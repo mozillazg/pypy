@@ -29,7 +29,7 @@ class AppTestNested:
     def test_nested_structures(self):
         import _rawffi
         S1 = _rawffi.Structure([('a', 'i'), ('b', 'P'), ('c', 'c')])
-        S = _rawffi.Structure([('x', 'c'), ('s1', S1.size_alignment())])
+        S = _rawffi.Structure([('x', 'c'), ('s1', (S1, 1))])
         assert S.size == S1.alignment + S1.size
         assert S.alignment == S1.alignment
         assert S.fieldoffset('x') == 0
@@ -48,7 +48,7 @@ class AppTestNested:
     def test_array_of_structures(self):
         import _rawffi
         S = _rawffi.Structure([('a', 'i'), ('b', 'P'), ('c', 'c')])
-        A = _rawffi.Array(S.size_alignment())
+        A = _rawffi.Array((S, 1))
         a = A(3)
         raises(TypeError, "a[0]")
         s0 = S.fromaddress(a.buffer)
@@ -70,7 +70,7 @@ class AppTestNested:
         B = _rawffi.Array('i')
         sizeofint = struct.calcsize("i")
         assert B.size_alignment(100) == (sizeofint * 100, sizeofint)
-        A = _rawffi.Array(B.size_alignment(4))
+        A = _rawffi.Array((B, 4))
         a = A(2)
         b0 = B.fromaddress(a.itemaddress(0), 4)
         b0[0] = 3
@@ -88,7 +88,7 @@ class AppTestNested:
     def test_array_in_structures(self):
         import _rawffi, struct
         A = _rawffi.Array('i')
-        S = _rawffi.Structure([('x', 'c'), ('ar', A.size_alignment(5))])
+        S = _rawffi.Structure([('x', 'c'), ('ar', (A, 5))])
         A5size, A5alignment = A.size_alignment(5)
         assert S.size == A5alignment + A5size
         assert S.alignment == A5alignment

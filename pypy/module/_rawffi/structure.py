@@ -13,7 +13,7 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value
-from pypy.module._rawffi.interp_rawffi import unpack_typecode
+from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
 from pypy.rlib import libffi
 from pypy.rlib.rarithmetic import intmask, r_uint
 
@@ -26,7 +26,7 @@ def unpack_fields(space, w_fields):
             raise OperationError(space.w_ValueError, space.wrap(
                 "Expected list of 2-size tuples"))
         name = space.str_w(l_w[0])
-        tp = unpack_typecode(space, l_w[1])
+        tp = unpack_to_size_alignment(space, l_w[1])
         fields.append((name, tp))
     return fields
 
