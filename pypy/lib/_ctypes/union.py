@@ -16,6 +16,7 @@ class UnionMeta(_CDataMeta):
             res._ffishape = (res._sizeofinstances(),
                              res._alignmentofinstances())
             res._ffiargshape = res._ffishape
+            res._fficompositesize = res._sizeofinstances()
             # we need to create an array of size one for each
             # of our elements
             res._ffiarrays = {}
@@ -61,6 +62,7 @@ class UnionMeta(_CDataMeta):
             _CDataMeta.__setattr__(self, '_fields_', value)
             self._ffiargshape = self._ffishape = (self._sizeofinstances(),
                                                   self._alignmentofinstances())
+            self._fficompositesize = self._sizeofinstances()
             return
         _CDataMeta.__setattr__(self, name, value)
 

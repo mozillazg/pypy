@@ -38,7 +38,8 @@ def struct_setattr(self, name, value):
             self.__dict__.get('_anonymous_', None))
         self._ffistruct = _rawffi.Structure(rawfields)
         _CDataMeta.__setattr__(self, '_fields_', value)
-        self._ffiargshape = self._ffishape = self._ffistruct.gettypecode()
+        self._ffiargshape = self._ffishape = (self._ffistruct, 1)
+        self._fficompositesize = self._ffistruct.size
         return
     _CDataMeta.__setattr__(self, name, value)
 
@@ -104,8 +105,9 @@ class StructureMeta(_CDataMeta):
                 typedict['_fields_'], cls[0], False,
                 typedict.get('_anonymous_', None))
             res._ffistruct = _rawffi.Structure(rawfields)
-            res._ffishape = res._ffistruct.gettypecode()
+            res._ffishape = (res._ffistruct, 1)
             res._ffiargshape = res._ffishape
+            res._fficompositesize = res._ffistruct.size
 
         def __init__(self, *args, **kwds):
             if not hasattr(self, '_ffistruct'):
@@ -184,10 +186,10 @@ class Structure(_CData):
             key = keepalive_key(getattr(self.__class__, name).offset)
             store_reference(self, key, value._objects)
         arg = fieldtype._CData_value(value)
-        if isinstance(fieldtype._ffishape, tuple):
+        if fieldtype._fficompositesize is not None:
             from ctypes import memmove
             dest = self._buffer.fieldaddress(name)
-            memmove(dest, arg._buffer.buffer, fieldtype._ffishape[0])
+            memmove(dest, arg._buffer.buffer, fieldtype._fficompositesize)
         else:
             self._buffer.__setattr__(name, arg)
 
