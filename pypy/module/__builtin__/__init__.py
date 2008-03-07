@@ -69,6 +69,7 @@ class Module(MixedModule):
         'type'          : '(space.w_type)',
         'object'        : '(space.w_object)',
         'unicode'       : '(space.w_unicode)',
+        'buffer'        : 'operation.Buffer',
 
         'file'          : 'state.get(space).w_file',
         'open'          : 'state.get(space).w_file',
