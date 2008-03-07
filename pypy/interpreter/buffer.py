@@ -92,6 +92,10 @@ class Buffer(Wrappable):
     descr_gt = _make_descr__cmp('gt')
     descr_ge = _make_descr__cmp('ge')
 
+    def descr_hash(self, space):
+        return space.wrap(hash(self.as_str()))
+    descr_hash.unwrap_spec = ['self', ObjSpace]
+
 
 def descr_buffer__new__(space, w_subtype, w_object):  #, offset, size
     # w_subtype can only be exactly 'buffer' for now
@@ -126,6 +130,7 @@ extend to the end of the target object (or with the specified size).
     __le__ = interp2app(Buffer.descr_le),
     __gt__ = interp2app(Buffer.descr_gt),
     __ge__ = interp2app(Buffer.descr_ge),
+    __hash__ = interp2app(Buffer.descr_hash),
     )
 Buffer.typedef.acceptable_as_base_class = False
 

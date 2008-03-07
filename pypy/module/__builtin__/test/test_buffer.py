@@ -55,3 +55,6 @@ class AppTestBuffer:
         assert buffer('ab') <= buffer('ab')
         assert buffer('ab') >  buffer('aa')
         assert buffer('ab') >= buffer('ab')
+
+    def test_hash(self):
+        assert hash(buffer('hello')) == hash('hello')
