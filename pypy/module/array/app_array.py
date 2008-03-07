@@ -277,6 +277,9 @@ class array(object):
                 strings.append(pack(self.typecode, item))
             return "".join(strings)
 
+    def __buffer__(self):        # XXX baaaaad performance
+        return buffer(self.tostring())
+
     def tounicode(self):
         """Convert the array to a unicode string. The array must be a type 'u'
         array; otherwise a ValueError is raised. Use array.tostring().decode()
