@@ -43,10 +43,15 @@ class Buffer(Wrappable):
         return space.wrap(self.length())
     descr_len.unwrap_spec = ['self', ObjSpace]
 
+    def descr__buffer__(self, space):
+        return space.wrap(self)
+    descr__buffer__.unwrap_spec = ['self', ObjSpace]
+
 
 Buffer.typedef = TypeDef(
     "buffer",
     __len__ = interp2app(Buffer.descr_len),
+    __buffer__ = interp2app(Buffer.descr__buffer__),
     )
 
 # ____________________________________________________________
