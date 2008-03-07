@@ -330,7 +330,7 @@ Note that not all file objects are seekable.""")
 
 Size defaults to the current file position, as returned by tell().""")
 
-    _decl(locals(), "write", ['self', str],
+    _decl(locals(), "write", ['self', 'bufferstr'],
         """write(str) -> None.  Write string str to file.
 
 Note that due to buffering, flush() or close() may be needed before

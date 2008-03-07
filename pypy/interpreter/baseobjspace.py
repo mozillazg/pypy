@@ -917,9 +917,20 @@ class ObjSpace(object):
                                            'to unsigned int'))
 
     def buffer_w(self, w_obj):
+        # returns a Buffer instance
         from pypy.interpreter.buffer import Buffer
         w_buffer = self.buffer(w_obj)
         return self.interp_w(Buffer, w_buffer)
+
+    def bufferstr_w(self, w_obj):
+        # directly returns an interp-level str
+        try:
+            return self.str_w(w_obj)
+        except OperationError, e:
+            if not e.match(self, self.w_TypeError):
+                raise
+            buffer = self.buffer_w(w_obj)
+            return buffer.as_str()
 
     def warn(self, msg, w_warningcls):
         self.appexec([self.wrap(msg), w_warningcls], """(msg, warningcls):
