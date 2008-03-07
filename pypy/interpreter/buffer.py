@@ -28,7 +28,7 @@ class Buffer(Wrappable):
     def as_str(self):
         "Returns an interp-level string with the whole content of the buffer."
         # May be overridden.
-        return self.getslice(0, self.length())
+        return self.getslice(0, self.len)
 
     def getitem(self, index):
         "Returns the index'th character in the buffer."
