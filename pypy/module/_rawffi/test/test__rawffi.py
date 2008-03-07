@@ -525,7 +525,11 @@ class AppTestFfi:
         s = struct.calcsize("i")
         assert (repr(_rawffi.Array('i')) ==
                 "<_rawffi.Array 'i' (%d, %d)>" % (s, s))
-        assert repr(_rawffi.Array((18, 2))) == "<_rawffi.Array 'V' (18, 2)>"
+
+        # fragile
+        S = _rawffi.Structure([('x', 'c'), ('y', 'l')])
+        assert repr(_rawffi.Array((S, 2))) == "<_rawffi.Array 'V' (16, 4)>"
+
         assert (repr(_rawffi.Structure([('x', 'i'), ('yz', 'i')])) ==
                 "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*s, s))
 

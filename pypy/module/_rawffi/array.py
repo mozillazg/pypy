@@ -12,7 +12,8 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import unwrap_value, wrap_value
-from pypy.module._rawffi.interp_rawffi import unpack_typecode, letter2tp
+from pypy.module._rawffi.interp_rawffi import letter2tp
+from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
 from pypy.rlib.rarithmetic import intmask, r_uint
 
 def push_elem(ll_array, pos, value):
@@ -81,8 +82,8 @@ class ArrayCache:
 def get_array_cache(space):
     return space.fromcache(ArrayCache)
 
-def descr_new_array(space, w_type, w_itemtp):
-    itemtp = unpack_typecode(space, w_itemtp)
+def descr_new_array(space, w_type, w_shape):
+    itemtp = unpack_to_size_alignment(space, w_shape)
     array_type = get_array_cache(space).get_array_type(itemtp)
     return space.wrap(array_type)
 

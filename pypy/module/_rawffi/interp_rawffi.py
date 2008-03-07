@@ -87,14 +87,6 @@ def letter2tp(space, key):
         raise OperationError(space.w_ValueError, space.wrap(
             "Unknown type letter %s" % (key,)))
 
-def unpack_typecode(space, w_typecode):
-    if space.is_true(space.isinstance(w_typecode, space.w_str)):
-        letter = space.str_w(w_typecode)
-        return letter2tp(space, letter)
-    else:
-        w_size, w_align = space.unpacktuple(w_typecode, expected_length=2)
-        return ('V', space.int_w(w_size), space.int_w(w_align)) # value object
-
 def _get_type_(space, key):
     try:
         return TYPEMAP[key]
@@ -102,7 +94,7 @@ def _get_type_(space, key):
         raise OperationError(space.w_ValueError, space.wrap(
             "Unknown type letter %s" % (key,)))
     
-def unpack_shape(space, w_shape, allow_void=False, shape=False):
+def unpack_to_ffi_type(space, w_shape, allow_void=False, shape=False):
     resshape = None
     if space.is_true(space.isinstance(w_shape, space.w_str)):
         letter = space.str_w(w_shape)
@@ -121,6 +113,16 @@ def unpack_shape(space, w_shape, allow_void=False, shape=False):
         ffi_type = resshape.get_ffi_type()
     return letter, ffi_type, resshape
 
+def unpack_to_size_alignment(space, w_shape):
+    if space.is_true(space.isinstance(w_shape, space.w_str)):
+        letter = space.str_w(w_shape)
+        return letter2tp(space, letter)
+    else:
+        w_shapetype, w_length = space.unpacktuple(w_shape, expected_length=2)
+        resshape = space.interp_w(W_DataShape, w_shapetype)
+        length = space.int_w(w_length)
+        size, alignment = resshape._size_alignment()
+        return ('V', length*size, alignment) # value object
 
 class W_CDLL(Wrappable):
     def __init__(self, space, name):
@@ -138,7 +140,7 @@ class W_CDLL(Wrappable):
             resshape = None
             ffi_restype = ffi_type_void
         else:
-            tp_letter, ffi_restype, resshape = unpack_shape(space, w_restype,
+            tp_letter, ffi_restype, resshape = unpack_to_ffi_type(space, w_restype,
                                                             allow_void=True,
                                                             shape=True)                
         w = space.wrap
@@ -155,7 +157,7 @@ class W_CDLL(Wrappable):
         argletters = []
         ffi_argtypes = []
         for w_arg in argtypes_w:
-            argletter, ffi_argtype, _ = unpack_shape(space, w_arg)
+            argletter, ffi_argtype, _ = unpack_to_ffi_type(space, w_arg)
             argletters.append(argletter)
             ffi_argtypes.append(ffi_argtype)
 
@@ -220,9 +222,9 @@ class W_DataShape(Wrappable):
     def _size_alignment(self):
         raise NotImplementedError
     
-    def descr_size_alignment(self, space, length=1):
-        itemsize, alignment = self._size_alignment()
-        return space.newtuple([space.wrap(itemsize * length),
+    def descr_size_alignment(self, space, n=1):
+        size, alignment = self._size_alignment()
+        return space.newtuple([space.wrap(size * n),
                                space.wrap(alignment)])
     descr_size_alignment.unwrap_spec = ['self', ObjSpace, int]
     
