@@ -32,3 +32,6 @@ class AppTestBuffer:
         import array
         assert buffer(array.array("B", [0]))
         assert not buffer(array.array("B", []))
+
+    def test_str(self):
+        assert str(buffer('hello')) == 'hello'
