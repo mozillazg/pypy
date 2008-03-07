@@ -14,6 +14,7 @@ Buffer protocol support.
 # used to get directly a Buffer instance.  Doing so also gives you for
 # free the typecheck that __buffer__() really returned a wrapped Buffer.
 
+import operator
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
@@ -72,6 +73,25 @@ class Buffer(Wrappable):
         return space.wrap(self.as_str() + other)
     descr_add.unwrap_spec = ['self', ObjSpace, 'bufferstr']
 
+    def _make_descr__cmp(name):
+        def descr__cmp(self, space, w_other):
+            other = space.interpclass_w(w_other)
+            if not isinstance(other, Buffer):
+                return space.w_NotImplemented
+            # xxx not the most efficient implementation
+            str1 = self.as_str()
+            str2 = other.as_str()
+            return space.wrap(getattr(operator, name)(str1, str2))
+        descr__cmp.unwrap_spec = ['self', ObjSpace, W_Root]
+        return descr__cmp
+
+    descr_eq = _make_descr__cmp('eq')
+    descr_ne = _make_descr__cmp('ne')
+    descr_lt = _make_descr__cmp('lt')
+    descr_le = _make_descr__cmp('le')
+    descr_gt = _make_descr__cmp('gt')
+    descr_ge = _make_descr__cmp('ge')
+
 
 def descr_buffer__new__(space, w_subtype, w_object):  #, offset, size
     # w_subtype can only be exactly 'buffer' for now
@@ -100,6 +120,12 @@ extend to the end of the target object (or with the specified size).
     __buffer__ = interp2app(Buffer.descr__buffer__),
     __str__ = interp2app(Buffer.descr_str),
     __add__ = interp2app(Buffer.descr_add),
+    __eq__ = interp2app(Buffer.descr_eq),
+    __ne__ = interp2app(Buffer.descr_ne),
+    __lt__ = interp2app(Buffer.descr_lt),
+    __le__ = interp2app(Buffer.descr_le),
+    __gt__ = interp2app(Buffer.descr_gt),
+    __ge__ = interp2app(Buffer.descr_ge),
     )
 Buffer.typedef.acceptable_as_base_class = False
 
