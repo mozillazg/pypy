@@ -394,6 +394,7 @@ class TranslationDriver(SimpleTaskEngine):
                                     [SomeLLAbstractConstant(v.concretetype,
                                                             {OriginFlags(): True})
                                      for v in self.orig_portal_graph.getargs()])
+        hannotator.simplify()
         count = hannotator.bookkeeper.nonstuboriggraphcount
         stubcount = hannotator.bookkeeper.stuboriggraphcount
         self.log.info("The hint-annotator saw %d graphs"
