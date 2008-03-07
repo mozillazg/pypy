@@ -58,3 +58,9 @@ class AppTestBuffer:
 
     def test_hash(self):
         assert hash(buffer('hello')) == hash('hello')
+
+    def test_mul(self):
+        assert buffer('ab') * 5 == 'ababababab'
+        assert buffer('ab') * (-2) == ''
+        assert 5 * buffer('ab') == 'ababababab'
+        assert (-2) * buffer('ab') == ''

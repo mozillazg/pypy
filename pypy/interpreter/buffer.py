@@ -96,6 +96,14 @@ class Buffer(Wrappable):
         return space.wrap(hash(self.as_str()))
     descr_hash.unwrap_spec = ['self', ObjSpace]
 
+    def descr_mul(self, space, w_times):
+        # xxx not the most efficient implementation
+        w_string = space.wrap(self.as_str())
+        # use the __mul__ method instead of space.mul() so that we
+        # return NotImplemented instead of raising a TypeError
+        return space.call_method(w_string, '__mul__', w_times)
+    descr_mul.unwrap_spec = ['self', ObjSpace, W_Root]
+
 
 def descr_buffer__new__(space, w_subtype, w_object):  #, offset, size
     # w_subtype can only be exactly 'buffer' for now
@@ -131,6 +139,8 @@ extend to the end of the target object (or with the specified size).
     __gt__ = interp2app(Buffer.descr_gt),
     __ge__ = interp2app(Buffer.descr_ge),
     __hash__ = interp2app(Buffer.descr_hash),
+    __mul__ = interp2app(Buffer.descr_mul),
+    __rmul__ = interp2app(Buffer.descr_mul),
     )
 Buffer.typedef.acceptable_as_base_class = False
 
