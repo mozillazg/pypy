@@ -25,3 +25,10 @@ class AppTestBuffer:
         b = buffer(array.array("B", [1, 2, 3]))
         assert len(b) == 3
         assert b[0:3] == "\x01\x02\x03"
+
+    def test_nonzero(self):
+        assert buffer('\x00')
+        assert not buffer('')
+        import array
+        assert buffer(array.array("B", [0]))
+        assert not buffer(array.array("B", []))
