@@ -7,16 +7,20 @@ class TestFrontend(InterpretationTest):
     type_system = "lltype"
 
     def test_we_are_jitted(self):
-        def f():
+        def g(n):
+            return n + 5
+        def f(m):
             if we_are_jitted():
                 return 42
-            return 0
+            # the following path should not be seen by the hint-annotator
+            # and killed from the red-green graphs by 'hannotator.simplify()'
+            return g(m)
 
-        assert f() == 0
-        res = interpret(f, [])
-        assert res == 0
+        assert f(5) == 10
+        res = interpret(f, [5])
+        assert res == 10
 
-        res = self.interpret(f, [])
+        res = self.interpret(f, [5])
         assert res == 42
 
     def test_is_early_constant(self):
