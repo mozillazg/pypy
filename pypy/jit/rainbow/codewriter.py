@@ -10,9 +10,11 @@ from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
 from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
+from pypy.jit.rainbow.interpreter import DEBUG_JITCODES
 from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 from pypy.translator.unsimplify import varoftype
+from cStringIO import StringIO
 
 def residual_exception_nontranslated(jitstate, e, rtyper):
     # since we have a normal exception instance here
@@ -227,6 +229,10 @@ class BytecodeWriter(object):
         bytecode._interpreter = self.interpreter
         bytecode._labelpos = labelpos
         bytecode.dump()
+        if DEBUG_JITCODES:
+            f = StringIO()
+            bytecode.dump(f)
+            bytecode.dump_copy = f.getvalue()
         if is_portal:
             self.finish_all_graphs()
             self.interpreter.set_num_global_mergepoints(
