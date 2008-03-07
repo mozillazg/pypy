@@ -916,6 +916,11 @@ class ObjSpace(object):
                                  self.wrap('cannot convert negative integer '
                                            'to unsigned int'))
 
+    def buffer_w(self, w_obj):
+        from pypy.interpreter.buffer import Buffer
+        w_buffer = self.buffer(w_obj)
+        return self.interp_w(Buffer, w_buffer)
+
     def warn(self, msg, w_warningcls):
         self.appexec([self.wrap(msg), w_warningcls], """(msg, warningcls):
             import warnings
@@ -1020,6 +1025,7 @@ ObjSpace.MethodTable = [
     ('set',             'set',       3, ['__set__']),
     ('delete',          'delete',    2, ['__delete__']),
     ('userdel',         'del',       1, ['__del__']),
+    ('buffer',          'buffer',    1, ['__buffer__']),   # see buffer.py
     ]
 
 ObjSpace.BuiltinModuleTable = [
