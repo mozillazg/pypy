@@ -127,6 +127,14 @@ class BytecodeWriter(object):
         self.num_global_mergepoints = 0
         self.ptr_to_jitcode = {}
         self.transformer = GraphTransformer(hannotator)
+        self._listcache = {}
+
+    def sharelist(self, name):
+        lst = getattr(self, name)
+        # 'lst' is typically a list of descs or low-level pointers.
+        # It's safer to compare its items by identity.
+        key = (name,) + tuple([id(x) for x in lst])
+        return self._listcache.setdefault(key, lst)
 
     def can_raise(self, op):
         return self.raise_analyzer.analyze(op)
@@ -207,23 +215,23 @@ class BytecodeWriter(object):
         code = assemble_labelpos(labelpos, self.interpreter, *self.assembler)
         bytecode.__init__(graph.name,
                           code,
-                          self.constants,
-                          self.typekinds,
-                          self.redboxclasses,
-                          self.keydescs,
-                          self.structtypedescs,
-                          self.fielddescs,
-                          self.arrayfielddescs,
-                          self.interiordescs,
-                          self.exceptioninstances,
-                          self.oopspecdescs,
-                          self.promotiondescs,
-                          self.called_bytecodes,
+                          self.sharelist("constants"),
+                          self.sharelist("typekinds"),
+                          self.sharelist("redboxclasses"),
+                          self.sharelist("keydescs"),
+                          self.sharelist("structtypedescs"),
+                          self.sharelist("fielddescs"),
+                          self.sharelist("arrayfielddescs"),
+                          self.sharelist("interiordescs"),
+                          self.sharelist("exceptioninstances"),
+                          self.sharelist("oopspecdescs"),
+                          self.sharelist("promotiondescs"),
+                          self.sharelist("called_bytecodes"),
                           self.num_local_mergepoints,
                           self.graph_color,
-                          self.calldescs,
-                          self.metacalldescs,
-                          self.indirectcalldescs,
+                          self.sharelist("calldescs"),
+                          self.sharelist("metacalldescs"),
+                          self.sharelist("indirectcalldescs"),
                           self.is_portal)
         bytecode._source = self.assembler
         bytecode._interpreter = self.interpreter
