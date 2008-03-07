@@ -23,12 +23,13 @@ class AppTestNested:
         assert S.fieldoffset('a') == 0
         assert S.fieldoffset('b') == align
         assert S.fieldoffset('c') == round_up(struct.calcsize("iP"))
-        assert S.gettypecode() == (S.size, S.alignment)
+        assert S.size_alignment() == (S.size, S.alignment)
+        assert S.size_alignment(1) == (S.size, S.alignment)
 
     def test_nested_structures(self):
         import _rawffi
         S1 = _rawffi.Structure([('a', 'i'), ('b', 'P'), ('c', 'c')])
-        S = _rawffi.Structure([('x', 'c'), ('s1', S1.gettypecode())])
+        S = _rawffi.Structure([('x', 'c'), ('s1', S1.size_alignment())])
         assert S.size == S1.alignment + S1.size
         assert S.alignment == S1.alignment
         assert S.fieldoffset('x') == 0
@@ -47,7 +48,7 @@ class AppTestNested:
     def test_array_of_structures(self):
         import _rawffi
         S = _rawffi.Structure([('a', 'i'), ('b', 'P'), ('c', 'c')])
-        A = _rawffi.Array(S.gettypecode())
+        A = _rawffi.Array(S.size_alignment())
         a = A(3)
         raises(TypeError, "a[0]")
         s0 = S.fromaddress(a.buffer)
@@ -68,8 +69,8 @@ class AppTestNested:
         import _rawffi, struct
         B = _rawffi.Array('i')
         sizeofint = struct.calcsize("i")
-        assert B.gettypecode(100) == (sizeofint * 100, sizeofint)
-        A = _rawffi.Array(B.gettypecode(4))
+        assert B.size_alignment(100) == (sizeofint * 100, sizeofint)
+        A = _rawffi.Array(B.size_alignment(4))
         a = A(2)
         b0 = B.fromaddress(a.itemaddress(0), 4)
         b0[0] = 3
@@ -87,8 +88,8 @@ class AppTestNested:
     def test_array_in_structures(self):
         import _rawffi, struct
         A = _rawffi.Array('i')
-        S = _rawffi.Structure([('x', 'c'), ('ar', A.gettypecode(5))])
-        A5size, A5alignment = A.gettypecode(5)
+        S = _rawffi.Structure([('x', 'c'), ('ar', A.size_alignment(5))])
+        A5size, A5alignment = A.size_alignment(5)
         assert S.size == A5alignment + A5size
         assert S.alignment == A5alignment
         assert S.fieldoffset('x') == 0

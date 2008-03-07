@@ -129,18 +129,6 @@ class W_CDLL(Wrappable):
         self.w_cache = space.newdict()
         self.space = space
 
-    # xxx refactor away !
-    def get_arg_type(self, letter, argsize, argalignment):
-        space = self.space
-        if letter == 'V': # xxx leaks
-            return make_struct_ffitype(argsize, argalignment)
-        else:
-            return _get_type_(space, letter)
-
-    def get_type(self, key):
-        space = self.space
-        return _get_type_(space, key)
-
     def ptr(self, space, name, w_argtypes, w_restype):
         """ Get a pointer for function name with provided argtypes
         and restype
@@ -228,6 +216,16 @@ class W_DataShape(Wrappable):
     
     def allocate(self, space, length, autofree=False):
         raise NotImplementedError
+
+    def _size_alignment(self):
+        raise NotImplementedError
+    
+    def descr_size_alignment(self, space, length=1):
+        itemsize, alignment = self._size_alignment()
+        return space.newtuple([space.wrap(itemsize * length),
+                               space.wrap(alignment)])
+    descr_size_alignment.unwrap_spec = ['self', ObjSpace, int]
+    
 
 class W_DataInstance(Wrappable):
     def __init__(self, space, size, address=r_uint(0)):

@@ -96,10 +96,8 @@ class W_Structure(W_DataShape):
         return space.wrap(self.ll_positions[index])
     descr_fieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
-    def descr_gettypecode(self, space):
-        return space.newtuple([space.wrap(self.size),
-                               space.wrap(self.alignment)])
-    descr_gettypecode.unwrap_spec = ['self', ObjSpace]
+    def _size_alignment(self):
+        return self.size, self.alignment
 
     # get the corresponding ffi_type
     ffi_type = lltype.nullptr(libffi.FFI_TYPE_P.TO)
@@ -128,7 +126,7 @@ W_Structure.typedef = TypeDef(
     size        = interp_attrproperty('size', W_Structure),
     alignment   = interp_attrproperty('alignment', W_Structure),
     fieldoffset = interp2app(W_Structure.descr_fieldoffset),
-    gettypecode = interp2app(W_Structure.descr_gettypecode),
+    size_alignment = interp2app(W_Structure.descr_size_alignment)
 )
 W_Structure.typedef.acceptable_as_base_class = False
 
