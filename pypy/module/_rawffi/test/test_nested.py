@@ -84,4 +84,27 @@ class AppTestNested:
         assert rawbuf[7] == 17
         a.free()
 
-    # xxx missing array in structure
+    def test_array_in_structures(self):
+        import _rawffi, struct
+        A = _rawffi.Array('i')
+        S = _rawffi.Structure([('x', 'c'), ('ar', A.gettypecode(5))])
+        A5size, A5alignment = A.gettypecode(5)
+        assert S.size == A5alignment + A5size
+        assert S.alignment == A5alignment
+        assert S.fieldoffset('x') == 0
+        assert S.fieldoffset('ar') == A5alignment
+        s = S()
+        s = S()
+        s.x = 'G'
+        raises(TypeError, 's.ar')
+        assert s.fieldaddress('ar') == s.buffer + S.fieldoffset('ar')
+        a1 = A.fromaddress(s.fieldaddress('ar'), 5)
+        a1[4] = 33
+        rawbuf = _rawffi.Array('c').fromaddress(s.buffer, S.size)
+        assert rawbuf[0] == 'G'
+        sizeofint = struct.calcsize("i")
+        v = 0
+        for i in range(sizeofint):
+            v += ord(rawbuf[A5alignment + sizeofint*4+i])
+        assert v == 33
+        s.free()
