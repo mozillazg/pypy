@@ -60,11 +60,9 @@ class W_Array(W_DataShape):
         return space.wrap(W_ArrayInstance(space, self, length, address))
     fromaddress.unwrap_spec = ['self', ObjSpace, r_uint, int]
 
-    def descr_gettypecode(self, space, length):
+    def _size_alignment(self):
         _, itemsize, alignment = self.itemtp
-        return space.newtuple([space.wrap(itemsize * length),
-                               space.wrap(alignment)])
-    descr_gettypecode.unwrap_spec = ['self', ObjSpace, int]
+        return itemsize, alignment
 
 class ArrayCache:
     def __init__(self, space):
@@ -96,7 +94,7 @@ W_Array.typedef = TypeDef(
                           unwrap_spec=['self', ObjSpace, int, W_Root, int]),
     __repr__ = interp2app(W_Array.descr_repr),
     fromaddress = interp2app(W_Array.fromaddress),
-    gettypecode = interp2app(W_Array.descr_gettypecode),
+    size_alignment = interp2app(W_Array.descr_size_alignment)
 )
 W_Array.typedef.acceptable_as_base_class = False
 
