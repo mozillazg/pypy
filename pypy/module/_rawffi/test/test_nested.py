@@ -12,6 +12,11 @@ class AppTestNested:
 
     def test_inspect_structure(self):
         import _rawffi, struct
+
+        E = _rawffi.Structure([])
+        assert E.size == 0
+        assert E.alignment == 1
+        
         align = max(struct.calcsize("i"), struct.calcsize("P"))
         assert align & (align-1) == 0, "not a power of 2??"
         def round_up(x):
@@ -25,6 +30,18 @@ class AppTestNested:
         assert S.fieldoffset('c') == round_up(struct.calcsize("iP"))
         assert S.size_alignment() == (S.size, S.alignment)
         assert S.size_alignment(1) == (S.size, S.alignment)
+
+    def test_opaque_structure(self):
+        import _rawffi
+        # define opaque structure with size = 200 and aligment = 16
+        N = _rawffi.Structure((200, 16))
+        assert N.size == 200
+        assert N.alignment == 16
+        assert N.size_alignment() == (200, 16)
+        assert N.size_alignment(1) == (200, 16)
+        raises(AttributeError, N.fieldoffset, '_')
+        n = N()
+        n.free()
 
     def test_nested_structures(self):
         import _rawffi

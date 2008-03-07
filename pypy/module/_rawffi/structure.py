@@ -47,20 +47,23 @@ def size_alignment_pos(fields):
 
 
 class W_Structure(W_DataShape):
-    def __init__(self, space, w_fields):
-        fields = unpack_fields(space, w_fields)
+    def __init__(self, space, fields, size, alignment):
         name_to_index = {}
-        for i in range(len(fields)):
-            name, tp = fields[i]
-            if name in name_to_index:
-                raise OperationError(space.w_ValueError, space.wrap(
-                    "duplicate field name %s" % (name, )))
-            name_to_index[name] = i
-        size, alignment, pos = size_alignment_pos(fields)
-        self.size = size
-        self.alignment = alignment
-        self.ll_positions = pos
+        if fields is not None:
+            for i in range(len(fields)):
+                name, tp = fields[i]
+                if name in name_to_index:
+                    raise OperationError(space.w_ValueError, space.wrap(
+                        "duplicate field name %s" % (name, )))
+                name_to_index[name] = i
+            size, alignment, pos = size_alignment_pos(fields)
+        else: # opaque case
+            fields = []
+            pos = []
         self.fields = fields
+        self.size = size
+        self.alignment = alignment                
+        self.ll_positions = pos
         self.name_to_index = name_to_index
 
     def allocate(self, space, length, autofree=False):
@@ -114,8 +117,15 @@ class W_Structure(W_DataShape):
     
 
 
-def descr_new_structure(space, w_type, w_fields):
-    return space.wrap(W_Structure(space, w_fields))
+def descr_new_structure(space, w_type, w_shapeinfo):
+    if space.is_true(space.isinstance(w_shapeinfo, space.w_tuple)):
+        w_size, w_alignment = space.unpacktuple(w_shapeinfo, expected_length=2)
+        S = W_Structure(space, None, space.int_w(w_size),
+                                     space.int_w(w_alignment))
+    else:
+        fields = unpack_fields(space, w_shapeinfo)
+        S = W_Structure(space, fields, 0, 0)
+    return space.wrap(S)
 
 W_Structure.typedef = TypeDef(
     'Structure',
