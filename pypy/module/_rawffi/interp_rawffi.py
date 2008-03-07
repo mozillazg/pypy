@@ -153,7 +153,7 @@ class W_CDLL(Wrappable):
             if e.match(space, space.w_KeyError):
                 pass
             else:
-                rais
+                raise
         argletters = []
         ffi_argtypes = []
         for w_arg in argtypes_w:
