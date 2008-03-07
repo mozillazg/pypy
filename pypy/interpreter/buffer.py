@@ -16,7 +16,7 @@ Buffer protocol support.
 
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef
-from pypy.interpreter.gateway import interp2app, ObjSpace
+from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
 
 
 class Buffer(Wrappable):
@@ -40,19 +40,57 @@ class Buffer(Wrappable):
     # __________ app-level support __________
 
     def descr_len(self, space):
-        return space.wrap(self.length())
+        return space.wrap(self.len)
     descr_len.unwrap_spec = ['self', ObjSpace]
+
+    def descr_getitem(self, space, w_index):
+        start, stop, step = space.decode_index(w_index, self.len)
+        if step == 0:  # index only
+            return space.wrap(self.getitem(start))
+        elif step == 1:
+            if 0 <= start <= stop:
+                res = self.getslice(start, stop)
+            else:
+                res = ''
+            return space.wrap(res)
+        else:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("buffer object does not support"
+                                            " slicing with a step"))
+    descr_getitem.unwrap_spec = ['self', ObjSpace, W_Root]
 
     def descr__buffer__(self, space):
         return space.wrap(self)
     descr__buffer__.unwrap_spec = ['self', ObjSpace]
 
 
+def descr_buffer__new__(space, w_subtype, w_object):  #, offset, size
+    # w_subtype can only be exactly 'buffer' for now
+    if not space.is_w(w_subtype, space.gettypefor(Buffer)):
+        raise OperationError(space.w_TypeError,
+                             space.wrap("argument 1 must be 'buffer'"))
+    w_buffer = space.buffer(w_object)
+    space.interp_w(Buffer, w_buffer)    # type-check
+    return w_buffer
+descr_buffer__new__.unwrap_spec = [ObjSpace, W_Root, W_Root]
+
+
 Buffer.typedef = TypeDef(
     "buffer",
+    __doc__ = """\
+buffer(object [, offset[, size]])
+
+Create a new buffer object which references the given object.
+The buffer will reference a slice of the target object from the
+start of the object (or at the specified offset). The slice will
+extend to the end of the target object (or with the specified size).
+""",
+    __new__ = interp2app(descr_buffer__new__),
     __len__ = interp2app(Buffer.descr_len),
+    __getitem__ = interp2app(Buffer.descr_getitem),
     __buffer__ = interp2app(Buffer.descr__buffer__),
     )
+Buffer.typedef.acceptable_as_base_class = False
 
 # ____________________________________________________________
 

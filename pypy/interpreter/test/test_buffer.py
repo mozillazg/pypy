@@ -34,3 +34,6 @@ class TestBuffer:
         data = f.read()
         f.close()
         assert data == 'hello world'
+
+
+# Note: some app-level tests for buffer are in module/__builtin__/test/.
