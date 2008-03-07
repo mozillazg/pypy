@@ -40,3 +40,18 @@ class AppTestBuffer:
         assert buffer('abc') + 'def' == 'abcdef'
         import array
         assert buffer('abc') + array.array('c', 'def') == 'abcdef'
+
+    def test_cmp(self):
+        assert buffer('ab') != 'ab'
+        assert not ('ab' == buffer('ab'))
+        assert buffer('ab') == buffer('ab')
+        assert not (buffer('ab') != buffer('ab'))
+        assert not (buffer('ab') <  buffer('ab'))
+        assert buffer('ab') <= buffer('ab')
+        assert not (buffer('ab') >  buffer('ab'))
+        assert buffer('ab') >= buffer('ab')
+        assert buffer('ab') != buffer('abc')
+        assert buffer('ab') <  buffer('abc')
+        assert buffer('ab') <= buffer('ab')
+        assert buffer('ab') >  buffer('aa')
+        assert buffer('ab') >= buffer('ab')
