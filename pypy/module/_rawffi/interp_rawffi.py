@@ -140,9 +140,10 @@ class W_CDLL(Wrappable):
             resshape = None
             ffi_restype = ffi_type_void
         else:
-            tp_letter, ffi_restype, resshape = unpack_to_ffi_type(space, w_restype,
-                                                            allow_void=True,
-                                                            shape=True)                
+            tp_letter, ffi_restype, resshape = unpack_to_ffi_type(space,
+                                                        w_restype,
+                                                        allow_void=True,
+                                                        shape=True)
         w = space.wrap
         argtypes_w = space.unpackiterable(w_argtypes)
         w_argtypes = space.newtuple(argtypes_w)
