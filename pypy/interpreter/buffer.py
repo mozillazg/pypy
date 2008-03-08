@@ -58,6 +58,29 @@ class Buffer(Wrappable):
                                             " slicing with a step"))
     descr_getitem.unwrap_spec = ['self', ObjSpace, W_Root]
 
+    def descr_setitem(self, space, w_index, newstring):
+        if not isinstance(self, RWBuffer):
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("buffer is read-only"))
+        start, stop, step = space.decode_index(w_index, self.len)
+        if step == 0:  # index only
+            if len(newstring) != 1:
+                msg = 'buffer[index]=x: x must be a single character'
+                raise OperationError(space.w_ValueError, space.wrap(msg))
+            char = newstring[0]   # annotator hint
+            self.setitem(start, char)
+        elif step == 1:
+            length = stop - start
+            if length != len(newstring):
+                msg = "buffer slice assignment is wrong size"
+                raise OperationError(space.w_ValueError, space.wrap(msg))
+            self.setslice(start, newstring)
+        else:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("buffer object does not support"
+                                            " slicing with a step"))
+    descr_setitem.unwrap_spec = ['self', ObjSpace, W_Root, 'bufferstr']
+
     def descr__buffer__(self, space):
         return space.wrap(self)
     descr__buffer__.unwrap_spec = ['self', ObjSpace]
@@ -101,6 +124,29 @@ class Buffer(Wrappable):
         return space.call_method(w_string, '__mul__', w_times)
     descr_mul.unwrap_spec = ['self', ObjSpace, W_Root]
 
+    def descr_repr(self, space):
+        if isinstance(self, RWBuffer):
+            info = 'read-write buffer'
+        else:
+            info = 'read-only buffer'
+        return self.getrepr(space, info)
+    descr_repr.unwrap_spec = ['self', ObjSpace]
+
+
+class RWBuffer(Buffer):
+    """Abstract base class for read-write memory views."""
+
+    __slots__ = ()     # no extra slot here
+
+    def setitem(self, index, char):
+        "Write a character into the buffer."
+        raise NotImplementedError   # Must be overriden.  No bounds checks.
+
+    def setslice(self, start, string):
+        # May be overridden.  No bounds checks.
+        for i in range(len(string)):
+            self.setitem(start + i, string[i])
+
 
 def descr_buffer__new__(space, w_subtype, w_object):  #, offset, size
     # w_subtype can only be exactly 'buffer' for now
@@ -126,6 +172,7 @@ extend to the end of the target object (or with the specified size).
     __new__ = interp2app(descr_buffer__new__),
     __len__ = interp2app(Buffer.descr_len),
     __getitem__ = interp2app(Buffer.descr_getitem),
+    __setitem__ = interp2app(Buffer.descr_setitem),
     __buffer__ = interp2app(Buffer.descr__buffer__),
     __str__ = interp2app(Buffer.descr_str),
     __add__ = interp2app(Buffer.descr_add),
@@ -138,6 +185,7 @@ extend to the end of the target object (or with the specified size).
     __hash__ = interp2app(Buffer.descr_hash),
     __mul__ = interp2app(Buffer.descr_mul),
     __rmul__ = interp2app(Buffer.descr_mul),
+    __repr__ = interp2app(Buffer.descr_repr),
     )
 Buffer.typedef.acceptable_as_base_class = False
 

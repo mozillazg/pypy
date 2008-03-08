@@ -927,6 +927,15 @@ class ObjSpace(object):
         w_buffer = self.buffer(w_obj)
         return self.interp_w(Buffer, w_buffer)
 
+    def rwbuffer_w(self, w_obj):
+        # returns a RWBuffer instance
+        from pypy.interpreter.buffer import RWBuffer
+        buffer = self.buffer_w(w_obj)
+        if not isinstance(buffer, RWBuffer):
+            raise OperationError(self.w_TypeError,
+                                 self.wrap('read-write buffer expected'))
+        return buffer
+
     def bufferstr_w(self, w_obj):
         # Directly returns an interp-level str.  Note that if w_obj is a
         # unicode string, this is different from str_w(buffer(w_obj)):
