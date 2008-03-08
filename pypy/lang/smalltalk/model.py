@@ -209,6 +209,11 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
             shadow = TheClass(self)
             self._shadow = shadow
         shadow.check_for_updates()
+        # XXX
+        # Should only invalidate when we write to the instance...
+        # For now easier to always invalidate when the shadow is 
+        # requested lokaly. Probably the w_self is invalid
+        # afterwards anyway (currently only for contexts however...)
         shadow.invalidate_w_self()
         return shadow
 
