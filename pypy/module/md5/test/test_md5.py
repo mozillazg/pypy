@@ -88,3 +88,14 @@ class AppTestMD5(object):
         d1 = md5.md5(buffer("abcde"))
         d1.update(buffer("jkl"))
         assert d1.hexdigest() == 'e570e7110ecef72fcb772a9c05d03373'
+
+
+    def test_unicode(self):
+        """
+        Test passing unicode strings.
+        """
+        md5 = self.md5
+        d1 = md5.md5(u"abcde")
+        d1.update(u"jkl")
+        assert d1.hexdigest() == 'e570e7110ecef72fcb772a9c05d03373'
+        raises(UnicodeEncodeError, d1.update, u'\xe9')

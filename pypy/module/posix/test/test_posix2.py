@@ -352,6 +352,17 @@ class AppTestPosix:
                 break
             data += s
         assert data == 'hello, world!\n'
+        os.close(fd)
+
+    def test_write_unicode(self):
+        os = self.posix
+        fd = os.open(self.path3, os.O_RDWR | os.O_CREAT, 0666)
+        os.write(fd, u'X')
+        raises(UnicodeEncodeError, os.write, fd, u'\xe9')
+        os.lseek(fd, 0, 0)
+        data = os.read(fd, 2)
+        assert data == 'X'
+        os.close(fd)
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

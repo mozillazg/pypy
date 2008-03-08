@@ -923,7 +923,14 @@ class ObjSpace(object):
         return self.interp_w(Buffer, w_buffer)
 
     def bufferstr_w(self, w_obj):
-        # directly returns an interp-level str
+        # Directly returns an interp-level str.  Note that if w_obj is a
+        # unicode string, this is different from str_w(buffer(w_obj)):
+        # indeed, the latter returns a string with the raw bytes from
+        # the underlying unicode buffer, but bufferstr_w() just converts
+        # the unicode to an ascii string.  This inconsistency is kind of
+        # needed because CPython has the same issue.  (Well, it's
+        # unclear if there is any use at all for getting the bytes in
+        # the unicode buffer.)
         try:
             return self.str_w(w_obj)
         except OperationError, e:
