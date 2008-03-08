@@ -404,7 +404,6 @@ class ContextPartShadow(AbstractShadow):
                                        self.stackpointer() + 1)]
         self._pc = utility.unwrap_int(self.w_self()._vars[constants.CTXPART_PC_INDEX])
         self._pc -= 1 + self.w_method().getliteralsize()
-        AbstractShadow.update_shadow(self)
 
     def update_w_self(self):
         AbstractShadow.update_w_self(self)
@@ -502,16 +501,20 @@ class ContextPartShadow(AbstractShadow):
 
     def pop_n(self, n):
         assert n >= 0
-        assert n <= len(self._stack)
-        self._stack = self._stack[:len(self._stack)-n]
+        start = len(self._stack) - n
+        assert start >= 0          # XXX what if this fails?
+        del self._stack[start:]
 
     def stack(self):
         return self._stack
 
     def pop_and_return_n(self, n):
-        w_vs = self._stack[len(self._stack)-n:]
-        self.pop_n(n)
-        return w_vs
+        assert n >= 0
+        start = len(self._stack) - n
+        assert start >= 0          # XXX what if this fails?
+        res = self._stack[start:]
+        del self._stack[start:]
+        return res
     
 class BlockContextShadow(ContextPartShadow):
 
@@ -522,16 +525,18 @@ class BlockContextShadow(ContextPartShadow):
         ContextPartShadow.update_self(self)
         self._initialip = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX])
         self._initialip -= 1 + self.w_method().getliteralsize()
+        self._eargc = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
 
     def update_w_self(self):
         ContextPartShadow.update_w_self(self)
         self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX] = utility.wrap_int(self._initialip + 1 + self.w_method().getliteralsize())
+        self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX] = utility.wrap_int(self._eargc)
 
     def expected_argument_count(self):
-        return utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
+        return self._eargc
 
     def store_expected_argument_count(self, argc):
-        self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX] = utility.wrap_int(argc)
+        self._eargc = argc
 
     def initialip(self):
         return self._initialip

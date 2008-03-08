@@ -494,7 +494,7 @@ def W_BlockContext(w_home, w_sender, argcnt, initialip):
     s_result.store_initialip(initialip)
     s_result.store_w_home(w_home)
     s_result._stack = []
-    s_result._pc = -1
+    s_result._pc = initialip
     return w_result
 
 def W_MethodContext(w_method, w_receiver,
@@ -512,7 +512,6 @@ def W_MethodContext(w_method, w_receiver,
     s_result.store_pc(0)
     for i in range(len(arguments)):
         s_result.settemp(i, arguments[i])
-    s_result.store_stackpointer(s_result.stackstart())
     s_result._stack = []
     return w_result
 
