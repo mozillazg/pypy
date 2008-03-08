@@ -15,7 +15,7 @@ essential_modules = dict.fromkeys(
 
 default_modules = essential_modules.copy()
 default_modules.update(dict.fromkeys(
-    ["_codecs", "gc", "_weakref", "array", "marshal", "errno",
+    ["_codecs", "gc", "_weakref", "marshal", "errno",
      "math", "_sre", "_pickle_support", "operator",
      "recparser", "symbol", "_random", "__pypy__"]))
 
@@ -35,7 +35,8 @@ if sys.platform == "win32":
     del working_modules["termios"]
 
 
-module_dependencies = {}
+module_dependencies = {'array': [("objspace.usemodules.struct", True)],
+                       }
 module_suggests = {    # the reason you want _rawffi is for ctypes, which
                        # itself needs the interp-level struct module
                        # because 'P' is missing from the app-level one
