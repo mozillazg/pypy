@@ -521,8 +521,8 @@ class BlockContextShadow(ContextPartShadow):
     def __init__(self, w_self, invalid):
         ContextPartShadow.__init__(self, w_self, invalid)
     
-    def update_self(self):
-        ContextPartShadow.update_self(self)
+    def update_shadow(self):
+        ContextPartShadow.update_shadow(self)
         self._initialip = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX])
         self._initialip -= 1 + self.w_method().getliteralsize()
         self._eargc = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
@@ -564,11 +564,20 @@ class MethodContextShadow(ContextPartShadow):
     def __init__(self, w_self, invalid):
         ContextPartShadow.__init__(self, w_self, invalid)
 
+    def update_shadow(self):
+        # Make sure the method is updated first
+        self._w_method = self.w_self()._vars[constants.MTHDCTX_METHOD]
+        ContextPartShadow.update_shadow(self)
+
+    def update_w_self(self):
+        ContextPartShadow.update_w_self(self)
+        self.w_self()._vars[constants.MTHDCTX_METHOD] = self._w_method
+
     def w_method(self):
-        return self.w_self()._vars[constants.MTHDCTX_METHOD]
+        return self._w_method
 
     def store_w_method(self, w_method):
-        self.w_self()._vars[constants.MTHDCTX_METHOD] = w_method
+        self._w_method = w_method
 
     def w_receiver(self):
         return self.w_self()._vars[constants.MTHDCTX_RECEIVER]
