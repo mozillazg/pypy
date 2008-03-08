@@ -206,12 +206,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
             shadow = TheClass(self)
             self._shadow = shadow
         shadow.check_for_updates()
-        # XXX
-        # Should only invalidate when we write to the instance...
-        # For now easier to always invalidate when the shadow is 
-        # requested lokaly. Probably the w_self is invalid
-        # afterwards anyway (currently only for contexts however...)
-        shadow.invalidate_w_self()
         return shadow
 
     def as_class_get_shadow(self):
@@ -498,6 +492,7 @@ def W_BlockContext(w_home, w_sender, argcnt, initialip):
     s_result.store_w_home(w_home)
     s_result._stack = []
     s_result._pc = initialip
+    s_result.invalidate_w_self()
     return w_result
 
 def W_MethodContext(w_method, w_receiver,
@@ -517,6 +512,7 @@ def W_MethodContext(w_method, w_receiver,
     for i in range(len(arguments)):
         s_result.settemp(i, arguments[i])
     s_result._stack = []
+    s_result.invalidate_w_self()
     return w_result
 
 # Use black magic to create w_nil without running the constructor,

@@ -415,7 +415,6 @@ class ContextPartShadow(AbstractShadow):
 
     def __init__(self, w_self, invalid):
         AbstractShadow.__init__(self, w_self, invalid)
-        self.w_invalid = True
 
     def s_home(self):
         raise NotImplementedError()
@@ -442,6 +441,7 @@ class ContextPartShadow(AbstractShadow):
         return self._pc
 
     def store_pc(self, newpc):
+        self.invalidate_w_self()
         self._pc = newpc
 
     def stackpointer(self):
@@ -476,19 +476,23 @@ class ContextPartShadow(AbstractShadow):
         return self.s_home().gettemp(index)
 
     def settemp(self, index, w_value):
+        self.invalidate_w_self()
         self.s_home().settemp(index, w_value)
 
     # ______________________________________________________________________
     # Stack Manipulation
     def pop(self):
+        self.invalidate_w_self()
         w_v = self._stack[-1]
         self._stack = self._stack[:-1]
         return w_v
 
     def push(self, w_v):
+        self.invalidate_w_self()
         self._stack += [w_v]
 
     def push_all(self, lst):
+        self.invalidate_w_self()
         #for x in lst:
         #    self.push(x)
         self._stack += lst
@@ -500,6 +504,7 @@ class ContextPartShadow(AbstractShadow):
         return self._stack[-(idx + 1)]
 
     def pop_n(self, n):
+        self.invalidate_w_self()
         assert n >= 0
         start = len(self._stack) - n
         assert start >= 0          # XXX what if this fails?
@@ -509,6 +514,7 @@ class ContextPartShadow(AbstractShadow):
         return self._stack
 
     def pop_and_return_n(self, n):
+        self.invalidate_w_self()
         assert n >= 0
         start = len(self._stack) - n
         assert start >= 0          # XXX what if this fails?
@@ -536,12 +542,14 @@ class BlockContextShadow(ContextPartShadow):
         return self._eargc
 
     def store_expected_argument_count(self, argc):
+        self.invalidate_w_self()
         self._eargc = argc
 
     def initialip(self):
         return self._initialip
         
     def store_initialip(self, initialip):
+        self.invalidate_w_self()
         self._initialip = initialip
         
     def store_w_home(self, w_home):
@@ -554,6 +562,7 @@ class BlockContextShadow(ContextPartShadow):
         return self.w_home().as_methodcontext_get_shadow()
 
     def reset_stack(self):
+        self.invalidate_w_self()
         self._stack = []
         
     def stackstart(self):
