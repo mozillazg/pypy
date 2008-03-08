@@ -558,15 +558,19 @@ class ContextPartShadow(AbstractShadow):
 class BlockContextShadow(ContextPartShadow):
 
     def __init__(self, w_self, invalid):
-        self._s_home = None
         ContextPartShadow.__init__(self, w_self, invalid)
-    
+        self._s_home = None
+
+    def invalidate(self):
+        self._s_home = None
+        AbstractShadow.invalidate(self)
+
     def update_shadow(self):
-        ContextPartShadow.update_shadow(self)
+        self.store_w_home(self.w_self()._vars[constants.BLKCTX_HOME_INDEX])
         self._initialip = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX])
         self._initialip -= 1 + self.w_method().getliteralsize()
         self._eargc = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
-        self.store_w_home(self.w_self()._vars[constants.BLKCTX_HOME_INDEX])
+        ContextPartShadow.update_shadow(self)
 
     def update_w_self(self):
         ContextPartShadow.update_w_self(self)
