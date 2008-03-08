@@ -143,12 +143,17 @@ class W_ArrayInstance(W_DataInstance):
         return space.wrap(rffi.cast(lltype.Unsigned, ptr))
     descr_itemaddress.unwrap_spec = ['self', ObjSpace, int]
 
+    def getrawsize(self):
+        _, itemsize, _ = self.shape.itemtp
+        return itemsize * self.length
+
 W_ArrayInstance.typedef = TypeDef(
     'ArrayInstance',
     __repr__    = interp2app(W_ArrayInstance.descr_repr),
     __setitem__ = interp2app(W_ArrayInstance.setitem),
     __getitem__ = interp2app(W_ArrayInstance.getitem),
     __len__     = interp2app(W_ArrayInstance.getlength),
+    __buffer__  = interp2app(W_ArrayInstance.descr_buffer),
     buffer      = GetSetProperty(W_ArrayInstance.getbuffer),
     shape       = interp_attrproperty('shape', W_ArrayInstance),
     free        = interp2app(W_ArrayInstance.free),
@@ -172,6 +177,7 @@ W_ArrayInstanceAutoFree.typedef = TypeDef(
     __setitem__ = interp2app(W_ArrayInstance.setitem),
     __getitem__ = interp2app(W_ArrayInstance.getitem),
     __len__     = interp2app(W_ArrayInstance.getlength),
+    __buffer__  = interp2app(W_ArrayInstance.descr_buffer),
     buffer      = GetSetProperty(W_ArrayInstance.getbuffer),
     shape       = interp_attrproperty('shape', W_ArrayInstance),
     byptr       = interp2app(W_ArrayInstance.byptr),
