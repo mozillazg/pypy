@@ -52,6 +52,7 @@ class AbstractShadow(object):
             self.update_shadow()
 
     def update_shadow(self):
+        self.w_self().setshadow(self)
         self.invalid = False
 
     def update_w_self(self):
@@ -550,11 +551,13 @@ class ContextPartShadow(AbstractShadow):
 class BlockContextShadow(ContextPartShadow):
 
     def __init__(self, w_self, invalid):
-        ContextPartShadow.__init__(self, w_self, invalid)
         self._s_home = None
+        ContextPartShadow.__init__(self, w_self, invalid)
 
     def invalidate(self):
-        self._s_home = None
+        if self._s_home is not None:
+            self._s_home.unnotify(self)
+            self._s_home = None
         AbstractShadow.invalidate(self)
 
     def update_shadow(self):
@@ -587,15 +590,17 @@ class BlockContextShadow(ContextPartShadow):
     def store_w_home(self, w_home):
         if self._s_home is not None:
             self._s_home.unnotify(self)
+            self._s_home = None
         self.invalidate_w_self()
         self._w_home = w_home
-        self._s_home = self._w_home.as_methodcontext_get_shadow()
-        self._s_home.notifyinvalid(self)
 
     def w_home(self):
         return self._w_home
 
     def s_home(self):
+        if self._s_home is None:
+            self._s_home = self._w_home.as_methodcontext_get_shadow()
+            self._s_home.notifyinvalid(self)
         return self._s_home
 
     def reset_stack(self):

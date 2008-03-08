@@ -245,7 +245,7 @@ def test_pushConstantTwoBytecode():
 def test_pushActiveContextBytecode():
     interp = new_interpreter(pushActiveContextBytecode)
     interp.step()
-    assert interp.s_active_context().pop() == interp.w_active_context
+    assert interp.s_active_context().pop() == interp.w_active_context()
     assert interp.s_active_context().stack() == []
     
 def test_duplicateTopBytecode():
@@ -397,7 +397,7 @@ def sendBytecodesTest(w_class, w_object, bytecodes):
         interp = new_interpreter(bytecodes)
         interp.w_active_context().as_methodcontext_get_shadow().w_method().literals = fakeliterals("foo")
         interp.s_active_context().push(w_object)
-        callerContext = interp.w_active_context
+        callerContext = interp.w_active_context()
         interp.step()
         assert interp.s_active_context().w_sender() == callerContext
         assert interp.s_active_context().stack() == []
@@ -438,7 +438,7 @@ def test_send_to_primitive():
         interp.w_active_context().as_methodcontext_get_shadow().w_method().literals = fakeliterals("foo", "sub")
         interp.s_active_context().push(wrap_int(50))
         interp.s_active_context().push(wrap_int(8))
-        callerContext = interp.w_active_context
+        callerContext = interp.w_active_context()
         interp.step()
         assert interp.w_active_context() is callerContext
         assert len(interp.s_active_context().stack()) == 1
@@ -602,7 +602,7 @@ def test_singleExtendedSuperBytecode(bytecode=singleExtendedSuperBytecode + chr(
     interp.s_active_context().push(w_object)
     interp.step()
     for w_specificclass in [w_super, w_supersuper]:
-        callerContext = interp.w_active_context
+        callerContext = interp.w_active_context()
         interp.step()
         interp.step()
         assert interp.s_active_context().w_sender() == callerContext

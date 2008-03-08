@@ -12,9 +12,9 @@ mockclass = classtable.bootstrap_class
 class MockFrame(model.W_PointersObject):
     def __init__(self, stack):
         self._vars = [None] * 6 + stack
-        s_self = self.as_blockcontext_get_shadow()
+        s_self = self.as_blockcontext_get_shadow(False)
+        s_self._stack = stack
         s_self.store_expected_argument_count(0)
-        s_self.store_stackpointer(s_self.stackstart()+len(stack)-1) 
 
 def wrap(x):
     if isinstance(x, int): return utility.wrap_int(x)
@@ -28,7 +28,7 @@ def mock(stack):
     mapped_stack = [wrap(x) for x in stack]
     frame = MockFrame(mapped_stack)
     interp = interpreter.Interpreter()
-    interp.w_active_context = frame
+    interp.store_w_active_context(frame)
     return (interp, len(stack))
 
 def prim(code, stack):

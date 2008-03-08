@@ -122,6 +122,7 @@ def test_context():
     w_object.store(idx + 1, 'f')
     w_object.store(idx + 2, 'g')
     w_object.store(idx + 3, 'h')
+    s_object.update_shadow()
     assert s_object.top() == 'h'
     assert s_object.stack() == ['f', 'g', 'h' ]
     s_object.push('i')
@@ -130,6 +131,8 @@ def test_context():
     assert s_object.pop() == 'i'
     assert s_object.pop_and_return_n(2) == ['g', 'h']
     assert s_object.pop() == 'f'
+    s_object.update_w_self()
+    s_object.update_shadow()
     assert s_object.stackpointer() == s_object.stackstart()
 
 def test_methodcontext():
