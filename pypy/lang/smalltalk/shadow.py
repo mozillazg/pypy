@@ -9,7 +9,7 @@ class AbstractShadow(object):
     
     def __init__(self, w_self, invalid):
         self._w_self = w_self
-        self._version = 0
+        self.version = 0
         self.invalid = invalid
         self.w_invalid = False
         if invalid:
@@ -21,6 +21,7 @@ class AbstractShadow(object):
     def invalidate(self):
         """XXX This should get called whenever the base Smalltalk
         object changes."""
+        self.version += 1
         self.invalid = True
 
     def invalidate_w_self(self):
@@ -41,7 +42,6 @@ class AbstractShadow(object):
             self.update_shadow()
 
     def update_shadow(self):
-        self._version += 1
         self.invalid = False
 
     def update_w_self(self):

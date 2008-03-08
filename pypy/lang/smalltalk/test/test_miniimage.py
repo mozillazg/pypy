@@ -202,7 +202,7 @@ def test_lookup_abs_in_integer(int=10):
 
     assert w_method
     w_frame = w_method.create_frame(w_object, [])
-    interp.w_active_context = w_frame
+    interp.store_w_active_context(w_frame)
 
     while True:
         try:
@@ -233,7 +233,7 @@ def test_runimage():
     s_ctx = s_ap.s_suspended_context()
     s_ap.store_w_suspended_context(objtable.w_nil)
     interp = interpreter.Interpreter()
-    interp.w_active_context = s_ctx.w_self()
+    interp.store_w_active_context(s_ctx.w_self())
     interp.interpret()
     
 def test_compile_method():
@@ -268,7 +268,7 @@ def perform(w_receiver, selector, *arguments_w):
     w_method = s_class.lookup(selector)
     assert w_method
     w_frame = w_method.create_frame(w_receiver, list(arguments_w))
-    interp.w_active_context = w_frame
+    interp.store_w_active_context(w_frame)
     while True:
         try:
             interp.step()

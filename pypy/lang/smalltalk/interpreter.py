@@ -28,11 +28,24 @@ class Interpreter:
     _w_last_active_context = None
     
     def __init__(self):
-        self.w_active_context = None
+        self._w_active_context = None
+        self._s_active_context = None
+        self.s_version = None
         self.cnt = 0
 
+    def w_active_context(self):
+        return self._w_active_context
+
+    def store_w_active_context(self, w_context):
+        self._w_active_context = w_context
+        self._s_active_context = w_context.as_context_get_shadow()
+        self.s_version = self._s_active_context.version
+
     def s_active_context(self):
-        return self.w_active_context.as_context_get_shadow()
+        if self._s_active_context.version != self.s_version:
+            self._s_active_context = self.w_active_context().as_context_get_shadow()
+            self.s_version = self._s_active_context.version
+        return self._s_active_context
 
     def interpret(self):
         try:
@@ -51,15 +64,15 @@ class Interpreter:
         if not objectmodel.we_are_translated():
             bytecodeimpl = BYTECODE_TABLE[next]
             if self.should_trace():
-                if self._w_last_active_context != self.w_active_context:
+                if self._w_last_active_context != self.w_active_context():
                     cnt = 0
-                    p = self.w_active_context
+                    p = self.w_active_context()
                     # AK make method
                     while p is not objtable.w_nil:
                         cnt += 1
                         p = p.as_context_get_shadow().w_sender()
                     self._last_indent = "  " * cnt
-                    self._w_last_active_context = self.w_active_context
+                    self._w_last_active_context = self.w_active_context()
 
                 print "%sStack=%s" % (
                     self._last_indent,
@@ -203,7 +216,8 @@ class __extend__(ContextPartShadow):
                         print "PRIMITIVE FAILED: %d %s" % (method.primitive, selector,)
                     pass # ignore this error and fall back to the Smalltalk version
         arguments = self.pop_and_return_n(argcount)
-        interp.w_active_context = method.create_frame(receiver, arguments, self.w_self()) 
+        interp.store_w_active_context(method.create_frame(receiver, arguments,
+                                                          self.w_self()))
         self.pop()
 
     def _return(self, object, interp, w_return_to):
@@ -211,7 +225,7 @@ class __extend__(ContextPartShadow):
         if w_return_to is objtable.w_nil:
             raise ReturnFromTopLevel(object)
         w_return_to.as_context_get_shadow().push(object)
-        interp.w_active_context = w_return_to
+        interp.store_w_active_context(w_return_to)
 
     def returnReceiver(self, interp):
         self._return(self.w_receiver(), interp, self.s_home().w_sender())
