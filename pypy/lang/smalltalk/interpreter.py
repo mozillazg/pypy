@@ -36,7 +36,9 @@ class Interpreter:
         return self._w_active_context
 
     def store_w_active_context(self, w_context):
-        self._s_active_context = None
+        if self._s_active_context is not None:
+            self._s_active_context.unnotify(self)
+            self._s_active_context = None
         self._w_active_context = w_context
 
     def invalidate(self):

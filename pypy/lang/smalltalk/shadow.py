@@ -18,6 +18,10 @@ class AbstractShadow(object):
     def notifyinvalid(self, other):
         self._notifyinvalid += [other]
 
+    def unnotify(self, other):
+        if other in self._notifyinvalid:
+            self._notifyinvalid.remove(other)
+
     def getname(self):
         return repr(self)
 
@@ -554,6 +558,7 @@ class ContextPartShadow(AbstractShadow):
 class BlockContextShadow(ContextPartShadow):
 
     def __init__(self, w_self, invalid):
+        self._s_home = None
         ContextPartShadow.__init__(self, w_self, invalid)
     
     def update_shadow(self):
@@ -561,11 +566,13 @@ class BlockContextShadow(ContextPartShadow):
         self._initialip = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX])
         self._initialip -= 1 + self.w_method().getliteralsize()
         self._eargc = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
+        self.store_w_home(self.w_self()._vars[constants.BLKCTX_HOME_INDEX])
 
     def update_w_self(self):
         ContextPartShadow.update_w_self(self)
         self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX] = utility.wrap_int(self._initialip + 1 + self.w_method().getliteralsize())
         self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX] = utility.wrap_int(self._eargc)
+        self.w_self()._vars[constants.BLKCTX_HOME_INDEX] = self._w_home
 
     def expected_argument_count(self):
         return self._eargc
@@ -582,13 +589,18 @@ class BlockContextShadow(ContextPartShadow):
         self._initialip = initialip
         
     def store_w_home(self, w_home):
-        self.w_self()._vars[constants.BLKCTX_HOME_INDEX] = w_home
+        if self._s_home is not None:
+            self._s_home.unnotify(self)
+        self.invalidate_w_self()
+        self._w_home = w_home
+        self._s_home = self._w_home.as_methodcontext_get_shadow()
+        self._s_home.notifyinvalid(self)
 
     def w_home(self):
-        return self.w_self()._vars[constants.BLKCTX_HOME_INDEX]
+        return self._w_home
 
     def s_home(self):
-        return self.w_home().as_methodcontext_get_shadow()
+        return self._s_home
 
     def reset_stack(self):
         self.invalidate_w_self()
