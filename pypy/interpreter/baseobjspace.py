@@ -853,6 +853,11 @@ class ObjSpace(object):
             if step == 0:
                 raise OperationError(self.w_ValueError,
                                      self.wrap("slice step cannot be zero"))
+            if start < 0:
+                start = 0
+            if stop < start:
+                stop = start
+            assert stop <= seqlength
         else:
             start = self.int_w(w_index_or_slice)
             if start < 0:

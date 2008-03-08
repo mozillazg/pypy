@@ -50,10 +50,7 @@ class Buffer(Wrappable):
         if step == 0:  # index only
             return space.wrap(self.getitem(start))
         elif step == 1:
-            if 0 <= start <= stop:
-                res = self.getslice(start, stop)
-            else:
-                res = ''
+            res = self.getslice(start, stop)
             return space.wrap(res)
         else:
             raise OperationError(space.w_ValueError,
@@ -161,3 +158,30 @@ class StringBuffer(Buffer):
     def getslice(self, start, stop):
         assert 0 <= start <= stop <= self.len
         return self.value[start:stop]
+
+
+class StringLikeBuffer(Buffer):
+    """For app-level objects that already have a string-like interface
+    with __len__ and a __getitem__ that returns characters or (with
+    slicing) substrings."""
+    # XXX this is inefficient, it should only be used temporarily
+
+    def __init__(self, space, w_obj):
+        self.space = space
+        self.w_obj = w_obj
+        self.len = space.int_w(space.len(w_obj))
+
+    def getitem(self, index):
+        space = self.space
+        s = space.str_w(space.getitem(self.w_obj, space.wrap(index)))
+        if len(s) != 1:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("character expected, got string"))
+        char = s[0]   # annotator hint
+        return char
+
+    def getslice(self, start, stop):
+        space = self.space
+        s = space.str_w(space.getslice(self.w_obj, space.wrap(start),
+                                                   space.wrap(stop)))
+        return s
