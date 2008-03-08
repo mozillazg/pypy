@@ -201,6 +201,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
             shadow = TheClass(self, invalid)
             self._shadow = shadow
         elif not isinstance(shadow, TheClass):
+            shadow.check_for_w_updates()
             shadow.invalidate()
             shadow = TheClass(self)
             self._shadow = shadow
@@ -242,13 +243,13 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import AssociationShadow
         return self.as_special_get_shadow(AssociationShadow)
 
-    def as_blockcontext_get_shadow(self):
+    def as_blockcontext_get_shadow(self, invalid=True):
         from pypy.lang.smalltalk.shadow import BlockContextShadow
-        return self.as_special_get_shadow(BlockContextShadow, False)
+        return self.as_special_get_shadow(BlockContextShadow, invalid)
 
-    def as_methodcontext_get_shadow(self):
+    def as_methodcontext_get_shadow(self, invalid=True):
         from pypy.lang.smalltalk.shadow import MethodContextShadow
-        return self.as_special_get_shadow(MethodContextShadow, False)
+        return self.as_special_get_shadow(MethodContextShadow, invalid)
 
     def as_context_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
@@ -490,7 +491,8 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 def W_BlockContext(w_home, w_sender, argcnt, initialip):
     from pypy.lang.smalltalk.classtable import w_BlockContext
     w_result = W_PointersObject(w_BlockContext, w_home.size())
-    s_result = w_result.as_blockcontext_get_shadow()
+    # Only home-brewed shadows are not invalid from start.
+    s_result = w_result.as_blockcontext_get_shadow(invalid=False)
     s_result.store_expected_argument_count(argcnt)
     s_result.store_initialip(initialip)
     s_result.store_w_home(w_home)
@@ -505,7 +507,8 @@ def W_MethodContext(w_method, w_receiver,
     # mc for methods with islarge flag turned on 32
     size = 12 + w_method.islarge * 20 + w_method.argsize
     w_result = w_MethodContext.as_class_get_shadow().new(size)
-    s_result = w_result.as_methodcontext_get_shadow()
+    # Only home-brewed shadows are not invalid from start.
+    s_result = w_result.as_methodcontext_get_shadow(invalid=False)
     s_result.store_w_method(w_method)
     if w_sender:
         s_result.store_w_sender(w_sender)
