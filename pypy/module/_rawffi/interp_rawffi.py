@@ -299,7 +299,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
         s = space.unicode_w(w_arg)
         if len(s) != 1:
             raise OperationError(space.w_TypeError, w(
-                "Expected unicode string og length one as wide character"))
+                "Expected unicode string of length one as wide character"))
         val = s[0]
         push_func(add_arg, argdesc, val)
     else:
