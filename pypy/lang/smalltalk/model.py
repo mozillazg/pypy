@@ -195,6 +195,10 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
                 isinstance(self._vars, list))
 
     # XXX XXX
+    # Find better way of overloading shadows...
+    def setshadow(self, shadow):
+        self._shadow = shadow
+
     def as_special_get_shadow(self, TheClass, invalid=True):
         shadow = self._shadow
         if shadow is None:
@@ -203,7 +207,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         elif not isinstance(shadow, TheClass):
             shadow.check_for_w_updates()
             shadow.invalidate()
-            shadow = TheClass(self)
+            shadow = TheClass(self, invalid)
             self._shadow = shadow
         shadow.check_for_updates()
         return shadow
