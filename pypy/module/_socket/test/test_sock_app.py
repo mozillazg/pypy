@@ -394,8 +394,8 @@ class AppTestSocket:
         assert s.getsockname() == s2.getsockname()
     
 
-    def test_buffer(self):
-        # Test that send/sendall/sendto accept a buffer as argument
+    def test_buffer_or_unicode(self):
+        # Test that send/sendall/sendto accept a buffer or a unicode as arg
         import _socket, os
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM, 0)
         # XXX temporarily we use codespeak to test, will have more robust tests in
@@ -404,6 +404,9 @@ class AppTestSocket:
         s.connect(("codespeak.net", 80))
         s.send(buffer(''))
         s.sendall(buffer(''))
+        s.send(u'')
+        s.sendall(u'')
+        raises(UnicodeEncodeError, s.send, u'\xe9')
         s.close()
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM, 0)
         s.sendto(buffer(''), ('localhost', 9)) # Send to discard port.

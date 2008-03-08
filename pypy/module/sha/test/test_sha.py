@@ -92,3 +92,14 @@ class AppTestSHA(object):
         d1 = sha.sha(buffer("abcde"))
         d1.update(buffer("jkl"))
         assert d1.hexdigest() == 'f5d13cf6341db9b0e299d7b9d562de9572b58e5d'
+
+
+    def test_unicode(self):
+        """
+        Test passing unicode strings.
+        """
+        sha = self.sha
+        d1 = sha.sha(u"abcde")
+        d1.update(u"jkl")
+        assert d1.hexdigest() == 'f5d13cf6341db9b0e299d7b9d562de9572b58e5d'
+        raises(UnicodeEncodeError, d1.update, u'\xe9')

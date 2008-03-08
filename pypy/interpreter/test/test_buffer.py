@@ -35,5 +35,13 @@ class TestBuffer:
         f.close()
         assert data == 'hello world'
 
+    def test_unicode(self):
+        space = self.space
+        s = space.bufferstr_w(space.wrap(u'hello'))
+        assert type(s) is str
+        assert s == 'hello'
+        space.raises_w(space.w_UnicodeEncodeError,
+                       space.bufferstr_w, space.wrap(u'\xe9'))
+
 
 # Note: some app-level tests for buffer are in module/__builtin__/test/.
