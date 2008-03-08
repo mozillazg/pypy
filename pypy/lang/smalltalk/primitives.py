@@ -640,7 +640,6 @@ def finalize_block_ctx(interp, s_block_ctx, frame):
     # Set some fields
     s_block_ctx.store_pc(s_block_ctx.initialip())
     s_block_ctx.store_w_sender(frame)
-    s_block_ctx.update_w_self()
     interp.w_active_context = s_block_ctx.w_self()
     
 @expose_primitive(PRIMITIVE_VALUE, no_result=True)
