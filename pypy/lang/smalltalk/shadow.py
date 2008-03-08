@@ -9,7 +9,7 @@ class AbstractShadow(object):
     
     def __init__(self, w_self, invalid):
         self._w_self = w_self
-        self.version = 0
+        self._version = 0
         self.invalid = invalid
         self.w_invalid = False
         if invalid:
@@ -21,8 +21,14 @@ class AbstractShadow(object):
     def invalidate(self):
         """XXX This should get called whenever the base Smalltalk
         object changes."""
-        self.version += 1
+        self._version += 1
         self.invalid = True
+
+    def version(self):
+        """ XXX If decoded shadows depends on more than just w_self,
+        this method should be overwritten to check the versions of the
+        shadows used to build up this shadow. """
+        return self._version
 
     def invalidate_w_self(self):
         """XXX This should get called whenever the shadow
