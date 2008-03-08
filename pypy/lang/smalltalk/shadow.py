@@ -9,11 +9,15 @@ class AbstractShadow(object):
     
     def __init__(self, w_self, invalid):
         self._w_self = w_self
-        self._version = 0
+        self._invalidnotify = []
         self.invalid = invalid
         self.w_invalid = False
         if invalid:
             self.invalidate()
+
+    def invalidnotify(self, other):
+        if other not in self._invalidnotify:
+            self._invalidnotify += [other]
 
     def getname(self):
         return repr(self)
@@ -21,8 +25,10 @@ class AbstractShadow(object):
     def invalidate(self):
         """XXX This should get called whenever the base Smalltalk
         object changes."""
-        self._version += 1
-        self.invalid = True
+        if not self.invalid:
+            self.invalid = True
+            for listener in self._invalidnotify:
+                listener.invalidate()
 
     def version(self):
         """ XXX If decoded shadows depends on more than just w_self,
