@@ -30,7 +30,6 @@ class Interpreter:
     def __init__(self):
         self._w_active_context = None
         self._s_active_context = None
-        self.s_version = None
         self.cnt = 0
 
     def w_active_context(self):
@@ -38,15 +37,14 @@ class Interpreter:
 
     def store_w_active_context(self, w_context):
         self._w_active_context = w_context
-        self.store_s_active_context()
+        self._s_active_context = None
 
-    def store_s_active_context(self):
-        self._s_active_context = self.w_active_context().as_context_get_shadow()
-        self.s_version = self._s_active_context.version()
+    def invalidate(self):
+        self._s_active_context = None
 
     def s_active_context(self):
-        if self._s_active_context.version() != self.s_version:
-            self.store_s_active_context()
+        if self._s_active_context is None:
+            self._s_active_context = self.w_active_context().as_context_get_shadow()
         return self._s_active_context
 
     def interpret(self):
