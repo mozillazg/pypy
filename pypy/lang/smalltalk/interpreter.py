@@ -1,4 +1,6 @@
 import py
+from pypy.lang.smalltalk.shadow import AbstractShadow
+from pypy.lang.smalltalk.shadow import ContextPartShadow
 from pypy.lang.smalltalk import model, constants, primitives
 from pypy.lang.smalltalk import objtable
 from pypy.lang.smalltalk.shadow import ContextPartShadow
@@ -15,7 +17,7 @@ class MissingBytecode(Exception):
 class IllegalStoreError(Exception):
     """Illegal Store."""
 
-class Interpreter:
+class Interpreter(AbstractShadow):
 
     TRUE = objtable.w_true
     FALSE = objtable.w_false
@@ -39,6 +41,7 @@ class Interpreter:
         if self._s_active_context is not None:
             self._s_active_context.unnotify(self)
             self._s_active_context = None
+        assert isinstance(w_context, model.W_PointersObject)
         self._w_active_context = w_context
 
     def invalidate(self):
@@ -47,6 +50,7 @@ class Interpreter:
     def s_active_context(self):
         if self._s_active_context is None:
             self._s_active_context = self.w_active_context().as_context_get_shadow()
+            assert isinstance(self._s_active_context, ContextPartShadow)
             self._s_active_context.notifyinvalid(self)
         return self._s_active_context
 
