@@ -944,31 +944,12 @@ def repr__Unicode(space, w_unicode):
 def mod__Unicode_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=True)
 
-_maxunicode = sys.maxunicode
-_bigendian = sys.byteorder == "big"
-
 def buffer__Unicode(space, w_unicode):
     # xxx this is a slightly strange thing...
+    from pypy.module.struct.unichar import pack_unichar
     charlist = []
     for unich in w_unicode._value:
-        if _maxunicode <= 65535:
-            if _bigendian:
-                charlist.append(chr(ord(unich) >> 8))
-                charlist.append(chr(ord(unich) & 0xFF))
-            else:
-                charlist.append(chr(ord(unich) & 0xFF))
-                charlist.append(chr(ord(unich) >> 8))
-        else:
-            if _bigendian:
-                charlist.append(chr(ord(unich) >> 24))
-                charlist.append(chr((ord(unich) >> 16) & 0xFF))
-                charlist.append(chr((ord(unich) >> 8) & 0xFF))
-                charlist.append(chr(ord(unich) & 0xFF))
-            else:
-                charlist.append(chr(ord(unich) & 0xFF))
-                charlist.append(chr((ord(unich) >> 8) & 0xFF))
-                charlist.append(chr((ord(unich) >> 16) & 0xFF))
-                charlist.append(chr(ord(unich) >> 24))
+        pack_unichar(unich, charlist)
     from pypy.interpreter.buffer import StringBuffer
     return space.wrap(StringBuffer(''.join(charlist)))
 

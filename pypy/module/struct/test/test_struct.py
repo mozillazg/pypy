@@ -322,3 +322,14 @@ class AppTestStruct(object):
         assert pack("!B", -1.1) == '\xff'
         assert pack("!h", 0xa000) == '\xa0\x00'
         assert pack("!H", -2.2) == '\xff\xfe'
+
+
+    def test_unicode(self):
+        """
+        A PyPy extension: accepts the 'u' format character in native mode,
+        just like the array module does.  (This is actually used in the
+        implementation of our interp-level array module.)
+        """
+        data = self.struct.pack("uuu", u'X', u'Y', u'Z')
+        assert data == str(buffer(u'XYZ'))
+        assert self.struct.unpack("uuu", data) == (u'X', u'Y', u'Z')
