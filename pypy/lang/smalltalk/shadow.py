@@ -156,10 +156,12 @@ class ClassShadow(AbstractShadow):
         # cause infinite recursion
         # read s_superclass
         w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
-        if w_superclass is objtable.w_nil:
-            self.s_superclass = None
-        else:
+        if w_superclass is not objtable.w_nil:
             self.s_superclass = w_superclass.as_class_get_shadow()
+            # Cache all methods of superclasses locally.
+            for selector, method in self.s_superclass.methoddict.items():
+                if selector not in self.methoddict:
+                    self.methoddict[selector] = method
             self.s_superclass.notifyinvalid(self)
         AbstractShadow.update_shadow(self)
 
@@ -229,15 +231,11 @@ class ClassShadow(AbstractShadow):
 
     def lookup(self, selector):
         look_in_shadow = self
-        while True:
-            try:
-                return look_in_shadow.methoddict[selector]
-            except KeyError:
-                pass
-            look_in_shadow = look_in_shadow.s_superclass
-            if look_in_shadow is None:
-                # attach information on the exception, for debugging.
-                raise MethodNotFound(self, selector)
+        if selector in self.methoddict:
+            # We cached all methods of superclasses locally.
+            return self.methoddict[selector]
+        else:
+            raise MethodNotFound(self, selector)
 
     def installmethod(self, selector, method):
         "NOT_RPYTHON"     # this is only for testing.
