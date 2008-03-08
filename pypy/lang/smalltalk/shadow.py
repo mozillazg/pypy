@@ -162,6 +162,7 @@ class ClassShadow(AbstractShadow):
             self.s_superclass = None
         else:
             self.s_superclass = w_superclass.as_class_get_shadow()
+            self.s_superclass.notifyinvalid(self)
         AbstractShadow.update_shadow(self)
 
     # XXX check better way to store objects
