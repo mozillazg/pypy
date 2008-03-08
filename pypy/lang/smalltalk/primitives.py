@@ -77,7 +77,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
             unrolling_unwrap_spec = unrolling_iterable(enumerate(unwrap_spec))
             def wrapped(interp, argument_count_m1):
                 argument_count = argument_count_m1 + 1 # to account for the rcvr
-                frame = interp.w_active_context
+                frame = interp.w_active_context()
                 s_frame = frame.as_context_get_shadow()
                 assert argument_count == len_unwrap_spec
                 if len(s_frame.stack()) < len_unwrap_spec:
@@ -640,7 +640,7 @@ def finalize_block_ctx(interp, s_block_ctx, frame):
     # Set some fields
     s_block_ctx.store_pc(s_block_ctx.initialip())
     s_block_ctx.store_w_sender(frame)
-    interp.w_active_context = s_block_ctx.w_self()
+    interp.store_w_active_context(s_block_ctx.w_self())
     
 @expose_primitive(PRIMITIVE_VALUE, no_result=True)
 def func(interp, argument_count):
@@ -693,7 +693,7 @@ def func(interp, w_block_ctx, w_args):
 
     # XXX Check original logic. Image does not test this anyway
     # because falls back to value + internal implementation
-    finalize_block_ctx(interp, s_block_ctx, interp.w_active_context)
+    finalize_block_ctx(interp, s_block_ctx, interp.w_active_context())
 
 @expose_primitive(PRIMITIVE_PERFORM)
 def func(interp, argcount):
@@ -709,8 +709,8 @@ def func(interp, w_rcvr, sel, w_args):
     w_frame = w_method.create_frame(w_rcvr,
         [w_args.fetch(i) for i in range(w_args.size())])
 
-    w_frame.as_context_get_shadow().store_w_sender(interp.w_active_context)
-    interp.w_active_context = w_frame
+    w_frame.as_context_get_shadow().store_w_sender(interp.w_active_context())
+    interp.store_w_active_context(w_frame)
 
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):
