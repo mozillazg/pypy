@@ -134,14 +134,17 @@ class ClassShadow(AbstractShadow):
         # read the name
         if w_self.size() > constants.CLASS_NAME_INDEX:
             w_name = w_self._vars[constants.CLASS_NAME_INDEX]
+        else:
+            w_name = None
 
         # XXX This is highly experimental XXX
         # if the name-pos of class is not bytesobject,
         # we are probably holding a metaclass instead of a class.
         # metaclasses hold a pointer to the real class in the last
         # slot. This is pos 6 in mini.image and higher in squeak3.9
-        if not isinstance(w_name, model.W_BytesObject):
+        if w_name is None:
             w_realclass = w_self._vars[w_self.size() - 1]
+            assert isinstance(w_realclass, model.W_PointersObject)
             if w_realclass.size() > constants.CLASS_NAME_INDEX:
                 w_name = w_realclass._vars[constants.CLASS_NAME_INDEX]
         if isinstance(w_name, model.W_BytesObject):
@@ -184,6 +187,8 @@ class ClassShadow(AbstractShadow):
             raise NotImplementedError(self.instance_kind)
         if store:
             from pypy.lang.smalltalk import objtable
+## XXX breaks translation
+            assert isinstance(w_new, model.W_Object)
             objtable.objects += [w_new]
         return w_new
 
@@ -254,6 +259,7 @@ class MethodDictionaryShadow(AbstractShadow):
     def update_shadow(self):
         from pypy.lang.smalltalk import objtable
         w_values = self.w_self()._vars[constants.METHODDICT_VALUES_INDEX]
+        assert isinstance(w_values, model.W_PointersObject)
         s_values = w_values.get_shadow()
         s_values.notifyinvalid(self)
         size = self.w_self().size() - constants.METHODDICT_NAMES_INDEX
@@ -320,17 +326,18 @@ class SemaphoreShadow(LinkedListShadow):
         priority = s_process.priority()
         s_scheduler = self.s_scheduler()
         w_process_lists = s_scheduler.process_lists()
+        assert isinstance(w_process_lists, model.W_PointersObject)
         w_process_list = w_process_lists._vars[priority]
         w_process_list.as_linkedlist_get_shadow().add_last_link(s_process.w_self())
         s_process.store_my_list(w_process_list)
         
     def transfer_to(self, s_process, interp):
         from pypy.lang.smalltalk import objtable
-        s_scheduler = self.scheduler()
+        s_scheduler = self.s_scheduler()
         s_old_process = s_scheduler.s_active_process()
         s_scheduler.store_w_active_process(s_process.w_self())
-        s_old_process.store_w_suspended_context(interp.s_active_context.w_self())
-        interp.s_active_context = s_process.s_suspended_context()
+        s_old_process.store_w_suspended_context(interp.s_active_context().w_self())
+        interp.store_w_active_context(s_process.w_suspended_context())
         s_process.store_w_suspended_context(objtable.w_nil)
         #reclaimableContextCount := 0
 
@@ -385,10 +392,10 @@ class ProcessShadow(LinkShadow):
     def store_my_list(self, w_object):
         self.w_self()._vars[constants.PROCESS_MY_LIST_INDEX] = w_object
 
-    def s_suspended_context(self):
+    def w_suspended_context(self):
         # XXX Can currently only restart context if it is a method context...
         # XXX Depends on typechecking ...
-        return self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX].as_methodcontext_get_shadow()
+        return self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX]
 
     def store_w_suspended_context(self, w_object):
         self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX] = w_object
@@ -484,7 +491,9 @@ class ContextPartShadow(AbstractShadow):
 
     def getbytecode(self):
         assert self._pc >= 0
-        bytecode = self.w_method().bytes[self._pc]
+        w_method = self.w_method()
+        assert isinstance(w_method, model.W_CompiledMethod)
+        bytecode = w_method.bytes[self._pc]
         currentBytecode = ord(bytecode)
         self._pc = self._pc + 1
         return currentBytecode
@@ -618,6 +627,7 @@ class MethodContextShadow(ContextPartShadow):
     def update_shadow(self):
         # Make sure the method is updated first
         self._w_method = self.w_self()._vars[constants.MTHDCTX_METHOD]
+        assert isinstance(self._w_method, model.W_CompiledMethod)
         ContextPartShadow.update_shadow(self)
 
     def update_w_self(self):
@@ -625,9 +635,11 @@ class MethodContextShadow(ContextPartShadow):
         self.w_self()._vars[constants.MTHDCTX_METHOD] = self._w_method
 
     def w_method(self):
+        assert isinstance(self._w_method, model.W_CompiledMethod)
         return self._w_method
 
     def store_w_method(self, w_method):
+        assert isinstance(w_method, model.W_CompiledMethod)
         self._w_method = w_method
 
     def w_receiver(self):
@@ -649,6 +661,8 @@ class MethodContextShadow(ContextPartShadow):
         return self
 
     def stackstart(self):
+        w_method = self.w_method()
+        assert isinstance(w_method, model.W_CompiledMethod)
         return (constants.MTHDCTX_TEMP_FRAME_START +
-                self.w_method().argsize +
-                self.w_method().tempsize)
+                w_method.argsize +
+                w_method.tempsize)
