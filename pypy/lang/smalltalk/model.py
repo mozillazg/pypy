@@ -162,10 +162,13 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         self.store(index0+self.instsize(), w_value)
 
     def fetch(self, n0):
+        if self._shadow is not None:
+            self._shadow.check_for_w_updates()
         return self._vars[n0]
         
     def store(self, n0, w_value):    
         if self._shadow is not None:
+            self._shadow.check_for_w_updates()
             self._shadow.invalidate()
         self._vars[n0] = w_value
 
@@ -196,14 +199,17 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def setshadow(self, shadow):
         self._shadow = shadow
 
-    def as_special_get_shadow(self, TheClass):
+    def as_special_get_shadow(self, TheClass, invalid=True):
         shadow = self._shadow
         if shadow is None:
-            shadow = TheClass(self)
+            shadow = TheClass(self, invalid)
+            self._shadow = shadow
         elif not isinstance(shadow, TheClass):
             shadow.invalidate()
             shadow = TheClass(self)
+            self._shadow = shadow
         shadow.check_for_updates()
+        shadow.invalidate_w_self()
         return shadow
 
     def as_class_get_shadow(self):
@@ -237,11 +243,11 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     def as_blockcontext_get_shadow(self):
         from pypy.lang.smalltalk.shadow import BlockContextShadow
-        return self.as_special_get_shadow(BlockContextShadow)
+        return self.as_special_get_shadow(BlockContextShadow, False)
 
     def as_methodcontext_get_shadow(self):
         from pypy.lang.smalltalk.shadow import MethodContextShadow
-        return self.as_special_get_shadow(MethodContextShadow)
+        return self.as_special_get_shadow(MethodContextShadow, False)
 
     def as_context_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
@@ -448,12 +454,6 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         else:
             self.literals[index0-1] = w_value
 
-    def fetchbyte(self, index1):
-        index0 = index1 - 1
-        index0 -= self.getliteralsize()
-        assert index0 < len(self.bytes)
-        return self.bytes[index0]
-
     def store(self, index0, w_v):
         self.atput0(index0, w_v)
 
@@ -493,7 +493,8 @@ def W_BlockContext(w_home, w_sender, argcnt, initialip):
     s_result.store_expected_argument_count(argcnt)
     s_result.store_initialip(initialip)
     s_result.store_w_home(w_home)
-    s_result.store_stackpointer(s_result.stackstart())
+    s_result._stack = []
+    s_result._pc = -1
     return w_result
 
 def W_MethodContext(w_method, w_receiver,
@@ -508,10 +509,11 @@ def W_MethodContext(w_method, w_receiver,
     if w_sender:
         s_result.store_w_sender(w_sender)
     s_result.store_w_receiver(w_receiver)
-    s_result.store_pc(w_method.getliteralsize()+1)
+    s_result.store_pc(0)
     for i in range(len(arguments)):
         s_result.settemp(i, arguments[i])
     s_result.store_stackpointer(s_result.stackstart())
+    s_result._stack = []
     return w_result
 
 # Use black magic to create w_nil without running the constructor,

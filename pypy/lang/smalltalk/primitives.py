@@ -80,7 +80,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                 frame = interp.w_active_context
                 s_frame = frame.as_context_get_shadow()
                 assert argument_count == len_unwrap_spec
-                if s_frame.stackpointer() - s_frame.stackstart() + 1 < len_unwrap_spec:
+                if len(s_frame.stack()) < len_unwrap_spec:
                     raise PrimitiveFailedError()
                 args = ()
                 for i, spec in unrolling_unwrap_spec:
@@ -640,6 +640,7 @@ def finalize_block_ctx(interp, s_block_ctx, frame):
     # Set some fields
     s_block_ctx.store_pc(s_block_ctx.initialip())
     s_block_ctx.store_w_sender(frame)
+    s_block_ctx.update_w_self()
     interp.w_active_context = s_block_ctx.w_self()
     
 @expose_primitive(PRIMITIVE_VALUE, no_result=True)
@@ -669,7 +670,7 @@ def func(interp, argument_count):
     block_args = frame.pop_and_return_n(exp_arg_cnt)
 
     # Reset stack of blockcontext to []
-    s_block_ctx.store_stackpointer(s_block_ctx.stackstart())
+    s_block_ctx.reset_stack()
     s_block_ctx.push_all(block_args)
 
     frame.pop()
