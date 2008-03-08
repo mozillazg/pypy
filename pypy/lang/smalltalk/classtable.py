@@ -6,7 +6,7 @@ def bootstrap_class(instsize, w_superclass=None, w_metaclass=None,
     from pypy.lang.smalltalk import model
     w_class = model.W_PointersObject(w_metaclass, 0)
                                              # a dummy placeholder for testing
-    s = shadow.ClassShadow(w_class)
+    s = shadow.ClassShadow(w_class, True)
     s.methoddict = {}
     if w_superclass is not None:
         s.s_superclass = w_superclass.as_class_get_shadow()

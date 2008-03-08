@@ -6,9 +6,14 @@ class AbstractShadow(object):
     """A shadow is an optional extra bit of information that
     can be attached at run-time to any Smalltalk object.
     """
-    def __init__(self, w_self):
+    
+    def __init__(self, w_self, invalid):
         self._w_self = w_self
-        self.invalidate()
+        self._version = 0
+        self.invalid = invalid
+        self.w_invalid = False
+        if invalid:
+            self.invalidate()
 
     def getname(self):
         return repr(self)
@@ -18,18 +23,29 @@ class AbstractShadow(object):
         object changes."""
         self.invalid = True
 
+    def invalidate_w_self(self):
+        """XXX This should get called whenever the shadow
+        object changes.
+        (current shortcut, whenever the shadow is used)"""
+        self.w_invalid = True
+
     def w_self(self):
         return self._w_self
 
+    def check_for_w_updates(self):
+        if self.w_invalid:
+            self.update_w_self()
+
     def check_for_updates(self):
         if self.invalid:
-            self.w_self().setshadow(self)
             self.update_shadow()
 
-    # XXX XXX Remove function when fixing superclass to AbstractShadow
     def update_shadow(self):
-        pass
+        self._version += 1
+        self.invalid = False
 
+    def update_w_self(self):
+        self.w_invalid = False
 
 # ____________________________________________________________ 
 
@@ -50,8 +66,8 @@ class ClassShadow(AbstractShadow):
     """A shadow for Smalltalk objects that are classes
     (i.e. used as the class of another Smalltalk object).
     """
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
 
     def invalidate(self):
         AbstractShadow.invalidate(self)
@@ -66,11 +82,12 @@ class ClassShadow(AbstractShadow):
         from pypy.lang.smalltalk import objtable
 
         "Update the ClassShadow with data from the w_self class."
+        AbstractShadow.update_shadow(self)
 
         w_self = self.w_self()
         # read and painfully decode the format
         classformat = utility.unwrap_int(
-            w_self.fetch(constants.CLASS_FORMAT_INDEX))
+            w_self._vars[constants.CLASS_FORMAT_INDEX])
         # The classformat in Squeak, as an integer value, is:
         #    <2 bits=instSize//64><5 bits=cClass><4 bits=instSpec>
         #                                    <6 bits=instSize\\64><1 bit=0>
@@ -105,7 +122,7 @@ class ClassShadow(AbstractShadow):
             raise ClassShadowError("unknown format %d" % (format,))
         # read the name
         if w_self.size() > constants.CLASS_NAME_INDEX:
-            w_name = w_self.fetch(constants.CLASS_NAME_INDEX)
+            w_name = w_self._vars[constants.CLASS_NAME_INDEX]
 
         # XXX This is highly experimental XXX
         # if the name-pos of class is not bytesobject,
@@ -113,22 +130,22 @@ class ClassShadow(AbstractShadow):
         # metaclasses hold a pointer to the real class in the last
         # slot. This is pos 6 in mini.image and higher in squeak3.9
         if not isinstance(w_name, model.W_BytesObject):
-            w_realclass = w_self.fetch(w_self.size() - 1)
+            w_realclass = w_self._vars[w_self.size() - 1]
             if w_realclass.size() > constants.CLASS_NAME_INDEX:
-                w_name = w_realclass.fetch(constants.CLASS_NAME_INDEX)
+                w_name = w_realclass._vars[constants.CLASS_NAME_INDEX]
         if isinstance(w_name, model.W_BytesObject):
             self.name = w_name.as_string()
         # read the methoddict
-        w_methoddict = w_self.fetch(constants.CLASS_METHODDICT_INDEX)
-        w_values = w_methoddict.fetch(constants.METHODDICT_VALUES_INDEX)
+        w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
+        w_values = w_methoddict._vars[constants.METHODDICT_VALUES_INDEX]
         size = w_methoddict.size() - constants.METHODDICT_NAMES_INDEX
         for i in range(size):
-            w_selector = w_methoddict.fetch(constants.METHODDICT_NAMES_INDEX+i)
+            w_selector = w_methoddict._vars[constants.METHODDICT_NAMES_INDEX+i]
             if w_selector is not objtable.w_nil:
                 if not isinstance(w_selector, model.W_BytesObject):
                     raise ClassShadowError("bogus selector in method dict")
                 selector = w_selector.as_string()
-                w_compiledmethod = w_values.fetch(i)
+                w_compiledmethod = w_values._vars[i]
                 if not isinstance(w_compiledmethod, model.W_CompiledMethod):
                     raise ClassShadowError("the methoddict must contain "
                                            "CompiledMethods only for now")
@@ -136,13 +153,13 @@ class ClassShadow(AbstractShadow):
         # for the rest, we need to reset invalid to False already so
         # that cycles in the superclass and/or metaclass chains don't
         # cause infinite recursion
-        self.invalid = False
         # read s_superclass
-        w_superclass = w_self.fetch(constants.CLASS_SUPERCLASS_INDEX)
+        w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
         if w_superclass is objtable.w_nil:
             self.s_superclass = None
         else:
             self.s_superclass = w_superclass.as_class_get_shadow()
+        AbstractShadow.update_shadow(self)
 
     # XXX check better way to store objects
     # XXX storing is necessary for "become" which loops over all pointers
@@ -227,20 +244,20 @@ class ClassShadow(AbstractShadow):
         method.w_compiledin = self.w_self()
 
 class LinkedListShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
 
     def w_firstlink(self):
-        return self.w_self().fetch(constants.FIRST_LINK_INDEX)
+        return self.w_self()._vars[constants.FIRST_LINK_INDEX]
 
     def store_w_firstlink(self, w_object):
-        return self.w_self().store(constants.FIRST_LINK_INDEX, w_object)
+        self.w_self()._vars[constants.FIRST_LINK_INDEX] = w_object
 
     def w_lastlink(self):
-        return self.w_self().fetch(constants.LAST_LINK_INDEX)
+        return self.w_self()._vars[constants.LAST_LINK_INDEX]
 
     def store_w_lastlink(self, w_object):
-        return self.w_self().store(constants.LAST_LINK_INDEX, w_object)
+        self.w_self()._vars[constants.LAST_LINK_INDEX] = w_object
 
     def is_empty_list(self):
         from pypy.lang.smalltalk import objtable
@@ -270,14 +287,14 @@ class LinkedListShadow(AbstractShadow):
 class SemaphoreShadow(LinkedListShadow):
     """A shadow for Smalltalk objects that are semaphores
     """
-    def __init__(self, w_self):
-        LinkedListShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        LinkedListShadow.__init__(self, w_self, invalid)
 
     def put_to_sleep(self, s_process):
         priority = s_process.priority()
         s_scheduler = self.s_scheduler()
         w_process_lists = s_scheduler.process_lists()
-        w_process_list = w_process_lists.fetch(priority)
+        w_process_list = w_process_lists._vars[priority]
         w_process_list.as_linkedlist_get_shadow().add_last_link(s_process.w_self())
         s_process.store_my_list(w_process_list)
         
@@ -311,77 +328,95 @@ class SemaphoreShadow(LinkedListShadow):
 
     def synchronous_signal(self, interp):
         if self.is_empty_list():
-            w_value = self.w_self().fetch(constants.EXCESS_SIGNALS_INDEX)
+            w_value = self.w_self()._vars[constants.EXCESS_SIGNALS_INDEX]
             w_value = utility.wrap_int(utility.unwrap_int(w_value) + 1)
-            self.w_self().store(constants.EXCESS_SIGNALS_INDEX, w_value)
+            self.w_self()._vars[constants.EXCESS_SIGNALS_INDEX] = w_value
         else:
             self.resume(self.remove_first_link_of_list(), interp)
 
 class LinkShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
 
     def next(self):
-        return self.w_self().fetch(constants.NEXT_LINK_INDEX)
+        return self.w_self()._vars[constants.NEXT_LINK_INDEX]
 
     def store_next(self, w_object):
-        self.w_self().store(constants.NEXT_LINK_INDEX, w_object)
+        self.w_self()._vars[constants.NEXT_LINK_INDEX] = w_object
 
 class ProcessShadow(LinkShadow):
     """A shadow for Smalltalk objects that are processes
     """
-    def __init__(self, w_self):
-        LinkShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        LinkShadow.__init__(self, w_self, invalid)
 
     def priority(self):
-        return utility.unwrap_int(self.w_self().fetch(constants.PROCESS_PRIORITY_INDEX))
+        return utility.unwrap_int(self.w_self()._vars[constants.PROCESS_PRIORITY_INDEX])
 
     def my_list(self):
-        return self.w_self().fetch(constants.PROCESS_MY_LIST_INDEX)
+        return self.w_self()._vars[constants.PROCESS_MY_LIST_INDEX]
 
     def store_my_list(self, w_object):
-        self.w_self().store(constants.PROCESS_MY_LIST_INDEX, w_object)
+        self.w_self()._vars[constants.PROCESS_MY_LIST_INDEX] = w_object
 
     def s_suspended_context(self):
         # XXX Can currently only restart context if it is a method context...
         # XXX Depends on typechecking ...
-        return self.w_self().fetch(constants.PROCESS_SUSPENDED_CONTEXT_INDEX).as_methodcontext_get_shadow()
+        return self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX].as_methodcontext_get_shadow()
 
     def store_w_suspended_context(self, w_object):
-        self.w_self().store(constants.PROCESS_SUSPENDED_CONTEXT_INDEX, w_object)
+        self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX] = w_object
 
 class AssociationShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
 
     def key(self):
-        return self.w_self().fetch(constants.ASSOCIATION_KEY_INDEX)
+        return self.w_self()._vars[constants.ASSOCIATION_KEY_INDEX]
 
     def value(self):
-        return self.w_self().fetch(constants.ASSOCIATION_VALUE_INDEX)
+        return self.w_self()._vars[constants.ASSOCIATION_VALUE_INDEX]
 
     def store_value(self, w_value):
-        self.w_self().store(constants.ASSOCIATION_VALUE_INDEX, w_value)
+        self.w_self()._vars[constants.ASSOCIATION_VALUE_INDEX] = w_value
 
 class SchedulerShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
 
     def s_active_process(self):
-        return self.w_self().fetch(constants.SCHEDULER_ACTIVE_PROCESS_INDEX).as_process_get_shadow()
+        return self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX].as_process_get_shadow()
 
     def store_w_active_process(self, w_object):
-        self.w_self().store(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_object)
+        self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX] = w_object
     
     def process_lists(self):
-        return self.w_self().fetch(constants.SCHEDULER_PROCESS_LISTS_INDEX)
+        return self.w_self()._vars[constants.SCHEDULER_PROCESS_LISTS_INDEX]
 
 class ContextPartShadow(AbstractShadow):
 
     __metaclass__ = extendabletype
-    
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+
+    def update_shadow(self):
+        AbstractShadow.update_shadow(self)
+        self._stack = [self.w_self()._vars[i]
+                        for i in range(self.stackstart() + 1,
+                                       self.stackpointer() + 1)]
+        self._pc = utility.unwrap_int(self.w_self()._vars[constants.CTXPART_PC_INDEX])
+        self._pc -= 1 + self.w_method().getliteralsize()
+        AbstractShadow.update_shadow(self)
+
+    def update_w_self(self):
+        AbstractShadow.update_w_self(self)
+        for i in range(len(self._stack)):
+            self.w_self()._vars[self.stackstart() + 1 + i] = self._stack[i]
+        self.store_stackpointer(len(self._stack) + self.stackstart())
+        self.w_self()._vars[constants.CTXPART_PC_INDEX] = utility.wrap_int(self._pc + 1 +
+                                                                           self.w_method().getliteralsize())
+
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
+        self.w_invalid = True
 
     def s_home(self):
         raise NotImplementedError()
@@ -391,7 +426,7 @@ class ContextPartShadow(AbstractShadow):
         return self.s_home().w_receiver()
 
     def w_sender(self):
-        return self.w_self().fetch(constants.CTXPART_SENDER_INDEX)
+        return self.w_self()._vars[constants.CTXPART_SENDER_INDEX]
 
     def s_sender(self):
         from pypy.lang.smalltalk import objtable
@@ -402,20 +437,19 @@ class ContextPartShadow(AbstractShadow):
             return w_sender.as_context_get_shadow()
 
     def store_w_sender(self, w_sender):
-        self.w_self().store(constants.CTXPART_SENDER_INDEX, w_sender)
+        self.w_self()._vars[constants.CTXPART_SENDER_INDEX] = w_sender
 
     def pc(self):
-        return utility.unwrap_int(self.w_self().fetch(constants.CTXPART_PC_INDEX))
+        return self._pc
 
     def store_pc(self, newpc):
-        self.w_self().store(constants.CTXPART_PC_INDEX, utility.wrap_int(newpc))
+        self._pc = newpc
 
     def stackpointer(self):
-        return utility.unwrap_int(self.w_self().fetch(constants.CTXPART_STACKP_INDEX))
+        return utility.unwrap_int(self.w_self()._vars[constants.CTXPART_STACKP_INDEX])
 
     def store_stackpointer(self, pointer):
-        self.w_self().store(constants.CTXPART_STACKP_INDEX,
-                          utility.wrap_int(pointer))
+        self.w_self()._vars[constants.CTXPART_STACKP_INDEX] = utility.wrap_int(pointer)
 
     # ______________________________________________________________________
     # Method that contains the bytecode for this method/block context
@@ -424,10 +458,10 @@ class ContextPartShadow(AbstractShadow):
         return self.s_home().w_method()
 
     def getbytecode(self):
-        pc = self.pc()
-        bytecode = self.w_method().fetchbyte(pc)
+        assert self._pc >= 0
+        bytecode = self.w_method().bytes[self._pc]
         currentBytecode = ord(bytecode)
-        self.store_pc(pc + 1)
+        self._pc = self._pc + 1
         return currentBytecode
 
     def getNextBytecode(self):
@@ -448,93 +482,100 @@ class ContextPartShadow(AbstractShadow):
     # ______________________________________________________________________
     # Stack Manipulation
     def pop(self):
-        idx = self.stackpointer()
-        w_v = self.w_self().fetch(idx)
-        self.store_stackpointer(idx - 1)
+        w_v = self._stack[-1]
+        self._stack = self._stack[:-1]
         return w_v
 
     def push(self, w_v):
-        idx = self.stackpointer() + 1
-        self.w_self().store(idx, w_v)
-        self.store_stackpointer(idx)
+        self._stack += [w_v]
 
     def push_all(self, lst):
-        for x in lst:
-            self.push(x)
+        #for x in lst:
+        #    self.push(x)
+        self._stack += lst
 
     def top(self):
         return self.peek(0)
         
     def peek(self, idx):
-        return self.w_self().fetch(self.stackpointer()-idx)
+        return self._stack[-(idx + 1)]
 
     def pop_n(self, n):
         assert n >= 0
-        assert n <= self.stackpointer() + 1
-        self.store_stackpointer(self.stackpointer() - n)
+        assert n <= len(self._stack)
+        self._stack = self._stack[:len(self._stack)-n]
 
     def stack(self):
-                                                      # fetch = 1-based
-        return [self.w_self().fetch(i) for i in range(self.stackstart() + 1, self.stackpointer() + 1)]
+        return self._stack
 
     def pop_and_return_n(self, n):
+        w_vs = self._stack[len(self._stack)-n:]
         self.pop_n(n)
-        start = self.stackpointer() + 1
-        return [self.w_self().fetch(i) for i in range(start, start+n)]
+        return w_vs
     
 class BlockContextShadow(ContextPartShadow):
 
-    def __init__(self, w_self):
-        ContextPartShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        ContextPartShadow.__init__(self, w_self, invalid)
+    
+    def update_self(self):
+        ContextPartShadow.update_self(self)
+        self._initialip = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX])
+        self._initialip -= 1 + self.w_method().getliteralsize()
+
+    def update_w_self(self):
+        ContextPartShadow.update_w_self(self)
+        self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX] = utility.wrap_int(self._initialip + 1 + self.w_method().getliteralsize())
 
     def expected_argument_count(self):
-        return utility.unwrap_int(self.w_self().fetch(constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX))
+        return utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
 
     def store_expected_argument_count(self, argc):
-        return self.w_self().store(constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX,
-                                 utility.wrap_int(argc))
+        self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX] = utility.wrap_int(argc)
 
     def initialip(self):
-        return utility.unwrap_int(self.w_self().fetch(constants.BLKCTX_INITIAL_IP_INDEX))
+        return self._initialip
         
     def store_initialip(self, initialip):
-        self.w_self().store(constants.BLKCTX_INITIAL_IP_INDEX,
-                            utility.wrap_int(initialip))
+        self._initialip = initialip
         
     def store_w_home(self, w_home):
-        self.w_self().store(constants.BLKCTX_HOME_INDEX, w_home)
+        self.w_self()._vars[constants.BLKCTX_HOME_INDEX] = w_home
 
     def w_home(self):
-        return self.w_self().fetch(constants.BLKCTX_HOME_INDEX)
+        return self.w_self()._vars[constants.BLKCTX_HOME_INDEX]
 
     def s_home(self):
         return self.w_home().as_methodcontext_get_shadow()
+
+    def reset_stack(self):
+        self._stack = []
         
     def stackstart(self):
         return (constants.BLKCTX_TEMP_FRAME_START +
                 self.expected_argument_count())
 
 class MethodContextShadow(ContextPartShadow):
-    def __init__(self, w_self):
-        ContextPartShadow.__init__(self, w_self)
+    def __init__(self, w_self, invalid):
+        ContextPartShadow.__init__(self, w_self, invalid)
 
     def w_method(self):
-        return self.w_self().fetch(constants.MTHDCTX_METHOD)
+        return self.w_self()._vars[constants.MTHDCTX_METHOD]
 
     def store_w_method(self, w_method):
-        return self.w_self().store(constants.MTHDCTX_METHOD, w_method)
+        self.w_self()._vars[constants.MTHDCTX_METHOD] = w_method
 
     def w_receiver(self):
-        return self.w_self().fetch(constants.MTHDCTX_RECEIVER)
+        return self.w_self()._vars[constants.MTHDCTX_RECEIVER]
 
     def store_w_receiver(self, w_receiver):
-        self.w_self().store(constants.MTHDCTX_RECEIVER, w_receiver)
+        self.w_self()._vars[constants.MTHDCTX_RECEIVER] = w_receiver
 
     def gettemp(self, index):
-        return self.w_self().fetch(constants.MTHDCTX_TEMP_FRAME_START + index)
+        return self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index]
 
     def settemp(self, index, w_value):
-        self.w_self().store(constants.MTHDCTX_TEMP_FRAME_START + index, w_value) 
+        self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index] = w_value
 
     def w_home(self):
         return self.w_self()
