@@ -1,3 +1,7 @@
+"""
+Native type codes.
+The table 'native_fmttable' is also used by pypy.module.array.interp_array.
+"""
 import struct
 from pypy.module.struct import standardfmttable as std
 from pypy.rpython.tool import rffi_platform
@@ -118,3 +122,28 @@ setup()
 
 sizeof_double = native_fmttable['d']['size']
 sizeof_float  = native_fmttable['f']['size']
+
+# ____________________________________________________________
+#
+# A PyPy extension: accepts the 'u' format character in native mode,
+# just like the array module does.  (This is actually used in the
+# implementation of our interp-level array module.)
+
+from pypy.module.struct import unichar
+
+def pack_unichar(fmtiter):
+    unistr = fmtiter.accept_unicode_arg()
+    if len(unistr) != 1:
+        raise StructError("expected a unicode string of length 1")
+    c = unistr[0]   # string->char conversion for the annotator
+    unichar.pack_unichar(c, fmtiter.result)
+
+def unpack_unichar(fmtiter):
+    data = fmtiter.read(unichar.UNICODE_SIZE)
+    fmtiter.appendobj(unichar.unpack_unichar(data))
+
+native_fmttable['u'] = {'size': unichar.UNICODE_SIZE,
+                        'alignment': unichar.UNICODE_SIZE,
+                        'pack': pack_unichar,
+                        'unpack': unpack_unichar,
+                        }
