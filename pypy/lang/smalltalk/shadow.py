@@ -19,6 +19,10 @@ class AbstractShadow(object):
         if other not in self._invalidnotify:
             self._invalidnotify += [other]
 
+    def unnotify(self, other):
+        if other in self._invalidnotify:
+            self._invalidnotify.remove(other)
+
     def getname(self):
         return repr(self)
 
