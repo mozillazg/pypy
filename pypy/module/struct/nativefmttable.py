@@ -4,6 +4,7 @@ The table 'native_fmttable' is also used by pypy.module.array.interp_array.
 """
 import struct
 from pypy.module.struct import standardfmttable as std
+from pypy.module.struct.error import StructError
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import r_singlefloat
