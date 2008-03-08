@@ -36,8 +36,10 @@ class Interpreter:
         return self._w_active_context
 
     def store_w_active_context(self, w_context):
+        if self._s_active_context is not None:
+            self._s_active_context.unnotify(self)
+            self.invalidate()
         self._w_active_context = w_context
-        self._s_active_context = None
 
     def invalidate(self):
         self._s_active_context = None
@@ -45,6 +47,7 @@ class Interpreter:
     def s_active_context(self):
         if self._s_active_context is None:
             self._s_active_context = self.w_active_context().as_context_get_shadow()
+            self._s_active_context.invalidnotify(self)
         return self._s_active_context
 
     def interpret(self):
