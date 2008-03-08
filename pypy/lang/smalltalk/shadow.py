@@ -34,12 +34,6 @@ class AbstractShadow(object):
                 listener.invalidate()
             self._notifyinvalid = []
 
-    def version(self):
-        """ XXX If decoded shadows depends on more than just w_self,
-        this method should be overwritten to check the versions of the
-        shadows used to build up this shadow. """
-        return self._version
-
     def invalidate_w_self(self):
         """XXX This should get called whenever the shadow
         object changes.
