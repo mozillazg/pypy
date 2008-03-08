@@ -208,10 +208,13 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         shadow.check_for_updates()
         return shadow
 
+    def get_shadow(self):
+        from pypy.lang.smalltalk.shadow import AbstractShadow
+        return self.as_special_get_shadow(AbstractShadow)
+
     def as_class_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ClassShadow
-        shadow = self.as_special_get_shadow(ClassShadow)
-        return shadow
+        return self.as_special_get_shadow(ClassShadow)
 
     def as_link_get_shadow(self):
         from pypy.lang.smalltalk.shadow import LinkShadow
@@ -248,6 +251,10 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def as_context_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
         return self.as_special_get_shadow(ContextPartShadow)
+
+    def as_methoddict_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import MethodDictionaryShadow
+        return self.as_special_get_shadow(MethodDictionaryShadow)
 
     def become(self, w_old, w_new):
         W_AbstractObjectWithClassReference.become(self, w_old, w_new)

@@ -9,19 +9,14 @@ class AbstractShadow(object):
     
     def __init__(self, w_self, invalid):
         self._w_self = w_self
-        self._invalidnotify = []
+        self._notifyinvalid = []
         self.invalid = invalid
         self.w_invalid = False
         if invalid:
             self.invalidate()
 
-    def invalidnotify(self, other):
-        if other not in self._invalidnotify:
-            self._invalidnotify += [other]
-
-    def unnotify(self, other):
-        if other in self._invalidnotify:
-            self._invalidnotify.remove(other)
+    def notifyinvalid(self, other):
+        self._notifyinvalid += [other]
 
     def getname(self):
         return repr(self)
@@ -31,8 +26,9 @@ class AbstractShadow(object):
         object changes."""
         if not self.invalid:
             self.invalid = True
-            for listener in self._invalidnotify:
+            for listener in self._notifyinvalid:
                 listener.invalidate()
+            self._notifyinvalid = []
 
     def version(self):
         """ XXX If decoded shadows depends on more than just w_self,
@@ -153,19 +149,10 @@ class ClassShadow(AbstractShadow):
             self.name = w_name.as_string()
         # read the methoddict
         w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
-        w_values = w_methoddict._vars[constants.METHODDICT_VALUES_INDEX]
-        size = w_methoddict.size() - constants.METHODDICT_NAMES_INDEX
-        for i in range(size):
-            w_selector = w_methoddict._vars[constants.METHODDICT_NAMES_INDEX+i]
-            if w_selector is not objtable.w_nil:
-                if not isinstance(w_selector, model.W_BytesObject):
-                    raise ClassShadowError("bogus selector in method dict")
-                selector = w_selector.as_string()
-                w_compiledmethod = w_values._vars[i]
-                if not isinstance(w_compiledmethod, model.W_CompiledMethod):
-                    raise ClassShadowError("the methoddict must contain "
-                                           "CompiledMethods only for now")
-                self.methoddict[selector] = w_compiledmethod
+        s_methoddict = w_methoddict.as_methoddict_get_shadow()
+        self.methoddict = s_methoddict.methoddict
+        s_methoddict.notifyinvalid(self)
+
         # for the rest, we need to reset invalid to False already so
         # that cycles in the superclass and/or metaclass chains don't
         # cause infinite recursion
@@ -258,6 +245,31 @@ class ClassShadow(AbstractShadow):
         assert isinstance(method, model.W_CompiledMethod)
         self.methoddict[selector] = method
         method.w_compiledin = self.w_self()
+
+class MethodDictionaryShadow(AbstractShadow):
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
+
+    def invalidate(self):
+        self.methoddict = {}
+
+    def update_shadow(self):
+        from pypy.lang.smalltalk import objtable
+        w_values = self.w_self()._vars[constants.METHODDICT_VALUES_INDEX]
+        s_values = w_values.get_shadow()
+        s_values.notifyinvalid(self)
+        size = self.w_self().size() - constants.METHODDICT_NAMES_INDEX
+        for i in range(size):
+            w_selector = self.w_self()._vars[constants.METHODDICT_NAMES_INDEX+i]
+            if w_selector is not objtable.w_nil:
+                if not isinstance(w_selector, model.W_BytesObject):
+                    raise ClassShadowError("bogus selector in method dict")
+                selector = w_selector.as_string()
+                w_compiledmethod = w_values._vars[i]
+                if not isinstance(w_compiledmethod, model.W_CompiledMethod):
+                    raise ClassShadowError("the methoddict must contain "
+                                           "CompiledMethods only for now")
+                self.methoddict[selector] = w_compiledmethod
 
 class LinkedListShadow(AbstractShadow):
     def __init__(self, w_self, invalid):
