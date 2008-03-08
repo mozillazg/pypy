@@ -50,16 +50,17 @@ class Interpreter:
         # translating the interpreter
         if not objectmodel.we_are_translated():
             bytecodeimpl = BYTECODE_TABLE[next]
-            if self._w_last_active_context != self.w_active_context:
-                cnt = 0
-                p = self.w_active_context
-                # AK make method
-                while p is not objtable.w_nil:
-                    cnt += 1
-                    p = p.as_context_get_shadow().w_sender()
-                self._last_indent = "  " * cnt
-                self._w_last_active_context = self.w_active_context
             if self.should_trace():
+                if self._w_last_active_context != self.w_active_context:
+                    cnt = 0
+                    p = self.w_active_context
+                    # AK make method
+                    while p is not objtable.w_nil:
+                        cnt += 1
+                        p = p.as_context_get_shadow().w_sender()
+                    self._last_indent = "  " * cnt
+                    self._w_last_active_context = self.w_active_context
+
                 print "%sStack=%s" % (
                     self._last_indent,
                     repr(self.s_active_context().stack()),)
