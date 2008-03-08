@@ -27,10 +27,6 @@ def setup_module(mod):
     mod.DATA = DATA
     mod.decompress = decompress
 
-def teardown_module(mod):
-    if os.path.exists("foo"):
-        os.unlink("foo")
-
 class AppTestBZ2Compressor(CheckAllocation):
     def setup_class(cls):
         space = gettestobjspace(usemodules=('bz2',))
