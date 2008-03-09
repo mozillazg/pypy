@@ -386,10 +386,10 @@ class array(object):
             return array(self.typecode, self._data[start * self.itemsize :
                                                    stop * self.itemsize])
         else:
-            if self.typecode == 'c':  # speed trick
-                return self._data[i]
             if i < 0:
                 i += seqlength
+            if self.typecode == 'c':  # speed trick
+                return self._data[i]
             if not (0 <= i < seqlength):
                 raise IndexError(i)
             boundary = i * self.itemsize
@@ -421,12 +421,12 @@ class array(object):
             self._data[start * self.itemsize :
                        stop * self.itemsize] = x._data
         else:
-            if self.typecode == 'c':  # speed trick
-                self._data[i] = x
-                return
             seqlength = len(self)
             if i < 0:
                 i += seqlength
+            if self.typecode == 'c':  # speed trick
+                self._data[i] = x
+                return
             if not (0 <= i < seqlength):
                 raise IndexError(i)
             boundary = i * self.itemsize
