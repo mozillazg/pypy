@@ -24,12 +24,15 @@ from pypy.interpreter.error import OperationError
 class Buffer(Wrappable):
     """Abstract base class for memory views."""
 
-    __slots__ = ('len',)     # the length, stored as an attribute
+    __slots__ = ()     # no extra slot here
+
+    def getlength(self):
+        raise NotImplementedError
 
     def as_str(self):
         "Returns an interp-level string with the whole content of the buffer."
         # May be overridden.
-        return self.getslice(0, self.len)
+        return self.getslice(0, self.getlength())
 
     def getitem(self, index):
         "Returns the index'th character in the buffer."
@@ -42,11 +45,11 @@ class Buffer(Wrappable):
     # __________ app-level support __________
 
     def descr_len(self, space):
-        return space.wrap(self.len)
+        return space.wrap(self.getlength())
     descr_len.unwrap_spec = ['self', ObjSpace]
 
     def descr_getitem(self, space, w_index):
-        start, stop, step = space.decode_index(w_index, self.len)
+        start, stop, step = space.decode_index(w_index, self.getlength())
         if step == 0:  # index only
             return space.wrap(self.getitem(start))
         elif step == 1:
@@ -62,7 +65,7 @@ class Buffer(Wrappable):
         if not isinstance(self, RWBuffer):
             raise OperationError(space.w_TypeError,
                                  space.wrap("buffer is read-only"))
-        start, stop, step = space.decode_index(w_index, self.len)
+        start, stop, step = space.decode_index(w_index, self.getlength())
         if step == 0:  # index only
             if len(newstring) != 1:
                 msg = 'buffer[index]=x: x must be a single character'
@@ -194,8 +197,10 @@ Buffer.typedef.acceptable_as_base_class = False
 class StringBuffer(Buffer):
 
     def __init__(self, value):
-        self.len = len(value)
         self.value = value
+
+    def getlength(self):
+        return len(self.value)
 
     def as_str(self):
         return self.value
@@ -204,7 +209,7 @@ class StringBuffer(Buffer):
         return self.value[index]
 
     def getslice(self, start, stop):
-        assert 0 <= start <= stop <= self.len
+        assert 0 <= start <= stop <= len(self.value)
         return self.value[start:stop]
 
 
@@ -217,7 +222,10 @@ class StringLikeBuffer(Buffer):
     def __init__(self, space, w_obj):
         self.space = space
         self.w_obj = w_obj
-        self.len = space.int_w(space.len(w_obj))
+
+    def getlength(self):
+        space = self.space
+        return space.int_w(space.len(self.w_obj))
 
     def getitem(self, index):
         space = self.space

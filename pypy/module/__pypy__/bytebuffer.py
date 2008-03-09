@@ -9,8 +9,10 @@ from pypy.interpreter.gateway import ObjSpace
 class ByteBuffer(RWBuffer):
 
     def __init__(self, len):
-        self.len = len
         self.data = ['\x00'] * len
+
+    def getlength(self):
+        return len(self.data)
 
     def getitem(self, index):
         return self.data[index]
