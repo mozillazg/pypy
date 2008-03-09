@@ -170,8 +170,8 @@ class W_ArrayInstance(W_DataInstance):
 
     def decodeslice(self, space, w_slice):
         if not space.is_true(space.isinstance(w_slice, space.w_slice)):
-            return OperationError(space.w_TypeError,
-                                  space.wrap('index must be int or slice'))
+            raise OperationError(space.w_TypeError,
+                                 space.wrap('index must be int or slice'))
         letter, _, _ = self.shape.itemtp
         if letter != 'c':
             raise OperationError(space.w_TypeError,
