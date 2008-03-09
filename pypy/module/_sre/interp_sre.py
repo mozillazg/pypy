@@ -163,7 +163,7 @@ class W_GenericState(W_State):
 
     def unwrap_object(self):
         self.buffer = self.space.buffer_w(self.w_string)
-        return self.buffer.len
+        return self.buffer.getlength()
 
     def get_char_ord(self, p):
         return ord(self.buffer.getitem(p))
