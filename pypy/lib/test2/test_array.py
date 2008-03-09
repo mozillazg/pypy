@@ -24,6 +24,12 @@ class BaseArrayTests:
         a *= 3
         assert a.tolist() == [12, 34] * 3
 
+    def test_unicode(self):
+        a = self.array.array('u')
+        a.fromunicode(unichr(9999))
+        assert len(a) == 1
+        assert a.tolist() == [unichr(9999)]
+
 
 class TestArrayOnTopOfCPython(BaseArrayTests):
 
