@@ -810,8 +810,8 @@ class NumberTest(BaseTest):
         a = array.array(self.typecode, [lower])
         a[0] = lower
         # should overflow assigning less than lower limit
-        self.assertRaises((OverflowError, struct.error), array.array, self.typecode, [lower-1])
-        self.assertRaises((OverflowError, struct.error), a.__setitem__, 0, lower-1)
+        self.assertRaises((OverflowError, struct.error, ValueError), array.array, self.typecode, [lower-1])
+        self.assertRaises((OverflowError, struct.error, ValueError), a.__setitem__, 0, lower-1)
         # should not overflow assigning upper limit
         a = array.array(self.typecode, [upper])
         a[0] = upper
