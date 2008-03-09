@@ -487,7 +487,7 @@ testmap = [
     RegrTest('test_errno.py', enabled=True, dumbtest=1),
     RegrTest('test_exceptions.py', enabled=True, core=True),
     RegrTest('test_extcall.py', enabled=True, core=True),
-    RegrTest('test_fcntl.py', enabled=False, dumbtest=1),
+    RegrTest('test_fcntl.py', enabled=False, dumbtest=1, usemodules='fcntl'),
     RegrTest('test_file.py', enabled=True, dumbtest=1, usemodules="posix", core=True),
     RegrTest('test_filecmp.py', enabled=True, core=True),
     RegrTest('test_fileinput.py', enabled=True, dumbtest=1, core=True),
