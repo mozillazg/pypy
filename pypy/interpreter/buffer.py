@@ -69,7 +69,7 @@ class Buffer(Wrappable):
         if step == 0:  # index only
             if len(newstring) != 1:
                 msg = 'buffer[index]=x: x must be a single character'
-                raise OperationError(space.w_ValueError, space.wrap(msg))
+                raise OperationError(space.w_TypeError, space.wrap(msg))
             char = newstring[0]   # annotator hint
             self.setitem(start, char)
         elif step == 1:
