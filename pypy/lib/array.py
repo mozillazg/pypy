@@ -168,8 +168,9 @@ class array(object):
         if not isinstance(ustr, unicode):
             raise TypeError("fromunicode() argument should probably be "
                             "a unicode string")
-        self._frombuffer(ustr)   # _frombuffer() does the currect thing using
-                                 # the buffer behavior of unicode objects
+        # _frombuffer() does the currect thing using
+        # the buffer behavior of unicode objects
+        self._frombuffer(buffer(ustr))
 
     def tofile(self, f):
         """Write all items (as machine values) to the file object f.  Also
@@ -371,11 +372,6 @@ class array(object):
     __rmul__ = __mul__
 
     def __getitem__(self, i):
-        if self.typecode == 'c':  # speed trick
-            try:
-                return self._data[i]
-            except TypeError:
-                pass   # "bug": ctypes.create_string_buffer(10)[slice(2,5)]
         seqlength = len(self)
         if isinstance(i, slice):
             start, stop, step = i.indices(seqlength)
@@ -390,6 +386,8 @@ class array(object):
             return array(self.typecode, self._data[start * self.itemsize :
                                                    stop * self.itemsize])
         else:
+            if self.typecode == 'c':  # speed trick
+                return self._data[i]
             if i < 0:
                 i += seqlength
             if not (0 <= i < seqlength):
@@ -423,6 +421,9 @@ class array(object):
             self._data[start * self.itemsize :
                        stop * self.itemsize] = x._data
         else:
+            if self.typecode == 'c':  # speed trick
+                self._data[i] = x
+                return
             seqlength = len(self)
             if i < 0:
                 i += seqlength
