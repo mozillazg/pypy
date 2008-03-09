@@ -1,8 +1,6 @@
-
+# NOT_RPYTHON
 """
 Application-level definitions for the struct module.
-
-NOT_RPYTHON
 """
 import struct
 
