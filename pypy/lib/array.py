@@ -243,32 +243,50 @@ class array(object):
     def __eq__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return buffer(self._data) == buffer(other._data)
+        if self.typecode == 'c':
+            return buffer(self._data) == buffer(other._data)
+        else:
+            return self.tolist() == other.tolist()
 
     def __ne__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return buffer(self._data) != buffer(other._data)
+        if self.typecode == 'c':
+            return buffer(self._data) != buffer(other._data)
+        else:
+            return self.tolist() != other.tolist()
 
     def __lt__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return buffer(self._data) < buffer(other._data)
+        if self.typecode == 'c':
+            return buffer(self._data) < buffer(other._data)
+        else:
+            return self.tolist() < other.tolist()
 
     def __gt__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return buffer(self._data) > buffer(other._data)
+        if self.typecode == 'c':
+            return buffer(self._data) > buffer(other._data)
+        else:
+            return self.tolist() > other.tolist()
 
     def __le__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return buffer(self._data) <= buffer(other._data)
+        if self.typecode == 'c':
+            return buffer(self._data) <= buffer(other._data)
+        else:
+            return self.tolist() <= other.tolist()
 
     def __ge__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return buffer(self._data) >= buffer(other._data)
+        if self.typecode == 'c':
+            return buffer(self._data) >= buffer(other._data)
+        else:
+            return self.tolist() >= other.tolist()
 
     ##### list methods
     
@@ -354,7 +372,10 @@ class array(object):
 
     def __getitem__(self, i):
         if self.typecode == 'c':  # speed trick
-            return self._data[i]
+            try:
+                return self._data[i]
+            except TypeError:
+                pass   # "bug": ctypes.create_string_buffer(10)[slice(2,5)]
         seqlength = len(self)
         if isinstance(i, slice):
             start, stop, step = i.indices(seqlength)
@@ -381,8 +402,10 @@ class array(object):
 
     def __setitem__(self, i, x):
         if isinstance(i, slice):
-            if not isinstance(x, array):
-                raise TypeError("can only assign array to array slice")
+            if (not isinstance(x, array)
+                or self.typecode != x.typecode):
+                raise TypeError("can only assign array of same kind"
+                                " to array slice")
             seqlength = len(self)
             start, stop, step = i.indices(seqlength)
             if start < 0:
