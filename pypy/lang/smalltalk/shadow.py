@@ -2,7 +2,11 @@ import weakref
 from pypy.lang.smalltalk import model, constants, utility, error
 from pypy.tool.pairtype import extendabletype
 
-class AbstractShadow(object):
+class Invalidateable(object):
+    def invalidate(self):
+        pass
+
+class AbstractShadow(Invalidateable):
     """A shadow is an optional extra bit of information that
     can be attached at run-time to any Smalltalk object.
     """
@@ -162,10 +166,6 @@ class ClassShadow(AbstractShadow):
         w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
         if w_superclass is not objtable.w_nil:
             self.s_superclass = w_superclass.as_class_get_shadow()
-            # Cache all methods of superclasses locally.
-            for selector, method in self.s_superclass.methoddict.items():
-                if selector not in self.methoddict:
-                    self.methoddict[selector] = method
             self.s_superclass.notifyinvalid(self)
         AbstractShadow.update_shadow(self)
 
@@ -187,8 +187,6 @@ class ClassShadow(AbstractShadow):
             raise NotImplementedError(self.instance_kind)
         if store:
             from pypy.lang.smalltalk import objtable
-## XXX breaks translation
-            assert isinstance(w_new, model.W_Object)
             objtable.objects += [w_new]
         return w_new
 
@@ -237,11 +235,15 @@ class ClassShadow(AbstractShadow):
 
     def lookup(self, selector):
         look_in_shadow = self
-        if selector in self.methoddict:
-            # We cached all methods of superclasses locally.
-            return self.methoddict[selector]
-        else:
-            raise MethodNotFound(self, selector)
+        while look_in_shadow is not None:
+            try:
+                w_method = look_in_shadow.methoddict[selector]
+                # We locally cache the method we found.
+                self.methoddict[selector] = w_method
+                return w_method
+            except KeyError, e:
+                look_in_shadow = look_in_shadow.s_superclass
+        raise MethodNotFound(self, selector)
 
     def installmethod(self, selector, method):
         "NOT_RPYTHON"     # this is only for testing.
@@ -326,7 +328,6 @@ class SemaphoreShadow(LinkedListShadow):
         priority = s_process.priority()
         s_scheduler = self.s_scheduler()
         w_process_lists = s_scheduler.process_lists()
-        assert isinstance(w_process_lists, model.W_PointersObject)
         w_process_list = w_process_lists._vars[priority]
         w_process_list.as_linkedlist_get_shadow().add_last_link(s_process.w_self())
         s_process.store_my_list(w_process_list)
@@ -424,7 +425,9 @@ class SchedulerShadow(AbstractShadow):
         self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX] = w_object
     
     def process_lists(self):
-        return self.w_self()._vars[constants.SCHEDULER_PROCESS_LISTS_INDEX]
+        w_v = self.w_self()._vars[constants.SCHEDULER_PROCESS_LISTS_INDEX]
+        assert isinstance(w_v, model.W_PointersObject)
+        return w_v
 
 class ContextPartShadow(AbstractShadow):
 
@@ -492,7 +495,6 @@ class ContextPartShadow(AbstractShadow):
     def getbytecode(self):
         assert self._pc >= 0
         w_method = self.w_method()
-        assert isinstance(w_method, model.W_CompiledMethod)
         bytecode = w_method.bytes[self._pc]
         currentBytecode = ord(bytecode)
         self._pc = self._pc + 1
@@ -626,8 +628,7 @@ class MethodContextShadow(ContextPartShadow):
 
     def update_shadow(self):
         # Make sure the method is updated first
-        self._w_method = self.w_self()._vars[constants.MTHDCTX_METHOD]
-        assert isinstance(self._w_method, model.W_CompiledMethod)
+        self.store_w_method(self.w_self()._vars[constants.MTHDCTX_METHOD])
         ContextPartShadow.update_shadow(self)
 
     def update_w_self(self):
@@ -635,7 +636,6 @@ class MethodContextShadow(ContextPartShadow):
         self.w_self()._vars[constants.MTHDCTX_METHOD] = self._w_method
 
     def w_method(self):
-        assert isinstance(self._w_method, model.W_CompiledMethod)
         return self._w_method
 
     def store_w_method(self, w_method):
@@ -662,7 +662,6 @@ class MethodContextShadow(ContextPartShadow):
 
     def stackstart(self):
         w_method = self.w_method()
-        assert isinstance(w_method, model.W_CompiledMethod)
         return (constants.MTHDCTX_TEMP_FRAME_START +
                 w_method.argsize +
                 w_method.tempsize)

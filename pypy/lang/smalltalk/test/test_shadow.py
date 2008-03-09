@@ -162,7 +162,7 @@ def test_process():
     assert s_object.next() == 'foo'
     assert s_object.priority() == 3
     assert s_object.my_list() == 'mli'
-    assert s_object.s_suspended_context() == w_context.as_context_get_shadow()
+    assert s_object.w_suspended_context() == w_context
 
 def test_association():
     w_object = model.W_PointersObject(None, 2)
@@ -174,15 +174,16 @@ def test_association():
 
 def test_scheduler():
     w_process = process()
+    w_pl = model.W_PointersObject(None, 0)
     w_object = model.W_PointersObject(None, 2)
     w_object.store(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_process)
-    w_object.store(constants.SCHEDULER_PROCESS_LISTS_INDEX, 'pl')
+    w_object.store(constants.SCHEDULER_PROCESS_LISTS_INDEX, w_pl)
     s_object = w_object.as_scheduler_get_shadow()
     assert s_object.s_active_process() == w_process.as_process_get_shadow()
-    assert s_object.process_lists() == 'pl'
+    assert s_object.process_lists() == w_pl
     w_process2 = process()
     s_object.store_w_active_process(w_process2)
-    assert s_object.process_lists() == 'pl'
+    assert s_object.process_lists() == w_pl
     assert s_object.s_active_process() != w_process.as_process_get_shadow()
     assert s_object.s_active_process() == w_process2.as_process_get_shadow()
 
