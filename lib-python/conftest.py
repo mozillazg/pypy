@@ -387,7 +387,7 @@ testmap = [
     RegrTest('test_al.py', enabled=False, dumbtest=1),
     RegrTest('test_anydbm.py', enabled=True),
     RegrTest('test_applesingle.py', enabled=False),
-    RegrTest('test_array.py', enabled=True, core=True),
+    RegrTest('test_array.py', enabled=True, core=True, usemodules='struct'),
     RegrTest('test_asynchat.py', enabled=False, usemodules='thread'),
     RegrTest('test_atexit.py', enabled=True, dumbtest=1, core=True),
     RegrTest('test_audioop.py', enabled=False, dumbtest=1),

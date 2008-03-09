@@ -1,10 +1,3 @@
-#
-# This module is a pure Python version of pypy.module.array.
-# It is only imported if the vastly faster pypy.module.array is not
-# compiled in.  For now we keep this version for reference and
-# because pypy.module.array is not ootype-backend-friendly yet.
-#
-
 """This module defines an object type which can efficiently represent
 an array of basic values: characters, integers, floating point
 numbers.  Arrays are sequence types and behave very much like lists,
@@ -30,115 +23,35 @@ The constructor is:
 
 array(typecode [, initializer]) -- create a new array
 """
-import sys
 
-if sys.maxunicode == 65535:
-    UNICODE_SIZE = 2
-    UNICODE_FORMAT = "H"
-else:
-    UNICODE_SIZE = 4
-    UNICODE_FORMAT = "I"
+from struct import calcsize, pack, pack_into, unpack_from
+import operator
 
-def c_type_check(x):
-    if not isinstance(x, str) or len(x) != 1:
-        raise TypeError("array item must be char")
-    return x
+# the buffer-like object to use internally: trying from
+# various places in order...
+try:
+    import _rawffi                    # a reasonable implementation based
+    _RAWARRAY = _rawffi.Array('c')    # on raw_malloc, and providing a
+    def bytebuffer(size):             # real address
+        return _RAWARRAY(size, autofree=True)
+    def getbufaddress(buf):
+        return buf.buffer
+except ImportError:
+    try:
+        from __pypy__ import bytebuffer     # a reasonable implementation
+        def getbufaddress(buf):             # compatible with oo backends,
+            return 0                        # but no address
+    except ImportError:
+        # not running on PyPy.  Fall back to ctypes...
+        import ctypes
+        bytebuffer = ctypes.create_string_buffer
+        def getbufaddress(buf):
+            voidp = ctypes.cast(ctypes.pointer(buf), ctypes.c_void_p)
+            return voidp.value
 
-def general_int_type_check(x, lower_bound, upper_bound):
-    if not (isinstance(x, int) or isinstance(x, long) or isinstance(x, float)):
-        raise TypeError("an integer is required")
-    x_int = int(x)
-    if not (x_int >= lower_bound and x_int <= upper_bound):
-        raise OverflowError("integer is not in the allowed range")
-    return x_int    
+# ____________________________________________________________
 
-def b_type_check(x):
-    return general_int_type_check(x, -128, 127)
-
-def BB_type_check(x):
-    return general_int_type_check(x, 0, 255)
-
-def u_type_check(x):
-    if isinstance(x, str):
-        if len(x) / UNICODE_SIZE == 1:
-            # XXX Problem: CPython will gladly accept any unicode codepoint
-            # up to 0xFFFFFFFF in UCS-4 builds here, but unichr which is used
-            # to implement decode for unicode_internal in PyPy will
-            # reject anything above 0x00110000. I don't think there is a
-            # way to replicate CPython behaviour without resorting to C.
-            x_uni = x[:UNICODE_SIZE].decode("unicode_internal")
-        else:
-            raise TypeError("array item must be unicode character")
-    elif isinstance(x, unicode):
-        x_uni = x
-    else:
-        raise TypeError("array item must be unicode character")
-    if len(x_uni) != 1:
-        raise TypeError("array item must be unicode character")
-    return x_uni
-
-def h_type_check(x):
-    return general_int_type_check(x, -32768, 32767)
-
-def HH_type_check(x):
-    return general_int_type_check(x, 0, 65535)
-
-def i_type_check(x):
-    return general_int_type_check(x, -2147483648, 2147483647)
-
-def general_long_type_check(x, lower_bound, upper_bound):
-    if not (isinstance(x, int) or isinstance(x, long) or isinstance(x, float)):
-        raise TypeError("an integer is required")
-    x_long = long(x)
-    if not (x_long >= lower_bound and x_long <= upper_bound):
-        raise OverflowError("integer/long is not in the allowed range")
-    return x_long
-
-def II_type_check(x):
-    return general_long_type_check(x, 0, 4294967295L)
-
-l_type_check = i_type_check
-
-LL_type_check = II_type_check
-
-def f_type_check(x):
-    if not (isinstance(x, int) or isinstance(x, long) or isinstance(x, float)):
-        raise TypeError("a float is required")
-    x_float = float(x)
-    # XXX This is not exactly a nice way of checking bounds. Formerly, I tried
-    # this: return unpack("f", pack("f", x_float))[0]
-    # Which works in CPython, but PyPy struct is not currently intelligent
-    # enough to handle this.
-    if x_float > 3.4028e38:
-        x_float = 3.4028e38
-    elif x_float < -3.4028e38:
-        x_float = -3.4028e38
-    return x_float
-
-def d_type_check(x):
-    if not (isinstance(x, int) or isinstance(x, long) or isinstance(x, float)):
-        raise TypeError("a float is required")
-    return float(x)
-
-def dummy_type_check(x):
-    return x
-
-# XXX Assuming fixed sizes of the different types, independent of platform.
-# These are the same assumptions that struct makes at the moment.
-descriptors = {
-    'c' : ('char', 1, c_type_check),
-    'b' : ('signed char', 1, b_type_check),
-    'B' : ('unsigned char', 1, BB_type_check),
-    'u' : ('Py_UNICODE', UNICODE_SIZE, u_type_check),
-    'h' : ('signed short', 2, h_type_check),
-    'H' : ('unsigned short', 2, HH_type_check),
-    'i' : ('signed int', 4, i_type_check),
-    'I' : ('unsigned int', 4, II_type_check),
-    'l' : ('signed long', 4, l_type_check),
-    'L' : ('unsigned long', 4, LL_type_check),
-    'f' : ('float', 4, f_type_check),
-    'd' : ('double', 8, d_type_check),
-}
+TYPECODES = "cbBuhHiIlLfd"
 
 class array(object):
     """array(typecode [, initializer]) -> array
@@ -183,13 +96,12 @@ class array(object):
         if not isinstance(typecode, str) or len(typecode) != 1:
             raise TypeError(
                      "array() argument 1 must be char, not %s" % type(typecode))
-        if not descriptors.has_key(typecode):
+        if typecode not in TYPECODES:
             raise ValueError(
-                  "bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)")
-        self._descriptor = descriptors[typecode]
-        self._data = []
+                  "bad typecode (must be one of %s)" % ', '.join(TYPECODES))
+        self._data = bytebuffer(0)
         self.typecode = typecode
-        self.itemsize = self._descriptor[1]
+        self.itemsize = calcsize(typecode)
         if isinstance(initializer, list):
             self.fromlist(initializer)
         elif isinstance(initializer, str):
@@ -200,6 +112,9 @@ class array(object):
             self.extend(initializer)
         return self
 
+    def _clear(self):
+        self._data = bytebuffer(0)
+
     ##### array-specific operations
 
     def fromfile(self, f, n):
@@ -207,11 +122,11 @@ class array(object):
         the array. Also called as read."""
         if not isinstance(f, file):
             raise TypeError("arg1 must be open file")
-        for i in range(n):
-            item = f.read(self.itemsize)
-            if len(item) < self.itemsize:
-                raise EOFError("not enough items in file")
-            self.fromstring(item)
+        size = self.itemsize * n
+        item = f.read(size)
+        if len(item) < size:
+            raise EOFError("not enough items in file")
+        self.fromstring(item)
 
     def fromlist(self, l):
         """Append items to array from list."""
@@ -220,27 +135,22 @@ class array(object):
         self._fromiterable(l)
         
     def fromstring(self, s):
-        from struct import pack, unpack
         """Appends items from the string, interpreting it as an array of machine
         values, as if it had been read from a file using the fromfile()
-        method)."""
+        method."""
         if isinstance(s, unicode):
             s = str(s)
-        if not (isinstance(s, str) or isinstance(s, buffer)):
-            raise TypeError(
-                   "fromstring() argument 1 must be string or read-only buffer")
-        if len(s) % self.itemsize != 0:
+        self._frombuffer(s)
+
+    def _frombuffer(self, s):
+        length = len(s)
+        if length % self.itemsize != 0:
             raise ValueError("string length not a multiple of item size")
-        items = []
-        if self.typecode == "u":
-            for i in range(0, len(s), self.itemsize):
-                items.append(u_type_check(s[i:i + self.itemsize]))
-        else:
-            for i in range(0, len(s), self.itemsize):
-                item = unpack(self.typecode, s[i:i + self.itemsize])[0]
-                # the item needn't be type checked if unpack succeeded
-                items.append(item)
-        self._data.extend(items)
+        boundary = len(self._data)
+        newdata = bytebuffer(boundary + length)
+        newdata[:boundary] = self._data
+        newdata[boundary:] = s
+        self._data = newdata
 
     def fromunicode(self, ustr):
         """Extends this array with data from the unicode string ustr. The array
@@ -250,16 +160,16 @@ class array(object):
         if not self.typecode == "u":
             raise ValueError(
                           "fromunicode() may only be called on type 'u' arrays")
-        if isinstance(ustr, unicode):
-            self._fromiterable(ustr)
-        elif isinstance(ustr, str) or isinstance(ustr, buffer):
-            # CPython strangely truncates string arguments at multiples of the
-            # unicode byte size ...
-            trunc_s = ustr[:len(ustr) - (len(ustr) % self.itemsize)]
-            self.fromstring(trunc_s)
-        else:
-            raise TypeError(
-                  "fromunicode() argument 1 must be string or read-only buffer")
+        # XXX the following probable bug is not emulated:
+        # CPython accepts a non-unicode string or a buffer, and then
+        # behaves just like fromstring(), except that it strangely truncates
+        # string arguments at multiples of the unicode byte size.
+        # Let's only accept unicode arguments for now.
+        if not isinstance(ustr, unicode):
+            raise TypeError("fromunicode() argument should probably be "
+                            "a unicode string")
+        self._frombuffer(ustr)   # _frombuffer() does the currect thing using
+                                 # the buffer behavior of unicode objects
 
     def tofile(self, f):
         """Write all items (as machine values) to the file object f.  Also
@@ -270,22 +180,14 @@ class array(object):
         
     def tolist(self):
         """Convert array to an ordinary list with the same items."""
-        return self._data[:]
+        count = len(self._data) // self.itemsize
+        return list(unpack_from('%d%s' % (count, self.typecode), self._data))
 
     def tostring(self):
-        from struct import pack, unpack
-        """Convert the array to an array of machine values and return the string
-        representation."""
-        if self.typecode == "u":
-            return u"".join(self._data).encode("unicode_internal")
-        else:
-            strings = []
-            for item in self._data:
-                strings.append(pack(self.typecode, item))
-            return "".join(strings)
+        return self._data[:]
 
-    def __buffer__(self):        # XXX baaaaad performance
-        return buffer(self.tostring())
+    def __buffer__(self):
+        return buffer(self._data)
 
     def tounicode(self):
         """Convert the array to a unicode string. The array must be a type 'u'
@@ -293,29 +195,28 @@ class array(object):
         to obtain a unicode string from an array of some other type."""
         if self.typecode != "u":
             raise ValueError("tounicode() may only be called on type 'u' arrays")
-        return u"".join(self._data)
+        # XXX performance is not too good
+        return u"".join(self.tolist())
 
     def byteswap(self):
         """Byteswap all items of the array.  If the items in the array are not
         1, 2, 4, or 8 bytes in size, RuntimeError is raised."""
         if self.itemsize not in [1, 2, 4, 8]:
             raise RuntimeError("byteswap not supported for this array")
-        bytes = self.tostring()
-        swapped = []
-        for offset in range(0, len(self._data) * self.itemsize, self.itemsize):
-            l = list(bytes[offset:offset + self.itemsize])
-            l.reverse()
-            swapped += l
-        self._data = []
-        self.fromstring("".join(swapped))
+        # XXX slowish
+        itemsize = self.itemsize
+        bytes = self._data
+        for start in range(0, len(bytes), itemsize):
+            stop = start + itemsize
+            bytes[start:stop] = bytes[start:stop][::-1]
 
     def buffer_info(self):
         """Return a tuple (address, length) giving the current memory address
         and the length in items of the buffer used to hold array's contents. The
         length should be multiplied by the itemsize attribute to calculate the
-        buffer length in bytes. In PyPy the return values are not really
-        meaningful."""
-        return (0, len(self._data))
+        buffer length in bytes. On PyPy the address might be meaningless
+        (returned as 0), depending on the available modules."""
+        return (getbufaddress(self._data), len(self))
     
     read = fromfile
 
@@ -335,49 +236,49 @@ class array(object):
 
     def __copy__(self):
         a = array(self.typecode)
-        a._data = self._data[:]
+        a._data = bytebuffer(len(self._data))
+        a._data[:] = self._data
         return a
 
     def __eq__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return self._data == other._data
+        return buffer(self._data) == buffer(other._data)
 
     def __ne__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return self._data != other._data
+        return buffer(self._data) != buffer(other._data)
 
     def __lt__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return self._data < other._data
+        return buffer(self._data) < buffer(other._data)
 
     def __gt__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return self._data > other._data
+        return buffer(self._data) > buffer(other._data)
 
     def __le__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return self._data <= other._data
+        return buffer(self._data) <= buffer(other._data)
 
     def __ge__(self, other):
         if not isinstance(other, array):
             return NotImplemented
-        return self._data >= other._data
+        return buffer(self._data) >= buffer(other._data)
 
     ##### list methods
     
     def append(self, x):
         """Append new value x to the end of the array."""
-        x_checked = self._type_check(x)
-        self._data.append(x_checked)
+        self._frombuffer(pack(self.typecode, x))
 
     def count(self, x):
         """Return number of occurences of x in the array."""
-        return self._data.count(x)
+        return operator.countOf(self, x)
 
     def extend(self, iterable):
         """Append items to the end of the array."""
@@ -388,49 +289,90 @@ class array(object):
 
     def index(self, x):
         """Return index of first occurence of x in the array."""
-        return self._data.index(x)
+        return operator.indexOf(self, x)
     
     def insert(self, i, x):
         """Insert a new item x into the array before position i."""
-        x_checked = self._type_check(x)
-        self._data.insert(i, x_checked)
+        seqlength = len(self)
+        if i < 0:
+            i += seqlength
+        if not (0 <= i <= seqlength):
+            raise IndexError(i)
+        boundary = i * self.itemsize
+        data = pack(self.typecode, x)
+        newdata = bytebuffer(len(self._data) + len(data))
+        newdata[:boundary] = self._data[:boundary]
+        newdata[boundary:boundary+self.itemsize] = data
+        newdata[boundary+self.itemsize:] = self._data[boundary:]
+        self._data = newdata
         
     def pop(self, i=-1):
         """Return the i-th element and delete it from the array. i defaults to
         -1."""
-        return self._data.pop(i)
+        seqlength = len(self)
+        if i < 0:
+            i += seqlength
+        if not (0 <= i < seqlength):
+            raise IndexError(i)
+        boundary = i * self.itemsize
+        result = unpack_from(self.typecode, self._data, boundary)[0]
+        newdata = bytebuffer(len(self._data) - self.itemsize)
+        newdata[:boundary] = self._data[:boundary]
+        newdata[boundary:] = self._data[boundary+self.itemsize:]
+        self._data = newdata
+        return result
         
     def remove(self, x):
         """Remove the first occurence of x in the array."""
-        self._data.remove(x)
+        self.pop(self.index(x))
         
     def reverse(self):
         """Reverse the order of the items in the array."""
-        self._data.reverse()
+        lst = self.tolist()
+        lst.reverse()
+        self._clear()
+        self.fromlist(lst)
 
     ##### list protocol
     
     def __len__(self):
-        return len(self._data)
+        return len(self._data) // self.itemsize
     
     def __add__(self, other):
         if not isinstance(other, array):
             raise TypeError("can only append array to array")
         if self.typecode != other.typecode:
             raise TypeError("bad argument type for built-in operation")
-        return array(self.typecode, self._data + other._data)
+        return array(self.typecode, buffer(self._data) + buffer(other._data))
 
     def __mul__(self, repeat):
-        return array(self.typecode, self._data * repeat)
+        return array(self.typecode, buffer(self._data) * repeat)
 
     __rmul__ = __mul__
 
     def __getitem__(self, i):
+        if self.typecode == 'c':  # speed trick
+            return self._data[i]
+        seqlength = len(self)
         if isinstance(i, slice):
-            sliced = array(self.typecode)
-            sliced._data = self._data[i]
-            return sliced
-        return self._data[i]
+            start, stop, step = i.indices(seqlength)
+            if step != 1:
+                sublist = self.tolist()[i]    # fall-back
+                return array(self.typecode, sublist)
+            if start < 0:
+                start = 0
+            if stop < start:
+                stop = start
+            assert stop <= seqlength
+            return array(self.typecode, self._data[start * self.itemsize :
+                                                   stop * self.itemsize])
+        else:
+            if i < 0:
+                i += seqlength
+            if not (0 <= i < seqlength):
+                raise IndexError(i)
+            boundary = i * self.itemsize
+            return unpack_from(self.typecode, self._data, boundary)[0]
 
     def __getslice__(self, i, j):
         return self.__getitem__(slice(i, j))
@@ -439,28 +381,76 @@ class array(object):
         if isinstance(i, slice):
             if not isinstance(x, array):
                 raise TypeError("can only assign array to array slice")
-            if x.typecode != self.typecode:
-                raise TypeError("bad argument type for built-in operation")
-            self._data[i] = x._data
-            return
-        if not (isinstance(i, int) or isinstance(i, long)):
-            raise TypeError("list indices must be integers")
-        if i >= len(self._data) or i < -len(self._data):
-            raise IndexError("array assignment index out of range")
-        x_checked = self._type_check(x)
-        self._data[i] = x_checked
+            seqlength = len(self)
+            start, stop, step = i.indices(seqlength)
+            if start < 0:
+                start = 0
+            if stop < start:
+                stop = start
+            assert stop <= seqlength
+            asslength = stop - start
+            if step != 1 or len(x) != asslength:
+                sublist = self.tolist()    # fall-back
+                sublist[i] = x.tolist()
+                self._clear()
+                self.fromlist(sublist)
+                return
+            self._data[start * self.itemsize :
+                       stop * self.itemsize] = x._data
+        else:
+            seqlength = len(self)
+            if i < 0:
+                i += seqlength
+            if not (0 <= i < seqlength):
+                raise IndexError(i)
+            boundary = i * self.itemsize
+            pack_into(self.typecode, self._data, boundary, x)
 
     def __setslice__(self, i, j, x):
         self.__setitem__(slice(i, j), x)
 
     def __delitem__(self, i):
-        del self._data[i]
+        if isinstance(i, slice):
+            seqlength = len(self)
+            start, stop, step = i.indices(seqlength)
+            if start < 0:
+                start = 0
+            if stop < start:
+                stop = start
+            assert stop <= seqlength
+            if step != 1:
+                sublist = self.tolist()    # fall-back
+                del sublist[i]
+                self._clear()
+                self.fromlist(sublist)
+                return
+            dellength = stop - start
+            boundary1 = start * self.itemsize
+            boundary2 = stop * self.itemsize
+            newdata = bytebuffer(len(self._data) - (boundary2-boundary1))
+            newdata[:boundary1] = self._data[:boundary1]
+            newdata[boundary1:] = self._data[boundary2:]
+            self._data = newdata
+        else:            
+            seqlength = len(self)
+            if i < 0:
+                i += seqlength
+            if not (0 <= i < seqlength):
+                raise IndexError(i)
+            boundary = i * self.itemsize
+            newdata = bytebuffer(len(self._data) - self.itemsize)
+            newdata[:boundary] = self._data[:boundary]
+            newdata[boundary:] = self._data[boundary+self.itemsize:]
+            self._data = newdata
 
     def __delslice__(self, i, j):
         self.__delitem__(slice(i, j))
 
     def __contains__(self, item):
-        return item in self._data
+        for x in self:
+            if x == item:
+                return True
+        return False
 
     def __iadd__(self, other):
         if not isinstance(other, array):
@@ -469,22 +459,28 @@ class array(object):
         return self
 
     def __imul__(self, repeat):
-        self._data *= repeat
+        newdata = buffer(self._data) * repeat
+        self._data = bytebuffer(len(newdata))
+        self._data[:] = newdata
         return self
 
     def __iter__(self):
-        return iter(self._data)
+        p = 0
+        typecode = self.typecode
+        itemsize = self.itemsize
+        while p < len(self._data):
+            yield unpack_from(typecode, self._data, p)[0]
+            p += itemsize
 
     ##### internal methods
-    
-    def _type_check(self, x):
-        return self._descriptor[2](x)
 
     def _fromiterable(self, iterable):
-        items = []
-        for item in iterable:
-            item_checked = self._type_check(item)
-            items.append(item_checked)
-        self._data.extend(items)
+        iterable = tuple(iterable)
+        n = len(iterable)
+        boundary = len(self._data)
+        newdata = bytebuffer(boundary + n * self.itemsize)
+        newdata[:boundary] = self._data
+        pack_into('%d%s' % (n, self.typecode), newdata, boundary, *iterable)
+        self._data = newdata
 
 ArrayType = array
