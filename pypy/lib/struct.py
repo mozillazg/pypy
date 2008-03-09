@@ -285,7 +285,7 @@ def pack(fmt,*args):
                 raise StructError,"arg for string format not a string"
 
         else:
-            if len(args) == 0:
+            if len(args) < num:
                 raise StructError,"insufficient arguments to pack"
             for var in args[:num]:
                 result += [format['pack'](var,format['size'],endianness)]
