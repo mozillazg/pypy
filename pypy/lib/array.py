@@ -296,8 +296,10 @@ class array(object):
         seqlength = len(self)
         if i < 0:
             i += seqlength
-        if not (0 <= i <= seqlength):
-            raise IndexError(i)
+            if i < 0:
+                i = 0
+        elif i > seqlength:
+            i = seqlength
         boundary = i * self.itemsize
         data = pack(self.typecode, x)
         newdata = bytebuffer(len(self._data) + len(data))
