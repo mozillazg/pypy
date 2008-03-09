@@ -39,7 +39,7 @@ class W_MMap(Wrappable):
 
     def find(self, tofind, start=0):
         return self.space.wrap(self.mmap.find(tofind, start))
-    find.unwrap_spec = ['self', str, int]
+    find.unwrap_spec = ['self', 'bufferstr', int]
 
     def seek(self, pos, whence=0):
         try:
@@ -64,7 +64,7 @@ class W_MMap(Wrappable):
         except RValueError, v:
             raise OperationError(self.space.w_ValueError,
                                  self.space.wrap(v.message))
-    write.unwrap_spec = ['self', str]
+    write.unwrap_spec = ['self', 'bufferstr']
     
     def write_byte(self, byte):
         try:
@@ -168,7 +168,7 @@ class W_MMap(Wrappable):
         else:
             raise OperationError(space.w_ValueError,
                 space.wrap("mmap object does not support slicing with a step"))
-    descr_setitem.unwrap_spec = ['self', W_Root, str]
+    descr_setitem.unwrap_spec = ['self', W_Root, 'bufferstr']
 
     def descr_buffer(self):
         # XXX improve to work directly on the low-level address

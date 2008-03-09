@@ -335,6 +335,15 @@ class AppTestStruct(object):
         assert self.struct.unpack("uuu", data) == (u'X', u'Y', u'Z')
 
 
+    def test_unpack_buffer(self):
+        """
+        Buffer objects can be passed to struct.unpack().
+        """
+        b = buffer(self.struct.pack("ii", 62, 12))
+        assert self.struct.unpack("ii", b) == (62, 12)
+        raises(self.struct.error, self.struct.unpack, "i", b)
+
+
 class AppTestStructBuffer(object):
 
     def setup_class(cls):
