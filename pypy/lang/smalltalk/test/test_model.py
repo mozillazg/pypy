@@ -54,7 +54,6 @@ def test_word_object():
     py.test.raises(IndexError, lambda: w_bytes.getword(20))
 
 def test_method_lookup():
-    py.test.skip("Fix me; methods are now cached on each level -> when a level changes other levels need to be notified and updated.")
     w_class = mockclass(0)
     shadow = w_class.as_class_get_shadow()
     shadow.methoddict["foo"] = 1
@@ -72,7 +71,6 @@ def test_method_lookup():
     py.test.raises(MethodNotFound, subshadow.lookup, "zork")
 
 def test_w_compiledin():
-    py.test.skip("Fix me; methods are now cached on each level -> when a level changes other levels need to be notified and updated.")
     w_super = mockclass(0)
     w_class = mockclass(0, w_superclass=w_super)
     supershadow = w_super.as_class_get_shadow()
@@ -95,15 +93,6 @@ def test_hashes():
     h2 = w_inst.gethash()
     assert h1 == h2
     assert h1 == w_inst.hash
-
-def test_compiledmethod_fetchbyte():
-    py.test.skip("Fetchbyte doesn't exist anymore. Test by setting pc in pointersobject; decoding and asking next bytecode")
-    w_method = model.W_CompiledMethod()
-    w_method.bytes = "abc"
-    w_method.literalsize = 2
-    w_method.fetchbyte(9) == ord('a')
-    w_method.fetchbyte(10) == ord('b')
-    w_method.fetchbyte(11) == ord('c')
 
 def test_compiledmethod_at0():
     w_method = model.W_CompiledMethod()

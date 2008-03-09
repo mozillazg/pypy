@@ -1,5 +1,5 @@
 import sys
-from pypy.rlib import rrandom
+from pypy.rlib import rrandom, objectmodel
 from pypy.rlib.rarithmetic import intmask
 from pypy.lang.smalltalk import constants
 from pypy.tool.pairtype import extendabletype
@@ -199,6 +199,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def setshadow(self, shadow):
         self._shadow = shadow
 
+    @objectmodel.specialize.arg(1)
     def as_special_get_shadow(self, TheClass, invalid=True):
         shadow = self._shadow
         if shadow is None:

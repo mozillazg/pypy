@@ -36,7 +36,8 @@ objtable = {}
 objects = []
 
 for name in constants.objects_in_special_object_table:
+    name = "w_" + name
     try:
-        objtable["w_" + name] = globals()["w_" + name]
+        objtable[name] = globals()[name]
     except KeyError, e:
-        objtable["w_" + name ] = None
+        objtable[name] = None
