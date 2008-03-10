@@ -6,16 +6,20 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
     novirtualcontainer     = False
     oopspec                = False
     entrypoint_returns_red = True
+    hotpath                = False
 
     def __init__(self, novirtualcontainer     = None,
                        oopspec                = None,
-                       entrypoint_returns_red = None):
+                       entrypoint_returns_red = None,
+                       hotpath                = None):
         if novirtualcontainer is not None:
             self.novirtualcontainer = novirtualcontainer
         if oopspec is not None:
             self.oopspec = oopspec
         if entrypoint_returns_red is not None:
             self.entrypoint_returns_red = entrypoint_returns_red
+        if hotpath is not None:
+            self.hotpath = hotpath
 
     def look_inside_graph(self, graph):
         return True
