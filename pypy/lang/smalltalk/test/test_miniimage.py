@@ -56,6 +56,7 @@ def test_read_all_header():
       
       
 def test_number_of_objects():
+    py.test.skip("we don't store globally available objects other than the special objects array")
     image = get_image()
     objects = objtable.objects
     assert len(objects) > 0
@@ -75,6 +76,7 @@ def test_there_are_31_compact_classes():
     assert len(reader.compactclasses) == 31
     
 def test_invariant():
+    py.test.skip("we don't store globally available objects other than the special objects array")
     image = get_image()
     for each in objtable.objects:
         each.invariant()

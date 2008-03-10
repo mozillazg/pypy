@@ -19,22 +19,22 @@ class W_Object(object):
         return self.size()
 
     def getclass(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def gethash(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def at0(self, index0):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def atput0(self, index0, w_value):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def fetch(self, n0):
-        raise NotImplementedError
+        raise NotImplementedError()
         
     def store(self, n0, w_value):    
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def invariant(self):
         return True
@@ -122,6 +122,7 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         self.w_class = w_class
 
     def getclass(self):
+        assert self.w_class is not None
         return self.w_class
 
     def __repr__(self):
@@ -143,6 +144,8 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
     def become(self, w_old, w_new):
         if self.w_class == w_old:
             self.w_class = w_new
+        elif self.w_class == w_new:
+            self.w_class = w_old
 
 class W_PointersObject(W_AbstractObjectWithClassReference):
     """ The normal object """
@@ -179,10 +182,10 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         self._vars[idx+self.instsize()] = value
 
     def varsize(self):
-        return self.size() - self.shadow_of_my_class().instsize()
+        return self.size() - self.instsize()
 
     def instsize(self):
-        return self.getclass().as_class_get_shadow().instsize()
+        return self.shadow_of_my_class().instsize()
 
     def primsize(self):
         return self.varsize()
@@ -264,8 +267,11 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def become(self, w_old, w_new):
         W_AbstractObjectWithClassReference.become(self, w_old, w_new)
         for i in range(len(self._vars)):
-            if self.fetch(i) == w_old:
+            w_test = self.fetch(i)
+            if w_test == w_old:
                 self.store(i, w_new)
+            elif w_test == w_new:
+                self.store(i, w_old)
 
 class W_BytesObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
@@ -515,6 +521,7 @@ def W_MethodContext(w_method, w_receiver,
     # mc for methods with islarge flag turned on 32
     size = 12 + w_method.islarge * 20 + w_method.argsize
     w_result = w_MethodContext.as_class_get_shadow().new(size)
+    assert isinstance(w_result, W_PointersObject)
     # Only home-brewed shadows are not invalid from start.
     s_result = w_result.as_methodcontext_get_shadow(invalid=False)
     s_result.store_w_method(w_method)

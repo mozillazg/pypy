@@ -32,8 +32,8 @@ w_nil = model.w_nil
 w_nil.w_class = classtable.classtable['w_UndefinedObject']
 
 objtable = {}
-# XXX Should be table of weakref, contains all objects in the system
-objects = []
+# XXX Used for non-PyPy way of doing become.
+#objects = []
 
 for name in constants.objects_in_special_object_table:
     name = "w_" + name

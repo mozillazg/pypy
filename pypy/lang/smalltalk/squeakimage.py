@@ -203,9 +203,10 @@ class SqueakImage(object):
                                 .g_object.pointers]
 
         from pypy.lang.smalltalk import objtable
-        objtable.objects.extend(
-            [chunk.g_object.w_object
-                for chunk in reader.chunklist])
+        # XXX Used for non-PyPy way of doing become.
+        #objtable.objects.extend(
+        #    [chunk.g_object.w_object
+        #        for chunk in reader.chunklist])
         for name, idx in constants.objects_in_special_object_table.items():
             objtable.objtable["w_" + name] = self.special_objects[idx]
 

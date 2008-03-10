@@ -95,6 +95,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                     elif spec is object:
                         args += (w_arg, )
                     elif spec is str:
+                        assert isinstance(w_arg, model.W_BytesObject)
                         args += (w_arg.as_string(), )
                     elif spec is char:
                         args += (unwrap_char(w_arg), )
@@ -366,6 +367,7 @@ def func(interp, w_rcvr, n0, w_value):
 
 @expose_primitive(NEW, unwrap_spec=[object])
 def func(interp, w_cls):
+    assert isinstance(w_cls, model.W_PointersObject)
     s_class = w_cls.as_class_get_shadow()
     if s_class.isvariable():
         raise PrimitiveFailedError()
@@ -373,6 +375,7 @@ def func(interp, w_cls):
 
 @expose_primitive(NEW_WITH_ARG, unwrap_spec=[object, int])
 def func(interp, w_cls, size):
+    assert isinstance(w_cls, model.W_PointersObject)
     s_class = w_cls.as_class_get_shadow()
     if not s_class.isvariable():
         raise PrimitiveFailedError()
@@ -499,9 +502,9 @@ INC_GC = 131
 
 @expose_primitive(BECOME, unwrap_spec=[object, object])
 def func(interp, w_rcvr, w_new):
-    for w_object in objtable.objects:
-        w_object.become(w_rcvr, w_new)
-    return w_rcvr
+#    for w_object in objtable.objects:
+#        w_object.become(w_rcvr, w_new)
+    raise PrimitiveNotYetWrittenError
 
 def fake_bytes_left():
     return utility.wrap_int(2**20) # XXX we don't know how to do this :-(
@@ -627,6 +630,7 @@ def func(interp, w_context, argcnt):
     # the new BlockContext's home context.  Otherwise, the home
     # context of the receiver is used for the new BlockContext.
     # Note that in our impl, MethodContext.w_home == self
+    assert isinstance(w_context, model.W_PointersObject)
     w_method_context = w_context.as_context_get_shadow().w_home()
 
     # The block bytecodes are stored inline: so we skip past the
@@ -655,8 +659,12 @@ def func(interp, argument_count):
     # Validate that we have a block on the stack and that it received
     # the proper number of arguments:
     w_block_ctx = frame.peek(argument_count)
+
+    # XXX need to check this since VALUE is called on all sorts of objects.
     if w_block_ctx.getclass() != classtable.w_BlockContext:
         raise PrimitiveFailedError()
+    
+    assert isinstance(w_block_ctx, model.W_PointersObject)
 
     s_block_ctx = w_block_ctx.as_blockcontext_get_shadow()
 
@@ -678,6 +686,8 @@ def func(interp, argument_count):
 @expose_primitive(PRIMITIVE_VALUE_WITH_ARGS, unwrap_spec=[object, object],
                   no_result=True)
 def func(interp, w_block_ctx, w_args):
+
+    assert isinstance(w_block_ctx, model.W_PointersObject)
     s_block_ctx = w_block_ctx.as_blockcontext_get_shadow()
     exp_arg_cnt = s_block_ctx.expected_argument_count()
 
@@ -687,6 +697,7 @@ def func(interp, w_block_ctx, w_args):
     if w_args.size() != exp_arg_cnt:
         raise PrimitiveFailedError()
     
+    assert isinstance(w_args, model.W_PointersObject)
     # Push all the items from the array
     for i in range(exp_arg_cnt):
         s_block_ctx.push(w_args.fetchvarpointer(i))
@@ -714,8 +725,9 @@ def func(interp, w_rcvr, sel, w_args):
 
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):
-    if w_rcvr.getclass() != classtable.classtable['w_Semaphore']:
-        raise PrimitiveFailedError()
+    #if w_rcvr.getclass() != classtable.classtable['w_Semaphore']:
+    #    raise PrimitiveFailedError()
+    assert isinstance(w_rcvr, model.W_PointersObject)
     w_rcvr.as_semaphore_get_shadow().synchronous_signal(interp)
     return w_rcvr
     
