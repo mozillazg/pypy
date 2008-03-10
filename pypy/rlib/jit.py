@@ -84,4 +84,50 @@ class Entry(ExtRegistryEntry):
         return hop.genop('is_early_constant', [v], resulttype=lltype.Bool)
 
 
+def jit_merge_point(green=(), red=()):
+    pass
 
+def can_enter_jit(green=(), red=()):
+    pass
+
+class Entry(ExtRegistryEntry):
+    _about_ = jit_merge_point, can_enter_jit
+
+    def compute_result_annotation(self, s_green=None, s_red=None):
+        from pypy.annotation import model as annmodel
+        assert s_green is None or isinstance(s_green, annmodel.SomeTuple)
+        assert s_red is None or isinstance(s_red, annmodel.SomeTuple)
+        return annmodel.s_None
+
+    def specialize_call(self, hop, **kwds_i):
+        from pypy.rpython.error import TyperError
+        from pypy.rpython.lltypesystem import lltype
+        lst = kwds_i.values()
+        lst.sort()
+        if lst != range(hop.nb_args):
+            raise TyperError("%s() takes only keyword arguments" % (
+                self.instance.__name__,))
+        greens_v = []
+        reds_v = []
+        if 'i_green' in kwds_i:
+            i = kwds_i['i_green']
+            r_green_tuple = hop.args_r[i]
+            v_green_tuple = hop.inputarg(r_green_tuple, arg=i)
+            for j in range(len(r_green_tuple.items_r)):
+                v = r_green_tuple.getitem(hop.llops, v_green_tuple, j)
+                greens_v.append(v)
+        if 'i_red' in kwds_i:
+            i = kwds_i['i_red']
+            r_red_tuple = hop.args_r[i]
+            v_red_tuple = hop.inputarg(r_red_tuple, arg=i)
+            for j in range(len(r_red_tuple.items_r)):
+                v = r_red_tuple.getitem(hop.llops, v_red_tuple, j)
+                reds_v.append(v)
+
+        hop.exception_cannot_occur()
+        vlist = [hop.inputconst(lltype.Signed, len(greens_v)),
+                 hop.inputconst(lltype.Signed, len(reds_v))]
+        vlist.extend(greens_v)
+        vlist.extend(reds_v)
+        return hop.genop(self.instance.__name__, vlist,
+                         resulttype=lltype.Void)
