@@ -42,39 +42,15 @@ def tinyBenchmarks():
 
     assert w_method
     w_frame = w_method.create_frame(w_object, [])
-    interp.w_active_context = w_frame
-
-    print w_method
-    print "Going to execute %d toplevel bytecodes" % (len(w_method.bytes),)
-    counter = 0
+    interp.store_w_active_context(w_frame)
 
     from pypy.lang.smalltalk.interpreter import BYTECODE_TABLE
     while True:
         try:
-            counter += 1
-            if interp.w_active_context == w_frame:
-                print "Executing toplevel bytecode nr: %d of %d" % (interp.w_active_context.pc+1, len(w_method.bytes))
-                cb = ord(interp.w_active_context.w_method().bytes[interp.w_active_context.pc])
-                print "= bytecode: %s %d" % (BYTECODE_TABLE[cb].__name__,cb)
             interp.step()
-            #if hasattr(interp.w_active_context,"currentBytecode"):
-            #    print "Executing bytecode: %s" % (BYTECODE_TABLE[interp.w_active_context.currentBytecode].__name__,)
-            #else:
-            #    print "Jump to new stackframe"
-            # print interp.w_active_context.stack
-            if counter == 100000:
-                counter = 0
-                sys.stderr.write("#")
         except interpreter.ReturnFromTopLevel, e:
             print e.object
             return
-        except:
-            if hasattr(interp.w_active_context,"currentBytecode"):
-                cb = interp.w_active_context.currentBytecode
-                print "Failing bytecode: %s %d" % (BYTECODE_TABLE[cb].__name__,cb)
-            raise
-
-
 
 def test_do():
     #testSelector()
