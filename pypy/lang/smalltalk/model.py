@@ -373,6 +373,7 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
             # Last of the literals is an association with compiledin
             # as a class
             w_association = self.literals[-1]
+            assert isinstance(w_association, W_PointersObject)
             s_association = w_association.as_association_get_shadow()
             self.w_compiledin = s_association.value()
         return self.w_compiledin

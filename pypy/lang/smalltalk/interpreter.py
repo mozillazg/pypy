@@ -129,6 +129,7 @@ class __extend__(ContextPartShadow):
         # named var (the value).
         index = self.currentBytecode & 31
         w_association = self.w_method().getliteral(index)
+        assert isinstance(w_association, model.W_PointersObject)
         s_association = w_association.as_association_get_shadow()
         self.push(s_association.value())
 
@@ -269,6 +270,7 @@ class __extend__(ContextPartShadow):
             self.push(self.w_method().getliteral(variableIndex))
         elif variableType == 3:
             w_association = self.w_method().getliteral(variableIndex)
+            assert isinstance(w_association, model.W_PointersObject)
             s_association = w_association.as_association_get_shadow()
             self.push(s_association.value())
         else:
@@ -284,6 +286,7 @@ class __extend__(ContextPartShadow):
             raise IllegalStoreError
         elif variableType == 3:
             w_association = self.w_method().getliteral(variableIndex)
+            assert isinstance(w_association, model.W_PointersObject)
             s_association = w_association.as_association_get_shadow()
             s_association.store_value(self.top())
 
@@ -321,6 +324,7 @@ class __extend__(ContextPartShadow):
         elif opType == 4:
             # pushLiteralVariable
             w_association = self.w_method().getliteral(third)
+            assert isinstance(w_association, model.W_PointersObject)
             s_association = w_association.as_association_get_shadow()
             self.push(s_association.value())
         elif opType == 5:
@@ -329,6 +333,7 @@ class __extend__(ContextPartShadow):
             self.w_receiver().store(third, self.pop())
         elif opType == 7:
             w_association = self.w_method().getliteral(third)
+            assert isinstance(w_association, model.W_PointersObject)
             s_association = w_association.as_association_get_shadow()
             s_association.store_value(self.top())
 

@@ -329,6 +329,7 @@ class SemaphoreShadow(LinkedListShadow):
         s_scheduler = self.s_scheduler()
         w_process_lists = s_scheduler.process_lists()
         w_process_list = w_process_lists._vars[priority]
+        assert isinstance(w_process_list, model.W_PointersObject)
         w_process_list.as_linkedlist_get_shadow().add_last_link(s_process.w_self())
         s_process.store_my_list(w_process_list)
         
@@ -345,6 +346,8 @@ class SemaphoreShadow(LinkedListShadow):
     def s_scheduler(self):
         from pypy.lang.smalltalk import objtable
         w_association = objtable.objtable["w_schedulerassociationpointer"]
+        assert w_association is not None
+        assert isinstance(w_association, model.W_PointersObject)
         w_scheduler = w_association.as_association_get_shadow().value()
         return w_scheduler.as_scheduler_get_shadow()
 
