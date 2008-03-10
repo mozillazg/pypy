@@ -1,5 +1,5 @@
 from pypy.objspace.flow.model import summary
-from pypy.rlib.jit import hint, we_are_jitted
+from pypy.rlib.jit import jit_merge_point, can_enter_jit, we_are_jitted
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.hintannotator.test.test_annotator import AbstractAnnotatorTest
 
@@ -13,15 +13,16 @@ class TestHotPath(AbstractAnnotatorTest):
 
     def hannotate(self, func, argtypes, policy=P_HOTPATH):
         # change default policy
-        AbstractAnnotatorTest.hannotate(self, func, argtypes, policy=policy)
+        AbstractAnnotatorTest.hannotate(self, func, argtypes, policy=policy,
+                                        backendoptimize=True)
 
     def test_simple_loop(self):
         def ll_function(n):
             n1 = n * 2
             total = 0
             while n1 > 0:
-                hint(None, can_enter_jit=True)
-                hint(None, global_merge_point=True)
+                can_enter_jit(red=(n1, total))
+                jit_merge_point(red=(n1, total))
                 if we_are_jitted():
                     total += 1000
                 total += n1

@@ -792,6 +792,9 @@ class JitInterpreter(object):
             return true
         return false
 
+    @arguments()
+    def opimpl_jit_merge_point(self):
+        xxx
 
     # ____________________________________________________________
     # construction-time interface

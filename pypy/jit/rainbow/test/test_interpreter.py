@@ -65,10 +65,15 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
         policy.seetranslator(t)
     graph1 = graphof(t, portal)
     # build hint annotator types
-    hannotator = HintAnnotator(base_translator=t, policy=policy)
-    hs = hannotator.build_types(graph1, [SomeLLAbstractConstant(v.concretetype,
-                                                                {OriginFlags(): True})
-                                         for v in graph1.getargs()])
+    if policy.hotpath:
+        from pypy.jit.hintannotator.hotpath import HotPathHintAnnotator
+        hannotator = HotPathHintAnnotator(base_translator=t, policy=policy)
+        hs = hannotator.build_hotpath_types()
+    else:
+        hannotator = HintAnnotator(base_translator=t, policy=policy)
+        hs = hannotator.build_types(graph1,
+            [SomeLLAbstractConstant(v.concretetype, {OriginFlags(): True})
+             for v in graph1.getargs()])
     hannotator.simplify()
     if conftest.option.view:
         hannotator.translator.view()
@@ -106,14 +111,26 @@ class InterpretationTest(object):
         self.rtyper = rtyper
         self.hintannotator = hannotator
         t = hannotator.translator
-        graph2 = graphof(t, portal)
-        self.graph = graph2
-        self.maingraph = graphof(rtyper.annotator.translator, func)
+        if policy.hotpath:
+            graph2 = t.graphs[0]
+        else:
+            graph2 = graphof(t, portal)
+            self.graph = graph2
+            self.maingraph = graphof(rtyper.annotator.translator, func)
         writer = BytecodeWriter(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
         # the bytecode writer can ask for llhelpers about lists and dicts
         rtyper.specialize_more_blocks() 
+        self.writer = writer
+        self.jitcode = jitcode
 
+        if policy.hotpath:
+            from pypy.jit.rainbow.hotpath import EntryPointsRewriter
+            rewriter = EntryPointsRewriter(rtyper, hannotator, jitcode,
+                                           self.translate_support_code)
+            self.rewriter = rewriter
+            rewriter.rewrite_all()
+            return
 
 
         # rewire the original portal
@@ -127,9 +144,6 @@ class InterpretationTest(object):
                          portalgraph=portalgraph,
                          view = conftest.option.view and self.small)
         self.RESIDUAL_FUNCTYPE = rewriter.RESIDUAL_FUNCTYPE
-
-        self.writer = writer
-        self.jitcode = jitcode
 
 
     def serialize(self, func, values, policy=None,

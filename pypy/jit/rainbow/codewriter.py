@@ -1328,6 +1328,31 @@ class BytecodeWriter(object):
             c = 'red'
         return c
 
+    def serialize_op_jit_merge_point(self, op):
+        # by construction, the graph should have exactly the vars listed
+        # in the op as live vars.  Check this.  Also check the colors
+        # while we are at it.
+        numgreens = op.args[0].value
+        numreds = op.args[1].value
+        greens_v = op.args[2:2+numgreens]
+        reds_v = op.args[2+numgreens:2+numgreens+numreds]
+        for i, v in enumerate(greens_v):
+            if self.varcolor(v) != "green":
+                raise Exception("computed color does not match declared color:"
+                                " %s is %s, but jit_merge_point() declares it"
+                                " as green" % (v, self.varcolor(v)))
+            assert self.green_position(v) == i
+        for i, v in enumerate(reds_v):
+            if self.varcolor(v) != "red":
+                raise Exception("computed color does not match declared color:"
+                                " %s is %s, but jit_merge_point() declares it"
+                                " as red" % (v, self.varcolor(v)))
+            assert self.redvar_position(v) == i
+        self.emit('jit_merge_point')
+
+    def serialize_op_can_enter_jit(self, op):
+        return    # no need to put anything in the bytecode here
+
 
 class GraphTransformer(object):
     def __init__(self, hannotator):

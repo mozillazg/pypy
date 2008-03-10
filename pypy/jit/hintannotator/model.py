@@ -22,6 +22,8 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       ptr_nonzero
                       ptr_iszero
                       is_early_constant
+                      jit_merge_point
+                      can_enter_jit
                       oogetfield
                       oosetfield
                       oononnull
@@ -348,7 +350,7 @@ class __extend__(SomeLLAbstractValue):
             hs_clone.deepfrozen = True
             return hs_clone
         for name in ["reverse_split_queue", "global_merge_point",
-                     "access_directly", "can_enter_jit"]:
+                     "access_directly"]:
             if hs_flags.const.get(name, False):
                 return
 
@@ -487,6 +489,12 @@ class __extend__(SomeLLAbstractValue):
         else:
             # like an indirect_call
             return hs_c1._call_multiple_graphs(graph_list, METH.RESULT, hs_c1, *args_hs) # prepend hs_c1 to the args
+
+    def jit_merge_point(hs_numgreens, hs_numreds, *livevars_hs):
+        pass     # XXX should check colors
+
+    def can_enter_jit(hs_numgreens, hs_numreds, *livevars_hs):
+        pass     # XXX should check colors
 
 class __extend__(SomeLLAbstractConstant):
 
