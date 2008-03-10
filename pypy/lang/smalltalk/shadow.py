@@ -187,7 +187,7 @@ class ClassShadow(AbstractShadow):
             raise NotImplementedError(self.instance_kind)
         if store:
             from pypy.lang.smalltalk import objtable
-            objtable.objects += [w_new]
+            objtable.objects.extend([w_new])
         return w_new
 
     # _______________________________________________________________

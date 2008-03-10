@@ -18,6 +18,10 @@ def wrap_char_table():
 
 wrap_char_table()
 
+def init_chartable_from_objtable():
+    global CharacterTable
+    CharacterTable = objtable["w_charactertable"]
+
 w_true  = classtable.classtable['w_True'].as_class_get_shadow().new(store=False)
 w_false = classtable.classtable['w_False'].as_class_get_shadow().new(store=False)
 w_minus_one = model.W_SmallInteger(-1)
