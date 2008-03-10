@@ -348,7 +348,7 @@ class __extend__(SomeLLAbstractValue):
             hs_clone.deepfrozen = True
             return hs_clone
         for name in ["reverse_split_queue", "global_merge_point",
-                     "access_directly"]:
+                     "access_directly", "can_enter_jit"]:
             if hs_flags.const.get(name, False):
                 return
 
