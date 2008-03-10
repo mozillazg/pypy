@@ -125,11 +125,6 @@ class InterpretationTest(object):
         self.jitcode = jitcode
 
         if policy.hotpath:
-            from pypy.jit.rainbow.hotpath import EntryPointsRewriter
-            rewriter = EntryPointsRewriter(rtyper, hannotator, jitcode,
-                                           self.translate_support_code)
-            self.rewriter = rewriter
-            rewriter.rewrite_all()
             return
 
 
