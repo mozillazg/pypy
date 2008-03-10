@@ -244,6 +244,18 @@ class JitInterpreter(object):
         exceptiondesc.store_global_excdata(jitstate)
         jitstate.curbuilder.finish_and_return(graphsigtoken, gv_ret)
 
+    def finish_jitstate_gray(self, graphsigtoken):
+        jitstate = self.jitstate
+        exceptiondesc = self.exceptiondesc
+        builder = jitstate.curbuilder
+        for virtualizable_box in jitstate.virtualizables:
+            assert isinstance(virtualizable_box, rvalue.PtrRedBox)
+            content = virtualizable_box.content
+            assert isinstance(content, rcontainer.VirtualizableStruct)
+            content.store_back(jitstate)        
+        exceptiondesc.store_global_excdata(jitstate)
+        jitstate.curbuilder.finish_and_return(graphsigtoken, None)
+
     def bytecode_loop(self):
         while 1:
             bytecode = self.load_2byte()
@@ -267,7 +279,7 @@ class JitInterpreter(object):
                 is_portal = frame.bytecode.is_portal
                 graph_color = frame.bytecode.graph_color
                 if graph_color == "gray":
-                    assert not is_portal
+                    #assert not is_portal
                     newjitstate = rtimeshift.leave_graph_gray(queue)
                 elif is_portal or graph_color == "red":
                     newjitstate = rtimeshift.leave_graph_red(
@@ -794,7 +806,8 @@ class JitInterpreter(object):
 
     @arguments()
     def opimpl_jit_merge_point(self):
-        xxx
+        # xxx in-progress
+        pass
 
     # ____________________________________________________________
     # construction-time interface
