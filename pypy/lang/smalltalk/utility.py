@@ -51,8 +51,8 @@ def wrap_string(string):
     return w_inst
 
 def wrap_char(c):
-    from pypy.lang.smalltalk.objtable import CharacterTable
-    return CharacterTable.fetch(ord(c))
+    from pypy.lang.smalltalk.objtable import w_charactertable
+    return w_charactertable.fetch(ord(c))
 
 def wrap_bool(bool):
     from pypy.lang.smalltalk import objtable

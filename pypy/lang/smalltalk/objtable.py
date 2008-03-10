@@ -6,21 +6,17 @@ from pypy.lang.smalltalk import model
 # Global Data
 
 def wrap_char_table():
-    global CharacterTable
+    global w_charactertable
     def bld_char(i):
         w_cinst = classtable.w_Character.as_class_get_shadow().new(store=False)
         w_cinst.store(constants.CHARACTER_VALUE_INDEX,
                       model.W_SmallInteger(i))
         return w_cinst
-    CharacterTable = model.W_PointersObject(classtable.classtable['w_Array'], 256)
+    w_charactertable = model.W_PointersObject(classtable.classtable['w_Array'], 256)
     for i in range(256):
-        CharacterTable.atput0(i, bld_char(i))
+        w_charactertable.atput0(i, bld_char(i))
 
 wrap_char_table()
-
-def init_chartable_from_objtable():
-    global CharacterTable
-    CharacterTable = objtable["w_charactertable"]
 
 w_true  = classtable.classtable['w_True'].as_class_get_shadow().new(store=False)
 w_false = classtable.classtable['w_False'].as_class_get_shadow().new(store=False)
