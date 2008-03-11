@@ -488,24 +488,14 @@ class W_List(W_Root):
         return str(self.list_w)
 
 class ExecutionContext(object):
-    def create_fast_lookup(self, scope_elem):
-        fast_lookup = {}
-        for elem, val in self.scope[-1].propdict.iteritems():
-            if val.dd:
-                fast_lookup[elem] = W_Reference(elem, self.scope[-1])
-        return fast_lookup
-    
     def __init__(self, scope, this=None, variable=None, 
                     debug=False, jsproperty=None):
         assert scope is not None
-        assert len(scope) == 1
         self.scope = scope
         if this is None:
             self.this = scope[-1]
         else:
             self.this = this
-        self.fast_lookup = self.create_fast_lookup(scope[-1])
-        self.scope_lookup = [self.fast_lookup]
         # create a fast lookup
         if variable is None:
             self.variable = self.scope[0]
@@ -533,20 +523,12 @@ class ExecutionContext(object):
         # XXX O(n^2)
         self.scope.insert(0, obj)
         self.variable = obj
-        self.fast_lookup = self.create_fast_lookup(obj)
-        self.scope_lookup.append(self.fast_lookup)
     
     def pop_object(self):
         """remove the last pushed object"""
-        self.scope_lookup.pop()
-        self.fast_lookup = self.scope_lookup[-1]
         return self.scope.pop(0)
         
     def resolve_identifier(self, identifier):
-        try:
-            return self.fast_lookup[identifier]
-        except KeyError:
-            pass
         for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
             if obj.HasProperty(identifier):
