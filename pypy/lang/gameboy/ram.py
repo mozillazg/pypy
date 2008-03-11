@@ -9,10 +9,10 @@ class RAM(object):
 	HIGH_SIZE = 128
 	
 	# Work RAM
-	wram
+	wram = []
 
 	# High RAM
-	hram
+	hram = []
 
 	def __init__(self):
 		self.reset();

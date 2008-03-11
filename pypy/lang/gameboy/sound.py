@@ -49,72 +49,72 @@ class Sound(object):
 
 
 	# Audio Channel 1 int
-	nr10;
-	nr11;
-	nr12;
-	nr13;
-	nr14;
-	audio1Index;
-	audio1Length;
-	audio1Volume;
-	audio1EnvelopeLength;
-	audio1SweepLength;
-	audio1Frequency;
+	nr10=0;
+	nr11=0;
+	nr12=0;
+	nr13=0;
+	nr14=0;
+	audio1Index=0;
+	audio1Length=0;
+	audio1Volume=0;
+	audio1EnvelopeLength=0;
+	audio1SweepLength=0;
+	audio1Frequency=0;
 
 
 	# Audio Channel 2 int
-	nr21;
-	nr22;
-	nr23;
-	nr24;
-	audio2Index;
-	audio2Length;
-	audio2Volume;
-	audio2EnvelopeLength;
-	audio2Frequency;
+	nr21=0;
+	nr22=0;
+	nr23=0;
+	nr24=0;
+	audio2Index=0;
+	audio2Length=0;
+	audio2Volume=0;
+	audio2EnvelopeLength=0;
+	audio2Frequency=0;
 
 
 	# Audio Channel 3 int
-	nr30;
-	nr31;
-	nr32;
-	nr33;
-	nr34;
-	audio3Index;
-	audio3Length;
-	audio3Frequency;
-	audio3WavePattern# = new byte[16];
+	nr30=0;
+	nr31=0;
+	nr32=0;
+	nr33=0;
+	nr34=0;
+	audio3Index=0;
+	audio3Length=0;
+	audio3Frequency=0;
+	audio3WavePattern = []# = new byte[16];
 
 	# Audio Channel 4 int
-	nr41;
-	nr42;
-	nr43;
-	nr44;
-	audio4Index;
-	audio4Length;
-	audio4Volume;
-	audio4EnvelopeLength;
-	audio4Frequency;
+	nr41=0;
+	nr42=0;
+	nr43=0;
+	nr44=0;
+	audio4Index=0;
+	audio4Length=0;
+	audio4Volume=0;
+	audio4EnvelopeLength=0;
+	audio4Frequency=0;
 
 	# Output Control int
-	nr50;
-	nr51;
-	nr52;
+	nr50=0;
+	nr51=0;
+	nr52=0;
 
 	 # Sound DriverSoundDriver
-	driver;
-	buffer# = new byte[512];
+	#driver;
+	buffer  = []# = new byte[512];
 	#int
-	frames;
-	cycles;
+	#frames;
+	#cycles;
 
 	 # Frequency Table
-	frequencyTable #= new int[2048];
-	noiseFreqRatioTable #= new int[8];
+	frequencyTable = []#= new int[2048];
+	noiseFreqRatioTable = [] #= new int[8];
 
 	 # Noise Tables
-	noiseStep7Table #= new int[128 / 32];
-	noiseStep15Table #= new int[32768 / 32];
+	noiseStep7Table = [] #= new int[128 / 32];
+	noiseStep15Table = [] #= new int[32768 / 32];
 
 	def __init__(self, soundDriver):
 		self.driver = soundDriver;
@@ -293,8 +293,6 @@ class Sound(object):
 		else:
 			if (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
 				self.setAudio3WavePattern(address, data);
-			break;
-	
 
 
 	def updateAudio(self):
@@ -310,7 +308,6 @@ class Sound(object):
 
 			if ((self.nr52 & 0x08) != 0):
 				self.updateAudio4();
-	
 
 
 	def mixAudio(self,buffer, length):
@@ -329,12 +326,9 @@ class Sound(object):
 
 			if ((self.nr52 & 0x08) != 0):
 				self.mixAudio4(buffer, length);
-	
-
 
 
 	 # Audio Channel 1
-
 	def getAudio1Sweep(self):
 		return self.nr10;
 
@@ -401,19 +395,14 @@ class Sound(object):
 			self.audio1EnvelopeLength = (SOUND_CLOCK / 64) * (self.nr12 & 0x07);
 	
 
-
 	def updateAudio1(self):
 		if ((self.nr14 & 0x40) != 0):
 			if (self.audio1Length > 0):
 				self.audio1Length-=1;
-
 				if (self.audio1Length <= 0):
 					self.nr52 &= ~0x01;
-		
-
 		if (self.audio1EnvelopeLength > 0):
 			self.audio1EnvelopeLength-=1;
-
 			if (self.audio1EnvelopeLength <= 0):
 				if ((self.nr12 & 0x08) != 0):
 					if (self.audio1Volume < 15):
@@ -421,23 +410,16 @@ class Sound(object):
 				elif (self.audio1Volume > 0):
 					self.audio1Volume-=1;
 				self.audio1EnvelopeLength += (SOUND_CLOCK / 64) * (self.nr12 & 0x07);
-		
-	
-
 		if (self.audio1SweepLength > 0):
 			self.audio1SweepLength-=1;
-
 			if (self.audio1SweepLength <= 0):
 				sweepSteps = (self.nr10 & 0x07);
-
 				if (sweepSteps != 0):
 					frequency = ((self.nr14 & 0x07) << 8) + self.nr13;
-
 					if ((self.nr10 & 0x08) != 0):
 						frequency -= frequency >> sweepSteps;
 					else:
 						frequency += frequency >> sweepSteps;
-
 					if (frequency < 2048):
 						self.audio1Frequency = self.frequencyTable[frequency];
 						self.nr13 = frequency & 0xFF;
@@ -448,8 +430,6 @@ class Sound(object):
 			
 				self.audio1SweepLength += (SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
 		
-	
-
 
 	def mixAudio1(self, buffer, length):
 		wavePattern = 0x18
@@ -475,11 +455,7 @@ class Sound(object):
 					buffer[index + 1] += self.audio1Volume;
 		
 	
-
-
-
 	 # Audio Channel 2
-
 	def getAudio2Length(self):
 		return self.nr21;
 
@@ -498,13 +474,11 @@ class Sound(object):
 
 	def setAudio2Length(self, data):
 		self.nr21 = data;
-
 		self.audio2Length = (SOUND_CLOCK / 256) * (64 - (self.nr21 & 0x3F));
 
 
 	def setAudio2Envelope(self, data):
 		self.nr22 = data;
-
 		if ((self.nr24 & 0x40) == 0):
 			if ((self.nr22 >> 4) == 0):
 				self.audio2Volume = 0;
@@ -516,15 +490,14 @@ class Sound(object):
 
 	def setAudio2Frequency(self, data):
 		self.nr23 = data;
-
-		self.audio2Frequency = self.frequencyTable[self.nr23
+		self.audio2Frequency = self.frequencyTable[self.nr23\
 				+ ((self.nr24 & 0x07) << 8)];
 
 
 	def setAudio2Playback(self, data):
 		self.nr24 = data;
 
-		self.audio2Frequency = self.frequencyTable[self.nr23
+		self.audio2Frequency = self.frequencyTable[self.nr23\
 				+ ((self.nr24 & 0x07) << 8)];
 
 		if ((self.nr24 & 0x80) != 0):
@@ -556,8 +529,6 @@ class Sound(object):
 					self.audio2Volume-=1;
 				self.audio2EnvelopeLength += (SOUND_CLOCK / 64) * (self.nr22 & 0x07);
 		
-	
-
 
 	def mixAudio2(self, buffer, length):
 		wavePattern = 0x18
@@ -582,13 +553,9 @@ class Sound(object):
 					buffer[index + 0] += self.audio2Volume;
 				if ((self.nr51 & 0x02) != 0):
 					buffer[index + 1] += self.audio2Volume;
-		
-	
-
 
 
 	 # Audio Channel 3
-
 	def getAudio3Enable(self):
 		return self.nr30;
 
@@ -656,7 +623,6 @@ class Sound(object):
 				self.audio3Length-=1;
 				if (self.audio3Length <= 0):
 					self.nr52 &= ~0x04;
-		
 
 
 	def mixAudio3(self, buffer, length):
@@ -684,10 +650,7 @@ class Sound(object):
 				buffer[index + 1] += sample;
 	
 
-
-
 	 # Audio Channel 4
-
 	def getAudio4Length(self):
 		return self.nr41;
 
@@ -706,7 +669,6 @@ class Sound(object):
 
 	def setAudio4Length(self, data):
 		self.nr41 = data;
-
 		self.audio4Length = (SOUND_CLOCK / 256) * (64 - (self.nr41 & 0x3F));
 
 
@@ -765,8 +727,6 @@ class Sound(object):
 				self.audio4EnvelopeLength += (SOUND_CLOCK / 64) * (self.nr42 & 0x07);
 		
 	
-
-
 	def mixAudio4(self, buffer, length):
 		for index in range(0, length, 2):
 			self.audio4Index += self.audio4Frequency;
@@ -781,7 +741,6 @@ class Sound(object):
 				self.audio4Index &= 0x7FFFFFFF;
 				polynomial = self.noiseStep15Table[self.audio4Index >> 21] >> ((self.audio4Index >> 16) & 31);
 		
-
 			if ((polynomial & 1) != 0):
 				if ((self.nr51 & 0x80) != 0):
 					buffer[index + 0] -= self.audio4Volume;
@@ -792,13 +751,9 @@ class Sound(object):
 					buffer[index + 0] += self.audio4Volume;
 				if ((self.nr51 & 0x08) != 0):
 					buffer[index + 1] += self.audio4Volume;
-		
-	
-
 
 
 	 # Output Control
-
 	def getOutputLevel(self):
 		return self.nr50;
 
@@ -825,9 +780,7 @@ class Sound(object):
 			self.nr52 &= 0xF0;
 
 
-
 	 # Frequency Table Generation
-
 	def generateFrequencyTables(self):
 		sampleRate = self.driver.getSampleRate();
 	
@@ -838,8 +791,6 @@ class Sound(object):
 				self.frequencyTable[period] = 0;
 			else:
 				self.frequencyTable[period] = skip;
-
-	
 		 # Polynomial Noise Frequency Ratios
 		 # 
 		 # 4194304 Hz * 1/2^3 * 2 4194304 Hz * 1/2^3 * 1 4194304 Hz * 1/2^3 *
@@ -862,7 +813,6 @@ class Sound(object):
 			if ((index & 31) == 0):
 				self.noiseStep7Table[index >> 5] = 0;
 			self.noiseStep7Table[index >> 5] |= (polynomial & 1) << (index & 31);
-	
 		#  15 steps&
 		polynomial = 0x7FFF
 		for index in range(0, 0x7FFF):
