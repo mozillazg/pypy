@@ -1,5 +1,5 @@
 
-from pypy.lang.js.jsobj import W_IntNumber
+from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String
 
 class JsCode(object):
     """ That object stands for code of a single javascript function
@@ -7,11 +7,12 @@ class JsCode(object):
     def __init__(self):
         self.opcodes = []
 
-    def emit(self, operation, args):
+    def emit(self, operation, *args):
         try:
-            self.opcodes.append(OpcodeMap[operation](args))
+            self.opcodes.append(OpcodeMap[operation](*args))
         except KeyError:
             raise ValueError("Unknown opcode %s" % (operation,))
+    emit._annspecialcase_ = 'specialize:arg(1)'
 
     def __repr__(self):
         return "\n".join([repr(i) for i in self.opcodes])
@@ -59,9 +60,8 @@ class Undefined(Opcode):
         return w_Undefined
 
 class LOAD_INTCONSTANT(Opcode):
-    def __init__(self, args):
-        assert len(args) == 1
-        self.w_intvalue = W_IntNumber(int(args[0]))
+    def __init__(self, value):
+        self.w_intvalue = W_IntNumber(int(value))
 
     def eval(self, ctx):
         return self.w_intvalue
@@ -69,16 +69,52 @@ class LOAD_INTCONSTANT(Opcode):
     def __repr__(self):
         return 'LOAD_INTCONSTANT %s' % (self.w_intvalue.intval,)
 
+class LOAD_FLOATCONSTANT(Opcode):
+    def __init__(self, value):
+        self.w_floatvalue = W_FloatNumber(float(value))
+
+    def eval(self, ctx):
+        return self.w_floatvalue
+
+    def __repr__(self):
+        return 'LOAD_FLOATCONSTANT %s' % (self.w_floatvalue.floatval,)
+
+class LOAD_STRINGCONSTANT(Opcode):
+    def __init__(self, value):
+        self.w_stringvalue = W_String(value)
+
+    def eval(self, ctx):
+        return self.w_stringvalue
+
+    def get_literal(self):
+        return W_String(self.strval).ToString()
+
+    def __repr__(self):
+        return 'LOAD_STRINGCONSTANT "%s"' % (self.w_stringvalue.strval,)
+
 class LOAD_VARIABLE(Opcode):
-    def __init__(self, args):
-        assert len(args) == 1
-        self.identifier = args[0]
+    def __init__(self, identifier):
+        self.identifier = identifier
 
     def eval(self, ctx):
         return ctx.resolve_identifier(self.identifier)
 
     def __repr__(self):
         return 'LOAD_VARIABLE "%s"' % (self.identifier,)
+
+class LOAD_ARRAY(Opcode):
+    def __init__(self, counter):
+        self.counter = counter
+
+    def eval(self, ctx):
+        proto = ctx.get_global().Get('Array').Get('prototype')
+        array = W_Array(ctx, Prototype=proto, Class = proto.Class)
+        for i in range(len(self.nodes)):
+            array.Put(str(i), self.nodes[i].eval(ctx).GetValue())
+        return array
+
+    def __repr__(self):
+        return 'LOAD_ARRAY %d' % (self.counter,)
 
 OpcodeMap = {}
 
