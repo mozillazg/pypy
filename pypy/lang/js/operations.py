@@ -84,29 +84,36 @@ class Undefined(Statement):
         bytecode.emit('LOAD_UNDEFINED')
 
 class PropertyInit(Expression):
-    def __init__(self, identifier, expr):
-        self.identifier = identifier
-        assert isinstance(identifier, str)
+    def __init__(self, pos, identifier, expr):
+        self.pos = pos
+        self.identifier = identifier.name
         self.expr = expr
     
     def emit(self, bytecode):
+        XXX # not sure what to do here, think later
         self.expr.emit(bytecode)
-        bytecode.emit('STORE', [self.identifier])
+        bytecode.emit('STORE', self.identifier)
 
 class Array(ListOp):
-    def eval(self, ctx):
-        proto = ctx.get_global().Get('Array').Get('prototype')
-        array = W_Array(ctx, Prototype=proto, Class = proto.Class)
-        for i in range(len(self.nodes)):
-            array.Put(str(i), self.nodes[i].eval(ctx).GetValue())
-        return array
+    def emit(self, bytecode):
+        for element in self.nodes:
+            element.emit(bytecode)
+        bytecode.emit('LOAD_ARRAY', len(self.nodes))
 
 class Assignment(Expression):
-    def __init__(self, pos, left, right, atype):
+    def __init__(self, pos, left, right, operand):
         self.pos = pos
-        self.left = left
+        self.identifier = left.name
         self.right = right
-        self.type = atype
+        self.operand = operand
+
+    def emit(self, bytecode):
+        op = self.operand
+        XXX
+        if op == '==':
+            bytecode.emit('STORE', self.identifier)
+        else:
+            XXX
 
     def eval(self, ctx):
         v1 = self.left.eval(ctx)
@@ -278,7 +285,7 @@ class Identifier(Expression):
         self.name = name
 
     def emit(self, bytecode):
-        bytecode.emit('LOAD_VARIABLE', [self.name])
+        bytecode.emit('LOAD_VARIABLE', self.name)
         
 #    def get_literal(self):
 #        return self.name
@@ -741,28 +748,27 @@ class IntNumber(BaseNumber):
         self.num = num
 
     def emit(self, bytecode):
-        bytecode.emit('LOAD_INTCONSTANT', [self.num])
+        bytecode.emit('LOAD_INTCONSTANT', self.num)
 
 class FloatNumber(BaseNumber):
     def __init__(self, pos, num):
         self.pos = pos
         self.num = num
 
-    def eval(self, ctx):
-        return W_FloatNumber(float(self.num))
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_FLOATCONSTANT', self.num)
 
 class String(Expression):
     def __init__(self, pos, strval):
         self.pos = pos
         self.strval = self.string_unquote(strval)
-    
-    def eval(self, ctx):
-        return W_String(self.strval)
-    
-    def get_literal(self):
-        return W_String(self.strval).ToString()
+
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_STRINGCONSTANT', self.strval)
     
     def string_unquote(self, string):
+        # XXX I don't think this works, it's very unlikely IMHO
+        #     test it
         temp = []
         stop = len(string)-1
         # XXX proper error
@@ -786,7 +792,6 @@ class String(Expression):
                 temp.append(c)
             last = c
         return ''.join(temp)
-    
 
 class ObjectInit(ListOp):
     def eval(self, ctx):

@@ -138,7 +138,9 @@ class TestExpressions(BaseGrammarTest):
         result1 = self.evaluator.dispatch(tree)
         assert result1 == n
         return tree
-        
+
+    def parse_raises(self, s):
+        py.test.raises(ParseError, self.parse, s)
 
     def parse_and_eval_all(self, l):
         for i in l:
@@ -184,6 +186,9 @@ class TestExpressions(BaseGrammarTest):
         self.parse('{}')
         self.parse('{x:1}') #per spec {x:1,} should not be supported
         self.parse('{x:1,y:2}')
+
+    def test_invalid_expression(self):
+        self.parse_raises('(1+2)=3')
     
 class TestStatements(BaseGrammarTest):
     def setup_class(cls):
@@ -293,6 +298,10 @@ class TestToASTExpr(BaseGrammarTest):
 #         w_Object = W_Object(Prototype=W_Object())
 #         w_Global.Put('Object', w_Object)
 #         return ast.eval(global_context(w_Global))
+
+    def check(self, source, expected):
+        bytecode = self.compile(source)
+        assert bytecode == expected
     
     def test_get_pos(self):
         from pypy.lang.js import operations
@@ -306,21 +315,23 @@ class TestToASTExpr(BaseGrammarTest):
         assert not isinstance(t, Symbol)
         pos = astb.get_pos(t)
         assert pos.start == 0
-        
+
     def test_primaryexpression(self):
-        bytecode = self.compile('(6)')
-        assert bytecode == ['LOAD_INTCONSTANT 6']
-        bytecode = self.compile('((((6))))')
-        assert bytecode == ['LOAD_INTCONSTANT 6']
-        bytecode = self.compile('x')
-        assert bytecode == ['LOAD_VARIABLE "x"']
-        # w_array = self.eval_expr('[1,2,3]')
-        # assert w_array.ToString(self.ctx) == '1,2,3'
-        w_identifier = self.eval_expr('x')
-        py.test.raises(ThrowException, w_identifier.GetValue)
-        w_object = self.eval_expr('{x:1}')
-        assert w_object.ToString(self.ctx) == '[object Object]'
-        assert w_object.Get('x').ToNumber() == 1
+        self.check('(6)', ['LOAD_INTCONSTANT 6'])
+        self.check('((((6))))', ['LOAD_INTCONSTANT 6'])
+        self.check('x', ['LOAD_VARIABLE "x"'])
+        self.check('[1,2,3.3,"abc"]', [
+            'LOAD_INTCONSTANT 1',
+            'LOAD_INTCONSTANT 2',
+            'LOAD_FLOATCONSTANT 3.3',
+            'LOAD_STRINGCONSTANT "abc"',
+            'LOAD_ARRAY 4'])
+        self.check('x = 3', [
+            'LOAD_INTCONSTANT 3',
+            'STORE "x"'])
+        self.check('{x:1}', [
+            'LOAD_INTCONSTANT 1',
+            'LOAD_OBJECT ["x"]'])
     
     def test_expression(self):
         w_num = self.eval_expr('1 - 1 - 1')

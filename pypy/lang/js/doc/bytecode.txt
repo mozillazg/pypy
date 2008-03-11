@@ -18,6 +18,16 @@ STORE <identifier>
 
 stores the last value on stack into identifierx
 
+STORE_ELEMENT <identifier>
+
+identifier[last_element_on_the_stack] = previous_element_on_the_stack
+note that in javascript a.b is exactly the same as a['b'], just that
+first one can be eventually speed up
+
+LOAD_ARRAY <num>
+
+create array out of num elements on the stack
+
 Arithmetic binary operations:
 (all pops two values and pushes on stack the result)
 
