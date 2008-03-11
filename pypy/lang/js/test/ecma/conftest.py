@@ -1,10 +1,11 @@
 import py
 from pypy.lang.js.interpreter import *
-from pypy.lang.js.jsobj import W_Array, JsBaseExcept
+from pypy.lang.js.jsobj import W_Array
 from pypy.rlib.parsing.parsing import ParseError
 from py.__.test.outcome import Failed, ExceptionFailure
 import pypy.lang.js as js
 from pypy.lang.js import interpreter
+from pypy.lang.js.execution import JsBaseExcept
 
 interpreter.TEST = True
 
@@ -32,7 +33,7 @@ class JSTestFile(py.test.collect.Module):
     def init_interp(cls):
         if hasattr(cls, 'interp'):
             cls.testcases.PutValue(W_Array(), cls.interp.global_context)
-            cls.tc.PutValue(W_Number(0), cls.interp.global_context)
+            cls.tc.PutValue(W_IntNumber(0), cls.interp.global_context)
 
         cls.interp = Interpreter()
         ctx = cls.interp.global_context
@@ -81,7 +82,7 @@ class JSTestItem(py.test.collect.Item):
     def run(self):
         ctx = JSTestFile.interp.global_context
         r3 = ctx.resolve_identifier('run_test').GetValue()
-        w_test_number = W_Number(self.number)
+        w_test_number = W_IntNumber(self.number)
         result = r3.Call(ctx=ctx, args=[w_test_number,]).GetValue().ToString()
         if result != "passed":
             raise Failed(msg=result)

@@ -2,8 +2,11 @@
 import math
 from pypy.lang.js.jsparser import parse, ParseError
 from pypy.lang.js.astbuilder import ASTBuilder
-from pypy.lang.js.operations import *
-from pypy.lang.js.jsobj import ThrowException
+from pypy.lang.js.jsobj import global_context, W_Object,\
+     w_Undefined, W_NewBuiltin, W_IntNumber, w_Null, create_object, W_Boolean,\
+     W_FloatNumber, NaN, Infinity, W_String, W_Builtin, W_Array, w_Null,\
+     isnull_or_undefined, W_PrimitiveObject, W_ListObject
+from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
 
@@ -37,8 +40,8 @@ class W_ObjectObject(W_NativeObject):
             return self.Construct(ctx)
 
     def Construct(self, ctx, args=[]):
-        if len(args) >= 1 and not (isinstance(args[0], W_Undefined) \
-                                    or isinstance(args[0], W_Null)):          
+        if (len(args) >= 1 and not args[0] is w_Undefined and not
+            args[0] is w_Null):
             # XXX later we could separate builtins and normal objects
             return args[0].ToObject(ctx)
         return create_object(ctx, 'Object')
@@ -59,15 +62,15 @@ class W_BooleanObject(W_NativeObject):
 class W_NumberObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
-            return W_Number(args[0].ToNumber())
+            return W_FloatNumber(args[0].ToNumber())
         else:
-            return W_Number(0.0)
+            return W_FloatNumber(0.0)
 
     def Construct(self, ctx, args=[]):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
-            Value = W_Number(args[0].ToNumber())
+            Value = W_FloatNumber(args[0].ToNumber())
             return create_object(ctx, 'Number', Value = Value)
-        return create_object(ctx, 'Number', Value = W_Number(0.0))
+        return create_object(ctx, 'Number', Value = W_FloatNumber(0.0))
 
 class W_StringObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
@@ -87,7 +90,6 @@ class W_ArrayObject(W_NativeObject):
         proto = ctx.get_global().Get('Array').Get('prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         for i in range(len(args)):
-            print "yeahh"
             array.Put(str(i), args[0])
         return array
 
@@ -119,7 +121,7 @@ def evaljs(ctx, args, this):
 
 def parseIntjs(ctx, args, this):
     if len(args) < 1:
-        return W_Number(NaN)
+        return W_FloatNumber(NaN)
     s = args[0].ToString(ctx).strip(" ")
     if len(args) > 1:
         radix = args[1].ToInt32()
@@ -129,22 +131,22 @@ def parseIntjs(ctx, args, this):
         radix = 16
         s = s[2:]
     if s == '' or radix < 2 or radix > 36:
-        return W_Number(NaN)
+        return W_FloatNumber(NaN)
     try:
         n = int(s, radix)
     except ValueError:
-        n = NaN
-    return W_Number(n)
+        return W_FloatNumber(NaN)
+    return W_IntNumber(n)
 
 def parseFloatjs(ctx, args, this):
     if len(args) < 1:
-        return W_Number(NaN)
+        return W_FloatNumber(NaN)
     s = args[0].ToString(ctx).strip(" ")
     try:
         n = float(s)
     except ValueError:
         n = NaN
-    return W_Number(n)
+    return W_FloatNumber(n)
     
 
 def printjs(ctx, args, this):
@@ -184,20 +186,25 @@ def arrayjs(ctx, args, this):
 
 def numberjs(ctx, args, this):
     if len(args) > 0:
-        return W_Number(args[0].ToNumber())
-    return W_Number(0)
+        return W_FloatNumber(args[0].ToNumber())
+    return W_IntNumber(0)
         
 def absjs(ctx, args, this):
-    return W_Number(abs(args[0].ToNumber()))
+    val = args[0]
+    if isinstance(val, W_IntNumber):
+        if val.intval > 0:
+            return val # fast path
+        return W_IntNumber(-val.intval)
+    return W_FloatNumber(abs(args[0].ToNumber()))
 
 def floorjs(ctx, args, this):
-    return W_Number(math.floor(args[0].ToNumber()))
+    return W_IntNumber(int(math.floor(args[0].ToNumber())))
 
 def powjs(ctx, args, this):
-    return W_Number(math.pow(args[0].ToNumber(), args[1].ToNumber()))
+    return W_FloatNumber(math.pow(args[0].ToNumber(), args[1].ToNumber()))
 
 def sqrtjs(ctx, args, this):
-    return W_Number(math.sqrt(args[0].ToNumber()))
+    return W_FloatNumber(math.sqrt(args[0].ToNumber()))
 
 def versionjs(ctx, args, this):
     return w_Undefined
@@ -280,8 +287,7 @@ class W_Apply(W_NewBuiltin):
             arrayArgs = args[1]
             if isinstance(arrayArgs, W_ListObject):
                 callargs = arrayArgs.tolist()
-            elif isinstance(arrayArgs, W_Undefined) \
-                    or isinstance(arrayArgs, W_Null):
+            elif isnull_or_undefined(arrayArgs):
                 callargs = []
             else:
                 raise JsTypeError('arrayArgs is not an Array or Arguments object')
@@ -334,7 +340,7 @@ class W_IndexOf(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         if len(args) < 1:
-            return W_Number(-1.0)
+            return W_IntNumber(-1)
         substr = args[0].ToString(ctx)
         size = len(string)
         subsize = len(substr)
@@ -343,7 +349,7 @@ class W_IndexOf(W_NewBuiltin):
         else:
             pos = args[1].ToInt32()
         pos = min(max(pos, 0), size)
-        return W_Number(string.find(substr, pos))
+        return W_IntNumber(string.find(substr, pos))
 
 class W_Substring(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -377,6 +383,9 @@ class W_DateFake(W_NewBuiltin): # XXX This is temporary
     def Construct(self, ctx, args=[]):
         return create_object(ctx, 'Object')
 
+def pypy_repr(ctx, repr, w_arg):
+    return W_String(w_arg.__class__.__name__)
+
 class Interpreter(object):
     """Creates a js interpreter"""
     def __init__(self):
@@ -403,7 +412,7 @@ class Interpreter(object):
         w_Function.Put('prototype', w_FncPrototype, dd=True, de=True, ro=True)
         w_Function.Put('constructor', w_Function)
         
-        w_Object.Put('length', W_Number(1), ro=True, dd=True)
+        w_Object.Put('length', W_IntNumber(1), ro=True, dd=True)
         
         toString = W_ToString(ctx)
         
@@ -447,7 +456,7 @@ class Interpreter(object):
         #Number
         w_Number = W_NumberObject('Number', w_FncPrototype)
 
-        w_NumPrototype = create_object(ctx, 'Object', Value=W_Number(0.0))
+        w_NumPrototype = create_object(ctx, 'Object', Value=W_FloatNumber(0.0))
         w_NumPrototype.Class = 'Number'
         put_values(w_NumPrototype, {
             'constructor': w_FncPrototype,
@@ -459,9 +468,9 @@ class Interpreter(object):
         put_values(w_Number, {
             'constructor': w_FncPrototype,
             'prototype': w_NumPrototype,
-            'NaN': W_Number(NaN),
-            'POSITIVE_INFINITY': W_Number(Infinity),
-            'NEGATIVE_INFINITY': W_Number(-Infinity),
+            'NaN': W_FloatNumber(NaN),
+            'POSITIVE_INFINITY': W_FloatNumber(Infinity),
+            'NEGATIVE_INFINITY': W_FloatNumber(-Infinity),
         })
 
         w_Global.Put('Number', w_Number)
@@ -511,8 +520,8 @@ class Interpreter(object):
         w_math.Put('floor', W_Builtin(floorjs, Class='function'))
         w_math.Put('pow', W_Builtin(powjs, Class='function'))
         w_math.Put('sqrt', W_Builtin(sqrtjs, Class='function'))
-        w_math.Put('E', W_Number(math.e))
-        w_math.Put('PI', W_Number(math.pi))
+        w_math.Put('E', W_FloatNumber(math.e))
+        w_math.Put('PI', W_FloatNumber(math.pi))
         
         w_Global.Put('version', W_Builtin(versionjs))
         
@@ -520,8 +529,8 @@ class Interpreter(object):
         w_Date = W_DateFake(ctx, Class='Date')
         w_Global.Put('Date', w_Date)
         
-        w_Global.Put('NaN', W_Number(NaN))
-        w_Global.Put('Infinity', W_Number(Infinity))
+        w_Global.Put('NaN', W_FloatNumber(NaN))
+        w_Global.Put('Infinity', W_FloatNumber(Infinity))
         w_Global.Put('undefined', w_Undefined)
         w_Global.Put('eval', W_Builtin(evaljs))
         w_Global.Put('parseInt', W_Builtin(parseIntjs))
@@ -531,7 +540,10 @@ class Interpreter(object):
 
         w_Global.Put('print', W_Builtin(printjs))
         w_Global.Put('this', w_Global)
-        
+
+        # DEBUGGING
+        if 1:
+            w_Global.Put('pypy_repr', W_Builtin(pypy_repr))
         
         self.global_context = ctx
         self.w_Global = w_Global
@@ -549,9 +561,12 @@ def wrap_arguments(pyargs):
             res.append(arg)
         elif isinstance(arg, str):
             res.append(W_String(arg))
-        elif isinstance(arg, int) or isinstance(arg, float) \
-                                    or isinstance(arg, long):
-            res.append(W_Number(arg))
+        elif isinstance(arg, int):
+            res.append(W_IntNumber(arg))
+        elif isinstance(arg, float):
+            res.append(W_FloatNumber(arg))
         elif isinstance(arg, bool):
             res.append(W_Boolean(arg))
+        else:
+            raise Exception("Cannot wrap %s" % (arg,))
     return res

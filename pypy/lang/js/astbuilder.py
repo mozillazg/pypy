@@ -80,18 +80,19 @@ class ASTBuilder(RPythonVisitor):
 
     def visit_DECIMALLITERAL(self, node):
         pos = self.get_pos(node)
-        number = operations.Number(pos, float(node.additional_info))
-        return number
+        try:
+            int(node.additional_info)
+        except ValueError:
+            return operations.FloatNumber(pos, float(node.additional_info))
+        return operations.IntNumber(pos, int(node.additional_info))
     
     def visit_HEXINTEGERLITERAL(self, node):
         pos = self.get_pos(node)
-        number = operations.Number(pos, float(int(node.additional_info, 16)))
-        return number
+        return operations.IntNumber(pos, int(node.additional_info, 16))
 
     def visit_OCTALLITERAL(self, node):
         pos = self.get_pos(node)
-        number = operations.Number(pos, float(int(node.additional_info, 8)))
-        return number
+        return operations.IntNumber(pos, int(node.additional_info, 8))
 
     def string(self,node):
         pos = self.get_pos(node)
