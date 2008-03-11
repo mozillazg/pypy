@@ -20,6 +20,13 @@ class HotPathHintAnnotator(HintAnnotator):
             return None
 
     def build_hotpath_types(self):
+        self.prepare_portal_graphs()
+        input_args_hs = [SomeLLAbstractConstant(v.concretetype,
+                                                {OriginFlags(): True})
+                         for v in self.portalgraph.getargs()]
+        return self.build_types(self.portalgraph, input_args_hs)
+
+    def prepare_portal_graphs(self):
         # find the graph with the jit_merge_point()
         found_at = []
         for graph in self.base_translator.graphs:
@@ -29,9 +36,13 @@ class HotPathHintAnnotator(HintAnnotator):
         if len(found_at) != 1:
             raise Exception("found %d graphs with a jit_merge_point(),"
                             " expected 1 (for now)" % len(found_at))
-        portalgraph, _, _ = found_at[0]
-        # make a copy of the portalgraph before mutating it
-        portalgraph = copygraph(portalgraph)
+        origportalgraph, _, _ = found_at[0]
+        #
+        # We make a copy of origportalgraph and mutate it to make it
+        # the portal.  The portal really starts at the jit_merge_point()
+        # without any block or operation before it.
+        #
+        portalgraph = copygraph(origportalgraph)
         _, portalblock, portalop = self.find_jit_merge_point(portalgraph)
         portalopindex = portalblock.operations.index(portalop)
         # split the block just before the jit_merge_point()
@@ -50,8 +61,3 @@ class HotPathHintAnnotator(HintAnnotator):
         # check the new graph: errors mean some live vars have not
         # been listed in the jit_merge_point()
         checkgraph(portalgraph)
-        # annotate!
-        input_args_hs = [SomeLLAbstractConstant(v.concretetype,
-                                                {OriginFlags(): True})
-                         for v in portalgraph.getargs()]
-        return self.build_types(portalgraph, input_args_hs)
