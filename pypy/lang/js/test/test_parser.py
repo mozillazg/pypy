@@ -6,6 +6,7 @@ from pypy.rlib.parsing.parsing import ParseError, Rule
 from pypy.rlib.parsing.tree import RPythonVisitor
 from pypy.lang.js.jsobj import W_Object, global_context, ThrowException, empty_context
 from pypy.lang.js.astbuilder import ASTBuilder
+from pypy.lang.js.jscode import JsCode
 from pypy import conftest
 import sys
 
@@ -279,17 +280,19 @@ class TestFunctionDeclaration(BaseGrammarTest):
 class TestToASTExpr(BaseGrammarTest):
     def setup_class(cls):
         cls.parse = parse_func('expression')
-        cls.ctx = empty_context()
 
     def to_ast(self, s):
         return ASTBuilder().dispatch(self.parse(s))
     
-    def eval_expr(self, s):
+    def compile(self, s):
         ast = self.to_ast(s)
-        w_Global = W_Object()
-        w_Object = W_Object(Prototype=W_Object())
-        w_Global.Put('Object', w_Object)
-        return ast.eval(global_context(w_Global))
+        bytecode = JsCode()
+        ast.emit(bytecode)
+        return bytecode
+#         w_Global = W_Object()
+#         w_Object = W_Object(Prototype=W_Object())
+#         w_Global.Put('Object', w_Object)
+#         return ast.eval(global_context(w_Global))
     
     def test_get_pos(self):
         from pypy.lang.js import operations
@@ -305,10 +308,12 @@ class TestToASTExpr(BaseGrammarTest):
         assert pos.start == 0
         
     def test_primaryexpression(self):
-        w_num = self.eval_expr('(6)')
-        assert w_num.ToNumber() == 6
-        w_num =  self.eval_expr('((((6))))')
-        assert w_num.ToNumber() == 6
+        bytecode = self.compile('(6)')
+        assert bytecode == ['LOAD_INTCONSTANT 6']
+        bytecode = self.compile('((((6))))')
+        assert bytecode == ['LOAD_INTCONSTANT 6']
+        bytecode = self.compile('x')
+        assert bytecode == ['LOAD_VARIABLE "x"']
         # w_array = self.eval_expr('[1,2,3]')
         # assert w_array.ToString(self.ctx) == '1,2,3'
         w_identifier = self.eval_expr('x')

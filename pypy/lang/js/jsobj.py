@@ -535,7 +535,6 @@ class ExecutionContext(object):
                 return W_Reference(identifier, obj)
         
         return W_Reference(identifier)
-    
 
 def global_context(w_global):
     assert isinstance(w_global, W_PrimitiveObject)
