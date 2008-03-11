@@ -428,6 +428,11 @@ class LLFrame(object):
                                 KeyboardInterrupt, SystemExit,
                                 ImportError, SyntaxError)):
                 raise original[0], original[1], original[2]     # re-raise it
+            # for testing the JIT (see ContinueRunningNormally) we need
+            # to let some exceptions introduced by the JIT go through
+            # the llinterpreter uncaught
+            if getattr(exc, '_go_through_llinterp_uncaught_', False):
+                raise original[0], original[1], original[2]     # re-raise it
             extraargs = (original,)
         else:
             extraargs = ()

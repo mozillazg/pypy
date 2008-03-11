@@ -1,5 +1,6 @@
 from pypy.objspace.flow.model import checkgraph, copygraph
 from pypy.translator.unsimplify import split_block
+from pypy.translator.simplify import join_blocks
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 
@@ -58,6 +59,11 @@ class HotPathHintAnnotator(HintAnnotator):
         portalgraph.startblock = link.target
         portalgraph.startblock.isstartblock = True
         self.portalgraph = portalgraph
+        self.origportalgraph = origportalgraph
         # check the new graph: errors mean some live vars have not
         # been listed in the jit_merge_point()
         checkgraph(portalgraph)
+        join_blocks(portalgraph)
+        # put the new graph back in the base_translator
+        portalgraph.tag = 'portal'
+        self.base_translator.graphs.append(portalgraph)
