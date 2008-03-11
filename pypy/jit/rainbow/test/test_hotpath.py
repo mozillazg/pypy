@@ -1,4 +1,5 @@
-from pypy.rlib.jit import jit_merge_point, can_enter_jit, we_are_jitted
+import py
+from pypy.rlib.jit import jit_merge_point, can_enter_jit
 from pypy.jit.rainbow.test import test_interpreter
 from pypy.jit.rainbow.hotpath import EntryPointsRewriter
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
@@ -8,6 +9,9 @@ P_HOTPATH = HintAnnotatorPolicy(oopspec=True,
                                 novirtualcontainer=True,
                                 hotpath=True)
 
+class Exit(Exception):
+    def __init__(self, result):
+        self.result = result
 
 class TestHotPath(test_interpreter.InterpretationTest):
     type_system = 'lltype'
@@ -26,19 +30,17 @@ class TestHotPath(test_interpreter.InterpretationTest):
         return llinterp.eval_graph(graph, main_args)
 
     def test_simple_loop(self):
-        class Exit(Exception):
-            def __init__(self, result):
-                self.result = result
-
+        py.test.skip("in-progress")
+        # there are no greens in this test
         def ll_function(n):
             n1 = n * 2
             total = 0
-            while n1 > 0:
+            while True:
                 can_enter_jit(red=(n1, total))
                 jit_merge_point(red=(n1, total))
-                if we_are_jitted():
-                    total += 1000
                 total += n1
+                if n1 <= 1:
+                    break
                 n1 -= 1
             raise Exit(total)
 
@@ -48,5 +50,38 @@ class TestHotPath(test_interpreter.InterpretationTest):
             except Exit, e:
                 return e.result
 
-        res = self.run(main, [2, 5], threshold=7)
-        assert res == 210 + 14*1000
+        res = self.run(main, [2, 5], threshold=8)
+        assert res == main(2, 5)
+        self.check_traces([
+            # running non-JITted leaves the initial profiling traces
+            # recorded by jit_may_enter().  We see the values of n1 and total.
+            "jit_not_entered 20 0",
+            "jit_not_entered 19 20",
+            "jit_not_entered 18 39",
+            "jit_not_entered 17 57",
+            "jit_not_entered 16 74",
+            "jit_not_entered 15 90",
+            "jit_not_entered 14 105",
+            # on the start of the next iteration, compile the 'total += n1'
+            "jit_enter",
+            "pause at hotsplit",
+            # execute the compiled machine code until the 'n1 <= 1'.
+            # It finishes in the fallback interpreter 7 times
+            "run_machine_code 13 119", "fallback_interp", "fb_leave 12 132",
+            "run_machine_code 12 132", "fallback_interp", "fb_leave 11 144",
+            "run_machine_code 11 144", "fallback_interp", "fb_leave 10 155",
+            "run_machine_code 10 155", "fallback_interp", "fb_leave 9 165",
+            "run_machine_code 9 165", "fallback_interp", "fb_leave 8 174",
+            "run_machine_code 8 174", "fallback_interp", "fb_leave 7 182",
+            "run_machine_code 7 182", "fallback_interp", "fb_leave 6 189",
+            "run_machine_code 6 189",
+            # now that we know which path is hot (i.e. "staying in the loop"),
+            # it gets compiled
+            "jit_resume",
+            "done at jit_merge_point",
+            # execution continues purely in machine code, from the "n1 <= 1"
+            # test which triggered the "jit_resume"
+            "resume_machine_code",
+            # finally, go back the fallback interpreter when "n1 <= 1" is True
+            "fallback_interp",
+            "fb_raise Exit"])
