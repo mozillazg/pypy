@@ -34,16 +34,9 @@ class Node(object):
         Initializes the content from the AST specific for each node type
         """
         raise NotImplementedError
-        
-    def eval(self, ctx):
-        """
-        Used for expression evaluation
-        """
-        raise NotImplementedError
 
-    def execute(self, ctx):
-        """
-        Called on statament execution
+    def emit(self, bytecode):
+        """ Emits bytecode
         """
         raise NotImplementedError
     
@@ -72,7 +65,6 @@ class ListOp(Expression):
 class UnaryOp(Expression):
     def __init__(self, pos, expr, postfix=False):
         self.pos = pos
-        #assert isinstance(expr, Node)
         self.expr = expr
         self.postfix = postfix
 
@@ -81,36 +73,25 @@ class BinaryOp(Expression):
         self.pos = pos
         self.left = left
         self.right = right
-    
-class BinaryComparisonOp(BinaryOp):
-    def eval(self, ctx):
-        s2 = self.left.eval(ctx).GetValue()
-        s4 = self.right.eval(ctx).GetValue()
-        return self.decision(ctx, s2, s4)
-    
-    def decision(self, ctx, op1, op2):
-        raise NotImplementedError
 
-class BinaryBitwiseOp(BinaryOp):
-    def eval(self, ctx):
-        s5 = self.left.eval(ctx).GetValue().ToInt32()
-        s6 = self.right.eval(ctx).GetValue().ToInt32()
-        return self.decision(ctx, s5, s6)
-    
-    def decision(self, ctx, op1, op2):
-        raise NotImplementedError
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        self.right.emit(bytecode)
+        bytecode.emit(self.operation_name)
 
 class Undefined(Statement):
-    def eval(self, ctx):
-        return w_Undefined
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_UNDEFINED')
+
+class PropertyInit(Expression):
+    def __init__(self, identifier, expr):
+        self.identifier = identifier
+        assert isinstance(identifier, str)
+        self.expr = expr
     
-    def execute(self, ctx):
-        return w_Undefined
-
-astundef = Undefined(Position())
-
-class PropertyInit(BinaryOp):
-    pass
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        bytecode.emit('STORE', [self.identifier])
 
 class Array(ListOp):
     def eval(self, ctx):
@@ -175,7 +156,7 @@ class Block(Statement):
                 raise e
     
 
-class BitwiseAnd(BinaryBitwiseOp):
+class BitwiseAnd(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_IntNumber(op1&op2)
     
@@ -186,13 +167,13 @@ class BitwiseNot(UnaryOp):
         return W_IntNumber(~op1)
     
 
-class BitwiseOr(BinaryBitwiseOp):
+class BitwiseOr(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_IntNumber(op1|op2)
     
 
 
-class BitwiseXor(BinaryBitwiseOp):
+class BitwiseXor(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_IntNumber(op1^op2)
     
@@ -277,7 +258,7 @@ class FunctionStatement(Statement):
         self.name = name
         self.body = body
         self.params = params
-        
+
     def eval(self, ctx):
         proto = ctx.get_global().Get('Function').Get('prototype')
         w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self)
@@ -295,12 +276,12 @@ class Identifier(Expression):
     def __init__(self, pos, name):
         self.pos = pos
         self.name = name
-    
-    def eval(self, ctx):
-        return ctx.resolve_identifier(self.name)
-    
-    def get_literal(self):
-        return self.name
+
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_VARIABLE', [self.name])
+        
+#    def get_literal(self):
+#        return self.name
     
 
 class This(Identifier):
@@ -308,7 +289,7 @@ class This(Identifier):
     
 
 class If(Statement):
-    def __init__(self, pos, condition, thenpart, elsepart=astundef):
+    def __init__(self, pos, condition, thenpart, elsepart=None):
         self.pos = pos
         self.condition = condition
         self.thenPart = thenpart
@@ -375,7 +356,7 @@ class And(BinaryOp):
         return s4
     
 
-class Ge(BinaryComparisonOp):
+class Ge(BinaryOp):
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op1, op2)
         if s5 in (-1, 1):
@@ -384,7 +365,7 @@ class Ge(BinaryComparisonOp):
             return W_Boolean(True)
     
 
-class Gt(BinaryComparisonOp):
+class Gt(BinaryOp):
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op2, op1)
         if s5 == -1:
@@ -393,7 +374,7 @@ class Gt(BinaryComparisonOp):
             return W_Boolean(s5)
     
 
-class Le(BinaryComparisonOp):
+class Le(BinaryOp):
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op2, op1)
         if s5 in (-1, 1):
@@ -402,7 +383,7 @@ class Le(BinaryComparisonOp):
             return W_Boolean(True)
     
 
-class Lt(BinaryComparisonOp):
+class Lt(BinaryOp):
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op1, op2)
         if s5 == -1:
@@ -417,19 +398,19 @@ class Lt(BinaryComparisonOp):
 #
 ##############################################################################
 
-class Ursh(BinaryComparisonOp):
+class Ursh(BinaryOp):
     def decision(self, ctx, op1, op2):
         a = op1.ToUInt32()
         b = op2.ToUInt32()
         return W_IntNumber(a >> (b & 0x1F))
 
-class Rsh(BinaryComparisonOp):
+class Rsh(BinaryOp):
     def decision(self, ctx, op1, op2):
         a = op1.ToInt32()
         b = op2.ToUInt32()
         return W_IntNumber(a >> intmask(b & 0x1F))
 
-class Lsh(BinaryComparisonOp):
+class Lsh(BinaryOp):
     def decision(self, ctx, op1, op2):
         a = op1.ToInt32()
         b = op2.ToUInt32()
@@ -499,11 +480,11 @@ def AEC(ctx, x, y):
         r = x.ToNumber() == y.ToNumber()
     return r
 
-class Eq(BinaryComparisonOp):
+class Eq(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_Boolean(AEC(ctx, op1, op2))
 
-class Ne(BinaryComparisonOp):
+class Ne(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_Boolean(not AEC(ctx, op1, op2))
 
@@ -540,16 +521,16 @@ def SEC(ctx, x, y):
         return x.ToBoolean() == x.ToBoolean()
     return x == y
 
-class StrictEq(BinaryComparisonOp):
+class StrictEq(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_Boolean(SEC(ctx, op1, op2))
 
-class StrictNe(BinaryComparisonOp):
+class StrictNe(BinaryOp):
     def decision(self, ctx, op1, op2):
         return W_Boolean(not SEC(ctx, op1, op2))
     
 
-class In(BinaryComparisonOp):
+class In(BinaryOp):
     """
     The in operator, eg: "property in object"
     """
@@ -759,8 +740,8 @@ class IntNumber(BaseNumber):
         self.pos = pos
         self.num = num
 
-    def eval(self, ctx):
-        return W_IntNumber(int(self.num))
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_INTCONSTANT', [self.num])
 
 class FloatNumber(BaseNumber):
     def __init__(self, pos, num):

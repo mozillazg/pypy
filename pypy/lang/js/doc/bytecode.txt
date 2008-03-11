@@ -1,0 +1,44 @@
+Bytecode specification for the pypy javascript interpreter.
+
+We implement stack-based machine. We'll likely extend the bytecode for
+performance.
+
+LOAD_INTCONSTANT <constant>
+LOAD_FLOATCONSTANT <constant>
+LOAD_STRINGCONSTANT <constant>
+...
+
+LOAD_VARIABLE <identifier>
+
+simple identifier dereferencing
+
+LOAD_UNDEFINED, LOAD_NULL
+
+STORE <identifier>
+
+stores the last value on stack into identifierx
+
+Arithmetic binary operations:
+(all pops two values and pushes on stack the result)
+
+ADD, SUB, MUL, DIV, MOD
+BITXOR, BITOR, BITAND
+AND, OR, EQ, NE, IS, ISNOT, GT, GE, LT, LE,
+RSHIT, URSHIFT, LSHIFT
+
+Unary arithmetic operations:
+(pops one value and pushes result to the stack)
+
+BITNOT,
+NOT, UPLUS, UMINUS
+
+PREDECR, POSTDECR, PREINCR, POSTINCR
+decrement and increment (++, --) prefix and postfix
+
+control flow:
+
+XXX
+
+function control flow:
+
+DECLARE_FUNCTION <bytecode>
