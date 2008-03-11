@@ -196,8 +196,8 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox):
     #      (only "real" run-time exceptions should arrive here, not
     #      compile-time exceptions)
     # As a minor hack, we know by the way the exception transformer works
-    # that in the third case the return value we get is -1, so we can
-    # just leave the machine code if we can any value != 1.
+    # that in the third case the gv_res we get is -1, so we can
+    # just leave the machine code if we get any value != 1.
     gv_leave_flag = default_builder.genop2("int_ne", gv_res,
                                            hotpromotiondesc.gv_constant_one)
     leaving_builder = default_builder.jump_if_true(gv_leave_flag, [])
