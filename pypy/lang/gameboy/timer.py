@@ -34,22 +34,21 @@ class Timer(object):
 
 	 # Registers
 	 #int
-	div;
-	tima;
-	tma;
-	tac;
+	div = 0;
+	tima = 0;
+	tma = 0;
+	tac = 0;
 
-	dividerCycles;
-	timerCycles;
-	timerClock;
+	dividerCycles = 0;
+	timerCycles = 0;
+	timerClock = 0;
 
 
 	 # Interrupt Controller Interrupt
-	interrupt;
+	interrupt = None;
 
 	def __init__(self, interrupt):
 		self.interrupt = interrupt;
-
 		self.reset();
 
 
@@ -149,5 +148,5 @@ class Timer(object):
 
 				if (self.tima == 0x00):
 					self.tima = self.tma;
-					self.interrupt.raise(Interrupt.TIMER);
+					self.interrupt.raiseInterrupt(Interrupt.TIMER);
 	

@@ -15,19 +15,18 @@ class Joypad(object):
 	JOYPAD_CLOCK = GAMEBOY_CLOCK >> 6;
 
 	# Registers
-	joyp;
-	cycles;
+	joyp = 0;
+	cycles = 0;
 
 	# Interrupt Controller
-	interrupt;
+	interrupt = None;
 
 	# Driver JoypadDriver
-	driver;
+	driver = None;
 
 	def __init__(self, joypadDriver, interrupt):
 		self.driver = joypadDriver;
 		self.interrupt = interrupt;
-
 		self.reset();
 
 	def  reset(self):
@@ -67,7 +66,7 @@ class Joypad(object):
 			data |= 0x0F;
 
 		if ((self.joyp & ~data & 0x0F) != 0):
-			self.interrupt.raise(Interrupt.JOYPAD);
+			self.interrupt.raiseInterrupt(Interrupt.JOYPAD);
 
 		self.joyp = data;
 

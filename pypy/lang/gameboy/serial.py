@@ -18,12 +18,12 @@ class Serial(object):
 	SC = 0xFF02; # Serial Transfer Control */
 
 	 # Registers
-	sb;
-	sc;
-	cycles;
+	sb = 0;
+	sc = 0;
+	cycles = 0;
 
 	 # Interrupt Controller #Interrupt
-	interrupt;
+	interrupt = None;
 
 	def __init__(self, interrupt):
 		self.interrupt = interrupt;
@@ -46,7 +46,7 @@ class Serial(object):
 				self.sc &= 0x7F;
 				self.cycles = SERIAL_IDLE_CLOCK;
 
-				self.interrupt.raise(Interrupt.SERIAL);
+				self.interrupt.raiseInterrupt(Interrupt.SERIAL);
 
 
 	def setSerialData(self, data):

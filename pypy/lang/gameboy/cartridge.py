@@ -29,25 +29,25 @@ TYPE_HUC3_RTC_RAM = 0xFE
 TYPE_HUC1_RAM_BATTERY = 0xFF
 
 CATRIDGE_TYPE_MAPPING = {
-						TYPE_ROM_ONLY: MBC1,
-						TYPE_MBC1:  MBC1,
-						TYPE_MBC1_RAM: MBC1,
-						TYPE_MBC1_RAM_BATTERY: MBC1,
-						TYPE_MBC2: MBC2,
-						TYPE_MBC2_BATTERY: MBC2,
-						TYPE_MBC3_RTC_BATTERY: MBC3,
-						TYPE_MBC3_RTC_RAM_BATTERY: MBC3,
-						TYPE_MBC3: MBC3,
-						TYPE_MBC3_RAM: MBC3,
-						TYPE_MBC3_RAM_BATTERY: MBC3,
-						TYPE_MBC5: MBC5,
-						TYPE_MBC5_RAM: MBC5,
-						TYPE_MBC5_RAM_BATTERY: MBC5,
-						TYPE_MBC5_RUMBLE: MBC5,
-						TYPE_MBC5_RUMBLE_RAM: MBC5,
-						TYPE_MBC5_RUMBLE_RAM_BATTERY: MBC5,
-						TYPE_HUC3_RTC_RAM: HuC3,
-						TYPE_HUC1_RAM_BATTERY: HuC1
+						TYPE_ROM_ONLY: 			"MBC1",
+						TYPE_MBC1:  			"MBC1",
+						TYPE_MBC1_RAM: 			"MBC1",
+						TYPE_MBC1_RAM_BATTERY:	"MBC1",
+						TYPE_MBC2: 				"MBC2",
+						TYPE_MBC2_BATTERY: 		"MBC2",
+						TYPE_MBC3_RTC_BATTERY: 	"MBC3",
+						TYPE_MBC3_RTC_RAM_BATTERY: "MBC3",
+						TYPE_MBC3: 				"MBC3",
+						TYPE_MBC3_RAM: 			"MBC3",
+						TYPE_MBC3_RAM_BATTERY: 	"MBC3",
+						TYPE_MBC5: 				"MBC5",
+						TYPE_MBC5_RAM: 			"MBC5",
+						TYPE_MBC5_RAM_BATTERY: 	"MBC5",
+						TYPE_MBC5_RUMBLE: 		"MBC5",
+						TYPE_MBC5_RUMBLE_RAM: 	"MBC5",
+						TYPE_MBC5_RUMBLE_RAM_BATTERY: "MBC5",
+						TYPE_HUC3_RTC_RAM: 		"HuC3",
+						TYPE_HUC1_RAM_BATTERY: 	"HuC1"
 						};
 
 
@@ -220,9 +220,9 @@ A000-BFFF	RAM Bank 0-3 (8KB)
  """
 class MBC1(MBC):
 	
-	rom
-	ram
-	ramEnable
+	rom = []
+	ram = []
+	ramEnable = False
 	
 	def __init__(self, rom, ram):
 		self.setRom(rom)
@@ -309,12 +309,12 @@ A000-A1FF	RAM Bank (512x4bit)
 class MBC2(MBC):
 	RAM_BANK_SIZE = 512;
 
-	rom
-	ram
+	rom = []
+	ram = []
 
-	romSize
-	romBank
-	ramEnable
+	romSize = 0
+	romBank  =0
+	ramEnable = False
 
 	def __init__(self, rom, ram):
 		self.setROM(rom);
@@ -322,7 +322,7 @@ class MBC2(MBC):
 
 	def reset(self):
 		self.romBank = ROM_BANK_SIZE;
-		self.ramEnable = false;
+		self.ramEnable = False;
 
 	def read(self, address):
 		if (address <= 0x3FFF):
@@ -380,32 +380,32 @@ A000-BFFF	RAM Bank 0-3 (8KB)
 
 class MBC3(MBC):
 	#ClockDriver 
-	clock;
+	clock = None;
 
-	rom;
-	ram;
+	rom = [];
+	ram = [];
 
-	romSize;
-	ramSize;
+	romSize = 0;
+	ramSize = 0;
 
-	romBank;
-	ramBank;
+	romBank = 0;
+	ramBank = 0;
 
-	ramEnable;
+	ramEnable = False;
 
-	clockRegister;
-	clockLatch;
-	clockTime;
+	clockRegister = 0;
+	clockLatch = 0;
+	clockTime = 0;
 
-	clockSeconds
-	clockMinutes
-	clockHours
-	clockDays,
-	clockControl;
-	clockLSeconds
-	clockLMinutes
-	clockLHours
-	clockLDaysclockLControl;
+	clockSeconds = 0
+	clockMinutes = 0
+	clockHours = 0
+	clockDays = 0
+	clockControl = None
+	clockLSeconds  = 0
+	clockLMinutes = 0
+	clockLHours = 0
+	clockLDaysclockLControl = None
 
 	def __init__(self, rom, ram, clock):
 		self.clock = clock;
@@ -571,17 +571,17 @@ A000-BFFF	RAM Bank 0-15 (8KB)
 """
 
 class MBC5(MBC):
-	rom;
-	ram;
+	rom = [];
+	ram = [];
 
-	romSize;
-	ramSize;
+	romSize = 0;
+	ramSize = 0;
 
-	romBank;
-	ramBank;
+	romBank = 0;
+	ramBank = 0;
 
-	ramEnable;
-	rumble;
+	ramEnable = False;
+	rumble = False;
 
 	def __init__(self, rom, ram, rumble):
 		self.rumble = rumble;
@@ -589,11 +589,13 @@ class MBC5(MBC):
 		self.setROM(rom);
 		self.setRAM(ram);
 
+
 	def reset():
 		self.romBank = ROM_BANK_SIZE;
 		self.ramBank = 0;
 
 		self.ramEnable = false;
+
 
 	def read(self, address):
 		if (address <= 0x3FFF):
@@ -606,6 +608,7 @@ class MBC5(MBC):
 			# A000-BFFF
 			return self.ram[self.ramBank + (address & 0x1FFF)] & 0xFF;
 		return 0xFF;
+
 
 	def write(self, address, data):
 		if (address <= 0x1FFF):
@@ -630,6 +633,7 @@ class MBC5(MBC):
 				#TODO byte conversion
 				self.ram[self.ramBank + (address & 0x1FFF)] = data;
 
+
 	def setROM(self, buffer):
 		banks = buffer.length / ROM_BANK_SIZE;
 
@@ -638,6 +642,7 @@ class MBC5(MBC):
 
 		self.rom = buffer;
 		self.romSize = ROM_BANK_SIZE * banks - 1;
+
 
 	def setRAM(self, buffer):
 		banks = buffer.length / RAM_BANK_SIZE;
@@ -664,24 +669,25 @@ Hudson Memory Bank Controller 3 (2MB ROM, 128KB RAM, RTC)
 A000-BFFF	RAM Bank 0-15 (8KB)
 """
 class HuC3(MBC):
-	clock;
-	rom;
-	ram;
-	romBank;
-	ramBank;
-	romSize;
-	ramSize;
-	ramFlag;
-	ramValue;
-	clockRegister;
-	clockShift;
-	clockTime;
+	clock = None;
+	rom = [];
+	ram = [];
+	romBank = 0;
+	ramBank = 0;
+	romSize = 0;
+	ramSize = 0;
+	ramFlag = 0;
+	ramValue = 0;
+	clockRegister = 0;
+	clockShift = 0;
+	clockTime = 0;
 
 	def __init__(self, rom, ram, clock):
 		self.clock = clock;
 
 		self.setROM(rom);
 		self.setRAM(ram);
+
 
 	def reset():
 		self.romBank = ROM_BANK_SIZE;
@@ -694,6 +700,7 @@ class HuC3(MBC):
 		self.clockShift = 0;
 
 		self.clockTime = self.clock.getTime();
+
 
 	def read(self, address):
 		if (address <= 0x3FFF):
@@ -712,6 +719,7 @@ class HuC3(MBC):
 				if (self.ramSize > 0):
 					return self.ram[self.ramBank + (address & 0x1FFF)] & 0xFF;
 		return 0xFF;
+
 
 	def write(self, address,  data):
 		if (address <= 0x1FFF):
@@ -757,6 +765,7 @@ class HuC3(MBC):
 					#TODO byte conversion
 					self.ram[self.ramBank + (address & 0x1FFF)] = data;
 
+
 	def updateClock(self):
 		now = self.clock.getTime();
 
@@ -785,6 +794,7 @@ class HuC3(MBC):
 
 		self.clockTime = now - elapsed;
 
+
 	def setROM(self, buffer):
 		banks = buffer.length / ROM_BANK_SIZE;
 
@@ -793,6 +803,7 @@ class HuC3(MBC):
 
 		self.rom = buffer;
 		self.romSize = ROM_BANK_SIZE*banks - 1;
+
 
 	def setRAM(self, buffer):
 		banks = buffer.length / RAM_BANK_SIZE;

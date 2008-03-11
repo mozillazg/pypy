@@ -10,7 +10,6 @@ class Interrupt(object):
 	IE = 0xFFFF # Interrupt Enable */
 	IF = 0xFF0F # Interrupt Flag */
 
-
 	 # Interrupt Flags
 	VBLANK = 0x01 # V-Blank Interrupt (INT 40h) */
 	LCD = 0x02 # LCD STAT Interrupt (INT 48h) */
@@ -18,10 +17,9 @@ class Interrupt(object):
 	SERIAL = 0x08 # Serial Interrupt (INT 58h) */
 	JOYPAD = 0x10 # Joypad Interrupt (INT 60h) */
 
-
 	 # Registers
-	enable;
-	flag;
+	enable = 0;
+	flag = 0;
 
 	def __init__(self):
 		self.reset();
@@ -36,7 +34,7 @@ class Interrupt(object):
 	def isPending(self, mask):
 		return (self.enable & self.flag & mask) != 0;
 
-	def raise(self, mask):
+	def raiseInterrupt(self, mask):
 		self.flag |= mask;
 
 	def lower(self, mask):

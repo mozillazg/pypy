@@ -71,51 +71,51 @@ class Video(object):
 	];
 
 	# OAM Registers
-	oam #= new byte[OAM_SIZE];
+	oam = [] #= new byte[OAM_SIZE];
 
 	 # Video RAM
-	vram #= new byte[VRAM_SIZE];
+	vram = []#= new byte[VRAM_SIZE];
 
 
 	 # LCD Registers int
-	lcdc;
-	stat;
-	scy;
-	scx;
-	ly;
-	lyc;
-	dma;
-	bgp;
-	obp0;
-	obp1;
-	wy;
-	wx;
-	wly;
+	lcdc = 0;
+	stat = 0;
+	scy = 0;
+	scx = 0;
+	ly = 0;
+	lyc = 0;
+	dma = 0;
+	bgp = 0;
+	obp0 = 0;
+	obp1 = 0;
+	wy = 0;
+	wx = 0;
+	wly = 0;
 
-	cycles;
+	cycles = 0;
 
-	frames;
-	frameSkip;
+	frames = 0;
+	frameSkip = 0;
 
 	#boolean
-	transfer;
-	display;
-	vblank;
-	dirty;
+	transfer = False;
+	display = False;
+	vblank = False;
+	dirty = False;
 
 	 # Line Buffer, OAM Cache and Color Palette
-	line #= new int[8 + 160 + 8];
-	objects #= new int[OBJECTS_PER_LINE];
-	palette #= new int[1024];
+	line = []#= new int[8 + 160 + 8];
+	objects = []#= new int[OBJECTS_PER_LINE];
+	palette = []#= new int[1024];
 
 	 # Video Driver VideoDriver
-	driver;
+	driver = None;
 
 	 # Interrupt Controller Interrupt
-	interrupt;
+	interrupt = None;
 
 	 # Memory Interface Memory
-	memory;
+	memory = None;
 
 	def __init__(self, videDriver, interrupt, memory):
 		self.driver = videoDriver;
@@ -194,8 +194,6 @@ class Video(object):
 			elif (address >= VRAM_ADDR and address < VRAM_ADDR + VRAM_SIZE):
 				#TODO convert to byte
 				self.vram[address - VRAM_ADDR] =data;
-			break;
-	
 
 
 	def read(self, address):
@@ -325,7 +323,7 @@ class Video(object):
 
 		# Gameboy Bug
 		if ((self.lcdc & 0x80) != 0 and (self.stat & 0x03) == 0x01 and (self.stat & 0x44) != 0x44):
-			self.interrupt.raise(Interrupt.LCD);
+			self.interrupt.raiseInterrupt(Interrupt.LCD);
 
 
 	def setScrollY(self, data):
@@ -347,7 +345,7 @@ class Video(object):
 					self.stat |= 0x04;
 
 					if ((self.stat & 0x40) != 0):
-						self.interrupt.raise(Interrupt.LCD);
+						self.interrupt.raiseInterrupt(Interrupt.LCD);
 			else:
 				self.stat &= 0xFB;
 
@@ -404,7 +402,7 @@ class Video(object):
 			self.cycles += MODE_0_TICKS;
 			# H-Blank interrupt
 			if ((self.stat & 0x08) != 0 and (self.stat & 0x44) != 0x44):
-				self.interrupt.raise(Interrupt.LCD);
+				self.interrupt.raiseInterrupt(Interrupt.LCD);
 
 
 	def emulateHBlank(self):
@@ -414,7 +412,7 @@ class Video(object):
 			# LYC=LY interrupt
 			self.stat |= 0x04;
 			if ((self.stat & 0x40) != 0):
-				self.interrupt.raise(Interrupt.LCD);
+				self.interrupt.raiseInterrupt(Interrupt.LCD);
 		else:
 			self.stat &= 0xFB;
 		if (self.ly < 144):
@@ -422,7 +420,7 @@ class Video(object):
 			self.cycles += MODE_2_TICKS;
 			# OAM interrupt
 			if ((self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44):
-				self.interrupt.raise(Interrupt.LCD);
+				self.interrupt.raiseInterrupt(Interrupt.LCD);
 		else:
 			if (self.display):
 				self.drawFrame();
@@ -444,42 +442,34 @@ class Video(object):
 
 			self.stat = (self.stat & 0xFC) | 0x01;
 			self.cycles += MODE_1_TICKS - MODE_1_BEGIN_TICKS;
-
 			# V-Blank interrupt
 			if ((self.stat & 0x10) != 0):
-				self.interrupt.raise(Interrupt.LCD);
-
+				self.interrupt.raiseInterrupt(Interrupt.LCD);
 			# V-Blank interrupt
-			self.interrupt.raise(Interrupt.VBLANK);
+			self.interrupt.raiseInterrupt(Interrupt.VBLANK);
 		elif (self.ly == 0):
 			self.stat = (self.stat & 0xFC) | 0x02;
 			self.cycles += MODE_2_TICKS;
-
 			# OAM interrupt
 			if ((self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44):
-				self.interrupt.raise(Interrupt.LCD);
+				self.interrupt.raiseInterrupt(Interrupt.LCD);
 		else:
 			if (self.ly < 153):
 				self.ly+=1;
-
 				self.stat = (self.stat & 0xFC) | 0x01;
-
 				if (self.ly == 153):
 					self.cycles += MODE_1_END_TICKS;
 				else:
 					self.cycles += MODE_1_TICKS;
 			else:
 				self.ly = self.wly = 0;
-
 				self.stat = (self.stat & 0xFC) | 0x01;
 				self.cycles += MODE_1_TICKS - MODE_1_END_TICKS;
-
 			if (self.ly == self.lyc):
 				# LYC=LY interrupt
 				self.stat |= 0x04;
-
 				if ((self.stat & 0x40) != 0):
-					self.interrupt.raise(Interrupt.LCD);
+					self.interrupt.raiseInterrupt(Interrupt.LCD);
 			else:
 				self.stat &= 0xFB;
 
@@ -642,38 +632,54 @@ class Video(object):
 			mask |= 0x0004;
 		# X flip
 		if (flags & 0x20) != 0:
-			if (color = (pattern << 1) & 0x0202) != 0:
+			color = (pattern << 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 0] |= color | mask;
-			if ((color = (pattern >> 0) & 0x0202) != 0):
+			color = (pattern >> 0)
+			if ((color & 0x0202) != 0):
 				self.line[x + 1] |= color | mask;
-			if ((color = (pattern >> 1) & 0x0202) != 0):
+			color = (pattern >> 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 2] |= color | mask;
-			if ((color = (pattern >> 2) & 0x0202) != 0):
+			color = (pattern >> 2)
+			if ((color & 0x0202) != 0):
 				self.line[x + 3] |= color | mask;
-			if ((color = (pattern >> 3) & 0x0202) != 0):
+			color = (pattern >> 3)
+			if ((color & 0x0202) != 0):
 				self.line[x + 4] |= color | mask;
-			if ((color = (pattern >> 4) & 0x0202) != 0):
+			color = (pattern >> 4)
+			if ((color & 0x0202) != 0):
 				self.line[x + 5] |= color | mask;
-			if ((color = (pattern >> 5) & 0x0202) != 0):
+			color = (pattern >> 5)
+			if ((color & 0x0202) != 0):
 				self.line[x + 6] |= color | mask;
-			if ((color = (pattern >> 6) & 0x0202) != 0):
+			color = (pattern >> 6)
+			if ((color & 0x0202) != 0):
 				self.line[x + 7] |= color | mask;
 		else:
-			if ((color = (pattern >> 6) & 0x0202) != 0):
+			color = (pattern >> 6)
+			if ((color & 0x0202) != 0):
 				self.line[x + 0] |= color | mask;
-			if ((color = (pattern >> 5) & 0x0202) != 0):
+			color = (pattern >> 5)
+			if ((color & 0x0202) != 0):
 				self.line[x + 1] |= color | mask;
-			if ((color = (pattern >> 4) & 0x0202) != 0):
+			color = (pattern >> 4)
+			if ((color & 0x0202) != 0):
 				self.line[x + 2] |= color | mask;
-			if ((color = (pattern >> 3) & 0x0202) != 0):
+			color = (pattern >> 3)
+			if ((color & 0x0202) != 0):
 				self.line[x + 3] |= color | mask;
-			if ((color = (pattern >> 2) & 0x0202) != 0):
+			color = (pattern >> 2)
+			if ((color & 0x0202) != 0):
 				self.line[x + 4] |= color | mask;
-			if ((color = (pattern >> 1) & 0x0202) != 0):
+			color = (pattern >> 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 5] |= color | mask;
-			if ((color = (pattern >> 0) & 0x0202) != 0):
+			color = (pattern >> 0)
+			if ((color & 0x0202) != 0):
 				self.line[x + 6] |= color | mask;
-			if ((color = (pattern << 1) & 0x0202) != 0):
+			color = (pattern << 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 7] |= color | mask;
 
 
@@ -681,45 +687,61 @@ class Video(object):
 		pattern = (self.vram[address] & 0xFF) + ((self.vram[address + 1] & 0xFF) << 8);
 		mask = 0;
 		# priority
-		if ((flags & 0x80) != 0)
+		if ((flags & 0x80) != 0):
 			mask |= 0x0008;
 		# palette
-		if ((flags & 0x10) != 0)
+		if ((flags & 0x10) != 0):
 			mask |= 0x0004;
 		# X flip
 		if ((flags & 0x20) != 0):
-			if ((color = (pattern << 1) & 0x0202) != 0):
+			color = (pattern << 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 0] = (self.line[x + 0] & 0x0101) | color | mask;
-			if ((color = (pattern >> 0) & 0x0202) != 0):
+			color = (pattern >> 0)
+			if ((color & 0x0202) != 0):
 				self.line[x + 1] = (self.line[x + 1] & 0x0101) | color | mask;
-			if ((color = (pattern >> 1) & 0x0202) != 0):
+			color = (pattern >> 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 2] = (self.line[x + 2] & 0x0101) | color | mask;
-			if ((color = (pattern >> 2) & 0x0202) != 0):
+			color = (pattern >> 2)
+			if ((color & 0x0202) != 0):
 				self.line[x + 3] = (self.line[x + 3] & 0x0101) | color | mask;
-			if ((color = (pattern >> 3) & 0x0202) != 0):
+			color = (pattern >> 3)
+			if ((color & 0x0202) != 0):
 				self.line[x + 4] = (self.line[x + 4] & 0x0101) | color | mask;
-			if ((color = (pattern >> 4) & 0x0202) != 0):
+			color = (pattern >> 4)
+			if ((color & 0x0202) != 0):
 				self.line[x + 5] = (self.line[x + 5] & 0x0101) | color | mask;
-			if ((color = (pattern >> 6) & 0x0202) != 0):
+			color = (pattern >> 6)
+			if ((color & 0x0202) != 0):
 				self.line[x + 7] = (self.line[x + 7] & 0x0101) | color | mask;
-			if ((color = (pattern >> 5) & 0x0202) != 0):
+			color = (pattern >> 5)
+			if ((color & 0x0202) != 0):
 				self.line[x + 6] = (self.line[x + 6] & 0x0101) | color | mask;
 		else:
-			if ((color = (pattern >> 6) & 0x0202) != 0):
+			color = (pattern >> 6)
+			if ((color & 0x0202) != 0):
 				self.line[x + 0] = (self.line[x + 0] & 0x0101) | color | mask;
-			if ((color = (pattern >> 5) & 0x0202) != 0):
+			color = (pattern >> 5)
+			if ((color & 0x0202) != 0):
 				self.line[x + 1] = (self.line[x + 1] & 0x0101) | color | mask;
-			if ((color = (pattern >> 4) & 0x0202) != 0):
+			color = (pattern >> 4)
+			if ((color & 0x0202) != 0):
 				self.line[x + 2] = (self.line[x + 2] & 0x0101) | color | mask;
-			if ((color = (pattern >> 3) & 0x0202) != 0):
+			color = (pattern >> 3)
+			if ((color & 0x0202) != 0):
 				self.line[x + 3] = (self.line[x + 3] & 0x0101) | color | mask;
-			if ((color = (pattern >> 2) & 0x0202) != 0):
+			color = (pattern >> 2)
+			if ((color & 0x0202) != 0):
 				self.line[x + 4] = (self.line[x + 4] & 0x0101) | color | mask;
-			if ((color = (pattern >> 1) & 0x0202) != 0)
+			color = (pattern >> 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 5] = (self.line[x + 5] & 0x0101) | color | mask;
-			if ((color = (pattern >> 0) & 0x0202) != 0):
+			color = (pattern >> 0)
+			if ((color & 0x0202) != 0):
 				self.line[x + 6] = (self.line[x + 6] & 0x0101) | color | mask;
-			if ((color = (pattern << 1) & 0x0202) != 0):
+			color = (pattern << 1)
+			if ((color & 0x0202) != 0):
 				self.line[x + 7] = (self.line[x + 7] & 0x0101) | color | mask;
 
 
@@ -727,11 +749,11 @@ class Video(object):
 		self.updatePalette();
 		pixels = self.driver.getPixels();
 		offset = self.ly * self.driver.getWidth();
-		for x in range(8, 168, 4)
-			int pattern0 = self.line[x + 0];
-			int pattern1 = self.line[x + 1];
-			int pattern2 = self.line[x + 2];
-			int pattern3 = self.line[x + 3];
+		for x in range(8, 168, 4):
+			pattern0 = self.line[x + 0];
+			pattern1 = self.line[x + 1];
+			pattern2 = self.line[x + 2];
+			pattern3 = self.line[x + 3];
 
 			pixels[offset + 0] = self.palette[pattern0];
 			pixels[offset + 1] = self.palette[pattern1];
@@ -744,7 +766,7 @@ class Video(object):
 	def clearPixels(self):
 		pixels = self.driver.getPixels();
 		length = self.driver.getWidth() * self.driver.getHeight();
-		for offset in range(0, length)
+		for offset in range(0, length):
 			pixels[offset] = COLOR_MAP[0];
 
 
@@ -752,10 +774,10 @@ class Video(object):
 		if (self.dirty):
 			# bit 4/0 = BG color, bit 5/1 = OBJ color, bit 2 = OBJ palette, bit
 			# 3 = OBJ priority
-			for pattern in range(0, 64)
-				int color;
+			for pattern in range(0, 64):
+				#color;
 
-				if ((pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and (pattern & 0x11) != 0))
+				if ((pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and (pattern & 0x11) != 0)):
 					# OBJ behind BG color 1-3
 					color = (self.bgp >> ((((pattern >> 3) & 0x02) + (pattern & 0x01)) << 1)) & 0x03;
 				 # OBJ above BG

@@ -1,56 +1,47 @@
 """
-Mario GameBoy (TM) Emulator
+Mario GameBoy (TM) EmulatOR
 
-Central Unit Processor (Sharp LR35902 CPU)
+Central Unit ProcessOR (Sharp LR35902 CPU)
 """
 
 class CPU(object):
-
 	 # Flags
-
 	Z_FLAG = 0x80
 	N_FLAG = 0x40
 	H_FLAG = 0x20
 	C_FLAG = 0x10
 
-
 	# Registers
-	a
-	b
-	c
-	d
-	f
-	d
-	l
-	sp;
-	pc;
-
+	a = 0
+	b = 0
+	c = 0
+	d = 0
+	f = 0
+	d = 0
+	l = 0
+	sp = 0;
+	pc = 0;
 
 	# Interrupt Flags
-
-	ime;
-	halted;
-	cycles;
-
+	ime = False;
+	halted  = False;
+	cycles  = 0;
 
 	# Interrupt Controller
-
 	#Interrupt 
-	interrupt;
+	interrupt = None;
 
-
-	 # Memory Access
-	#Memory
-	memory;
+	 # memory Access
+	#memory
+	memory = None;
 
 
 	# ROM Access
-	rom;
+	rom = [];
 
 	def __init__(self, interrupt, memory):
 		self.interrupt = interrupt;
 		self.memory = memory;
-
 		self.reset();
 
 
@@ -88,7 +79,6 @@ class CPU(object):
 		return val
 			
 
-
 	def setROM(self, banks):
 		self.rom = banks;
 
@@ -120,9 +110,7 @@ class CPU(object):
 			self.execute();
 
 
-
 	 # Interrupts
-
 	def interrupt():
 		if (self.halted):
 			if (self.interrupt.isPending()):
@@ -131,7 +119,6 @@ class CPU(object):
 				self.cycles -= 4;
 			elif (self.cycles > 0):
 				self.cycles = 0;
-
 		if (self.ime):
 			if (self.interrupt.isPending()):
 				if (self.interrupt.isPending(Interrupt.VBLANK)):
@@ -151,16 +138,12 @@ class CPU(object):
 					self.interrupt.lower(Interrupt.JOYPAD);
 			
 
-
 	def interrupt(self, address):
 		self.ime = false;
-
 		self.call(address);
 
 
-
 	 # Execution
-
 	def execute():
 		self.execute(self.fetch());
 
@@ -400,34 +383,34 @@ class CPU(object):
 			0x9F:self.sbc_A_A(),
 	
 			# AND A,r
-			0xA0:self.and_A_B(),
-			0xA1:self.and_A_C(),
-			0xA2:self.and_A_D(),
-			0xA3:self.and_A_E(),
-			0xA4:self.and_A_H(),
-			0xA5:self.and_A_L(),
-			0xA6:self.and_A_HLi(),
-			0xA7:self.and_A_A(),
+			0xA0:self.AND_A_B(),
+			0xA1:self.AND_A_C(),
+			0xA2:self.AND_A_D(),
+			0xA3:self.AND_A_E(),
+			0xA4:self.AND_A_H(),
+			0xA5:self.AND_A_L(),
+			0xA6:self.AND_A_HLi(),
+			0xA7:self.AND_A_A(),
 	
 			# XOR A,r
-			0xA8:self.xor_A_B(),
-			0xA9:self.xor_A_C(),
-			0xAA:self.xor_A_D(),
-			0xAB:self.xor_A_E(),
-			0xAC:self.xor_A_H(),
-			0xAD:self.xor_A_L(),
-			0xAE:self.xor_A_HLi(),
-			0xAF:self.xor_A_A(),
+			0xA8:self.xOR_A_B(),
+			0xA9:self.xOR_A_C(),
+			0xAA:self.xOR_A_D(),
+			0xAB:self.xOR_A_E(),
+			0xAC:self.xOR_A_H(),
+			0xAD:self.xOR_A_L(),
+			0xAE:self.xOR_A_HLi(),
+			0xAF:self.xOR_A_A(),
 	
 			# OR A,r
-			0xB0:self.or_A_B(),
-			0xB1:self.or_A_C(),
-			0xB2:self.or_A_D(),
-			0xB3:self.or_A_E(),
-			0xB4:self.or_A_H(),
-			0xB5:self.or_A_L(),
-			0xB6:self.or_A_HLi(),
-			0xB7:self.or_A_A(),
+			0xB0:self.OR_A_B(),
+			0xB1:self.OR_A_C(),
+			0xB2:self.OR_A_D(),
+			0xB3:self.OR_A_E(),
+			0xB4:self.OR_A_H(),
+			0xB5:self.OR_A_L(),
+			0xB6:self.OR_A_HLi(),
+			0xB7:self.OR_A_A(),
 	
 			# CP A,r
 			0xB8:self.cp_A_B(),
@@ -532,13 +515,13 @@ class CPU(object):
 		0xDE:self.sbc_A_nn(),
 
 		# AND A,nn
-		0xE6:self.and_A_nn(),
+		0xE6:self.AND_A_nn(),
 
 		# XOR A,nn
-		0xEE:self.xor_A_nn(),
+		0xEE:self.xOR_A_nn(),
 
 		# OR A,nn
-		0xF6:self.or_A_nn(),
+		0xF6:self.OR_A_nn(),
 
 		# CP A,nn
 		0xFE:self.cp_A_nn(),
@@ -554,7 +537,6 @@ class CPU(object):
 		0xFF:self.rst(0x38)
 		}[opcode]()
 	
-
 		def fetchExecute(self):
 			result = {
 			# RLC r
@@ -879,8 +861,7 @@ class CPU(object):
 			}[self.fetch()]()
 
 
-	 # Memory Access
-
+	 # memory Access
 	def read(self, address):
 		return self.memory.read(address);
 
@@ -897,9 +878,7 @@ class CPU(object):
 		self.write((hi << 8) + lo, data);
 
 
-
 	 # Fetching
-
 	def fetch():
 		if (self.pc <= 0x3FFF):
 			self.pc+=1
@@ -910,9 +889,7 @@ class CPU(object):
 		return data;
 
 
-
 	 # Stack
-
 	def push(self, data):
 		self.sp = (self.sp - 1) & 0xFFFF;
 		self.memory.write(self.sp, data);
@@ -930,9 +907,7 @@ class CPU(object):
 		self.pc = address;
 
 
-
 	 # ALU
-
 	def add(self, data):
 		s = (self.a + data) & 0xFF;
 		self.f = 0
@@ -982,21 +957,21 @@ class CPU(object):
 		self.a = s & 0xFF;
 
 
-	def and(self, data):
+	def AND(self, data):
 		self.a &= data;
 		self.f = 0
 		if self.a == 0:
 			self.f = Z_FLAG
 
 
-	def xor(self, data):
+	def xOR(self, data):
 		self.a ^= data;
 		self.f = 0 		
 		if self.a == 0:
 			self.f = Z_FLAG
 
 
-	def or(self, data):
+	def cpuOR(self, data):
 		self.a |= data;
 		self.f = 0
 		if self.a == 0: 	
@@ -1134,9 +1109,7 @@ class CPU(object):
 		self.h = s >> 8;
 
 
-
 	 # LD r,r
-
 	def ld_B_B():
 		# b = b;
 		self.cycles -= 1;
@@ -1382,9 +1355,7 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # LD r,nn
-
 	def ld_B_nn():
 		self.b = self.fetch();
 		self.cycles -= 2;
@@ -1420,9 +1391,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LD r,(HL)
-
 	def ld_B_HLi():
 		self.b = self.read(self.h, self.l);
 		self.cycles -= 2;
@@ -1458,9 +1427,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LD (HL),r
-
 	def ld_HLi_B():
 		self.write(self.h, self.l, self.b);
 		self.cycles -= 2;
@@ -1496,17 +1463,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LD (HL),nn
-
 	def ld_HLi_nn():
 		self.write(self.h, self.l, self.fetch());
 		self.cycles -= 3;
 
 
-
 	 # LD A,(rr)
-
 	def ld_A_BCi():
 		self.a = self.read(self.b, self.c);
 		self.cycles -= 2;
@@ -1517,9 +1480,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LD A,(nnnn)
-
 	def ld_A_mem():
 		lo = self.fetch();
 		hi = self.fetch();
@@ -1527,9 +1488,7 @@ class CPU(object):
 		self.cycles -= 4;
 
 
-
 	 # LD (rr),A
-
 	def ld_BCi_A():
 		self.write(self.b, self.c, self.a);
 		self.cycles -= 2;
@@ -1540,9 +1499,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LD (nnnn),SP
-
 	def load_mem_SP():
 		lo = self.fetch();
 		hi = self.fetch();
@@ -1554,9 +1511,7 @@ class CPU(object):
 		self.cycles -= 5;
 
 
-
 	 # LD (nnnn),A
-
 	def ld_mem_A():
 		lo = self.fetch();
 		hi = self.fetch();
@@ -1564,41 +1519,31 @@ class CPU(object):
 		self.cycles -= 4;
 
 
-
 	 # LDH A,(nn)
-
 	def ldh_A_mem():
 		self.a = self.read(0xFF00 + self.fetch());
 		self.cycles -= 3;
 
 
-
 	 # LDH (nn),A
-
 	def ldh_mem_A():
 		self.write(0xFF00 + self.fetch(), self.a);
 		self.cycles -= 3;
 
 
-
 	 # LDH A,(C)
-
 	def ldh_A_Ci():
 		self.a = self.read(0xFF00 + self.c);
 		self.cycles -= 2;
 
 
-
 	 # LDH (C),A
-
 	def ldh_Ci_A():
 		self.write(0xFF00 + self.c, self.a);
 		self.cycles -= 2;
 
 
-
 	 # LDI (HL),A
-
 	def ldi_HLi_A():
 		self.write(self.h, self.l, self.a);
 		self.l = (self.l + 1) & 0xFF;
@@ -1607,9 +1552,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LDI A,(HL)
-
 	def ldi_A_HLi():
 		self.a = self.read(self.h, self.l);
 		self.l = (self.l + 1) & 0xFF;
@@ -1618,9 +1561,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LDD (HL),A
-
 	def ldd_HLi_A():
 		self.write(self.h, self.l, self.a);
 		self.l = (self.l - 1) & 0xFF;
@@ -1629,9 +1570,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LDD A,(HL)
-
 	def ldd_A_HLi():
 		self.a = self.read(self.h, self.l);
 		self.l = (self.l - 1) & 0xFF;
@@ -1640,9 +1579,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # LD rr,nnnn
-
 	def ld_BC_nnnn():
 		self.c = self.fetch();
 		self.b = self.fetch();
@@ -1668,17 +1605,13 @@ class CPU(object):
 		self.cycles -= 3;
 
 
-
 	 # LD SP,HL
-
 	def ld_SP_HL():
 		self.sp = (self.h << 8) + self.l;
 		self.cycles -= 2;
 
 
-
 	 # PUSH rr
-
 	def push_BC():
 		self.push(self.b);
 		self.push(self.c);
@@ -1703,9 +1636,7 @@ class CPU(object):
 		self.cycles -= 4;
 
 
-
 	 # POP rr
-
 	def pop_BC():
 		self.c = self.pop();
 		self.b = self.pop();
@@ -1730,9 +1661,7 @@ class CPU(object):
 		self.cycles -= 3;
 
 
-
 	 # ADD A,r
-
 	def add_A_B():
 		self.add(self.b);
 		self.cycles -= 1;
@@ -1768,25 +1697,19 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # ADD A,nn
-
 	def add_A_nn():
 		self.add(self.fetch());
 		self.cycles -= 2;
 
 
-
 	 # ADD A,(HL)
-
 	def add_A_HLi():
 		self.add(self.read(self.h, self.l));
 		self.cycles -= 2;
 
 
-
 	 # ADC A,r
-
 	def adc_A_B():
 		self.adc(self.b);
 		self.cycles -= 1;
@@ -1822,25 +1745,19 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # ADC A,nn
-
 	def adc_A_nn():
 		self.adc(self.fetch());
 		self.cycles -= 2;
 
 
-
 	 # ADC A,(HL)
-
 	def adc_A_HLi():
 		self.adc(self.read(self.h, self.l));
 		self.cycles -= 2;
 
 
-
 	 # SUB A,r
-
 	def sub_A_B():
 		self.sub(self.b);
 		self.cycles -= 1;
@@ -1876,25 +1793,19 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # SUB A,nn
-
 	def sub_A_nn():
 		self.sub(self.fetch());
 		self.cycles -= 2;
 
 
-
 	 # SUB A,(HL)
-
 	def sub_A_HLi():
 		self.sub(self.read(self.h, self.l));
 		self.cycles -= 2;
 
 
-
 	 # SBC A,r
-
 	def sbc_A_B():
 		self.sbc(self.b);
 		self.cycles -= 1;
@@ -1930,187 +1841,163 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # SBC A,nn
-
 	def sbc_A_nn():
 		self.sbc(self.fetch());
 		self.cycles -= 2;
 
 
-
 	 # SBC A,(HL)
-
 	def sbc_A_HLi():
 		self.sbc(self.read(self.h, self.l));
 		self.cycles -= 2;
 
 
-
 	 # AND A,r
-
-	def and_A_B():
-		self.and(self.b);
+	def AND_A_B():
+		self.AND(self.b);
 		self.cycles -= 1;
 
 
-	def and_A_C():
-		self.and(self.c);
+	def AND_A_C():
+		self.AND(self.c);
 		self.cycles -= 1;
 
 
-	def and_A_D():
-		self.and(self.d);
+	def AND_A_D():
+		self.AND(self.d);
 		self.cycles -= 1;
 
 
-	def and_A_E():
-		self.and(self.e);
+	def AND_A_E():
+		self.AND(self.e);
 		self.cycles -= 1;
 
 
-	def and_A_H():
-		self.and(self.h);
+	def AND_A_H():
+		self.AND(self.h);
 		self.cycles -= 1;
 
 
-	def and_A_L():
-		self.and(self.l);
+	def AND_A_L():
+		self.AND(self.l);
 		self.cycles -= 1;
 
 
-	def and_A_A():
-		self.and(self.a);
+	def AND_A_A():
+		self.AND(self.a);
 		self.cycles -= 1;
-
 
 
 	 # AND A,nn
-
-	def and_A_nn():
-		self.and(self.fetch());
+	def AND_A_nn():
+		self.AND(self.fetch());
 		self.cycles -= 2;
-
 
 
 	 # AND A,(HL)
-
-	def and_A_HLi():
-		self.and(self.read(self.h, self.l));
+	def AND_A_HLi():
+		self.AND(self.read(self.h, self.l));
 		self.cycles -= 2;
-
 
 
 	 # XOR A,r
-
-	def xor_A_B():
-		self.xor(self.b);
+	def xOR_A_B():
+		self.xOR(self.b);
 		self.cycles -= 1;
 
 
-	def xor_A_C():
-		self.xor(self.c);
+	def xOR_A_C():
+		self.xOR(self.c);
 		self.cycles -= 1;
 
 
-	def xor_A_D():
-		self.xor(self.d);
+	def xOR_A_D():
+		self.xOR(self.d);
 		self.cycles -= 1;
 
 
-	def xor_A_E():
-		self.xor(self.e);
+	def xOR_A_E():
+		self.xOR(self.e);
 		self.cycles -= 1;
 
 
-	def xor_A_H():
-		self.xor(self.h);
+	def xOR_A_H():
+		self.xOR(self.h);
 		self.cycles -= 1;
 
 
-	def xor_A_L():
-		self.xor(self.l);
+	def xOR_A_L():
+		self.xOR(self.l);
 		self.cycles -= 1;
 
 
-	def xor_A_A():
-		self.xor(self.a);
+	def xOR_A_A():
+		self.xOR(self.a);
 		self.cycles -= 1;
-
 
 
 	 # XOR A,nn
-
-	def xor_A_nn():
-		self.xor(self.fetch());
+	def xOR_A_nn():
+		self.xOR(self.fetch());
 		self.cycles -= 2;
-
 
 
 	 # XOR A,(HL)
-
-	def xor_A_HLi():
-		self.xor(self.read(self.h, self.l));
+	def xOR_A_HLi():
+		self.xOR(self.read(self.h, self.l));
 		self.cycles -= 2;
-
 
 
 	 # OR A,r
-
-	def or_A_B():
-		self.or(self.b);
+	def OR_A_B():
+		self.OR(self.b);
 		self.cycles -= 1;
 
 
-	def or_A_C():
-		self.or(self.c);
+	def OR_A_C():
+		self.OR(self.c);
 		self.cycles -= 1;
 
 
-	def or_A_D():
-		self.or(self.d);
+	def OR_A_D():
+		self.OR(self.d);
 		self.cycles -= 1;
 
 
-	def or_A_E():
-		self.or(self.e);
+	def OR_A_E():
+		self.OR(self.e);
 		self.cycles -= 1;
 
 
-	def or_A_H():
-		self.or(self.h);
+	def OR_A_H():
+		self.OR(self.h);
 		self.cycles -= 1;
 
 
-	def or_A_L():
-		self.or(self.l);
+	def OR_A_L():
+		self.OR(self.l);
 		self.cycles -= 1;
 
 
-	def or_A_A():
-		self.or(self.a);
+	def OR_A_A():
+		self.OR(self.a);
 		self.cycles -= 1;
-
 
 
 	 # OR A,nn
-
-	def or_A_nn():
-		self.or(self.fetch());
+	def OR_A_nn():
+		self.OR(self.fetch());
 		self.cycles -= 2;
-
 
 
 	 # OR A,(HL)
-
-	def or_A_HLi():
-		self.or(self.read(self.h, self.l));
+	def OR_A_HLi():
+		self.OR(self.read(self.h, self.l));
 		self.cycles -= 2;
 
 
-
 	 # CP A,r
-
 	def cp_A_B():
 		self.cp(self.b);
 		self.cycles -= 1;
@@ -2146,25 +2033,19 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # CP A,nn
-
 	def cp_A_nn():
 		self.cp(self.fetch());
 		self.cycles -= 2;
 
 
-
 	 # CP A,(HL)
-
 	def cp_A_HLi():
 		self.cp(self.read(self.h, self.l));
 		self.cycles -= 2;
 
 
-
 	 # INC r
-
 	def inc_B():
 		self.b = self.inc(self.b);
 		self.cycles -= 1;
@@ -2200,17 +2081,13 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # INC (HL)
-
 	def inc_HLi():
 		self.write(self.h, self.l, self.inc(self.read(self.h, self.l)));
 		self.cycles -= 3;
 
 
-
 	 # DEC r
-
 	def dec_B():
 		self.b = self.dec(self.b);
 		self.cycles -= 1;
@@ -2246,37 +2123,27 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # DEC (HL)
-
 	def dec_HLi():
 		self.write(self.h, self.l, self.dec(self.read(self.h, self.l)));
 		self.cycles -= 3;
 
 
-
 	 # CPL
-
 	def cpl():
 		self.a ^= 0xFF;
 		self.f |= N_FLAG + H_FLAG;
 
 
-
 	 # DAA
-
 	def daa():
 		delta = 0;
-
 		if ((self.f & H_FLAG) != 0 or (self.a & 0x0F) > 0x09):
 			delta |= 0x06;
-
 		if ((self.f & C_FLAG) != 0 or (self.a & 0xF0) > 0x90):
 			delta |= 0x60;
-
 		if ((self.a & 0xF0) > 0x80 and (self.a & 0x0F) > 0x09):
 			delta |= 0x60;
-
 		if ((self.f & N_FLAG) == 0):
 			self.a = (self.a + delta) & 0xFF;
 		else:
@@ -2291,9 +2158,7 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # ADD HL,rr
-
 	def add_HL_BC():
 		self.add(self.b, self.c);
 		self.cycles -= 2;
@@ -2314,9 +2179,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # INC rr
-
 	def inc_BC():
 		self.c = (self.c + 1) & 0xFF;
 		if (self.c == 0x00):
@@ -2343,9 +2206,7 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # DEC rr
-
 	def dec_BC():
 		self.c = (self.c - 1) & 0xFF;
 		if (self.c == 0xFF):
@@ -2372,16 +2233,12 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # ADD SP,nn
-
 	def add_SP_nn():
 		# TODO convert to byte
 		offset = self.fetch();
-
 		s = (self.sp + offset) & 0xFFFF;
 		self.updateFRegisterAfterSP_nn(offset, s)
-
 
 		self.sp = s;
 		self.cycles -= 4;
@@ -2389,10 +2246,8 @@ class CPU(object):
 
 
 	 # LD HL,SP+nn
-
 	def ld_HP_SP_nn():
 		#TODO convert to byte
-
 		s = (self.sp + offset) & 0xFFFF;
 		self.updateFRegisterAfterSP_nn(offset, s)
 
@@ -2415,8 +2270,8 @@ class CPU(object):
 				self.f += C_FLAG
 			if (s & 0x0F00) > (self.sp & 0x0F00):
 				self.f += H_FLAG
-	 # RLCA
 
+	 # RLCA
 	def rlca():
 		self.f = 0
 		if (self.a & 0x80) != 0:
@@ -2425,9 +2280,7 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # RLA
-
 	def rla():
 		s = ((self.a & 0x7F) << 1)
 		if (self.f & C_FLAG) != 0:
@@ -2439,9 +2292,7 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # RRCA
-
 	def rrca():
 		self.f = 0
 		if (self.a & 0x01) != 0:
@@ -2450,9 +2301,7 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # RRA
-
 	def rra():
 		s = ((self.a >> 1) & 0x7F)
 		if (self.f & C_FLAG) != 0:
@@ -2464,9 +2313,7 @@ class CPU(object):
 		self.cycles -= 1;
 
 
-
 	 # RLC r
-
 	def rlc_B():
 		self.b = self.rlc(self.b);
 		self.cycles -= 2;
@@ -2502,17 +2349,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # RLC (HL)
-
 	def rlc_HLi():
 		self.write(self.h, self.l, self.rlc(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # RL r
-
 	def rl_B():
 		self.b = self.rl(self.b);
 		self.cycles -= 2;
@@ -2548,17 +2391,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # RL (HL)
-
 	def rl_HLi():
 		self.write(self.h, self.l, self.rl(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # RRC r
-
 	def rrc_B():
 		self.b = self.rrc(self.b);
 		self.cycles -= 2;
@@ -2594,17 +2433,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # RRC (HL)
-
 	def rrc_HLi():
 		self.write(self.h, self.l, self.rrc(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # RR r
-
 	def rr_B():
 		self.b = self.rr(self.b);
 		self.cycles -= 2;
@@ -2640,17 +2475,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # RR (HL)
-
 	def rr_HLi():
 		self.write(self.h, self.l, self.rr(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # SLA r
-
 	def sla_B():
 		self.b = self.sla(self.b);
 		self.cycles -= 2;
@@ -2686,17 +2517,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # SLA (HL)
-
 	def sla_HLi():
 		self.write(self.h, self.l, self.sla(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # SWAP r
-
 	def swap_B():
 		self.b = self.swap(self.b);
 		self.cycles -= 2;
@@ -2732,17 +2559,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # SWAP (HL)
-
 	def swap_HLi():
 		self.write(self.h, self.l, self.swap(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # SRA r
-
 	def sra_B():
 		self.b = self.sra(self.b);
 		self.cycles -= 2;
@@ -2778,17 +2601,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # SRA (HL)
-
 	def sra_HLi():
 		self.write(self.h, self.l, self.sra(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # SRL r
-
 	def srl_B():
 		self.b = self.srl(self.b);
 		self.cycles -= 2;
@@ -2824,17 +2643,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # SRL (HL)
-
 	def srl_HLi():
 		self.write(self.h, self.l, self.srl(self.read(self.h, self.l)));
 		self.cycles -= 4;
 
 
-
 	 # BIT n,r
-
 	def bit_B(self, n):
 		self.bit(n, self.b);
 		self.cycles -= 2;
@@ -2870,17 +2685,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # BIT n,(HL)
-
 	def bit_HLi(self, n):
 		self.bit(n, self.read(self.h, self.l));
 		self.cycles -= 3;
 
 
-
 	 # SET n,r
-
 	def set_B(self, n):
 		self.b |= 1 << n;
 		self.cycles -= 2;
@@ -2916,17 +2727,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # SET n,(HL)
-
 	def set_HLi(self, n):
 		self.write(self.h, self.l, self.read(self.h, self.l) | (1 << n));
 		self.cycles -= 4;
 
 
-
 	 # RES n,r
-
 	def res_B(self, n):
 		self.b &= ~(1 << n);
 		self.cycles -= 2;
@@ -2962,17 +2769,13 @@ class CPU(object):
 		self.cycles -= 2;
 
 
-
 	 # RES n,(HL)
-
 	def res_HLi(self, n):
 		self.write(self.h, self.l, self.read(self.h, self.l) & ~(1 << n));
 		self.cycles -= 4;
 
 
-
 	 # CCF/SCF
-
 	def ccf():
 		self.f = (self.f & (Z_FLAG | C_FLAG)) ^ C_FLAG;
 
@@ -2981,16 +2784,12 @@ class CPU(object):
 		self.f = (self.f & Z_FLAG) | C_FLAG;
 
 
-
 	 # NOP
-
 	def nop():
 		self.cycles -= 1;
 
 
-
 	 # JP nnnn
-
 	def jp_nnnn():
 		lo = self.fetch();
 		hi = self.fetch();
@@ -2998,17 +2797,13 @@ class CPU(object):
 		self.cycles -= 4;
 
 
-
 	 # LD PC,HL
-
 	def ld_PC_HL():
 		self.pc = (self.h << 8) + self.l;
 		self.cycles -= 1;
 
 
-
 	 # JP cc,nnnn
-
 	def jp_cc_nnnn(cc):
 		if (cc):
 			lo = self.fetch();
@@ -3019,7 +2814,6 @@ class CPU(object):
 			self.pc = (self.pc + 2) & 0xFFFF;
 			self.cycles -= 3;
 	
-
 
 	def jp_NZ_nnnn():
 		self.jp_cc_nnnn((self.f & Z_FLAG) == 0);
@@ -3037,9 +2831,7 @@ class CPU(object):
 		self.jp_cc_nnnn((self.f & C_FLAG) != 0);
 
 
-
 	 # JR +nn
-
 	def jr_nn():
 		# TODO convert to byte
 		offset = self.fetch();
@@ -3047,9 +2839,7 @@ class CPU(object):
 		self.cycles -= 3;
 
 
-
 	 # JR cc,+nn
-
 	def jr_cc_nn(cc):
 		if (cc):
 			# TODO convert to byte
@@ -3061,7 +2851,6 @@ class CPU(object):
 			self.pc = (self.pc + 1) & 0xFFFF;
 			self.cycles -= 2;
 	
-
 
 	def jr_NZ_nn():
 		self.jr_cc_nn((self.f & Z_FLAG) == 0);
@@ -3079,9 +2868,7 @@ class CPU(object):
 		self.jr_cc_nn((self.f & C_FLAG) != 0);
 
 
-
 	 # CALL nnnn
-
 	def call_nnnn():
 		lo = self.fetch();
 		hi = self.fetch();
@@ -3089,9 +2876,7 @@ class CPU(object):
 		self.cycles -= 6;
 
 
-
 	 # CALL cc,nnnn
-
 	def call_cc_nnnn(cc):
 		if (cc):
 			lo = self.fetch();
@@ -3120,9 +2905,7 @@ class CPU(object):
 		self.call_cc_nnnn((self.f & C_FLAG) != 0);
 
 
-
 	 # RET
-
 	def ret():
 		lo = self.pop();
 		hi = self.pop();
@@ -3130,9 +2913,7 @@ class CPU(object):
 		self.cycles -= 4;
 
 
-
 	 # RET cc
-
 	def ret_cc(cc):
 		if (cc):
 			lo = self.pop();
@@ -3159,36 +2940,27 @@ class CPU(object):
 		self.ret_cc((self.f & C_FLAG) != 0);
 
 
-
 	 # RST nn
-
 	def rst(self, nn):
 		self.call(nn);
 		self.cycles -= 4;
 
 
-
 	 # RETI
-
 	def reti():
 		lo = self.pop();
 		hi = self.pop();
 		self.pc = (hi << 8) + lo;
-
 		# enable interrupts
 		self.ime = true;
 		self.cycles -= 4;
-
 		# execute next instruction
 		self.execute();
-
 		# check pending interrupts
 		self.interrupt();
 
 
-
 	 # DI/EI
-
 	def di():
 		# disable interrupts
 		self.ime = false;
@@ -3199,24 +2971,18 @@ class CPU(object):
 		# enable interrupts
 		self.ime = true;
 		self.cycles -= 1;
-
 		# execute next instruction
 		self.execute();
-
 		# check pending interrupts
 		self.interrupt();
 
 
-
 	 # HALT/STOP
-
 	def halt():
 		self.halted = true;
-
 		# emulate bug when interrupts are pending
 		if (not self.ime and self.interrupt.isPending()):
 			self.execute(self.memory.read(self.pc));
-
 		# check pending interrupts
 		self.interrupt();
 
