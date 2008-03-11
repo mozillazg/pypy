@@ -42,12 +42,11 @@ def compile(interp):
     builder = jitstate.curbuilder
     builder.start_writing()
     try:
-        try:
-            interp.bytecode_loop()
-        except GenerateReturn:
-            pass
+        interp.bytecode_loop()
     except FinishedCompiling:
         pass
+    except GenerateReturn:
+        leave_graph(interp)
     else:
         leave_graph(interp)
     builder.end()
@@ -64,10 +63,9 @@ def report_compile_time_exception(e):
         traceback.print_exc()
         print >> sys.stderr
         pdb.post_mortem(sys.exc_info()[2])
-    # XXX I think compile-time errors don't have to be fatal
-    # any more
-    lloperation.llop.debug_fatalerror(
-        lltype.Void, "compilation-time error %s" % e)
+    else:
+        msg = 'Note: the JIT got a compile-time exception: %s' % (e,)
+        lloperation.llop.debug_print(lltype.Void, msg)
 
 # ____________________________________________________________
 
@@ -85,24 +83,55 @@ class HotPromotionDesc:
 
     def __init__(self, ERASED, interpreter, threshold):
         self.exceptiondesc = interpreter.exceptiondesc
+        self.gv_constant_one = interpreter.rgenop.constPrebuiltGlobal(1)
 
         def ll_reach_fallback_point(fallback_point_ptr, value, framebase):
             try:
-                promotion_point = _cast_base_ptr_to_promotion_point(
-                    promotion_point_ptr)
-                path = [None]
-                root = promotion_point.promotion_path.follow_path(path)
-                gv_value = root.rgenop.genconst(value)
-                resuminginfo = ResumingInfo(promotion_point, gv_value, path)
-                root.reach_fallback_point(resuminginfo)
-                interpreter.portalstate.compile_more_functions()
+                fbp = fallback_point_ptr     # XXX cast
+                assert lltype.typeOf(value) is lltype.Bool   # XXX for now
+                if value:
+                    counter = fbp.truepath_counter
+                else:
+                    counter = fbp.falsepath_counter
+                assert counter >= 0, (
+                    "reaching a fallback point for an already-compiled path")
+                counter += 1
+
+                if counter >= threshold:
+                    # this is a hot path, compile it
+                    gv_value = fbp.getrgenop().genconst(value)
+                    fbp.compile_hot_path()
+                    if value:
+                        fbp.truepath_counter = -1    # mean "compiled"
+                    else:
+                        fbp.falsepath_counter = -1   # mean "compiled"
+                    # Done.  We return 1, which causes our caller
+                    # (machine code produced by hotsplit()) to loop back to
+                    # the flexswitch and execute the newly-generated code.
+                    return 1
+                else:
+                    # path is still cold
+                    if value:
+                        fbp.truepath_counter = counter
+                    else:
+                        fbp.falsepath_counter = counter
+
             except Exception, e:
                 report_compile_time_exception(e)
+
+            # exceptions below at run-time exceptions, we let them propagate
+            fbp.run_fallback_interpreter(framebase)
+            # the fallback interpreter reached the next jit_merge_point();
+            # we return 0, causing the machine code that called us to exit
+            # and go back to its own caller, which is jit_may_enter() from
+            # hotpath.py.
+            return 0
+
         self.ll_reach_fallback_point = ll_reach_fallback_point
-        ll_reach_fallback_point._debugexc = True
+        #ll_reach_fallback_point._debugexc = True
 
         FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED,
-                                    llmemory.Address], lltype.Void)
+                                    llmemory.Address], lltype.Signed)
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
         self.FUNCPTRTYPE = FUNCPTRTYPE
         self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
@@ -123,12 +152,17 @@ class FallbackPoint(object):
     truepath_counter = 0      # -1 after this path was compiled
 
     def __init__(self, jitstate, flexswitch, frameinfo):
+        # XXX we should probably trim down the jitstate once our caller
+        # is done with it, to avoid keeping too much stuff in memory
         self.saved_jitstate = jitstate
         self.flexswitch = flexswitch
         self.frameinfo = frameinfo
         # ^^^ 'frameinfo' describes where the machine code stored all
         # its GenVars, so that we can fish these values to pass them
         # to the fallback interpreter
+
+    def getrgenop(self):
+        return self.saved_jitstate.curbuilder.rgenop
 
     # hack for testing: make the llinterpreter believe this is a Ptr to base
     # instance
@@ -137,7 +171,7 @@ class FallbackPoint(object):
 
 def hotsplit(jitstate, hotpromotiondesc, switchbox):
     # produce a Bool flexswitch for now
-    incoming = jitstate.enter_block()
+    incoming = jitstate.enter_block_sweep_virtualizables()
     switchblock = rtimeshift.enter_next_block(jitstate, incoming)
     gv_switchvar = switchbox.genvar
     incoming_gv = [box.genvar for box in incoming]
@@ -152,21 +186,25 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox):
     gv_switchvar = switchbox.genvar
     gv_fnptr = hotpromotiondesc.get_gv_reach_fallback_point(default_builder)
     gv_framebase = default_builder.genop_get_frame_base()
-    default_builder.genop_call(hotpromotiondesc.sigtoken,
-                               gv_fnptr,
-                               [gv_fbp, gv_switchvar, gv_framebase])
-    # loop back to 'switchblock' unless an exception occurred
-    # (only "real" run-time exceptions should arrive here, not
-    # compile-time exceptions)
-    exceptiondesc = hotpromotiondesc.exceptiondesc
-    gv_exc_type = exceptiondesc.genop_get_exc_type(default_builder)
-    gv_occurred = default_builder.genop_ptr_nonzero(
-        exceptiondesc.exc_type_token, gv_exc_type)
-    excpath_builder = default_builder.jump_if_true(gv_occurred, [])
+    gv_res = default_builder.genop_call(hotpromotiondesc.sigtoken,
+                                        gv_fnptr,
+                                        [gv_fbp, gv_switchvar, gv_framebase])
+    # There are three ways the call above can return:
+    #  * 1: continue running by looping back to 'switchblock'
+    #  * 0: leave the machine code now, as with a return
+    #  * exception: leave the machine code now, propagating the exception
+    #      (only "real" run-time exceptions should arrive here, not
+    #      compile-time exceptions)
+    # As a minor hack, we know by the way the exception transformer works
+    # that in the third case the return value we get is -1, so we can
+    # just leave the machine code if we can any value != 1.
+    gv_leave_flag = default_builder.genop2("int_ne", gv_res,
+                                           hotpromotiondesc.gv_constant_one)
+    leaving_builder = default_builder.jump_if_true(gv_leave_flag, [])
     default_builder.finish_and_goto(incoming_gv, switchblock)
 
-    jitstate.curbuilder = excpath_builder
-    excpath_builder.start_writing()
+    jitstate.curbuilder = leaving_builder
+    leaving_builder.start_writing()
     raise GenerateReturn
 
 # ____________________________________________________________

@@ -67,11 +67,14 @@ class EntryPointsRewriter:
         state = HotEnterState()
 
         def jit_may_enter(*args):
-            if not state.machine_code:
-                state.counter += 1
-                if state.counter < self.threshold:
+            counter = state.counter
+            if counter >= 0:
+                counter += 1
+                if counter < self.threshold:
+                    state.counter = counter
                     return
-                state.compile()
+                if not state.compile():
+                    return
             maybe_on_top_of_llinterp(self, state.machine_code)(*args)
 
         HotEnterState.compile.im_func._dont_inline_ = True
@@ -112,13 +115,15 @@ def make_state_class(rewriter):
     class HotEnterState:
         def __init__(self):
             self.machine_code = lltype.nullptr(rewriter.RESIDUAL_FUNCTYPE)
-            self.counter = 0
+            self.counter = 0     # -1 means "compiled"
 
         def compile(self):
             try:
                 self._compile()
+                return True
             except Exception, e:
                 rhotpath.report_compile_time_exception(e)
+                return False
 
         def _compile(self):
             interp = rewriter.interpreter
@@ -144,6 +149,7 @@ def make_state_class(rewriter):
 
             FUNCPTR = lltype.Ptr(rewriter.RESIDUAL_FUNCTYPE)
             self.machine_code = gv_generated.revealconst(FUNCPTR)
+            self.counter = -1     # compiled
 
     return HotEnterState
 
