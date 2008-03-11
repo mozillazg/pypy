@@ -318,7 +318,8 @@ class BytecodeWriter(object):
             self.register_redvar(arg, verbose=False)
         for arg in greens:
             self.register_greenvar(arg, verbose=False)
-        self.insert_merges(block)
+        if not self.hannotator.policy.hotpath:
+            self.insert_merges(block)
         for op in block.operations:
             self.serialize_op(op)
         self.insert_exits(block)
@@ -366,7 +367,9 @@ class BytecodeWriter(object):
 
             falserenaming = self.insert_renaming(linkfalse)
             truerenaming = self.insert_renaming(linktrue)
-            if reverse is not None:
+            if self.hannotator.policy.hotpath and color == "red":
+                self.emit("red_hot_goto_iftrue")
+            elif reverse is not None:
                 ptrindex = self.serialize_oparg("red", srcargs[0])
                 self.emit("red_goto_ifptrnonzero")
                 self.emit(reverse)

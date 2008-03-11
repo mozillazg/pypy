@@ -82,6 +82,6 @@ class TestHotPath(test_interpreter.InterpretationTest):
             # execution continues purely in machine code, from the "n1 <= 1"
             # test which triggered the "jit_resume"
             "resume_machine_code",
-            # finally, go back the fallback interpreter when "n1 <= 1" is True
+            # finally, go back to the fallback interp when "n1 <= 1" is True
             "fallback_interp",
             "fb_raise Exit"])

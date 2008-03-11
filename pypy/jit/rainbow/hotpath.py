@@ -1,12 +1,13 @@
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
 from pypy.rpython.annlowlevel import llhelper
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
+from pypy.jit.rainbow import rhotpath
 
 
 class EntryPointsRewriter:
@@ -28,6 +29,7 @@ class EntryPointsRewriter:
     def rewrite_all(self):
         self.make_args_specification()
         self.make_enter_function()
+        self.update_interp()
         for graph in self.hintannotator.base_translator.graphs:
             for block in graph.iterblocks():
                 for op in block.operations:
@@ -76,6 +78,11 @@ class EntryPointsRewriter:
         jit_may_enter._always_inline = True
         self.jit_enter_fn = jit_may_enter
 
+    def update_interp(self):
+        ERASED = self.RGenOp.erasedType(lltype.Bool)
+        self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
+            ERASED, self.interpreter, self.threshold)
+
     def rewrite_can_enter_jit(self, graph, block, index):
         if not self.translate_support_code:
             # this case is used for most tests: the jit stuff should be run
@@ -104,29 +111,20 @@ def make_state_class(rewriter):
 
     class HotEnterState:
         def __init__(self):
-            self.graph_compilation_queue = []
             self.machine_code = lltype.nullptr(rewriter.RESIDUAL_FUNCTYPE)
             self.counter = 0
 
-        def compile_more_functions(self):
-            while self.graph_compilation_queue:
-                top_jitstate, greenargs, redargs = self.graph_compilation_queue.pop()
-                builder = top_jitstate.curbuilder
-                builder.start_writing()
-                top_jitstate = rewriter.interpreter.run(top_jitstate,
-                                                        rewriter.entryjitcode,
-                                                        greenargs, redargs)
-                if top_jitstate is not None:
-                    rewriter.interpreter.finish_jitstate_gray(
-                        rewriter.sigtoken)
-                builder.end()
-                builder.show_incremental_progress()
-
         def compile(self):
-            rgenop = rewriter.interpreter.rgenop
+            try:
+                self._compile()
+            except Exception, e:
+                rhotpath.report_compile_time_exception(e)
+
+        def _compile(self):
+            interp = rewriter.interpreter
+            rgenop = interp.rgenop
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
                 rewriter.sigtoken, "residual")
-            top_jitstate = rewriter.interpreter.fresh_jitstate(builder)
 
             greenargs = ()
             redargs = ()
@@ -139,9 +137,10 @@ def make_state_class(rewriter):
             greenargs = list(greenargs)
             redargs = list(redargs)
 
-            self.graph_compilation_queue.append((top_jitstate,
-                                                 greenargs, redargs))
-            self.compile_more_functions()
+            jitstate = interp.fresh_jitstate(builder)
+            rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
+                                    rewriter.entryjitcode, rewriter.sigtoken)
+            rhotpath.compile(interp)
 
             FUNCPTR = lltype.Ptr(rewriter.RESIDUAL_FUNCTYPE)
             self.machine_code = gv_generated.revealconst(FUNCPTR)
