@@ -4,6 +4,7 @@ from pypy.jit.rainbow.test import test_interpreter
 from pypy.jit.rainbow.hotpath import EntryPointsRewriter
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.rpython.llinterp import LLInterpreter
+from pypy import conftest
 
 P_HOTPATH = HintAnnotatorPolicy(oopspec=True,
                                 novirtualcontainer=True,
@@ -16,13 +17,16 @@ class Exit(Exception):
 class TestHotPath(test_interpreter.InterpretationTest):
     type_system = 'lltype'
 
-    def run(self, main, main_args, threshold, policy=P_HOTPATH):
+    def run(self, main, main_args, threshold, policy=P_HOTPATH, small=False):
         self.serialize(main, main_args, policy=policy, backendoptimize=True)
         rewriter = EntryPointsRewriter(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
                                        threshold, self.translate_support_code)
         self.rewriter = rewriter
         rewriter.rewrite_all()
+        if small and conftest.option.view:
+            self.rtyper.annotator.translator.view()
+
         graph = self.rtyper.annotator.translator.graphs[0]
         assert graph.func is main
         llinterp = LLInterpreter(
@@ -36,12 +40,12 @@ class TestHotPath(test_interpreter.InterpretationTest):
             n1 = n * 2
             total = 0
             while True:
-                can_enter_jit(red=(n1, total))
                 jit_merge_point(red=(n1, total))
                 total += n1
                 if n1 <= 1:
                     break
                 n1 -= 1
+                can_enter_jit(red=(n1, total))
             raise Exit(total)
 
         def main(n, m):
@@ -50,7 +54,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
             except Exit, e:
                 return e.result
 
-        res = self.run(main, [2, 5], threshold=8)
+        res = self.run(main, [2, 5], threshold=8, small=True)
         assert res == main(2, 5)
         self.check_traces([
             # running non-JITted leaves the initial profiling traces
@@ -62,19 +66,20 @@ class TestHotPath(test_interpreter.InterpretationTest):
             "jit_not_entered 16 74",
             "jit_not_entered 15 90",
             "jit_not_entered 14 105",
+            "jit_not_entered 13 119",
             # on the start of the next iteration, compile the 'total += n1'
             "jit_enter",
             "pause at hotsplit",
             # execute the compiled machine code until the 'n1 <= 1'.
             # It finishes in the fallback interpreter 7 times
-            "run_machine_code 13 119", "fallback_interp", "fb_leave 12 132",
             "run_machine_code 12 132", "fallback_interp", "fb_leave 11 144",
             "run_machine_code 11 144", "fallback_interp", "fb_leave 10 155",
             "run_machine_code 10 155", "fallback_interp", "fb_leave 9 165",
             "run_machine_code 9 165", "fallback_interp", "fb_leave 8 174",
             "run_machine_code 8 174", "fallback_interp", "fb_leave 7 182",
             "run_machine_code 7 182", "fallback_interp", "fb_leave 6 189",
-            "run_machine_code 6 189",
+            "run_machine_code 6 189", "fallback_interp", "fb_leave 5 195",
+            "run_machine_code 5 195",
             # now that we know which path is hot (i.e. "staying in the loop"),
             # it gets compiled
             "jit_resume",

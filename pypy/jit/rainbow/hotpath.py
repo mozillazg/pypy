@@ -1,4 +1,5 @@
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
+from pypy.objspace.flow.model import Link, checkgraph
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.llinterp import LLInterpreter
@@ -29,13 +30,8 @@ class EntryPointsRewriter:
     def rewrite_all(self):
         self.make_args_specification()
         self.make_enter_function()
+        self.rewrite_graphs()
         self.update_interp()
-        for graph in self.hintannotator.base_translator.graphs:
-            for block in graph.iterblocks():
-                for op in block.operations:
-                    if op.opname == 'can_enter_jit':
-                        index = block.operations.index(op)
-                        self.rewrite_can_enter_jit(graph, block, index)
 
     def make_args_specification(self):
         origportalgraph = self.hintannotator.portalgraph
@@ -79,14 +75,33 @@ class EntryPointsRewriter:
 
         HotEnterState.compile.im_func._dont_inline_ = True
         jit_may_enter._always_inline = True
-        self.jit_enter_fn = jit_may_enter
+        self.jit_may_enter_fn = jit_may_enter
 
     def update_interp(self):
         ERASED = self.RGenOp.erasedType(lltype.Bool)
         self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
-            ERASED, self.interpreter, self.threshold)
+            ERASED, self.interpreter, self.threshold,
+            self.ContinueRunningNormally)
+
+    def rewrite_graphs(self):
+        for graph in self.hintannotator.base_translator.graphs:
+            for block in graph.iterblocks():
+                for op in list(block.operations):
+                    if op.opname == 'can_enter_jit':
+                        index = block.operations.index(op)
+                        self.rewrite_can_enter_jit(graph, block, index)
+                    elif op.opname == 'jit_merge_point':
+                        index = block.operations.index(op)
+                        self.rewrite_jit_merge_point(graph, block, index)
 
     def rewrite_can_enter_jit(self, graph, block, index):
+        #
+        # In the original graphs, replace the 'jit_can_enter' operations
+        # with a call to the jit_may_enter() helper.
+        #
+        assert graph is not self.hintannotator.origportalgraph, (
+            "XXX can_enter_jit() cannot appear before jit_merge_point() "
+            "in the portal graph")
         if not self.translate_support_code:
             # this case is used for most tests: the jit stuff should be run
             # directly to make these tests faster
@@ -97,7 +112,7 @@ class EntryPointsRewriter:
             reds_v = op.args[2+numgreens:2+numgreens+numreds]
 
             FUNCPTR = lltype.Ptr(self.JIT_ENTER_FUNCTYPE)
-            jit_enter_graph_ptr = llhelper(FUNCPTR, self.jit_enter_fn)
+            jit_enter_graph_ptr = llhelper(FUNCPTR, self.jit_may_enter_fn)
             vlist = [Constant(jit_enter_graph_ptr, FUNCPTR)] + reds_v
 
             v_result = Variable()
@@ -106,6 +121,89 @@ class EntryPointsRewriter:
             block.operations[index] = newop
         else:
             xxx
+
+    def rewrite_jit_merge_point(self, origportalgraph, origblock, origindex):
+        #
+        # Mutate the original portal graph from this:
+        #
+        #       def original_portal(..):
+        #           stuff
+        #           jit_merge_point(*args)
+        #           more stuff
+        #
+        # to that:
+        #
+        #       def original_portal(..):
+        #           stuff
+        #           return portal_runner(*args)
+        #
+        #       def portal_runner(*args):
+        #           while 1:
+        #               try:
+        #                   return portal(*args)
+        #               except ContinueRunningNormally, e:
+        #                   *args = *e.new_args
+        #
+        #       def portal(*args):
+        #           more stuff
+        #
+        portalgraph = self.hintannotator.portalgraph
+        # ^^^ as computed by HotPathHintAnnotator.prepare_portal_graphs()
+        if origportalgraph is portalgraph:
+            return       # only mutate the original portal graph,
+                         # not its copy
+
+        ARGS = [v.concretetype for v in portalgraph.getargs()]
+        assert portalgraph.getreturnvar().concretetype is lltype.Void
+        PORTALFUNC = lltype.FuncType(ARGS, lltype.Void)
+
+        if not self.translate_support_code:
+            # ____________________________________________________________
+            # Prepare the portal_runner() helper, in a version that
+            # doesn't need to be translated
+            #
+            exc_data_ptr = self.codewriter.exceptiondesc.exc_data_ptr
+            llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
+
+            class ContinueRunningNormally(Exception):
+                _go_through_llinterp_uncaught_ = True     # ugh
+                def __init__(self, *args):
+                    self.args = args
+            self.ContinueRunningNormally = ContinueRunningNormally
+
+            def portal_runner(*args):
+                while 1:
+                    try:
+                        llinterp.eval_graph(portalgraph, list(args))
+                        assert 0, "unreachable"
+                    except ContinueRunningNormally, e:
+                        args = e.args
+
+            portal_runner_ptr = lltype.functionptr(PORTALFUNC, 'portal_runner',
+                                                   _callable = portal_runner)
+        else:
+            xxx
+        # ____________________________________________________________
+        # Now mutate origportalgraph to end with a call to portal_runner_ptr
+        #
+        op = origblock.operations[origindex]
+        assert op.opname == 'jit_merge_point'
+        numgreens = op.args[0].value
+        numreds = op.args[1].value
+        greens_v = op.args[2:2+numgreens]
+        reds_v = op.args[2+numgreens:2+numgreens+numreds]
+        vlist = [Constant(portal_runner_ptr, lltype.Ptr(PORTALFUNC))]
+        vlist += greens_v
+        vlist += reds_v
+        v_result = Variable()
+        v_result.concretetype = lltype.Void
+        newop = SpaceOperation('direct_call', vlist, v_result)
+        del origblock.operations[origindex:]
+        origblock.operations.append(newop)
+        origblock.exitswitch = None
+        origblock.recloseblock(Link([Constant(None, lltype.Void)],
+                                    origportalgraph.returnblock))
+        checkgraph(origportalgraph)
 
 
 def make_state_class(rewriter):

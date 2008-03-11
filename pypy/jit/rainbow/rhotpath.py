@@ -81,7 +81,8 @@ class MesurePoint(object):
 class HotPromotionDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, ERASED, interpreter, threshold):
+    def __init__(self, ERASED, interpreter, threshold,
+                 ContinueRunningNormally):
         self.exceptiondesc = interpreter.exceptiondesc
         self.gv_constant_one = interpreter.rgenop.constPrebuiltGlobal(1)
 
@@ -105,10 +106,11 @@ class HotPromotionDesc:
                         fbp.truepath_counter = -1    # mean "compiled"
                     else:
                         fbp.falsepath_counter = -1   # mean "compiled"
-                    # Done.  We return 1, which causes our caller
-                    # (machine code produced by hotsplit()) to loop back to
-                    # the flexswitch and execute the newly-generated code.
-                    return 1
+                    # Done.  We return without an exception set, which causes
+                    # our caller (the machine code produced by hotsplit()) to
+                    # loop back to the flexswitch and execute the
+                    # newly-generated code.
+                    return
                 else:
                     # path is still cold
                     if value:
@@ -120,18 +122,18 @@ class HotPromotionDesc:
                 report_compile_time_exception(e)
 
             # exceptions below at run-time exceptions, we let them propagate
-            fbp.run_fallback_interpreter(framebase)
-            # the fallback interpreter reached the next jit_merge_point();
-            # we return 0, causing the machine code that called us to exit
-            # and go back to its own caller, which is jit_may_enter() from
-            # hotpath.py.
-            return 0
+            fbp.run_fallback_interpreter(framebase, ContinueRunningNormally)
+            # If the fallback interpreter reached the next jit_merge_point(),
+            # it raised ContinueRunningNormally().  This exception is
+            # caught by portal_runner() from hotpath.py in order to loop
+            # back to the beginning of the portal.
+            assert 0, "unreachable"
 
         self.ll_reach_fallback_point = ll_reach_fallback_point
         #ll_reach_fallback_point._debugexc = True
 
         FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED,
-                                    llmemory.Address], lltype.Signed)
+                                    llmemory.Address], lltype.Void)
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
         self.FUNCPTRTYPE = FUNCPTRTYPE
         self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
@@ -186,25 +188,21 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox):
     gv_switchvar = switchbox.genvar
     gv_fnptr = hotpromotiondesc.get_gv_reach_fallback_point(default_builder)
     gv_framebase = default_builder.genop_get_frame_base()
-    gv_res = default_builder.genop_call(hotpromotiondesc.sigtoken,
-                                        gv_fnptr,
-                                        [gv_fbp, gv_switchvar, gv_framebase])
-    # There are three ways the call above can return:
-    #  * 1: continue running by looping back to 'switchblock'
-    #  * 0: leave the machine code now, as with a return
-    #  * exception: leave the machine code now, propagating the exception
-    #      (only "real" run-time exceptions should arrive here, not
-    #      compile-time exceptions)
-    # As a minor hack, we know by the way the exception transformer works
-    # that in the third case the gv_res we get is -1, so we can
-    # just leave the machine code if we get any value != 1.
-    gv_leave_flag = default_builder.genop2("int_ne", gv_res,
-                                           hotpromotiondesc.gv_constant_one)
-    leaving_builder = default_builder.jump_if_true(gv_leave_flag, [])
+    default_builder.genop_call(hotpromotiondesc.sigtoken,
+                               gv_fnptr,
+                               [gv_fbp, gv_switchvar, gv_framebase])
+    # The call above may either return normally, meaning that more machine
+    # code was compiled and we should loop back to 'switchblock' to enter it,
+    # or it may have set an exception.
+    exceptiondesc = hotpromotiondesc.exceptiondesc
+    gv_exc_type = exceptiondesc.genop_get_exc_type(default_builder)
+    gv_noexc = default_builder.genop_ptr_iszero(
+        exceptiondesc.exc_type_kind, gv_exc_type)
+    excpath_builder = default_builder.jump_if_false(gv_noexc, [])
     default_builder.finish_and_goto(incoming_gv, switchblock)
 
-    jitstate.curbuilder = leaving_builder
-    leaving_builder.start_writing()
+    jitstate.curbuilder = excpath_builder
+    excpath_builder.start_writing()
     raise GenerateReturn
 
 # ____________________________________________________________
