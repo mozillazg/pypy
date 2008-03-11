@@ -1,7 +1,7 @@
 import py
 from pypy.lang.js import interpreter
 from pypy.lang.js.operations import *
-from pypy.lang.js.jsobj import W_Number, empty_context
+from pypy.lang.js.jsobj import empty_context
 
 class MOCKNode(Node):
     def __init__(self, pos, ret):

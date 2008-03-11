@@ -1,13 +1,13 @@
 
 import py
 from pypy.lang.js import interpreter
-from pypy.lang.js.operations import AEC, Number, Position, Plus
-from pypy.lang.js.jsobj import W_Number, W_Object, \
-    ExecutionContext, W_Root, ThrowException, w_Null
+from pypy.lang.js.operations import AEC, IntNumber, FloatNumber, Position, Plus
+from pypy.lang.js.jsobj import W_Object, ExecutionContext, W_Root, w_Null
+from pypy.lang.js.execution import ThrowException
 
 def test_simple():
-    n1 = Number(Position(), 2.0)
-    n2 = Number(Position(), 4.0)
+    n1 = FloatNumber(Position(), 2.0)
+    n2 = FloatNumber(Position(), 4.0)
     p = Plus(Position(), n1, n2)
     assert p.eval(ExecutionContext([W_Object(),])).GetValue().ToNumber() == 6.0
     l = []
@@ -599,3 +599,6 @@ def test_proper_prototype_inheritance():
 def test_new_without_args_really():
     assertv("var x = new Boolean; x.toString();", 'false')
 
+def test_pypy_repr():
+    assertv("pypy_repr(3);", 'W_IntNumber')
+    assertv("pypy_repr(3.0);", 'W_FloatNumber')

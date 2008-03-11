@@ -1,35 +1,11 @@
 # encoding: utf-8
-from pypy.rlib.rarithmetic import r_uint, intmask
-
+from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
+     ovfcheck_float_to_int
+from pypy.lang.js.execution import ThrowException, JsTypeError,\
+     ExecutionReturned, RangeError
 
 class SeePage(NotImplementedError):
     pass
-
-class JsBaseExcept(Exception):
-    pass    
-
-#XXX Just an idea for now
-class JsRuntimeExcept(Exception):
-    def __init__(self, pos, message, exception_object):
-        self.pos = pos
-        self.message = message
-        self.exception_object = exception_object # JS Exception Object
-
-class ExecutionReturned(JsBaseExcept):
-    def __init__(self, type='normal', value=None, identifier=None):
-        self.type = type
-        self.value = value
-        self.identifier = identifier
-
-class ThrowException(JsBaseExcept):
-    def __init__(self, exception):
-        self.exception = exception
-        self.args = [exception]
-
-class JsTypeError(JsBaseExcept):
-    pass
-
-class RangeError(JsBaseExcept): pass
 
 Infinity = 1e300 * 1e300
 NaN = Infinity/Infinity
@@ -312,7 +288,7 @@ class W_Arguments(W_ListObject):
         W_PrimitiveObject.__init__(self, Class='Arguments')
         del self.propdict["prototype"]
         self.Put('callee', callee)
-        self.Put('length', W_Number(len(args)))
+        self.Put('length', W_IntNumber(len(args)))
         for i in range(len(args)):
             self.Put(str(i), args[i])
         self.length = len(args)
@@ -330,7 +306,7 @@ class W_Array(W_ListObject):
     def __init__(self, ctx=None, Prototype=None, Class='Array',
                  Value=w_Undefined, callfunc=None):
         W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
-        self.Put('length', W_Number(0))
+        self.Put('length', W_IntNumber(0))
         self.length = r_uint(0)
 
     def Put(self, P, V, dd=False,
@@ -343,7 +319,7 @@ class W_Array(W_ListObject):
                     res = V.ToUInt32()
                     if V.ToNumber() < 0:
                         raise RangeError()
-                    self.propdict['length'].value = W_Number(res)
+                    self.propdict['length'].value = W_IntNumber(res)
                     self.length = res
                     return
                 except ValueError:
@@ -355,14 +331,14 @@ class W_Array(W_ListObject):
             dd = dd, ro = ro, it = it)
 
         try:
-            index = r_uint(float(P))
+            index = r_uint(int(P))
         except ValueError:
             return
         if index < self.length:
             return
         
-        self.length = index+1        
-        self.propdict['length'].value = W_Number(index+1)
+        self.length = index+1
+        self.propdict['length'].value = W_IntNumber(index+1)
         return
 
 
@@ -414,71 +390,87 @@ class W_String(W_Primitive):
     def GetPropertyName(self):
         return self.ToString()
 
-class W_Number(W_Primitive):
-    def __init__(self, floatval):
-        try:
-            self.floatval = float(floatval)
-        except OverflowError: 
-            # XXX this should not be happening, there is an error somewhere else
-            #an ecma test to stress this is GlobalObject/15.1.2.2-2.js
-            self.floatval = Infinity
-
-    def __str__(self):
-        return str(self.floatval)+"W"
-
+class W_BaseNumber(W_Primitive):
+    """ Base class for numbers, both known to be floats
+    and those known to be integers
+    """
     def ToObject(self, ctx):
         return create_object(ctx, 'Number', Value=self)
-        
-    def ToString(self, ctx = None):
-        floatstr = str(self.floatval)
-        if floatstr == str(NaN):
-            return 'NaN'
-        if floatstr == str(Infinity):
-            return 'Infinity'
-        if floatstr == str(-Infinity):
-            return '-Infinity'
-        try:
-            if float(int(self.floatval)) == self.floatval:
-                return str(int(self.floatval))
-        except OverflowError, e:
-            pass
-        return floatstr
-    
-    def ToBoolean(self):
-        if self.floatval == 0.0 or str(self.floatval) == str(NaN):
-            return False
-        return bool(self.floatval)
 
-    def ToNumber(self):
-        return self.floatval
-    
     def Get(self, name):
         return w_Undefined
 
     def type(self):
         return 'number'
-    
+
+class W_IntNumber(W_BaseNumber):
+    """ Number known to be an integer
+    """
+    def __init__(self, intval):
+        self.intval = intmask(intval)
+
+    def __str__(self):
+        return str(self.intval)+"W"
+
+    def ToString(self, ctx=None):
+        return str(self.intval)
+
+    def ToBoolean(self):
+        return bool(self.intval)
+
+    def ToNumber(self):
+        # XXX
+        return float(self.intval)
+
     def ToInt32(self):
-        strval = str(self.floatval)
-        if strval == str(NaN) or \
-           strval == str(Infinity) or \
-           strval == str(-Infinity):
-            return 0
-           
+        return self.intval
+
+    def ToUInt32(self):
+        return r_uint(self.intval)
+
+    def GetPropertyName(self):
+        return self.ToString()
+
+class W_FloatNumber(W_BaseNumber):
+    """ Number known to be a float
+    """
+    def __init__(self, floatval):
+        self.floatval = floatval
+
+    def __str__(self):
+        return str(self.floatval)+"W"
+    
+    def ToString(self, ctx = None):
+        if isnan(self.floatval):
+            return 'NaN'
+        if isinf(self.floatval):
+            if self.floatval > 0:
+                return 'Infinity'
+            else:
+                return '-Infinity'
+        try:
+            return str(ovfcheck_float_to_int(self.floatval))
+        except OverflowError:
+            return str(self.floatval)
+    
+    def ToBoolean(self):
+        if isnan(self.floatval):
+            return False
+        return bool(self.floatval)
+
+    def ToNumber(self):
+        return self.floatval
+        
+    def ToInt32(self):
+        if isnan(self.floatval) or isinf(self.floatval):
+            return 0           
         return int(self.floatval)
     
     def ToUInt32(self):
-        strval = str(self.floatval)
-        if strval == str(NaN) or \
-           strval == str(Infinity) or \
-           strval == str(-Infinity):
+        if isnan(self.floatval) or isinf(self.floatval):
             return r_uint(0)
-           
         return r_uint(self.floatval)
-    
-    def GetPropertyName(self):
-        return self.ToString()
-        
+            
 class W_List(W_Root):
     def __init__(self, list_w):
         self.list_w = list_w
@@ -496,15 +488,25 @@ class W_List(W_Root):
         return str(self.list_w)
 
 class ExecutionContext(object):
+    def create_fast_lookup(self, scope_elem):
+        fast_lookup = {}
+        for elem, val in self.scope[-1].propdict.iteritems():
+            if val.dd:
+                fast_lookup[elem] = W_Reference(elem, self.scope[-1])
+        return fast_lookup
+    
     def __init__(self, scope, this=None, variable=None, 
                     debug=False, jsproperty=None):
         assert scope is not None
+        assert len(scope) == 1
         self.scope = scope
         if this is None:
             self.this = scope[-1]
         else:
             self.this = this
-        
+        self.fast_lookup = self.create_fast_lookup(scope[-1])
+        self.scope_lookup = [self.fast_lookup]
+        # create a fast lookup
         if variable is None:
             self.variable = self.scope[0]
         else:
@@ -528,14 +530,23 @@ class ExecutionContext(object):
     def push_object(self, obj):
         """push object into scope stack"""
         assert isinstance(obj, W_PrimitiveObject)
+        # XXX O(n^2)
         self.scope.insert(0, obj)
         self.variable = obj
+        self.fast_lookup = self.create_fast_lookup(obj)
+        self.scope_lookup.append(self.fast_lookup)
     
     def pop_object(self):
         """remove the last pushed object"""
+        self.scope_lookup.pop()
+        self.fast_lookup = self.scope_lookup[-1]
         return self.scope.pop(0)
         
     def resolve_identifier(self, identifier):
+        try:
+            return self.fast_lookup[identifier]
+        except KeyError:
+            pass
         for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
             if obj.HasProperty(identifier):
@@ -559,7 +570,7 @@ def function_context(scope, activation, this=None):
                             jsproperty = Property('', w_Undefined, dd=True))
     ctx.push_object(activation)
     return ctx
-    
+
 def eval_context(calling_context):
     ctx = ExecutionContext(calling_context.scope[:],
                             this = calling_context.this,
@@ -611,7 +622,6 @@ def create_object(ctx, prototypename, callfunc=None, Value=w_Undefined):
     return obj
 
 def isnull_or_undefined(obj):
-    if isinstance(obj, W_Undefined) or isinstance(obj, W_Null):
+    if obj is w_Null or obj is w_Undefined:
         return True
-    else:
-        return False
+    return False

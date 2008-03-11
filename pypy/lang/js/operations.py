@@ -4,10 +4,15 @@ operations.py
 Implements the javascript operations nodes for the interpretation tree
 """
 
-#XXX * imports are bad
-from pypy.lang.js.jsobj import *
+from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_Object,\
+     w_Undefined, W_NewBuiltin, W_String, create_object, W_List,\
+     W_PrimitiveObject, W_Reference, ActivationObject, W_Array, W_Boolean,\
+     w_Null, W_BaseNumber, isnull_or_undefined
 from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
-from pypy.rlib.rarithmetic import r_uint, intmask
+from pypy.rlib.rarithmetic import r_uint, intmask, INFINITY, NAN, ovfcheck,\
+     isnan, isinf
+from pypy.lang.js.execution import ExecutionReturned, JsTypeError,\
+     ThrowException
 from constants import unescapedict, SLASH
 
 import sys
@@ -139,11 +144,11 @@ class Assignment(Expression):
         elif op == "%=":
             val = mod(ctx, v1.GetValue(), v3)
         elif op == "&=":
-            val = W_Number(v1.GetValue().ToInt32() & v3.ToInt32())
+            val = W_IntNumber(v1.GetValue().ToInt32() & v3.ToInt32())
         elif op == "|=":
-            val = W_Number(v1.GetValue().ToInt32() | v3.ToInt32())
+            val = W_IntNumber(v1.GetValue().ToInt32() | v3.ToInt32())
         elif op == "^=":
-            val = W_Number(v1.GetValue().ToInt32() ^ v3.ToInt32())
+            val = W_IntNumber(v1.GetValue().ToInt32() ^ v3.ToInt32())
         else:
             print op
             raise NotImplementedError()
@@ -172,24 +177,24 @@ class Block(Statement):
 
 class BitwiseAnd(BinaryBitwiseOp):
     def decision(self, ctx, op1, op2):
-        return W_Number(op1&op2)
+        return W_IntNumber(op1&op2)
     
 
 class BitwiseNot(UnaryOp):
     def eval(self, ctx):
         op1 = self.expr.eval(ctx).GetValue().ToInt32()
-        return W_Number(~op1)
+        return W_IntNumber(~op1)
     
 
 class BitwiseOr(BinaryBitwiseOp):
     def decision(self, ctx, op1, op2):
-        return W_Number(op1|op2)
+        return W_IntNumber(op1|op2)
     
 
 
 class BitwiseXor(BinaryBitwiseOp):
     def decision(self, ctx, op1, op2):
-        return W_Number(op1^op2)
+        return W_IntNumber(op1^op2)
     
 
 class Unconditional(Statement):
@@ -224,7 +229,6 @@ class Call(BinaryOp):
             r7 = None
         else:
             r7 = r6
-        
         try:
             res = r3.Call(ctx=ctx, args=r2.get_args(), this=r7)
         except JsTypeError:
@@ -277,7 +281,7 @@ class FunctionStatement(Statement):
     def eval(self, ctx):
         proto = ctx.get_global().Get('Function').Get('prototype')
         w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self)
-        w_func.Put('length', W_Number(len(self.params)))
+        w_func.Put('length', W_IntNumber(len(self.params)))
         w_obj = create_object(ctx, 'Object')
         w_obj.Put('constructor', w_func, de=True)
         w_func.Put('prototype', w_obj)
@@ -332,12 +336,13 @@ def ARC(ctx, x, y):
     Implements the Abstract Relational Comparison x < y
     Still not fully to the spec
     """
+    # XXX fast path when numbers only
     s1 = x.ToPrimitive(ctx, 'Number')
     s2 = y.ToPrimitive(ctx, 'Number')
     if not (isinstance(s1, W_String) and isinstance(s2, W_String)):
         s4 = s1.ToNumber()
         s5 = s2.ToNumber()
-        if s4 == NaN or s5 == NaN:
+        if isnan(s4) or isnan(s5):
             return -1
         if s4 < s5:
             return 1
@@ -416,19 +421,19 @@ class Ursh(BinaryComparisonOp):
     def decision(self, ctx, op1, op2):
         a = op1.ToUInt32()
         b = op2.ToUInt32()
-        return W_Number(a >> (b & 0x1F))
+        return W_IntNumber(a >> (b & 0x1F))
 
 class Rsh(BinaryComparisonOp):
     def decision(self, ctx, op1, op2):
         a = op1.ToInt32()
         b = op2.ToUInt32()
-        return W_Number(a >> intmask(b & 0x1F))
+        return W_IntNumber(a >> intmask(b & 0x1F))
 
 class Lsh(BinaryComparisonOp):
     def decision(self, ctx, op1, op2):
         a = op1.ToInt32()
         b = op2.ToUInt32()
-        return W_Number(a << intmask(b & 0x1F))
+        return W_IntNumber(a << intmask(b & 0x1F))
 
 ##############################################################################
 #
@@ -442,6 +447,7 @@ def AEC(ctx, x, y):
     Implements the Abstract Equality Comparison x == y
     trying to be fully to the spec
     """
+    # XXX think about fast paths here and there
     type1 = x.type()
     type2 = y.type()
     if type1 == type2:
@@ -450,8 +456,7 @@ def AEC(ctx, x, y):
         if type1 == "number":
             n1 = x.ToNumber()
             n2 = y.ToNumber()
-            nan_string = str(NaN)
-            if str(n1) == nan_string or str(n2) == nan_string:
+            if isnan(n1) or isnan(n2):
                 return False
             if n1 == n2:
                 return True
@@ -467,13 +472,13 @@ def AEC(ctx, x, y):
            (type1 == "null" and type2 == "undefined"):
             return True
         if type1 == "number" and type2 == "string":
-            return AEC(ctx, x, W_Number(y.ToNumber()))
+            return AEC(ctx, x, W_FloatNumber(y.ToNumber()))
         if type1 == "string" and type2 == "number":
-            return AEC(ctx, W_Number(x.ToNumber()), y)
+            return AEC(ctx, W_FloatNumber(x.ToNumber()), y)
         if type1 == "boolean":
-            return AEC(ctx, W_Number(x.ToNumber()), y)
+            return AEC(ctx, W_FloatNumber(x.ToNumber()), y)
         if type2 == "boolean":
-            return AEC(ctx, x, W_Number(y.ToNumber()))
+            return AEC(ctx, x, W_FloatNumber(y.ToNumber()))
         if (type1 == "string" or type1 == "number") and \
             type2 == "object":
             return AEC(ctx, x, y.ToPrimitive(ctx))
@@ -524,8 +529,7 @@ def SEC(ctx, x, y):
     if type1 == "number":
         n1 = x.ToNumber()
         n2 = y.ToNumber()
-        nan_string = str(NaN)
-        if str(n1) == nan_string or str(n2) == nan_string:
+        if isnan(n1) or isnan(n2):
             return False
         if n1 == n2:
             return True
@@ -573,10 +577,11 @@ class Increment(UnaryOp):
     ++value (prefix) and value++ (postfix)
     """
     def eval(self, ctx):
+        # XXX write down fast version
         thing = self.expr.eval(ctx)
         val = thing.GetValue()
         x = val.ToNumber()
-        resl = plus(ctx, W_Number(x), W_Number(1))
+        resl = plus(ctx, W_FloatNumber(x), W_IntNumber(1))
         thing.PutValue(resl, ctx)
         if self.postfix:
             return val
@@ -589,10 +594,11 @@ class Decrement(UnaryOp):
     same as increment --value and value --
     """
     def eval(self, ctx):
+        # XXX write down hot path
         thing = self.expr.eval(ctx)
         val = thing.GetValue()
         x = val.ToNumber()
-        resl = sub(ctx, W_Number(x), W_Number(1))
+        resl = sub(ctx, W_FloatNumber(x), W_IntNumber(1))
         thing.PutValue(resl, ctx)
         if self.postfix:
             return val
@@ -632,31 +638,61 @@ def plus(ctx, nleft, nright):
         sleft = nleft.ToString(ctx)
         sright = nright.ToString(ctx)
         return W_String(sleft + sright)
+    # hot path
+    if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
+        ileft = nleft.ToInt32()
+        iright = nright.ToInt32()
+        try:
+            return W_IntNumber(ovfcheck(ileft + iright))
+        except OverflowError:
+            return W_FloatNumber(float(ileft) + float(iright))
     else:
         fleft = nleft.ToNumber()
         fright = nright.ToNumber()
-        return W_Number(fleft + fright)
+        return W_FloatNumber(fleft + fright)
 
 def mult(ctx, nleft, nright):
+    if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
+        ileft = nleft.ToInt32()
+        iright = nright.ToInt32()
+        try:
+            return W_IntNumber(ovfcheck(ileft * iright))
+        except OverflowError:
+            return W_FloatNumber(float(ileft) * float(iright))
     fleft = nleft.ToNumber()
     fright = nright.ToNumber()
-    return W_Number(fleft * fright)
+    return W_FloatNumber(fleft * fright)
 
 def mod(ctx, nleft, nright): # XXX this one is really not following spec
     ileft = nleft.ToInt32()
     iright = nright.ToInt32()
-    return W_Number(ileft % iright)
+    return W_IntNumber(ileft % iright)
 
 def division(ctx, nleft, nright):
     fleft = nleft.ToNumber()
     fright = nright.ToNumber()
-    return W_Number(fleft / fright)
+    if fright == 0:
+        if fleft < 0:
+            val = -INFINITY
+        elif fleft == 0:
+            val = NAN
+        else:
+            val = INFINITY
+    else:
+        val = fleft / fright
+    return W_FloatNumber(val)
 
 def sub(ctx, nleft, nright):
+    if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
+        ileft = nleft.ToInt32()
+        iright = nright.ToInt32()
+        try:
+            return W_IntNumber(ovfcheck(ileft - iright))
+        except OverflowError:
+            return W_FloatNumber(float(ileft) - float(iright))
     fleft = nleft.ToNumber()
     fright = nright.ToNumber()
-    return W_Number(fleft - fright)
-
+    return W_FloatNumber(fleft - fright)
 
 class Plus(BinaryNumberOp):
     def mathop(self, ctx, n1, n2):
@@ -714,17 +750,25 @@ class NewWithArgs(BinaryOp):
         x = self.left.eval(ctx).GetValue()
         args = self.right.eval(ctx).get_args()
         return commonnew(ctx, x, args)
+
+class BaseNumber(Expression):
+    pass
     
-
-
-class Number(Expression):
+class IntNumber(BaseNumber):
     def __init__(self, pos, num):
         self.pos = pos
-        assert isinstance(num, float)
         self.num = num
 
     def eval(self, ctx):
-        return W_Number(self.num)
+        return W_IntNumber(int(self.num))
+
+class FloatNumber(BaseNumber):
+    def __init__(self, pos, num):
+        self.pos = pos
+        self.num = num
+
+    def eval(self, ctx):
+        return W_FloatNumber(float(self.num))
 
 class String(Expression):
     def __init__(self, pos, strval):
@@ -740,6 +784,7 @@ class String(Expression):
     def string_unquote(self, string):
         temp = []
         stop = len(string)-1
+        # XXX proper error
         assert stop >= 0
         last = ""
         
@@ -784,7 +829,7 @@ class SourceElements(Statement):
 
     def execute(self, ctx):
         for varname in self.var_decl:
-            ctx.variable.Put(varname, w_Undefined)
+            ctx.variable.Put(varname, w_Undefined, dd=True)
         for funcname, funccode in self.func_decl.items():
             ctx.variable.Put(funcname, funccode.eval(ctx))
         node = self
@@ -880,9 +925,9 @@ class VariableDeclaration(Expression):
     def eval(self, ctx):
         name = self.identifier.get_literal()
         if self.expr is None:
-            ctx.variable.Put(name, w_Undefined)
+            ctx.variable.Put(name, w_Undefined, dd=True)
         else:
-            ctx.variable.Put(name, self.expr.eval(ctx).GetValue())
+            ctx.variable.Put(name, self.expr.eval(ctx).GetValue(), dd=True)
         return self.identifier.eval(ctx)
     
 
@@ -1050,9 +1095,17 @@ class Not(UnaryOp):
 
 class UMinus(UnaryOp):
     def eval(self, ctx):
-        return W_Number(-self.expr.eval(ctx).GetValue().ToNumber())
+        res = self.expr.eval(ctx)
+        if isinstance(res, W_IntNumber):
+            return W_IntNumber(-res.intval)
+        elif isinstance(res, W_FloatNumber):
+            return W_FloatNumber(-res.floatval)
+        return W_FloatNumber(-self.expr.eval(ctx).GetValue().ToNumber())
 
 class UPlus(UnaryOp):
     def eval(self, ctx):
-        return W_Number(+self.expr.eval(ctx).GetValue().ToNumber())
+        res = self.expr.eval(ctx)
+        if isinstance(res, W_BaseNumber):
+            return res
+        return W_FloatNumber(self.expr.eval(ctx).GetValue().ToNumber())
     
