@@ -3,6 +3,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
+from pypy.jit.rainbow import rhotpath
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 DEBUG_JITCODES = True     # store a dump() of all JitCodes
@@ -804,10 +805,18 @@ class JitInterpreter(object):
             return true
         return false
 
+    # ____________________________________________________________
+    # opcodes used by the 'hotpath' policy
+
     @arguments()
     def opimpl_jit_merge_point(self):
         # xxx in-progress
         pass
+
+    @arguments("red", "jumptarget")
+    def opimpl_red_hot_goto_iftrue(self, switchbox, target):
+        rhotpath.hotsplit(self.jitstate, self.bool_hotpromotiondesc, switchbox)
+        assert False, "unreachable"
 
     # ____________________________________________________________
     # construction-time interface
