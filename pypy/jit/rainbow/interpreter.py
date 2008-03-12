@@ -209,6 +209,7 @@ class JitInterpreter(object):
         self.portalstate = None
         self.num_global_mergepoints = -1
         self.global_state_dicts = None
+        self.jit_merge_point_state_dict = newgreendict()
         if DEBUG_JITCODES:
             self.find_opcode("trace")     # force it to be compiled in
 
@@ -828,10 +829,16 @@ class JitInterpreter(object):
     # ____________________________________________________________
     # opcodes used by the 'hotpath' policy
 
-    @arguments()
-    def opimpl_jit_merge_point(self):
-        # xxx in-progress
-        pass
+    @arguments("greenkey")
+    def opimpl_jit_merge_point(self, key):
+        states_dic = self.jit_merge_point_state_dict
+        global_resumer = RainbowResumer(self, self.frame)
+        done = rtimeshift.retrieve_jitstate_for_merge(states_dic,
+                                                      self.jitstate,
+                                                      key, None)
+        if done:
+            self.newjitstate(None)
+            return STOP
 
     @arguments("red", "jumptarget")
     def opimpl_red_hot_goto_iftrue(self, switchbox, target):

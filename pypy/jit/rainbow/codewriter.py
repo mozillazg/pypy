@@ -471,14 +471,7 @@ class BytecodeWriter(object):
         for arg in self.sort_by_color(block.inputargs)[1]:
             TYPE = arg.concretetype
             key += (TYPE, )
-        if not key:
-            keyindex = -1 # use prebuilt empty_key
-        elif key not in self.keydesc_positions:
-            keyindex = len(self.keydesc_positions)
-            self.keydesc_positions[key] = keyindex
-            self.keydescs.append(KeyDesc(self.RGenOp, *key))
-        else:
-            keyindex = self.keydesc_positions[key]
+        keyindex = self.keydesc_position(key)
 
         kind = self.mergepoint_set[block]
         if kind == "global":
@@ -618,6 +611,17 @@ class BytecodeWriter(object):
         result = len(self.type_positions)
         self.type_positions[TYPE] = result
         return result
+
+    def keydesc_position(self, key):    # key is a tuple of TYPEs
+        if not key:
+            keyindex = -1 # use prebuilt empty_key
+        elif key not in self.keydesc_positions:
+            keyindex = len(self.keydesc_positions)
+            self.keydesc_positions[key] = keyindex
+            self.keydescs.append(KeyDesc(self.RGenOp, *key))
+        else:
+            keyindex = self.keydesc_positions[key]
+        return keyindex
 
     def structtypedesc_position(self, TYPE):
         if TYPE in self.structtypedesc_positions:
@@ -1391,12 +1395,14 @@ class BytecodeWriter(object):
         numreds = op.args[1].value
         greens_v = op.args[2:2+numgreens]
         reds_v = op.args[2+numgreens:2+numgreens+numreds]
+        key = ()
         for i, v in enumerate(greens_v):
             if self.varcolor(v) != "green":
                 raise Exception("computed color does not match declared color:"
                                 " %s is %s, but jit_merge_point() declares it"
                                 " as green" % (v, self.varcolor(v)))
             assert self.green_position(v) == i
+            key += (v.concretetype,)
         for i, v in enumerate(reds_v):
             if self.varcolor(v) != "red":
                 raise Exception("computed color does not match declared color:"
@@ -1404,6 +1410,7 @@ class BytecodeWriter(object):
                                 " as red" % (v, self.varcolor(v)))
             assert self.redvar_position(v) == i
         self.emit('jit_merge_point')
+        self.emit(self.keydesc_position(key))
 
     def serialize_op_can_enter_jit(self, op):
         return    # no need to put anything in the bytecode here

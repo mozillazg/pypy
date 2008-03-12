@@ -27,6 +27,8 @@ def setup_jitstate(interp, jitstate, greenargs, redargs,
 
 def leave_graph(interp):
     jitstate = interp.jitstate
+    if jitstate is None:
+        return
     exceptiondesc = interp.exceptiondesc
     builder = jitstate.curbuilder
     #for virtualizable_box in jitstate.virtualizables:
