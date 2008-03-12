@@ -4,6 +4,8 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.annlowlevel import cachedtype
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
@@ -26,10 +28,31 @@ def residual_exception_nontranslated(jitstate, e, rtyper):
         rtyper, exc_classdef)
     jitstate.residual_ll_exception(ll_exc)
 
+def maybe_on_top_of_llinterp(exceptiondesc, fnptr):
+    # Run a generated graph on top of the llinterp for testing.
+    # When translated, this just returns the fnptr.
+    exc_data_ptr = exceptiondesc.exc_data_ptr
+    assert exceptiondesc.rtyper is not None
+    llinterp = LLInterpreter(exceptiondesc.rtyper, exc_data_ptr=exc_data_ptr)
+    def on_top_of_llinterp(*args):
+        return llinterp.eval_graph(fnptr._obj.graph, list(args))
+    return on_top_of_llinterp
+
+class Entry(ExtRegistryEntry):
+    _about_ = maybe_on_top_of_llinterp
+
+    def compute_result_annotation(self, s_exceptiondesc, s_fnptr):
+        return s_fnptr
+
+    def specialize_call(self, hop):
+        return hop.inputarg(hop.args_r[1], arg=1)
+
+
 class CallDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, rtyper, FUNCTYPE, voidargs=()):
+    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE, voidargs=()):
+        self.exceptiondesc = exceptiondesc
         self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
         self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
         # xxx what if the result is virtualizable?
@@ -44,8 +67,14 @@ class CallDesc:
             voidargs = (None, ) * voidargcount
         argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
         RETURN = FUNCTYPE.TO.RESULT
-        def green_call(interpreter, fnptr_gv, greenargs):
-            fnptr = fnptr_gv.revealconst(FUNCTYPE)
+        if RETURN is lltype.Void:
+            self.gv_whatever_return_value = None
+        else:
+            self.gv_whatever_return_value = RGenOp.constPrebuiltGlobal(
+                whatever_return_value)
+
+        def perform_call(rgenop, gv_fnptr, greenargs):
+            fnptr = gv_fnptr.revealconst(FUNCTYPE)
             assert len(greenargs) + len(voidargs) == numargs 
             args = ()
             j = 0
@@ -65,21 +94,30 @@ class CallDesc:
                     arg = genconst.revealconst(ARG)
                     args += (arg, )
                     j += 1
-            rgenop = interpreter.jitstate.curbuilder.rgenop
-            try:
-                result = fnptr(*args)
-            except Exception, e:
-                if not we_are_translated():
-                    residual_exception_nontranslated(interpreter.jitstate, e, rtyper)
-                else:
-                    interpreter.jitstate.residual_exception(e)
-                result = whatever_return_value
-            if RETURN != lltype.Void:
-                interpreter.green_result(rgenop.genconst(result))
-        self.green_call = green_call
+            result = maybe_on_top_of_llinterp(self.exceptiondesc, fnptr)(*args)
+            if RETURN is lltype.Void:
+                return None
+            else:
+                return rgenop.genconst(result)
+
+        self.perform_call = perform_call
 
     def _freeze_(self):
         return True
+
+    def green_call(self, interpreter, gv_fnptr, greenargs):
+        rgenop = interpreter.jitstate.curbuilder.rgenop
+        try:
+            gv_result = self.perform_call(rgenop, gv_fnptr, greenargs)
+        except Exception, e:
+            if not we_are_translated():
+                residual_exception_nontranslated(interpreter.jitstate, e,
+                                                 self.exceptiondesc.rtyper)
+            else:
+                interpreter.jitstate.residual_exception(e)
+            gv_result = self.gv_whatever_return_value
+        if gv_result is not None:
+            interpreter.green_result(gv_result)
 
 
 class IndirectCallsetDesc(object):
@@ -105,7 +143,7 @@ class IndirectCallsetDesc(object):
 
         self.graphs = [graph for (graph, tsgraph) in graph2tsgraph]
         self.jitcodes = values
-        self.calldesc = CallDesc(codewriter.RGenOp, codewriter.rtyper,
+        self.calldesc = CallDesc(codewriter.RGenOp, codewriter.exceptiondesc,
                                  lltype.typeOf(fnptr))
 
 
@@ -117,7 +155,7 @@ class BytecodeWriter(object):
         etrafo = hannotator.exceptiontransformer
         type_system = self.rtyper.type_system.name
         self.exceptiondesc = exception.ExceptionDesc(
-            RGenOp, etrafo, type_system, True)
+            RGenOp, etrafo, type_system, True, self.rtyper)
         self.interpreter = JitInterpreter(self.exceptiondesc, RGenOp)
         self.RGenOp = RGenOp
         self.current_block = None
@@ -213,6 +251,7 @@ class BytecodeWriter(object):
         bytecode = self.all_graphs[graph]
         labelpos = {}
         code = assemble_labelpos(labelpos, self.interpreter, *self.assembler)
+        owncalldesc, gv_ownfnptr = self.make_own_call_information(graph)
         bytecode.__init__(graph.name,
                           code,
                           self.sharelist("constants"),
@@ -232,7 +271,9 @@ class BytecodeWriter(object):
                           self.sharelist("calldescs"),
                           self.sharelist("metacalldescs"),
                           self.sharelist("indirectcalldescs"),
-                          self.is_portal)
+                          self.is_portal,
+                          owncalldesc,
+                          gv_ownfnptr)
         bytecode._source = self.assembler
         bytecode._interpreter = self.interpreter
         bytecode._labelpos = labelpos
@@ -246,6 +287,17 @@ class BytecodeWriter(object):
             self.interpreter.set_num_global_mergepoints(
                 self.num_global_mergepoints)
             return bytecode
+
+    def make_own_call_information(self, graph):
+        ARGS = [v.concretetype for v in graph.getargs()]
+        RESULT = graph.getreturnvar().concretetype
+        FUNCTYPE = lltype.FuncType(ARGS, RESULT)
+
+        owncalldesc = CallDesc(self.RGenOp, self.exceptiondesc,
+                               lltype.Ptr(FUNCTYPE))
+        ownfnptr = lltype.functionptr(FUNCTYPE, graph.name, graph=graph)
+        gv_ownfnptr = self.RGenOp.constPrebuiltGlobal(ownfnptr)
+        return owncalldesc, gv_ownfnptr
 
     def get_jitcode(self, graph):
         if graph in self.all_graphs:
@@ -646,7 +698,7 @@ class BytecodeWriter(object):
             return self.calldesc_positions[key]
         result = len(self.calldescs)
         self.calldescs.append(
-            CallDesc(self.RGenOp, self.rtyper, FUNCTYPE, voidargs))
+            CallDesc(self.RGenOp, self.exceptiondesc, FUNCTYPE, voidargs))
         self.calldesc_positions[key] = result
         return result
 

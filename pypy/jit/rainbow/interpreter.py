@@ -29,7 +29,7 @@ class JitCode(object):
                  interiordescs, exceptioninstances, oopspecdescs,
                  promotiondescs, called_bytecodes, num_mergepoints,
                  graph_color, calldescs, metacalldescs,
-                 indirectcalldescs, is_portal):
+                 indirectcalldescs, is_portal, owncalldesc, gv_ownfnptr):
         # XXX quite a lot of lists of descs here...  At least we
         # share identical lists between the numberous prebuilt
         # JitCode instances.
@@ -53,6 +53,8 @@ class JitCode(object):
         self.metacalldescs = metacalldescs
         self.indirectcalldescs = indirectcalldescs
         self.is_portal = is_portal
+        self.owncalldesc = owncalldesc
+        self.gv_ownfnptr = gv_ownfnptr
 
     def _freeze_(self):
         return True

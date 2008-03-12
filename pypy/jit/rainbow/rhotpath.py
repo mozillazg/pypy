@@ -2,7 +2,7 @@
 RPython support code for the hotpath policy.
 """
 
-from pypy.jit.timeshifter import rtimeshift
+from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import llhelper
@@ -36,11 +36,11 @@ def leave_graph(interp):
     #    content.store_back(jitstate)        
     exceptiondesc.store_global_excdata(jitstate)
     jitstate.curbuilder.finish_and_return(interp.graphsigtoken, None)
+    jitstate.curbuilder = None
 
 def compile(interp):
     jitstate = interp.jitstate
     builder = jitstate.curbuilder
-    builder.start_writing()
     try:
         interp.bytecode_loop()
     except FinishedCompiling:
@@ -49,7 +49,6 @@ def compile(interp):
         leave_graph(interp)
     else:
         leave_graph(interp)
-    builder.end()
     builder.show_incremental_progress()
 
 def report_compile_time_exception(e):
@@ -101,12 +100,12 @@ class HotPromotionDesc:
 
                 if counter >= threshold:
                     # this is a hot path, compile it
-                    gv_value = fbp.getrgenop().genconst(value)
-                    fbp.compile_hot_path()
+                    gv_value = interpreter.rgenop.genconst(value)
+                    fbp.compile_hot_path(interpreter, gv_value, pc)
                     if value:
-                        fbp.truepath_counter = -1    # mean "compiled"
+                        fbp.truepath_counter = -1    # means "compiled"
                     else:
-                        fbp.falsepath_counter = -1   # mean "compiled"
+                        fbp.falsepath_counter = -1   # means "compiled"
                     # Done.  We return without an exception set, which causes
                     # our caller (the machine code produced by hotsplit()) to
                     # loop back to the flexswitch and execute the
@@ -167,8 +166,19 @@ class FallbackPoint(object):
         self.falsepath_pc = falsepath_pc
         self.truepath_pc = truepath_pc
 
-    def getrgenop(self):
-        return self.saved_jitstate.curbuilder.rgenop
+    def compile_hot_path(self, interpreter, gv_case, pc):
+        if self.falsepath_counter == -1 or self.truepath_counter == -1:
+            # the other path was already compiled, we can reuse the jitstate
+            jitstate = self.saved_jitstate
+            self.saved_jitstate = None
+        else:
+            # clone the jitstate
+            memo = rvalue.copy_memo()
+            jitstate = self.saved_jitstate.clone(memo)
+        interpreter.newjitstate(jitstate)
+        interpreter.frame.pc = pc
+        jitstate.curbuilder = self.flexswitch.add_case(gv_case)
+        compile(interpreter)
 
     # hack for testing: make the llinterpreter believe this is a Ptr to base
     # instance

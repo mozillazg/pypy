@@ -1056,6 +1056,19 @@ class JITState(object):
         if virtualizable_box not in self.virtualizables:
             self.virtualizables.append(virtualizable_box)
 
+    def clone(self, memo):
+        virtualizables = []
+        for virtualizable_box in self.virtualizables:
+            new_virtualizable_box = virtualizable_box.copy(memo)
+            assert isinstance(new_virtualizable_box, rvalue.PtrRedBox)
+            virtualizables.append(new_virtualizable_box)
+        return JITState(self.curbuilder,
+                        self.frame.copy(memo),
+                        self.exc_type_box .copy(memo),
+                        self.exc_value_box.copy(memo),
+                        self.greens[:],
+                        virtualizables)
+
     def split(self, newbuilder, newresumepoint, newgreens, memo):
         virtualizables = []
         for virtualizable_box in self.virtualizables:
