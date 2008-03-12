@@ -76,6 +76,8 @@ class LLInterpreter(object):
                     self.tracer.dump('LLException: %s\n' % (e,))
                 raise
             except Exception, e:
+                if getattr(e, '_go_through_llinterp_uncaught_', False):
+                    raise
                 log.error("AN ERROR OCCURED: %s" % (e, ))
                 self.print_traceback()
                 if self.tracer:
@@ -455,6 +457,8 @@ class LLFrame(object):
         except LLException, e:
             raise
         except Exception, e:
+            if getattr(e, '_go_through_llinterp_uncaught_', False):
+                raise
             if getattr(obj, '_debugexc', False):
                 log.ERROR('The llinterpreter got an '
                           'unexpected exception when calling')

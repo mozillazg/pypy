@@ -37,6 +37,7 @@ class FallbackInterpreter(object):
         self.pc = pc
         self.gv_exc_type  = self.getinitialboxgv(jitstate.exc_type_box)
         self.gv_exc_value = self.getinitialboxgv(jitstate.exc_value_box)
+        self.seen_can_enter_jit = False
 
     def getinitialboxgv(self, box):
         assert box.genvar is not None, "XXX Virtuals support missing"
@@ -57,6 +58,17 @@ class FallbackInterpreter(object):
         self.local_red = []
         for box in frame.local_boxes:
             self.local_red.append(self.getinitialboxgv(box))
+
+    def run_directly(self, greenargs, redargs, targetbytecode):
+        assert not (greenargs and redargs)  # XXX for now
+        calldesc = targetbytecode.owncalldesc
+        try:
+            gv_res = calldesc.perform_call(self.rgenop,
+                                           targetbytecode.gv_ownfnptr,
+                                           greenargs or redargs)
+        except Exception, e:
+            XXX
+        return gv_res
 
     # ____________________________________________________________
     # XXX Lots of copy and paste from interp.py!
@@ -141,18 +153,22 @@ class FallbackInterpreter(object):
     def green_result_from_red(self, gv):
         self.green_result(gv)
 
-    # ____________________________________________________________
-    # Operation implementations
-
-    @arguments()
-    def opimpl_trace(self):
+    def trace(self):
         bytecode = self.bytecode
         msg = '*** fallback trace: in %s position %d ***' % (bytecode.name,
                                                              self.pc)
         print msg
         if bytecode.dump_copy is not None:
             print bytecode.dump_copy
-        self.debug_trace(msg)
+        return msg
+
+    # ____________________________________________________________
+    # Operation implementations
+
+    @arguments()
+    def opimpl_trace(self):
+        msg = self.trace()
+        self.interpreter.debug_trace(msg)
 
     @arguments("green", "2byte", returns="red")
     def opimpl_make_redbox(self, genconst, typeid):
@@ -168,11 +184,40 @@ class FallbackInterpreter(object):
 
     @arguments("green", "jumptarget")
     def opimpl_green_goto_iftrue(self, genconst, target):
-        xxx
+        if genconst.revealconst(lltype.Bool):
+            self.pc = target
 
     @arguments("green", "green_varargs", "jumptargets")
     def opimpl_green_switch(self, exitcase, cases, targets):
         xxx
+
+    @arguments("bool", "red", "red", "jumptarget")
+    def opimpl_red_goto_ifptrnonzero(self, reverse, gv_ptr, gv_switch, target):
+        xxx
+
+    @arguments("red", "jumptarget")
+    def opimpl_goto_if_constant(self, gv_value, target):
+        xxx
+
+
+    @arguments("red", returns="red")
+    def opimpl_red_ptr_nonzero(self, gv_ptr):
+        addr = gv_ptr.revealconst(llmemory.Address)
+        return self.rgenop.genconst(bool(addr))
+
+    @arguments("red", returns="red")
+    def opimpl_red_ptr_iszero(self, gv_ptr):
+        addr = gv_ptr.revealconst(llmemory.Address)
+        return self.rgenop.genconst(not addr)
+
+    @arguments("red", "red", returns="red")
+    def opimpl_red_ptr_eq(self, gv_ptr1, gv_ptr2):
+        xxx
+
+    @arguments("red", "red", returns="red")
+    def opimpl_red_ptr_ne(self, gv_ptr1, gv_ptr2):
+        xxx
+
 
     @arguments("red_varargs")
     def opimpl_make_new_redvars(self, local_red):
@@ -191,39 +236,28 @@ class FallbackInterpreter(object):
         self.local_green = newgreens
     opimpl_make_new_greenvars.argspec = arguments("green_varargs")
 
-    @arguments("red", returns="red")
-    def opimpl_red_ptr_nonzero(self, gv_ptr):
-        addr = gv_ptr.revealconst(llmemory.Address)
-        return self.rgenop.genconst(bool(addr))
+    @arguments("green", "calldesc", "green_varargs")
+    def opimpl_green_call(self, fnptr_gv, calldesc, greenargs):
+        xxx
 
-    @arguments("red", returns="red")
-    def opimpl_red_ptr_iszero(self, gv_ptr):
-        addr = gv_ptr.revealconst(llmemory.Address)
-        return self.rgenop.genconst(not addr)
+    @arguments("green_varargs", "red_varargs", "red", "indirectcalldesc")
+    def opimpl_indirect_call_const(self, greenargs, redargs,
+                                      gv_funcptr, callset):
+        xxx
 
-    @arguments()
-    def opimpl_gray_return(self):
-        assert self.current_source_jitframe.backframe is None   # XXX for now
-        # at this point we should have an exception set in self.gv_exc_xxx
-        # and we have to really raise it.  XXX non-translatable hack follows...
-        from pypy.rpython.llinterp import LLException, type_name
-        exceptiondesc = self.exceptiondesc
-        lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
-        llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
-        assert lltype and llvalue
-        self.interpreter.debug_trace("fb_raise", type_name(lltype))
-        raise LLException(lltype, llvalue)
+    @arguments("red", "calldesc", "bool", "bool", "red_varargs",
+               "promotiondesc")
+    def opimpl_red_residual_call(self, gv_func, calldesc, withexc, has_result,
+                                 redargs, promotiondesc):
+        xxx
+
+    @arguments("metacalldesc", "red_varargs", returns="red")
+    def opimpl_metacall(self, metafunc, redargs):
+        xxx
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_red_direct_call(self, greenargs, redargs, targetbytecode):
-        assert not greenargs  # XXX for now
-        calldesc = targetbytecode.owncalldesc
-        try:
-            gv_res = calldesc.perform_call(self.rgenop,
-                                           targetbytecode.gv_ownfnptr,
-                                           redargs)
-        except Exception, e:
-            XXX
+        gv_res = self.run_directly(greenargs, redargs, targetbytecode)
         if gv_res is not None:
             self.red_result(gv_res)
 
@@ -256,26 +290,110 @@ class FallbackInterpreter(object):
     def opimpl_red_malloc(self, structtypedesc):
         return structtypedesc.allocate(self.rgenop)
 
+    @arguments("structtypedesc", "red", returns="red")
+    def opimpl_red_malloc_varsize_struct(self, structtypedesc, gv_size):
+        xxx
+
+    @arguments("arraydesc", "red", returns="red")
+    def opimpl_red_malloc_varsize_array(self, arraytypedesc, gv_size):
+        xxx
+
     @arguments("red", "fielddesc", "bool", returns="red")
     def opimpl_red_getfield(self, gv_struct, fielddesc, deepfrozen):
         gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
         assert gv_res is not None, "segfault!"
         return gv_res
 
+    @arguments("red", "fielddesc", "bool", returns="green_from_red")
+    def opimpl_green_getfield(self, gv_struct, fielddesc, deepfrozen):
+        xxx
+
     @arguments("red", "fielddesc", "red")
     def opimpl_red_setfield(self, gv_dest, fielddesc, gv_value):
         fielddesc.setfield(self.rgenop, gv_dest, gv_value)
+
+    @arguments("red", "arraydesc", "red", "bool", returns="red")
+    def opimpl_red_getarrayitem(self, gv_array, fielddesc, gv_index, deepfrozen):
+        xxx
+
+    @arguments("red", "arraydesc", "red", "red")
+    def opimpl_red_setarrayitem(self, gv_dest, fielddesc, gv_index, gv_value):
+        xxx
+
+    @arguments("red", "arraydesc", returns="red")
+    def opimpl_red_getarraysize(self, gv_array, fielddesc):
+        xxx
+
+    @arguments("red", "arraydesc", returns="green_from_red")
+    def opimpl_green_getarraysize(self, gv_array, fielddesc):
+        xxx
+
+    @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
+    def opimpl_red_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
+                                    indexes_gv):
+        xxx
+
+    @arguments("red", "interiordesc", "bool", "red_varargs",
+               returns="green_from_red")
+    def opimpl_green_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
+                                      indexes_gv):
+        xxx
+
+    @arguments("red", "interiordesc", "red_varargs", "red")
+    def opimpl_red_setinteriorfield(self, gv_dest, interiordesc, indexes_gv,
+                                    gv_value):
+        xxx
+
+    @arguments("red", "interiordesc", "red_varargs", returns="red")
+    def opimpl_red_getinteriorarraysize(self, gv_array, interiordesc, indexes_gv):
+        xxx
+
+    @arguments("red", "interiordesc", "red_varargs", returns="green_from_red")
+    def opimpl_green_getinteriorarraysize(self, gv_array, interiordesc,
+                                          indexes_gv):
+        xxx
+
+    @arguments("red", "green", "green", returns="green")
+    def opimpl_is_constant(self, arg, true, false):
+        xxx
 
     # hotpath-specific operations
 
     @arguments("greenkey")
     def opimpl_jit_merge_point(self, key):
-        raise self.ContinueRunningNormally(self.local_green + self.local_red)
+        raise self.ContinueRunningNormally(self.local_green + self.local_red,
+                                           self.seen_can_enter_jit)
+
+    @arguments()
+    def opimpl_can_enter_jit(self):
+        self.seen_can_enter_jit = True
 
     @arguments("red", "jumptarget")
-    def opimpl_red_hot_goto_iftrue(self, gv_switch, target):
+    def opimpl_hp_red_goto_iftrue(self, gv_switch, target):
         if gv_switch.revealconst(lltype.Bool):
             self.pc = target
+
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):
+        gv_res = self.run_directly(greenargs, redargs, targetbytecode)
+        self.green_result(gv_res)
+
+    @arguments()
+    def opimpl_hp_gray_return(self):
+        assert self.current_source_jitframe.backframe is None   # XXX for now
+        # at this point we should have an exception set in self.gv_exc_xxx
+        # and we have to really raise it.  XXX non-translatable hack follows...
+        from pypy.rpython.llinterp import LLException, type_name
+        exceptiondesc = self.exceptiondesc
+        lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
+        llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
+        assert lltype and llvalue
+        self.interpreter.debug_trace("fb_raise", type_name(lltype))
+        raise LLException(lltype, llvalue)
+
+    @arguments()
+    def opimpl_hp_yellow_return(self):
+        xxx
 
     # ____________________________________________________________
     # construction-time helpers

@@ -1,5 +1,6 @@
 import py
-from pypy.rlib.jit import jit_merge_point, can_enter_jit
+import re
+from pypy.rlib.jit import jit_merge_point, can_enter_jit, hint
 from pypy.jit.rainbow.test import test_interpreter
 from pypy.jit.rainbow.hotpath import EntryPointsRewriter
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
@@ -38,10 +39,13 @@ class TestHotPath(test_interpreter.InterpretationTest):
         i = 0
         for trace, expect in zip(traces + ['--end of traces--'],
                                  expected + ['--end of traces--']):
+            # '...' in the expect string stands for any sequence of characters
+            regexp = '.*'.join(map(re.escape, expect.split('...'))) + '$'
             # 'trace' is a DebugTrace instance, reduce it to a string
-            assert str(trace) == expect, ("debug_trace[%d] mismatch:\n"
-                                          "       got %s\n"
-                                          "  expected %s" % (i, trace, expect))
+            match = re.match(regexp, str(trace))
+            assert match, ("debug_trace[%d] mismatch:\n"
+                           "       got: %s\n"
+                           "  expected: %s" % (i, trace, expect))
             i += 1
 
 
@@ -100,3 +104,94 @@ class TestHotPath(test_interpreter.InterpretationTest):
             # finally, go back to the fallback interp when "n1 <= 1" is True
             "fallback_interp",
             "fb_raise Exit"])
+
+    def test_greens(self):
+        def ll_function(code, buffer):
+            data = 0
+            accum = 0
+            pc = 0
+            while True:
+                jit_merge_point(green=(code, pc), red=(accum, data, buffer))
+                if pc == len(code):
+                    raise Exit(accum)
+                c = code[pc]
+                pc += 1
+                c = hint(c, concrete=True)
+                if c == 'I':
+                    accum += 1                   # increment
+                elif c == 'D':
+                    accum -= 1                   # decrement
+                elif c == 'S':
+                    accum, data = data, accum    # swap
+                elif c == 'W':
+                    buffer = accum               # write
+                elif c == 'R':
+                    accum = buffer               # read
+                elif c == '*':
+                    accum *= data
+                elif c == '%':
+                    accum %= data
+                elif c == '?':
+                    accum = int(bool(accum))
+                elif c == '{':
+                    if accum == 0:               # loop while != 0
+                        while code[pc] != '}':
+                            pc += 1
+                        pc += 1
+                elif c == '}':
+                    if accum != 0:
+                        pc -= 2                      # end of loop
+                        assert pc >= 0
+                        while code[pc] != '{':
+                            pc -= 1
+                            assert pc >= 0
+                        pc += 1
+                        can_enter_jit(green=(code, pc), red=(accum,
+                                                             data, buffer))
+
+        def main(demo, arg):
+            if demo == 1:
+                code = 'RSIS{S*SD}S'    # factorial
+            elif demo == 2:
+                code = 'ISRDD{ISR%?SDD*}S'  # prime number tester (for arg>=2)
+            else:
+                raise ValueError
+            try:
+                ll_function(code, arg)
+            except Exit, e:
+                return e.result
+
+        assert main(1, 10) == 10*9*8*7*6*5*4*3*2*1
+        assert ([main(2, n)
+                 for n in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]
+                ==        [1, 1, 0, 1, 0, 1, 0, 0,  0,  1,  0,  1,  0,  0])
+
+        res = self.run(main, [1, 10], threshold=3, small=True)
+        assert res == main(1, 10)
+        self.check_traces([
+            # start compiling the 3rd time we loop back
+                "jit_not_entered * struct rpy_string {...} 5 9 10 10",
+                "jit_not_entered * struct rpy_string {...} 5 8 90 10",
+                "jit_compile * struct rpy_string {...} 5 7 720 10",
+            # stop compiling at the red split ending an extra iteration
+                "pause at hotsplit in ll_function",
+            # run it, finishing twice through the fallback interp
+                "run_machine_code * struct rpy_string {...} 5 7 720 10",
+                "fallback_interp",
+                "fb_leave * struct rpy_string {...} 5 6 5040 10",
+                "run_machine_code * struct rpy_string {...} 5 6 5040 10",
+                "fallback_interp",
+                "fb_leave * struct rpy_string {...} 5 5 30240 10",
+                "run_machine_code * struct rpy_string {...} 5 5 30240 10",
+            # the third time, compile the hot path, which closes the loop
+            # in the generated machine code
+                "jit_resume bool_path True in ll_function",
+                "done at jit_merge_point",
+            # continue running 100% in the machine code as long as necessary
+                "resume_machine_code",
+            # at the end, use the fallbac interp to follow the exit path
+                "fallback_interp",
+                "fb_leave * struct rpy_string {...} 10 0 3628800 10",
+            # finally, we interpret the final 'S' character
+            # which gives us the final answer
+            ])

@@ -378,6 +378,10 @@ class BytecodeWriter(object):
         self.current_block = oldblock
 
     def insert_exits(self, block):
+        if self.hannotator.policy.hotpath:
+            hp = "hp_"
+        else:
+            hp = ""
         if block.exits == ():
             returnvar, = block.inputargs
             color = self.graph_calling_color(self.graph)
@@ -386,15 +390,15 @@ class BytecodeWriter(object):
                     place = self.serialize_oparg("red", returnvar)
                     assert place == 0
                 if color == "gray":
-                    self.emit("gray_return")
+                    self.emit(hp + "gray_return")
                 else:
-                    self.emit("red_return")
+                    self.emit(hp + "red_return")
             elif color == "red":
-                self.emit("red_return")
+                self.emit(hp + "red_return")
             elif color == "gray":
-                self.emit("gray_return")
+                self.emit(hp + "gray_return")
             elif color == "yellow":
-                self.emit("yellow_return")
+                self.emit(hp + "yellow_return")
             else:
                 assert 0, "unknown graph calling color %s" % (color, )
         elif len(block.exits) == 1:
@@ -420,7 +424,7 @@ class BytecodeWriter(object):
             falserenaming = self.insert_renaming(linkfalse)
             truerenaming = self.insert_renaming(linktrue)
             if self.hannotator.policy.hotpath and color == "red":
-                self.emit("red_hot_goto_iftrue")
+                self.emit("hp_red_goto_iftrue")
             elif reverse is not None:
                 ptrindex = self.serialize_oparg("red", srcargs[0])
                 self.emit("red_goto_ifptrnonzero")
@@ -1046,10 +1050,14 @@ class BytecodeWriter(object):
         graphindex = self.graph_position(targetgraph)
         args = targetgraph.getargs()
         emitted_args = self.args_of_call(op.args[1:], args)
-        self.emit("yellow_direct_call")
+        if not self.hannotator.policy.hotpath:
+            self.emit("yellow_direct_call")
+        else:
+            self.emit("hp_yellow_direct_call")
         self.emit(*emitted_args)
         self.emit(graphindex)
-        self.emit("yellow_retrieve_result")
+        if not self.hannotator.policy.hotpath:
+            self.emit("yellow_retrieve_result")
         self.register_greenvar(op.result)
 
     def handle_vable_call(self, op, withexc):
@@ -1413,7 +1421,9 @@ class BytecodeWriter(object):
         self.emit(self.keydesc_position(key))
 
     def serialize_op_can_enter_jit(self, op):
-        return    # no need to put anything in the bytecode here
+        # no need to put anything in the bytecode here, except a marker
+        # that is useful for the fallback interpreter
+        self.emit('can_enter_jit')
 
 
 class GraphTransformer(object):

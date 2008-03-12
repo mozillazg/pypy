@@ -73,9 +73,6 @@ class FinishedCompiling(Exception):
 class GenerateReturn(Exception):
     pass
 
-class MeasurePoint(object):
-    pass
-
 class HotPromotionDesc:
     __metaclass__ = cachedtype
 
@@ -132,7 +129,7 @@ class HotPromotionDesc:
             assert 0, "unreachable"
 
         self.ll_reach_fallback_point = ll_reach_fallback_point
-        #ll_reach_fallback_point._debugexc = True
+        ll_reach_fallback_point._debugexc = True
 
         FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED,
                                     llmemory.Address], lltype.Void)
