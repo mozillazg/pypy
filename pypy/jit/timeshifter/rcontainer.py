@@ -540,11 +540,11 @@ class NamedFieldDesc(FieldDesc):
         T = self.PTRTYPE.TO
         self.fieldname = name
         self.fieldtoken = RGenOp.fieldToken(T, name)
-        def getfield_if_non_null(jitstate, genvar):
+        def getfield_if_non_null(rgenop, genvar):
              ptr = genvar.revealconst(PTRTYPE)
              if ptr:
                  res = getattr(ptr, name)
-                 return rvalue.ll_gv_fromvalue(jitstate, res)
+                 return rgenop.genconst(res)
         self.getfield_if_non_null = getfield_if_non_null
 
     def compact_repr(self): # goes in ll helper names

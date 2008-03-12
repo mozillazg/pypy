@@ -145,7 +145,7 @@ def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     assert isinstance(argbox, rvalue.PtrRedBox)
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
         resgv = fielddesc.getfield_if_non_null(
-                jitstate, argbox.getgenvar(jitstate))
+                jitstate.curbuilder.rgenop, argbox.getgenvar(jitstate))
         if resgv is not None:
             return fielddesc.makebox(jitstate, resgv)
     return argbox.op_getfield(jitstate, fielddesc)

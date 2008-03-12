@@ -404,7 +404,14 @@ def op_getarrayitem(p, index):
 
 def op_debug_print(*args):
     for arg in args:
-        print arg
+        print >> sys.stderr, arg,
+    print >> sys.stderr
+
+class DebugFatalError(AssertionError):
+    pass
+
+def op_debug_fatalerror(*args):
+    raise DebugFatalError(*args)
 
 # ____________________________________________________________
 

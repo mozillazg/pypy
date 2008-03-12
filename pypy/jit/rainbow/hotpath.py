@@ -9,6 +9,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.rainbow import rhotpath
+from pypy.jit.rainbow.fallback import FallbackInterpreter
 
 
 class EntryPointsRewriter:
@@ -78,10 +79,11 @@ class EntryPointsRewriter:
         self.jit_may_enter_fn = jit_may_enter
 
     def update_interp(self):
+        self.fallbackinterp = FallbackInterpreter(self.ContinueRunningNormally)
         ERASED = self.RGenOp.erasedType(lltype.Bool)
         self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
-            ERASED, self.interpreter, self.threshold,
-            self.ContinueRunningNormally)
+            ERASED, self.interpreter, self.threshold, self.fallbackinterp)
+        self.fallbackinterp.register_opcode_impls(self.interpreter)
 
     def rewrite_graphs(self):
         for graph in self.hintannotator.base_translator.graphs:
@@ -164,20 +166,33 @@ class EntryPointsRewriter:
             #
             exc_data_ptr = self.codewriter.exceptiondesc.exc_data_ptr
             llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
+            jit_may_enter = self.jit_may_enter_fn
 
             class ContinueRunningNormally(Exception):
                 _go_through_llinterp_uncaught_ = True     # ugh
-                def __init__(self, *args):
-                    self.args = args
+                def __init__(self, args_gv):
+                    assert len(args_gv) == len(ARGS)
+                    self.args = [gv_arg.revealconst(ARG)
+                                 for gv_arg, ARG in zip(args_gv, ARGS)]
+                def __str__(self):
+                    return 'ContinueRunningNormally(%s)' % (
+                        ', '.join(map(str, self.args)),)
             self.ContinueRunningNormally = ContinueRunningNormally
 
             def portal_runner(*args):
+                check_for_immediate_reentry = False
                 while 1:
                     try:
+                        if check_for_immediate_reentry:
+                            jit_may_enter(*args)
                         llinterp.eval_graph(portalgraph, list(args))
                         assert 0, "unreachable"
                     except ContinueRunningNormally, e:
                         args = e.args
+                        check_for_immediate_reentry = True
+                        # ^^^ but should depend on whether the fallback
+                        # interpreter reached a jit_can_enter() or just
+                        # the jit_merge_point()
 
             portal_runner_ptr = lltype.functionptr(PORTALFUNC, 'portal_runner',
                                                    _callable = portal_runner)

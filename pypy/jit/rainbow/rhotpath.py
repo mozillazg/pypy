@@ -81,8 +81,7 @@ class MesurePoint(object):
 class HotPromotionDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, ERASED, interpreter, threshold,
-                 ContinueRunningNormally):
+    def __init__(self, ERASED, interpreter, threshold, fallbackinterp):
         self.exceptiondesc = interpreter.exceptiondesc
         self.gv_constant_one = interpreter.rgenop.constPrebuiltGlobal(1)
 
@@ -92,8 +91,10 @@ class HotPromotionDesc:
                 assert lltype.typeOf(value) is lltype.Bool   # XXX for now
                 if value:
                     counter = fbp.truepath_counter
+                    pc = fbp.truepath_pc
                 else:
                     counter = fbp.falsepath_counter
+                    pc = fbp.falsepath_pc
                 assert counter >= 0, (
                     "reaching a fallback point for an already-compiled path")
                 counter += 1
@@ -122,7 +123,7 @@ class HotPromotionDesc:
                 report_compile_time_exception(e)
 
             # exceptions below at run-time exceptions, we let them propagate
-            fbp.run_fallback_interpreter(framebase, ContinueRunningNormally)
+            fallbackinterp.run(fbp, framebase, pc)
             # If the fallback interpreter reached the next jit_merge_point(),
             # it raised ContinueRunningNormally().  This exception is
             # caught by portal_runner() from hotpath.py in order to loop
@@ -153,7 +154,8 @@ class FallbackPoint(object):
     falsepath_counter = 0     # -1 after this path was compiled
     truepath_counter = 0      # -1 after this path was compiled
 
-    def __init__(self, jitstate, flexswitch, frameinfo):
+    def __init__(self, jitstate, flexswitch, frameinfo,
+                 falsepath_pc, truepath_pc):
         # XXX we should probably trim down the jitstate once our caller
         # is done with it, to avoid keeping too much stuff in memory
         self.saved_jitstate = jitstate
@@ -162,6 +164,8 @@ class FallbackPoint(object):
         # ^^^ 'frameinfo' describes where the machine code stored all
         # its GenVars, so that we can fish these values to pass them
         # to the fallback interpreter
+        self.falsepath_pc = falsepath_pc
+        self.truepath_pc = truepath_pc
 
     def getrgenop(self):
         return self.saved_jitstate.curbuilder.rgenop
@@ -171,7 +175,7 @@ class FallbackPoint(object):
     _TYPE = base_ptr_lltype()
 
 
-def hotsplit(jitstate, hotpromotiondesc, switchbox):
+def hotsplit(jitstate, hotpromotiondesc, switchbox, falsepath_pc, truepath_pc):
     # produce a Bool flexswitch for now
     incoming = jitstate.enter_block_sweep_virtualizables()
     switchblock = rtimeshift.enter_next_block(jitstate, incoming)
@@ -182,7 +186,8 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox):
     jitstate.curbuilder = default_builder
     # default case of the switch:
     frameinfo = default_builder.get_frame_info(incoming_gv)
-    fbp = FallbackPoint(jitstate, flexswitch, frameinfo)
+    fbp = FallbackPoint(jitstate, flexswitch, frameinfo,
+                        falsepath_pc, truepath_pc)
     ll_fbp = fbp        # XXX doesn't translate
     gv_fbp = default_builder.rgenop.genconst(ll_fbp)
     gv_switchvar = switchbox.genvar
@@ -204,8 +209,3 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox):
     jitstate.curbuilder = excpath_builder
     excpath_builder.start_writing()
     raise GenerateReturn
-
-# ____________________________________________________________
-# The fallback interp takes an existing suspended jitstate and
-# actual values for the live red vars, and interprets the jitcode
-# normally until it reaches the 'jit_merge_point' or raises.
