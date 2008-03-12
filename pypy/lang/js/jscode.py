@@ -23,9 +23,6 @@ class JsCode(object):
         return all([i == j for i, j in zip(self.opcodes, list_of_opcodes)])
 
 class Opcode(object):
-    def __init__(self, args):
-        raise NotImplementedError("Purely abstract")
-    
     def eval(self, ctx, stack):
         """ Execute in context ctx
         """
@@ -33,6 +30,9 @@ class Opcode(object):
 
     def __eq__(self, other):
         return repr(self) == other
+
+    def __repr__(self):
+        return self.__class__.__name__
 
 class BaseBinaryComparison(Opcode):
     def eval(self, ctx):
@@ -115,6 +115,27 @@ class LOAD_ARRAY(Opcode):
 
     def __repr__(self):
         return 'LOAD_ARRAY %d' % (self.counter,)
+
+class STORE_MEMBER(Opcode):
+    def eval(self, ctx):
+        XXX
+
+class STORE(Opcode):
+    def __init__(self, name):
+        self.name = name
+    
+    def eval(self, ctx):
+        XXX
+
+    def __repr__(self):
+        return 'STORE "%s"' % self.name
+
+class LOAD_OBJECT(Opcode):
+    def __init__(self, listofnames):
+        self.listofnames = listofnames
+
+    def __repr__(self):
+        return 'LOAD_OBJECT %r' % (self.listofnames,)
 
 OpcodeMap = {}
 
