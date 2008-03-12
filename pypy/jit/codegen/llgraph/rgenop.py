@@ -487,6 +487,11 @@ class RGenOp(AbstractRGenOp):
         return llimpl.read_frame_var(T, base, info, index)
 
     @staticmethod
+    def genconst_from_frame_var(gv_TYPE, base, info, index):
+        v = llimpl.genconst_from_frame_var(gv_TYPE.v, base, info, index)
+        return LLConst(v)
+
+    @staticmethod
     @specialize.arg(0)
     def write_frame_place(T, base, place, value):
         llimpl.write_frame_var(base, place.info, 0, value)

@@ -785,6 +785,13 @@ def read_frame_var(T, base, info, index):
 setannotation(read_frame_var, lambda s_T, s_base, s_info, s_index:
               annmodel.lltype_to_annotation(s_T.const))
 
+def genconst_from_frame_var(gv_TYPE, base, info, index):
+    TYPE = _from_opaque(gv_TYPE).value
+    llvalue = read_frame_var(TYPE, base, info, index)
+    return genconst(llvalue)
+
+setannotation(genconst_from_frame_var, s_ConstOrVar)
+
 def write_frame_var(base, info, index, value):
     vars = info._obj.info.args
     v = vars[index]

@@ -27,6 +27,9 @@ class SourceIterator:
     def get_opname(self):
         return self.get(str, 2)
 
+    def getjitcode(self):
+        return self.jitcode
+
     def load_2byte(self):
         return self.get(int, 2)
 
@@ -64,9 +67,18 @@ class SourceIterator:
             keydesc = self.jitcode.keydescs[keydescnum]
             return keydesc
 
-    def load_jumptarget(self):
+    def load_4byte(self):     # for jump targets
         tlbl = self.get(codewriter.tlabel, 4)
         return 'pc: %d' % self.labelpos[tlbl.name]
+
+    def red_result(self, val):
+        pass
+
+    def green_result(self, val):
+        pass
+
+    def green_result_from_red(self, val):
+        pass
 
 
 class CustomRepr:
@@ -93,74 +105,11 @@ def dump_bytecode(jitcode, file=None):
             opname = src.get_opname()
             opcode = interpreter.find_opcode(opname)
             opimpl = interpreter.opcode_implementations[opcode]
-            argtypes = opimpl.argspec
-            args = []
 
-            for argspec in argtypes:
-                if argspec == "red":
-                    args.append(src.get_redarg())
-                elif argspec == "green":
-                    args.append(src.get_greenarg())
-                elif argspec == "kind":
-                    args.append(jitcode.typekinds[src.load_2byte()])
-                elif argspec == "jumptarget":
-                    args.append(src.load_jumptarget())
-                elif argspec == "jumptargets":
-                    num = src.load_2byte()
-                    args.append([src.load_jumptarget() for i in range(num)], )
-                elif argspec == "bool":
-                    args.append(src.load_bool())
-                elif argspec == "redboxcls":
-                    args.append(jitcode.redboxclasses[src.load_2byte()])
-                elif argspec == "2byte":
-                    args.append(src.load_2byte())
-                elif argspec == "greenkey":
-                    args.append(src.get_greenkey())
-                elif argspec == "promotiondesc":
-                    promotiondescnum = src.load_2byte()
-                    promotiondesc = jitcode.promotiondescs[promotiondescnum]
-                    args.append(promotiondesc)
-                elif argspec == "green_varargs":
-                    args.append(src.get_green_varargs())
-                elif argspec == "red_varargs":
-                    args.append(src.get_red_varargs())
-                elif argspec == "bytecode":
-                    bytecodenum = src.load_2byte()
-                    called_bytecode = jitcode.called_bytecodes[bytecodenum]
-                    args.append(getattr(called_bytecode, 'name', '?'))
-                elif argspec == "calldesc":
-                    index = src.load_2byte()
-                    function = jitcode.calldescs[index]
-                    args.append(function)
-                elif argspec == "metacalldesc":
-                    index = src.load_2byte()
-                    function = jitcode.metacalldescs[index]
-                    args.append(function)
-                elif argspec == "indirectcalldesc":
-                    index = src.load_2byte()
-                    function = jitcode.indirectcalldescs[index]
-                    args.append(function)
-                elif argspec == "oopspec":
-                    oopspecindex = src.load_2byte()
-                    oopspec = jitcode.oopspecdescs[oopspecindex]
-                    args.append(oopspec)
-                elif argspec == "structtypedesc":
-                    td = jitcode.structtypedescs[src.load_2byte()]
-                    args.append(td)
-                elif argspec == "arraydesc":
-                    td = jitcode.arrayfielddescs[src.load_2byte()]
-                    args.append(td)
-                elif argspec == "fielddesc":
-                    d = jitcode.fielddescs[src.load_2byte()]
-                    args.append(d)
-                elif argspec == "interiordesc":
-                    d = jitcode.interiordescs[src.load_2byte()]
-                    args.append(d)
-                elif argspec == "exception":
-                    d = jitcode.exceptioninstances[src.load_2byte()]
-                    args.append(d)
-                else:
-                    assert 0, "unknown argtype declaration"
+            args = []
+            def wrapper_callback(src, *newargs):
+                args.extend(newargs)
+            opimpl.argspec(wrapper_callback)(src)
 
             args = map(str, args)
 

@@ -57,9 +57,13 @@ class JitCode(object):
     def _freeze_(self):
         return True
 
+    def __repr__(self):
+        return '<JitCode %r>' % (getattr(self, 'name', '?'),)
+
     def dump(self, file=None):
         from pypy.jit.rainbow import dump
         dump.dump_bytecode(self, file=file)
+        print >> file
 
 SIGN_EXTEND2 = 1 << 15
 
@@ -89,11 +93,25 @@ class RainbowResumer(rtimeshift.Resumer):
         if finaljitstate is not None:
             interpreter.finish_jitstate(interpreter.portalstate.sigtoken)
 
-def arguments(*argtypes, **kwargs):
-    result = kwargs.pop("returns", None)
-    assert not kwargs
-    argtypes = unrolling_iterable(argtypes)
-    def decorator(func):
+class arguments(object):
+    def __init__(self, *argtypes, **kwargs):
+        self.result = kwargs.pop("returns", None)
+        assert not kwargs
+        self.argtypes = argtypes
+
+    def __eq__(self, other):
+        if not isinstance(other, arguments):
+            return NotImplemented
+        return self.argtypes == other.argtypes and self.result == other.result
+
+    def __ne__(self, other):
+        if not isinstance(other, arguments):
+            return NotImplemented
+        return self.argtypes != other.argtypes or self.result != other.result
+
+    def __call__(self, func):
+        result = self.result
+        argtypes = unrolling_iterable(self.argtypes)
         def wrapped(self):
             args = (self, )
             for argspec in argtypes:
@@ -102,7 +120,7 @@ def arguments(*argtypes, **kwargs):
                 elif argspec == "green":
                     args += (self.get_greenarg(), )
                 elif argspec == "kind":
-                    args += (self.frame.bytecode.typekinds[self.load_2byte()], )
+                    args += (self.getjitcode().typekinds[self.load_2byte()], )
                 elif argspec == "jumptarget":
                     args += (self.load_4byte(), )
                 elif argspec == "jumptargets":
@@ -111,14 +129,14 @@ def arguments(*argtypes, **kwargs):
                 elif argspec == "bool":
                     args += (self.load_bool(), )
                 elif argspec == "redboxcls":
-                    args += (self.frame.bytecode.redboxclasses[self.load_2byte()], )
+                    args += (self.getjitcode().redboxclasses[self.load_2byte()], )
                 elif argspec == "2byte":
                     args += (self.load_2byte(), )
                 elif argspec == "greenkey":
                     args += (self.get_greenkey(), )
                 elif argspec == "promotiondesc":
                     promotiondescnum = self.load_2byte()
-                    promotiondesc = self.frame.bytecode.promotiondescs[promotiondescnum]
+                    promotiondesc = self.getjitcode().promotiondescs[promotiondescnum]
                     args += (promotiondesc, )
                 elif argspec == "green_varargs":
                     args += (self.get_green_varargs(), )
@@ -126,37 +144,37 @@ def arguments(*argtypes, **kwargs):
                     args += (self.get_red_varargs(), )
                 elif argspec == "bytecode":
                     bytecodenum = self.load_2byte()
-                    args += (self.frame.bytecode.called_bytecodes[bytecodenum], )
+                    args += (self.getjitcode().called_bytecodes[bytecodenum], )
                 elif argspec == "calldesc":
                     index = self.load_2byte()
-                    function = self.frame.bytecode.calldescs[index]
+                    function = self.getjitcode().calldescs[index]
                     args += (function, )
                 elif argspec == "metacalldesc":
                     index = self.load_2byte()
-                    function = self.frame.bytecode.metacalldescs[index]
+                    function = self.getjitcode().metacalldescs[index]
                     args += (function, )
                 elif argspec == "indirectcalldesc":
                     index = self.load_2byte()
-                    function = self.frame.bytecode.indirectcalldescs[index]
+                    function = self.getjitcode().indirectcalldescs[index]
                     args += (function, )
                 elif argspec == "oopspec":
                     oopspecindex = self.load_2byte()
-                    oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
+                    oopspec = self.getjitcode().oopspecdescs[oopspecindex]
                     args += (oopspec, )
                 elif argspec == "structtypedesc":
-                    td = self.frame.bytecode.structtypedescs[self.load_2byte()]
+                    td = self.getjitcode().structtypedescs[self.load_2byte()]
                     args += (td, )
                 elif argspec == "arraydesc":
-                    td = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
+                    td = self.getjitcode().arrayfielddescs[self.load_2byte()]
                     args += (td, )
                 elif argspec == "fielddesc":
-                    d = self.frame.bytecode.fielddescs[self.load_2byte()]
+                    d = self.getjitcode().fielddescs[self.load_2byte()]
                     args += (d, )
                 elif argspec == "interiordesc":
-                    d = self.frame.bytecode.interiordescs[self.load_2byte()]
+                    d = self.getjitcode().interiordescs[self.load_2byte()]
                     args += (d, )
                 elif argspec == "exception":
-                    d = self.frame.bytecode.exceptioninstances[self.load_2byte()]
+                    d = self.getjitcode().exceptioninstances[self.load_2byte()]
                     args += (d, )
                 else:
                     assert 0, "unknown argtype declaration"
@@ -173,10 +191,8 @@ def arguments(*argtypes, **kwargs):
                 return
             return val
         wrapped.func_name = "wrap_" + func.func_name
-        wrapped.argspec = tuple(argtypes)
-        wrapped.resultspec = result
+        wrapped.argspec = self
         return wrapped
-    return decorator
 
 
 class JitInterpreter(object):
@@ -312,6 +328,9 @@ class JitInterpreter(object):
             return
 
     # operation helper functions
+    def getjitcode(self):
+        return self.frame.bytecode
+
     def load_byte(self):
         pc = self.frame.pc
         assert pc >= 0
@@ -523,8 +542,7 @@ class JitInterpreter(object):
         for i in range(num):
             newgreens.append(self.get_greenarg())
         self.frame.local_green = newgreens
-    opimpl_make_new_greenvars.argspec = ("green_varargs",)  # for dump.py
-    opimpl_make_new_greenvars.resultspec = None
+    opimpl_make_new_greenvars.argspec = arguments("green_varargs") #for dump.py
 
     @arguments("2byte", "greenkey")
     def opimpl_local_merge(self, mergepointnum, key):
@@ -815,7 +833,8 @@ class JitInterpreter(object):
 
     @arguments("red", "jumptarget")
     def opimpl_red_hot_goto_iftrue(self, switchbox, target):
-        rhotpath.hotsplit(self.jitstate, self.bool_hotpromotiondesc, switchbox)
+        rhotpath.hotsplit(self.jitstate, self.bool_hotpromotiondesc,
+                          switchbox, self.frame.pc, target)
         assert False, "unreachable"
 
     # ____________________________________________________________
@@ -849,8 +868,6 @@ class JitInterpreter(object):
                             args = (args[0], args[1].default)
                 result = self.rgenop.genconst(opdesc.llop(*args))
                 self.green_result(result)
-            implementation.argspec = ("green",) * len(list(numargs))
-            implementation.resultspec = "green"
         elif color == "red":
             if opdesc.nb_args == 1:
                 impl = rtimeshift.ll_gen1
@@ -864,11 +881,14 @@ class JitInterpreter(object):
                     args += (self.get_redarg(), )
                 result = impl(*args)
                 self.red_result(result)
-            implementation.argspec = ("red",) * len(list(numargs))
-            implementation.resultspec = "red"
         else:
             assert 0, "unknown color"
         implementation.func_name = "opimpl_%s_%s" % (color, opdesc.opname)
+        # build an arguments() for dump.py
+        colorarglist = [color] * opdesc.nb_args
+        resultdict = {"returns": color}
+        implementation.argspec = arguments(*colorarglist, **resultdict)
+
         opname = "%s_%s" % (color, opdesc.opname)
         index = self.opname_to_index[opname] = len(self.opcode_implementations)
         self.opcode_implementations.append(implementation)
