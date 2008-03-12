@@ -7,6 +7,8 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
+from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key
+from pypy.jit.timeshifter.greenkey import GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath
 from pypy.jit.rainbow.fallback import FallbackInterpreter
 from pypy.jit.rainbow.codewriter import maybe_on_top_of_llinterp
@@ -43,17 +45,19 @@ class EntryPointsRewriter:
         newportalgraph = self.hintannotator.translator.graphs[0]
         ALLARGS = []
         RESARGS = []
-        self.args_specification = []
+        self.red_args_spec = []
+        self.green_args_spec = []
         for v in newportalgraph.getargs():
             TYPE = v.concretetype
             ALLARGS.append(TYPE)
             if self.hintannotator.binding(v).is_green():
-                xxx
+                self.green_args_spec.append(TYPE)
+                assert len(self.red_args_spec) == 0, "bogus order of colors"
             else:
                 RESARGS.append(TYPE)
                 kind = self.RGenOp.kindToken(TYPE)
                 boxcls = rvalue.ll_redboxcls(TYPE)
-                self.args_specification.append((kind, boxcls))
+                self.red_args_spec.append((kind, boxcls))
 
         self.JIT_ENTER_FUNCTYPE = lltype.FuncType(ALLARGS, lltype.Void)
         self.RESIDUAL_FUNCTYPE = lltype.FuncType(RESARGS, lltype.Void)
@@ -64,24 +68,28 @@ class EntryPointsRewriter:
         state = HotEnterState()
         exceptiondesc = self.codewriter.exceptiondesc
         interpreter = self.interpreter
+        num_green_args = len(self.green_args_spec)
 
-        def jit_may_enter(*args):
-            counter = state.counter
+        def maybe_enter_jit(*args):
+            key = state.getkey(*args[:num_green_args])
+            counter = state.counters.get(key, 0)
             if counter >= 0:
                 counter += 1
                 if counter < self.threshold:
                     interpreter.debug_trace("jit_not_entered", *args)
-                    state.counter = counter
+                    state.counters[key] = counter
                     return
                 interpreter.debug_trace("jit_compile", *args)
-                if not state.compile():
+                if not state.compile(key):
                     return
             interpreter.debug_trace("run_machine_code", *args)
-            maybe_on_top_of_llinterp(exceptiondesc, state.machine_code)(*args)
+            mc = state.machine_codes[key]
+            run = maybe_on_top_of_llinterp(exceptiondesc, mc)
+            run(*args[num_green_args:])
 
         HotEnterState.compile.im_func._dont_inline_ = True
-        jit_may_enter._always_inline_ = True
-        self.jit_may_enter_fn = jit_may_enter
+        maybe_enter_jit._always_inline_ = True
+        self.maybe_enter_jit_fn = maybe_enter_jit
 
     def update_interp(self):
         self.fallbackinterp = FallbackInterpreter(
@@ -112,24 +120,23 @@ class EntryPointsRewriter:
 
     def rewrite_can_enter_jit(self, graph, block, index):
         #
-        # In the original graphs, replace the 'jit_can_enter' operations
-        # with a call to the jit_may_enter() helper.
+        # In the original graphs, replace the 'can_enter_jit' operations
+        # with a call to the maybe_enter_jit() helper.
         #
         assert graph is not self.hintannotator.origportalgraph, (
             "XXX can_enter_jit() cannot appear before jit_merge_point() "
-            "in the portal graph")
+            "in the graph of the main loop")
         if not self.translate_support_code:
             # this case is used for most tests: the jit stuff should be run
             # directly to make these tests faster
             op = block.operations[index]
             numgreens = op.args[0].value
             numreds = op.args[1].value
-            assert numgreens == 0    # XXX for the first test
-            reds_v = op.args[2+numgreens:2+numgreens+numreds]
+            args_v = op.args[2:2+numgreens+numreds]
 
             FUNCPTR = lltype.Ptr(self.JIT_ENTER_FUNCTYPE)
-            jit_enter_graph_ptr = llhelper(FUNCPTR, self.jit_may_enter_fn)
-            vlist = [Constant(jit_enter_graph_ptr, FUNCPTR)] + reds_v
+            jit_enter_graph_ptr = llhelper(FUNCPTR, self.maybe_enter_jit_fn)
+            vlist = [Constant(jit_enter_graph_ptr, FUNCPTR)] + args_v
 
             v_result = Variable()
             v_result.concretetype = lltype.Void
@@ -181,14 +188,15 @@ class EntryPointsRewriter:
             #
             exc_data_ptr = self.codewriter.exceptiondesc.exc_data_ptr
             llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
-            jit_may_enter = self.jit_may_enter_fn
+            maybe_enter_jit = self.maybe_enter_jit_fn
 
             class ContinueRunningNormally(Exception):
                 _go_through_llinterp_uncaught_ = True     # ugh
-                def __init__(self, args_gv):
+                def __init__(self, args_gv, seen_can_enter_jit):
                     assert len(args_gv) == len(ARGS)
                     self.args = [gv_arg.revealconst(ARG)
                                  for gv_arg, ARG in zip(args_gv, ARGS)]
+                    self.seen_can_enter_jit = seen_can_enter_jit
                 def __str__(self):
                     return 'ContinueRunningNormally(%s)' % (
                         ', '.join(map(str, self.args)),)
@@ -199,15 +207,15 @@ class EntryPointsRewriter:
                 while 1:
                     try:
                         if check_for_immediate_reentry:
-                            jit_may_enter(*args)
+                            maybe_enter_jit(*args)
                         llinterp.eval_graph(portalgraph, list(args))
                         assert 0, "unreachable"
                     except ContinueRunningNormally, e:
                         args = e.args
                         self.interpreter.debug_trace("fb_leave", *args)
-                        check_for_immediate_reentry = True
+                        check_for_immediate_reentry = e.seen_can_enter_jit
                         # ^^^ but should depend on whether the fallback
-                        # interpreter reached a jit_can_enter() or just
+                        # interpreter reached a can_enter_jit() or just
                         # the jit_merge_point()
 
             portal_runner_ptr = lltype.functionptr(PORTALFUNC, 'portal_runner',
@@ -240,36 +248,61 @@ class EntryPointsRewriter:
 
 def make_state_class(rewriter):
     # very minimal, just to make the first test pass
-    args_specification = unrolling_iterable(rewriter.args_specification)
+    green_args_spec = unrolling_iterable(rewriter.green_args_spec)
+    red_args_spec = unrolling_iterable(rewriter.red_args_spec)
+    if rewriter.green_args_spec:
+        keydesc = KeyDesc(rewriter.RGenOp, *rewriter.green_args_spec)
+    else:
+        keydesc = None
 
     class HotEnterState:
         def __init__(self):
-            self.machine_code = lltype.nullptr(rewriter.RESIDUAL_FUNCTYPE)
-            self.counter = 0     # -1 means "compiled"
+            self.machine_codes = newgreendict()
+            self.counters = newgreendict()     # -1 means "compiled"
 
-        def compile(self):
+            # XXX XXX be more clever and find a way where we don't need
+            # to allocate a GreenKey object for each call to
+            # maybe_enter_jit().  One way would be to replace the
+            # 'counters' with some hand-written fixed-sized hash table.
+            # Indeed, this is all a heuristic, so if things are designed
+            # correctly, the occasional mistake due to hash collision is
+            # not too bad.  The fixed-size-ness would also let old
+            # recorded counters gradually disappear as they get replaced
+            # by more recent ones.
+
+        def getkey(self, *greenvalues):
+            if keydesc is None:
+                return empty_key
+            rgenop = rewriter.interpreter.rgenop
+            lst_gv = [None] * len(greenvalues)
+            i = 0
+            for _ in green_args_spec:
+                lst_gv[i] = rgenop.genconst(greenvalues[i])
+                i += 1
+            return GreenKey(lst_gv, keydesc)
+
+        def compile(self, greenkey):
             try:
-                self._compile()
+                self._compile(greenkey)
                 return True
             except Exception, e:
                 rhotpath.report_compile_time_exception(rewriter.interpreter, e)
                 return False
 
-        def _compile(self):
+        def _compile(self, greenkey):
             interp = rewriter.interpreter
             rgenop = interp.rgenop
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
                 rewriter.sigtoken, "residual")
 
-            greenargs = ()
+            greenargs = list(greenkey.values)
             redargs = ()
             red_i = 0
-            for kind, boxcls in args_specification:
+            for kind, boxcls in red_args_spec:
                 gv_arg = inputargs_gv[red_i]
                 red_i += 1
                 box = boxcls(kind, gv_arg)
                 redargs += (box,)
-            greenargs = list(greenargs)
             redargs = list(redargs)
 
             jitstate = interp.fresh_jitstate(builder)
@@ -281,8 +314,7 @@ def make_state_class(rewriter):
             builder.end()
 
             FUNCPTR = lltype.Ptr(rewriter.RESIDUAL_FUNCTYPE)
-            self.machine_code = gv_generated.revealconst(FUNCPTR)
-            self.counter = -1     # compiled
+            self.machine_codes[greenkey] = gv_generated.revealconst(FUNCPTR)
+            self.counters[greenkey] = -1     # compiled
 
     return HotEnterState
-
