@@ -252,7 +252,7 @@ def make_state_class(rewriter):
                 self._compile()
                 return True
             except Exception, e:
-                rhotpath.report_compile_time_exception(e)
+                rhotpath.report_compile_time_exception(rewriter.interpreter, e)
                 return False
 
         def _compile(self):
