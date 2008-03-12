@@ -210,8 +210,13 @@ class JitInterpreter(object):
         self.num_global_mergepoints = -1
         self.global_state_dicts = None
         self.jit_merge_point_state_dict = newgreendict()
+        self.debug_traces = []
         if DEBUG_JITCODES:
             self.find_opcode("trace")     # force it to be compiled in
+
+    def debug_trace(self, *args):
+        if not we_are_translated():
+            self.debug_traces.append(DebugTrace(*args))
 
     def set_portalstate(self, portalstate):
         assert self.portalstate is None
@@ -425,10 +430,12 @@ class JitInterpreter(object):
         # attributes of JitCode objects to be included in the C
         # executable.
         bytecode = self.frame.bytecode
-        print '*** opimpl_trace: in %s position %d ***' % (bytecode.name,
+        msg = '*** opimpl_trace: in %s position %d ***' % (bytecode.name,
                                                            self.frame.pc)
+        print msg
         if bytecode.dump_copy is not None:
             print bytecode.dump_copy
+        self.debug_trace(msg)
 
     @arguments("green", "2byte", returns="red")
     def opimpl_make_redbox(self, genconst, typeid):
@@ -837,11 +844,13 @@ class JitInterpreter(object):
                                                       self.jitstate,
                                                       key, None)
         if done:
+            self.debug_trace("done at jit_merge_point")
             self.newjitstate(None)
             return STOP
 
     @arguments("red", "jumptarget")
     def opimpl_red_hot_goto_iftrue(self, switchbox, target):
+        self.debug_trace("pause at hotsplit")
         rhotpath.hotsplit(self.jitstate, self.bool_hotpromotiondesc,
                           switchbox, self.frame.pc, target)
         assert False, "unreachable"
@@ -905,3 +914,12 @@ class JitInterpreter(object):
         return index
 
 
+class DebugTrace(object):
+    def __init__(self, *args):
+        self.args = args or ('--empty--',)
+
+    def __repr__(self):
+        return '<DebugTrace %s>' % (self,)
+
+    def __str__(self):
+        return ' '.join(map(str, self.args))

@@ -63,16 +63,20 @@ class EntryPointsRewriter:
         HotEnterState = make_state_class(self)
         state = HotEnterState()
         exceptiondesc = self.codewriter.exceptiondesc
+        interpreter = self.interpreter
 
         def jit_may_enter(*args):
             counter = state.counter
             if counter >= 0:
                 counter += 1
                 if counter < self.threshold:
+                    interpreter.debug_trace("jit_not_entered", *args)
                     state.counter = counter
                     return
+                interpreter.debug_trace("jit_compile", *args)
                 if not state.compile():
                     return
+            interpreter.debug_trace("run_machine_code", *args)
             maybe_on_top_of_llinterp(exceptiondesc, state.machine_code)(*args)
 
         HotEnterState.compile.im_func._dont_inline_ = True
@@ -80,12 +84,13 @@ class EntryPointsRewriter:
         self.jit_may_enter_fn = jit_may_enter
 
     def update_interp(self):
-        self.fallbackinterp = FallbackInterpreter(self.ContinueRunningNormally,
-                                                 self.codewriter.exceptiondesc)
+        self.fallbackinterp = FallbackInterpreter(
+            self.interpreter,
+            self.ContinueRunningNormally,
+            self.codewriter.exceptiondesc)
         ERASED = self.RGenOp.erasedType(lltype.Bool)
         self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
             ERASED, self.interpreter, self.threshold, self.fallbackinterp)
-        self.fallbackinterp.register_opcode_impls(self.interpreter)
 
     def rewrite_graphs(self):
         for graph in self.hintannotator.base_translator.graphs:
@@ -199,6 +204,7 @@ class EntryPointsRewriter:
                         assert 0, "unreachable"
                     except ContinueRunningNormally, e:
                         args = e.args
+                        self.interpreter.debug_trace("fb_leave", *args)
                         check_for_immediate_reentry = True
                         # ^^^ but should depend on whether the fallback
                         # interpreter reached a jit_can_enter() or just
