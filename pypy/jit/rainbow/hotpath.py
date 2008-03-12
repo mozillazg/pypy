@@ -80,7 +80,7 @@ class EntryPointsRewriter:
             maybe_on_top_of_llinterp(exceptiondesc, state.machine_code)(*args)
 
         HotEnterState.compile.im_func._dont_inline_ = True
-        jit_may_enter._always_inline = True
+        jit_may_enter._always_inline_ = True
         self.jit_may_enter_fn = jit_may_enter
 
     def update_interp(self):
