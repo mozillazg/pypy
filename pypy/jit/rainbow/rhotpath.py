@@ -73,7 +73,7 @@ class FinishedCompiling(Exception):
 class GenerateReturn(Exception):
     pass
 
-class MesurePoint(object):
+class MeasurePoint(object):
     pass
 
 class HotPromotionDesc:
