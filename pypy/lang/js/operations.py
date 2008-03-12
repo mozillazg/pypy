@@ -68,6 +68,10 @@ class UnaryOp(Expression):
         self.expr = expr
         self.postfix = postfix
 
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        bytecode.emit(self.operation_name)
+
 class BinaryOp(Expression):
     def __init__(self, pos, left, right):
         self.pos = pos
@@ -609,12 +613,21 @@ class Delete(UnaryOp):
         r3 = r1.GetBase()
         r4 = r1.GetPropertyName()
         return W_Boolean(r3.Delete(r4))
-    
 
-class Increment(UnaryOp):
+class BaseIncrementDecrement(UnaryOp):
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        if self.postfix:
+            bytecode.emit('POST' + self.operation_name)
+        else:
+            bytecode.emit('PRE' + self.operation_name)
+
+class Increment(BaseIncrementDecrement):
     """
     ++value (prefix) and value++ (postfix)
     """
+    operation_name = 'INCR'
+
     def eval(self, ctx):
         # XXX write down fast version
         thing = self.expr.eval(ctx)
@@ -628,10 +641,12 @@ class Increment(UnaryOp):
             return resl
         
 
-class Decrement(UnaryOp):
+class Decrement(BaseIncrementDecrement):
     """
     same as increment --value and value --
     """
+    operation_name = 'DECR'
+    
     def eval(self, ctx):
         # XXX write down hot path
         thing = self.expr.eval(ctx)
@@ -734,19 +749,21 @@ def sub(ctx, nleft, nright):
     return W_FloatNumber(fleft - fright)
 
 class Plus(BinaryNumberOp):
+    operation_name = 'ADD'
     def mathop(self, ctx, n1, n2):
         return plus(ctx, n1, n2)
 
 
 class Mult(BinaryNumberOp):
+    operation_name = 'MUL'
     def mathop(self, ctx, n1, n2):
         return mult(ctx, n1, n2)
 
 
 class Mod(BinaryNumberOp):
+    operation_name = 'MOD'
     def mathop(self, ctx, n1, n2):
         return mod(ctx, n1, n2)
-
 
 class Division(BinaryNumberOp):
     def mathop(self, ctx, n1, n2):
@@ -754,6 +771,8 @@ class Division(BinaryNumberOp):
 
 
 class Sub(BinaryNumberOp):
+    operation_name = 'SUB'
+    
     def mathop(self, ctx, n1, n2):
         return sub(ctx, n1, n2)
 
@@ -1138,6 +1157,8 @@ class Not(UnaryOp):
     
 
 class UMinus(UnaryOp):
+    operation_name = 'UMINUS'
+    
     def eval(self, ctx):
         res = self.expr.eval(ctx)
         if isinstance(res, W_IntNumber):
@@ -1147,6 +1168,8 @@ class UMinus(UnaryOp):
         return W_FloatNumber(-self.expr.eval(ctx).GetValue().ToNumber())
 
 class UPlus(UnaryOp):
+    operation_name = 'UPLUS'
+    
     def eval(self, ctx):
         res = self.expr.eval(ctx)
         if isinstance(res, W_BaseNumber):
