@@ -33,8 +33,11 @@ class TestHotPath(test_interpreter.InterpretationTest):
             self.rtyper, exc_data_ptr=self.writer.exceptiondesc.exc_data_ptr)
         return llinterp.eval_graph(graph, main_args)
 
+    def check_traces(self, expected):
+        py.test.skip("traces in progress")
+
+
     def test_simple_loop(self):
-        py.test.skip("in-progress")
         # there are no greens in this test
         def ll_function(n):
             n1 = n * 2

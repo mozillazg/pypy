@@ -2,6 +2,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
 
 
@@ -210,12 +211,14 @@ class FallbackInterpreter(object):
     def opimpl_red_direct_call(self, greenargs, redargs, targetbytecode):
         assert not greenargs  # XXX for now
         calldesc = targetbytecode.owncalldesc
-        gv_res = calldesc.perform_call(self.rgenop,
-                                       targetbytecode.gv_ownfnptr,
-                                       redargs)
+        try:
+            gv_res = calldesc.perform_call(self.rgenop,
+                                           targetbytecode.gv_ownfnptr,
+                                           redargs)
+        except Exception, e:
+            XXX
         if gv_res is not None:
             self.red_result(gv_res)
-        # XXX what occurs with exceptions raised by the called graph?
 
     # exceptions
 
@@ -258,8 +261,8 @@ class FallbackInterpreter(object):
 
     # hotpath-specific operations
 
-    @arguments()
-    def opimpl_jit_merge_point(self):
+    @arguments("greenkey")
+    def opimpl_jit_merge_point(self, key):
         raise self.ContinueRunningNormally(self.local_green + self.local_red)
 
     @arguments("red", "jumptarget")
