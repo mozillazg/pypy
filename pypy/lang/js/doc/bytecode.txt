@@ -18,11 +18,11 @@ STORE <identifier>
 
 stores the last value on stack into identifierx
 
-STORE_ELEMENT <identifier>
+STORE_MEMBER
 
-identifier[last_element_on_the_stack] = previous_element_on_the_stack
-note that in javascript a.b is exactly the same as a['b'], just that
-first one can be eventually speed up
+take from stack: right side, element and where to store and store
+where[element] = right. XXX can be optimized further for direct member
+assignement
 
 LOAD_ARRAY <num>
 
@@ -44,6 +44,13 @@ NOT, UPLUS, UMINUS
 
 PREDECR, POSTDECR, PREINCR, POSTINCR
 decrement and increment (++, --) prefix and postfix
+
+object creation:
+
+LOAD_OBJECT <list of parameters>
+
+Takes one element per one parameter from the stack and initializes
+object this way.
 
 control flow:
 

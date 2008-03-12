@@ -90,9 +90,7 @@ class PropertyInit(Expression):
         self.expr = expr
     
     def emit(self, bytecode):
-        XXX # not sure what to do here, think later
         self.expr.emit(bytecode)
-        bytecode.emit('STORE', self.identifier)
 
 class Array(ListOp):
     def emit(self, bytecode):
@@ -101,15 +99,68 @@ class Array(ListOp):
         bytecode.emit('LOAD_ARRAY', len(self.nodes))
 
 class Assignment(Expression):
+    pass
+
+class SimpleAssignment(Assignment):
+    def __init__(self, pos, left, right, operand):
+        assert isinstance(left, Identifier)
+        self.identifier = left.name
+        self.right = right
+        self.pos = pos
+        self.operand = operand
+
+    def emit(self, bytecode):
+        self.right.emit(bytecode)
+        bytecode.emit('STORE', self.identifier)
+
+class MemberAssignment(Assignment):
+    def __init__(self, pos, what, item, right, operand):
+        # XXX we can optimise here what happens if what is identifier,
+        #     but let's leave it alone for now
+        self.pos = pos
+        self.what = what
+        self.item = item
+        self.right = right
+        self.operand = operand
+
+    def emit(self, bytecode):
+        self.right.emit(bytecode)
+        self.item.emit(bytecode)
+        self.what.emit(bytecode)
+        bytecode.emit('STORE_MEMBER')
+
+class MemberDotAssignment(Assignment):
+    def __init__(self, pos, what, item, right, operand):
+        self.pos = pos
+        self.what = what
+        assert isinstance(item, Identifier)
+        self.itemname = item.name
+        self.right = right
+        self.operand = operand
+
+    def emit(self, bytecode):
+        self.right.emit(bytecode)
+        bytecode.emit('LOAD_STRINGCONSTANT', self.itemname)
+        self.what.emit(bytecode)
+        bytecode.emit('STORE_MEMBER')
+
+class StuffAssignment(Expression):
     def __init__(self, pos, left, right, operand):
         self.pos = pos
-        self.identifier = left.name
+        # check the sanity of lefthandside
+        if isinstance(left, Identifier):
+            self.identifier = left.name
+            self.single_assignement = True
+        elif isinstance(left, Member):
+            import pdb
+            pdb.set_trace()
+            self.lefthandside = left
+            self.single_assignement = False
         self.right = right
         self.operand = operand
 
     def emit(self, bytecode):
         op = self.operand
-        XXX
         if op == '==':
             bytecode.emit('STORE', self.identifier)
         else:
@@ -794,6 +845,13 @@ class String(Expression):
         return ''.join(temp)
 
 class ObjectInit(ListOp):
+    def emit(self, bytecode):
+        names = []
+        for prop in self.nodes:
+            prop.emit(bytecode)
+            names.append(prop.identifier)
+        bytecode.emit('LOAD_OBJECT', names)
+    
     def eval(self, ctx):
         w_obj = create_object(ctx, 'Object')
         for prop in self.nodes:

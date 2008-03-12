@@ -1,6 +1,6 @@
 from pypy.rlib.parsing.tree import RPythonVisitor, Symbol, Nonterminal
 from pypy.lang.js import operations
-
+from pypy.rlib.parsing.parsing import ParseError
 
 class ASTBuilder(RPythonVisitor):
     BINOP_TO_CLS = {
@@ -275,11 +275,21 @@ class ASTBuilder(RPythonVisitor):
         return left
         
     def visit_assignmentexpression(self, node):
+        from pypy.lang.js.operations import Identifier, Member, MemberDot
         pos = self.get_pos(node)
         left = self.dispatch(node.children[0])
         atype = node.children[1].additional_info
         right = self.dispatch(node.children[2])
-        return operations.Assignment(pos, left, right, atype)
+        if isinstance(left, Identifier):
+            return operations.SimpleAssignment(pos, left, right, atype)
+        elif isinstance(left, Member):
+            return operations.MemberAssignment(pos, left.left, left.right,
+                                               right, atype)
+        elif isinstance(left, MemberDot):
+            return operations.MemberDotAssignment(pos, left.left, left.right,
+                                                  right, atype)
+        else:
+            raise ParseError(left.pos, "Invalid lefthand expression")
     visit_assignmentexpressionnoin = visit_assignmentexpression
         
     def visit_emptystatement(self, node):
