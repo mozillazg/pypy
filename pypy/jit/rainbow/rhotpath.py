@@ -102,6 +102,7 @@ class HotPromotionDesc:
 
                 if counter >= threshold:
                     # this is a hot path, compile it
+                    interpreter.debug_trace("jit_resume", value)
                     gv_value = interpreter.rgenop.genconst(value)
                     fbp.compile_hot_path(interpreter, gv_value, pc)
                     if value:
@@ -112,6 +113,7 @@ class HotPromotionDesc:
                     # our caller (the machine code produced by hotsplit()) to
                     # loop back to the flexswitch and execute the
                     # newly-generated code.
+                    interpreter.debug_trace("resume_machine_code")
                     return
                 else:
                     # path is still cold

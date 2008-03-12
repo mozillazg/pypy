@@ -34,7 +34,16 @@ class TestHotPath(test_interpreter.InterpretationTest):
         return llinterp.eval_graph(graph, main_args)
 
     def check_traces(self, expected):
-        py.test.skip("traces in progress")
+        traces = self.rewriter.interpreter.debug_traces
+        i = 0
+        for trace, expect in zip(traces + ['--end of traces--'],
+                                 expected + ['--end of traces--']):
+            # 'trace' is a DebugTrace instance, reduce it to a string
+            got = str(trace)
+            assert got == expect, ("debug_trace[%d] mismatch:\n"
+                                   "       got %r\n"
+                                   "  expected %r" % (i, got, expect))
+            i += 1
 
 
     def test_simple_loop(self):
@@ -62,7 +71,6 @@ class TestHotPath(test_interpreter.InterpretationTest):
         self.check_traces([
             # running non-JITted leaves the initial profiling traces
             # recorded by jit_may_enter().  We see the values of n1 and total.
-            "jit_not_entered 20 0",
             "jit_not_entered 19 20",
             "jit_not_entered 18 39",
             "jit_not_entered 17 57",
@@ -71,7 +79,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
             "jit_not_entered 14 105",
             "jit_not_entered 13 119",
             # on the start of the next iteration, compile the 'total += n1'
-            "jit_enter",
+            "jit_compile 12 132",
             "pause at hotsplit",
             # execute the compiled machine code until the 'n1 <= 1'.
             # It finishes in the fallback interpreter 7 times
@@ -85,7 +93,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
             "run_machine_code 5 195",
             # now that we know which path is hot (i.e. "staying in the loop"),
             # it gets compiled
-            "jit_resume",
+            "jit_resume False",
             "done at jit_merge_point",
             # execution continues purely in machine code, from the "n1 <= 1"
             # test which triggered the "jit_resume"

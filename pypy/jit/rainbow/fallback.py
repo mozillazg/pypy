@@ -12,11 +12,15 @@ class FallbackInterpreter(object):
     actual values for the live red vars, and interprets the jitcode
     normally until it reaches the 'jit_merge_point' or raises.
     """
-    def __init__(self, ContinueRunningNormally, exceptiondesc):
+    def __init__(self, interpreter, ContinueRunningNormally, exceptiondesc):
+        self.interpreter = interpreter
+        self.rgenop = interpreter.rgenop
         self.ContinueRunningNormally = ContinueRunningNormally
         self.exceptiondesc = exceptiondesc
+        self.register_opcode_impls(interpreter)
 
     def run(self, fallback_point, framebase, pc):
+        self.interpreter.debug_trace("fallback_interp")
         self.fbp = fallback_point
         self.framebase = framebase
         self.initialize_state(pc)
@@ -143,10 +147,12 @@ class FallbackInterpreter(object):
     @arguments()
     def opimpl_trace(self):
         bytecode = self.bytecode
-        print '*** fallback trace: in %s position %d ***' % (bytecode.name,
+        msg = '*** fallback trace: in %s position %d ***' % (bytecode.name,
                                                              self.pc)
+        print msg
         if bytecode.dump_copy is not None:
             print bytecode.dump_copy
+        self.debug_trace(msg)
 
     @arguments("green", "2byte", returns="red")
     def opimpl_make_redbox(self, genconst, typeid):
@@ -200,11 +206,12 @@ class FallbackInterpreter(object):
         assert self.current_source_jitframe.backframe is None   # XXX for now
         # at this point we should have an exception set in self.gv_exc_xxx
         # and we have to really raise it.  XXX non-translatable hack follows...
-        from pypy.rpython.llinterp import LLException
+        from pypy.rpython.llinterp import LLException, type_name
         exceptiondesc = self.exceptiondesc
         lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
         llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
         assert lltype and llvalue
+        self.interpreter.debug_trace("fb_raise", type_name(lltype))
         raise LLException(lltype, llvalue)
 
     @arguments("green_varargs", "red_varargs", "bytecode")
@@ -271,10 +278,9 @@ class FallbackInterpreter(object):
             self.pc = target
 
     # ____________________________________________________________
-    # construction-time interface
+    # construction-time helpers
 
     def register_opcode_impls(self, interp):
-        self.rgenop = interp.rgenop
         impl = [None] * len(interp.opcode_implementations)
         for opname, index in interp.opname_to_index.items():
             argspec = interp.opcode_implementations[index].argspec
