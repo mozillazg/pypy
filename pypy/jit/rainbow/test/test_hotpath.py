@@ -19,7 +19,8 @@ class TestHotPath(test_interpreter.InterpretationTest):
     type_system = 'lltype'
 
     def run(self, main, main_args, threshold, policy=P_HOTPATH, small=False):
-        self.serialize(main, main_args, policy=policy, backendoptimize=True)
+        # xxx caching of tests doesn't work - do we care?
+        self._serialize(main, main_args, policy=policy, backendoptimize=True)
         rewriter = EntryPointsRewriter(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
                                        threshold, self.translate_support_code)
@@ -195,3 +196,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
             # finally, we interpret the final 'S' character
             # which gives us the final answer
             ])
+
+        res = self.run(main, [2, 1291], threshold=3, small=True)
+        assert res == 1
+        assert len(self.rewriter.interpreter.debug_traces) < 20
