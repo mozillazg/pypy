@@ -99,56 +99,72 @@ class Cartridge(object):
 		self.store = storeDriver
 		self.clock = clockDriver
 	
+	
 	def initialize(self):
 	 	pass
 	
+	
 	def getTitle(self):
 		pass
+	
 		
 	def getCartridgeType(self):
 		return self.rom[CARTRIDGE_TYPE_ADDRESS] & 0xFF
+	
 		
 	def getRom(self):
 		return self.rom
+	
 		
 	def getROMSize(self):
 		romSize = self.rom[CARTRIDGE_SIZE_ADDRESS] & 0xFF
 		if romSize>=0x00 and romSize<=0x07:
 			return 32768 << romSize
 		return -1
+	
 		
 	def getRAMSize(self):
 		return RAM_SIZE_MAPPING[self.rom[RAM_SIZE_ADDRESS]]
 		
+	
 	def getDestinationCode(self):
 		return self.rom[DESTINATION_CODE_ADDRESS] & 0xFF;
 
+	
 	def getLicenseeCode():
 		return self.rom[LICENSEE_ADDRESS] & 0xFF;
 
+	
 	def getROMVersion(self):
 		return self.rom[ROM_VERSION_ADDRESS] & 0xFF;
 
+	
 	def getHeaderChecksum(self):
 		return self.rom[HEADER_CHECKSUM_ADDRESS] & 0xFF;
 
+	
 	def getChecksum(self):
 		return ((rom[CHECKSUM_A_ADDRESS] & 0xFF) << 8) + (rom[CHECKSUM_B_ADDRESS] & 0xFF);
 
+	
 	def hasBattery(self):
 		return hasCartridgeBattery(self.getCartridgeType())
 
+	
 	def reset(self):
 		if not self.hasBattery():
 			self.ram[0:len(self.ram):1] = 0xFF;
 		self.mbc.reset();
 
+	
 	def read(self, address):
 		return self.mbc.read(address);
 
+	
 	def write(self, address, data):
 		self.mbc.write(address, data);
 
+	
 	def load(self, cartridgeName):
 		romSize = self.store.getCartridgeSize(cartridgeName);
 		self.rom = range(0, romSize)
@@ -179,10 +195,12 @@ class Cartridge(object):
 			
 		self.mbc = createBankController(self.getCartridgeType(), rom, ram, clock)
 
+	
 	def save(self, cartridgeName):
 		if self.hasBattery():
 			self.store.writeBattery(cartridgeName, self.ram)
 
+	
 	def verify(self):
 		checksum = 0;
 		for address in range(len(self.rom)):
@@ -190,6 +208,7 @@ class Cartridge(object):
 				checksum = (checksum + (self.rom[address] & 0xFF)) & 0xFFFF
 		return (checksum == self.getChecksum());
 
+	
 	def verifyHeader(self):
 		if self.rom.length < 0x0150:
 			return false;
@@ -197,6 +216,7 @@ class Cartridge(object):
 		for address in range(0x0134,0x014C):
 			checksum = (checksum - (rom[address] & 0xFF)) & 0xFF;
 		return (checksum == self.getHeaderChecksum())
+
 
 # ==============================================================================
 # CARTRIDGE TYPES
@@ -207,6 +227,44 @@ class MBC(object):
 	
 	# RAM Bank Size (8KB)
 	RAM_BANK_SIZE = 0x2000
+	
+	ramEnable = False
+	
+	rom = []
+	ram = []
+	
+	romSize = 0;
+	ramSize = 0;
+	
+	minRomBankSize = 0
+	maxRomBankSize = 0
+	
+	minRamBankSize = 0
+	maxRamBankSize = 0
+	
+	romBank = ROM_BANK_SIZE
+	ramBank = 0
+	
+	
+	def reset(self):
+		self.romBank = ROM_BANK_SIZE;
+		self.ramBank = 0;
+		self.ramEnable = False;
+	
+	def setROM(self, buffer):
+		banks = len(buffer) / ROM_BANK_SIZE;
+		if (banks < minRomBankSize or banks > maxRomBankSize):
+			raise Exception("Invalid ROM size");
+		self.rom = buffer;
+		self.romSize = ROM_BANK_SIZE*banks - 1;
+
+
+	def setRAM(buffer):
+		banks = len(buffer) / RAM_BANK_SIZE;
+		if (banks < minRamBankSize or banks > maxRamBankSize):
+			raise Exception("Invalid RAM size");
+		self.ram = buffer;
+		self.ramSize = RAM_BANK_SIZE*banks - 1;
 	
 
 """
@@ -220,20 +278,21 @@ A000-BFFF	RAM Bank 0-3 (8KB)
  """
 class MBC1(MBC):
 	
-	rom = []
-	ram = []
-	ramEnable = False
-	
 	def __init__(self, rom, ram):
+		self.minRamBankSize = 0
+		self.maxRamBankSize = 4
+		self.minRomBankSize = 2	
+		self.maxRomBankSize = 128
+		
 		self.setRom(rom)
 		self.serRam(ram)
 		
+		
 	def reset(self):
-		self.romBank= ROM_BANK_SIZE
-		self.romBank = 0
+		super.reset()
 		
 		self.memoryModel = 0
-		self.ramEnable = False
+	
 	
 	def read(self, address):	
 		if address <= 0x3FFF:
@@ -247,6 +306,7 @@ class MBC1(MBC):
 			if (self.ramEnable):
 				return self.ram[self.ramBank + (address & 0x1FFF)] & 0xFF;
 		return 0xFF;
+
 
 	def write(self, address, data):
 		if (address <= 0x1FFF):
@@ -275,24 +335,6 @@ class MBC1(MBC):
 			if (self.ramEnable):
 				self.ram[self.ramBank + (address & 0x1FFF)] = data;
 
-	def setROM(self, buffer):
-		banks = len(buffer) / ROM_BANK_SIZE;
-
-		if (banks < 2 or banks > 128):
-			raise Exception("Invalid MBC1 ROM size");
-
-		self.rom = buffer;
-		self.romSize = ROM_BANK_SIZEbanks - 1;
-
-	def setRAM(buffer):
-		banks = len(buffer) / RAM_BANK_SIZE;
-
-		if (banks < 0 or banks > 4):
-			raise Exception("Invalid MBC1 RAM size");
-
-		self.ram = buffer;
-		self.ramSize = RAM_BANK_SIZEbanks - 1;
-
 		
 		
 		
@@ -309,20 +351,19 @@ A000-A1FF	RAM Bank (512x4bit)
 class MBC2(MBC):
 	RAM_BANK_SIZE = 512;
 
-	rom = []
-	ram = []
-
-	romSize = 0
-	romBank  =0
-	ramEnable = False
-
 	def __init__(self, rom, ram):
+		self.minRamBankSize = RAM_BANK_SIZE
+		self.maxRamBankSize = RAM_BANK_SIZE
+		self.minRomBankSize = 2	
+		self.maxRomBankSize = 16
+		
 		self.setROM(rom);
 		self.setRAM(ram);
 
+
 	def reset(self):
-		self.romBank = ROM_BANK_SIZE;
-		self.ramEnable = False;
+		super.reset()
+
 
 	def read(self, address):
 		if (address <= 0x3FFF):
@@ -335,6 +376,7 @@ class MBC2(MBC):
 			# A000-A1FF
 			return self.ram[address & 0x01FF] & 0x0F;
 		return 0xFF;
+
 
 	def write(self, address, data):
 		if (address <= 0x1FFF):
@@ -352,21 +394,6 @@ class MBC2(MBC):
 			if (self.ramEnable):
 				self.ram[address & 0x01FF] = (byte) (data & 0x0F);
 
-	def setROM(self, buffer):
-		banks = buffer.length / ROM_BANK_SIZE;
-
-		if (banks < 2 or banks > 16):
-			raise Exception("Invalid MBC2 ROM size");
-
-		self.rom = buffer;
-		self.romSize = ROM_BANK_SIZEbanks - 1;
-
-	def setRAM(self, buffer):
-		if (buffer.length != RAM_BANK_SIZE):
-			raise Exception("Invalid MBC2 RAM size");
-
-		self.ram = buffer;
-
 
 """
 Mario GameBoy (TM) Emulator
@@ -382,16 +409,8 @@ class MBC3(MBC):
 	#ClockDriver 
 	clock = None;
 
-	rom = [];
-	ram = [];
-
-	romSize = 0;
-	ramSize = 0;
-
 	romBank = 0;
 	ramBank = 0;
-
-	ramEnable = False;
 
 	clockRegister = 0;
 	clockLatch = 0;
@@ -408,16 +427,19 @@ class MBC3(MBC):
 	clockLDaysclockLControl = None
 
 	def __init__(self, rom, ram, clock):
+		self.minRamBankSize = 0
+		self.maxRamBankSize = 4
+		self.minRomBankSize = 2	
+		self.maxRomBankSize = 128
+		
 		self.clock = clock;
 
 		self.setROM(rom);
 		self.setRAM(ram);
 
-	def reset():
-		self.romBank = ROM_BANK_SIZE;
-		self.ramBank = 0;
 
-		self.ramEnable = false;
+	def reset():
+		super.reset()
 
 		self.clockTime = self.clock.getTime();
 
@@ -425,6 +447,7 @@ class MBC3(MBC):
 
 		self.clockSeconds = self.clockMinutes = self.clockHours = self.clockDays = self.clockControl = 0;
 		self.clockLSeconds = self.clockLMinutes = self.clockLHours = self.clockLDays = self.clockLControl = 0;
+
 
 	def read(self, address):
 		if (address <= 0x3FFF):
@@ -449,6 +472,7 @@ class MBC3(MBC):
 				if (self.clockRegister == 0x0C):
 					return self.clockLControl;
 		return 0xFF;
+
 
 	def write(self, address, data):
 		if (address <= 0x1FFF):
@@ -493,6 +517,7 @@ class MBC3(MBC):
 					if (self.clockRegister == 0x0C):
 						self.clockControl = (self.clockControl & 0x80) | data;
 
+
 	def latchClock(self):
 		self.updateClock();
 
@@ -501,6 +526,7 @@ class MBC3(MBC):
 		self.clockLHours = self.clockHours;
 		self.clockLDays = self.clockDays & 0xFF;
 		self.clockLControl = (self.clockControl & 0xFE) | ((self.clockDays >> 8) & 0x01);
+
 
 	def updateClock():
 		now = self.clock.getTime();
@@ -540,24 +566,6 @@ class MBC3(MBC):
 
 		self.clockTime = now;
 
-	def setROM(self, buffer):
-		banks = buffer.length / ROM_BANK_SIZE;
-
-		if (banks < 2 or banks > 128):
-			raise Exception("Invalid MCB3 ROM size");
-
-		self.rom = buffer;
-		self.romSize = ROM_BANK_SIZE * banks - 1;
-
-	def setRAM(self, buffer):
-		banks = buffer.length / RAM_BANK_SIZE;
-
-		if (banks < 0 or banks > 4):
-			raise Exception("Invalid MBC3 RAM size");
-
-		self.ram = buffer;
-		self.ramSize = RAM_BANK_SIZE * banks - 1;
-
 
 
 """
@@ -571,30 +579,23 @@ A000-BFFF	RAM Bank 0-15 (8KB)
 """
 
 class MBC5(MBC):
-	rom = [];
-	ram = [];
-
-	romSize = 0;
-	ramSize = 0;
-
 	romBank = 0;
-	ramBank = 0;
 
-	ramEnable = False;
 	rumble = False;
 
 	def __init__(self, rom, ram, rumble):
+		self.minRamBankSize = 0
+		self.maxRamBankSize = 16
+		self.minRomBankSize = 2	
+		self.maxRomBankSize = 512
+		
 		self.rumble = rumble;
-
 		self.setROM(rom);
 		self.setRAM(ram);
 
 
 	def reset():
-		self.romBank = ROM_BANK_SIZE;
-		self.ramBank = 0;
-
-		self.ramEnable = false;
+		super.reset()
 
 
 	def read(self, address):
@@ -634,24 +635,6 @@ class MBC5(MBC):
 				self.ram[self.ramBank + (address & 0x1FFF)] = data;
 
 
-	def setROM(self, buffer):
-		banks = buffer.length / ROM_BANK_SIZE;
-
-		if (banks < 2 or banks > 512):
-			raise Exception("Invalid MBC5 ROM size");
-
-		self.rom = buffer;
-		self.romSize = ROM_BANK_SIZE * banks - 1;
-
-
-	def setRAM(self, buffer):
-		banks = buffer.length / RAM_BANK_SIZE;
-
-		if (banks < 0 or banks > 16):
-			raise Exception("Invalid MBC5 RAM size");
-
-		self.ram = buffer;
-		self.ramSize = RAM_BANK_SIZE * banks - 1;
 
 
 class HuC1(MBC):
@@ -670,28 +653,29 @@ A000-BFFF	RAM Bank 0-15 (8KB)
 """
 class HuC3(MBC):
 	clock = None;
-	rom = [];
-	ram = [];
+	
 	romBank = 0;
-	ramBank = 0;
-	romSize = 0;
-	ramSize = 0;
+
 	ramFlag = 0;
+	
 	ramValue = 0;
+	
 	clockRegister = 0;
 	clockShift = 0;
 	clockTime = 0;
 
 	def __init__(self, rom, ram, clock):
+		self.minRamBankSize = 0
+		self.maxRamBankSize = 4
+		self.minRomBankSize = 2	
+		self.maxRomBankSize = 128
 		self.clock = clock;
-
 		self.setROM(rom);
 		self.setRAM(ram);
 
 
 	def reset():
-		self.romBank = ROM_BANK_SIZE;
-		self.ramBank = 0;
+		super.reset()
 
 		self.ramFlag = 0;
 		self.ramValue = 0;
@@ -747,7 +731,6 @@ class HuC3(MBC):
 						self.clockShift += 4;
 				elif ((data & 0xF0) == 0x40):
 					self.updateClock();
-
 					if ((data & 0x0F) == 0x00):
 						self.clockShift = 0;
 					elif ((data & 0x0F) == 0x03):
@@ -768,19 +751,15 @@ class HuC3(MBC):
 
 	def updateClock(self):
 		now = self.clock.getTime();
-
 		elapsed = now - self.clockTime;
-
 		# years (4 bits)
 		while (elapsed >= 365246060):
 			self.clockRegister += 1 << 24;
 			elapsed -= 365246060;
-
 		# days (12 bits)
 		while (elapsed >= 246060):
 			self.clockRegister += 1 << 12;
 			elapsed -= 246060;
-
 		# minutes (12 bits)
 		while (elapsed >= 60):
 			self.clockRegister += 1;
@@ -788,29 +767,8 @@ class HuC3(MBC):
 
 		if ((self.clockRegister & 0x0000FFF) >= 2460):
 			self.clockRegister += (1 << 12) - 2460;
-
 		if ((self.clockRegister & 0x0FFF000) >= (365 << 12)):
 			self.clockRegister += (1 << 24) - (365 << 12);
 
 		self.clockTime = now - elapsed;
-
-
-	def setROM(self, buffer):
-		banks = buffer.length / ROM_BANK_SIZE;
-
-		if (banks < 2 or banks > 128):
-			raise Exception("Invalid HuC3 ROM size");
-
-		self.rom = buffer;
-		self.romSize = ROM_BANK_SIZE*banks - 1;
-
-
-	def setRAM(self, buffer):
-		banks = buffer.length / RAM_BANK_SIZE;
-
-		if (banks < 0 or banks > 4):
-			raise Exception("Invalid HuC3 RAM size");
-
-		self.ram = buffer;
-		self.ramSize = RAM_BANK_SIZE * banks - 1;
 
