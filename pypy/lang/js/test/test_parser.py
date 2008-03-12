@@ -341,17 +341,33 @@ class TestToASTExpr(BaseGrammarTest):
         py.test.raises(ParseError, self.check, '1=2', [])
     
     def test_expression(self):
-        py.test.skip("Not yet")
-        w_num = self.eval_expr('1 - 1 - 1')
-        assert w_num.ToNumber() == -1
-        w_num = self.eval_expr('-(6 * (6 * 6)) + 6 - 6')
-        assert w_num.ToNumber() == -216
-        w_num = self.eval_expr('++5')
-        assert w_num.ToNumber() == 6
-        w_num = self.eval_expr('--5')
-        assert w_num.ToNumber() == 4
-        w_str = self.eval_expr('"hello "+\'world\'')
-        assert w_str.ToString(self.ctx) == 'hello world'
+        self.check('1 - 1 - 1', [
+            'LOAD_INTCONSTANT 1',
+            'LOAD_INTCONSTANT 1',
+            'SUB',
+            'LOAD_INTCONSTANT 1',
+            'SUB'])
+        self.check('-(6 * (6 * 6)) + 6 - 6', [
+            'LOAD_INTCONSTANT 6',
+            'LOAD_INTCONSTANT 6',
+            'LOAD_INTCONSTANT 6',
+            'MUL',
+            'MUL',
+            'UMINUS',
+            'LOAD_INTCONSTANT 6',
+            'ADD',
+            'LOAD_INTCONSTANT 6',
+            'SUB'])
+        self.check('++5', [
+            'LOAD_INTCONSTANT 5',
+            'PREINCR'])
+        self.check('5--', [
+            'LOAD_INTCONSTANT 5',
+            'POSTDECR'])
+        self.check('"hello " + \'world\'',
+                   ['LOAD_STRINGCONSTANT "hello "',
+                    'LOAD_STRINGCONSTANT "world"',
+                    'ADD'])
 
 from pypy.lang.js.jsparser import parse
     

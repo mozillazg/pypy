@@ -52,6 +52,12 @@ class BaseBinaryBitwiseOp(Opcode):
     def decision(self, ctx, op1, op2):
         raise NotImplementedError
 
+class BaseBinaryOperation(Opcode):
+    pass
+
+class BaseUnaryOperation(Opcode):
+    pass
+
 class Undefined(Opcode):
     def eval(self, ctx):
         return w_Undefined
@@ -136,6 +142,39 @@ class LOAD_OBJECT(Opcode):
 
     def __repr__(self):
         return 'LOAD_OBJECT %r' % (self.listofnames,)
+
+class SUB(BaseBinaryOperation):
+    pass
+
+class ADD(BaseBinaryOperation):
+    pass
+
+class MUL(BaseBinaryOperation):
+    pass
+
+class DIV(BaseBinaryOperation):
+    pass
+
+class MOD(BaseBinaryOperation):
+    pass
+
+class UPLUS(BaseUnaryOperation):
+    pass
+
+class UMINUS(BaseUnaryOperation):
+    pass
+
+class PREINCR(BaseUnaryOperation):
+    pass
+
+class POSTINCR(BaseUnaryOperation):
+    pass
+
+class PREDECR(BaseUnaryOperation):
+    pass
+
+class POSTDECR(BaseUnaryOperation):
+    pass
 
 OpcodeMap = {}
 
