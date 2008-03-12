@@ -119,8 +119,7 @@ class Timer(object):
 
 
 	def cycles(self):
-		if ((self.tac & 0x04) != 0):
-			if (self.timerCycles < self.dividerCycles):
+		if ((self.tac & 0x04) != 0 and self.timerCycles < self.dividerCycles):
 				return self.timerCycles;
 		return self.dividerCycles;
 

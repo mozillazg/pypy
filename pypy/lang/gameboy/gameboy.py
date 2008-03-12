@@ -36,6 +36,7 @@ class GameBoy(object):
 	def getCartridge(self):
 		return self.cartridge;
 
+
 	def getFrameSkip(self):
 		return self.video.getFrameSkip();
 

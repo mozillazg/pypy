@@ -235,9 +235,8 @@ class Sound(object):
 		elif address==NR52:
 			return self.getOutputEnable();
 
-		else:
-			if (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
-				return self.getAudio3WavePattern(address);
+		elif (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
+			return self.getAudio3WavePattern(address);
 
 		return 0xFF;
 
@@ -290,42 +289,45 @@ class Sound(object):
 		elif address == NR52:
 			self.setOutputEnable(data);
 		
-		else:
-			if (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
-				self.setAudio3WavePattern(address, data);
+		elif (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
+			self.setAudio3WavePattern(address, data);
 
 
 	def updateAudio(self):
-		if ((self.nr52 & 0x80) != 0):
-			if ((self.nr52 & 0x01) != 0):
-				self.updateAudio1();
+		if ((self.nr52 & 0x80) == 0):
+			return
+		
+		if ((self.nr52 & 0x01) != 0):
+			self.updateAudio1();
 
-			if ((self.nr52 & 0x02) != 0):
-				self.updateAudio2();
+		if ((self.nr52 & 0x02) != 0):
+			self.updateAudio2();
 
-			if ((self.nr52 & 0x04) != 0):
-				self.updateAudio3();
+		if ((self.nr52 & 0x04) != 0):
+			self.updateAudio3();
 
-			if ((self.nr52 & 0x08) != 0):
-				self.updateAudio4();
+		if ((self.nr52 & 0x08) != 0):
+			self.updateAudio4();
 
 
 	def mixAudio(self,buffer, length):
 		for index in range(0, length):
 			buffer[index] = 0;
 
-		if ((self.nr52 & 0x80) != 0):
-			if ((self.nr52 & 0x01) != 0):
-				self.mixAudio1(buffer, length);
+		if ((self.nr52 & 0x80) == 0):
+			return
+		
+		if ((self.nr52 & 0x01) != 0):
+			self.mixAudio1(buffer, length);
 
-			if ((self.nr52 & 0x02) != 0):
-				self.mixAudio2(buffer, length);
+		if ((self.nr52 & 0x02) != 0):
+			self.mixAudio2(buffer, length);
 
-			if ((self.nr52 & 0x04) != 0):
-				self.mixAudio3(buffer, length);
+		if ((self.nr52 & 0x04) != 0):
+			self.mixAudio3(buffer, length);
 
-			if ((self.nr52 & 0x08) != 0):
-				self.mixAudio4(buffer, length);
+		if ((self.nr52 & 0x08) != 0):
+			self.mixAudio4(buffer, length);
 
 
 	 # Audio Channel 1
@@ -361,20 +363,19 @@ class Sound(object):
 
 	def setAudio1Envelope(self, data):
 		self.nr12 = data;
-		if ((self.nr14 & 0x40) == 0):
-			if ((self.nr12 >> 4) == 0):
-				self.audio1Volume = 0;
-			elif (self.audio1EnvelopeLength == 0 and (self.nr12 & 0x07) == 0):
-				self.audio1Volume = (self.audio1Volume + 1) & 0x0F;
-			else:
-				self.audio1Volume = (self.audio1Volume + 2) & 0x0F;
+		if ((self.nr14 & 0x40) != 0):
+			return
+		if ((self.nr12 >> 4) == 0):
+			self.audio1Volume = 0;
+		elif (self.audio1EnvelopeLength == 0 and (self.nr12 & 0x07) == 0):
+			self.audio1Volume = (self.audio1Volume + 1) & 0x0F;
+		else:
+			self.audio1Volume = (self.audio1Volume + 2) & 0x0F;
 
 
 	def setAudio1Frequency(self, data):
 		self.nr13 = data;
-
-		self.audio1Frequency = self.frequencyTable[self.nr13
-				+ ((self.nr14 & 0x07) << 8)];
+		self.audio1Frequency = self.frequencyTable[self.nr13 + ((self.nr14 & 0x07) << 8)];
 
 
 	def setAudio1Playback(self, data):
@@ -396,11 +397,10 @@ class Sound(object):
 	
 
 	def updateAudio1(self):
-		if ((self.nr14 & 0x40) != 0):
-			if (self.audio1Length > 0):
-				self.audio1Length-=1;
-				if (self.audio1Length <= 0):
-					self.nr52 &= ~0x01;
+		if ((self.nr14 & 0x40) != 0 and self.audio1Length > 0):
+			self.audio1Length-=1;
+			if (self.audio1Length <= 0):
+				self.nr52 &= ~0x01;
 		if (self.audio1EnvelopeLength > 0):
 			self.audio1EnvelopeLength-=1;
 			if (self.audio1EnvelopeLength <= 0):
@@ -512,11 +512,10 @@ class Sound(object):
 
 
 	def updateAudio2(self):
-		if ((self.nr24 & 0x40) != 0):
-			if (self.audio2Length > 0):
-				self.audio2Length-=1;
-				if (self.audio2Length <= 0):
-					self.nr52 &= ~0x02;
+		if ((self.nr24 & 0x40) != 0 and self.audio2Length > 0):
+			self.audio2Length-=1;
+			if (self.audio2Length <= 0):
+				self.nr52 &= ~0x02;
 
 		if (self.audio2EnvelopeLength > 0):
 			self.audio2EnvelopeLength-=1;
@@ -618,11 +617,10 @@ class Sound(object):
 
 
 	def updateAudio3(self):
-		if ((self.nr34 & 0x40) != 0):
-			if (self.audio3Length > 0):
-				self.audio3Length-=1;
-				if (self.audio3Length <= 0):
-					self.nr52 &= ~0x04;
+		if ((self.nr34 & 0x40) != 0 and self.audio3Length > 0):
+			self.audio3Length-=1;
+			if (self.audio3Length <= 0):
+				self.nr52 &= ~0x04;
 
 
 	def mixAudio3(self, buffer, length):
@@ -693,7 +691,6 @@ class Sound(object):
 
 	def setAudio4Playback(self, data):
 		self.nr44 = data;
-
 		if ((self.nr44 & 0x80) != 0):
 			self.nr52 |= 0x08;
 
@@ -708,11 +705,10 @@ class Sound(object):
 
 
 	def updateAudio4(self):
-		if ((self.nr44 & 0x40) != 0):
-			if (self.audio4Length > 0):
-				self.audio4Length-=1;
-				if (self.audio4Length <= 0):
-					self.nr52 &= ~0x08;
+		if ((self.nr44 & 0x40) != 0 and self.audio4Length > 0):
+			self.audio4Length-=1;
+			if (self.audio4Length <= 0):
+				self.nr52 &= ~0x08;
 
 		if (self.audio4EnvelopeLength > 0):
 			self.audio4EnvelopeLength-=1;

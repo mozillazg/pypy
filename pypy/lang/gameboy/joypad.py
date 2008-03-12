@@ -29,12 +29,15 @@ class Joypad(object):
 		self.interrupt = interrupt;
 		self.reset();
 
+
 	def  reset(self):
 		self.joyp = 0xFF;
 		self.cycles = JOYPAD_CLOCK;
 
+
 	def cycles(self):
 		return self.cycles;
+
 
 	def  emulate(self, ticks):
 		self.cycles -= ticks;
@@ -44,15 +47,18 @@ class Joypad(object):
 
 			self.cycles = JOYPAD_CLOCK;
 
+
 	def  write(self, address, data):
 		if (address == JOYP):
 			self.joyp = (self.joyp & 0xCF) + (data & 0x30);
 			self.update();
 
+
 	def read(self, address):
 		if (address == JOYP):
 			return self.joyp;
 		return 0xFF;
+
 
 	def update(self):
 		data = self.joyp & 0xF0;
