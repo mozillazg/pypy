@@ -6,6 +6,11 @@ from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath
 from pypy.rpython.lltypesystem import lltype, llmemory
 
+import py
+from pypy.tool.ansi_print import ansi_log
+log = py.log.Producer('rainbow')
+py.log.setconsumer('rainbow', ansi_log)
+
 DEBUG_JITCODES = True     # store a dump() of all JitCodes
                           # in the translated program
 
@@ -216,7 +221,9 @@ class JitInterpreter(object):
 
     def debug_trace(self, *args):
         if not we_are_translated():
-            self.debug_traces.append(DebugTrace(*args))
+            trace = DebugTrace(*args)
+            log.trace(trace)
+            self.debug_traces.append(trace)
 
     def set_portalstate(self, portalstate):
         assert self.portalstate is None
@@ -850,7 +857,7 @@ class JitInterpreter(object):
 
     @arguments("red", "jumptarget")
     def opimpl_red_hot_goto_iftrue(self, switchbox, target):
-        self.debug_trace("pause at hotsplit")
+        self.debug_trace("pause at hotsplit in", self.frame.bytecode.name)
         rhotpath.hotsplit(self.jitstate, self.bool_hotpromotiondesc,
                           switchbox, self.frame.pc, target)
         assert False, "unreachable"

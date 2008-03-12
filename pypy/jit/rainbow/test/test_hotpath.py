@@ -39,10 +39,9 @@ class TestHotPath(test_interpreter.InterpretationTest):
         for trace, expect in zip(traces + ['--end of traces--'],
                                  expected + ['--end of traces--']):
             # 'trace' is a DebugTrace instance, reduce it to a string
-            got = str(trace)
-            assert got == expect, ("debug_trace[%d] mismatch:\n"
-                                   "       got %r\n"
-                                   "  expected %r" % (i, got, expect))
+            assert str(trace) == expect, ("debug_trace[%d] mismatch:\n"
+                                          "       got %s\n"
+                                          "  expected %s" % (i, trace, expect))
             i += 1
 
 
@@ -80,7 +79,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
             "jit_not_entered 13 119",
             # on the start of the next iteration, compile the 'total += n1'
             "jit_compile 12 132",
-            "pause at hotsplit",
+            "pause at hotsplit in ll_function",
             # execute the compiled machine code until the 'n1 <= 1'.
             # It finishes in the fallback interpreter 7 times
             "run_machine_code 12 132", "fallback_interp", "fb_leave 11 144",
@@ -93,7 +92,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
             "run_machine_code 5 195",
             # now that we know which path is hot (i.e. "staying in the loop"),
             # it gets compiled
-            "jit_resume False",
+            "jit_resume bool_path False in ll_function",
             "done at jit_merge_point",
             # execution continues purely in machine code, from the "n1 <= 1"
             # test which triggered the "jit_resume"

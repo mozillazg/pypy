@@ -8,11 +8,6 @@ from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, llmemory
 
-import py
-from pypy.tool.ansi_print import ansi_log
-log = py.log.Producer('hotpath')
-py.log.setconsumer('hotpath', ansi_log)
-
 
 def setup_jitstate(interp, jitstate, greenargs, redargs,
                    bytecode, graphsigtoken):
@@ -53,8 +48,9 @@ def compile(interp):
         leave_graph(interp)
     builder.show_incremental_progress()
 
-def report_compile_time_exception(e):
+def report_compile_time_exception(interp, e):
     if not we_are_translated():
+        from pypy.jit.rainbow.interpreter import log
         import sys, pdb, traceback
         msg = str(e)
         if msg: msg = ': ' + msg
@@ -67,6 +63,7 @@ def report_compile_time_exception(e):
     else:
         msg = 'Note: the JIT got a compile-time exception: %s' % (e,)
         lloperation.llop.debug_print(lltype.Void, msg)
+    interp.debug_trace("ERROR:", "compile-time exception:", e)
 
 # ____________________________________________________________
 
@@ -102,7 +99,8 @@ class HotPromotionDesc:
 
                 if counter >= threshold:
                     # this is a hot path, compile it
-                    interpreter.debug_trace("jit_resume", value)
+                    interpreter.debug_trace("jit_resume", "bool_path", value,
+                        "in", fbp.saved_jitstate.frame.bytecode.name)
                     gv_value = interpreter.rgenop.genconst(value)
                     fbp.compile_hot_path(interpreter, gv_value, pc)
                     if value:
@@ -123,7 +121,7 @@ class HotPromotionDesc:
                         fbp.falsepath_counter = counter
 
             except Exception, e:
-                report_compile_time_exception(e)
+                report_compile_time_exception(interpreter, e)
 
             # exceptions below at run-time exceptions, we let them propagate
             fallbackinterp.run(fbp, framebase, pc)
