@@ -100,6 +100,7 @@ class StructTypeDesc(object):
 
         if fixsize:
             self._define_devirtualize()
+            self._define_allocate()
 
         
     def _compute_fielddescs(self, RGenOp):
@@ -131,7 +132,16 @@ class StructTypeDesc(object):
 
         self.fielddescs = fielddescs
         self.fielddesc_by_name = fielddesc_by_name
-        self.innermostdesc = innermostdesc        
+        self.innermostdesc = innermostdesc
+
+    def _define_allocate(self):
+        TYPE = self.TYPE
+
+        def allocate(rgenop):
+            s = lltype.malloc(TYPE)
+            return rgenop.genconst(s)
+
+        self.allocate = allocate
 
     def _define_devirtualize(self):
         TYPE = self.TYPE
@@ -536,7 +546,8 @@ class FieldDesc(object):
 class NamedFieldDesc(FieldDesc):
 
     def __init__(self, RGenOp, PTRTYPE, name):
-        FieldDesc.__init__(self, RGenOp, PTRTYPE, getattr(PTRTYPE.TO, name))
+        FIELDTYPE = getattr(PTRTYPE.TO, name)
+        FieldDesc.__init__(self, RGenOp, PTRTYPE, FIELDTYPE)
         T = self.PTRTYPE.TO
         self.fieldname = name
         self.fieldtoken = RGenOp.fieldToken(T, name)
@@ -546,6 +557,17 @@ class NamedFieldDesc(FieldDesc):
                  res = getattr(ptr, name)
                  return rgenop.genconst(res)
         self.getfield_if_non_null = getfield_if_non_null
+        if not isinstance(FIELDTYPE, lltype.ContainerType):
+            self._define_setfield(FIELDTYPE)
+
+    def _define_setfield(self, FIELDTYPE):
+        PTRTYPE = self.PTRTYPE
+        name = self.fieldname
+        def setfield(rgenop, genvar, gv_newvalue):
+            ptr = genvar.revealconst(PTRTYPE)
+            newvalue = gv_newvalue.revealconst(FIELDTYPE)
+            setattr(ptr, name, newvalue)
+        self.setfield = setfield
 
     def compact_repr(self): # goes in ll helper names
         return "Fld_%s_in_%s" % (self.fieldname, self.PTRTYPE._short_name())

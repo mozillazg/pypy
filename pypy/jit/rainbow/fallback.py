@@ -5,18 +5,15 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
 
 
-class SegfaultException(AssertionError):
-    pass
-
-
 class FallbackInterpreter(object):
     """
     The fallback interp takes an existing suspended jitstate and
     actual values for the live red vars, and interprets the jitcode
     normally until it reaches the 'jit_merge_point' or raises.
     """
-    def __init__(self, ContinueRunningNormally):
+    def __init__(self, ContinueRunningNormally, exceptiondesc):
         self.ContinueRunningNormally = ContinueRunningNormally
+        self.exceptiondesc = exceptiondesc
 
     def run(self, fallback_point, framebase, pc):
         self.fbp = fallback_point
@@ -25,29 +22,36 @@ class FallbackInterpreter(object):
         self.bytecode_loop()
 
     def initialize_state(self, pc):
-        incoming_gv = self.fbp.saved_jitstate.get_locals_gv()
+        jitstate = self.fbp.saved_jitstate
+        incoming_gv = jitstate.get_locals_gv()
         self.gv_to_index = {}
         for i in range(len(incoming_gv)):
             self.gv_to_index[incoming_gv[i]] = i
-        self.initialize_from_frame(self.fbp.saved_jitstate.frame)
+
+        self.initialize_from_frame(jitstate.frame)
         self.pc = pc
+        self.gv_exc_type  = self.getinitialboxgv(jitstate.exc_type_box)
+        self.gv_exc_value = self.getinitialboxgv(jitstate.exc_value_box)
+
+    def getinitialboxgv(self, box):
+        assert box.genvar is not None, "XXX Virtuals support missing"
+        gv = box.genvar
+        if not gv.is_const:
+            # fetch the value from the machine code stack
+            gv = self.rgenop.genconst_from_frame_var(box.kind, self.framebase,
+                                                     self.fbp.frameinfo,
+                                                     self.gv_to_index[gv])
+        return gv
 
     def initialize_from_frame(self, frame):
         # note that both local_green and local_red contain GenConsts
-        rgenop = self.rgenop
+        self.current_source_jitframe = frame
         self.pc = frame.pc
         self.bytecode = frame.bytecode
         self.local_green = frame.local_green[:]
         self.local_red = []
         for box in frame.local_boxes:
-            assert box.genvar is not None, "XXX Virtuals support missing"
-            gv = box.genvar
-            if not gv.is_const:
-                # fetch the value from the machine code stack
-                gv = rgenop.genconst_from_frame_var(box.kind, self.framebase,
-                                                    self.fbp.frameinfo,
-                                                    self.gv_to_index[gv])
-            self.local_red.append(gv)
+            self.local_red.append(self.getinitialboxgv(box))
 
     # ____________________________________________________________
     # XXX Lots of copy and paste from interp.py!
@@ -192,50 +196,65 @@ class FallbackInterpreter(object):
 
     @arguments()
     def opimpl_gray_return(self):
-        xxx
+        assert self.current_source_jitframe.backframe is None   # XXX for now
+        # at this point we should have an exception set in self.gv_exc_xxx
+        # and we have to really raise it.  XXX non-translatable hack follows...
+        from pypy.rpython.llinterp import LLException
+        exceptiondesc = self.exceptiondesc
+        lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
+        llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
+        assert lltype and llvalue
+        raise LLException(lltype, llvalue)
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_red_direct_call(self, greenargs, redargs, targetbytecode):
-        xxx
+        assert not greenargs  # XXX for now
+        calldesc = targetbytecode.owncalldesc
+        gv_res = calldesc.perform_call(self.rgenop,
+                                       targetbytecode.gv_ownfnptr,
+                                       redargs)
+        if gv_res is not None:
+            self.red_result(gv_res)
+        # XXX what occurs with exceptions raised by the called graph?
 
     # exceptions
 
     @arguments(returns="red")
     def opimpl_read_exctype(self):
-        xxx
+        return self.gv_exc_type
 
     @arguments(returns="red")
     def opimpl_read_excvalue(self):
-        xxx
+        return self.gv_exc_value
 
     @arguments("red")
-    def opimpl_write_exctype(self, typebox):
-        xxx
+    def opimpl_write_exctype(self, gv_type):
+        self.gv_exc_type = gv_type
 
     @arguments("red")
-    def opimpl_write_excvalue(self, valuebox):
-        xxx
+    def opimpl_write_excvalue(self, gv_value):
+        self.gv_exc_value = gv_value
 
     @arguments("red", "red")
-    def opimpl_setexception(self, typebox, valuebox):
-        xxx
+    def opimpl_setexception(self, gv_type, gv_value):
+        self.gv_exc_type  = gv_type
+        self.gv_exc_value = gv_value
 
     # structs and arrays
 
     @arguments("structtypedesc", returns="red")
     def opimpl_red_malloc(self, structtypedesc):
-        xxx
+        return structtypedesc.allocate(self.rgenop)
 
     @arguments("red", "fielddesc", "bool", returns="red")
     def opimpl_red_getfield(self, gv_struct, fielddesc, deepfrozen):
         gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
-        if gv_res is None:
-            raise SegfaultException
+        assert gv_res is not None, "segfault!"
         return gv_res
 
     @arguments("red", "fielddesc", "red")
-    def opimpl_red_setfield(self, destbox, fielddesc, valuebox):
-        xxx
+    def opimpl_red_setfield(self, gv_dest, fielddesc, gv_value):
+        fielddesc.setfield(self.rgenop, gv_dest, gv_value)
 
     # hotpath-specific operations
 

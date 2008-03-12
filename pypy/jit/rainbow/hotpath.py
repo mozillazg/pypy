@@ -3,13 +3,13 @@ from pypy.objspace.flow.model import Link, checkgraph
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.rainbow import rhotpath
 from pypy.jit.rainbow.fallback import FallbackInterpreter
+from pypy.jit.rainbow.codewriter import maybe_on_top_of_llinterp
 
 
 class EntryPointsRewriter:
@@ -62,6 +62,7 @@ class EntryPointsRewriter:
     def make_enter_function(self):
         HotEnterState = make_state_class(self)
         state = HotEnterState()
+        exceptiondesc = self.codewriter.exceptiondesc
 
         def jit_may_enter(*args):
             counter = state.counter
@@ -72,14 +73,15 @@ class EntryPointsRewriter:
                     return
                 if not state.compile():
                     return
-            maybe_on_top_of_llinterp(self, state.machine_code)(*args)
+            maybe_on_top_of_llinterp(exceptiondesc, state.machine_code)(*args)
 
         HotEnterState.compile.im_func._dont_inline_ = True
         jit_may_enter._always_inline = True
         self.jit_may_enter_fn = jit_may_enter
 
     def update_interp(self):
-        self.fallbackinterp = FallbackInterpreter(self.ContinueRunningNormally)
+        self.fallbackinterp = FallbackInterpreter(self.ContinueRunningNormally,
+                                                 self.codewriter.exceptiondesc)
         ERASED = self.RGenOp.erasedType(lltype.Bool)
         self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
             ERASED, self.interpreter, self.threshold, self.fallbackinterp)
@@ -87,14 +89,21 @@ class EntryPointsRewriter:
 
     def rewrite_graphs(self):
         for graph in self.hintannotator.base_translator.graphs:
-            for block in graph.iterblocks():
-                for op in list(block.operations):
-                    if op.opname == 'can_enter_jit':
-                        index = block.operations.index(op)
-                        self.rewrite_can_enter_jit(graph, block, index)
-                    elif op.opname == 'jit_merge_point':
-                        index = block.operations.index(op)
-                        self.rewrite_jit_merge_point(graph, block, index)
+            while self.rewrite_graph(graph):
+                pass
+
+    def rewrite_graph(self, graph):
+        for block in graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'can_enter_jit':
+                    index = block.operations.index(op)
+                    if self.rewrite_can_enter_jit(graph, block, index):
+                        return True      # graph mutated, start over again
+                elif op.opname == 'jit_merge_point':
+                    index = block.operations.index(op)
+                    if self.rewrite_jit_merge_point(graph, block, index):
+                        return True      # graph mutated, start over again
+        return False  # done
 
     def rewrite_can_enter_jit(self, graph, block, index):
         #
@@ -123,6 +132,7 @@ class EntryPointsRewriter:
             block.operations[index] = newop
         else:
             xxx
+        return True
 
     def rewrite_jit_merge_point(self, origportalgraph, origblock, origindex):
         #
@@ -152,8 +162,8 @@ class EntryPointsRewriter:
         portalgraph = self.hintannotator.portalgraph
         # ^^^ as computed by HotPathHintAnnotator.prepare_portal_graphs()
         if origportalgraph is portalgraph:
-            return       # only mutate the original portal graph,
-                         # not its copy
+            return False      # only mutate the original portal graph,
+                              # not its copy
 
         ARGS = [v.concretetype for v in portalgraph.getargs()]
         assert portalgraph.getreturnvar().concretetype is lltype.Void
@@ -219,6 +229,7 @@ class EntryPointsRewriter:
         origblock.recloseblock(Link([Constant(None, lltype.Void)],
                                     origportalgraph.returnblock))
         checkgraph(origportalgraph)
+        return True
 
 
 def make_state_class(rewriter):
@@ -258,7 +269,10 @@ def make_state_class(rewriter):
             jitstate = interp.fresh_jitstate(builder)
             rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
                                     rewriter.entryjitcode, rewriter.sigtoken)
+            builder = jitstate.curbuilder
+            builder.start_writing()
             rhotpath.compile(interp)
+            builder.end()
 
             FUNCPTR = lltype.Ptr(rewriter.RESIDUAL_FUNCTYPE)
             self.machine_code = gv_generated.revealconst(FUNCPTR)
@@ -266,21 +280,3 @@ def make_state_class(rewriter):
 
     return HotEnterState
 
-
-def maybe_on_top_of_llinterp(rewriter, fnptr):
-    # Run a generated graph on top of the llinterp for testing.
-    # When translated, this just returns the fnptr.
-    exc_data_ptr = rewriter.codewriter.exceptiondesc.exc_data_ptr
-    llinterp = LLInterpreter(rewriter.rtyper, exc_data_ptr=exc_data_ptr)
-    def on_top_of_llinterp(*args):
-        return llinterp.eval_graph(fnptr._obj.graph, list(args))
-    return on_top_of_llinterp
-
-class Entry(ExtRegistryEntry):
-    _about_ = maybe_on_top_of_llinterp
-
-    def compute_result_annotation(self, s_rewriter, s_fnptr):
-        return s_fnptr
-
-    def specialize_call(self, hop):
-        return hop.inputarg(hop.args_r[1], arg=1)

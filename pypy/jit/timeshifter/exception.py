@@ -4,19 +4,21 @@ from pypy.jit.timeshifter import rvalue, rtimeshift
 
 class ExceptionDesc:
 
-    def __init__(self, RGenOp, etrafo, type_system, lazy_exception_path):
+    def __init__(self, RGenOp, etrafo, type_system, lazy_exception_path,
+                 rtyper=None):
+        self.rtyper = rtyper
         self.etrafo = etrafo
         self.cexcdata = self.etrafo.cexcdata
         self.exc_data_ptr = self.cexcdata.value
         self.gv_excdata = RGenOp.constPrebuiltGlobal(self.exc_data_ptr)
 
         EXCDATA = self.etrafo.EXCDATA
-        LL_EXC_TYPE = self.etrafo.lltype_of_exception_type
-        LL_EXC_VALUE = self.etrafo.lltype_of_exception_value
+        self.LL_EXC_TYPE = self.etrafo.lltype_of_exception_type
+        self.LL_EXC_VALUE = self.etrafo.lltype_of_exception_value
         self.exc_type_token  = RGenOp.fieldToken(EXCDATA, 'exc_type')
         self.exc_value_token = RGenOp.fieldToken(EXCDATA, 'exc_value')
-        self.exc_type_kind   = RGenOp.kindToken(LL_EXC_TYPE)
-        self.exc_value_kind  = RGenOp.kindToken(LL_EXC_VALUE)
+        self.exc_type_kind   = RGenOp.kindToken(self.LL_EXC_TYPE)
+        self.exc_value_kind  = RGenOp.kindToken(self.LL_EXC_VALUE)
 
         null_exc_type = self.etrafo.c_null_etype.value
         null_exc_value = self.etrafo.c_null_evalue.value
