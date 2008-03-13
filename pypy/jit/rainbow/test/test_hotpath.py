@@ -202,7 +202,6 @@ class TestHotPath(test_interpreter.InterpretationTest):
         assert len(self.rewriter.interpreter.debug_traces) < 20
 
     def test_simple_return(self):
-        py.test.skip("in-progress")
         def ll_function(n):
             total = 0
             if n <= 0:
@@ -217,7 +216,12 @@ class TestHotPath(test_interpreter.InterpretationTest):
 
         res = self.run(ll_function, [0], threshold=3, small=True)
         assert res == -1
-        assert len(self.rewriter.interpreter.debug_traces) == 0
+        self.check_traces([])
+
+        res = self.run(ll_function, [3], threshold=3, small=True)
+        assert res == (3*4)/2
+        self.check_traces(['jit_not_entered 2 3',
+                           'jit_not_entered 1 5'])
 
         res = self.run(ll_function, [50], threshold=3, small=True)
         assert res == (50*51)/2

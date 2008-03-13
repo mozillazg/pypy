@@ -12,11 +12,13 @@ class FallbackInterpreter(object):
     actual values for the live red vars, and interprets the jitcode
     normally until it reaches the 'jit_merge_point' or raises.
     """
-    def __init__(self, interpreter, ContinueRunningNormally, exceptiondesc):
+    def __init__(self, interpreter, exceptiondesc,
+                 DoneWithThisFrame, ContinueRunningNormally):
         self.interpreter = interpreter
         self.rgenop = interpreter.rgenop
-        self.ContinueRunningNormally = ContinueRunningNormally
         self.exceptiondesc = exceptiondesc
+        self.DoneWithThisFrame = DoneWithThisFrame
+        self.ContinueRunningNormally = ContinueRunningNormally
         self.register_opcode_impls(interpreter)
 
     def run(self, fallback_point, framebase, pc):
@@ -69,6 +71,21 @@ class FallbackInterpreter(object):
         except Exception, e:
             XXX
         return gv_res
+
+    def leave_fallback_interp(self, gv_result):
+        # at this point we might have an exception set in self.gv_exc_xxx
+        # and we have to really raise it.
+        exceptiondesc = self.exceptiondesc
+        lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
+        if lltype:
+            # XXX non-translatable hack follows...
+            from pypy.rpython.llinterp import LLException, type_name
+            llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
+            assert lltype and llvalue
+            self.interpreter.debug_trace("fb_raise", type_name(lltype))
+            raise LLException(lltype, llvalue)
+        else:
+            raise self.DoneWithThisFrame(gv_result)
 
     # ____________________________________________________________
     # XXX Lots of copy and paste from interp.py!
@@ -381,15 +398,12 @@ class FallbackInterpreter(object):
     @arguments()
     def opimpl_hp_gray_return(self):
         assert self.current_source_jitframe.backframe is None   # XXX for now
-        # at this point we should have an exception set in self.gv_exc_xxx
-        # and we have to really raise it.  XXX non-translatable hack follows...
-        from pypy.rpython.llinterp import LLException, type_name
-        exceptiondesc = self.exceptiondesc
-        lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
-        llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
-        assert lltype and llvalue
-        self.interpreter.debug_trace("fb_raise", type_name(lltype))
-        raise LLException(lltype, llvalue)
+        self.leave_fallback_interp(None)
+
+    @arguments()
+    def opimpl_hp_red_return(self):
+        assert self.current_source_jitframe.backframe is None   # XXX for now
+        self.leave_fallback_interp(self.local_red[0])
 
     @arguments()
     def opimpl_hp_yellow_return(self):
