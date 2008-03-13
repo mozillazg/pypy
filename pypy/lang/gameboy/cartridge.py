@@ -1,4 +1,4 @@
-# CATRIGE TYPES
+# constants.CATRIGE constants.TYPES
 # ___________________________________________________________________________
 
 from pypy.lang.gameboy import constants
@@ -15,12 +15,12 @@ def hasCartridgeBattery(self, cartridgeType):
 
 
 def hasCartridgeType(self, catridgeType):
-	return CATRIDGE_TYPE_MAPPING.has_key(cartridgeType);	
+	return constants.CATRIDGE_TYPE_MAPPING.has_key(cartridgeType);	
 
 
 def createBankController(self, cartridgeType, rom, ram, clock):
 		if hasCartridgeType(cartridgeType):
-			return CATRIDGE_TYPE_MAPPING[cartridgeType](rom, ram, clock);
+			return constants.CATRIDGE_TYPE_MAPPING[cartridgeType](rom, ram, clock);
 		else:
 			raise InvalidMemoryBankTypeError("Unsupported memory bank controller (0x"+hex(cartridgeType)+")")
 
@@ -35,17 +35,6 @@ class InvalidMemoryBankTypeError(Exception):
 
 class Cartridge(object):
 	
-	CARTRIDGE_TYPE_ADDRESS = 0x0147
-	ROM_SIZE_ADDRESS = 0x0148
-	RAM_SIZE_ADDRESS = 0x0149
-	RAM_SIZE_MAPPING = {0x00:0, 0x01:8192, 0x02:8192, 0x03:32768}
-	DESTINATION_CODE_ADDRESS = 0x014A
-	LICENSEE_ADDRESS = 0x014B
-	ROM_VERSION_ADDRESS = 0x014C
-	HEADER_CHECKSUM_ADDRESS = 0x014D
-	CHECKSUM_A_ADDRESS = 0x014E
-	CHECKSUM_B_ADDRESS = 0x014F
-
 	def __init__(self, storeDriver, clockDriver):
 		self.store = storeDriver
 		self.clock = clockDriver
@@ -60,7 +49,7 @@ class Cartridge(object):
 	
 		
 	def getCartridgeType(self):
-		return self.rom[CARTRIDGE_TYPE_ADDRESS] & 0xFF
+		return self.rom[constants.CARTRIDGE_TYPE_ADDRESS] & 0xFF
 	
 		
 	def getRom(self):
@@ -68,34 +57,34 @@ class Cartridge(object):
 	
 		
 	def getROMSize(self):
-		romSize = self.rom[CARTRIDGE_SIZE_ADDRESS] & 0xFF
+		romSize = self.rom[constants.CARTRIDGE_SIZE_ADDRESS] & 0xFF
 		if romSize>=0x00 and romSize<=0x07:
 			return 32768 << romSize
 		return -1
 	
 		
 	def getRAMSize(self):
-		return RAM_SIZE_MAPPING[self.rom[RAM_SIZE_ADDRESS]]
+		return constants.RAM_SIZE_MAPPING[self.rom[constants.RAM_SIZE_ADDRESS]]
 		
 	
 	def getDestinationCode(self):
-		return self.rom[DESTINATION_CODE_ADDRESS] & 0xFF;
+		return self.rom[constants.DESTINATION_CODE_ADDRESS] & 0xFF;
 
 	
 	def getLicenseeCode():
-		return self.rom[LICENSEE_ADDRESS] & 0xFF;
+		return self.rom[constants.LICENSEE_ADDRESS] & 0xFF;
 
 	
 	def getROMVersion(self):
-		return self.rom[ROM_VERSION_ADDRESS] & 0xFF;
+		return self.rom[constants.ROM_VERSION_ADDRESS] & 0xFF;
 
 	
 	def getHeaderChecksum(self):
-		return self.rom[HEADER_CHECKSUM_ADDRESS] & 0xFF;
+		return self.rom[constants.HEADER_CHECKSUM_ADDRESS] & 0xFF;
 
 	
 	def getChecksum(self):
-		return ((rom[CHECKSUM_A_ADDRESS] & 0xFF) << 8) + (rom[CHECKSUM_B_ADDRESS] & 0xFF);
+		return ((rom[constants.CHECKSUM_A_ADDRESS] & 0xFF) << 8) + (rom[constants.CHECKSUM_B_ADDRESS] & 0xFF);
 
 	
 	def hasBattery(self):
@@ -173,12 +162,7 @@ class Cartridge(object):
 # CARTRIDGE TYPES
 
 class MBC(object):
-	 #ROM Bank Size (16KB)
-	ROM_BANK_SIZE = 0x4000
-	
-	# RAM Bank Size (8KB)
-	RAM_BANK_SIZE = 0x2000
-	
+
 	ramEnable = False
 	
 	rom = []
@@ -193,35 +177,35 @@ class MBC(object):
 	minRamBankSize = 0
 	maxRamBankSize = 0
 	
-	romBank = ROM_BANK_SIZE
+	romBank = constants.ROM_BANK_SIZE
 	ramBank = 0
 	
 	
 	def reset(self):
-		self.romBank = ROM_BANK_SIZE;
+		self.romBank = constants.ROM_BANK_SIZE;
 		self.ramBank = 0;
 		self.ramEnable = False;
 	
 	def setROM(self, buffer):
-		banks = len(buffer) / ROM_BANK_SIZE;
+		banks = len(buffer) / constants.ROM_BANK_SIZE;
 		if (banks < minRomBankSize or banks > maxRomBankSize):
-			raise Exception("Invalid ROM size");
+			raise Exception("Invalid constants.ROM size");
 		self.rom = buffer;
-		self.romSize = ROM_BANK_SIZE*banks - 1;
+		self.romSize = constants.ROM_BANK_SIZE*banks - 1;
 
 
 	def setRAM(buffer):
-		banks = len(buffer) / RAM_BANK_SIZE;
+		banks = len(buffer) / constants.RAM_BANK_SIZE;
 		if (banks < minRamBankSize or banks > maxRamBankSize):
-			raise Exception("Invalid RAM size");
+			raise Exception("Invalid constants.RAM size");
 		self.ram = buffer;
-		self.ramSize = RAM_BANK_SIZE*banks - 1;
+		self.ramSize = constants.RAM_BANK_SIZE*banks - 1;
 	
 
 """
 Mario GameBoy (TM) Emulator
 
-Memory Bank Controller 1 (2MB ROM, 32KB RAM)
+Memory Bank Controller 1 (2MB constants.ROM, 32KB constants.RAM)
  
 0000-3FFF	ROM Bank 0 (16KB)
 4000-7FFF	ROM Bank 1-127 (16KB)
@@ -292,7 +276,7 @@ class MBC1(MBC):
 """
 Mario GameBoy (TM) Emulator
 
-Memory Bank Controller 2 (256KB ROM, 512x4bit RAM)
+Memory Bank Controller 2 (256KB constants.ROM, 512x4bit constants.RAM)
 
 0000-3FFF	ROM Bank 0 (16KB)
 4000-7FFF	ROM Bank 1-15 (16KB)
@@ -303,8 +287,8 @@ class MBC2(MBC):
 	RAM_BANK_SIZE = 512;
 
 	def __init__(self, rom, ram):
-		self.minRamBankSize = RAM_BANK_SIZE
-		self.maxRamBankSize = RAM_BANK_SIZE
+		self.minRamBankSize = constants.RAM_BANK_SIZE
+		self.maxRamBankSize = constants.RAM_BANK_SIZE
 		self.minRomBankSize = 2	
 		self.maxRomBankSize = 16
 		
@@ -349,7 +333,7 @@ class MBC2(MBC):
 """
 Mario GameBoy (TM) Emulator
 
-Memory Bank Controller 3 (2MB ROM, 32KB RAM, Real Time Clock)
+Memory Bank Controller 3 (2MB constants.ROM, 32KB constants.RAM, Real Time Clock)
 
 0000-3FFF	ROM Bank 0 (16KB)
 4000-7FFF	ROM Bank 1-127 (16KB)
@@ -452,7 +436,7 @@ class MBC3(MBC):
 			# A000-BFFF
 			if (self.ramEnable):
 				if (self.ramBank >= 0):
-					# TODO conversion to byte
+					# constants.TODO conversion to byte
 					self.ram[self.ramBank + (address & 0x1FFF)] = data;
 				else:
 					self.updateClock();
@@ -522,7 +506,7 @@ class MBC3(MBC):
 """
 Mario GameBoy (TM) Emulator
 
-Memory Bank Controller 5 (8MB ROM, 128KB RAM)
+Memory Bank Controller 5 (8MB constants.ROM, 128KB constants.RAM)
  *
 0000-3FFF	ROM Bank 0 (16KB)
 4000-7FFF	ROM Bank 1-511 (16KB)
@@ -596,7 +580,7 @@ class HuC1(MBC):
 """
 Mario GameBoy (TM) Emulator
 
-Hudson Memory Bank Controller 3 (2MB ROM, 128KB RAM, RTC)
+Hudson Memory Bank Controller 3 (2MB constants.ROM, 128KB constants.RAM, constants.RTC)
 
 0000-3FFF	ROM Bank 0 (16KB)
 4000-7FFF	ROM Bank 1-127 (16KB)
