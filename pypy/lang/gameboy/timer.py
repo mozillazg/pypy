@@ -6,32 +6,6 @@ Timer and Divider
 
 class Timer(object):
 
-	 # Gameboy Clock Speed (1048576 Hz)
-
-	GAMEBOY_CLOCK = 1 << 20;
-
-
-	 # DIV Timer Speed (16384 Hz)
-
-	DIV_CLOCK = GAMEBOY_CLOCK >> 14;
-
-
-	 # Timer Clock Speeds (4096, 262144, 65536 and 16384 Hz)
-
-	TIMER_CLOCK = [	GAMEBOY_CLOCK >> 12,
-					GAMEBOY_CLOCK >> 18, 
-					GAMEBOY_CLOCK >> 16, 
-					GAMEBOY_CLOCK >> 14 ];
-
-
-	 # Timer Register Addresses
-
-	DIV = 0xFF04 # Divider Register */
-	TIMA = 0xFF05 # Timer Counter */
-	TMA = 0xFF06 # Timer Modulo */
-	TAC = 0xFF07 # Timer Control */
-
-
 	 # Registers
 	 #int
 	div = 0;
@@ -54,31 +28,31 @@ class Timer(object):
 
 	def reset(self):
 		self.div = 0;
-		self.dividerCycles = DIV_CLOCK;
+		self.dividerCycles = constants.DIV_CLOCK;
 		self.tima = self.tma = self.tac = 0x00;
-		self.timerCycles = self.timerClock = TIMER_CLOCK[self.tac & 0x03];
+		self.timerCycles = self.timerClock = constants.TIMER_CLOCK[self.tac & 0x03];
 
 
 	def write(self,  address, data):
-		if address==DIV:
+		if address==constants.DIV:
 			self.setDivider(data);
-		elif address==TIMA:
+		elif address==constants.TIMA:
 			self.setTimerCounter(data);
-		elif address==TMA:
+		elif address==constants.TMA:
 			self.setTimerModulo(data);
-		elif address==TAC:
+		elif address==constants.TAC:
 			self.setTimerControl(data);
 	
 
 
 	def read(self,  address):
-		if address==DIV:
+		if address==constants.DIV:
 			return self.getDivider();
-		elif address==TIMA:
+		elif address==constants.TIMA:
 			return self.getTimerCounter();
-		elif address==TMA:
+		elif address==constants.TMA:
 			return self.getTimerModulo();
-		elif address==TAC:
+		elif address==constants.TAC:
 			return self.getTimerControl();
 		return 0xFF;
 
@@ -98,7 +72,7 @@ class Timer(object):
 
 	def setTimerControl(self,  data):
 		if ((self.tac & 0x03) != (data & 0x03)):
-			self.timerCycles = self.timerClock = TIMER_CLOCK[data & 0x03];
+			self.timerCycles = self.timerClock = constants.TIMER_CLOCK[data & 0x03];
 		self.tac = data;
 
 
@@ -133,7 +107,7 @@ class Timer(object):
 		self.dividerCycles -= ticks;
 		while (self.dividerCycles <= 0):
 			self.div = (self.div + 1) & 0xFF;
-			self.dividerCycles += DIV_CLOCK;
+			self.dividerCycles += constants.DIV_CLOCK;
 	
 
 
@@ -147,5 +121,5 @@ class Timer(object):
 
 				if (self.tima == 0x00):
 					self.tima = self.tma;
-					self.interrupt.raiseInterrupt(Interrupt.TIMER);
+					self.interrupt.raiseInterrupt(constants.TIMER);
 	

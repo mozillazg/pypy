@@ -5,14 +5,6 @@ Joypad Input
 """
 
 class Joypad(object):
-	# Joypad Registers
-	JOYP = 0xFF00; # P1 */
-
-	# Gameboy Clock Speed (1048576 Hz)
-	GAMEBOY_CLOCK = 1 << 20;
-
-	# Joypad Poll Speed (64 Hz)
-	JOYPAD_CLOCK = GAMEBOY_CLOCK >> 6;
 
 	# Registers
 	joyp = 0;
@@ -32,7 +24,7 @@ class Joypad(object):
 
 	def  reset(self):
 		self.joyp = 0xFF;
-		self.cycles = JOYPAD_CLOCK;
+		self.cycles = constants.JOYPAD_CLOCK;
 
 
 	def cycles(self):
@@ -45,17 +37,17 @@ class Joypad(object):
 			if (self.driver.isRaised()):
 				self.update();
 
-			self.cycles = JOYPAD_CLOCK;
+			self.cycles = constants.JOYPAD_CLOCK;
 
 
 	def  write(self, address, data):
-		if (address == JOYP):
+		if (address == constants.JOYP):
 			self.joyp = (self.joyp & 0xCF) + (data & 0x30);
 			self.update();
 
 
 	def read(self, address):
-		if (address == JOYP):
+		if (address == constants.JOYP):
 			return self.joyp;
 		return 0xFF;
 
@@ -72,7 +64,7 @@ class Joypad(object):
 			data |= 0x0F;
 
 		if ((self.joyp & ~data & 0x0F) != 0):
-			self.interrupt.raiseInterrupt(Interrupt.JOYPAD);
+			self.interrupt.raiseInterrupt(constants.JOYPAD);
 
 		self.joyp = data;
 
