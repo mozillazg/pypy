@@ -4,11 +4,9 @@ Mario GameBoy (TM) Emulator
 Gameboy Scheduler and Memory Mapper
 
 """
+from pypy.lang.gameboy import constants
 
 class GameBoy(object):
-
-	 # Registered Symbol, convert to byte
-	REGISTERED_BITMAP = [0x3C, 0x42, 0xB9, 0xA5, 0xB9, 0xA5, 0x42, 0x3C ];
 
 	# RAM
 	ram = None;
@@ -176,7 +174,7 @@ class GameBoy(object):
 			self.video.write(0x8016 + (index << 3), pattern1);
 
 		for index in range(0, 8):
-			self.video.write(0x8190 + (index << 1), REGISTERED_BITMAP[index]);
+			self.video.write(0x8190 + (index << 1), constants.REGISTERED_BITMAP[index]);
 
 		for tile in range(0, 12):
 			self.video.write(0x9904 + tile, tile + 1);

@@ -4,18 +4,9 @@ Mario GameBoy (TM) Emulator
 Interrupt Controller
 """
 
+from pypy.lang.gameboy import constants
+
 class Interrupt(object):
-
-	 # Interrupt Registers
-	IE = 0xFFFF # Interrupt Enable */
-	IF = 0xFF0F # Interrupt Flag */
-
-	 # Interrupt Flags
-	VBLANK = 0x01 # V-Blank Interrupt (INT 40h) */
-	LCD = 0x02 # LCD STAT Interrupt (INT 48h) */
-	TIMER = 0x04 # Timer Interrupt (INT 50h) */
-	SERIAL = 0x08 # Serial Interrupt (INT 58h) */
-	JOYPAD = 0x10 # Joypad Interrupt (INT 60h) */
 
 	 # Registers
 	enable = 0;
@@ -47,16 +38,16 @@ class Interrupt(object):
 
 
 	def write(self, address, data):
-		if  address == IE:
+		if  address == constants.IE:
 			self.setInterruptEnable(data);
-		elif address==IF:
+		elif address == constants.IF:
 			self.setInterruptFlag(data);
 
 
 	def read(self, address):
-		if  address==IE:
+		if  address == constants.IE:
 			return self.getInterruptEnable();
-		elif address== IF:
+		elif address == constants.IF:
 			return self.getInterruptFlag();
 		return 0xFF;
 

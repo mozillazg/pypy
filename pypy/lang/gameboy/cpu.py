@@ -3,13 +3,9 @@ Mario GameBoy (TM) EmulatOR
 
 Central Unit ProcessOR (Sharp LR35902 CPU)
 """
+from pypy.lang.gameboy import constants
 
 class CPU(object):
-	 # Flags
-	Z_FLAG = 0x80
-	N_FLAG = 0x40
-	H_FLAG = 0x20
-	C_FLAG = 0x10
 
 	# Registers
 	a = 0
@@ -121,21 +117,21 @@ class CPU(object):
 				self.cycles = 0;
 		if (self.ime):
 			if (self.interrupt.isPending()):
-				if (self.interrupt.isPending(Interrupt.VBLANK)):
+				if (self.interrupt.isPending(constants.VBLANK)):
 					self.interrupt(0x40);
-					self.interrupt.lower(Interrupt.VBLANK);
-				elif (self.interrupt.isPending(Interrupt.LCD)):
+					self.interrupt.lower(constants.VBLANK);
+				elif (self.interrupt.isPending(constants.LCD)):
 					self.interrupt(0x48);
-					self.interrupt.lower(Interrupt.LCD);
-				elif (self.interrupt.isPending(Interrupt.TIMER)):
+					self.interrupt.lower(constants.LCD);
+				elif (self.interrupt.isPending(constants.TIMER)):
 					self.interrupt(0x50);
-					self.interrupt.lower(Interrupt.TIMER);
-				elif (self.interrupt.isPending(Interrupt.SERIAL)):
+					self.interrupt.lower(constants.TIMER);
+				elif (self.interrupt.isPending(constants.SERIAL)):
 					self.interrupt(0x58);
-					self.interrupt.lower(Interrupt.SERIAL);
-				elif (self.interrupt.isPending(Interrupt.JOYPAD)):
+					self.interrupt.lower(constants.SERIAL);
+				elif (self.interrupt.isPending(constants.JOYPAD)):
 					self.interrupt(0x60);
-					self.interrupt.lower(Interrupt.JOYPAD);
+					self.interrupt.lower(constants.JOYPAD);
 			
 
 	def interrupt(self, address):
@@ -465,48 +461,48 @@ class CPU(object):
 		s = (self.a + data) & 0xFF;
 		self.f = 0
 		if s == 0:
-			self.f = Z_FLAG
+			self.f = constants.Z_FLAG
 		if s < self.a:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		if (s & 0x0F) < (self.a & 0x0F):
-			self.f += H_FLAG
+			self.f += constants.H_FLAG
 		self.a = s;
 
 
 	def adc(self, data):
-		s = self.a + data + ((self.f & C_FLAG) >> 4);
+		s = self.a + data + ((self.f & constants.C_FLAG) >> 4);
 		self.f = 0
 		if (s & 0xFF) == 0:
-			self.f += Z_FLAG 
+			self.f += constants.Z_FLAG 
 		if s >= 0x100:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		if ((s ^ self.a ^ data) & 0x10) != 0:
-			self.f +=  H_FLAG
+			self.f +=  constants.H_FLAG
 		self.a = s & 0xFF;
 
 
 	def sub(self, data):
 		s = (self.a - data) & 0xFF;
-		self.f = N_FLAG
+		self.f = constants.N_FLAG
 		if s == 0:
-			self.f += Z_FLAG 
+			self.f += constants.Z_FLAG 
 		if s > self.a:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		if (s & 0x0F) > (self.a & 0x0F):
-			self.f +=  H_FLAG
+			self.f +=  constants.H_FLAG
 			
 		self.a = s;
 
 
 	def sbc(self, data):
-		s = self.a - data - ((self.f & C_FLAG) >> 4);
-		self.f = N_FLAG
+		s = self.a - data - ((self.f & constants.C_FLAG) >> 4);
+		self.f = constants.N_FLAG
 		if (s & 0xFF) == 0:
-			self.f += Z_FLAG 
+			self.f += constants.Z_FLAG 
 		if (s & 0xFF00) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		if ((s ^ self.a ^ data) & 0x10) != 0:
-			self.f +=  H_FLAG
+			self.f +=  constants.H_FLAG
 		self.a = s & 0xFF;
 
 
@@ -514,42 +510,42 @@ class CPU(object):
 		self.a &= data;
 		self.f = 0
 		if self.a == 0:
-			self.f = Z_FLAG
+			self.f = constants.Z_FLAG
 
 
 	def xOR(self, data):
 		self.a ^= data;
 		self.f = 0 		
 		if self.a == 0:
-			self.f = Z_FLAG
+			self.f = constants.Z_FLAG
 
 
 	def cpuOR(self, data):
 		self.a |= data;
 		self.f = 0
 		if self.a == 0: 	
-			self.f = Z_FLAG
+			self.f = constants.Z_FLAG
 
 
 	def cp(self, data):
 		s = (self.a - data) & 0xFF;
-		self.f = N_FLAG
+		self.f = constants.N_FLAG
 		if s==0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if s > self.a:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		if (s & 0x0F) > (self.a & 0x0F):
-			self.f += H_FLAG
+			self.f += constants.H_FLAG
 
 
 	def inc(self, data):
 		data = (data + 1) & 0xFF;
 		self.f = 0
 		if data == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x0F) == 0x00:
-			self.f += H_FLAG
-		self.f += (self.f & C_FLAG);
+			self.f += constants.H_FLAG
+		self.f += (self.f & constants.C_FLAG);
 		return data;
 
 
@@ -557,10 +553,10 @@ class CPU(object):
 		data = (data - 1) & 0xFF;
 		self.f = 0
 		if data == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x0F) == 0x0F:
-				self.f += H_FLAG
-		self.f += (self.f & C_FLAG) + N_FLAG;
+				self.f += constants.H_FLAG
+		self.f += (self.f & constants.C_FLAG) + constants.N_FLAG;
 		return data;
 
 
@@ -568,21 +564,21 @@ class CPU(object):
 		s = ((data & 0x7F) << 1) + ((data & 0x80) >> 7);
 		self.f = 0
 		if s == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x80) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		return s;
 
 
 	def rl(self, data):
 		s = ((data & 0x7F) << 1)
-		if (self.f & C_FLAG) != 0:
+		if (self.f & constants.C_FLAG) != 0:
 			self.f += 0x01;
 		self.f =0
 		if  (s == 0):
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x80) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		return s;
 
 
@@ -590,19 +586,19 @@ class CPU(object):
 		s = (data >> 1) + ((data & 0x01) << 7);
 		self.f = 0
 		if s == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x01) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		return s;
 
 
 	def rr(self, data):
-		s = (data >> 1) + ((self.f & C_FLAG) << 3);
+		s = (data >> 1) + ((self.f & constants.C_FLAG) << 3);
 		self.f = 0 
 		if s == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x01) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		return s;
 
 
@@ -610,9 +606,9 @@ class CPU(object):
 		s = (data << 1) & 0xFF;
 		self.f = 0
 		if s == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x80) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		return s;
 
 
@@ -620,9 +616,9 @@ class CPU(object):
 		s = (data >> 1) + (data & 0x80);
 		self.f = 0 
 		if s == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if  (data & 0x01) != 0:
-			self.f += C_FLAG 
+			self.f += constants.C_FLAG 
 		return s;
 
 
@@ -630,9 +626,9 @@ class CPU(object):
 		s = (data >> 1);
 		self.f = 0
 		if s == 0 :
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		if (data & 0x01) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		return s;
 
 
@@ -640,24 +636,24 @@ class CPU(object):
 		s = ((data << 4) & 0xF0) + ((data >> 4) & 0x0F);
 		self.f = 0
 		if s == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 		return s;
 
 
 	def bit(self, n, data):
-		self.f = (self.f & C_FLAG) + H_FLAG
+		self.f = (self.f & constants.C_FLAG) + constants.H_FLAG
 		if (data & (1 << n)) == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 
 
 	def add(self, hi, lo):
 		s = ((self.h << 8) + self.l + (hi << 8) + lo) & 0xFFFF;
-		self.f = (self.f & Z_FLAG)
+		self.f = (self.f & constants.Z_FLAG)
 		if ((s >> 8) & 0x0F) < (self.h & 0x0F):
-			self.f += H_FLAG
+			self.f += constants.H_FLAG
 		self.f += s < (self.h << 8)
 		if self.l:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		self.l = s & 0xFF;
 		self.h = s >> 8;
 
@@ -1176,28 +1172,28 @@ class CPU(object):
 	 # CPL
 	def cpl(self):
 		self.a ^= 0xFF;
-		self.f |= N_FLAG + H_FLAG;
+		self.f |= constants.N_FLAG + constants.H_FLAG;
 
 
 	 # DAA
 	def daa(self):
 		delta = 0;
-		if ((self.f & H_FLAG) != 0 or (self.a & 0x0F) > 0x09):
+		if ((self.f & constants.H_FLAG) != 0 or (self.a & 0x0F) > 0x09):
 			delta |= 0x06;
-		if ((self.f & C_FLAG) != 0 or (self.a & 0xF0) > 0x90):
+		if ((self.f & constants.C_FLAG) != 0 or (self.a & 0xF0) > 0x90):
 			delta |= 0x60;
 		if ((self.a & 0xF0) > 0x80 and (self.a & 0x0F) > 0x09):
 			delta |= 0x60;
-		if ((self.f & N_FLAG) == 0):
+		if ((self.f & constants.N_FLAG) == 0):
 			self.a = (self.a + delta) & 0xFF;
 		else:
 			self.a = (self.a - delta) & 0xFF;
 
-		self.f = (self.f & N_FLAG)
+		self.f = (self.f & constants.N_FLAG)
 		if delta >= 0x60:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		if self.a == 0:
-			self.f += Z_FLAG
+			self.f += constants.Z_FLAG
 
 		self.cycles -= 1;
 
@@ -1305,21 +1301,21 @@ class CPU(object):
 		if (offset >= 0):
 			self.f = 0
 			if s < self.sp:
-				self.f += C_FLAG
+				self.f += constants.C_FLAG
 			if (s & 0x0F00) < (self.sp & 0x0F00):
-				self.f += H_FLAG
+				self.f += constants.H_FLAG
 		else:
 			self.f = 0
 			if s > self.sp:
-				self.f += C_FLAG
+				self.f += constants.C_FLAG
 			if (s & 0x0F00) > (self.sp & 0x0F00):
-				self.f += H_FLAG
+				self.f += constants.H_FLAG
 
 	 # RLCA
 	def rlca(self):
 		self.f = 0
 		if (self.a & 0x80) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		self.a = ((self.a & 0x7F) << 1) + ((self.a & 0x80) >> 7);
 		self.cycles -= 1;
 
@@ -1327,11 +1323,11 @@ class CPU(object):
 	 # RLA
 	def rla(self):
 		s = ((self.a & 0x7F) << 1)
-		if (self.f & C_FLAG) != 0:
+		if (self.f & constants.C_FLAG) != 0:
 			s +=  0x01
 		self.f = 0
 		if (self.a & 0x80) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		self.a = s;
 		self.cycles -= 1;
 
@@ -1340,7 +1336,7 @@ class CPU(object):
 	def rrca(self):
 		self.f = 0
 		if (self.a & 0x01) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		self.a = ((self.a >> 1) & 0x7F) + ((self.a << 7) & 0x80);
 		self.cycles -= 1;
 
@@ -1348,21 +1344,21 @@ class CPU(object):
 	 # RRA
 	def rra(self):
 		s = ((self.a >> 1) & 0x7F)
-		if (self.f & C_FLAG) != 0:
+		if (self.f & constants.C_FLAG) != 0:
 			se += 0x80
 		self.f = 0
 		if (self.a & 0x01) != 0:
-			self.f += C_FLAG
+			self.f += constants.C_FLAG
 		self.a = s;
 		self.cycles -= 1;
 
 	 # CCF/SCF
 	def ccf(self):
-		self.f = (self.f & (Z_FLAG | C_FLAG)) ^ C_FLAG;
+		self.f = (self.f & (constants.Z_FLAG | constants.C_FLAG)) ^ constants.C_FLAG;
 
 
 	def scf(self):
-		self.f = (self.f & Z_FLAG) | C_FLAG;
+		self.f = (self.f & constants.Z_FLAG) | constants.C_FLAG;
 
 
 	 # NOP
@@ -1397,19 +1393,19 @@ class CPU(object):
 	
 
 	def jp_NZ_nnnn(self):
-		self.jp_cc_nnnn((self.f & Z_FLAG) == 0);
+		self.jp_cc_nnnn((self.f & constants.Z_FLAG) == 0);
 
 
 	def jp_NC_nnnn(self):
-		self.jp_cc_nnnn((self.f & C_FLAG) == 0);
+		self.jp_cc_nnnn((self.f & constants.C_FLAG) == 0);
 
 
 	def jp_Z_nnnn(self):
-		self.jp_cc_nnnn((self.f & Z_FLAG) != 0);
+		self.jp_cc_nnnn((self.f & constants.Z_FLAG) != 0);
 
 
 	def jp_C_nnnn(self):
-		self.jp_cc_nnnn((self.f & C_FLAG) != 0);
+		self.jp_cc_nnnn((self.f & constants.C_FLAG) != 0);
 
 
 	 # JR +nn
@@ -1434,19 +1430,19 @@ class CPU(object):
 	
 
 	def jr_NZ_nn(self):
-		self.jr_cc_nn((self.f & Z_FLAG) == 0);
+		self.jr_cc_nn((self.f & constants.Z_FLAG) == 0);
 
 
 	def jr_Z_nn(self):
-		self.jr_cc_nn((self.f & Z_FLAG) != 0);
+		self.jr_cc_nn((self.f & constants.Z_FLAG) != 0);
 
 
 	def jr_NC_nn(self):
-		self.jr_cc_nn((self.f & C_FLAG) == 0);
+		self.jr_cc_nn((self.f & constants.C_FLAG) == 0);
 
 
 	def jr_C_nn(self):
-		self.jr_cc_nn((self.f & C_FLAG) != 0);
+		self.jr_cc_nn((self.f & constants.C_FLAG) != 0);
 
 
 	 # CALL nnnn
@@ -1471,19 +1467,19 @@ class CPU(object):
 
 
 	def call_NZ_nnnn(self):
-		self.call_cc_nnnn((self.f & Z_FLAG) == 0);
+		self.call_cc_nnnn((self.f & constants.Z_FLAG) == 0);
 
 
 	def call_NC_nnnn(self):
-		self.call_cc_nnnn((self.f & C_FLAG) == 0);
+		self.call_cc_nnnn((self.f & constants.C_FLAG) == 0);
 
 
 	def call_Z_nnnn(self):
-		self.call_cc_nnnn((self.f & Z_FLAG) != 0);
+		self.call_cc_nnnn((self.f & constants.Z_FLAG) != 0);
 
 
 	def call_C_nnnn(self):
-		self.call_cc_nnnn((self.f & C_FLAG) != 0);
+		self.call_cc_nnnn((self.f & constants.C_FLAG) != 0);
 
 
 	 # RET
@@ -1506,19 +1502,19 @@ class CPU(object):
 
 
 	def ret_NZ(self):
-		self.ret_cc((self.f & Z_FLAG) == 0);
+		self.ret_cc((self.f & constants.Z_FLAG) == 0);
 
 
 	def ret_NC(self):
-		self.ret_cc((self.f & C_FLAG) == 0);
+		self.ret_cc((self.f & constants.C_FLAG) == 0);
 
 
 	def ret_Z(self):
-		self.ret_cc((self.f & Z_FLAG) != 0);
+		self.ret_cc((self.f & constants.Z_FLAG) != 0);
 
 
 	def ret_C(self):
-		self.ret_cc((self.f & C_FLAG) != 0);
+		self.ret_cc((self.f & constants.C_FLAG) != 0);
 
 
 	 # RST nn

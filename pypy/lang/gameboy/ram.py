@@ -3,10 +3,10 @@ Mario GameBoy (TM) Emulator
 
 Work and High RAM
 """
+
+from pypy.lang.gameboy import constants
+
 class RAM(object):
-	
-	WRAM_SIZE = 8192
-	HIGH_SIZE = 128
 	
 	# Work RAM
 	wram = []
@@ -18,13 +18,13 @@ class RAM(object):
 		self.reset();
 
 	def reset(self):
-		self.wram = range(0, WRAM_SIZE)
-		for index in range(0, WRAM_SIZE):
+		self.wram = range(0, constants.WRAM_SIZE)
+		for index in range(0, constants.WRAM_SIZE):
 			#TODO convert to byte
 			self.wram[index] =  0x00;
 
-		self.hram = range(0, HIGH_SIZE)
-		for index in range(0, HIGH_SIZE):
+		self.hram = range(0, constants.HIGH_SIZE)
+		for index in range(0, constants.HIGH_SIZE):
 			#TODO convert to byte
 			self.hram[index] =  0x00;
 

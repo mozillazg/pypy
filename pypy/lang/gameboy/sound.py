@@ -4,49 +4,9 @@ Mario GameBoy (TM) Emulator
 Audio Processor Unit (Sharp LR35902 APU)
 """
 
+from pypy.lang.gameboy import constants
 
 class Sound(object):
-
-	 # Gameboy Clock Speed (1048576 Hz)
-
-	GAMEBOY_CLOCK = 1 << 20;
-
-
-	 # Sound Clock (256 Hz)
-
-	SOUND_CLOCK = 256;
-
-
-	 # Sound Register Addresses
-
-	NR10 = 0xFF10 # AUD1SWEEP */
-	NR11 = 0xFF11 # AUD1LEN */
-	NR12 = 0xFF12 # AUD1ENV */
-	NR13 = 0xFF13 # AUD1LOW */
-	NR14 = 0xFF14 # AUD1HIGH */
-
-	NR21 = 0xFF16 # AUD2LEN */
-	NR22 = 0xFF17 # AUD2ENV */
-	NR23 = 0xFF18 # AUD2LOW */
-	NR24 = 0xFF19 # AUD2HIGH */
-
-	NR30 = 0xFF1A # AUD3ENA */
-	NR31 = 0xFF1B # AUD3LEN */
-	NR32 = 0xFF1C # AUD3LEVEL */
-	NR33 = 0xFF1D # AUD3LOW */
-	NR34 = 0xFF1E # AUD3HIGH */
-
-	NR41 = 0xFF20 # AUD4LEN */
-	NR42 = 0xFF21 # AUD4ENV */
-	NR43 = 0xFF22 # AUD4POLY */
-	NR44 = 0xFF23 # AUD4GO */
-
-	NR50 = 0xFF24 # AUDVOL */
-	NR51 = 0xFF25 # AUDTERM */
-	NR52 = 0xFF26 # AUDENA */
-
-	AUD3WAVERAM = 0xFF30;
-
 
 	# Audio Channel 1 int
 	nr10=0;
@@ -141,44 +101,44 @@ class Sound(object):
 			self.updateAudio();
 			if (self.driver.isEnabled()):
 				self.frames += self.driver.getSampleRate();
-				length = (self.frames / SOUND_CLOCK) << 1;
+				length = (self.frames / constants.SOUND_CLOCK) << 1;
 				self.mixAudio(self.buffer, length);
 				self.driver.write(self.buffer, length);
-				self.frames %= SOUND_CLOCK;
+				self.frames %= constants.SOUND_CLOCK;
 
-			self.cycles += GAMEBOY_CLOCK / SOUND_CLOCK;
+			self.cycles += constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK;
 	
 
 
 	def reset(self):
-		self.cycles = GAMEBOY_CLOCK / SOUND_CLOCK;
+		self.cycles = constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK;
 		self.frames = 0;
 		self.audio1Index = self.audio2Index = self.audio3Index = self.audio4Index = 0;
-		self.write(NR10, 0x80);
-		self.write(NR11, 0x3F); #  0xBF
-		self.write(NR12, 0x00); #  0xF3
-		self.write(NR13, 0xFF);
-		self.write(NR14, 0xBF);
+		self.write(constants.NR10, 0x80);
+		self.write(constants.NR11, 0x3F); #  0xBF
+		self.write(constants.NR12, 0x00); #  0xF3
+		self.write(constants.NR13, 0xFF);
+		self.write(constants.NR14, 0xBF);
 
-		self.write(NR21, 0x3F);
-		self.write(NR22, 0x00);
-		self.write(NR23, 0xFF);
-		self.write(NR24, 0xBF);
+		self.write(constants.NR21, 0x3F);
+		self.write(constants.NR22, 0x00);
+		self.write(constants.NR23, 0xFF);
+		self.write(constants.NR24, 0xBF);
 
-		self.write(NR30, 0x7F);
-		self.write(NR31, 0xFF);
-		self.write(NR32, 0x9F);
-		self.write(NR33, 0xFF);
-		self.write(NR34, 0xBF);
+		self.write(constants.NR30, 0x7F);
+		self.write(constants.NR31, 0xFF);
+		self.write(constants.NR32, 0x9F);
+		self.write(constants.NR33, 0xFF);
+		self.write(constants.NR34, 0xBF);
 
-		self.write(NR41, 0xFF);
-		self.write(NR42, 0x00);
-		self.write(NR43, 0x00);
-		self.write(NR44, 0xBF);
+		self.write(constants.NR41, 0xFF);
+		self.write(constants.NR42, 0x00);
+		self.write(constants.NR43, 0x00);
+		self.write(constants.NR44, 0xBF);
 
-		self.write(NR50, 0x00); #  0x77
-		self.write(NR51, 0xF0);
-		self.write(NR52, 0xFF); #  0xF0
+		self.write(constants.NR50, 0x00); #  0x77
+		self.write(constants.NR51, 0xF0);
+		self.write(constants.NR52, 0xFF); #  0xF0
 
 		for address in range(0xFF30, 0xFF3F):
 			write = 0xFF
@@ -188,108 +148,108 @@ class Sound(object):
 
 
 	def read(self, address):
-		if address==NR10:
+		if address==constants.NR10:
 			return self.getAudio1Sweep();
-		elif address == NR11:
+		elif address == constants.NR11:
 			return self.getAudio1Length();
-		elif address == NR12:
+		elif address == constants.NR12:
 			return self.getAudio1Envelope();
-		elif address == NR13:
+		elif address == constants.NR13:
 			return self.getAudio1Frequency();
-		elif address == NR14:
+		elif address == constants.NR14:
 			return self.getAudio1Playback();
 
-		elif address == NR21:
+		elif address == constants.NR21:
 			return self.getAudio2Length();
-		elif address == NR22:
+		elif address == constants.NR22:
 			return self.getAudio2Envelope();
-		elif address==NR23:
+		elif address==constants.NR23:
 			return self.getAudio2Frequency();
-		elif address==NR24:
+		elif address==constants.NR24:
 			return self.getAudio2Playback();
 
-		elif address==NR30:
+		elif address==constants.NR30:
 			return self.getAudio3Enable();
-		elif address==NR31:
+		elif address==constants.NR31:
 			return self.getAudio3Length();
-		elif address==NR32:
+		elif address==constants.NR32:
 			return self.getAudio3Level();
-		elif address==NR33:
+		elif address==constants.NR33:
 			return self.getAudio4Frequency();
-		elif address==NR34:
+		elif address==constants.NR34:
 			return self.getAudio3Playback();
 
-		elif address==NR41:
+		elif address==constants.NR41:
 			return self.getAudio4Length();
-		elif address==NR42:
+		elif address==constants.NR42:
 			return self.getAudio4Envelope();
-		elif address==NR43:
+		elif address==constants.NR43:
 			return self.getAudio4Polynomial();
-		elif address==NR44:
+		elif address==constants.NR44:
 			return self.getAudio4Playback();
 
-		elif address==NR50:
+		elif address==constants.NR50:
 			return self.getOutputLevel();
-		elif address==NR51:
+		elif address==constants.NR51:
 			return self.getOutputTerminal();
-		elif address==NR52:
+		elif address==constants.NR52:
 			return self.getOutputEnable();
 
-		elif (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
+		elif (address >= constants.AUD3WAVERAM and address <= constants.AUD3WAVERAM + 0x3F):
 			return self.getAudio3WavePattern(address);
 
 		return 0xFF;
 
 
 	def write(self, address, data):
-		if address==NR10:
+		if address==constants.NR10:
 			self.setAudio1Sweep(data);
-		elif address == NR11:
+		elif address == constants.NR11:
 			self.setAudio1Length(data);
-		elif address == NR12:
+		elif address == constants.NR12:
 			self.setAudio1Envelope(data);
-		elif address == NR13:
+		elif address == constants.NR13:
 			self.setAudio1Frequency(data);
-		elif address == NR14:
+		elif address == constants.NR14:
 			self.setAudio1Playback(data);
 		
-		elif address == NR21:
+		elif address == constants.NR21:
 			self.setAudio2Length(data);
-		elif address == NR22:
+		elif address == constants.NR22:
 			self.setAudio2Envelope(data);
-		elif address == NR23:
+		elif address == constants.NR23:
 			self.setAudio2Frequency(data);
-		elif address == NR24:
+		elif address == constants.NR24:
 			self.setAudio2Playback(data);
 		
-		elif address == NR30:
+		elif address == constants.NR30:
 			self.setAudio3Enable(data);
-		elif address == NR31:
+		elif address == constants.NR31:
 			self.setAudio3Length(data);
-		elif address == NR32:
+		elif address == constants.NR32:
 			self.setAudio3Level(data);
-		elif address == NR33:
+		elif address == constants.NR33:
 			self.setAudio3Frequency(data);
-		elif address == NR34:
+		elif address == constants.NR34:
 			self.setAudio3Playback(data);
 		
-		elif address == NR41:
+		elif address == constants.NR41:
 			self.setAudio4Length(data);
-		elif address == NR42:
+		elif address == constants.NR42:
 			self.setAudio4Envelope(data);
-		elif address == NR43:
+		elif address == constants.NR43:
 			self.setAudio4Polynomial(data);
-		elif address == NR44:
+		elif address == constants.NR44:
 			self.setAudio4Playback(data);
 		
-		elif address == NR50:
+		elif address == constants.NR50:
 			self.setOutputLevel(data);
-		elif address == NR51:
+		elif address == constants.NR51:
 			self.setOutputTerminal(data);
-		elif address == NR52:
+		elif address == constants.NR52:
 			self.setOutputEnable(data);
 		
-		elif (address >= AUD3WAVERAM and address <= AUD3WAVERAM + 0x3F):
+		elif (address >= constants.AUD3WAVERAM and address <= constants.AUD3WAVERAM + 0x3F):
 			self.setAudio3WavePattern(address, data);
 
 
@@ -353,12 +313,12 @@ class Sound(object):
 
 	def setAudio1Sweep(self, data):
 		self.nr10 = data;
-		self.audio1SweepLength = (SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
+		self.audio1SweepLength = (constants.SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
 
 
 	def setAudio1Length(self, data):
 		self.nr11 = data;
-		self.audio1Length = (SOUND_CLOCK / 256) * (64 - (self.nr11 & 0x3F));
+		self.audio1Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr11 & 0x3F));
 
 
 	def setAudio1Envelope(self, data):
@@ -388,12 +348,12 @@ class Sound(object):
 			self.nr52 |= 0x01;
 
 			if ((self.nr14 & 0x40) != 0 and self.audio1Length == 0):
-				self.audio1Length = (SOUND_CLOCK / 256) * (64 - (self.nr11 & 0x3F));
+				self.audio1Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr11 & 0x3F));
 
-			self.audio1SweepLength = (SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
+			self.audio1SweepLength = (constants.SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
 
 			self.audio1Volume = self.nr12 >> 4;
-			self.audio1EnvelopeLength = (SOUND_CLOCK / 64) * (self.nr12 & 0x07);
+			self.audio1EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr12 & 0x07);
 	
 
 	def updateAudio1(self):
@@ -409,7 +369,7 @@ class Sound(object):
 						self.audio1Volume+=1;
 				elif (self.audio1Volume > 0):
 					self.audio1Volume-=1;
-				self.audio1EnvelopeLength += (SOUND_CLOCK / 64) * (self.nr12 & 0x07);
+				self.audio1EnvelopeLength += (constants.SOUND_CLOCK / 64) * (self.nr12 & 0x07);
 		if (self.audio1SweepLength > 0):
 			self.audio1SweepLength-=1;
 			if (self.audio1SweepLength <= 0):
@@ -428,7 +388,7 @@ class Sound(object):
 						self.audio1Frequency = 0;
 						self.nr52 &= ~0x01;
 			
-				self.audio1SweepLength += (SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
+				self.audio1SweepLength += (constants.SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
 		
 
 	def mixAudio1(self, buffer, length):
@@ -474,7 +434,7 @@ class Sound(object):
 
 	def setAudio2Length(self, data):
 		self.nr21 = data;
-		self.audio2Length = (SOUND_CLOCK / 256) * (64 - (self.nr21 & 0x3F));
+		self.audio2Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr21 & 0x3F));
 
 
 	def setAudio2Envelope(self, data):
@@ -504,10 +464,10 @@ class Sound(object):
 			self.nr52 |= 0x02;
 
 			if ((self.nr24 & 0x40) != 0 and self.audio2Length == 0):
-				self.audio2Length = (SOUND_CLOCK / 256) * (64 - (self.nr21 & 0x3F));
+				self.audio2Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr21 & 0x3F));
 
 			self.audio2Volume = self.nr22 >> 4;
-			self.audio2EnvelopeLength = (SOUND_CLOCK / 64) * (self.nr22 & 0x07);
+			self.audio2EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr22 & 0x07);
 	
 
 
@@ -526,7 +486,7 @@ class Sound(object):
 						self.audio2Volume+=1;
 				elif (self.audio2Volume > 0):
 					self.audio2Volume-=1;
-				self.audio2EnvelopeLength += (SOUND_CLOCK / 64) * (self.nr22 & 0x07);
+				self.audio2EnvelopeLength += (constants.SOUND_CLOCK / 64) * (self.nr22 & 0x07);
 		
 
 	def mixAudio2(self, buffer, length):
@@ -583,7 +543,7 @@ class Sound(object):
 
 	def setAudio3Length(self, data):
 		self.nr31 = data;
-		self.audio3Length = (SOUND_CLOCK / 256) * (256 - self.nr31);
+		self.audio3Length = (constants.SOUND_CLOCK / 256) * (256 - self.nr31);
 
 
 	def setAudio3Level(self, data):
@@ -603,7 +563,7 @@ class Sound(object):
 		if ((self.nr34 & 0x80) != 0 and (self.nr30 & 0x80) != 0):
 			self.nr52 |= 0x04;
 			if ((self.nr34 & 0x40) != 0 and self.audio3Length == 0):
-				self.audio3Length = (SOUND_CLOCK / 256) * (256 - self.nr31);
+				self.audio3Length = (constants.SOUND_CLOCK / 256) * (256 - self.nr31);
 	
 
 
@@ -667,7 +627,7 @@ class Sound(object):
 
 	def setAudio4Length(self, data):
 		self.nr41 = data;
-		self.audio4Length = (SOUND_CLOCK / 256) * (64 - (self.nr41 & 0x3F));
+		self.audio4Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr41 & 0x3F));
 
 
 	def setAudio4Envelope(self, data):
@@ -695,10 +655,10 @@ class Sound(object):
 			self.nr52 |= 0x08;
 
 			if ((self.nr44 & 0x40) != 0 and self.audio4Length == 0):
-				self.audio4Length = (SOUND_CLOCK / 256) * (64 - (self.nr41 & 0x3F));
+				self.audio4Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr41 & 0x3F));
 
 			self.audio4Volume = self.nr42 >> 4;
-			self.audio4EnvelopeLength = (SOUND_CLOCK / 64) * (self.nr42 & 0x07);
+			self.audio4EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr42 & 0x07);
 
 			self.audio4Index = 0;
 	
@@ -720,7 +680,7 @@ class Sound(object):
 				elif (self.audio4Volume > 0):
 					self.audio4Volume-=1;
 
-				self.audio4EnvelopeLength += (SOUND_CLOCK / 64) * (self.nr42 & 0x07);
+				self.audio4EnvelopeLength += (constants.SOUND_CLOCK / 64) * (self.nr42 & 0x07);
 		
 	
 	def mixAudio4(self, buffer, length):
@@ -782,7 +742,7 @@ class Sound(object):
 	
 		 # frequency = (4194304 / 32) / (2048 - period) Hz
 		for period in range(0, 2048):
-			skip = (((GAMEBOY_CLOCK << 10) / sampleRate) << (22 - 8)) / (2048 - period);
+			skip = (((constants.GAMEBOY_CLOCK << 10) / sampleRate) << (22 - 8)) / (2048 - period);
 			if (skip >= (32 << 22)):
 				self.frequencyTable[period] = 0;
 			else:
@@ -796,7 +756,7 @@ class Sound(object):
 			divider = 1
 			if ratio != 0:
 				divider = 2 * ratio
-			self.noiseFreqRatioTable[ratio] = (GAMEBOY_CLOCK / divider) * ((1 << 16) / sampleRate);
+			self.noiseFreqRatioTable[ratio] = (constants.GAMEBOY_CLOCK / divider) * ((1 << 16) / sampleRate);
 
 
 
