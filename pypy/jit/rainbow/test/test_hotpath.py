@@ -236,3 +236,40 @@ class TestHotPath(test_interpreter.InterpretationTest):
         def ll_function(n):
             jit_merge_point(green=(n,))
         py.test.raises(JitHintError, self.run, ll_function, [5], 3)
+
+    def test_hp_tlr(self):
+        from pypy.jit.tl import tlr
+
+        def main(code, n):
+            if code == 1:
+                bytecode = tlr.SQUARE
+            else:
+                bytecode = chr(tlr.RETURN_A)
+            return tlr.hp_interpret(bytecode, n)
+
+        res = self.run(main, [1, 71], threshold=4)
+        assert res == 5041
+        self.check_traces([
+            "jit_not_entered * stru...} 10 70 * array [ 70, 71, 71 ]",
+            "jit_not_entered * stru...} 10 69 * array [ 69, 71, 142 ]",
+            "jit_not_entered * stru...} 10 68 * array [ 68, 71, 213 ]",
+            "jit_compile * stru...} 10 67 * array [ 67, 71, 284 ]",
+            "pause at hotsplit in hp_interpret",
+            "run_machine_code * stru...} 10 67 * array [ 67, 71, 284 ]",
+            "fallback_interp",
+            "fb_leave * stru...} 10 66 * array [ 66, 71, 355 ]",
+            "run_machine_code * stru...} 10 66 * array [ 66, 71, 355 ]",
+            "fallback_interp",
+            "fb_leave * stru...} 10 65 * array [ 65, 71, 426 ]",
+            "run_machine_code * stru...} 10 65 * array [ 65, 71, 426 ]",
+            "fallback_interp",
+            "fb_leave * stru...} 10 64 * array [ 64, 71, 497 ]",
+            "run_machine_code * stru...} 10 64 * array [ 64, 71, 497 ]",
+            "jit_resume bool_path True in hp_interpret",
+            "done at jit_merge_point",
+            "resume_machine_code",
+            "fallback_interp",
+            "fb_leave * stru...} 27 0 * array [ 0, 71, 5041 ]",
+            ])
+        py.test.skip("XXX currently the 'regs' list is not virtual."
+                     "The test should check this and fail.")

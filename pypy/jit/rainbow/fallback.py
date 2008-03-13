@@ -262,6 +262,38 @@ class FallbackInterpreter(object):
                                       gv_funcptr, callset):
         xxx
 
+    @arguments("oopspec", "bool", returns="red")
+    def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
+        xxx
+
+    @arguments("oopspec", "bool", "red", returns="red")
+    def opimpl_red_oopspec_call_1(self, oopspec, deepfrozen, arg1):
+        xxx
+
+    @arguments("oopspec", "bool", "red", "red", returns="red")
+    def opimpl_red_oopspec_call_2(self, oopspec, deepfrozen, arg1, arg2):
+        xxx
+
+    @arguments("oopspec", "bool", "red", "red", "red", returns="red")
+    def opimpl_red_oopspec_call_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
+        xxx
+
+    @arguments("oopspec", "bool")
+    def opimpl_red_oopspec_call_noresult_0(self, oopspec, deepfrozen):
+        xxx
+
+    @arguments("oopspec", "bool", "red")
+    def opimpl_red_oopspec_call_noresult_1(self, oopspec, deepfrozen, arg1):
+        xxx
+
+    @arguments("oopspec", "bool", "red", "red")
+    def opimpl_red_oopspec_call_noresult_2(self, oopspec, deepfrozen, arg1, arg2):
+        xxx
+
+    @arguments("oopspec", "bool", "red", "red", "red")
+    def opimpl_red_oopspec_call_noresult_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
+        xxx
+
     @arguments("red", "calldesc", "bool", "bool", "red_varargs",
                "promotiondesc")
     def opimpl_red_residual_call(self, gv_func, calldesc, withexc, has_result,
