@@ -1,6 +1,6 @@
 import py
 import re
-from pypy.rlib.jit import jit_merge_point, can_enter_jit, hint, JitHintError
+from pypy.rlib.jit import JitDriver, hint, JitHintError
 from pypy.jit.rainbow.test import test_interpreter
 from pypy.jit.rainbow.hotpath import EntryPointsRewriter
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
@@ -52,16 +52,20 @@ class TestHotPath(test_interpreter.InterpretationTest):
 
     def test_simple_loop(self):
         # there are no greens in this test
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n1', 'total']
+
         def ll_function(n):
             n1 = n * 2
             total = 0
             while True:
-                jit_merge_point(red=(n1, total))
+                MyJitDriver.jit_merge_point(n1=n1, total=total)
                 total += n1
                 if n1 <= 1:
                     break
                 n1 -= 1
-                can_enter_jit(red=(n1, total))
+                MyJitDriver.can_enter_jit(n1=n1, total=total)
             raise Exit(total)
 
         def main(n, m):
@@ -107,12 +111,17 @@ class TestHotPath(test_interpreter.InterpretationTest):
             "fb_raise Exit"])
 
     def test_greens(self):
+        class MyJitDriver(JitDriver):
+            greens = ['code', 'pc']
+            reds = ['accum', 'data', 'buffer']
+
         def ll_function(code, buffer):
             data = 0
             accum = 0
             pc = 0
             while True:
-                jit_merge_point(green=(code, pc), red=(accum, data, buffer))
+                MyJitDriver.jit_merge_point(code=code, pc=pc, accum=accum,
+                                            data=data, buffer=buffer)
                 if pc == len(code):
                     raise Exit(accum)
                 c = code[pc]
@@ -147,8 +156,9 @@ class TestHotPath(test_interpreter.InterpretationTest):
                             pc -= 1
                             assert pc >= 0
                         pc += 1
-                        can_enter_jit(green=(code, pc), red=(accum,
-                                                             data, buffer))
+                        MyJitDriver.can_enter_jit(code=code, pc=pc,
+                                                  accum=accum, data=data,
+                                                  buffer=buffer)
 
         def main(demo, arg):
             if demo == 1:
@@ -202,17 +212,21 @@ class TestHotPath(test_interpreter.InterpretationTest):
         assert len(self.rewriter.interpreter.debug_traces) < 20
 
     def test_simple_return(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'total']
+
         def ll_function(n):
             total = 0
             if n <= 0:
                 return -1
             while True:
-                jit_merge_point(red=(n, total))
+                MyJitDriver.jit_merge_point(n=n, total=total)
                 total += n
                 if n <= 1:
                     return total
                 n -= 1
-                can_enter_jit(red=(n, total))
+                MyJitDriver.can_enter_jit(n=n, total=total)
 
         res = self.run(ll_function, [0], threshold=3, small=True)
         assert res == -1
@@ -228,13 +242,18 @@ class TestHotPath(test_interpreter.InterpretationTest):
         assert len(self.rewriter.interpreter.debug_traces) < 20
 
     def test_hint_errors(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n']
+
         def ll_function(n):
-            jit_merge_point(red=(n,))
-            can_enter_jit(red=(n,), green=(0,))
+            MyJitDriver.jit_merge_point(n=n)
+            MyJitDriver.can_enter_jit(foobar=n)
         py.test.raises(JitHintError, self.run, ll_function, [5], 3)
 
         def ll_function(n):
-            jit_merge_point(green=(n,))
+            MyJitDriver.jit_merge_point(n=n)   # wrong color
+            hint(n, concrete=True)
         py.test.raises(JitHintError, self.run, ll_function, [5], 3)
 
     def test_hp_tlr(self):

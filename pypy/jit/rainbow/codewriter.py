@@ -167,7 +167,6 @@ class BytecodeWriter(object):
         self.ptr_to_jitcode = {}
         self.transformer = GraphTransformer(hannotator)
         self._listcache = {}
-        self.jit_merge_point_args = None
 
     def sharelist(self, name):
         lst = getattr(self, name)
@@ -1397,20 +1396,20 @@ class BytecodeWriter(object):
             c = 'red'
         return c
 
+    def decode_hp_hint_args(self, op):
+        # Returns (list-of-green-vars, list-of-red-vars).
+        drivercls = op.args[0].value
+        numgreens = len(drivercls.greens)
+        numreds = len(drivercls.reds)
+        greens_v = op.args[1:1+numgreens]
+        reds_v = op.args[1+numgreens:]
+        assert len(reds_v) == numreds
+        return greens_v, reds_v
+
     def check_hp_hint_args(self, op):
         # Check the colors of the jit_merge_point() and can_enter_jit()
-        # arguments, and check that all these hints are called with the
-        # same number of arguments.
-        numgreens = op.args[0].value
-        numreds = op.args[1].value
-        if self.jit_merge_point_args is None:
-            self.jit_merge_point_args = (numgreens, numreds)
-        elif self.jit_merge_point_args != (numgreens, numreds):
-            raise JitHintError("the number of green=() or red=() arguments"
-                               " in can_enter_jit() don't match the ones"
-                               " in jit_merge_point()")
-        greens_v = op.args[2:2+numgreens]
-        reds_v = op.args[2+numgreens:2+numgreens+numreds]
+        # arguments.
+        greens_v, reds_v = self.decode_hp_hint_args(op)
         for v in greens_v:
             if self.varcolor(v) != "green":
                 raise JitHintError(
@@ -1421,7 +1420,7 @@ class BytecodeWriter(object):
             if self.varcolor(v) != "red":
                 raise JitHintError(
                     "computed color does not match declared color:"
-                    " %s is %s, but %s() declares it as red"
+                    " %s is %s, but %s() declares it as red" %
                     (v, self.varcolor(v), op.opname))
         return greens_v, reds_v
 

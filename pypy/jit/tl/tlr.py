@@ -1,4 +1,4 @@
-from pypy.rlib.jit import hint, jit_merge_point, can_enter_jit
+from pypy.rlib.jit import hint, JitDriver
 
 
 MOV_A_R    = 1
@@ -48,12 +48,26 @@ def interpret(bytecode, a):
         elif opcode == NEG_A:
             a = -a
 
+
+class TLRJitDriver(JitDriver):
+    greens = ['bytecode', 'pc']
+    reds   = ['a', 'regs']
+
+    def on_enter_jit(self):
+        xxx - "not called yet"
+        # make a copy of the 'regs' list to make it a VirtualList for the JIT
+        length = hint(len(self.regs), promote=True)
+        newregs = [None] * length
+        for i in range(length):
+            newregs[i] = self.regs[i]
+        self.regs = newregs
+
 def hp_interpret(bytecode, a):
     """A copy of interpret() with the hints required by the hotpath policy."""
     regs = []
     pc = 0
     while True:
-        jit_merge_point(green=(bytecode, pc), red=(a, regs))
+        TLRJitDriver.jit_merge_point(bytecode=bytecode, pc=pc, a=a, regs=regs)
         opcode = hint(ord(bytecode[pc]), concrete=True)
         pc += 1
         if opcode == MOV_A_R:
@@ -69,7 +83,8 @@ def hp_interpret(bytecode, a):
             pc += 1
             if a:
                 if target < pc:
-                    can_enter_jit(green=(bytecode, target), red=(a, regs))
+                    TLRJitDriver.can_enter_jit(bytecode=bytecode, pc=target,
+                                               a=a, regs=regs)
                 pc = target
         elif opcode == SET_A:
             a = ord(bytecode[pc])
