@@ -97,52 +97,20 @@ class GameBoy(object):
 
 
 	def write(self, address, data):
-		if (address <= 0x7FFF):
-			# 0000-7FFF ROM Bank
-			self.cartridge.write(address, data);
-		elif (address <= 0x9FFF):
-			# 8000-9FFF Video RAM
-			self.video.write(address, data);
-		elif (address <= 0xBFFF):
-			# A000-BFFF External RAM
-			self.cartridge.write(address, data);
-		elif (address <= 0xFDFF):
-			# C000-FDFF Work RAM
-			self.ram.write(address, data);
-		elif (address <= 0xFEFF):
-			# FE00-FEFF OAM
-			self.video.write(address, data);
-		elif (address == 0xFF00):
-			# FF00-FF00 Joypad
-			self.joypad.write(address, data);
-		elif (address >= 0xFF01 and address <= 0xFF02):
-			# FF01-FF02 Serial
-			self.serial.write(address, data);
-		elif (address >= 0xFF04 and address <= 0xFF07):
-			# FF04-FF07 Timer
-			self.timer.write(address, data);
-		elif (address == 0xFF0F):
-			# FF0F-FF0F Interrupt
-			self.interrupt.write(address, data);
-			# check pending interrupts when IF is changed
-			self.cpu.interrupt();
-	 	elif (address >= 0xFF10 and address <= 0xFF3F):
-			# FF10-FF3F Sound
-			self.sound.write(address, data);
-		elif (address >= 0xFF40 and address <= 0xFF4B):
-			# FF40-FF4B Video
-			self.video.write(address, data);
-			# check pending interrupts when STAT is changed
-			if (address == Video.STAT):
-				self.cpu.interrupt();
-	 	elif (address >= 0xFF80 and address <= 0xFFFE):
-			# FF80-FFFE High RAM
-			self.ram.write(address, data);
-		elif (address == 0xFFFF):
-			# FFFF-FFFF Interrupt
-			self.interrupt.write(address, data);
-			# check pending interrupts when IE is changed
-			self.cpu.interrupt();
+	(0x0000, 0x7FFF,Gameboy.cartridge),
+	(0x8000, 0x9FFF, Gameboy.video),
+	(0xA000, 0xBFFF, Gameboy.cartridge),
+	(0xC000, 0xFDFF, Gameboy.ram),
+	(0xFE00, 0xFEFF, Gameboy.video),
+	(0xFF00, 0xFF00, Gameboy.joypad),
+	(0xFF01, 0xFF02, Gameboy.serial),
+	(0xFF04, 0xFF07, Gameboy.timer),
+	(0xFF0F, 0xFF0F, Gameboy.interrupt),
+	(0xFF10, 0xFF3F, Gameboy.sound),
+	(0xFF40, 0xFF4B, Gameboy.video),
+	(0xFF80, 0xFFFE, Gameboy.ram),
+	(0xFFFF, 0xFFFF, Gameboy.interrupt)
+]
 	
 
 
@@ -214,4 +182,20 @@ class GameBoy(object):
 			self.video.write(0x9904 + tile, tile + 1);
 			self.video.write(0x9924 + tile, tile + 13);
 
-		self.video.write(0x9904 + 12, 25);
+		self.video.write(0x9905 + 12, 25);
+
+
+	(0x0000, 0x7FFF, Gameboy.cartridge),
+	(0x8000, 0x9FFF, Gameboy.video),
+	(0xA000, 0xBFFF, Gameboy.cartridge),
+	(0xC000, 0xFDFF, Gameboy.ram),
+	(0xFE00, 0xFEFF, Gameboy.video),
+	(0xFF00, 0xFF00, Gameboy.joypad),
+	(0xFF01, 0xFF02, Gameboy.serial),
+	(0xFF04, 0xFF07, Gameboy.timer),
+	(0xFF0F, 0xFF0F, Gameboy.interrupt),
+	(0xFF10, 0xFF3F, Gameboy.sound),
+	(0xFF40, 0xFF4B, Gameboy.video),
+	(0xFF80, 0xFFFE, Gameboy.ram),
+	(0xFFFF, 0xFFFF, Gameboy.interrupt)
+]
