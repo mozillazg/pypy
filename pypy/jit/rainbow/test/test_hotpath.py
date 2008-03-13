@@ -94,7 +94,7 @@ class TestHotPath(HotPathTest):
             "jit_not_entered 14 105",
             "jit_not_entered 13 119",
             # on the start of the next iteration, compile the 'total += n1'
-            "jit_compile 12 132",
+            "jit_compile",
             "pause at hotsplit in ll_function",
             # execute the compiled machine code until the 'n1 <= 1'.
             # It finishes in the fallback interpreter 7 times
@@ -190,7 +190,7 @@ class TestHotPath(HotPathTest):
             # start compiling the 3rd time we loop back
                 "jit_not_entered * struct rpy_string {...} 5 9 10 10",
                 "jit_not_entered * struct rpy_string {...} 5 8 90 10",
-                "jit_compile * struct rpy_string {...} 5 7 720 10",
+                "jit_compile * struct rpy_string {...} 5",
             # stop compiling at the red split ending an extra iteration
                 "pause at hotsplit in ll_function",
             # run it, finishing twice through the fallback interp
@@ -279,7 +279,7 @@ class TestHotPath(HotPathTest):
             "jit_not_entered * stru...} 10 70 * array [ 70, 71, 71 ]",
             "jit_not_entered * stru...} 10 69 * array [ 69, 71, 142 ]",
             "jit_not_entered * stru...} 10 68 * array [ 68, 71, 213 ]",
-            "jit_compile * stru...} 10 67 * array [ 67, 71, 284 ]",
+            "jit_compile * stru...} 10",
             "pause at hotsplit in hp_interpret",
             "run_machine_code * stru...} 10 67 * array [ 67, 71, 284 ]",
             "fallback_interp",
