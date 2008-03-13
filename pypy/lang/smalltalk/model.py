@@ -1,3 +1,19 @@
+"""
+Squeak model.
+
+    W_Object
+        W_SmallInteger        
+        W_Float
+        W_AbstractObjectWithIdentityHash
+            W_AbstractObjectWithClassReference
+                W_PointersObject 
+                W_BytesObject
+                W_WordsObject
+            W_CompiledMethod
+
+W_BlockContext and W_MethodContext classes have been replaced by functions
+that create W_PointersObjects of correct size with attached shadows.
+"""
 import sys
 from pypy.rlib import rrandom, objectmodel
 from pypy.rlib.rarithmetic import intmask
@@ -7,48 +23,77 @@ from pypy.rlib.objectmodel import instantiate
 from pypy.lang.smalltalk.tool.bitmanipulation import splitter
 
 class W_Object(object):
+    """Root of Squeak model, abstract."""
     __slots__ = ()    # no RPython-level instance variables allowed in W_Object
 
     def size(self):
+        """Return bytesize that conforms to Blue Book.
+        
+        The reported size may differ from the actual size in Spy's object
+space, as memory representation varies depending on PyPy translation."""
         return 0
 
     def varsize(self):
+        """Return bytesize of variable-sized part.
+
+        Variable sized objects are those created with #new:."""
         return self.size()
 
     def primsize(self):
+        # TODO remove this method
         return self.size()
 
     def getclass(self):
+        """Return Squeak class."""
         raise NotImplementedError()
 
     def gethash(self):
+        """Return 31-bit hash value."""
         raise NotImplementedError()
 
     def at0(self, index0):
+        """Access variable-sized part, as by Object>>at:.
+
+        Return value depends on layout of instance. Byte objects return bytes,
+        word objects return words, pointer objects return pointers. Compiled method are
+        treated special, if index0 within the literalsize returns pointer to literal,
+        otherwise returns byte (ie byte code indexing starts at literalsize)."""
         raise NotImplementedError()
 
     def atput0(self, index0, w_value):
+        """Access variable-sized part, as by Object>>at:put:.
+
+        Semantics depend on layout of instance. Byte objects set bytes,
+        word objects set words, pointer objects set pointers. Compiled method are
+        treated special, if index0 within the literalsize sets pointer to literal,
+        otherwise patches bytecode (ie byte code indexing starts at literalsize)."""
         raise NotImplementedError()
 
     def fetch(self, n0):
+        """Access fixed-size part, maybe also variable-sized part (we have to
+        consult the Blue Book)."""
+        # TODO check the Blue Book
         raise NotImplementedError()
         
     def store(self, n0, w_value):    
+        """Access fixed-size part, maybe also variable-sized part (we have to
+        consult the Blue Book)."""
         raise NotImplementedError()
 
     def invariant(self):
         return True
 
     def shadow_of_my_class(self):
+        """Return internal representation of Squeak class."""
         return self.getclass().as_class_get_shadow()
 
-    def pointer_equals(self,other):
+    def equals(self, other):
+        """Compare object identity"""
         return self == other
 
-    def equals(self, other):
-        return self.pointer_equals(other)
-
     def become(self, w_old, w_new):
+        """Exchange object identity."""
+        # TODO use PyPy's become 
         pass
 
 class W_SmallInteger(W_Object):
@@ -137,9 +182,6 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
     def invariant(self):
         return (W_AbstractObjectWithIdentityHash.invariant(self) and
                 isinstance(self.w_class, W_PointersObject))
-
-    def equals(self, w_other):
-        return self.pointer_equals(w_other)
 
     def become(self, w_old, w_new):
         if self.w_class == w_old:
