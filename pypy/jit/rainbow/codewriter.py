@@ -1,6 +1,7 @@
 import py
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.jit import JitHintError
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.annlowlevel import cachedtype
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -166,6 +167,7 @@ class BytecodeWriter(object):
         self.ptr_to_jitcode = {}
         self.transformer = GraphTransformer(hannotator)
         self._listcache = {}
+        self.jit_merge_point_args = None
 
     def sharelist(self, name):
         lst = getattr(self, name)
@@ -1395,27 +1397,43 @@ class BytecodeWriter(object):
             c = 'red'
         return c
 
-    def serialize_op_jit_merge_point(self, op):
-        # by construction, the graph should have exactly the vars listed
-        # in the op as live vars.  Check this.  Also check the colors
-        # while we are at it.
+    def check_hp_hint_args(self, op):
+        # Check the colors of the jit_merge_point() and can_enter_jit()
+        # arguments, and check that all these hints are called with the
+        # same number of arguments.
         numgreens = op.args[0].value
         numreds = op.args[1].value
+        if self.jit_merge_point_args is None:
+            self.jit_merge_point_args = (numgreens, numreds)
+        elif self.jit_merge_point_args != (numgreens, numreds):
+            raise JitHintError("the number of green=() or red=() arguments"
+                               " in can_enter_jit() don't match the ones"
+                               " in jit_merge_point()")
         greens_v = op.args[2:2+numgreens]
         reds_v = op.args[2+numgreens:2+numgreens+numreds]
+        for v in greens_v:
+            if self.varcolor(v) != "green":
+                raise JitHintError(
+                    "computed color does not match declared color:"
+                    " %s is %s, but %s() declares it as green" %
+                    (v, self.varcolor(v), op.opname))
+        for v in reds_v:
+            if self.varcolor(v) != "red":
+                raise JitHintError(
+                    "computed color does not match declared color:"
+                    " %s is %s, but %s() declares it as red"
+                    (v, self.varcolor(v), op.opname))
+        return greens_v, reds_v
+
+    def serialize_op_jit_merge_point(self, op):
+        # by construction, the graph should have exactly the vars listed
+        # in the op as live vars.  Check this.
+        greens_v, reds_v = self.check_hp_hint_args(op)
         key = ()
         for i, v in enumerate(greens_v):
-            if self.varcolor(v) != "green":
-                raise Exception("computed color does not match declared color:"
-                                " %s is %s, but jit_merge_point() declares it"
-                                " as green" % (v, self.varcolor(v)))
             assert self.green_position(v) == i
             key += (v.concretetype,)
         for i, v in enumerate(reds_v):
-            if self.varcolor(v) != "red":
-                raise Exception("computed color does not match declared color:"
-                                " %s is %s, but jit_merge_point() declares it"
-                                " as red" % (v, self.varcolor(v)))
             assert self.redvar_position(v) == i
         self.emit('jit_merge_point')
         self.emit(self.keydesc_position(key))
@@ -1423,6 +1441,7 @@ class BytecodeWriter(object):
     def serialize_op_can_enter_jit(self, op):
         # no need to put anything in the bytecode here, except a marker
         # that is useful for the fallback interpreter
+        self.check_hp_hint_args(op)
         self.emit('can_enter_jit')
 
 
