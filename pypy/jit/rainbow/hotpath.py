@@ -75,7 +75,7 @@ class EntryPointsRewriter:
                     interpreter.debug_trace("jit_not_entered", *args)
                     state.counters[key] = counter
                     return
-                interpreter.debug_trace("jit_compile", *args)
+                interpreter.debug_trace("jit_compile", *args[:num_green_args])
                 if not state.compile(key):
                     return
             interpreter.debug_trace("run_machine_code", *args)
