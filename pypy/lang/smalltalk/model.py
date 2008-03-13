@@ -97,12 +97,15 @@ space, as memory representation varies depending on PyPy translation."""
         pass
 
 class W_SmallInteger(W_Object):
+    """Boxed integer value"""
+    # TODO can we tell pypy that its never larger then 31-bit?
     __slots__ = ('value',)     # the only allowed slot here
 
     def __init__(self, value):
         self.value = value
 
     def getclass(self):
+        """Return SmallInteger from special objects array."""
         from pypy.lang.smalltalk.classtable import w_SmallInteger
         return w_SmallInteger
 
@@ -110,21 +113,24 @@ class W_SmallInteger(W_Object):
         return self.value
 
     def invariant(self):
-        return isinstance(self.value, int)
+        return isinstance(self.value, int) and self.value < 0x8000
 
     def __repr__(self):
         return "W_SmallInteger(%d)" % self.value
 
     def equals(self, other):
+        # TODO what is correct terminology to say that identity is by value?
         if not isinstance(other, W_SmallInteger):
             return False
         return self.value == other.value
 
 class W_Float(W_Object):
+    """Boxed float value."""
     def __init__(self, value):
         self.value = value
 
     def getclass(self):
+        """Return Float from special objects array."""
         from pypy.lang.smalltalk.classtable import w_Float
         return w_Float
 
@@ -140,9 +146,12 @@ class W_Float(W_Object):
     def equals(self, other):
         if not isinstance(other, W_Float):
             return False
+        # TODO is that correct in Squeak?
         return self.value == other.value
 
 class W_AbstractObjectWithIdentityHash(W_Object):
+    """Object with explicit hash (ie all except small
+    ints and floats)."""
     #XXX maybe this is too extreme, but it's very random
     hash_generator = rrandom.Random()
     UNASSIGNED_HASH = sys.maxint
@@ -159,7 +168,8 @@ class W_AbstractObjectWithIdentityHash(W_Object):
         return isinstance(self.hash, int)
 
 class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
-    """ The base class of objects that store 'w_class' explicitly. """
+    """Objects with arbitrary class (ie not CompiledMethod, SmallInteger or
+    Float)."""
 
     def __init__(self, w_class):
         if w_class is not None:     # it's None only for testing
@@ -184,17 +194,19 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
                 isinstance(self.w_class, W_PointersObject))
 
     def become(self, w_old, w_new):
+        # TODO to be eventually replaced by PyPy's become
         if self.w_class == w_old:
             self.w_class = w_new
         elif self.w_class == w_new:
             self.w_class = w_old
 
 class W_PointersObject(W_AbstractObjectWithClassReference):
-    """ The normal object """
+    """Common object."""
     
     _shadow = None # Default value
 
     def __init__(self, w_class, size):
+        """Create new object with size = fixed + variable size."""
         W_AbstractObjectWithClassReference.__init__(self, w_class)
         self._vars = [w_nil] * size
 
@@ -208,20 +220,20 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     def fetch(self, n0):
         if self._shadow is not None:
-            self._shadow.check_for_w_updates()
+            self._shadow.sync_w_self()
         return self._vars[n0]
         
     def store(self, n0, w_value):    
         if self._shadow is not None:
-            self._shadow.check_for_w_updates()
-            self._shadow.invalidate()
+            self._shadow.sync_w_self()
+            self._shadow.invalidate_shadow()
         self._vars[n0] = w_value
 
-    def fetchvarpointer(self, idx):
-        return self._vars[idx+self.instsize()]
+    # def fetchvarpointer(self, idx):
+    #    return self._vars[idx+self.instsize()]
 
-    def storevarpointer(self, idx, value):
-        self._vars[idx+self.instsize()] = value
+    # def storevarpointer(self, idx, value):
+    #    self._vars[idx+self.instsize()] = value
 
     def varsize(self):
         return self.size() - self.instsize()
@@ -251,11 +263,11 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
             shadow = TheClass(self, invalid)
             self._shadow = shadow
         elif not isinstance(shadow, TheClass):
-            shadow.check_for_w_updates()
-            shadow.invalidate()
+            shadow.sync_w_self()
+            shadow.invalidate_shadow()
             shadow = TheClass(self, invalid)
             self._shadow = shadow
-        shadow.check_for_updates()
+        shadow.sync_shadow()
         return shadow
 
     def get_shadow(self):

@@ -3,7 +3,7 @@ from pypy.lang.smalltalk import model, constants, utility, error
 from pypy.tool.pairtype import extendabletype
 
 class Invalidateable(object):
-    def invalidate(self):
+    def invalidate_shadow(self):
         pass
 
 class AbstractShadow(Invalidateable):
@@ -17,7 +17,7 @@ class AbstractShadow(Invalidateable):
         self.invalid = invalid
         self.w_invalid = False
         if invalid:
-            self.invalidate()
+            self.invalidate_shadow()
 
     def notifyinvalid(self, other):
         self._notifyinvalid += [other]
@@ -29,13 +29,13 @@ class AbstractShadow(Invalidateable):
     def getname(self):
         return repr(self)
 
-    def invalidate(self):
+    def invalidate_shadow(self):
         """XXX This should get called whenever the base Smalltalk
         object changes."""
         if not self.invalid:
             self.invalid = True
             for listener in self._notifyinvalid:
-                listener.invalidate()
+                listener.invalidate_shadow()
             self._notifyinvalid = []
 
     def invalidate_w_self(self):
@@ -47,11 +47,11 @@ class AbstractShadow(Invalidateable):
     def w_self(self):
         return self._w_self
 
-    def check_for_w_updates(self):
+    def sync_w_self(self):
         if self.w_invalid:
             self.update_w_self()
 
-    def check_for_updates(self):
+    def sync_shadow(self):
         if self.invalid:
             self.update_shadow()
 
@@ -84,8 +84,8 @@ class ClassShadow(AbstractShadow):
     def __init__(self, w_self, invalid):
         AbstractShadow.__init__(self, w_self, invalid)
 
-    def invalidate(self):
-        AbstractShadow.invalidate(self)
+    def invalidate_shadow(self):
+        AbstractShadow.invalidate_shadow(self)
         self.methoddict = {}
         self.s_superclass = None     # the ClassShadow of the super class
         self.name = None
@@ -259,7 +259,7 @@ class MethodDictionaryShadow(AbstractShadow):
     def __init__(self, w_self, invalid):
         AbstractShadow.__init__(self, w_self, invalid)
 
-    def invalidate(self):
+    def invalidate_shadow(self):
         self.methoddict = {}
 
     def update_shadow(self):
@@ -581,11 +581,11 @@ class BlockContextShadow(ContextPartShadow):
         self._s_home = None
         ContextPartShadow.__init__(self, w_self, invalid)
 
-    def invalidate(self):
+    def invalidate_shadow(self):
         if self._s_home is not None:
             self._s_home.unnotify(self)
             self._s_home = None
-        AbstractShadow.invalidate(self)
+        AbstractShadow.invalidate_shadow(self)
 
     def update_shadow(self):
         self.store_w_home(self.w_self()._vars[constants.BLKCTX_HOME_INDEX])

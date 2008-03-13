@@ -61,7 +61,7 @@ def fakeliterals(*literals):
             lstlen = len(lit)
             res = classtable.w_Array.as_class_get_shadow().new(lstlen)
             for i in range(lstlen):
-                res.storevarpointer(i, fakeliteral(lit[i]))
+                res.atput0(i, fakeliteral(lit[i]))
             return res
         return lit
     return [fakeliteral(lit) for lit in literals]
