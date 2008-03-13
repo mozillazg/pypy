@@ -2,56 +2,6 @@
 # ___________________________________________________________________________
 
 
-TYPE_ROM_ONLY = 0x00
-
-TYPE_MBC1 = 0x01
-TYPE_MBC1_RAM = 0x02
-TYPE_MBC1_RAM_BATTERY = 0x03
-
-TYPE_MBC2 = 0x05
-TYPE_MBC2_BATTERY = 0x06
-
-TYPE_MBC3_RTC_BATTERY = 0x0F
-TYPE_MBC3_RTC_RAM_BATTERY = 0x10
-TYPE_MBC3 = 0x11
-TYPE_MBC3_RAM = 0x12
-TYPE_MBC3_RAM_BATTERY = 0x13
-
-TYPE_MBC5 = 0x19
-TYPE_MBC5_RAM = 0x1A
-TYPE_MBC5_RAM_BATTERY = 0x1B
-
-TYPE_MBC5_RUMBLE = 0x1C
-TYPE_MBC5_RUMBLE_RAM = 0x1D
-TYPE_MBC5_RUMBLE_RAM_BATTERY = 0x1E
-
-TYPE_HUC3_RTC_RAM = 0xFE
-TYPE_HUC1_RAM_BATTERY = 0xFF
-
-CATRIDGE_TYPE_MAPPING = {
-						TYPE_ROM_ONLY: 			"MBC1",
-						TYPE_MBC1:  			"MBC1",
-						TYPE_MBC1_RAM: 			"MBC1",
-						TYPE_MBC1_RAM_BATTERY:	"MBC1",
-						TYPE_MBC2: 				"MBC2",
-						TYPE_MBC2_BATTERY: 		"MBC2",
-						TYPE_MBC3_RTC_BATTERY: 	"MBC3",
-						TYPE_MBC3_RTC_RAM_BATTERY: "MBC3",
-						TYPE_MBC3: 				"MBC3",
-						TYPE_MBC3_RAM: 			"MBC3",
-						TYPE_MBC3_RAM_BATTERY: 	"MBC3",
-						TYPE_MBC5: 				"MBC5",
-						TYPE_MBC5_RAM: 			"MBC5",
-						TYPE_MBC5_RAM_BATTERY: 	"MBC5",
-						TYPE_MBC5_RUMBLE: 		"MBC5",
-						TYPE_MBC5_RUMBLE_RAM: 	"MBC5",
-						TYPE_MBC5_RUMBLE_RAM_BATTERY: "MBC5",
-						TYPE_HUC3_RTC_RAM: 		"HuC3",
-						TYPE_HUC1_RAM_BATTERY: 	"HuC1"
-						};
-
-
-
 def hasCartridgeBattery(self, cartridgeType):	
 	return (cartridgeType == TYPE_MBC1_RAM_BATTERY \
 				or cartridgeType == TYPE_MBC2_BATTERY \
@@ -772,3 +722,51 @@ class HuC3(MBC):
 
 		self.clockTime = now - elapsed;
 
+TYPE_ROM_ONLY = 0x00
+
+TYPE_MBC1 = 0x01
+TYPE_MBC1_RAM = 0x02
+TYPE_MBC1_RAM_BATTERY = 0x03
+
+TYPE_MBC2 = 0x05
+TYPE_MBC2_BATTERY = 0x06
+
+TYPE_MBC3_RTC_BATTERY = 0x0F
+TYPE_MBC3_RTC_RAM_BATTERY = 0x10
+TYPE_MBC3 = 0x11
+TYPE_MBC3_RAM = 0x12
+TYPE_MBC3_RAM_BATTERY = 0x13
+
+TYPE_MBC5 = 0x19
+TYPE_MBC5_RAM = 0x1A
+TYPE_MBC5_RAM_BATTERY = 0x1B
+
+TYPE_MBC5_RUMBLE = 0x1C
+TYPE_MBC5_RUMBLE_RAM = 0x1D
+TYPE_MBC5_RUMBLE_RAM_BATTERY = 0x1E
+
+TYPE_HUC3_RTC_RAM = 0xFE
+TYPE_HUC1_RAM_BATTERY = 0xFF
+
+CATRIDGE_TYPE_RANGES = [
+   (TYPE_MBC1, TYPE_MBC1_RAM_BATTERY,              MBC1),
+   (TYPE_MBC2, TYPE_MBC2_BATTERY,                  MBC2),
+   (TYPE_MBC3_RTC_BATTERY, TYPE_MBC3_RAM_BATTERY,  MBC3),
+   (TYPE_MBC5, TYPE_MBC5_RUMBLE_RAM_BATTERY,       MBC5),
+   (TYPE_HUC3_RTC_RAM,                             HuC3),
+   (TYPE_HUC1_RAM_BATTERY,                         HuC1)
+]
+
+def initialize_cartridge_mapping():
+    result = [None] * 256
+    for entry in BYTECODE_RANGES:
+        if len(entry) == 2:
+            positions = [entry[0]]
+        else:
+            positions = range(entry[0], entry[1]+1)
+        for pos in positions:
+            result[pos] = entry[-1]
+    assert None not in result
+    return result 
+            
+CARTRIDGE_TABLE = initialize_cartridge_mapping()
