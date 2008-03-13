@@ -200,3 +200,25 @@ class TestHotPath(test_interpreter.InterpretationTest):
         res = self.run(main, [2, 1291], threshold=3, small=True)
         assert res == 1
         assert len(self.rewriter.interpreter.debug_traces) < 20
+
+    def test_simple_return(self):
+        py.test.skip("in-progress")
+        def ll_function(n):
+            total = 0
+            if n <= 0:
+                return -1
+            while True:
+                jit_merge_point(red=(n, total))
+                total += n
+                if n <= 1:
+                    return total
+                n -= 1
+                can_enter_jit(red=(n, total))
+
+        res = self.run(ll_function, [0], threshold=3, small=True)
+        assert res == -1
+        assert len(self.rewriter.interpreter.debug_traces) == 0
+
+        res = self.run(ll_function, [50], threshold=3, small=True)
+        assert res == (50*51)/2
+        assert len(self.rewriter.interpreter.debug_traces) < 20
