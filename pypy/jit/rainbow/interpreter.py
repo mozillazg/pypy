@@ -881,7 +881,11 @@ class JitInterpreter(object):
 
     @arguments()
     def opimpl_hp_gray_return(self):
-        assert False, "unreachable for now"
+        xxx
+
+    @arguments()
+    def opimpl_hp_red_return(self):
+        xxx
 
     @arguments()
     def opimpl_hp_yellow_return(self):

@@ -38,10 +38,6 @@ class EntryPointsRewriter:
 
     def make_args_specification(self):
         origportalgraph = self.hintannotator.portalgraph
-        for block in origportalgraph.iterblocks():
-            if block is origportalgraph.returnblock:
-                raise Exception("XXX doesn't support portal functions with"
-                                " a 'return' yet - leave it with 'raise' :-)")
         newportalgraph = self.hintannotator.translator.graphs[0]
         ALLARGS = []
         RESARGS = []
@@ -94,8 +90,9 @@ class EntryPointsRewriter:
     def update_interp(self):
         self.fallbackinterp = FallbackInterpreter(
             self.interpreter,
-            self.ContinueRunningNormally,
-            self.codewriter.exceptiondesc)
+            self.codewriter.exceptiondesc,
+            self.DoneWithThisFrame,
+            self.ContinueRunningNormally)
         ERASED = self.RGenOp.erasedType(lltype.Bool)
         self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
             ERASED, self.interpreter, self.threshold, self.fallbackinterp)
@@ -178,8 +175,8 @@ class EntryPointsRewriter:
                               # not its copy
 
         ARGS = [v.concretetype for v in portalgraph.getargs()]
-        assert portalgraph.getreturnvar().concretetype is lltype.Void
-        PORTALFUNC = lltype.FuncType(ARGS, lltype.Void)
+        RES = portalgraph.getreturnvar().concretetype
+        PORTALFUNC = lltype.FuncType(ARGS, RES)
 
         if not self.translate_support_code:
             # ____________________________________________________________
@@ -189,6 +186,17 @@ class EntryPointsRewriter:
             exc_data_ptr = self.codewriter.exceptiondesc.exc_data_ptr
             llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
             maybe_enter_jit = self.maybe_enter_jit_fn
+
+            class DoneWithThisFrame(Exception):
+                _go_through_llinterp_uncaught_ = True     # ugh
+                def __init__(self, gv_result):
+                    if RES is lltype.Void:
+                        assert gv_result is None
+                        self.result = None
+                    else:
+                        self.result = gv_result.revealconst(RES)
+                def __str__(self):
+                    return 'DoneWithThisFrame(%s)' % (self.result,)
 
             class ContinueRunningNormally(Exception):
                 _go_through_llinterp_uncaught_ = True     # ugh
@@ -200,6 +208,8 @@ class EntryPointsRewriter:
                 def __str__(self):
                     return 'ContinueRunningNormally(%s)' % (
                         ', '.join(map(str, self.args)),)
+
+            self.DoneWithThisFrame = DoneWithThisFrame
             self.ContinueRunningNormally = ContinueRunningNormally
 
             def portal_runner(*args):
@@ -208,8 +218,9 @@ class EntryPointsRewriter:
                     try:
                         if check_for_immediate_reentry:
                             maybe_enter_jit(*args)
-                        llinterp.eval_graph(portalgraph, list(args))
-                        assert 0, "unreachable"
+                        return llinterp.eval_graph(portalgraph, list(args))
+                    except DoneWithThisFrame, e:
+                        return e.result
                     except ContinueRunningNormally, e:
                         args = e.args
                         self.interpreter.debug_trace("fb_leave", *args)
@@ -235,13 +246,12 @@ class EntryPointsRewriter:
         vlist += greens_v
         vlist += reds_v
         v_result = Variable()
-        v_result.concretetype = lltype.Void
+        v_result.concretetype = RES
         newop = SpaceOperation('direct_call', vlist, v_result)
         del origblock.operations[origindex:]
         origblock.operations.append(newop)
         origblock.exitswitch = None
-        origblock.recloseblock(Link([Constant(None, lltype.Void)],
-                                    origportalgraph.returnblock))
+        origblock.recloseblock(Link([v_result], origportalgraph.returnblock))
         checkgraph(origportalgraph)
         return True
 
