@@ -127,9 +127,8 @@ class EntryPointsRewriter:
             # this case is used for most tests: the jit stuff should be run
             # directly to make these tests faster
             op = block.operations[index]
-            numgreens = op.args[0].value
-            numreds = op.args[1].value
-            args_v = op.args[2:2+numgreens+numreds]
+            greens_v, reds_v = self.codewriter.decode_hp_hint_args(op)
+            args_v = greens_v + reds_v
 
             FUNCPTR = lltype.Ptr(self.JIT_ENTER_FUNCTYPE)
             jit_enter_graph_ptr = llhelper(FUNCPTR, self.maybe_enter_jit_fn)
@@ -238,10 +237,7 @@ class EntryPointsRewriter:
         #
         op = origblock.operations[origindex]
         assert op.opname == 'jit_merge_point'
-        numgreens = op.args[0].value
-        numreds = op.args[1].value
-        greens_v = op.args[2:2+numgreens]
-        reds_v = op.args[2+numgreens:2+numgreens+numreds]
+        greens_v, reds_v = self.codewriter.decode_hp_hint_args(op)
         vlist = [Constant(portal_runner_ptr, lltype.Ptr(PORTALFUNC))]
         vlist += greens_v
         vlist += reds_v

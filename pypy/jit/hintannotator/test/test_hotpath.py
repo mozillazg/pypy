@@ -1,5 +1,5 @@
 from pypy.objspace.flow.model import summary
-from pypy.rlib.jit import jit_merge_point, can_enter_jit, we_are_jitted
+from pypy.rlib.jit import JitDriver, we_are_jitted
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.hintannotator.test.test_annotator import AbstractAnnotatorTest
 
@@ -17,16 +17,22 @@ class TestHotPath(AbstractAnnotatorTest):
                                         backendoptimize=True)
 
     def test_simple_loop(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n1', 'total']
+
         def ll_function(n):
             n1 = n * 2
             total = 0
-            while n1 > 0:
-                can_enter_jit(red=(n1, total))
-                jit_merge_point(red=(n1, total))
+            while True:
+                MyJitDriver.jit_merge_point(n1=n1, total=total)
+                if n1 <= 0:
+                    break
                 if we_are_jitted():
                     total += 1000
                 total += n1
                 n1 -= 1
+                MyJitDriver.can_enter_jit(n1=n1, total=total)
             return total
 
         def main(n, m):

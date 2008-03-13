@@ -83,54 +83,94 @@ class Entry(ExtRegistryEntry):
         v, = hop.inputargs(hop.args_r[0])
         return hop.genop('is_early_constant', [v], resulttype=lltype.Bool)
 
+# ____________________________________________________________
+# Internal
+
+class _JitHintClassMethod(object):
+    def __init__(self, name):
+        self.name = name
+    def __get__(self, instance, type):
+        return _JitBoundClassMethod(type, self.name)
+
+class _JitBoundClassMethod(object):
+    def __init__(self, drivercls, name):
+        self.drivercls = drivercls
+        self.name = name
+    def __eq__(self, other):
+        return (isinstance(other, _JitBoundClassMethod) and
+                self.drivercls is other.drivercls and
+                self.name == other.name)
+    def __ne__(self, other):
+        return not (self == other)
+    def __call__(self, **livevars):
+        # ignore calls to the hint class methods when running on top of CPython
+        pass
+
+class Entry(ExtRegistryEntry):
+    _type_ = _JitBoundClassMethod
+
+    def compute_result_annotation(self, **kwds_s):
+        from pypy.annotation import model as annmodel
+        drivercls = self.instance.drivercls
+        drivercls._check_class()
+        keys = kwds_s.keys()
+        keys.sort()
+        expected = ['s_' + name for name in drivercls.greens + drivercls.reds]
+        expected.sort()
+        if keys != expected:
+            raise JitHintError("%s.%s(): must give exactly the same keywords"
+                               " as the 'greens' and 'reds'" % (
+                drivercls.__name__, self.instance.name))
+        return annmodel.s_None
+
+    def specialize_call(self, hop, **kwds_i):
+        # replace a call to MyDriverCls.hintname(**livevars)
+        # with an operation 'hintname(MyDriverCls, livevars...)'
+        # XXX to be complete, this could also check that the concretetype
+        # of the variables are the same for each of the calls.
+        from pypy.rpython.error import TyperError
+        from pypy.rpython.lltypesystem import lltype
+        drivercls = self.instance.drivercls
+        greens_v = []
+        reds_v = []
+        for name in drivercls.greens:
+            i = kwds_i['i_' + name]
+            r_green = hop.args_r[i]
+            v_green = hop.inputarg(r_green, arg=i)
+            greens_v.append(v_green)
+        for name in drivercls.reds:
+            i = kwds_i['i_' + name]
+            r_red = hop.args_r[i]
+            v_red = hop.inputarg(r_red, arg=i)
+            reds_v.append(v_red)
+        hop.exception_cannot_occur()
+        vlist = [hop.inputconst(lltype.Void, drivercls)]
+        vlist.extend(greens_v)
+        vlist.extend(reds_v)
+        return hop.genop(self.instance.name, vlist,
+                         resulttype=lltype.Void)
+
+# ____________________________________________________________
+# User interface for the hotpath JIT policy
 
 class JitHintError(Exception):
     """Inconsistency in the JIT hints."""
 
-def jit_merge_point(green=(), red=()):
-    pass
+class JitDriver:
+    """Base class to declare fine-grained user control on the JIT process."""
 
-def can_enter_jit(green=(), red=()):
-    pass
+    # NB. one of the points of requiring subclasses of this a class is
+    # to support a single RPython program with several independent
+    # JITting interpreters in it.  XXX that's not implemented yet.
 
-class Entry(ExtRegistryEntry):
-    _about_ = jit_merge_point, can_enter_jit
+    jit_merge_point = _JitHintClassMethod("jit_merge_point")
+    can_enter_jit = _JitHintClassMethod("can_enter_jit")
 
-    def compute_result_annotation(self, s_green=None, s_red=None):
-        from pypy.annotation import model as annmodel
-        assert s_green is None or isinstance(s_green, annmodel.SomeTuple)
-        assert s_red is None or isinstance(s_red, annmodel.SomeTuple)
-        return annmodel.s_None
-
-    def specialize_call(self, hop, **kwds_i):
-        from pypy.rpython.error import TyperError
-        from pypy.rpython.lltypesystem import lltype
-        lst = kwds_i.values()
-        lst.sort()
-        if lst != range(hop.nb_args):
-            raise TyperError("%s() takes only keyword arguments" % (
-                self.instance.__name__,))
-        greens_v = []
-        reds_v = []
-        if 'i_green' in kwds_i:
-            i = kwds_i['i_green']
-            r_green_tuple = hop.args_r[i]
-            v_green_tuple = hop.inputarg(r_green_tuple, arg=i)
-            for j in range(len(r_green_tuple.items_r)):
-                v = r_green_tuple.getitem(hop.llops, v_green_tuple, j)
-                greens_v.append(v)
-        if 'i_red' in kwds_i:
-            i = kwds_i['i_red']
-            r_red_tuple = hop.args_r[i]
-            v_red_tuple = hop.inputarg(r_red_tuple, arg=i)
-            for j in range(len(r_red_tuple.items_r)):
-                v = r_red_tuple.getitem(hop.llops, v_red_tuple, j)
-                reds_v.append(v)
-
-        hop.exception_cannot_occur()
-        vlist = [hop.inputconst(lltype.Signed, len(greens_v)),
-                 hop.inputconst(lltype.Signed, len(reds_v))]
-        vlist.extend(greens_v)
-        vlist.extend(reds_v)
-        return hop.genop(self.instance.__name__, vlist,
-                         resulttype=lltype.Void)
+    def _check_class(cls):
+        if cls is JitDriver:
+            raise JitHintError("must subclass JitDriver")
+        for name in cls.greens + cls.reds:
+            if name.startswith('_'):
+                raise JitHintError("%s: the 'greens' and 'reds' names should"
+                                   " not start with an underscore" % (cls,))
+    _check_class = classmethod(_check_class)

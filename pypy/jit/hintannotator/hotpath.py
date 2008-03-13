@@ -53,7 +53,7 @@ class HotPathHintAnnotator(HintAnnotator):
         # specified by the user in the jit_merge_point() call
         _, portalblock, portalop = self.find_jit_merge_point(portalgraph)
         assert portalop is portalblock.operations[0]
-        livevars = portalop.args[2:]
+        livevars = portalop.args[1:]
         link = split_block(None, portalblock, 0, livevars)
         # rewire the graph to start at the global_merge_point
         portalgraph.startblock.isstartblock = False
