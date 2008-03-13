@@ -843,6 +843,8 @@ class BytecodeWriter(object):
         self.register_greenvar(result)
 
     def handle_global_merge_point_hint(self, op, arg, result):
+        if self.hannotator.policy.hotpath:
+            raise JitHintError("'global_merge_point' not supported by hotpath")
         return # the compute_merge_points function already cared
 
     def handle_reverse_split_queue_hint(self, op, arg, result):

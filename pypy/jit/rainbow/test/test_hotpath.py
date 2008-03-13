@@ -15,12 +15,16 @@ class Exit(Exception):
     def __init__(self, result):
         self.result = result
 
-class TestHotPath(test_interpreter.InterpretationTest):
+class HotPathTest(test_interpreter.InterpretationTest):
     type_system = 'lltype'
 
     def run(self, main, main_args, threshold, policy=P_HOTPATH, small=False):
         # xxx caching of tests doesn't work - do we care?
         self._serialize(main, main_args, policy=policy, backendoptimize=True)
+        self._rewrite(threshold)
+        self._run(main, main_args)
+
+    def _rewrite(self, threshold):
         rewriter = EntryPointsRewriter(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
                                        threshold, self.translate_support_code)
@@ -29,6 +33,7 @@ class TestHotPath(test_interpreter.InterpretationTest):
         if small and conftest.option.view:
             self.rtyper.annotator.translator.view()
 
+    def _run(self, main, main_args):
         graph = self.rtyper.annotator.translator.graphs[0]
         assert graph.func is main
         llinterp = LLInterpreter(
@@ -49,6 +54,8 @@ class TestHotPath(test_interpreter.InterpretationTest):
                            "  expected: %s" % (i, trace, expect))
             i += 1
 
+
+class TestHotPath(HotPathTest):
 
     def test_simple_loop(self):
         # there are no greens in this test
