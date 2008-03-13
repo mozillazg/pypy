@@ -84,6 +84,9 @@ class Entry(ExtRegistryEntry):
         return hop.genop('is_early_constant', [v], resulttype=lltype.Bool)
 
 
+class JitHintError(Exception):
+    """Inconsistency in the JIT hints."""
+
 def jit_merge_point(green=(), red=()):
     pass
 

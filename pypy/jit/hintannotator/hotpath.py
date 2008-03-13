@@ -3,6 +3,7 @@ from pypy.translator.unsimplify import split_block
 from pypy.translator.simplify import join_blocks
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
+from pypy.rlib.jit import JitHintError
 
 
 class HotPathHintAnnotator(HintAnnotator):
@@ -14,7 +15,7 @@ class HotPathHintAnnotator(HintAnnotator):
                 if op.opname == 'jit_merge_point':
                     found_at.append((graph, block, op))
         if len(found_at) > 1:
-            raise Exception("multiple jit_merge_point() not supported")
+            raise JitHintError("multiple jit_merge_point() not supported")
         if found_at:
             return found_at[0]
         else:
@@ -35,8 +36,8 @@ class HotPathHintAnnotator(HintAnnotator):
             if place is not None:
                 found_at.append(place)
         if len(found_at) != 1:
-            raise Exception("found %d graphs with a jit_merge_point(),"
-                            " expected 1 (for now)" % len(found_at))
+            raise JitHintError("found %d graphs with a jit_merge_point(),"
+                               " expected 1 (for now)" % len(found_at))
         origportalgraph, _, _ = found_at[0]
         #
         # We make a copy of origportalgraph and mutate it to make it
@@ -62,6 +63,7 @@ class HotPathHintAnnotator(HintAnnotator):
         self.origportalgraph = origportalgraph
         # check the new graph: errors mean some live vars have not
         # been listed in the jit_merge_point()
+        # (XXX should give an explicit JitHintError explaining the problem)
         checkgraph(portalgraph)
         join_blocks(portalgraph)
         # put the new graph back in the base_translator

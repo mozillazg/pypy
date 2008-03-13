@@ -1,6 +1,6 @@
 import py
 import re
-from pypy.rlib.jit import jit_merge_point, can_enter_jit, hint
+from pypy.rlib.jit import jit_merge_point, can_enter_jit, hint, JitHintError
 from pypy.jit.rainbow.test import test_interpreter
 from pypy.jit.rainbow.hotpath import EntryPointsRewriter
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
@@ -226,3 +226,13 @@ class TestHotPath(test_interpreter.InterpretationTest):
         res = self.run(ll_function, [50], threshold=3, small=True)
         assert res == (50*51)/2
         assert len(self.rewriter.interpreter.debug_traces) < 20
+
+    def test_hint_errors(self):
+        def ll_function(n):
+            jit_merge_point(red=(n,))
+            can_enter_jit(red=(n,), green=(0,))
+        py.test.raises(JitHintError, self.run, ll_function, [5], 3)
+
+        def ll_function(n):
+            jit_merge_point(green=(n,))
+        py.test.raises(JitHintError, self.run, ll_function, [5], 3)
