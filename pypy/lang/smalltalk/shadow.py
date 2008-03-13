@@ -238,7 +238,7 @@ class ClassShadow(AbstractShadow):
 
     def lookup(self, selector):
         look_in_shadow = self
-        while lookin_shadow is not None:
+        while look_in_shadow is not None:
             try:
                 w_method = look_in_shadow.methoddict[selector]
                 # We locally cache the method we found.
