@@ -21,10 +21,10 @@ class HotPathTest(test_interpreter.InterpretationTest):
     def run(self, main, main_args, threshold, policy=P_HOTPATH, small=False):
         # xxx caching of tests doesn't work - do we care?
         self._serialize(main, main_args, policy=policy, backendoptimize=True)
-        self._rewrite(threshold)
-        self._run(main, main_args)
+        self._rewrite(threshold, small=small)
+        return self._run(main, main_args)
 
-    def _rewrite(self, threshold):
+    def _rewrite(self, threshold, small):
         rewriter = EntryPointsRewriter(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
                                        threshold, self.translate_support_code)
