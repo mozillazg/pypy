@@ -700,7 +700,7 @@ def func(interp, w_block_ctx, w_args):
     assert isinstance(w_args, model.W_PointersObject)
     # Push all the items from the array
     for i in range(exp_arg_cnt):
-        s_block_ctx.push(w_args.fetchvarpointer(i))
+        s_block_ctx.push(w_args.at0(i))
 
     # XXX Check original logic. Image does not test this anyway
     # because falls back to value + internal implementation

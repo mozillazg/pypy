@@ -229,7 +229,7 @@ def test_shadowchanges():
     assert s_object2.key() == w_o1
     assert s_object2.value() == w_o2
     assert w_object._shadow == s_object2
-    s_object.check_for_updates()
+    s_object.sync_shadow()
     assert s_object.w_firstlink() == w_o1
     assert s_object.w_lastlink() == w_o2
     assert w_object._shadow == s_object

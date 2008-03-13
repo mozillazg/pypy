@@ -332,7 +332,7 @@ class GenericObject(object):
         w_pointersobject.w_class = self.g_class.w_object
         w_pointersobject.hash = self.chunk.hash12
         if w_pointersobject._shadow is not None:
-            w_pointersobject._shadow.invalidate()
+            w_pointersobject._shadow.invalidate_shadow()
 
     def fillin_wordsobject(self, w_wordsobject):
         w_wordsobject.words = self.chunk.data
