@@ -956,9 +956,13 @@ class JitInterpreter(object):
 class DebugTrace(object):
     def __init__(self, *args):
         self.args = args or ('--empty--',)
+        self.captured_repr = ' '.join(map(str, self.args))
+        # if 'args' contains mutable objects, computing
+        # map(str, self.args) several times would return different
+        # results, which is unexpected for a debug trace
 
     def __repr__(self):
         return '<DebugTrace %s>' % (self,)
 
     def __str__(self):
-        return ' '.join(map(str, self.args))
+        return self.captured_repr

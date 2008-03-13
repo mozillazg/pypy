@@ -973,7 +973,7 @@ class BytecodeWriter(object):
         if hasresult:
             self.register_redvar(op.result)
 
-        if withexc:
+        if withexc and not self.hannotator.policy.hotpath:
             self.emit("goto_if_oopcall_was_virtual", tlabel(("oop_call", op)))
             self.emit("after_oop_residual_call")
             self.emit(self.promotiondesc_position(lltype.Signed))
@@ -1452,7 +1452,9 @@ class GraphTransformer(object):
     def transform_graph(self, graph):
         self.graph = graph
         remove_same_as(graph)
-        self.insert_splits()
+        # we want native red switch support in the hotpath policy
+        if not self.hannotator.policy.hotpath:
+            self.insert_splits()
 
     def insert_splits(self):
         hannotator = self.hannotator
