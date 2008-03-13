@@ -30,7 +30,7 @@ class W_Object(object):
         """Return bytesize that conforms to Blue Book.
         
         The reported size may differ from the actual size in Spy's object
-space, as memory representation varies depending on PyPy translation."""
+        space, as memory representation varies depending on PyPy translation."""
         return 0
 
     def varsize(self):
@@ -408,20 +408,17 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         header (4 bytes)
         literals (4 bytes each)
         bytecodes  (variable)
-        trailer (variable)
-
-    The header is a 30-bit integer with the following format:
-
-    (index 0)   9 bits: main part of primitive number   (#primitive)
-    (index 9)   8 bits: number of literals (#numLiterals)
-    (index 17)  1 bit:  whether a large frame size is needed (#frameSize)
-    (index 18)  6 bits: number of temporary variables (#numTemps)
-    (index 24)  4 bits: number of arguments to the method (#numArgs)
-    (index 28)  1 bit:  high-bit of primitive number (#primitive)
-    (index 29)  1 bit:  flag bit, ignored by the VM  (#flag)
-
-    The trailer has two variant formats.  In the first variant, the last byte is at least 252 and the last four bytes represent a source pointer into one of the sources files (see #sourcePointer).  In the second variant, the last byte is less than 252, and the last several bytes are a compressed version of the names of the method's temporary variables.  The number of bytes used for this purpose is the value of the last byte in the method.
     """
+
+### Extension from Squeak 3.9 doc, which we do not implement:
+###        trailer (variable)
+###    The trailer has two variant formats.  In the first variant, the last
+###    byte is at least 252 and the last four bytes represent a source pointer
+###    into one of the sources files (see #sourcePointer).  In the second
+###    variant, the last byte is less than 252, and the last several bytes
+###    are a compressed version of the names of the method's temporary
+###    variables.  The number of bytes used for this purpose is the value of
+###    the last byte in the method.
 
     def __init__(self, bytecount=0, header=0):
         self.setheader(header)
@@ -429,7 +426,9 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def compiledin(self):  
         if self.w_compiledin is None:
-            # (Blue book, p 607) All CompiledMethods that contain extended-super bytecodes have the clain which they are found as their last literal variable.   
+            # (Blue book, p 607) All CompiledMethods that contain
+            # extended-super bytecodes have the clain which they are found as
+            # their last literal variable.   
             # Last of the literals is an association with compiledin
             # as a class
             w_association = self.literals[-1]
@@ -489,13 +488,16 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         return self.header
 
     def setheader(self, header):
-        #(index 0)  9 bits: main part of primitive number   (#primitive)
-        #(index 9)  8 bits: number of literals (#numLiterals)
-        #(index 17) 1 bit:  whether a large frame size is needed (#frameSize)
-        #(index 18) 6 bits: number of temporary variables (#numTemps)
-        #(index 24) 4 bits: number of arguments to the method (#numArgs)
-        #(index 28) 1 bit:  high-bit of primitive number (#primitive)
-        #(index 29) 1 bit:  flag bit, ignored by the VM  (#flag)
+        """Decode 30-bit method header and apply new format.
+
+        (index 0)  9 bits: main part of primitive number   (#primitive)
+        (index 9)  8 bits: number of literals (#numLiterals)
+        (index 17) 1 bit:  whether a large frame size is needed (#frameSize)
+        (index 18) 6 bits: number of temporary variables (#numTemps)
+        (index 24) 4 bits: number of arguments to the method (#numArgs)
+        (index 28) 1 bit:  high-bit of primitive number (#primitive)
+        (index 29) 1 bit:  flag bit, ignored by the VM  (#flag)
+        """
         primitive, literalsize, islarge, tempsize, numargs, highbit = (
             splitter[9,8,1,6,4,1](header))
         primitive = primitive + (highbit << 10) ##XXX todo, check this
