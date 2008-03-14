@@ -56,6 +56,18 @@ class HotPathTest(test_interpreter.InterpretationTest):
                            "  expected: %s" % (i, trace, expect))
             i += 1
 
+    def get_residual_graph(self):
+        return self.hotrunnerdesc.residual_graph
+
+    def check_insns_excluding_return(self, expected=None, **counts):
+        # the return is currently implemented by a direct_call(exitfnptr)
+        if expected is not None:
+            expected.setdefault('direct_call', 0)
+            expected['direct_call'] += 1
+        if 'direct_call' in counts:
+            counts['direct_call'] += 1
+        self.check_insns(expected, **counts)
+
 
 class TestHotPath(HotPathTest):
 
@@ -265,6 +277,27 @@ class TestHotPath(HotPathTest):
             hint(n, concrete=True)
         py.test.raises(JitHintError, self.run, ll_function, [5], 3)
 
+    def test_on_enter_jit(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n']
+            def on_enter_jit(self):
+                self.n += 100     # doesn't make sense, just for testing
+
+        def ll_function(n):
+            MyJitDriver.jit_merge_point(n=n)
+            MyJitDriver.can_enter_jit(n=n)
+            return n + 5
+
+        res = self.run(ll_function, [2], threshold=1, small=True)
+        assert res == 107
+        self.check_traces([
+            "jit_compile",
+            "done at hp_return",
+            "run_machine_code 2",
+            ])
+
     def test_hp_tlr(self):
         from pypy.jit.tl import tlr
 
@@ -299,5 +332,8 @@ class TestHotPath(HotPathTest):
             "fallback_interp",
             "fb_leave * stru...} 27 0 * array [ 0, 71, 5041 ]",
             ])
-        py.test.skip("XXX currently the 'regs' list is not virtual."
-                     "The test should check this and fail.")
+        py.test.skip("XXX currently the 'regs' list is not virtual.")
+        # We expect only the direct_call from the red split fallback point.
+        # If we get e.g. 7 of them instead it probably means that we see
+        # direct_calls to the ll helpers for the 'regs' list.
+        self.check_insns(direct_call = 1)

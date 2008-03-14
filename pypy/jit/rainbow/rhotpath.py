@@ -63,6 +63,7 @@ def report_compile_time_exception(interp, e):
     interp.debug_trace("ERROR:", "compile-time exception:", e)
 
 def hp_return(interp, gv_result):
+    interp.debug_trace("done at hp_return")
     # XXX not translatable (and slow if translated literally)
     # XXX well, and hackish, clearly
     def exit(llvalue=None):
