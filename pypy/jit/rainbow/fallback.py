@@ -2,6 +2,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
@@ -108,15 +109,15 @@ class FallbackInterpreter(object):
         # at this point we might have an exception set in self.gv_exc_xxx
         # and we have to really raise it.
         exceptiondesc = self.exceptiondesc
-        llexctype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
-        if llexctype:
+        llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
+        if llvalue:
             if we_are_translated():
-                lloperation.llop.debug_fatalerror(lltype.Void,
-                                                  "fb_raise not implemented")
-                assert 0
-            # XXX non-translatable hack follows...
+                exception = cast_base_ptr_to_instance(Exception, llvalue)
+                self.interpreter.debug_trace("fb_raise", str(exception))
+                raise Exception, exception
+            # non-translatable hack follows...
             from pypy.rpython.llinterp import LLException, type_name
-            llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
+            llexctype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
             assert llexctype and llvalue
             self.interpreter.debug_trace("fb_raise", type_name(llexctype))
             raise LLException(llexctype, llvalue)
