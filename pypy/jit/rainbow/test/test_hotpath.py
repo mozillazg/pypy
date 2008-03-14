@@ -216,7 +216,7 @@ class TestHotPath(HotPathTest):
             # which gives us the final answer
             ])
 
-        res = self.run(main, [2, 1291], threshold=3, small=True)
+        res = self.run(main, [2, 127], threshold=3, small=True)
         assert res == 1
         assert len(self.get_traces()) < 20
 
