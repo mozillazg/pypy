@@ -120,9 +120,14 @@ class FallbackInterpreter(object):
             self.interpreter.debug_trace("fb_raise", type_name(llexctype))
             raise LLException(llexctype, llvalue)
         else:
-            self.interpreter.debug_trace("fb_return", gv_result)
+            ARGS = self.hotrunnerdesc.RAISE_DONE_FUNCPTR.TO.ARGS
+            if ARGS:
+                result = gv_result.revealconst(ARGS[0])
+            else:
+                result = None
+            self.interpreter.debug_trace("fb_return", result)
             DoneWithThisFrame = self.hotrunnerdesc.DoneWithThisFrame
-            raise DoneWithThisFrame(gv_result)
+            raise DoneWithThisFrame(result)
 
     # ____________________________________________________________
     # XXX Lots of copy and paste from interp.py!

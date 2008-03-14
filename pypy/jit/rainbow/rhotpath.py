@@ -66,25 +66,15 @@ def report_compile_time_exception(interp, e):
 
 def hp_return(interp, gv_result):
     interp.debug_trace("done at hp_return")
-    if we_are_translated():
-        lloperation.llop.debug_fatalerror(lltype.Void,
-                                          "hp_return not implemented")
-        leave_graph(interp)
-    
-    # XXX not translatable (and slow if translated literally)
-    # XXX well, and hackish, clearly
-    def exit(llvalue=None):
-        DoneWithThisFrame = interp.hotrunnerdesc.DoneWithThisFrame
-        raise DoneWithThisFrame(interp.rgenop.genconst(llvalue))
-    FUNCTYPE = lltype.FuncType([interp.hotrunnerdesc.DoneWithThisFrameARG],
-                               lltype.Void)
-    exitfnptr = lltype.functionptr(FUNCTYPE, 'exit', _callable=exit)
+    # XXX slowish
+    desc = interp.hotrunnerdesc
+    exitfnptr = llhelper(desc.RAISE_DONE_FUNCPTR, desc.raise_done)
     gv_exitfnptr = interp.rgenop.genconst(exitfnptr)
     if gv_result is None:
         args_gv = []
     else:
         args_gv = [gv_result]
-    interp.jitstate.curbuilder.genop_call(interp.rgenop.sigToken(FUNCTYPE),
+    interp.jitstate.curbuilder.genop_call(desc.tok_raise_done,
                                           gv_exitfnptr, args_gv)
     leave_graph(interp)
 

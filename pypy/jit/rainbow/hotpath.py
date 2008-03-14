@@ -198,14 +198,13 @@ class HotRunnerDesc:
 
         class DoneWithThisFrame(Exception):
             _go_through_llinterp_uncaught_ = True     # ugh
-            def __init__(self, gv_result):
-                if RES is lltype.Void:
-                    assert gv_result is None
-                    self.result = None
-                else:
-                    self.result = gv_result.revealconst(RES)
+            def __init__(self, result):
+                self.result = result
             def __str__(self):
                 return 'DoneWithThisFrame(%s)' % (self.result,)
+
+        def raise_done(llvalue=None):
+            raise DoneWithThisFrame(llvalue)
 
         class ContinueRunningNormally(Exception):
             _go_through_llinterp_uncaught_ = True     # ugh
@@ -223,8 +222,14 @@ class HotRunnerDesc:
                 return 'ContinueRunningNormally(%s)' % (
                     ', '.join(map(str, self.args)),)
 
+        self.raise_done = raise_done
+        if RES is lltype.Void:
+            RAISE_DONE_FUNC = lltype.FuncType([], lltype.Void)
+        else:
+            RAISE_DONE_FUNC = lltype.FuncType([RES], lltype.Void)
+        self.tok_raise_done = self.RGenOp.sigToken(RAISE_DONE_FUNC)
+        self.RAISE_DONE_FUNCPTR = lltype.Ptr(RAISE_DONE_FUNC)
         self.DoneWithThisFrame = DoneWithThisFrame
-        self.DoneWithThisFrameARG = RES
         self.ContinueRunningNormally = ContinueRunningNormally
 
         def ll_portal_runner(*args):

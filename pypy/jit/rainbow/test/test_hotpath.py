@@ -106,6 +106,8 @@ class HotPathTest(test_interpreter.InterpretationTest):
         self.check_insns(expected, **counts)
 
     def check_insns_in_loops(self, expected=None, **counts):
+        if self.translate_support_code:
+            return    # XXX it would be nice to check insns in this case too
         self.insns_in_loops = summary_loops(self.get_residual_graph())
         if expected is not None:
             assert self.insns_in_loops == expected
