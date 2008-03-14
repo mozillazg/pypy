@@ -1,6 +1,7 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic, noop
+from pypy.rlib.debug import debug_print
 from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath
@@ -225,8 +226,11 @@ class JitInterpreter(object):
         log.trace(trace)
         self.debug_traces.append(trace)
 
-    debug_trace = noop     # RPython-friendly,
-                           # patched for tests in set_hotrunnerdesc()
+    # a choice of two RPython-friendly implementation,
+    # patched for tests in set_hotrunnerdesc():
+
+    #debug_trace = staticmethod(noop)
+    debug_trace = staticmethod(debug_print)
 
     def set_hotrunnerdesc(self, hotrunnerdesc):
         self.hotrunnerdesc = hotrunnerdesc

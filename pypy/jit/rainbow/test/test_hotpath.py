@@ -75,6 +75,8 @@ class HotPathTest(test_interpreter.InterpretationTest):
         return self.hotrunnerdesc.interpreter.debug_traces
 
     def check_traces(self, expected):
+        if self.translate_support_code:
+            return    # XXX it would be nice to check traces in this case too
         traces = self.get_traces()
         i = 0
         for trace, expect in zip(traces + ['--end of traces--'],
