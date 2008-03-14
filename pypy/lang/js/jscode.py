@@ -58,6 +58,12 @@ class JsCode(object):
             return False
         return all([i == j for i, j in zip(self.opcodes, list_of_opcodes)])
 
+class JsFunction(object):
+    def __init__(self, name, params, code):
+        self.name = name
+        self.params = params
+        self.code = code
+
 class Opcode(object):
     def eval(self, ctx, stack):
         """ Execute in context ctx
@@ -158,6 +164,13 @@ class LOAD_ARRAY(Opcode):
     def __repr__(self):
         return 'LOAD_ARRAY %d' % (self.counter,)
 
+class LOAD_FUNCTION(Opcode):
+    def __init__(self, funcobj):
+        self.funcobj = funcobj
+
+    def __repr__(self):
+        return 'LOAD_FUNCTION' # XXX
+
 class STORE_MEMBER(Opcode):
     def eval(self, ctx):
         XXX
@@ -245,6 +258,29 @@ class JUMP_IF_FALSE(BaseJump):
     pass
 
 class JUMP_IF_TRUE(BaseJump):
+    pass
+
+class DECLARE_FUNCTION(Opcode):
+    def __init__(self, funcobj):
+        self.funcobj = funcobj
+
+    def __repr__(self):
+        funcobj = self.funcobj
+        if funcobj.name is None:
+            name = ""
+        else:
+            name = funcobj.name + " "
+        codestr = '\n'.join(['  %r' % (op,) for op in funcobj.code.opcodes])
+        return 'DECLARE_FUNCTION %s%r [\n%s\n]' % (name, funcobj.params, codestr)
+
+class DECLARE_VAR(Opcode):
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return 'DECLARE_VAR "%s"' % (self.name,)
+
+class RETURN(Opcode):
     pass
 
 OpcodeMap = {}

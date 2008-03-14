@@ -47,6 +47,8 @@ class ASTBuilder(RPythonVisitor):
     }
     
     def __init__(self):
+        self.varlists = []
+        self.funclists = []
         self.sourcename = ""
         RPythonVisitor.__init__(self)
     
@@ -200,8 +202,6 @@ class ASTBuilder(RPythonVisitor):
         return operations.Identifier(pos, name)
     
     def visit_program(self, node):
-        self.varlists = []
-        self.funclists = []
         pos = self.get_pos(node)
         body = self.dispatch(node.children[0])
         return operations.Program(pos, body)
@@ -235,7 +235,7 @@ class ASTBuilder(RPythonVisitor):
         identifier, i = self.get_next_expr(node, i)
         parameters, i = self.get_next_expr(node, i)
         functionbody, i = self.get_next_expr(node, i)
-        if parameters == operations.astundef:
+        if parameters is None:
             p = []
         else:
             p = [pident.get_literal() for pident in parameters.nodes]
@@ -359,7 +359,7 @@ class ASTBuilder(RPythonVisitor):
     def get_next_expr(self, node, i):
         if isinstance(node.children[i], Symbol) and \
            node.children[i].additional_info in [';', ')', '(', '}']:
-            return operations.astundef, i+1
+            return None, i+1
         else:
             return self.dispatch(node.children[i]), i+2
     
@@ -368,7 +368,7 @@ class ASTBuilder(RPythonVisitor):
         if len(node.children) > 0:
             target = self.dispatch(node.children[0])
         else:
-            target = operations.astundef
+            target = None
         return operations.Break(pos, target)
     
     def visit_returnstatement(self, node):

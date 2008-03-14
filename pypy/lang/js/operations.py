@@ -13,6 +13,7 @@ from pypy.rlib.rarithmetic import r_uint, intmask, INFINITY, NAN, ovfcheck,\
      isnan, isinf
 from pypy.lang.js.execution import ExecutionReturned, JsTypeError,\
      ThrowException
+from pypy.lang.js.jscode import JsCode, JsFunction
 from constants import unescapedict, SLASH
 
 import sys
@@ -321,9 +322,22 @@ class MemberDot(BinaryOp):
 class FunctionStatement(Statement):
     def __init__(self, pos, name, params, body):
         self.pos = pos
-        self.name = name
+        if name is None:
+            self.name = None
+        else:
+            assert isinstance(name, Identifier)
+            self.name = name.name
         self.body = body
         self.params = params
+
+    def emit(self, bytecode):
+        code = JsCode()
+        self.body.emit(code)
+        funcobj = JsFunction(self.name, self.params, code)
+        bytecode.emit('DECLARE_FUNCTION', funcobj)
+        if self.name is None:
+            # XXX looks awful
+            bytecode.emit('LOAD_FUNCTION', funcobj)
 
     def eval(self, ctx):
         proto = ctx.get_global().Get('Function').Get('prototype')
@@ -346,8 +360,8 @@ class Identifier(Expression):
     def emit(self, bytecode):
         bytecode.emit('LOAD_VARIABLE', self.name)
         
-#    def get_literal(self):
-#        return self.name
+    def get_literal(self):
+        return self.name
     
 
 class This(Identifier):
@@ -912,6 +926,15 @@ class SourceElements(Statement):
         self.nodes = nodes
         self.sourcename = sourcename
 
+    def emit(self, bytecode):
+        for varname in self.var_decl:
+            bytecode.emit('DECLARE_VAR', varname)
+        for funcname, funccode in self.func_decl.items():
+            funccode.emit(bytecode)
+
+        for node in self.nodes:
+            node.emit(bytecode)
+
     def execute(self, ctx):
         for varname in self.var_decl:
             ctx.variable.Put(varname, w_Undefined, dd=True)
@@ -946,6 +969,10 @@ class Return(Statement):
     def __init__(self, pos, expr):
         self.pos = pos
         self.expr = expr
+
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        bytecode.emit('RETURN')
     
     def execute(self, ctx):
         if isinstance(self.expr, Undefined):
@@ -1004,8 +1031,13 @@ class Typeof(UnaryOp):
 class VariableDeclaration(Expression):
     def __init__(self, pos, identifier, expr=None):
         self.pos = pos
-        self.identifier = identifier
+        assert isinstance(identifier, Identifier)
+        self.identifier = identifier.name
         self.expr = expr
+
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        bytecode.emit('STORE', self.identifier)
     
     def eval(self, ctx):
         name = self.identifier.get_literal()
@@ -1020,6 +1052,10 @@ class VariableDeclList(Expression):
     def __init__(self, pos, nodes):
         self.pos = pos
         self.nodes = nodes
+
+    def emit(self, bytecode):
+        for node in self.nodes:
+            node.emit(bytecode)
     
     def eval(self, ctx):
         for var in self.nodes:
@@ -1030,6 +1066,9 @@ class Variable(Statement):
     def __init__(self, pos, body):
         self.pos = pos
         self.body = body
+
+    def emit(self, bytecode):
+        self.body.emit(bytecode)
     
     def execute(self, ctx):
         return self.body.eval(ctx)
