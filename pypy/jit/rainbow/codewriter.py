@@ -52,7 +52,7 @@ class Entry(ExtRegistryEntry):
 class CallDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE, voidargs=()):
+    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE):
         self.exceptiondesc = exceptiondesc
         self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
         self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
@@ -64,8 +64,6 @@ class CallDesc:
         for ARG in FUNCTYPE.TO.ARGS:
             if ARG == lltype.Void:
                 voidargcount += 1
-        if len(voidargs) != voidargcount:
-            voidargs = (None, ) * voidargcount
         argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
         RETURN = FUNCTYPE.TO.RESULT
         if RETURN is lltype.Void:
@@ -76,20 +74,12 @@ class CallDesc:
 
         def perform_call(rgenop, gv_fnptr, greenargs):
             fnptr = gv_fnptr.revealconst(FUNCTYPE)
-            assert len(greenargs) + len(voidargs) == numargs 
+            assert len(greenargs) + voidargcount == numargs
             args = ()
             j = 0
-            k = 0
             for ARG in argiter:
                 if ARG == lltype.Void:
-                    # XXX terrible hack
-                    if not we_are_translated():
-                        arg = voidargs[k]
-                        arg._TYPE = lltype.Void
-                    else:
-                        arg = None
-                    args += (arg, )
-                    k += 1
+                    args += (None, )
                 else:
                     genconst = greenargs[j]
                     arg = genconst.revealconst(ARG)
@@ -705,13 +695,13 @@ class BytecodeWriter(object):
         self.graph_positions[graph] = index
         return index
 
-    def calldesc_position(self, FUNCTYPE, *voidargs):
-        key = FUNCTYPE, voidargs
+    def calldesc_position(self, FUNCTYPE):
+        key = FUNCTYPE
         if key in self.calldesc_positions:
             return self.calldesc_positions[key]
         result = len(self.calldescs)
         self.calldescs.append(
-            CallDesc(self.RGenOp, self.exceptiondesc, FUNCTYPE, voidargs))
+            CallDesc(self.RGenOp, self.exceptiondesc, FUNCTYPE))
         self.calldesc_positions[key] = result
         return result
 
@@ -992,10 +982,8 @@ class BytecodeWriter(object):
             args = op.args[1:-1]
         else:
             args = op.args[1:]
-        voidargs = [const.value for const in args
-                        if const.concretetype == lltype.Void]
         fnptr = op.args[0]
-        pos = self.calldesc_position(fnptr.concretetype, *voidargs)
+        pos = self.calldesc_position(fnptr.concretetype)
         func = self.serialize_oparg("green", fnptr)
         emitted_args = []
         for v in op.args[1:]:
