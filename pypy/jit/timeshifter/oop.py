@@ -92,7 +92,8 @@ class OopSpecDesc:
 
         vmodule = __import__('pypy.jit.timeshifter.v%s' % (typename,),
                              None, None, [method])
-        self.typedesc = vmodule.TypeDesc(RGenOp, rtyper, SELFTYPE)
+        self.typedesc = vmodule.TypeDesc(RGenOp, rtyper, exceptiondesc,
+                                         SELFTYPE)
         handler = getattr(vmodule, method)
 
         boxargcount_max = handler.func_code.co_argcount - 3
