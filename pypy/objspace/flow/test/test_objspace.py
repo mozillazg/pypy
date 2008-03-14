@@ -856,6 +856,24 @@ class TestFlowObjSpace(Base):
             return foolist[0]
         py.test.raises(RuntimeError, "self.codetest(f)")
 
+    def test_constant_fold_immutable_inplace_add(self):
+        def f():
+            i = 5
+            i += 1
+            return i
+        graph = self.codetest(f)
+        simplify_graph(graph)
+        assert self.all_operations(graph) == {}
+
+        l1 = []
+        l2 = []
+        def g():
+            i = l1
+            i += l2       # mutates global lists - forbidden
+            return i
+        py.test.raises(TypeError, self.codetest, g)
+
+
 class TestFlowObjSpaceDelay(Base):
     def setup_class(cls):
         cls.space = FlowObjSpace()
