@@ -361,6 +361,20 @@ class If(Statement):
         self.thenPart = thenpart
         self.elsePart = elsepart
 
+    def emit(self, bytecode):
+        self.condition.emit(bytecode)
+        one = bytecode.prealocate_label()
+        bytecode.emit('JUMP_IF_FALSE', one)
+        self.thenPart.emit(bytecode)
+        if self.elsePart is not None:
+            two = bytecode.prealocate_label()
+            bytecode.emit('JUMP', two)
+            bytecode.emit('LABEL', one)
+            self.elsePart.emit(bytecode)
+            bytecode.emit('LABEL', two)
+        else:
+            bytecode.emit('LABEL', one)
+
     def execute(self, ctx):
         temp = self.condition.eval(ctx).GetValue()
         if temp.ToBoolean():
@@ -1068,6 +1082,12 @@ class Do(WhileBase):
                     break
                 elif e.type == 'continue':
                     continue
+
+    def emit(self, bytecode):
+        startlabel = bytecode.emit_label()
+        self.body.emit(bytecode)
+        self.condition.emit(bytecode)
+        bytecode.emit('JUMP_IF_TRUE', startlabel)
     
 class While(WhileBase):
     def emit(self, bytecode):

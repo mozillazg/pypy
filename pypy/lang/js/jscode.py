@@ -244,6 +244,9 @@ class JUMP(BaseJump):
 class JUMP_IF_FALSE(BaseJump):
     pass
 
+class JUMP_IF_TRUE(BaseJump):
+    pass
+
 OpcodeMap = {}
 
 for name, value in locals().items():
