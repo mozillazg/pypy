@@ -1437,8 +1437,10 @@ class BytecodeWriter(object):
         return greens_v, reds_v
 
     def serialize_op_jit_merge_point(self, op):
-        # by construction, the graph should have exactly the vars listed
-        # in the op as live vars.  Check this.
+        # If jit_merge_point is the first operation of its block, and if
+        # the block's input variables are in the right order, the graph
+        # should have exactly the vars listed in the op as live vars.
+        # Check this.  It should be ensured by the GraphTransformer.
         greens_v, reds_v = self.check_hp_hint_args(op)
         key = ()
         for i, v in enumerate(greens_v):
@@ -1466,6 +1468,11 @@ class GraphTransformer(object):
         # we want native red switch support in the hotpath policy
         if not self.hannotator.policy.hotpath:
             self.insert_splits()
+        # we need jit_merge_point to be at the start of its block
+        if self.hannotator.policy.hotpath:
+            from pypy.jit.hintannotator.hotpath import \
+                                             split_before_jit_merge_point
+            split_before_jit_merge_point(self.hannotator, graph)
 
     def insert_splits(self):
         hannotator = self.hannotator

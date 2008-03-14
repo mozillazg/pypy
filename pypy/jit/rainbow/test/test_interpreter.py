@@ -13,6 +13,7 @@ from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
+from pypy.annotation.policy import AnnotatorPolicy
 from pypy.objspace.flow.model import summary, Variable
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.jit import hint
@@ -48,7 +49,9 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
               portal=None, type_system="lltype"):
     # build the normal ll graphs for ll_function
     t = TranslationContext()
-    a = t.buildannotator()
+    annpolicy = AnnotatorPolicy()
+    annpolicy.allow_someobjects = False
+    a = t.buildannotator(policy=annpolicy)
     argtypes = getargtypes(a, values)
     a.build_types(func, argtypes)
     rtyper = t.buildrtyper(type_system = type_system)

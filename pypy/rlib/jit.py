@@ -121,6 +121,7 @@ class Entry(ExtRegistryEntry):
             raise JitHintError("%s.%s(): must give exactly the same keywords"
                                " as the 'greens' and 'reds'" % (
                 drivercls.__name__, self.instance.name))
+        drivercls._emulate_method_calls(self.bookkeeper, kwds_s)
         return annmodel.s_None
 
     def specialize_call(self, hop, **kwds_i):
@@ -174,3 +175,19 @@ class JitDriver:
                 raise JitHintError("%s: the 'greens' and 'reds' names should"
                                    " not start with an underscore" % (cls,))
     _check_class = classmethod(_check_class)
+
+    def _emulate_method_calls(cls, bookkeeper, livevars_s):
+        # annotate "cls.on_enter_jit()" if it is defined
+        from pypy.annotation import model as annmodel
+        if hasattr(cls, 'on_enter_jit'):
+            classdef = bookkeeper.getuniqueclassdef(cls)
+            s_arg = annmodel.SomeInstance(classdef)
+            for name, s_value in livevars_s.items():
+                assert name.startswith('s_')
+                name = name[2:]
+                s_arg.setattr(bookkeeper.immutablevalue(name), s_value)
+            key = "rlib.jit.JitDriver.on_enter_jit"
+            s_func = bookkeeper.immutablevalue(cls.on_enter_jit.im_func)
+            s_result = bookkeeper.emulate_pbc_call(key, s_func, [s_arg])
+            assert annmodel.s_None.contains(s_result)
+    _emulate_method_calls = classmethod(_emulate_method_calls)
