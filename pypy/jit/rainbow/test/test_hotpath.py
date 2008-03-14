@@ -91,6 +91,9 @@ class HotPathTest(test_interpreter.InterpretationTest):
     def get_residual_graph(self):
         return self.hotrunnerdesc.residual_graph
 
+    def check_nothing_compiled_at_all(self):
+        assert not hasattr(self.hotrunnerdesc, 'residual_graph')
+
     def check_insns_excluding_return(self, expected=None, **counts):
         # the return is currently implemented by a direct_call(exitfnptr)
         if expected is not None:
