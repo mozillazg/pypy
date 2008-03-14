@@ -82,9 +82,7 @@ class FallbackInterpreter(object):
             self.gv_exc_type  = self.rgenop.genconst(llexctype)
             self.gv_exc_value = self.rgenop.genconst(llvalue)
         else:
-            lloperation.llop.debug_fatalerror(lltype.Void, "capture_exception"
-                                                           " not implemented")
-            assert 0
+            Xxx("capture_exception")
 
     def run_directly(self, greenargs, redargs, targetbytecode):
         assert not (greenargs and redargs)  # XXX for now
@@ -245,15 +243,15 @@ class FallbackInterpreter(object):
 
     @arguments("green", "green_varargs", "jumptargets")
     def opimpl_green_switch(self, exitcase, cases, targets):
-        xxx
+        Xxx("green_switch")
 
     @arguments("bool", "red", "red", "jumptarget")
     def opimpl_red_goto_ifptrnonzero(self, reverse, gv_ptr, gv_switch, target):
-        xxx
+        Xxx("red_goto_ifptrnonzero")
 
     @arguments("red", "jumptarget")
     def opimpl_goto_if_constant(self, gv_value, target):
-        xxx
+        Xxx("goto_if_constant")
 
 
     @arguments("red", returns="red")
@@ -268,11 +266,11 @@ class FallbackInterpreter(object):
 
     @arguments("red", "red", returns="red")
     def opimpl_red_ptr_eq(self, gv_ptr1, gv_ptr2):
-        xxx
+        Xxx("red_ptr_eq")
 
     @arguments("red", "red", returns="red")
     def opimpl_red_ptr_ne(self, gv_ptr1, gv_ptr2):
-        xxx
+        Xxx("red_ptr_ne")
 
 
     @arguments("red_varargs")
@@ -300,7 +298,7 @@ class FallbackInterpreter(object):
     @arguments("green_varargs", "red_varargs", "red", "indirectcalldesc")
     def opimpl_indirect_call_const(self, greenargs, redargs,
                                       gv_funcptr, callset):
-        xxx
+        Xxx("indirect_call_const")
 
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
@@ -338,11 +336,11 @@ class FallbackInterpreter(object):
                "promotiondesc")
     def opimpl_red_residual_call(self, gv_func, calldesc, withexc, has_result,
                                  redargs, promotiondesc):
-        xxx
+        Xxx("red_residual_call")
 
     @arguments("metacalldesc", "red_varargs", returns="red")
     def opimpl_metacall(self, metafunc, redargs):
-        xxx
+        Xxx("metacall")
 
     # exceptions
 
@@ -375,11 +373,11 @@ class FallbackInterpreter(object):
 
     @arguments("structtypedesc", "red", returns="red")
     def opimpl_red_malloc_varsize_struct(self, structtypedesc, gv_size):
-        xxx
+        Xxx("red_malloc_varsize_struct")
 
     @arguments("arraydesc", "red", returns="red")
     def opimpl_red_malloc_varsize_array(self, arraytypedesc, gv_size):
-        xxx
+        Xxx("red_malloc_varsize_array")
 
     @arguments("red", "fielddesc", "bool", returns="red")
     def opimpl_red_getfield(self, gv_struct, fielddesc, deepfrozen):
@@ -389,7 +387,7 @@ class FallbackInterpreter(object):
 
     @arguments("red", "fielddesc", "bool", returns="green_from_red")
     def opimpl_green_getfield(self, gv_struct, fielddesc, deepfrozen):
-        xxx
+        Xxx("green_getfield")
 
     @arguments("red", "fielddesc", "red")
     def opimpl_red_setfield(self, gv_dest, fielddesc, gv_value):
@@ -397,48 +395,48 @@ class FallbackInterpreter(object):
 
     @arguments("red", "arraydesc", "red", "bool", returns="red")
     def opimpl_red_getarrayitem(self, gv_array, fielddesc, gv_index, deepfrozen):
-        xxx
+        Xxx("red_getarrayitem")
 
     @arguments("red", "arraydesc", "red", "red")
     def opimpl_red_setarrayitem(self, gv_dest, fielddesc, gv_index, gv_value):
-        xxx
+        Xxx("red_setarrayitem")
 
     @arguments("red", "arraydesc", returns="red")
     def opimpl_red_getarraysize(self, gv_array, fielddesc):
-        xxx
+        Xxx("red_getarraysize")
 
     @arguments("red", "arraydesc", returns="green_from_red")
     def opimpl_green_getarraysize(self, gv_array, fielddesc):
-        xxx
+        Xxx("green_getarraysize")
 
     @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
     def opimpl_red_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
                                     indexes_gv):
-        xxx
+        Xxx("red_getinteriorfield")
 
     @arguments("red", "interiordesc", "bool", "red_varargs",
                returns="green_from_red")
     def opimpl_green_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
                                       indexes_gv):
-        xxx
+        Xxx("green_getinteriorfield")
 
     @arguments("red", "interiordesc", "red_varargs", "red")
     def opimpl_red_setinteriorfield(self, gv_dest, interiordesc, indexes_gv,
                                     gv_value):
-        xxx
+        Xxx("red_setinteriorfield")
 
     @arguments("red", "interiordesc", "red_varargs", returns="red")
     def opimpl_red_getinteriorarraysize(self, gv_array, interiordesc, indexes_gv):
-        xxx
+        Xxx("red_getinteriorarraysize")
 
     @arguments("red", "interiordesc", "red_varargs", returns="green_from_red")
     def opimpl_green_getinteriorarraysize(self, gv_array, interiordesc,
                                           indexes_gv):
-        xxx
+        Xxx("green_getinteriorarraysize")
 
     @arguments("red", "green", "green", returns="green")
     def opimpl_is_constant(self, arg, true, false):
-        xxx
+        Xxx("is_constant")
 
     # hotpath-specific operations
 
@@ -543,3 +541,8 @@ class FallbackInterpreter(object):
         # the argspec may unwrap *args_gv from local_red or local_green
         # and put the result back into local_red or local_green
         return argspec(implementation)
+
+
+def Xxx(msg):
+    lloperation.llop.debug_fatalerror(lltype.Void, "not implemented: " + msg)
+    assert 0
