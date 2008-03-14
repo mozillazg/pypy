@@ -62,6 +62,24 @@ def report_compile_time_exception(interp, e):
         lloperation.llop.debug_print(lltype.Void, msg)
     interp.debug_trace("ERROR:", "compile-time exception:", e)
 
+def hp_return(interp, gv_result):
+    # XXX not translatable (and slow if translated literally)
+    # XXX well, and hackish, clearly
+    def exit(llvalue=None):
+        DoneWithThisFrame = interp.hotrunnerdesc.DoneWithThisFrame
+        raise DoneWithThisFrame(interp.rgenop.genconst(llvalue))
+    FUNCTYPE = lltype.FuncType([interp.hotrunnerdesc.DoneWithThisFrameARG],
+                               lltype.Void)
+    exitfnptr = lltype.functionptr(FUNCTYPE, 'exit', _callable=exit)
+    gv_exitfnptr = interp.rgenop.genconst(exitfnptr)
+    if gv_result is None:
+        args_gv = []
+    else:
+        args_gv = [gv_result]
+    interp.jitstate.curbuilder.genop_call(interp.rgenop.sigToken(FUNCTYPE),
+                                          gv_exitfnptr, args_gv)
+    leave_graph(interp)
+
 # ____________________________________________________________
 
 class FinishedCompiling(Exception):

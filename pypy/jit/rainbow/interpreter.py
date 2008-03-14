@@ -885,7 +885,7 @@ class JitInterpreter(object):
             assert False, "unreachable"
 
     @arguments("green_varargs", "red_varargs", "bytecode")
-    def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):
+    def opimpl_hp_red_direct_call(self, greenargs, redargs, targetbytecode):
         frame = rtimeshift.VirtualFrame(self.frame, None)
         self.frame = self.jitstate.frame = frame
         frame.pc = 0
@@ -893,33 +893,36 @@ class JitInterpreter(object):
         frame.local_boxes = redargs
         frame.local_green = greenargs
 
+    opimpl_hp_gray_direct_call = opimpl_hp_red_direct_call
+    opimpl_hp_yellow_direct_call = opimpl_hp_red_direct_call
+
     @arguments()
     def opimpl_hp_gray_return(self):
-        xxx
+        frame = self.frame.backframe
+        if frame is None:
+            rhotpath.hp_return(self, None)
+        else:
+            self.frame = self.jitstate.frame = frame
 
     @arguments()
     def opimpl_hp_red_return(self):
         gv_result = self.frame.local_boxes[0].getgenvar(self.jitstate)
-        # XXX not translatable (and slow if translated literally)
-        # XXX well, and hackish, clearly
-        def exit(llvalue):
-            DoneWithThisFrame = self.hotrunnerdesc.DoneWithThisFrame
-            raise DoneWithThisFrame(self.rgenop.genconst(llvalue))
-        FUNCTYPE = lltype.FuncType([self.hotrunnerdesc.DoneWithThisFrameARG],
-                                   lltype.Void)
-        exitfnptr = lltype.functionptr(FUNCTYPE, 'exit', _callable=exit)
-        gv_exitfnptr = self.rgenop.genconst(exitfnptr)
-        self.jitstate.curbuilder.genop_call(self.rgenop.sigToken(FUNCTYPE),
-                                            gv_exitfnptr,
-                                            [gv_result])
-        rhotpath.leave_graph(self)
+        frame = self.frame.backframe
+        if frame is None:
+            rhotpath.hp_return(self, gv_result)
+        else:
+            self.frame = self.jitstate.frame = frame
+            self.red_result(gv_result)
 
     @arguments()
     def opimpl_hp_yellow_return(self):
         gv_result = self.frame.local_green[0]
         frame = self.frame.backframe
-        self.frame = self.jitstate.frame = frame
-        self.green_result(gv_result)
+        if frame is None:
+            xxx
+        else:
+            self.frame = self.jitstate.frame = frame
+            self.green_result(gv_result)
 
     # ____________________________________________________________
     # construction-time interface

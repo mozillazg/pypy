@@ -300,12 +300,6 @@ class FallbackInterpreter(object):
     def opimpl_metacall(self, metafunc, redargs):
         xxx
 
-    @arguments("green_varargs", "red_varargs", "bytecode")
-    def opimpl_red_direct_call(self, greenargs, redargs, targetbytecode):
-        gv_res = self.run_directly(greenargs, redargs, targetbytecode)
-        if gv_res is not None:
-            self.red_result(gv_res)
-
     # exceptions
 
     @arguments(returns="red")
@@ -422,6 +416,16 @@ class FallbackInterpreter(object):
     @arguments("red", "promotiondesc")
     def opimpl_hp_promote(self, gv_promote, promotiondesc):
         xxx
+
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_hp_red_direct_call(self, greenargs, redargs, targetbytecode):
+        gv_res = self.run_directly(greenargs, redargs, targetbytecode)
+        self.red_result(gv_res)
+
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_hp_gray_direct_call(self, greenargs, redargs, targetbytecode):
+        gv_res = self.run_directly(greenargs, redargs, targetbytecode)
+        assert gv_res is None
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):

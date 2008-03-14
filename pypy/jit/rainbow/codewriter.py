@@ -1043,7 +1043,10 @@ class BytecodeWriter(object):
         if bytecode.is_portal:
             self.emit("portal_call", *emitted_args)
         else:
-            self.emit("red_direct_call")
+            if self.hannotator.policy.hotpath:
+                self.emit("hp_%s_direct_call" % (kind,))
+            else:
+                self.emit("red_direct_call")
             self.emit(*emitted_args)
             self.emit(graphindex)
 

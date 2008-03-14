@@ -99,23 +99,27 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             ])
 
     def test_promote_after_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n']
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         def ll_two(k, s):
             if k > 5:
                 s.x = 20
             else:
-                s.x = 10
+                s.x = k
         def ll_function(n):
-            hint(None, global_merge_point=True)
+            MyJitDriver.jit_merge_point(n=n)
+            MyJitDriver.can_enter_jit(n=n)
             s = lltype.malloc(S)
             ll_two(n, s)
             k = hint(n, promote=True)
             k *= 17
             return hint(k, variable=True) + s.x
 
-        res = self.interpret(ll_function, [4])
-        assert res == 4*17 + 10
-        self.check_insns(int_mul=0, int_add=1)
+        res = self.run(ll_function, [4], threshold=1)
+        assert res == 4*17 + 4
+        self.check_insns(int_mul=0, int_add=0)
 
     def test_promote_after_yellow_call(self):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
