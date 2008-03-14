@@ -27,12 +27,13 @@ class ItemDesc(object):
 class ListTypeDesc(object):
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, rtyper, LIST):
+    def __init__(self, RGenOp, rtyper, exceptiondesc, LIST):
         self.LIST = LIST
         self.LISTPTR = lltype.Ptr(LIST)
         self.ptrkind = RGenOp.kindToken(self.LISTPTR)
         self.null = self.LISTPTR._defl()
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
+        self.exceptiondesc = exceptiondesc
 
         argtypes = [lltype.Signed]
         ll_newlist_ptr = rtyper.annotate_helper_fn(LIST.ll_newlist,
@@ -48,6 +49,7 @@ class ListTypeDesc(object):
             lltype.typeOf(ll_setitem_fast).TO)
 
         self._define_devirtualize()
+        self._define_allocate()
 
     def _define_devirtualize(self):
         LIST = self.LIST
@@ -67,6 +69,26 @@ class ListTypeDesc(object):
                 l.ll_setitem_fast(i, v)
 
         self.devirtualize = make, fill_into
+
+    def _define_allocate(self):
+        LIST = self.LIST
+        LISTPTR = self.LISTPTR
+
+        def allocate(rgenop, n):
+            l = LIST.ll_newlist(n)
+            return rgenop.genconst(l)
+
+        def populate(item_boxes, gv_lst, box_gv_reader):
+            l = gv_lst.revealconst(LISTPTR)
+            for i in range(len(item_boxes)):
+                box = item_boxes[i]
+                if box is not None:
+                    gv_value = box_gv_reader(box)
+                    v = gv_value.revealconst(LIST.ITEM)
+                    l.ll_setitem_fast(i, v)
+
+        self.allocate = allocate
+        self.populate = populate
 
     def _freeze_(self):
         return True
@@ -265,6 +287,13 @@ class VirtualList(VirtualContainer):
                 content = box.content
                 assert content.allowed_in_virtualizable
                 content.reshape(jitstate, shapemask, memo)
+
+    def allocate_gv_container(self, rgenop):
+        return self.typedesc.allocate(rgenop, len(self.item_boxes))
+
+    def populate_gv_container(self, gv_listptr, box_gv_reader):
+        return self.typedesc.populate(self.item_boxes,
+                                      gv_listptr, box_gv_reader)
 
 
 def oop_newlist(jitstate, oopspecdesc, deepfrozen, lengthbox, itembox=None):

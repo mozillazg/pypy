@@ -95,7 +95,7 @@ class LLEqDesc(object):
 class DictTypeDesc(object):
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, rtyper, DICT):
+    def __init__(self, RGenOp, rtyper, exceptiondesc, DICT):
         bk = rtyper.annotator.bookkeeper
         self.DICT = DICT
         self.DICTPTR = lltype.Ptr(DICT)

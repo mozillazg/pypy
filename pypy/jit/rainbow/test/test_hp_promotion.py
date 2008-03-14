@@ -340,7 +340,6 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_flexswitches(1)
 
     def test_virtual_list_copy(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['x', 'y', 'repeat']
