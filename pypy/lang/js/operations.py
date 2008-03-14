@@ -204,6 +204,10 @@ class Block(Statement):
     def __init__(self, pos, nodes):
         self.pos = pos
         self.nodes = nodes
+
+    def emit(self, bytecode):
+        for node in self.nodes:
+            node.emit(bytecode)
     
     def execute(self, ctx):
         try:
@@ -419,6 +423,7 @@ class And(BinaryOp):
     
 
 class Ge(BinaryOp):
+    operation_name = 'GE'
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op1, op2)
         if s5 in (-1, 1):
@@ -428,6 +433,7 @@ class Ge(BinaryOp):
     
 
 class Gt(BinaryOp):
+    operation_name = 'GT'
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op2, op1)
         if s5 == -1:
@@ -437,6 +443,7 @@ class Gt(BinaryOp):
     
 
 class Le(BinaryOp):
+    operation_name = 'LE'
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op2, op1)
         if s5 in (-1, 1):
@@ -446,6 +453,7 @@ class Le(BinaryOp):
     
 
 class Lt(BinaryOp):
+    operation_name = 'LT'
     def decision(self, ctx, op1, op2):
         s5 = ARC(ctx, op1, op2)
         if s5 == -1:
@@ -1062,6 +1070,15 @@ class Do(WhileBase):
                     continue
     
 class While(WhileBase):
+    def emit(self, bytecode):
+        startlabel = bytecode.emit_label()
+        self.condition.emit(bytecode)
+        endlabel = bytecode.prealocate_label()
+        bytecode.emit('JUMP_IF_FALSE', endlabel)
+        self.body.emit(bytecode)
+        bytecode.emit('JUMP', startlabel)
+        bytecode.emit('LABEL', endlabel)
+
     def execute(self, ctx):
         while self.condition.eval(ctx).ToBoolean():
             try:

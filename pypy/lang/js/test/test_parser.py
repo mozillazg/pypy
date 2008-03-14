@@ -276,10 +276,7 @@ class TestFunctionDeclaration(BaseGrammarTest):
         self.parse('function z (a,b,c,d,e) {;}')
     
 
-class TestToASTExpr(BaseGrammarTest):
-    def setup_class(cls):
-        cls.parse = parse_func('expression')
-
+class BaseTestToAST(BaseGrammarTest):
     def to_ast(self, s):
         return ASTBuilder().dispatch(self.parse(s))
     
@@ -288,14 +285,15 @@ class TestToASTExpr(BaseGrammarTest):
         bytecode = JsCode()
         ast.emit(bytecode)
         return bytecode
-#         w_Global = W_Object()
-#         w_Object = W_Object(Prototype=W_Object())
-#         w_Global.Put('Object', w_Object)
-#         return ast.eval(global_context(w_Global))
 
     def check(self, source, expected):
         bytecode = self.compile(source)
         assert bytecode == expected
+        return bytecode
+
+class TestToASTExpr(BaseTestToAST):
+    def setup_class(cls):
+        cls.parse = parse_func('expression')
     
     def test_get_pos(self):
         from pypy.lang.js import operations
@@ -368,6 +366,37 @@ class TestToASTExpr(BaseGrammarTest):
                    ['LOAD_STRINGCONSTANT "hello "',
                     'LOAD_STRINGCONSTANT "world"',
                     'ADD'])
+
+class TestToAstStatement(BaseTestToAST):
+    def setup_class(cls):
+        cls.parse = parse_func('statement')
+
+    def check_remove_label(self, s, expected, expected_after_rl):
+        bytecode = self.check(s, expected)
+        bytecode.remove_labels()
+        assert bytecode == expected_after_rl
+    
+    def test_control_flow(self):
+        self.check_remove_label('while (i>1) {x}',
+                   ['LABEL 0',
+                    'LOAD_VARIABLE "i"',
+                    'LOAD_INTCONSTANT 1',
+                    'GT',
+                    'JUMP_IF_FALSE 1',
+                    'LOAD_VARIABLE "x"',
+                    'JUMP 0',
+                    'LABEL 1'],
+                   ['LOAD_VARIABLE "i"',
+                    'LOAD_INTCONSTANT 1',
+                    'GT',
+                    'JUMP_IF_FALSE 6',
+                    'LOAD_VARIABLE "x"',
+                    'JUMP 0'])
+        #self.check_remove_label('if (x>3) {x} else {y}',
+                                
+
+    def test_function_decl(self):
+        pass
 
 from pypy.lang.js.jsparser import parse
     
