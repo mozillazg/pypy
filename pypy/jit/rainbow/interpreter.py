@@ -1,6 +1,6 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
+from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic, noop
 from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath
@@ -219,11 +219,19 @@ class JitInterpreter(object):
         if DEBUG_JITCODES:
             self.find_opcode("trace")     # force it to be compiled in
 
-    def debug_trace(self, *args):
-        if not we_are_translated():
-            trace = DebugTrace(*args)
-            log.trace(trace)
-            self.debug_traces.append(trace)
+    def _debug_trace(self, *args):
+        "NOT_RPYTHON"
+        trace = DebugTrace(*args)
+        log.trace(trace)
+        self.debug_traces.append(trace)
+
+    debug_trace = noop     # RPython-friendly,
+                           # patched for tests in set_hotrunnerdesc()
+
+    def set_hotrunnerdesc(self, hotrunnerdesc):
+        self.hotrunnerdesc = hotrunnerdesc
+        if not hotrunnerdesc.translate_support_code:
+            self.debug_trace = self._debug_trace
 
     def set_portalstate(self, portalstate):
         assert self.portalstate is None
@@ -907,7 +915,7 @@ class JitInterpreter(object):
     @arguments()
     def opimpl_hp_gray_return(self):
         if self.hp_return():
-            rhotpath.hp_return(self, gv_result)
+            rhotpath.hp_return(self, None)
             assert False, "unreachable"
 
     @arguments()
