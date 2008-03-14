@@ -1,5 +1,7 @@
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String
+from pypy.rlib.unroll import unrolling_iterable
+from pypy.lang.js.baseop import plus
 
 class AlreadyRun(Exception):
     pass
@@ -11,6 +13,7 @@ class JsCode(object):
         self.opcodes = []
         self.label_count = 0
         self.has_labels = True
+        self.stack = []
 
     def emit_label(self):
         num = self.prealocate_label()
@@ -30,6 +33,17 @@ class JsCode(object):
         except KeyError:
             raise ValueError("Unknown opcode %s" % (operation,))
     emit._annspecialcase_ = 'specialize:arg(1)'
+
+    def run(self, ctx, check_stack=True):
+        i = 0
+        while i < len(self.opcodes):
+            for name, op in opcode_unrolling:
+                opcode = self.opcodes[i]
+                if isinstance(opcode, op):
+                    opcode.eval(ctx, self.stack)
+            i += 1
+        if check_stack:
+            assert not self.stack
 
     def remove_labels(self):
         """ Basic optimization to remove all labels and change
@@ -95,7 +109,10 @@ class BaseBinaryBitwiseOp(Opcode):
         raise NotImplementedError
 
 class BaseBinaryOperation(Opcode):
-    pass
+    def eval(self, ctx, stack):
+        right = stack.pop()
+        left = stack.pop()
+        stack.append(self.operation(ctx, left, right))
 
 class BaseUnaryOperation(Opcode):
     pass
@@ -121,8 +138,8 @@ class LOAD_FLOATCONSTANT(Opcode):
     def __init__(self, value):
         self.w_floatvalue = W_FloatNumber(float(value))
 
-    def eval(self, ctx):
-        return self.w_floatvalue
+    def eval(self, ctx, stack):
+        stack.append(self.w_floatvalue)
 
     def __repr__(self):
         return 'LOAD_FLOATCONSTANT %s' % (self.w_floatvalue.floatval,)
@@ -196,7 +213,8 @@ class SUB(BaseBinaryOperation):
     pass
 
 class ADD(BaseBinaryOperation):
-    pass
+    def operation(self, ctx, left, right):
+        return plus(ctx, left, right)
 
 class MUL(BaseBinaryOperation):
     pass
@@ -292,3 +310,4 @@ for name, value in locals().items():
     if name.upper() == name and issubclass(value, Opcode):
         OpcodeMap[name] = value
 
+opcode_unrolling = unrolling_iterable(OpcodeMap.items())
