@@ -205,6 +205,7 @@ class TestHotPath(HotPathTest):
                 elif c == '*':
                     accum *= data
                 elif c == '%':
+                    assert data != 0
                     accum %= data
                 elif c == '?':
                     accum = int(bool(accum))
