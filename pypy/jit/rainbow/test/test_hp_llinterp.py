@@ -8,8 +8,6 @@ if option.quicktest:
     py.test.skip("slow")
 
 
-py.test.skip("in-progress")
-
 class TestLLInterpreted(test_hotpath.TestHotPath):
     translate_support_code = True
 

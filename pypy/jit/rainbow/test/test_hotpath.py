@@ -101,6 +101,11 @@ class HotPathTest(test_interpreter.InterpretationTest):
             return    # XXX it would be nice to check insns in this case too
         test_interpreter.InterpretationTest.check_insns(self, *args, **kwds)
 
+    def check_oops(self, *args, **kwds):
+        if self.translate_support_code:
+            return    # XXX it would be nice to check insns in this case too
+        test_interpreter.InterpretationTest.check_oops(self, *args, **kwds)
+
     def check_insns_excluding_return(self, expected=None, **counts):
         # the return is currently implemented by a direct_call(exitfnptr)
         if expected is not None:
