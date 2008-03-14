@@ -857,7 +857,7 @@ class JitInterpreter(object):
         if done:
             self.debug_trace("done at jit_merge_point")
             self.newjitstate(None)
-            return STOP
+            raise rhotpath.FinishedCompiling
 
     @arguments()
     def opimpl_can_enter_jit(self):
@@ -865,10 +865,24 @@ class JitInterpreter(object):
 
     @arguments("red", "jumptarget")
     def opimpl_hp_red_goto_iftrue(self, switchbox, target):
-        self.debug_trace("pause at hotsplit in", self.frame.bytecode.name)
-        rhotpath.hotsplit(self.jitstate, self.bool_hotpromotiondesc,
-                          switchbox, self.frame.pc, target)
-        assert False, "unreachable"
+        if switchbox.is_constant():
+            if switchbox.getgenvar(self.jitstate).revealconst(lltype.Bool):
+                self.frame.pc = target
+        else:
+            self.debug_trace("pause at hotsplit in", self.frame.bytecode.name)
+            rhotpath.hotsplit(self.jitstate, self.hotrunnerdesc,
+                              switchbox, self.frame.pc, target)
+            assert False, "unreachable"
+
+    @arguments("red", "promotiondesc")
+    def opimpl_hp_promote(self, promotebox, promotiondesc):
+        if promotebox.is_constant():
+            self.green_result_from_red(promotebox)
+        else:
+            self.debug_trace("pause at promote in", self.frame.bytecode.name)
+            rhotpath.hp_promote(self.jitstate, self.hotrunnerdesc,
+                                promotebox, promotiondesc)
+            assert False, "unreachable"
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):
@@ -885,7 +899,20 @@ class JitInterpreter(object):
 
     @arguments()
     def opimpl_hp_red_return(self):
-        xxx
+        gv_result = self.frame.local_boxes[0].getgenvar(self.jitstate)
+        # XXX not translatable (and slow if translated literally)
+        # XXX well, and hackish, clearly
+        def exit(llvalue):
+            DoneWithThisFrame = self.hotrunnerdesc.DoneWithThisFrame
+            raise DoneWithThisFrame(self.rgenop.genconst(llvalue))
+        FUNCTYPE = lltype.FuncType([self.hotrunnerdesc.DoneWithThisFrameARG],
+                                   lltype.Void)
+        exitfnptr = lltype.functionptr(FUNCTYPE, 'exit', _callable=exit)
+        gv_exitfnptr = self.rgenop.genconst(exitfnptr)
+        self.jitstate.curbuilder.genop_call(self.rgenop.sigToken(FUNCTYPE),
+                                            gv_exitfnptr,
+                                            [gv_result])
+        rhotpath.leave_graph(self)
 
     @arguments()
     def opimpl_hp_yellow_return(self):

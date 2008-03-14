@@ -3,7 +3,8 @@ RPython support code for the hotpath policy.
 """
 
 from pypy.jit.timeshifter import rtimeshift, rvalue
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.jit.timeshifter.greenkey import KeyDesc, GreenKey, newgreendict
+from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -22,8 +23,6 @@ def setup_jitstate(interp, jitstate, greenargs, redargs,
 
 def leave_graph(interp):
     jitstate = interp.jitstate
-    if jitstate is None:
-        return
     exceptiondesc = interp.exceptiondesc
     builder = jitstate.curbuilder
     #for virtualizable_box in jitstate.virtualizables:
@@ -34,18 +33,16 @@ def leave_graph(interp):
     exceptiondesc.store_global_excdata(jitstate)
     jitstate.curbuilder.finish_and_return(interp.graphsigtoken, None)
     jitstate.curbuilder = None
+    raise FinishedCompiling
 
 def compile(interp):
     jitstate = interp.jitstate
     builder = jitstate.curbuilder
     try:
         interp.bytecode_loop()
+        assert False, "unreachable"
     except FinishedCompiling:
         pass
-    except GenerateReturn:
-        leave_graph(interp)
-    else:
-        leave_graph(interp)
     builder.show_incremental_progress()
 
 def report_compile_time_exception(interp, e):
@@ -70,58 +67,43 @@ def report_compile_time_exception(interp, e):
 class FinishedCompiling(Exception):
     pass
 
-class GenerateReturn(Exception):
-    pass
-
 class HotPromotionDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, ERASED, interpreter, threshold, fallbackinterp):
-        self.exceptiondesc = interpreter.exceptiondesc
-        self.gv_constant_one = interpreter.rgenop.constPrebuiltGlobal(1)
+    def __init__(self, ERASED, RGenOp):
+        self.RGenOp = RGenOp
+        self.greenkeydesc = KeyDesc(RGenOp, ERASED)
+        pathkind = "%s path" % (ERASED,)
 
         def ll_reach_fallback_point(fallback_point_ptr, value, framebase):
             try:
                 fbp = fallback_point_ptr     # XXX cast
-                assert lltype.typeOf(value) is lltype.Bool   # XXX for now
-                if value:
-                    counter = fbp.truepath_counter
-                    pc = fbp.truepath_pc
-                else:
-                    counter = fbp.falsepath_counter
-                    pc = fbp.falsepath_pc
-                assert counter >= 0, (
-                    "reaching a fallback point for an already-compiled path")
-                counter += 1
+                # check if we should compile for this value.
+                path_is_hot = fbp.check_should_compile(value)
 
-                if counter >= threshold:
+                if path_is_hot:
                     # this is a hot path, compile it
-                    interpreter.debug_trace("jit_resume", "bool_path", value,
+                    interpreter = fbp.hotrunnerdesc.interpreter
+                    interpreter.debug_trace("jit_resume", pathkind, value,
                         "in", fbp.saved_jitstate.frame.bytecode.name)
-                    gv_value = interpreter.rgenop.genconst(value)
-                    fbp.compile_hot_path(interpreter, gv_value, pc)
-                    if value:
-                        fbp.truepath_counter = -1    # means "compiled"
-                    else:
-                        fbp.falsepath_counter = -1   # means "compiled"
+                    fbp.compile_hot_path(value)
                     # Done.  We return without an exception set, which causes
                     # our caller (the machine code produced by hotsplit()) to
                     # loop back to the flexswitch and execute the
                     # newly-generated code.
                     interpreter.debug_trace("resume_machine_code")
                     return
-                else:
-                    # path is still cold
-                    if value:
-                        fbp.truepath_counter = counter
-                    else:
-                        fbp.falsepath_counter = counter
+                # else: path is still cold
 
             except Exception, e:
+                interpreter = fbp.hotrunnerdesc.interpreter
                 report_compile_time_exception(interpreter, e)
 
             # exceptions below at run-time exceptions, we let them propagate
-            fallbackinterp.run(fbp, framebase, pc)
+            fallbackinterp = fbp.hotrunnerdesc.fallbackinterp
+            fallbackinterp.initialize_state(fbp, framebase)
+            fbp.prepare_fallbackinterp(fallbackinterp, value)
+            fallbackinterp.bytecode_loop()
             # If the fallback interpreter reached the next jit_merge_point(),
             # it raised ContinueRunningNormally().  This exception is
             # caught by portal_runner() from hotpath.py in order to loop
@@ -135,7 +117,7 @@ class HotPromotionDesc:
                                     llmemory.Address], lltype.Void)
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
         self.FUNCPTRTYPE = FUNCPTRTYPE
-        self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
+        self.sigtoken = RGenOp.sigToken(FUNCTYPE)
 
         def get_gv_reach_fallback_point(builder):
             fnptr = llhelper(FUNCPTRTYPE, ll_reach_fallback_point)
@@ -149,43 +131,159 @@ class HotPromotionDesc:
 
 
 class FallbackPoint(object):
-    falsepath_counter = 0     # -1 after this path was compiled
-    truepath_counter = 0      # -1 after this path was compiled
 
-    def __init__(self, jitstate, flexswitch, frameinfo,
-                 falsepath_pc, truepath_pc):
+    def __init__(self, jitstate, hotrunnerdesc, promotebox):
         # XXX we should probably trim down the jitstate once our caller
         # is done with it, to avoid keeping too much stuff in memory
         self.saved_jitstate = jitstate
+        self.hotrunnerdesc = hotrunnerdesc
+        self.promotebox = promotebox
+
+    def set_machine_code_info(self, flexswitch, frameinfo):
         self.flexswitch = flexswitch
         self.frameinfo = frameinfo
         # ^^^ 'frameinfo' describes where the machine code stored all
         # its GenVars, so that we can fish these values to pass them
         # to the fallback interpreter
-        self.falsepath_pc = falsepath_pc
-        self.truepath_pc = truepath_pc
-
-    def compile_hot_path(self, interpreter, gv_case, pc):
-        if self.falsepath_counter == -1 or self.truepath_counter == -1:
-            # the other path was already compiled, we can reuse the jitstate
-            jitstate = self.saved_jitstate
-            self.saved_jitstate = None
-        else:
-            # clone the jitstate
-            memo = rvalue.copy_memo()
-            jitstate = self.saved_jitstate.clone(memo)
-        interpreter.newjitstate(jitstate)
-        interpreter.frame.pc = pc
-        jitstate.curbuilder = self.flexswitch.add_case(gv_case)
-        compile(interpreter)
 
     # hack for testing: make the llinterpreter believe this is a Ptr to base
     # instance
     _TYPE = base_ptr_lltype()
 
 
-def hotsplit(jitstate, hotpromotiondesc, switchbox, falsepath_pc, truepath_pc):
+class HotSplitFallbackPoint(FallbackPoint):
+    falsepath_counter = 0     # -1 after this path was compiled
+    truepath_counter = 0      # -1 after this path was compiled
+
+    def __init__(self, jitstate, hotrunnerdesc, promotebox,
+                 falsepath_pc, truepath_pc):
+        FallbackPoint. __init__(self, jitstate, hotrunnerdesc, promotebox)
+        self.falsepath_pc = falsepath_pc
+        self.truepath_pc = truepath_pc
+
+    @specialize.arg(1)
+    def check_should_compile(self, value):
+        assert lltype.typeOf(value) is lltype.Bool
+        threshold = self.hotrunnerdesc.threshold
+        if value:
+            counter = self.truepath_counter + 1
+            assert counter > 0, (
+                "reaching a fallback point for an already-compiled path")
+            if counter >= threshold:
+                return True
+            self.truepath_counter = counter
+            return False
+        else:
+            counter = self.falsepath_counter + 1
+            assert counter > 0, (
+                "reaching a fallback point for an already-compiled path")
+            if counter >= threshold:
+                return True
+            self.falsepath_counter = counter
+            return False   # path is still cold
+
+    @specialize.arg(2)
+    def prepare_fallbackinterp(self, fallbackinterp, value):
+        if value:
+            fallbackinterp.pc = self.truepath_pc
+        else:
+            fallbackinterp.pc = self.falsepath_pc
+
+    @specialize.arg(1)
+    def compile_hot_path(self, value):
+        if value:
+            pc = self.truepath_pc
+        else:
+            pc = self.falsepath_pc
+        gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
+        self._compile_hot_path(gv_value, pc)
+        if value:
+            self.truepath_counter = -1    # means "compiled"
+        else:
+            self.falsepath_counter = -1   # means "compiled"
+
+    def _compile_hot_path(self, gv_case, pc):
+        if self.falsepath_counter == -1 or self.truepath_counter == -1:
+            # the other path was already compiled, we can reuse the jitstate
+            jitstate = self.saved_jitstate
+            self.saved_jitstate = None
+            promotebox = self.promotebox
+        else:
+            # clone the jitstate
+            memo = rvalue.copy_memo()
+            jitstate = self.saved_jitstate.clone(memo)
+            promotebox = memo.boxes[self.promotebox]
+        promotebox.setgenvar(gv_case)
+        interpreter = self.hotrunnerdesc.interpreter
+        interpreter.newjitstate(jitstate)
+        interpreter.frame.pc = pc
+        jitstate.curbuilder = self.flexswitch.add_case(gv_case)
+        compile(interpreter)
+
+
+class PromoteFallbackPoint(FallbackPoint):
+
+    def __init__(self, jitstate, hotrunnerdesc, promotebox, hotpromotiondesc):
+        FallbackPoint. __init__(self, jitstate, hotrunnerdesc, promotebox)
+        self.hotpromotiondesc = hotpromotiondesc
+        self.counters = newgreendict()
+
+    @specialize.arg(1)
+    def check_should_compile(self, value):
+        # XXX incredibly heavy for a supposely lightweight profiling
+        gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
+        greenkey = GreenKey([gv_value], self.hotpromotiondesc.greenkeydesc)
+        counter = self.counters.get(greenkey, 0) + 1
+        threshold = self.hotrunnerdesc.threshold
+        assert counter > 0, (
+            "reaching a fallback point for an already-compiled path")
+        if counter >= threshold:
+            return True
+        self.counters[greenkey] = counter
+        return False
+
+    @specialize.arg(2)
+    def prepare_fallbackinterp(self, fallbackinterp, value):
+        gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
+        fallbackinterp.local_green.append(gv_value)
+
+    @specialize.arg(1)
+    def compile_hot_path(self, value):
+        gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
+        self._compile_hot_path(gv_value)
+
+    def _compile_hot_path(self, gv_value):
+        # clone the jitstate
+        memo = rvalue.copy_memo()
+        jitstate = self.saved_jitstate.clone(memo)
+        promotebox = memo.boxes[self.promotebox]
+        promotebox.setgenvar(gv_value)
+        # compile from that state
+        interpreter = self.hotrunnerdesc.interpreter
+        interpreter.newjitstate(jitstate)
+        interpreter.green_result(gv_value)
+        jitstate.curbuilder = self.flexswitch.add_case(gv_value)
+        compile(interpreter)
+        # done
+        greenkey = GreenKey([gv_value], self.hotpromotiondesc.greenkeydesc)
+        self.counters[greenkey] = -1     # means "compiled"
+
+
+def hotsplit(jitstate, hotrunnerdesc, switchbox,
+             falsepath_pc, truepath_pc):
     # produce a Bool flexswitch for now
+    fbp = HotSplitFallbackPoint(jitstate, hotrunnerdesc, switchbox,
+                                falsepath_pc, truepath_pc)
+    desc = hotrunnerdesc.bool_hotpromotiondesc
+    generate_fallback_code(fbp, desc, switchbox)
+
+def hp_promote(jitstate, hotrunnerdesc, promotebox, hotpromotiondesc):
+    fbp = PromoteFallbackPoint(jitstate, hotrunnerdesc, promotebox,
+                               hotpromotiondesc)
+    generate_fallback_code(fbp, hotpromotiondesc, promotebox)
+
+def generate_fallback_code(fbp, hotpromotiondesc, switchbox):
+    jitstate = fbp.saved_jitstate
     incoming = jitstate.enter_block_sweep_virtualizables()
     switchblock = rtimeshift.enter_next_block(jitstate, incoming)
     gv_switchvar = switchbox.genvar
@@ -195,8 +293,7 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox, falsepath_pc, truepath_pc):
     jitstate.curbuilder = default_builder
     # default case of the switch:
     frameinfo = default_builder.get_frame_info(incoming_gv)
-    fbp = FallbackPoint(jitstate, flexswitch, frameinfo,
-                        falsepath_pc, truepath_pc)
+    fbp.set_machine_code_info(flexswitch, frameinfo)
     ll_fbp = fbp        # XXX doesn't translate
     gv_fbp = default_builder.rgenop.genconst(ll_fbp)
     gv_switchvar = switchbox.genvar
@@ -208,7 +305,7 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox, falsepath_pc, truepath_pc):
     # The call above may either return normally, meaning that more machine
     # code was compiled and we should loop back to 'switchblock' to enter it,
     # or it may have set an exception.
-    exceptiondesc = hotpromotiondesc.exceptiondesc
+    exceptiondesc = fbp.hotrunnerdesc.exceptiondesc
     gv_exc_type = exceptiondesc.genop_get_exc_type(default_builder)
     gv_noexc = default_builder.genop_ptr_iszero(
         exceptiondesc.exc_type_kind, gv_exc_type)
@@ -217,4 +314,4 @@ def hotsplit(jitstate, hotpromotiondesc, switchbox, falsepath_pc, truepath_pc):
 
     jitstate.curbuilder = excpath_builder
     excpath_builder.start_writing()
-    raise GenerateReturn
+    leave_graph(fbp.hotrunnerdesc.interpreter)

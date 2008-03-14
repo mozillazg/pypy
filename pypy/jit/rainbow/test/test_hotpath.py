@@ -2,7 +2,7 @@ import py
 import re
 from pypy.rlib.jit import JitDriver, hint, JitHintError
 from pypy.jit.rainbow.test import test_interpreter
-from pypy.jit.rainbow.hotpath import EntryPointsRewriter
+from pypy.jit.rainbow.hotpath import HotRunnerDesc
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.rpython.llinterp import LLInterpreter
 from pypy import conftest
@@ -25,11 +25,10 @@ class HotPathTest(test_interpreter.InterpretationTest):
         return self._run(main, main_args)
 
     def _rewrite(self, threshold, small):
-        rewriter = EntryPointsRewriter(self.hintannotator, self.rtyper,
+        self.hotrunnerdesc = HotRunnerDesc(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
                                        threshold, self.translate_support_code)
-        self.rewriter = rewriter
-        rewriter.rewrite_all()
+        self.hotrunnerdesc.rewrite_all()
         if small and conftest.option.view:
             self.rtyper.annotator.translator.view()
 
@@ -40,8 +39,11 @@ class HotPathTest(test_interpreter.InterpretationTest):
             self.rtyper, exc_data_ptr=self.writer.exceptiondesc.exc_data_ptr)
         return llinterp.eval_graph(graph, main_args)
 
+    def get_traces(self):
+        return self.hotrunnerdesc.interpreter.debug_traces
+
     def check_traces(self, expected):
-        traces = self.rewriter.interpreter.debug_traces
+        traces = self.get_traces()
         i = 0
         for trace, expect in zip(traces + ['--end of traces--'],
                                  expected + ['--end of traces--']):
@@ -108,7 +110,7 @@ class TestHotPath(HotPathTest):
             "run_machine_code 5 195",
             # now that we know which path is hot (i.e. "staying in the loop"),
             # it gets compiled
-            "jit_resume bool_path False in ll_function",
+            "jit_resume Bool path False in ll_function",
             "done at jit_merge_point",
             # execution continues purely in machine code, from the "n1 <= 1"
             # test which triggered the "jit_resume"
@@ -203,7 +205,7 @@ class TestHotPath(HotPathTest):
                 "run_machine_code * struct rpy_string {...} 5 5 30240 10",
             # the third time, compile the hot path, which closes the loop
             # in the generated machine code
-                "jit_resume bool_path True in ll_function",
+                "jit_resume Bool path True in ll_function",
                 "done at jit_merge_point",
             # continue running 100% in the machine code as long as necessary
                 "resume_machine_code",
@@ -216,7 +218,7 @@ class TestHotPath(HotPathTest):
 
         res = self.run(main, [2, 1291], threshold=3, small=True)
         assert res == 1
-        assert len(self.rewriter.interpreter.debug_traces) < 20
+        assert len(self.get_traces()) < 20
 
     def test_simple_return(self):
         class MyJitDriver(JitDriver):
@@ -246,7 +248,7 @@ class TestHotPath(HotPathTest):
 
         res = self.run(ll_function, [50], threshold=3, small=True)
         assert res == (50*51)/2
-        assert len(self.rewriter.interpreter.debug_traces) < 20
+        assert len(self.get_traces()) < 20
 
     def test_hint_errors(self):
         class MyJitDriver(JitDriver):
@@ -291,7 +293,7 @@ class TestHotPath(HotPathTest):
             "fallback_interp",
             "fb_leave * stru...} 10 64 * array [ 64, 71, 497 ]",
             "run_machine_code * stru...} 10 64 * array [ 64, 71, 497 ]",
-            "jit_resume bool_path True in hp_interpret",
+            "jit_resume Bool path True in hp_interpret",
             "done at jit_merge_point",
             "resume_machine_code",
             "fallback_interp",

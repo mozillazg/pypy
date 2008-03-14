@@ -14,7 +14,7 @@ from pypy.jit.rainbow.fallback import FallbackInterpreter
 from pypy.jit.rainbow.codewriter import maybe_on_top_of_llinterp
 
 
-class EntryPointsRewriter:
+class HotRunnerDesc:
 
     def __init__(self, hintannotator, rtyper, entryjitcode, RGenOp,
                  codewriter, threshold, translate_support_code = True):
@@ -22,6 +22,7 @@ class EntryPointsRewriter:
         self.entryjitcode = entryjitcode
         self.rtyper = rtyper
         self.RGenOp = RGenOp
+        self.exceptiondesc = codewriter.exceptiondesc
         self.interpreter = codewriter.interpreter
         self.codewriter = codewriter
         self.threshold = threshold
@@ -34,7 +35,9 @@ class EntryPointsRewriter:
         self.make_args_specification()
         self.make_enter_function()
         self.rewrite_graphs()
-        self.update_interp()
+        self.make_descs()
+        self.fallbackinterp = FallbackInterpreter(self)
+        self.interpreter.hotrunnerdesc = self
 
     def make_args_specification(self):
         origportalgraph = self.hintannotator.portalgraph
@@ -62,7 +65,7 @@ class EntryPointsRewriter:
     def make_enter_function(self):
         HotEnterState = make_state_class(self)
         state = HotEnterState()
-        exceptiondesc = self.codewriter.exceptiondesc
+        exceptiondesc = self.exceptiondesc
         interpreter = self.interpreter
         num_green_args = len(self.green_args_spec)
 
@@ -87,15 +90,10 @@ class EntryPointsRewriter:
         maybe_enter_jit._always_inline_ = True
         self.maybe_enter_jit_fn = maybe_enter_jit
 
-    def update_interp(self):
-        self.fallbackinterp = FallbackInterpreter(
-            self.interpreter,
-            self.codewriter.exceptiondesc,
-            self.DoneWithThisFrame,
-            self.ContinueRunningNormally)
+    def make_descs(self):
         ERASED = self.RGenOp.erasedType(lltype.Bool)
-        self.interpreter.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(
-            ERASED, self.interpreter, self.threshold, self.fallbackinterp)
+        self.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(ERASED,
+                                                               self.RGenOp)
 
     def rewrite_graphs(self):
         for graph in self.hintannotator.base_translator.graphs:
@@ -209,6 +207,7 @@ class EntryPointsRewriter:
                         ', '.join(map(str, self.args)),)
 
             self.DoneWithThisFrame = DoneWithThisFrame
+            self.DoneWithThisFrameARG = RES
             self.ContinueRunningNormally = ContinueRunningNormally
 
             def portal_runner(*args):
@@ -252,12 +251,12 @@ class EntryPointsRewriter:
         return True
 
 
-def make_state_class(rewriter):
+def make_state_class(hotrunnerdesc):
     # very minimal, just to make the first test pass
-    green_args_spec = unrolling_iterable(rewriter.green_args_spec)
-    red_args_spec = unrolling_iterable(rewriter.red_args_spec)
-    if rewriter.green_args_spec:
-        keydesc = KeyDesc(rewriter.RGenOp, *rewriter.green_args_spec)
+    green_args_spec = unrolling_iterable(hotrunnerdesc.green_args_spec)
+    red_args_spec = unrolling_iterable(hotrunnerdesc.red_args_spec)
+    if hotrunnerdesc.green_args_spec:
+        keydesc = KeyDesc(hotrunnerdesc.RGenOp, *hotrunnerdesc.green_args_spec)
     else:
         keydesc = None
 
@@ -279,7 +278,7 @@ def make_state_class(rewriter):
         def getkey(self, *greenvalues):
             if keydesc is None:
                 return empty_key
-            rgenop = rewriter.interpreter.rgenop
+            rgenop = hotrunnerdesc.interpreter.rgenop
             lst_gv = [None] * len(greenvalues)
             i = 0
             for _ in green_args_spec:
@@ -292,14 +291,15 @@ def make_state_class(rewriter):
                 self._compile(greenkey)
                 return True
             except Exception, e:
-                rhotpath.report_compile_time_exception(rewriter.interpreter, e)
+                rhotpath.report_compile_time_exception(
+                    hotrunnerdesc.interpreter, e)
                 return False
 
         def _compile(self, greenkey):
-            interp = rewriter.interpreter
+            interp = hotrunnerdesc.interpreter
             rgenop = interp.rgenop
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
-                rewriter.sigtoken, "residual")
+                hotrunnerdesc.sigtoken, "residual")
 
             greenargs = list(greenkey.values)
             redargs = ()
@@ -313,14 +313,19 @@ def make_state_class(rewriter):
 
             jitstate = interp.fresh_jitstate(builder)
             rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
-                                    rewriter.entryjitcode, rewriter.sigtoken)
+                                    hotrunnerdesc.entryjitcode,
+                                    hotrunnerdesc.sigtoken)
             builder = jitstate.curbuilder
             builder.start_writing()
             rhotpath.compile(interp)
             builder.end()
 
-            FUNCPTR = lltype.Ptr(rewriter.RESIDUAL_FUNCTYPE)
-            self.machine_codes[greenkey] = gv_generated.revealconst(FUNCPTR)
+            FUNCPTR = lltype.Ptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
+            generated = gv_generated.revealconst(FUNCPTR)
+            self.machine_codes[greenkey] = generated
             self.counters[greenkey] = -1     # compiled
+
+            if not we_are_translated():
+                hotrunnerdesc.residual_graph = generated._obj.graph  #for tests
 
     return HotEnterState

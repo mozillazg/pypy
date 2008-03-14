@@ -12,31 +12,24 @@ class FallbackInterpreter(object):
     actual values for the live red vars, and interprets the jitcode
     normally until it reaches the 'jit_merge_point' or raises.
     """
-    def __init__(self, interpreter, exceptiondesc,
-                 DoneWithThisFrame, ContinueRunningNormally):
-        self.interpreter = interpreter
-        self.rgenop = interpreter.rgenop
-        self.exceptiondesc = exceptiondesc
-        self.DoneWithThisFrame = DoneWithThisFrame
-        self.ContinueRunningNormally = ContinueRunningNormally
-        self.register_opcode_impls(interpreter)
+    def __init__(self, hotrunnerdesc):
+        self.hotrunnerdesc = hotrunnerdesc
+        self.interpreter = hotrunnerdesc.interpreter
+        self.rgenop = self.interpreter.rgenop
+        self.exceptiondesc = hotrunnerdesc.exceptiondesc
+        self.register_opcode_impls(self.interpreter)
 
-    def run(self, fallback_point, framebase, pc):
+    def initialize_state(self, fallback_point, framebase):
         self.interpreter.debug_trace("fallback_interp")
-        self.fbp = fallback_point
-        self.framebase = framebase
-        self.initialize_state(pc)
-        self.bytecode_loop()
-
-    def initialize_state(self, pc):
-        jitstate = self.fbp.saved_jitstate
+        jitstate = fallback_point.saved_jitstate
         incoming_gv = jitstate.get_locals_gv()
+        self.framebase = framebase
+        self.frameinfo = fallback_point.frameinfo
         self.gv_to_index = {}
         for i in range(len(incoming_gv)):
             self.gv_to_index[incoming_gv[i]] = i
 
         self.initialize_from_frame(jitstate.frame)
-        self.pc = pc
         self.gv_exc_type  = self.getinitialboxgv(jitstate.exc_type_box)
         self.gv_exc_value = self.getinitialboxgv(jitstate.exc_value_box)
         self.seen_can_enter_jit = False
@@ -47,7 +40,7 @@ class FallbackInterpreter(object):
         if not gv.is_const:
             # fetch the value from the machine code stack
             gv = self.rgenop.genconst_from_frame_var(box.kind, self.framebase,
-                                                     self.fbp.frameinfo,
+                                                     self.frameinfo,
                                                      self.gv_to_index[gv])
         return gv
 
@@ -85,7 +78,9 @@ class FallbackInterpreter(object):
             self.interpreter.debug_trace("fb_raise", type_name(lltype))
             raise LLException(lltype, llvalue)
         else:
-            raise self.DoneWithThisFrame(gv_result)
+            self.interpreter.debug_trace("fb_return", gv_result)
+            DoneWithThisFrame = self.hotrunnerdesc.DoneWithThisFrame
+            raise DoneWithThisFrame(gv_result)
 
     # ____________________________________________________________
     # XXX Lots of copy and paste from interp.py!
@@ -254,8 +249,9 @@ class FallbackInterpreter(object):
     opimpl_make_new_greenvars.argspec = arguments("green_varargs")
 
     @arguments("green", "calldesc", "green_varargs")
-    def opimpl_green_call(self, fnptr_gv, calldesc, greenargs):
-        xxx
+    def opimpl_green_call(self, gv_fnptr, calldesc, greenargs):
+        gv_res = calldesc.perform_call(self.rgenop, gv_fnptr, greenargs)
+        self.green_result(gv_res)
 
     @arguments("green_varargs", "red_varargs", "red", "indirectcalldesc")
     def opimpl_indirect_call_const(self, greenargs, redargs,
@@ -410,8 +406,9 @@ class FallbackInterpreter(object):
 
     @arguments("greenkey")
     def opimpl_jit_merge_point(self, key):
-        raise self.ContinueRunningNormally(self.local_green + self.local_red,
-                                           self.seen_can_enter_jit)
+        ContinueRunningNormally = self.hotrunnerdesc.ContinueRunningNormally
+        raise ContinueRunningNormally(self.local_green + self.local_red,
+                                      self.seen_can_enter_jit)
 
     @arguments()
     def opimpl_can_enter_jit(self):
@@ -421,6 +418,10 @@ class FallbackInterpreter(object):
     def opimpl_hp_red_goto_iftrue(self, gv_switch, target):
         if gv_switch.revealconst(lltype.Bool):
             self.pc = target
+
+    @arguments("red", "promotiondesc")
+    def opimpl_hp_promote(self, gv_promote, promotiondesc):
+        xxx
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):
