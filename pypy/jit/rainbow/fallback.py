@@ -120,9 +120,9 @@ class FallbackInterpreter(object):
             self.interpreter.debug_trace("fb_raise", type_name(llexctype))
             raise LLException(llexctype, llvalue)
         else:
-            ARGS = self.hotrunnerdesc.RAISE_DONE_FUNCPTR.TO.ARGS
-            if ARGS:
-                result = gv_result.revealconst(ARGS[0])
+            ARG = self.hotrunnerdesc.RAISE_DONE_FUNCPTR.TO.ARGS[0]
+            if ARG is not lltype.Void:
+                result = gv_result.revealconst(ARG)
             else:
                 result = None
             self.interpreter.debug_trace("fb_return", result)
