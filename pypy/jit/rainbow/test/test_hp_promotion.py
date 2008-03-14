@@ -11,18 +11,6 @@ class TestHotPromotion(test_hotpath.HotPathTest):
     def interpret_raises(self, Exception, main, ll_values, opt_consts=[]):
         py.test.skip("fix this test")
 
-    def get_residual_graph(self):
-        return self.hotrunnerdesc.residual_graph
-
-    def check_insns_excluding_return(self, expected=None, **counts):
-        # the return is currently implemented by a direct_call(exitfnptr)
-        if expected is not None:
-            expected.setdefault('direct_call', 0)
-            expected['direct_call'] += 1
-        if 'direct_call' in counts:
-            counts['direct_call'] += 1
-        self.check_insns(expected, **counts)
-
     def test_easy_case(self):
         class MyJitDriver(JitDriver):
             greens = ['n']
