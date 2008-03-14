@@ -2,6 +2,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
 
@@ -25,6 +26,7 @@ class FallbackInterpreter(object):
         incoming_gv = jitstate.get_locals_gv()
         self.framebase = framebase
         self.frameinfo = fallback_point.frameinfo
+        self.containers_gv = {}
         self.gv_to_index = {}
         for i in range(len(incoming_gv)):
             self.gv_to_index[incoming_gv[i]] = i
@@ -35,14 +37,29 @@ class FallbackInterpreter(object):
         self.seen_can_enter_jit = False
 
     def getinitialboxgv(self, box):
-        assert box.genvar is not None, "XXX Virtuals support missing"
         gv = box.genvar
+        if gv is None:
+            return self.build_gv_container(box)
         if not gv.is_const:
             # fetch the value from the machine code stack
             gv = self.rgenop.genconst_from_frame_var(box.kind, self.framebase,
                                                      self.frameinfo,
                                                      self.gv_to_index[gv])
         return gv
+
+    def build_gv_container(self, box):
+        # allocate a real structure on the heap mirroring the virtual
+        # container of the box
+        assert isinstance(box, rvalue.PtrRedBox)
+        content = box.content
+        assert content is not None
+        try:
+            return self.containers_gv[content]
+        except KeyError:
+            gv_result = content.allocate_gv_container(self.rgenop)
+            self.containers_gv[content] = gv_result
+            content.populate_gv_container(gv_result, self.getinitialboxgv)
+            return gv_result
 
     def initialize_from_frame(self, frame):
         # note that both local_green and local_red contain GenConsts
@@ -415,7 +432,7 @@ class FallbackInterpreter(object):
 
     @arguments("red", "promotiondesc")
     def opimpl_hp_promote(self, gv_promote, promotiondesc):
-        xxx
+        self.green_result(gv_promote)
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_hp_red_direct_call(self, greenargs, redargs, targetbytecode):
@@ -432,19 +449,34 @@ class FallbackInterpreter(object):
         gv_res = self.run_directly(greenargs, redargs, targetbytecode)
         self.green_result(gv_res)
 
+    def hp_return(self):
+        frame = self.current_source_jitframe.backframe
+        if frame is None:
+            return True
+        else:
+            self.initialize_from_frame(frame)
+            return False
+
     @arguments()
     def opimpl_hp_gray_return(self):
-        assert self.current_source_jitframe.backframe is None   # XXX for now
-        self.leave_fallback_interp(None)
+        if self.hp_return():
+            self.leave_fallback_interp(None)
 
     @arguments()
     def opimpl_hp_red_return(self):
-        assert self.current_source_jitframe.backframe is None   # XXX for now
-        self.leave_fallback_interp(self.local_red[0])
+        gv_result = self.local_red[0]
+        if self.hp_return():
+            self.leave_fallback_interp(gv_result)
+        else:
+            self.red_result(gv_result)
 
     @arguments()
     def opimpl_hp_yellow_return(self):
-        xxx
+        gv_result = self.local_green[0]
+        if self.hp_return():
+            self.leave_fallback_interp(gv_result)
+        else:
+            self.green_result(gv_result)
 
     # ____________________________________________________________
     # construction-time helpers
