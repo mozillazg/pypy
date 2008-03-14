@@ -392,8 +392,39 @@ class TestToAstStatement(BaseTestToAST):
                     'JUMP_IF_FALSE 6',
                     'LOAD_VARIABLE "x"',
                     'JUMP 0'])
-        #self.check_remove_label('if (x>3) {x} else {y}',
-                                
+        self.check_remove_label('if (x<3) {x} else {y}',[
+                                'LOAD_VARIABLE "x"',
+                                'LOAD_INTCONSTANT 3',
+                                'LT',
+                                'JUMP_IF_FALSE 0',
+                                'LOAD_VARIABLE "x"',
+                                'JUMP 1',
+                                'LABEL 0',
+                                'LOAD_VARIABLE "y"',
+                                'LABEL 1'],[
+                                'LOAD_VARIABLE "x"',
+                                'LOAD_INTCONSTANT 3',
+                                'LT',
+                                'JUMP_IF_FALSE 6',
+                                'LOAD_VARIABLE "x"',
+                                'JUMP 7',
+                                'LOAD_VARIABLE "y"'])
+        self.check_remove_label('if (x) {y}',[
+                                'LOAD_VARIABLE "x"',
+                                'JUMP_IF_FALSE 0',
+                                'LOAD_VARIABLE "y"',
+                                'LABEL 0'],[
+                                'LOAD_VARIABLE "x"',
+                                'JUMP_IF_FALSE 3',
+                                'LOAD_VARIABLE "y"'])
+        self.check_remove_label('do { stuff } while (x)',[
+                                'LABEL 0',
+                                'LOAD_VARIABLE "stuff"',
+                                'LOAD_VARIABLE "x"',
+                                'JUMP_IF_TRUE 0'],[
+                                'LOAD_VARIABLE "stuff"',
+                                'LOAD_VARIABLE "x"',
+                                'JUMP_IF_TRUE 0'])
 
     def test_function_decl(self):
         pass

@@ -310,7 +310,7 @@ class ASTBuilder(RPythonVisitor):
         if len(node.children) > 2:
             elseblock =  self.dispatch(node.children[2])
         else:
-            elseblock = operations.astundef
+            elseblock = None
         return operations.If(pos, condition, ifblock, elseblock)
     
     def visit_iterationstatement(self, node):
@@ -324,7 +324,11 @@ class ASTBuilder(RPythonVisitor):
             block = self.dispatch(node.children[2])
             return operations.While(pos, condition, block)
         elif itertype == "do":
-            pass
+            condition = self.dispatch(node.children[2])
+            block = self.dispatch(node.children[1])
+            return operations.Do(pos, condition, block)
+        else:
+            raise NotImplementedError("Unknown while version %s" % (itertype,))
     
     def visit_regularfor(self, node):
         pos = self.get_pos(node)
