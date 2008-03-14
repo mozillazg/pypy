@@ -873,6 +873,21 @@ class TestFlowObjSpace(Base):
             return i
         py.test.raises(TypeError, self.codetest, g)
 
+    def test_ordering_bug(self):
+        # eager constant propagation could make the flow space believe that
+        # there is an always-raising '1.0 / 0' operation.  Unsure how to
+        # fix this.
+        py.test.skip("minor bug")
+        def f(n, m):
+            x = 0
+            total = 0.0
+            while x < n:
+                if x > m:
+                    total += 1.0 / x
+                x = x + 1
+            return total
+        self.codetest(f)
+
 
 class TestFlowObjSpaceDelay(Base):
     def setup_class(cls):
