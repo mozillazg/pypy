@@ -384,13 +384,15 @@ class TestToAstStatement(BaseTestToAST):
                     'GT',
                     'JUMP_IF_FALSE 1',
                     'LOAD_VARIABLE "x"',
+                    'POP',
                     'JUMP 0',
                     'LABEL 1'],
                    ['LOAD_VARIABLE "i"',
                     'LOAD_INTCONSTANT 1',
                     'GT',
-                    'JUMP_IF_FALSE 6',
+                    'JUMP_IF_FALSE 7',
                     'LOAD_VARIABLE "x"',
+                    'POP',
                     'JUMP 0'])
         self.check_remove_label('if (x<3) {x} else {y}',[
                                 'LOAD_VARIABLE "x"',
@@ -398,31 +400,39 @@ class TestToAstStatement(BaseTestToAST):
                                 'LT',
                                 'JUMP_IF_FALSE 0',
                                 'LOAD_VARIABLE "x"',
+                                'POP',
                                 'JUMP 1',
                                 'LABEL 0',
                                 'LOAD_VARIABLE "y"',
+                                'POP',
                                 'LABEL 1'],[
                                 'LOAD_VARIABLE "x"',
                                 'LOAD_INTCONSTANT 3',
                                 'LT',
-                                'JUMP_IF_FALSE 6',
+                                'JUMP_IF_FALSE 7',
                                 'LOAD_VARIABLE "x"',
-                                'JUMP 7',
-                                'LOAD_VARIABLE "y"'])
+                                'POP',
+                                'JUMP 9',
+                                'LOAD_VARIABLE "y"',
+                                'POP'])
         self.check_remove_label('if (x) {y}',[
                                 'LOAD_VARIABLE "x"',
                                 'JUMP_IF_FALSE 0',
                                 'LOAD_VARIABLE "y"',
+                                'POP',
                                 'LABEL 0'],[
                                 'LOAD_VARIABLE "x"',
-                                'JUMP_IF_FALSE 3',
-                                'LOAD_VARIABLE "y"'])
+                                'JUMP_IF_FALSE 4',
+                                'LOAD_VARIABLE "y"',
+                                'POP'])
         self.check_remove_label('do { stuff } while (x)',[
                                 'LABEL 0',
                                 'LOAD_VARIABLE "stuff"',
+                                'POP',
                                 'LOAD_VARIABLE "x"',
                                 'JUMP_IF_TRUE 0'],[
                                 'LOAD_VARIABLE "stuff"',
+                                'POP',
                                 'LOAD_VARIABLE "x"',
                                 'JUMP_IF_TRUE 0'])
 

@@ -283,6 +283,9 @@ class DECLARE_VAR(Opcode):
 class RETURN(Opcode):
     pass
 
+class POP(Opcode):
+    pass
+
 OpcodeMap = {}
 
 for name, value in locals().items():
