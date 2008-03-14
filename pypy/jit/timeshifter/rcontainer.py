@@ -136,12 +136,27 @@ class StructTypeDesc(object):
 
     def _define_allocate(self):
         TYPE = self.TYPE
+        descs = unrolling_iterable(self.fielddescs)
 
         def allocate(rgenop):
             s = lltype.malloc(TYPE)
             return rgenop.genconst(s)
 
+        def populate(content_boxes, gv_s, box_gv_reader):
+            s = gv_s.revealconst(lltype.Ptr(TYPE))
+            i = 0
+            for desc in descs:
+                box = content_boxes[i]
+                if box is not None:
+                    gv_value = box_gv_reader(box)
+                    FIELDTYPE = getattr(desc.PTRTYPE.TO, desc.fieldname)
+                    v = gv_value.revealconst(FIELDTYPE)
+                    tgt = lltype.cast_pointer(desc.PTRTYPE, s)
+                    setattr(tgt, desc.fieldname, v)
+                i += 1
+
         self.allocate = allocate
+        self.populate = populate
 
     def _define_devirtualize(self):
         TYPE = self.TYPE
@@ -813,6 +828,13 @@ class VirtualStruct(VirtualContainer):
                 content = box.content
                 assert content.allowed_in_virtualizable
                 content.reshape(jitstate, shapemask, memo)
+
+    def allocate_gv_container(self, rgenop):
+        return self.typedesc.allocate(rgenop)
+
+    def populate_gv_container(self, gv_structptr, box_gv_reader):
+        return self.typedesc.populate(self.content_boxes,
+                                      gv_structptr, box_gv_reader)
 
 class VirtualizableStruct(VirtualStruct):
     

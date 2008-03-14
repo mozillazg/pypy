@@ -896,32 +896,37 @@ class JitInterpreter(object):
     opimpl_hp_gray_direct_call = opimpl_hp_red_direct_call
     opimpl_hp_yellow_direct_call = opimpl_hp_red_direct_call
 
-    @arguments()
-    def opimpl_hp_gray_return(self):
+    def hp_return(self):
         frame = self.frame.backframe
         if frame is None:
-            rhotpath.hp_return(self, None)
+            return True
         else:
             self.frame = self.jitstate.frame = frame
+            return False
+
+    @arguments()
+    def opimpl_hp_gray_return(self):
+        if self.hp_return():
+            rhotpath.hp_return(self, gv_result)
+            assert False, "unreachable"
 
     @arguments()
     def opimpl_hp_red_return(self):
-        gv_result = self.frame.local_boxes[0].getgenvar(self.jitstate)
-        frame = self.frame.backframe
-        if frame is None:
+        box = self.frame.local_boxes[0]
+        if self.hp_return():
+            gv_result = box.getgenvar(self.jitstate)
             rhotpath.hp_return(self, gv_result)
+            assert False, "unreachable"
         else:
-            self.frame = self.jitstate.frame = frame
-            self.red_result(gv_result)
+            self.red_result(box)
 
     @arguments()
     def opimpl_hp_yellow_return(self):
         gv_result = self.frame.local_green[0]
-        frame = self.frame.backframe
-        if frame is None:
-            xxx
+        if self.hp_return():
+            rhotpath.hp_return(self, gv_result)
+            assert False, "unreachable"
         else:
-            self.frame = self.jitstate.frame = frame
             self.green_result(gv_result)
 
     # ____________________________________________________________

@@ -110,6 +110,9 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_mul=0, int_add=0)
 
     def test_promote_after_yellow_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'i']
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         def ll_two(k, s):
             if k > 5:
@@ -120,14 +123,19 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 return 9
             
         def ll_function(n):
-            hint(None, global_merge_point=True)
-            s = lltype.malloc(S)
-            c = ll_two(n, s)
-            k = hint(s.x, promote=True)
-            k += c
-            return hint(k, variable=True)
+            i = 10
+            while i > 0:
+                i -= 1
+                MyJitDriver.jit_merge_point(n=n, i=i)
+                MyJitDriver.can_enter_jit(n=n, i=i)
+                s = lltype.malloc(S)
+                c = ll_two(n, s)
+                k = hint(s.x, promote=True)
+                k += c
+                res = hint(k, variable=True)
+            return res
 
-        res = self.interpret(ll_function, [4])
+        res = self.run(ll_function, [4], threshold=2)
         assert res == 49
         self.check_insns(int_add=0)
 
