@@ -245,4 +245,5 @@ class Entry(ExtRegistryEntry):
         return s_fnptr
 
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.inputarg(hop.args_r[1], arg=1)

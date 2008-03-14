@@ -362,6 +362,8 @@ def merge_generalized(jitstate):
     resuming = jitstate.get_resuming()
     if resuming is None:
         node = jitstate.promotion_path
+        if node is None:
+            return    # not recording paths at all
         while not node.cut_limit:
             node = node.next
         dispatchqueue = jitstate.frame.dispatchqueue
@@ -1236,6 +1238,8 @@ class JITState(object):
         self.residual_ll_exception(cast_instance_to_base_ptr(e))
 
     def get_resuming(self):
+        if self.frame.dispatchqueue is None:
+            return None
         return self.frame.dispatchqueue.resuming
 
     def clear_resuming(self):
