@@ -56,9 +56,12 @@ class TLRJitDriver(JitDriver):
     def on_enter_jit(self):
         # make a copy of the 'regs' list to make it a VirtualList for the JIT
         length = hint(len(self.regs), promote=True)
-        newregs = []
-        for x in self.regs:
-            newregs.append(x)
+        newregs = [0] * length
+        i = 0
+        while i < length:
+            i = hint(i, concrete=True)
+            newregs[i] = self.regs[i]
+            i += 1
         self.regs = newregs
 
 def hp_interpret(bytecode, a):

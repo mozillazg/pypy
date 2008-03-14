@@ -71,6 +71,18 @@ class FallbackInterpreter(object):
         for box in frame.local_boxes:
             self.local_red.append(self.getinitialboxgv(box))
 
+    def capture_exception(self, e):
+        if not we_are_translated():
+            from pypy.rpython.llinterp import LLException
+            if not isinstance(e, LLException):
+                raise      # don't know how to capture it, and it
+                           # probably shows a bug anyway
+            lltype, llvalue = e.args
+            self.gv_exc_type  = self.rgenop.genconst(lltype)
+            self.gv_exc_value = self.rgenop.genconst(llvalue)
+        else:
+            xxx
+
     def run_directly(self, greenargs, redargs, targetbytecode):
         assert not (greenargs and redargs)  # XXX for now
         calldesc = targetbytecode.owncalldesc
@@ -79,8 +91,16 @@ class FallbackInterpreter(object):
                                            targetbytecode.gv_ownfnptr,
                                            greenargs or redargs)
         except Exception, e:
-            XXX
+            self.capture_exception(e)
+            gv_res = calldesc.gv_whatever_return_value
         return gv_res
+
+    def oopspec_call(self, oopspec, arglist):
+        try:
+            return oopspec.do_call(self.rgenop, arglist)
+        except Exception, e:
+            self.capture_exception(e)
+            return oopspec.gv_whatever_return_value
 
     def leave_fallback_interp(self, gv_result):
         # at this point we might have an exception set in self.gv_exc_xxx
@@ -277,35 +297,35 @@ class FallbackInterpreter(object):
 
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
-        return oopspec.do_call(self.rgenop, [])
+        return self.oopspec_call(oopspec, [])
 
     @arguments("oopspec", "bool", "red", returns="red")
     def opimpl_red_oopspec_call_1(self, oopspec, deepfrozen, arg1):
-        return oopspec.do_call(self.rgenop, [arg1])
+        return self.oopspec_call(oopspec, [arg1])
 
     @arguments("oopspec", "bool", "red", "red", returns="red")
     def opimpl_red_oopspec_call_2(self, oopspec, deepfrozen, arg1, arg2):
-        return oopspec.do_call(self.rgenop, [arg1, arg2])
+        return self.oopspec_call(oopspec, [arg1, arg2])
 
     @arguments("oopspec", "bool", "red", "red", "red", returns="red")
     def opimpl_red_oopspec_call_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
-        return oopspec.do_call(self.rgenop, [arg1, arg2, arg3])
+        return self.oopspec_call(oopspec, [arg1, arg2, arg3])
 
     @arguments("oopspec", "bool")
     def opimpl_red_oopspec_call_noresult_0(self, oopspec, deepfrozen):
-        oopspec.do_call(self.rgenop, [])
+        self.oopspec_call(oopspec, [])
 
     @arguments("oopspec", "bool", "red")
     def opimpl_red_oopspec_call_noresult_1(self, oopspec, deepfrozen, arg1):
-        oopspec.do_call(self.rgenop, [arg1])
+        self.oopspec_call(oopspec, [arg1])
 
     @arguments("oopspec", "bool", "red", "red")
     def opimpl_red_oopspec_call_noresult_2(self, oopspec, deepfrozen, arg1, arg2):
-        oopspec.do_call(self.rgenop, [arg1, arg2])
+        self.oopspec_call(oopspec, [arg1, arg2])
 
     @arguments("oopspec", "bool", "red", "red", "red")
     def opimpl_red_oopspec_call_noresult_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
-        oopspec.do_call(self.rgenop, [arg1, arg2, arg3])
+        self.oopspec_call(oopspec, [arg1, arg2, arg3])
 
     @arguments("red", "calldesc", "bool", "bool", "red_varargs",
                "promotiondesc")

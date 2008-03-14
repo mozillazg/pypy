@@ -15,6 +15,38 @@ class Exit(Exception):
     def __init__(self, result):
         self.result = result
 
+def summary_loops(graph):
+    # Find all operations that are inside a loop.
+    # Ignore the 'default' path of exitswitches, because they are
+    # part of the pseudo-loop that jumps back to the exitswitch
+    # after compiling more code.
+    def visit(block):
+        if block not in stackpos:
+            stackpos[block] = len(blockstack)
+            blockstack.append(block)
+            for link in block.exits:
+                if getattr(link, 'exitcase', None) != 'default':
+                    visit(link.target)
+            blockstack.pop()
+            stackpos[block] = None
+        else:
+            if stackpos[block] is not None:   # back-edge
+                for b in blockstack[stackpos[block]:]:
+                    blocks_in_loop[b] = True
+    blockstack = []
+    stackpos = {}
+    blocks_in_loop = {}
+    visit(graph.startblock)
+    # count operations
+    insns = {}
+    for block in blocks_in_loop:
+        for op in block.operations:
+            if op.opname != 'same_as':
+                insns[op.opname] = insns.get(op.opname, 0) + 1
+    return insns
+
+# ____________________________________________________________
+
 class HotPathTest(test_interpreter.InterpretationTest):
     type_system = 'lltype'
 
@@ -67,6 +99,13 @@ class HotPathTest(test_interpreter.InterpretationTest):
         if 'direct_call' in counts:
             counts['direct_call'] += 1
         self.check_insns(expected, **counts)
+
+    def check_insns_in_loops(self, expected=None, **counts):
+        self.insns_in_loops = summary_loops(self.get_residual_graph())
+        if expected is not None:
+            assert self.insns_in_loops == expected
+        for opname, count in counts.items():
+            assert self.insns_in_loops.get(opname, 0) == count
 
 
 class TestHotPath(HotPathTest):
@@ -298,7 +337,6 @@ class TestHotPath(HotPathTest):
             ])
 
     def test_hp_tlr(self):
-        py.test.skip("in-progress")
         from pypy.jit.tl import tlr
 
         def main(code, n):
@@ -308,31 +346,44 @@ class TestHotPath(HotPathTest):
                 bytecode = chr(tlr.RETURN_A)
             return tlr.hp_interpret(bytecode, n)
 
-        res = self.run(main, [1, 71], threshold=4)
+        res = self.run(main, [1, 71], threshold=3)
         assert res == 5041
         self.check_traces([
             "jit_not_entered * stru...} 10 70 * array [ 70, 71, 71 ]",
             "jit_not_entered * stru...} 10 69 * array [ 69, 71, 142 ]",
-            "jit_not_entered * stru...} 10 68 * array [ 68, 71, 213 ]",
             "jit_compile * stru...} 10",
-            "pause at hotsplit in hp_interpret",
+        # we first see the promotion of len(regs) in on_enter_jit()
+            "pause at promote in TLRJitDriver.on_enter_jit_Hv",
+        # followed by two fallback runs
+            "run_machine_code * stru...} 10 68 * array [ 68, 71, 213 ]",
+            "fallback_interp",
+            "fb_leave * stru...} 10 68 * array [ 68, 71, 213 ]",
             "run_machine_code * stru...} 10 67 * array [ 67, 71, 284 ]",
             "fallback_interp",
-            "fb_leave * stru...} 10 66 * array [ 66, 71, 355 ]",
+            "fb_leave * stru...} 10 67 * array [ 67, 71, 284 ]",
+        # the third time, we resume compiling for len(regs) == 3
             "run_machine_code * stru...} 10 66 * array [ 66, 71, 355 ]",
+            "jit_resume Signed path 3 in TLRJitDriver.on_enter_jit_Hv",
+        # pause at the "int_is_true" from the JUMP_IF_A opcode
+            "pause at hotsplit in hp_interpret",
+        # two fallback runs off this hotsplit
+            "resume_machine_code",
             "fallback_interp",
             "fb_leave * stru...} 10 65 * array [ 65, 71, 426 ]",
             "run_machine_code * stru...} 10 65 * array [ 65, 71, 426 ]",
             "fallback_interp",
             "fb_leave * stru...} 10 64 * array [ 64, 71, 497 ]",
+        # the third time, compile the path "stay in the loop"
             "run_machine_code * stru...} 10 64 * array [ 64, 71, 497 ]",
             "jit_resume Bool path True in hp_interpret",
             "done at jit_merge_point",
+        # the rest is running 100% in machine code
             "resume_machine_code",
+        # fallback interp for the exit path
             "fallback_interp",
             "fb_leave * stru...} 27 0 * array [ 0, 71, 5041 ]",
             ])
-        # We expect only the direct_call from the red split fallback point.
-        # If we get e.g. 7 of them instead it probably means that we see
-        # direct_calls to the ll helpers for the 'regs' list.
-        self.check_insns(direct_call = 1)
+        # check that the residual graph's inner loop has no direct_call (as
+        # would be the case if the 'regs' list was not properly virtualized)
+        self.check_insns_in_loops({'int_add': 2,
+                                   'int_is_true': 1})
