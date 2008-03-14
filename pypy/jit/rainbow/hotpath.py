@@ -223,10 +223,7 @@ class HotRunnerDesc:
                     ', '.join(map(str, self.args)),)
 
         self.raise_done = raise_done
-        if RES is lltype.Void:
-            RAISE_DONE_FUNC = lltype.FuncType([], lltype.Void)
-        else:
-            RAISE_DONE_FUNC = lltype.FuncType([RES], lltype.Void)
+        RAISE_DONE_FUNC = lltype.FuncType([RES], lltype.Void)
         self.tok_raise_done = self.RGenOp.sigToken(RAISE_DONE_FUNC)
         self.RAISE_DONE_FUNCPTR = lltype.Ptr(RAISE_DONE_FUNC)
         self.DoneWithThisFrame = DoneWithThisFrame
