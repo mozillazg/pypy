@@ -426,8 +426,20 @@ class TestToAstStatement(BaseTestToAST):
                                 'LOAD_VARIABLE "x"',
                                 'JUMP_IF_TRUE 0'])
 
+class TestToAstFunction(BaseTestToAST):
+    def setup_class(cls):
+        cls.parse = parse_func('sourceelements')
+
     def test_function_decl(self):
-        pass
+        self.check('function f(x, y, z) {x;}',
+                   ['DECLARE_FUNCTION f [\'x\', \'y\', \'z\'] [\n  LOAD_VARIABLE "x"\n]'])
+
+    def test_function_expression(self):
+        self.check('var x = function() {return x}',[
+            'DECLARE_VAR "x"',
+            'DECLARE_FUNCTION [] [\n  LOAD_VARIABLE "x"\n  RETURN\n]',
+            'LOAD_FUNCTION',
+            'STORE "x"'])
 
 from pypy.lang.js.jsparser import parse
     

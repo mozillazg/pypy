@@ -28,6 +28,22 @@ LOAD_ARRAY <num>
 
 create array out of num elements on the stack
 
+object creation:
+
+LOAD_OBJECT <list of parameters>
+
+Takes one element per one parameter from the stack and initializes
+object this way.
+
+POP
+
+pops one element from the stack.
+
+LOAD_FUNCTION <code object>
+
+loads function object (declared earlier) to a stack. used for
+function expressions.
+
 Arithmetic binary operations:
 (all pops two values and pushes on stack the result)
 
@@ -45,17 +61,14 @@ NOT, UPLUS, UMINUS
 PREDECR, POSTDECR, PREINCR, POSTINCR
 decrement and increment (++, --) prefix and postfix
 
-object creation:
-
-LOAD_OBJECT <list of parameters>
-
-Takes one element per one parameter from the stack and initializes
-object this way.
-
 control flow:
 
-XXX
+JUMP, LABEL, JUMP_IF_TRUE, JUMP_IF_FALSE
 
 function control flow:
 
-DECLARE_FUNCTION <bytecode>
+DECLARE_FUNCTION <code object>
+
+scope control opcodes:
+
+DECLARE_VAR <name>
