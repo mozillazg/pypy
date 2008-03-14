@@ -83,7 +83,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             "run_machine_code 4 355", "fallback_interp", "fb_leave 3 371",
             "run_machine_code 3 371", "fallback_interp", "fb_leave 2 380",
             "run_machine_code 2 380", "fallback_interp", "fb_leave 1 384",
-            "run_machine_code 1 384", "fallback_interp", "fb_return (385)"
+            "run_machine_code 1 384", "fallback_interp", "fb_return 385"
             ])
 
     def test_promote_after_call(self):
