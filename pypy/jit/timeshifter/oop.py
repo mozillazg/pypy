@@ -2,6 +2,7 @@ from pypy.jit.timeshifter import rvalue, rtimeshift
 from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
@@ -19,9 +20,7 @@ class Index:
 class OopSpecDesc:
     __metaclass__ = cachedtype
 
-    do_call = None
-
-    def __init__(self, RGenOp, rtyper, fnobj, can_raise):
+    def __init__(self, RGenOp, rtyper, exceptiondesc, fnobj, can_raise):
         self.rtyper = rtyper
         ll_func = fnobj._callable
         FUNCTYPE = lltype.typeOf(fnobj)
@@ -129,18 +128,25 @@ class OopSpecDesc:
             # make a copy of the function, for specialization purposes
             oopargcheck = func_with_new_name(oopargcheck,
                                              'argcheck_%s' % (method,))
+        else:
+            oopargcheck = None
+
+        if True:     # preserve indentation for svn history.
+            # This used to be only if couldfold, but it is now
+            # always required, for the fallback interp
             ARGS = FUNCTYPE.ARGS
             residualargsources = self.residualargsources
             unrolling_ARGS = unrolling_iterable(ARGS)
             unrolling_OOPARGS = unrolling_iterable(enumerate(OOPARGTYPES))
 
-            def do_call(jitstate, argboxes):
+            def do_call(rgenop, args_gv):
                 oopargs = ()
                 for i, ARG in unrolling_OOPARGS:
-                    v = rvalue.ll_getvalue(argboxes[i], ARG)
+                    v = args_gv[i].revealconst(ARG)
                     oopargs += (v,)
-                if not oopargcheck(*oopargs):
-                    raise SegfaultException
+                if oopargcheck is not None:
+                    if not oopargcheck(*oopargs):
+                        raise SegfaultException
                 args = ()
                 j = 0
                 for ARG in unrolling_ARGS:
@@ -151,10 +157,10 @@ class OopSpecDesc:
                         j = j + 1
                         v = oopargs[argsrc]
                     args += (v,)
-                result = fnptr(*args)
+                result = maybe_on_top_of_llinterp(exceptiondesc, fnptr)(*args)
                 if FUNCTYPE.RESULT == lltype.Void:
                     return None
-                return rvalue.ll_fromvalue(jitstate, result)
+                return rgenop.genconst(result)
 
             self.do_call = do_call
 
@@ -168,13 +174,15 @@ class OopSpecDesc:
             fold &= gv_arg.is_const
         if fold:
             try:
-                return self.do_call(jitstate, argboxes)
+                gv_result = self.do_call(builder.rgenop, args_gv)
             except Exception, e:
                 jitstate.residual_exception(e)
                 return self.errorbox
-        gv_result = builder.genop_call(self.sigtoken, self.gv_fnptr, args_gv)
-        if self.can_raise:
-            jitstate.generated_oop_residual_can_raise = True
+        else:
+            gv_result = builder.genop_call(self.sigtoken,
+                                           self.gv_fnptr, args_gv)
+            if self.can_raise:
+                jitstate.generated_oop_residual_can_raise = True
         return self.redboxbuilder(self.result_kind, gv_result)
 
     def residual_exception(self, jitstate, ExcCls):
@@ -216,3 +224,22 @@ class Entry(ExtRegistryEntry):
         excdata = rtyper.exceptiondata
         ll_evalue = excdata.get_standard_ll_exc_instance(rtyper, clsdef)
         return hop.inputconst(hop.r_result, ll_evalue)
+
+def maybe_on_top_of_llinterp(exceptiondesc, fnptr):
+    # Run a generated graph on top of the llinterp for testing.
+    # When translated, this just returns the fnptr.
+    exc_data_ptr = exceptiondesc.exc_data_ptr
+    assert exceptiondesc.rtyper is not None
+    llinterp = LLInterpreter(exceptiondesc.rtyper, exc_data_ptr=exc_data_ptr)
+    def on_top_of_llinterp(*args):
+        return llinterp.eval_graph(fnptr._obj.graph, list(args))
+    return on_top_of_llinterp
+
+class Entry(ExtRegistryEntry):
+    _about_ = maybe_on_top_of_llinterp
+
+    def compute_result_annotation(self, s_exceptiondesc, s_fnptr):
+        return s_fnptr
+
+    def specialize_call(self, hop):
+        return hop.inputarg(hop.args_r[1], arg=1)
