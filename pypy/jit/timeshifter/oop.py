@@ -62,10 +62,12 @@ class OopSpecDesc:
         self.result_kind = result_kind
         if FUNCTYPE.RESULT is lltype.Void:
             self.errorbox = None
+            self.gv_whatever_return_value = None
         else:
             error_value = exceptiontransform.error_value(FUNCTYPE.RESULT)
             self.errorbox = rvalue.redbox_from_prebuilt_value(RGenOp,
                                                               error_value)
+            self.gv_whatever_return_value = self.errorbox.genvar
         redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.RESULT)
         self.redboxbuilder = redboxbuilder
         self.sigtoken = RGenOp.sigToken(FUNCTYPE)
