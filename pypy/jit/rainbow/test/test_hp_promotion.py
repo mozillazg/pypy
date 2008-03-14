@@ -140,53 +140,79 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_add=0)
 
     def test_promote_inside_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'i']
         def ll_two(n):
             k = hint(n, promote=True)
             k *= 17
             return hint(k, variable=True)
         def ll_function(n):
-            hint(None, global_merge_point=True)
-            return ll_two(n + 1) - 1
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(n=n, i=i)
+                MyJitDriver.can_enter_jit(n=n, i=i)
+                res = ll_two(n + 1) - 1
+            return res
 
-        res = self.interpret(ll_function, [10])
+        res = self.run(ll_function, [10], threshold=2)
         assert res == 186
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
     def test_promote_inside_call2(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'm', 'i']
         def ll_two(n):
             k = hint(n, promote=True)
             k *= 17
             return k
         def ll_function(n, m):
-            hint(None, global_merge_point=True)
-            if not n:
-                return -41
-            if m:
-                return 42
-            return ll_two(n + 1) - 1
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(n=n, m=m, i=i)
+                MyJitDriver.can_enter_jit(n=n, m=m, i=i)
+                if not n:
+                    return -41
+                if m:
+                    res = 42
+                else:
+                    res = ll_two(n + 1) - 1
+            return res
 
-        res = self.interpret(ll_function, [10, 0])
+        res = self.run(ll_function, [10, 0], threshold=2)
         assert res == 186
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
-        res = self.interpret(ll_function, [0, 0])
+        res = self.run(ll_function, [0, 0], threshold=2)
         assert res == -41
-        self.check_insns(int_add=1, int_mul=0, int_sub=0)
+        self.check_nothing_compiled_at_all()
 
-        res = self.interpret(ll_function, [1, 1])
+        res = self.run(ll_function, [1, 1], threshold=2)
         assert res == 42
-        self.check_insns(int_add=1, int_mul=0, int_sub=0)
-
+        self.check_insns_in_loops({'int_is_true': 2,
+                                   'int_gt': 1,
+                                   'int_rshift': 1})
 
     def test_two_promotions(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'm', 'i']
         def ll_function(n, m):
-            hint(None, global_merge_point=True)
-            n1 = hint(n, promote=True)
-            m1 = hint(m, promote=True)
-            s1 = n1 + m1
-            return hint(s1, variable=True)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(n=n, m=m, i=i)
+                MyJitDriver.can_enter_jit(n=n, m=m, i=i)
+                n1 = hint(n, promote=True)
+                m1 = hint(m, promote=True)
+                s1 = n1 + m1
+                res = hint(s1, variable=True)
+            return res
 
-        res = self.interpret(ll_function, [40, 2])
+        res = self.run(ll_function, [40, 2], threshold=2)
         assert res == 42
         self.check_insns(int_add=0)
 
