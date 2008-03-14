@@ -3,34 +3,44 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitDriver, hint, JitHintError
 from pypy.jit.rainbow.test import test_hotpath
 
-py.test.skip("in-progress")
-
 
 class TestHotPromotion(test_hotpath.HotPathTest):
 
     def interpret(self, main, ll_values, opt_consts=[]):
-        if opt_consts:
-            # opt_consts lists the indices of arguments that should be
-            # passed in as constant red boxes.  To emulate this effect
-            # we make them green vars in a wrapper main() but pass
-            # them as red boxes to the original main().
-            miniglobals = {'original_main': main,
-                           'hint': hint,
-                           }
-            args = ', '.join(['a%d' % i for i in range(len(ll_values))])
-            lines = '\n'.join(['    a%d = hint(hint(a%d, concrete=True), '
-                                              'variable=True)' % (i, i)
-                               for i in opt_consts])
-            # cannot use unrolling_iterable because the main() cannot
-            # take *args...
-            src = py.code.Source("""\
-                def main(%(args)s):
-                %(lines)s
-                    return original_main(%(args)s)""" % locals())
-            exec src.compile() in miniglobals
-            main = miniglobals['main']
+        py.test.skip("fix this test")
+    def interpret_raises(self, Exception, main, ll_values, opt_consts=[]):
+        py.test.skip("fix this test")
 
-        return self.run(main, ll_values, threshold=1)
+    def get_residual_graph(self):
+        return self.hotrunnerdesc.residual_graph
+
+    def check_insns_excluding_return(self, expected=None, **counts):
+        # the return is currently implemented by a direct_call(exitfnptr)
+        if expected is not None:
+            expected.setdefault('direct_call', 0)
+            expected['direct_call'] += 1
+        if 'direct_call' in counts:
+            counts['direct_call'] += 1
+        self.check_insns(expected, **counts)
+
+    def test_easy_case(self):
+        class MyJitDriver(JitDriver):
+            greens = ['n']
+            reds = []
+        def ll_two(k):
+            return (k+1)*2
+        def ll_function(n):
+            MyJitDriver.jit_merge_point(n=n)
+            MyJitDriver.can_enter_jit(n=n)
+            hint(n, concrete=True)
+            n = hint(n, variable=True)     # n => constant red box
+            k = hint(n, promote=True)      # no-op
+            k = ll_two(k)
+            return hint(k, variable=True)
+
+        res = self.run(ll_function, [20], threshold=1)
+        assert res == 42
+        self.check_insns_excluding_return({})
 
     def test_simple_promotion(self):
         class MyJitDriver(JitDriver):
@@ -40,35 +50,53 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             return (k+1)*2
         def ll_function(n):
             MyJitDriver.jit_merge_point(n=n)
+            MyJitDriver.can_enter_jit(n=n)
             k = hint(n, promote=True)
             k = ll_two(k)
             return hint(k, variable=True)
 
-        # easy case: no promotion needed
-        res = self.interpret(ll_function, [20], [0])
-        assert res == 42
-        self.check_insns({})
-
-        # the real test: with promotion
-        res = self.interpret(ll_function, [20], [])
+        res = self.run(ll_function, [20], threshold=1)
         assert res == 42
         self.check_insns(int_add=0, int_mul=0)
 
     def test_many_promotions(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'total']
         def ll_two(k):
             return k*k
         def ll_function(n, total):
             while n > 0:
-                hint(None, global_merge_point=True)
+                MyJitDriver.jit_merge_point(n=n, total=total)
+                MyJitDriver.can_enter_jit(n=n, total=total)
                 k = hint(n, promote=True)
                 k = ll_two(k)
                 total += hint(k, variable=True)
                 n -= 1
             return total
 
-        res = self.interpret(ll_function, [10, 0], [])
+        res = self.run(ll_function, [10, 0], threshold=1)
         assert res == ll_function(10, 0)
         self.check_insns(int_add=10, int_mul=0)
+
+        # the same using the fallback interp instead of compiling each case
+        res = self.run(ll_function, [10, 0], threshold=3)
+        assert res == ll_function(10, 0)
+        self.check_insns(int_add=0, int_mul=0)
+        self.check_traces([
+            "jit_not_entered 10 0",
+            "jit_not_entered 9 100",
+            "jit_compile",
+            "pause at promote in ll_function",
+            "run_machine_code 8 181", "fallback_interp", "fb_leave 7 245",
+            "run_machine_code 7 245", "fallback_interp", "fb_leave 6 294",
+            "run_machine_code 6 294", "fallback_interp", "fb_leave 5 330",
+            "run_machine_code 5 330", "fallback_interp", "fb_leave 4 355",
+            "run_machine_code 4 355", "fallback_interp", "fb_leave 3 371",
+            "run_machine_code 3 371", "fallback_interp", "fb_leave 2 380",
+            "run_machine_code 2 380", "fallback_interp", "fb_leave 1 384",
+            "run_machine_code 1 384", "fallback_interp", "fb_return (385)"
+            ])
 
     def test_promote_after_call(self):
         S = lltype.GcStruct('S', ('x', lltype.Signed))
@@ -85,7 +113,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             k *= 17
             return hint(k, variable=True) + s.x
 
-        res = self.interpret(ll_function, [4], [])
+        res = self.interpret(ll_function, [4])
         assert res == 4*17 + 10
         self.check_insns(int_mul=0, int_add=1)
 
@@ -107,7 +135,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             k += c
             return hint(k, variable=True)
 
-        res = self.interpret(ll_function, [4], [])
+        res = self.interpret(ll_function, [4])
         assert res == 49
         self.check_insns(int_add=0)
 
@@ -120,7 +148,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             hint(None, global_merge_point=True)
             return ll_two(n + 1) - 1
 
-        res = self.interpret(ll_function, [10], [])
+        res = self.interpret(ll_function, [10])
         assert res == 186
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
@@ -137,15 +165,15 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 return 42
             return ll_two(n + 1) - 1
 
-        res = self.interpret(ll_function, [10, 0], [])
+        res = self.interpret(ll_function, [10, 0])
         assert res == 186
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
-        res = self.interpret(ll_function, [0, 0], [])
+        res = self.interpret(ll_function, [0, 0])
         assert res == -41
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
-        res = self.interpret(ll_function, [1, 1], [])
+        res = self.interpret(ll_function, [1, 1])
         assert res == 42
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
@@ -158,7 +186,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             s1 = n1 + m1
             return hint(s1, variable=True)
 
-        res = self.interpret(ll_function, [40, 2], [])
+        res = self.interpret(ll_function, [40, 2])
         assert res == 42
         self.check_insns(int_add=0)
 
@@ -177,7 +205,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             hint(None, global_merge_point=True)
             return ll_two(n)
 
-        res = self.interpret(ll_function, [3], [])
+        res = self.interpret(ll_function, [3])
         assert res == 340
         self.check_insns(int_lt=1, int_mul=0)
 
@@ -199,7 +227,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns({})
 
         # the real test: with promotion
-        res = self.interpret(ll_function, [20], [])
+        res = self.interpret(ll_function, [20])
         assert res == 62
         self.check_insns(int_add=0, int_mul=0)
 
@@ -236,7 +264,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 i += j
             return s.x + s.y * 17
 
-        res = self.interpret(ll_function, [100, 2], [])
+        res = self.interpret(ll_function, [100, 2])
         assert res == ll_function(100, 2)
 
     def test_mixed_merges(self):
@@ -307,7 +335,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             return s
         ll_function.convert_arguments = [struct_S, int]
 
-        res = self.interpret(ll_function, ["20", 0], [])
+        res = self.interpret(ll_function, ["20", 0])
         assert res == 42
         self.check_flexswitches(1)
 
@@ -324,7 +352,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 vl[i] = l[i]
                 i = i + 1
             return len(vl)
-        res = self.interpret(ll_function, [6, 5], [])
+        res = self.interpret(ll_function, [6, 5])
         assert res == 6
         self.check_oops(**{'newlist': 1, 'list.len': 1})
             
@@ -349,7 +377,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 a += z
 
         assert ll_function(1, 5, 8) == 22
-        res = self.interpret(ll_function, [1, 5, 8], [])
+        res = self.interpret(ll_function, [1, 5, 8])
         assert res == 22
 
     def test_raise_result_mixup(self):
@@ -431,7 +459,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             if m == 0:
                 raise ValueError
             return n
-        self.interpret_raises(ValueError, ll_function, [1, 0], [])
+        self.interpret_raises(ValueError, ll_function, [1, 0])
 
     def test_promote_in_yellow_call(self):
         def ll_two(n):
@@ -443,7 +471,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             c = ll_two(n)
             return hint(c, variable=True)
 
-        res = self.interpret(ll_function, [4], [])
+        res = self.interpret(ll_function, [4])
         assert res == 6
         self.check_insns(int_add=0)
 
@@ -460,7 +488,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 c = ll_two(n)
             return hint(c, variable=True)
 
-        res = self.interpret(ll_function, [4], [])
+        res = self.interpret(ll_function, [4])
         assert res == 6
         self.check_insns(int_add=0)
 
@@ -482,6 +510,6 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             c = ll_one(n, m)
             return c
 
-        res = self.interpret(ll_function, [4, 7], [])
+        res = self.interpret(ll_function, [4, 7])
         assert res == 11
         self.check_insns(int_add=0)

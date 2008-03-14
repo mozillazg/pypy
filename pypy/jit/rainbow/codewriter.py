@@ -686,7 +686,11 @@ class BytecodeWriter(object):
         ERASED = self.RGenOp.erasedType(TYPE)
         if ERASED in self.promotiondesc_positions:
             return self.promotiondesc_positions[ERASED]
-        promotiondesc = rtimeshift.PromotionDesc(ERASED, self.interpreter)
+        if self.hannotator.policy.hotpath:
+            from pypy.jit.rainbow.rhotpath import HotPromotionDesc
+            promotiondesc = HotPromotionDesc(ERASED, self.RGenOp)
+        else:
+            promotiondesc = rtimeshift.PromotionDesc(ERASED, self.interpreter)
         result = len(self.promotiondescs)
         self.promotiondescs.append(promotiondesc)
         self.promotiondesc_positions[ERASED] = result
@@ -837,7 +841,10 @@ class BytecodeWriter(object):
         if self.varcolor(arg) == "green":
             self.register_greenvar(result, self.green_position(arg))
             return
-        self.emit("promote")
+        if self.hannotator.policy.hotpath:
+            self.emit("hp_promote")
+        else:
+            self.emit("promote")
         self.emit(self.serialize_oparg("red", arg))
         self.emit(self.promotiondesc_position(arg.concretetype))
         self.register_greenvar(result)
