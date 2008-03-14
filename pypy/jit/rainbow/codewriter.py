@@ -5,12 +5,11 @@ from pypy.rlib.jit import JitHintError
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.annlowlevel import cachedtype
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
 from pypy.jit.timeshifter import oop
+from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.jit.rainbow.interpreter import DEBUG_JITCODES
@@ -28,25 +27,6 @@ def residual_exception_nontranslated(jitstate, e, rtyper):
     ll_exc = rtyper.exceptiondata.get_standard_ll_exc_instance(
         rtyper, exc_classdef)
     jitstate.residual_ll_exception(ll_exc)
-
-def maybe_on_top_of_llinterp(exceptiondesc, fnptr):
-    # Run a generated graph on top of the llinterp for testing.
-    # When translated, this just returns the fnptr.
-    exc_data_ptr = exceptiondesc.exc_data_ptr
-    assert exceptiondesc.rtyper is not None
-    llinterp = LLInterpreter(exceptiondesc.rtyper, exc_data_ptr=exc_data_ptr)
-    def on_top_of_llinterp(*args):
-        return llinterp.eval_graph(fnptr._obj.graph, list(args))
-    return on_top_of_llinterp
-
-class Entry(ExtRegistryEntry):
-    _about_ = maybe_on_top_of_llinterp
-
-    def compute_result_annotation(self, s_exceptiondesc, s_fnptr):
-        return s_fnptr
-
-    def specialize_call(self, hop):
-        return hop.inputarg(hop.args_r[1], arg=1)
 
 
 class CallDesc:
@@ -666,6 +646,7 @@ class BytecodeWriter(object):
         if key in self.oopspecdesc_positions:
             return self.oopspecdesc_positions[key]
         oopspecdesc = oop.OopSpecDesc(self.RGenOp, self.rtyper,
+                                      self.exceptiondesc,
                                       fnobj, canraise)
         result = len(self.oopspecdescs)
         self.oopspecdescs.append(oopspecdesc)

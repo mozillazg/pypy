@@ -340,19 +340,28 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_flexswitches(1)
 
     def test_virtual_list_copy(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'y', 'repeat']
         def ll_function(x, y):
-            hint(None, global_merge_point=True)
-            l = [y] * x
-            size = len(l)
-            size = hint(size, promote=True)
-            vl = [0] * size
-            i = 0
-            while i < size:
-                hint(i, concrete=True)
-                vl[i] = l[i]
-                i = i + 1
-            return len(vl)
-        res = self.interpret(ll_function, [6, 5])
+            repeat = 10
+            while repeat > 0:
+                repeat -= 1
+                MyJitDriver.jit_merge_point(x=x, y=y, repeat=repeat)
+                MyJitDriver.can_enter_jit(x=x, y=y, repeat=repeat)
+                l = [y] * x
+                size = len(l)
+                size = hint(size, promote=True)
+                vl = [0] * size
+                i = 0
+                while i < size:
+                    hint(i, concrete=True)
+                    vl[i] = l[i]
+                    i = i + 1
+                res = len(vl)
+            return res
+        res = self.run(ll_function, [6, 11], threshold=2)
         assert res == 6
         self.check_oops(**{'newlist': 1, 'list.len': 1})
             

@@ -7,11 +7,11 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
+from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key
 from pypy.jit.timeshifter.greenkey import GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath
 from pypy.jit.rainbow.fallback import FallbackInterpreter
-from pypy.jit.rainbow.codewriter import maybe_on_top_of_llinterp
 
 
 class HotRunnerDesc:
