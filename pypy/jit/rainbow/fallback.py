@@ -1,7 +1,7 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
@@ -108,6 +108,10 @@ class FallbackInterpreter(object):
         exceptiondesc = self.exceptiondesc
         lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
         if lltype:
+            if we_are_translated():
+                lloperation.llop.debug_fatalerror(lltype.Void,
+                                                  "fb_raise not implemented")
+                assert 0
             # XXX non-translatable hack follows...
             from pypy.rpython.llinterp import LLException, type_name
             llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)

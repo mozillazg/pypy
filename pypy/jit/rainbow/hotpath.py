@@ -1,5 +1,7 @@
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
 from pypy.objspace.flow.model import Link, checkgraph
+from pypy.annotation import model as annmodel
+from pypy.rpython import annlowlevel
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.llinterp import LLInterpreter
@@ -32,12 +34,16 @@ class HotRunnerDesc:
         return True
 
     def rewrite_all(self):
+        if self.translate_support_code:
+            self.annhelper = annlowlevel.MixLevelHelperAnnotator(self.rtyper)
+        self.interpreter.set_hotrunnerdesc(self)
         self.make_args_specification()
         self.make_enter_function()
         self.rewrite_graphs()
         self.make_descs()
         self.fallbackinterp = FallbackInterpreter(self)
-        self.interpreter.hotrunnerdesc = self
+        if self.translate_support_code:
+            self.annhelper.finish()
 
     def make_args_specification(self):
         origportalgraph = self.hintannotator.portalgraph
@@ -121,23 +127,29 @@ class HotRunnerDesc:
         assert graph is not self.hintannotator.origportalgraph, (
             "XXX can_enter_jit() cannot appear before jit_merge_point() "
             "in the graph of the main loop")
+        FUNC = self.JIT_ENTER_FUNCTYPE
+        FUNCPTR = lltype.Ptr(FUNC)
+
         if not self.translate_support_code:
             # this case is used for most tests: the jit stuff should be run
             # directly to make these tests faster
-            op = block.operations[index]
-            greens_v, reds_v = self.codewriter.decode_hp_hint_args(op)
-            args_v = greens_v + reds_v
-
-            FUNCPTR = lltype.Ptr(self.JIT_ENTER_FUNCTYPE)
-            jit_enter_graph_ptr = llhelper(FUNCPTR, self.maybe_enter_jit_fn)
-            vlist = [Constant(jit_enter_graph_ptr, FUNCPTR)] + args_v
-
-            v_result = Variable()
-            v_result.concretetype = lltype.Void
-            newop = SpaceOperation('direct_call', vlist, v_result)
-            block.operations[index] = newop
+            jit_enter_fnptr = llhelper(FUNCPTR, self.maybe_enter_jit_fn)
         else:
-            xxx
+            args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
+            s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
+            jit_enter_fnptr = self.annhelper.delayedfunction(
+                self.maybe_enter_jit_fn, args_s, s_result)
+
+        op = block.operations[index]
+        greens_v, reds_v = self.codewriter.decode_hp_hint_args(op)
+        args_v = greens_v + reds_v
+
+        vlist = [Constant(jit_enter_fnptr, FUNCPTR)] + args_v
+
+        v_result = Variable()
+        v_result.concretetype = lltype.Void
+        newop = SpaceOperation('direct_call', vlist, v_result)
+        block.operations[index] = newop
         return True
 
     def rewrite_jit_merge_point(self, origportalgraph, origblock, origindex):
@@ -175,59 +187,64 @@ class HotRunnerDesc:
         RES = portalgraph.getreturnvar().concretetype
         PORTALFUNC = lltype.FuncType(ARGS, RES)
 
+        # ____________________________________________________________
+        # Prepare the portal_runner() helper
+        #
+        exceptiondesc = self.exceptiondesc
+        portal_ptr = lltype.functionptr(PORTALFUNC, 'portal',
+                                        graph = portalgraph)
+        maybe_enter_jit = self.maybe_enter_jit_fn
+
+        class DoneWithThisFrame(Exception):
+            _go_through_llinterp_uncaught_ = True     # ugh
+            def __init__(self, gv_result):
+                if RES is lltype.Void:
+                    assert gv_result is None
+                    self.result = None
+                else:
+                    self.result = gv_result.revealconst(RES)
+            def __str__(self):
+                return 'DoneWithThisFrame(%s)' % (self.result,)
+
+        class ContinueRunningNormally(Exception):
+            _go_through_llinterp_uncaught_ = True     # ugh
+            def __init__(self, args_gv, seen_can_enter_jit):
+                assert len(args_gv) == len(ARGS)
+                self.args = [gv_arg.revealconst(ARG)
+                             for gv_arg, ARG in zip(args_gv, ARGS)]
+                self.seen_can_enter_jit = seen_can_enter_jit
+            def __str__(self):
+                return 'ContinueRunningNormally(%s)' % (
+                    ', '.join(map(str, self.args)),)
+
+        self.DoneWithThisFrame = DoneWithThisFrame
+        self.DoneWithThisFrameARG = RES
+        self.ContinueRunningNormally = ContinueRunningNormally
+
+        def ll_portal_runner(*args):
+            check_for_immediate_reentry = False
+            while 1:
+                try:
+                    if check_for_immediate_reentry:
+                        maybe_enter_jit(*args)
+                    return maybe_on_top_of_llinterp(exceptiondesc,
+                                                    portal_ptr)(*args)
+                except DoneWithThisFrame, e:
+                    return e.result
+                except ContinueRunningNormally, e:
+                    args = e.args
+                    self.interpreter.debug_trace("fb_leave", *args)
+                    check_for_immediate_reentry = e.seen_can_enter_jit
+
         if not self.translate_support_code:
-            # ____________________________________________________________
-            # Prepare the portal_runner() helper, in a version that
-            # doesn't need to be translated
-            #
-            exc_data_ptr = self.codewriter.exceptiondesc.exc_data_ptr
-            llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
-            maybe_enter_jit = self.maybe_enter_jit_fn
-
-            class DoneWithThisFrame(Exception):
-                _go_through_llinterp_uncaught_ = True     # ugh
-                def __init__(self, gv_result):
-                    if RES is lltype.Void:
-                        assert gv_result is None
-                        self.result = None
-                    else:
-                        self.result = gv_result.revealconst(RES)
-                def __str__(self):
-                    return 'DoneWithThisFrame(%s)' % (self.result,)
-
-            class ContinueRunningNormally(Exception):
-                _go_through_llinterp_uncaught_ = True     # ugh
-                def __init__(self, args_gv, seen_can_enter_jit):
-                    assert len(args_gv) == len(ARGS)
-                    self.args = [gv_arg.revealconst(ARG)
-                                 for gv_arg, ARG in zip(args_gv, ARGS)]
-                    self.seen_can_enter_jit = seen_can_enter_jit
-                def __str__(self):
-                    return 'ContinueRunningNormally(%s)' % (
-                        ', '.join(map(str, self.args)),)
-
-            self.DoneWithThisFrame = DoneWithThisFrame
-            self.DoneWithThisFrameARG = RES
-            self.ContinueRunningNormally = ContinueRunningNormally
-
-            def portal_runner(*args):
-                check_for_immediate_reentry = False
-                while 1:
-                    try:
-                        if check_for_immediate_reentry:
-                            maybe_enter_jit(*args)
-                        return llinterp.eval_graph(portalgraph, list(args))
-                    except DoneWithThisFrame, e:
-                        return e.result
-                    except ContinueRunningNormally, e:
-                        args = e.args
-                        self.interpreter.debug_trace("fb_leave", *args)
-                        check_for_immediate_reentry = e.seen_can_enter_jit
-
-            portal_runner_ptr = lltype.functionptr(PORTALFUNC, 'portal_runner',
-                                                   _callable = portal_runner)
+            portal_runner_ptr = llhelper(lltype.Ptr(PORTALFUNC),
+                                         ll_portal_runner)
         else:
-            xxx
+            args_s = [annmodel.lltype_to_annotation(ARG) for ARG in ARGS]
+            s_result = annmodel.lltype_to_annotation(RES)
+            portal_runner_ptr = self.annhelper.delayedfunction(
+                ll_portal_runner, args_s, s_result)
+
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
         #

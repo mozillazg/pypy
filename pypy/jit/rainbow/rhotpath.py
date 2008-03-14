@@ -7,7 +7,9 @@ from pypy.jit.timeshifter.greenkey import KeyDesc, GreenKey, newgreendict
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import llhelper
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 
 
 def setup_jitstate(interp, jitstate, greenargs, redargs,
@@ -64,6 +66,11 @@ def report_compile_time_exception(interp, e):
 
 def hp_return(interp, gv_result):
     interp.debug_trace("done at hp_return")
+    if we_are_translated():
+        lloperation.llop.debug_fatalerror(lltype.Void,
+                                          "hp_return not implemented")
+        leave_graph(interp)
+    
     # XXX not translatable (and slow if translated literally)
     # XXX well, and hackish, clearly
     def exit(llvalue=None):
@@ -95,8 +102,8 @@ class HotPromotionDesc:
         pathkind = "%s path" % (ERASED,)
 
         def ll_reach_fallback_point(fallback_point_ptr, value, framebase):
+            fbp = _cast_base_ptr_to_fallback_point(fallback_point_ptr)
             try:
-                fbp = fallback_point_ptr     # XXX cast
                 # check if we should compile for this value.
                 path_is_hot = fbp.check_should_compile(value)
 
@@ -180,7 +187,7 @@ class HotSplitFallbackPoint(FallbackPoint):
         self.falsepath_pc = falsepath_pc
         self.truepath_pc = truepath_pc
 
-    @specialize.arg(1)
+    @specialize.arglltype(1)
     def check_should_compile(self, value):
         assert lltype.typeOf(value) is lltype.Bool
         threshold = self.hotrunnerdesc.threshold
@@ -201,14 +208,14 @@ class HotSplitFallbackPoint(FallbackPoint):
             self.falsepath_counter = counter
             return False   # path is still cold
 
-    @specialize.arg(2)
+    @specialize.arglltype(2)
     def prepare_fallbackinterp(self, fallbackinterp, value):
         if value:
             fallbackinterp.pc = self.truepath_pc
         else:
             fallbackinterp.pc = self.falsepath_pc
 
-    @specialize.arg(1)
+    @specialize.arglltype(1)
     def compile_hot_path(self, value):
         if value:
             pc = self.truepath_pc
@@ -247,7 +254,7 @@ class PromoteFallbackPoint(FallbackPoint):
         self.hotpromotiondesc = hotpromotiondesc
         self.counters = newgreendict()
 
-    @specialize.arg(1)
+    @specialize.arglltype(1)
     def check_should_compile(self, value):
         # XXX incredibly heavy for a supposely lightweight profiling
         gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
@@ -261,12 +268,12 @@ class PromoteFallbackPoint(FallbackPoint):
         self.counters[greenkey] = counter
         return False
 
-    @specialize.arg(2)
+    @specialize.arglltype(2)
     def prepare_fallbackinterp(self, fallbackinterp, value):
         gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
         fallbackinterp.local_green.append(gv_value)
 
-    @specialize.arg(1)
+    @specialize.arglltype(1)
     def compile_hot_path(self, value):
         gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
         self._compile_hot_path(gv_value)
@@ -313,7 +320,7 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox):
     # default case of the switch:
     frameinfo = default_builder.get_frame_info(incoming_gv)
     fbp.set_machine_code_info(flexswitch, frameinfo)
-    ll_fbp = fbp        # XXX doesn't translate
+    ll_fbp = _cast_fallback_point_to_base_ptr(fbp)
     gv_fbp = default_builder.rgenop.genconst(ll_fbp)
     gv_switchvar = switchbox.genvar
     gv_fnptr = hotpromotiondesc.get_gv_reach_fallback_point(default_builder)
@@ -334,3 +341,17 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox):
     jitstate.curbuilder = excpath_builder
     excpath_builder.start_writing()
     leave_graph(fbp.hotrunnerdesc.interpreter)
+
+# for testing purposes
+def _cast_base_ptr_to_fallback_point(ptr):
+    if we_are_translated():
+        return cast_base_ptr_to_instance(FallbackPoint, ptr)
+    else:
+        return ptr
+
+def _cast_fallback_point_to_base_ptr(instance):
+    assert isinstance(instance, FallbackPoint)
+    if we_are_translated():
+        return cast_instance_to_base_ptr(instance)
+    else:
+        return instance

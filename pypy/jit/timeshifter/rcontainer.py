@@ -65,6 +65,7 @@ class StructTypeDesc(object):
                     immutable noidentity
                     materialize
                     devirtualize
+                    allocate populate
                  """.split()
                             
 

@@ -1066,6 +1066,7 @@ class JITState(object):
                         self.frame.copy(memo),
                         self.exc_type_box .copy(memo),
                         self.exc_value_box.copy(memo),
+                        self.resumepoint,
                         self.greens[:],
                         virtualizables)
 
