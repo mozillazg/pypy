@@ -1,18 +1,54 @@
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String
 
+class AlreadyRun(Exception):
+    pass
+
 class JsCode(object):
     """ That object stands for code of a single javascript function
     """
     def __init__(self):
         self.opcodes = []
+        self.label_count = 0
+        self.has_labels = True
+
+    def emit_label(self):
+        num = self.prealocate_label()
+        self.emit('LABEL', num)
+        return num
+
+    def prealocate_label(self):
+        num = self.label_count
+        self.label_count += 1
+        return num        
 
     def emit(self, operation, *args):
         try:
-            self.opcodes.append(OpcodeMap[operation](*args))
+            opcode = OpcodeMap[operation](*args)
+            self.opcodes.append(opcode)
+            return opcode
         except KeyError:
             raise ValueError("Unknown opcode %s" % (operation,))
     emit._annspecialcase_ = 'specialize:arg(1)'
+
+    def remove_labels(self):
+        """ Basic optimization to remove all labels and change
+        jumps to addresses. Necessary to run code at all
+        """
+        if not self.has_labels:
+            raise AlreadyRun("Already has labels")
+        labels = {}
+        counter = 0
+        for i, op in enumerate(self.opcodes):
+            if isinstance(op, LABEL):
+                labels[op.num] = counter
+            else:
+                counter += 1
+        self.opcodes = [op for op in self.opcodes if not isinstance(op, LABEL)]
+        for op in self.opcodes:
+            if isinstance(op, BaseJump):
+                op.where = labels[op.where]
+        self.has_labels = False
 
     def __repr__(self):
         return "\n".join([repr(i) for i in self.opcodes])
@@ -174,6 +210,38 @@ class PREDECR(BaseUnaryOperation):
     pass
 
 class POSTDECR(BaseUnaryOperation):
+    pass
+
+class GT(BaseBinaryComparison):
+    pass
+
+class GE(BaseBinaryComparison):
+    pass
+
+class LT(BaseBinaryComparison):
+    pass
+
+class LE(BaseBinaryComparison):
+    pass
+
+class LABEL(Opcode):
+    def __init__(self, num):
+        self.num = num
+
+    def __repr__(self):
+        return 'LABEL %d' % (self.num,)
+
+class BaseJump(Opcode):
+    def __init__(self, where):
+        self.where = where
+
+    def __repr__(self):
+        return '%s %d' % (self.__class__.__name__, self.where)
+
+class JUMP(BaseJump):
+    pass
+
+class JUMP_IF_FALSE(BaseJump):
     pass
 
 OpcodeMap = {}
