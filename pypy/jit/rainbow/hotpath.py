@@ -223,9 +223,6 @@ class HotRunnerDesc:
                         args = e.args
                         self.interpreter.debug_trace("fb_leave", *args)
                         check_for_immediate_reentry = e.seen_can_enter_jit
-                        # ^^^ but should depend on whether the fallback
-                        # interpreter reached a can_enter_jit() or just
-                        # the jit_merge_point()
 
             portal_runner_ptr = lltype.functionptr(PORTALFUNC, 'portal_runner',
                                                    _callable = portal_runner)
