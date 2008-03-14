@@ -278,7 +278,6 @@ class TestHotPath(HotPathTest):
         py.test.raises(JitHintError, self.run, ll_function, [5], 3)
 
     def test_on_enter_jit(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['n']
@@ -299,6 +298,7 @@ class TestHotPath(HotPathTest):
             ])
 
     def test_hp_tlr(self):
+        py.test.skip("in-progress")
         from pypy.jit.tl import tlr
 
         def main(code, n):
@@ -332,7 +332,6 @@ class TestHotPath(HotPathTest):
             "fallback_interp",
             "fb_leave * stru...} 27 0 * array [ 0, 71, 5041 ]",
             ])
-        py.test.skip("XXX currently the 'regs' list is not virtual.")
         # We expect only the direct_call from the red split fallback point.
         # If we get e.g. 7 of them instead it probably means that we see
         # direct_calls to the ll helpers for the 'regs' list.

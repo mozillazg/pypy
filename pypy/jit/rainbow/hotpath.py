@@ -167,7 +167,7 @@ class HotRunnerDesc:
         #
         portalgraph = self.hintannotator.portalgraph
         # ^^^ as computed by HotPathHintAnnotator.prepare_portal_graphs()
-        if origportalgraph is portalgraph:
+        if origportalgraph is not self.hintannotator.origportalgraph:
             return False      # only mutate the original portal graph,
                               # not its copy
 

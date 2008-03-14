@@ -54,12 +54,11 @@ class TLRJitDriver(JitDriver):
     reds   = ['a', 'regs']
 
     def on_enter_jit(self):
-        xxx - "not called yet"
         # make a copy of the 'regs' list to make it a VirtualList for the JIT
         length = hint(len(self.regs), promote=True)
-        newregs = [None] * length
-        for i in range(length):
-            newregs[i] = self.regs[i]
+        newregs = []
+        for x in self.regs:
+            newregs.append(x)
         self.regs = newregs
 
 def hp_interpret(bytecode, a):
