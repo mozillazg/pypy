@@ -77,11 +77,13 @@ class FallbackInterpreter(object):
             if not isinstance(e, LLException):
                 raise      # don't know how to capture it, and it
                            # probably shows a bug anyway
-            lltype, llvalue = e.args
-            self.gv_exc_type  = self.rgenop.genconst(lltype)
+            llexctype, llvalue = e.args
+            self.gv_exc_type  = self.rgenop.genconst(llexctype)
             self.gv_exc_value = self.rgenop.genconst(llvalue)
         else:
-            xxx
+            lloperation.llop.debug_fatalerror(lltype.Void, "capture_exception"
+                                                           " not implemented")
+            assert 0
 
     def run_directly(self, greenargs, redargs, targetbytecode):
         assert not (greenargs and redargs)  # XXX for now
@@ -106,8 +108,8 @@ class FallbackInterpreter(object):
         # at this point we might have an exception set in self.gv_exc_xxx
         # and we have to really raise it.
         exceptiondesc = self.exceptiondesc
-        lltype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
-        if lltype:
+        llexctype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
+        if llexctype:
             if we_are_translated():
                 lloperation.llop.debug_fatalerror(lltype.Void,
                                                   "fb_raise not implemented")
@@ -115,9 +117,9 @@ class FallbackInterpreter(object):
             # XXX non-translatable hack follows...
             from pypy.rpython.llinterp import LLException, type_name
             llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
-            assert lltype and llvalue
-            self.interpreter.debug_trace("fb_raise", type_name(lltype))
-            raise LLException(lltype, llvalue)
+            assert llexctype and llvalue
+            self.interpreter.debug_trace("fb_raise", type_name(llexctype))
+            raise LLException(llexctype, llvalue)
         else:
             self.interpreter.debug_trace("fb_return", gv_result)
             DoneWithThisFrame = self.hotrunnerdesc.DoneWithThisFrame

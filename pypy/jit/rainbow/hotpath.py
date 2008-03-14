@@ -194,6 +194,7 @@ class HotRunnerDesc:
         portal_ptr = lltype.functionptr(PORTALFUNC, 'portal',
                                         graph = portalgraph)
         maybe_enter_jit = self.maybe_enter_jit_fn
+        unroll_ARGS = unrolling_iterable(ARGS)
 
         class DoneWithThisFrame(Exception):
             _go_through_llinterp_uncaught_ = True     # ugh
@@ -210,8 +211,13 @@ class HotRunnerDesc:
             _go_through_llinterp_uncaught_ = True     # ugh
             def __init__(self, args_gv, seen_can_enter_jit):
                 assert len(args_gv) == len(ARGS)
-                self.args = [gv_arg.revealconst(ARG)
-                             for gv_arg, ARG in zip(args_gv, ARGS)]
+                args = ()
+                i = 0
+                for ARG in unroll_ARGS:
+                    gv_arg = args_gv[i]
+                    args += (gv_arg.revealconst(ARG), )
+                    i += 1
+                self.args = args
                 self.seen_can_enter_jit = seen_can_enter_jit
             def __str__(self):
                 return 'ContinueRunningNormally(%s)' % (
