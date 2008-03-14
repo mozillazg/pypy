@@ -209,6 +209,7 @@ class Block(Statement):
     def emit(self, bytecode):
         for node in self.nodes:
             node.emit(bytecode)
+            bytecode.emit('POP')
     
     def execute(self, ctx):
         try:
