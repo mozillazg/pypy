@@ -178,6 +178,10 @@ class JitDriver:
 
     def _emulate_method_calls(cls, bookkeeper, livevars_s):
         # annotate "cls.on_enter_jit()" if it is defined
+        # on_enter_jit(self) is called with a copy of the value of the
+        # red and green variables.  The red variables can be modified
+        # in order to give hints to the JIT about the redboxes.  The
+        # green variables should not be changed.
         from pypy.annotation import model as annmodel
         if hasattr(cls, 'on_enter_jit'):
             classdef = bookkeeper.getuniqueclassdef(cls)

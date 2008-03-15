@@ -1,4 +1,4 @@
-from pypy.objspace.flow.model import checkgraph, copygraph
+from pypy.objspace.flow.model import checkgraph, copygraph, Constant
 from pypy.objspace.flow.model import Block, Link, SpaceOperation, Variable
 from pypy.translator.unsimplify import split_block, varoftype
 from pypy.translator.simplify import join_blocks
@@ -6,6 +6,7 @@ from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.annotation import model as annmodel
 from pypy.rpython.rtyper import LowLevelOpList
+from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitHintError
 
 
@@ -94,12 +95,14 @@ def split_before_jit_merge_point(hannotator, graph):
         portalopindex = portalblock.operations.index(portalop)
         # split the block just before the jit_merge_point()
         if portalopindex > 0:
-            split_block(hannotator, portalblock, portalopindex)
+            link = split_block(hannotator, portalblock, portalopindex)
+            portalblock = link.target
+            portalop = portalblock.operations[0]
         # split again, this time enforcing the order of the live vars
         # specified by the user in the jit_merge_point() call
-        _, portalblock, portalop = find_jit_merge_point(graph)
-        assert portalop is portalblock.operations[0]
-        livevars = portalop.args[1:]
+        assert portalop.opname == 'jit_merge_point'
+        livevars = [v for v in portalop.args[1:]
+                      if v.concretetype is not lltype.Void]
         link = split_block(hannotator, portalblock, 0, livevars)
         return link.target
     else:
@@ -109,17 +112,30 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
     vars = [varoftype(v.concretetype, name=v) for v in graph.getargs()]
     newblock = Block(vars)
 
+    op = graph.startblock.operations[0]
+    assert op.opname == 'jit_merge_point'
+    assert op.args[0].value is drivercls
+    allvars = []
+    i = 0
+    for v in op.args[1:]:
+        if v.concretetype is lltype.Void:
+            allvars.append(Constant(None, concretetype=lltype.Void))
+        else:
+            allvars.append(vars[i])
+            i += 1
+    assert i == len(vars)
+
     llops = LowLevelOpList(rtyper)
     # generate ops to make an instance of DriverCls
     classdef = rtyper.annotator.bookkeeper.getuniqueclassdef(drivercls)
     s_instance = annmodel.SomeInstance(classdef)
     r_instance = rtyper.getrepr(s_instance)
     v_self = r_instance.new_instance(llops)
-    # generate ops to store the 'reds' variables on 'self'
+    # generate ops to store the 'greens' and 'reds' variables on 'self'
     num_greens = len(drivercls.greens)
     num_reds = len(drivercls.reds)
-    assert len(vars) == num_greens + num_reds
-    for name, v_value in zip(drivercls.reds, vars[num_greens:]):
+    assert len(allvars) == num_greens + num_reds
+    for name, v_value in zip(drivercls.greens + drivercls.reds, allvars):
         r_instance.setfield(v_self, name, v_value, llops)
     # generate a call to on_enter_jit(self)
     on_enter_jit_func = drivercls.on_enter_jit.im_func
@@ -128,10 +144,13 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
     c_func = r_func.get_unique_llfn()
     llops.genop('direct_call', [c_func, v_self])
     # generate ops to reload the 'reds' variables from 'self'
-    newvars = vars[:num_greens]
-    for name, v_value in zip(drivercls.reds, vars[num_greens:]):
+    # XXX Warning!  the 'greens' variables are not reloaded.  This is
+    # a bit of a mess color-wise, and probably not useful.
+    newvars = allvars[:num_greens]
+    for name, v_value in zip(drivercls.reds, allvars[num_greens:]):
         v_value = r_instance.getfield(v_self, name, llops)
         newvars.append(v_value)
+    newvars = [v for v in newvars if v.concretetype is not lltype.Void]
     # done, fill the block and link it to make it the startblock
     newblock.operations[:] = llops
     newblock.closeblock(Link(newvars, graph.startblock))

@@ -258,6 +258,9 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_add=0, int_mul=0)
 
     def test_more_promotes(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'm', 'i', 's']
         S = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed))
         def ll_two(s, i, m):
             if i > 4:
@@ -279,7 +282,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             s.y = 0
             i = 0
             while i < n:
-                hint(None, global_merge_point=True)
+                MyJitDriver.jit_merge_point(n=n, m=m, i=i, s=s)
+                MyJitDriver.can_enter_jit(n=n, m=m, i=i, s=s)
                 k = ll_two(s, i, m)
                 if m & 1:
                     k *= 3
@@ -290,7 +294,7 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                 i += j
             return s.x + s.y * 17
 
-        res = self.interpret(ll_function, [100, 2])
+        res = self.run(ll_function, [100, 2], threshold=3)
         assert res == ll_function(100, 2)
 
     def test_mixed_merges(self):
@@ -323,22 +327,30 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         assert res == ll_function(6, 3, 2, 2)
 
     def test_green_across_global_mp(self):
-        py.test.skip("void vars not handled correctly")
+        class MyJitDriver(JitDriver):
+            greens = ['n1', 'n2']
+            reds = ['total', 'n3', 'n4']
         def ll_function(n1, n2, n3, n4, total):
             while n2:
-                hint(None, global_merge_point=True)
-                total += n3
-                hint(n4, concrete=True)
+                MyJitDriver.jit_merge_point(n1=n1, n2=n2, n3=n3, n4=n4,
+                                            total=total)
+                MyJitDriver.can_enter_jit(n1=n1, n2=n2, n3=n3, n4=n4,
+                                          total=total)
+                total += n4
+                total *= n2
                 hint(n3, concrete=True)
                 hint(n2, concrete=True)
                 hint(n1, concrete=True)
                 n2 -= 1
             return total
-        void = lambda s: None
-        ll_function.convert_arguments = [void, int, int, void, int]
+        def main(n2, n4, total):
+            return ll_function(None, n2, None, n4, total)
 
-        res = self.interpret(ll_function, [None, 4, 3, None, 100], [0])
-        assert res == ll_function(None, 4, 3, None, 100)
+        res = self.run(main, [7, 3, 100], threshold=2)
+        assert res == main(7, 3, 100)
+
+        res = self.run(main, [7, 3, 100], threshold=1)
+        assert res == main(7, 3, 100)
 
     def test_remembers_across_mp(self):
         def ll_function(x, flag):

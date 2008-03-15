@@ -1378,14 +1378,15 @@ class BytecodeWriter(object):
         return c
 
     def decode_hp_hint_args(self, op):
-        # Returns (list-of-green-vars, list-of-red-vars).
+        # Returns (list-of-green-vars, list-of-red-vars) without Voids.
         drivercls = op.args[0].value
         numgreens = len(drivercls.greens)
         numreds = len(drivercls.reds)
         greens_v = op.args[1:1+numgreens]
         reds_v = op.args[1+numgreens:]
         assert len(reds_v) == numreds
-        return greens_v, reds_v
+        return ([v for v in greens_v if v.concretetype is not lltype.Void],
+                [v for v in reds_v if v.concretetype is not lltype.Void])
 
     def check_hp_hint_args(self, op):
         # Check the colors of the jit_merge_point() and can_enter_jit()
