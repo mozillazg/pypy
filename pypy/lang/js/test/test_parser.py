@@ -460,6 +460,16 @@ class TestToAstFunction(BaseTestToAST):
             'CALL',
             'POP'])
 
+    def test_member(self):
+        self.check('a.b', ['LOAD_VARIABLE "a"',
+                           'LOAD_MEMBER "b"',
+                           'POP'])
+        self.check('a.b = 3', ['LOAD_INTCONSTANT 3',
+                               'LOAD_STRINGCONSTANT "b"',
+                               'LOAD_VARIABLE "a"',
+                               'STORE_MEMBER',
+                               'POP'])
+
 from pypy.lang.js.jsparser import parse
     
 def test_simplesemicolon():

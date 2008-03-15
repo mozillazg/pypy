@@ -133,11 +133,10 @@ class MemberAssignment(Assignment):
         bytecode.emit('STORE_MEMBER')
 
 class MemberDotAssignment(Assignment):
-    def __init__(self, pos, what, item, right, operand):
+    def __init__(self, pos, what, name, right, operand):
         self.pos = pos
         self.what = what
-        assert isinstance(item, Identifier)
-        self.itemname = item.name
+        self.itemname = name
         self.right = right
         self.operand = operand
 
@@ -301,6 +300,16 @@ class Member(BinaryOp):
 
 class MemberDot(BinaryOp):
     "this is for object.name"
+    def __init__(self, pos, left, name):
+        assert isinstance(name, Identifier)
+        self.name = name.name
+        self.left = left
+        self.pos = pos
+    
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        bytecode.emit('LOAD_MEMBER', self.name)
+    
     def eval(self, ctx):
         w_obj = self.left.eval(ctx).GetValue().ToObject(ctx)
         name = self.right.get_literal()
@@ -865,14 +874,6 @@ class ObjectInit(ListOp):
             prop.emit(bytecode)
             names.append(prop.identifier)
         bytecode.emit('LOAD_OBJECT', names)
-    
-    def eval(self, ctx):
-        w_obj = create_object(ctx, 'Object')
-        for prop in self.nodes:
-            name = prop.left.eval(ctx).GetPropertyName()
-            w_expr = prop.right.eval(ctx).GetValue()
-            w_obj.Put(name, w_expr)
-        return w_obj
 
 class SourceElements(Statement):
     """
