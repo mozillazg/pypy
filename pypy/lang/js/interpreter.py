@@ -9,6 +9,7 @@ from pypy.lang.js.jsobj import global_context, W_Object,\
 from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
+from pypy.lang.js.jscode import JsCode
 
 ASTBUILDER = ASTBuilder()
 
@@ -551,7 +552,10 @@ class Interpreter(object):
 
     def run(self, script):
         """run the interpreter"""
-        return script.execute(self.global_context)
+        bytecode = JsCode()
+        script.emit(bytecode)
+        bytecode.run(self.global_context)
+        # XXX not sure what this should return
 
 def wrap_arguments(pyargs):
     "receives a list of arguments and wrap then in their js equivalents"

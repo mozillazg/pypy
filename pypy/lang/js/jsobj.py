@@ -496,7 +496,6 @@ class ExecutionContext(object):
             self.this = scope[-1]
         else:
             self.this = this
-        # create a fast lookup
         if variable is None:
             self.variable = self.scope[0]
         else:
@@ -512,7 +511,13 @@ class ExecutionContext(object):
         return "<ExCtx %s, var: %s>"%(self.scope, self.variable)
         
     def assign(self, name, value):
-        pass
+        for obj in self.scope:
+            assert isinstance(obj, W_PrimitiveObject)
+            if obj.HasProperty(name):
+                obj.Put(name, value)
+                return
+        # if not, we need to put this thing in current scope
+        self.scope[0].Put(name, value)
     
     def get_global(self):
         return self.scope[-1]
@@ -573,11 +578,13 @@ class W_Reference(W_Root):
         self.base = base
         self.property_name = property_name
 
-    def GetValue(self):
+    def check_empty(self):
         if self.base is None:
             exception = "ReferenceError: %s is not defined"%(self.property_name,)
-            raise ThrowException(W_String(exception))
-        
+            raise ThrowException(W_String(exception))        
+
+    def GetValue(self):
+        self.check_empty()
         return self.base.Get(self.property_name)
 
     def PutValue(self, w, ctx):

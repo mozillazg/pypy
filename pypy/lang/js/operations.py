@@ -9,8 +9,6 @@ from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_Object,\
      W_PrimitiveObject, W_Reference, ActivationObject, W_Array, W_Boolean,\
      w_Null, W_BaseNumber, isnull_or_undefined
 from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
-from pypy.rlib.rarithmetic import r_uint, intmask, INFINITY, NAN, ovfcheck,\
-     isnan, isinf
 from pypy.lang.js.execution import ExecutionReturned, JsTypeError,\
      ThrowException
 from pypy.lang.js.jscode import JsCode, JsFunction
@@ -262,27 +260,16 @@ class Continue(Unconditional):
     
 
 
-class Call(BinaryOp):
-    def eval(self, ctx):
-        r1 = self.left.eval(ctx)
-        r2 = self.right.eval(ctx)
-        r3 = r1.GetValue()
-        if not isinstance(r3, W_PrimitiveObject):
-            raise ThrowException(W_String("it is not a callable"))
-            
-        if isinstance(r1, W_Reference):
-            r6 = r1.GetBase()
-        else:
-            r6 = None
-        if isinstance(r2, ActivationObject):
-            r7 = None
-        else:
-            r7 = r6
-        try:
-            res = r3.Call(ctx=ctx, args=r2.get_args(), this=r7)
-        except JsTypeError:
-            raise ThrowException(W_String('it is not a function'))
-        return res
+class Call(Expression):
+    def __init__(self, pos, left, args):
+        self.pos = pos
+        self.left = left
+        self.args = args
+    
+    def emit(self, bytecode):
+        self.args.emit(bytecode)
+        self.left.emit(bytecode)
+        bytecode.emit('CALL')
 
 class Comma(BinaryOp):
     def eval(self, ctx):
@@ -707,6 +694,10 @@ class ArgumentList(ListOp):
     def eval(self, ctx):
         return W_List([node.eval(ctx).GetValue() for node in self.nodes])
 
+    def emit(self, bytecode):
+        for node in self.nodes:
+            node.emit(bytecode)
+        bytecode.emit('LOAD_ARRAY', len(self.nodes))
 
 ##############################################################################
 #
@@ -754,18 +745,6 @@ def division(ctx, nleft, nright):
     else:
         val = fleft / fright
     return W_FloatNumber(val)
-
-def sub(ctx, nleft, nright):
-    if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
-        ileft = nleft.ToInt32()
-        iright = nright.ToInt32()
-        try:
-            return W_IntNumber(ovfcheck(ileft - iright))
-        except OverflowError:
-            return W_FloatNumber(float(ileft) - float(iright))
-    fleft = nleft.ToNumber()
-    fright = nright.ToNumber()
-    return W_FloatNumber(fleft - fright)
 
 class Plus(BinaryNumberOp):
     operation_name = 'ADD'
@@ -914,6 +893,10 @@ class SourceElements(Statement):
 
         for node in self.nodes:
             node.emit(bytecode)
+            # we don't need to pop after certain instructions, let's
+            # list them
+            if not isinstance(node, Return):
+                bytecode.emit('POP')
 
     def execute(self, ctx):
         for varname in self.var_decl:
@@ -941,9 +924,8 @@ class Program(Statement):
         self.pos = pos
         self.body = body
 
-    def execute(self, ctx):
-        return self.body.execute(ctx)
-    
+    def emit(self, bytecode):
+        self.body.emit(bytecode)
 
 class Return(Statement):
     def __init__(self, pos, expr):
