@@ -1,17 +1,15 @@
 import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitDriver, hint, JitHintError
+from pypy.jit.hintannotator.policy import StopAtXPolicy
 from pypy.jit.rainbow.test import test_hotpath
 
 import sys
 
-def StopAtXPolicy(*args):
-    py.test.skip("fix this test")
-
 
 class TestHotInterpreter(test_hotpath.HotPathTest):
 
-    def interpret(self, main, ll_values, opt_consts=[], backendoptimize=None):
+    def interpret(self, main, ll_values, opt_consts=[], **kwds):
         py.test.skip("fix this test")
     def interpret_raises(self, Exception, main, ll_values, opt_consts=[]):
         py.test.skip("fix this test")
@@ -761,17 +759,31 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns({})
 
     def test_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'x']
         def g(x):
             return x+1
-
         def f(x):
-            return 2*g(x)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(x=x, i=i)
+                MyJitDriver.can_enter_jit(x=x, i=i)
+                res = 2*g(x)
+            return res
 
-        res = self.interpret(f, [20], [], policy=StopAtXPolicy(g))
+        res = self.run(f, [20], threshold=2, policy=StopAtXPolicy(g))
         assert res == 42
-        self.check_insns(int_add=0)
+        self.check_insns_in_loops({'direct_call': 1, 'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_residual_red_call_with_exc(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'x']
+
         def h(x):
             if x > 0:
                 return x+1
@@ -782,20 +794,25 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return 2*h(x)
 
         def f(x):
-            hint(None, global_merge_point=True)
-            try:
-                return g(x)
-            except ValueError:
-                return 7
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(x=x, i=i)
+                MyJitDriver.can_enter_jit(x=x, i=i)
+                try:
+                    res = g(x)
+                except ValueError:
+                    res = 7
+            return res
 
         stop_at_h = StopAtXPolicy(h)
-        res = self.interpret(f, [20], [], policy=stop_at_h)
+        res = self.run(f, [20], threshold=2, policy=stop_at_h)
         assert res == 42
-        self.check_insns(int_add=0)
+        self.check_insns_in_loops(int_add=0, int_mul=1)
 
-        res = self.interpret(f, [-20], [], policy=stop_at_h)
+        res = self.run(f, [-20], threshold=2, policy=stop_at_h)
         assert res == 7
-        self.check_insns(int_add=0)
+        self.check_insns_in_loops(int_add=0, int_mul=0)
 
     def test_red_call_ignored_result(self):
         def g(n):
