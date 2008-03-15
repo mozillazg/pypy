@@ -1,3 +1,4 @@
+from pypy.rlib.objectmodel import instantiate
 from pypy.annotation import policy
 from pypy.annotation.specialize import getuniquenondirectgraph
 from pypy.translator.translator import graphof
@@ -20,6 +21,12 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
             self.entrypoint_returns_red = entrypoint_returns_red
         if hotpath is not None:
             self.hotpath = hotpath
+
+    def copy(self, **kwds):
+        new = instantiate(self.__class__)
+        new.__dict__.update(self.__dict__)
+        HintAnnotatorPolicy.__init__(new, **kwds)
+        return new
 
     def look_inside_graph(self, graph):
         return True

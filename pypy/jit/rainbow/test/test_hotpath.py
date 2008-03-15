@@ -7,10 +7,15 @@ from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.rpython.llinterp import LLInterpreter
 from pypy import conftest
 
-P_HOTPATH = HintAnnotatorPolicy(oopspec=True,
-                                novirtualcontainer=True,
-                                hotpath=True,
-                                entrypoint_returns_red=False)
+def make_hot_policy(policy):
+    if not policy.hotpath:
+        policy = policy.copy(oopspec                = True,
+                             novirtualcontainer     = True,
+                             hotpath                = True,
+                             entrypoint_returns_red = False)
+    return policy
+
+P_HOTPATH = make_hot_policy(HintAnnotatorPolicy())
 
 class Exit(Exception):
     def __init__(self, result):
@@ -53,6 +58,7 @@ class HotPathTest(test_interpreter.InterpretationTest):
 
     def run(self, main, main_args, threshold, policy=P_HOTPATH, small=False):
         # xxx caching of tests doesn't work - do we care?
+        policy = make_hot_policy(policy)
         self._serialize(main, main_args, policy=policy, backendoptimize=True)
         self._rewrite(threshold, small=small)
         return self._run(main, main_args)
