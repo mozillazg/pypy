@@ -30,81 +30,79 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 x -= 1
             return tot
 
-        res = self.run(ll_function, [7, 2], threshold=5)
-        assert res == 14
-        self.check_nothing_compiled_at_all()
-
         res = self.run(ll_function, [7, 2], threshold=1)
         assert res == 14
         self.check_insns_excluding_return({'int_add': 7})
 
-    def test_green_switch(self):
+    def test_ifs(self):
         class MyJitDriver(JitDriver):
             greens = ['green']
-            reds = ['x', 'y']
+            reds = ['x', 'y', 'i']
         def f(green, x, y):
-            MyJitDriver.jit_merge_point(green=green, x=x, y=y)
-            MyJitDriver.can_enter_jit(green=green, x=x, y=y)
-            green = hint(green, concrete=True)
-            if green:
-                return x + y
-            return x - y
-        res = self.run(f, [1, 1, 2], threshold=2)
-        assert res == 3
-        self.check_nothing_compiled_at_all()
-        res = self.run(f, [0, 1, 2], threshold=2)
-        assert res == -1
-        self.check_nothing_compiled_at_all()
-        res = self.run(f, [1, 1, 2], threshold=1)
-        assert res == 3
-        self.check_insns_excluding_return({"int_add": 1})
-        res = self.run(f, [0, 1, 2], threshold=1)
-        assert res == -1
-        self.check_insns_excluding_return({"int_sub": 1})
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(green=green, x=x, y=y, i=i)
+                MyJitDriver.can_enter_jit(green=green, x=x, y=y, i=i)
+                green = hint(green, concrete=True)
+                if x:                # red if, and compiling pause
+                    res = 100
+                else:
+                    res = 1
+                if y > 5:            # red if
+                    res += 50
+                if green:            # green if
+                    res *= x + y
+                else:
+                    res *= x - y
+            return res
+        for g in [0, 1]:
+            for x in [0, 1]:
+                for y in [4, 77]:
+                    res = self.run(f, [g, x, y], threshold=3)
+                    assert res == f(g, x, y)
 
     def test_simple_opt_const_propagation2(self):
+        class MyJitDriver(JitDriver):
+            greens = ['x', 'y']
+            reds = []
         def ll_function(x, y):
-            return x + y
-        res = self.interpret(ll_function, [5, 7], [0, 1])
+            MyJitDriver.jit_merge_point(x=x, y=y)
+            MyJitDriver.can_enter_jit(x=x, y=y)
+            hint(x, concrete=True)
+            hint(y, concrete=True)
+            x = hint(x, variable=True)
+            y = hint(y, variable=True)
+            return x + (-y)
+        res = self.run(ll_function, [5, -7], threshold=2)
         assert res == 12
-        self.check_insns({})
-
-    def test_simple_opt_const_propagation1(self):
-        def ll_function(x):
-            return -x
-        res = self.interpret(ll_function, [5], [0])
-        assert res == -5
-        self.check_insns({})
+        self.check_nothing_compiled_at_all()
+        res = self.run(ll_function, [5, -7], threshold=1)
+        assert res == 12
+        self.check_insns_excluding_return({})
 
     def test_loop_folding(self):
+        class MyJitDriver(JitDriver):
+            greens = ['x', 'y']
+            reds = []
         def ll_function(x, y):
+            MyJitDriver.jit_merge_point(x=x, y=y)
+            MyJitDriver.can_enter_jit(x=x, y=y)
+            hint(x, concrete=True)
+            hint(y, concrete=True)
+            x = hint(x, variable=True)
+            y = hint(y, variable=True)
             tot = 0
-            x = hint(x, concrete=True)    
             while x:
                 tot += y
                 x -= 1
             return tot
-        res = self.interpret(ll_function, [7, 2], [0, 1])
+        res = self.run(ll_function, [7, 2], threshold=2)
         assert res == 14
-        self.check_insns({})
-
-    def test_red_switch(self):
-        def f(x, y):
-            if x:
-                return x
-            return y
-        res = self.interpret(f, [1, 2])
-        assert res == 1
-
-    def test_merge(self):
-        def f(x, y, z):
-            if x:
-                a = y - z
-            else:
-                a = y + z
-            return 1 + a
-        res = self.interpret(f, [1, 2, 3])
-        assert res == 0
+        self.check_nothing_compiled_at_all()
+        res = self.run(ll_function, [7, 2], threshold=1)
+        assert res == 14
+        self.check_insns_excluding_return({})
 
     def test_loop_merging(self):
         def ll_function(x, y):
