@@ -225,160 +225,138 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns({'int_gt': 1})
 
     def test_arith_plus_minus(self):
+        class MyJitDriver(JitDriver):
+            greens = ['encoded_insn', 'nb_insn']
+            reds = ['i', 'x', 'y']
         def ll_plus_minus(encoded_insn, nb_insn, x, y):
-            acc = x
-            pc = 0
-            while pc < nb_insn:
-                op = (encoded_insn >> (pc*4)) & 0xF
-                op = hint(op, concrete=True)
-                if op == 0xA:
-                    acc += y
-                elif op == 0x5:
-                    acc -= y
-                pc += 1
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(encoded_insn=encoded_insn,
+                                            nb_insn=nb_insn, x=x, y=y, i=i)
+                MyJitDriver.can_enter_jit(encoded_insn=encoded_insn,
+                                          nb_insn=nb_insn, x=x, y=y, i=i)
+                hint(nb_insn, concrete=True)
+                acc = x
+                pc = 0
+                while pc < nb_insn:
+                    op = (encoded_insn >> (pc*4)) & 0xF
+                    op = hint(op, concrete=True)
+                    if op == 0xA:
+                        acc += y
+                    elif op == 0x5:
+                        acc -= y
+                    pc += 1
             return acc
         assert ll_plus_minus(0xA5A, 3, 32, 10) == 42
-        res = self.interpret(ll_plus_minus, [0xA5A, 3, 32, 10], [0, 1])
+        res = self.run(ll_plus_minus, [0xA5A, 3, 32, 10], threshold=2)
         assert res == 42
-        self.check_insns({'int_add': 2, 'int_sub': 1})
-
-    def test_call_simple(self):
-        def ll_add_one(x):
-            return x + 1
-        def ll_function(y):
-            return ll_add_one(y)
-        res = self.interpret(ll_function, [5], [])
-        assert res == 6
-        self.check_insns({'int_add': 1})
-
-    def test_call_2(self):
-        def ll_add_one(x):
-            return x + 1
-        def ll_function(y):
-            return ll_add_one(y) + y
-        res = self.interpret(ll_function, [5], [])
-        assert res == 11
-        self.check_insns({'int_add': 2})
+        self.check_insns_in_loops({'int_add': 2, 'int_sub': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_call_3(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'y']
         def ll_add_one(x):
             return x + 1
         def ll_two(x):
             return ll_add_one(ll_add_one(x)) - x
         def ll_function(y):
-            return ll_two(y) * y
-        res = self.interpret(ll_function, [5], [])
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(y=y, i=i)
+                MyJitDriver.can_enter_jit(y=y, i=i)
+                res = ll_two(y) * y
+            return res
+        res = self.run(ll_function, [5], threshold=2)
         assert res == 10
-        self.check_insns({'int_add': 2, 'int_sub': 1, 'int_mul': 1})
-
-    def test_call_4(self):
-        def ll_two(x):
-            if x > 0:
-                return x + 5
-            else:
-                return x - 4
-        def ll_function(y):
-            return ll_two(y) * y
-
-        res = self.interpret(ll_function, [3], [])
-        assert res == 24
-        self.check_insns({'int_gt': 1, 'int_add': 1,
-                          'int_sub': 1, 'int_mul': 1})
-
-        res = self.interpret(ll_function, [-3], [])
-        assert res == 21
-        self.check_insns({'int_gt': 1, 'int_add': 1,
-                          'int_sub': 1, 'int_mul': 1})
-
-    def test_call_5(self):
-        def ll_two(x):
-            if x > 0:
-                return x + 5
-            else:
-                return x - 4
-        def ll_function(y):
-            if y > 2:
-                return ll_two(y) * y
-            else:
-                return ll_two(y + 3) * y
-
-        res = self.interpret(ll_function, [3], [])
-        assert res == 24
-        self.check_insns({'int_gt': 3, 'int_add': 3,
-                          'int_sub': 2, 'int_mul': 2})
-
-        res = self.interpret(ll_function, [-3], [])
-        assert res == 12
-        self.check_insns({'int_gt': 3, 'int_add': 3,
-                          'int_sub': 2, 'int_mul': 2})
-
-    def test_call_6(self):
-        def ll_two(x):
-            if x > 0:
-                return x + 5
-            else:
-                return x - 4
-        def ll_function(y):
-            if y > 2:
-                y -= 2
-            return ll_two(y) * y
-
-        res = self.interpret(ll_function, [3], [])
-        assert res == 6
-        self.check_insns({'int_gt': 2, 'int_add': 1,
-                          'int_sub': 2, 'int_mul': 1})
-
-        res = self.interpret(ll_function, [-3], [])
-        assert res == 21
-        self.check_insns({'int_gt': 2, 'int_add': 1,
-                          'int_sub': 2, 'int_mul': 1})
+        self.check_insns_in_loops({'int_add': 2, 'int_sub': 1, 'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_void_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['y', 'i']
         def ll_do_nothing(x):
             pass
         def ll_function(y):
-            ll_do_nothing(y)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(y=y, i=i)
+                MyJitDriver.can_enter_jit(y=y, i=i)
+                ll_do_nothing(y)
             return y
 
-        res = self.interpret(ll_function, [3], [])
+        res = self.run(ll_function, [3], threshold=2)
         assert res == 3
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
+
+    def test_green_return(self):
+        class MyJitDriver(JitDriver):
+            greens = ['x']
+            reds = []
+        def ll_function(x):
+            MyJitDriver.jit_merge_point(x=x)
+            MyJitDriver.can_enter_jit(x=x)
+            return hint(x, concrete=True) + 1
+
+        res = self.run(ll_function, [3], threshold=1)
+        assert res == 4
+        self.check_insns_excluding_return({})
+
+    def test_void_return(self):
+        class MyJitDriver(JitDriver):
+            greens = ['x']
+            reds = []
+        def ll_function(x):
+            MyJitDriver.jit_merge_point(x=x)
+            MyJitDriver.can_enter_jit(x=x)
+            hint(x, concrete=True)
+
+        res = self.run(ll_function, [3], threshold=1)
+        assert res is None
+        self.check_insns_excluding_return({})
+
+    def test_fbinterp_void_return(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i']
+        def ll_function():
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(i=i)
+                MyJitDriver.can_enter_jit(i=i)
+
+        res = self.run(ll_function, [], threshold=2)
+        assert res is None
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_green_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['y']
+            reds = ['i']
+        def ll_boring(x):
+            return
         def ll_add_one(x):
             return x+1
         def ll_function(y):
-            z = ll_add_one(y)
-            z = hint(z, concrete=True)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                MyJitDriver.jit_merge_point(y=y, i=i)
+                MyJitDriver.can_enter_jit(y=y, i=i)
+                ll_boring(y)
+                z = ll_add_one(y)
+                z = hint(z, concrete=True)
             return z
 
-        res = self.interpret(ll_function, [3], [0])
+        res = self.run(ll_function, [3], threshold=2)
         assert res == 4
-        self.check_insns({})
-
-    def test_green_call_void_return(self):
-        def ll_boring(x):
-            return
-        def ll_function(y):
-            z = ll_boring(y)
-            z = hint(y, concrete=True)
-            return z
-
-        res = self.interpret(ll_function, [3], [0])
-        assert res == 3
-        self.check_insns({})
-
-    def test_split_on_green_return(self):
-        def ll_two(x):
-            if x > 0:
-                return 17
-            else:
-                return 22
-        def ll_function(x):
-            n = ll_two(x)
-            return hint(n+1, variable=True)
-        res = self.interpret(ll_function, [-70], [])
-        assert res == 23
-        self.check_insns({'int_gt': 1})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_recursive_call(self):
         def indirection(n, fudge):

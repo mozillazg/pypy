@@ -9,7 +9,8 @@ from pypy import conftest
 
 P_HOTPATH = HintAnnotatorPolicy(oopspec=True,
                                 novirtualcontainer=True,
-                                hotpath=True)
+                                hotpath=True,
+                                entrypoint_returns_red=False)
 
 class Exit(Exception):
     def __init__(self, result):
