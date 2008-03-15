@@ -23,7 +23,7 @@ def setup_jitstate(interp, jitstate, greenargs, redargs,
     interp.frame.local_green = greenargs
     interp.graphsigtoken = graphsigtoken
 
-def leave_graph(interp):
+def leave_graph(interp, store_back_exception=True):
     jitstate = interp.jitstate
     exceptiondesc = interp.exceptiondesc
     builder = jitstate.curbuilder
@@ -277,12 +277,15 @@ class PromoteFallbackPoint(FallbackPoint):
         # compile from that state
         interpreter = self.hotrunnerdesc.interpreter
         interpreter.newjitstate(jitstate)
-        interpreter.green_result(gv_value)
         jitstate.curbuilder = self.flexswitch.add_case(gv_value)
+        self.prepare_compiler(interpreter, gv_value)
         compile(interpreter)
         # done
         greenkey = GreenKey([gv_value], self.hotpromotiondesc.greenkeydesc)
         self.counters[greenkey] = -1     # means "compiled"
+
+    def prepare_compiler(self, interpreter, gv_value):
+        interpreter.green_result(gv_value)
 
 
 def hotsplit(jitstate, hotrunnerdesc, switchbox,
@@ -298,7 +301,8 @@ def hp_promote(jitstate, hotrunnerdesc, promotebox, hotpromotiondesc):
                                hotpromotiondesc)
     generate_fallback_code(fbp, hotpromotiondesc, promotebox)
 
-def generate_fallback_code(fbp, hotpromotiondesc, switchbox):
+def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
+                           check_exceptions=False):
     jitstate = fbp.saved_jitstate
     incoming = jitstate.enter_block_sweep_virtualizables()
     switchblock = rtimeshift.enter_next_block(jitstate, incoming)
@@ -307,7 +311,17 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox):
     flexswitch, default_builder = jitstate.curbuilder.flexswitch(gv_switchvar,
                                                                  incoming_gv)
     jitstate.curbuilder = default_builder
+
     # default case of the switch:
+    exceptiondesc = fbp.hotrunnerdesc.exceptiondesc
+    if check_exceptions:
+        # virtualize the exception into the jitstate (xxx fragile code)
+        prevtypebox = jitstate.exc_type_box
+        prevvaluebox = jitstate.exc_value_box
+        exceptiondesc.fetch_global_excdata(jitstate)
+        incoming_gv.append(jitstate.exc_type_box.genvar)
+        incoming_gv.append(jitstate.exc_value_box.genvar)
+
     frameinfo = default_builder.get_frame_info(incoming_gv)
     fbp.set_machine_code_info(flexswitch, frameinfo)
     ll_fbp = _cast_fallback_point_to_base_ptr(fbp)
@@ -321,11 +335,18 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox):
     # The call above may either return normally, meaning that more machine
     # code was compiled and we should loop back to 'switchblock' to enter it,
     # or it may have set an exception.
-    exceptiondesc = fbp.hotrunnerdesc.exceptiondesc
     gv_exc_type = exceptiondesc.genop_get_exc_type(default_builder)
     gv_noexc = default_builder.genop_ptr_iszero(
         exceptiondesc.exc_type_kind, gv_exc_type)
     excpath_builder = default_builder.jump_if_false(gv_noexc, [])
+
+    if check_exceptions:
+        # unvirtualize the exception
+        exceptiondesc.store_global_excdata(jitstate)
+        incoming_gv.pop()
+        incoming_gv.pop()
+        jitstate.exc_type_box = prevtypebox
+        jitstate.exc_value_box = prevvaluebox
     default_builder.finish_and_goto(incoming_gv, switchblock)
 
     jitstate.curbuilder = excpath_builder
@@ -345,3 +366,52 @@ def _cast_fallback_point_to_base_ptr(instance):
         return cast_instance_to_base_ptr(instance)
     else:
         return instance
+
+# ____________________________________________________________
+
+# support for reading the state after a residual call, XXX a bit lengthy
+
+class AfterResidualCallFallbackPoint(PromoteFallbackPoint):
+
+    def __init__(self, jitstate, hotrunnerdesc, promotebox, hotpromotiondesc,
+                 check_forced):
+        PromoteFallbackPoint.__init__(self, jitstate, hotrunnerdesc,
+                                      promotebox, hotpromotiondesc)
+        self.check_forced = check_forced
+
+    @specialize.arglltype(2)
+    def prepare_fallbackinterp(self, fallbackinterp, value):
+        fallbackinterp.local_red.pop()   # remove the temporary flagbox
+
+    def prepare_compiler(self, interpreter, gv_value):
+        # remove the temporary flagbox
+        flagbox = interpreter.frame.local_boxes.pop()
+        exceptiondesc = self.hotrunnerdesc.exceptiondesc
+        rtimeshift.residual_fetch(interpreter.jitstate, exceptiondesc,
+                                  self.check_forced, flagbox)
+
+
+def hp_after_residual_call(jitstate, hotrunnerdesc, withexc, check_forced):
+    if withexc:
+        exceptiondesc = hotrunnerdesc.exceptiondesc
+    else:
+        exceptiondesc = None
+    gv_flags = rtimeshift.gvflags_after_residual_call(jitstate,
+                                                      exceptiondesc,
+                                                      check_forced)
+    if gv_flags is None:
+        return     # nothing to check
+    # XXX slightly hackish: the gv_flags needs to be in local_boxes
+    # to be passed along to the new block
+    assert not gv_flags.is_const
+    tok_signed = hotrunnerdesc.RGenOp.kindToken(lltype.Signed)
+    flagbox = rvalue.IntRedBox(tok_signed, gv_flags)
+    jitstate.frame.local_boxes.append(flagbox)
+
+    hotpromotiondesc = hotrunnerdesc.signed_hotpromotiondesc
+    fbp = AfterResidualCallFallbackPoint(jitstate, hotrunnerdesc,
+                                         flagbox, hotpromotiondesc,
+                                         check_forced)
+    generate_fallback_code(fbp, hotpromotiondesc, flagbox,
+                           check_exceptions=withexc)
+    assert 0, "unreachable"

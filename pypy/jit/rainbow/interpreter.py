@@ -908,6 +908,16 @@ class JitInterpreter(object):
     opimpl_hp_gray_direct_call = opimpl_hp_red_direct_call
     opimpl_hp_yellow_direct_call = opimpl_hp_red_direct_call
 
+    @arguments("red", "calldesc", "bool", "bool", "red_varargs")
+    def opimpl_hp_residual_call(self, funcbox, calldesc, withexc, has_result,
+                                redargs):
+        result = rtimeshift.gen_residual_call(self.jitstate, calldesc,
+                                              funcbox, redargs)
+        if has_result:
+            self.red_result(result)
+        rhotpath.hp_after_residual_call(self.jitstate, self.hotrunnerdesc,
+                                        withexc, True)
+
     def hp_return(self):
         frame = self.frame.backframe
         if frame is None:
