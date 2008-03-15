@@ -1,6 +1,7 @@
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
-     W_Array, W_PrimitiveObject, W_Reference, ActivationObject
+     W_Array, W_PrimitiveObject, W_Reference, ActivationObject,\
+     create_object
 from pypy.lang.js.execution import JsTypeError
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub
@@ -112,8 +113,8 @@ class BaseBinaryBitwiseOp(Opcode):
 
 class BaseBinaryOperation(Opcode):
     def eval(self, ctx, stack):
-        right = stack.pop()
-        left = stack.pop()
+        right = stack.pop().GetValue()
+        left = stack.pop().GetValue()
         stack.append(self.operation(ctx, left, right))
 
 class BaseUnaryOperation(Opcode):
@@ -208,13 +209,28 @@ class STORE(Opcode):
 
 class LOAD_OBJECT(Opcode):
     def __init__(self, listofnames):
-        self.listofnames = listofnames
+        self.listofnames = reversed(listofnames)
 
     def eval(self, ctx, stack):
-        XXX
+        w_obj = create_object(ctx, 'Object')
+        for name in self.listofnames:
+            w_elem = stack.pop().GetValue()
+            w_obj.Put(name, w_elem)
+        stack.append(w_obj)
 
     def __repr__(self):
         return 'LOAD_OBJECT %r' % (self.listofnames,)
+
+class LOAD_MEMBER(Opcode):
+    def __init__(self, name):
+        self.name = name
+
+    def eval(self, ctx, stack):
+        w_obj = stack.pop().GetValue().ToObject(ctx)
+        stack.append(W_Reference(self.name, w_obj))
+
+    def __repr__(self):
+        return 'LOAD_MEMBER "%s"' % (self.name,)
 
 class SUB(BaseBinaryOperation):
     def operation(self, ctx, left, right):

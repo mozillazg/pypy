@@ -85,7 +85,7 @@ def test_to_string():
 def test_object_access():
     yield assertp, "x={d:3}; print(x.d);", "3"
     yield assertp, "x={d:3}; print(x.d.d);", "undefined"
-    yield assertp, "x={d:3, z:4}; print(x.d+x.z);", "7"
+    yield assertp, "x={d:3, z:4}; print(x.d-x.z);", "-1"
 
 def test_object_access_index():
     assertp('x={d:"x"}; print(x["d"]);', 'x')

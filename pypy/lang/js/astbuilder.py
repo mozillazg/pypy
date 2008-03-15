@@ -286,7 +286,7 @@ class ASTBuilder(RPythonVisitor):
             return operations.MemberAssignment(pos, left.left, left.right,
                                                right, atype)
         elif isinstance(left, MemberDot):
-            return operations.MemberDotAssignment(pos, left.left, left.right,
+            return operations.MemberDotAssignment(pos, left.left, left.name,
                                                   right, atype)
         else:
             raise ParseError(left.pos, "Invalid lefthand expression")
