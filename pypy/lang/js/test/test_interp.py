@@ -4,7 +4,7 @@ from pypy.lang.js import interpreter
 from pypy.lang.js.operations import AEC, IntNumber, FloatNumber, Position, Plus
 from pypy.lang.js.jsobj import W_Object, ExecutionContext, W_Root, w_Null
 from pypy.lang.js.execution import ThrowException
-from pypy.lang.js.jscode import JsCode
+from pypy.lang.js.jscode import JsCode, POP
 
 def test_simple():
     bytecode = JsCode()
@@ -33,7 +33,13 @@ def assertv(code, value):
     jsint = interpreter.Interpreter()
     ctx = jsint.w_Global
     try:
-        code_val = jsint.run(interpreter.load_source(code, '')).GetValue()
+        bytecode = JsCode()
+        interpreter.load_source(code, '').emit(bytecode)
+        # XXX terrible hack
+        assert isinstance(bytecode.opcodes[-1], POP)
+        bytecode.opcodes.pop()
+        bytecode.run(ExecutionContext([ctx]), check_stack=False)
+        code_val = bytecode.stack[0].GetValue()
     except ThrowException, excpt:
         code_val = excpt.exception
     print code_val, value
@@ -51,7 +57,6 @@ def assertv(code, value):
 def asserte(code, value):
     jsint = interpreter.Interpreter()
     py.test.raises(value, 'jsint.run(interpreter.load_source(code, ""))')
-    
     
 def test_interp_parse():
     yield assertv, "1+1;", 2

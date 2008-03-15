@@ -1,7 +1,9 @@
 
-from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String
+from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
+     W_Array, W_PrimitiveObject, W_Reference, ActivationObject
+from pypy.lang.js.execution import JsTypeError
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.lang.js.baseop import plus
+from pypy.lang.js.baseop import plus, sub
 
 class AlreadyRun(Exception):
     pass
@@ -128,8 +130,8 @@ class LOAD_INTCONSTANT(Opcode):
     def __init__(self, value):
         self.w_intvalue = W_IntNumber(int(value))
 
-    def eval(self, ctx):
-        return self.w_intvalue
+    def eval(self, ctx, stack):
+        stack.append(self.w_intvalue)
 
     def __repr__(self):
         return 'LOAD_INTCONSTANT %s' % (self.w_intvalue.intval,)
@@ -148,8 +150,8 @@ class LOAD_STRINGCONSTANT(Opcode):
     def __init__(self, value):
         self.w_stringvalue = W_String(value)
 
-    def eval(self, ctx):
-        return self.w_stringvalue
+    def eval(self, ctx, stack):
+        stack.append(self.w_stringvalue)
 
     def get_literal(self):
         return W_String(self.strval).ToString()
@@ -161,8 +163,8 @@ class LOAD_VARIABLE(Opcode):
     def __init__(self, identifier):
         self.identifier = identifier
 
-    def eval(self, ctx):
-        return ctx.resolve_identifier(self.identifier)
+    def eval(self, ctx, stack):
+        stack.append(ctx.resolve_identifier(self.identifier).GetValue())
 
     def __repr__(self):
         return 'LOAD_VARIABLE "%s"' % (self.identifier,)
@@ -171,12 +173,12 @@ class LOAD_ARRAY(Opcode):
     def __init__(self, counter):
         self.counter = counter
 
-    def eval(self, ctx):
+    def eval(self, ctx, stack):
         proto = ctx.get_global().Get('Array').Get('prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
-        for i in range(len(self.nodes)):
-            array.Put(str(i), self.nodes[i].eval(ctx).GetValue())
-        return array
+        for i in range(self.counter):
+            array.Put(str(self.counter - i - 1), stack.pop().GetValue())
+        stack.append(array)
 
     def __repr__(self):
         return 'LOAD_ARRAY %d' % (self.counter,)
@@ -196,8 +198,10 @@ class STORE(Opcode):
     def __init__(self, name):
         self.name = name
     
-    def eval(self, ctx):
-        XXX
+    def eval(self, ctx, stack):
+        value = stack.pop().GetValue()
+        ctx.assign(self.name, value)
+        stack.append(value)
 
     def __repr__(self):
         return 'STORE "%s"' % self.name
@@ -206,11 +210,15 @@ class LOAD_OBJECT(Opcode):
     def __init__(self, listofnames):
         self.listofnames = listofnames
 
+    def eval(self, ctx, stack):
+        XXX
+
     def __repr__(self):
         return 'LOAD_OBJECT %r' % (self.listofnames,)
 
 class SUB(BaseBinaryOperation):
-    pass
+    def operation(self, ctx, left, right):
+        return sub(ctx, left, right)
 
 class ADD(BaseBinaryOperation):
     def operation(self, ctx, left, right):
@@ -302,7 +310,30 @@ class RETURN(Opcode):
     pass
 
 class POP(Opcode):
-    pass
+    def eval(self, ctx, stack):
+        stack.pop()
+
+class CALL(Opcode):
+    def eval(self, ctx, stack):
+        r1 = stack.pop()
+        args = stack.pop()
+        r3 = r1.GetValue()
+        if not isinstance(r3, W_PrimitiveObject):
+            raise ThrowException(W_String("it is not a callable"))
+            
+        if isinstance(r1, W_Reference):
+            r6 = r1.GetBase()
+        else:
+            r6 = None
+        if isinstance(args, ActivationObject):
+            r7 = None
+        else:
+            r7 = r6
+        try:
+            res = r3.Call(ctx=ctx, args=args.tolist(), this=r7)
+        except JsTypeError:
+            raise ThrowException(W_String('it is not a function'))
+        stack.append(res)
 
 OpcodeMap = {}
 
