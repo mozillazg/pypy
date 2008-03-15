@@ -585,7 +585,7 @@ def gen_residual_call(jitstate, calldesc, funcbox, argboxes):
     gv_result = builder.genop_call(calldesc.sigtoken, gv_funcbox, args_gv)
     return calldesc.redboxbuilder(calldesc.result_kind, gv_result)
 
-def after_residual_call(jitstate, exceptiondesc, check_forced):
+def gvflags_after_residual_call(jitstate, exceptiondesc, check_forced):
     builder = jitstate.curbuilder
     if check_forced:
         gv_flags = jitstate.check_forced_after_residual_call()
@@ -602,6 +602,11 @@ def after_residual_call(jitstate, exceptiondesc, check_forced):
         else:
             assert gv_flags is None
             exceptiondesc.fetch_global_excdata(jitstate)
+    return gv_flags
+
+def after_residual_call(jitstate, exceptiondesc, check_forced):
+    gv_flags = gvflags_after_residual_call(jitstate, exceptiondesc,
+                                           check_forced)
     if gv_flags is None:
         gv_flags = builder.rgenop.constPrebuiltGlobal(0)
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Signed), gv_flags)

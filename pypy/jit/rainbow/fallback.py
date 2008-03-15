@@ -85,12 +85,11 @@ class FallbackInterpreter(object):
             Xxx("capture_exception")
 
     def run_directly(self, greenargs, redargs, targetbytecode):
-        assert not (greenargs and redargs)  # XXX for now
         calldesc = targetbytecode.owncalldesc
         try:
-            gv_res = calldesc.perform_call(self.rgenop,
-                                           targetbytecode.gv_ownfnptr,
-                                           greenargs or redargs)
+            gv_res = calldesc.perform_call_mixed(self.rgenop,
+                                                 targetbytecode.gv_ownfnptr,
+                                                 greenargs, redargs)
         except Exception, e:
             self.capture_exception(e)
             gv_res = calldesc.gv_whatever_return_value
@@ -248,7 +247,12 @@ class FallbackInterpreter(object):
 
     @arguments("green", "green_varargs", "jumptargets")
     def opimpl_green_switch(self, exitcase, cases, targets):
-        Xxx("green_switch")
+        arg = exitcase.revealconst(lltype.Signed)
+        assert len(cases) == len(targets)
+        for i in range(len(cases)):
+            if arg == cases[i].revealconst(lltype.Signed):
+                self.pc = targets[i]
+                break
 
     @arguments("bool", "red", "red", "jumptarget")
     def opimpl_red_goto_ifptrnonzero(self, reverse, gv_ptr, gv_switch, target):
@@ -337,12 +341,6 @@ class FallbackInterpreter(object):
     def opimpl_red_oopspec_call_noresult_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
         self.oopspec_call(oopspec, [arg1, arg2, arg3])
 
-    @arguments("red", "calldesc", "bool", "bool", "red_varargs",
-               "promotiondesc")
-    def opimpl_red_residual_call(self, gv_func, calldesc, withexc, has_result,
-                                 redargs, promotiondesc):
-        Xxx("red_residual_call")
-
     @arguments("metacalldesc", "red_varargs", returns="red")
     def opimpl_metacall(self, metafunc, redargs):
         Xxx("metacall")
@@ -392,7 +390,9 @@ class FallbackInterpreter(object):
 
     @arguments("red", "fielddesc", "bool", returns="green_from_red")
     def opimpl_green_getfield(self, gv_struct, fielddesc, deepfrozen):
-        Xxx("green_getfield")
+        gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
+        assert gv_res is not None, "segfault!"
+        return gv_res
 
     @arguments("red", "fielddesc", "red")
     def opimpl_red_setfield(self, gv_dest, fielddesc, gv_value):
@@ -478,6 +478,17 @@ class FallbackInterpreter(object):
     def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):
         gv_res = self.run_directly(greenargs, redargs, targetbytecode)
         self.green_result(gv_res)
+
+    @arguments("red", "calldesc", "bool", "bool", "red_varargs")
+    def opimpl_hp_residual_call(self, gv_func, calldesc, withexc, has_result,
+                                redargs_gv):
+        try:
+            gv_res = calldesc.perform_call(self.rgenop, gv_func, redargs_gv)
+        except Exception, e:
+            self.capture_exception(e)
+            gv_res = calldesc.gv_whatever_return_value
+        if has_result:
+            self.red_result(gv_res)
 
     def hp_return(self):
         frame = self.current_source_jitframe.backframe

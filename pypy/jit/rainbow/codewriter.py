@@ -32,10 +32,11 @@ def residual_exception_nontranslated(jitstate, e, rtyper):
 class CallDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE):
+    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE, colororder=None):
         self.exceptiondesc = exceptiondesc
         self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
         self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
+        self.colororder = colororder
         # xxx what if the result is virtualizable?
         self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.TO.RESULT)
         whatever_return_value = FUNCTYPE.TO.RESULT._defl()
@@ -52,16 +53,16 @@ class CallDesc:
             self.gv_whatever_return_value = RGenOp.constPrebuiltGlobal(
                 whatever_return_value)
 
-        def perform_call(rgenop, gv_fnptr, greenargs):
+        def perform_call(rgenop, gv_fnptr, args_gv):
             fnptr = gv_fnptr.revealconst(FUNCTYPE)
-            assert len(greenargs) + voidargcount == numargs
+            assert len(args_gv) + voidargcount == numargs
             args = ()
             j = 0
             for ARG in argiter:
                 if ARG == lltype.Void:
                     args += (None, )
                 else:
-                    genconst = greenargs[j]
+                    genconst = args_gv[j]
                     arg = genconst.revealconst(ARG)
                     args += (arg, )
                     j += 1
@@ -77,6 +78,7 @@ class CallDesc:
         return True
 
     def green_call(self, interpreter, gv_fnptr, greenargs):
+        assert self.colororder is None
         rgenop = interpreter.jitstate.curbuilder.rgenop
         try:
             gv_result = self.perform_call(rgenop, gv_fnptr, greenargs)
@@ -89,6 +91,25 @@ class CallDesc:
             gv_result = self.gv_whatever_return_value
         if gv_result is not None:
             interpreter.green_result(gv_result)
+
+    def perform_call_mixed(self, rgenop, gv_fnptr, greens_gv, reds_gv):
+        if self.colororder is None:
+            args_gv = greens_gv + reds_gv
+        else:
+            args_gv = []
+            gi = 0
+            ri = 0
+            for c in self.colororder:
+                if c == 'g':
+                    gv = greens_gv[gi]
+                    gi += 1
+                else:
+                    gv = reds_gv[ri]
+                    ri += 1
+                args_gv.append(gv)
+            assert gi == len(greens_gv)
+            assert ri == len(reds_gv)
+        return self.perform_call(rgenop, gv_fnptr, args_gv)
 
 
 class IndirectCallsetDesc(object):
@@ -264,8 +285,22 @@ class BytecodeWriter(object):
         RESULT = graph.getreturnvar().concretetype
         FUNCTYPE = lltype.FuncType(ARGS, RESULT)
 
+        # if the graph takes both red and green arguments, we need
+        # a way for the fallback interp to rezip the two lists
+        # 'greenargs' and 'redargs' into a single one
+        colororder = ""
+        in_order = True           # "in order" means allgreens+allreds
+        for v in graph.getargs():
+            if self.hannotator.binding(v).is_green():
+                if "r" in colororder:
+                    in_order = False
+                colororder += "g"
+            else:
+                colororder += "r"
+        if in_order:
+            colororder = None
         owncalldesc = CallDesc(self.RGenOp, self.exceptiondesc,
-                               lltype.Ptr(FUNCTYPE))
+                               lltype.Ptr(FUNCTYPE), colororder)
         ownfnptr = lltype.functionptr(FUNCTYPE, graph.name, graph=graph)
         gv_ownfnptr = self.RGenOp.constPrebuiltGlobal(ownfnptr)
         return owncalldesc, gv_ownfnptr
@@ -987,10 +1022,14 @@ class BytecodeWriter(object):
             if v.concretetype == lltype.Void:
                 continue
             emitted_args.append(self.serialize_oparg("red", v))
-        self.emit("red_residual_call")
+        if self.hannotator.policy.hotpath:
+            self.emit("hp_residual_call")
+        else:
+            self.emit("red_residual_call")
         self.emit(func, pos, withexc, has_result, len(emitted_args))
         self.emit(*emitted_args)
-        self.emit(self.promotiondesc_position(lltype.Signed))
+        if not self.hannotator.policy.hotpath:
+            self.emit(self.promotiondesc_position(lltype.Signed))
         if has_result:
             self.register_redvar(op.result)
 

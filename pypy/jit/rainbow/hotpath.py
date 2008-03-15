@@ -97,9 +97,12 @@ class HotRunnerDesc:
         self.maybe_enter_jit_fn = maybe_enter_jit
 
     def make_descs(self):
-        ERASED = self.RGenOp.erasedType(lltype.Bool)
-        self.bool_hotpromotiondesc = rhotpath.HotPromotionDesc(ERASED,
-                                                               self.RGenOp)
+        HotPromotionDesc = rhotpath.HotPromotionDesc
+        RGenOp = self.RGenOp
+        EBOOL   = RGenOp.erasedType(lltype.Bool)
+        ESIGNED = RGenOp.erasedType(lltype.Signed)
+        self.bool_hotpromotiondesc   = HotPromotionDesc(EBOOL,   RGenOp)
+        self.signed_hotpromotiondesc = HotPromotionDesc(ESIGNED, RGenOp)
 
     def rewrite_graphs(self):
         for graph in self.hintannotator.base_translator.graphs:
