@@ -1,5 +1,5 @@
 from pypy.lang.gameboy.cpu import CPU, Register, DoubleRegister
-import pypy.lang.gameboy.constants
+from pypy.lang.gameboy import constants
 
 def get_cpu():
     return CPU([None]*256, None)
