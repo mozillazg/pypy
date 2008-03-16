@@ -432,45 +432,102 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                             hints={'immutable': True})
         
         def ll_function(s):
-            return s.hello * s.world
+            i = 1024
+            while i > 0:
+                i >>= 1
+                s1 = s
+                if MyJitDriver.case >= 2:
+                    hint(s1, concrete=True)     # green
+                    if MyJitDriver.case == 3:
+                        s1 = hint(s1, variable=True)    # constant redbox
+                #
+                res = s1.hello * s1.world
+                #
+                MyJitDriver.jit_merge_point(s=s, i=i, res=res)
+                MyJitDriver.can_enter_jit(s=s, i=i, res=res)
+            return res
 
-        def struct_S(string):
-            items = string.split(',')
-            assert len(items) == 2
+        def main(x, y):
             s1 = lltype.malloc(S)
-            s1.hello = int(items[0])
-            s1.world = int(items[1])
-            return s1
-        ll_function.convert_arguments = [struct_S]
+            s1.hello = x
+            s1.world = y
+            return ll_function(s1)
 
-        res = self.interpret(ll_function, ["6,7"], [])
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['s', 'i', 'res']
+            case = 1
+        res = self.run(main, [6, 7], threshold=2)
         assert res == 42
-        self.check_insns({'getfield': 2, 'int_mul': 1})
-        res = self.interpret(ll_function, ["8,9"], [0])
+        self.check_insns_in_loops({'getfield': 2, 'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
+
+        class MyJitDriver(JitDriver):
+            greens = ['s']
+            reds = ['i', 'res']
+            case = 2
+        res = self.run(main, [8, 9], threshold=2)
         assert res == 72
-        self.check_insns({})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
+
+        class MyJitDriver(JitDriver):
+            greens = ['s']
+            reds = ['i', 'res']
+            case = 3
+        res = self.run(main, [10, 11], threshold=2)
+        assert res == 110
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_simple_array(self):
         A = lltype.GcArray(lltype.Signed, 
                             hints={'immutable': True})
         def ll_function(a):
-            return a[0] * a[1]
+            i = 1024
+            while i > 0:
+                i >>= 1
+                a1 = a
+                if MyJitDriver.case >= 2:
+                    hint(a1, concrete=True)     # green
+                    if MyJitDriver.case == 3:
+                        a1 = hint(a1, variable=True)    # constant redbox
+                #
+                res = a1[0] * a1[1] + len(a1)
+                #
+                MyJitDriver.jit_merge_point(a=a, i=i, res=res)
+                MyJitDriver.can_enter_jit(a=a, i=i, res=res)
+            return res
 
-        def int_array(string):
-            items = [int(x) for x in string.split(',')]
-            n = len(items)
-            a1 = lltype.malloc(A, n)
-            for i in range(n):
-                a1[i] = items[i]
-            return a1
-        ll_function.convert_arguments = [int_array]
+        def main(x, y):
+            a = lltype.malloc(A, 2)
+            a[0] = x
+            a[1] = y
+            return ll_function(a)
 
-        res = self.interpret(ll_function, ["6,7"], [])
-        assert res == 42
-        self.check_insns({'getarrayitem': 2, 'int_mul': 1})
-        res = self.interpret(ll_function, ["8,3"], [0])
-        assert res == 24
-        self.check_insns({})
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['a', 'i', 'res']
+            case = 1
+        res = self.run(main, [6, 7], threshold=2)
+        assert res == 44
+        self.check_insns_in_loops({'getarrayitem': 2, 'int_mul': 1,
+                                   'getarraysize': 1, 'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
+
+        class MyJitDriver(JitDriver):
+            greens = ['a']
+            reds = ['i', 'res']
+            case = 2
+        res = self.run(main, [8, 9], threshold=2)
+        assert res == 74
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
+
+        class MyJitDriver(JitDriver):
+            greens = ['a']
+            reds = ['i', 'res']
+            case = 3
+        res = self.run(main, [10, 11], threshold=2)
+        assert res == 112
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_arraysize(self):
         A = lltype.GcArray(lltype.Signed)
@@ -1740,3 +1797,7 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return f(space, x, y)
         res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
         assert res == 11
+
+
+    #def test_handle_SegfaultException(self):
+    #    ...

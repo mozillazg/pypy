@@ -4,6 +4,7 @@ from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic, noop
 from pypy.rlib.debug import debug_print
 from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
+from pypy.jit.timeshifter.oop import SegfaultException
 from pypy.jit.rainbow import rhotpath
 from pypy.rpython.lltypesystem import lltype, llmemory
 
@@ -789,10 +790,12 @@ class JitInterpreter(object):
         return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
                                       structbox)
 
-    @arguments("red", "fielddesc", "bool", returns="green_from_red")
-    def opimpl_green_getfield(self, structbox, fielddesc, deepfrozen):
-        return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
-                                      structbox)
+    @arguments("green", "fielddesc", returns="green")
+    def opimpl_green_getfield(self, gv_struct, fielddesc):
+        gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
+        if gv_res is None:
+            raise SegfaultException
+        return gv_res
 
     @arguments("red", "fielddesc", "red")
     def opimpl_red_setfield(self, destbox, fielddesc, valuebox):
@@ -813,9 +816,21 @@ class JitInterpreter(object):
     def opimpl_red_getarraysize(self, arraybox, fielddesc):
         return rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
 
-    @arguments("red", "arraydesc", returns="green_from_red")
-    def opimpl_green_getarraysize(self, arraybox, fielddesc):
-        return rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
+    @arguments("green", "arraydesc", "green", returns="green")
+    def opimpl_green_getarrayitem(self, gv_array, fielddesc, gv_index):
+        gv_res = fielddesc.getarrayitem_if_non_null(self.rgenop,
+                                                    gv_array, gv_index)
+        if gv_res is None:
+            raise SegfaultException   # XXX should probably just raise it
+                                      # from fielddesc.getarrayitem()
+        return gv_res
+
+    @arguments("green", "arraydesc", returns="green")
+    def opimpl_green_getarraysize(self, gv_array, fielddesc):
+        gv_res = fielddesc.getarraysize_if_non_null(self.rgenop, gv_array)
+        if gv_res is None:
+            raise SegfaultException
+        return gv_res
 
     @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
     def opimpl_red_getinteriorfield(self, structbox, interiordesc, deepfrozen,

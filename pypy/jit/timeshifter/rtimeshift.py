@@ -167,7 +167,7 @@ def gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
     if ((fielddesc.immutable or deepfrozen) and argbox.is_constant()
                                             and indexbox.is_constant()):
         resgv = fielddesc.getarrayitem_if_non_null(
-                jitstate, argbox.getgenvar(jitstate),
+                jitstate.curbuilder.rgenop, argbox.getgenvar(jitstate),
                 indexbox.getgenvar(jitstate))
         if resgv is not None:
             return fielddesc.makebox(jitstate, resgv)
@@ -204,7 +204,7 @@ def gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
 def gengetarraysize(jitstate, fielddesc, argbox):
     if argbox.is_constant():
         resgv = fielddesc.getarraysize_if_non_null(
-                jitstate, argbox.getgenvar(jitstate))
+                jitstate.curbuilder.rgenop, argbox.getgenvar(jitstate))
         if resgv is not None:
             return rvalue.redboxbuilder_int(fielddesc.indexkind, resgv)
     genvar = jitstate.curbuilder.genop_getarraysize(
