@@ -452,7 +452,18 @@ class BytecodeWriter(object):
             self.emit(*truerenaming)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
-            assert self.varcolor(block.exitswitch) == "green"
+            if self.varcolor(block.exitswitch) == "green":
+                switchvaridx = self.serialize_oparg("green", block.exitswitch)
+            else:
+                assert self.hannotator.policy.hotpath
+                TYPE = block.exitswitch.concretetype
+                self.emit("hp_promote")
+                self.emit(self.serialize_oparg("red", block.exitswitch))
+                self.emit(self.promotiondesc_position(TYPE))
+                switchvaridx = self.register_greenvar(
+                    ("promoted", block.exitswitch),
+                    check=False)
+
             for link in block.exits:
                 if link.exitcase == 'default':
                     defaultlink = link
@@ -467,7 +478,7 @@ class BytecodeWriter(object):
             cases = [self.serialize_oparg("green", case) for case in cases]
             targets = [tlabel(link) for link in switchlinks]
             self.emit("green_switch")
-            self.emit(self.serialize_oparg("green", block.exitswitch))
+            self.emit(switchvaridx)
             self.emit(len(cases), *cases)
             self.emit(len(targets), *targets)
             self.emit(*defaultrenaming)
