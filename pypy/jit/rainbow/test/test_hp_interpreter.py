@@ -1974,7 +1974,6 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_sub=2)
 
     def test_substitute_graph_void(self):
-        py.test.skip("fix this test")
 
         class MetaG:
             def __init__(self, codewriter):
@@ -1989,6 +1988,10 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 gv_result = builder.genop1("int_neg", mbox.getgenvar(jitstate))
                 return IntRedBox(mbox.kind, gv_result)
 
+        class MyJitDriver(JitDriver):
+            greens = ['m']
+            reds = ['n', 'i', 'res']
+
         class Fz(object):
             x = 10
             
@@ -2001,10 +2004,18 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         fz = Fz()
 
         def f(n, m):
-            x = g(fz, n)
-            y = g(fz, m)
-            hint(y, concrete=True)
-            return x + g(fz, y)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                x = g(fz, n)    # this goes via MetaG
+                y = g(fz, m)    # but this g() runs directly (green call)
+                hint(y, concrete=True)
+                res = x + g(fz, y)   # this g() too
+                #
+                MyJitDriver.jit_merge_point(n=n, m=m, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, m=m, res=res, i=i)
+            return res
 
         class MyPolicy(HintAnnotatorPolicy):
             novirtualcontainer = True
@@ -2015,9 +2026,10 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     return True
 
-        res = self.interpret(f, [3, 6], policy=MyPolicy())
+        res = self.run(f, [3, 6], threshold=2, policy=MyPolicy())
         assert res == -3 + 600
-        self.check_insns({'int_neg': 1, 'int_add': 1})
+        self.check_insns_in_loops({'int_neg': 1, 'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_hash_of_green_string_is_green(self):
         py.test.skip("unfortunately doesn't work")
@@ -2063,29 +2075,55 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             def _freeze_(self):
                 return True
 
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['space', 'x', 'y', 'i', 'res']
+
         def f(space, x, y):
-            if space.is_true(x):
-                return space.add(x, y)
-            return space.sub(6, y)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                if space.is_true(x):
+                    res = space.add(x, y)
+                else:
+                    res = space.sub(6, y)
+                #
+                MyJitDriver.jit_merge_point(space=space, x=x, y=y,
+                                            res=res, i=i)
+                MyJitDriver.can_enter_jit(space=space, x=x, y=y,
+                                          res=res, i=i)
+            return res
 
         def main1(x, y):
             return f(space, x, y)
 
         space = Space()
-        res = self.interpret(main1, [5, 6])
+        res = self.run(main1, [5, 6], threshold=2)
         assert res == 11
 
         def g(space, x, y):
             return space.add(x, y)
 
         def f(space, x, y):
-            if space.is_true(x):
-                return g(space, x, y)
-            return space.sub(6, y)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                if space.is_true(x):
+                    res = g(space, x, y)
+                else:
+                    res = space.sub(6, y)
+                #
+                MyJitDriver.jit_merge_point(space=space, x=x, y=y,
+                                            res=res, i=i)
+                MyJitDriver.can_enter_jit(space=space, x=x, y=y,
+                                          res=res, i=i)
+            return res
 
         def main2(x, y):
             return f(space, x, y)
-        res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
+        res = self.run(main2, [5, 6], threshold=2, policy=StopAtXPolicy(g))
         assert res == 11
 
 
