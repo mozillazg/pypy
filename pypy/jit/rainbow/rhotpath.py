@@ -2,6 +2,7 @@
 RPython support code for the hotpath policy.
 """
 
+from pypy.jit.codegen.i386.rgenop import cast_whatever_to_int
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.jit.timeshifter.greenkey import KeyDesc, GreenKey, newgreendict
 from pypy.rlib.objectmodel import we_are_translated, specialize
@@ -242,20 +243,19 @@ class PromoteFallbackPoint(FallbackPoint):
     def __init__(self, jitstate, hotrunnerdesc, promotebox, hotpromotiondesc):
         FallbackPoint. __init__(self, jitstate, hotrunnerdesc, promotebox)
         self.hotpromotiondesc = hotpromotiondesc
-        self.counters = newgreendict()
+        self.counters = {}
 
     @specialize.arglltype(1)
     def check_should_compile(self, value):
-        # XXX incredibly heavy for a supposely lightweight profiling
-        gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
-        greenkey = GreenKey([gv_value], self.hotpromotiondesc.greenkeydesc)
-        counter = self.counters.get(greenkey, 0) + 1
+        # XXX unsafe with a moving GC
+        hash = cast_whatever_to_int(lltype.typeOf(value), value)
+        counter = self.counters.get(hash, 0) + 1
         threshold = self.hotrunnerdesc.threshold
         assert counter > 0, (
             "reaching a fallback point for an already-compiled path")
         if counter >= threshold:
             return True
-        self.counters[greenkey] = counter
+        self.counters[hash] = counter
         return False
 
     @specialize.arglltype(2)
@@ -265,10 +265,11 @@ class PromoteFallbackPoint(FallbackPoint):
 
     @specialize.arglltype(1)
     def compile_hot_path(self, value):
+        hash = cast_whatever_to_int(lltype.typeOf(value), value)
         gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
-        self._compile_hot_path(gv_value)
+        self._compile_hot_path(gv_value, hash)
 
-    def _compile_hot_path(self, gv_value):
+    def _compile_hot_path(self, gv_value, hash):
         # clone the jitstate
         memo = rvalue.copy_memo()
         jitstate = self.saved_jitstate.clone(memo)
@@ -281,8 +282,7 @@ class PromoteFallbackPoint(FallbackPoint):
         self.prepare_compiler(interpreter, gv_value)
         compile(interpreter)
         # done
-        greenkey = GreenKey([gv_value], self.hotpromotiondesc.greenkeydesc)
-        self.counters[greenkey] = -1     # means "compiled"
+        self.counters[hash] = -1     # means "compiled"
 
     def prepare_compiler(self, interpreter, gv_value):
         interpreter.green_result(gv_value)
