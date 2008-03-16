@@ -1722,6 +1722,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_manual_marking_of_pure_functions(self):
+        class MyJitDriver(JitDriver):
+            greens = ['n']
+            reds = ['i', 'res']
         d = {}
         def h1(s):
             try:
@@ -1731,23 +1734,30 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 return r
         h1._pure_function_ = True
         def f(n):
-            hint(None, global_merge_point=True)
-            hint(n, concrete=True)
-            if n == 0:
-                s = 123
-            else:
-                s = 567
-            a = h1(s)
-            return hint(a, variable=True)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                hint(n, concrete=True)
+                if n == 0:
+                    s = 123
+                else:
+                    s = 567
+                a = h1(s)
+                res = hint(a, variable=True)
+                #
+                MyJitDriver.jit_merge_point(n=n, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, res=res, i=i)
+            return res
 
         P = StopAtXPolicy(h1)
         P.oopspec = True
-        res = self.interpret(f, [0], [], policy=P)
+        res = self.run(f, [0], threshold=2, policy=P)
         assert res == 123 * 15
-        self.check_insns({})
-        res = self.interpret(f, [4], [], policy=P)
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
+        res = self.run(f, [4], threshold=2, policy=P)
         assert res == 567 * 15
-        self.check_insns({})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
 
     def test_red_int_add_ovf(self):
@@ -1853,6 +1863,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == -7
 
     def test_switch(self):
+        class MyJitDriver(JitDriver):
+            greens = ['m']
+            reds = ['n', 'i', 'res']
         def g(n, x):
             if n == 0:
                 return 12 + x
@@ -1865,13 +1878,21 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             else:
                 return 90 + x
         def f(n, m):
-            x = g(n, n)   # gives a red switch
-            y = g(hint(m, concrete=True), n)   # gives a green switch
-            return x - y
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                x = g(n, n)   # gives a red switch
+                y = g(hint(m, concrete=True), n)   # gives a green switch
+                res = x - y
+                #
+                MyJitDriver.jit_merge_point(n=n, m=m, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, m=m, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [7, 2], backendoptimize=True)
+        res = self.run(f, [7, 2], threshold=2)
         assert res == 78 - 90
-        res = self.interpret(f, [8, 1], backendoptimize=True)
+        res = self.run(f, [8, 1], threshold=2)
         assert res == 90 - 34
 
     def test_switch_char(self):
