@@ -578,6 +578,7 @@ class BytecodeWriter(object):
         
     def register_redvar(self, arg, where=-1, verbose=True):
         assert arg not in self.redvar_positions
+        assert getattr(arg, 'concretetype', '?') is not lltype.Void
         if where == -1:
             where = self.free_red[self.current_block]
             self.free_red[self.current_block] += 1
@@ -591,6 +592,7 @@ class BytecodeWriter(object):
 
     def register_greenvar(self, arg, where=None, check=True, verbose=True):
         assert isinstance(arg, flowmodel.Variable) or not check
+        assert getattr(arg, 'concretetype', '?') is not lltype.Void
         if where is None:
             where = self.free_green[self.current_block]
             self.free_green[self.current_block] += 1
@@ -825,11 +827,15 @@ class BytecodeWriter(object):
         return handler(op, arg, result)
 
     def handle_concrete_hint(self, op, arg, result):
+        if arg.concretetype is lltype.Void:
+            return
         assert self.hannotator.binding(arg).is_green()
         assert self.hannotator.binding(result).is_green()
         self.register_greenvar(result, self.green_position(arg))
 
     def handle_variable_hint(self, op, arg, result):
+        if arg.concretetype is lltype.Void:
+            return
         assert not self.hannotator.binding(result).is_green()
         if self.hannotator.binding(arg).is_green():
             resultindex = self.convert_to_red(arg)
@@ -838,12 +844,16 @@ class BytecodeWriter(object):
             self.register_redvar(result, self.redvar_position(arg))
 
     def handle_deepfreeze_hint(self, op, arg, result):
+        if arg.concretetype is lltype.Void:
+            return
         if self.varcolor(result) == "red":
             self.register_redvar(result, self.redvar_position(arg))
         else:
             self.register_greenvar(result, self.green_position(arg))
 
     def handle_promote_hint(self, op, arg, result):
+        if arg.concretetype is lltype.Void:
+            return
         if self.varcolor(arg) == "green":
             self.register_greenvar(result, self.green_position(arg))
             return
@@ -912,6 +922,37 @@ class BytecodeWriter(object):
         has_result = (self.varcolor(op.result) != "gray" and
                       op.result.concretetype != lltype.Void)
 
+        if self.hannotator.policy.hotpath:
+            if not targets:
+                self.handle_residual_call(op, withexc)
+                return
+            if not has_result:
+                kind = "gray"
+            # for now, let's try to promote all indirect calls
+            self.emit("hp_promote")
+            self.emit(fnptrindex)
+            self.emit(self.promotiondesc_position(op.args[0].concretetype))
+            greenfnptrindex = self.register_greenvar(("promoted fnptr", op),
+                                                     check=False)
+            args = targets.values()[0].getargs()
+            emitted_args = self.args_of_call(op.args[1:-1], args)
+            self.emit("hp_%s_indirect_call" % (kind,))
+            self.emit(*emitted_args)
+            setdescindex = self.indirectcalldesc_position(targets)
+            self.emit(greenfnptrindex, setdescindex)
+            if has_result:
+                assert self.varcolor(op.result) == "red"
+                if kind != "red":
+                    assert kind == "yellow"
+                    tmpindex = self.register_greenvar(("tmpresult", op),
+                                                      check=False)
+                    self.emit("make_redbox")
+                    self.emit(tmpindex)
+                    self.emit(self.type_position(op.result.concretetype))
+                self.register_redvar(op.result)
+            return
+
+        # ---------- non-hotpath logic follows ----------
         emitted_args = []
         for v in op.args[1:-1]:
             if v.concretetype == lltype.Void:
@@ -1019,8 +1060,8 @@ class BytecodeWriter(object):
         func = self.serialize_oparg("red", fnptr)
         emitted_args = []
         for v in op.args[1:]:
-            if v.concretetype == lltype.Void:
-                continue
+            if v.concretetype == lltype.Void:   # for indirect_call, this also
+                continue                        # skips the last argument
             emitted_args.append(self.serialize_oparg("red", v))
         if self.hannotator.policy.hotpath:
             self.emit("hp_residual_call")
