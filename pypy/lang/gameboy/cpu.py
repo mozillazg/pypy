@@ -86,11 +86,9 @@ class CPU(object):
     cycles  = 0
 
     # Interrupt Controller
-    #Interrupt 
     interrupt = None
 
      # memory Access
-    #memory
     memory = None
 
     # ROM Access
@@ -106,10 +104,8 @@ class CPU(object):
         self.sp = DoubleRegister()
         self.reset()
 
-
     def getAF(self):
         return (self.a << 8) + self.f
-
 
     def getIF(self):
         val = 0x00
@@ -119,25 +115,53 @@ class CPU(object):
             val += 0x80
         return val
        
-       
+    def getA(self):
+    	return self.a
+    	
     def setA(self, value):
     	self.a = value 
     	self.cycles -= 1 
     	
-    def getA(self):
-    	return self.a
-    
+    def getB(self):
+    	return self.bc.getHi()
+    	
+    def setB(self, value):
+    	self.bc.setHi(value)
+    	
+    def getC(self):
+    	return self.bc.getLo()
+    	
+    def setC(self, value):
+    	self.bc.setLo(value)
+    	
+    def getD(self):
+    	return self.de.getHi()
+    	
+    def setD(self, value):
+    	self.de.setHi(value)
+    	
+    def getE(self):
+    	return self.de.getLo()
+    	
+    def setE(self, value):
+    	self.de.setLo(value)
+    	    
     def setF(self, value):
     	self.f = value
     	self.cycles -= 1
     	
     def getF(self):
-    	return self.f    
-            
-
+    	return self.f
+    
+    def getHLi(self):
+    	return self.read(self.hl.get())
+    	
+    def setHLi(self, value):
+    	self.write(self.hl.get(), value)
+    	self.cycles += 1
+        
     def setROM(self, banks):
         self.rom = banks
-
 
     def reset(self):
         self.a = 0x01
@@ -153,7 +177,6 @@ class CPU(object):
 
         self.cycles = 0
         
-        
     def zFlagAdd(self, s, resetF=False):
     	if (resetF):
     		 self.f = 0        
@@ -165,14 +188,12 @@ class CPU(object):
     		 self.f = 0
         if (s & compareAnd) != 0:
             self.f += constants.C_FLAG
-    	
 
     def emulate(self, ticks):
         self.cycles += ticks
         self.interrupt()
         while (self.cycles > 0):
             self.execute()
-
 
      # Interrupts
     def interrupt(self):
@@ -199,7 +220,6 @@ class CPU(object):
             elif (self.interrupt.isPending(constants.JOYPAD)):
                 self.interrupt(0x60)
                 self.interrupt.lower(constants.JOYPAD)
-            
 
     def interrupt(self, address):
         self.ime = False
@@ -207,17 +227,15 @@ class CPU(object):
 
      # Execution
     def fetchExecute(self):
-        self.execute(self.fetch())
+       FETCHEXEC_OP_CODES[self.fetch()](self)
         
     def execute(self, opCode):
     	OP_CODES[opCode](self)
-        
         
      # memory Access, 1 cycle
     def read(self, address):
         self.cycles -= 1
         return self.memory.read(address)
-
 	 
     def read(self, hi, lo):
         return self.read((hi << 8) + lo)
@@ -227,7 +245,6 @@ class CPU(object):
         self.memory.write(address, data)
         self.cycles -= 2
 
-
     def write(self, hi, lo, data):
         self.write((hi << 8) + lo, data)
 
@@ -235,21 +252,21 @@ class CPU(object):
     def fetch(self):
         self.cycles += 1
         if (self.pc.get() <= 0x3FFF):
-            self.pc.inc() # 2 cycles
+            self.pc.inc() # 2 cycles
             return self.rom[self.pc.get()] & 0xFF
         data = self.memory.read(self.pc.get())
-        self.pc.inc() # 2 cycles
+        self.pc.inc() # 2 cycles
         return data
 
      # Stack, 2 cycles
     def push(self, data):
-        self.sp.dec() # 2 cycles
+        self.sp.dec() # 2 cycles
         self.memory.write(self.sp.get(), data)
 
 	# 1 cycle
     def pop(self):
         data = self.memory.read(self.sp.get())
-        self.sp.inc() # 2 cycles
+        self.sp.inc() # 2 cycles
         self.cycles += 1
         return data
 
@@ -270,7 +287,7 @@ class CPU(object):
             self.f += constants.H_FLAG
         self.setA(s) # 1 cycle
         
-    # 2 cycles
+    # 2 cycles
     def addHL(self, register):
         s = (self.hl.get() + register.get()) & 0xFFFF
         self.f = (self.f & constants.Z_FLAG)
@@ -319,13 +336,12 @@ class CPU(object):
     # 1 cycle
     def cpA(self, getter):
         s = (self.a - getter()) & 0xFF
-        self.setF(constants.N_FLAG)  # 1 cycle
+        self.setF(constants.N_FLAG)  # 1 cycle
         self.zFlagAdd(self.a)
         if s > self.a:
             self.f += constants.C_FLAG
         if (s & 0x0F) > (self.a & 0x0F):
             self.f += constants.H_FLAG
-            
 
     # 1 cycle
     def AND(self, getter):
@@ -342,8 +358,6 @@ class CPU(object):
         self.setA(self.a | getter())  # 1 cycle
         self.zFlagAdd(self.a, resetF=True)
 
-
-
     # 1 cycle
     def inc(self, getter, setter):
         data = (getter() + 1) & 0xFF
@@ -356,13 +370,12 @@ class CPU(object):
         self.f += constants.N_FLAG
      
     def decIncFlagFinish(data):
-        self.setF(0) # 1 cycle
+        self.setF(0) # 1 cycle
         self.zFlagAdd(data)
         if (data & 0x0F) == 0x0F:
             self.f += constants.H_FLAG
         self.f += (self.f & constants.C_FLAG)
         setter(data)
-
 
 	# 1 cycle
     def rlc(self, getter, setter):
@@ -374,32 +387,32 @@ class CPU(object):
         s = ((getter() & 0x7F) << 1)
         if (self.f & constants.C_FLAG) != 0:
             s += 0x01
-        flagsAndSetterFinish(s, getter, 0x80) # 1 cycle
+        flagsAndSetterFinish(s, getter, 0x80) # 1 cycle
 
 	# 1 cycle
     def rrc(self, getter, setter):
         s = (getter() >> 1) + ((getter() & 0x01) << 7)
-        flagsAndSetterFinish(s, getter) # 1 cycle
+        flagsAndSetterFinish(s, getter) # 1 cycle
 
 	# 1 cycle
     def rr(self, getter, setter):
         s = (getter() >> 1) + ((self.f & constants.C_FLAG) << 3)
-        flagsAndSetterFinish(s, getter) # 1 cycle
+        flagsAndSetterFinish(s, getter) # 1 cycle
 
 	# 2 cycles
     def sla(self, getter, setter):
         s = (getter() << 1) & 0xFF
-        flagsAndSetterFinish(s, getter, 0x80) # 1 cycle
+        flagsAndSetterFinish(s, getter, 0x80) # 1 cycle
 
 	# 1 cycle
     def sra(self, getter, setter):
         s = (getter() >> 1) + (getter() & 0x80)
-        flagsAndSetterFinish(s, getter) # 1 cycle
+        flagsAndSetterFinish(s, getter) # 1 cycle
 
 	# 1 cycle
     def srl(self, getter, setter):
         s = (getter() >> 1)
-        flagsAndSetterFinish(s, getter) # 1 cycle
+        flagsAndSetterFinish(s, getter) # 1 cycle
         
      # 1 cycle
     def flagsAndSetterFinish(self, s, setter, compareAnd=0x01):
@@ -416,7 +429,7 @@ class CPU(object):
         setter(s)
 
 	# 2 cycles
-    def bit(self, n, getter):
+    def bit(self, getter, setter, n):
         self.f = (self.f & constants.C_FLAG) + constants.H_FLAG
         if (getter() & (1 << n)) == 0:
             self.f += constants.Z_FLAG
@@ -454,11 +467,11 @@ class CPU(object):
     	setter(getter() | (1 << n)) # 1 cycle
     	
     # 1 cycle
-    def res(self, getter, setter):
+    def res(self, getter, setter, n):
         setter(getter() & (~(1 << n))) # 1 cycle
     	
  	# 1 cycle
-    def ld(self, setter, getter):
+    def ld(self, getter, setter):
         setter(getter()) # 1 cycle
 
      # LD A,(nnnn), 4 cycles
@@ -506,7 +519,6 @@ class CPU(object):
         self.hl.dec() # 2 cycles
         self.cycles += 1
         
-
      # LDH (nn),A 3 cycles
     def ldh_mem_A(self):
         self.write(0xFF00 + self.fetch(), self.a) # 2 + 1 cycles
@@ -514,7 +526,6 @@ class CPU(object):
      # LDH (C),A 2 cycles
     def ldh_Ci_A(self):
         self.write(0xFF00 + self.bc.getLo(), self.a) # 2 cycles
-
 
      # LDI (HL),A 2 cycles
     def ldi_HLi_A(self):
@@ -555,7 +566,6 @@ class CPU(object):
         self.f = self.pop() # 1 cycle
         self.setA(self.pop()) # 1+1 cycle
 
-     
     def cpl(self):
         self.a ^= 0xFF
         self.f |= constants.N_FLAG + constants.H_FLAG
@@ -573,7 +583,6 @@ class CPU(object):
             self.setA((self.a + delta) & 0xFF) # 1 cycle
         else:
             self.setA((self.a - delta) & 0xFF) # 1 cycle
-
         self.f = (self.f & constants.N_FLAG)
         if delta >= 0x60:
             self.f += constants.C_FLAG
@@ -592,9 +601,9 @@ class CPU(object):
         self.sp.set(sel.SP_nn()) # 1+1 cycle
         self.cycles -= 2
 
-     # LD HL,SP+nn   3  cycles
+     # LD HL,SP+nn   3  cycles
     def ld_HL_SP_nn(self):
-        self.hl.set(sel.SP_nn()) # 1+1 cycle
+        self.hl.set(sel.SP_nn()) # 1+1 cycle
         self.cycles -= 1
 
     # 1 cycle
@@ -652,7 +661,7 @@ class CPU(object):
         if (cc):
             self.pc.add(self.fetch()) # 3 cycles
         else:
-            self.pc.inc() # 2 cycles
+            self.pc.inc() # 2 cycles
     
      # CALL nnnn, 6 cycles
     def call_nnnn(self):
@@ -667,18 +676,14 @@ class CPU(object):
         else:
             self.pc.add(2) # 3 cycles
     
-
     def isNZ(self):
         return (self.f & constants.Z_FLAG) == 0
-
 
     def isNC(self):
         return (self.f & constants.C_FLAG) == 0
 
-
     def isZ(self):
         return (self.f & constants.Z_FLAG) != 0
-
 
     def isC(self):
         return (self.f & constants.C_FLAG) != 0
@@ -736,7 +741,6 @@ class CPU(object):
             self.execute(self.memory.read(self.pc.get()))
         # check pending interrupts
         self.interrupt()
-
 
     def stop(self):
         self.fetch()
@@ -800,25 +804,10 @@ SINGLE_OP_CODES = [
     (0x76, CPU.halt),
 ]
 
-METHOD_OP_CODES = [ 
-    (0x01, 0x10, CPU.ld_nnnn, [BC, DE, HL, SP]),
-    (0x09, 0x10, CPU.add_HL, [BC, DE, HL, SP]),
-    (0x03, 0x10, CPU.inc, [BC, DE, HL, SP]),
-    (0x0B, 0x10, CPU.dec, [BC, DE, HL, SP]),
-    
-    (0xC0, 0x08, CPU.ret, [NZ, Z, NC, C]),
-    (0xC2, 0x08, CPU.jp_nnnn, [NZ, Z, NC, C]),
-    (0xC4, 0x08, CPU.call_nnnn, [NZ, Z, NC, C]),
-    (0x20, 0x08, CPU.jr_nn, [NZ, Z, NC, C]),
-    
-    (0xC1, 0x10, CPU.pop, [BC, DE, HL, AF]),
-    (0xC5, 0x10, CPU.push, [BC, DE, HL, AF])
-]
 
 REGISTER_GROUP_OP_CODES = [
     (0x04, 0x08, CPU.inc),
-    (0x05, 0x08, CPU.dec),
-    (0x06, 0x08, CPU.ld_nn),    
+    (0x05, 0x08, CPU.dec),    
     (0x80, 0x01, CPU.add_A),    
     (0x88, 0x01, CPU.adc_A),    
     (0x90, 0x01, CPU.sub_A),    
@@ -837,20 +826,58 @@ REGISTER_GROUP_OP_CODES = [
     (0x38, 0x01, CPU.srl),
     (0x40, 0x01, CPU.bit, range(0, 8)),    
     (0xC0, 0x01, CPU.set, range(0, 8)),
-    (0x80, 0x01, CPU.res, range(0, 8))
+    (0x80, 0x01, CPU.res, range(0, 8)),
+    (0x06, 0x08, CPU.ld_nn),
+    (0x40, 0x01, CPU.res, range(0, 8))
 ]
 
+GROUP_CODES_GETTERS = (CPU.getB, CPU.getC, CPU.getD, CPU.getE, CPU.getH, CPU.getL, CPU.getHLi, CPU.getA)
+GROUP_CODES_SETTERS = (CPU.setB, CPU.setC, CPU.setD, CPU.setE, CPU.setH, CPU.setL, CPU.setHLi, CPU.setA)
 
 def create_group_op_codes(table):
-	opCodes = [];
+	opCodes = [None] * 0xFF;
+	for entry in table:
+		startCode = entry[0]
+		step = entry[1]
+		method = entry[2]
+		getters = GROUP_CODES_GETTERS
+		if len(entry) == 4:
+			for i in range(0, 8):
+				for n in entry[3]:
+	        		opCodes[startCode+step*i] = lambda me: method(me, GROUP_CODES_GETTERS[i], GROUP_CODES_SETTERS[i], n)
+		else:
+			for i in range(0, 8):
+	        	opCodes[startCode+step*i] = lambda me: method(me, GROUP_CODES_GETTERS[i], GROUP_CODES_SETTERS[i])
 	return opCodes
+SINGLE_OP_CODES.extend(create_group_op_codes(REGISTER_GROUP_OP_CODES))
 	
-def create_method_op_codes(table):
+	
+
+REGISTER_OP_CODES = [ 
+    (0x01, 0x10, CPU.ld_nnnn, [BC, DE, HL, SP]),
+    (0x09, 0x10, CPU.addHL, [BC, DE, HL, SP]),
+    (0x03, 0x10, CPU.inc, [BC, DE, HL, SP]),
+    (0x0B, 0x10, CPU.dec, [BC, DE, HL, SP]),
+    
+    (0xC0, 0x08, CPU.ret, [NZ, Z, NC, C]),
+    (0xC2, 0x08, CPU.jp_nnnn, [NZ, Z, NC, C]),
+    (0xC4, 0x08, CPU.call_nnnn, [NZ, Z, NC, C]),
+    (0x20, 0x08, CPU.jr_nn, [NZ, Z, NC, C]),
+    
+    (0xC1, 0x10, CPU.pop, [BC, DE, HL, AF]),
+    (0xC5, 0x10, CPU.push, [BC, DE, HL, AF])
+]
+
+def create_register_op_codes(table):
 	opCodes = [];
+	for entry in table:
+		 startCode = entry[0]
+		 step = entry[1]
+		 commandBase = entry[2]
+		 changing = entry[3]
 	return opCodes
 
-SINGLE_OP_CODES.extend(create_group_op_codes(REGISTER_GROUP_OP_CODES))
-SINGLE_OP_CODES.extend(create_method_op_codes(METHOD_OP_CODES))
+SINGLE_OP_CODES.extend(create_register_op_codes(REGISTER_OP_CODES))
 
 
 def initialize_op_code_table(table):
