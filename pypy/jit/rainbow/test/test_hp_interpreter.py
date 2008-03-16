@@ -1655,49 +1655,71 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_mul=0, int_sub=1, setfield=1, getfield=1)
 
     def test_indirect_sometimes_residual_pure_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['n']
+            reds = ['x', 'res', 'i']
         def h1(x):
             return x-2
         def h2(x):
             return x*4
         l = [h1, h2]
         def f(n, x):
-            hint(None, global_merge_point=True)
-            hint(n, concrete=True)
-            frozenl = hint(l, deepfreeze=True)
-            h = frozenl[n&1]
-            return h(x)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                hint(n, concrete=True)
+                frozenl = hint(l, deepfreeze=True)
+                h = frozenl[n&1]
+                res = h(x)
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
 
         P = StopAtXPolicy(h1)
         P.oopspec = True
-        res = self.interpret(f, [7, 3], [], policy=P)
+        res = self.run(f, [7, 3], threshold=2, policy=P)
         assert res == f(7,3)
-        self.check_insns({'int_mul': 1})
-        res = self.interpret(f, [4, 113], [], policy=P)
+        self.check_insns_in_loops({'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
+        res = self.run(f, [4, 113], threshold=2, policy=P)
         assert res == f(4,113)
-        self.check_insns({'direct_call': 1})
+        self.check_insns_in_loops({'direct_call': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_indirect_sometimes_residual_pure_but_fixed_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['n', 'x']
+            reds = ['i', 'res']
         def h1(x):
             return x-2
         def h2(x):
             return x*4
         l = [h1, h2]
         def f(n, x):
-            hint(None, global_merge_point=True)
-            frozenl = hint(l, deepfreeze=True)
-            h = frozenl[n&1]
-            z = h(x)
-            hint(z, concrete=True)
-            return z
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                frozenl = hint(l, deepfreeze=True)
+                h = frozenl[n&1]
+                z = h(x)
+                hint(z, concrete=True)
+                res = hint(z, variable=True)
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
 
         P = StopAtXPolicy(h1)
         P.oopspec = True
-        res = self.interpret(f, [7, 3], [], policy=P)
+        res = self.run(f, [7, 3], threshold=2, policy=P)
         assert res == f(7,3)
-        self.check_insns({})
-        res = self.interpret(f, [4, 113], [], policy=P)
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
+        res = self.run(f, [4, 113], threshold=2, policy=P)
         assert res == f(4,113)
-        self.check_insns({})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_manual_marking_of_pure_functions(self):
         d = {}
