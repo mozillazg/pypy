@@ -1,4 +1,5 @@
 from pypy.lang.gameboy.cpu import CPU, Register, DoubleRegister
+import pypy.lang.gameboy.constants
 
 def get_cpu():
     return CPU([None]*256, None)
@@ -91,6 +92,16 @@ def test_double_register_methods():
 # ------------------------------------------------------------
 # TEST CPU
 
+def test_getters():
+    cpu = get_cpu()
+    assert cpu.getA() == constants.RESET_A
+    assert cpu.getF() == constants.RESET_F
+    assert cpu.bc.get() == constants.RESET_BC
+    assert cpu.de.get() == constants.RESET_DE
+    assert cpu.pc.get() == constants.RESET_PC
+    assert cpu.sp.get() == constants.RESET_SP
+    
+    
 OPCODE_CYCLES = [
     (0x00, 1),
     (0x08, 5),
