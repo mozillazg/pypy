@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitDriver, hint, JitHintError
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.objectmodel import keepalive_until_here
-from pypy.jit.hintannotator.policy import StopAtXPolicy
+from pypy.jit.hintannotator.policy import HintAnnotatorPolicy, StopAtXPolicy
 from pypy.jit.rainbow.test import test_hotpath
 
 import sys
@@ -1919,7 +1919,6 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 56 - 90
 
     def test_simple_substitute_graph(self):
-        py.test.skip("fix this test")
 
         class MetaG:
             def __init__(self, codewriter):
@@ -1935,13 +1934,29 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                            bbox.getgenvar(jitstate))
                 return IntRedBox(abox.kind, gv_result)
 
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['a', 'b', 'i', 'res']
+
+        A = lltype.GcArray(lltype.Signed)
+
         def g(a, b):
             return a + b
 
         def f(a, b):
-            x = g(a, b)
-            y = g(b, a)
-            return x + y
+            res = lltype.malloc(A, 20)
+            i = 0
+            while i < 10:
+                #
+                x = g(a, b)
+                y = g(b, a)
+                res[2*i] = x
+                res[2*i+1] = y
+                #
+                MyJitDriver.jit_merge_point(a=a, b=b, res=res, i=i)
+                MyJitDriver.can_enter_jit(a=a, b=b, res=res, i=i)
+                i += 1
+            return res
 
         class MyPolicy(HintAnnotatorPolicy):
             novirtualcontainer = True
@@ -1952,9 +1967,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     return True
 
-        res = self.interpret(f, [3, 6], policy=MyPolicy())
-        assert res == 0
-        self.check_insns({'int_add': 1, 'int_sub': 2})
+        res = self.run(f, [7, 1], threshold=3, policy=MyPolicy())
+        assert list(res) == [8, 8,  8, 8,  8, 8,   # direct run
+                             8, 8,  8, 8,          # fallback interp run
+                             6, -6,  6, -6,  6, -6,  6, -6,  6, -6]  # compiled
+        self.check_insns_in_loops(int_sub=2)
 
     def test_substitute_graph_void(self):
         py.test.skip("fix this test")
