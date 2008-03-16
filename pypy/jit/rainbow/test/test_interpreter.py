@@ -1,5 +1,6 @@
 import py
 from pypy.translator.translator import TranslationContext, graphof
+from pypy.translator.simplify import simplify_graph
 from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
@@ -232,6 +233,10 @@ class InterpretationTest(object):
 
     def get_residual_graph(self):
         return self.residual_graph
+
+    def simplify_graph(self):
+        graph = self.get_residual_graph()
+        simplify_graph(graph)
 
     def check_insns(self, expected=None, **counts):
         graph = self.get_residual_graph()

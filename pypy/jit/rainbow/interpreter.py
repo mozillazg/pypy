@@ -541,8 +541,8 @@ class JitInterpreter(object):
                                    ptrbox2, True)
 
     @arguments("red", "bool")
-    def opimpl_learn_nonzeroness(self, ptrbox, nonzero):
-        rtimeshift.learn_nonzeroness(self.jitstate, ptrbox, nonzero)
+    def opimpl_learn_boolvalue(self, redbox, boolval):
+        redbox.learn_boolvalue(self.jitstate, boolval)
 
     @arguments()
     def opimpl_red_return(self):
@@ -963,10 +963,6 @@ class JitInterpreter(object):
             assert False, "unreachable"
         else:
             self.green_result(gv_result)
-
-    @arguments("bool", "red")
-    def opimpl_hp_learn_boolvalue(self, boolval, redbox):
-        redbox.learn_boolvalue(self.jitstate, boolval)
 
     # ____________________________________________________________
     # construction-time interface

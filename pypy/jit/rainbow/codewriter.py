@@ -443,12 +443,12 @@ class BytecodeWriter(object):
             self.emit(index)
             self.emit(tlabel(linktrue))
             if reverse is not None:
-                self.emit("hp_learn_boolvalue", reverse, ptrindex)
+                self.emit("learn_boolvalue", ptrindex, reverse)
             self.emit(*falserenaming)
             self.make_bytecode_block(linkfalse.target, insert_goto=True)
             self.emit(label(linktrue))
             if reverse is not None:
-                self.emit("hp_learn_boolvalue", not reverse, ptrindex)
+                self.emit("learn_boolvalue", ptrindex, not reverse)
             self.emit(*truerenaming)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
@@ -902,7 +902,7 @@ class BytecodeWriter(object):
         srcopname, srcargs = self.trace_back_bool_var(self.current_block, v)
         if srcopname in ('ptr_iszero', 'ptr_nonzero'):
             arg = self.serialize_oparg("red", srcargs[0])
-            self.emit("learn_nonzeroness", arg, srcopname == "ptr_nonzero")
+            self.emit("learn_boolvalue", arg, srcopname == "ptr_nonzero")
 
     def serialize_op_direct_call(self, op):
         kind, withexc = self.guess_call_kind(op)
