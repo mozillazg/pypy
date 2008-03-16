@@ -288,6 +288,10 @@ class FallbackInterpreter(object):
         addr2 = gv_ptr2.revealconst(llmemory.Address)
         return self.rgenop.genconst(addr1 != addr2)
 
+    @arguments("red", "bool")
+    def opimpl_learn_boolvalue(self, gv_value, boolval):
+        pass
+
 
     @arguments("red_varargs")
     def opimpl_make_new_redvars(self, local_red):
@@ -553,10 +557,6 @@ class FallbackInterpreter(object):
             self.leave_fallback_interp(gv_result)
         else:
             self.green_result(gv_result)
-
-    @arguments("bool", "red")
-    def opimpl_hp_learn_boolvalue(self, boolval, gv_value):
-        pass
 
     # ____________________________________________________________
     # construction-time helpers

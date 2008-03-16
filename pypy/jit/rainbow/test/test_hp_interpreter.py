@@ -1,6 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitDriver, hint, JitHintError
+from pypy.rlib.debug import ll_assert
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.jit.hintannotator.policy import StopAtXPolicy
 from pypy.jit.rainbow.test import test_hotpath
@@ -1402,28 +1403,42 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_debug_assert_ptr_nonzero(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['m', 'res', 'i']
         S = lltype.GcStruct('s', ('x', lltype.Signed))
-        def h():
-            s = lltype.malloc(S)
-            s.x = 42
-            return s
+        global_s = lltype.malloc(S)
+        global_s.x = 42
+        def h(flag):
+            if flag:
+                return global_s
+            else:
+                return lltype.nullptr(S)
         def g(s):
             # assumes that s is not null here
             ll_assert(bool(s), "please don't give me a null")
             return 5
         def f(m):
-            hint(None, global_merge_point=True)
-            s = h()
-            n = g(s)
-            if not s:
-                n *= m
-            return n
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                s = h(m)
+                n = g(s)
+                if not s:
+                    n *= m
+                res = n
+                #
+                MyJitDriver.jit_merge_point(m=m, res=res, i=i)
+                MyJitDriver.can_enter_jit(m=m, res=res, i=i)
+            return res
 
         P = StopAtXPolicy(h)
 
-        res = self.interpret(f, [17], [], policy=P)
+        res = self.run(f, [17], threshold=2, policy=P)
         assert res == 5
-        self.check_insns(int_mul=0)
+        self.simplify_graph()   # to remove ptr_nonzero with unused result
+        self.check_insns_in_loops(int_mul=0, ptr_iszero=0, ptr_nonzero=0)
 
     def test_indirect_red_call(self):
         def h1(n):
