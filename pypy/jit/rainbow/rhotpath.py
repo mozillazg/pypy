@@ -4,7 +4,6 @@ RPython support code for the hotpath policy.
 
 from pypy.jit.codegen.i386.rgenop import cast_whatever_to_int
 from pypy.jit.timeshifter import rtimeshift, rvalue
-from pypy.jit.timeshifter.greenkey import KeyDesc, GreenKey, newgreendict
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import llhelper
@@ -89,7 +88,6 @@ class HotPromotionDesc:
 
     def __init__(self, ERASED, RGenOp):
         self.RGenOp = RGenOp
-        self.greenkeydesc = KeyDesc(RGenOp, ERASED)
         pathkind = "%s path" % (ERASED,)
 
         def ll_reach_fallback_point(fallback_point_ptr, value, framebase):
