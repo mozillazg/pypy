@@ -248,12 +248,9 @@ class Video(object):
 				self.ly = 0
 
 				self.clearFrame()
-		
-
 		# don't draw window if it was not enabled and not being drawn before
 		if ((self.lcdc & 0x20) == 0 and (data & 0x20) != 0 and self.wly == 0 and self.ly > self.wy):
 			self.wly = 144
-
 		self.lcdc = data
 
 
@@ -350,7 +347,6 @@ class Video(object):
 				self.interrupt.raiseInterrupt(constants.LCD)
 		else:
 			self.stat &= 0xFB
-			
 		if (self.ly < 144):
 			self.stat = (self.stat & 0xFC) | 0x02
 			self.cycles += constants.MODE_2_TICKS
@@ -375,7 +371,6 @@ class Video(object):
 	def emulateVBlank(self):
 		if (self.vblank):
 			self.vblank = False
-
 			self.stat = (self.stat & 0xFC) | 0x01
 			self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
 			# V-Blank interrupt
@@ -439,14 +434,12 @@ class Video(object):
 	def drawBackground(self):
 		y = (self.scy + self.ly) & 0xFF
 		x = self.scx & 0xFF
-
 		tileMap = constants.VRAM_MAP_A
 		if (self.lcdc & 0x08) != 0:
 			tileMap =  constants.VRAM_MAP_B
 		tileData = constants.VRAM_DATA_B
 		if (self.lcdc & 0x10) != 0:
 			tileData = constants.VRAM_DATA_A
-
 		tileMap += ((y >> 3) << 5) + (x >> 3)
 		tileData += (y & 7) << 1
 		self.drawTiles(8 - (x & 7), tileMap, tileData)
@@ -460,10 +453,8 @@ class Video(object):
 			tileData = constants.VRAM_DATA_B
 			if (self.lcdc & 0x10) != 0:
 				tileData = constants.VRAM_DATA_A
-
 			tileMap += (self.wly >> 3) << 5
 			tileData += (self.wly & 7) << 1
-
 			self.drawTiles(self.wx + 1, tileMap, tileData)
 			self.wly+=1
 
@@ -690,12 +681,10 @@ class Video(object):
 			pattern1 = self.line[x + 1]
 			pattern2 = self.line[x + 2]
 			pattern3 = self.line[x + 3]
-
 			pixels[offset + 0] = self.palette[pattern0]
 			pixels[offset + 1] = self.palette[pattern1]
 			pixels[offset + 2] = self.palette[pattern2]
 			pixels[offset + 3] = self.palette[pattern3]
-
 			offset += 4
 
 

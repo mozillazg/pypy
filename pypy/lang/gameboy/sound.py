@@ -256,16 +256,12 @@ class Sound(object):
 	def updateAudio(self):
 		if ((self.nr52 & 0x80) == 0):
 			return
-		
 		if ((self.nr52 & 0x01) != 0):
 			self.updateAudio1();
-
 		if ((self.nr52 & 0x02) != 0):
 			self.updateAudio2();
-
 		if ((self.nr52 & 0x04) != 0):
 			self.updateAudio3();
-
 		if ((self.nr52 & 0x08) != 0):
 			self.updateAudio4();
 
@@ -273,19 +269,14 @@ class Sound(object):
 	def mixAudio(self,buffer, length):
 		for index in range(0, length):
 			buffer[index] = 0;
-
 		if ((self.nr52 & 0x80) == 0):
 			return
-		
 		if ((self.nr52 & 0x01) != 0):
 			self.mixAudio1(buffer, length);
-
 		if ((self.nr52 & 0x02) != 0):
 			self.mixAudio2(buffer, length);
-
 		if ((self.nr52 & 0x04) != 0):
 			self.mixAudio3(buffer, length);
-
 		if ((self.nr52 & 0x08) != 0):
 			self.mixAudio4(buffer, length);
 
@@ -340,18 +331,13 @@ class Sound(object):
 
 	def setAudio1Playback(self, data):
 		self.nr14 = data;
-
 		self.audio1Frequency = self.frequencyTable[self.nr13
 				+ ((self.nr14 & 0x07) << 8)];
-
 		if ((self.nr14 & 0x80) != 0):
 			self.nr52 |= 0x01;
-
 			if ((self.nr14 & 0x40) != 0 and self.audio1Length == 0):
 				self.audio1Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr11 & 0x3F));
-
 			self.audio1SweepLength = (constants.SOUND_CLOCK / 128) * ((self.nr10 >> 4) & 0x07);
-
 			self.audio1Volume = self.nr12 >> 4;
 			self.audio1EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr12 & 0x07);
 	
@@ -400,7 +386,6 @@ class Sound(object):
 		elif (self.nr11 & 0xC0) == 0x80:
 			wavePattern = 0x10
 		wavePattern << 22;
-
 		for index in range(0, length, 3):
 			self.audio1Index += self.audio1Frequency;
 			if ((self.audio1Index & (0x1F << 22)) >= wavePattern):
@@ -456,16 +441,12 @@ class Sound(object):
 
 	def setAudio2Playback(self, data):
 		self.nr24 = data;
-
 		self.audio2Frequency = self.frequencyTable[self.nr23\
 				+ ((self.nr24 & 0x07) << 8)];
-
 		if ((self.nr24 & 0x80) != 0):
 			self.nr52 |= 0x02;
-
 			if ((self.nr24 & 0x40) != 0 and self.audio2Length == 0):
 				self.audio2Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr21 & 0x3F));
-
 			self.audio2Volume = self.nr22 >> 4;
 			self.audio2EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr22 & 0x07);
 	
@@ -476,7 +457,6 @@ class Sound(object):
 			self.audio2Length-=1;
 			if (self.audio2Length <= 0):
 				self.nr52 &= ~0x02;
-
 		if (self.audio2EnvelopeLength > 0):
 			self.audio2EnvelopeLength-=1;
 
@@ -498,10 +478,8 @@ class Sound(object):
 		elif (self.nr21 & 0xC0) == 0x80:
 			wavePattern = 0x10
 		wavePattern << 22;
-		
 		for index in range(0, length):
 			self.audio2Index += self.audio2Frequency;
-
 			if ((self.audio2Index & (0x1F << 22)) >= wavePattern):
 				if ((self.nr51 & 0x20) != 0):
 					buffer[index + 0] -= self.audio2Volume;
@@ -557,9 +535,7 @@ class Sound(object):
 
 	def setAudio3Playback(self, data):
 		self.nr34 = data;
-
 		self.audio3Frequency = self.frequencyTable[((self.nr34 & 0x07) << 8) + self.nr33] >> 1;
-
 		if ((self.nr34 & 0x80) != 0 and (self.nr30 & 0x80) != 0):
 			self.nr52 |= 0x04;
 			if ((self.nr34 & 0x40) != 0 and self.audio3Length == 0):
@@ -653,13 +629,10 @@ class Sound(object):
 		self.nr44 = data;
 		if ((self.nr44 & 0x80) != 0):
 			self.nr52 |= 0x08;
-
 			if ((self.nr44 & 0x40) != 0 and self.audio4Length == 0):
 				self.audio4Length = (constants.SOUND_CLOCK / 256) * (64 - (self.nr41 & 0x3F));
-
 			self.audio4Volume = self.nr42 >> 4;
 			self.audio4EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr42 & 0x07);
-
 			self.audio4Index = 0;
 	
 
@@ -669,17 +642,14 @@ class Sound(object):
 			self.audio4Length-=1;
 			if (self.audio4Length <= 0):
 				self.nr52 &= ~0x08;
-
 		if (self.audio4EnvelopeLength > 0):
 			self.audio4EnvelopeLength-=1;
-
 			if (self.audio4EnvelopeLength <= 0):
 				if ((self.nr42 & 0x08) != 0):
 					if (self.audio4Volume < 15):
 						self.audio4Volume+=1;
 				elif (self.audio4Volume > 0):
 					self.audio4Volume-=1;
-
 				self.audio4EnvelopeLength += (constants.SOUND_CLOCK / 64) * (self.nr42 & 0x07);
 		
 	
@@ -687,7 +657,6 @@ class Sound(object):
 		for index in range(0, length, 2):
 			self.audio4Index += self.audio4Frequency;
 			polynomial;
-
 			if ((self.nr43 & 0x08) != 0):
 				#  7 steps
 				self.audio4Index &= 0x7FFFFF;
@@ -696,7 +665,6 @@ class Sound(object):
 				#  15 steps
 				self.audio4Index &= 0x7FFFFFFF;
 				polynomial = self.noiseStep15Table[self.audio4Index >> 21] >> ((self.audio4Index >> 16) & 31);
-		
 			if ((polynomial & 1) != 0):
 				if ((self.nr51 & 0x80) != 0):
 					buffer[index + 0] -= self.audio4Volume;
@@ -739,7 +707,6 @@ class Sound(object):
 	 # Frequency Table Generation
 	def generateFrequencyTables(self):
 		sampleRate = self.driver.getSampleRate();
-	
 		 # frequency = (4194304 / 32) / (2048 - period) Hz
 		for period in range(0, 2048):
 			skip = (((constants.GAMEBOY_CLOCK << 10) / sampleRate) << (22 - 8)) / (2048 - period);
