@@ -1,6 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitDriver, hint, JitHintError
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.jit.hintannotator.policy import StopAtXPolicy
 from pypy.jit.rainbow.test import test_hotpath
 
@@ -804,16 +805,28 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                          getinteriorarraysize=1)
 
     def test_array_of_voids(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'i', 'res']
         A = lltype.GcArray(lltype.Void)
         def ll_function(n):
-            a = lltype.malloc(A, 3)
-            a[1] = None
-            b = a[n]
-            res = a, b
-            keepalive_until_here(b)      # to keep getarrayitem around
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                a = lltype.malloc(A, 3)
+                a[1] = None
+                b = a[n]
+                res = a, b
+                # we mention 'b' to prevent the getarrayitem operation
+                # from disappearing
+                keepalive_until_here(b)
+                #
+                MyJitDriver.jit_merge_point(n=n, i=i, res=res)
+                MyJitDriver.can_enter_jit(n=n, i=i, res=res)
             return res
 
-        res = self.interpret(ll_function, [2], [])
+        res = self.run(ll_function, [2], threshold=3)
         assert len(res.item0) == 3
 
     def test_red_propagate(self):
@@ -828,39 +841,70 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 24
         self.check_insns({'int_lt': 1, 'int_mul': 1})
 
-    def test_red_subcontainer(self):
+    def test_red_subcontainer_escape(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['k', 'i', 'res']
         S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Signed))
         def ll_function(k):
-            t = lltype.malloc(T)
-            s = t.s
-            s.n = k
-            if k < 0:
-                return -123
-            result = s.n * (k-1)
-            keepalive_until_here(t)
-            return result
-        res = self.interpret(ll_function, [7], [])
-        assert res == 42
-        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                t = lltype.malloc(T)
+                if k < 0:
+                    s = lltype.cast_pointer(lltype.Ptr(S), t)
+                else:
+                    s = t.s
+                s.n = k
+                t.n = k*k
+                res = s
+                #
+                MyJitDriver.jit_merge_point(k=k, i=i, res=res)
+                MyJitDriver.can_enter_jit(k=k, i=i, res=res)
+            return res
 
+        res = self.run(ll_function, [7], threshold=2)
+        assert res.n == 7
+        assert lltype.cast_pointer(lltype.Ptr(T), res).n == 49
+        self.check_insns_in_loops(malloc=1, setfield=2)
+
+        res = self.run(ll_function, [-6], threshold=2)
+        assert res.n == -6
+        assert lltype.cast_pointer(lltype.Ptr(T), res).n == 36
+        self.check_insns_in_loops(malloc=1, setfield=2)
 
     def test_red_subcontainer_cast(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['k', 'i', 'res']
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
         def ll_function(k):
-            t = lltype.malloc(T)
-            s = lltype.cast_pointer(lltype.Ptr(S), t)
-            s.n = k
-            if k < 0:
-                return -123
-            result = s.n * (k-1)
-            keepalive_until_here(t)
-            return result
-        res = self.interpret(ll_function, [7], [])
-        assert res == 42
-        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
-
+            i = 1024*1024
+            while i > 0:
+                i >>= 1
+                #
+                t = lltype.malloc(T)
+                if k < 5:
+                    s = lltype.cast_pointer(lltype.Ptr(S), t)
+                else:
+                    s = t.s
+                s.n = k
+                if k < 0:
+                    res = -123
+                else:
+                    res = s.n * (k-1)
+                keepalive_until_here(t)
+                k += 1
+                #
+                MyJitDriver.jit_merge_point(k=k, i=i, res=res)
+                MyJitDriver.can_enter_jit(k=k, i=i, res=res)
+            return res
+        res = self.run(ll_function, [-10], threshold=2)
+        assert res == 10*9
+        self.check_insns_in_loops(malloc=0, getfield=0, setfield=0)
 
     def test_merge_structures(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
