@@ -11,10 +11,10 @@ P_HOTPATH = HintAnnotatorPolicy(oopspec=True,
 class TestHotPath(AbstractAnnotatorTest):
     type_system = 'lltype'
 
-    def hannotate(self, func, argtypes, policy=P_HOTPATH):
+    def hannotate(self, func, argtypes, policy=P_HOTPATH, backendoptimize=True):
         # change default policy
         AbstractAnnotatorTest.hannotate(self, func, argtypes, policy=policy,
-                                        backendoptimize=True)
+                                        backendoptimize=backendoptimize)
 
     def test_simple_loop(self):
         class MyJitDriver(JitDriver):
@@ -43,3 +43,24 @@ class TestHotPath(AbstractAnnotatorTest):
         assert len(graphs) == 1
         assert ll_function is graphs[0].func
         assert 'int_mul' not in summary(graphs[0])
+
+    def test_call(self):
+        def add(count, x, y):
+            result = x + y
+            can_enter_jit(red=(count, x, y))
+            return result
+        add._dont_inline_ = True
+        def sub(x, y):
+            return x - y
+        sub._dont_inline_ = True
+        def main(count, x, y):
+            while True:
+                jit_merge_point(red=(count, x, y))
+                count -= 1
+                if not count:
+                    break
+                if count % 3 == 0:
+                    x = add(count, x, y)
+                else:
+                    y = sub(x, y)
+        self.hannotate(main, [int, int, int])

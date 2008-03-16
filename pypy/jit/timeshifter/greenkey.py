@@ -4,6 +4,8 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import r_dict
 from pypy.rpython.lltypesystem import lltype
 
+# XXX green dicts are unsafe with moving GCs
+
 class KeyDesc(object):
     __metaclass__ = cachedtype
 
