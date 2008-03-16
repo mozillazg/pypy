@@ -301,6 +301,11 @@ class BytecodeWriter(object):
             colororder = None
         owncalldesc = CallDesc(self.RGenOp, self.exceptiondesc,
                                lltype.Ptr(FUNCTYPE), colororder)
+        # detect the special ts_stub or ts_metacall graphs and replace
+        # a real function pointer to them with a function pointer to
+        # the graph they are stubs for
+        if hasattr(graph, 'ts_stub_for'):
+            graph = graph.ts_stub_for
         ownfnptr = lltype.functionptr(FUNCTYPE, graph.name, graph=graph)
         gv_ownfnptr = self.RGenOp.constPrebuiltGlobal(ownfnptr)
         return owncalldesc, gv_ownfnptr

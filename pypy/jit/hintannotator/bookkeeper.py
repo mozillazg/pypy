@@ -101,6 +101,7 @@ class GraphDesc(object):
         newgraph = FunctionGraph('%s_%s' % (graph.name, suffix), newstartblock)
         newgraph.getreturnvar().concretetype = v_res.concretetype
         newstartblock.closeblock(Link([v_res], newgraph.returnblock))
+        newgraph.ts_stub_for = graph
         return newgraph
 
 
