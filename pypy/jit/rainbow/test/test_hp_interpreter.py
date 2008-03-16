@@ -777,22 +777,29 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_red_varsized_struct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'y', 'n', 'i', 'res']
         A = lltype.Array(lltype.Signed)
         S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
         def ll_function(x, y, n):
-            s = lltype.malloc(S, 3)
-            s.foo = len(s.a)-1
-            s.a[0] = x
-            s.a[1] = y
-            return s.a[n]*s.foo
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                s = lltype.malloc(S, 3)
+                s.foo = len(s.a)-1
+                s.a[0] = x
+                s.a[1] = y
+                res = s.a[n]*s.foo
+                n = 1 - n
+                #
+                MyJitDriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
+                MyJitDriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
+            return res
 
-        res = self.interpret(ll_function, [21, -21, 0], [])
+        res = self.run(ll_function, [21, -21, 0], threshold=2)
         assert res == 42
-        self.check_insns(malloc_varsize=1,
-                         getinteriorarraysize=1)
-
-        res = self.interpret(ll_function, [21, -21, 1], [])
-        assert res == -42
         self.check_insns(malloc_varsize=1,
                          getinteriorarraysize=1)
 

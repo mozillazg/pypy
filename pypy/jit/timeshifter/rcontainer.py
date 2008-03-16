@@ -105,7 +105,7 @@ class StructTypeDesc(object):
 
         if fixsize:
             self._define_devirtualize()
-            self._define_allocate()
+        self._define_allocate(fixsize)
 
         
     def _compute_fielddescs(self, RGenOp):
@@ -139,13 +139,20 @@ class StructTypeDesc(object):
         self.fielddesc_by_name = fielddesc_by_name
         self.innermostdesc = innermostdesc
 
-    def _define_allocate(self):
+    def _define_allocate(self, fixsize):
         TYPE = self.TYPE
         descs = unrolling_iterable(self.fielddescs)
 
-        def allocate(rgenop):
-            s = lltype.malloc(TYPE)
-            return rgenop.genconst(s)
+        if fixsize:
+            def allocate(rgenop):
+                s = lltype.malloc(TYPE)
+                return rgenop.genconst(s)
+            self.allocate = allocate
+        else:
+            def allocate_varsize(rgenop, size):
+                s = lltype.malloc(TYPE, size)
+                return rgenop.genconst(s)
+            self.allocate_varsize = allocate_varsize
 
         def populate(content_boxes, gv_s, box_gv_reader):
             s = gv_s.revealconst(lltype.Ptr(TYPE))
@@ -159,8 +166,6 @@ class StructTypeDesc(object):
                     tgt = lltype.cast_pointer(desc.PTRTYPE, s)
                     setattr(tgt, desc.fieldname, v)
                 i += 1
-
-        self.allocate = allocate
         self.populate = populate
 
     def _define_devirtualize(self):
@@ -473,12 +478,13 @@ class InteriorDesc(object):
                             # constant-folding: success
                             return rvalue.ll_fromvalue(jitstate, len(array))
 
-                argbox = getinterior_all(jitstate, argbox, indexboxes)
+                argbox = gengetinterior_all(jitstate, argbox, indexboxes)
                 genvar = jitstate.curbuilder.genop_getarraysize(
                     arrayfielddesc.arraytoken,
                     argbox.getgenvar(jitstate))
                 return rvalue.IntRedBox(arrayfielddesc.indexkind, genvar)
 
+            self.perform_getinteriorarraysize = perform_getinteriorarraysize
             self.gengetinteriorarraysize = gengetinteriorarraysize
 
     def _freeze_(self):
