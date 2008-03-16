@@ -97,7 +97,7 @@ class GameBoy(object):
         self.getreceiver(address).write(address, data)
 
     def read(self, address):
-        self.getreceiver().read(address)
+        self.getreceiver(address).read(address)
 
     def getreceiver(self, address):
         if 0x0000 <= address <= 0x7FFF:
