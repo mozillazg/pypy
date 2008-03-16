@@ -13,6 +13,10 @@ from pypy.rpython.lltypesystem import lloperation
 debug_print = lloperation.llop.debug_print
 debug_pdb = lloperation.llop.debug_pdb
 
+class SegfaultException(Exception):
+    "Signals a run-time segfault detected at compile-time."
+
+
 class AbstractContainer(object):
     _attrs_ = []
 
@@ -376,29 +380,45 @@ class InteriorDesc(object):
             lastoffset = path[-1]
             lastfielddesc = fielddescs[-1]
             immutable = LASTCONTAINER._hints.get('immutable', False)
-            getinterior_initial = make_interior_getter(fielddescs[:-1])
+            perform_getinterior_initial, gengetinterior_initial = \
+                    make_interior_getter(fielddescs[:-1])
+
+            def perform_getinteriorfield(rgenop, genvar, indexes_gv):
+                ptr = perform_getinterior_initial(rgenop, genvar, indexes_gv)
+                if lastoffset is None:      # getarrayitem
+                    lastindex = indexes_gv[-1].revealconst(lltype.Signed)
+                    result = ptr[lastindex]
+                else:  # getfield
+                    result = getattr(ptr, lastfielddesc.fieldname)
+                return rgenop.genconst(result)
+
+            def perform_setinteriorfield(rgenop, genvar, indexes_gv,
+                                         gv_newvalue):
+                ptr = perform_getinterior_initial(rgenop, genvar, indexes_gv)
+                newvalue = gv_newvalue.revealconst(TYPE)
+                if lastoffset is None:      # setarrayitem
+                    lastindex = indexes_gv[-1].revealconst(lltype.Signed)
+                    ptr[lastindex] = newvalue
+                else:  # setfield
+                    setattr(ptr, lastfielddesc.fieldname, newvalue)
 
             def gengetinteriorfield(jitstate, deepfrozen, argbox, indexboxes):
                 if (immutable or deepfrozen) and argbox.is_constant():
-                    ptr = rvalue.ll_getvalue(argbox, PTRTYPE)
-                    if ptr:    # else don't constant-fold the segfault...
-                        i = 0
-                        for offset in unroll_path:
-                            if offset is None:        # array substruct
-                                indexbox = indexboxes[i]
-                                i += 1
-                                if not indexbox.is_constant():
-                                    break    # non-constant array index
-                                index = rvalue.ll_getvalue(indexbox,
-                                                           lltype.Signed)
-                                ptr = ptr[index]
-                            else:
-                                ptr = getattr(ptr, offset)
+                    # try to constant-fold
+                    indexes_gv = unbox_indexes(jitstate, indexboxes)
+                    if indexes_gv is not None:
+                        try:
+                            gv_res = perform_getinteriorfield(
+                                jitstate.curbuilder.rgenop,
+                                argbox.getgenvar(jitstate),
+                                indexes_gv)
+                        except SegfaultException:
+                            pass
                         else:
                             # constant-folding: success
-                            assert i == len(indexboxes)
-                            return rvalue.ll_fromvalue(jitstate, ptr)
-                argbox = getinterior_initial(jitstate, argbox, indexboxes)
+                            return lastfielddesc.makebox(jitstate, gv_res)
+
+                argbox = gengetinterior_initial(jitstate, argbox, indexboxes)
                 if lastoffset is None:      # getarrayitem
                     indexbox = indexboxes[-1]
                     genvar = jitstate.curbuilder.genop_getarrayitem(
@@ -410,7 +430,7 @@ class InteriorDesc(object):
                     return argbox.op_getfield(jitstate, lastfielddesc)
 
             def gensetinteriorfield(jitstate, destbox, valuebox, indexboxes):
-                destbox = getinterior_initial(jitstate, destbox, indexboxes)
+                destbox = gengetinterior_initial(jitstate, destbox, indexboxes)
                 if lastoffset is None:      # setarrayitem
                     indexbox = indexboxes[-1]
                     genvar = jitstate.curbuilder.genop_setarrayitem(
@@ -422,34 +442,37 @@ class InteriorDesc(object):
                 else:  # setfield
                     destbox.op_setfield(jitstate, lastfielddesc, valuebox)
 
+            self.perform_getinteriorfield = perform_getinteriorfield
+            self.perform_setinteriorfield = perform_setinteriorfield
             self.gengetinteriorfield = gengetinteriorfield
             self.gensetinteriorfield = gensetinteriorfield
 
         else:
             assert isinstance(TYPE, lltype.Array)
             arrayfielddesc = ArrayFieldDesc(RGenOp, TYPE)
-            getinterior_all = make_interior_getter(fielddescs)
+            perform_getinterior_all, gengetinterior_all = \
+                    make_interior_getter(fielddescs)
+
+            def perform_getinteriorarraysize(rgenop, genvar, indexes_gv):
+                ptr = perform_getinterior_all(rgenop, genvar, indexes_gv)
+                return rgenop.genconst(len(ptr))
 
             def gengetinteriorarraysize(jitstate, argbox, indexboxes):
                 if argbox.is_constant():
-                    ptr = rvalue.ll_getvalue(argbox, PTRTYPE)
-                    if ptr:    # else don't constant-fold the segfault...
-                        i = 0
-                        for offset in unroll_path:
-                            if offset is None:        # array substruct
-                                indexbox = indexboxes[i]
-                                i += 1
-                                if not indexbox.is_constant():
-                                    break    # non-constant array index
-                                index = rvalue.ll_getvalue(indexbox,
-                                                           lltype.Signed)
-                                ptr = ptr[index]
-                            else:
-                                ptr = getattr(ptr, offset)
+                    # try to constant-fold
+                    indexes_gv = unbox_indexes(jitstate, indexboxes)
+                    if indexes_gv is not None:
+                        try:
+                            array = perform_getinterior_all(
+                                jitstate.curbuilder.rgenop,
+                                argbox.getgenvar(jitstate),
+                                indexes_gv)
+                        except SegfaultException:
+                            pass
                         else:
                             # constant-folding: success
-                            assert i == len(indexboxes)
-                            return rvalue.ll_fromvalue(jitstate, len(ptr))
+                            return rvalue.ll_fromvalue(jitstate, len(array))
+
                 argbox = getinterior_all(jitstate, argbox, indexboxes)
                 genvar = jitstate.curbuilder.genop_getarraysize(
                     arrayfielddesc.arraytoken,
@@ -463,7 +486,10 @@ class InteriorDesc(object):
 
 
 def make_interior_getter(fielddescs, _cache={}):
-    # returns a 'getinterior(jitstate, argbox, indexboxes)' function
+    # returns two functions:
+    #    * perform_getinterior(rgenop, gv_arg, indexes_gv)
+    #    * gengetinterior(jitstate, argbox, indexboxes)
+    #
     key = tuple(fielddescs)
     try:
         return _cache[key]
@@ -471,8 +497,26 @@ def make_interior_getter(fielddescs, _cache={}):
         unroll_fielddescs = unrolling_iterable([
             (fielddesc, isinstance(fielddesc, ArrayFieldDesc))
             for fielddesc in fielddescs])
+        FIRSTPTRTYPE = fielddescs[0].PTRTYPE
 
-        def getinterior(jitstate, argbox, indexboxes):
+        def perform_getinterior(rgenop, gv_arg, indexes_gv):
+            ptr = gv_arg.revealconst(FIRSTPTRTYPE)
+            if not ptr:
+                raise SegfaultException    # don't constant-fold
+            i = 0
+            for fielddesc, is_array in unroll_fielddescs:
+                if is_array:    # array substruct
+                    index = indexes_gv[i].revealconst(lltype.Signed)
+                    i += 1
+                    if 0 <= i < len(ptr):
+                        ptr = ptr[i]
+                    else:
+                        raise SegfaultException    # index out of bounds
+                else:
+                    ptr = getattr(ptr, fielddesc.fieldname)
+            return ptr
+
+        def gengetinterior(jitstate, argbox, indexboxes):
             i = 0
             for fielddesc, is_array in unroll_fielddescs:
                 if is_array:    # array substruct
@@ -488,8 +532,17 @@ def make_interior_getter(fielddescs, _cache={}):
                 assert isinstance(argbox, rvalue.PtrRedBox)
             return argbox
 
-        _cache[key] = getinterior
-        return getinterior
+        result = perform_getinterior, gengetinterior
+        _cache[key] = result
+        return result
+
+def unbox_indexes(jitstate, indexboxes):
+    indexes_gv = []
+    for box in indexboxes:
+        if not indexbox.is_constant():
+            return None    # non-constant array index
+        indexes_gv.append(indexbox.getgenvar(jitstate))
+    return indexes_gv
 
 # ____________________________________________________________
 
@@ -567,23 +620,24 @@ class NamedFieldDesc(FieldDesc):
         T = self.PTRTYPE.TO
         self.fieldname = name
         self.fieldtoken = RGenOp.fieldToken(T, name)
-        def getfield_if_non_null(rgenop, genvar):
+        def perform_getfield(rgenop, genvar):
              ptr = genvar.revealconst(PTRTYPE)
-             if ptr:
-                 res = getattr(ptr, name)
-                 return rgenop.genconst(res)
-        self.getfield_if_non_null = getfield_if_non_null
+             if not ptr:
+                 raise SegfaultException
+             res = getattr(ptr, name)
+             return rgenop.genconst(res)
+        self.perform_getfield = perform_getfield
         if not isinstance(FIELDTYPE, lltype.ContainerType):
             self._define_setfield(FIELDTYPE)
 
     def _define_setfield(self, FIELDTYPE):
         PTRTYPE = self.PTRTYPE
         name = self.fieldname
-        def setfield(rgenop, genvar, gv_newvalue):
+        def perform_setfield(rgenop, genvar, gv_newvalue):
             ptr = genvar.revealconst(PTRTYPE)
             newvalue = gv_newvalue.revealconst(FIELDTYPE)
             setattr(ptr, name, newvalue)
-        self.setfield = setfield
+        self.perform_setfield = perform_setfield
 
     def compact_repr(self): # goes in ll helper names
         return "Fld_%s_in_%s" % (self.fieldname, self.PTRTYPE._short_name())
@@ -618,19 +672,36 @@ class ArrayFieldDesc(FieldDesc):
         self.varsizealloctoken = RGenOp.varsizeAllocToken(TYPE)
         self.indexkind = RGenOp.kindToken(lltype.Signed)
 
-        def getarrayitem_if_non_null(rgenop, genvar, gv_index):
+        def perform_getarrayitem(rgenop, genvar, gv_index):
             array = genvar.revealconst(self.PTRTYPE)
             index = gv_index.revealconst(lltype.Signed)
             if array and 0 <= index < len(array):  # else don't constant-fold
                 res = array[index]
                 return rgenop.genconst(res)
-        self.getarrayitem_if_non_null = getarrayitem_if_non_null
-        def getarraysize_if_non_null(rgenop, genvar):
+            else:
+                raise SegfaultException
+        self.perform_getarrayitem = perform_getarrayitem
+
+        def perform_getarraysize(rgenop, genvar):
             array = genvar.revealconst(self.PTRTYPE)
-            if array:  # else don't constant-fold
-                res = len(array)
-                return rgenop.genconst(res)
-        self.getarraysize_if_non_null = getarraysize_if_non_null
+            if not array:  # don't constant-fold
+                raise SegfaultException
+            res = len(array)
+            return rgenop.genconst(res)
+        self.perform_getarraysize = perform_getarraysize
+
+        def perform_setarrayitem(rgenop, genvar, gv_index, gv_newvalue):
+            array = genvar.revealconst(self.PTRTYPE)
+            index = gv_index.revealconst(lltype.Signed)
+            newvalue = gv_newvalue.revealconst(TYPE.OF)
+            array[index] = newvalue
+        self.perform_setarrayitem = perform_setarrayitem
+
+        def allocate(rgenop, size):
+            a = lltype.malloc(TYPE, size)
+            return rgenop.genconst(a)
+        self.allocate = allocate
+
 # ____________________________________________________________
 
 class FrozenVirtualStruct(FrozenContainer):
