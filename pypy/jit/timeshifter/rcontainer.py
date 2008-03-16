@@ -544,7 +544,7 @@ def make_interior_getter(fielddescs, _cache={}):
 
 def unbox_indexes(jitstate, indexboxes):
     indexes_gv = []
-    for box in indexboxes:
+    for indexbox in indexboxes:
         if not indexbox.is_constant():
             return None    # non-constant array index
         indexes_gv.append(indexbox.getgenvar(jitstate))
