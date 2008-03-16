@@ -1326,61 +1326,80 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert count_depth(res) == 2
 
     def test_known_nonzero(self):
+        class MyJitDriver(JitDriver):
+            greens = ['x']
+            reds = ['y', 'res', 'i']
         S = lltype.GcStruct('s', ('x', lltype.Signed))
         global_s = lltype.malloc(S, immortal=True)
         global_s.x = 100
 
-        def h():
-            s = lltype.malloc(S)
-            s.x = 50
-            return s
+        def h(i):
+            if i < 30:
+                return global_s
+            else:
+                return lltype.nullptr(S)
         def g(s, y):
             if s:
                 return s.x * 5
             else:
                 return -12 + y
         def f(x, y):
-            hint(None, global_merge_point=True)
-            x = hint(x, concrete=True)
-            if x == 1:
-                return g(lltype.nullptr(S), y)
-            elif x == 2:
-                return g(global_s, y)
-            elif x == 3:
-                s = lltype.malloc(S)
-                s.x = y
-                return g(s, y)
-            elif x == 4:
-                s = h()
-                return g(s, y)
-            else:
-                s = h()
-                if s:
-                    return g(s, y)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                x = hint(x, concrete=True)
+                if x == 1:
+                    res = g(lltype.nullptr(S), y)
+                elif x == 2:
+                    res = g(global_s, y)
+                elif x == 3:
+                    s = lltype.malloc(S)
+                    s.x = y
+                    res = g(s, y)
+                elif x == 4:
+                    s = h(i)
+                    res = g(s, y)
                 else:
-                    return 0
+                    s = h(i)
+                    if s:
+                        res = g(s, y)
+                    else:
+                        res = 0
+                #
+                MyJitDriver.jit_merge_point(x=x, y=y, res=res, i=i)
+                MyJitDriver.can_enter_jit(x=x, y=y, res=res, i=i)
+            return res
 
         P = StopAtXPolicy(h)
 
-        res = self.interpret(f, [1, 10], [0], policy=P)
+        res = self.run(f, [1, 10], threshold=2, policy=P)
         assert res == -2
-        self.check_insns(int_mul=0, int_add=1)
+        self.check_insns_in_loops({'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [2, 10], [0], policy=P)
+        res = self.run(f, [2, 10], threshold=2, policy=P)
         assert res == 500
-        self.check_insns(int_mul=1, int_add=0)
+        self.check_insns_in_loops({'getfield': 1, 'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [3, 10], [0], policy=P)
+        res = self.run(f, [3, 10], threshold=2, policy=P)
         assert res == 50
-        self.check_insns(int_mul=1, int_add=0)
+        self.check_insns_in_loops({'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [4, 10], [0], policy=P)
-        assert res == 250
-        self.check_insns(int_mul=1, int_add=1)
+        res = self.run(f, [4, 10], threshold=2, policy=P)
+        assert res == 500
+        self.check_insns_in_loops({'direct_call': 1, 'ptr_nonzero': 1,
+                                   'getfield': 1, 'int_mul': 1,
+                                   'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [5, 10], [0], policy=P)
-        assert res == 250
-        self.check_insns(int_mul=1, int_add=0)
+        res = self.run(f, [5, 10], threshold=2, policy=P)
+        assert res == 500
+        self.check_insns_in_loops({'direct_call': 1, 'ptr_nonzero': 1,
+                                   'getfield': 1, 'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_debug_assert_ptr_nonzero(self):
         S = lltype.GcStruct('s', ('x', lltype.Signed))

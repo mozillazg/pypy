@@ -278,11 +278,15 @@ class FallbackInterpreter(object):
 
     @arguments("red", "red", returns="red")
     def opimpl_red_ptr_eq(self, gv_ptr1, gv_ptr2):
-        Xxx("red_ptr_eq")
+        addr1 = gv_ptr1.revealconst(llmemory.Address)
+        addr2 = gv_ptr2.revealconst(llmemory.Address)
+        return self.rgenop.genconst(addr1 == addr2)
 
     @arguments("red", "red", returns="red")
     def opimpl_red_ptr_ne(self, gv_ptr1, gv_ptr2):
-        Xxx("red_ptr_ne")
+        addr1 = gv_ptr1.revealconst(llmemory.Address)
+        addr2 = gv_ptr2.revealconst(llmemory.Address)
+        return self.rgenop.genconst(addr1 != addr2)
 
 
     @arguments("red_varargs")
@@ -549,6 +553,10 @@ class FallbackInterpreter(object):
             self.leave_fallback_interp(gv_result)
         else:
             self.green_result(gv_result)
+
+    @arguments("bool", "red")
+    def opimpl_hp_learn_boolvalue(self, boolval, gv_value):
+        pass
 
     # ____________________________________________________________
     # construction-time helpers
