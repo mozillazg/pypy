@@ -670,68 +670,111 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         # this checks that red boxes are able to be virtualized dynamically by
         # the compiler (the P_NOVIRTUAL policy prevents the hint-annotator from
         # marking variables in blue)
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'i', 'res']
         S = lltype.GcStruct('S', ('n', lltype.Signed))
-        def ll_function(n):
+        def make(n):
             s = lltype.malloc(S)
             s.n = n
-            return s.n
-        res = self.interpret(ll_function, [42], [])
+            return s
+        def ll_function(n):
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                s = make(n)
+                res = s.n
+                #
+                MyJitDriver.jit_merge_point(n=n, i=i, res=res)
+                MyJitDriver.can_enter_jit(n=n, i=i, res=res)
+            return res
+        res = self.run(ll_function, [42], threshold=2)
         assert res == 42
-        self.check_insns({})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
 
     def test_setarrayitem(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'res']
         A = lltype.GcArray(lltype.Signed)
         a = lltype.malloc(A, 2, immortal=True)
         def ll_function():
-            a[0] = 1
-            a[1] = 2
-            return a[0]+a[1]
-        
-        res = self.interpret(ll_function, [], [])
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                a[0] = 1
+                a[1] = 2
+                res = a[0]+a[1]
+                #
+                MyJitDriver.jit_merge_point(i=i, res=res)
+                MyJitDriver.can_enter_jit(i=i, res=res)
+            return res
+        res = self.run(ll_function, [], threshold=2)
         assert res == 3
+        self.check_insns_in_loops({'setarrayitem': 2,
+                                   'getarrayitem': 2, 'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_red_array(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'y', 'n', 'i', 'res']
         A = lltype.GcArray(lltype.Signed)
         def ll_function(x, y, n):
-            a = lltype.malloc(A, 2)
-            a[0] = x
-            a[1] = y
-            return a[n]*len(a)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                a = lltype.malloc(A, 2)
+                a[0] = x
+                a[1] = y
+                res = a[n]*len(a)
+                n = 1 - n
+                #
+                MyJitDriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
+                MyJitDriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
+            return res
 
-        res = self.interpret(ll_function, [21, -21, 0], [])
+        res = self.run(ll_function, [21, -21, 0], threshold=2)
         assert res == 42
-        self.check_insns({'malloc_varsize': 1,
-                          'setarrayitem': 2, 'getarrayitem': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
-        res = self.interpret(ll_function, [21, -21, 1], [])
-        assert res == -42
-        self.check_insns({'malloc_varsize': 1,
-                          'setarrayitem': 2, 'getarrayitem': 1,
-                          'getarraysize': 1, 'int_mul': 1})
+        self.check_insns_in_loops({'malloc_varsize': 1,
+                                   'setarrayitem': 2, 'getarrayitem': 1,
+                                   'getarraysize': 1, 'int_mul': 1,
+                                   'int_sub': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_red_struct_array(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'y', 'n', 'i', 'res']
         S = lltype.Struct('s', ('x', lltype.Signed))
         A = lltype.GcArray(S)
         def ll_function(x, y, n):
-            a = lltype.malloc(A, 2)
-            a[0].x = x
-            a[1].x = y
-            return a[n].x*len(a)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                a = lltype.malloc(A, 2)
+                a[0].x = x
+                a[1].x = y
+                res = a[n].x*len(a)
+                n = 1 - n
+                #
+                MyJitDriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
+                MyJitDriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
+            return res
 
-        res = self.interpret(ll_function, [21, -21, 0], [])
+        res = self.run(ll_function, [21, -21, 0], threshold=2)
         assert res == 42
-        self.check_insns({'malloc_varsize': 1,
-                          'setinteriorfield': 2, 'getinteriorfield': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
-        res = self.interpret(ll_function, [21, -21, 1], [])
-        assert res == -42
-        self.check_insns({'malloc_varsize': 1,
-                          'setinteriorfield': 2, 'getinteriorfield': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
+        self.check_insns_in_loops({'malloc_varsize': 1,
+                                   'setinteriorfield': 2,
+                                   'getinteriorfield': 1,
+                                   'getarraysize': 1, 'int_mul': 1,
+                                   'int_sub': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_red_varsized_struct(self):
         A = lltype.Array(lltype.Signed)

@@ -144,9 +144,12 @@ def genmalloc_varsize(jitstate, contdesc, sizebox):
 def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     assert isinstance(argbox, rvalue.PtrRedBox)
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
-        resgv = fielddesc.getfield_if_non_null(
+        try:
+            resgv = fielddesc.perform_getfield(
                 jitstate.curbuilder.rgenop, argbox.getgenvar(jitstate))
-        if resgv is not None:
+        except rcontainer.SegfaultException:
+            pass
+        else:
             return fielddesc.makebox(jitstate, resgv)
     return argbox.op_getfield(jitstate, fielddesc)
 
@@ -166,10 +169,13 @@ def ll_gengetsubstruct(jitstate, fielddesc, argbox):
 def gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
     if ((fielddesc.immutable or deepfrozen) and argbox.is_constant()
                                             and indexbox.is_constant()):
-        resgv = fielddesc.getarrayitem_if_non_null(
+        try:
+            resgv = fielddesc.perform_getarrayitem(
                 jitstate.curbuilder.rgenop, argbox.getgenvar(jitstate),
                 indexbox.getgenvar(jitstate))
-        if resgv is not None:
+        except rcontainer.SegfaultException:
+            pass
+        else:
             return fielddesc.makebox(jitstate, resgv)
     genvar = jitstate.curbuilder.genop_getarrayitem(
         fielddesc.arraytoken,
@@ -203,9 +209,12 @@ def gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
 
 def gengetarraysize(jitstate, fielddesc, argbox):
     if argbox.is_constant():
-        resgv = fielddesc.getarraysize_if_non_null(
+        try:
+            resgv = fielddesc.perform_getarraysize(
                 jitstate.curbuilder.rgenop, argbox.getgenvar(jitstate))
-        if resgv is not None:
+        except rcontainer.SegfaultException:
+            pass
+        else:
             return rvalue.redboxbuilder_int(fielddesc.indexkind, resgv)
     genvar = jitstate.curbuilder.genop_getarraysize(
         fielddesc.arraytoken,

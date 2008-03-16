@@ -1,5 +1,5 @@
 from pypy.jit.timeshifter import rvalue, rtimeshift
-from pypy.jit.timeshifter.rcontainer import cachedtype
+from pypy.jit.timeshifter.rcontainer import cachedtype, SegfaultException
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.llinterp import LLInterpreter
@@ -8,9 +8,6 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.translator import exceptiontransform
 
-
-class SegfaultException(Exception):
-    "Signals a run-time segfault detected at compile-time."
 
 class Index:
     def __init__(self, n):

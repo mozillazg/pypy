@@ -1298,16 +1298,17 @@ class BytecodeWriter(object):
                 op, PTRTYPE, len(op.args) - 1)
         if interiordescindex == -1:    # Void field
             return None
-        structindex = self.serialize_oparg("red", structvar)
+        structindex = self.serialize_oparg(color, structvar)
         deepfrozen = self.hannotator.binding(structvar).deepfrozen
         indexes = []
         for arg in indices_v:
-            indexes.append(self.serialize_oparg("red", arg))
+            indexes.append(self.serialize_oparg(color, arg))
         self.emit("%s_getinteriorfield" % color, structindex,
-                  interiordescindex, deepfrozen)
+                  interiordescindex)
         self.emit(len(indexes))
         self.emit(*indexes)
         if color == "red":
+            self.emit(deepfrozen)
             self.register_redvar(op.result)
         else:
             self.register_greenvar(op.result)

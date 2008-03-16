@@ -4,7 +4,7 @@ from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic, noop
 from pypy.rlib.debug import debug_print
 from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
-from pypy.jit.timeshifter.oop import SegfaultException
+from pypy.jit.timeshifter.rcontainer import SegfaultException
 from pypy.jit.rainbow import rhotpath
 from pypy.rpython.lltypesystem import lltype, llmemory
 
@@ -792,10 +792,7 @@ class JitInterpreter(object):
 
     @arguments("green", "fielddesc", returns="green")
     def opimpl_green_getfield(self, gv_struct, fielddesc):
-        gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
-        if gv_res is None:
-            raise SegfaultException
-        return gv_res
+        return fielddesc.perform_getfield(self.rgenop, gv_struct)
 
     @arguments("red", "fielddesc", "red")
     def opimpl_red_setfield(self, destbox, fielddesc, valuebox):
@@ -818,34 +815,23 @@ class JitInterpreter(object):
 
     @arguments("green", "arraydesc", "green", returns="green")
     def opimpl_green_getarrayitem(self, gv_array, fielddesc, gv_index):
-        gv_res = fielddesc.getarrayitem_if_non_null(self.rgenop,
-                                                    gv_array, gv_index)
-        if gv_res is None:
-            raise SegfaultException   # XXX should probably just raise it
-                                      # from fielddesc.getarrayitem()
-        return gv_res
+        return fielddesc.perform_getarrayitem(self.rgenop, gv_array, gv_index)
 
     @arguments("green", "arraydesc", returns="green")
     def opimpl_green_getarraysize(self, gv_array, fielddesc):
-        gv_res = fielddesc.getarraysize_if_non_null(self.rgenop, gv_array)
-        if gv_res is None:
-            raise SegfaultException
-        return gv_res
+        return fielddesc.perform_getarraysize(self.rgenop, gv_array)
 
-    @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
-    def opimpl_red_getinteriorfield(self, structbox, interiordesc, deepfrozen,
-                                    indexboxes):
+    @arguments("red", "interiordesc", "red_varargs", "bool", returns="red")
+    def opimpl_red_getinteriorfield(self, structbox, interiordesc,
+                                    indexboxes, deepfrozen):
         return interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
                                                 structbox, indexboxes)
 
-    @arguments("red", "interiordesc", "bool", "red_varargs",
-               returns="green_from_red")
-    def opimpl_green_getinteriorfield(self, structbox, interiordesc, deepfrozen,
-                                      indexboxes):
-        # XXX make a green version that does not use the constant folding of
-        # the red one
-        return interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
-                                                structbox, indexboxes)
+    @arguments("green", "interiordesc", "green_varargs", returns="green")
+    def opimpl_green_getinteriorfield(self, gv_struct, interiordesc,
+                                      indexes_gv):
+        return interiordesc.perform_getinteriorfield(self.rgenop, gv_struct,
+                                                     indexes_gv)
 
     @arguments("red", "interiordesc", "red_varargs", "red")
     def opimpl_red_setinteriorfield(self, destbox, interiordesc, indexboxes,

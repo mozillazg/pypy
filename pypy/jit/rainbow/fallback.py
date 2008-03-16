@@ -378,69 +378,59 @@ class FallbackInterpreter(object):
 
     @arguments("arraydesc", "red", returns="red")
     def opimpl_red_malloc_varsize_array(self, arraytypedesc, gv_size):
-        Xxx("red_malloc_varsize_array")
+        size = gv_size.revealconst(lltype.Signed)
+        return arraytypedesc.allocate(self.rgenop, size)
 
     @arguments("red", "fielddesc", "bool", returns="red")
     def opimpl_red_getfield(self, gv_struct, fielddesc, deepfrozen):
-        gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
-        assert gv_res is not None, "segfault!"
-        return gv_res
+        return fielddesc.perform_getfield(self.rgenop, gv_struct)
 
     @arguments("green", "fielddesc", returns="green")
     def opimpl_green_getfield(self, gv_struct, fielddesc):
-        gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
-        assert gv_res is not None, "segfault!"
-        return gv_res
+        return fielddesc.perform_getfield(self.rgenop, gv_struct)
 
     @arguments("red", "fielddesc", "red")
     def opimpl_red_setfield(self, gv_dest, fielddesc, gv_value):
-        fielddesc.setfield(self.rgenop, gv_dest, gv_value)
+        fielddesc.perform_setfield(self.rgenop, gv_dest, gv_value)
 
     @arguments("red", "arraydesc", "red", "bool", returns="red")
     def opimpl_red_getarrayitem(self, gv_array, fielddesc, gv_index, deepfrozen):
-        gv_res = fielddesc.getarrayitem_if_non_null(self.rgenop,
-                                                    gv_array, gv_index)
-        assert gv_res is not None, "segfault!"
-        return gv_res
+        return fielddesc.perform_getarrayitem(self.rgenop, gv_array, gv_index)
 
     @arguments("red", "arraydesc", "red", "red")
     def opimpl_red_setarrayitem(self, gv_dest, fielddesc, gv_index, gv_value):
-        Xxx("red_setarrayitem")
+        fielddesc.perform_setarrayitem(self.rgenop, gv_dest, gv_index,
+                                       gv_value)
 
     @arguments("red", "arraydesc", returns="red")
     def opimpl_red_getarraysize(self, gv_array, fielddesc):
-        gv_res = fielddesc.getarraysize_if_non_null(self.rgenop, gv_array)
-        assert gv_res is not None, "segfault!"
-        return gv_res
+        return fielddesc.perform_getarraysize(self.rgenop, gv_array)
 
     @arguments("green", "arraydesc", "green", returns="green")
     def opimpl_green_getarrayitem(self, gv_array, fielddesc, gv_index):
-        gv_res = fielddesc.getarrayitem_if_non_null(self.rgenop,
-                                                    gv_array, gv_index)
-        assert gv_res is not None, "segfault!"
-        return gv_res
+        return fielddesc.perform_getarrayitem(self.rgenop, gv_array, gv_index)
 
     @arguments("green", "arraydesc", returns="green")
     def opimpl_green_getarraysize(self, gv_array, fielddesc):
-        gv_res = fielddesc.getarraysize_if_non_null(self.rgenop, gv_array)
-        assert gv_res is not None, "segfault!"
-        return gv_res
+        return fielddesc.perform_getarraysize(self.rgenop, gv_array)
 
-    @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
-    def opimpl_red_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
-                                    indexes_gv):
-        Xxx("red_getinteriorfield")
+    @arguments("red", "interiordesc", "red_varargs", "bool", returns="red")
+    def opimpl_red_getinteriorfield(self, gv_struct, interiordesc,
+                                    indexes_gv, deepfrozen):
+        return interiordesc.perform_getinteriorfield(self.rgenop, gv_struct,
+                                                     indexes_gv)
 
-    @arguments("red", "interiordesc", "bool", "red_varargs",
-               returns="green_from_red")
-    def opimpl_green_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
+    @arguments("green", "interiordesc", "green_varargs", returns="green")
+    def opimpl_green_getinteriorfield(self, gv_struct, interiordesc,
                                       indexes_gv):
-        Xxx("green_getinteriorfield")
+        return interiordesc.perform_getinteriorfield(self.rgenop, gv_struct,
+                                                     indexes_gv)
 
     @arguments("red", "interiordesc", "red_varargs", "red")
     def opimpl_red_setinteriorfield(self, gv_dest, interiordesc, indexes_gv,
                                     gv_value):
-        Xxx("red_setinteriorfield")
+        interiordesc.perform_setinteriorfield(self.rgenop, gv_dest, indexes_gv,
+                                              gv_value)
 
     @arguments("red", "interiordesc", "red_varargs", returns="red")
     def opimpl_red_getinteriorarraysize(self, gv_array, interiordesc, indexes_gv):
