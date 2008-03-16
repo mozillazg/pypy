@@ -13,7 +13,7 @@ class Register(object):
         self.set(value)
         
     def set(self, value):
-        self.value = value
+        self.value = value & 0xFF
         self.cpu.cycles -= 1
         
     def get(self):
@@ -29,19 +29,19 @@ class DoubleRegister(Register):
         self.cpu = cpu
         self.set(hi, lo);
         
-    def set(self, hi, lo=None):
+    def set(self, hi=0, lo=None):
         if (lo is None):
-            self.value = hi
+            self.value = (hi & 0xFFFF)
             self.cpu.cycles -= 1
         else:
-            self.value = (hi << 8) + lo
+            self.value = ((hi & 0xFF) << 8) + (lo & 0xFF)
             self.cpu.cycles -= 2
             
-    def setHi(self, hi):
+    def setHi(self, hi=0):
         self.set(hi, self.getLo())
         self.cpu.cycles += 1
     
-    def setLo(self, lo):
+    def setLo(self, lo=0):
         self.set(self.getHi(), lo)
         self.cpu.cycles += 1
         
@@ -62,7 +62,7 @@ class DoubleRegister(Register):
         self.value = (self.value - 1) & 0xFFFF
         self.cpu.cycles -= 2
         
-    def add(self, n):
+    def add(self, n=2):
         self.value = (self.value + n) & 0xFFFF
         self.cpu.cycles -= 3
     
@@ -239,9 +239,11 @@ class CPU(object):
 
      # Execution
     def fetchExecute(self):
-       FETCHEXEC_OP_CODES[self.fetch()](self)
+        global FETCHEXEC_OP_CODES
+        FETCHEXEC_OP_CODES[self.fetch()](self)
         
     def execute(self, opCode):
+        global OP_CODES
         OP_CODES[opCode](self)
         
      # memory Access, 1 cycle
@@ -914,14 +916,15 @@ SINGLE_OP_CODES.extend(create_register_op_codes())
 def initialize_op_code_table(table):
     result = [None] * 256
     for entry in table:
+        if entry is not tuple:
+            continue
         if len(entry) == 2:
             positions = [entry[0]]
         else:
             positions = range(entry[0], entry[1]+1)
         for pos in positions:
             result[pos] = entry[-1]
-    assert None not in result
     return result
    
-#OP_CODES = initialize_op_code_table(SINGLE_OP_CODES)
+OP_CODES = initialize_op_code_table(SINGLE_OP_CODES)
 
