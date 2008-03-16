@@ -1587,6 +1587,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(indirect_call=1, int_add=0, int_mul=0)
 
     def test_constant_indirect_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['m', 'n']
+            reds = ['x', 'res', 'i']
         def h1(m, n, x):
             return x-2
         def h2(m, n, x):
@@ -1598,23 +1601,28 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 i >>= 1
                 #
                 m = hint(m, concrete=True)
+                hint(n, concrete=True)
                 frozenl = hint(l, deepfreeze=True)
-                h = frozenl[n&1]
+                h = frozenl[hint(n, variable=True) & 1]
                 res = h(m, 5, x)
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                MyJitDriver.jit_merge_point(m=m, n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(m=m, n=n, x=x, res=res, i=i)
             return res
 
-        P = StopAtXPolicy()
-        res = self.interpret(f, [1, 7, 3], [0, 1], policy=P)
+        res = self.run(f, [1, 7, 3], threshold=2)
         assert res == f(1,7,3)
-        self.check_insns({'int_mul': 1})
-        res = self.interpret(f, [1, 4, 113], [0, 1], policy=P)
+        self.check_insns_in_loops({'int_mul': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
+        res = self.run(f, [1, 4, 113], threshold=2)
         assert res == f(1,4,113)
-        self.check_insns({'int_sub': 1})
+        self.check_insns_in_loops({'int_sub': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_constant_indirect_red_call_no_result(self):
+        class MyJitDriver(JitDriver):
+            greens = ['m', 'n']
+            reds = ['x', 'res', 'i']
         class A:
             pass
         glob_a = A()
@@ -1624,19 +1632,27 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             glob_a.x = x*4
         l = [h1, h2]
         def f(m, n, x):
-            m = hint(m, concrete=True)
-            frozenl = hint(l, deepfreeze=True)
-            h = frozenl[n&1]
-            h(m, 5, x)
-            return glob_a.x
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                m = hint(m, concrete=True)
+                hint(n, concrete=True)
+                frozenl = hint(l, deepfreeze=True)
+                h = frozenl[hint(n, variable=True) & 1]
+                h(m, 5, x)
+                res = glob_a.x
+                #
+                MyJitDriver.jit_merge_point(m=m, n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(m=m, n=n, x=x, res=res, i=i)
+            return res
 
-        P = StopAtXPolicy()
-        res = self.interpret(f, [1, 7, 3], [0, 1], policy=P)
+        res = self.run(f, [1, 7, 3], threshold=2)
         assert res == f(1,7,3)
-        self.check_insns(int_mul=1, int_sub=0)
-        res = self.interpret(f, [1, 4, 113], [0, 1], policy=P)
+        self.check_insns_in_loops(int_mul=1, int_sub=0, setfield=1, getfield=1)
+        res = self.run(f, [1, 4, 113], threshold=2)
         assert res == f(1,4,113)
-        self.check_insns(int_sub=1, int_mul=0)
+        self.check_insns_in_loops(int_mul=0, int_sub=1, setfield=1, getfield=1)
 
     def test_indirect_sometimes_residual_pure_red_call(self):
         def h1(x):
