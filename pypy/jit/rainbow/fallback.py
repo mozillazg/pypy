@@ -374,7 +374,8 @@ class FallbackInterpreter(object):
 
     @arguments("structtypedesc", "red", returns="red")
     def opimpl_red_malloc_varsize_struct(self, structtypedesc, gv_size):
-        Xxx("red_malloc_varsize_struct")
+        size = gv_size.revealconst(lltype.Signed)
+        return structtypedesc.allocate_varsize(self.rgenop, size)
 
     @arguments("arraydesc", "red", returns="red")
     def opimpl_red_malloc_varsize_array(self, arraytypedesc, gv_size):
@@ -433,13 +434,18 @@ class FallbackInterpreter(object):
                                               gv_value)
 
     @arguments("red", "interiordesc", "red_varargs", returns="red")
-    def opimpl_red_getinteriorarraysize(self, gv_array, interiordesc, indexes_gv):
-        Xxx("red_getinteriorarraysize")
+    def opimpl_red_getinteriorarraysize(self, gv_array, interiordesc,
+                                        indexes_gv):
+        return interiordesc.perform_getinteriorarraysize(self.rgenop,
+                                                         gv_array,
+                                                         indexes_gv)
 
-    @arguments("red", "interiordesc", "red_varargs", returns="green_from_red")
+    @arguments("green", "interiordesc", "green_varargs", returns="green")
     def opimpl_green_getinteriorarraysize(self, gv_array, interiordesc,
                                           indexes_gv):
-        Xxx("green_getinteriorarraysize")
+        return interiordesc.perform_getinteriorarraysize(self.rgenop,
+                                                         gv_array,
+                                                         indexes_gv)
 
     @arguments("red", "green", "green", returns="green")
     def opimpl_is_constant(self, arg, true, false):

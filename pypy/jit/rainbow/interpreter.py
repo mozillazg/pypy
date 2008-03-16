@@ -843,13 +843,12 @@ class JitInterpreter(object):
         return interiordesc.gengetinteriorarraysize(
             self.jitstate, arraybox, indexboxes)
 
-    @arguments("red", "interiordesc", "red_varargs", returns="green_from_red")
-    def opimpl_green_getinteriorarraysize(self, arraybox, interiordesc,
-                                          indexboxes):
-        # XXX make a green version that does not use the constant folding of
-        # the red one
-        return interiordesc.gengetinteriorarraysize(
-            self.jitstate, arraybox, indexboxes)
+    @arguments("green", "interiordesc", "green_varargs", returns="green")
+    def opimpl_green_getinteriorarraysize(self, gv_array, interiordesc,
+                                          indexes_gv):
+        return interiordesc.perform_getinteriorarraysize(self.rgenop,
+                                                         gv_array,
+                                                         indexes_gv)
 
     @arguments("red", "green", "green", returns="green")
     def opimpl_is_constant(self, arg, true, false):

@@ -1338,10 +1338,10 @@ class BytecodeWriter(object):
         interiordescindex, indices_v = self.interiordesc(
                 op, PTRTYPE, len(op.args) - 1)
         assert interiordescindex != -1
-        structindex = self.serialize_oparg("red", structvar)
+        structindex = self.serialize_oparg(color, structvar)
         indexes = []
         for arg in indices_v:
-            indexes.append(self.serialize_oparg("red", arg))
+            indexes.append(self.serialize_oparg(color, arg))
         self.emit("%s_getinteriorarraysize" % color, structindex,
                   interiordescindex)
         self.emit(len(indexes))
