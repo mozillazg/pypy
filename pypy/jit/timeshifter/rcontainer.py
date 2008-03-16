@@ -618,18 +618,18 @@ class ArrayFieldDesc(FieldDesc):
         self.varsizealloctoken = RGenOp.varsizeAllocToken(TYPE)
         self.indexkind = RGenOp.kindToken(lltype.Signed)
 
-        def getarrayitem_if_non_null(jitstate, genvar, gv_index):
+        def getarrayitem_if_non_null(rgenop, genvar, gv_index):
             array = genvar.revealconst(self.PTRTYPE)
             index = gv_index.revealconst(lltype.Signed)
             if array and 0 <= index < len(array):  # else don't constant-fold
                 res = array[index]
-                return rvalue.ll_gv_fromvalue(jitstate, res)
+                return rgenop.genconst(res)
         self.getarrayitem_if_non_null = getarrayitem_if_non_null
-        def getarraysize_if_non_null(jitstate, genvar):
+        def getarraysize_if_non_null(rgenop, genvar):
             array = genvar.revealconst(self.PTRTYPE)
             if array:  # else don't constant-fold
                 res = len(array)
-                return rvalue.ll_gv_fromvalue(jitstate, res)
+                return rgenop.genconst(res)
         self.getarraysize_if_non_null = getarraysize_if_non_null
 # ____________________________________________________________
 

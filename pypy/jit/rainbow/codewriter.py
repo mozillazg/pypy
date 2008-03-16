@@ -1198,7 +1198,7 @@ class BytecodeWriter(object):
             assert op.args[1].value != 'vable_access'
 
         # non virtual case                
-        index = self.serialize_oparg("red", args[0])
+        index = self.serialize_oparg(color, args[0])
         fieldname = args[1].value
         s_struct = self.hannotator.binding(args[0])
         deepfrozen = s_struct.deepfrozen
@@ -1206,8 +1206,9 @@ class BytecodeWriter(object):
         fielddescindex = self.fielddesc_position(PTRTYPE.TO, fieldname)
         if fielddescindex == -1:   # Void field
             return
-        self.emit("%s_getfield" % (color, ), index, fielddescindex, deepfrozen)
+        self.emit("%s_getfield" % (color, ), index, fielddescindex)
         if color == "red":
+            self.emit(deepfrozen)
             self.register_redvar(op.result)
         else:
             self.register_greenvar(op.result)
@@ -1239,17 +1240,22 @@ class BytecodeWriter(object):
         self.emit("red_setfield", destboxindex, fielddescindex, valboxindex)
 
     def serialize_op_getarrayitem(self, op):
+        color = self.opcolor(op)
         arrayvar, indexvar = op.args
         PTRTYPE = arrayvar.concretetype
         if PTRTYPE.TO.OF is lltype.Void:
             return
         deepfrozen = self.hannotator.binding(arrayvar).deepfrozen
         fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
-        arrayindex = self.serialize_oparg("red", arrayvar)
-        index = self.serialize_oparg("red", indexvar)
-        self.emit("red_getarrayitem", arrayindex, fielddescindex, index,
-                  deepfrozen)
-        self.register_redvar(op.result)
+        arrayindex = self.serialize_oparg(color, arrayvar)
+        index = self.serialize_oparg(color, indexvar)
+        self.emit("%s_getarrayitem" % (color, ))
+        self.emit(arrayindex, fielddescindex, index)
+        if color == "red":
+            self.emit(deepfrozen)
+            self.register_redvar(op.result)
+        else:
+            self.register_greenvar(op.result)
 
     def serialize_op_setarrayitem(self, op):
         args = op.args
@@ -1273,7 +1279,7 @@ class BytecodeWriter(object):
         if PTRTYPE.TO.OF is lltype.Void:
             return
         fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
-        arrayindex = self.serialize_oparg("red", arrayvar)
+        arrayindex = self.serialize_oparg(color, arrayvar)
         self.emit("%s_getarraysize" % (color, ), arrayindex, fielddescindex)
         if color == "red":
             self.register_redvar(op.result)

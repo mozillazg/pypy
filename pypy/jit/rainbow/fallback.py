@@ -386,8 +386,8 @@ class FallbackInterpreter(object):
         assert gv_res is not None, "segfault!"
         return gv_res
 
-    @arguments("red", "fielddesc", "bool", returns="green_from_red")
-    def opimpl_green_getfield(self, gv_struct, fielddesc, deepfrozen):
+    @arguments("green", "fielddesc", returns="green")
+    def opimpl_green_getfield(self, gv_struct, fielddesc):
         gv_res = fielddesc.getfield_if_non_null(self.rgenop, gv_struct)
         assert gv_res is not None, "segfault!"
         return gv_res
@@ -398,7 +398,10 @@ class FallbackInterpreter(object):
 
     @arguments("red", "arraydesc", "red", "bool", returns="red")
     def opimpl_red_getarrayitem(self, gv_array, fielddesc, gv_index, deepfrozen):
-        Xxx("red_getarrayitem")
+        gv_res = fielddesc.getarrayitem_if_non_null(self.rgenop,
+                                                    gv_array, gv_index)
+        assert gv_res is not None, "segfault!"
+        return gv_res
 
     @arguments("red", "arraydesc", "red", "red")
     def opimpl_red_setarrayitem(self, gv_dest, fielddesc, gv_index, gv_value):
@@ -406,11 +409,22 @@ class FallbackInterpreter(object):
 
     @arguments("red", "arraydesc", returns="red")
     def opimpl_red_getarraysize(self, gv_array, fielddesc):
-        Xxx("red_getarraysize")
+        gv_res = fielddesc.getarraysize_if_non_null(self.rgenop, gv_array)
+        assert gv_res is not None, "segfault!"
+        return gv_res
 
-    @arguments("red", "arraydesc", returns="green_from_red")
+    @arguments("green", "arraydesc", "green", returns="green")
+    def opimpl_green_getarrayitem(self, gv_array, fielddesc, gv_index):
+        gv_res = fielddesc.getarrayitem_if_non_null(self.rgenop,
+                                                    gv_array, gv_index)
+        assert gv_res is not None, "segfault!"
+        return gv_res
+
+    @arguments("green", "arraydesc", returns="green")
     def opimpl_green_getarraysize(self, gv_array, fielddesc):
-        Xxx("green_getarraysize")
+        gv_res = fielddesc.getarraysize_if_non_null(self.rgenop, gv_array)
+        assert gv_res is not None, "segfault!"
+        return gv_res
 
     @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
     def opimpl_red_getinteriorfield(self, gv_struct, interiordesc, deepfrozen,
