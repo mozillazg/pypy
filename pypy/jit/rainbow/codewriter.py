@@ -1060,7 +1060,7 @@ class BytecodeWriter(object):
 
     def handle_residual_call(self, op, withexc):
         fnptr = op.args[0]
-        pos = self.calldesc_position(lltype.typeOf(fnptr.value))
+        pos = self.calldesc_position(fnptr.concretetype)
         has_result = (self.varcolor(op.result) != "gray" and
                       op.result.concretetype != lltype.Void)
         func = self.serialize_oparg("red", fnptr)

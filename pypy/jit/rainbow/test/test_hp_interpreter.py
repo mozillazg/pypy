@@ -1441,21 +1441,32 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_mul=0, ptr_iszero=0, ptr_nonzero=0)
 
     def test_indirect_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'x', 'res', 'i']
         def h1(n):
             return n*2
         def h2(n):
             return n*4
         l = [h1, h2]
         def f(n, x):
-            h = l[n&1]
-            return h(n) + x
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                h = l[n&1]
+                res = h(n) + x
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
 
-        P = StopAtXPolicy()
-        res = self.interpret(f, [7, 3], policy=P)
+        res = self.run(f, [7, 3], threshold=2)
         assert res == f(7,3)
-        self.check_insns(indirect_call=1, direct_call=1)
+        self.check_insns_in_loops(int_mul=1)    # call target eagerly promoted
 
     def test_indirect_red_call_with_exc(self):
+        py.test.skip("only interesting if the call target is not promoted")
         def h1(n):
             if n < 0:
                 raise ValueError
@@ -1486,35 +1497,94 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns(indirect_call=1)
 
     def test_indirect_gray_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'x', 'res', 'i']
         def h1(w, n):
             w[0] =  n*2
         def h2(w, n):
             w[0] = n*4
         l = [h1, h2]
         def f(n, x):
-            w = [0]
-            h = l[n&1]
-            h(w, n)
-            return w[0] + x
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                w = [0]
+                h = l[n&1]
+                h(w, n)
+                res = w[0] + x
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
 
-        P = StopAtXPolicy()
-        res = self.interpret(f, [7, 3], policy=P)
+        res = self.run(f, [7, 3], threshold=2)
         assert res == f(7,3)
 
     def test_indirect_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'x', 'res', 'i']
         def h1(n):
             return n*2
         def h2(n):
             return n*4
         l = [h1, h2]
         def f(n, x):
-            h = l[n&1]
-            return h(n) + x
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                h = l[n&1]
+                res = h(n) + x
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
 
         P = StopAtXPolicy(h1, h2)
-        res = self.interpret(f, [7, 3], policy=P)
+        res = self.run(f, [7, 3], threshold=2, policy=P)
         assert res == f(7,3)
-        self.check_insns(indirect_call=1)
+        self.check_insns_in_loops({'int_and': 1,
+                                   'direct_call': 1,     # to list.getitem
+                                   'indirect_call': 1,
+                                   'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
+
+    def test_indirect_residual_red_call_with_exc(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'x', 'res', 'i']
+        def h1(n):
+            if n < 0:
+                raise ValueError
+            return n*2
+        def h2(n):
+            return n*4
+        l = [h1, h2]
+        def f(n, x):
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                h = l[n&1]
+                try:
+                    res = h(n) + x
+                except ValueError:
+                    res = -42
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
+
+        P = StopAtXPolicy(h1, h2)
+        res = self.run(f, [7, 3], threshold=2, policy=P)
+        assert res == f(7,3)
+
+        res = self.run(f, [-2, 3], threshold=2, policy=P)
+        assert res == f(-2, 3) == -42
+        self.check_insns_in_loops(indirect_call=1, int_add=0, int_mul=0)
 
     def test_constant_indirect_red_call(self):
         def h1(m, n, x):
@@ -1523,10 +1593,18 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return x*4
         l = [h1, h2]
         def f(m, n, x):
-            m = hint(m, concrete=True)
-            frozenl = hint(l, deepfreeze=True)
-            h = frozenl[n&1]
-            return h(m, 5, x)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                m = hint(m, concrete=True)
+                frozenl = hint(l, deepfreeze=True)
+                h = frozenl[n&1]
+                res = h(m, 5, x)
+                #
+                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+            return res
 
         P = StopAtXPolicy()
         res = self.interpret(f, [1, 7, 3], [0, 1], policy=P)
