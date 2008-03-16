@@ -529,28 +529,6 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 112
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
-    def test_arraysize(self):
-        A = lltype.GcArray(lltype.Signed)
-        def ll_function(a):
-            return len(a)
-
-        def int_array(string):
-            items = [int(x) for x in string.split(',')]
-            n = len(items)
-            a1 = lltype.malloc(A, n)
-            for i in range(n):
-                a1[i] = items[i]
-            return a1
-        ll_function.convert_arguments = [int_array]
-
-        res = self.interpret(ll_function, ["6,7"], [])
-        assert res == 2
-        self.check_insns({'getarraysize': 1})
-        res = self.interpret(ll_function, ["8,3,3,4,5"], [0])
-        assert res == 5
-        self.check_insns({})
-
-
     def test_degenerated_before_return(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
@@ -629,34 +607,64 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 4 * 4
 
     def test_degenerate_with_voids(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'res']
         S = lltype.GcStruct('S', ('y', lltype.Void),
                                  ('x', lltype.Signed))
         def ll_function():
-            s = lltype.malloc(S)
-            s.x = 123
-            return s
-        res = self.interpret(ll_function, [], [])
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                res = lltype.malloc(S)
+                res.x = 123
+                #
+                MyJitDriver.jit_merge_point(i=i, res=res)
+                MyJitDriver.can_enter_jit(i=i, res=res)
+            return res
+
+        res = self.run(ll_function, [], threshold=2)
         assert res.x == 123
+        # ATM 'res' is forced at each iteration, because it gets merged with
+        # the 'res' that comes from outside (the first copy of the loop body
+        # which exists outside the portal, up to the jit_merge_point)
+        self.check_insns_in_loops({'malloc': 1, 'setfield': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_plus_minus(self):
-        py.test.skip("fix this test")
+        class MyJitDriver(JitDriver):
+            greens = ['s']
+            reds = ['x', 'y', 'i', 'acc']
         def ll_plus_minus(s, x, y):
-            acc = x
-            n = len(s)
-            pc = 0
-            while pc < n:
-                op = s[pc]
-                op = hint(op, concrete=True)
-                if op == '+':
-                    acc += y
-                elif op == '-':
-                    acc -= y
-                pc += 1
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                acc = x
+                n = len(s)
+                pc = 0
+                while pc < n:
+                    op = s[pc]
+                    op = hint(op, concrete=True)
+                    if op == '+':
+                        acc += y
+                    elif op == '-':
+                        acc -= y
+                    pc += 1
+                #
+                MyJitDriver.jit_merge_point(s=s, x=x, y=y, i=i, acc=acc)
+                MyJitDriver.can_enter_jit(s=s, x=x, y=y, i=i, acc=acc)
             return acc
-        ll_plus_minus.convert_arguments = [LLSupport.to_rstr, int, int]
-        res = self.interpret(ll_plus_minus, ["+-+", 0, 2], [0])
-        assert res == ll_plus_minus("+-+", 0, 2)
-        self.check_insns({'int_add': 2, 'int_sub': 1})
+
+        def main(copies, x, y):
+            s = "+%s+" % ("-" * copies,)
+            return ll_plus_minus(s, x, y)
+        
+        res = self.run(main, [5, 0, 2], threshold=2)
+        assert res == ll_plus_minus("+-----+", 0, 2)
+        self.check_insns_in_loops({'int_add': 2, 'int_sub': 5,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_red_virtual_container(self):
         # this checks that red boxes are able to be virtualized dynamically by
