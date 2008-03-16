@@ -48,9 +48,9 @@ def test_double_register_hilo():
     oldCycles = register.cpu.cycles
     register.set(valueHi, valueLo)
     assert oldCycles-register.cpu.cycles == 2
-    assert register.get() == value
     assert register.getHi() == valueHi
     assert register.getLo() == valueLo
+    assert register.get() == value
     
     valueHi = 0x56
     oldCycles = register.cpu.cycles
@@ -88,13 +88,31 @@ def test_double_register_methods():
     assert register.get() == value+addValue
     
     
+# ------------------------------------------------------------
+# TEST CPU
 
-def setup_module(module):
-    pass
-
-
+OPCODE_CYCLES = [
+    (0x00, 1),
+    (0x08, 5),
+    (0x10, 0),
+    (0x18, 3),
+    (0x01, 0x31, 0x10, 3)
+]
 
 def test_cycles():
-    pass
-
+    cpu = get_cpu()
+    for entry in OPCODE_CYCLES:
+        if len(entry) == 2:
+            test_cycle(cpu, entry[0], entry[1])
+        elif len(entry) == 4:
+            for opCode in range(entry[0], entry[1], entry[2]):
+                test_cycle(cpu, opCode, entry[3])
+                
+        
+        
+def test_cycle(cpu, opCode, cycles):
+    oldCycles = cpu.cycles
+    cpu.execute(opCode)
+    assert oldCycles - cpu.cycles == cycles
+            
 
