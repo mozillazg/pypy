@@ -1072,7 +1072,8 @@ class BytecodeWriter(object):
         self.emit(func, pos)
         self.emit(len(emitted_args))
         self.emit(*emitted_args)
-        self.register_greenvar(op.result)
+        if op.result.concretetype != lltype.Void:
+            self.register_greenvar(op.result)
 
     def handle_residual_call(self, op, withexc):
         fnptr = op.args[0]

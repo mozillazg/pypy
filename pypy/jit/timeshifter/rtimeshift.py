@@ -616,6 +616,7 @@ def gvflags_after_residual_call(jitstate, exceptiondesc, check_forced):
 def after_residual_call(jitstate, exceptiondesc, check_forced):
     gv_flags = gvflags_after_residual_call(jitstate, exceptiondesc,
                                            check_forced)
+    builder = jitstate.curbuilder
     if gv_flags is None:
         gv_flags = builder.rgenop.constPrebuiltGlobal(0)
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Signed), gv_flags)
