@@ -63,7 +63,13 @@ Z_FLAG = 0x80
 N_FLAG = 0x40
 H_FLAG = 0x20
 
-#CPU OP CODES
+RESET_A = 0x01 
+RESET_F = 0x80 
+RESET_BC = 0x0013
+RESET_DE = 0x00D8
+RESET_HL = 0x014D
+RESET_SP = 0xFFFE
+RESET_PC =  0x0100
 
 
 # ___________________________________________________________________________

@@ -104,6 +104,20 @@ class CPU(object):
         self.sp = DoubleRegister(self)
         self.reset()
 
+    def reset(self):
+        self.a = 0x01
+        self.f = 0x80
+        self.bc.set(0x0013)
+        self.de.set(0x00D8)
+        self.hl.set(0x014D)
+        self.sp.set(0xFFFE)
+        self.pc.set(0x0100)
+
+        self.ime = False
+        self.halted = False
+
+        self.cycles = 0
+        
     def getAF(self):
         return (self.a << 8) + self.f
 
@@ -175,19 +189,6 @@ class CPU(object):
     def setROM(self, banks):
         self.rom = banks
 
-    def reset(self):
-        self.a = 0x01
-        self.f = 0x80
-        self.bc.set(0x0013)
-        self.de.set(0x00D8)
-        self.hl.set(0x014D)
-        self.sp.set(0xFFFE)
-        self.pc.set(0x0100)
-
-        self.ime = False
-        self.halted = False
-
-        self.cycles = 0
         
     def zFlagAdd(self, s, resetF=False):
         if (resetF):
