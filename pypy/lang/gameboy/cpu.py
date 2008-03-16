@@ -7,67 +7,66 @@ from pypy.lang.gameboy import constants
 
 
 class Register(object):
-	
-	cpu = None
-	
-	def __init__(self, cpu, value=0):
-		self.cpu = cpu
-		self.set(value)
-		
-	def set(self, value):
-		self.value = value
-		self.cpu.cycles -= 1
-		
-	def get(self):
-		return self.value
-	
+    
+    def __init__(self, cpu, value=0):
+        self.cpu = cpu
+        self.set(value)
+        
+    def set(self, value):
+        self.value = value
+        self.cpu.cycles -= 1
+        
+    def get(self):
+        return self.value
+    
 # ___________________________________________________________________________
 
 class DoubleRegister(Register):
-	
-	value = 0
-	cpu  = None
-	
-	def __init__(self, cpu, hi=0, lo=None):
-		self.cpu = cpu
-		self.set(hi, lo);
-		
-	def set(self, hi, lo=None):
-		if (lo is None):
-			self.value = hi
-			self.cpu.cycles -= 1
-		else:
-			self.value = (hi << 8) + lo
-			self.cpu.cycles -= 2
-			
-	def setHi(self, hi):
-		self.set(hi, this.getLo())
-	
-	def setLo(self, lo):
-		self.set(self.getHi(), lo)
-		
-	def get(self):
-		return self.value
-	
-	def getHi(self):
-		return (self.value >> 8) & 0xFF
-		
-	def getLo(self):
-		return self.value & 0xFF
-	
-	def inc(self):
-		self.value = (self.value +1) & 0xFFFF
-		self.cpu.cycles -= 2
-		
-	def dec(self):
-		self.value = (self.value - 1) & 0xFFFF
-		self.cpu.cycles -= 2
-		
-	def add(self, n):
-		self.value = (self.value + n) & 0xFFFF
-		self.cpu.cycles -= 3
-	
-	
+    
+    cpu = None
+    
+    def __init__(self, cpu, hi=0, lo=None):
+        self.cpu = cpu
+        self.set(hi, lo);
+        
+    def set(self, hi, lo=None):
+        if (lo is None):
+            self.value = hi
+            self.cpu.cycles -= 1
+        else:
+            self.value = (hi << 8) + lo
+            self.cpu.cycles -= 2
+            
+    def setHi(self, hi):
+        self.set(hi, self.getLo())
+        self.cpu.cycles += 1
+    
+    def setLo(self, lo):
+        self.set(self.getHi(), lo)
+        self.cpu.cycles += 1
+        
+    def get(self):
+        return self.value
+    
+    def getHi(self):
+        return (self.value >> 8) & 0xFF
+        
+    def getLo(self):
+        return self.value & 0xFF
+    
+    def inc(self):
+        self.value = (self.value +1) & 0xFFFF
+        self.cpu.cycles -= 2
+        
+    def dec(self):
+        self.value = (self.value - 1) & 0xFFFF
+        self.cpu.cycles -= 2
+        
+    def add(self, n):
+        self.value = (self.value + n) & 0xFFFF
+        self.cpu.cycles -= 3
+    
+    
 # ___________________________________________________________________________
 
 class CPU(object):
@@ -79,6 +78,7 @@ class CPU(object):
     hl = None
     sp = None
     pc = None
+    af = None
 
     # Interrupt Flags
     ime = False
@@ -97,11 +97,11 @@ class CPU(object):
     def __init__(self, interrupt, memory):
         self.interrupt = interrupt
         self.memory = memory
-        self.bc = DoubleRegister()
-        self.de = DoubleRegister()
-        self.hl = DoubleRegister()
-        self.pc = DoubleRegister()
-        self.sp = DoubleRegister()
+        self.bc = DoubleRegister(self)
+        self.de = DoubleRegister(self)
+        self.hl = DoubleRegister(self)
+        self.pc = DoubleRegister(self)
+        self.sp = DoubleRegister(self)
         self.reset()
 
     def getAF(self):
@@ -116,49 +116,61 @@ class CPU(object):
         return val
        
     def getA(self):
-    	return self.a
-    	
+        return self.a
+        
     def setA(self, value):
-    	self.a = value 
-    	self.cycles -= 1 
-    	
+        self.a = value 
+        self.cycles -= 1 
+        
     def getB(self):
-    	return self.bc.getHi()
-    	
+        return self.bc.getHi()
+        
     def setB(self, value):
-    	self.bc.setHi(value)
-    	
+        self.bc.setHi(value)
+        
     def getC(self):
-    	return self.bc.getLo()
-    	
+        return self.bc.getLo()
+        
     def setC(self, value):
-    	self.bc.setLo(value)
-    	
+        self.bc.setLo(value)
+        
     def getD(self):
-    	return self.de.getHi()
-    	
+        return self.de.getHi()
+        
     def setD(self, value):
-    	self.de.setHi(value)
-    	
+        self.de.setHi(value)
+        
     def getE(self):
-    	return self.de.getLo()
-    	
+        return self.de.getLo()
+        
     def setE(self, value):
-    	self.de.setLo(value)
-    	    
+        self.de.setLo(value)
+            
     def setF(self, value):
-    	self.f = value
-    	self.cycles -= 1
-    	
+        self.f = value
+        self.cycles -= 1
+        
     def getF(self):
-    	return self.f
+        return self.f
+ 
+    def getH(self):
+        return self.hl.getHi()
     
+    def setH(self, value):
+        self.hl.setHi(value)
+        
+    def getL(self):
+        return self.hl.getLo()
+    
+    def setL(self, value):
+        self.hl.setLo(value)
+        
     def getHLi(self):
-    	return self.read(self.hl.get())
-    	
+        return self.read(self.hl.get())
+        
     def setHLi(self, value):
-    	self.write(self.hl.get(), value)
-    	self.cycles += 1
+        self.write(self.hl.get(), value)
+        self.cycles += 1
         
     def setROM(self, banks):
         self.rom = banks
@@ -178,14 +190,14 @@ class CPU(object):
         self.cycles = 0
         
     def zFlagAdd(self, s, resetF=False):
-    	if (resetF):
-    		 self.f = 0        
-    	if s == 0:
+        if (resetF):
+             self.f = 0        
+        if s == 0:
             self.f = constants.Z_FLAG
             
     def cFlagAdd(self, s, compareAnd=0x01, resetF=False):
-    	if (resetF):
-    		 self.f = 0
+        if (resetF):
+             self.f = 0
         if (s & compareAnd) != 0:
             self.f += constants.C_FLAG
 
@@ -230,13 +242,13 @@ class CPU(object):
        FETCHEXEC_OP_CODES[self.fetch()](self)
         
     def execute(self, opCode):
-    	OP_CODES[opCode](self)
+        OP_CODES[opCode](self)
         
      # memory Access, 1 cycle
     def read(self, address):
         self.cycles -= 1
         return self.memory.read(address)
-	 
+     
     def read(self, hi, lo):
         return self.read((hi << 8) + lo)
 
@@ -263,14 +275,14 @@ class CPU(object):
         self.sp.dec() # 2 cycles
         self.memory.write(self.sp.get(), data)
 
-	# 1 cycle
+    # 1 cycle
     def pop(self):
         data = self.memory.read(self.sp.get())
         self.sp.inc() # 2 cycles
         self.cycles += 1
         return data
 
-	# 4 cycles
+    # 4 cycles
     def call(self, address):
         self.push(self.pc.getHi()) # 2 cycles
         self.push(self.pc.getLo()) # 2 cycles
@@ -377,39 +389,39 @@ class CPU(object):
         self.f += (self.f & constants.C_FLAG)
         setter(data)
 
-	# 1 cycle
+    # 1 cycle
     def rlc(self, getter, setter):
         s = ((getter() & 0x7F) << 1) + ((getter() & 0x80) >> 7)
         flagsAndSetterFinish(s, getter, 0x80)
 
-	# 1 cycle
+    # 1 cycle
     def rl(self, getter, setter):
         s = ((getter() & 0x7F) << 1)
         if (self.f & constants.C_FLAG) != 0:
             s += 0x01
         flagsAndSetterFinish(s, getter, 0x80) # 1 cycle
 
-	# 1 cycle
+    # 1 cycle
     def rrc(self, getter, setter):
         s = (getter() >> 1) + ((getter() & 0x01) << 7)
         flagsAndSetterFinish(s, getter) # 1 cycle
 
-	# 1 cycle
+    # 1 cycle
     def rr(self, getter, setter):
         s = (getter() >> 1) + ((self.f & constants.C_FLAG) << 3)
         flagsAndSetterFinish(s, getter) # 1 cycle
 
-	# 2 cycles
+    # 2 cycles
     def sla(self, getter, setter):
         s = (getter() << 1) & 0xFF
         flagsAndSetterFinish(s, getter, 0x80) # 1 cycle
 
-	# 1 cycle
+    # 1 cycle
     def sra(self, getter, setter):
         s = (getter() >> 1) + (getter() & 0x80)
         flagsAndSetterFinish(s, getter) # 1 cycle
 
-	# 1 cycle
+    # 1 cycle
     def srl(self, getter, setter):
         s = (getter() >> 1)
         flagsAndSetterFinish(s, getter) # 1 cycle
@@ -421,14 +433,14 @@ class CPU(object):
         self.cFlagAdd(getter(), compareAnd)
         setter(s)
 
-	# 1 cycle
+    # 1 cycle
     def swap(self, getter, setter):
         s = ((getter() << 4) & 0xF0) + ((getter() >> 4) & 0x0F)
         self.setF(0) # 1 cycle
         self.zFlagAdd(s)
         setter(s)
 
-	# 2 cycles
+    # 2 cycles
     def bit(self, getter, setter, n):
         self.f = (self.f & constants.C_FLAG) + constants.H_FLAG
         if (getter() & (1 << n)) == 0:
@@ -461,16 +473,16 @@ class CPU(object):
         self.cFlagAdd(self.a, resetF=True)
         self.setA(s) # 1 cycle
 
-	# 2 cycles
+    # 2 cycles
     def set(self, getter, setter, n):
-    	self.cycles -= 1   	   	    # 1 cycle
-    	setter(getter() | (1 << n)) # 1 cycle
-    	
+        self.cycles -= 1                  # 1 cycle
+        setter(getter() | (1 << n)) # 1 cycle
+        
     # 1 cycle
     def res(self, getter, setter, n):
         setter(getter() & (~(1 << n))) # 1 cycle
-    	
- 	# 1 cycle
+        
+     # 1 cycle
     def ld(self, getter, setter):
         setter(getter()) # 1 cycle
 
@@ -479,6 +491,21 @@ class CPU(object):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
         self.setA(self.read(hi, lo))  # 1+1 cycles
+
+    def ld_BCi_A(self):
+        self.write(self.bc.get(), self.a);
+        self.cycles -= 2;
+
+    def ld_DEi_A(self):
+        self.write(self.de.get(), self.a);
+           
+    def ld_A_BCi(self):
+        self.a = self.read(self.b, self.c);
+        self.cycles -= 2;
+
+    def load_A_DEi(self):
+        self.a = self.read(self.d, self.e);
+        self.cycles -= 2;
 
      # LD (rr),A  2 cycles
     def ld_dbRegisteri_A(self, register):
@@ -492,6 +519,8 @@ class CPU(object):
         self.write(address, self.sp.getLo())  # 2 cycles
         self.write((address + 1) & 0xFFFF, self.sp.getHi()) # 2 cycles
         self.cycles += 1
+   
+
 
      # LD (nnnn),A  4 cycles
     def ld_mem_A(self):
@@ -526,6 +555,7 @@ class CPU(object):
      # LDH (C),A 2 cycles
     def ldh_Ci_A(self):
         self.write(0xFF00 + self.bc.getLo(), self.a) # 2 cycles
+        
 
      # LDI (HL),A 2 cycles
     def ldi_HLi_A(self):
@@ -555,13 +585,13 @@ class CPU(object):
         self.push(self.f) # 2 cycles
  
      # 3 cycles
-	def pop_dbRegister(self, register, getter):
-		b = getter() # 1 cycle
-		a = getter() # 1 cycle
-		register.set(a, b) # 2 cycles
+    def pop_dbRegister(self, register, getter):
+        b = getter() # 1 cycle
+        a = getter() # 1 cycle
+        register.set(a, b) # 2 cycles
         self.cycles += 1
-		
-	# 3 cycles
+        
+    # 3 cycles
     def pop_AF(self):
         self.f = self.pop() # 1 cycle
         self.setA(self.pop()) # 1+1 cycle
@@ -723,7 +753,7 @@ class CPU(object):
         self.ime = False
         self.cycles -= 1; 
 
-	# 1 cycle
+    # 1 cycle
     def ei(self): 
         # enable interrupts
         self.ime = True
@@ -748,7 +778,7 @@ class CPU(object):
 
 
 SINGLE_OP_CODES = [
-    (0x00, CPU.nop)
+    (0x00, CPU.nop),
     (0x08, CPU.load_mem_SP),
     (0x10, CPU.stop),
     (0x18, CPU.jr_nn),
@@ -783,16 +813,16 @@ SINGLE_OP_CODES = [
     (0xE8, CPU.add_SP_nn),
     (0xF0, CPU.ldh_A_mem),
     (0xF8, CPU.ld_HL_SP_nn),
-    (0xCB, CPU.fetchExecute)
+    (0xCB, CPU.fetchExecute),
     (0xCD, CPU.call_nnnn),
-    (0xC6, CPU.add_A_nn),
-    (0xCE, CPU.adc_A_nn),
-    (0xD6, CPU.sub_A_nn),
-    (0xDE, CPU.sbc_A_nn),
-    (0xE6, CPU.and_A_nn),
-    (0xEE, CPU.xor_A_nn),
-    (0xF6, CPU.or_A_nn),
-    (0xFE, CPU.cp_A_nn),
+    (0xC6, lambda s: CPU.addA(s, CPU.fetch(s))),
+    (0xCE, lambda s: CPU.adc(s, CPU.fetch(s))),
+    (0xD6, lambda s: CPU.sub(s, CPU.fetch(s))),
+    (0xDE, lambda s: CPU.sbc(s, CPU.fetch(s))),
+    (0xE6, lambda s: CPU.AND(s, CPU.fetch(s))),
+    (0xEE, lambda s: CPU.XOR(s, CPU.fetch(s))),
+    (0xF6, lambda s: CPU.OR(s, CPU.fetch(s))),
+    (0xFE, lambda s: CPU.cpA(s, CPU.fetch(s))),
     (0xC7, lambda s: CPU.rst(s, 0x00)),
     (0xCF, lambda s: CPU.rst(s, 0x08)),
     (0xD7, lambda s: CPU.rst(s, 0x10)),
@@ -800,22 +830,22 @@ SINGLE_OP_CODES = [
     (0xE7, lambda s: CPU.rst(s, 0x20)),
     (0xEF, lambda s: CPU.rst(s, 0x28)),
     (0xF7, lambda s: CPU.rst(s, 0x30)),
-    (0xFF, lambda s: CPU.rst(s, 0x38))
-    (0x76, CPU.halt),
+    (0xFF, lambda s: CPU.rst(s, 0x38)),
+    (0x76, CPU.halt)
 ]
 
 
 REGISTER_GROUP_OP_CODES = [
     (0x04, 0x08, CPU.inc),
     (0x05, 0x08, CPU.dec),    
-    (0x80, 0x01, CPU.add_A),    
-    (0x88, 0x01, CPU.adc_A),    
-    (0x90, 0x01, CPU.sub_A),    
-    (0x98, 0x01, CPU.sbc_A),    
-    (0xA0, 0x01, CPU.and_A),    
-    (0xA8, 0x01, CPU.xor_A),    
-    (0xB0, 0x01, CPU.or_A),
-    (0xB8, 0x01, CPU.cp_A),
+    (0x80, 0x01, CPU.addA),    
+    (0x88, 0x01, CPU.adc),    
+    (0x90, 0x01, CPU.sub),    
+    (0x98, 0x01, CPU.sbc),    
+    (0xA0, 0x01, CPU.AND),    
+    (0xA8, 0x01, CPU.XOR),    
+    (0xB0, 0x01, CPU.OR),
+    (0xB8, 0x01, CPU.cpA),
     (0x00, 0x01, CPU.rlc),    
     (0x08, 0x01, CPU.rrc),    
     (0x10, 0x01, CPU.rl),    
@@ -827,57 +857,58 @@ REGISTER_GROUP_OP_CODES = [
     (0x40, 0x01, CPU.bit, range(0, 8)),    
     (0xC0, 0x01, CPU.set, range(0, 8)),
     (0x80, 0x01, CPU.res, range(0, 8)),
-    (0x06, 0x08, CPU.ld_nn),
+    #(0x06, 0x08, CPU.ld_nn),
     (0x40, 0x01, CPU.res, range(0, 8))
 ]
 
 GROUP_CODES_GETTERS = (CPU.getB, CPU.getC, CPU.getD, CPU.getE, CPU.getH, CPU.getL, CPU.getHLi, CPU.getA)
 GROUP_CODES_SETTERS = (CPU.setB, CPU.setC, CPU.setD, CPU.setE, CPU.setH, CPU.setL, CPU.setHLi, CPU.setA)
 
-def create_group_op_codes(table):
-	opCodes = [None] * 0xFF;
-	for entry in table:
-		startCode = entry[0]
-		step = entry[1]
-		method = entry[2]
-		getters = GROUP_CODES_GETTERS
-		if len(entry) == 4:
-			for i in range(0, 8):
-				for n in entry[3]:
-	        		opCodes[startCode+step*i] = lambda me: method(me, GROUP_CODES_GETTERS[i], GROUP_CODES_SETTERS[i], n)
-		else:
-			for i in range(0, 8):
-	        	opCodes[startCode+step*i] = lambda me: method(me, GROUP_CODES_GETTERS[i], GROUP_CODES_SETTERS[i])
-	return opCodes
-SINGLE_OP_CODES.extend(create_group_op_codes(REGISTER_GROUP_OP_CODES))
-	
-	
+def create_group_op_codes():
+    opCodes = [None] * 0xFF;
+    for entry in REGISTER_GROUP_OP_CODES:
+        startCode = entry[0]
+        step = entry[1]
+        method = entry[2]
+        getters = GROUP_CODES_GETTERS
+        if len(entry) == 4:
+            for i in range(0, 8):
+                for n in entry[3]:
+                     opCodes[startCode+step*i] = lambda me: method(me, GROUP_CODES_GETTERS[i], GROUP_CODES_SETTERS[i], n)
+        else:
+            for i in range(0, 8):
+                 opCodes[startCode+step*i] = lambda me: method(me, GROUP_CODES_GETTERS[i], GROUP_CODES_SETTERS[i])
+    return opCodes
+SINGLE_OP_CODES.extend(create_group_op_codes())
+    
+    
+
 
 REGISTER_OP_CODES = [ 
-    (0x01, 0x10, CPU.ld_nnnn, [BC, DE, HL, SP]),
-    (0x09, 0x10, CPU.addHL, [BC, DE, HL, SP]),
-    (0x03, 0x10, CPU.inc, [BC, DE, HL, SP]),
-    (0x0B, 0x10, CPU.dec, [BC, DE, HL, SP]),
+    (0x01, 0x10, lambda s: CPU.pop_dbRegister(s, CPU.fetch), [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
+    (0x09, 0x10, CPU.addHL,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
+    (0x03, 0x10, CPU.inc,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
+    (0x0B, 0x10, CPU.dec,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     
-    (0xC0, 0x08, CPU.ret, [NZ, Z, NC, C]),
-    (0xC2, 0x08, CPU.jp_nnnn, [NZ, Z, NC, C]),
-    (0xC4, 0x08, CPU.call_nnnn, [NZ, Z, NC, C]),
-    (0x20, 0x08, CPU.jr_nn, [NZ, Z, NC, C]),
+    #(0xC0, 0x08, CPU.ret, [NZ, Z, NC, C]),
+    #(0xC2, 0x08, CPU.jp_nnnn, [NZ, Z, NC, C]),
+    #(0xC4, 0x08, CPU.call_nnnn, [NZ, Z, NC, C]),
+    #(0x20, 0x08, CPU.jr_nn, [NZ, Z, NC, C]),"""
     
-    (0xC1, 0x10, CPU.pop, [BC, DE, HL, AF]),
-    (0xC5, 0x10, CPU.push, [BC, DE, HL, AF])
+    (0xC1, 0x10, CPU.pop,  [CPU.bc, CPU.de, CPU.hl, CPU.af]),
+    (0xC5, 0x10, CPU.push, [CPU.bc, CPU.de, CPU.hl, CPU.af])
 ]
 
-def create_register_op_codes(table):
-	opCodes = [];
-	for entry in table:
-		 startCode = entry[0]
-		 step = entry[1]
-		 commandBase = entry[2]
-		 changing = entry[3]
-	return opCodes
+def create_register_op_codes():
+    opCodes = [];
+    for entry in REGISTER_OP_CODES:
+         startCode = entry[0]
+         step = entry[1]
+         commandBase = entry[2]
+         changing = entry[3]
+    return opCodes
 
-SINGLE_OP_CODES.extend(create_register_op_codes(REGISTER_OP_CODES))
+SINGLE_OP_CODES.extend(create_register_op_codes())
 
 
 def initialize_op_code_table(table):
@@ -892,5 +923,5 @@ def initialize_op_code_table(table):
     assert None not in result
     return result
    
-OP_CODES = initialize_op_code_table(SINGLE_OP_CODES)
+#OP_CODES = initialize_op_code_table(SINGLE_OP_CODES)
 
