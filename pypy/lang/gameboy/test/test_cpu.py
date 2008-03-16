@@ -114,14 +114,14 @@ def test_cycles():
     cpu = get_cpu()
     for entry in OPCODE_CYCLES:
         if len(entry) == 2:
-            test_cycle(cpu, entry[0], entry[1])
+            cycletest(cpu, entry[0], entry[1])
         elif len(entry) == 4:
             for opCode in range(entry[0], entry[1], entry[2]):
-                test_cycle(cpu, opCode, entry[3])
+                cycletest(cpu, opCode, entry[3])
                 
         
         
-def test_cycle(cpu, opCode, cycles):
+def cycletest(cpu, opCode, cycles):
     oldCycles = cpu.cycles
     cpu.execute(opCode)
     assert oldCycles - cpu.cycles == cycles
