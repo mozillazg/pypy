@@ -234,7 +234,8 @@ class InterpretationTest(object):
         return self.residual_graph
 
     def check_insns(self, expected=None, **counts):
-        self.insns = summary(self.get_residual_graph())
+        graph = self.get_residual_graph()
+        self.insns = summary(graph)
         if expected is not None:
             assert self.insns == expected
         for opname, count in counts.items():

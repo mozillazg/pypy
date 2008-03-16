@@ -426,23 +426,29 @@ class BytecodeWriter(object):
                         reverse = False
                     elif srcopname == 'ptr_iszero':
                         reverse = True
+                if reverse is not None:
+                    ptrindex = self.serialize_oparg("red", srcargs[0])
 
             falserenaming = self.insert_renaming(linkfalse)
             truerenaming = self.insert_renaming(linktrue)
             if self.hannotator.policy.hotpath and color == "red":
                 self.emit("hp_red_goto_iftrue")
             elif reverse is not None:
-                ptrindex = self.serialize_oparg("red", srcargs[0])
                 self.emit("red_goto_ifptrnonzero")
                 self.emit(reverse)
                 self.emit(ptrindex)
+                reverse = None
             else:
                 self.emit("%s_goto_iftrue" % color)
             self.emit(index)
             self.emit(tlabel(linktrue))
+            if reverse is not None:
+                self.emit("hp_learn_boolvalue", reverse, ptrindex)
             self.emit(*falserenaming)
             self.make_bytecode_block(linkfalse.target, insert_goto=True)
             self.emit(label(linktrue))
+            if reverse is not None:
+                self.emit("hp_learn_boolvalue", not reverse, ptrindex)
             self.emit(*truerenaming)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:

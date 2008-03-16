@@ -964,6 +964,10 @@ class JitInterpreter(object):
         else:
             self.green_result(gv_result)
 
+    @arguments("bool", "red")
+    def opimpl_hp_learn_boolvalue(self, boolval, redbox):
+        redbox.learn_boolvalue(self.jitstate, boolval)
+
     # ____________________________________________________________
     # construction-time interface
 
