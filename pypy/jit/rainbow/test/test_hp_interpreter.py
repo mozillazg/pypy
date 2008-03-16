@@ -12,6 +12,7 @@ import sys
 #
 #    i = 1024
 #    while i > 0:
+#        i >>= 1
 #        ...real test code here...
 #        MyJitDriver.jit_merge_point(...)
 #        MyJitDriver.can_enter_jit(...)
@@ -879,10 +880,14 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         res = self.interpret(f, [4, 212], [])
         assert res == 212
 
-    def test_simple_meth(self):
+    def test_simple_yellow_meth(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['flag', 'res', 'i']
+
         class Base(object):
             def m(self):
-                raise NotImplementedError
+                return 21
             pass  # for inspect.getsource() bugs
 
         class Concrete(Base):
@@ -891,43 +896,61 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             pass  # for inspect.getsource() bugs
 
         def f(flag):
-            if flag:
-                o = Base()
-            else:
-                o = Concrete()
-            return o.m()
+            i = 1024
+            while i > 0:
+                i >>= 1
+                if flag:
+                    o = Base()
+                else:
+                    o = Concrete()
+                res = o.m()        # yellow call
+                MyJitDriver.jit_merge_point(flag=flag, res=res, i=i)
+                MyJitDriver.can_enter_jit(flag=flag, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [0], [0])
+        res = self.run(f, [0], threshold=2)
         assert res == 42
-        self.check_insns({})
-
-        res = self.interpret(f, [0], [])
-        assert res == 42
-        self.check_insns(indirect_call=0)
+        self.check_insns_in_loops({'int_is_true': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_simple_red_meth(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['flag', 'res', 'i']
+
         class Base(object):
-            def m(self, n):
-                raise NotImplementedError
+            def m(self, i):
+                return 21 + i
             pass  # for inspect.getsource() bugs
 
         class Concrete(Base):
-            def m(self, n):
-                return 21*n
+            def m(self, i):
+                return 42 - i
             pass  # for inspect.getsource() bugs
 
-        def f(flag, x):
-            if flag:
-                o = Base()
-            else:
-                o = Concrete()
-            return o.m(x)
+        def f(flag):
+            i = 1024
+            while i > 0:
+                i >>= 1
+                if flag:
+                    o = Base()
+                else:
+                    o = Concrete()
+                res = o.m(i)        # red call
+                MyJitDriver.jit_merge_point(flag=flag, res=res, i=i)
+                MyJitDriver.can_enter_jit(flag=flag, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [0, 2], [0])
+        res = self.run(f, [0], threshold=2)
         assert res == 42
-        self.check_insns({'int_mul': 1})
+        self.check_insns_in_loops({'int_is_true': 1, 'int_sub': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_simple_red_meth_vars_around(self):
+        class MyJitDriver(JitDriver):
+            greens = ['y']
+            reds = ['flag', 'x', 'z', 'res', 'i']
+
         class Base(object):
             def m(self, n):
                 raise NotImplementedError
@@ -939,27 +962,48 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             pass  # for inspect.getsource() bugs
 
         def f(flag, x, y, z):
-            if flag:
-                o = Base()
-            else:
-                o = Concrete()
-            return (o.m(x)+y)-z
+            i = 1024
+            while i > 0:
+                i >>= 1
+                if flag:
+                    o = Base()
+                else:
+                    o = Concrete()
+                hint(y, concrete=True)
+                res = (o.m(x)+y)-z
+                MyJitDriver.jit_merge_point(flag=flag, res=res, i=i,
+                                            x=x, y=y, z=z)
+                MyJitDriver.can_enter_jit(flag=flag, res=res, i=i,
+                                          x=x, y=y, z=z)
+            return res
 
-        res = self.interpret(f, [0, 2, 7, 5], [0])
+        res = self.run(f, [0, 2, 7, 5], threshold=2)
         assert res == 44
-        self.check_insns({'int_mul': 1, 'int_add': 1, 'int_sub': 1})
+        self.check_insns_in_loops({'int_is_true': 1,
+                                   'int_mul': 1, 'int_add': 1, 'int_sub': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_green_red_mismatch_in_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['x', 'y']
+            reds = ['u', 'res', 'i']
+
         def add(a,b, u):
             return a+b
 
         def f(x, y, u):
-            r = add(x+1,y+1, u)
-            z = x+y
-            z = hint(z, concrete=True) + r   # this checks that 'r' is green
-            return hint(z, variable=True)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                r = add(x+1,y+1, u)
+                z = x+y
+                z = hint(z, concrete=True) + r  # this checks that 'r' is green
+                res = hint(z, variable=True)
+                MyJitDriver.jit_merge_point(x=x, y=y, u=u, res=res, i=i)
+                MyJitDriver.can_enter_jit(x=x, y=y, u=u, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [4, 5, 0], [])
+        res = self.run(f, [4, 5, 0], threshold=2)
         assert res == 20
 
 
@@ -976,6 +1020,10 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 120
         
     def test_simple_indirect_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['flag']
+            reds = ['v', 'res', 'i']
+
         def g1(v):
             return v * 2
 
@@ -983,17 +1031,28 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return v + 2
 
         def f(flag, v):
-            if hint(flag, concrete=True):
-                g = g1
-            else:
-                g = g2
-            return g(v)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                if hint(flag, concrete=True):
+                    g = g1
+                else:
+                    g = g2
+                res = g(v)
+                MyJitDriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
+                MyJitDriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [0, 40], [0])
+        res = self.run(f, [0, 40], threshold=2)
         assert res == 42
-        self.check_insns({'int_add': 1})
+        self.check_insns_in_loops({'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_normalize_indirect_call(self):
+        class MyJitDriver(JitDriver):
+            greens = ['flag']
+            reds = ['v', 'res', 'i']
+
         def g1(v):
             return -17
 
@@ -1001,21 +1060,32 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return v + 2
 
         def f(flag, v):
-            if hint(flag, concrete=True):
-                g = g1
-            else:
-                g = g2
-            return g(v)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                if hint(flag, concrete=True):
+                    g = g1
+                else:
+                    g = g2
+                res = g(v)
+                MyJitDriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
+                MyJitDriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [0, 40], [0])
+        res = self.run(f, [0, 40], threshold=2)
         assert res == 42
-        self.check_insns({'int_add': 1})
+        self.check_insns_in_loops({'int_add': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [1, 40], [0])
+        res = self.run(f, [1, 40], threshold=2)
         assert res == -17
-        self.check_insns({})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_normalize_indirect_call_more(self):
+        class MyJitDriver(JitDriver):
+            greens = ['flag']
+            reds = ['v', 'res', 'i']
+
         def g1(v):
             if v >= 0:
                 return -17
@@ -1026,28 +1096,38 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return v + 2
 
         def f(flag, v):
-            w = g1(v)
-            if hint(flag, concrete=True):
-                g = g1
-            else:
-                g = g2
-            return g(v) + w
+            i = 1024
+            while i > 0:
+                i >>= 1
+                w = g1(v)
+                if hint(flag, concrete=True):
+                    g = g1
+                else:
+                    g = g2
+                res = g(v) + w
+                MyJitDriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
+                MyJitDriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
+            return res
 
-        res = self.interpret(f, [0, 40], [0])
+        res = self.run(f, [0, 40], threshold=2)
         assert res == 25
-        self.check_insns({'int_add': 2, 'int_ge': 1})
+        self.check_insns_in_loops({'int_add': 2, 'int_ge': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [1, 40], [0])
+        res = self.run(f, [1, 40], threshold=2)
         assert res == -34
-        self.check_insns({'int_ge': 2, 'int_add': 1})
+        self.check_insns_in_loops({'int_ge': 2,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [0, -1000], [0])
+        res = self.run(f, [0, -1000], threshold=2)
         assert res == f(False, -1000)
-        self.check_insns({'int_add': 2, 'int_ge': 1})
+        self.check_insns_in_loops({'int_add': 2, 'int_ge': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
 
-        res = self.interpret(f, [1, -1000], [0])
+        res = self.run(f, [1, -1000], threshold=2)
         assert res == f(True, -1000)
-        self.check_insns({'int_ge': 2, 'int_add': 1})
+        self.check_insns_in_loops({'int_ge': 2,
+                                   'int_gt': 1, 'int_rshift': 1})
 
     def test_green_char_at_merge(self):
         def f(c, x):

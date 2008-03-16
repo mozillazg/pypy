@@ -85,10 +85,13 @@ class FallbackInterpreter(object):
             Xxx("capture_exception")
 
     def run_directly(self, greenargs, redargs, targetbytecode):
-        calldesc = targetbytecode.owncalldesc
+        return self.perform_call_mixed(greenargs, redargs,
+                                       targetbytecode.gv_ownfnptr,
+                                       targetbytecode.owncalldesc)
+
+    def perform_call_mixed(self, greenargs, redargs, gv_func, calldesc):
         try:
-            gv_res = calldesc.perform_call_mixed(self.rgenop,
-                                                 targetbytecode.gv_ownfnptr,
+            gv_res = calldesc.perform_call_mixed(self.rgenop, gv_func,
                                                  greenargs, redargs)
         except Exception, e:
             self.capture_exception(e)
@@ -304,11 +307,6 @@ class FallbackInterpreter(object):
         gv_res = calldesc.perform_call(self.rgenop, gv_fnptr, greenargs)
         self.green_result(gv_res)
 
-    @arguments("green_varargs", "red_varargs", "red", "indirectcalldesc")
-    def opimpl_indirect_call_const(self, greenargs, redargs,
-                                      gv_funcptr, callset):
-        Xxx("indirect_call_const")
-
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
         return self.oopspec_call(oopspec, [])
@@ -441,7 +439,10 @@ class FallbackInterpreter(object):
 
     @arguments("red", "green", "green", returns="green")
     def opimpl_is_constant(self, arg, true, false):
-        Xxx("is_constant")
+        # we could return either true or false here, but 'false' is probably
+        # better because there is no point in fallback-interpreting the clever
+        # logic that typically follows the 'true' case.
+        return false
 
     # hotpath-specific operations
 
@@ -477,6 +478,26 @@ class FallbackInterpreter(object):
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_hp_yellow_direct_call(self, greenargs, redargs, targetbytecode):
         gv_res = self.run_directly(greenargs, redargs, targetbytecode)
+        self.green_result(gv_res)
+
+    @arguments("green_varargs", "red_varargs", "green", "indirectcalldesc")
+    def opimpl_hp_red_indirect_call(self, greenargs, redargs, gv_funcptr,
+                                    callset):
+        gv_res = self.perform_call_mixed(greenargs, redargs, gv_funcptr,
+                                         callset.calldesc)
+        self.red_result(gv_res)
+
+    @arguments("green_varargs", "red_varargs", "green", "indirectcalldesc")
+    def opimpl_hp_gray_indirect_call(self, greenargs, redargs, gv_funcptr,
+                                     callset):
+        self.perform_call_mixed(greenargs, redargs, gv_funcptr,
+                                callset.calldesc)
+
+    @arguments("green_varargs", "red_varargs", "green", "indirectcalldesc")
+    def opimpl_hp_yellow_indirect_call(self, greenargs, redargs, gv_funcptr,
+                                       callset):
+        gv_res = self.perform_call_mixed(greenargs, redargs, gv_funcptr,
+                                         callset.calldesc)
         self.green_result(gv_res)
 
     @arguments("red", "calldesc", "bool", "bool", "red_varargs")

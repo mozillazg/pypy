@@ -896,8 +896,7 @@ class JitInterpreter(object):
                                 promotebox, promotiondesc)
             assert False, "unreachable"
 
-    @arguments("green_varargs", "red_varargs", "bytecode")
-    def opimpl_hp_red_direct_call(self, greenargs, redargs, targetbytecode):
+    def hp_direct_call(self, greenargs, redargs, targetbytecode):
         frame = rtimeshift.VirtualFrame(self.frame, None)
         self.frame = self.jitstate.frame = frame
         frame.pc = 0
@@ -905,8 +904,22 @@ class JitInterpreter(object):
         frame.local_boxes = redargs
         frame.local_green = greenargs
 
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_hp_red_direct_call(self, greenargs, redargs, targetbytecode):
+        self.hp_direct_call(greenargs, redargs, targetbytecode)
+
     opimpl_hp_gray_direct_call = opimpl_hp_red_direct_call
     opimpl_hp_yellow_direct_call = opimpl_hp_red_direct_call
+
+    @arguments("green_varargs", "red_varargs", "green", "indirectcalldesc")
+    def opimpl_hp_red_indirect_call(self, greenargs, redargs, gv_funcptr,
+                                    callset):
+        addr = gv_funcptr.revealconst(llmemory.Address)
+        bytecode = callset.bytecode_for_address(addr)
+        self.hp_direct_call(greenargs, redargs, bytecode)
+
+    opimpl_hp_gray_indirect_call = opimpl_hp_red_indirect_call
+    opimpl_hp_yellow_indirect_call = opimpl_hp_red_indirect_call
 
     @arguments("red", "calldesc", "bool", "bool", "red_varargs")
     def opimpl_hp_residual_call(self, funcbox, calldesc, withexc, has_result,
