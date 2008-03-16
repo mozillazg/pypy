@@ -3,6 +3,7 @@
 
 from pypy.lang.gameboy import constants
 
+
 def hasCartridgeBattery(self, cartridgeType):	
 	return (cartridgeType == constants.TYPE_MBC1_RAM_BATTERY \
 				or cartridgeType == constants.TYPE_MBC2_BATTERY \
@@ -127,7 +128,7 @@ class Cartridge(object):
 			
 		self.ram = []
 		
-		for i in range(0,ramSize):
+		for i in range(0, ramSize):
 			self.ram[i] = 0xFF
 			
 		if self.store.hasBattery(cartridgeName):
@@ -153,7 +154,7 @@ class Cartridge(object):
 		if self.rom.length < 0x0150:
 			return false;
 		checksum = 0xE7;
-		for address in range(0x0134,0x014C):
+		for address in range(0x0134, 0x014C):
 			checksum = (checksum - (rom[address] & 0xFF)) & 0xFF;
 		return (checksum == self.getHeaderChecksum())
 
@@ -529,7 +530,7 @@ class MBC5(MBC):
 		self.setRAM(ram);
 
 
-	def reset():
+	def  reset():
 		super.reset()
 
 
@@ -640,7 +641,7 @@ class HuC3(MBC):
 		return 0xFF;
 
 
-	def write(self, address,  data):
+	def write(self, address, data):
 		if (address <= 0x1FFF):
 			# 0000-1FFF
 			self.ramFlag = data;
@@ -706,6 +707,8 @@ class HuC3(MBC):
 			self.clockRegister += (1 << 24) - (365 << 12);
 
 		self.clockTime = now - elapsed;
+
+
 
 CATRIDGE_TYPE_RANGES = [
    (constants.TYPE_MBC1,             constants.TYPE_MBC1_RAM_BATTERY,        MBC1),
