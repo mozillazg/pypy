@@ -1,3 +1,4 @@
+import py
 from pypy.lang.gameboy.cpu import CPU, Register, DoubleRegister
 from pypy.lang.gameboy import constants
 
@@ -111,17 +112,18 @@ OPCODE_CYCLES = [
 ]
 
 def test_cycles():
+    py.test.skip("opCode mapping in CPU is still missing.")
     cpu = get_cpu()
     for entry in OPCODE_CYCLES:
         if len(entry) == 2:
-            cycletest(cpu, entry[0], entry[1])
+            cycle_test(cpu, entry[0], entry[1])
         elif len(entry) == 4:
             for opCode in range(entry[0], entry[1], entry[2]):
-                cycletest(cpu, opCode, entry[3])
+                cycle_test(cpu, opCode, entry[3])
                 
         
         
-def cycletest(cpu, opCode, cycles):
+def cycle_test(cpu, opCode, cycles):
     oldCycles = cpu.cycles
     cpu.execute(opCode)
     assert oldCycles - cpu.cycles == cycles
