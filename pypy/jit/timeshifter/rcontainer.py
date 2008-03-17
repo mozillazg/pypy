@@ -514,8 +514,8 @@ def make_interior_getter(fielddescs, _cache={}):
                 if is_array:    # array substruct
                     index = indexes_gv[i].revealconst(lltype.Signed)
                     i += 1
-                    if 0 <= i < len(ptr):
-                        ptr = ptr[i]
+                    if 0 <= index < len(ptr):
+                        ptr = ptr[index]
                     else:
                         raise SegfaultException    # index out of bounds
                 else:
