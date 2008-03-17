@@ -216,6 +216,11 @@ class CPU(object):
             self.execute()
 
      # Interrupts
+     # XXX this doesn't work, you cannot have two methods with the same name
+     # and different numbers of parameters
+     # another problem is that the attribute self.parameter cannot have the
+     # same name as a method or you will confuse yourself in major ways (Python
+     # is lookup-based, not send-based)
     def interrupt(self):
         if (self.halted):
             if (self.interrupt.isPending()):
@@ -247,6 +252,7 @@ class CPU(object):
 
      # Execution
     def fetchExecute(self):
+        # these global statements have no effect
         global FETCH_EXECUTE_OP_CODES
         FETCH_EXECUTE_OP_CODES[self.fetch()](self)
         
@@ -458,6 +464,7 @@ class CPU(object):
     def flagsAndSetterFinish(self, s, setter, compareAnd=0x01):
         self.f.set(0) # 1 cycle
         self.zFlagAdd(s)
+        # XXX where does "getter" come from here? should be "setter"?
         self.cFlagAdd(getter(), compareAnd)
         setter(s)
 
@@ -901,6 +908,7 @@ FIRST_ORDER_OP_CODES.extend(create_group_op_codes(REGISTER_GROUP_OP_CODES))
 SECOND_ORDER_OP_CODES = create_group_op_codes(SECOND_ORDER_REGISTER_OP_CODES)
 
 def create_register_op_codes():
+    # not necessary to build a list, you can nicely use a generator here
     opCodes = [];
     for entry in REGISTER_OP_CODES:
          startCode = entry[0]
