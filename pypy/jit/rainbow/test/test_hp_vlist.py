@@ -224,7 +224,6 @@ class TestVList(test_hotpath.HotPathTest):
                                    'int_is_true': 1})
 
     def test_frozen_list_indexerror(self):
-        py.test.skip("fix me")
         lst = [5, 7, 9]
         class MyJitDriver(JitDriver):
             greens = ['x']
