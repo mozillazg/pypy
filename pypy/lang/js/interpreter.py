@@ -259,7 +259,11 @@ class W_Function(W_NewBuiltin):
             functioncode = "function () {}"
         #remove program and sourcelements node
         funcnode = parse(functioncode).children[0].children[0]
-        return ASTBUILDER.dispatch(funcnode).execute(ctx)
+        ast = ASTBUILDER.dispatch(funcnode)
+        bytecode = JsCode()
+        ast.emit(bytecode)
+        bytecode.run(ctx, check_stack=False)
+        return bytecode.stack[-1]
     
     def Construct(self, ctx, args=[]):
         return self.Call(ctx, args, this=None)

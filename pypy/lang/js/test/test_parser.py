@@ -331,9 +331,10 @@ class TestToASTExpr(BaseTestToAST):
         self.check('x = 3', [
             'LOAD_INTCONSTANT 3',
             'STORE "x"'])
-        self.check('{x:1}', [
+        self.check('{"x":1}', [
             'LOAD_INTCONSTANT 1',
-            "LOAD_OBJECT ['x']"])
+            'LOAD_STRINGCONSTANT "x"',
+            "LOAD_OBJECT 1"])
 
     def test_raising(self):
         py.test.raises(ParseError, self.check, '1=2', [])
@@ -366,6 +367,12 @@ class TestToASTExpr(BaseTestToAST):
                    ['LOAD_STRINGCONSTANT "hello "',
                     'LOAD_STRINGCONSTANT "world"',
                     'ADD'])
+
+    def test_member(self):
+        self.check('a["b"]',
+                   ['LOAD_VARIABLE "a"',
+                    'LOAD_STRINGCONSTANT "b"',
+                    'LOAD_ELEMENT'])
 
 class TestToAstStatement(BaseTestToAST):
     def setup_class(cls):

@@ -30,7 +30,7 @@ create array out of num elements on the stack
 
 object creation:
 
-LOAD_OBJECT <list of parameters>
+LOAD_OBJECT <num>
 
 Takes one element per one parameter from the stack and initializes
 object this way.
@@ -43,6 +43,15 @@ LOAD_FUNCTION <code object>
 
 loads function object (declared earlier) to a stack. used for
 function expressions.
+
+LOAD_MEMBER <name>
+
+Load a member name from the last element on a stack.
+
+LOAD_ELEMENT
+
+Take element and left side from the stack and load element
+from the left side onto the stack
 
 Arithmetic binary operations:
 (all pops two values and pushes on stack the result)

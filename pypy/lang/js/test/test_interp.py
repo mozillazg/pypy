@@ -110,7 +110,8 @@ def test_var_scoping():
     function x () {
         var p;
         p = 1;
-        y = 3; return y + z;
+        y = 3;
+        return y + z;
     };
     var z = 2;
     print(x(), y, p);
