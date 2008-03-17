@@ -216,12 +216,11 @@ class CPU(object):
             self.execute()
 
      # Interrupts
-     # XXX this doesn't work, you cannot have two methods with the same name
-     # and different numbers of parameters
-     # another problem is that the attribute self.parameter cannot have the
-     # same name as a method or you will confuse yourself in major ways (Python
-     # is lookup-based, not send-based)
-    def interrupt(self):
+    def interrupt(self, address=None):
+        if address is not None:
+            self.ime = False
+            self.call(address)
+            return
         if (self.halted):
             if (self.interrupt.isPending()):
                 self.halted = False
@@ -246,20 +245,12 @@ class CPU(object):
                 self.interrupt(0x60)
                 self.interrupt.lower(constants.JOYPAD)
 
-    def interrupt(self, address):
-        self.ime = False
-        self.call(address)
-
      # Execution
     def fetchExecute(self):
-        # these global statements have no effect
-        global FETCH_EXECUTE_OP_CODES
         FETCH_EXECUTE_OP_CODES[self.fetch()](self)
         
     def execute(self, opCode):
-        global OP_CODES
         OP_CODES[opCode](self)
-        
         
     def reverseArgumentsDoubleRegister(self, register, getter):
         pass
@@ -277,14 +268,13 @@ class CPU(object):
         self.memory.write(address, data)
         self.cycles -= 2
 
-
      # Fetching  1 cycle
     def fetch(self):
         self.cycles += 1
         if (self.pc.get() <= 0x3FFF):
-            self.pc.inc() # 2 cycles
-            return self.rom[self.pc.get()] & 0xFF
-        data = self.memory.read(self.pc.get())
+            data =  self.rom[self.pc.get()]
+        else:
+            data = self.memory.read(self.pc.get())
         self.pc.inc() # 2 cycles
         return data
 
@@ -677,7 +667,7 @@ class CPU(object):
         self.pc.set(hi,lo) # 2 cycles
 
      # JP cc,nnnn 3,4 cycles
-    def jp_cc_nnnn(cc):
+    def jp_cc_nnnn(self, cc):
         if (cc):
             self.jp_nnnn() # 4 cycles
         else:
@@ -689,9 +679,9 @@ class CPU(object):
         self.cycles += 1
 
      # JR cc,+nn, 2,3 cycles
-    def jr_cc_nn(cc):
+    def jr_cc_nn(self, cc):
         if (cc):
-            self.pc.add(self.fetch()) # 3 cycles
+            self.jr_nn() # 3 cycles
         else:
             self.pc.inc() # 2 cycles
     
@@ -702,7 +692,7 @@ class CPU(object):
         self.call((hi << 8) + lo)  # 4 cycles
 
      # CALL cc,nnnn, 3,6 cycles
-    def call_cc_nnnn(cc):
+    def call_cc_nnnn(self, cc):
         if (cc):
             self.call_nnnn() # 6 cycles
         else:
@@ -854,19 +844,33 @@ REGISTER_GROUP_OP_CODES = [
 ]
 
 REGISTER_OP_CODES = [ 
-    (0x01, 0x10, lambda s: CPU.pop_dbRegister(s, CPU.fetch), [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
+    (0x01, 0x10, lambda s, register: CPU.popDoubleRegister(s, register=register, getter=CPU.fetch), [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     (0x09, 0x10, CPU.addHL,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     (0x03, 0x10, CPU.inc,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     (0x0B, 0x10, CPU.dec,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     
-    #(0xC0, 0x08, CPU.ret, [NZ, Z, NC, C]),
-    #(0xC2, 0x08, CPU.jp_nnnn, [NZ, Z, NC, C]),
-    #(0xC4, 0x08, CPU.call_nnnn, [NZ, Z, NC, C]),
-    #(0x20, 0x08, CPU.jr_nn, [NZ, Z, NC, C]),"""
+    (0xC0, 0x08, CPU.ret, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
+    (0xC2, 0x08, CPU.jp_nnnn, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
+    (0xC4, 0x08, CPU.call_nnnn, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
+    (0x20, 0x08, CPU.jr_nn, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
     
     (0xC1, 0x10, CPU.pop,  [CPU.bc, CPU.de, CPU.hl, CPU.af]),
     (0xC5, 0x10, CPU.push, [CPU.bc, CPU.de, CPU.hl, CPU.af])
 ]
+
+def create_register_op_codes(table):
+    opCodes = [None] * 0xFF
+    for entry in table:
+        opCode = entry[0]
+        step = entry[1]
+        function = entry[2]
+        for getter in entry[3]:
+            opCodes[opCode] = (opCode, lambda s: function(s, getter))
+            opCode += step
+    return opCodes
+            
+        
+FIRST_ORDER_OP_CODES.extend(create_register_op_codes(REGISTER_OP_CODES))
 
 SECOND_ORDER_REGISTER_OP_CODES = [
     (0x00, 0x01, CPU.rlc),    
@@ -887,7 +891,7 @@ GROUP_CODES_GETTERS = (CPU.getB, CPU.getC, CPU.getD, CPU.getE, CPU.getH, CPU.get
 GROUP_CODES_SETTERS = (CPU.setB, CPU.setC, CPU.setD, CPU.setE, CPU.setH, CPU.setL, CPU.setHLi, CPU.setA)
 
 def create_group_op_codes(table):
-    opCodes = [None] * 0xFF;
+    opCodes = [None] * 0xFF
     for entry in table:
         startCode = entry[0]
         step = entry[1]
