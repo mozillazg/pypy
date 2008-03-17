@@ -1,9 +1,12 @@
 import py
 from pypy.lang.gameboy.cpu import CPU, Register, DoubleRegister
+from pypy.lang.gameboy.ram import RAM
 from pypy.lang.gameboy import constants
 
 def get_cpu():
-    return CPU([None]*256, None)
+    cpu =  CPU(None, RAM())
+    cpu.setROM([0]*0xFFFF);
+    return cpu
 
 # ------------------------------------------------------------
 # TEST REGISTER
@@ -22,17 +25,31 @@ def test_register():
     assert register.get() == value
     assert oldCycles-register.cpu.cycles == 1
     
+def test_register_bounds():
+    register = Register(get_cpu())
+    value = 0x1234FF
+    register.set(value)
+    assert register.get() == 0xFF
+    
 # ------------------------------------------------------------
 # TEST DOUBLE REGISTER
 
 def test_double_register_constructor():
-    register = DoubleRegister(get_cpu())
+    cpu = get_cpu()
+    register = DoubleRegister(cpu)
     assert register.get() == 0
     assert register.getHi() == 0
     assert register.getLo() == 0
     value = 0x1234
-    register = DoubleRegister(get_cpu(), value)
-    assert register.get() == value
+    reg1 = Register(cpu)
+    reg1.set(0x12)
+    reg2 = Register(cpu)
+    reg2.set(0x34)
+    register = DoubleRegister(cpu, reg1, reg2)
+    assert register.hi == reg1
+    assert register.lo == reg2
+    assert register.getHi() == reg1.get()
+    assert register.getLo() == reg2.get()
     
 def test_double_register():
     register = DoubleRegister(get_cpu())
@@ -41,6 +58,12 @@ def test_double_register():
     register.set(value)
     assert oldCycles-register.cpu.cycles == 1
     assert register.get() == value
+    
+def test_double_register_bounds():
+    register = DoubleRegister(get_cpu())
+    value = 0xFFFF1234
+    register.set(value)
+    assert register.get() == 0x1234
     
 def test_double_register_hilo():
     register = DoubleRegister(get_cpu())
@@ -71,7 +94,8 @@ def test_double_register_hilo():
     
 def test_double_register_methods():
     value = 0x1234
-    register = DoubleRegister(get_cpu(), value)
+    register = DoubleRegister(get_cpu())
+    register.set(value)
     
     oldCycles = register.cpu.cycles
     register.inc()

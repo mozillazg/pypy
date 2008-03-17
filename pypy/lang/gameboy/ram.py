@@ -18,15 +18,8 @@ class RAM(object):
         self.reset();
 
     def reset(self):
-        self.wram = range(0, constants.WRAM_SIZE)
-        for index in range(0, constants.WRAM_SIZE):
-            #TODO convert to byte
-            self.wram[index] =  0x00;
-
-        self.hram = range(0, constants.HIGH_SIZE)
-        for index in range(0, constants.HIGH_SIZE):
-            #TODO convert to byte
-            self.hram[index] =  0x00;
+        self.wram =  [0x00]*8192;
+        self.hram =  [0x00]*128;
 
     def write(self, address, data):
         if (address >= 0xC000 and address <= 0xFDFF):
