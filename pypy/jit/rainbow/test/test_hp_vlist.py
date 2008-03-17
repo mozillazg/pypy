@@ -2,10 +2,11 @@ import py
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
 from pypy.rlib.jit import JitDriver, hint, JitHintError
+from pypy.jit.rainbow.test import test_hotpath
 
 
 
-class TestVList(InterpretationTest):
+class TestVList(test_hotpath.HotPathTest):
     type_system = "lltype"
 
     def test_vlist(self):
@@ -17,15 +18,15 @@ class TestVList(InterpretationTest):
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(i=i, tot=tot)
-                MyJitDriver.can_enter_jit(i=i, tot=tot)
                 lst = []
                 lst.append(12)
                 tot += lst[0]
+                MyJitDriver.jit_merge_point(tot=tot, i=i)
+                MyJitDriver.can_enter_jit(tot=tot, i=i)
             return tot
-        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.run(ll_function, [], threshold=2)
         assert res == ll_function()
-        self.check_insns({})
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1, 'int_add': 1})
 
     def test_enter_block(self):
         py.test.skip("port me")
