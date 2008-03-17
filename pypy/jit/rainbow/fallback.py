@@ -312,7 +312,11 @@ class FallbackInterpreter(object):
 
     @arguments("green", "calldesc", "green_varargs")
     def opimpl_green_call(self, gv_fnptr, calldesc, greenargs):
-        gv_res = calldesc.perform_call(self.rgenop, gv_fnptr, greenargs)
+        try:
+            gv_res = calldesc.perform_call(self.rgenop, gv_fnptr, greenargs)
+        except Exception, e:
+            self.capture_exception(e)
+            gv_res = calldesc.gv_whatever_return_value
         self.green_result(gv_res)
 
     @arguments("oopspec", "bool", returns="red")
