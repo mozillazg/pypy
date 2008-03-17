@@ -56,6 +56,12 @@ def summary_loops(graph):
 class HotPathTest(test_interpreter.InterpretationTest):
     type_system = 'lltype'
 
+
+    def interpret(self, main, ll_values, opt_consts=[], **kwds):
+        py.test.skip("old-style test, port me")
+    def interpret_raises(self, Exception, main, ll_values, opt_consts=[]):
+        py.test.skip("old-style test, port me")
+
     def run(self, main, main_args, threshold, policy=P_HOTPATH, small=False):
         # xxx caching of tests doesn't work - do we care?
         policy = make_hot_policy(policy)

@@ -30,11 +30,6 @@ import sys
 
 class TestHotInterpreter(test_hotpath.HotPathTest):
 
-    def interpret(self, main, ll_values, opt_consts=[], **kwds):
-        py.test.skip("fix this test")
-    def interpret_raises(self, Exception, main, ll_values, opt_consts=[]):
-        py.test.skip("fix this test")
-
     def test_loop_convert_const_to_redbox(self):
         class MyJitDriver(JitDriver):
             greens = ['x']
