@@ -283,17 +283,17 @@ class ASTBuilder(RPythonVisitor):
         if isinstance(left, Identifier):
             return operations.SimpleAssignment(pos, left, right, atype)
         elif isinstance(left, Member):
-            return operations.MemberAssignment(pos, left.left, left.right,
+            return operations.MemberAssignment(pos, left.left, left.expr,
                                                right, atype)
         elif isinstance(left, MemberDot):
             return operations.MemberDotAssignment(pos, left.left, left.name,
                                                   right, atype)
         else:
-            raise ParseError(left.pos, "Invalid lefthand expression")
+            raise ParseError(pos, None)
     visit_assignmentexpressionnoin = visit_assignmentexpression
         
     def visit_emptystatement(self, node):
-        return operations.astundef
+        pass
     
     def visit_newexpression(self, node):
         if len(node.children) == 1:
@@ -376,7 +376,7 @@ class ASTBuilder(RPythonVisitor):
         if len(node.children) > 0:
             value = self.dispatch(node.children[0])
         else:
-            value = operations.astundef
+            value = None
         return operations.Return(pos, value)
 
     def visit_conditionalexpression(self, node):

@@ -9,11 +9,15 @@ class JsRuntimeExcept(Exception):
         self.message = message
         self.exception_object = exception_object # JS Exception Object
 
-class ExecutionReturned(JsBaseExcept):
-    def __init__(self, type='normal', value=None, identifier=None):
-        self.type = type
+class ReturnException(Exception):
+    def __init__(self, value):
         self.value = value
-        self.identifier = identifier
+
+#class ExecutionReturned(JsBaseExcept):
+#    def __init__(self, type='normal', value=None, identifier=None):
+#        self.type = type
+#        self.value = value
+#        self.identifier = identifier
 
 class ThrowException(JsBaseExcept):
     def __init__(self, exception):

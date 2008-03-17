@@ -9,8 +9,7 @@ from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_Object,\
      W_PrimitiveObject, W_Reference, ActivationObject, W_Array, W_Boolean,\
      w_Null, W_BaseNumber, isnull_or_undefined
 from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
-from pypy.lang.js.execution import ExecutionReturned, JsTypeError,\
-     ThrowException
+from pypy.lang.js.execution import JsTypeError, ThrowException
 from pypy.lang.js.jscode import JsCode, JsFunction
 from constants import unescapedict, SLASH
 
@@ -87,13 +86,17 @@ class Undefined(Statement):
         bytecode.emit('LOAD_UNDEFINED')
 
 class PropertyInit(Expression):
-    def __init__(self, pos, identifier, expr):
+    def __init__(self, pos, lefthand, expr):
         self.pos = pos
-        self.identifier = identifier.name
+        self.lefthand = lefthand
         self.expr = expr
     
     def emit(self, bytecode):
         self.expr.emit(bytecode)
+        if isinstance(self.lefthand, Identifier):
+            bytecode.emit('LOAD_STRINGCONSTANT', self.lefthand.name)
+        else:
+            self.lefthand.emit(bytecode)
 
 class Array(ListOp):
     def emit(self, bytecode):
@@ -290,13 +293,17 @@ class Conditional(Expression):
             return self.falsepart.eval(ctx).GetValue()
     
 
-class Member(BinaryOp):
+class Member(Expression):
     "this is for object[name]"
-    def eval(self, ctx):
-        w_obj = self.left.eval(ctx).GetValue().ToObject(ctx)
-        name = self.right.eval(ctx).GetValue().ToString(ctx)
-        return W_Reference(name, w_obj)
-    
+    def __init__(self, pos, left, expr):
+        self.pos = pos
+        self.left = left
+        self.expr = expr
+
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        self.expr.emit(bytecode)
+        bytecode.emit('LOAD_ELEMENT')
 
 class MemberDot(BinaryOp):
     "this is for object.name"
@@ -308,13 +315,7 @@ class MemberDot(BinaryOp):
     
     def emit(self, bytecode):
         self.left.emit(bytecode)
-        bytecode.emit('LOAD_MEMBER', self.name)
-    
-    def eval(self, ctx):
-        w_obj = self.left.eval(ctx).GetValue().ToObject(ctx)
-        name = self.right.get_literal()
-        return W_Reference(name, w_obj)
-    
+        bytecode.emit('LOAD_MEMBER', self.name)    
 
 class FunctionStatement(Statement):
     def __init__(self, pos, name, params, body):
@@ -329,25 +330,16 @@ class FunctionStatement(Statement):
 
     def emit(self, bytecode):
         code = JsCode()
-        self.body.emit(code)
+        if self.body is not None:
+            self.body.emit(code)
         funcobj = JsFunction(self.name, self.params, code)
         bytecode.emit('DECLARE_FUNCTION', funcobj)
         if self.name is None:
-            # XXX looks awful
             bytecode.emit('LOAD_FUNCTION', funcobj)
-
-    def eval(self, ctx):
-        proto = ctx.get_global().Get('Function').Get('prototype')
-        w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self)
-        w_func.Put('length', W_IntNumber(len(self.params)))
-        w_obj = create_object(ctx, 'Object')
-        w_obj.Put('constructor', w_func, de=True)
-        w_func.Put('prototype', w_obj)
-        return w_func
-    
-    def execute(self, ctx):
-        return self.eval(ctx)
-    
+        #else:
+        #    bytecode.emit('LOAD_FUNCTION', funcobj)
+        #    bytecode.emit('STORE', self.name)
+        #    bytecode.emit('POP')
 
 class Identifier(Expression):
     def __init__(self, pos, name):
@@ -869,11 +861,9 @@ class String(Expression):
 
 class ObjectInit(ListOp):
     def emit(self, bytecode):
-        names = []
         for prop in self.nodes:
             prop.emit(bytecode)
-            names.append(prop.identifier)
-        bytecode.emit('LOAD_OBJECT', names)
+        bytecode.emit('LOAD_OBJECT', len(self.nodes))
 
 class SourceElements(Statement):
     """
@@ -934,15 +924,11 @@ class Return(Statement):
         self.expr = expr
 
     def emit(self, bytecode):
-        self.expr.emit(bytecode)
-        bytecode.emit('RETURN')
-    
-    def execute(self, ctx):
-        if isinstance(self.expr, Undefined):
-            raise ExecutionReturned('return', None, None)
+        if self.expr is None:
+            bytecode.emit('LOAD_UNDEFINED')
         else:
-            raise ExecutionReturned('return', self.expr.eval(ctx), None)
-    
+            self.expr.emit(bytecode)
+        bytecode.emit('RETURN')
 
 class Throw(Statement):
     def __init__(self, pos, exp):
@@ -999,7 +985,10 @@ class VariableDeclaration(Expression):
         self.expr = expr
 
     def emit(self, bytecode):
-        self.expr.emit(bytecode)
+        if self.expr is not None:
+            self.expr.emit(bytecode)
+        else:
+            bytecode.emit('LOAD_UNDEFINED')
         bytecode.emit('STORE', self.identifier)
     
     def eval(self, ctx):

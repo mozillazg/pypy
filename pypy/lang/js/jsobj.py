@@ -2,7 +2,7 @@
 from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
      ovfcheck_float_to_int
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
-     ExecutionReturned, RangeError
+     RangeError
 
 class SeePage(NotImplementedError):
     pass
@@ -145,7 +145,7 @@ class W_PrimitiveObject(W_Root):
         w_Arguments = W_Arguments(self, args)
         act.Put('arguments', w_Arguments)
         newctx = function_context(self.Scope, act, this)
-        val = self.callfunc.body.execute(ctx=newctx)
+        val = self.callfunc.run(ctx=newctx)
         return val
     
     def Construct(self, ctx, args=[]):
@@ -517,7 +517,10 @@ class ExecutionContext(object):
                 obj.Put(name, value)
                 return
         # if not, we need to put this thing in current scope
-        self.scope[0].Put(name, value)
+        self.variable.Put(name, value)
+
+    def put(self, name, value):
+        self.variable.Put(name, value)
     
     def get_global(self):
         return self.scope[-1]

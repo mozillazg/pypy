@@ -1,8 +1,8 @@
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, W_Reference, ActivationObject,\
-     create_object
-from pypy.lang.js.execution import JsTypeError
+     create_object, W_Object, w_Undefined
+from pypy.lang.js.execution import JsTypeError, ReturnException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub
 
@@ -80,6 +80,13 @@ class JsFunction(object):
         self.name = name
         self.params = params
         self.code = code
+
+    def run(self, ctx):
+        try:
+            self.code.run(ctx)
+        except ReturnException, e:
+            return e.value
+        return w_Undefined
 
 class Opcode(object):
     def eval(self, ctx, stack):
@@ -160,6 +167,10 @@ class LOAD_STRINGCONSTANT(Opcode):
     def __repr__(self):
         return 'LOAD_STRINGCONSTANT "%s"' % (self.w_stringvalue.strval,)
 
+class LOAD_UNDEFINED(Opcode):
+    def eval(self, ctx, stack):
+        stack.append(w_Undefined)
+
 class LOAD_VARIABLE(Opcode):
     def __init__(self, identifier):
         self.identifier = identifier
@@ -188,6 +199,16 @@ class LOAD_FUNCTION(Opcode):
     def __init__(self, funcobj):
         self.funcobj = funcobj
 
+    def eval(self, ctx, stack):
+        proto = ctx.get_global().Get('Function').Get('prototype')
+        w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function',
+                          callfunc=self.funcobj)
+        w_func.Put('length', W_IntNumber(len(self.funcobj.params)))
+        w_obj = create_object(ctx, 'Object')
+        w_obj.Put('constructor', w_func, de=True)
+        w_func.Put('prototype', w_obj)
+        stack.append(w_func)
+
     def __repr__(self):
         return 'LOAD_FUNCTION' # XXX
 
@@ -208,18 +229,19 @@ class STORE(Opcode):
         return 'STORE "%s"' % self.name
 
 class LOAD_OBJECT(Opcode):
-    def __init__(self, listofnames):
-        self.listofnames = reversed(listofnames)
-
+    def __init__(self, counter):
+        self.counter = counter
+    
     def eval(self, ctx, stack):
         w_obj = create_object(ctx, 'Object')
-        for name in self.listofnames:
+        for _ in range(self.counter):
+            name = stack.pop().GetValue().ToString()
             w_elem = stack.pop().GetValue()
             w_obj.Put(name, w_elem)
         stack.append(w_obj)
 
     def __repr__(self):
-        return 'LOAD_OBJECT %r' % (self.listofnames,)
+        return 'LOAD_OBJECT %d' % (self.counter,)
 
 class LOAD_MEMBER(Opcode):
     def __init__(self, name):
@@ -231,6 +253,12 @@ class LOAD_MEMBER(Opcode):
 
     def __repr__(self):
         return 'LOAD_MEMBER "%s"' % (self.name,)
+
+class LOAD_ELEMENT(Opcode):
+    def eval(self, ctx, stack):
+        name = stack.pop().GetValue().ToString(ctx)
+        w_obj = stack.pop().GetValue().ToObject(ctx)        
+        stack.append(W_Reference(name, w_obj))
 
 class SUB(BaseBinaryOperation):
     def operation(self, ctx, left, right):
@@ -306,6 +334,16 @@ class DECLARE_FUNCTION(Opcode):
     def __init__(self, funcobj):
         self.funcobj = funcobj
 
+    def eval(self, ctx, stack):
+        # function declaration actyally don't run anything
+        proto = ctx.get_global().Get('Function').Get('prototype')
+        w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self.funcobj)
+        w_func.Put('length', W_IntNumber(len(self.funcobj.params)))
+        w_obj = create_object(ctx, 'Object')
+        w_obj.Put('constructor', w_func, de=True)
+        w_func.Put('prototype', w_obj)
+        ctx.put(self.funcobj.name, w_func)
+
     def __repr__(self):
         funcobj = self.funcobj
         if funcobj.name is None:
@@ -319,11 +357,15 @@ class DECLARE_VAR(Opcode):
     def __init__(self, name):
         self.name = name
 
+    def eval(self, ctx, stack):
+        ctx.put(self.name, w_Undefined)
+
     def __repr__(self):
         return 'DECLARE_VAR "%s"' % (self.name,)
 
 class RETURN(Opcode):
-    pass
+    def eval(self, ctx, stack):
+        raise ReturnException(stack.pop())
 
 class POP(Opcode):
     def eval(self, ctx, stack):
