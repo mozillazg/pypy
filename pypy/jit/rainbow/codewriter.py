@@ -23,11 +23,15 @@ def residual_exception_nontranslated(jitstate, e, rtyper):
     # we need to turn it into a low level one
     assert not we_are_translated()
     from pypy.rpython.llinterp import LLException
-    if not isinstance(e, LLException):
-        raise      # don't know how to capture it, and it
-                   # probably shows a bug anyway
-    llexctype, llvalue = e.args
-    jitstate.residual_ll_exception(llvalue)
+    if isinstance(e, LLException):
+        llexctype, llvalue = e.args
+        jitstate.residual_ll_exception(llvalue)
+    else:
+        bk = rtyper.annotator.bookkeeper
+        exc_classdef = bk.getuniqueclassdef(e.__class__)
+        ll_exc = rtyper.exceptiondata.get_standard_ll_exc_instance(
+        rtyper, exc_classdef)
+        jitstate.residual_ll_exception(ll_exc)
 
 
 class CallDesc:
