@@ -13,6 +13,7 @@ from pypy.rpython.lltypesystem.lltype import Struct, Array, FixedSizeArray
 from pypy.rpython.lltypesystem.lltype import ForwardReference, FuncType
 from pypy.rpython.lltypesystem.llmemory import Address
 from pypy.translator.backendopt.ssa import SSI_to_SSA
+from pypy.translator.backendopt.innerloop import find_inner_loops
 
 PyObjPtr = Ptr(PyObject)
 LOCALVAR = 'l_%s'
@@ -32,9 +33,8 @@ class FunctionCodeGenerator(object):
                        vars
                        lltypes
                        functionname
-                       currentblock
                        blocknum
-                       backlinks
+                       innerloops
                        oldgraph""".split()
 
     def __init__(self, graph, db, exception_policy=None, functionname=None):
@@ -113,58 +113,14 @@ class FunctionCodeGenerator(object):
             self.db.gctransformer.inline_helpers(graph)
         return graph
 
-    def order_blocks(self):
-        from pypy.tool.algo import graphlib
-        self.blocknum = {}
-        self.backlinks = {}
-        vertices = {}
-        edge_list = []
-        for index, block in enumerate(self.graph.iterblocks()):
-            self.blocknum[block] = index
-            vertices[block] = True
-            for link in block.exits:
-                edge_list.append(graphlib.Edge(block, link.target))
-        edges = graphlib.make_edge_dict(edge_list)
-        cycles = graphlib.all_cycles(self.graph.startblock, vertices, edges)
-        cycles.sort(key=len)
-        for cycle in cycles:
-            for edge in cycle:
-                if edge.source not in vertices:
-                    break    # cycle overlaps already-seen blocks
-            else:
-                # make this cycle a C-level loop
-                def edge2link(edge):
-                    for link in edge.source.exits:
-                        if link.target is edge.target:
-                            return link
-                    raise AssertionError("an edge's link has gone missing")
-
-                edges = []
-                for i, edge in enumerate(cycle):
-                    v = edge.source.exitswitch
-                    if isinstance(v, Variable) and len(edge.source.exits) == 2:
-                        TYPE = self.lltypemap(v)
-                        if TYPE in (Bool, PyObjPtr):
-                            edges.append((self.blocknum[edge.source], i))
-                if not edges:
-                    continue
-                _, i = min(edges)
-                backedge = cycle[i-1]
-                forwardedge = cycle[i]
-                headblock = backedge.target
-                assert headblock is forwardedge.source
-                self.backlinks[edge2link(backedge)] = None
-                exitcase = edge2link(forwardedge).exitcase
-                assert exitcase in (False, True)
-                self.backlinks[headblock] = exitcase
-                for edge in cycle:
-                    del vertices[edge.target]
-
     def implementation_begin(self):
         self.oldgraph = self.graph
         self.graph = self.patch_graph(copy_graph=True)
         SSI_to_SSA(self.graph)
         self.collect_var_and_types()
+        self.blocknum = {}
+        for block in self.graph.iterblocks():
+            self.blocknum[block] = len(self.blocknum)
         db = self.db
         lltypes = {}
         for v in self.vars:
@@ -172,7 +128,9 @@ class FunctionCodeGenerator(object):
             typename = db.gettype(T)
             lltypes[id(v)] = T, typename
         self.lltypes = lltypes
-        self.order_blocks()
+        self.innerloops = {}    # maps the loop's header block to a Loop()
+        for loop in find_inner_loops(self.graph, Bool):
+            self.innerloops[loop.headblock] = loop
 
     def graphs_to_patch(self):
         yield self.graph
@@ -181,8 +139,7 @@ class FunctionCodeGenerator(object):
         self.lltypes = None
         self.vars = None
         self.blocknum = None
-        self.backlinks = None
-        self.currentblock = None
+        self.innerloops = None
         self.graph = self.oldgraph
         del self.oldgraph
 
@@ -251,10 +208,8 @@ class FunctionCodeGenerator(object):
         graph = self.graph
 
         # generate the body of each block
-        allblocks = [(num, block) for (block, num) in self.blocknum.items()]
-        allblocks.sort()
-        for myblocknum, block in allblocks:
-            self.currentblock = block
+        for block in graph.iterblocks():
+            myblocknum = self.blocknum[block]
             yield ''
             yield 'block%d:' % myblocknum
             for i, op in enumerate(block.operations):
@@ -279,25 +234,9 @@ class FunctionCodeGenerator(object):
                 assert len(block.exits) == 1
                 for op in self.gen_link(block.exits[0]):
                     yield op
-            elif block in self.backlinks:
-                looplink, exitlink = block.exits
-                if looplink.exitcase != self.backlinks[block]:
-                    looplink, exitlink = exitlink, looplink
-                assert looplink.exitcase == self.backlinks[block]
-                assert exitlink.exitcase == (not self.backlinks[block])
-                expr = self.expr(block.exitswitch)
-                if not looplink.exitcase:
-                    expr = '!' + expr
-                yield 'while (%s) {' % expr
-                for op in self.gen_link(looplink):
-                    yield '\t' + op
-                yield '\t  block%d_back:' % myblocknum
-                for i, op in enumerate(block.operations):
-                    for line in self.gen_op(op):
-                        yield '\t' + line
-                yield '}'
-                for op in self.gen_link(exitlink):
-                    yield op
+            elif block in self.innerloops:
+                for line in self.gen_while_loop_hack(block):
+                    yield line
             else:
                 assert block.exitswitch != c_last_exception
                 # block ending in a switch on a value
@@ -371,8 +310,10 @@ class FunctionCodeGenerator(object):
         for line in gen_assignments(assignments):
             yield line
         label = 'block%d' % self.blocknum[link.target]
-        if link in self.backlinks:
-            label += '_back'
+        if link.target in self.innerloops:
+            loop = self.innerloops[link.target]
+            if link is loop.links[-1]:   # link that ends a loop
+                label += '_back'
         yield 'goto %s;' % label
 
     def gen_op(self, op):
@@ -394,6 +335,52 @@ class FunctionCodeGenerator(object):
         else:
             for line in line.splitlines():
                 yield line
+
+    def gen_while_loop_hack(self, headblock):
+        # a GCC optimization hack: generate 'while' statement in the
+        # source to convince the C compiler that it is really dealing
+        # with loops.  For the head of a loop (i.e. the block where the
+        # decision is) we produce code like this:
+        #
+        #             headblock:
+        #               ...headblock operations...
+        #               while (cond) {
+        #                   goto firstbodyblock;
+        #                 headblock_back:
+        #                   ...headblock operations...
+        #               }
+        #
+        # The real body of the loop is not syntactically within the
+        # scope of { }, but apparently this doesn't matter to GCC as
+        # long as it is within the { } via the chain of goto's starting
+        # at firstbodyblock: and ending at headblock_back:.  We need to
+        # duplicate the operations of headblock, though, because the
+        # chain of gotos entering the loop must arrive outside the
+        # while() at the headblock: label and the chain of goto's that
+        # close the loop must arrive inside the while() at the
+        # headblock_back: label.
+
+        looplinks = self.innerloops[headblock].links
+        enterlink = looplinks[0]
+        assert len(headblock.exits) == 2
+        assert isinstance(headblock.exits[0].exitcase, bool)
+        assert isinstance(headblock.exits[1].exitcase, bool)
+        i = list(headblock.exits).index(enterlink)
+        exitlink = headblock.exits[1 - i]
+
+        expr = self.expr(headblock.exitswitch)
+        if enterlink.exitcase == False:
+            expr = '!' + expr
+        yield 'while (%s) {' % expr
+        for op in self.gen_link(enterlink):
+            yield '\t' + op
+        yield '\t  block%d_back:' % self.blocknum[headblock]
+        for i, op in enumerate(headblock.operations):
+            for line in self.gen_op(op):
+                yield '\t' + line
+        yield '}'
+        for op in self.gen_link(exitlink):
+            yield op
 
     # ____________________________________________________________
 
