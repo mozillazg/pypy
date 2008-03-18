@@ -23,15 +23,10 @@ def setup_jitstate(interp, jitstate, greenargs, redargs,
     interp.frame.local_green = greenargs
     interp.graphsigtoken = graphsigtoken
 
-def leave_graph(interp, store_back_exception=True):
+def leave_graph(interp):
     jitstate = interp.jitstate
     exceptiondesc = interp.exceptiondesc
     builder = jitstate.curbuilder
-    #for virtualizable_box in jitstate.virtualizables:
-    #    assert isinstance(virtualizable_box, rvalue.PtrRedBox)
-    #    content = virtualizable_box.content
-    #    assert isinstance(content, rcontainer.VirtualizableStruct)
-    #    content.store_back(jitstate)        
     exceptiondesc.store_global_excdata(jitstate)
     jitstate.curbuilder.finish_and_return(interp.graphsigtoken, None)
     jitstate.curbuilder = None
@@ -66,6 +61,7 @@ def report_compile_time_exception(interp, e):
 
 def hp_return(interp, gv_result):
     interp.debug_trace("done at hp_return")
+    interp.jitstate.store_back_virtualizables_at_return()
     # XXX slowish
     desc = interp.hotrunnerdesc
     exitfnptr = llhelper(desc.RAISE_DONE_FUNCPTR, desc.raise_done)
@@ -349,6 +345,9 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
 
     jitstate.curbuilder = excpath_builder
     excpath_builder.start_writing()
+    # virtualizables: when we reach this point, the fallback interpreter
+    # should already have done the right thing, i.e. stored the values
+    # back into the structure (reading them out of framebase+frameinfo)
     leave_graph(fbp.hotrunnerdesc.interpreter)
 
 # for testing purposes

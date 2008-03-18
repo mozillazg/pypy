@@ -260,7 +260,6 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'xy']
@@ -288,6 +287,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(20, 22)
         self.check_insns_in_loops(getfield=0, setfield=0)
 
+        # also run the test with a threshold of 1 to check if the return
+        # path (taken only once) is compiled correctly
         res = self.run(main, [20, 22], threshold=1)
         assert res == main(20, 22)
         self.check_insns_in_loops(getfield=0, setfield=0)
