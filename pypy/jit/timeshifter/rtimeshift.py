@@ -1131,6 +1131,13 @@ class JITState(object):
                 content.store_back(self)
         return incoming
 
+    def store_back_virtualizables_at_return(self):
+        for virtualizable_box in self.virtualizables:
+            assert isinstance(virtualizable_box, rvalue.PtrRedBox)
+            content = virtualizable_box.content
+            assert isinstance(content, rcontainer.VirtualizableStruct)
+            content.store_back(self)
+
     def prepare_for_residual_call(self):
         virtualizables = self.virtualizables
         if virtualizables:
