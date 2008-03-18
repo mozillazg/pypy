@@ -260,6 +260,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
+        py.test.skip("implement me")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'xy']
@@ -333,7 +334,10 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0)
 
     def test_simple_construct_no_escape(self):
-   
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'x', 'y']
+
         def f(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
@@ -344,13 +348,24 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             return x+y
 
         def main(x, y):
-            return f(x, y)
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                tot += f(x, y)
+                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns({'int_add': 1})
+        res = self.run(main, [20, 22], 2)
+        assert res == 42 * 11
+        self.check_insns_in_loops({'int_add': 2, 'int_is_true': 1,
+                                   'int_rshift': 1})
 
     def test_simple_construct_escape(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'x', 'y']
    
         def f(x, y):
             xy = lltype.malloc(XY)
@@ -362,14 +377,24 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             return xy
 
         def main(x, y):
-            xy = f(x, y)
-            return xy_get_x(xy)+xy_get_y(xy)
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                xy = f(x, y)
+                tot += xy_get_x(xy)+xy_get_y(xy)
+                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=0)
+        res = self.run(main, [20, 22], 2)
+        assert res == 42 * 11
+        self.check_insns_in_loops(getfield=0)
 
     def test_simple_with_struct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'xp']
    
         def f(xp):
             x = xp_get_x(xp)
@@ -384,14 +409,23 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             s.a = a
             s.b = b
             xp.p = s
-            return f(xp)
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                tot += f(xp)
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 10, 12],
-                                         policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=2)    
+        res = self.run(main, [20, 10, 12], 2)
+        assert res == 42 * 11
+        self.check_insns_in_loops(getfield=2)    
 
     def test_simple_with_setting_struct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'xp', 's', 'x']
    
         def f(xp, s):
             xp_set_p(xp, s)
@@ -407,15 +441,24 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             s = lltype.malloc(S)
             s.a = a
             s.b = b
-            v = f(xp, s)
-            return v+xp.p.b
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                v = f(xp, s)
+                tot += v+xp.p.b
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, s=s, x=x)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, s=s, x=x)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 10, 3],
-                                         policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=3)
+        res = self.run(main, [20, 10, 3], 2)
+        assert res == main(20, 10, 3)
+        self.check_insns_in_loops(getfield=4)
 
     def test_simple_with_setting_new_struct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'xp', 'a', 'b']
    
         def f(xp, a, b):
             s = lltype.malloc(S)
@@ -431,16 +474,25 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xp = lltype.malloc(XP)
             xp.vable_access = lltype.nullptr(XP_ACCESS)
             xp.x = x
-            v = f(xp, a, b)
-            return v+xp.p.b
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                v = f(xp, a, b)
+                tot += v+xp.p.b
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, a=a, b=b)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, a=a, b=b)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 10, 3],
-                                         policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=0, malloc=1)
+        res = self.run(main, [20, 10, 3], 2)
+        assert res == 42 * 11
+        self.check_insns_in_loops(getfield=0, malloc=1)
 
 
     def test_simple_constr_with_setting_new_struct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'x', 'a', 'b']
    
         def f(x, a, b):
             xp = lltype.malloc(XP)
@@ -456,19 +508,33 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             return xp
 
         def main(x, a, b):
-            xp = f(x, a, b)
-            return xp.x+xp.p.a+xp.p.b+xp.p.b
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                xp = f(x, a, b)
+                tot += xp.x+xp.p.a+xp.p.b+xp.p.b
+                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, a=a, b=b)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, a=a, b=b)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 10, 3],
-                                         policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=0, malloc=2)
+        res = self.run(main, [20, 10, 3], 2)
+        assert res == main(20, 10, 3)
+        self.check_insns_in_loops(getfield=0, malloc=0)
+
+        # run again with threshold 1 to get the return generated too
+        res = self.run(main, [20, 10, 3], 1)
+        assert res == main(20, 10, 3)
+        self.check_insns_in_loops(getfield=0, malloc=0)
 
     def test_simple_read(self):
-   
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'e']
+
         def f(e):
             xy = e.xy
-            xy_set_y(xy, 3)
+            xy_set_y(xy, xy_get_y(xy) + 3)
             return xy_get_x(xy)*2
 
         def main(x, y):
@@ -478,14 +544,24 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xy.y = y
             e = lltype.malloc(E)
             e.xy = xy
-            v = f(e)
-            return v + e.xy.x+e.xy.y
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                v = f(e)
+                tot += v + e.xy.x+e.xy.y
+                MyJitDriver.jit_merge_point(tot=tot, i=i, e=e)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, e=e)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 63
-        self.check_insns(getfield=3)
+        res = self.run(main, [20, 22], 2)
+        assert res == main(x, y)
+        self.check_insns_in_loops(getfield=9)
 
     def test_simple_escape_through_vstruct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'x', 'y']
    
         def f(x, y):
             xy = lltype.malloc(XY)
@@ -500,12 +576,19 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             return e
 
         def main(x, y):
-            e = f(x, y)
-            return e.xy.x+e.xy.y
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                e = f(x, y)
+                tot += e.xy.x+e.xy.y
+                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 11], policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=0, malloc=2)
+        res = self.run(main, [20, 11], 2)
+        assert res == 42 * 11
+        self.check_insns_in_loops(getfield=0)
 
     def test_residual_doing_nothing(self):
         def g(xy):
