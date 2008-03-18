@@ -1908,3 +1908,55 @@ class SimpleTests(InterpretationTest):
 class TestLLType(SimpleTests):
     type_system = "lltype"
 
+
+class TestOOType(SimpleTests):
+    type_system = "ootype"
+
+    def _skip(self):
+        py.test.skip('in progress')
+
+    test_green_call = _skip
+    test_green_call_void_return = _skip
+    test_degenerated_before_return = _skip
+    test_degenerated_before_return_2 = _skip
+    test_degenerated_at_return = _skip
+    test_degenerated_via_substructure = _skip
+    test_degenerate_with_voids = _skip
+    test_plus_minus = _skip
+    test_red_virtual_container = _skip
+    test_red_array = _skip
+    test_red_struct_array = _skip
+    test_red_varsized_struct = _skip
+    test_array_of_voids = _skip
+    test_red_propagate = _skip
+    test_red_subcontainer = _skip
+    test_red_subcontainer_cast = _skip
+    test_merge_structures = _skip
+    test_deepfrozen_interior = _skip
+    test_compile_time_const_tuple = _skip
+    test_residual_red_call = _skip
+    test_residual_red_call_with_exc = _skip
+    test_simple_meth = _skip
+    test_simple_red_meth = _skip
+    test_simple_red_meth_vars_around = _skip
+    test_simple_indirect_call = _skip
+    test_normalize_indirect_call = _skip
+    test_normalize_indirect_call_more = _skip
+    test_green_char_at_merge = _skip
+    test_self_referential_structures = _skip
+    test_known_nonzero = _skip
+    test_debug_assert_ptr_nonzero = _skip
+    test_indirect_red_call = _skip
+    test_indirect_red_call_with_exc = _skip
+    test_indirect_gray_call = _skip
+    test_indirect_residual_red_call = _skip
+    test_constant_indirect_red_call = _skip
+    test_constant_indirect_red_call_no_result = _skip
+    test_indirect_sometimes_residual_pure_red_call = _skip
+    test_indirect_sometimes_residual_pure_but_fixed_red_call = _skip
+    test_manual_marking_of_pure_functions = _skip
+    test_red_int_add_ovf = _skip
+    test_nonzeroness_assert_while_compiling = _skip
+    test_segfault_while_compiling = _skip
+    test_substitute_graph_void = _skip
+    test_void_args = _skip
