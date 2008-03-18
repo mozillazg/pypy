@@ -100,6 +100,7 @@ class W_ArrayObject(W_NativeObject):
 TEST = False
 
 def evaljs(ctx, args, this):
+    raise NotImplementedError
     if len(args) >= 1:
         if  isinstance(args[0], W_String):
             code = args[0]
@@ -262,6 +263,10 @@ class W_Function(W_NewBuiltin):
         ast = ASTBUILDER.dispatch(funcnode)
         bytecode = JsCode()
         ast.emit(bytecode)
+        # XXX awful hack
+        from pypy.lang.js.jscode import POP
+        assert isinstance(bytecode.opcodes[-1], POP)
+        bytecode.opcodes.pop()
         bytecode.run(ctx, check_stack=False)
         return bytecode.stack[-1]
     
@@ -547,7 +552,7 @@ class Interpreter(object):
         w_Global.Put('this', w_Global)
 
         # DEBUGGING
-        if 1:
+        if 0:
             w_Global.Put('pypy_repr', W_Builtin(pypy_repr))
         
         self.global_context = ctx

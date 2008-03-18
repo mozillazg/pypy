@@ -2,6 +2,11 @@ from pypy.rlib.parsing.tree import RPythonVisitor, Symbol, Nonterminal
 from pypy.lang.js import operations
 from pypy.rlib.parsing.parsing import ParseError
 
+class FakeParseError(Exception):
+    def __init__(self, pos, msg):
+        self.pos = pos
+        self.msg = msg
+
 class ASTBuilder(RPythonVisitor):
     BINOP_TO_CLS = {
         '+': operations.Plus,
@@ -9,8 +14,8 @@ class ASTBuilder(RPythonVisitor):
         '*': operations.Mult,
         '/': operations.Division,
         '%': operations.Mod,
-        '^': operations.BitwiseXor,
-        '|': operations.BitwiseOr,
+        #'^': operations.BitwiseXor,
+        #'|': operations.BitwiseOr,
         '&': operations.BitwiseAnd,
         '&&': operations.And,
         '||': operations.Or,
@@ -22,24 +27,28 @@ class ASTBuilder(RPythonVisitor):
         '>=': operations.Ge,
         '<': operations.Lt,
         '<=': operations.Le,
-        '>>': operations.Rsh,
-        '>>>': operations.Ursh,
-        '<<': operations.Lsh,
+        #'>>': operations.Rsh,
+        #'>>>': operations.Ursh,
+        #'<<': operations.Lsh,
         '.': operations.MemberDot,
         '[': operations.Member,
         ',': operations.Comma,
-        'in': operations.In,
+        #'in': operations.In,
     }
     UNOP_TO_CLS = {
-        '~': operations.BitwiseNot,
-        '!': operations.Not,
+        #'~': operations.BitwiseNot,
+        #'!': operations.Not,
         '+': operations.UPlus,
         '-': operations.UMinus,
-        '++': operations.Increment,
-        '--': operations.Decrement,
-        'typeof': operations.Typeof,
-        'void': operations.Void,
-        'delete': operations.Delete,
+        '++': operations.PreIncrement,
+        '--': operations.PreDecrement,
+        #'typeof': operations.Typeof,
+        #'void': operations.Void,
+        #'delete': operations.Delete,
+    }
+    POSTFIX_TO_CLS = {
+        '++': operations.PostIncrement,
+        '--': operations.PostDecrement,
     }
     LISTOP_TO_CLS = {
         '[': operations.Array,
@@ -127,6 +136,7 @@ class ASTBuilder(RPythonVisitor):
     def visit_memberexpression(self, node):
         if isinstance(node.children[0], Symbol) and \
            node.children[0].additional_info == 'new': # XXX could be a identifier?
+            raise NotImplementedError
             pos = self.get_pos(node)
             left = self.dispatch(node.children[1])
             right = self.dispatch(node.children[2])
@@ -157,7 +167,7 @@ class ASTBuilder(RPythonVisitor):
         op = node.children[1]
         pos = self.get_pos(op)
         child = self.dispatch(node.children[0])
-        return self.UNOP_TO_CLS[op.additional_info](pos, child, postfix=True)
+        return self.POSTFIX_TO_CLS[op.additional_info](pos, child)
 
     
     def listop(self, node):
@@ -195,10 +205,26 @@ class ASTBuilder(RPythonVisitor):
         left = self.dispatch(node.children[0])
         right = self.dispatch(node.children[1])
         return operations.PropertyInit(pos,left,right)
+
+    def _search_identifier(self, name):
+        lenall = len(self.varlists)
+        for i in range(lenall):
+            num = lenall - i - 1
+            vardecl = self.varlists[num]
+            if name in vardecl:
+                return i, vardecl
+        raise ValueError("xxx")
     
     def visit_IDENTIFIERNAME(self, node):
         pos = self.get_pos(node)
         name = node.additional_info
+        try:
+            t = self._search_identifier(name)
+        except ValueError:
+            pass
+        else:
+            i, vardecl = t
+            return operations.VariableIdentifier(pos, i, name)
         return operations.Identifier(pos, name)
     
     def visit_program(self, node):
@@ -263,7 +289,8 @@ class ASTBuilder(RPythonVisitor):
     visit_variabledeclarationnoin = visit_variabledeclaration
     
     def visit_expressionstatement(self, node):
-        return self.dispatch(node.children[0])
+        pos = self.get_pos(node)
+        return operations.ExprStatement(pos, self.dispatch(node.children[0]))
     
     def visit_callexpression(self, node):
         pos = self.get_pos(node)
@@ -275,13 +302,16 @@ class ASTBuilder(RPythonVisitor):
         return left
         
     def visit_assignmentexpression(self, node):
-        from pypy.lang.js.operations import Identifier, Member, MemberDot
+        from pypy.lang.js.operations import Identifier, Member, MemberDot,\
+             VariableIdentifier
         pos = self.get_pos(node)
         left = self.dispatch(node.children[0])
         atype = node.children[1].additional_info
         right = self.dispatch(node.children[2])
         if isinstance(left, Identifier):
             return operations.SimpleAssignment(pos, left, right, atype)
+        elif isinstance(left, VariableIdentifier):
+            return operations.VariableAssignment(pos, left, right, atype)
         elif isinstance(left, Member):
             return operations.MemberAssignment(pos, left.left, left.expr,
                                                right, atype)
@@ -289,7 +319,7 @@ class ASTBuilder(RPythonVisitor):
             return operations.MemberDotAssignment(pos, left.left, left.name,
                                                   right, atype)
         else:
-            raise ParseError(pos, None)
+            raise FakeParseError(pos, "invalid lefthand expression")
     visit_assignmentexpressionnoin = visit_assignmentexpression
         
     def visit_emptystatement(self, node):
@@ -299,6 +329,7 @@ class ASTBuilder(RPythonVisitor):
         if len(node.children) == 1:
             return self.dispatch(node.children[0])
         else:
+            raise NotImplementedError
             pos = self.get_pos(node)
             val = self.dispatch(node.children[1])
             return operations.New(pos, val)

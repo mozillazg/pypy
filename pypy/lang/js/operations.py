@@ -12,6 +12,7 @@ from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
 from pypy.lang.js.execution import JsTypeError, ThrowException
 from pypy.lang.js.jscode import JsCode, JsFunction
 from constants import unescapedict, SLASH
+from pypy.rlib.unroll import unrolling_iterable
 
 import sys
 import os
@@ -51,6 +52,15 @@ class Statement(Node):
     def __init__(self, pos):
         self.pos = pos
 
+class ExprStatement(Node):
+    def __init__(self, pos, expr):
+        self.pos = pos
+        self.expr = expr
+
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        bytecode.emit('POP')
+
 class Expression(Statement):
     def execute(self, ctx):
         return self.eval(ctx)
@@ -59,27 +69,33 @@ class ListOp(Expression):
     def __init__(self, pos, nodes):
         self.pos = pos
         self.nodes = nodes
-        
-class UnaryOp(Expression):
-    def __init__(self, pos, expr, postfix=False):
-        self.pos = pos
-        self.expr = expr
-        self.postfix = postfix
 
-    def emit(self, bytecode):
-        self.expr.emit(bytecode)
-        bytecode.emit(self.operation_name)
+def create_unary_op(name):
+    class UnaryOp(Expression):
+        def __init__(self, pos, expr, postfix=False):
+            self.pos = pos
+            self.expr = expr
+            self.postfix = postfix
 
-class BinaryOp(Expression):
-    def __init__(self, pos, left, right):
-        self.pos = pos
-        self.left = left
-        self.right = right
+        def emit(self, bytecode):
+            self.expr.emit(bytecode)
+            bytecode.emit(name)
+    UnaryOp.__name__ = name
+    return UnaryOp
 
-    def emit(self, bytecode):
-        self.left.emit(bytecode)
-        self.right.emit(bytecode)
-        bytecode.emit(self.operation_name)
+def create_binary_op(name):
+    class BinaryOp(Expression):
+        def __init__(self, pos, left, right):
+            self.pos = pos
+            self.left = left
+            self.right = right
+
+        def emit(self, bytecode):
+            self.left.emit(bytecode)
+            self.right.emit(bytecode)
+            bytecode.emit(name)
+    BinaryOp.__name__ = name
+    return BinaryOp
 
 class Undefined(Statement):
     def emit(self, bytecode):
@@ -109,8 +125,7 @@ class Assignment(Expression):
 
 class SimpleAssignment(Assignment):
     def __init__(self, pos, left, right, operand):
-        assert isinstance(left, Identifier)
-        self.identifier = left.name
+        self.identifier = left.get_literal()
         self.right = right
         self.pos = pos
         self.operand = operand
@@ -118,6 +133,18 @@ class SimpleAssignment(Assignment):
     def emit(self, bytecode):
         self.right.emit(bytecode)
         bytecode.emit('STORE', self.identifier)
+
+class VariableAssignment(Assignment):
+    def __init__(self, pos, left, right, operand):
+        self.identifier = left.identifier
+        self.right = right
+        self.pos = pos
+        self.operand = operand
+        self.depth = left.depth
+
+    def emit(self, bytecode):
+        self.right.emit(bytecode)
+        bytecode.emit('STORE_VAR', self.depth, self.identifier)
 
 class MemberAssignment(Assignment):
     def __init__(self, pos, what, item, right, operand):
@@ -209,7 +236,6 @@ class Block(Statement):
     def emit(self, bytecode):
         for node in self.nodes:
             node.emit(bytecode)
-            bytecode.emit('POP')
     
     def execute(self, ctx):
         try:
@@ -223,27 +249,23 @@ class Block(Statement):
             else:
                 raise e
     
+BitwiseAnd = create_binary_op('BITAND')    
 
-class BitwiseAnd(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_IntNumber(op1&op2)
+#class BitwiseNot(UnaryOp):
+#    def eval(self, ctx):
+#        op1 = self.expr.eval(ctx).GetValue().ToInt32()
+#        return W_IntNumber(~op1)
     
 
-class BitwiseNot(UnaryOp):
-    def eval(self, ctx):
-        op1 = self.expr.eval(ctx).GetValue().ToInt32()
-        return W_IntNumber(~op1)
-    
-
-class BitwiseOr(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_IntNumber(op1|op2)
+# class BitwiseOr(BinaryOp):
+#     def decision(self, ctx, op1, op2):
+#         return W_IntNumber(op1|op2)
     
 
 
-class BitwiseXor(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_IntNumber(op1^op2)
+# class BitwiseXor(BinaryOp):
+#     def decision(self, ctx, op1, op2):
+#         return W_IntNumber(op1^op2)
     
 
 class Unconditional(Statement):
@@ -273,11 +295,7 @@ class Call(Expression):
         self.left.emit(bytecode)
         bytecode.emit('CALL')
 
-class Comma(BinaryOp):
-    def eval(self, ctx):
-        self.left.eval(ctx)
-        return self.right.eval(ctx)
-    
+Comma = create_binary_op('COMMA')    
 
 class Conditional(Expression):
     def __init__(self, pos, condition, truepart, falsepart):
@@ -305,11 +323,10 @@ class Member(Expression):
         self.expr.emit(bytecode)
         bytecode.emit('LOAD_ELEMENT')
 
-class MemberDot(BinaryOp):
+class MemberDot(Expression):
     "this is for object.name"
     def __init__(self, pos, left, name):
-        assert isinstance(name, Identifier)
-        self.name = name.name
+        self.name = name.get_literal()
         self.left = left
         self.pos = pos
     
@@ -323,8 +340,7 @@ class FunctionStatement(Statement):
         if name is None:
             self.name = None
         else:
-            assert isinstance(name, Identifier)
-            self.name = name.name
+            self.name = name.get_literal()
         self.body = body
         self.params = params
 
@@ -385,9 +401,9 @@ class If(Statement):
         else:
             return self.elsePart.execute(ctx)
 
-class Group(UnaryOp):
-    def eval(self, ctx):
-        return self.expr.eval(ctx)
+#class Group(UnaryOp):
+#    def eval(self, ctx):
+#        return self.expr.eval(ctx)
 
 ##############################################################################
 #
@@ -395,89 +411,36 @@ class Group(UnaryOp):
 #
 ##############################################################################
 
-def ARC(ctx, x, y):
-    """
-    Implements the Abstract Relational Comparison x < y
-    Still not fully to the spec
-    """
-    # XXX fast path when numbers only
-    s1 = x.ToPrimitive(ctx, 'Number')
-    s2 = y.ToPrimitive(ctx, 'Number')
-    if not (isinstance(s1, W_String) and isinstance(s2, W_String)):
-        s4 = s1.ToNumber()
-        s5 = s2.ToNumber()
-        if isnan(s4) or isnan(s5):
-            return -1
-        if s4 < s5:
-            return 1
-        else:
-            return 0
-    else:
-        s4 = s1.ToString(ctx)
-        s5 = s2.ToString(ctx)
-        if s4 < s5:
-            return 1
-        if s4 == s5:
-            return 0
-        return -1
-
-class Or(BinaryOp):
-    def eval(self, ctx):
-        s2 = self.left.eval(ctx).GetValue()
-        if s2.ToBoolean():
-            return s2
-        s4 = self.right.eval(ctx).GetValue()
-        return s4
+class And(Expression):
+    def __init__(self, pos, left, right):
+        self.pos = pos
+        self.left = left
+        self.right = right
     
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        one = bytecode.prealocate_label()
+        bytecode.emit('JUMP_IF_FALSE_NOPOP', one)
+        self.right.emit(bytecode)
+        bytecode.emit('LABEL', one)
 
-class And(BinaryOp):
-    def eval(self, ctx):
-        s2 = self.left.eval(ctx).GetValue()
-        if not s2.ToBoolean():
-            return s2
-        s4 = self.right.eval(ctx).GetValue()
-        return s4
-    
+class Or(Expression):
+    def __init__(self, pos, left, right):
+        self.pos = pos
+        self.left = left
+        self.right = right
 
-class Ge(BinaryOp):
-    operation_name = 'GE'
-    def decision(self, ctx, op1, op2):
-        s5 = ARC(ctx, op1, op2)
-        if s5 in (-1, 1):
-            return W_Boolean(False)
-        else:
-            return W_Boolean(True)
-    
-
-class Gt(BinaryOp):
-    operation_name = 'GT'
-    def decision(self, ctx, op1, op2):
-        s5 = ARC(ctx, op2, op1)
-        if s5 == -1:
-            return W_Boolean(False)
-        else:
-            return W_Boolean(s5)
-    
-
-class Le(BinaryOp):
-    operation_name = 'LE'
-    def decision(self, ctx, op1, op2):
-        s5 = ARC(ctx, op2, op1)
-        if s5 in (-1, 1):
-            return W_Boolean(False)
-        else:
-            return W_Boolean(True)
-    
-
-class Lt(BinaryOp):
-    operation_name = 'LT'
-    def decision(self, ctx, op1, op2):
-        s5 = ARC(ctx, op1, op2)
-        if s5 == -1:
-            return W_Boolean(False)
-        else:
-            return W_Boolean(s5)
-    
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        one = bytecode.prealocate_label()
+        bytecode.emit('JUMP_IF_TRUE_NOPOP', one)
+        self.right.emit(bytecode)
+        bytecode.emit('LABEL', one)        
+        
+Ge = create_binary_op('GE')
+Gt = create_binary_op('GT')    
+Le = create_binary_op('LE')    
+Lt = create_binary_op('LT')        
 
 ##############################################################################
 #
@@ -485,23 +448,23 @@ class Lt(BinaryOp):
 #
 ##############################################################################
 
-class Ursh(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        a = op1.ToUInt32()
-        b = op2.ToUInt32()
-        return W_IntNumber(a >> (b & 0x1F))
+# class Ursh(BinaryOp):
+#     def decision(self, ctx, op1, op2):
+#         a = op1.ToUInt32()
+#         b = op2.ToUInt32()
+#         return W_IntNumber(a >> (b & 0x1F))
 
-class Rsh(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        a = op1.ToInt32()
-        b = op2.ToUInt32()
-        return W_IntNumber(a >> intmask(b & 0x1F))
+# class Rsh(BinaryOp):
+#     def decision(self, ctx, op1, op2):
+#         a = op1.ToInt32()
+#         b = op2.ToUInt32()
+#         return W_IntNumber(a >> intmask(b & 0x1F))
 
-class Lsh(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        a = op1.ToInt32()
-        b = op2.ToUInt32()
-        return W_IntNumber(a << intmask(b & 0x1F))
+# class Lsh(BinaryOp):
+#     def decision(self, ctx, op1, op2):
+#         a = op1.ToInt32()
+#         b = op2.ToUInt32()
+#         return W_IntNumber(a << intmask(b & 0x1F))
 
 ##############################################################################
 #
@@ -509,72 +472,8 @@ class Lsh(BinaryOp):
 #
 ##############################################################################
 
-
-def AEC(ctx, x, y):
-    """
-    Implements the Abstract Equality Comparison x == y
-    trying to be fully to the spec
-    """
-    # XXX think about fast paths here and there
-    type1 = x.type()
-    type2 = y.type()
-    if type1 == type2:
-        if type1 == "undefined" or type1 == "null":
-            return True
-        if type1 == "number":
-            n1 = x.ToNumber()
-            n2 = y.ToNumber()
-            if isnan(n1) or isnan(n2):
-                return False
-            if n1 == n2:
-                return True
-            return False
-        elif type1 == "string":
-            return x.ToString(ctx) == y.ToString(ctx)
-        elif type1 == "boolean":
-            return x.ToBoolean() == x.ToBoolean()
-        return x == y
-    else:
-        #step 14
-        if (type1 == "undefined" and type2 == "null") or \
-           (type1 == "null" and type2 == "undefined"):
-            return True
-        if type1 == "number" and type2 == "string":
-            return AEC(ctx, x, W_FloatNumber(y.ToNumber()))
-        if type1 == "string" and type2 == "number":
-            return AEC(ctx, W_FloatNumber(x.ToNumber()), y)
-        if type1 == "boolean":
-            return AEC(ctx, W_FloatNumber(x.ToNumber()), y)
-        if type2 == "boolean":
-            return AEC(ctx, x, W_FloatNumber(y.ToNumber()))
-        if (type1 == "string" or type1 == "number") and \
-            type2 == "object":
-            return AEC(ctx, x, y.ToPrimitive(ctx))
-        if (type2 == "string" or type2 == "number") and \
-            type1 == "object":
-            return AEC(ctx, x.ToPrimitive(ctx), y)
-        return False
-            
-        
-    objtype = x.GetValue().type()
-    if objtype == y.GetValue().type():
-        if objtype == "undefined" or objtype == "null":
-            return True
-        
-    if isinstance(x, W_String) and isinstance(y, W_String):
-        r = x.ToString(ctx) == y.ToString(ctx)
-    else:
-        r = x.ToNumber() == y.ToNumber()
-    return r
-
-class Eq(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_Boolean(AEC(ctx, op1, op2))
-
-class Ne(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_Boolean(not AEC(ctx, op1, op2))
-
+Eq = create_binary_op('EQ')
+Ne = create_binary_op('NE')
 
 ##############################################################################
 #
@@ -583,118 +482,43 @@ class Ne(BinaryOp):
 #
 ##############################################################################
 
-def SEC(ctx, x, y):
-    """
-    Implements the Strict Equality Comparison x === y
-    trying to be fully to the spec
-    """
-    type1 = x.type()
-    type2 = y.type()
-    if type1 != type2:
-        return False
-    if type1 == "undefined" or type1 == "null":
-        return True
-    if type1 == "number":
-        n1 = x.ToNumber()
-        n2 = y.ToNumber()
-        if isnan(n1) or isnan(n2):
-            return False
-        if n1 == n2:
-            return True
-        return False
-    if type1 == "string":
-        return x.ToString(ctx) == y.ToString(ctx)
-    if type1 == "boolean":
-        return x.ToBoolean() == x.ToBoolean()
-    return x == y
+StrictEq = create_binary_op('IS')
+StrictNe = create_binary_op('ISNOT')    
 
-class StrictEq(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_Boolean(SEC(ctx, op1, op2))
+# class In(BinaryOp):
+#     """
+#     The in operator, eg: "property in object"
+#     """
+#     def decision(self, ctx, op1, op2):
+#         if not isinstance(op2, W_Object):
+#             raise ThrowException(W_String("TypeError"))
+#         name = op1.ToString(ctx)
+#         return W_Boolean(op2.HasProperty(name))
 
-class StrictNe(BinaryOp):
-    def decision(self, ctx, op1, op2):
-        return W_Boolean(not SEC(ctx, op1, op2))
-    
+# class Delete(UnaryOp):
+#     """
+#     the delete op, erases properties from objects
+#     """
+#     def eval(self, ctx):
+#         r1 = self.expr.eval(ctx)
+#         if not isinstance(r1, W_Reference):
+#             return W_Boolean(True)
+#         r3 = r1.GetBase()
+#         r4 = r1.GetPropertyName()
+#         return W_Boolean(r3.Delete(r4))
 
-class In(BinaryOp):
-    """
-    The in operator, eg: "property in object"
-    """
-    def decision(self, ctx, op1, op2):
-        if not isinstance(op2, W_Object):
-            raise ThrowException(W_String("TypeError"))
-        name = op1.ToString(ctx)
-        return W_Boolean(op2.HasProperty(name))
+PreIncrement = create_unary_op('PREINCR')
+PostIncrement = create_unary_op('POSTINCR')
+PreDecrement = create_unary_op('PREDECRE')
+PostDecrement = create_unary_op('POSTDECR')
 
-class Delete(UnaryOp):
-    """
-    the delete op, erases properties from objects
-    """
-    def eval(self, ctx):
-        r1 = self.expr.eval(ctx)
-        if not isinstance(r1, W_Reference):
-            return W_Boolean(True)
-        r3 = r1.GetBase()
-        r4 = r1.GetPropertyName()
-        return W_Boolean(r3.Delete(r4))
-
-class BaseIncrementDecrement(UnaryOp):
-    def emit(self, bytecode):
-        self.expr.emit(bytecode)
-        if self.postfix:
-            bytecode.emit('POST' + self.operation_name)
-        else:
-            bytecode.emit('PRE' + self.operation_name)
-
-class Increment(BaseIncrementDecrement):
-    """
-    ++value (prefix) and value++ (postfix)
-    """
-    operation_name = 'INCR'
-
-    def eval(self, ctx):
-        # XXX write down fast version
-        thing = self.expr.eval(ctx)
-        val = thing.GetValue()
-        x = val.ToNumber()
-        resl = plus(ctx, W_FloatNumber(x), W_IntNumber(1))
-        thing.PutValue(resl, ctx)
-        if self.postfix:
-            return val
-        else:
-            return resl
-        
-
-class Decrement(BaseIncrementDecrement):
-    """
-    same as increment --value and value --
-    """
-    operation_name = 'DECR'
-    
-    def eval(self, ctx):
-        # XXX write down hot path
-        thing = self.expr.eval(ctx)
-        val = thing.GetValue()
-        x = val.ToNumber()
-        resl = sub(ctx, W_FloatNumber(x), W_IntNumber(1))
-        thing.PutValue(resl, ctx)
-        if self.postfix:
-            return val
-        else:
-            return resl
-
-
-class Index(BinaryOp):
-    def eval(self, ctx):
-        w_obj = self.left.eval(ctx).GetValue().ToObject(ctx)
-        name= self.right.eval(ctx).GetValue().ToString(ctx)
-        return W_Reference(name, w_obj)
+#class Index(BinaryOp):
+#    def eval(self, ctx):
+#        w_obj = self.left.eval(ctx).GetValue().ToObject(ctx)
+#        name= self.right.eval(ctx).GetValue().ToString(ctx)
+#        return W_Reference(name, w_obj)
 
 class ArgumentList(ListOp):
-    def eval(self, ctx):
-        return W_List([node.eval(ctx).GetValue() for node in self.nodes])
-
     def emit(self, bytecode):
         for node in self.nodes:
             node.emit(bytecode)
@@ -706,72 +530,11 @@ class ArgumentList(ListOp):
 #
 ##############################################################################
 
-class BinaryNumberOp(BinaryOp):
-    def eval(self, ctx):
-        nleft = self.left.eval(ctx).GetValue().ToPrimitive(ctx, 'Number')
-        nright = self.right.eval(ctx).GetValue().ToPrimitive(ctx, 'Number')
-        result = self.mathop(ctx, nleft, nright)
-        return result
-    
-    def mathop(self, ctx, n1, n2):
-        raise NotImplementedError
-
-def mult(ctx, nleft, nright):
-    if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
-        ileft = nleft.ToInt32()
-        iright = nright.ToInt32()
-        try:
-            return W_IntNumber(ovfcheck(ileft * iright))
-        except OverflowError:
-            return W_FloatNumber(float(ileft) * float(iright))
-    fleft = nleft.ToNumber()
-    fright = nright.ToNumber()
-    return W_FloatNumber(fleft * fright)
-
-def mod(ctx, nleft, nright): # XXX this one is really not following spec
-    ileft = nleft.ToInt32()
-    iright = nright.ToInt32()
-    return W_IntNumber(ileft % iright)
-
-def division(ctx, nleft, nright):
-    fleft = nleft.ToNumber()
-    fright = nright.ToNumber()
-    if fright == 0:
-        if fleft < 0:
-            val = -INFINITY
-        elif fleft == 0:
-            val = NAN
-        else:
-            val = INFINITY
-    else:
-        val = fleft / fright
-    return W_FloatNumber(val)
-
-class Plus(BinaryNumberOp):
-    operation_name = 'ADD'
-
-class Mult(BinaryNumberOp):
-    operation_name = 'MUL'
-    def mathop(self, ctx, n1, n2):
-        return mult(ctx, n1, n2)
-
-
-class Mod(BinaryNumberOp):
-    operation_name = 'MOD'
-    def mathop(self, ctx, n1, n2):
-        return mod(ctx, n1, n2)
-
-class Division(BinaryNumberOp):
-    def mathop(self, ctx, n1, n2):
-        return division(ctx, n1, n2)
-
-
-class Sub(BinaryNumberOp):
-    operation_name = 'SUB'
-    
-    def mathop(self, ctx, n1, n2):
-        return sub(ctx, n1, n2)
-
+Plus = create_binary_op('ADD')
+Mult = create_binary_op('MUL')
+Mod = create_binary_op('MOD')
+Division = create_binary_op('DIV')
+Sub = create_binary_op('SUB')
 
 class Null(Expression):
     def eval(self, ctx):
@@ -793,17 +556,17 @@ def commonnew(ctx, obj, args):
         raise ThrowException(W_String('it is not a constructor'))
     return res
 
-class New(UnaryOp):
-    def eval(self, ctx):
-        x = self.expr.eval(ctx).GetValue()
-        return commonnew(ctx, x, [])
+#class New(UnaryOp):
+#    def eval(self, ctx):
+#        x = self.expr.eval(ctx).GetValue()
+#        return commonnew(ctx, x, [])
     
 
-class NewWithArgs(BinaryOp):
-    def eval(self, ctx):
-        x = self.left.eval(ctx).GetValue()
-        args = self.right.eval(ctx).get_args()
-        return commonnew(ctx, x, args)
+# class NewWithArgs(BinaryOp):
+#     def eval(self, ctx):
+#         x = self.left.eval(ctx).GetValue()
+#         args = self.right.eval(ctx).get_args()
+#         return commonnew(ctx, x, args)
 
 class BaseNumber(Expression):
     pass
@@ -886,8 +649,6 @@ class SourceElements(Statement):
             node.emit(bytecode)
             # we don't need to pop after certain instructions, let's
             # list them
-            if not isinstance(node, Return):
-                bytecode.emit('POP')
 
     def execute(self, ctx):
         for varname in self.var_decl:
@@ -970,18 +731,17 @@ class Try(Statement):
         return tryresult
     
 
-class Typeof(UnaryOp):
-    def eval(self, ctx):
-        val = self.expr.eval(ctx)
-        if isinstance(val, W_Reference) and val.GetBase() is None:
-            return W_String("undefined")
-        return W_String(val.GetValue().type())
+#class Typeof(UnaryOp):
+#    def eval(self, ctx):
+#        val = self.expr.eval(ctx)
+#        if isinstance(val, W_Reference) and val.GetBase() is None:
+#            return W_String("undefined")
+#        return W_String(val.GetValue().type())
 
 class VariableDeclaration(Expression):
     def __init__(self, pos, identifier, expr=None):
         self.pos = pos
-        assert isinstance(identifier, Identifier)
-        self.identifier = identifier.name
+        self.identifier = identifier.get_literal()
         self.expr = expr
 
     def emit(self, bytecode):
@@ -998,7 +758,18 @@ class VariableDeclaration(Expression):
         else:
             ctx.variable.Put(name, self.expr.eval(ctx).GetValue(), dd=True)
         return self.identifier.eval(ctx)
-    
+
+class VariableIdentifier(Expression):
+    def __init__(self, pos, depth, identifier):
+        self.pos = pos
+        self.depth = depth
+        self.identifier = identifier
+
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_REALVAR', self.depth, self.identifier)
+
+    def get_literal(self):
+        return self.identifier
 
 class VariableDeclList(Expression):
     def __init__(self, pos, nodes):
@@ -1021,14 +792,15 @@ class Variable(Statement):
 
     def emit(self, bytecode):
         self.body.emit(bytecode)
+        bytecode.emit('POP')
     
     def execute(self, ctx):
         return self.body.eval(ctx)
 
-class Void(UnaryOp):
-    def eval(self, ctx):
-        self.expr.eval(ctx)
-        return w_Undefined
+#class Void(UnaryOp):
+#    def eval(self, ctx):
+#        self.expr.eval(ctx)
+#        return w_Undefined
     
 
 class With(Statement):
@@ -1179,28 +951,11 @@ class Boolean(Expression):
         return W_Boolean(self.bool)
     
 
-class Not(UnaryOp):
-    def eval(self, ctx):
-        return W_Boolean(not self.expr.eval(ctx).GetValue().ToBoolean())
-    
+#class Not(UnaryOp):
+#    def eval(self, ctx):
+#        return W_Boolean(not self.expr.eval(ctx).GetValue().ToBoolean())
 
-class UMinus(UnaryOp):
-    operation_name = 'UMINUS'
-    
-    def eval(self, ctx):
-        res = self.expr.eval(ctx)
-        if isinstance(res, W_IntNumber):
-            return W_IntNumber(-res.intval)
-        elif isinstance(res, W_FloatNumber):
-            return W_FloatNumber(-res.floatval)
-        return W_FloatNumber(-self.expr.eval(ctx).GetValue().ToNumber())
+UMinus = create_unary_op('UMINUS')
+UPlus = create_unary_op('UPLUS')
 
-class UPlus(UnaryOp):
-    operation_name = 'UPLUS'
-    
-    def eval(self, ctx):
-        res = self.expr.eval(ctx)
-        if isinstance(res, W_BaseNumber):
-            return res
-        return W_FloatNumber(self.expr.eval(ctx).GetValue().ToNumber())
-    
+unrolling_classes = unrolling_iterable((If, Return, Block, While))
