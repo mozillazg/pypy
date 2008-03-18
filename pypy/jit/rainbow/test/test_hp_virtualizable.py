@@ -260,6 +260,39 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'xy']
+
+        def ll_function(xy):
+            i = 1024
+            while i:
+                i >>= 1
+                xy_set_x(xy, xy_get_x(xy) + 3)
+                xy_set_y(xy, xy_get_y(xy) + 30)
+                MyJitDriver.jit_merge_point(i=i, xy=xy)
+                MyJitDriver.can_enter_jit(i=i, xy=xy)
+            return xy
+
+        def main(x, y):
+            xy = lltype.malloc(XY)
+            xy.vable_access = lltype.nullptr(XY_ACCESS)
+            xy.x = x
+            xy.y = y
+            xy2 = ll_function(xy)
+            assert xy2 is xy
+            return xy.x * xy.y
+
+        res = self.run(main, [20, 22], 2)
+        assert res == main(20, 22)
+        self.check_insns_in_loops(getfield=0, setfield=0)
+
+        res = self.run(main, [20, 22], threshold=1)
+        assert res == main(20, 22)
+        self.check_insns_in_loops(getfield=0, setfield=0)
+
+    def test_simple_aliasing(self):
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'xy1', 'xy2', 'res', 'which']
