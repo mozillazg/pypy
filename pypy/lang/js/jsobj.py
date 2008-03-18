@@ -164,8 +164,11 @@ class W_PrimitiveObject(W_Root):
         
         
     def Get(self, P):
-        if P in self.propdict: return self.propdict[P].value
-        if self.Prototype is None: return w_Undefined
+        try:
+            return self.propdict[P].value
+        except KeyError:
+            if self.Prototype is None:
+                return w_Undefined
         return self.Prototype.Get(P) # go down the prototype chain
     
     def CanPut(self, P):
@@ -177,13 +180,14 @@ class W_PrimitiveObject(W_Root):
 
     def Put(self, P, V, dd=False,
             ro=False, de=False, it=False):
-        if not self.CanPut(P):
-            return
-        if P in self.propdict:
-            self.propdict[P].value = V
-        else:
+        try:
+            P = self.propdict[P]
+            if P.ro:
+                return
+            P.value = V
+        except KeyError:
             self.propdict[P] = Property(P, V,
-            dd = dd, ro = ro, it = it)
+                                        dd = dd, ro = ro, it = it)
     
     def HasProperty(self, P):
         if P in self.propdict: return True
@@ -514,9 +518,14 @@ class ExecutionContext(object):
         assert name is not None
         for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
-            if obj.HasProperty(name):
-                obj.Put(name, value)
+            try:
+                P = obj.propdict[name]
+                if P.ro:
+                    return
+                P.value = value
                 return
+            except KeyError:
+                pass
         # if not, we need to put this thing in current scope
         self.variable.Put(name, value)
 
@@ -541,9 +550,10 @@ class ExecutionContext(object):
     def resolve_identifier(self, identifier):
         for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
-            if obj.HasProperty(identifier):
-                return obj.Get(identifier)
-                #return W_Reference(identifier, obj)
+            try:
+                return obj.propdict[identifier].value
+            except KeyError:
+                pass
         raise Exception("stuff")
         #return W_Reference(identifier)
 

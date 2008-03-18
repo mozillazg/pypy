@@ -1,5 +1,5 @@
 
-// some simple number-crunching benchmarks
+// some simple number-crunching benchmark
 
 function f1(n) {
   var i = 0;
@@ -10,7 +10,7 @@ function f1(n) {
       j = j + 1;
       x = x + (i&j);
     }
-    i = i +1;
+    i = i + 1;
   }
   return x;
 }
