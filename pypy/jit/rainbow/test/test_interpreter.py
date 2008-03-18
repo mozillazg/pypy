@@ -6,7 +6,7 @@ from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.jit.hintannotator.model import originalconcretetype
-from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
+from pypy.jit.rainbow.codewriter import LLTypeBytecodeWriter, OOTypeBytecodeWriter, label, tlabel, assemble
 from pypy.jit.rainbow.portal import PortalRewriter
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.timeshifter import rtimeshift, rvalue
@@ -98,6 +98,11 @@ class InterpretationTest(object):
         del cls._cache
         del cls._cache_order
 
+    def create_writer(self, t, hannotator, RGenOp):
+        if self.type_system == 'lltype':
+            return LLTypeBytecodeWriter(t, hannotator, self.RGenOp)
+        else:
+            return OOTypeBytecodeWriter(t, hannotator, self.RGenOp)
 
     def _serialize(self, func, values, policy=None,
                   inline=None, backendoptimize=False,
@@ -121,7 +126,7 @@ class InterpretationTest(object):
             graph2 = graphof(t, portal)
             self.graph = graph2
             self.maingraph = graphof(rtyper.annotator.translator, func)
-        writer = BytecodeWriter(t, hannotator, self.RGenOp)
+        writer = self.create_writer(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
         # the bytecode writer can ask for llhelpers about lists and dicts
         rtyper.specialize_more_blocks() 

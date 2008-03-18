@@ -6,6 +6,7 @@ from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.jit.timeshifter.rcontainer import SegfaultException
 from pypy.jit.rainbow import rhotpath
+from pypy.jit.rainbow import typesystem
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 import py
@@ -273,7 +274,8 @@ class JitInterpreter(object):
     def fresh_jitstate(self, builder):
         return rtimeshift.JITState(builder, None,
                                    self.exceptiondesc.null_exc_type_box,
-                                   self.exceptiondesc.null_exc_value_box)
+                                   self.exceptiondesc.null_exc_value_box,
+                                   self.ts)
 
     def finish_jitstate(self, graphsigtoken):
         jitstate = self.jitstate
@@ -1021,6 +1023,12 @@ class JitInterpreter(object):
         self.opcode_implementations.append(implementation)
         self.opcode_descs.append(opdesc)
         return index
+
+class LLTypeJitInterpreter(JitInterpreter):
+    ts = typesystem.llhelper
+
+class OOTypeJitInterpreter(JitInterpreter):
+    ts = typesystem.oohelper
 
 
 class DebugTrace(object):

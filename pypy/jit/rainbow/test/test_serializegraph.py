@@ -4,7 +4,7 @@ from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.jit.codegen.llgraph.rgenop import RGenOp
-from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
+from pypy.jit.rainbow.codewriter import LLTypeBytecodeWriter, label, tlabel, assemble
 from pypy.rlib.jit import hint
 from pypy import conftest
 
@@ -47,7 +47,7 @@ class AbstractSerializationTest:
         if conftest.option.view:
             t.view()
         graph2 = graphof(t, func)
-        writer = BytecodeWriter(t, hannotator, RGenOp)
+        writer = LLTypeBytecodeWriter(t, hannotator, RGenOp)
         jitcode = writer.make_bytecode(graph2)
         return writer, jitcode
 

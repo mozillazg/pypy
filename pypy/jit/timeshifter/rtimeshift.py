@@ -21,6 +21,7 @@ debug_view = lloperation.llop.debug_view
 debug_print = lloperation.llop.debug_print
 debug_pdb = lloperation.llop.debug_pdb
 
+
 # ____________________________________________________________
 # emit ops
 
@@ -986,7 +987,7 @@ class FrozenJITState(object):
                                                               memo)
             assert isinstance(virtualizable_box, rvalue.PtrRedBox)
             virtualizables.append(virtualizable_box)
-        return JITState(None, frame, exc_type_box, exc_value_box,
+        return JITState(None, frame, exc_type_box, exc_value_box, self.ts,
                         virtualizables=virtualizables)
 
 
@@ -1053,12 +1054,13 @@ class JITState(object):
     promotion_path = None
     generated_oop_residual_can_raise = False
 
-    def __init__(self, builder, frame, exc_type_box, exc_value_box,
+    def __init__(self, builder, frame, exc_type_box, exc_value_box, ts,
                  resumepoint=-1, newgreens=[], virtualizables=None):
         self.curbuilder = builder
         self.frame = frame
         self.exc_type_box = exc_type_box
         self.exc_value_box = exc_value_box
+        self.ts = ts
         self.resumepoint = resumepoint
         self.greens = newgreens
 
@@ -1083,6 +1085,7 @@ class JITState(object):
                         self.frame.copy(memo),
                         self.exc_type_box .copy(memo),
                         self.exc_value_box.copy(memo),
+                        self.ts,
                         self.resumepoint,
                         self.greens[:],
                         virtualizables)
@@ -1097,6 +1100,7 @@ class JITState(object):
                                   self.frame.copy(memo),
                                   self.exc_type_box .copy(memo),
                                   self.exc_value_box.copy(memo),
+                                  self.ts,
                                   newresumepoint,
                                   newgreens,
                                   virtualizables)
@@ -1209,6 +1213,7 @@ class JITState(object):
         result.fz_frame = self.frame.freeze(memo)
         result.fz_exc_type_box  = self.exc_type_box .freeze(memo)
         result.fz_exc_value_box = self.exc_value_box.freeze(memo)
+        result.ts = self.ts
         fz_virtualizables = result.fz_virtualizables = []
         for virtualizable_box in self.virtualizables:
             assert virtualizable_box in memo.boxes
@@ -1243,7 +1248,7 @@ class JITState(object):
 
 
     def residual_ll_exception(self, ll_evalue):
-        ll_etype  = ll_evalue.typeptr
+        ll_etype  = self.ts.get_typeptr(ll_evalue)
         etypebox  = rvalue.ll_fromvalue(self, ll_etype)
         evaluebox = rvalue.ll_fromvalue(self, ll_evalue)
         setexctypebox (self, etypebox )
