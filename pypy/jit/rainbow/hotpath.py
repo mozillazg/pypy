@@ -338,7 +338,7 @@ def make_state_class(hotrunnerdesc):
                 gv_arg = inputargs_gv[red_i]
                 box = make_arg_redbox(jitstate, inputargs_gv, red_i)
                 redargs += (box,)
-                red_i += 1
+                red_i += make_arg_redbox.consumes
             redargs = list(redargs)
 
             rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,

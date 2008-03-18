@@ -1119,6 +1119,14 @@ class VirtualizableStruct(VirtualStruct):
                 return None   # fall-back
         return rvalue.ll_fromvalue(jitstate, answer ^ reverse)
 
+    def allocate_gv_container(self, rgenop):
+        typedesc = self.typedesc
+        gv_outside = self.content_boxes[-1].genvar
+        if gv_outside is typedesc.gv_null:
+            return typedesc.allocate(rgenop)
+        return gv_outside
+
+
 # patching VirtualStructCls
 StructTypeDesc.VirtualStructCls = VirtualStruct
 VirtualizableStructTypeDesc.VirtualStructCls = VirtualizableStruct

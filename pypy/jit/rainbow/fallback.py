@@ -42,11 +42,14 @@ class FallbackInterpreter(object):
         if gv is None:
             return self.build_gv_container(box)
         if not gv.is_const:
-            # fetch the value from the machine code stack
-            gv = self.rgenop.genconst_from_frame_var(box.kind, self.framebase,
-                                                     self.frameinfo,
-                                                     self.gv_to_index[gv])
+            gv = self.fetch_from_frame(box, gv)
         return gv
+
+    def fetch_from_frame(self, box, gv):
+        # fetch the value from the machine code stack
+        return self.rgenop.genconst_from_frame_var(box.kind, self.framebase,
+                                                   self.frameinfo,
+                                                   self.gv_to_index[gv])
 
     def build_gv_container(self, box):
         # allocate a real structure on the heap mirroring the virtual
@@ -58,6 +61,9 @@ class FallbackInterpreter(object):
             return self.containers_gv[content]
         except KeyError:
             gv_result = content.allocate_gv_container(self.rgenop)
+            if not gv_result.is_const:
+                gv_result = self.fetch_from_frame(box, gv_result)
+
             self.containers_gv[content] = gv_result
             content.populate_gv_container(gv_result, self.getinitialboxgv)
             return gv_result
