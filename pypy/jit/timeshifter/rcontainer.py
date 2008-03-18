@@ -222,9 +222,6 @@ class StructTypeDesc(object):
         return box
 
 
-def create(jitstate, typedesc):
-    return typedesc.factory()
-
 def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
     alloctoken = contdesc.varsizealloctoken
