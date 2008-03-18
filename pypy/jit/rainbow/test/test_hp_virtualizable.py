@@ -157,31 +157,42 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                     [lltype.Ptr(XY), lltype.Signed, lltype.Signed])
 
     def test_simple_set(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'xy']
    
-        def f(xy):
-            x = xy_get_x(xy)
-            xy_set_y(xy, 1)
-            y = xy_get_y(xy)
-            return x+y
 
         def main(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
-            return f(xy)
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                x = xy_get_x(xy)
+                xy_set_y(xy, 1)
+                y = xy_get_y(xy)
+                tot += x+y
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 21
-        self.check_insns(getfield=0)
+        res = self.run(main, [20, 22], 2, policy=P_OOPSPEC)
+        assert res == 21 * 11
+        self.check_insns_in_loops(getfield=0)
         if self.on_llgraph:
             residual_graph = self.get_residual_graph()
             inputargs = residual_graph.startblock.inputargs
-            assert len(inputargs) == 3
-            assert ([v.concretetype for v in inputargs] ==
+            assert len(inputargs) == 5
+            assert ([v.concretetype for v in inputargs[-3:]] ==
                     [lltype.Ptr(XY), lltype.Signed, lltype.Signed])
 
     def test_set_effect(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'xy']
 
         def f(xy):
            x = xy_get_x(xy)
@@ -194,23 +205,33 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
-            v = f(xy)
-            return v + xy.y
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                v = f(xy)
+                tot += v + xy.y
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 26
-        self.check_insns(getfield=0)
+        res = self.run(main, [20, 22], 2)
+        assert res == 26 * 11
+        self.check_insns_in_loops(getfield=0)
         if self.on_llgraph:
             residual_graph = self.get_residual_graph()
             inputargs = residual_graph.startblock.inputargs
-            assert len(inputargs) == 3
-            assert ([v.concretetype for v in inputargs] ==
+            assert len(inputargs) == 5
+            assert ([v.concretetype for v in inputargs[-3:]] ==
                     [lltype.Ptr(XY), lltype.Signed, lltype.Signed])
 
     def test_simple_escape(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'xy', 'e']
    
         def f(e, xy):
-            xy_set_y(xy, 3)
+            xy_set_y(xy, xy_get_y(xy) + 3)
             e.xy = xy
             return 0
 
@@ -220,18 +241,23 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xy.x = x
             xy.y = y
             e = lltype.malloc(E)
-            f(e, xy)
-            return e.xy.x+e.xy.y
+            i = 1024
+            while i:
+                i >>= 1
+                f(e, xy)
+                MyJitDriver.jit_merge_point(i=i, xy=xy, e=e)
+                MyJitDriver.can_enter_jit(i=i, xy=xy, e=e)
+            return e.xy.y
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 23
-        self.check_insns(getfield=0)
+        res = self.run(main, [20, 22], 2)
+        assert res == main(20, 22)
+        self.check_insns_in_loops(getfield=0)
         if self.on_llgraph:
             residual_graph = self.get_residual_graph()
             inputargs = residual_graph.startblock.inputargs
-            assert len(inputargs) == 4
-            assert ([v.concretetype for v in inputargs] ==
-                [lltype.Ptr(E), lltype.Ptr(XY), lltype.Signed, lltype.Signed])
+            assert len(inputargs) == 5
+            assert ([v.concretetype for v in inputargs[-4:]] ==
+                [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
         def f(which, xy1, xy2):
