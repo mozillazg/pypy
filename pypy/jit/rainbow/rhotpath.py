@@ -308,6 +308,10 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
 
     # default case of the switch:
     exceptiondesc = fbp.hotrunnerdesc.exceptiondesc
+
+    # for the annotator:
+    prevtypebox = None
+    prevvaluebox = None
     if check_exceptions:
         # virtualize the exception into the jitstate (xxx fragile code)
         prevtypebox = jitstate.exc_type_box
