@@ -260,9 +260,13 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'xy1', 'xy2', 'xy', 'which']
+
         def f(which, xy1, xy2):
-            xy_set_y(xy1, 3)
-            xy_set_y(xy2, 7)
+            xy_set_y(xy1, xy_get_y(xy1) + 3)
+            xy_set_y(xy2, xy_get_y(xy2) + 3)
             if which == 1:
                 return xy1
             else:
@@ -277,14 +281,21 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xy1.y = y
             xy2.x = y
             xy2.y = x
-            xy = f(which, xy1, xy2)
+            i = 1024
+            while i:
+                i >>= 1
+                xy = f(which, xy1, xy2)
+                MyJitDriver.jit_merge_point(i=i, xy1=xy1, xy2=xy2, xy=xy, which=which)
+                MyJitDriver.can_enter_jit(i=i, xy1=xy1, xy2=xy2, xy=xy, which=which)
             assert xy is xy1 or xy is xy2
             return xy.x+xy.y
 
-        res = self.timeshift_from_portal(main, f, [1, 20, 22],
-                                         policy=P_OOPSPEC)
-        assert res == 23
-        self.check_insns(getfield=0)
+        res = self.run(main, [1, 20, 22], 2)
+        assert res == main(1, 20, 22)
+        self.check_insns_in_loops(getfield=0)
+        res = self.run(main, [0, 20, 22], 2)
+        assert res == main(0, 20, 22)
+        self.check_insns_in_loops(getfield=0)
 
     def test_simple_construct_no_escape(self):
    
