@@ -262,7 +262,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
     def test_simple_return_it(self):
         class MyJitDriver(JitDriver):
             greens = []
-            reds = ['i', 'xy1', 'xy2', 'xy', 'which']
+            reds = ['i', 'xy1', 'xy2', 'res', 'which']
 
         def f(which, xy1, xy2):
             xy_set_y(xy1, xy_get_y(xy1) + 3)
@@ -285,10 +285,11 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             while i:
                 i >>= 1
                 xy = f(which, xy1, xy2)
-                MyJitDriver.jit_merge_point(i=i, xy1=xy1, xy2=xy2, xy=xy, which=which)
-                MyJitDriver.can_enter_jit(i=i, xy1=xy1, xy2=xy2, xy=xy, which=which)
-            assert xy is xy1 or xy is xy2
-            return xy.x+xy.y
+                assert xy is xy1 or xy is xy2
+                res = xy.x+xy.y
+                MyJitDriver.jit_merge_point(i=i, xy1=xy1, xy2=xy2, res=res, which=which)
+                MyJitDriver.can_enter_jit(i=i, xy1=xy1, xy2=xy2, res=res, which=which)
+            return res
 
         res = self.run(main, [1, 20, 22], 2)
         assert res == main(1, 20, 22)
