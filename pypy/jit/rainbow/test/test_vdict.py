@@ -17,6 +17,20 @@ class TestVDict(InterpretationTest):
         assert res == 34
         self.check_insns({})
 
+    def test_merge(self):
+        def ll_function(flag):
+            dic = {}
+            if flag:
+                dic[12] = 34
+            else:
+                dic[12] = 35
+            dic[13] = 35
+            return dic[12]
+
+        res = self.interpret(ll_function, [True], [], policy=P_OOPSPEC)
+        assert res == 34
+        self.check_insns({})
+
     def test_vdict_and_vlist(self):
         def ll_function():
             dic = {}
