@@ -1,7 +1,7 @@
 
 import py
 from pypy.lang.js import interpreter
-from pypy.lang.js.operations import AEC, IntNumber, FloatNumber, Position, Plus
+from pypy.lang.js.operations import IntNumber, FloatNumber, Position, Plus
 from pypy.lang.js.jsobj import W_Object, ExecutionContext, W_Root, w_Null
 from pypy.lang.js.execution import ThrowException
 from pypy.lang.js.jscode import JsCode, POP
@@ -175,6 +175,7 @@ def test_array_initializer():
     """, ['', '0'])
 
 def test_throw():
+    py.test.skip("Not implemented")
     assertp("throw(3);", "uncaught exception: 3")
     
 def test_group():
@@ -184,10 +185,11 @@ def test_comma():
     assertv("(500,3);", 3)
 
 def test_block():
-    yield assertv, "{5;}", 5
-    yield assertv, "{3; 5;}", 5
+    yield assertp, "{print(5);}", '5'
+    yield assertp, "{3; print(5);}", '5'
 
 def test_try_catch_finally():
+    py.test.skip("Not implemented")
     yield assertp, """
     try {
         throw(3);
@@ -250,7 +252,7 @@ def test_string_compare():
     yield assertv, "'aaa' < 'a';", False
     yield assertv, "'a' > 'a';", False
 
-def test_binary_op():
+def test_binary_opb():
     yield assertp, "print(0||0); print(1||0);", ["0", "1"]
     yield assertp, "print(0&&1); print(1&&1);", ["0", "1"]
 
@@ -259,7 +261,7 @@ def test_while():
     i = 0;
     while (i<3) {
         print(i);
-        i = i+1;
+        i++;
     }
     print(i);
     """, ["0","1","2","3"])

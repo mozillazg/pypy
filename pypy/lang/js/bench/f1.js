@@ -7,16 +7,16 @@ function f1(n) {
   while (i < n) {
     var j = 0;
     while (j <= i) {
-      j++;
+      j = j + 1;
       x = x + (i&j);
     }
-    i++;
+    i = i +1;
   }
   return x;
 }
 
-a = new Date();
-f1(2117);
-b = new Date();
-print(b - a);
+//a = new Date();
+print(f1(2117));
+//b = new Date();
+//print(b - a);
 

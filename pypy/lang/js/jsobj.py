@@ -460,7 +460,7 @@ class W_FloatNumber(W_BaseNumber):
 
     def ToNumber(self):
         return self.floatval
-        
+
     def ToInt32(self):
         if isnan(self.floatval) or isinf(self.floatval):
             return 0           
@@ -511,6 +511,7 @@ class ExecutionContext(object):
         return "<ExCtx %s, var: %s>"%(self.scope, self.variable)
         
     def assign(self, name, value):
+        assert name is not None
         for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
             if obj.HasProperty(name):
@@ -520,6 +521,7 @@ class ExecutionContext(object):
         self.variable.Put(name, value)
 
     def put(self, name, value):
+        assert name is not None
         self.variable.Put(name, value)
     
     def get_global(self):
@@ -540,9 +542,10 @@ class ExecutionContext(object):
         for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
             if obj.HasProperty(identifier):
-                return W_Reference(identifier, obj)
-        
-        return W_Reference(identifier)
+                return obj.Get(identifier)
+                #return W_Reference(identifier, obj)
+        raise Exception("stuff")
+        #return W_Reference(identifier)
 
 def global_context(w_global):
     assert isinstance(w_global, W_PrimitiveObject)
@@ -586,22 +589,22 @@ class W_Reference(W_Root):
             exception = "ReferenceError: %s is not defined"%(self.property_name,)
             raise ThrowException(W_String(exception))        
 
-    def GetValue(self):
-        self.check_empty()
-        return self.base.Get(self.property_name)
+    #def GetValue(self):
+    #    self.check_empty()
+    #    return self.base.Get(self.property_name)
 
-    def PutValue(self, w, ctx):
-        base = self.base
-        if base is None:
-            base = ctx.scope[-1]
-        base.Put(self.property_name, w)
-        return w
+    #def PutValue(self, w, ctx):
+    #    base = self.base
+    #    if base is None:
+    #        base = ctx.scope[-1]
+    #    base.Put(self.property_name, w)
+    #    return w
 
-    def GetBase(self):
-        return self.base
+    #def GetBase(self):
+    #    return self.base
 
-    def GetPropertyName(self):
-        return self.property_name
+    #def GetPropertyName(self):
+    #    return self.property_name
 
     def __str__(self):
         return "<" + str(self.base) + " -> " + str(self.property_name) + ">"
@@ -616,3 +619,11 @@ def isnull_or_undefined(obj):
     if obj is w_Null or obj is w_Undefined:
         return True
     return False
+
+w_True = W_Boolean(True)
+w_False = W_Boolean(False)
+
+def newbool(val):
+    if val:
+        return w_True
+    return w_False

@@ -2,7 +2,8 @@ from __future__ import division
 
 import py
 from pypy.rlib.parsing.ebnfparse import parse_ebnf, make_parse_function
-from pypy.rlib.parsing.parsing import ParseError, Rule
+from pypy.rlib.parsing.parsing import Rule
+from pypy.lang.js.astbuilder import FakeParseError
 from pypy.rlib.parsing.tree import RPythonVisitor
 from pypy.lang.js.jsobj import W_Object, global_context, ThrowException, empty_context
 from pypy.lang.js.astbuilder import ASTBuilder
@@ -337,7 +338,7 @@ class TestToASTExpr(BaseTestToAST):
             "LOAD_OBJECT 1"])
 
     def test_raising(self):
-        py.test.raises(ParseError, self.check, '1=2', [])
+        py.test.raises(FakeParseError, self.check, '1=2', [])
     
     def test_expression(self):
         self.check('1 - 1 - 1', [

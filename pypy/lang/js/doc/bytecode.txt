@@ -58,7 +58,7 @@ Arithmetic binary operations:
 
 ADD, SUB, MUL, DIV, MOD
 BITXOR, BITOR, BITAND
-AND, OR, EQ, NE, IS, ISNOT, GT, GE, LT, LE,
+EQ, NE, IS, ISNOT, GT, GE, LT, LE,
 RSHIT, URSHIFT, LSHIFT
 
 Unary arithmetic operations:
