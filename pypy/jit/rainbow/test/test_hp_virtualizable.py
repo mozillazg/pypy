@@ -1,9 +1,12 @@
+import py
 from pypy.jit.rainbow.test.test_portal import PortalTest, P_OOPSPEC
 from pypy.jit.rainbow.test.test_interpreter import StopAtXPolicy
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.rvirtualizable import VABLERTIPTR
 from pypy.rlib.jit import hint
-import py
+from pypy.rlib.jit import JitDriver, hint, JitHintError
+from pypy.jit.rainbow.test import test_hotpath
+
 
 S = lltype.GcStruct('s', ('a', lltype.Signed), ('b', lltype.Signed))
 PS = lltype.Ptr(S)
@@ -114,26 +117,38 @@ E3 = lltype.GcStruct('e', ('pq', lltype.Ptr(PQ)),
 
 
 
-class TestVirtualizableExplicit(PortalTest):
+class TestVirtualizableExplicit(test_hotpath.HotPathTest):
+    def timeshift_from_portal(self, *args, **kwargs):
+        py.test.skip("port me")
+
     type_system = "lltype"
 
     def test_simple(self):
-   
-        def f(xy):
-            x = xy_get_x(xy)
-            y = xy_get_y(xy)
-            return x+y
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'xy']
 
         def main(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
-            return f(xy)
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                x = xy_get_x(xy)
+                y = xy_get_y(xy)
+                tot += x+y
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+            return tot
 
-        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
-        assert res == 42
-        self.check_insns(getfield=0)
+        res = self.run(main, [20, 22], 2, policy=P_OOPSPEC)
+        assert res == 42 * 11
+        self.check_insns_in_loops(getfield=0)
+        return
+        # XXX port the rest
         if self.on_llgraph:
             residual_graph = self.get_residual_graph()
             inputargs = residual_graph.startblock.inputargs
@@ -738,8 +753,11 @@ class TestVirtualizableExplicit(PortalTest):
 
         assert res == 42
         
-class TestVirtualizableImplicit(PortalTest):
+class TestVirtualizableImplicit(test_hotpath.HotPathTest):
     type_system = "lltype"
+
+    def timeshift_from_portal(self, *args, **kwargs):
+        py.test.skip("port me")
 
     def test_simple(self):
 
