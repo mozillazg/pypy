@@ -773,8 +773,7 @@ class JitInterpreter(object):
 
     @arguments("structtypedesc", returns="red")
     def opimpl_red_malloc(self, structtypedesc):
-        redbox = rcontainer.create(self.jitstate, structtypedesc)
-        return redbox
+        return structtypedesc.factory(self.jitstate)
 
     @arguments("structtypedesc", "red", returns="red")
     def opimpl_red_malloc_varsize_struct(self, structtypedesc, sizebox):
