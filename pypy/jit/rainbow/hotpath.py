@@ -14,6 +14,7 @@ from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key
 from pypy.jit.timeshifter.greenkey import GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath
 from pypy.jit.rainbow.fallback import FallbackInterpreter
+from pypy.jit.rainbow.portal import getjitenterargdesc
 
 
 class HotRunnerDesc:
@@ -59,10 +60,11 @@ class HotRunnerDesc:
                 self.green_args_spec.append(TYPE)
                 assert len(self.red_args_spec) == 0, "bogus order of colors"
             else:
-                RESARGS.append(TYPE)
-                kind = self.RGenOp.kindToken(TYPE)
-                boxcls = rvalue.ll_redboxcls(TYPE)
-                self.red_args_spec.append((kind, boxcls))
+                argdesc = getjitenterargdesc(TYPE, self.RGenOp)
+                arg_spec = (argdesc.residual_args_collector(),
+                            argdesc.arg_redbox_maker(), TYPE)
+                self.red_args_spec.append(arg_spec)
+                RESARGS.extend(argdesc.residual_argtypes())
 
         self.JIT_ENTER_FUNCTYPE = lltype.FuncType(ALLARGS, lltype.Void)
         self.RESIDUAL_FUNCTYPE = lltype.FuncType(RESARGS, lltype.Void)
@@ -90,7 +92,8 @@ class HotRunnerDesc:
             interpreter.debug_trace("run_machine_code", *args)
             mc = state.machine_codes[key]
             run = maybe_on_top_of_llinterp(exceptiondesc, mc)
-            run(*args[num_green_args:])
+            residualargs = state.make_residualargs(*args[num_green_args:])
+            run(*residualargs)
 
         HotEnterState.compile.im_func._dont_inline_ = True
         maybe_enter_jit._always_inline_ = True
@@ -327,20 +330,20 @@ def make_state_class(hotrunnerdesc):
                 hotrunnerdesc.sigtoken, "residual")
 
             greenargs = list(greenkey.values)
-            redargs = ()
-            red_i = 0
-            for kind, boxcls in red_args_spec:
-                gv_arg = inputargs_gv[red_i]
-                red_i += 1
-                box = boxcls(kind, gv_arg)
-                redargs += (box,)
-            redargs = list(redargs)
 
             jitstate = interp.fresh_jitstate(builder)
+            redargs = ()
+            red_i = 0
+            for _, make_arg_redbox, _ in red_args_spec:
+                gv_arg = inputargs_gv[red_i]
+                box = make_arg_redbox(jitstate, inputargs_gv, red_i)
+                redargs += (box,)
+                red_i += 1
+            redargs = list(redargs)
+
             rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
                                     hotrunnerdesc.entryjitcode,
                                     hotrunnerdesc.sigtoken)
-            builder = jitstate.curbuilder
             builder.start_writing()
             rhotpath.compile(interp)
             builder.end()
@@ -352,5 +355,13 @@ def make_state_class(hotrunnerdesc):
 
             if not we_are_translated():
                 hotrunnerdesc.residual_graph = generated._obj.graph  #for tests
+
+        def make_residualargs(self, *redargs):
+            residualargs = ()
+            i = 0
+            for collect_residual_args, _, _ in red_args_spec:
+                residualargs = residualargs + collect_residual_args(redargs[i])
+                i += 1
+            return residualargs
 
     return HotEnterState

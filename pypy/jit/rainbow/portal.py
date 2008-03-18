@@ -45,7 +45,7 @@ class PortalRewriter(object):
             if binding.is_green():
                 arg_spec = "green", None, None, concretetype
             else:
-                argdesc = self.getportalargdesc(concretetype)
+                argdesc = getjitenterargdesc(concretetype, self.RGenOp)
                 arg_spec = ("red", argdesc.residual_args_collector(),
                             argdesc.arg_redbox_maker(), concretetype)
                 ARGS.extend(argdesc.residual_argtypes())
@@ -110,16 +110,6 @@ class PortalRewriter(object):
         block.recloseblock(
             flowmodel.Link([result], self.origportalgraph.returnblock))
 
-    def getportalargdesc(self, lowleveltype):
-        assert not isinstance(lowleveltype, lltype.ContainerType)
-        redportargdesccls = RedPortalArgDesc
-        if isinstance(lowleveltype, lltype.Ptr):
-            if isinstance(lowleveltype.TO, lltype.Struct):
-                if lowleveltype.TO._hints.get('virtualizable', False):
-                    redportargdesccls = RedVirtualizableStructPortalArgDesc
-                else:
-                    redportargdesccls = RedPortalArgDesc
-        return redportargdesccls(lowleveltype, self.RGenOp)
 
     def get_residual_graph(self, llinterp):
         # debugging helper
@@ -319,7 +309,16 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
     return PortalState
 
 
-class RedPortalArgDesc:
+def getjitenterargdesc(lowleveltype, RGenOp):
+    assert not isinstance(lowleveltype, lltype.ContainerType)
+    redportargdesccls = RedJitEnterArgDesc
+    if isinstance(lowleveltype, lltype.Ptr):
+        if isinstance(lowleveltype.TO, lltype.Struct):
+            if lowleveltype.TO._hints.get('virtualizable', False):
+                redportargdesccls = RedVirtualizableStructJitEnterArgDesc
+    return redportargdesccls(lowleveltype, RGenOp)
+
+class RedJitEnterArgDesc:
     __metaclass__ = cachedtype
 
     def __init__(self, original_concretetype, RGenOp):
@@ -355,7 +354,7 @@ class RedPortalArgDesc:
         return self.make_arg_redbox
 
 
-class RedVirtualizableStructPortalArgDesc(RedPortalArgDesc):
+class RedVirtualizableStructJitEnterArgDesc(RedJitEnterArgDesc):
     typedesc = None
     _s_c_typedesc = None
 
