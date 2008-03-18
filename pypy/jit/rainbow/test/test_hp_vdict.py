@@ -28,6 +28,29 @@ class TestVDict(test_hotpath.HotPathTest):
         assert res == 34 * 11
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1, 'int_add': 1})
 
+    def test_merge(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'tot', 'flag']
+        def ll_function(flag):
+            tot = 0
+            i = 1024
+            while i > 0:
+                i >>= 1
+                dic = {}
+                if flag:
+                    dic[12] = 34
+                else:
+                    dic[12] = 35
+                dic[13] = 35
+                tot += dic[12]
+                MyJitDriver.jit_merge_point(tot=tot, i=i, flag=flag)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, flag=flag)
+            return tot
+        res = self.run(ll_function, [True], 2, policy=P_OOPSPEC)
+        assert res == 34 * 11
+        self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1, 'int_add': 1})
+
     def test_vdict_and_vlist(self):
         class MyJitDriver(JitDriver):
             greens = []

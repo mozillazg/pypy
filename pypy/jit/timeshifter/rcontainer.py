@@ -956,7 +956,7 @@ class VirtualizableStruct(VirtualStruct):
     def load_from(self, jitstate, gv_outside):
         typedesc = self.typedesc
         assert isinstance(typedesc, VirtualizableStructTypeDesc)
-        # XXX missing check for gv_outside being NULL
+        assert self.content_boxes[-1].genvar is typedesc.gv_null
         boxes = self.content_boxes
         boxes[-1] = rvalue.PtrRedBox(boxes[-1].kind,
                                      gv_outside,

@@ -126,6 +126,8 @@ class DictTypeDesc(object):
         keydesc = LLEqDesc(DICT.KEY, keyeq, keyhash)
         self.VirtualDict = keydesc.VirtualDict
 
+        self._define_allocate()
+
     def _freeze_(self):
         return True
 
@@ -135,6 +137,27 @@ class DictTypeDesc(object):
         box.content = vdict
         vdict.ownbox = box
         return box
+
+    def _define_allocate(self):
+        from pypy.rpython.lltypesystem import rdict
+        DICT = self.DICT
+        DICTPTR = self.DICTPTR
+        KEY = DICT.KEY
+
+        def allocate(rgenop, n):
+            d = rdict.ll_newdict_size(DICT, n)
+            return rgenop.genconst(d)
+
+        def populate(item_boxes, gv_lst, box_gv_reader):
+            d = gv_lst.revealconst(DICTPTR)
+            for key, valuebox in item_boxes.iteritems():
+                if valuebox is not None:
+                    gv_value = box_gv_reader(valuebox)
+                    v = gv_value.revealconst(KEY)
+                    rdict.ll_dict_setitem(key, v)
+
+        self.allocate = allocate
+        self.populate = populate
 
 TypeDesc = DictTypeDesc
 
@@ -263,6 +286,12 @@ class AbstractVirtualDict(VirtualContainer):
     def internal_replace(self, memo):
         raise NotImplementedError
 
+    def allocate_gv_container(self, rgenop):
+        return self.typedesc.allocate(rgenop, len(self.item_boxes))
+
+    def populate_gv_container(self, gv_dictptr, box_gv_reader):
+        return self.typedesc.populate(self.item_boxes,
+                                      gv_dictptr, box_gv_reader)
 
 def oop_newdict(jitstate, oopspecdesc, deepfrozen):
     return oopspecdesc.typedesc.factory()
