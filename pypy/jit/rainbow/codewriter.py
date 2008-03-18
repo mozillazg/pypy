@@ -11,7 +11,7 @@ from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
 from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc
-from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
+from pypy.jit.rainbow.interpreter import JitCode, LLTypeJitInterpreter, OOTypeJitInterpreter
 from pypy.jit.rainbow.interpreter import DEBUG_JITCODES
 from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.translator.backendopt.ssa import SSA_to_SSI
@@ -154,7 +154,7 @@ class BytecodeWriter(object):
         type_system = self.rtyper.type_system.name
         self.exceptiondesc = exception.ExceptionDesc(
             RGenOp, etrafo, type_system, True, self.rtyper)
-        self.interpreter = JitInterpreter(self.exceptiondesc, RGenOp)
+        self.interpreter = self.create_interpreter(RGenOp)
         self.RGenOp = RGenOp
         self.current_block = None
         self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer
@@ -164,6 +164,9 @@ class BytecodeWriter(object):
         self.ptr_to_jitcode = {}
         self.transformer = GraphTransformer(hannotator)
         self._listcache = {}
+
+    def create_interpreter(self, RGenOp):
+        raise NotImplementedError
 
     def sharelist(self, name):
         lst = getattr(self, name)
@@ -1543,6 +1546,19 @@ class BytecodeWriter(object):
         # that is useful for the fallback interpreter
         self.check_hp_hint_args(op)
         self.emit('can_enter_jit')
+
+
+class LLTypeBytecodeWriter(BytecodeWriter):
+
+    def create_interpreter(self, RGenOp):
+        return LLTypeJitInterpreter(self.exceptiondesc, RGenOp)
+
+
+class OOTypeBytecodeWriter(BytecodeWriter):
+
+    def create_interpreter(self, RGenOp):
+        return OOTypeJitInterpreter(self.exceptiondesc, RGenOp)
+
 
 
 class GraphTransformer(object):
