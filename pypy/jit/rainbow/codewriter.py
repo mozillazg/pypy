@@ -16,6 +16,7 @@ from pypy.jit.rainbow.interpreter import DEBUG_JITCODES
 from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 from pypy.translator.unsimplify import varoftype
+from pypy.translator.simplify import get_funcobj, get_functype
 from cStringIO import StringIO
 
 def residual_exception_nontranslated(jitstate, e, rtyper):
@@ -39,19 +40,19 @@ class CallDesc:
 
     def __init__(self, RGenOp, exceptiondesc, FUNCTYPE, colororder=None):
         self.exceptiondesc = exceptiondesc
-        self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
-        self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
+        self.sigtoken = RGenOp.sigToken(get_functype(FUNCTYPE))
+        self.result_kind = RGenOp.kindToken(get_functype(FUNCTYPE).RESULT)
         self.colororder = colororder
         # xxx what if the result is virtualizable?
-        self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.TO.RESULT)
-        whatever_return_value = FUNCTYPE.TO.RESULT._defl()
-        numargs = len(FUNCTYPE.TO.ARGS)
+        self.redboxbuilder = rvalue.ll_redboxbuilder(get_functype(FUNCTYPE).RESULT)
+        whatever_return_value = get_functype(FUNCTYPE).RESULT._defl()
+        numargs = len(get_functype(FUNCTYPE).ARGS)
         voidargcount = 0
-        for ARG in FUNCTYPE.TO.ARGS:
+        for ARG in get_functype(FUNCTYPE).ARGS:
             if ARG == lltype.Void:
                 voidargcount += 1
-        argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
-        RETURN = FUNCTYPE.TO.RESULT
+        argiter = unrolling_iterable(get_functype(FUNCTYPE).ARGS)
+        RETURN = get_functype(FUNCTYPE).RESULT
         if RETURN is lltype.Void:
             self.gv_whatever_return_value = None
         else:
@@ -1025,7 +1026,7 @@ class BytecodeWriter(object):
 
     def handle_oopspec_call(self, op, withexc):
         from pypy.jit.timeshifter.oop import Index
-        fnobj = op.args[0].value._obj
+        fnobj = get_funcobj(op.args[0].value)
         oopspecdescindex = self.oopspecdesc_position(fnobj, withexc)
         oopspecdesc = self.oopspecdescs[oopspecdescindex]
         opargs = op.args[1:]
@@ -1152,7 +1153,8 @@ class BytecodeWriter(object):
 
     def handle_vable_call(self, op, withexc):
         assert op.opname == 'direct_call'
-        oopspec = op.args[0].value._obj._callable.oopspec
+        fnobj = get_funcobj(op.args[0].value)
+        oopspec = fnobj._callable.oopspec
         name, _ = oopspec.split('(')
         kind, name = name.split('_', 1)
 
@@ -1398,7 +1400,7 @@ class BytecodeWriter(object):
     def graphs_from(self, spaceop):
         if spaceop.opname == 'direct_call':
             c_func = spaceop.args[0]
-            fnobj = c_func.value._obj
+            fnobj = get_funcobj(c_func.value)
             graphs = [fnobj.graph]
             args_v = spaceop.args[1:]
         elif spaceop.opname == 'indirect_call':
@@ -1446,7 +1448,7 @@ class BytecodeWriter(object):
     def guess_call_kind(self, spaceop):
         if spaceop.opname == 'direct_call':
             c_func = spaceop.args[0]
-            fnobj = c_func.value._obj
+            fnobj = get_funcobj(c_func.value)
             if hasattr(fnobj, 'jitcallkind'):
                 return fnobj.jitcallkind, None
             if (hasattr(fnobj._callable, 'oopspec') and
