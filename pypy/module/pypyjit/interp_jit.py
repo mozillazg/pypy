@@ -30,6 +30,7 @@ class PyPyJitDriver(JitDriver):
         # *loads* of nonsense for now
         frame = self.frame
         pycode = self.pycode
+        pycode = hint(pycode, deepfreeze=True)
 
         fastlocals_w = [None] * pycode.co_nlocals
 
@@ -89,10 +90,8 @@ class __extend__(PyFrame):
     def JUMP_ABSOLUTE(f, jumpto, next_instr, *ignored):
         ec = f.space.getexecutioncontext()
         PyPyJitDriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
-                                    pycode=self.getcode())
+                                    pycode=f.getcode())
         return jumpto
-
-PORTAL = PyFrame.dispatch_jit
 
 class __extend__(Function):
     __metaclass__ = extendabletype
