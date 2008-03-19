@@ -125,25 +125,13 @@ class TinyJitDriver(JitDriver):
 def interpret(bytecode, args):
     """The interpreter's entry point and portal function.
     """
-    # ------------------------------
-    # First a lot of JIT hints...
-    #
-
-    # An important hint: 'bytecode' is a list, which is in theory
-    # mutable.  Let's tell the JIT compiler that it can assume that the
-    # list is entirely frozen, i.e. immutable and only containing immutable
-    # objects.  Otherwise, it cannot do anything - it would have to assume
-    # that the list can unpredictably change at runtime.
-    bytecode = hint(bytecode, deepfreeze=True)
-
-    # ------------------------------
-    # the real code starts here
     loops = []
     stack = []
     pos = 0
     while True:
         TinyJitDriver.jit_merge_point(args=args, loops=loops, stack=stack,
                                       bytecode=bytecode, pos=pos)
+        bytecode = hint(bytecode, deepfreeze=True)
         if pos >= len(bytecode):
             break
         opcode = bytecode[pos]
