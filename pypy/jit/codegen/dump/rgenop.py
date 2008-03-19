@@ -463,6 +463,13 @@ class RDumpGenOp(llrgenop.RGenOp):
         return llrgenop.RGenOp.read_frame_var(T, base, info, index)
 
     @staticmethod
+    def genconst_from_frame_var(gv_TYPE, base, info, index):
+        RDumpGenOp.dump("# genconst_from_frame_var(info=%s, index=%d)"
+                        % (info, index))
+        return llrgenop.RGenOp.genconst_from_frame_var(gv_TYPE, base,
+                                                       info, index)
+
+    @staticmethod
     @specialize.arg(0)
     def write_frame_place(T, base, place, value):
         RDumpGenOp.dump("# write_frame_place(place=%s)" % (place,))
