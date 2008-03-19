@@ -746,6 +746,16 @@ class RI386GenOp(AbstractRGenOp):
             return v.revealconst(T)
 
     @staticmethod
+    def genconst_from_frame_var(kind, base, info, index):
+        v = info[index]
+        if isinstance(v, StorageInStack):
+            value = peek_word_at(base + v.get_offset())
+            return IntConst(value)
+        else:
+            assert isinstance(v, GenConst)
+            return v
+
+    @staticmethod
     @specialize.arg(0)
     def write_frame_place(T, base, place, value):
         value = cast_whatever_to_int(T, value)

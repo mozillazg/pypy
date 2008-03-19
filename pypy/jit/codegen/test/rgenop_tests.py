@@ -623,10 +623,16 @@ def make_call_functions_with_different_signatures(rgenop):
 
 class FrameVarReader:
     FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Signed))
-    def __init__(self, RGenOp):
+    def __init__(self, RGenOp, via_genconst):
         def reader(base):
-            return RGenOp.read_frame_var(lltype.Signed, base,
-                                         self.frameinfo, 0)
+            if via_genconst:
+                gv = RGenOp.genconst_from_frame_var(
+                        RGenOp.kindToken(lltype.Signed),
+                        base, self.frameinfo, 0)
+                return gv.revealconst(lltype.Signed)
+            else:
+                return RGenOp.read_frame_var(lltype.Signed, base,
+                                             self.frameinfo, 0)
         self.reader = reader
     def get_reader(self, info):
         self.frameinfo = info
@@ -654,8 +660,8 @@ def make_read_frame_var(rgenop, get_reader):
 
     return gv_f
 
-def get_read_frame_var_runner(RGenOp):
-    fvr = FrameVarReader(RGenOp)
+def get_read_frame_var_runner(RGenOp, via_genconst):
+    fvr = FrameVarReader(RGenOp, via_genconst)
 
     def read_frame_var_runner(x):
         rgenop = RGenOp()
@@ -1401,7 +1407,20 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_read_frame_var_direct(self):
         def get_reader(info):
-            fvr = FrameVarReader(self.RGenOp)
+            fvr = FrameVarReader(self.RGenOp, via_genconst=False)
+            fvr.frameinfo = info
+            reader_ptr = self.directtesthelper(fvr.FUNC, fvr.reader)
+            return reader_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_read_frame_var(rgenop, get_reader)
+        fnptr = self.cast(gv_callable, 1)
+        res = fnptr(20)
+        assert res == 40
+
+    def test_genconst_from_frame_var_direct(self):
+        def get_reader(info):
+            fvr = FrameVarReader(self.RGenOp, via_genconst=True)
             fvr.frameinfo = info
             reader_ptr = self.directtesthelper(fvr.FUNC, fvr.reader)
             return reader_ptr
@@ -1413,7 +1432,14 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         assert res == 40
 
     def test_read_frame_var_compile(self):
-        fn = self.compile(get_read_frame_var_runner(self.RGenOp), [int])
+        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=False)
+        fn = self.compile(runner, [int])
+        res = fn(30)
+        assert res == 60
+
+    def test_genconst_from_frame_var_compile(self):
+        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=True)
+        fn = self.compile(runner, [int])
         res = fn(30)
         assert res == 60
 
