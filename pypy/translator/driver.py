@@ -418,7 +418,6 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_rainbow_lltype(self):
         from pypy.jit.codegen import detect_cpu
-        from pypy.jit.rainbow.codewriter import BytecodeWriter
         cpu = detect_cpu.autodetect()
         if cpu == 'i386':
             from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
@@ -434,7 +433,8 @@ class TranslationDriver(SimpleTaskEngine):
         t = self.translator
         rtyper = t.rtyper
         # make the bytecode and the rainbow interp
-        writer = BytecodeWriter(t, ha, RGenOp)
+        from pypy.jit.rainbow.codewriter import LLTypeBytecodeWriter
+        writer = LLTypeBytecodeWriter(t, ha, RGenOp)
         jitcode = writer.make_bytecode(self.portal_graph)
         if ha.policy.hotpath:
             from pypy.jit.rainbow.hotpath import HotRunnerDesc
