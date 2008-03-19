@@ -133,7 +133,9 @@ class GenBuilder(object):
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         '''Emit the epilogue code for the function, and the code to
-        return gv_returnvar.  This "closes" the current builder.'''
+        return gv_returnvar.  This "closes" the current builder.
+        The gv_returnvar must be None if the return type is Void
+        (and only in this case).'''
         raise NotImplementedError
 
     def finish_and_goto(self, outputargs_gv, target):

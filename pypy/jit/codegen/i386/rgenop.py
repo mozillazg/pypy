@@ -332,8 +332,13 @@ class Builder(GenBuilder):
         self.rgenop.close_mc(mc)
 
     def finish_and_return(self, sigtoken, gv_returnvar):
-        gvs = [gv_returnvar]
-        mc = self.generate_block_code(gvs, [eax])
+        if gv_returnvar is not None:
+            gvs = [gv_returnvar]
+            gvo = [eax]
+        else:
+            gvs = []
+            gvo = []
+        mc = self.generate_block_code(gvs, gvo)
         # --- epilogue ---
         mc.MOV(esp, ebp)
         mc.POP(ebp)

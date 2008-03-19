@@ -848,8 +848,8 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         return self.getcompiled(runner, argtypes,
                                 annotatorpolicy = GENOP_POLICY)
 
-    def cast(self, gv, nb_args):
-        F1 = lltype.FuncType([lltype.Signed] * nb_args, lltype.Signed)
+    def cast(self, gv, nb_args, RESULT=lltype.Signed):
+        F1 = lltype.FuncType([lltype.Signed] * nb_args, RESULT)
         return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
 
     def directtesthelper(self, FUNCTYPE, func):
@@ -2184,3 +2184,17 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         fnptr = self.cast(gv_fn, 1)
         result = fnptr(42)
         assert result == 47
+
+    def test_void_return(self):
+        # XXX minimal test only
+        rgenop = self.RGenOp()
+        FUNCV = lltype.FuncType([lltype.Signed], lltype.Void)
+        sigtoken = rgenop.sigToken(FUNCV)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, "nothing")
+        builder.start_writing()
+        builder.finish_and_return(sigtoken, None)
+        builder.end()
+
+        fnptr = self.cast(gv_fn, 1, RESULT=lltype.Void)
+        fnptr(12)
+        # assert did not crash

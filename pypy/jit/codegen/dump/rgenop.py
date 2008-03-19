@@ -83,7 +83,7 @@ class Builder(GenBuilder):
         self.dump("%s.finish_and_return(%s, %s)" % (
             self.name,
             self.rgenop.sigtokenname(sigtoken),
-            self.rgenop.vname(gv_returnvar)))
+            gv_returnvar and self.rgenop.vname(gv_returnvar)))
         self.llbuilder.finish_and_return(sigtoken, gv_returnvar)
 
     def pause_writing(self, alive_gv):
