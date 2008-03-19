@@ -124,7 +124,8 @@ class __extend__(pyframe.PyFrame):
             pytraceback.record_application_traceback(
                 self.space, operr, self, self.last_instr)
             if not we_are_jitted():
-                ec.exception_trace(self, operr)
+                if not ec.is_tracing:
+                    ec.exception_trace(self, operr)
 
         block = self.unrollstack(SApplicationException.kind)
         if block is None:
@@ -146,7 +147,9 @@ class __extend__(pyframe.PyFrame):
         while True:
             self.last_instr = intmask(next_instr)
             if not we_are_jitted():
-                ec.bytecode_trace(self)
+                if self.w_f_trace is None or ec.pending_actions \
+                       or ec.space.pending_actions:
+                    ec.bytecode_trace(self)
                 next_instr = r_uint(self.last_instr)
             opcode = ord(co_code[next_instr])
             next_instr += 1
