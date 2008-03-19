@@ -174,7 +174,9 @@ class HotSplitFallbackPoint(FallbackPoint):
 
     @specialize.arglltype(1)
     def check_should_compile(self, value):
-        assert lltype.typeOf(value) is lltype.Bool
+        # 'value' should be a Bool, but depending on the backend
+        # it could have been ERASED to about anything else
+        value = bool(value)
         threshold = self.hotrunnerdesc.threshold
         if value:
             counter = self.truepath_counter + 1
@@ -195,6 +197,7 @@ class HotSplitFallbackPoint(FallbackPoint):
 
     @specialize.arglltype(2)
     def prepare_fallbackinterp(self, fallbackinterp, value):
+        value = bool(value)
         if value:
             fallbackinterp.pc = self.truepath_pc
         else:
@@ -202,6 +205,7 @@ class HotSplitFallbackPoint(FallbackPoint):
 
     @specialize.arglltype(1)
     def compile_hot_path(self, value):
+        value = bool(value)
         if value:
             pc = self.truepath_pc
         else:
