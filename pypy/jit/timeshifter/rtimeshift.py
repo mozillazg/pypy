@@ -1047,6 +1047,7 @@ class JITState(object):
                  shape_place
                  forced_boxes
                  generated_oop_residual_can_raise
+                 ts
               """.split()
 
     returnbox = None
