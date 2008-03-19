@@ -382,7 +382,6 @@ class BuiltinCode(eval.Code):
     hidden_applevel = True
     descrmismatch_op = None
     descr_reqcls = None
-    do_fastcall = -1
 
     # When a BuiltinCode is stored in a Function object,
     # you get the functionality of CPython's built-in function type.
@@ -552,7 +551,6 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
             return w_result
 
 class BuiltinCode0(BuiltinCode):
-    do_fastcall = 0
     def fastcall_0(self, space, w_func):
         self = hint(self, deepfreeze=True)
         try:
@@ -569,7 +567,6 @@ class BuiltinCode0(BuiltinCode):
         return w_result
 
 class BuiltinCode1(BuiltinCode):
-    do_fastcall = 1
     def fastcall_1(self, space, w_func, w1):
         self = hint(self, deepfreeze=True)
         try:
@@ -591,7 +588,6 @@ class BuiltinCode1(BuiltinCode):
         return w_result
 
 class BuiltinCode2(BuiltinCode):
-    do_fastcall = 2
     def fastcall_2(self, space, w_func, w1, w2):
         self = hint(self, deepfreeze=True)
         try:
@@ -613,7 +609,6 @@ class BuiltinCode2(BuiltinCode):
         return w_result
 
 class BuiltinCode3(BuiltinCode):
-    do_fastcall = 3
     def fastcall_3(self, space, func, w1, w2, w3):
         self = hint(self, deepfreeze=True)
         try:
@@ -635,7 +630,6 @@ class BuiltinCode3(BuiltinCode):
         return w_result
 
 class BuiltinCode4(BuiltinCode):
-    do_fastcall = 4
     def fastcall_4(self, space, func, w1, w2, w3, w4):
         self = hint(self, deepfreeze=True)
         try:
