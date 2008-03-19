@@ -442,7 +442,7 @@ class TestHotPath(HotPathTest):
                                    'int_is_true': 1})
 
     def test_hp_tiny2(self):
-        from pypy.jit.tl.tiny2_hotpath import interpret, FACTORIAL, FIBONACCI
+        from pypy.jit.tl.tiny2_hotpath import interpret, FACTORIAL, FIBONACCI_SINGLE
         from pypy.jit.tl.tiny2_hotpath import IntBox, StrBox, repr
         from pypy.jit.tl.targettiny2hotpath import MyHintAnnotatorPolicy
 
@@ -451,7 +451,7 @@ class TestHotPath(HotPathTest):
                 bytecode = FACTORIAL
                 args = [IntBox(n)]
             elif case == 2:
-                bytecode = FIBONACCI
+                bytecode = FIBONACCI_SINGLE
                 args = [IntBox(1), IntBox(1), IntBox(n)]
             elif case == 3:
                 bytecode = "{ #1 #1 1 SUB ->#1 #1 }".split(" ")
@@ -462,11 +462,16 @@ class TestHotPath(HotPathTest):
             return repr(stack)
 
         POLICY = MyHintAnnotatorPolicy()
-        res = self.run(main, [1, 11], threshold=2, policy=POLICY)
-        assert ''.join(res.chars) == "The factorial of 11 is 39916800"
+        #res = self.run(main, [1, 11], threshold=2, policy=POLICY)
+        #assert ''.join(res.chars) == "The factorial of 11 is 39916800"
+        # nothing is forced
+        self.check_insns_in_loops(malloc=0)
 
-        res = self.run(main, [2, 11], threshold=2, policy=POLICY)
-        assert ''.join(res.chars) == "Fibonacci numbers: 1 1 2 3 5 8 13 21 34 55 89"
+        res = self.run(main, [2, 20], threshold=2, policy=POLICY)
+        assert ''.join(res.chars) == "6765"
+        self.check_insns_in_loops(malloc=0)
 
         res = self.run(main, [3, 40], threshold=10, policy=POLICY)
         assert ''.join(res.chars) == " ".join([str(n) for n in range(40, 0, -1)])
+        # XXX should check something about the produced code as well, but no
+        # clue what

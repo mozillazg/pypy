@@ -1,3 +1,5 @@
+import py
+
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.test.support import FakeJITState, FakeGenVar
@@ -97,14 +99,20 @@ class TestVirtualStruct:
 
 
     def test_merge_with_ptrvar(self):
+        DontMerge = rvalue.DontMerge
         V0 = FakeGenVar()
         ptrbox = rvalue.PtrRedBox("dummy pointer", V0)
         S = self.STRUCT
         constbox20 = makebox(20)
         oldbox = vmalloc(S, constbox20)
         frozenbox = oldbox.freeze(rvalue.freeze_memo())
-        # check that ptrbox does not match the frozen virtual struct
-        assert not self.match(frozenbox, ptrbox, [ptrbox])
+        # check that ptrbox does not match the frozen virtual struct ever
+        py.test.raises(DontMerge, self.match, frozenbox, ptrbox, [ptrbox])
+
+        # try it the other way round
+        frozenptrbox = ptrbox.freeze(rvalue.freeze_memo())
+        py.test.raises(DontMerge, self.match, frozenptrbox, oldbox, [oldbox])
+
 
 
     def test_nested_structure_no_vars(self):
