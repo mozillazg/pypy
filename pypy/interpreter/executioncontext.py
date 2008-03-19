@@ -105,7 +105,6 @@ class ExecutionContext:
         self.ticker = ticker
         if ticker < 0 or frame.w_f_trace is not None:
             self._do_bytecode_trace(frame)
-    bytecode_trace._always_inline_ = True
 
     def _do_bytecode_trace(self, frame):
         if self.ticker < 0:
@@ -152,7 +151,8 @@ class ExecutionContext:
 
             if frame.instr_lb == frame.last_instr: # At start of line!
                 frame.f_lineno = line
-                self._trace(frame, 'line', self.space.w_None)
+                if self.is_tracing:
+                    self._trace(frame, 'line', self.space.w_None)
 
         frame.instr_prev = frame.last_instr
             

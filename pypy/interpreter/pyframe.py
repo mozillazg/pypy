@@ -105,7 +105,8 @@ class PyFrame(eval.Frame):
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
         try:
-            executioncontext.call_trace(self)
+            if not executioncontext.is_tracing:
+                executioncontext.call_trace(self)
             # Execution starts just after the last_instr.  Initially,
             # last_instr is -1.  After a generator suspends it points to
             # the YIELD_VALUE instruction.
@@ -113,7 +114,8 @@ class PyFrame(eval.Frame):
             w_exitvalue = self.dispatch(self.pycode, next_instr,
                                         executioncontext)
             rstack.resume_point("execute_frame", self, executioncontext, returns=w_exitvalue)
-            executioncontext.return_trace(self, w_exitvalue)
+            if not executioncontext.is_tracing:
+                executioncontext.return_trace(self, w_exitvalue)
             # on exit, we try to release self.last_exception -- breaks an
             # obvious reference cycle, so it helps refcounting implementations
             self.last_exception = None
