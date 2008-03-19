@@ -246,3 +246,10 @@ FIBONACCI = """Fibonacci numbers:
 def test_fibonacci():
     res = interpret(FIBONACCI, [IntBox(1), IntBox(1), IntBox(10)])
     assert repr(res) == "Fibonacci numbers: 1 1 2 3 5 8 13 21 34 55"
+
+
+FIBONACCI_SINGLE = """#3 1 SUB ->#3 { #2 #1 #2 ADD ->#2 ->#1 #3 1 SUB ->#3 #3 } #1""".split()
+
+def test_fibonacci_single():
+    res = interpret(FIBONACCI_SINGLE, [IntBox(1), IntBox(1), IntBox(11)])
+    assert repr(res) == "89"
