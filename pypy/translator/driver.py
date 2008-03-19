@@ -379,21 +379,26 @@ class TranslationDriver(SimpleTaskEngine):
         "Backendopt before Hint-annotate")
 
     def task_hintannotate_lltype(self):
-        from pypy.jit.hintannotator.annotator import HintAnnotator
         from pypy.jit.hintannotator.model import OriginFlags
         from pypy.jit.hintannotator.model import SomeLLAbstractConstant
 
         get_portal = self.extra['portal']
         PORTAL, POLICY = get_portal(self)
+        assert (PORTAL is None) == POLICY.hotpath
         t = self.translator
-        self.orig_portal_graph = graphof(t, PORTAL)
-
-        hannotator = HintAnnotator(base_translator=t, policy=POLICY)
+        if POLICY.hotpath:
+            from pypy.jit.hintannotator.hotpath import HotPathHintAnnotator
+            hannotator = HotPathHintAnnotator(base_translator=t, policy=POLICY)
+            hs = hannotator.build_hotpath_types()
+        else:
+            from pypy.jit.hintannotator.annotator import HintAnnotator
+            hannotator = HintAnnotator(base_translator=t, policy=POLICY)
+            self.orig_portal_graph = graphof(t, PORTAL)
+            hs = hannotator.build_types(self.orig_portal_graph,
+                                        [SomeLLAbstractConstant(v.concretetype,
+                                                                {OriginFlags(): True})
+                                         for v in self.orig_portal_graph.getargs()])
         self.hint_translator = hannotator.translator
-        hs = hannotator.build_types(self.orig_portal_graph,
-                                    [SomeLLAbstractConstant(v.concretetype,
-                                                            {OriginFlags(): True})
-                                     for v in self.orig_portal_graph.getargs()])
         hannotator.simplify()
         count = hannotator.bookkeeper.nonstuboriggraphcount
         stubcount = hannotator.bookkeeper.stuboriggraphcount
@@ -402,7 +407,10 @@ class TranslationDriver(SimpleTaskEngine):
         n = len(list(hannotator.translator.graphs[0].iterblocks()))
         self.log.info("portal has %d blocks" % n)
         self.hannotator = hannotator
-        self.portal_graph = graphof(hannotator.translator, PORTAL)
+        if POLICY.hotpath:
+            self.portal_graph = hannotator.translator.graphs[0]
+        else:
+            self.portal_graph = graphof(hannotator.translator, PORTAL)
     #
     task_hintannotate_lltype = taskdef(task_hintannotate_lltype,
                                        ['prehannotatebackendopt_lltype'],
@@ -411,7 +419,6 @@ class TranslationDriver(SimpleTaskEngine):
     def task_rainbow_lltype(self):
         from pypy.jit.codegen import detect_cpu
         from pypy.jit.rainbow.codewriter import BytecodeWriter
-        from pypy.jit.rainbow.portal import PortalRewriter
         cpu = detect_cpu.autodetect()
         if cpu == 'i386':
             from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
@@ -429,11 +436,20 @@ class TranslationDriver(SimpleTaskEngine):
         # make the bytecode and the rainbow interp
         writer = BytecodeWriter(t, ha, RGenOp)
         jitcode = writer.make_bytecode(self.portal_graph)
-        rewriter = PortalRewriter(self.hannotator, rtyper, RGenOp,
-                                  writer, True)
-        rewriter.rewrite(origportalgraph=self.orig_portal_graph,
-                         portalgraph=self.portal_graph,
-                         view=False)
+        if ha.policy.hotpath:
+            from pypy.jit.rainbow.hotpath import HotRunnerDesc
+            threshold = 10  # for now
+            hotrunnerdesc = HotRunnerDesc(ha, rtyper, jitcode, RGenOp,
+                                          writer, threshold, 
+                                          translate_support_code=True)
+            hotrunnerdesc.rewrite_all()
+        else:
+            from pypy.jit.rainbow.portal import PortalRewriter
+            rewriter = PortalRewriter(self.hannotator, rtyper, RGenOp,
+                                      writer, True)
+            rewriter.rewrite(origportalgraph=self.orig_portal_graph,
+                             portalgraph=self.portal_graph,
+                             view=False)
     #
     task_rainbow_lltype = taskdef(task_rainbow_lltype,
                              ["hintannotate_lltype"],
