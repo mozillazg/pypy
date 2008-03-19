@@ -487,6 +487,7 @@ class FrozenPtrVar(FrozenVar):
         self.known_nonzero = known_nonzero
 
     def exactmatch(self, box, outgoingvarboxes, memo):
+        from pypy.jit.timeshifter.rcontainer import VirtualContainer
         assert isinstance(box, PtrRedBox)
         memo.partialdatamatch[box] = None
         if not self.known_nonzero:
@@ -494,8 +495,7 @@ class FrozenPtrVar(FrozenVar):
         match = FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
         if self.known_nonzero and not box.known_nonzero:
             match = False
-        if not memo.force_merge and not match:
-            from pypy.jit.timeshifter.rcontainer import VirtualContainer
+        if not memo.force_merge:
             if isinstance(box.content, VirtualContainer):
                 raise DontMerge   # XXX recursive data structures?
         return match
@@ -534,8 +534,7 @@ class FrozenPtrVirtual(FrozenValue):
     def exactmatch(self, box, outgoingvarboxes, memo):
         assert isinstance(box, PtrRedBox)
         if box.genvar:
-            outgoingvarboxes.append(box)
-            match = False
+            raise DontMerge
         else:
             assert box.content is not None
             match = self.fz_content.exactmatch(box.content, outgoingvarboxes,
