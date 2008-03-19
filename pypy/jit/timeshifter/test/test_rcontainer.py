@@ -60,7 +60,6 @@ class TestVirtualStruct:
         # check that frozenbox also matches newbox exactly
         assert self.match(frozenbox, newbox, [constbox23])
 
-
     def test_simple_merge_generalize(self):
         S = self.STRUCT
         constbox20 = makebox(20)
@@ -95,6 +94,17 @@ class TestVirtualStruct:
         assert self.match(newfrozenbox, oldbox, [constbox20])
         #       ^^^ the FrozenVar() in newfrozenbox corresponds to
         #           constbox20 in oldbox.
+
+
+    def test_merge_with_ptrvar(self):
+        V0 = FakeGenVar()
+        ptrbox = rvalue.PtrRedBox("dummy pointer", V0)
+        S = self.STRUCT
+        constbox20 = makebox(20)
+        oldbox = vmalloc(S, constbox20)
+        frozenbox = oldbox.freeze(rvalue.freeze_memo())
+        # check that ptrbox does not match the frozen virtual struct
+        assert not self.match(frozenbox, ptrbox, [ptrbox])
 
 
     def test_nested_structure_no_vars(self):
