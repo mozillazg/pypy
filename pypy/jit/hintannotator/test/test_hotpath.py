@@ -45,9 +45,13 @@ class TestHotPath(AbstractAnnotatorTest):
         assert 'int_mul' not in summary(graphs[0])
 
     def test_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['count', 'x', 'y']
+
         def add(count, x, y):
             result = x + y
-            can_enter_jit(red=(count, x, y))
+            MyJitDriver.can_enter_jit(count=count, x=x, y=y)
             return result
         add._dont_inline_ = True
         def sub(x, y):
@@ -55,7 +59,7 @@ class TestHotPath(AbstractAnnotatorTest):
         sub._dont_inline_ = True
         def main(count, x, y):
             while True:
-                jit_merge_point(red=(count, x, y))
+                MyJitDriver.jit_merge_point(count=count, x=x, y=y)
                 count -= 1
                 if not count:
                     break
