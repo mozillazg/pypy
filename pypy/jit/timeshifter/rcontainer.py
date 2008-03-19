@@ -70,6 +70,7 @@ class StructTypeDesc(object):
                     materialize
                     devirtualize
                     allocate populate
+                    allocate_varsize
                  """.split()
                             
 
