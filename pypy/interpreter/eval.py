@@ -10,6 +10,7 @@ class Code(Wrappable):
     """A code is a compiled version of some source code.
     Abstract base class."""
     hidden_applevel = False
+    do_fastcall = -1
 
     def __init__(self, co_name):
         self.co_name = co_name
