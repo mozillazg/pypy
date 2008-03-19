@@ -444,19 +444,29 @@ class TestHotPath(HotPathTest):
     def test_hp_tiny2(self):
         from pypy.jit.tl.tiny2_hotpath import interpret, FACTORIAL, FIBONACCI
         from pypy.jit.tl.tiny2_hotpath import IntBox, StrBox, repr
+        from pypy.jit.tl.targettiny2hotpath import MyHintAnnotatorPolicy
 
         def main(case, n):
             if case == 1:
                 bytecode = FACTORIAL
                 args = [IntBox(n)]
-            else:
+            elif case == 2:
                 bytecode = FIBONACCI
                 args = [IntBox(1), IntBox(1), IntBox(n)]
+            elif case == 3:
+                bytecode = "{ #1 #1 1 SUB ->#1 #1 }".split(" ")
+                args = [StrBox(str(n))]
+            else:
+                assert 0, "unknown case"
             stack = interpret(bytecode, args)
             return repr(stack)
 
-        res = self.run(main, [1, 11], threshold=2)
+        POLICY = MyHintAnnotatorPolicy()
+        res = self.run(main, [1, 11], threshold=2, policy=POLICY)
         assert ''.join(res.chars) == "The factorial of 11 is 39916800"
 
-        res = self.run(main, [2, 11], threshold=2)
+        res = self.run(main, [2, 11], threshold=2, policy=POLICY)
         assert ''.join(res.chars) == "Fibonacci numbers: 1 1 2 3 5 8 13 21 34 55 89"
+
+        res = self.run(main, [3, 40], threshold=10, policy=POLICY)
+        assert ''.join(res.chars) == " ".join([str(n) for n in range(40, 0, -1)])
