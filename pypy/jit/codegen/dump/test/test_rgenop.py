@@ -8,7 +8,7 @@ from ctypes import cast, c_int, c_void_p, CFUNCTYPE
 class TestRDumpGenop(AbstractRGenOpTests):
     RGenOp = RDumpGenOp
 
-    def cast(self, gv, nb_args):
+    def cast(self, gv, nb_args, RESULT=lltype.Signed):
         def dummyfn(*whatever):
             return Whatever()
         return dummyfn
