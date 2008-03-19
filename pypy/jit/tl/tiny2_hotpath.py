@@ -74,15 +74,28 @@ def op2(stack, func_int, func_str):
     # calls to as_int() direct calls at compile-time, instead of indirect
     # ones.  The JIT compiler cannot look into indirect calls, but it
     # can analyze and inline the code in directly-called functions.
-    y = stack.pop()
+    stack, y = stack.pop()
     hint(y.__class__, promote=True)
-    x = stack.pop()
+    stack, x = stack.pop()
     hint(x.__class__, promote=True)
     try:
         z = IntBox(func_int(x.as_int(), y.as_int()))
     except ValueError:
         z = StrBox(func_str(x.as_str(), y.as_str()))
-    stack.append(z)
+    stack = Stack(z, stack)
+    return stack
+
+class Stack(object):
+    def __init__(self, value, next=None):
+        self.next = next
+        self.value = value
+
+    def pop(self):
+        return self.next, self.value
+
+def empty_stack():
+    return None
+
 
 class TinyJitDriver(JitDriver):
     reds = ['args', 'loops', 'stack']
@@ -103,15 +116,6 @@ class TinyJitDriver(JitDriver):
             args.append(oldargs[n])
             n += 1
         self.args = args
-        oldstack = self.stack
-        argcount = hint(len(oldstack), promote=True)
-        stack = []
-        n = 0
-        while n < argcount:
-            hint(n, concrete=True)
-            stack.append(oldstack[n])
-            n += 1
-        self.stack = stack
         oldloops = self.loops
         argcount = hint(len(oldloops), promote=True)
         loops = []
@@ -126,7 +130,7 @@ def interpret(bytecode, args):
     """The interpreter's entry point and portal function.
     """
     loops = []
-    stack = []
+    stack = empty_stack()
     pos = 0
     while True:
         TinyJitDriver.jit_merge_point(args=args, loops=loops, stack=stack,
@@ -137,21 +141,25 @@ def interpret(bytecode, args):
         opcode = bytecode[pos]
         hint(opcode, concrete=True)    # same as in tiny1.py
         pos += 1
-        if   opcode == 'ADD': op2(stack, func_add_int, func_add_str)
-        elif opcode == 'SUB': op2(stack, func_sub_int, func_sub_str)
-        elif opcode == 'MUL': op2(stack, func_mul_int, func_mul_str)
+        if   opcode == 'ADD':
+            stack = op2(stack, func_add_int, func_add_str)
+        elif opcode == 'SUB':
+            stack = op2(stack, func_sub_int, func_sub_str)
+        elif opcode == 'MUL':
+            stack = op2(stack, func_mul_int, func_mul_str)
         elif opcode[0] == '#':
             n = myint(opcode, start=1)
-            stack.append(args[n-1])
+            stack = Stack(args[n-1], stack)
         elif opcode.startswith('->#'):
             n = myint(opcode, start=3)
             if n > len(args):
                 raise IndexError
-            args[n-1] = stack.pop()
+            stack, args[n-1] = stack.pop()
         elif opcode == '{':
             loops.append(pos)
         elif opcode == '}':
-            if stack.pop().as_int() == 0:
+            stack, flag = stack.pop()
+            if flag.as_int() == 0:
                 loops.pop()
             else:
                 pos = loops[-1]
@@ -170,15 +178,19 @@ def interpret(bytecode, args):
                 TinyJitDriver.can_enter_jit(args=args, loops=loops, stack=stack,
                                             bytecode=bytecode, pos=pos)
         else:
-            stack.append(StrBox(opcode))
+            stack = Stack(StrBox(opcode), stack)
     return stack
 
 
 def repr(stack):
     # this bit moved out of the portal function because JIT'ing it is not
     # very useful, and the JIT generator is confused by the 'for' right now...
-    # let's move this back in?
-    return ' '.join([x.as_str() for x in stack])
+    lst = []
+    while stack:
+        stack, x = stack.pop()
+        lst.append(x.as_str())
+    lst.reverse()
+    return ' '.join(lst)
 
 
 # ------------------------------

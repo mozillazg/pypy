@@ -440,3 +440,23 @@ class TestHotPath(HotPathTest):
         # would be the case if the 'regs' list was not properly virtualized)
         self.check_insns_in_loops({'int_add': 2,
                                    'int_is_true': 1})
+
+    def test_hp_tiny2(self):
+        from pypy.jit.tl.tiny2_hotpath import interpret, FACTORIAL, FIBONACCI
+        from pypy.jit.tl.tiny2_hotpath import IntBox, StrBox, repr
+
+        def main(case, n):
+            if case == 1:
+                bytecode = FACTORIAL
+                args = [IntBox(n)]
+            else:
+                bytecode = FIBONACCI
+                args = [IntBox(1), IntBox(1), IntBox(n)]
+            stack = interpret(bytecode, args)
+            return repr(stack)
+
+        res = self.run(main, [1, 11], threshold=2)
+        assert ''.join(res.chars) == "The factorial of 11 is 39916800"
+
+        res = self.run(main, [2, 11], threshold=2)
+        assert ''.join(res.chars) == "Fibonacci numbers: 1 1 2 3 5 8 13 21 34 55 89"
