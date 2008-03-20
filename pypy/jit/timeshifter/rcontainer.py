@@ -705,7 +705,7 @@ class ArrayFieldDesc(FieldDesc):
             self._define_allocate()
 
     def _define_allocate(self):
-        TYPE = self.TYPE
+        TYPE = self.PTRTYPE.TO
         def allocate(rgenop, size):
             a = lltype.malloc(TYPE, size)
             return rgenop.genconst(a)
