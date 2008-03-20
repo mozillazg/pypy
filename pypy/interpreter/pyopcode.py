@@ -147,9 +147,7 @@ class __extend__(pyframe.PyFrame):
         while True:
             self.last_instr = intmask(next_instr)
             if not we_are_jitted():
-                if self.w_f_trace is None or ec.pending_actions \
-                       or ec.space.pending_actions:
-                    ec.bytecode_trace(self)
+                ec.bytecode_trace(self)
                 next_instr = r_uint(self.last_instr)
             opcode = ord(co_code[next_instr])
             next_instr += 1
