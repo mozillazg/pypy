@@ -30,6 +30,7 @@ class PyPyJitDriver(JitDriver):
         # *loads* of nonsense for now
         frame = self.frame
         pycode = self.pycode
+        pycode = hint(pycode, promote=True)    # xxx workaround
         pycode = hint(pycode, deepfreeze=True)
 
         fastlocals_w = [None] * pycode.co_nlocals
@@ -70,12 +71,12 @@ class PyPyJitDriver(JitDriver):
 class __extend__(PyFrame):
 
     def dispatch(self, pycode, next_instr, ec):
-        pycode = hint(pycode, deepfreeze=True)
         next_instr = r_uint(next_instr)
         try:
             while True:
                 PyPyJitDriver.jit_merge_point(
                     frame=self, ec=ec, next_instr=next_instr, pycode=pycode)
+                pycode = hint(pycode, deepfreeze=True)
                 co_code = pycode.co_code
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
         except Return:
