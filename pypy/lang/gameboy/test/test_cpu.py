@@ -163,13 +163,13 @@ def test_jr_cc_nn():
     cpu.rom[constants.RESET_PC] = value
     # test jr_nn
     startCycles = cpu.cycles
-    cpu.jr_cc_nn((lambda :True))
+    cpu.jr_cc_nn(True)
     assert startCycles-cpu.cycles == 3
     assert_registers(cpu, pc=pc+value+1)
     # test pc.inc
     startCycles = cpu.cycles
     pc = cpu.pc.get()
-    cpu.jr_cc_nn((lambda: False))
+    cpu.jr_cc_nn(False)
     assert startCycles-cpu.cycles == 2
     assert cpu.pc.get() == pc+1
     
@@ -303,7 +303,7 @@ def test_0x18():
     
 # jr_NZ_nn see test_jr_cc_nn
 def test_0x20_0x28_0x30():
-    py.test.skip("OpCode Table incomplete")
+    #py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0x20
@@ -313,7 +313,7 @@ def test_0x20_0x28_0x30():
         pc = cpu.pc.get()
         cpu.f.set(flags[i])
         cycle_test(cpu, opCode, 3)
-        assert cpu.pc.get() == pc+value
+        assert cpu.pc.get() == pc+value+1
         
         pc = cpu.pc.get()
         cpu.f.set(~flags[i])
