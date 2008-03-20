@@ -958,7 +958,7 @@ class FrozenJITState(object):
             null1 = self.fz_exc_type_box.is_constant_nullptr()
             box = jitstate.exc_type_box
             null2 = (box.is_constant() and
-                     not rvalue.ll_getvalue(box, llmemory.Address))
+                     not rvalue.ll_getvalue(box, jitstate.ts.ROOT_TYPE))
             if null1 != null2:
                 raise rvalue.DontMerge # a jit-with-exc. and a jit-without-exc.
 

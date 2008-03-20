@@ -2,7 +2,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue, rtimeshift
 
 
-class ExceptionDesc:
+class AbstractExceptionDesc:
 
     def __init__(self, RGenOp, etrafo, type_system, lazy_exception_path,
                  rtyper=None):
@@ -25,18 +25,7 @@ class ExceptionDesc:
         self.gv_null_exc_type = RGenOp.constPrebuiltGlobal(null_exc_type)
         self.gv_null_exc_value = RGenOp.constPrebuiltGlobal(null_exc_value)
 
-        if type_system == 'lltypesystem':
-            self.null_exc_type_box = rvalue.PtrRedBox(self.exc_type_kind,
-                                                      self.gv_null_exc_type)
-            self.null_exc_value_box = rvalue.PtrRedBox(self.exc_value_kind,
-                                                       self.gv_null_exc_value)
-        else:
-            # XXX: think more about exceptions
-            self.null_exc_type_box = rvalue.PtrRedBox(self.exc_type_kind,
-                                                      RGenOp.constPrebuiltGlobal(llmemory.NULL))
-            self.null_exc_value_box = rvalue.IntRedBox(self.exc_value_kind,
-                                                       RGenOp.constPrebuiltGlobal(llmemory.NULL))
-            
+        self._create_boxes(RGenOp)
         self.lazy_exception_path = lazy_exception_path
 
     def _freeze_(self):
@@ -71,7 +60,7 @@ class ExceptionDesc:
         builder = jitstate.curbuilder
         etypebox = jitstate.exc_type_box
         if etypebox.is_constant():
-            ll_etype = rvalue.ll_getvalue(etypebox, llmemory.Address)
+            ll_etype = rvalue.ll_getvalue(etypebox, jitstate.ts.ROOT_TYPE)
             if not ll_etype:
                 return       # we know there is no exception set
         evaluebox = jitstate.exc_value_box
@@ -83,3 +72,22 @@ class ExceptionDesc:
     def gen_exc_occurred(self, builder):
         gv_etype = self.genop_get_exc_type(builder)
         return builder.genop_ptr_nonzero(self.exc_type_kind, gv_etype)
+
+
+class LLTypeExceptionDesc(AbstractExceptionDesc):
+    
+    def _create_boxes(self, RGenOp):
+        self.null_exc_type_box = rvalue.PtrRedBox(self.exc_type_kind,
+                                                  self.gv_null_exc_type)
+        self.null_exc_value_box = rvalue.PtrRedBox(self.exc_value_kind,
+                                                   self.gv_null_exc_value)
+
+
+class OOTypeExceptionDesc(AbstractExceptionDesc):
+    def _create_boxes(self, RGenOp):
+        # XXX: think more about exceptions
+        self.null_exc_type_box = rvalue.PtrRedBox(self.exc_type_kind,
+                                                  RGenOp.constPrebuiltGlobal(llmemory.NULL))
+        self.null_exc_value_box = rvalue.PtrRedBox(self.exc_value_kind,
+                                                   RGenOp.constPrebuiltGlobal(llmemory.NULL))
+

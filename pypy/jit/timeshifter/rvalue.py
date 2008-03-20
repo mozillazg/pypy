@@ -1,4 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 
 class Memo(object):
     _annspecialcase_ = 'specialize:ctr_location'
@@ -31,6 +32,19 @@ def make_vrti_memo():
 
 class DontMerge(Exception):
     pass
+
+class LLTypeMixin(object):
+    _mixin_ = True
+
+    def _revealconst(self, gv):
+        return gv.revealconst(llmemory.Address)
+
+class OOTypeMixin(object):
+    _mixin_ = True
+
+    def _revealconst(self, gv):
+        return gv.revealconst(ootype.ROOT) # ???
+
 
 class RedBox(object):
     _attrs_ = ['kind', 'genvar']
@@ -87,6 +101,7 @@ def redboxbuilder_void(kind, gv_value):return None
 def redboxbuilder_int(kind, gv_value): return IntRedBox(kind, gv_value)
 def redboxbuilder_dbl(kind, gv_value): return DoubleRedBox(kind,gv_value)
 def redboxbuilder_ptr(kind, gv_value): return PtrRedBox(kind, gv_value)
+def redboxbuilder_inst(kind, gv_value): return InstanceRedBox(kind, gv_value)
 
 def ll_redboxbuilder(TYPE):
     if TYPE is lltype.Void:
@@ -95,6 +110,8 @@ def ll_redboxbuilder(TYPE):
         return redboxbuilder_ptr
     elif TYPE is lltype.Float:
         return redboxbuilder_dbl
+    elif isinstance(TYPE, ootype.Instance):
+        return redboxbuilder_inst
     else:
         assert isinstance(TYPE, lltype.Primitive)
         # XXX what about long longs?
@@ -184,20 +201,24 @@ class DoubleRedBox(RedBox):
             return result
 
 
-class PtrRedBox(RedBox):
+class AbstractPtrRedBox(RedBox):
+    """
+    Base class for PtrRedBox (lltype) and InstanceRedBox (ootype)
+    """
+
     content = None   # or an AbstractContainer
 
     def __init__(self, kind, genvar=None, known_nonzero=False):
         self.kind = kind
         self.genvar = genvar    # None or a genvar
         if genvar is not None and genvar.is_const:
-            known_nonzero = bool(genvar.revealconst(llmemory.Address))
+            known_nonzero = bool(self._revealconst(genvar))
         self.known_nonzero = known_nonzero
 
     def setgenvar(self, newgenvar):
         RedBox.setgenvar(self, newgenvar)
         self.known_nonzero = (newgenvar.is_const and
-                              bool(newgenvar.revealconst(llmemory.Address)))
+                              bool(self._revealconst(newgenvar)))
 
     def setgenvar_hint(self, newgenvar, known_nonzero):
         RedBox.setgenvar(self, newgenvar)
@@ -226,55 +247,16 @@ class PtrRedBox(RedBox):
         else:
             return RedBox.__repr__(self)
 
-    def op_getfield(self, jitstate, fielddesc):
-        self.learn_nonzeroness(jitstate, True)
-        if self.content is not None:
-            box = self.content.op_getfield(jitstate, fielddesc)
-            if box is not None:
-                return box
-        gv_ptr = self.getgenvar(jitstate)
-        box = fielddesc.generate_get(jitstate, gv_ptr)
-        if fielddesc.immutable:
-            self.remember_field(fielddesc, box)
-        return box
-
-    def op_setfield(self, jitstate, fielddesc, valuebox):
-        self.learn_nonzeroness(jitstate, True)
-        gv_ptr = self.genvar
-        if gv_ptr:
-            fielddesc.generate_set(jitstate, gv_ptr,
-                                   valuebox.getgenvar(jitstate))
-        else:
-            assert self.content is not None
-            self.content.op_setfield(jitstate, fielddesc, valuebox)
-
-    def op_getsubstruct(self, jitstate, fielddesc):
-        self.learn_nonzeroness(jitstate, True)
-        gv_ptr = self.genvar
-        if gv_ptr:
-            return fielddesc.generate_getsubstruct(jitstate, gv_ptr)
-        else:
-            assert self.content is not None
-            return self.content.op_getsubstruct(jitstate, fielddesc)
-
-    def remember_field(self, fielddesc, box):
-        if self.genvar.is_const:
-            return      # no point in remembering field then
-        if self.content is None:
-            from pypy.jit.timeshifter import rcontainer
-            self.content = rcontainer.PartialDataStruct()
-        self.content.remember_field(fielddesc, box)
-
     def copy(self, memo):
         boxmemo = memo.boxes
         try:
             result = boxmemo[self]
         except KeyError:
-            result = PtrRedBox(self.kind, self.genvar, self.known_nonzero)
+            result = self.__class__(self.kind, self.genvar, self.known_nonzero)
             boxmemo[self] = result
             if self.content:
                 result.content = self.content.copy(memo)
-        assert isinstance(result, PtrRedBox)
+        assert isinstance(result, AbstractPtrRedBox)
         return result
 
     def replace(self, memo):
@@ -286,7 +268,7 @@ class PtrRedBox(RedBox):
             if self.content:
                 self.content.replace(memo)
             result = self
-        assert isinstance(result, PtrRedBox)
+        assert isinstance(result, AbstractPtrRedBox)
         return result
 
     def freeze(self, memo):
@@ -298,20 +280,20 @@ class PtrRedBox(RedBox):
             if not self.genvar:
                 from pypy.jit.timeshifter import rcontainer
                 assert isinstance(content, rcontainer.VirtualContainer)
-                result = FrozenPtrVirtual(self.kind)
+                result = self.FrozenPtrVirtual(self.kind)
                 boxmemo[self] = result
                 result.fz_content = content.freeze(memo)
                 return result
             elif self.genvar.is_const:
-                result = FrozenPtrConst(self.kind, self.genvar)
+                result = self.FrozenPtrConst(self.kind, self.genvar)
             elif content is None:
-                result = FrozenPtrVar(self.kind, self.known_nonzero)
+                result = self.FrozenPtrVar(self.kind, self.known_nonzero)
             else:
                 # if self.content is not None, it's a PartialDataStruct
                 from pypy.jit.timeshifter import rcontainer
                 assert isinstance(content, rcontainer.PartialDataStruct)
-                result = FrozenPtrVarWithPartialData(self.kind,
-                                                     known_nonzero=True)
+                result = self.FrozenPtrVarWithPartialData(self.kind,
+                                                          known_nonzero=True)
                 boxmemo[self] = result
                 result.fz_partialcontent = content.partialfreeze(memo)
                 return result
@@ -352,6 +334,54 @@ class PtrRedBox(RedBox):
             RedBox.enter_block(self, incoming, memo)
         if self.content:
             self.content.enter_block(incoming, memo)
+
+
+class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
+
+    def op_getfield(self, jitstate, fielddesc):
+        self.learn_nonzeroness(jitstate, True)
+        if self.content is not None:
+            box = self.content.op_getfield(jitstate, fielddesc)
+            if box is not None:
+                return box
+        gv_ptr = self.getgenvar(jitstate)
+        box = fielddesc.generate_get(jitstate, gv_ptr)
+        if fielddesc.immutable:
+            self.remember_field(fielddesc, box)
+        return box
+
+    def op_setfield(self, jitstate, fielddesc, valuebox):
+        self.learn_nonzeroness(jitstate, True)
+        gv_ptr = self.genvar
+        if gv_ptr:
+            fielddesc.generate_set(jitstate, gv_ptr,
+                                   valuebox.getgenvar(jitstate))
+        else:
+            assert self.content is not None
+            self.content.op_setfield(jitstate, fielddesc, valuebox)
+
+    def op_getsubstruct(self, jitstate, fielddesc):
+        self.learn_nonzeroness(jitstate, True)
+        gv_ptr = self.genvar
+        if gv_ptr:
+            return fielddesc.generate_getsubstruct(jitstate, gv_ptr)
+        else:
+            assert self.content is not None
+            return self.content.op_getsubstruct(jitstate, fielddesc)
+
+    def remember_field(self, fielddesc, box):
+        if self.genvar.is_const:
+            return      # no point in remembering field then
+        if self.content is None:
+            from pypy.jit.timeshifter import rcontainer
+            self.content = rcontainer.PartialDataStruct()
+        self.content.remember_field(fielddesc, box)
+
+
+class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):
+
+    def forcevar(self, jitstate, memo, forget_nonzeroness):
+        raise NotImplementedError
 
 # ____________________________________________________________
 
@@ -450,7 +480,7 @@ class FrozenDoubleVar(FrozenVar):
             return memo[self]
 
 
-class FrozenPtrConst(FrozenConst):
+class FrozenAbstractPtrConst(FrozenConst):
 
     def __init__(self, kind, gv_const):
         self.kind = kind
@@ -458,14 +488,14 @@ class FrozenPtrConst(FrozenConst):
 
     def is_constant_equal(self, box):
         return (box.is_constant() and
-                self.gv_const.revealconst(llmemory.Address) ==
-                box.genvar.revealconst(llmemory.Address))
+                self._revealconst(self.gv_const) ==
+                self._revealconst(box.genvar))
 
     def is_constant_nullptr(self):
-        return not self.gv_const.revealconst(llmemory.Address)
+        return not self._revealconst(self.gv_const)
 
     def exactmatch(self, box, outgoingvarboxes, memo):
-        assert isinstance(box, PtrRedBox)
+        assert isinstance(box, AbstractPtrRedBox)
         memo.partialdatamatch[box] = None     # could do better
         if self.is_constant_nullptr():
             memo.forget_nonzeroness[box] = None
@@ -477,7 +507,14 @@ class FrozenPtrConst(FrozenConst):
         return match
 
     def unfreeze(self, incomingvarboxes, memo):
-        return PtrRedBox(self.kind, self.gv_const)
+        return self.PtrRedBox(self.kind, self.gv_const)
+
+
+class FrozenPtrConst(FrozenAbstractPtrConst, LLTypeMixin):
+    PtrRedBox = PtrRedBox
+
+class FrozenInstanceConst(FrozenAbstractPtrConst, OOTypeMixin):
+    PtrRedBox = InstanceRedBox
 
 
 class FrozenPtrVar(FrozenVar):
@@ -558,3 +595,13 @@ class FrozenPtrVirtual(FrozenValue):
 ##        else:
 ##            outgoingvarboxes.append(box)
 ##            return False
+
+PtrRedBox.FrozenPtrVirtual = FrozenPtrVirtual
+PtrRedBox.FrozenPtrConst = FrozenPtrConst
+PtrRedBox.FrozenPtrVar = FrozenPtrVar
+PtrRedBox.FrozenPtrVarWithPartialData = FrozenPtrVarWithPartialData
+
+InstanceRedBox.FrozenPtrVirtual = None
+InstanceRedBox.FrozenPtrConst = FrozenInstanceConst
+InstanceRedBox.FrozenPtrVar = None
+InstanceRedBox.FrozenPtrVarWithPartialData = None
