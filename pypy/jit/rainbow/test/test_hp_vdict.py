@@ -38,6 +38,7 @@ class TestVDict(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 dic = {}
+                dic[11] = 66
                 if flag:
                     dic[12] = 34
                 else:

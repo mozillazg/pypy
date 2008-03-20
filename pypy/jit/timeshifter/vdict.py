@@ -32,6 +32,9 @@ class LLEqDesc(object):
             def getboxes(self):
                 return self.item_boxes.values()
 
+            def getlength(self):
+                return len(self.item_boxes)
+
             def getitems_and_makeempty(self, rgenop):
                 result = [(rgenop.genconst(key), box, llhash(key))
                           for key, box in self.item_boxes.iteritems()]
@@ -60,6 +63,12 @@ class LLEqDesc(object):
                         changes.append((key, newbox))
                 for key, newbox in changes:
                     self.item_boxes[key] = newbox
+
+            def populate_gv_container(self, rgenop, gv_dictptr, box_gv_reader):
+                for key, valuebox in self.item_boxes.iteritems():
+                    gv_value = box_gv_reader(valuebox)
+                    gv_key = rgenop.genconst(key)
+                    self.typedesc.perform_setitem(gv_dictptr, gv_key, gv_value)
 
 
         class FrozenVirtualDict(AbstractFrozenVirtualDict):
@@ -142,22 +151,19 @@ class DictTypeDesc(object):
         from pypy.rpython.lltypesystem import rdict
         DICT = self.DICT
         DICTPTR = self.DICTPTR
-        KEY = DICT.KEY
 
         def allocate(rgenop, n):
             d = rdict.ll_newdict_size(DICT, n)
             return rgenop.genconst(d)
 
-        def populate(item_boxes, gv_lst, box_gv_reader):
-            d = gv_lst.revealconst(DICTPTR)
-            for key, valuebox in item_boxes.iteritems():
-                if valuebox is not None:
-                    gv_value = box_gv_reader(valuebox)
-                    v = gv_value.revealconst(KEY)
-                    rdict.ll_dict_setitem(key, v)
+        def perform_setitem(gv_dictptr, gv_key, gv_value):
+            d = gv_dictptr.revealconst(DICTPTR)
+            k = gv_key.revealconst(DICT.KEY)
+            v = gv_value.revealconst(DICT.VALUE)
+            rdict.ll_dict_setitem(d, k, v)
 
         self.allocate = allocate
-        self.populate = populate
+        self.perform_setitem = perform_setitem
 
 TypeDesc = DictTypeDesc
 
@@ -271,6 +277,9 @@ class AbstractVirtualDict(VirtualContainer):
     def getboxes(self):
         raise NotImplementedError
 
+    def getlength(self):
+        raise NotImplementedError
+
     def getitems_and_makeempty(self, rgenop):
         raise NotImplementedError
 
@@ -287,11 +296,7 @@ class AbstractVirtualDict(VirtualContainer):
         raise NotImplementedError
 
     def allocate_gv_container(self, rgenop):
-        return self.typedesc.allocate(rgenop, len(self.item_boxes))
-
-    def populate_gv_container(self, gv_dictptr, box_gv_reader):
-        return self.typedesc.populate(self.item_boxes,
-                                      gv_dictptr, box_gv_reader)
+        return self.typedesc.allocate(rgenop, self.getlength())
 
 def oop_newdict(jitstate, oopspecdesc, deepfrozen):
     return oopspecdesc.typedesc.factory()

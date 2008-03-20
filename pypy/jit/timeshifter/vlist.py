@@ -291,9 +291,8 @@ class VirtualList(VirtualContainer):
     def allocate_gv_container(self, rgenop):
         return self.typedesc.allocate(rgenop, len(self.item_boxes))
 
-    def populate_gv_container(self, gv_listptr, box_gv_reader):
-        return self.typedesc.populate(self.item_boxes,
-                                      gv_listptr, box_gv_reader)
+    def populate_gv_container(self, rgenop, gv_listptr, box_gv_reader):
+        self.typedesc.populate(self.item_boxes, gv_listptr, box_gv_reader)
 
 
 def oop_newlist(jitstate, oopspecdesc, deepfrozen, lengthbox, itembox=None):

@@ -908,9 +908,8 @@ class VirtualStruct(VirtualContainer):
     def allocate_gv_container(self, rgenop):
         return self.typedesc.allocate(rgenop)
 
-    def populate_gv_container(self, gv_structptr, box_gv_reader):
-        return self.typedesc.populate(self.content_boxes,
-                                      gv_structptr, box_gv_reader)
+    def populate_gv_container(self, rgenop, gv_structptr, box_gv_reader):
+        self.typedesc.populate(self.content_boxes, gv_structptr, box_gv_reader)
 
 class VirtualizableStruct(VirtualStruct):
     
