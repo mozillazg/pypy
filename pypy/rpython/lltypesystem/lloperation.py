@@ -44,7 +44,7 @@ class LLOp(object):
                 self.canraise += (StackException,)
 
         # The operation can be run directly with __call__
-        self.canrun = canrun or canfold
+        self.canrun = canrun or self.tryfold
 
         # The operation belongs to the ootypesystem
         self.oo = oo
@@ -55,7 +55,7 @@ class LLOp(object):
 
     def __call__(self, RESULTTYPE, *args):
         # llop is meant to be rtyped and not called directly, unless it is
-        # a canfold=True operation
+        # a canfold=True or tryfold=True operation
         fold = self.fold
         if getattr(fold, 'need_result_type', False):
             val = fold(RESULTTYPE, *args)
