@@ -12,7 +12,7 @@ from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, LLTypeJitInterpreter, OOTypeJitInterpreter
-from pypy.jit.rainbow.interpreter import DEBUG_JITCODES
+from pypy.jit.rainbow.interpreter import DEBUG_JITCODES, log
 from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 from pypy.translator.unsimplify import varoftype
@@ -332,6 +332,23 @@ class BytecodeWriter(object):
         while self.unfinished_graphs:
             graph = self.unfinished_graphs.pop()
             self.make_bytecode(graph, is_portal=False)
+        numjitcodes = len(self.all_graphs)
+        size_estimate = 76 * numjitcodes
+        log.info("there are %d JitCode instances containing:" % numjitcodes)
+        numchars = 0
+        for jitcode in self.all_graphs.values():
+            numchars += len(jitcode.code)
+            size_estimate += (len(jitcode.code) + 15) & ~ 3
+        log.info("- %d characters in bytecodes" % numchars)
+        numdesclists = len(self._listcache)
+        numdescitems = 0
+        for lst in self._listcache.values():
+            numdescitems += len(lst)
+            size_estimate += 8 + 4*len(lst)
+        log.info("- %d unique lists of descs (average length %.2f)" % (
+            numdesclists, float(numdescitems) / numdesclists))
+        log.info("%d KB total estimated size (without the Descs)" % (
+            size_estimate/1024))
 
     def compute_merge_points(self):
         entrymap = flowmodel.mkentrymap(self.graph)
