@@ -125,12 +125,27 @@ class HintBookkeeper(object):
         self.tsgraphsigs = {}
         self.nonstuboriggraphcount = 0
         self.stuboriggraphcount = 0
+        self._abstractvariable_cause = {}
         if hannotator is not None:     # for tests
             t = hannotator.base_translator
             self.impurity_analyzer = ImpurityAnalyzer(t)
         # circular imports hack
         global hintmodel
         from pypy.jit.hintannotator import model as hintmodel
+
+    def setcause(self, hs, causes):
+        if not isinstance(causes, (list, tuple)):
+            causes = (causes,)
+        for cause in causes:
+            if isinstance(cause, annmodel.SomeObject):
+                cause = self.getcause(cause)
+            if cause is not None:
+                self._abstractvariable_cause[id(hs)] = hs, cause
+                break
+
+    def getcause(self, hs):
+        hs, cause = self._abstractvariable_cause.get(id(hs), (hs, None))
+        return cause
 
     def getdesc(self, graph):
         try:
