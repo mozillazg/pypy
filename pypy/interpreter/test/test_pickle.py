@@ -1,6 +1,8 @@
 import py
 from pypy import conftest
 
+py.test.skip("xxx")
+
 def _attach_helpers(space):
     from pypy.interpreter import pytraceback
     def hide_top_frame(space, w_frame):
