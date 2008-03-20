@@ -434,7 +434,7 @@ class TranslationDriver(SimpleTaskEngine):
         rtyper = t.rtyper
         # make the bytecode and the rainbow interp
         from pypy.jit.rainbow.codewriter import LLTypeBytecodeWriter
-        writer = LLTypeBytecodeWriter(t, ha, RGenOp)
+        writer = LLTypeBytecodeWriter(t, ha, RGenOp, verbose=False)
         jitcode = writer.make_bytecode(self.portal_graph)
         if ha.policy.hotpath:
             from pypy.jit.rainbow.hotpath import HotRunnerDesc
