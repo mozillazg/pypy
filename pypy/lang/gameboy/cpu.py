@@ -653,8 +653,8 @@ class CPU(object):
         self.pc.set(hi,lo) # 2 cycles
 
      # JP cc,nnnn 3,4 cycles
-    def jp_cc_nnnn(self, getter):
-        if getter():
+    def jp_cc_nnnn(self, cc):
+        if cc:
             self.jp_nnnn() # 4 cycles
         else:
             self.pc.add(2) # 3 cycles
@@ -665,8 +665,8 @@ class CPU(object):
         self.cycles += 1
 
      # JR cc,+nn, 2,3 cycles
-    def jr_cc_nn(self, getter):
-        if getter():
+    def jr_cc_nn(self, cc):
+        if cc:
             self.jr_nn() # 3 cycles
         else:
             self.pc.inc() # 2 cycles
@@ -703,8 +703,8 @@ class CPU(object):
         self.pc.set(hi, lo) # 2 cycles
 
      # RET cc 2,5 cycles
-    def ret_cc(getter):
-        if (getter()):
+    def ret_cc(cc):
+        if cc:
             self.ret() # 4 cycles
             # FIXME maybe this should be the same
             self.cycles -= 1
@@ -762,52 +762,74 @@ class CPU(object):
 
 GROUPED_REGISTERS = (CPU.b, CPU.c, CPU.d, CPU.e, CPU.h, CPU.l, CPU.hli, CPU.a)
 def create_group_op_codes(table):
+    print ""
     opCodes =[]
     for entry in table:
         opCode = entry[0]
         step = entry[1]
         function = entry[2]
         if len(entry) == 4:
-            for i in range(0, len(GROUPED_REGISTERS)):
+            for register in GROUPED_REGISTERS:
                 for n in entry[3]:
-                    register = GROUPED_REGISTERS[i]
-                    opCodes.append((opCode, lambda me: function(me, register.get, register.set, n)))
-                    #print "A", hex(opCode), function, n, i
+                    opCodes.append((opCode, group_lambda(function, register, n)))
+                    #print "A", hex(opCode), function, n
                     opCode += step
         else:
-            for i in range(0,  len(GROUPED_REGISTERS)):
-                register = GROUPED_REGISTERS[i]
-                opCodes.append((opCode, lambda me: function(me, register.get, register.set)))
-                #print "B", hex(opCode), function, i
+            for register in GROUPED_REGISTERS:
+                opCodes.append((opCode,group_lambda(function, register)))
+                #print "B", hex(opCode), function, register
                 opCode += step
     return opCodes
 
+def group_lambda(function, register, value=None):
+    if value == None:
+        lambda s: function(s, register.get, register.set)
+    else:
+        lambda s: function(s, register.get, register.set, value)
+        
+
 
 def create_register_op_codes(table):
+    print ""
     opCodes = []
     for entry in table:
         opCode = entry[0]
         step = entry[1]
         function = entry[2]
+        #print "------------------------------"
+        #print "C", hex(opCode), hex(step), function, len(entry[3])
+        #print entry[3], len(entry[3])
         for registerOrGetter in entry[3]:
-            opCodes.append((opCode, lambda s: function(s, registerOrGetter)))
-            #print "C", hex(opCode), function, registerOrGetter
+            opCodes.append((opCode, register_lambda(function, registerOrGetter)))
             opCode += step
     return opCodes
- 
+
+def register_lambda(function, registerOrGetter):
+    if registerOrGetter is object:
+        return lambda s: function(s, registerOrGetter)
+    else:
+        return lambda s: function(s, registerOrGetter(s))
 
 def initialize_op_code_table(table):
+    print ""
     result = [None] * (0xFF+1)
     for entry in  table:
-        if (entry is None) or len(entry) == 0:
+        if (entry is None) or (len(entry) == 0) or entry[-1] is None:
             continue
         if len(entry) == 2:
             positions = [entry[0]]
         else:
-            assert False
             positions = range(entry[0], entry[1]+1)
         for pos in positions:
+            #try:
+            #    print "D1", hex(pos), entry[-1].func_closure[0].cell_contents.func_name
+            #except:
+            #    pass
+            #else:
+            #    print "D2", hex(pos), entry[-1]
+            #print ""
             result[pos] = entry[-1]
+    #assert result[pos] is None
     return result
 
 # OPCODE TABLES ---------------------------------------------------------------
@@ -882,7 +904,7 @@ REGISTER_GROUP_OP_CODES = [
     (0xB8, 0x01, CPU.cpA),
     (0x06, 0x08, lambda s, register:CPU.ld(s, CPU.fetch(s), register.set)),
     (0x40, 0x01, CPU.res, range(0, 8))
-]      
+]    
         
 
 REGISTER_OP_CODES = [ 
@@ -917,9 +939,9 @@ SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
 # RAW OPCODE TABLE INITIALIZATION ----------------------------------------------
 
 FIRST_ORDER_OP_CODES += create_register_op_codes(REGISTER_OP_CODES)
-FIRST_ORDER_OP_CODES += create_group_op_codes(REGISTER_GROUP_OP_CODES)
+#FIRST_ORDER_OP_CODES += create_group_op_codes(REGISTER_GROUP_OP_CODES)
 SECOND_ORDER_OP_CODES = create_group_op_codes(SECOND_ORDER_REGISTER_GROUP_OP_CODES)
 
 
 OP_CODES = initialize_op_code_table(FIRST_ORDER_OP_CODES)
-FETCH_EXECUTE_OP_CODES = initialize_op_code_table(SECOND_ORDER_OP_CODES)
+FETCH_EXECUTE_OP_CODES = []#initialize_op_code_table(SECOND_ORDER_OP_CODES)
