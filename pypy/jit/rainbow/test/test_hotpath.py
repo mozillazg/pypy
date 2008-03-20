@@ -475,3 +475,33 @@ class TestHotPath(HotPathTest):
         assert ''.join(res.chars) == " ".join([str(n) for n in range(40, 0, -1)])
         # XXX should check something about the produced code as well, but no
         # clue what
+
+    def test_loop_with_more_and_more_structs(self):
+        py.test.skip("shows problem with current merging logic")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n1', 'res']
+
+        class List(object):
+            def __init__(self, value, prev):
+                self.value = value
+                self.prev = prev
+
+        def ll_function(n):
+            n1 = n * 2
+            res = None
+            while True:
+                MyJitDriver.jit_merge_point(n1=n1, res=res)
+                if n1 <= 1:
+                    break
+                n1 -= 1
+                res = List(n1, res)
+                MyJitDriver.can_enter_jit(n1=n1, res=res)
+            final = []
+            while res:
+                final.append(str(res.value))
+                res = res.prev
+            return " ".join(final)
+        res = self.run(ll_function, [40], threshold=2)
+        assert "".join(res.chars) == " ".join([str(i) for i in range(1, 80)])
+        self.check_insns(malloc=1)
