@@ -108,7 +108,6 @@ class PyCode(eval.Code):
                             self._args_as_cellvars.append(-1)   # pad
                         self._args_as_cellvars[i] = j
 
-        self._compute_fastcall()
 
     co_names = property(lambda self: [self.space.unwrap(w_name) for w_name in self.co_names_w]) # for trace
 
@@ -160,63 +159,6 @@ class PyCode(eval.Code):
 
     _code_new_w = staticmethod(_code_new_w)
     
-    def _compute_fastcall(self):
-        # Speed hack!
-        self.do_fastcall = -1
-        if not (0 <= self.co_argcount <= 4):
-            return
-        if self.co_flags & (CO_VARARGS | CO_VARKEYWORDS):
-            return
-        if len(self._args_as_cellvars) > 0:
-            return
-
-        self.do_fastcall = self.co_argcount
-
-    def fastcall_0(self, space, w_func):
-        if self.do_fastcall == 0:
-            frame = space.createframe(self, w_func.w_func_globals,
-                                      w_func.closure)
-            return frame.run()
-        return None
-
-    def fastcall_1(self, space, w_func, w_arg):
-        if self.do_fastcall == 1:
-            frame = space.createframe(self, w_func.w_func_globals,
-                                      w_func.closure)
-            frame.fastlocals_w[0] = w_arg # frame.setfastscope([w_arg])
-            return frame.run()
-        return None
-
-    def fastcall_2(self, space, w_func, w_arg1, w_arg2):
-        if self.do_fastcall == 2:
-            frame = space.createframe(self, w_func.w_func_globals,
-                                      w_func.closure)
-            frame.fastlocals_w[0] = w_arg1 # frame.setfastscope([w_arg])
-            frame.fastlocals_w[1] = w_arg2
-            return frame.run()
-        return None
-
-    def fastcall_3(self, space, w_func, w_arg1, w_arg2, w_arg3):
-        if self.do_fastcall == 3:
-            frame = space.createframe(self, w_func.w_func_globals,
-                                       w_func.closure)
-            frame.fastlocals_w[0] = w_arg1 # frame.setfastscope([w_arg])
-            frame.fastlocals_w[1] = w_arg2 
-            frame.fastlocals_w[2] = w_arg3 
-            return frame.run()
-        return None
-
-    def fastcall_4(self, space, w_func, w_arg1, w_arg2, w_arg3, w_arg4):
-        if self.do_fastcall == 4:
-            frame = space.createframe(self, w_func.w_func_globals,
-                                       w_func.closure)
-            frame.fastlocals_w[0] = w_arg1 # frame.setfastscope([w_arg])
-            frame.fastlocals_w[1] = w_arg2 
-            frame.fastlocals_w[2] = w_arg3 
-            frame.fastlocals_w[3] = w_arg4 
-            return frame.run()
-        return None
-
     def funcrun(self, func, args):
         frame = self.space.createframe(self, func.w_func_globals,
                                   func.closure)
