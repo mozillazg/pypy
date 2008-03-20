@@ -101,12 +101,12 @@ class StructTypeDesc(object):
 
         self._compute_fielddescs(RGenOp)
 
-        if self.immutable and self.noidentity:
-            self._define_materialize()
-
-        if fixsize:
-            self._define_devirtualize()
-        self._define_allocate(fixsize)
+        if TYPE._gckind == 'gc':    # no 'allocate' for inlined substructs
+            if self.immutable and self.noidentity:
+                self._define_materialize()
+            if fixsize:
+                self._define_devirtualize()
+            self._define_allocate(fixsize)
 
         
     def _compute_fielddescs(self, RGenOp):
@@ -701,6 +701,11 @@ class ArrayFieldDesc(FieldDesc):
             array[index] = newvalue
         self.perform_setarrayitem = perform_setarrayitem
 
+        if TYPE._gckind == 'gc':    # no allocate for inlined arrays
+            self._define_allocate()
+
+    def _define_allocate(self):
+        TYPE = self.TYPE
         def allocate(rgenop, size):
             a = lltype.malloc(TYPE, size)
             return rgenop.genconst(a)
