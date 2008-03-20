@@ -5,6 +5,7 @@ from pypy.rlib.debug import ll_assert
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy, StopAtXPolicy
 from pypy.jit.rainbow.test import test_hotpath
+from pypy.rlib.rarithmetic import ovfcheck
 
 import sys
 
@@ -1753,26 +1754,28 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
 
 
     def test_red_int_add_ovf(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'm', 'i', 'result']
         def f(n, m):
-            try:
-                result = ovfcheck(n + m)
-            except OverflowError:
-                return -42 + m
+            i = 1024
+            while i > 0:
+                i >>= 1
+                try:
+                    result = ovfcheck(n + m)
+                except OverflowError:
+                    result = -42 + m
+                MyJitDriver.jit_merge_point(n=n, m=m, i=i, result=result)
+                MyJitDriver.can_enter_jit(n=n, m=m, i=i, result=result)
             return result + 1
 
-        res = self.interpret(f, [100, 20])
+        res = self.run(f, [100, 20], threshold=2)
         assert res == 121
-        self.check_insns(int_add_ovf=1)
-        #res = self.interpret(f, [100, 20], [0, 1])
-        #assert res == 121
-        #self.check_insns()
+        self.check_insns_in_loops(int_add_ovf=1)
 
-        res = self.interpret(f, [sys.maxint, 1])
-        assert res == -41
-        self.check_insns(int_add_ovf=1)
-        res = self.interpret(f, [sys.maxint, 5], [0, 1])
-        assert res == -42 + 5
-        self.check_insns()
+        res = self.run(f, [sys.maxint, 1], threshold=2)
+        assert res == -40
+        self.check_insns_in_loops(int_add_ovf=1)
 
     def test_green_int_add_ovf(self):
         py.test.skip("not working yet")
