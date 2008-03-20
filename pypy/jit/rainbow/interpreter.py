@@ -932,6 +932,11 @@ class JitInterpreter(object):
         rhotpath.hp_after_residual_call(self.jitstate, self.hotrunnerdesc,
                                         withexc, True)
 
+    @arguments("exception")
+    def opimpl_hp_split_raisingop(self, ll_evalue):
+        rhotpath.hp_after_raisingop(self.jitstate, self.hotrunnerdesc,
+                                    ll_evalue)
+
     def hp_return(self):
         frame = self.frame.backframe
         if frame is None:

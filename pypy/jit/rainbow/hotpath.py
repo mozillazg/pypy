@@ -27,6 +27,7 @@ class HotRunnerDesc:
         self.RGenOp = RGenOp
         self.exceptiondesc = codewriter.exceptiondesc
         self.interpreter = codewriter.interpreter
+        self.ts = self.interpreter.ts
         self.codewriter = codewriter
         self.threshold = threshold
         self.translate_support_code = translate_support_code

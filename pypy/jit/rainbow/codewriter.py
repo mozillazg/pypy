@@ -571,9 +571,14 @@ class BytecodeWriter(object):
             self.register_redvar(op.result)
         if (opdesc is not None and 
             opdesc.tryfold and not opdesc.canfold and opdesc.canraise):
+            # XXX len(canraise) should be 1, except in
+            # kind-of-deprecated cases
             exc_class = opdesc.llop.canraise[0]
-            self.emit("split_raisingop",
-                      self.exceptioninstance_position(exc_class))
+            if self.hannotator.policy.hotpath:
+                self.emit("hp_split_raisingop")
+            else:
+                self.emit("split_raisingop")
+            self.emit(self.exceptioninstance_position(exc_class))
 
     def serialize_opcode(self, color, op):
         opname = op.opname

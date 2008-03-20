@@ -420,3 +420,53 @@ def hp_after_residual_call(jitstate, hotrunnerdesc, withexc, check_forced):
     generate_fallback_code(fbp, hotpromotiondesc, flagbox,
                            check_exceptions=withexc)
     assert 0, "unreachable"
+
+# ____________________________________________________________
+
+# support for turning the 'gv_raised' left behind by primitive raising
+# operations directly into a virtualized exception on the JITState,
+# splitting the machine code in two paths.
+
+class AfterRaisingOpFallbackPoint(PromoteFallbackPoint):
+        
+    def __init__(self, jitstate, hotrunnerdesc, promotebox, hotpromotiondesc,
+                 ll_evalue):
+        PromoteFallbackPoint.__init__(self, jitstate, hotrunnerdesc,
+                                      promotebox, hotpromotiondesc)
+        self.ll_evalue = ll_evalue
+
+    @specialize.arglltype(2)
+    def prepare_fallbackinterp(self, fallbackinterp, value):
+        value = bool(value)
+        fallbackinterp.local_red.pop()   # remove the temporary raisedbox
+        if value:
+            # got an exception, register it on the fallbackinterp
+            fallbackinterp.residual_ll_exception(self.ll_evalue)
+
+    def prepare_compiler(self, interpreter, gv_value):
+        # remove the temporary raisedbox
+        interpreter.frame.local_boxes.pop()
+        if gv_value.revealconst(lltype.Bool):
+            # got an exception, register it on the interpreter
+            interpreter.jitstate.residual_ll_exception(self.ll_evalue)
+
+
+def hp_after_raisingop(jitstate, hotrunnerdesc, ll_evalue):
+    gv_raised = jitstate.greens.pop() # XXX hackish interface,
+                                      # pushed here by ll_gen1 or ll_gen2
+    # XXX slightly hackish as well, we actually need gv_raised to be
+    # in local_boxes to be passed along to the new block
+    assert not gv_raised.is_const
+    tok_bool = hotrunnerdesc.RGenOp.kindToken(lltype.Bool)
+    raisedbox = rvalue.IntRedBox(tok_bool, gv_raised)
+    jitstate.frame.local_boxes.append(raisedbox)
+    
+    hotpromotiondesc = hotrunnerdesc.bool_hotpromotiondesc
+    fbp = AfterRaisingOpFallbackPoint(jitstate, hotrunnerdesc,
+                                      raisedbox, hotpromotiondesc,
+                                      ll_evalue)
+    generate_fallback_code(fbp, hotpromotiondesc, raisedbox,
+                           check_exceptions=False)
+    # NB. check_exceptions is False because no exception should set
+    # set now (the RGenOp's genraisingop cannot set an exception itself)
+    assert 0, "unreachable"

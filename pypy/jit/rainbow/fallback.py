@@ -90,6 +90,11 @@ class FallbackInterpreter(object):
         else:
             Xxx("capture_exception")
 
+    def residual_ll_exception(self, ll_evalue):
+        ll_etype = self.hotrunnerdesc.ts.get_typeptr(ll_evalue)
+        self.gv_exc_type  = self.rgenop.genconst(ll_etype)
+        self.gv_exc_value = self.rgenop.genconst(ll_evalue)
+
     def run_directly(self, greenargs, redargs, targetbytecode):
         return self.perform_call_mixed(greenargs, redargs,
                                        targetbytecode.gv_ownfnptr,
@@ -539,6 +544,12 @@ class FallbackInterpreter(object):
         if has_result:
             self.red_result(gv_res)
 
+    @arguments("exception")
+    def opimpl_hp_split_raisingop(self, ll_evalue):
+        gv_raised = self.local_green.pop()
+        if gv_raised.revealconst(lltype.Bool):
+            self.residual_ll_exception(ll_evalue)
+
     def hp_return(self):
         frame = self.current_source_jitframe.backframe
         if frame is None:
@@ -591,17 +602,33 @@ class FallbackInterpreter(object):
 
     def get_opcode_implementation(self, func_name, argspec, opdesc):
         numargs = unrolling_iterable(range(opdesc.nb_args))
-        def implementation(self, *args_gv):
-            args = (opdesc.RESULT, )
-            for i in numargs:
-                arg = args_gv[i].revealconst(opdesc.ARGS[i])
-                args += (arg, )
-            if not we_are_translated():
-                if opdesc.opname == "int_is_true":
-                    # special case for tests, as in llinterp.py
-                    if type(args[1]) is CDefinedIntSymbolic:
-                        args = (args[0], args[1].default)
-            return self.rgenop.genconst(opdesc.llop(*args))
+        if not opdesc.canraise:
+            def implementation(self, *args_gv):
+                args = (opdesc.RESULT, )
+                for i in numargs:
+                    arg = args_gv[i].revealconst(opdesc.ARGS[i])
+                    args += (arg, )
+                if not we_are_translated():
+                    if opdesc.opname == "int_is_true":
+                        # special case for tests, as in llinterp.py
+                        if type(args[1]) is CDefinedIntSymbolic:
+                            args = (args[0], args[1].default)
+                return self.rgenop.genconst(opdesc.llop(*args))
+        else:
+            exceptions_tuple = opdesc.llop.canraise
+            def implementation(self, *args_gv):
+                args = (opdesc.RESULT, )
+                for i in numargs:
+                    arg = args_gv[i].revealconst(opdesc.ARGS[i])
+                    args += (arg, )
+                try:
+                    result = opdesc.llop(*args)
+                    gv_raised = opdesc.gv_False
+                except exceptions_tuple:
+                    result = opdesc.whatever_result
+                    gv_raised = opdesc.gv_True
+                self.local_green.append(gv_raised)
+                return self.rgenop.genconst(result)
         implementation.func_name = func_name
         # the argspec may unwrap *args_gv from local_red or local_green
         # and put the result back into local_red or local_green
