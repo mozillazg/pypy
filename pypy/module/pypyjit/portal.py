@@ -1,5 +1,5 @@
 import pypy
-from pypy.module.pypyjit.newbool import NewBoolDesc
+#from pypy.module.pypyjit.newbool import NewBoolDesc
 from pypy.translator.translator import graphof
 from pypy.annotation.specialize import getuniquenondirectgraph
 from pypy.jit.hintannotator.policy import ManualGraphPolicy
@@ -101,7 +101,7 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
         self.seegraph(pypy.interpreter.pyframe.PyFrame.execute_frame, False)
         # --------------------
         # special timeshifting logic for newbool
-        self.seegraph(pypy.objspace.std.Space.newbool, NewBoolDesc)
+        #self.seegraph(pypy.objspace.std.Space.newbool, NewBoolDesc)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
                      pypy.objspace.std.Space.is_true)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
