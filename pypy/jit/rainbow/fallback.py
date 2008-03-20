@@ -65,7 +65,8 @@ class FallbackInterpreter(object):
                 gv_result = self.fetch_from_frame(box, gv_result)
 
             self.containers_gv[content] = gv_result
-            content.populate_gv_container(gv_result, self.getinitialboxgv)
+            content.populate_gv_container(self.rgenop, gv_result,
+                                          self.getinitialboxgv)
             return gv_result
 
     def initialize_from_frame(self, frame):
