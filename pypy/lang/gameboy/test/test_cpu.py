@@ -163,13 +163,13 @@ def test_jr_cc_nn():
     cpu.rom[constants.RESET_PC] = value
     # test jr_nn
     startCycles = cpu.cycles
-    cpu.jr_cc_nn(True)
+    cpu.jr_cc_nn((lambda :True))
     assert startCycles-cpu.cycles == 3
     assert_registers(cpu, pc=pc+value+1)
     # test pc.inc
     startCycles = cpu.cycles
     pc = cpu.pc.get()
-    cpu.jr_cc_nn(False)
+    cpu.jr_cc_nn((lambda: False))
     assert startCycles-cpu.cycles == 2
     assert cpu.pc.get() == pc+1
     
@@ -182,9 +182,47 @@ def cycle_test(cpu, opCode, cycles=0):
         assert False, "Opcode %s %s failed to execute: %s" % (hex(opCode), OP_CODES[opCode], inst)
     cpuUsedCycles = startCycles-cpu.cycles 
     assert cpuUsedCycles == cycles,\
-        "Cycles for opCode %s,%s should be %i not %i" %\
-         (hex(opCode).ljust(2), cpu.OP_CODEs[opCode], CPU.cycles, cpuUsedCycles)
-         
+        "Cycles for opCode %s [CPU.%s] should be %i not %i" %\
+         (hex(opCode).ljust(2),\
+          OP_CODES[opCode].func_closure[0].cell_contents.func_name,\
+          cycles, cpuUsedCycles)
+      
+      
+# TEST HELPERS ---------------------------------------
+
+def test_create_group_op_codes():
+    assert len(GROUPED_REGISTERS) == 8
+    start=0x12
+    step=0x03
+    func = CPU.inc
+    table = [(start, step, func)]
+    grouped = create_group_op_codes(table)
+    assert len(grouped) == len(table)*8
+    
+    opCode = start
+    for entry in grouped:
+        assert len(entry) == 2
+        assert entry[0] == opCode
+        assert entry[1].func_name == "<lambda>"
+        assert entry[1].func_closure[0].cell_contents == func
+        opCode += step
+        
+        
+def test_create_register_op_codes():
+    start = 0x09
+    step = 0x10
+    func = CPU.addHL
+    registers = [CPU.bc]*128
+    table = [(start, step, func, registers)]
+    list = create_register_op_codes(table)
+    opCode = start
+    assert len(list) == len(registers)
+    for entry in list:
+        assert len(entry) == 2
+        assert entry[0] == opCode
+        assert entry[1].func_name == "<lambda>"
+        assert entry[1].func_closure[0].cell_contents == func
+        opCode += step
  # HELPERS
  
 def assert_default_registers(cpu, a=constants.RESET_A, bc=constants.RESET_BC,\
@@ -263,7 +301,7 @@ def test_0x18():
     
 # jr_NZ_nn see test_jr_cc_nn
 def test_0x20_0x28_0x30():
-    py.test.skip("Op Code Mapping not fully implemented")
+    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0x20
@@ -284,7 +322,7 @@ def test_0x20_0x28_0x30():
     
 # ld_BC_nnnn to ld_SP_nnnn
 def test_0x01_0x11_0x21_0x31():
-    py.test.skip("Op Code Mapping not fully implemented")
+    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x12
@@ -297,7 +335,7 @@ def test_0x01_0x11_0x21_0x31():
         
 # add_HL_BC to add_HL_SP
 def test_0x09_0x19_0x29_0x39():
-    py.test.skip("Op Code Mapping not fully implemented")
+    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x1234
@@ -311,7 +349,6 @@ def test_0x09_0x19_0x29_0x39():
         
 # ld_BCi_A
 def test_0x02():
-    py.test.skip("Op Code Mapping not fully implemented")
     cpu = get_cpu();
     cpu.bc.set(0xC2, 0x23);
     cpu.a.set(0x12);
@@ -360,7 +397,7 @@ def test_0x3A():
     
 # inc_BC DE HL SP
 def test_0x03_to_0x33_inc_double_registers():
-    py.test.skip("Op Code Mapping not fully implemented")
+    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     opCode = 0x03
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
@@ -377,7 +414,7 @@ def test_0x03_to_0x33_inc_double_registers():
 
 # dec_BC
 def test_0x0B_to_0c38_dec_double_registers():
-    py.test.skip("Op Code Mapping not fully implemented")
+    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     opCode = 0x0B
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
