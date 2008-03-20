@@ -146,7 +146,7 @@ class IndirectCallsetDesc(object):
 
 
 class BytecodeWriter(object):
-    def __init__(self, t, hannotator, RGenOp):
+    def __init__(self, t, hannotator, RGenOp, verbose=True):
         self.translator = t
         self.rtyper = hannotator.base_translator.rtyper
         self.hannotator = hannotator
@@ -156,6 +156,7 @@ class BytecodeWriter(object):
             RGenOp, etrafo, type_system, True, self.rtyper)
         self.interpreter = self.create_interpreter(RGenOp)
         self.RGenOp = RGenOp
+        self.verbose = verbose
         self.current_block = None
         self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer
         self.all_graphs = {} # mapping graph to bytecode
@@ -278,7 +279,8 @@ class BytecodeWriter(object):
         bytecode._source = self.assembler
         bytecode._interpreter = self.interpreter
         bytecode._labelpos = labelpos
-        bytecode.dump()
+        if self.verbose:
+            bytecode.dump()
         if DEBUG_JITCODES:
             f = StringIO()
             bytecode.dump(f)
