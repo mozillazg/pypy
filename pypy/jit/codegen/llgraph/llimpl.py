@@ -237,6 +237,8 @@ def _generalcast(T, value):
     elif isinstance(T, ootype.StaticMethod):
         fn = value._obj
         return ootype._static_meth(T, graph=fn.graph, _callable=fn._callable)
+    elif isinstance(T, ootype.Instance):
+        return ootype.ooupcast(T, value) # XXX: oodowncast?
     else:
         T1 = lltype.typeOf(value)
         if T1 is llmemory.Address:

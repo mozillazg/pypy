@@ -152,7 +152,7 @@ class BytecodeWriter(object):
         self.hannotator = hannotator
         etrafo = hannotator.exceptiontransformer
         type_system = self.rtyper.type_system.name
-        self.exceptiondesc = exception.ExceptionDesc(
+        self.exceptiondesc = self.ExceptionDesc(
             RGenOp, etrafo, type_system, True, self.rtyper)
         self.interpreter = self.create_interpreter(RGenOp)
         self.RGenOp = RGenOp
@@ -1567,12 +1567,16 @@ class BytecodeWriter(object):
 
 class LLTypeBytecodeWriter(BytecodeWriter):
 
+    ExceptionDesc = exception.LLTypeExceptionDesc
+
     def create_interpreter(self, RGenOp):
         return LLTypeJitInterpreter(self.exceptiondesc, RGenOp)
 
 
 class OOTypeBytecodeWriter(BytecodeWriter):
 
+    ExceptionDesc = exception.OOTypeExceptionDesc
+    
     def create_interpreter(self, RGenOp):
         return OOTypeJitInterpreter(self.exceptiondesc, RGenOp)
 
