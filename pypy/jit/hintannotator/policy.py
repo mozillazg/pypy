@@ -60,9 +60,7 @@ class ManualGraphPolicy(HintAnnotatorPolicy):
         self.translator = t
         self.bookkeeper = t.annotator.bookkeeper
         self.timeshift_graphs = {}
-        portal = getattr(self.PORTAL, 'im_func', self.PORTAL)
-        portal_graph = graphof(t, portal)
-        self.fill_timeshift_graphs(portal_graph)
+        self.fill_timeshift_graphs()
 
     def look_inside_graph(self, graph):
         if graph in self.timeshift_graphs:
@@ -86,7 +84,7 @@ class ManualGraphPolicy(HintAnnotatorPolicy):
     def look_inside_graph_of_module(self, graph, func, mod):
         return True
 
-    def fill_timeshift_graphs(self, portal_graph):
+    def fill_timeshift_graphs(self):
         # subclasses should have their own
         pass
 
