@@ -74,7 +74,7 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
                 descr_impl,
                 pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
 
-    def fill_timeshift_graphs(self, portal_graph):
+    def fill_timeshift_graphs(self):
         import pypy
 
         # --------------------
