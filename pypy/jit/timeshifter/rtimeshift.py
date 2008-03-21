@@ -1053,6 +1053,7 @@ class VirtualFrame(object):
 class JITState(object):
     _attrs_ = """curbuilder frame
                  exc_type_box exc_value_box
+                 greens
                  gv_op_raised
                  returnbox
                  promotion_path
