@@ -288,6 +288,27 @@ class VirtualList(VirtualContainer):
                 assert content.allowed_in_virtualizable
                 content.reshape(jitstate, shapemask, memo)
 
+    def store_back_gv_reshaped(self, shapemask, memo):
+        if self in memo.containers:
+            return
+        typedesc = self.typedesc
+        memo.containers[self] = None
+        bitmask = 1<<memo.bitcount
+        memo.bitcount += 1
+
+        boxes = self.item_boxes
+        outside_box = boxes[-1]
+        if bitmask&shapemask:
+            gv_forced = memo.box_gv_reader(outside_box)
+            memo.forced_containers_gv[self] = gv_forced
+            
+        for box in boxes:
+            if not box.genvar:
+                assert isinstance(box, rvalue.PtrRedBox)
+                content = box.content
+                assert content.allowed_in_virtualizable
+                content.store_back_gv_reshaped(shapemask, memo)
+
     def allocate_gv_container(self, rgenop):
         return self.typedesc.allocate(rgenop, len(self.item_boxes))
 

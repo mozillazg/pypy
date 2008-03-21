@@ -85,6 +85,7 @@ class HotPromotionDesc:
     def __init__(self, ERASED, RGenOp):
         self.RGenOp = RGenOp
         pathkind = "%s path" % (ERASED,)
+        is_signed = (ERASED == RGenOp.erasedType(lltype.Signed))
 
         def ll_reach_fallback_point(fallback_point_ptr, value, framebase):
             fbp = _cast_base_ptr_to_fallback_point(fallback_point_ptr)
@@ -112,7 +113,11 @@ class HotPromotionDesc:
 
             # exceptions below at run-time exceptions, we let them propagate
             fallbackinterp = fbp.hotrunnerdesc.fallbackinterp
-            fallbackinterp.initialize_state(fbp, framebase)
+            if is_signed and fbp.check_virtualizables():
+                shapemask = value & ~ 1
+            else:
+                shapemask = -1
+            fallbackinterp.initialize_state(fbp, framebase, shapemask)
             fbp.prepare_fallbackinterp(fallbackinterp, value)
             fallbackinterp.bytecode_loop()
             # If the fallback interpreter reached the next jit_merge_point(),
@@ -156,6 +161,9 @@ class FallbackPoint(object):
         # ^^^ 'frameinfo' describes where the machine code stored all
         # its GenVars, so that we can fish these values to pass them
         # to the fallback interpreter
+
+    def check_virtualizables(self):
+        return False
 
     # hack for testing: make the llinterpreter believe this is a Ptr to base
     # instance
@@ -383,6 +391,9 @@ class AfterResidualCallFallbackPoint(PromoteFallbackPoint):
         PromoteFallbackPoint.__init__(self, jitstate, hotrunnerdesc,
                                       promotebox, hotpromotiondesc)
         self.check_forced = check_forced
+
+    def check_virtualizables(self):
+        return self.check_forced
 
     @specialize.arglltype(2)
     def prepare_fallbackinterp(self, fallbackinterp, value):

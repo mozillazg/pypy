@@ -3,9 +3,13 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
-from pypy.jit.timeshifter import rvalue
+from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
+
+
+class FallStoreBackMemo(object):
+    pass
 
 
 class FallbackInterpreter(object):
@@ -21,7 +25,7 @@ class FallbackInterpreter(object):
         self.exceptiondesc = hotrunnerdesc.exceptiondesc
         self.register_opcode_impls(self.interpreter)
 
-    def initialize_state(self, fallback_point, framebase):
+    def initialize_state(self, fallback_point, framebase, shapemask):
         self.interpreter.debug_trace("fallback_interp")
         jitstate = fallback_point.saved_jitstate
         incoming_gv = jitstate.get_locals_gv()
@@ -32,6 +36,7 @@ class FallbackInterpreter(object):
         for i in range(len(incoming_gv)):
             self.gv_to_index[incoming_gv[i]] = i
 
+        self.store_back_virtualizables(jitstate, shapemask)
         self.initialize_from_frame(jitstate.frame)
         self.gv_exc_type  = self.getinitialboxgv(jitstate.exc_type_box)
         self.gv_exc_value = self.getinitialboxgv(jitstate.exc_value_box)
@@ -61,13 +66,51 @@ class FallbackInterpreter(object):
             return self.containers_gv[content]
         except KeyError:
             gv_result = content.allocate_gv_container(self.rgenop)
-            if not gv_result.is_const:
-                gv_result = self.fetch_from_frame(box, gv_result)
-
             self.containers_gv[content] = gv_result
             content.populate_gv_container(self.rgenop, gv_result,
                                           self.getinitialboxgv)
             return gv_result
+
+    def store_back_virtualizables(self, jitstate, shapemask):
+        # this re-populates the virtualizables that already exist in the heap.
+        # If shapemask != -1, it means that the jitstate is in a state where
+        # it needs the equivalent of jitstate.reshape(), i.e. the clean-up and
+        # forced checks that follow a residual call.
+        if shapemask == -1:
+            for virtualizable_box in jitstate.virtualizables:
+                content = virtualizable_box.content
+                assert isinstance(content, rcontainer.VirtualizableStruct)
+                gv_ptr = content.store_back_gv(self.rgenop,
+                                               self.getinitialboxgv)
+                if gv_ptr is not None:
+                    self.containers_gv[content] = gv_ptr
+        else:
+            # Note that this must be done before initialize_from_frame()
+            # because store_back_gv_reshaped() could notice some virtual
+            # containers that were forced during the residual call.
+            # If we called getinitialboxgv() on their box before we
+            # reached the "State sanitized" point below, it would buggily
+            # allocate a new copy instead of reusing the just-forced one.
+
+            # XXX the rest of this function and all the
+            # store_back_gv_reshaped() are duplicating the
+            # lengthy logic from the various reshape() methods :-(
+            memo = FallStoreBackMemo()
+            memo.containers = {}    # for all containers visited
+            memo.forced_containers_gv = self.containers_gv  # forced ones only
+            memo.copyfields = []
+            memo.box_gv_reader = self.getinitialboxgv
+            memo.bitcount = 1
+
+            for virtualizable_box in jitstate.virtualizables:
+                content = virtualizable_box.content
+                assert isinstance(content, rcontainer.VirtualizableStruct)
+                content.store_back_gv_reshaped(shapemask, memo)
+
+            # State sanitized.
+            for gv_ptr, fielddesc, box in memo.copyfields:
+                gv_value = self.getinitialboxgv(box)
+                fielddesc.perform_setfield(self.rgenop, gv_ptr, gv_value)
 
     def initialize_from_frame(self, frame):
         # note that both local_green and local_red contain GenConsts
