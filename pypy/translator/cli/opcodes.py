@@ -3,7 +3,7 @@ from pypy.translator.cli.metavm import  Call, CallMethod, \
      MapException, Box, Unbox, NewArray, GetArrayElem, SetArrayElem,\
      TypeOf, CastPrimitive
 from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult, InstructionList,\
-    New, RuntimeNew, CastTo, PushPrimitive, OOString, OOUnicode
+    New, RuntimeNew, CastTo, PushPrimitive, OOString, OOUnicode, OONewArray
 from pypy.translator.cli.cts import WEAKREF
 from pypy.rpython.ootypesystem import ootype
 
@@ -54,6 +54,7 @@ opcodes = {
     'ooparse_int':              [PushAllArgs, 'call int32 [pypylib]pypy.runtime.Utils::OOParseInt(string, int32)'],
     'ooparse_float':            [PushAllArgs, 'call float64 [pypylib]pypy.runtime.Utils::OOParseFloat(string)'],
     'oonewcustomdict':          [NewCustomDict],
+    'oonewarray':               [OONewArray, StoreResult],
     
     'same_as':                  DoNothing,
     'hint':                     [PushArg(0), StoreResult],

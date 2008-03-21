@@ -670,9 +670,10 @@ class ArrayConst(AbstractConst):
             gen.dup(SELFTYPE)
             push_constant(self.db, ootype.Signed, idx, gen)
             push_constant(self.db, ITEM, item, gen)
-            gen.call_method(SELFTYPE, 'll_setitem_fast')
-            print idx, item
+            self._setitem(SELFTYPE, gen)
 
+    def _setitem(self, SELFTYPE, gen):
+        gen.call_method(SELFTYPE, 'll_setitem_fast')
 
 # ______________________________________________________________________
 # Dictionary constants
