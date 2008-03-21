@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.rvirtualizable import VABLERTIPTR
 from pypy.rlib.jit import hint
 from pypy.rlib.jit import JitDriver, hint, JitHintError
+from pypy.rlib.rarithmetic import intmask
 from pypy.jit.rainbow.test import test_hotpath
 
 
@@ -1646,6 +1647,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                     curstack.append(origstack[i])
                     i += 1
                 frame.stack = curstack
+                log.expected_stack = None
 
         class Log:
             stack = None
@@ -1659,6 +1661,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 
             def run(self):
                 self.trace = 0
+                log.expected_stack = self.stack
                 self.interpret(self.code)
                 assert self.pc == len(self.code)
                 assert len(self.stack) == 1
@@ -1703,12 +1706,14 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                         raise NotImplementedError
 
             def debug(self):
+                if log.expected_stack is not None:
+                    assert self.stack is log.expected_stack
+                log.expected_stack = self.stack
                 for item in self.stack:
                     self.trace = self.trace * 7 - item
             
         def main(x, case, expected):
             code = ['P2+tP5+tP3-', 'P1+tP3-DP3J', 'P4d-DtP0J'][case]
-            log.stack = []
             f = Frame(code, x)
             res = f.run()
             assert res == expected
@@ -1716,7 +1721,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
 
         assert main(38, 0, 42) == 40*3+45
         assert main(15, 1, -2) == ((((16*3+13)*3+10)*3+7)*3+4)*3+1
-        main(21, 2, -3)   # to check that this works too
+        main(41, 2, -3)   # to check that this works too
 
         res = self.run(main, [38, 0, 42], threshold=2,
                        policy=StopAtXPolicy(Frame.debug.im_func))
@@ -1729,10 +1734,9 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_sub': 1, 'int_gt': 1,
                                    'int_mul': 1, 'int_add': 1})
 
-        py.test.skip("in-progress")
-        res = self.run(main, [21, 2, -3], threshold=2,
+        res = self.run(main, [41, 2, -3], threshold=2,
                        policy=StopAtXPolicy(Frame.debug.im_func))
-        assert res == main(21, 2, -3)
+        assert intmask(res) == intmask(main(41, 2, -3))
 
 
     def test_recursive(self):

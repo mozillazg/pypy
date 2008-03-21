@@ -291,28 +291,8 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 
         self._define_access_is_null(RGenOp)
 
-        self._define_populate_by_store_back()
-
     def _define_virtual_desc(self):
         pass
-
-    def _define_populate_by_store_back(self):
-        # On a non-virtual virtualizable structure, the boxes that
-        # don't correspond to redirected fields are nonsense (always NULL)!
-        # Don't store them back...
-        TYPE = self.TYPE
-        redirected_fielddescs = unrolling_iterable(self.redirected_fielddescs)
-
-        def populate_by_store_back(content_boxes, gv_s, box_gv_reader):
-            s = gv_s.revealconst(lltype.Ptr(TYPE))
-            for desc, i in redirected_fielddescs:
-                box = content_boxes[i]
-                gv_value = box_gv_reader(box)
-                FIELDTYPE = getattr(desc.PTRTYPE.TO, desc.fieldname)
-                v = gv_value.revealconst(FIELDTYPE)
-                tgt = lltype.cast_pointer(desc.PTRTYPE, s)
-                setattr(tgt, desc.fieldname, v)
-        self.populate_by_store_back = populate_by_store_back
 
     def _define_getset_field_ptr(self, RGenOp, fielddesc, j):
         untouched = self.my_redirected_getsetters_untouched
@@ -926,10 +906,36 @@ class VirtualStruct(VirtualContainer):
                 assert content.allowed_in_virtualizable
                 content.reshape(jitstate, shapemask, memo)
 
+    def store_back_gv_reshaped(self, shapemask, memo):
+        if self in memo.containers:
+            return
+        typedesc = self.typedesc
+        memo.containers[self] = None
+        bitmask = 1<<memo.bitcount
+        memo.bitcount += 1
+
+        boxes = self.content_boxes
+        outside_box = boxes[-1]
+        if bitmask&shapemask:
+            gv_forced = memo.box_gv_reader(outside_box)
+            memo.forced_containers_gv[self] = gv_forced
+            
+        for box in boxes:
+            if not box.genvar:
+                assert isinstance(box, rvalue.PtrRedBox)
+                content = box.content
+                assert content.allowed_in_virtualizable
+                content.store_back_gv_reshaped(shapemask, memo)
+
     def allocate_gv_container(self, rgenop):
-        return self.typedesc.allocate(rgenop)
+        typedesc = self.typedesc
+        # this should not be used for already-allocated virtualizables
+        assert (not isinstance(self, VirtualizableStruct)
+                or self.content_boxes[-1].genvar is typedesc.gv_null)
+        return typedesc.allocate(rgenop)
 
     def populate_gv_container(self, rgenop, gv_structptr, box_gv_reader):
+        # this should not be used for already-allocated virtualizables
         self.typedesc.populate(self.content_boxes, gv_structptr, box_gv_reader)
 
 class VirtualizableStruct(VirtualStruct):
@@ -1090,7 +1096,7 @@ class VirtualizableStruct(VirtualStruct):
         bitmask = 1 << memo.bitcount
         memo.bitcount += 1
         memo.bitcount += nvirtual
-        if shapemask&bitmask:
+        if shapemask&bitmask:   # touched by anything during the residual call?
             vmask = bitmask
             for fielddesc, i in typedesc.redirected_fielddescs:
                 box = boxes[i]
@@ -1099,6 +1105,87 @@ class VirtualizableStruct(VirtualStruct):
                     if not (shapemask&vmask):
                         continue
                 boxes[i] = fielddesc.generate_get(jitstate, gv_outside)
+
+    def store_back_gv(self, rgenop, box_gv_reader):
+        # store back the fields' value from the machine code stack into
+        # the heap-based virtualizable object
+        typedesc = self.typedesc
+        assert isinstance(typedesc, VirtualizableStructTypeDesc)
+        outsidebox = self.content_boxes[-1]
+        if outsidebox.genvar is typedesc.gv_null:
+            return None
+        gv_outside = box_gv_reader(outsidebox)
+        for fielddesc, i in typedesc.redirected_fielddescs:
+            box = self.content_boxes[i]
+            gv_value = box_gv_reader(box)
+            fielddesc.perform_setfield(rgenop, gv_outside, gv_value)
+        return gv_outside
+
+    def store_back_gv_reshaped(self, shapemask, memo):
+        # store back the fields' value from the machine code stack into
+        # the heap-based virtualizable objects.  Advanced case: this
+        # occurs just after a residual call, where 'self' is in a state
+        # that requires the equivalent of a reshape().  In other words
+        # we cannot just copy all fields from the stack to the heap
+        # because the heap virtualizable might already contain some
+        # values that were written there during the residual call.  We
+        # have to decode the shapemask to know what is where...
+        typedesc = self.typedesc
+        assert isinstance(typedesc, VirtualizableStructTypeDesc)
+        boxes = self.content_boxes
+        outsidebox = boxes[-1]
+        if outsidebox.genvar is typedesc.gv_null:
+            return
+        if self in memo.containers:
+            return
+        memo.containers[self] = None
+
+        gv_outside = memo.box_gv_reader(outsidebox)
+        memo.forced_containers_gv[self] = gv_outside
+
+        nvirtual = 0
+        for _, i in typedesc.redirected_fielddescs:
+            box = boxes[i]
+            if not box.genvar:
+                nvirtual += 1
+                assert isinstance(box, rvalue.PtrRedBox)
+                content = box.content
+                assert content.allowed_in_virtualizable
+                content.store_back_gv_reshaped(shapemask, memo)
+
+        bitmask = 1 << memo.bitcount
+        memo.bitcount += 1
+        memo.bitcount += nvirtual
+        touched = shapemask&bitmask
+        # if 'touched' is set, then the virtualizable on the heap contains
+        # the correct values for all fields except possibly the ones that
+        # point, or used to point, to virtual container
+        vmask = bitmask
+        for fielddesc, i in typedesc.redirected_fielddescs:
+            box = boxes[i]
+            if not box.genvar:
+                vmask = vmask<<1
+                if shapemask&vmask:
+                    # this field used to point to a virtual container, but
+                    # a new value was already stored in the virtualizable
+                    continue
+                else:
+                    # this field still points to a virtual container,
+                    # which needs to be materialized and stored back
+                    pass
+            else:
+                if touched:
+                    # this is a regular field that was already stored
+                    # in the virtualizable when it was first touched
+                    continue
+                else:
+                    # a regular field to store back
+                    pass
+            # the actual copying is done later, to avoid strange interactions
+            # between the current recursive visit and a call to box_gv_reader()
+            # on a virtual structure; indeed, both update the containers_gv
+            # dictionary of the fallback interpreter
+            memo.copyfields.append((gv_outside, fielddesc, box))
 
     def op_getfield(self, jitstate, fielddesc):
         typedesc = self.typedesc
@@ -1136,22 +1223,6 @@ class VirtualizableStruct(VirtualStruct):
             else:
                 return None   # fall-back
         return rvalue.ll_fromvalue(jitstate, answer ^ reverse)
-
-    def allocate_gv_container(self, rgenop):
-        typedesc = self.typedesc
-        gv_outside = self.content_boxes[-1].genvar
-        if gv_outside is typedesc.gv_null:
-            return typedesc.allocate(rgenop)
-        return gv_outside
-
-    def populate_gv_container(self, rgenop, gv_structptr, box_gv_reader):
-        typedesc = self.typedesc
-        boxes = self.content_boxes
-        gv_outside = boxes[-1].genvar
-        if gv_outside is typedesc.gv_null:
-            typedesc.populate(boxes, gv_structptr, box_gv_reader)
-        else:
-            typedesc.populate_by_store_back(boxes, gv_structptr, box_gv_reader)
 
 
 # patching VirtualStructCls
