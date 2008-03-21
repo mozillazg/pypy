@@ -215,7 +215,19 @@ class HotRunnerDesc:
 
         class ContinueRunningNormally(Exception):
             _go_through_llinterp_uncaught_ = True     # ugh
+            args_gv = []       # for tests where __init__ is not seen
+            seen_can_enter_jit = False
+
             def __init__(self, args_gv, seen_can_enter_jit):
+                self.args_gv = args_gv
+                self.seen_can_enter_jit = seen_can_enter_jit
+
+            def __str__(self):
+                return 'ContinueRunningNormally(%s)' % (
+                    ', '.join(map(str, self.args_gv)),)
+
+            def decode_args(self):
+                args_gv = self.args_gv
                 assert len(args_gv) == len(ARGS)
                 args = ()
                 i = 0
@@ -223,11 +235,7 @@ class HotRunnerDesc:
                     gv_arg = args_gv[i]
                     args += (gv_arg.revealconst(ARG), )
                     i += 1
-                self.args = args
-                self.seen_can_enter_jit = seen_can_enter_jit
-            def __str__(self):
-                return 'ContinueRunningNormally(%s)' % (
-                    ', '.join(map(str, self.args)),)
+                return args
 
         self.raise_done = raise_done
         RAISE_DONE_FUNC = lltype.FuncType([RES], lltype.Void)
@@ -247,7 +255,7 @@ class HotRunnerDesc:
                 except DoneWithThisFrame, e:
                     return e.result
                 except ContinueRunningNormally, e:
-                    args = e.args
+                    args = e.decode_args()
                     self.interpreter.debug_trace("fb_leave", *args)
                     check_for_immediate_reentry = e.seen_can_enter_jit
 
