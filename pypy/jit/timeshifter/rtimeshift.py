@@ -93,7 +93,7 @@ def ll_gen1(opdesc, jitstate, argbox):
                 gv_flag = opdesc.gv_True
             else:
                 gv_flag = opdesc.gv_False
-            jitstate.greens.append(gv_flag)
+            jitstate.gv_op_raised = gv_flag
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg = argbox.getgenvar(jitstate)
     if not opdesc.canraise:
@@ -101,7 +101,7 @@ def ll_gen1(opdesc, jitstate, argbox):
     else:
         genvar, gv_raised = jitstate.curbuilder.genraisingop1(opdesc.opname,
                                                               gv_arg)
-        jitstate.greens.append(gv_raised)    # for split_raisingop()
+        jitstate.gv_op_raised = gv_raised    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def ll_gen2(opdesc, jitstate, argbox0, argbox1):
@@ -123,7 +123,7 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
                 gv_flag = opdesc.gv_True
             else:
                 gv_flag = opdesc.gv_False
-            jitstate.greens.append(gv_flag)
+            jitstate.gv_op_raised = gv_flag
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg0 = argbox0.getgenvar(jitstate)
     gv_arg1 = argbox1.getgenvar(jitstate)
@@ -132,7 +132,7 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
     else:
         genvar, gv_raised = jitstate.curbuilder.genraisingop2(opdesc.opname,
                                                               gv_arg0, gv_arg1)
-        jitstate.greens.append(gv_raised)    # for split_raisingop()
+        jitstate.gv_op_raised = gv_raised    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def genmalloc_varsize(jitstate, contdesc, sizebox):
@@ -448,7 +448,8 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
     return True
 
 def split_raisingop(jitstate, resumepoint, ll_evalue, *greens_gv):
-    exitgvar = jitstate.greens.pop()   # pushed here by the raising op
+    exitgvar = jitstate.gv_op_raised   # pushed here by the raising op
+    jitstate.gv_op_raised = None
     if exitgvar.is_const:
         gotexc = exitgvar.revealconst(lltype.Bool)
     else:
@@ -1038,7 +1039,7 @@ class VirtualFrame(object):
 class JITState(object):
     _attrs_ = """curbuilder frame
                  exc_type_box exc_value_box
-                 greens
+                 gv_op_raised
                  returnbox
                  promotion_path
                  resumepoint resuming
@@ -1056,16 +1057,19 @@ class JITState(object):
     generated_oop_residual_can_raise = False
 
     def __init__(self, builder, frame, exc_type_box, exc_value_box, ts,
-                 resumepoint=-1, newgreens=[], virtualizables=None):
+                 resumepoint=-1, newgreens=None, virtualizables=None):
         self.curbuilder = builder
         self.frame = frame
         self.exc_type_box = exc_type_box
         self.exc_value_box = exc_value_box
         self.ts = ts
         self.resumepoint = resumepoint
+        if newgreens is None:
+            newgreens = []
         self.greens = newgreens
+        self.gv_op_raised = None
 
-        # XXX can not be adictionary
+        # XXX can not be a dictionary
         # it needs to be iterated in a deterministic order.
         if virtualizables is None:
             virtualizables = []
@@ -1221,6 +1225,7 @@ class JITState(object):
         result.fz_frame = self.frame.freeze(memo)
         result.fz_exc_type_box  = self.exc_type_box .freeze(memo)
         result.fz_exc_value_box = self.exc_value_box.freeze(memo)
+        assert self.gv_op_raised is None
         result.ts = self.ts
         fz_virtualizables = result.fz_virtualizables = []
         for virtualizable_box in self.virtualizables:
