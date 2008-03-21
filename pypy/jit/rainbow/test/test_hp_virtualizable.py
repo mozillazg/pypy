@@ -543,89 +543,107 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0, malloc=0)
 
     def test_simple_read(self):
-        py.test.skip("fails :-(")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'tot', 'e']
 
         def f(e):
-            xy = e.xy
-            xy_set_y(xy, xy_get_y(xy) + 3)
-            return xy_get_x(xy)*2
-
-        def main(x, y):
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = y
-            e = lltype.malloc(E)
-            e.xy = xy
             tot = 0
             i = 1024
             while i:
                 i >>= 1
-                v = f(e)
-                tot += v + e.xy.x+e.xy.y
+                xy = e.xy
+                xy_set_y(xy, xy_get_y(xy) + 3)
+                v = xy_get_x(xy)*2
+                tot += v
                 MyJitDriver.jit_merge_point(tot=tot, i=i, e=e)
                 MyJitDriver.can_enter_jit(tot=tot, i=i, e=e)
             return tot
 
-        res = self.run(main, [20, 22], 2)
-        assert res == main(20, 22)
-        self.check_insns_in_loops(getfield=9)
-
-    def test_simple_escape_through_vstruct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'x', 'y']
-   
-        def f(x, y):
+        def main(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
             e = lltype.malloc(E)
             e.xy = xy
-            y = xy_get_y(xy)
-            newy = 2*y
-            xy_set_y(xy, newy)
-            return e
+            v = f(e)
+            return v + e.xy.x+e.xy.y
 
-        def main(x, y):
-            tot = 0
+        res = self.run(main, [20, 22], 2)
+        assert res == main(20, 22)
+        self.check_insns_in_loops(getfield=3)
+
+    def test_simple_escape_through_vstruct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'e', 'x', 'y']
+
+        def f(x, y):
             i = 1024
             while i:
                 i >>= 1
-                e = f(x, y)
-                tot += e.xy.x+e.xy.y
-                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
-            return tot
+                #
+                xy = lltype.malloc(XY)
+                xy.vable_access = lltype.nullptr(XY_ACCESS)
+                xy.x = x
+                xy.y = y
+                e = lltype.malloc(E)
+                e.xy = xy
+                y = xy_get_y(xy)
+                newy = 2*y
+                xy_set_y(xy, newy)
+                #
+                MyJitDriver.jit_merge_point(e=e, i=i, x=x, y=y)
+                MyJitDriver.can_enter_jit(e=e, i=i, x=x, y=y)
+            return e
+
+        def main(x, y):
+            e = f(x, y)
+            return e.xy.x+e.xy.y
 
         res = self.run(main, [20, 11], 2)
-        assert res == 42 * 11
-        self.check_insns_in_loops(getfield=0)
+        assert res == 42
+        self.check_insns_in_loops(getfield=0, malloc=0)
+
+        res = self.run(main, [20, 11], threshold=1)
+        assert res == 42
+        self.check_insns_in_loops(getfield=0, malloc=0)
 
     def test_residual_doing_nothing(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['xy', 'i', 'res']
+
+        class Counter:
+            counter = 0
+        glob = Counter()
+
         def g(xy):
-            pass
+            glob.counter += 1
 
         def f(xy):
-            hint(None, global_merge_point=True)
-            g(xy)
-            return xy.x + 1
-            
+            i = 1024
+            while i > 0:
+                i >>= 1
+                g(xy)
+                res = xy.x + 1
+                MyJitDriver.jit_merge_point(xy=xy, res=res, i=i)
+                MyJitDriver.can_enter_jit(xy=xy, res=res, i=i)
+            return res
+
         def main(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
             v = f(xy)
-            return v
+            return v - glob.counter
 
-        res = self.timeshift_from_portal(main, f, [2, 20],
-                                         policy=StopAtXPolicy(g))
-        assert res == 3
+        res = self.run(main, [2, 20], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == 3 - 11
+        self.check_insns_in_loops(direct_call=1)
 
     def test_late_residual_red_call(self):
         def g(e):
