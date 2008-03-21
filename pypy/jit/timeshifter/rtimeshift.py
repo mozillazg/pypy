@@ -448,8 +448,7 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
     return True
 
 def split_raisingop(jitstate, resumepoint, ll_evalue, *greens_gv):
-    exitgvar = jitstate.gv_op_raised   # pushed here by the raising op
-    jitstate.gv_op_raised = None
+    exitgvar = jitstate.get_gv_op_raised()
     if exitgvar.is_const:
         gotexc = exitgvar.revealconst(lltype.Bool)
     else:
@@ -1281,6 +1280,11 @@ class JITState(object):
             f.dispatchqueue.resuming = None
             f = f.backframe
 
+    def get_gv_op_raised(self):
+        result = self.gv_op_raised
+        self.gv_op_raised = None
+        return result
+
 
 def start_writing(jitstate=None, prevopen=None):
     if jitstate is not prevopen:
@@ -1365,6 +1369,7 @@ def leave_graph_red(dispatchqueue, is_portal):
         myframe = jitstate.frame
         leave_frame(jitstate)
         jitstate.greens = []
+        assert len(myframe.local_boxes) == 1
         jitstate.returnbox = myframe.local_boxes[0]
         jitstate = jitstate.next
     return return_chain

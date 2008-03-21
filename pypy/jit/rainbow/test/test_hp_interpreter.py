@@ -1777,6 +1777,34 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == -40
         self.check_insns_in_loops(int_add_ovf=1)
 
+    def test_red_int_add_ovf_consts(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'm', 'i', 'result']
+            def on_enter_jit(self):
+                self.n = hint(hint(self.n, promote=True), variable=True)
+                self.m = hint(hint(self.m, promote=True), variable=True)
+        def f(n, m):
+            i = 1024
+            result = 0
+            while i > 0:
+                i >>= 1
+                try:
+                    result += ovfcheck(n + m)
+                except OverflowError:
+                    result += -42 + m
+                MyJitDriver.jit_merge_point(n=n, m=m, i=i, result=result)
+                MyJitDriver.can_enter_jit(n=n, m=m, i=i, result=result)
+            return result
+
+        res = self.run(f, [100, 20], threshold=2)
+        assert res == 120 * 11
+        self.check_insns_in_loops(int_add_ovf=0)
+
+        res = self.run(f, [sys.maxint, 1], threshold=2)
+        assert res == -41 * 11
+        self.check_insns_in_loops(int_add_ovf=0)
+
     def test_green_int_add_ovf(self):
         py.test.skip("not working yet")
         def f(n, m):
