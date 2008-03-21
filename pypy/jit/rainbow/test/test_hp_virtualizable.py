@@ -1551,6 +1551,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             r, v1 = f(x, v)
             assert v1 is v
             assert type(v) is V
+            assert v.v == 0
             return r
 
         assert main(20, 3) == 40
