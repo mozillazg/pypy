@@ -128,11 +128,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             greens = []
             reds = ['i', 'tot', 'xy']
 
-        def main(x, y):
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = y
+        def f(xy):
             tot = 0
             i = 1024
             while i:
@@ -143,6 +139,13 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
                 MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
             return tot
+
+        def main(x, y):
+            xy = lltype.malloc(XY)
+            xy.vable_access = lltype.nullptr(XY_ACCESS)
+            xy.x = x
+            xy.y = y
+            return f(xy)
 
         res = self.run(main, [20, 22], 2, policy=P_OOPSPEC)
         assert res == 42 * 11
@@ -161,12 +164,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             greens = []
             reds = ['i', 'tot', 'xy']
    
-
-        def main(x, y):
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = y
+        def f(xy):
             tot = 0
             i = 1024
             while i:
@@ -178,6 +176,13 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
                 MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
             return tot
+
+        def main(x, y):
+            xy = lltype.malloc(XY)
+            xy.vable_access = lltype.nullptr(XY_ACCESS)
+            xy.x = x
+            xy.y = y
+            return f(xy)
 
         res = self.run(main, [20, 22], 2, policy=P_OOPSPEC)
         assert res == 21 * 11
@@ -195,28 +200,29 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             reds = ['i', 'tot', 'xy']
 
         def f(xy):
-           x = xy_get_x(xy)
-           xy_set_y(xy, 3)
-           y = xy_get_y(xy)
-           return x+y
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                x = xy_get_x(xy)
+                xy_set_y(xy, i)
+                y = xy_get_y(xy)
+                v = x + y
+                tot += v
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+            return tot
 
         def main(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
-            tot = 0
-            i = 1024
-            while i:
-                i >>= 1
-                v = f(xy)
-                tot += v + xy.y
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
-            return tot
+            v = f(xy)
+            return v + xy.y
 
         res = self.run(main, [20, 22], 2)
-        assert res == 26 * 11
+        assert res == main(20, 22)
         self.check_insns_in_loops(getfield=0)
         if self.on_llgraph:
             residual_graph = self.get_residual_graph()
@@ -229,11 +235,16 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'xy', 'e']
-   
+
         def f(e, xy):
-            xy_set_y(xy, xy_get_y(xy) + 3)
-            e.xy = xy
-            return 0
+            i = 1024
+            while i:
+                i >>= 1
+                xy_set_y(xy, xy_get_y(xy) + 3)
+                e.xy = xy
+                MyJitDriver.jit_merge_point(i=i, xy=xy, e=e)
+                MyJitDriver.can_enter_jit(i=i, xy=xy, e=e)
+            return e.xy.y
 
         def main(x, y):
             xy = lltype.malloc(XY)
@@ -241,13 +252,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xy.x = x
             xy.y = y
             e = lltype.malloc(E)
-            i = 1024
-            while i:
-                i >>= 1
-                f(e, xy)
-                MyJitDriver.jit_merge_point(i=i, xy=xy, e=e)
-                MyJitDriver.can_enter_jit(i=i, xy=xy, e=e)
-            return e.xy.y
+            f(e, xy)
+            return e.xy.x+e.xy.y
 
         res = self.run(main, [20, 22], 2)
         assert res == main(20, 22)
