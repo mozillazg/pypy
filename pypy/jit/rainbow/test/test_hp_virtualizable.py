@@ -1126,7 +1126,6 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0)
 
     def test_simple__class__(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['v', 'i', 'res']
@@ -1164,14 +1163,21 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             else:
                 c = f(v)
             V2()
-            return c is not None
+            return (c is not None) * 2 + (c is V1)
 
         res = self.run(main, [0, 1], threshold=2)
-        assert not res
+        assert res == 0
+        self.check_nothing_compiled_at_all()
         res = self.run(main, [1, 0], threshold=2)
-        assert res
+        assert res == 3
+        self.check_insns_in_loops({'getfield': 1,
+                                   'int_gt': 1, 'int_rshift': 1})
         res = self.run(main, [1, 0], threshold=1)
-        assert res
+        assert res == 3
+        res = self.run(main, [0, 0], threshold=2)
+        assert res == 2
+        res = self.run(main, [0, 0], threshold=1)
+        assert res == 2
 
     def test_simple_inheritance(self):
         class MyJitDriver(JitDriver):
@@ -1805,7 +1811,6 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert res == 222
 
     def test_type_bug(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['x', 'v', 'i', 'res']

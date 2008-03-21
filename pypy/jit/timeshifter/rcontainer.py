@@ -157,16 +157,13 @@ class StructTypeDesc(object):
 
         def populate(content_boxes, gv_s, box_gv_reader):
             s = gv_s.revealconst(lltype.Ptr(TYPE))
-            i = 0
             for desc in descs:
-                box = content_boxes[i]
-                if box is not None:
-                    gv_value = box_gv_reader(box)
-                    FIELDTYPE = getattr(desc.PTRTYPE.TO, desc.fieldname)
-                    v = gv_value.revealconst(FIELDTYPE)
-                    tgt = lltype.cast_pointer(desc.PTRTYPE, s)
-                    setattr(tgt, desc.fieldname, v)
-                i += 1
+                box = content_boxes[desc.fieldindex]
+                gv_value = box_gv_reader(box)
+                FIELDTYPE = getattr(desc.PTRTYPE.TO, desc.fieldname)
+                v = gv_value.revealconst(FIELDTYPE)
+                tgt = lltype.cast_pointer(desc.PTRTYPE, s)
+                setattr(tgt, desc.fieldname, v)
         self.populate = populate
 
     def _define_devirtualize(self):
@@ -294,9 +291,28 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 
         self._define_access_is_null(RGenOp)
 
+        self._define_populate_by_store_back()
 
     def _define_virtual_desc(self):
         pass
+
+    def _define_populate_by_store_back(self):
+        # On a non-virtual virtualizable structure, the boxes that
+        # don't correspond to redirected fields are nonsense (always NULL)!
+        # Don't store them back...
+        TYPE = self.TYPE
+        redirected_fielddescs = unrolling_iterable(self.redirected_fielddescs)
+
+        def populate_by_store_back(content_boxes, gv_s, box_gv_reader):
+            s = gv_s.revealconst(lltype.Ptr(TYPE))
+            for desc, i in redirected_fielddescs:
+                box = content_boxes[i]
+                gv_value = box_gv_reader(box)
+                FIELDTYPE = getattr(desc.PTRTYPE.TO, desc.fieldname)
+                v = gv_value.revealconst(FIELDTYPE)
+                tgt = lltype.cast_pointer(desc.PTRTYPE, s)
+                setattr(tgt, desc.fieldname, v)
+        self.populate_by_store_back = populate_by_store_back
 
     def _define_getset_field_ptr(self, RGenOp, fielddesc, j):
         untouched = self.my_redirected_getsetters_untouched
@@ -1127,6 +1143,15 @@ class VirtualizableStruct(VirtualStruct):
         if gv_outside is typedesc.gv_null:
             return typedesc.allocate(rgenop)
         return gv_outside
+
+    def populate_gv_container(self, rgenop, gv_structptr, box_gv_reader):
+        typedesc = self.typedesc
+        boxes = self.content_boxes
+        gv_outside = boxes[-1].genvar
+        if gv_outside is typedesc.gv_null:
+            typedesc.populate(boxes, gv_structptr, box_gv_reader)
+        else:
+            typedesc.populate_by_store_back(boxes, gv_structptr, box_gv_reader)
 
 
 # patching VirtualStructCls
