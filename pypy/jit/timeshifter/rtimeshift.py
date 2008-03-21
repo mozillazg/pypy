@@ -83,25 +83,31 @@ def ll_gen1(opdesc, jitstate, argbox):
     opname = opdesc.opname
     if opdesc.tryfold and argbox.is_constant():
         arg = rvalue.ll_getvalue(argbox, ARG0)
-        if not opdesc.canraise:
-            res = opdesc.llop(RESULT, arg)
-        else:
-            try:
-                res = opdesc.llop(RESULT, arg)
-            except Exception:   # shouldn't raise anything unexpected
-                res = opdesc.whatever_result
-                gv_flag = opdesc.gv_True
-            else:
-                gv_flag = opdesc.gv_False
-            jitstate.gv_op_raised = gv_flag
+        res = opdesc.llop(RESULT, arg)
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg = argbox.getgenvar(jitstate)
-    if not opdesc.canraise:
-        genvar = jitstate.curbuilder.genop1(opdesc.opname, gv_arg)
-    else:
-        genvar, gv_raised = jitstate.curbuilder.genraisingop1(opdesc.opname,
-                                                              gv_arg)
-        jitstate.gv_op_raised = gv_raised    # for split_raisingop()
+    genvar = jitstate.curbuilder.genop1(opdesc.opname, gv_arg)
+    return opdesc.redboxcls(opdesc.result_kind, genvar)
+
+def ll_gen1_canraise(opdesc, jitstate, argbox):
+    ARG0 = opdesc.ARG0
+    RESULT = opdesc.RESULT
+    opname = opdesc.opname
+    if opdesc.tryfold and argbox.is_constant():
+        arg = rvalue.ll_getvalue(argbox, ARG0)
+        try:
+            res = opdesc.llop(RESULT, arg)
+        except Exception:   # shouldn't raise anything unexpected
+            res = opdesc.whatever_result
+            gv_flag = opdesc.gv_True
+        else:
+            gv_flag = opdesc.gv_False
+        jitstate.gv_op_raised = gv_flag
+        return rvalue.ll_fromvalue(jitstate, res)
+    gv_arg = argbox.getgenvar(jitstate)
+    genvar, gv_raised = jitstate.curbuilder.genraisingop1(opdesc.opname,
+                                                          gv_arg)
+    jitstate.gv_op_raised = gv_raised    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def ll_gen2(opdesc, jitstate, argbox0, argbox1):
@@ -113,26 +119,35 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
         # const propagate
         arg0 = rvalue.ll_getvalue(argbox0, ARG0)
         arg1 = rvalue.ll_getvalue(argbox1, ARG1)
-        if not opdesc.canraise:
+        return rvalue.ll_fromvalue(jitstate, opdesc.llop(RESULT, arg0, arg1))
+    gv_arg0 = argbox0.getgenvar(jitstate)
+    gv_arg1 = argbox1.getgenvar(jitstate)
+    genvar = jitstate.curbuilder.genop2(opdesc.opname, gv_arg0, gv_arg1)
+    return opdesc.redboxcls(opdesc.result_kind, genvar)
+
+def ll_gen2_canraise(opdesc, jitstate, argbox0, argbox1):
+    ARG0 = opdesc.ARG0
+    ARG1 = opdesc.ARG1
+    RESULT = opdesc.RESULT
+    opname = opdesc.opname
+    if opdesc.tryfold and argbox0.is_constant() and argbox1.is_constant():
+        # const propagate
+        arg0 = rvalue.ll_getvalue(argbox0, ARG0)
+        arg1 = rvalue.ll_getvalue(argbox1, ARG1)
+        try:
             res = opdesc.llop(RESULT, arg0, arg1)
+        except Exception:   # shouldn't raise anything unexpected
+            res = opdesc.whatever_result
+            gv_flag = opdesc.gv_True
         else:
-            try:
-                res = opdesc.llop(RESULT, arg0, arg1)
-            except Exception:   # shouldn't raise anything unexpected
-                res = opdesc.whatever_result
-                gv_flag = opdesc.gv_True
-            else:
-                gv_flag = opdesc.gv_False
-            jitstate.gv_op_raised = gv_flag
+            gv_flag = opdesc.gv_False
+        jitstate.gv_op_raised = gv_flag
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg0 = argbox0.getgenvar(jitstate)
     gv_arg1 = argbox1.getgenvar(jitstate)
-    if not opdesc.canraise:
-        genvar = jitstate.curbuilder.genop2(opdesc.opname, gv_arg0, gv_arg1)
-    else:
-        genvar, gv_raised = jitstate.curbuilder.genraisingop2(opdesc.opname,
-                                                              gv_arg0, gv_arg1)
-        jitstate.gv_op_raised = gv_raised    # for split_raisingop()
+    genvar, gv_raised = jitstate.curbuilder.genraisingop2(opdesc.opname,
+                                                          gv_arg0, gv_arg1)
+    jitstate.gv_op_raised = gv_raised    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def genmalloc_varsize(jitstate, contdesc, sizebox):
