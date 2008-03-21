@@ -1520,6 +1520,11 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert res == 222
 
     def test_type_bug(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'v', 'i', 'res']
+
         class V(object):
             _virtualizable_ = True
 
@@ -1527,18 +1532,29 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 self.v = v
 
         def f(x, v):
-            if x:
-                v.v = 0
-            else:
-                pass
-            return x*2, v
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                if x:
+                    v.v = 0
+                else:
+                    pass
+                res = x*2, v
+                #
+                MyJitDriver.jit_merge_point(x=x, v=v, res=res, i=i)
+                MyJitDriver.can_enter_jit(x=x, v=v, res=res, i=i)
+            return res
 
         def main(x,y):
             v = V(y)
-            r, _ = f(x, v)
+            r, v1 = f(x, v)
+            assert v1 is v
+            assert type(v) is V
             return r
 
-        res = self.timeshift_from_portal(main, f, [20, 3], policy=P_OOPSPEC)
+        assert main(20, 3) == 40
+        res = self.run(main, [20, 3], threshold=2)
         assert res == 40
 
     def test_indirect_residual_call(self):
