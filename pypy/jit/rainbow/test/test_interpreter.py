@@ -1621,9 +1621,9 @@ class SimpleTests(InterpretationTest):
         res = self.interpret(f, [100, 20])
         assert res == 121
         self.check_insns(int_add_ovf=1)
-        #res = self.interpret(f, [100, 20], [0, 1])
-        #assert res == 121
-        #self.check_insns()
+        res = self.interpret(f, [100, 20], [0, 1])
+        assert res == 121
+        self.check_insns()
 
         res = self.interpret(f, [sys.maxint, 1])
         assert res == -41
