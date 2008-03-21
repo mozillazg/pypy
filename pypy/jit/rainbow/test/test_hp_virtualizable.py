@@ -646,24 +646,34 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(direct_call=1)
 
     def test_late_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'z', 'i', 'res']
+
         def g(e):
             xy = e.xy
             y = xy_get_y(xy)
             e.w = y
 
         def f(e, z):
-            hint(None, global_merge_point=True)
-            xy = e.xy
-            y = xy_get_y(xy)
-            newy = 2*y
-            xy_set_y(xy, newy)
-            if y:
-                dummy = z*2
-            else:
-                dummy = z*3
-            g(e)
-            return dummy
-            
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xy = e.xy
+                y = xy_get_y(xy)
+                newy = 2*y
+                xy_set_y(xy, newy)
+                if y:
+                    res = z*2
+                else:
+                    res = z*3
+                g(e)
+                #
+                MyJitDriver.jit_merge_point(e=e, z=z, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, z=z, res=res, i=i)
+            return res
+
         def main(x, y, z):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
@@ -674,25 +684,40 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             f(e, z)
             return e.w
 
-        res = self.timeshift_from_portal(main, f, [0, 21, 11],
-                                         policy=StopAtXPolicy(g))
-        assert res == 42
+        res = self.run(main, [0, 21, 11], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(0, 21, 11)
+
+        res = self.run(main, [0, 21, 11], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(0, 21, 11)
 
     def test_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'i', 'res']
+
         def g(e):
             xy = e.xy
             y = xy_get_y(xy)
             e.w = y        
 
         def f(e):
-            hint(None, global_merge_point=True)
-            xy = e.xy
-            y = xy_get_y(xy)
-            newy = 2*y
-            xy_set_y(xy, newy)
-            g(e)
-            return xy.x
-            
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xy = e.xy
+                y = xy_get_y(xy)
+                newy = 2*y
+                xy_set_y(xy, newy)
+                g(e)
+                res = xy.x
+                #
+                MyJitDriver.jit_merge_point(e=e, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, res=res, i=i)
+            return res
+
         def main(x, y):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
@@ -703,11 +728,18 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             v = f(e)
             return v+e.w
 
-        res = self.timeshift_from_portal(main, f, [2, 20],
-                                         policy=StopAtXPolicy(g))
-        assert res == 42
+        res = self.run(main, [2, 20], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20)
+
+        res = self.run(main, [2, 20], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20)
 
     def test_force_in_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'a', 'b', 'i', 'res']
 
         def g(e):
             xp = e.xp
@@ -717,19 +749,26 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             e.w = p.a + p.b + x
 
         def f(e, a, b):
-            hint(None, global_merge_point=True)
-            xp = e.xp
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xp = e.xp
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b
 
-            xp_set_p(xp, s)
+                xp_set_p(xp, s)
 
-            x = xp_get_x(xp)
-            newx = 2*x
-            xp_set_x(xp, newx)
-            g(e)            
-            return xp.x
+                x = xp_get_x(xp)
+                newx = 2*x
+                xp_set_x(xp, newx)
+                g(e)            
+                res = xp.x
+                #
+                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+            return res
             
         def main(a, b, x):
             xp = lltype.malloc(XP)
@@ -741,11 +780,19 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             f(e, a, b)
             return e.w
 
-        res = self.timeshift_from_portal(main, f, [2, 20, 10],
-                                         policy=StopAtXPolicy(g))
-        assert res == 42
+        res = self.run(main, [2, 20, 10], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
+
+        res = self.run(main, [2, 20, 10], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
 
     def test_force_multiple_reads_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'a', 'b', 'i', 'res']
+
         def g(e):
             xp = e.xp
             p1 = xp_get_p(xp)
@@ -753,19 +800,26 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             e.w = int(p1 == p2)
 
         def f(e, a, b):
-            hint(None, global_merge_point=True)
-            xp = e.xp
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b            
-            xp_set_p(xp, s)
-            
-            x = xp_get_x(xp)
-            newx = 2*x
-            xp_set_x(xp, newx)
-            g(e)            
-            return xp.x
-            
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xp = e.xp
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b            
+                xp_set_p(xp, s)
+
+                x = xp_get_x(xp)
+                newx = 2*x
+                xp_set_x(xp, newx)
+                g(e)            
+                res = xp.x
+                #
+                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+            return res
+
         def main(a, b, x):
             xp = lltype.malloc(XP)
             xp.vable_access = lltype.nullptr(XP_ACCESS)
@@ -776,12 +830,18 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             f(e, a, b)
             return e.w
 
-        res = self.timeshift_from_portal(main, f, [2, 20, 10],
-                                         policy=StopAtXPolicy(g))
-        assert res == 1
+        res = self.run(main, [2, 20, 10], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
 
+        res = self.run(main, [2, 20, 10], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
 
     def test_force_unaliased_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'a', 'b', 'i', 'res']
 
         def g(e):
             pq = e.pq
@@ -790,20 +850,26 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             e.w = int(p != q)
 
         def f(e, a, b):
-            hint(None, global_merge_point=True)
-            pq = e.pq
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b
-            pq_set_p(pq, s)
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b            
-            pq_set_q(pq, s)
-            g(e)            
-            return pq.p.a
-            
-        
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                pq = e.pq
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b
+                pq_set_p(pq, s)
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b            
+                pq_set_q(pq, s)
+                g(e)            
+                res = pq.p.a
+                #
+                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+            return res
+
         def main(a, b, x):
             pq = lltype.malloc(PQ)
             pq.vable_access = lltype.nullptr(PQ_ACCESS)
@@ -814,11 +880,18 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             f(e, a, b)
             return e.w
 
-        res = self.timeshift_from_portal(main, f, [2, 20, 10],
-                                         policy=StopAtXPolicy(g))
-        assert res == 1
+        res = self.run(main, [2, 20, 10], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
+
+        res = self.run(main, [2, 20, 10], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
 
     def test_force_aliased_residual_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'a', 'b', 'i', 'res']
 
         def g(e):
             pq = e.pq
@@ -827,16 +900,23 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             e.w = int(p == q)
 
         def f(e, a, b):
-            hint(None, global_merge_point=True)            
-            pq = e.pq
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b
-            pq_set_p(pq, s)
-            pq_set_q(pq, s)
-            g(e)            
-            return pq.p.a
-                    
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                pq = e.pq
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b
+                pq_set_p(pq, s)
+                pq_set_q(pq, s)
+                g(e)            
+                res = pq.p.a
+                #
+                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+            return res
+
         def main(a, b, x):
             pq = lltype.malloc(PQ)
             pq.vable_access = lltype.nullptr(PQ_ACCESS)
@@ -847,11 +927,19 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             f(e, a, b)
             return e.w
 
-        res = self.timeshift_from_portal(main, f, [2, 20, 10],
-                                         policy=StopAtXPolicy(g))
-        assert res == 1
+        res = self.run(main, [2, 20, 10], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
+
+        res = self.run(main, [2, 20, 10], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
 
     def test_force_in_residual_red_call_with_more_use(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['e', 'a', 'b', 'i', 'res']
+
         def g(e):
             xp = e.xp
             p = xp_get_p(xp)
@@ -860,21 +948,28 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             p.b, p.a = p.a, p.b
 
         def f(e, a, b):
-            hint(None, global_merge_point=True)
-            xp = e.xp
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b
-            xp_set_p(xp, s)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xp = e.xp
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b
+                xp_set_p(xp, s)
 
-            x = xp_get_x(xp)
-            newx = 2*x
-            xp_set_x(xp, newx)
-            g(e)
-            s.a = s.a*7
-            s.b = s.b*5
-            return xp.x
-            
+                x = xp_get_x(xp)
+                newx = 2*x
+                xp_set_x(xp, newx)
+                g(e)
+                s.a = s.a*7
+                s.b = s.b*5
+                res = xp.x
+                #
+                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+            return res
+
         def main(a, b, x):
             xp = lltype.malloc(XP)
             xp.vable_access = lltype.nullptr(XP_ACCESS)
@@ -885,36 +980,56 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             f(e, a, b)
             return e.w + xp.p.a + xp.p.b
 
-        res = self.timeshift_from_portal(main, f, [2, 20, 10],
-                                         policy=StopAtXPolicy(g))
-        assert res == 42 + 140 + 10
+        res = self.run(main, [2, 20, 10], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
+
+        res = self.run(main, [2, 20, 10], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(2, 20, 10)
 
     def test_virtualizable_escaped_as_argument_to_red_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'y', 'i', 'res']
+
         def g(xy):
             x = xy_get_x(xy)
             y = xy_get_y(xy)
             return y*2 + x
 
         def f(x, y):
-            hint(None, global_merge_point=True)
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = y
-            r = g(xy)
-            x = xy_get_x(xy)
-            y = xy_get_y(xy)
-            return r
-        
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xy = lltype.malloc(XY)
+                xy.vable_access = lltype.nullptr(XY_ACCESS)
+                xy.x = x
+                xy.y = y
+                res = g(xy)
+                x = xy_get_x(xy)
+                y = xy_get_y(xy)
+                #
+                MyJitDriver.jit_merge_point(x=x, y=y, res=res, i=i)
+                MyJitDriver.can_enter_jit(x=x, y=y, res=res, i=i)
+            return res
+
         def main(x, y):
             return f(x,y)
         
-        res = self.timeshift_from_portal(main, f, [20, 11],
-                                         policy=StopAtXPolicy(g))
+        res = self.run(main, [20, 11], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(20, 11)
 
-        assert res == 42
+        res = self.run(main, [20, 11], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(20, 11)
 
     def test_setting_in_residual_call(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'i', 'res']
 
         def g(xy):
             x = xy_get_x(xy)
@@ -923,25 +1038,34 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             xy_set_y(xy, x)
 
         def f(x):
-            hint(None, global_merge_point=True)
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = 11
-            g(xy)
-            x = xy_get_x(xy)
-            y = xy_get_y(xy)
-            return x*2 + y
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xy = lltype.malloc(XY)
+                xy.vable_access = lltype.nullptr(XY_ACCESS)
+                xy.x = x
+                xy.y = 11
+                g(xy)
+                x = xy_get_x(xy)
+                y = xy_get_y(xy)
+                res = x*2 + y
+                #
+                MyJitDriver.jit_merge_point(x=x, res=res, i=i)
+                MyJitDriver.can_enter_jit(x=x, res=res, i=i)
+            return res
 
-        
         def main(x):
             return f(x)
         
-        res = self.timeshift_from_portal(main, f, [20],
-                                         policy=StopAtXPolicy(g))
+        res = self.run(main, [20], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == main(20)
 
-        assert res == 42
-        
+        res = self.run(main, [20], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == main(20)
+
 class TestVirtualizableImplicit(test_hotpath.HotPathTest):
     type_system = "lltype"
 
