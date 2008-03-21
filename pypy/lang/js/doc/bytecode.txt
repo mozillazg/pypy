@@ -1,0 +1,83 @@
+Bytecode specification for the pypy javascript interpreter.
+
+We implement stack-based machine. We'll likely extend the bytecode for
+performance.
+
+LOAD_INTCONSTANT <constant>
+LOAD_FLOATCONSTANT <constant>
+LOAD_STRINGCONSTANT <constant>
+...
+
+LOAD_VARIABLE <identifier>
+
+simple identifier dereferencing
+
+LOAD_UNDEFINED, LOAD_NULL
+
+STORE <identifier>
+
+stores the last value on stack into identifierx
+
+STORE_MEMBER
+
+take from stack: right side, element and where to store and store
+where[element] = right. XXX can be optimized further for direct member
+assignement
+
+LOAD_ARRAY <num>
+
+create array out of num elements on the stack
+
+object creation:
+
+LOAD_OBJECT <num>
+
+Takes one element per one parameter from the stack and initializes
+object this way.
+
+POP
+
+pops one element from the stack.
+
+LOAD_FUNCTION <code object>
+
+loads function object (declared earlier) to a stack. used for
+function expressions.
+
+LOAD_MEMBER <name>
+
+Load a member name from the last element on a stack.
+
+LOAD_ELEMENT
+
+Take element and left side from the stack and load element
+from the left side onto the stack
+
+Arithmetic binary operations:
+(all pops two values and pushes on stack the result)
+
+ADD, SUB, MUL, DIV, MOD
+BITXOR, BITOR, BITAND
+EQ, NE, IS, ISNOT, GT, GE, LT, LE,
+RSHIT, URSHIFT, LSHIFT
+
+Unary arithmetic operations:
+(pops one value and pushes result to the stack)
+
+BITNOT,
+NOT, UPLUS, UMINUS
+
+PREDECR, POSTDECR, PREINCR, POSTINCR
+decrement and increment (++, --) prefix and postfix
+
+control flow:
+
+JUMP, LABEL, JUMP_IF_TRUE, JUMP_IF_FALSE
+
+function control flow:
+
+DECLARE_FUNCTION <code object>
+
+scope control opcodes:
+
+DECLARE_VAR <name>
