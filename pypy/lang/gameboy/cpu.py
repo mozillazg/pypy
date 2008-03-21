@@ -255,6 +255,9 @@ class CPU(object):
             data = self.memory.read(self.pc.get())
         self.pc.inc() # 2 cycles
         return data
+        
+    def fetchDoubleRegister(self, register):
+        self.popDoubleRegister(CPU.fetch, register)
 
      # Stack, 2 cycles
     def push(self, data):
@@ -274,11 +277,12 @@ class CPU(object):
         return data
     
      # 3 cycles
-    def popDoubleRegister(self, register, getter):
-        b = getter() # 1 cycle
-        a = getter() # 1 cycle
+    def popDoubleRegister(self, getter, register):
+        b = getter(self) # 1 cycle
+        a = getter(self) # 1 cycle
         register.set(a, b) # 2 cycles
         self.cycles += 1
+        
         
     # 4 cycles
     def call(self, address):
@@ -290,6 +294,10 @@ class CPU(object):
      # 1 cycle
     def ld(self, getter, setter):
         setter(getter()) # 1 cycle
+        
+    def fetchLoad(self, register):
+        self.ld(self.fetch, register.set)
+
 
      # ALU, 1 cycle
     def addA(self, data):
@@ -303,14 +311,15 @@ class CPU(object):
         
     # 2 cycles
     def addHL(self, register):
-        s = (self.hl.get() + register.get()) & 0xFFFF
+        self.hl.set(self.hl.get() + register.get()); # 1 cycle
+        s = self.hl.get()
         self.f.set((self.f.get() & constants.Z_FLAG), False)
         if ((s >> 8) & 0x0F) < (self.hl.getHi() & 0x0F):
             self.f.add(constants.H_FLAG, False)
         if  s < self.hl.get():
             self.f.add(constants.C_FLAG, False)
         self.cycles -= 1
-        self.hl.set(s); # 1 cycle
+        
 
     # 1 cycle
     def adc(self, getter):
@@ -685,10 +694,10 @@ class CPU(object):
             self.pc.add(2) # 3 cycles
     
     def isNZ(self):
-        return (self.f.get() & constants.Z_FLAG) == 0
+        return not self.isZ()
 
     def isNC(self):
-        return (self.f.get() & constants.C_FLAG) == 0
+        return not self.isC()
 
     def isZ(self):
         return (self.f.get() & constants.Z_FLAG) != 0
@@ -783,14 +792,12 @@ def create_group_op_codes(table):
 
 def group_lambda(function, register, value=None):
     if value == None:
-        lambda s: function(s, register.get, register.set)
+        return lambda s: function(s, register.get, register.set)
     else:
-        lambda s: function(s, register.get, register.set, value)
+        return  lambda s: function(s, register.get, register.set, value)
         
 
-
 def create_register_op_codes(table):
-    print ""
     opCodes = []
     for entry in table:
         opCode = entry[0]
@@ -805,10 +812,11 @@ def create_register_op_codes(table):
     return opCodes
 
 def register_lambda(function, registerOrGetter):
-    if registerOrGetter is object:
-        return lambda s: function(s, registerOrGetter)
-    else:
+    if callable(registerOrGetter):
         return lambda s: function(s, registerOrGetter(s))
+    else:
+        return lambda s: function(s, registerOrGetter)
+        
 
 def initialize_op_code_table(table):
     print ""
@@ -821,15 +829,7 @@ def initialize_op_code_table(table):
         else:
             positions = range(entry[0], entry[1]+1)
         for pos in positions:
-            #try:
-            #    print "D1", hex(pos), entry[-1].func_closure[0].cell_contents.func_name
-            #except:
-            #    pass
-            #else:
-            #    print "D2", hex(pos), entry[-1]
-            #print ""
             result[pos] = entry[-1]
-    #assert result[pos] is None
     return result
 
 # OPCODE TABLES ---------------------------------------------------------------
@@ -902,15 +902,13 @@ REGISTER_GROUP_OP_CODES = [
     (0xA8, 0x01, CPU.XOR),    
     (0xB0, 0x01, CPU.OR),
     (0xB8, 0x01, CPU.cpA),
-    (0x06, 0x08, lambda s, register:CPU.ld(s, CPU.fetch(s), register.set)),
+    (0x06, 0x08, CPU.fetchLoad),
     (0x40, 0x01, CPU.res, range(0, 8))
 ]    
         
 
 REGISTER_OP_CODES = [ 
-    (0x01, 0x10, lambda s, register: CPU.popDoubleRegister(s, register=register,\
-                                                            getter=CPU.fetch),\
-                [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
+    (0x01, 0x10, CPU.fetchDoubleRegister, [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     (0x09, 0x10, CPU.addHL,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     (0x03, 0x10, CPU.incDoubleRegister,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
     (0x0B, 0x10, CPU.decDoubleRegister,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
@@ -939,9 +937,9 @@ SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
 # RAW OPCODE TABLE INITIALIZATION ----------------------------------------------
 
 FIRST_ORDER_OP_CODES += create_register_op_codes(REGISTER_OP_CODES)
-#FIRST_ORDER_OP_CODES += create_group_op_codes(REGISTER_GROUP_OP_CODES)
+FIRST_ORDER_OP_CODES += create_group_op_codes(REGISTER_GROUP_OP_CODES)
 SECOND_ORDER_OP_CODES = create_group_op_codes(SECOND_ORDER_REGISTER_GROUP_OP_CODES)
 
 
 OP_CODES = initialize_op_code_table(FIRST_ORDER_OP_CODES)
-FETCH_EXECUTE_OP_CODES = []#initialize_op_code_table(SECOND_ORDER_OP_CODES)
+FETCH_EXECUTE_OP_CODES = initialize_op_code_table(SECOND_ORDER_OP_CODES)

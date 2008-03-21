@@ -174,6 +174,33 @@ def test_jr_cc_nn():
     assert cpu.pc.get() == pc+1
     
     
+def test_flags():
+    cpu = get_cpu()
+    cpu.f.set(constants.Z_FLAG)
+    assert cpu.isZ() == True
+    assert cpu.isNZ() == False
+    cpu.f.set(~constants.Z_FLAG)
+    assert cpu.isZ() == False
+    assert cpu.isNZ() == True
+    
+    cpu.f.set(constants.C_FLAG)
+    assert cpu.isC() == True
+    assert cpu.isNC() == False
+    cpu.f.set(~constants.C_FLAG)
+    assert cpu.isC() == False
+    assert cpu.isNC() == True
+ 
+def test_flags_memory_access(): 
+    cpu = get_cpu()
+    cpu.f.set(constants.Z_FLAG)
+    assert cpu.isZ() == True
+    prepare_for_fetch(cpu, 0x1234, 0x1234)
+    cpu.memory.write(0x1234, 0x12)
+    assert cpu.isZ() == True
+    cpu.rom[0x1234] = 0x12
+    assert cpu.isZ() == True
+    
+    
 def cycle_test(cpu, opCode, cycles=0):
     startCycles = cpu.cycles
     try:
@@ -191,7 +218,6 @@ def cycle_test(cpu, opCode, cycles=0):
 # TEST HELPERS ---------------------------------------
 
 def test_create_group_op_codes():
-    py.test.skip()
     assert len(GROUPED_REGISTERS) == 8
     start=0x12
     step=0x03
@@ -210,7 +236,6 @@ def test_create_group_op_codes():
         
         
 def test_create_register_op_codes():
-    py.test.skip()
     start = 0x09
     step = 0x10
     func = CPU.addHL
@@ -231,7 +256,6 @@ def assert_default_registers(cpu, a=constants.RESET_A, bc=constants.RESET_BC,\
                              de=constants.RESET_DE, f=constants.RESET_F,\
                              hl=constants.RESET_HL, sp=constants.RESET_SP,\
                              pc=constants.RESET_PC):
-    
     return assert_registers(cpu, a, bc, de, f, hl, sp, pc)
 
 def assert_registers(cpu, a=None, bc=None, de=None, f=None, hl=None, sp=None, pc=None):
@@ -251,9 +275,11 @@ def assert_registers(cpu, a=None, bc=None, de=None, f=None, hl=None, sp=None, pc
         assert cpu.pc.get() == pc, "Register pc is %s but should be %s" % (hex(cpu.pc.get()), hex(pc))
         
 def prepare_for_fetch(cpu, value, valueLo=None):
-    cpu.rom[cpu.pc.get()] = value & 0xFF
+    cpu.rom[cpu.pc.get()] = value
+    cpu.memory.write(cpu.pc.get(), value & 0xFF)
     if valueLo is not None:
-        cpu.rom[cpu.pc.get()+1] = value & 0xFF
+        cpu.rom[cpu.pc.get()+1] = valueLo & 0xFF
+        cpu.memory.write(cpu.pc.get(), valueLo & 0xFF)
         
 def set_registers(registers, value):
     #if registers is not list:
@@ -303,7 +329,6 @@ def test_0x18():
     
 # jr_NZ_nn see test_jr_cc_nn
 def test_0x20_0x28_0x30():
-    #py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0x20
@@ -319,7 +344,8 @@ def test_0x20_0x28_0x30():
         cpu.f.set(~flags[i])
         cycle_test(cpu, opCode, 2)
         assert cpu.pc.get() == pc+1
-        value += 2
+        value += 3
+        opCode += 0x08
         
 # ld_BC_nnnn to ld_SP_nnnn
 def test_0x01_0x11_0x21_0x31():
@@ -327,12 +353,14 @@ def test_0x01_0x11_0x21_0x31():
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x12
+    opCode = 0x01
     for index in range(0, 8):
         prepare_for_fetch(cpu, value, value+1)
-        cycle_test(cpu, 0x01+index*0x10, 3)
+        cycle_test(cpu, opCode, 3)
         assert registers[index].getHi() == value
         assert registers[index].getlo() == value+1
-        value += 2
+        value += 3
+        opCode += 0x10
         
 # add_HL_BC to add_HL_SP
 def test_0x09_0x19_0x29_0x39():
@@ -340,13 +368,15 @@ def test_0x09_0x19_0x29_0x39():
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x1234
+    opCode = 0x09
     for i in range(0, 8):
-        cpu.hl.set(0x00)
+        cpu.hl.set(value)
         registers[i].set(value)
         assert  registers[i].get() == value
-        cycle_test(cpu, 0x09+i*0x10, 2)
-        assert cpu.hl.get() == value
-        value += 1
+        cycle_test(cpu, opCode, 2)
+        assert cpu.hl.get() == value+value
+        value += 3
+        opCode += 0x10
         
 # ld_BCi_A
 def test_0x02():
