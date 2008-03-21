@@ -266,38 +266,44 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
-        py.test.skip("implement me")
         class MyJitDriver(JitDriver):
             greens = []
-            reds = ['i', 'xy']
+            reds = ['which', 'i', 'xy1', 'xy2']
 
-        def ll_function(xy):
+        def f(which, xy1, xy2):
             i = 1024
             while i:
                 i >>= 1
-                xy_set_x(xy, xy_get_x(xy) + 3)
-                xy_set_y(xy, xy_get_y(xy) + 30)
-                MyJitDriver.jit_merge_point(i=i, xy=xy)
-                MyJitDriver.can_enter_jit(i=i, xy=xy)
-            return xy
+                xy_set_y(xy1, xy_get_y(xy1) + 3)
+                xy_set_y(xy2, xy_get_y(xy2) + 7)
+                MyJitDriver.jit_merge_point(i=i, which=which, xy1=xy1, xy2=xy2)
+                MyJitDriver.can_enter_jit(i=i, which=which, xy1=xy1, xy2=xy2)
+            if which == 1:
+                return xy1
+            else:
+                return xy2
 
-        def main(x, y):
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = y
-            xy2 = ll_function(xy)
-            assert xy2 is xy
-            return xy.x * xy.y
+        def main(which, x, y):
+            xy1 = lltype.malloc(XY)
+            xy1.vable_access = lltype.nullptr(XY_ACCESS)
+            xy2 = lltype.malloc(XY)
+            xy2.vable_access = lltype.nullptr(XY_ACCESS)
+            xy1.x = x
+            xy1.y = y
+            xy2.x = y
+            xy2.y = x
+            xy = f(which, xy1, xy2)
+            assert xy is xy1 or xy is xy2
+            return xy.x+xy.y
 
-        res = self.run(main, [20, 22], 2)
-        assert res == main(20, 22)
+        res = self.run(main, [1, 20, 22], 2)
+        assert res == main(1, 20, 22)
         self.check_insns_in_loops(getfield=0, setfield=0)
 
         # also run the test with a threshold of 1 to check if the return
         # path (taken only once) is compiled correctly
-        res = self.run(main, [20, 22], threshold=1)
-        assert res == main(20, 22)
+        res = self.run(main, [0, 20, 22], threshold=1)
+        assert res == main(0, 20, 22)
         self.check_insns_in_loops(getfield=0, setfield=0)
 
     def test_simple_aliasing(self):
@@ -369,43 +375,51 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                                    'int_rshift': 1})
 
     def test_simple_construct_escape(self):
+        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
-            reds = ['i', 'tot', 'x', 'y']
+            reds = ['i', 'xy', 'x', 'y']
    
         def f(x, y):
-            xy = lltype.malloc(XY)
-            xy.vable_access = lltype.nullptr(XY_ACCESS)
-            xy.x = x
-            xy.y = y
-            x = xy_get_x(xy)
-            y = xy_get_y(xy)            
-            return xy
-
-        def main(x, y):
-            tot = 0
             i = 1024
             while i:
                 i >>= 1
-                xy = f(x, y)
-                tot += xy_get_x(xy)+xy_get_y(xy)
-                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
-            return tot
+                xy = lltype.malloc(XY)
+                xy.vable_access = lltype.nullptr(XY_ACCESS)
+                xy.x = x
+                xy.y = y
+                x = xy_get_x(xy)
+                y = xy_get_y(xy)            
+                MyJitDriver.jit_merge_point(xy=xy, i=i, x=x, y=y)
+                MyJitDriver.can_enter_jit(xy=xy, i=i, x=x, y=y)
+            return xy
 
+        def main(x, y):
+            xy = f(x, y)
+            return xy_get_x(xy)+xy_get_y(xy)
+
+        assert main(20, 22) == 42
         res = self.run(main, [20, 22], 2)
-        assert res == 42 * 11
+        assert res == 42
         self.check_insns_in_loops(getfield=0)
 
     def test_simple_with_struct(self):
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'tot', 'xp']
-   
+
         def f(xp):
-            x = xp_get_x(xp)
-            p = xp_get_p(xp)
-            return x+p.a+p.b
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                x = xp_get_x(xp)
+                p = xp_get_p(xp)
+                res = x+p.a+p.b
+                tot += res
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp)
+            return tot
 
         def main(x, a, b):
             xp = lltype.malloc(XP)
@@ -415,14 +429,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             s.a = a
             s.b = b
             xp.p = s
-            tot = 0
-            i = 1024
-            while i:
-                i >>= 1
-                tot += f(xp)
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp)
-            return tot
+            return f(xp)
 
         res = self.run(main, [20, 10, 12], 2)
         assert res == 42 * 11
@@ -434,11 +441,19 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             reds = ['i', 'tot', 'xp', 's', 'x']
    
         def f(xp, s):
-            xp_set_p(xp, s)
-            x = xp_get_x(xp)
-            p = xp_get_p(xp)
-            p.b = p.b*2
-            return x+p.a+p.b
+            tot = 0
+            i = 1024
+            while i:
+                i >>= 1
+                xp_set_p(xp, s)
+                x = xp_get_x(xp)
+                p = xp_get_p(xp)
+                p.b = p.b*2
+                v = x+p.a+p.b
+                tot += v+xp.p.b
+                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, s=s, x=x)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, s=s, x=x)
+            return tot
 
         def main(x, a, b):
             xp = lltype.malloc(XP)
@@ -447,91 +462,84 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             s = lltype.malloc(S)
             s.a = a
             s.b = b
-            tot = 0
-            i = 1024
-            while i:
-                i >>= 1
-                v = f(xp, s)
-                tot += v+xp.p.b
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, s=s, x=x)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, s=s, x=x)
-            return tot
+            v = f(xp, s)
+            return v+xp.p.b
 
         res = self.run(main, [20, 10, 3], 2)
         assert res == main(20, 10, 3)
         self.check_insns_in_loops(getfield=4)
 
     def test_simple_with_setting_new_struct(self):
-        py.test.skip("broken?")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'tot', 'xp', 'a', 'b']
    
         def f(xp, a, b):
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b
-            xp_set_p(xp, s)            
-            p = xp_get_p(xp)
-            p.b = p.b*2
-            x = xp_get_x(xp)
-            return x+p.a+p.b
-
-        def main(x, a, b):
-            xp = lltype.malloc(XP)
-            xp.vable_access = lltype.nullptr(XP_ACCESS)
-            xp.x = x
             tot = 0
             i = 1024
             while i:
                 i >>= 1
-                v = f(xp, a, b)
-                tot += v+xp.p.b
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b
+                xp_set_p(xp, s)            
+                p = xp_get_p(xp)
+                p.b = p.b*2
+                x = xp_get_x(xp)
+                v = x+p.a+p.b
+                tot += v
                 MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, a=a, b=b)
                 MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, a=a, b=b)
             return tot
 
-        res = self.run(main, [20, 10, 3], 2)
-        assert res == 42 * 11
-        self.check_insns_in_loops(getfield=0, malloc=1)
-
-
-    def test_simple_constr_with_setting_new_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'x', 'a', 'b']
-   
-        def f(x, a, b):
+        def main(x, a, b):
             xp = lltype.malloc(XP)
             xp.vable_access = lltype.nullptr(XP_ACCESS)
             xp.x = x
-            s = lltype.malloc(S)
-            s.a = a
-            s.b = b            
-            xp_set_p(xp, s)            
-            p = xp_get_p(xp)
-            p.b = p.b*2
-            x = xp_get_x(xp)
-            return xp
-
-        def main(x, a, b):
-            tot = 0
-            i = 1024
-            while i:
-                i >>= 1
-                xp = f(x, a, b)
-                tot += xp.x+xp.p.a+xp.p.b+xp.p.b
-                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, a=a, b=b)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, a=a, b=b)
-            return tot
+            v = f(xp, a, b)
+            return v+xp.p.b
 
         res = self.run(main, [20, 10, 3], 2)
         assert res == main(20, 10, 3)
         self.check_insns_in_loops(getfield=0, malloc=0)
 
+
+    def test_simple_constr_with_setting_new_struct(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'xp', 'x', 'a', 'b']
+
+        def f(x, a, b):
+            i = 1024
+            while i:
+                i >>= 1
+                #
+                xp = lltype.malloc(XP)
+                xp.vable_access = lltype.nullptr(XP_ACCESS)
+                xp.x = x
+                s = lltype.malloc(S)
+                s.a = a
+                s.b = b            
+                xp_set_p(xp, s)            
+                p = xp_get_p(xp)
+                p.b = p.b*2
+                x = xp_get_x(xp)
+                #
+                MyJitDriver.jit_merge_point(xp=xp, i=i, x=x, a=a, b=b)
+                MyJitDriver.can_enter_jit(xp=xp, i=i, x=x, a=a, b=b)
+            return xp
+
+        def main(x, a, b):
+            xp = f(x, a, b)
+            return xp.x+xp.p.a+xp.p.b+xp.p.b
+
+        res = self.run(main, [20, 10, 3], 2)
+        assert res == 42
+        self.check_insns_in_loops(getfield=0, malloc=0)
+
         # run again with threshold 1 to get the return generated too
         res = self.run(main, [20, 10, 3], 1)
-        assert res == main(20, 10, 3)
+        assert res == 42
         self.check_insns_in_loops(getfield=0, malloc=0)
 
     def test_simple_read(self):
