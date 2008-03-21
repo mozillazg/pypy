@@ -372,6 +372,33 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                                    'int_rshift': 1})
 
     def test_simple_construct_escape(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['x', 'y']
+   
+        def f(x, y):
+            MyJitDriver.jit_merge_point(x=x, y=y)
+            MyJitDriver.can_enter_jit(x=x, y=y)
+            xy = lltype.malloc(XY)
+            xy.vable_access = lltype.nullptr(XY_ACCESS)
+            xy.x = x
+            xy.y = y
+            return xy
+
+        def main(x, y):
+            xy = f(x, y)
+            return xy_get_x(xy)+xy_get_y(xy)
+
+        assert main(20, 22) == 42
+        res = self.run(main, [20, 22], 2)
+        assert res == 42
+        self.check_nothing_compiled_at_all()
+
+        res = self.run(main, [20, 22], threshold=1)
+        assert res == 42
+        self.check_insns(malloc=1)
+
+    def test_pass_in_construct_another_and_escape(self):
         py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
@@ -1700,8 +1727,6 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         res = self.run(main, [21, 2, -3], threshold=2,
                        policy=StopAtXPolicy(Frame.debug.im_func))
         assert res == main(21, 2, -3)
-        self.check_insns_in_loops({'int_sub': 1, 'int_gt': 1,
-                                   'int_mul': 1, 'int_add': 1})
 
 
     def test_recursive(self):
