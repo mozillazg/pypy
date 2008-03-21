@@ -452,10 +452,13 @@ class AfterRaisingOpFallbackPoint(PromoteFallbackPoint):
 
 
 def hp_after_raisingop(jitstate, hotrunnerdesc, ll_evalue):
-    gv_raised = jitstate.greens.pop() # XXX hackish interface,
-                                      # pushed here by ll_gen1 or ll_gen2
+    gv_raised = jitstate.get_gv_op_raised()
     # XXX slightly hackish as well, we actually need gv_raised to be
     # in local_boxes to be passed along to the new block
+    if gv_raised.is_const:
+        if gv_raised.revealconst(lltype.Bool):
+            jitstate.residual_ll_exception(ll_evalue)
+        return
     assert not gv_raised.is_const
     tok_bool = hotrunnerdesc.RGenOp.kindToken(lltype.Bool)
     raisedbox = rvalue.IntRedBox(tok_bool, gv_raised)
