@@ -549,6 +549,11 @@ class BytecodeWriter(object):
         reds, greens = self.sort_by_color(link.args, link.target.inputargs)
         result = []
         for color, args in [("red", reds), ("green", greens)]:
+            if not args:
+                if color == "red" and self.free_red[link.prevblock] == 0:
+                    continue
+                if color == "green" and self.free_green[link.prevblock] == 0:
+                    continue
             result += ["make_new_%svars" % (color, ), len(args)]
             for v in args:
                 result.append(self.serialize_oparg(color, v))

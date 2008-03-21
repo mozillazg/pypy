@@ -61,7 +61,6 @@ class AbstractSerializationTest:
         assert jitcode.code == assemble(writer.interpreter,
                                         "red_int_add", 0, 1,
                                         "make_new_redvars", 1, 2,
-                                        "make_new_greenvars", 0,
                                         "red_return")
         assert len(jitcode.constants) == 0
         assert len(jitcode.typekinds) == 0
@@ -76,7 +75,6 @@ class AbstractSerializationTest:
                                         "make_redbox", -1, 0,
                                         "red_int_add", 0, 1,
                                         "make_new_redvars", 1, 2,
-                                        "make_new_greenvars", 0,
                                         "red_return")
         assert len(jitcode.constants) == 1
         assert len(jitcode.typekinds) == 1
@@ -126,7 +124,6 @@ class AbstractSerializationTest:
                             label("sub"),
                             "red_int_sub", 0, 1,
                             "make_new_redvars", 1, 2,
-                            "make_new_greenvars", 0,
                             label("return"),
                             "red_return",
                             label("true"),
@@ -135,7 +132,6 @@ class AbstractSerializationTest:
                             label("add"),
                             "red_int_add", 0, 1,
                             "make_new_redvars", 1, 2,
-                            "make_new_greenvars", 0,
                             "goto", tlabel("return"),
                             )
         assert jitcode.code == expected
@@ -156,23 +152,18 @@ class AbstractSerializationTest:
                             "red_int_is_true", 0,
                             "red_goto_iftrue", 3, tlabel("add"),
                             "make_new_redvars", 2, 1, 2,
-                            "make_new_greenvars", 0,
                             "red_int_add", 0, 1,
                             "make_new_redvars", 1, 2,
-                            "make_new_greenvars", 0,
                             label("after"),
                             "local_merge", 0, -1,
                             "make_redbox", -1, 0,
                             "red_int_add", 1, 0,
                             "make_new_redvars", 1, 2,
-                            "make_new_greenvars", 0,
                             "red_return",
                             label("add"),
                             "make_new_redvars", 2, 1, 2,
-                            "make_new_greenvars", 0,
                             "red_int_sub", 0, 1,
                             "make_new_redvars", 1, 2,
-                            "make_new_greenvars", 0,
                             "goto", tlabel("after"),
                             )
         assert jitcode.code == expected
@@ -231,25 +222,21 @@ class AbstractSerializationTest:
 JITCODE 'f'
 pc: 0 |  make_redbox          (0), 0           => r1
     6 |  make_new_redvars     [r0, r1]
-   14 |  make_new_greenvars   []
       |
-   18 |  local_merge          0, None
-   24 |  red_int_is_true      r0               => r2
-   28 |  red_goto_iftrue      r2, pc: 48
-   36 |  make_new_redvars     [r1]
-   42 |  make_new_greenvars   []
+   14 |  local_merge          0, None
+   20 |  red_int_is_true      r0               => r2
+   24 |  red_goto_iftrue      r2, pc: 40
+   32 |  make_new_redvars     [r1]
       |
-   46 |  red_return
+   38 |  red_return
       |
-   48 |  make_new_redvars     [r0, r1]
-   56 |  make_new_greenvars   []
+   40 |  make_new_redvars     [r0, r1]
       |
-   60 |  red_int_add          r1, r0           => r2
-   66 |  make_redbox          (1), 0           => r3
-   72 |  red_int_sub          r0, r3           => r4
-   78 |  make_new_redvars     [r4, r2]
-   86 |  make_new_greenvars   []
-   90 |  goto                 pc: 18
+   48 |  red_int_add          r1, r0           => r2
+   54 |  make_redbox          (1), 0           => r3
+   60 |  red_int_sub          r0, r3           => r4
+   66 |  make_new_redvars     [r4, r2]
+   74 |  goto                 pc: 14
         """.rstrip()
         assert result == expected
 
@@ -264,7 +251,6 @@ pc: 0 |  make_redbox          (0), 0           => r1
                                         "make_redbox", -1, 0,
                                         "red_int_mul", 1, 2,
                                         "make_new_redvars", 1, 3,
-                                        "make_new_greenvars", 0,
                                         "red_return")
         assert jitcode.is_portal
         assert len(jitcode.called_bytecodes) == 1
@@ -273,7 +259,6 @@ pc: 0 |  make_redbox          (0), 0           => r1
                                                "make_redbox", -1, 0,
                                                "red_int_add", 0, 1,
                                                "make_new_redvars", 1, 2,
-                                               "make_new_greenvars", 0,
                                                "red_return")
         assert not called_jitcode.is_portal
         assert len(called_jitcode.called_bytecodes) == 0
