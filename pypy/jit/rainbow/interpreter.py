@@ -1003,16 +1003,20 @@ class JitInterpreter(object):
                 self.green_result(result)
         elif color == "red":
             if opdesc.nb_args == 1:
-                impl = rtimeshift.ll_gen1
+                if opdesc.canraise:
+                    impl = rtimeshift.ll_gen1_canraise
+                else:
+                    impl = rtimeshift.ll_gen1
             elif opdesc.nb_args == 2:
-                impl = rtimeshift.ll_gen2
+                if opdesc.canraise:
+                    impl = rtimeshift.ll_gen2_canraise
+                else:
+                    impl = rtimeshift.ll_gen2
             else:
                 XXX
-            def implementation(self):
-                args = (opdesc, self.jitstate, )
-                for i in numargs:
-                    args += (self.get_redarg(), )
-                result = impl(*args)
+            @arguments(*(("red", ) * opdesc.nb_args))  
+            def implementation(self, *args):
+                result = impl(opdesc, self.jitstate, *args)
                 self.red_result(result)
         else:
             assert 0, "unknown color"
