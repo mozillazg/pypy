@@ -496,7 +496,7 @@ class __extend__(SomeLLAbstractValue):
         if not graph_list:
             # it's a graphless method of a BuiltinADTType
             bk = getbookkeeper()
-            return handle_highlevel_operation_novirtual(bk, True, TYPE.immutable, hs_c1, *args_hs)
+            return handle_highlevel_operation_novirtual(bk, True, name, TYPE.immutable, hs_c1, *args_hs)
         elif len(graph_list) == 1:
             # like a direct_call
             graph = graph_list.pop()
@@ -754,7 +754,7 @@ class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractConstant)):
 
 # ____________________________________________________________
 
-def handle_highlevel_operation_novirtual(bookkeeper, ismethod, immutable, *args_hs):
+def handle_highlevel_operation_novirtual(bookkeeper, ismethod, name, immutable, *args_hs):
     RESULT = bookkeeper.current_op_concretetype()
     deepfrozen = ismethod and args_hs[0].deepfrozen # if self is deepfrozen, the result is it too
     if ismethod and (immutable or args_hs[0].deepfrozen):
@@ -769,7 +769,10 @@ def handle_highlevel_operation_novirtual(bookkeeper, ismethod, immutable, *args_
                                           eager_concrete = False,   # probably
                                           myorigin = myorigin,
                                           deepfrozen=deepfrozen)
-    return variableoftype(RESULT, deepfrozen=deepfrozen, cause=args_hs)
+        cause = args_hs
+    else:
+        cause = "oopspec call to %s()" % name
+    return variableoftype(RESULT, deepfrozen=deepfrozen, cause=cause)
     
 
 def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
@@ -793,7 +796,9 @@ def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
         # "blue variables" disabled, we just return a red var all the time.
         # Exception: an operation on a frozen container is constant-foldable.
         ismethod = '.' in operation_name
-        return handle_highlevel_operation_novirtual(bookkeeper, ismethod, False, *args_hs)
+        return handle_highlevel_operation_novirtual(bookkeeper, ismethod,
+                                                    operation_name, False,
+                                                    *args_hs)
 
     # --- the code below is not used any more except by test_annotator.py ---
     if operation_name == 'newlist':
