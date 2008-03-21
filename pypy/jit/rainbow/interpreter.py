@@ -567,18 +567,9 @@ class JitInterpreter(object):
     def opimpl_make_new_redvars(self, local_boxes):
         self.frame.local_boxes = local_boxes
 
-    def opimpl_make_new_greenvars(self):
-        # this uses a "green_varargs" argument, but we do the decoding
-        # manually for the fast case
-        num = self.load_2byte()
-        if num == 0 and len(self.frame.local_green) == 0:
-            # fast (very common) case
-            return
-        newgreens = []
-        for i in range(num):
-            newgreens.append(self.get_greenarg())
+    @arguments("green_varargs")
+    def opimpl_make_new_greenvars(self, newgreens):
         self.frame.local_green = newgreens
-    opimpl_make_new_greenvars.argspec = arguments("green_varargs") #for dump.py
 
     @arguments("2byte", "greenkey")
     def opimpl_local_merge(self, mergepointnum, key):
