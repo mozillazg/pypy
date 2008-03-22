@@ -1024,7 +1024,6 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_add=0, int_mul=0)
 
     def test_residual_red_call_with_exc_more(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['i', 'x', 'res']
