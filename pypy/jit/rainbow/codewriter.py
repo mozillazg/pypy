@@ -467,6 +467,8 @@ class BytecodeWriter(object):
             if self.hannotator.policy.hotpath and color == "red":
                 self.emit("hp_red_goto_iftrue")
             elif reverse is not None:
+                assert not self.hannotator.policy.hotpath, (
+                    """XXX reimplement me for the hotpath policy""")
                 self.emit("red_goto_ifptrnonzero")
                 self.emit(reverse)
                 self.emit(ptrindex)
