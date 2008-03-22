@@ -118,7 +118,27 @@ def test_double_register_methods():
 # TEST CPU
 
 def test_getters():
-    assert_default_registers(get_cpu())
+    cpu = get_cpu()
+    assert_default_registers(cpu)
+    assert cpu.af.cpu == cpu
+    assert cpu.a.cpu == cpu
+    assert cpu.f.cpu == cpu
+    
+    assert cpu.bc.cpu == cpu
+    assert cpu.b.cpu == cpu
+    assert cpu.c.cpu == cpu
+    
+    assert cpu.de.cpu == cpu
+    assert cpu.d.cpu == cpu
+    assert cpu.e.cpu == cpu
+    
+    assert cpu.hl.cpu == cpu
+    assert cpu.hli.cpu == cpu
+    assert cpu.h.cpu == cpu
+    assert cpu.l.cpu == cpu
+    
+    assert cpu.sp.cpu == cpu
+    assert cpu.pc.cpu == cpu
     
 
 def test_fetch():
@@ -239,7 +259,7 @@ def test_create_register_op_codes():
     start = 0x09
     step = 0x10
     func = CPU.addHL
-    registers = [CPU.bc]*128
+    registers = [CPU.getBC]*128
     table = [(start, step, func, registers)]
     list = create_register_op_codes(table)
     opCode = start
@@ -349,27 +369,25 @@ def test_0x20_0x28_0x30():
         
 # ld_BC_nnnn to ld_SP_nnnn
 def test_0x01_0x11_0x21_0x31():
-    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x12
     opCode = 0x01
-    for index in range(0, 8):
+    for index in range(0, len(registers)):
         prepare_for_fetch(cpu, value, value+1)
         cycle_test(cpu, opCode, 3)
-        assert registers[index].getHi() == value
-        assert registers[index].getlo() == value+1
+        assert registers[index].getLo() == value
+        assert registers[index].getHi() == value+1
         value += 3
         opCode += 0x10
         
 # add_HL_BC to add_HL_SP
 def test_0x09_0x19_0x29_0x39():
-    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x1234
     opCode = 0x09
-    for i in range(0, 8):
+    for i in range(0, len(registers)):
         cpu.hl.set(value)
         registers[i].set(value)
         assert  registers[i].get() == value
@@ -428,7 +446,6 @@ def test_0x3A():
     
 # inc_BC DE HL SP
 def test_0x03_to_0x33_inc_double_registers():
-    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     opCode = 0x03
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
@@ -445,7 +462,6 @@ def test_0x03_to_0x33_inc_double_registers():
 
 # dec_BC
 def test_0x0B_to_0c38_dec_double_registers():
-    py.test.skip("OpCode Table incomplete")
     cpu = get_cpu()
     opCode = 0x0B
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
@@ -468,10 +484,12 @@ def test_0x04_to_0x3C_inc_registers():
     opCode = 0x04
     value = 0x12
     for i in range(0, len(registers)):
-        if registers[i] == cpu.hl:
-            continue
         set_registers(registers, 0)
-        cycle_test(cpu, opCode, 1)
+        registers[i].set(value)
+        if registers[i] == cpu.hl:
+            cycle_test(cpu, opCode, 3)
+        else:
+            cycle_test(cpu, opCode, 1)
         assert registers[i].get() == value+1
         cpu.reset()
         opCode += 0x08

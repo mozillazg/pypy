@@ -7,9 +7,8 @@ from pypy.lang.gameboy import constants
 
 
 class Register(object):
-    
-    value =0
     def __init__(self, cpu, value=0):
+        self.value = 0
         self.cpu = cpu
         if value is not 0:
             self.set(value)
@@ -28,11 +27,6 @@ class Register(object):
 # ___________________________________________________________________________
 
 class DoubleRegister(Register):
-    
-    cpu = None
-    hi = Register(None)
-    lo = Register(None)
-    
     def __init__(self, cpu, hi=None, lo=None):
         self.cpu = cpu
         if hi==None:
@@ -82,56 +76,25 @@ class DoubleRegister(Register):
     
     
 class ImmediatePseudoRegister(object):
-        
-        hl = DoubleRegister(None)
-        
         def __init__(self, cpu, hl):
             self.cpu = cpu
             self.hl = hl
             
         def set(self, value):
-            sellf.cpu.write(self.get(), value)
-            self.cycles += 1
+            self.cpu.write(self.get(), value)
+            self.cpu.cycles += 1
         
-        def get(self, value):
-            return self.cpu.read(self.get())
+        def get(self):
+            return self.cpu.read(self.hl.get())
 # ___________________________________________________________________________
 
 class CPU(object):
-    # Registers
-    af = DoubleRegister(None)
-    a = Register(None)
-    f = Register(None)
-    bc = DoubleRegister(None)
-    b = Register(None)
-    c = Register(None)
-    de = DoubleRegister(None)
-    d = Register(None)
-    e = Register(None)
-    hl = DoubleRegister(None)
-    hli = ImmediatePseudoRegister(None, None)
-    h = Register(None)
-    l = Register(None)
-    sp = DoubleRegister(None)
-    pc = DoubleRegister(None)
-
-    # Interrupt Flags
-    ime = False
-    halted  = False
-    cycles  = 0
-
-    # Interrupt Controller
-    interrupt = None
-
-     # memory Access
-    memory = None
-
-    # ROM Access
-    rom = []
-
     def __init__(self, interrupt, memory):
         self.interrupt = interrupt
         self.memory = memory
+        self.ime = False
+        self.halted = False
+        self.cycles = 0
         self.bc = DoubleRegister(self)
         self.b = self.bc.hi
         self.c = self.bc.lo
@@ -160,7 +123,48 @@ class CPU(object):
         self.ime = False
         self.halted = False
         self.cycles = 0
-  
+        
+    def getAF(self):
+        return self.af
+        
+    def getA(self):
+        return self.a
+    
+    def getA(self):
+        return self.f
+        
+    def getBC(self):
+        return self.bc
+    
+    def getB(self):
+        return self.b
+    
+    def getC(self):
+        return self.c
+        
+    def getDE(self):
+        return self.de
+        
+    def getD(self):
+        return self.d
+        
+    def getE(self):
+        return self.e
+        
+    def getHL(self):
+        return self.hl
+        
+    def getHLi(self):
+        return self.hli
+        
+    def getH(self):
+        return self.h
+        
+    def getL(self):
+        return self.l
+             
+    def getSP(self):
+        return self.sp
 
     def getIF(self):
         val = 0x00
@@ -169,12 +173,10 @@ class CPU(object):
         if self.halted:
             val += 0x80
         return val
-               
-        
+                    
     def setROM(self, banks):
         self.rom = banks
-
-        
+       
     def zFlagAdd(self, s, resetF=False):
         if (resetF):
              self.f.set(0, False)        
@@ -295,6 +297,11 @@ class CPU(object):
     def ld(self, getter, setter):
         setter(getter()) # 1 cycle
         
+        
+     # LD PC,HL, 1 cycle
+    def ld_pc_hl(self):
+        self.ld(self.hl, self.pc)
+        
     def fetchLoad(self, register):
         self.ld(self.fetch, register.set)
 
@@ -382,31 +389,29 @@ class CPU(object):
         self.zFlagAdd(self.a, resetF=True)
 
     def incDoubleRegister(self, doubleRegister):
-        print doubleRegister, "inc"
         doubleRegister.inc()
         
     def decDoubleRegister(self, doubleRegister):
-        print doubleRegister, "dec"
         doubleRegister.dec()
         
     # 1 cycle
     def inc(self, getter, setter):
         data = (getter() + 1) & 0xFF
-        self.decIncFlagFinish(data)
+        self.decIncFlagFinish(data, setter)
         
     # 1 cycle
     def dec(self, getter, setter):
         data = (getter() - 1) & 0xFF
-        self.decIncFlagFinish(data) 
+        self.decIncFlagFinish(data, setter) 
         self.f.add(constants.N_FLAG, False)
      
-    def decIncFlagFinish(data):
-        self.f.set(0) # 1 cycle
+    def decIncFlagFinish(self, data, setter):
+        self.f.set(0, False)
         self.zFlagAdd(data)
         if (data & 0x0F) == 0x0F:
             self.f.add(constants.H_FLAG, False)
         self.f.add((self.f.get() & constants.C_FLAG), False)
-        setter(data)
+        setter(data) # 1 cycle
 
     # 1 cycle
     def rlc(self, getter, setter):
@@ -653,8 +658,6 @@ class CPU(object):
     def nop(self):
         self.cycles -= 1
 
-     # LD PC,HL, 1 cycle
-
      # JP nnnn, 4 cycles
     def jp_nnnn(self):
         lo = self.fetch() # 1 cycle
@@ -764,12 +767,9 @@ class CPU(object):
         self.cycles += 1
         self.fetch()
 
-
-
 # OPCODE LOOKUP TABLE GENERATION -----------------------------------------------
 
-
-GROUPED_REGISTERS = (CPU.b, CPU.c, CPU.d, CPU.e, CPU.h, CPU.l, CPU.hli, CPU.a)
+GROUPED_REGISTERS = (CPU.getB, CPU.getC, CPU.getD, CPU.getE, CPU.getH, CPU.getL, CPU.getHLi, CPU.getA)
 def create_group_op_codes(table):
     print ""
     opCodes =[]
@@ -778,34 +778,29 @@ def create_group_op_codes(table):
         step = entry[1]
         function = entry[2]
         if len(entry) == 4:
-            for register in GROUPED_REGISTERS:
+            for registerGetter in GROUPED_REGISTERS:
                 for n in entry[3]:
-                    opCodes.append((opCode, group_lambda(function, register, n)))
-                    #print "A", hex(opCode), function, n
+                    opCodes.append((opCode, group_lambda(function, registerGetter, n)))
                     opCode += step
         else:
-            for register in GROUPED_REGISTERS:
-                opCodes.append((opCode,group_lambda(function, register)))
-                #print "B", hex(opCode), function, register
+            for registerGetter in GROUPED_REGISTERS:
+                opCodes.append((opCode,group_lambda(function, registerGetter)))
                 opCode += step
     return opCodes
 
-def group_lambda(function, register, value=None):
+def group_lambda(function, registerGetter, value=None):
     if value == None:
-        return lambda s: function(s, register.get, register.set)
+        return lambda s: function(s, registerGetter(s).get, registerGetter(s).set)
     else:
-        return  lambda s: function(s, register.get, register.set, value)
+        return  lambda s: function(s, registerGetter(s).get, registerGetter(s).set, value)
         
 
 def create_register_op_codes(table):
     opCodes = []
     for entry in table:
-        opCode = entry[0]
-        step = entry[1]
+        opCode   = entry[0]
+        step     = entry[1]
         function = entry[2]
-        #print "------------------------------"
-        #print "C", hex(opCode), hex(step), function, len(entry[3])
-        #print entry[3], len(entry[3])
         for registerOrGetter in entry[3]:
             opCodes.append((opCode, register_lambda(function, registerOrGetter)))
             opCode += step
@@ -865,7 +860,7 @@ FIRST_ORDER_OP_CODES = [
     (0xC3, CPU.jp_nnnn),
     (0xC9, CPU.ret),
     (0xD9, CPU.reti),
-    (0xE9, lambda s: CPU.ld(s, CPU.hl, CPU.pc)),
+    (0xE9, CPU.ld_pc_hl),
     (0xF9, CPU.ld_SP_HL),
     (0xE0, CPU.ldh_mem_A),
     (0xE8, CPU.add_SP_nn),
@@ -903,21 +898,24 @@ REGISTER_GROUP_OP_CODES = [
     (0xB0, 0x01, CPU.OR),
     (0xB8, 0x01, CPU.cpA),
     (0x06, 0x08, CPU.fetchLoad),
-    (0x40, 0x01, CPU.res, range(0, 8))
+    (0x40, 0x01, CPU.res,       range(0, 8))
 ]    
         
 
+REGISTER_SET_A = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getSP]
+REGISTER_SET_B = [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]
+REGISTER_SET_C = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getAF]
 REGISTER_OP_CODES = [ 
-    (0x01, 0x10, CPU.fetchDoubleRegister, [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
-    (0x09, 0x10, CPU.addHL,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
-    (0x03, 0x10, CPU.incDoubleRegister,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
-    (0x0B, 0x10, CPU.decDoubleRegister,  [CPU.bc, CPU.de, CPU.hl, CPU.sp]),
-    (0xC0, 0x08, CPU.ret_cc, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
-    (0xC2, 0x08, CPU.jp_cc_nnnn, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
-    (0xC4, 0x08, CPU.call_cc_nnnn, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
-    (0x20, 0x08, CPU.jr_cc_nn, [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]),
-    (0xC1, 0x10, CPU.pop,  [CPU.bc, CPU.de, CPU.hl, CPU.af]),
-    (0xC5, 0x10, CPU.push, [CPU.bc, CPU.de, CPU.hl, CPU.af])
+    (0x01, 0x10, CPU.fetchDoubleRegister, REGISTER_SET_A),
+    (0x09, 0x10, CPU.addHL,               REGISTER_SET_A),
+    (0x03, 0x10, CPU.incDoubleRegister,   REGISTER_SET_A),
+    (0x0B, 0x10, CPU.decDoubleRegister,   REGISTER_SET_A),
+    (0xC0, 0x08, CPU.ret_cc,              REGISTER_SET_B),
+    (0xC2, 0x08, CPU.jp_cc_nnnn,          REGISTER_SET_B),
+    (0xC4, 0x08, CPU.call_cc_nnnn,        REGISTER_SET_B),
+    (0x20, 0x08, CPU.jr_cc_nn,            REGISTER_SET_B),
+    (0xC1, 0x10, CPU.pop,                 REGISTER_SET_C),
+    (0xC5, 0x10, CPU.push,                REGISTER_SET_C)
 ]
 
 SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
