@@ -1,3 +1,14 @@
+"""Dumps jitstates, frames, redboxes and containers as a .dot file.
+
+Usage from a C-level debugger: call one the following global functions
+with a pointer to the object in question as a single argument:
+
+  * pypy_g_dump_jitstate()
+  * pypy_g_dump_frame()
+  * pypy_g_dump_redbox()
+  * pypy_g_dump_container()
+
+"""
 import os
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue, rcontainer, vlist
