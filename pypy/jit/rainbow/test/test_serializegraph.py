@@ -155,7 +155,7 @@ class AbstractSerializationTest:
                             "red_int_add", 0, 1,
                             "make_new_redvars", 1, 2,
                             label("after"),
-                            "local_merge", 0, -1,
+                            "local_merge", 0, 0,
                             "make_redbox", 1, 0,
                             "red_int_add", 1, 0,
                             "make_new_redvars", 1, 2,

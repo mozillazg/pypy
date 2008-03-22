@@ -61,10 +61,10 @@ class SourceIterator:
 
     def get_greenkey(self):
         keydescnum = self.load_2byte()
-        if keydescnum == -1:
+        if keydescnum == 0:
             return None
         else:
-            keydesc = self.jitcode.keydescs[keydescnum]
+            keydesc = self.jitcode.keydescs[keydescnum - 1]
             return keydesc
 
     def load_4byte(self):     # for jump targets

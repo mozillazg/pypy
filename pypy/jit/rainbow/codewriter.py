@@ -691,14 +691,14 @@ class BytecodeWriter(object):
 
     def keydesc_position(self, key):    # key is a tuple of TYPEs
         if not key:
-            keyindex = -1 # use prebuilt empty_key
+            return 0 # use prebuilt empty_key
         elif key not in self.keydesc_positions:
             keyindex = len(self.keydesc_positions)
             self.keydesc_positions[key] = keyindex
             self.keydescs.append(KeyDesc(self.RGenOp, *key))
         else:
             keyindex = self.keydesc_positions[key]
-        return keyindex
+        return keyindex + 1
 
     def structtypedesc_position(self, TYPE):
         if TYPE in self.structtypedesc_positions:
