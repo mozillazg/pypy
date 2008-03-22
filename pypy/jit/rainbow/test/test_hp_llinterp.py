@@ -33,6 +33,10 @@ def test_green_across_global_mp():
     from pypy.jit.rainbow.test.test_hp_promotion import TestHotPromotion
     llinterp(TestHotPromotion.test_green_across_global_mp)
 
+def test_residual_red_call_with_exc():
+    from pypy.jit.rainbow.test.test_hp_interpreter import TestHotInterpreter
+    llinterp(TestHotInterpreter.test_residual_red_call_with_exc)
+
 def test_simple_interpreter_with_frame_with_stack():
     from pypy.jit.rainbow.test.test_hp_virtualizable import TestVirtualizableImplicit
     llinterp(TestVirtualizableImplicit.test_simple_interpreter_with_frame_with_stack)

@@ -3,6 +3,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
@@ -135,7 +136,8 @@ class FallbackInterpreter(object):
             self.gv_exc_type  = self.rgenop.genconst(llexctype)
             self.gv_exc_value = self.rgenop.genconst(llvalue)
         else:
-            Xxx("capture_exception")
+            ll_evalue = cast_instance_to_base_ptr(e)
+            self.residual_ll_exception(ll_evalue)
 
     def residual_ll_exception(self, ll_evalue):
         ll_etype = self.hotrunnerdesc.ts.get_typeptr(ll_evalue)

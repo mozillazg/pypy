@@ -1723,16 +1723,18 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert main(15, 1, -2) == ((((16*3+13)*3+10)*3+7)*3+4)*3+1
         main(41, 2, -3)   # to check that this works too
 
-        res = self.run(main, [38, 0, 42], threshold=2,
-                       policy=StopAtXPolicy(Frame.debug.im_func))
-        assert res == 40*3+45
-        self.check_nothing_compiled_at_all()
+        if not self.translate_support_code:
+            # one case is enough if translating the support code
+            res = self.run(main, [38, 0, 42], threshold=2,
+                           policy=StopAtXPolicy(Frame.debug.im_func))
+            assert res == 40*3+45
+            self.check_nothing_compiled_at_all()
 
-        res = self.run(main, [15, 1, -2], threshold=2,
-                       policy=StopAtXPolicy(Frame.debug.im_func))
-        assert res == ((((16*3+13)*3+10)*3+7)*3+4)*3+1
-        self.check_insns_in_loops({'int_sub': 1, 'int_gt': 1,
-                                   'int_mul': 1, 'int_add': 1})
+            res = self.run(main, [15, 1, -2], threshold=2,
+                           policy=StopAtXPolicy(Frame.debug.im_func))
+            assert res == ((((16*3+13)*3+10)*3+7)*3+4)*3+1
+            self.check_insns_in_loops({'int_sub': 1, 'int_gt': 1,
+                                       'int_mul': 1, 'int_add': 1})
 
         res = self.run(main, [41, 2, -3], threshold=2,
                        policy=StopAtXPolicy(Frame.debug.im_func))

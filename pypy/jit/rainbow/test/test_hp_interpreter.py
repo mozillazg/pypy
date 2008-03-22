@@ -1015,9 +1015,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             return res
 
         stop_at_h = StopAtXPolicy(h)
-        res = self.run(f, [20], threshold=2, policy=stop_at_h)
-        assert res == 42
-        self.check_insns_in_loops(int_add=0, int_mul=1)
+        if not self.translate_support_code:
+            # one case is enough if translating the support code
+            res = self.run(f, [20], threshold=2, policy=stop_at_h)
+            assert res == 42
+            self.check_insns_in_loops(int_add=0, int_mul=1)
 
         res = self.run(f, [-20], threshold=2, policy=stop_at_h)
         assert res == 7
