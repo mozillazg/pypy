@@ -414,10 +414,10 @@ class JitInterpreter(object):
 
     def get_greenkey(self):
         keydescnum = self.load_2byte()
-        if keydescnum == -1:
+        if keydescnum == 0:
             return empty_key
         else:
-            keydesc = self.frame.bytecode.keydescs[keydescnum]
+            keydesc = self.frame.bytecode.keydescs[keydescnum - 1]
             return GreenKey(self.frame.local_green[:keydesc.nb_vals], keydesc)
 
     def red_result(self, box):
