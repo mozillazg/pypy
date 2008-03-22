@@ -1023,6 +1023,43 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 7
         self.check_insns_in_loops(int_add=0, int_mul=0)
 
+    def test_residual_red_call_with_exc_more(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'x', 'res']
+
+        def h(x):
+            if x > 0:
+                return x
+            else:
+                raise ValueError
+
+        def f(x):
+            res = 0
+            i = 256
+            while i > 0:
+                i >>= 1
+                try:
+                    v = h(x) - 1
+                except ValueError:
+                    v = 7
+                res = res * 10 + v
+                MyJitDriver.jit_merge_point(x=x, i=i, res=res)
+                MyJitDriver.can_enter_jit(x=x, i=i, res=res)
+            return res
+
+        stop_at_h = StopAtXPolicy(h)
+        res = self.run(f, [4], threshold=2, policy=stop_at_h)
+        assert res == 333333333
+        self.check_insns_in_loops(int_sub=1, int_mul=1, int_add=1,
+                                  direct_call=1)
+
+        res = self.run(f, [-20], threshold=2, policy=stop_at_h)
+        assert res == 777777777
+        self.check_insns_in_loops(int_sub=0, int_mul=1, int_add=1,
+                                  direct_call=1)
+
     def test_red_call_ignored_result(self):
         def g(n):
             return n * 7
