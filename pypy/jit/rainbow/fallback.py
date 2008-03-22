@@ -317,13 +317,11 @@ class FallbackInterpreter(object):
                 self.pc = targets[i]
                 break
 
-    @arguments("bool", "red", "red", "jumptarget")
-    def opimpl_red_goto_ifptrnonzero(self, reverse, gv_ptr, gv_switch, target):
-        Xxx("red_goto_ifptrnonzero")
-
     @arguments("red", "jumptarget")
     def opimpl_goto_if_constant(self, gv_value, target):
-        Xxx("goto_if_constant")
+        # it is probably better to consider the value as non-constant to
+        # avoid the logic that typically follows the constant case.
+        pass
 
 
     @arguments("red", returns="red")
@@ -357,18 +355,9 @@ class FallbackInterpreter(object):
     def opimpl_make_new_redvars(self, local_red):
         self.local_red = local_red
 
-    def opimpl_make_new_greenvars(self):
-        # this uses a "green_varargs" argument, but we do the decoding
-        # manually for the fast case
-        num = self.load_2byte()
-        if num == 0 and len(self.local_green) == 0:
-            # fast (very common) case
-            return
-        newgreens = []
-        for i in range(num):
-            newgreens.append(self.get_greenarg())
+    @arguments("green_varargs")
+    def opimpl_make_new_greenvars(self, newgreens):
         self.local_green = newgreens
-    opimpl_make_new_greenvars.argspec = arguments("green_varargs")
 
     @arguments("green", "calldesc", "green_varargs")
     def opimpl_green_call(self, gv_fnptr, calldesc, greenargs):
