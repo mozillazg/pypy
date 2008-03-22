@@ -65,7 +65,8 @@ class FallbackInterpreter(object):
         try:
             return self.containers_gv[content]
         except KeyError:
-            gv_result = content.allocate_gv_container(self.rgenop)
+            reshaping = content in self.containers_needing_reshaping
+            gv_result = content.allocate_gv_container(self.rgenop, reshaping)
             self.containers_gv[content] = gv_result
             content.populate_gv_container(self.rgenop, gv_result,
                                           self.getinitialboxgv)
@@ -84,6 +85,7 @@ class FallbackInterpreter(object):
                                                self.getinitialboxgv)
                 if gv_ptr is not None:
                     self.containers_gv[content] = gv_ptr
+            self.containers_needing_reshaping = {}
         else:
             # Note that this must be done before initialize_from_frame()
             # because store_back_gv_reshaped() could notice some virtual
@@ -101,6 +103,7 @@ class FallbackInterpreter(object):
             memo.copyfields = []
             memo.box_gv_reader = self.getinitialboxgv
             memo.bitcount = 1
+            self.containers_needing_reshaping = memo.containers
 
             for virtualizable_box in jitstate.virtualizables:
                 content = virtualizable_box.content

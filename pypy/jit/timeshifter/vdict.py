@@ -295,7 +295,7 @@ class AbstractVirtualDict(VirtualContainer):
     def internal_replace(self, memo):
         raise NotImplementedError
 
-    def allocate_gv_container(self, rgenop):
+    def allocate_gv_container(self, rgenop, need_reshaping=False):
         return self.typedesc.allocate(rgenop, self.getlength())
 
 def oop_newdict(jitstate, oopspecdesc, deepfrozen):

@@ -1740,7 +1740,6 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
 
 
     def test_virtual_list_and_struct_fallback(self):
-        py.test.skip("in-progress")
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['v', 'i', 'res']
@@ -1763,8 +1762,11 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             _virtualizable_ = True
             def summary(self):
                 result = 0
-                for s in self.l:
+                i = 0
+                while i < len(self.l):
+                    s = self.l[i]
                     result = (result * 100) + s.x * 10 + s.y
+                    i += 1
                 return result
 
         def f(v):
@@ -1774,14 +1776,12 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 l = v.l = []
                 l.append(S(6, 3))
                 l.append(S(2, 7))
-                #residual(0, len(v.l))
                 residual(1, 10 - i)
                 res = v.summary()
                 l.pop()
                 l.pop()
                 assert len(l) == 0
                 v.l = None
-                #residual(2, len(v.l))
                 MyJitDriver.jit_merge_point(v=v, res=res, i=i)
                 MyJitDriver.can_enter_jit(v=v, res=res, i=i)
             return res
@@ -1797,6 +1797,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
 
         res = self.run(main, [], threshold=2, policy=StopAtXPolicy(residual))
         assert res == main()
+        self.check_insns_in_loops(malloc=0, direct_call=1)
 
 
     def test_recursive(self):
