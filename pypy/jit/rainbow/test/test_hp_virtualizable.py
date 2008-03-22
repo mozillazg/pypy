@@ -1739,6 +1739,66 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert intmask(res) == intmask(main(41, 2, -3))
 
 
+    def test_virtual_list_and_struct_fallback(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['v', 'i', 'res']
+
+        class Counter:
+            pass
+        glob = Counter()
+
+        def residual(idx, see):
+            print 'RESIDUAL:', idx, see
+            glob.counter[idx] += 1
+            assert see == glob.counter[idx]
+
+        class S(object):
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        class V(object):
+            _virtualizable_ = True
+            def summary(self):
+                result = 0
+                for s in self.l:
+                    result = (result * 100) + s.x * 10 + s.y
+                return result
+
+        def f(v):
+            i = 10
+            while i > 0:
+                i -= 1
+                l = v.l = []
+                l.append(S(6, 3))
+                l.append(S(2, 7))
+                #residual(0, len(v.l))
+                residual(1, 10 - i)
+                res = v.summary()
+                l.pop()
+                l.pop()
+                assert len(l) == 0
+                v.l = None
+                #residual(2, len(v.l))
+                MyJitDriver.jit_merge_point(v=v, res=res, i=i)
+                MyJitDriver.can_enter_jit(v=v, res=res, i=i)
+            return res
+
+        def main():
+            v = V()
+            glob.counter = [0, 0, 0]
+            res = f(v)
+            assert glob.counter == [0, 10, 0]
+            return res
+
+        print main()
+
+        res = self.run(main, [], threshold=2, policy=StopAtXPolicy(residual))
+        assert res == main()
+
+
     def test_recursive(self):
 
         class XY(object):
