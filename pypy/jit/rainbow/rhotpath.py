@@ -23,11 +23,12 @@ def setup_jitstate(interp, jitstate, greenargs, redargs,
     interp.frame.local_green = greenargs
     interp.graphsigtoken = graphsigtoken
 
-def leave_graph(interp):
+def leave_graph(interp, store_back_exc_data=True):
     jitstate = interp.jitstate
     exceptiondesc = interp.exceptiondesc
     builder = jitstate.curbuilder
-    exceptiondesc.store_global_excdata(jitstate)
+    if store_back_exc_data:
+        exceptiondesc.store_global_excdata(jitstate)
     jitstate.curbuilder.finish_and_return(interp.graphsigtoken, None)
     jitstate.curbuilder = None
     raise FinishedCompiling
@@ -321,14 +322,10 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
     # default case of the switch:
     exceptiondesc = fbp.hotrunnerdesc.exceptiondesc
 
-    # for the annotator:
-    prevtypebox = None
-    prevvaluebox = None
     if check_exceptions:
-        # virtualize the exception into the jitstate (xxx fragile code)
-        prevtypebox = jitstate.exc_type_box
-        prevvaluebox = jitstate.exc_value_box
+        # virtualize the exception (if any) by loading it into the jitstate
         exceptiondesc.fetch_global_excdata(jitstate)
+        # xxx a bit fragile
         incoming_gv.append(jitstate.exc_type_box.genvar)
         incoming_gv.append(jitstate.exc_value_box.genvar)
 
@@ -353,10 +350,12 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
     if check_exceptions:
         # unvirtualize the exception
         exceptiondesc.store_global_excdata(jitstate)
+        # note that the exc_type_box and exc_value_box stay in the jitstate,
+        # where the fallback interp can find them.  When compiling more code
+        # they are replaced by null boxes if we know that no exception
+        # occurred.
         incoming_gv.pop()
         incoming_gv.pop()
-        jitstate.exc_type_box = prevtypebox
-        jitstate.exc_value_box = prevvaluebox
     default_builder.finish_and_goto(incoming_gv, switchblock)
 
     jitstate.curbuilder = excpath_builder
@@ -364,7 +363,7 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
     # virtualizables: when we reach this point, the fallback interpreter
     # should already have done the right thing, i.e. stored the values
     # back into the structure (reading them out of framebase+frameinfo)
-    leave_graph(fbp.hotrunnerdesc.interpreter)
+    leave_graph(fbp.hotrunnerdesc.interpreter, store_back_exc_data=False)
 
 # for testing purposes
 def _cast_base_ptr_to_fallback_point(ptr):
@@ -402,8 +401,15 @@ class AfterResidualCallFallbackPoint(PromoteFallbackPoint):
     def prepare_compiler(self, interpreter, gv_value):
         # remove the temporary flagbox
         flagbox = interpreter.frame.local_boxes.pop()
+        jitstate = interpreter.jitstate
         exceptiondesc = self.hotrunnerdesc.exceptiondesc
-        rtimeshift.residual_fetch(interpreter.jitstate, exceptiondesc,
+
+        # remove the temporary exception boxes that may have been
+        # put on the JITState by generate_fallback_code()
+        jitstate.exc_type_box  = exceptiondesc.null_exc_type_box
+        jitstate.exc_value_box = exceptiondesc.null_exc_value_box
+
+        rtimeshift.residual_fetch(jitstate, exceptiondesc,
                                   self.check_forced, flagbox)
 
 
