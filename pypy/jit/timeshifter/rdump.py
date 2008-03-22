@@ -13,6 +13,7 @@ import os
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue, rcontainer, vlist
 from pypy.rlib.objectmodel import compute_unique_id as getid
+from pypy.tool.pairtype import extendabletype
 
 DUMPFILENAME = '%s.dot'
 
@@ -171,18 +172,7 @@ class GraphBuilder:
             return 0
         id = getid(redbox)
         if self.see(id):
-            text = "%s\\n" % str(redbox)
-            if isinstance(redbox, rvalue.PtrRedBox):
-                if redbox.genvar is None and redbox.content is not None:
-                    text += "virtual"
-                else:
-                    text += self.ptrgenvar(redbox.genvar)
-                if redbox.content is not None:
-                    self.emit_edge(id, self.add_container(redbox.content))
-            elif isinstance(redbox, rvalue.DoubleRedBox):
-                text += self.doublegenvar(redbox.genvar)
-            else:
-                text += self.intgenvar(redbox.genvar)
+            text = "%s\\n%s" % (str(redbox), redbox._rdump(id, self))
             self.emit_node(id, text)
         return id
 
@@ -191,34 +181,65 @@ class GraphBuilder:
             return 0
         id = getid(container)
         if self.see(id):
-            text = "%s\\n" % str(container)
-
-            if isinstance(container, rcontainer.VirtualContainer):
-                # most cases should arrive here, it's not exclusive for
-                # the cases below
-                self.emit_edge(id, self.add_redbox(container.ownbox),
-                               color="#808000", weak=True)
-
-            if isinstance(container, rcontainer.VirtualStruct):
-                text += container.typedesc.name
-                fielddescs = container.typedesc.fielddescs
-                for i in range(len(container.content_boxes)):
-                    try:
-                        name = fielddescs[i].fieldname
-                    except IndexError:
-                        name = 'field out of bounds (%d)' % (i,)
-                    box = container.content_boxes[i]
-                    self.emit_edge(id, self.add_redbox(box), name)
-
-            if isinstance(container, vlist.VirtualList):
-                text += 'length %d' % len(container.item_boxes)
-                for i in range(len(container.item_boxes)):
-                    box = container.item_boxes[i]
-                    self.emit_edge(id, self.add_redbox(box),
-                                   'item_boxes[%d]' % i)
-
+            text = "%s\\n%s" % (str(container), container._rdump(id, self))
             self.emit_node(id, text, fillcolor="#ffff60", color="#808000")
         return id
+
+# We need to avoid using isinstance(x, Cls) because it forces the
+# Classes to be seen by the annotator even if the rest of the code is
+# not using them; then it chokes because they don't have the attributes
+# we are trying to read...
+
+class __extend__(rvalue.RedBox):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        return gb.intgenvar(self.genvar)
+
+class __extend__(rvalue.PtrRedBox):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        if self.content is not None:
+            gb.emit_edge(id, gb.add_container(self.content))
+            if self.genvar is None:
+                return "virtual"
+        return gb.ptrgenvar(self.genvar)
+
+class __extend__(rvalue.DoubleRedBox):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        return gb.doublegenvar(self.genvar)
+
+
+class __extend__(rcontainer.VirtualContainer):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        gb.emit_edge(id, gb.add_redbox(self.ownbox),
+                     color="#808000", weak=True)
+        return ''
+
+class __extend__(rcontainer.VirtualStruct):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        rcontainer.VirtualContainer._rdump(self, id, gb)
+        fielddescs = self.typedesc.fielddescs
+        for i in range(len(self.content_boxes)):
+            try:
+                name = fielddescs[i].fieldname
+            except IndexError:
+                name = 'field out of bounds (%d)' % (i,)
+            box = self.content_boxes[i]
+            gb.emit_edge(id, gb.add_redbox(box), name)
+        return self.typedesc.name
+
+class __extend__(vlist.VirtualList):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        rcontainer.VirtualContainer._rdump(self, id, gb)
+        for i in range(len(self.item_boxes)):
+            box = self.item_boxes[i]
+            gb.emit_edge(id, gb.add_redbox(box),
+                           'item_boxes[%d]' % i)
+        return 'length %d' % len(self.item_boxes)
 
 # ____________________________________________________________
 #
