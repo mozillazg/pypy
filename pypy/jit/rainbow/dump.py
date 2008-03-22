@@ -38,9 +38,9 @@ class SourceIterator:
 
     def get_greenarg(self):
         i = self.load_2byte()
-        if i < 0:
-            return self.jitcode.constants[~i]
-        return CustomRepr('g%d' % i)
+        if i % 2:
+            return self.jitcode.constants[i // 2]
+        return CustomRepr('g%d' % (i // 2))
 
     def get_green_varargs(self):
         greenargs = []
