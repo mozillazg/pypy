@@ -324,6 +324,39 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         res = self.run(ll_function, [1, 2, 4, 8], threshold=2)
         assert res == ll_function(1, 2, 4, 8)
 
+    def test_call_mixed_color_args_with_void(self):
+        class MyJitDriver(JitDriver):
+            greens = ['g1', 'g2']
+            reds = ['r1', 'r2', 'i', 'res']
+
+        def ll_vrg(a, b, c): return 1 + 3*b + 7*c
+        def ll_gvr(a, b, c): return a + 3*1 + 7*c
+        def ll_rgv(a, b, c): return a + 3*b + 7*1
+        def ll_vgr(a, b, c): return 1 + 3*b + 7*c
+        def ll_rvg(a, b, c): return a + 3*1 + 7*c
+        def ll_grv(a, b, c): return a + 3*b + 7*1
+
+        def ll_function(g1, g2, r1, r2):
+            i = 1024
+            while i > 0:
+                i >>= 1
+                vv = None
+                res = (ll_vrg(vv, r1, g2) * 1 +
+                       ll_gvr(g1, vv, r2) * 10 +
+                       ll_rgv(r2, g1, vv) * 100 +
+                       ll_vgr(vv, g2, r2) * 1000 +
+                       ll_rvg(r2, vv, g1) * 10000 +
+                       ll_grv(g1, r2, vv) * 100000)
+                hint(g1, concrete=True)
+                hint(g2, concrete=True)
+                MyJitDriver.jit_merge_point(g1=g1, g2=g2, r1=r1, r2=r2,
+                                            i=i, res=res)
+                MyJitDriver.can_enter_jit(g1=g1, g2=g2, r1=r1, r2=r2,
+                                          i=i, res=res)
+            return res
+        res = self.run(ll_function, [1, 2, 4, 8], threshold=2)
+        assert res == ll_function(1, 2, 4, 8)
+
     def test_void_call(self):
         class MyJitDriver(JitDriver):
             greens = []
