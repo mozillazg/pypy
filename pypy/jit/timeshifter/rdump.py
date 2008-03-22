@@ -202,7 +202,7 @@ class GraphBuilder:
             if isinstance(container, vlist.VirtualList):
                 text += 'length %d' % len(container.item_boxes)
                 for i in range(len(container.item_boxes)):
-                    box = item_boxes.item_boxes[i]
+                    box = container.item_boxes[i]
                     self.emit_edge(id, self.add_redbox(box),
                                    'item_boxes[%d]' % i)
 

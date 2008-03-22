@@ -59,7 +59,7 @@ class StructTypeDesc(object):
 
     VirtualStructCls = None # patched later with VirtualStruct
 
-    _attrs_ =  """TYPE PTRTYPE
+    _attrs_ =  """TYPE PTRTYPE name
                     firstsubstructdesc arrayfielddesc
                     innermostdesc
                     ptrkind
