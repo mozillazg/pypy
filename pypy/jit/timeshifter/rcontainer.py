@@ -86,6 +86,7 @@ class StructTypeDesc(object):
     def __init__(self, RGenOp, TYPE):
         self.TYPE = TYPE
         self.PTRTYPE = lltype.Ptr(TYPE)
+        self.name = TYPE._name
         self.ptrkind = RGenOp.kindToken(self.PTRTYPE)
 
         self.immutable = TYPE._hints.get('immutable', False)

@@ -272,7 +272,7 @@ class FallbackInterpreter(object):
     def green_result_from_red(self, gv):
         self.green_result(gv)
 
-    def trace(self):
+    def dump(self):
         bytecode = self.bytecode
         msg = '*** fallback trace: in %s position %d ***' % (bytecode.name,
                                                              self.pc)
@@ -286,7 +286,7 @@ class FallbackInterpreter(object):
 
     @arguments()
     def opimpl_trace(self):
-        msg = self.trace()
+        msg = self.dump()
         self.interpreter.debug_trace(msg)
 
     @arguments("green", "2byte", returns="red")
