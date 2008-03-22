@@ -402,7 +402,11 @@ class FallbackInterpreter(object):
 
     @arguments("metacalldesc", "red_varargs", returns="red")
     def opimpl_metacall(self, metafunc, redargs):
-        Xxx("metacall")
+        # the fallback interp should not reach this opcode, because it
+        # only occurs inside a small stub graph.  The stub graph is not
+        # interpreted but instead the original function it corresponds
+        # to is called.
+        assert 0, "unreachable"
 
     # exceptions
 
@@ -671,8 +675,3 @@ class FallbackInterpreter(object):
         # the argspec may unwrap *args_gv from local_red or local_green
         # and put the result back into local_red or local_green
         return argspec(implementation)
-
-
-def Xxx(msg):
-    lloperation.llop.debug_fatalerror(lltype.Void, "not implemented: " + msg)
-    assert 0
