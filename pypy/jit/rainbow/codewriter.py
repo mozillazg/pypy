@@ -302,6 +302,8 @@ class BytecodeWriter(object):
         colororder = ""
         in_order = True           # "in order" means allgreens+allreds
         for v in graph.getargs():
+            if v.concretetype is lltype.Void:
+                continue
             if self.hannotator.binding(v).is_green():
                 if "r" in colororder:
                     in_order = False
