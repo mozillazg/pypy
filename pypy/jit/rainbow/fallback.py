@@ -234,9 +234,9 @@ class FallbackInterpreter(object):
 
     def get_greenarg(self):
         i = self.load_2byte()
-        if i < 0:
-            return self.bytecode.constants[~i]
-        return self.local_green[i]
+        if i % 2:
+            return self.bytecode.constants[i // 2]
+        return self.local_green[i // 2]
 
     def get_green_varargs(self):
         greenargs = []

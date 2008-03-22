@@ -656,7 +656,7 @@ class BytecodeWriter(object):
         assert isinstance(arg, flowmodel.Variable) or not check
         assert getattr(arg, 'concretetype', '?') is not lltype.Void
         if where is None:
-            where = self.free_green[self.current_block]
+            where = self.free_green[self.current_block] * 2
             self.free_green[self.current_block] += 1
             if verbose:
                 self.emit('# => g%d' % (where,))
@@ -665,8 +665,9 @@ class BytecodeWriter(object):
 
     def green_position(self, arg):
         if isinstance(arg, flowmodel.Variable):
+            # greenvar_positions contains even numbers usually
             return self.greenvar_positions[arg]
-        return ~self.const_position(arg)
+        return self.const_position(arg) * 2 + 1
 
     def const_position(self, const):
         if const in self.const_positions:
@@ -1565,7 +1566,7 @@ class BytecodeWriter(object):
         greens_v, reds_v = self.check_hp_hint_args(op)
         key = ()
         for i, v in enumerate(greens_v):
-            assert self.green_position(v) == i
+            assert self.green_position(v) == i * 2
             key += (v.concretetype,)
         for i, v in enumerate(reds_v):
             assert self.redvar_position(v) == i
