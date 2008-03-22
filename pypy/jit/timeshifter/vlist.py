@@ -80,7 +80,8 @@ class ListTypeDesc(object):
 
         def populate(item_boxes, gv_lst, box_gv_reader):
             l = gv_lst.revealconst(LISTPTR)
-            for i in range(len(item_boxes)):
+            # NB. len(item_boxes) may be l.ll_length()+1 if need_reshaping :-(
+            for i in range(l.ll_length()):
                 box = item_boxes[i]
                 if box is not None:
                     gv_value = box_gv_reader(box)
@@ -309,8 +310,11 @@ class VirtualList(VirtualContainer):
                 assert content.allowed_in_virtualizable
                 content.store_back_gv_reshaped(shapemask, memo)
 
-    def allocate_gv_container(self, rgenop):
-        return self.typedesc.allocate(rgenop, len(self.item_boxes))
+    def allocate_gv_container(self, rgenop, need_reshaping=False):
+        length = len(self.item_boxes)
+        if need_reshaping:
+            length -= 1      # hack hack hack
+        return self.typedesc.allocate(rgenop, length)
 
     def populate_gv_container(self, rgenop, gv_listptr, box_gv_reader):
         self.typedesc.populate(self.item_boxes, gv_listptr, box_gv_reader)

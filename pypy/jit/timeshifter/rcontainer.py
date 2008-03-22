@@ -927,7 +927,7 @@ class VirtualStruct(VirtualContainer):
                 assert content.allowed_in_virtualizable
                 content.store_back_gv_reshaped(shapemask, memo)
 
-    def allocate_gv_container(self, rgenop):
+    def allocate_gv_container(self, rgenop, need_reshaping=False):
         typedesc = self.typedesc
         # this should not be used for already-allocated virtualizables
         assert (not isinstance(self, VirtualizableStruct)
