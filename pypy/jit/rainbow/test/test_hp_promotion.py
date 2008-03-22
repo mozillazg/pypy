@@ -346,8 +346,10 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         def main(n2, n4, total):
             return ll_function(None, n2, None, n4, total)
 
-        res = self.run(main, [7, 3, 100], threshold=2)
-        assert res == main(7, 3, 100)
+        if not self.translate_support_code:
+            # one case is enough if translating the support code
+            res = self.run(main, [7, 3, 100], threshold=2)
+            assert res == main(7, 3, 100)
 
         res = self.run(main, [7, 3, 100], threshold=1)
         assert res == main(7, 3, 100)

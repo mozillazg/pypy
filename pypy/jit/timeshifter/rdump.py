@@ -210,6 +210,11 @@ class __extend__(rvalue.DoubleRedBox):
         return gb.doublegenvar(self.genvar)
 
 
+class __extend__(rcontainer.AbstractContainer):
+    __metaclass__ = extendabletype
+    def _rdump(self, id, gb):
+        return ''
+
 class __extend__(rcontainer.VirtualContainer):
     __metaclass__ = extendabletype
     def _rdump(self, id, gb):
