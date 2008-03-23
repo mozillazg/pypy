@@ -63,6 +63,8 @@ class FallbackInterpreter(object):
         try:
             return self.containers_gv[content]
         except KeyError:
+            # if shapemask != -1 in store_back_virtualizables(), we should
+            # not reach this point before we reach the "State sanitized" line.
             reshaping = content in self.containers_needing_reshaping
             gv_result = content.allocate_gv_container(self.rgenop, reshaping)
             self.containers_gv[content] = gv_result
@@ -101,7 +103,6 @@ class FallbackInterpreter(object):
             memo.copyfields = []
             memo.box_gv_reader = self.getinitialboxgv
             memo.bitcount = 1
-            self.containers_needing_reshaping = memo.containers
 
             for virtualizable_box in jitstate.virtualizables:
                 content = virtualizable_box.content
@@ -109,6 +110,7 @@ class FallbackInterpreter(object):
                 content.store_back_gv_reshaped(shapemask, memo)
 
             # State sanitized.
+            self.containers_needing_reshaping = memo.containers
             for gv_ptr, fielddesc, box in memo.copyfields:
                 gv_value = self.getinitialboxgv(box)
                 fielddesc.perform_setfield(self.rgenop, gv_ptr, gv_value)
