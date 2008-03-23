@@ -167,6 +167,10 @@ class JitDriver:
     jit_merge_point = _JitHintClassMethod("jit_merge_point")
     can_enter_jit = _JitHintClassMethod("can_enter_jit")
 
+    def getcurrentthreshold():
+        return 10
+    getcurrentthreshold = staticmethod(getcurrentthreshold)
+
     def _check_class(cls):
         if cls is JitDriver:
             raise JitHintError("must subclass JitDriver")

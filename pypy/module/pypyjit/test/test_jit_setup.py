@@ -9,12 +9,23 @@ class AppTestPyPyJIT:
         # this just checks that the module is setting up things correctly, and
         # the resulting code makes sense on top of CPython.
         import pypyjit
+        #assert pypyjit.isenabled() -- should we start disabled or enabled?
+        pypyjit.disable()
+        assert not pypyjit.isenabled()
+        pypyjit.setthreshold(41)
+        assert not pypyjit.isenabled()
+        assert pypyjit.getthreshold() == 41
+        pypyjit.enable()
+        assert pypyjit.getthreshold() == 41
+        assert pypyjit.isenabled()
+        assert pypyjit.getthreshold() == 41
+        pypyjit.setthreshold(43)
+        assert pypyjit.isenabled()
+        assert pypyjit.getthreshold() == 43
 
         def f(x, y):
             return x*y+1
 
-        assert f(6, 7) == 43
-        pypyjit.enable(f.func_code)
         assert f(6, 7) == 43
 
         def gen(x):
@@ -23,6 +34,4 @@ class AppTestPyPyJIT:
                 yield i*i
                 i += 1
 
-        assert list(gen(3)) == [0, 1, 4]
-        pypyjit.enable(gen.func_code)
         assert list(gen(3)) == [0, 1, 4]

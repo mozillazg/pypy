@@ -438,9 +438,10 @@ class TranslationDriver(SimpleTaskEngine):
         jitcode = writer.make_bytecode(self.portal_graph)
         if ha.policy.hotpath:
             from pypy.jit.rainbow.hotpath import HotRunnerDesc
-            threshold = 10  # for now
+            assert len(ha.jitdriverclasses) == 1
+            jitdrivercls = ha.jitdriverclasses.keys()[0] # hack
             hotrunnerdesc = HotRunnerDesc(ha, rtyper, jitcode, RGenOp,
-                                          writer, threshold, 
+                                          writer, jitdrivercls,
                                           translate_support_code=True)
             hotrunnerdesc.rewrite_all()
         else:

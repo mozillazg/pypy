@@ -19,7 +19,7 @@ from pypy.jit.rainbow.portal import getjitenterargdesc
 class HotRunnerDesc:
 
     def __init__(self, hintannotator, rtyper, entryjitcode, RGenOp,
-                 codewriter, threshold, translate_support_code = True):
+                 codewriter, jitdrivercls, translate_support_code = True):
         self.hintannotator = hintannotator
         self.entryjitcode = entryjitcode
         self.rtyper = rtyper
@@ -28,7 +28,7 @@ class HotRunnerDesc:
         self.interpreter = codewriter.interpreter
         self.ts = self.interpreter.ts
         self.codewriter = codewriter
-        self.threshold = threshold
+        self.jitdrivercls = jitdrivercls
         self.translate_support_code = translate_support_code
 
     def _freeze_(self):
@@ -82,7 +82,7 @@ class HotRunnerDesc:
             counter = state.counters.get(key, 0)
             if counter >= 0:
                 counter += 1
-                if counter < self.threshold:
+                if counter < self.jitdrivercls.getcurrentthreshold():
                     interpreter.debug_trace("jit_not_entered", *args)
                     state.counters[key] = counter
                     return
