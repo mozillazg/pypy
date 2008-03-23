@@ -966,7 +966,6 @@ class BytecodeWriter(object):
     def serialize_op_direct_call(self, op):
         kind, withexc = self.guess_call_kind(op)
         handler = getattr(self, "handle_%s_call" % (kind, ))
-        print op, kind, withexc
         return handler(op, withexc)
 
     def serialize_op_ts_metacall(self, op):
