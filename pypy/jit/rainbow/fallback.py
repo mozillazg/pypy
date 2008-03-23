@@ -76,6 +76,7 @@ class FallbackInterpreter(object):
         # it needs the equivalent of jitstate.reshape(), i.e. the clean-up and
         # forced checks that follow a residual call.
         if shapemask == -1:
+            self.containers_needing_reshaping = {}
             for virtualizable_box in jitstate.virtualizables:
                 content = virtualizable_box.content
                 assert isinstance(content, rcontainer.VirtualizableStruct)
@@ -83,7 +84,6 @@ class FallbackInterpreter(object):
                                                self.getinitialboxgv)
                 if gv_ptr is not None:
                     self.containers_gv[content] = gv_ptr
-            self.containers_needing_reshaping = {}
         else:
             # Note that this must be done before initialize_from_frame()
             # because store_back_gv_reshaped() could notice some virtual
