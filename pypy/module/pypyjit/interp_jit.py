@@ -147,9 +147,8 @@ def startup(space):
     # save the app-level sys.executable in JITInfo, where the machine
     # code backend can fish for it.  A bit hackish.
     from pypy.jit.codegen.hlinfo import highleveljitinfo
-    if highleveljitinfo.sys_executable is None:
-        highleveljitinfo.sys_executable = space.str_w(
-            space.sys.get('executable'))
+    highleveljitinfo.sys_executable = space.str_w(
+        space.sys.get('executable'))
     # -- for now, we start disabled and you have to use pypyjit.enable()
     #pypyjitconfig.enable()
 
