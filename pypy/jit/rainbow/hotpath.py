@@ -12,8 +12,7 @@ from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key
 from pypy.jit.timeshifter.greenkey import GreenKey, newgreendict
-from pypy.jit.rainbow import rhotpath
-from pypy.jit.rainbow.fallback import FallbackInterpreter
+from pypy.jit.rainbow import rhotpath, fallback
 from pypy.jit.rainbow.portal import getjitenterargdesc
 
 
@@ -43,7 +42,7 @@ class HotRunnerDesc:
         self.make_enter_function()
         self.rewrite_graphs()
         self.make_descs()
-        self.fallbackinterp = FallbackInterpreter(self)
+        self.fbrunnerdesc = fallback.FallbackRunnerDesc(self)
         if self.translate_support_code:
             self.annhelper.finish()
 

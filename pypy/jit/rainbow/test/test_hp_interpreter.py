@@ -444,16 +444,51 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 4
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
-    def test_recursive_call(self):
+    def test_recursive_via_residual(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'fudge', 'res', 'i']
         def indirection(n, fudge):
             return ll_pseudo_factorial(n, fudge)
         def ll_pseudo_factorial(n, fudge):
-            k = hint(n, concrete=True)
-            if n <= 0:
-                return 1
-            return n * ll_pseudo_factorial(n - 1, fudge + n) - fudge
-        res = self.interpret(indirection, [4, 2], [0])
-        expected = ll_pseudo_factorial(4, 2)
+            res = 0
+            i = 4
+            while i > 0:
+                i >>= 1
+                if n <= 0:
+                    v = 1
+                else:
+                    v = n * indirection(n - 1, fudge + n) - fudge
+                res += v
+                MyJitDriver.jit_merge_point(n=n, fudge=fudge, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, fudge=fudge, res=res, i=i)
+            return res
+        res = self.run(ll_pseudo_factorial, [3, 2], threshold=2,
+                       policy=StopAtXPolicy(indirection))
+        expected = ll_pseudo_factorial(3, 2)
+        assert res == expected
+
+    def test_recursive_call(self):
+        py.test.skip("in-progress")
+        class MyJitDriver(JitDriver):
+            greens = ['n']
+            reds = ['fudge', 'res', 'i']
+        def indirection(n, fudge):
+            return ll_pseudo_factorial(n, fudge)
+        def ll_pseudo_factorial(n, fudge):
+            i = 4
+            while i > 0:
+                i >>= 1
+                hint(n, concrete=True)
+                if n <= 0:
+                    res = 1
+                else:
+                    res = n * indirection(n - 1, fudge + n) - fudge
+                MyJitDriver.jit_merge_point(n=n, fudge=fudge, res=res, i=i)
+                MyJitDriver.can_enter_jit(n=n, fudge=fudge, res=res, i=i)
+            return res
+        res = self.run(ll_pseudo_factorial, [3, 2], threshold=2)
+        expected = ll_pseudo_factorial(3, 2)
         assert res == expected
         
 

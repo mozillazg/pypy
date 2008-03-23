@@ -19,15 +19,12 @@ class FallbackInterpreter(object):
     actual values for the live red vars, and interprets the jitcode
     normally until it reaches the 'jit_merge_point' or raises.
     """
-    def __init__(self, hotrunnerdesc):
-        self.hotrunnerdesc = hotrunnerdesc
-        self.interpreter = hotrunnerdesc.interpreter
-        self.rgenop = self.interpreter.rgenop
-        self.exceptiondesc = hotrunnerdesc.exceptiondesc
-        self.register_opcode_impls(self.interpreter)
+    def __init__(self, fallback_point, framebase, shapemask):
+        self.hotrunnerdesc = fallback_point.hotrunnerdesc
+        self.fbrunnerdesc = self.hotrunnerdesc.fbrunnerdesc
+        self.fbrunnerdesc.debug_trace("fallback_interp")
+        self.rgenop = self.fbrunnerdesc.rgenop
 
-    def initialize_state(self, fallback_point, framebase, shapemask):
-        self.interpreter.debug_trace("fallback_interp")
         jitstate = fallback_point.saved_jitstate
         incoming_gv = jitstate.get_locals_gv()
         self.framebase = framebase
@@ -168,18 +165,18 @@ class FallbackInterpreter(object):
     def leave_fallback_interp(self, gv_result):
         # at this point we might have an exception set in self.gv_exc_xxx
         # and we have to really raise it.
-        exceptiondesc = self.exceptiondesc
+        exceptiondesc = self.fbrunnerdesc.exceptiondesc
         llvalue = self.gv_exc_value.revealconst(exceptiondesc.LL_EXC_VALUE)
         if llvalue:
             if we_are_translated():
                 exception = cast_base_ptr_to_instance(Exception, llvalue)
-                self.interpreter.debug_trace("fb_raise", str(exception))
+                self.fbrunnerdesc.debug_trace("fb_raise", str(exception))
                 raise Exception, exception
             # non-translatable hack follows...
             from pypy.rpython.llinterp import LLException, type_name
             llexctype = self.gv_exc_type.revealconst(exceptiondesc.LL_EXC_TYPE)
             assert llexctype and llvalue
-            self.interpreter.debug_trace("fb_raise", type_name(llexctype))
+            self.fbrunnerdesc.debug_trace("fb_raise", type_name(llexctype))
             raise LLException(llexctype, llvalue)
         else:
             ARG = self.hotrunnerdesc.RAISE_DONE_FUNCPTR.TO.ARGS[0]
@@ -187,7 +184,7 @@ class FallbackInterpreter(object):
                 result = gv_result.revealconst(ARG)
             else:
                 result = None
-            self.interpreter.debug_trace("fb_return", result)
+            self.fbrunnerdesc.debug_trace("fb_return", result)
             DoneWithThisFrame = self.hotrunnerdesc.DoneWithThisFrame
             raise DoneWithThisFrame(result)
 
@@ -198,7 +195,7 @@ class FallbackInterpreter(object):
         while 1:
             bytecode = self.load_2byte()
             assert bytecode >= 0
-            result = self.opcode_implementations[bytecode](self)
+            result = self.fbrunnerdesc.opcode_implementations[bytecode](self)
 
     # operation helper functions
     def getjitcode(self):
@@ -289,7 +286,7 @@ class FallbackInterpreter(object):
     @arguments()
     def opimpl_trace(self):
         msg = self.dump()
-        self.interpreter.debug_trace(msg)
+        self.fbrunnerdesc.debug_trace(msg)
 
     @arguments("green", "2byte", returns="red")
     def opimpl_make_redbox(self, genconst, typeid):
@@ -621,16 +618,30 @@ class FallbackInterpreter(object):
         else:
             self.green_result(gv_result)
 
-    # ____________________________________________________________
-    # construction-time helpers
+
+# ____________________________________________________________
+# construction-time helpers
+
+class FallbackRunnerDesc(object):
+
+    def __init__(self, hotrunnerdesc):
+        self.hotrunnerdesc = hotrunnerdesc
+        self.interpreter = hotrunnerdesc.interpreter
+        self.rgenop = self.interpreter.rgenop
+        self.exceptiondesc = hotrunnerdesc.exceptiondesc
+        self.debug_trace = self.interpreter.debug_trace
+        self.register_opcode_impls(self.interpreter)
+
+    def _freeze_(self):
+        return True
 
     def register_opcode_impls(self, interp):
         impl = [None] * len(interp.opcode_implementations)
         for opname, index in interp.opname_to_index.items():
             argspec = interp.opcode_implementations[index].argspec
             name = 'opimpl_' + opname
-            if hasattr(self, name):
-                fbopimpl = getattr(self, name).im_func
+            if hasattr(FallbackInterpreter, name):
+                fbopimpl = getattr(FallbackInterpreter, name).im_func
                 assert fbopimpl.argspec == argspec
             else:
                 opdesc = interp.opcode_descs[index]
