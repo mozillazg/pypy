@@ -113,12 +113,12 @@ class HotPromotionDesc:
                 report_compile_time_exception(interpreter, e)
 
             # exceptions below at run-time exceptions, we let them propagate
-            fallbackinterp = fbp.hotrunnerdesc.fallbackinterp
+            from pypy.jit.rainbow.fallback import FallbackInterpreter
             if is_signed and fbp.check_virtualizables():
                 shapemask = value & ~ 1
             else:
                 shapemask = -1
-            fallbackinterp.initialize_state(fbp, framebase, shapemask)
+            fallbackinterp = FallbackInterpreter(fbp, framebase, shapemask)
             fbp.prepare_fallbackinterp(fallbackinterp, value)
             fallbackinterp.bytecode_loop()
             # If the fallback interpreter reached the next jit_merge_point(),
