@@ -13,6 +13,7 @@ from pypy.rlib.jit import JitHintError
 class HotPathHintAnnotator(HintAnnotator):
 
     def build_hotpath_types(self):
+        self.jitdriverclasses = {}
         self.prepare_portal_graphs()
         graph = self.portalgraph_with_on_enter_jit
         input_args_hs = [SomeLLAbstractConstant(v.concretetype,
@@ -32,6 +33,7 @@ class HotPathHintAnnotator(HintAnnotator):
                                " expected 1 (for now)" % len(found_at))
         origportalgraph, _, origportalop = found_at[0]
         drivercls = origportalop.args[0].value
+        self.jitdriverclasses[drivercls] = True
         #
         # We make a copy of origportalgraph and mutate it to make it
         # the portal.  The portal really starts at the jit_merge_point()

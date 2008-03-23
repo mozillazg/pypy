@@ -70,9 +70,13 @@ class HotPathTest(test_interpreter.InterpretationTest):
         return self._run(main, main_args)
 
     def _rewrite(self, threshold, small):
+        assert len(self.hintannotator.jitdriverclasses) == 1
+        jitdrivercls = self.hintannotator.jitdriverclasses.keys()[0]    # hack
+        jitdrivercls.getcurrentthreshold = staticmethod(lambda : threshold) #..
         self.hotrunnerdesc = HotRunnerDesc(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
-                                       threshold, self.translate_support_code)
+                                       jitdrivercls,
+                                       self.translate_support_code)
         self.hotrunnerdesc.rewrite_all()
         if small and conftest.option.view:
             self.rtyper.annotator.translator.view()
