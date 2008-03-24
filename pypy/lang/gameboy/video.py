@@ -1,5 +1,5 @@
 """
- Mario GameBoy (TM) Emulator
+ PyBoy GameBoy (TM) Emulator
  constants.LCD Video Display Processor
 """
 

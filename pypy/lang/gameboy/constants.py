@@ -228,7 +228,7 @@ TIMER_CLOCK = [
 ]
  
 # Timer Register Addresses
-DIV = 0xFF04 # Divider Register */
-TIMA = 0xFF05 # Timer Counter */
-TMA = 0xFF06 # Timer Modulo */
-TAC = 0xFF07 # Timer Control */
+DIV = 0xFF04 # Divider Register
+TIMA = 0xFF05 # Timer Counter
+TMA = 0xFF06 # Timer Modulo
+TAC = 0xFF07 # Timer Control
