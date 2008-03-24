@@ -16,7 +16,6 @@ def get_timer_interrupt():
 
 
 def test_reset(timer=None):
-    py.test.skip("Timer Class not working")
     if timer == None:
         timer = get_timer()
     assert timer.div == 0
@@ -29,7 +28,6 @@ def test_reset(timer=None):
     
     
 def test_read_write():
-    py.test.skip("Timer Class not working")
     timer = get_timer()
     timer.div = 10
     value = 0x11
@@ -52,7 +50,7 @@ def test_read_write():
     
     
 def test_setTimerControl():
-    py.test.skip("Timer Class not working")
+    py.test.skip("need to use more information about the timer")
     timer = get_timer()
     value = 0x12
     timer.write(constants.TAC, value)
@@ -61,15 +59,12 @@ def test_setTimerControl():
     
     
 def test_cycles():
-    py.test.skip("Timer Class not working")
     timer = get_timer()
     
 
 def test_emulateDivider():
-    py.test.skip("Timer Class not working")
     timer = get_timer()
     
 
 def test_emulateTimer():
-    py.test.skip("Timer Class not working")
     timer = get_timer()
