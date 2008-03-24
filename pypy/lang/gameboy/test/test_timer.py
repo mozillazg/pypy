@@ -50,21 +50,23 @@ def test_read_write():
     
     
 def test_setTimerControl():
-    py.test.skip("need to use more information about the timer")
     timer = get_timer()
     value = 0x12
     timer.write(constants.TAC, value)
-    assert timer.getTimerControl() == value
-    assert timer.read(constants.TAC) == value
+    assert timer.getTimerControl() == 0xF8 | value 
+    assert timer.read(constants.TAC) == 0xF8 |value
     
     
 def test_cycles():
+    py.test.skip("not yet implemented")
     timer = get_timer()
     
 
 def test_emulateDivider():
+    py.test.skip("not yet implemented")
     timer = get_timer()
     
 
 def test_emulateTimer():
+    py.test.skip("not yet implemented")
     timer = get_timer()
