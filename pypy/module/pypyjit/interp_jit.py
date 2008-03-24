@@ -1,10 +1,6 @@
 """This is not the JIT :-)
 
-The pypyjit module helpers set the 'jit_enable' flag on code objects.
-The code below makes two identical copies of the interpreter's main
-loop, and the flag controls which of them is used.  One of them
-(dispatch_jit) is transformed to become a JIT by code elsewhere:
-pypy/jit/*
+This is transformed to become a JIT by code elsewhere: pypy/jit/*
 """
 import py
 import sys
