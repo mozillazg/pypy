@@ -1,8 +1,3 @@
-"""
-PyBoy GameBoy (TM) Emulator
-
-Central Unit ProcessOR (Sharp LR35902 CPU)
-"""
 from pypy.lang.gameboy import constants
 
 
@@ -89,6 +84,12 @@ class ImmediatePseudoRegister(object):
 # ___________________________________________________________________________
 
 class CPU(object):
+    """
+    PyBoy GameBoy (TM) Emulator
+    
+    Central Unit ProcessOR (Sharp LR35902 CPU)
+    """
+    
     def __init__(self, interrupt, memory):
         self.interrupt = interrupt
         self.memory = memory
@@ -288,7 +289,6 @@ class CPU(object):
         register.set(a, b) # 2 cycles
         self.cycles += 1
         
-        
     # 4 cycles
     def call(self, address):
         self.push(self.pc.getHi()) # 2 cycles
@@ -300,14 +300,12 @@ class CPU(object):
     def ld(self, getter, setter):
         setter(getter()) # 1 cycle
         
-        
      # LD PC,HL, 1 cycle
     def ld_pc_hl(self):
         self.ld(self.hl, self.pc)
         
     def fetchLoad(self, register):
         self.ld(self.fetch, register.set)
-
 
      # ALU, 1 cycle
     def addA(self, data):
@@ -330,7 +328,6 @@ class CPU(object):
             self.f.add(constants.C_FLAG, False)
         self.cycles -= 1
         
-
     # 1 cycle
     def adc(self, getter):
         s = self.a.get() + getter() + ((self.f.get() & constants.C_FLAG) >> 4)
@@ -510,7 +507,6 @@ class CPU(object):
     def res(self, getter, setter, n):
         setter(getter() & (~(1 << n))) # 1 cycle
         
-
      # LD A,(nnnn), 4 cycles
     def ld_A_mem(self):
         lo = self.fetch() # 1 cycle
@@ -796,7 +792,6 @@ def group_lambda(function, registerGetter, value=None):
         return lambda s: function(s, registerGetter(s).get, registerGetter(s).set)
     else:
         return  lambda s: function(s, registerGetter(s).get, registerGetter(s).set, value)
-        
 
 def create_register_op_codes(table):
     opCodes = []
@@ -815,7 +810,6 @@ def register_lambda(function, registerOrGetter):
     else:
         return lambda s: function(s, registerOrGetter)
         
-
 def initialize_op_code_table(table):
     print ""
     result = [None] * (0xFF+1)

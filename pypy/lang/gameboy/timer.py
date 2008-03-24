@@ -3,6 +3,7 @@ PyBoy GameBoy (TM) Emulator
  
 Timer and Divider
 """
+from pypy.lang.gameboy import constants
 
 class Timer(object):
 
