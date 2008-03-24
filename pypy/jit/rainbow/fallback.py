@@ -195,7 +195,7 @@ class FallbackInterpreter(object):
 
     def bytecode_loop(self):
         while 1:
-            bytecode = self.load_2byte()
+            bytecode = self.load_int()
             assert bytecode >= 0
             result = self.fbrunnerdesc.opcode_implementations[bytecode](self)
 
@@ -210,13 +210,19 @@ class FallbackInterpreter(object):
         self.pc = pc + 1
         return result
 
-    def load_2byte(self):
+    def load_int(self):
+        result = 0
+        shift = 0
         pc = self.pc
-        assert pc >= 0
-        result = ((ord(self.bytecode.code[pc]) << 8) |
-                   ord(self.bytecode.code[pc + 1]))
-        self.pc = pc + 2
-        return intmask((result ^ SIGN_EXTEND2) - SIGN_EXTEND2)
+        while 1:
+            byte = ord(self.bytecode.code[pc])
+            pc += 1
+            result += (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        self.pc = pc
+        return intmask(result)
 
     def load_4byte(self):
         pc = self.pc
@@ -232,30 +238,30 @@ class FallbackInterpreter(object):
         return bool(self.load_byte())
 
     def get_greenarg(self):
-        i = self.load_2byte()
+        i = self.load_int()
         if i % 2:
             return self.bytecode.constants[i // 2]
         return self.local_green[i // 2]
 
     def get_green_varargs(self):
         greenargs = []
-        num = self.load_2byte()
+        num = self.load_int()
         for i in range(num):
             greenargs.append(self.get_greenarg())
         return greenargs
 
     def get_red_varargs(self):
         redargs = []
-        num = self.load_2byte()
+        num = self.load_int()
         for i in range(num):
             redargs.append(self.get_redarg())
         return redargs
 
     def get_redarg(self):
-        return self.local_red[self.load_2byte()]
+        return self.local_red[self.load_int()]
 
     def get_greenkey(self):
-        keydescnum = self.load_2byte()
+        keydescnum = self.load_int()
         if keydescnum == 0:
             return empty_key
         else:
