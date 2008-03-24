@@ -25,42 +25,47 @@ class SourceIterator:
         return arg
 
     def get_opname(self):
-        return self.get(str, 2)
+        result = self.get(str, 0)
+        self.pc += len(
+            codewriter.encode_int(self.interpreter.find_opcode(result)))
+        return result
 
     def getjitcode(self):
         return self.jitcode
 
-    def load_2byte(self):
-        return self.get(int, 2)
+    def load_int(self):
+        result = self.get(int, 0)
+        self.pc += len(codewriter.encode_int(result))
+        return result
 
     def load_bool(self):
         return self.get(bool, 1)
 
     def get_greenarg(self):
-        i = self.load_2byte()
+        i = self.load_int()
         if i % 2:
             return self.jitcode.constants[i // 2]
         return CustomRepr('g%d' % (i // 2))
 
     def get_green_varargs(self):
         greenargs = []
-        num = self.load_2byte()
+        num = self.load_int()
         for i in range(num):
             greenargs.append(self.get_greenarg())
         return greenargs
 
     def get_red_varargs(self):
         redargs = []
-        num = self.load_2byte()
+        num = self.load_int()
         for i in range(num):
             redargs.append(self.get_redarg())
         return redargs
 
     def get_redarg(self):
-        return CustomRepr('r%d' % self.get(int, 2))
+        return CustomRepr('r%d' % self.load_int())
 
     def get_greenkey(self):
-        keydescnum = self.load_2byte()
+        keydescnum = self.load_int()
         if keydescnum == 0:
             return None
         else:
@@ -135,4 +140,5 @@ def dump_bytecode(jitcode, file=None):
             assert 0, "unexpected object: %r" % (arg,)
 
     if src.pc != len(jitcode.code):
+        import pdb; pdb.set_trace()
         print >> file, 'WARNING: the pc column is bogus! fix dump.py!'

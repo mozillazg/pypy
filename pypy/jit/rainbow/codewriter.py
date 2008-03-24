@@ -1771,23 +1771,32 @@ class tlabel(object):
     def __repr__(self):
         return "tlabel(%r)" % (self.name, )
 
+def encode_int(index):
+    assert index >= 0
+    result = []
+    while True:
+        byte = index & 0x7F
+        index >>= 7
+        result.append(chr(byte + 0x80 * bool(index)))
+        if not index:
+            break
+    return result
+
 def assemble_labelpos(labelpos, interpreter, *args):
     result = []
-    def emit_2byte(index):
-        assert -32768 <= index < 32768
-        result.append(chr((index >> 8) & 0xff))
-        result.append(chr(index & 0xff))
+    def emit(index):
+        result.extend(encode_int(index))
     for arg in args:
         if isinstance(arg, str):
             if arg.startswith('#'):     # skip comments
                 continue
             opcode = interpreter.find_opcode(arg)
             assert opcode >= 0, "unknown opcode %s" % (arg, )
-            emit_2byte(opcode)
+            emit(opcode)
         elif isinstance(arg, bool):
             result.append(chr(int(arg)))
         elif isinstance(arg, int):
-            emit_2byte(arg)
+            emit(arg)
         elif isinstance(arg, label):
             labelpos[arg.name] = len(result)
         elif isinstance(arg, tlabel):

@@ -130,22 +130,22 @@ class arguments(object):
                 elif argspec == "green":
                     args += (self.get_greenarg(), )
                 elif argspec == "kind":
-                    args += (self.getjitcode().typekinds[self.load_2byte()], )
+                    args += (self.getjitcode().typekinds[self.load_int()], )
                 elif argspec == "jumptarget":
                     args += (self.load_4byte(), )
                 elif argspec == "jumptargets":
-                    num = self.load_2byte()
+                    num = self.load_int()
                     args += ([self.load_4byte() for i in range(num)], )
                 elif argspec == "bool":
                     args += (self.load_bool(), )
                 elif argspec == "redboxcls":
-                    args += (self.getjitcode().redboxclasses[self.load_2byte()], )
+                    args += (self.getjitcode().redboxclasses[self.load_int()], )
                 elif argspec == "2byte":
-                    args += (self.load_2byte(), )
+                    args += (self.load_int(), )
                 elif argspec == "greenkey":
                     args += (self.get_greenkey(), )
                 elif argspec == "promotiondesc":
-                    promotiondescnum = self.load_2byte()
+                    promotiondescnum = self.load_int()
                     promotiondesc = self.getjitcode().promotiondescs[promotiondescnum]
                     args += (promotiondesc, )
                 elif argspec == "green_varargs":
@@ -153,38 +153,38 @@ class arguments(object):
                 elif argspec == "red_varargs":
                     args += (self.get_red_varargs(), )
                 elif argspec == "bytecode":
-                    bytecodenum = self.load_2byte()
+                    bytecodenum = self.load_int()
                     args += (self.getjitcode().called_bytecodes[bytecodenum], )
                 elif argspec == "calldesc":
-                    index = self.load_2byte()
+                    index = self.load_int()
                     function = self.getjitcode().calldescs[index]
                     args += (function, )
                 elif argspec == "metacalldesc":
-                    index = self.load_2byte()
+                    index = self.load_int()
                     function = self.getjitcode().metacalldescs[index]
                     args += (function, )
                 elif argspec == "indirectcalldesc":
-                    index = self.load_2byte()
+                    index = self.load_int()
                     function = self.getjitcode().indirectcalldescs[index]
                     args += (function, )
                 elif argspec == "oopspec":
-                    oopspecindex = self.load_2byte()
+                    oopspecindex = self.load_int()
                     oopspec = self.getjitcode().oopspecdescs[oopspecindex]
                     args += (oopspec, )
                 elif argspec == "structtypedesc":
-                    td = self.getjitcode().structtypedescs[self.load_2byte()]
+                    td = self.getjitcode().structtypedescs[self.load_int()]
                     args += (td, )
                 elif argspec == "arraydesc":
-                    td = self.getjitcode().arrayfielddescs[self.load_2byte()]
+                    td = self.getjitcode().arrayfielddescs[self.load_int()]
                     args += (td, )
                 elif argspec == "fielddesc":
-                    d = self.getjitcode().fielddescs[self.load_2byte()]
+                    d = self.getjitcode().fielddescs[self.load_int()]
                     args += (d, )
                 elif argspec == "interiordesc":
-                    d = self.getjitcode().interiordescs[self.load_2byte()]
+                    d = self.getjitcode().interiordescs[self.load_int()]
                     args += (d, )
                 elif argspec == "exception":
-                    d = self.getjitcode().exceptioninstances[self.load_2byte()]
+                    d = self.getjitcode().exceptioninstances[self.load_int()]
                     args += (d, )
                 else:
                     assert 0, "unknown argtype declaration"
@@ -305,7 +305,7 @@ class JitInterpreter(object):
 
     def bytecode_loop(self):
         while 1:
-            bytecode = self.load_2byte()
+            bytecode = self.load_int()
             assert bytecode >= 0
             result = self.opcode_implementations[bytecode](self)
             assert (self.frame is None or not self.frame.local_boxes or
@@ -361,20 +361,19 @@ class JitInterpreter(object):
     def getjitcode(self):
         return self.frame.bytecode
 
-    def load_byte(self):
+    def load_int(self):
+        result = 0
+        shift = 0
         pc = self.frame.pc
-        assert pc >= 0
-        result = ord(self.frame.bytecode.code[pc])
-        self.frame.pc = pc + 1
-        return result
-
-    def load_2byte(self):
-        pc = self.frame.pc
-        assert pc >= 0
-        result = ((ord(self.frame.bytecode.code[pc]) << 8) |
-                   ord(self.frame.bytecode.code[pc + 1]))
-        self.frame.pc = pc + 2
-        return intmask((result ^ SIGN_EXTEND2) - SIGN_EXTEND2)
+        while 1:
+            byte = ord(self.frame.bytecode.code[pc])
+            pc += 1
+            result += (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        self.frame.pc = pc
+        return intmask(result)
 
     def load_4byte(self):
         pc = self.frame.pc
@@ -387,33 +386,37 @@ class JitInterpreter(object):
         return intmask(result)
 
     def load_bool(self):
-        return bool(self.load_byte())
+        pc = self.frame.pc
+        assert pc >= 0
+        result = ord(self.frame.bytecode.code[pc])
+        self.frame.pc = pc + 1
+        return bool(result)
 
     def get_greenarg(self):
-        i = self.load_2byte()
+        i = self.load_int()
         if i % 2:
             return self.frame.bytecode.constants[i // 2]
         return self.frame.local_green[i // 2]
 
     def get_green_varargs(self):
         greenargs = []
-        num = self.load_2byte()
+        num = self.load_int()
         for i in range(num):
             greenargs.append(self.get_greenarg())
         return greenargs
 
     def get_red_varargs(self):
         redargs = []
-        num = self.load_2byte()
+        num = self.load_int()
         for i in range(num):
             redargs.append(self.get_redarg())
         return redargs
 
     def get_redarg(self):
-        return self.frame.local_boxes[self.load_2byte()]
+        return self.frame.local_boxes[self.load_int()]
 
     def get_greenkey(self):
-        keydescnum = self.load_2byte()
+        keydescnum = self.load_int()
         if keydescnum == 0:
             return empty_key
         else:

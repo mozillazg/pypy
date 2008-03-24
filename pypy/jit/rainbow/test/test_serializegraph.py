@@ -221,22 +221,22 @@ class AbstractSerializationTest:
         expected = """\
 JITCODE 'f'
 pc: 0 |  make_redbox          (0), 0           => r1
-    6 |  make_new_redvars     [r0, r1]
+    3 |  make_new_redvars     [r0, r1]
       |
-   14 |  local_merge          0, None
-   20 |  red_int_is_true      r0               => r2
-   24 |  red_goto_iftrue      r2, pc: 40
-   32 |  make_new_redvars     [r1]
+    7 |  local_merge          0, None
+   10 |  red_int_is_true      r0               => r2
+   12 |  red_goto_iftrue      r2, pc: 22
+   18 |  make_new_redvars     [r1]
       |
-   38 |  red_return
+   21 |  red_return
       |
-   40 |  make_new_redvars     [r0, r1]
+   22 |  make_new_redvars     [r0, r1]
       |
-   48 |  red_int_add          r1, r0           => r2
-   54 |  make_redbox          (1), 0           => r3
-   60 |  red_int_sub          r0, r3           => r4
-   66 |  make_new_redvars     [r4, r2]
-   74 |  goto                 pc: 14
+   26 |  red_int_add          r1, r0           => r2
+   29 |  make_redbox          (1), 0           => r3
+   32 |  red_int_sub          r0, r3           => r4
+   35 |  make_new_redvars     [r4, r2]
+   39 |  goto                 pc: 7
         """.rstrip()
         assert result == expected
 
