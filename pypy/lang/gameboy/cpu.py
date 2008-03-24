@@ -1,5 +1,5 @@
 """
-Mario GameBoy (TM) EmulatOR
+PyBoy GameBoy (TM) Emulator
 
 Central Unit ProcessOR (Sharp LR35902 CPU)
 """
@@ -279,7 +279,10 @@ class CPU(object):
         return data
     
      # 3 cycles
-    def popDoubleRegister(self, getter, register):
+    def popDoubleRegister(self, getter, register=None):
+        if register == None:
+            register = getter
+            getter = CPU.pop
         b = getter(self) # 1 cycle
         a = getter(self) # 1 cycle
         register.set(a, b) # 2 cycles
@@ -516,10 +519,10 @@ class CPU(object):
 
     # 2 cycles
     def ld_BCi_A(self):
-        self.write(self.bc.get(), self.a.get());
+        self.write(self.bc.get(), self.a.get())
         
     def ld_DEi_A(self):
-        self.write(self.de.get(), self.a.get());
+        self.write(self.de.get(), self.a.get())
            
     def ld_A_BCi(self):
         self.a.set(self.read(self.bc.get()))
@@ -914,7 +917,7 @@ REGISTER_OP_CODES = [
     (0xC2, 0x08, CPU.jp_cc_nnnn,          REGISTER_SET_B),
     (0xC4, 0x08, CPU.call_cc_nnnn,        REGISTER_SET_B),
     (0x20, 0x08, CPU.jr_cc_nn,            REGISTER_SET_B),
-    (0xC1, 0x10, CPU.pop,                 REGISTER_SET_C),
+    (0xC1, 0x10, CPU.popDoubleRegister,   REGISTER_SET_C),
     (0xC5, 0x10, CPU.push,                REGISTER_SET_C)
 ]
 

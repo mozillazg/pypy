@@ -1,5 +1,5 @@
 """
-Mario GameBoy (TM) Emulator
+PyBoy GameBoy (TM) Emulator
 Serial Link Controller
  """
 from pypy.lang.gameboy import constants

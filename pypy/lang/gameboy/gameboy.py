@@ -1,5 +1,5 @@
 """
-Mario GameBoy (TM) Emulator
+PyBoy GameBoy (TM) Emulator
  
 Gameboy Scheduler and Memory Mapper
 
@@ -9,88 +9,88 @@ from pypy.lang.gameboy import constants
 class GameBoy(object):
 
     # RAM
-    ram = None;
-    cartridge = None;
-    interrupt = None;
-    cpu = None;
-    serial = None;
-    timer = None;
-    joypad = None;
-    video = None;
-    sound = None;
+    ram = None
+    cartridge = None
+    interrupt = None
+    cpu = None
+    serial = None
+    timer = None
+    joypad = None
+    video = None
+    sound = None
 
     def __init__(self, videoDriver, soundDriver, joypadDriver, storeDriver, clockDriver):
-        self.ram = RAM();
-        self.cartridge = Cartridge(storeDriver, clockDriver);
-        self.interrupt = Interrupt();
-        self.cpu = CPU(self.interrupt, this);
-        self.serial = Serial(self.interrupt);
-        self.timer = Timer(self.interrupt);
-        self.joypad = Joypad(joypadDriver, self.interrupt);
-        self.video = Video(videoDriver, self.interrupt, this);
-        self.sound = Sound(soundDriver);
+        self.ram = RAM()
+        self.cartridge = Cartridge(storeDriver, clockDriver)
+        self.interrupt = Interrupt()
+        self.cpu = CPU(self.interrupt, this)
+        self.serial = Serial(self.interrupt)
+        self.timer = Timer(self.interrupt)
+        self.joypad = Joypad(joypadDriver, self.interrupt)
+        self.video = Video(videoDriver, self.interrupt, this)
+        self.sound = Sound(soundDriver)
 
 
     def getCartridge(self):
-        return self.cartridge;
+        return self.cartridge
 
 
     def getFrameSkip(self):
-        return self.video.getFrameSkip();
+        return self.video.getFrameSkip()
 
 
     def setFrameSkip(self, frameSkip):
-        self.video.setFrameSkip(frameSkip);
+        self.video.setFrameSkip(frameSkip)
 
 
     def load(self, cartridgeName):
-        self.cartridge.load(cartridgeName);
+        self.cartridge.load(cartridgeName)
 
 
     def save(self, cartridgeName):
-        self.cartridge.save(cartridgeName);
+        self.cartridge.save(cartridgeName)
 
 
     def start(self):
-        self.sound.start();
+        self.sound.start()
 
 
     def stop(self):
-        self.sound.stop();
+        self.sound.stop()
 
 
     def reset(self):
-        self.ram.reset();
-        self.cartridge.reset();
-        self.interrupt.reset();
-        self.cpu.reset();
-        self.serial.reset();
-        self.timer.reset();
-        self.joypad.reset();
-        self.video.reset();
-        self.sound.reset();
-        self.cpu.setROM(self.cartridge.getROM());
-        self.drawLogo();
+        self.ram.reset()
+        self.cartridge.reset()
+        self.interrupt.reset()
+        self.cpu.reset()
+        self.serial.reset()
+        self.timer.reset()
+        self.joypad.reset()
+        self.video.reset()
+        self.sound.reset()
+        self.cpu.setROM(self.cartridge.getROM())
+        self.drawLogo()
 
 
     def cycles(self):
         return min(self.video.cycles(), self.serial.cycles(),
                     self.timer.cycles(), self.sound.cycles(),
-                    self.joypad.cycles());
+                    self.joypad.cycles())
 
 
     def emulate(self, ticks):
         while (ticks > 0):
-            count = self.cycles();
+            count = self.cycles()
 
-            self.cpu.emulate(count);
-            self.serial.emulate(count);
-            self.timer.emulate(count);
-            self.video.emulate(count);
-            self.sound.emulate(count);
-            self.joypad.emulate(count);
+            self.cpu.emulate(count)
+            self.serial.emulate(count)
+            self.timer.emulate(count)
+            self.video.emulate(count)
+            self.sound.emulate(count)
+            self.joypad.emulate(count)
 
-            ticks -= count;
+            ticks -= count
     
 
     def write(self, address, data):
@@ -129,26 +129,26 @@ class GameBoy(object):
 
     def drawLogo(self):
         for index in range(0, 48):
-            bits = self.cartridge.read(0x0104 + index);
+            bits = self.cartridge.read(0x0104 + index)
             pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60)\
                     + ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06)\
-                    + ((bits >> 4) & 0x01);
+                    + ((bits >> 4) & 0x01)
 
             pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60)\
                     + ((bits << 2) & 0x18) + ((bits << 1) & 0x06)\
-                    + ((bits << 0) & 0x01);
+                    + ((bits << 0) & 0x01)
 
-            self.video.write(0x8010 + (index << 3), pattern0);
-            self.video.write(0x8012 + (index << 3), pattern0);
+            self.video.write(0x8010 + (index << 3), pattern0)
+            self.video.write(0x8012 + (index << 3), pattern0)
 
-            self.video.write(0x8014 + (index << 3), pattern1);
-            self.video.write(0x8016 + (index << 3), pattern1);
+            self.video.write(0x8014 + (index << 3), pattern1)
+            self.video.write(0x8016 + (index << 3), pattern1)
 
         for index in range(0, 8):
-            self.video.write(0x8190 + (index << 1), constants.REGISTERED_BITMAP[index]);
+            self.video.write(0x8190 + (index << 1), constants.REGISTERED_BITMAP[index])
 
         for tile in range(0, 12):
-            self.video.write(0x9904 + tile, tile + 1);
-            self.video.write(0x9924 + tile, tile + 13);
+            self.video.write(0x9904 + tile, tile + 1)
+            self.video.write(0x9924 + tile, tile + 13)
 
-        self.video.write(0x9905 + 12, 25);
+        self.video.write(0x9905 + 12, 25)
