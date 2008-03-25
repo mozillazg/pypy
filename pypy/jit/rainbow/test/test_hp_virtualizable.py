@@ -1093,6 +1093,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
 
 class TestVirtualizableImplicit(test_hotpath.HotPathTest):
     type_system = "lltype"
+    simplify_virtualizable_accesses = True
 
     def timeshift_from_portal(self, *args, **kwargs):
         py.test.skip("port me")

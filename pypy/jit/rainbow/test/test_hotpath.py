@@ -55,7 +55,7 @@ def summary_loops(graph):
 
 class HotPathTest(test_interpreter.InterpretationTest):
     type_system = 'lltype'
-
+    simplify_virtualizable_accesses = False
 
     def interpret(self, main, ll_values, opt_consts=[], **kwds):
         py.test.skip("old-style test, port me")
@@ -78,6 +78,9 @@ class HotPathTest(test_interpreter.InterpretationTest):
                                        jitdrivercls,
                                        self.translate_support_code)
         self.hotrunnerdesc.rewrite_all()
+        if self.simplify_virtualizable_accesses:
+            from pypy.jit.rainbow import graphopt
+            graphopt.simplify_virtualizable_accesses(self.writer)
         if small and conftest.option.view:
             self.rtyper.annotator.translator.view()
 
