@@ -187,7 +187,6 @@ class BytecodeWriter(object):
 
     def make_bytecode(self, graph, is_portal=True):
         self.transformer.transform_graph(graph)
-        #graph.show()
         if is_portal:
             bytecode = JitCode.__new__(JitCode)
             bytecode.name = graph.name     # for dump()
@@ -1207,25 +1206,6 @@ class BytecodeWriter(object):
         newop = flowmodel.SpaceOperation(opname, args, op.result)
         self.serialize_op(newop)
 
-    def serialize_op_malloc(self, op):
-        index = self.structtypedesc_position(op.args[0].value)
-        self.emit("red_malloc", index)
-        self.register_redvar(op.result)
-
-    def serialize_op_malloc_varsize(self, op):
-        PTRTYPE = op.result.concretetype
-        TYPE = PTRTYPE.TO
-        v_size = op.args[2]
-        sizeindex = self.serialize_oparg("red", v_size)
-        if isinstance(TYPE, lltype.Struct):
-            index = self.structtypedesc_position(op.args[0].value)
-            self.emit("red_malloc_varsize_struct")
-        else:
-            index = self.arrayfielddesc_position(TYPE)
-            self.emit("red_malloc_varsize_array")
-        self.emit(index, sizeindex)
-        self.register_redvar(op.result)
-
     def serialize_op_zero_gc_pointers_inside(self, op):
         pass # XXX is that right?
 
@@ -1603,6 +1583,25 @@ class LLTypeBytecodeWriter(BytecodeWriter):
 
     def serialize_op_setfield(self, op):
         return self.serialize_op_setfield_impl(op)
+ 
+    def serialize_op_malloc(self, op):
+        index = self.structtypedesc_position(op.args[0].value)
+        self.emit("red_malloc", index)
+        self.register_redvar(op.result)
+
+    def serialize_op_malloc_varsize(self, op):
+        PTRTYPE = op.result.concretetype
+        TYPE = PTRTYPE.TO
+        v_size = op.args[2]
+        sizeindex = self.serialize_oparg("red", v_size)
+        if isinstance(TYPE, lltype.Struct):
+            index = self.structtypedesc_position(op.args[0].value)
+            self.emit("red_malloc_varsize_struct")
+        else:
+            index = self.arrayfielddesc_position(TYPE)
+            self.emit("red_malloc_varsize_array")
+        self.emit(index, sizeindex)
+        self.register_redvar(op.result)
 
 
 class OOTypeBytecodeWriter(BytecodeWriter):
@@ -1618,6 +1617,11 @@ class OOTypeBytecodeWriter(BytecodeWriter):
 
     def serialize_op_oosetfield(self, op):
         return self.serialize_op_setfield_impl(op)
+
+    def serialize_op_new(self, op):
+        index = self.structtypedesc_position(op.args[0].value)
+        self.emit("red_new", index)
+        self.register_redvar(op.result)
 
 
 class GraphTransformer(object):

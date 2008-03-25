@@ -21,7 +21,6 @@ class TypeSystemHelper(object):
     def _freeze_(self):
         return True
 
-
 class LLTypeHelper(TypeSystemHelper):
 
     name = 'lltype'
@@ -30,6 +29,8 @@ class LLTypeHelper(TypeSystemHelper):
     def get_typeptr(self, obj):
         return obj.typeptr
 
+    def genop_malloc_fixedsize(self, builder, alloctoken):
+        return builder.genop_malloc_fixedsize(alloctoken)
 
 class OOTypeHelper(TypeSystemHelper):
 
@@ -38,6 +39,9 @@ class OOTypeHelper(TypeSystemHelper):
 
     def get_typeptr(self, obj):
         return obj.meta
+
+    def genop_malloc_fixedsize(self, builder, alloctoken):
+        return builder.genop_new(alloctoken)
 
 
 llhelper = LLTypeHelper()

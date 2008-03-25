@@ -100,7 +100,7 @@ class InterpretationTest(object):
         return lltype.Ptr(T)
 
     @staticmethod
-    def Struct(name, *fields, **kwds):
+    def GcStruct(name, *fields, **kwds):
         S = lltype.GcStruct(name, *fields, **kwds)
         return S
 
@@ -684,10 +684,10 @@ class SimpleTests(InterpretationTest):
         
 
     def test_simple_struct(self):
-        S = self.Struct('helloworld',
-                        ('hello', lltype.Signed),
-                        ('world', lltype.Signed),
-                        hints={'immutable': True})
+        S = self.GcStruct('helloworld',
+                          ('hello', lltype.Signed),
+                          ('world', lltype.Signed),
+                          hints={'immutable': True})
         malloc = self.malloc
         
         def ll_function(s):
@@ -790,6 +790,7 @@ class SimpleTests(InterpretationTest):
     def test_degenerated_before_return(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+        malloc = self.malloc
 
         def ll_function(flag):
             t = lltype.malloc(T)
@@ -865,10 +866,11 @@ class SimpleTests(InterpretationTest):
         assert res == 4 * 4
 
     def test_degenerate_with_voids(self):
-        S = lltype.GcStruct('S', ('y', lltype.Void),
-                                 ('x', lltype.Signed))
+        S = self.GcStruct('S', ('y', lltype.Void),
+                               ('x', lltype.Signed))
+        malloc = self.malloc
         def ll_function():
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.x = 123
             return s
         res = self.interpret(ll_function, [], [])
@@ -1066,7 +1068,7 @@ class SimpleTests(InterpretationTest):
 
 
     def test_green_with_side_effects(self):
-        S = self.Struct('S', ('flag', lltype.Bool))
+        S = self.GcStruct('S', ('flag', lltype.Bool))
         s = self.malloc(S)
         s.flag = False
         def ll_set_flag(s):
@@ -1987,7 +1989,7 @@ class TestOOType(SimpleTests):
         return T
 
     @staticmethod
-    def Struct(name, *fields, **kwds):
+    def GcStruct(name, *fields, **kwds):
         if 'hints' in kwds:
             kwds['_hints'] = kwds['hints']
             del kwds['hints']
@@ -2019,7 +2021,6 @@ class TestOOType(SimpleTests):
     test_degenerated_before_return_2 = _skip
     test_degenerated_at_return = _skip
     test_degenerated_via_substructure = _skip
-    test_degenerate_with_voids = _skip
     test_plus_minus = _skip
     test_red_virtual_container = _skip
     test_red_array = _skip

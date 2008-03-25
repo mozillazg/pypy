@@ -857,7 +857,7 @@ class VirtualStruct(VirtualContainer):
                 return
         debug_print(lltype.Void, "FORCE CONTAINER: "+ typedesc.TYPE._name)
         #debug_pdb(lltype.Void)
-        genvar = builder.genop_malloc_fixedsize(typedesc.alloctoken)
+        genvar = jitstate.ts.genop_malloc_fixedsize(builder, typedesc.alloctoken)
         # force the box pointing to this VirtualStruct
         self.setforced(genvar)
         fielddescs = typedesc.fielddescs
@@ -1284,6 +1284,7 @@ class VirtualizableStruct(VirtualStruct):
 
 # patching VirtualStructCls
 StructTypeDesc.VirtualStructCls = VirtualStruct
+InstanceTypeDesc.VirtualStructCls = VirtualStruct
 VirtualizableStructTypeDesc.VirtualStructCls = VirtualizableStruct
 
 
