@@ -104,9 +104,7 @@ class InterpretationTest(object):
         S = lltype.GcStruct(name, *fields, **kwds)
         return S
 
-    @staticmethod
-    def malloc(S):
-        return lltype.malloc(S)
+    malloc = staticmethod(lltype.malloc)
 
     def setup_class(cls):
         cls.on_llgraph = cls.RGenOp is LLRGenOp
@@ -899,9 +897,10 @@ class SimpleTests(InterpretationTest):
         # this checks that red boxes are able to be virtualized dynamically by
         # the compiler (the P_NOVIRTUAL policy prevents the hint-annotator from
         # marking variables in blue)
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        S = self.GcStruct('S', ('n', lltype.Signed))
+        malloc = self.malloc
         def ll_function(n):
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.n = n
             return s.n
         res = self.interpret(ll_function, [42], [])
@@ -996,9 +995,10 @@ class SimpleTests(InterpretationTest):
         assert len(res.item0) == 3
 
     def test_red_propagate(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        S = self.GcStruct('S', ('n', lltype.Signed))
+        malloc = self.malloc
         def ll_function(n, k):
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.n = n
             if k < 0:
                 return -123
@@ -1042,20 +1042,21 @@ class SimpleTests(InterpretationTest):
 
 
     def test_merge_structures(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', lltype.Ptr(S)), ('n', lltype.Signed))
+        S = self.GcStruct('S', ('n', lltype.Signed))
+        T = self.GcStruct('T', ('s', self.Ptr(S)), ('n', lltype.Signed))
+        malloc = self.malloc
 
         def ll_function(flag):
             if flag:
-                s = lltype.malloc(S)
+                s = malloc(S)
                 s.n = 1
-                t = lltype.malloc(T)
+                t = malloc(T)
                 t.s = s
                 t.n = 2
             else:
-                s = lltype.malloc(S)
+                s = malloc(S)
                 s.n = 5
-                t = lltype.malloc(T)
+                t = malloc(T)
                 t.s = s
                 t.n = 6
             return t.n + t.s.n
@@ -1996,9 +1997,7 @@ class TestOOType(SimpleTests):
         I = ootype.Instance(name, ootype.ROOT, dict(fields), **kwds)
         return I
 
-    @staticmethod
-    def malloc(I):
-        return ootype.new(I)
+    malloc = staticmethod(ootype.new)
 
     def translate_insns(self, insns):
         replace = {
@@ -2022,15 +2021,12 @@ class TestOOType(SimpleTests):
     test_degenerated_at_return = _skip
     test_degenerated_via_substructure = _skip
     test_plus_minus = _skip
-    test_red_virtual_container = _skip
     test_red_array = _skip
     test_red_struct_array = _skip
     test_red_varsized_struct = _skip
     test_array_of_voids = _skip
-    test_red_propagate = _skip
     test_red_subcontainer = _skip
     test_red_subcontainer_cast = _skip
-    test_merge_structures = _skip
     test_deepfrozen_interior = _skip
     test_compile_time_const_tuple = _skip
     test_residual_red_call = _skip
