@@ -91,8 +91,8 @@ class HotRunnerDesc:
                     return
                 interpreter.debug_trace("jit_compile", *args[:num_green_args])
                 mc = state.compile(argshash, *greenargs)
-                if not mc:
-                    return
+                if not mc:      # xxx check if compile() could raise
+                    return      # ContinueRunningNormally to avoid this check
             else:
                 greenkey = state.getgreenkey(*greenargs)
                 mc = state.machine_codes[greenkey]
