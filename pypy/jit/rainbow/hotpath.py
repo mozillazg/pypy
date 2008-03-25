@@ -314,7 +314,7 @@ def make_state_class(hotrunnerdesc):
             mult = 1000003
             for TYPE in green_args_spec:
                 item = greenargs[i]
-                retval = intmask((result ^ cast_whatever_to_int(TYPE, item)) *
+                result = intmask((result ^ cast_whatever_to_int(TYPE, item)) *
                                  intmask(mult))
                 mult = mult + 82520 + 2*len(greenargs)
                 i += 1
