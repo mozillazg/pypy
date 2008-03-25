@@ -165,6 +165,8 @@ class BytecodeWriter(object):
         self.ptr_to_jitcode = {}
         self.transformer = GraphTransformer(hannotator)
         self._listcache = {}
+        if self.hannotator.policy.hotpath:
+            self.residual_call_targets = {}
 
     def create_interpreter(self, RGenOp):
         raise NotImplementedError
@@ -1118,17 +1120,21 @@ class BytecodeWriter(object):
             self.register_greenvar(op.result)
 
     def handle_residual_call(self, op, withexc):
+        graphs, args_v = self.decompose_call_op(op)
         fnptr = op.args[0]
         pos = self.calldesc_position(fnptr.concretetype)
         has_result = (self.varcolor(op.result) != "gray" and
                       op.result.concretetype != lltype.Void)
         func = self.serialize_oparg("red", fnptr)
         emitted_args = []
-        for v in op.args[1:]:
-            if v.concretetype == lltype.Void:   # for indirect_call, this also
-                continue                        # skips the last argument
+        for v in args_v:
+            if v.concretetype == lltype.Void:
+                continue
             emitted_args.append(self.serialize_oparg("red", v))
         if self.hannotator.policy.hotpath:
+            if graphs is not None:
+                for graph in graphs:
+                    self.residual_call_targets[graph] = True
             self.emit("hp_residual_call")
         else:
             self.emit("red_residual_call")
@@ -1433,7 +1439,7 @@ class BytecodeWriter(object):
 
     # call handling
 
-    def graphs_from(self, spaceop):
+    def decompose_call_op(self, spaceop):
         if spaceop.opname == 'direct_call':
             c_func = spaceop.args[0]
             fnobj = get_funcobj(c_func.value)
@@ -1441,11 +1447,15 @@ class BytecodeWriter(object):
             args_v = spaceop.args[1:]
         elif spaceop.opname == 'indirect_call':
             graphs = spaceop.args[-1].value
-            if graphs is None:
-                return       # cannot follow at all
             args_v = spaceop.args[1:-1]
         else:
             raise AssertionError(spaceop.opname)
+        return graphs, args_v
+
+    def graphs_from(self, spaceop):
+        graphs, args_v = self.decompose_call_op(spaceop)
+        if graphs is None:   # cannot follow at all
+            return
         # if the graph - or all the called graphs - are marked as "don't
         # follow", directly return None as a special case.  (This is only
         # an optimization for the indirect_call case.)

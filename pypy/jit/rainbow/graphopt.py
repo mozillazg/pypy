@@ -33,7 +33,8 @@ class VirtualizableAccessTracker(object):
     are safe to replace with direct getfield or setfield.
     """
 
-    def __init__(self):
+    def __init__(self, residual_call_targets):
+        self.residual_call_targets = residual_call_targets
         self.safe_variables = set()
         # set of graphs left to analyze:
         self.pending_graphs = set()
@@ -60,6 +61,8 @@ class VirtualizableAccessTracker(object):
             self.pending_graphs.add(graph)
 
     def seeing_call(self, graph, safe_args):
+        if graph in self.residual_call_targets:
+            return      # don't follow that call
         prevset = self.graph2safeargs.get(graph)
         if prevset is None:
             self.graph2safeargs[graph] = set(safe_args)
@@ -147,7 +150,9 @@ class VirtualizableAccessTracker(object):
 
 
 def simplify_virtualizable_accesses(codewriter):
-    tracker = VirtualizableAccessTracker()
+    assert codewriter.hannotator.policy.hotpath, (
+        "too many potential residual calls in the non-hotpath policy")
+    tracker = VirtualizableAccessTracker(codewriter.residual_call_targets)
     tracker.find_safe_points(codewriter.rtyper.annotator.translator.graphs)
     tracker.propagate()
     tracker.replace_safe_operations()
