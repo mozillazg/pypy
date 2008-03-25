@@ -1033,6 +1033,11 @@ class OOTypeJitInterpreter(JitInterpreter):
         return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
                                       structbox)
 
+    @arguments("red", "fielddesc", "red")
+    def opimpl_red_oosetfield(self, destbox, fielddesc, valuebox):
+        rtimeshift.gensetfield(self.jitstate, fielddesc, destbox,
+                               valuebox)
+
 
 class DebugTrace(object):
     def __init__(self, *args):

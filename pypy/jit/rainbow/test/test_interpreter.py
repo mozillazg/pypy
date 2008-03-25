@@ -2015,8 +2015,6 @@ class TestOOType(SimpleTests):
     def _skip(self):
         py.test.skip('in progress')
 
-    #test_green_with_side_effects = _skip
-    
     test_degenerated_before_return = _skip
     test_degenerated_before_return_2 = _skip
     test_degenerated_at_return = _skip
