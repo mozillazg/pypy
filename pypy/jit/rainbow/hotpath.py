@@ -5,13 +5,13 @@ from pypy.rpython import annlowlevel
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.codegen.i386.rgenop import cast_whatever_to_int
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
+from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key
+from pypy.jit.timeshifter.greenkey import GreenKey, newgreendict
 from pypy.jit.rainbow import rhotpath, fallback
 from pypy.jit.rainbow.portal import getjitenterargdesc
 
@@ -78,8 +78,7 @@ class HotRunnerDesc:
         num_green_args = len(self.green_args_spec)
 
         def maybe_enter_jit(*args):
-            greenargs = args[:num_green_args]
-            key = state.getkey(*greenargs)
+            key = state.getkey(*args[:num_green_args])
             counter = state.counters.get(key, 0)
             if counter >= 0:
                 counter += 1
@@ -88,7 +87,7 @@ class HotRunnerDesc:
                     state.counters[key] = counter
                     return
                 interpreter.debug_trace("jit_compile", *args[:num_green_args])
-                if not state.compile(key, *greenargs):
+                if not state.compile(key):
                     return
             interpreter.debug_trace("run_machine_code", *args)
             mc = state.machine_codes[key]
@@ -292,54 +291,53 @@ def make_state_class(hotrunnerdesc):
     # very minimal, just to make the first test pass
     green_args_spec = unrolling_iterable(hotrunnerdesc.green_args_spec)
     red_args_spec = unrolling_iterable(hotrunnerdesc.red_args_spec)
+    if hotrunnerdesc.green_args_spec:
+        keydesc = KeyDesc(hotrunnerdesc.RGenOp, *hotrunnerdesc.green_args_spec)
+    else:
+        keydesc = None
 
     class HotEnterState:
         def __init__(self):
-            self.machine_codes = {}
-            self.counters = {}     # value of -1 means "compiled"
+            self.machine_codes = newgreendict()
+            self.counters = newgreendict()     # -1 means "compiled"
 
-            # Only use the hash of the arguments as the key.
+            # XXX XXX be more clever and find a way where we don't need
+            # to allocate a GreenKey object for each call to
+            # maybe_enter_jit().  One way would be to replace the
+            # 'counters' with some hand-written fixed-sized hash table.
             # Indeed, this is all a heuristic, so if things are designed
             # correctly, the occasional mistake due to hash collision is
-            # not too bad.
-            
-            # Another idea would be to replace the 'counters' with some
-            # hand-written fixed-sized hash table.  The fixed-size-ness would
-            # also let old recorded counters gradually disappear as they get
-            # replaced by more recent ones.
+            # not too bad.  The fixed-size-ness would also let old
+            # recorded counters gradually disappear as they get replaced
+            # by more recent ones.
 
-        def getkey(self, *greenargs):
-            result = 0x345678
+        def getkey(self, *greenvalues):
+            if keydesc is None:
+                return empty_key
+            rgenop = hotrunnerdesc.interpreter.rgenop
+            lst_gv = [None] * len(greenvalues)
             i = 0
-            mult = 1000003
-            for TYPE in green_args_spec:
-                item = greenargs[i]
-                result = intmask((result ^ cast_whatever_to_int(TYPE, item)) *
-                                 intmask(mult))
-                mult = mult + 82520 + 2*len(greenargs)
+            for _ in green_args_spec:
+                lst_gv[i] = rgenop.genconst(greenvalues[i])
                 i += 1
-            return result
+            return GreenKey(lst_gv, keydesc)
 
-        def compile(self, key, *greenargs):
+        def compile(self, greenkey):
             try:
-                self._compile(key, *greenargs)
+                self._compile(greenkey)
                 return True
             except Exception, e:
                 rhotpath.report_compile_time_exception(
                     hotrunnerdesc.interpreter, e)
                 return False
 
-        def _compile(self, key, *greenargs):
+        def _compile(self, greenkey):
             interp = hotrunnerdesc.interpreter
             rgenop = interp.rgenop
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
                 hotrunnerdesc.sigtoken, "residual")
 
-            gv_greenargs = [None] * len(greenargs)
-            i = 0
-            for _ in green_args_spec:
-                gv_greenargs[i] = rgenop.genconst(greenargs[i])
-                i += 1
+            greenargs = list(greenkey.values)
 
             jitstate = interp.fresh_jitstate(builder)
             redargs = ()
@@ -351,7 +349,7 @@ def make_state_class(hotrunnerdesc):
                 red_i += make_arg_redbox.consumes
             redargs = list(redargs)
 
-            rhotpath.setup_jitstate(interp, jitstate, gv_greenargs, redargs,
+            rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
                                     hotrunnerdesc.entryjitcode,
                                     hotrunnerdesc.sigtoken)
             builder.start_writing()
@@ -360,8 +358,8 @@ def make_state_class(hotrunnerdesc):
 
             FUNCPTR = lltype.Ptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
             generated = gv_generated.revealconst(FUNCPTR)
-            self.machine_codes[key] = generated
-            self.counters[key] = -1     # compiled
+            self.machine_codes[greenkey] = generated
+            self.counters[greenkey] = -1     # compiled
 
             if not we_are_translated():
                 hotrunnerdesc.residual_graph = generated._obj.graph  #for tests
