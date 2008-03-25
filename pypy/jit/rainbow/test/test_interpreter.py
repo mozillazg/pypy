@@ -1863,6 +1863,50 @@ class SimpleTests(InterpretationTest):
             return g(n)
         py.test.raises(AssertionError, self.interpret, f, [7], [])
 
+    def test_learn_boolvalue(self):
+        class A(object):
+            pass
+        def f(b, x):
+            a = A()
+            a.b = b
+            if a.b:
+                if a.b:
+                    return 1 + x
+                return -1 + x
+            else:
+                if not a.b:
+                    return 2 + x
+                return -2 + x
+        res = self.interpret(f, [False, 5])
+        assert res == 7
+        self.check_insns({'int_add': 2})
+
+    def test_learn_nonzeroness(self):
+        class A:
+            pass
+        class B:
+            pass
+        def g(isnotnone):
+            if isnotnone:
+                return A()
+            return None
+        def f(isnotnone, x):
+            hint(None, global_merge_point=True)
+            a = g(isnotnone)
+            b = B()
+            b.a = a
+            if b.a:
+                if b.a:
+                    return 1 + x
+                return -1 + x
+            else:
+                if not b.a:
+                    return 2 + x
+                return -2 + x
+        res = self.interpret(f, [False, 5], policy=StopAtXPolicy(g))
+        assert res == 7
+        self.check_insns(int_add=2)
+
     # void tests
     def test_void_args(self):
         class Space(object):
@@ -1961,4 +2005,6 @@ class TestOOType(SimpleTests):
     test_red_int_add_ovf = _skip
     test_nonzeroness_assert_while_compiling = _skip
     test_segfault_while_compiling = _skip
+    test_learn_boolvalue = _skip
+    test_learn_nonzeroness = _skip
     test_void_args = _skip
