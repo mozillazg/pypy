@@ -342,6 +342,21 @@ def gengetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname):
         vars_gv = [gv_ptr, gv_fieldname]
         return genop(block, "getfield", vars_gv, RESULTTYPE)
 
+def genoosetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname, gv_value):
+    v_obj = _from_opaque(gv_obj)
+    gv_obj = cast(block, gv_OBJTYPE, gv_obj)
+    vars_gv = [gv_obj, gv_fieldname, gv_value]
+    genop(block, "oosetfield", vars_gv, lltype.Void)
+
+def genoogetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname):
+    OBJTYPE = _from_opaque(gv_OBJTYPE).value
+    c_fieldname = _from_opaque(gv_fieldname)
+    RESULTTYPE = getattr(OBJTYPE.TO, c_fieldname.value) #XXX
+    v_obj = _from_opaque(gv_obj)
+    gv_obj = cast(block, gv_OBJTYPE, gv_obj)
+    vars_gv = [gv_obj, gv_fieldname]
+    return genop(block, "oogetfield", vars_gv, RESULTTYPE)
+
 def gensetarrayitem(block, gv_ptr, gv_index, gv_value):
     v_ptr = _from_opaque(gv_ptr)
     if isinstance(v_ptr, InteriorPtrVariable):

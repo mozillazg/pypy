@@ -7,7 +7,7 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.translator import exceptiontransform
-
+from pypy.translator.simplify import get_funcobj, get_functype
 
 class Index:
     def __init__(self, n):
@@ -232,7 +232,7 @@ def maybe_on_top_of_llinterp(exceptiondesc, fnptr):
     assert exceptiondesc.rtyper is not None
     llinterp = LLInterpreter(exceptiondesc.rtyper, exc_data_ptr=exc_data_ptr)
     def on_top_of_llinterp(*args):
-        return llinterp.eval_graph(fnptr._obj.graph, list(args))
+        return llinterp.eval_graph(get_funcobj(fnptr).graph, list(args))
     return on_top_of_llinterp
 
 class Entry(ExtRegistryEntry):
