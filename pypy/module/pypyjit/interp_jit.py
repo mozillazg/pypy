@@ -139,14 +139,24 @@ class PyPyJITConfig:
 pypyjitconfig = PyPyJITConfig()
 
 
-def startup(space):
+def ensure_sys_executable(space):
     # save the app-level sys.executable in JITInfo, where the machine
     # code backend can fish for it.  A bit hackish.
     from pypy.jit.codegen.hlinfo import highleveljitinfo
     highleveljitinfo.sys_executable = space.str_w(
         space.sys.get('executable'))
+
+def startup(space):
     # -- for now, we start disabled and you have to use pypyjit.enable()
     #pypyjitconfig.enable()
+
+    # -- the next line would be nice, but the app-level sys.executable is not
+    # initialized yet :-(  What we need is a hook called by app_main.py
+    # after things have really been initialized...  For now we work around
+    # this problem by calling ensure_sys_executable() from pypyjit.enable().
+
+    #ensure_sys_executable(space)
+    pass
 
 
 def setthreshold(space, threshold):
@@ -157,6 +167,7 @@ def getthreshold(space):
     return space.wrap(pypyjitconfig.getthreshold())
 
 def enable(space):
+    ensure_sys_executable(space)
     pypyjitconfig.enable()
 
 def disable(space):
