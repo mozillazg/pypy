@@ -1,9 +1,11 @@
 import operator
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import cachedtype, cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import base_ptr_lltype, cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.timeshifter import rvalue, rvirtualizable
+from pypy.jit.rainbow.typesystem import deref, fieldType
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 
@@ -54,7 +56,7 @@ class FrozenContainer(AbstractContainer):
 
 # ____________________________________________________________
 
-class StructTypeDesc(object):
+class AbstractStructTypeDesc(object):
     __metaclass__ = cachedtype
 
     VirtualStructCls = None # patched later with VirtualStruct
@@ -76,16 +78,11 @@ class StructTypeDesc(object):
 
     firstsubstructdesc = None
     materialize = None
+    StructFieldDesc = None
 
-    def __new__(cls, RGenOp, TYPE):
-        if TYPE._hints.get('virtualizable', False):
-            return object.__new__(VirtualizableStructTypeDesc)
-        else:
-            return object.__new__(StructTypeDesc)
-            
     def __init__(self, RGenOp, TYPE):
         self.TYPE = TYPE
-        self.PTRTYPE = lltype.Ptr(TYPE)
+        self.PTRTYPE = self.Ptr(TYPE)
         self.name = TYPE._name
         self.ptrkind = RGenOp.kindToken(self.PTRTYPE)
 
@@ -101,22 +98,26 @@ class StructTypeDesc(object):
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
 
         self._compute_fielddescs(RGenOp)
+        self._define_helpers(TYPE, fixsize)
 
-        if TYPE._gckind == 'gc':    # no 'allocate' for inlined substructs
-            if self.immutable and self.noidentity:
-                self._define_materialize()
-            if fixsize:
-                self._define_devirtualize()
-            self._define_allocate(fixsize)
 
-        
+    def Ptr(self, TYPE):
+        raise NotImplementedError
+
+    def _define_helpers(self, TYPE, fixsize):
+        raise NotImplementedError
+
+    def _iter_fields(self, TYPE):
+        for name in TYPE._names:
+            FIELDTYPE = getattr(TYPE, name)
+            yield name, FIELDTYPE
+    
     def _compute_fielddescs(self, RGenOp):
         TYPE = self.TYPE
         innermostdesc = self
         fielddescs = []
         fielddesc_by_name = {}
-        for name in TYPE._names:
-            FIELDTYPE = getattr(TYPE, name)
+        for name, FIELDTYPE in self._iter_fields(TYPE):
             if isinstance(FIELDTYPE, lltype.ContainerType):
                 if isinstance(FIELDTYPE, lltype.Array):
                     self.arrayfielddesc = ArrayFieldDesc(RGenOp, FIELDTYPE)
@@ -133,7 +134,7 @@ class StructTypeDesc(object):
                 if FIELDTYPE is lltype.Void:
                     desc = None
                 else:
-                    desc = StructFieldDesc(RGenOp, self.PTRTYPE, name, index)
+                    desc = self.StructFieldDesc(RGenOp, self.PTRTYPE, name, index)
                     fielddescs.append(desc)
                 fielddesc_by_name[name] = desc
 
@@ -219,6 +220,43 @@ class StructTypeDesc(object):
         box.content = vstruct
         vstruct.ownbox = box
         return box
+
+
+class StructTypeDesc(AbstractStructTypeDesc):
+    
+    StructFieldDesc = None # patched later with StructFieldDesc
+
+    def __new__(cls, RGenOp, TYPE):
+        if TYPE._hints.get('virtualizable', False):
+            return object.__new__(VirtualizableStructTypeDesc)
+        else:
+            return object.__new__(StructTypeDesc)
+
+    def Ptr(self, TYPE):
+        return lltype.Ptr(TYPE)
+
+    def _define_helpers(self, TYPE, fixsize):
+        if TYPE._gckind == 'gc':    # no 'allocate' for inlined substructs
+            if self.immutable and self.noidentity:
+                self._define_materialize()
+            if fixsize:
+                self._define_devirtualize()
+            self._define_allocate(fixsize)
+
+
+class InstanceTypeDesc(AbstractStructTypeDesc):
+
+    StructFieldDesc = None # patched later with InstanceFieldDesc
+
+    def Ptr(self, TYPE):
+        return TYPE
+
+    def _define_helpers(self, TYPE, fixsize):
+        pass
+
+    def _iter_fields(self, TYPE):
+        for name, (FIELDTYPE, defl) in TYPE._fields.iteritems():
+            yield name, FIELDTYPE
 
 
 def create_varsize(jitstate, contdesc, sizebox):
@@ -579,6 +617,8 @@ class FieldDesc(object):
             else:
                 T = None
             self.fieldnonnull = PTRTYPE.TO._hints.get('shouldntbenull', False)
+        elif isinstance(RESTYPE, ootype.OOType):
+            assert False, 'XXX: TODO'
         self.RESTYPE = RESTYPE
         self.ptrkind = RGenOp.kindToken(PTRTYPE)
         self.kind = RGenOp.kindToken(RESTYPE)
@@ -591,7 +631,7 @@ class FieldDesc(object):
                 self.structdesc = StructTypeDesc(RGenOp, T)
             self.redboxcls = rvalue.ll_redboxcls(RESTYPE)
             
-        self.immutable = PTRTYPE.TO._hints.get('immutable', False)
+        self.immutable = deref(PTRTYPE)._hints.get('immutable', False)
 
     def _freeze_(self):
         return True
@@ -616,9 +656,9 @@ class FieldDesc(object):
 class NamedFieldDesc(FieldDesc):
 
     def __init__(self, RGenOp, PTRTYPE, name):
-        FIELDTYPE = getattr(PTRTYPE.TO, name)
+        FIELDTYPE = fieldType(deref(PTRTYPE), name)
         FieldDesc.__init__(self, RGenOp, PTRTYPE, FIELDTYPE)
-        T = self.PTRTYPE.TO
+        T = deref(self.PTRTYPE)
         self.fieldname = name
         self.fieldtoken = RGenOp.fieldToken(T, name)
         def perform_getfield(rgenop, genvar):
@@ -662,6 +702,22 @@ class StructFieldDesc(NamedFieldDesc):
     def __init__(self, RGenOp, PTRTYPE, name, index):
         NamedFieldDesc.__init__(self, RGenOp, PTRTYPE, name)
         self.fieldindex = index
+
+class InstanceFieldDesc(NamedFieldDesc):
+
+    def __init__(self, RGenOp, PTRTYPE, name, index):
+        NamedFieldDesc.__init__(self, RGenOp, PTRTYPE, name)
+        self.fieldindex = index
+
+    def generate_get(self, jitstate, genvar):
+        builder = jitstate.curbuilder
+        gv_item = builder.genop_oogetfield(self.fieldtoken, genvar)
+        return self.makebox(jitstate, gv_item)
+
+    def generate_set(self, jitstate, genvar, gv_value):
+        builder = jitstate.curbuilder
+        builder.genop_oosetfield(self.fieldtoken, genvar, gv_value)
+
 
 class ArrayFieldDesc(FieldDesc):
     allow_void = True
@@ -1341,3 +1397,8 @@ class PartialDataStruct(AbstractContainer):
             return None
         del data[j:]
         return self
+
+
+
+StructTypeDesc.StructFieldDesc = StructFieldDesc
+InstanceTypeDesc.StructFieldDesc = InstanceFieldDesc
