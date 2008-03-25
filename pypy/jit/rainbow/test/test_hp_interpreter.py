@@ -2175,6 +2175,63 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns({'int_eq': 2})
         assert res == f(0)
 
+    def test_learn_boolvalue(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['n', 'i', 'tot', 'b']
+        class A(object):
+            pass
+        def f(b, n):
+            i = 1024 * 1024
+            tot = 0
+            while i > 0:
+                i >>= 1
+
+                a = A()
+                a.b = b
+                if a.b:
+                    if a.b:
+                        tot += 1 + n
+                    else:
+                        tot += -1 + n
+                else:
+                    if not a.b:
+                        tot += 2 + n
+                    else:
+                        tot += -2 + n
+                MyJitDriver.jit_merge_point(tot=tot, i=i, n=n, b=b)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, n=n, b=b)
+            return tot
+        res = self.run(f, [False, 5], threshold=2)
+        assert res == f(False, 5)
+        self.check_insns_in_loops({'int_add': 2, 'int_gt': 1, 'int_rshift': 1})
+
+    def test_learn_nonzeroness(self):
+        class A:
+            pass
+        class B:
+            pass
+        def g(isnotnone):
+            if isnotnone:
+                return A()
+            return None
+        def f(isnotnone, x):
+            hint(None, global_merge_point=True)
+            a = g(isnotnone)
+            b = B()
+            b.a = a
+            if b.a:
+                if b.a:
+                    return 1 + x
+                return -1 + x
+            else:
+                if not b.a:
+                    return 2 + x
+                return -2 + x
+        res = self.interpret(f, [False, 5], policy=StopAtXPolicy(g))
+        assert res == 7
+        self.check_insns(int_add=2)
+
     # void tests
     def test_void_args(self):
         class Space(object):
