@@ -11,6 +11,7 @@ from pypy.jit.rainbow.portal import PortalRewriter
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
@@ -83,11 +84,29 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
         hannotator.translator.view()
     return hs, hannotator, rtyper
 
+
 class InterpretationTest(object):
 
     RGenOp = LLRGenOp
     small = False
     translate_support_code = False       # only works for portal tests for now
+
+    # these staticmethods should go to TestLLType, they are here only
+    # for compatibility with other tests that inherit from
+    # InterpretationTest
+    
+    @staticmethod
+    def Ptr(T):
+        return lltype.Ptr(T)
+
+    @staticmethod
+    def Struct(name, *fields, **kwds):
+        S = lltype.GcStruct(name, *fields, **kwds)
+        return S
+
+    @staticmethod
+    def malloc(S):
+        return lltype.malloc(S)
 
     def setup_class(cls):
         cls.on_llgraph = cls.RGenOp is LLRGenOp
@@ -247,9 +266,14 @@ class InterpretationTest(object):
         graph = self.get_residual_graph()
         self.insns = summary(graph)
         if expected is not None:
+            expected = self.translate_insns(expected)
             assert self.insns == expected
+        counts = self.translate_insns(counts)
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
+
+    def translate_insns(self, insns):
+        return insns
 
     def check_oops(self, expected=None, **counts):
         if not self.on_llgraph:
@@ -660,9 +684,11 @@ class SimpleTests(InterpretationTest):
         
 
     def test_simple_struct(self):
-        S = lltype.GcStruct('helloworld', ('hello', lltype.Signed),
-                                          ('world', lltype.Signed),
-                            hints={'immutable': True})
+        S = self.Struct('helloworld',
+                        ('hello', lltype.Signed),
+                        ('world', lltype.Signed),
+                        hints={'immutable': True})
+        malloc = self.malloc
         
         def ll_function(s):
             return s.hello * s.world
@@ -670,7 +696,7 @@ class SimpleTests(InterpretationTest):
         def struct_S(string):
             items = string.split(',')
             assert len(items) == 2
-            s1 = lltype.malloc(S)
+            s1 = malloc(S)
             s1.hello = int(items[0])
             s1.world = int(items[1])
             return s1
@@ -1040,8 +1066,8 @@ class SimpleTests(InterpretationTest):
 
 
     def test_green_with_side_effects(self):
-        S = lltype.GcStruct('S', ('flag', lltype.Bool))
-        s = lltype.malloc(S)
+        S = self.Struct('S', ('flag', lltype.Bool))
+        s = self.malloc(S)
         s.flag = False
         def ll_set_flag(s):
             s.flag = True
@@ -1952,18 +1978,45 @@ class SimpleTests(InterpretationTest):
         res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
         assert res == 11
 
-            
-
-class TestLLType(SimpleTests):
-    type_system = "lltype"
-
 
 class TestOOType(SimpleTests):
     type_system = "ootype"
 
+    @staticmethod
+    def Ptr(T):
+        return T
+
+    @staticmethod
+    def Struct(name, *fields, **kwds):
+        if 'hints' in kwds:
+            kwds['_hints'] = kwds['hints']
+            del kwds['hints']
+        I = ootype.Instance(name, ootype.ROOT, dict(fields), **kwds)
+        return I
+
+    @staticmethod
+    def malloc(I):
+        return ootype.new(I)
+
+    def translate_insns(self, insns):
+        replace = {
+            'getfield': 'oogetfield',
+            'setfield': 'oosetfield',
+            }
+
+        insns = insns.copy()
+        for a, b in replace.iteritems():
+            if a in insns:
+                assert b not in insns
+                insns[b] = insns[a]
+                del insns[a]
+        return insns
+
     def _skip(self):
         py.test.skip('in progress')
 
+    #test_green_with_side_effects = _skip
+    
     test_degenerated_before_return = _skip
     test_degenerated_before_return_2 = _skip
     test_degenerated_at_return = _skip
@@ -2008,3 +2061,9 @@ class TestOOType(SimpleTests):
     test_learn_boolvalue = _skip
     test_learn_nonzeroness = _skip
     test_void_args = _skip
+
+
+class TestLLType(SimpleTests):
+    type_system = "lltype"
+
+

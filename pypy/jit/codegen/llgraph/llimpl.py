@@ -14,6 +14,7 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.rclass import fishllattr
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.jit.rainbow.typesystem import fieldType
 
 def _from_opaque(opq):
     return opq._obj.externalobj
@@ -351,7 +352,7 @@ def genoosetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname, gv_value):
 def genoogetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname):
     OBJTYPE = _from_opaque(gv_OBJTYPE).value
     c_fieldname = _from_opaque(gv_fieldname)
-    RESULTTYPE = getattr(OBJTYPE.TO, c_fieldname.value) #XXX
+    RESULTTYPE = fieldType(OBJTYPE, c_fieldname.value)
     v_obj = _from_opaque(gv_obj)
     gv_obj = cast(block, gv_OBJTYPE, gv_obj)
     vars_gv = [gv_obj, gv_fieldname]

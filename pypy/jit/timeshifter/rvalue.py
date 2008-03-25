@@ -110,7 +110,7 @@ def ll_redboxbuilder(TYPE):
         return redboxbuilder_ptr
     elif TYPE is lltype.Float:
         return redboxbuilder_dbl
-    elif isinstance(TYPE, ootype.Instance):
+    elif isinstance(TYPE, (ootype.Instance, ootype.Record)):
         return redboxbuilder_inst
     else:
         assert isinstance(TYPE, lltype.Primitive)
@@ -335,9 +335,6 @@ class AbstractPtrRedBox(RedBox):
         if self.content:
             self.content.enter_block(incoming, memo)
 
-
-class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
-
     def op_getfield(self, jitstate, fielddesc):
         self.learn_nonzeroness(jitstate, True)
         if self.content is not None:
@@ -349,6 +346,17 @@ class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
         if fielddesc.immutable:
             self.remember_field(fielddesc, box)
         return box
+
+    def remember_field(self, fielddesc, box):
+        if self.genvar.is_const:
+            return      # no point in remembering field then
+        if self.content is None:
+            from pypy.jit.timeshifter import rcontainer
+            self.content = rcontainer.PartialDataStruct()
+        self.content.remember_field(fielddesc, box)
+
+
+class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
 
     def op_setfield(self, jitstate, fielddesc, valuebox):
         self.learn_nonzeroness(jitstate, True)
@@ -368,14 +376,6 @@ class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
         else:
             assert self.content is not None
             return self.content.op_getsubstruct(jitstate, fielddesc)
-
-    def remember_field(self, fielddesc, box):
-        if self.genvar.is_const:
-            return      # no point in remembering field then
-        if self.content is None:
-            from pypy.jit.timeshifter import rcontainer
-            self.content = rcontainer.PartialDataStruct()
-        self.content.remember_field(fielddesc, box)
 
 
 class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):

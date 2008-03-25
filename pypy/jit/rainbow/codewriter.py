@@ -13,6 +13,7 @@ from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, LLTypeJitInterpreter, OOTypeJitInterpreter
 from pypy.jit.rainbow.interpreter import DEBUG_JITCODES, log
+from pypy.jit.rainbow.typesystem import deref
 from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 from pypy.translator.unsimplify import varoftype
@@ -146,6 +147,9 @@ class IndirectCallsetDesc(object):
 
 
 class BytecodeWriter(object):
+
+    StructTypeDesc = None
+    
     def __init__(self, t, hannotator, RGenOp, verbose=True):
         self.translator = t
         self.rtyper = hannotator.base_translator.rtyper
@@ -699,7 +703,7 @@ class BytecodeWriter(object):
         if TYPE in self.structtypedesc_positions:
             return self.structtypedesc_positions[TYPE]
         self.structtypedescs.append(
-            rcontainer.StructTypeDesc(self.RGenOp, TYPE))
+            self.StructTypeDesc(self.RGenOp, TYPE))
         result = len(self.structtypedesc_positions)
         self.structtypedesc_positions[TYPE] = result
         return result
@@ -707,7 +711,7 @@ class BytecodeWriter(object):
     def fielddesc_position(self, TYPE, fieldname):
         if (fieldname, TYPE) in self.fielddesc_positions:
             return self.fielddesc_positions[fieldname, TYPE]
-        structtypedesc = rcontainer.StructTypeDesc(self.RGenOp, TYPE)
+        structtypedesc = self.StructTypeDesc(self.RGenOp, TYPE)
         fielddesc = structtypedesc.getfielddesc(fieldname)
         if fielddesc is None:
             self.fielddesc_positions[fieldname, TYPE] = -1
@@ -1242,8 +1246,9 @@ class BytecodeWriter(object):
     def serialize_op_keepalive(self, op):
         pass
 
-    def serialize_op_getfield(self, op):
+    def serialize_op_getfield_impl(self, op):
         color = self.opcolor(op)
+        opname = op.opname
         args = op.args
         if args[0] == self.exceptiondesc.cexcdata:
             # reading one of the exception boxes (exc_type or exc_value)
@@ -1253,13 +1258,13 @@ class BytecodeWriter(object):
             elif fieldname == 'exc_value':
                 self.emit("read_excvalue")
             else:
-                raise Exception("getfield(exc_data, %r)" % (fieldname,))
+                raise Exception("%s(exc_data, %r)" % (opname, fieldname,))
             self.register_redvar(op.result)
             return
 
         # virtualizable access read
         PTRTYPE = args[0].concretetype
-        if PTRTYPE.TO._hints.get('virtualizable', False):
+        if deref(PTRTYPE)._hints.get('virtualizable', False):
             assert op.args[1].value != 'vable_access'
 
         # non virtual case                
@@ -1268,18 +1273,19 @@ class BytecodeWriter(object):
         s_struct = self.hannotator.binding(args[0])
         deepfrozen = s_struct.deepfrozen
         
-        fielddescindex = self.fielddesc_position(PTRTYPE.TO, fieldname)
+        fielddescindex = self.fielddesc_position(deref(PTRTYPE), fieldname)
         if fielddescindex == -1:   # Void field
             return
-        self.emit("%s_getfield" % (color, ), index, fielddescindex)
+        self.emit("%s_%s" % (color, opname), index, fielddescindex)
         if color == "red":
             self.emit(deepfrozen)
             self.register_redvar(op.result)
         else:
             self.register_greenvar(op.result)
 
-    def serialize_op_setfield(self, op):
+    def serialize_op_setfield_impl(self, op):
         args = op.args
+        opname = op.opname
         PTRTYPE = args[0].concretetype
         VALUETYPE = args[2].concretetype
         if VALUETYPE is lltype.Void:
@@ -1293,16 +1299,16 @@ class BytecodeWriter(object):
             elif fieldname == 'exc_value':
                 self.emit("write_excvalue", val)
             else:
-                raise Exception("getfield(exc_data, %r)" % (fieldname,))
+                raise Exception("%s(exc_data, %r)" % (opname, fieldname,))
             return
         # non virtual case                
         destboxindex = self.serialize_oparg("red", args[0])
         valboxindex = self.serialize_oparg("red", args[2])
         fieldname = args[1].value
-        fielddescindex = self.fielddesc_position(PTRTYPE.TO, fieldname)
+        fielddescindex = self.fielddesc_position(deref(PTRTYPE), fieldname)
         if fielddescindex == -1:   # Void field
             return
-        self.emit("red_setfield", destboxindex, fielddescindex, valboxindex)
+        self.emit("red_%s" % opname, destboxindex, fielddescindex, valboxindex)
 
     def serialize_op_getarrayitem(self, op):
         color = self.opcolor(op)
@@ -1587,18 +1593,31 @@ class BytecodeWriter(object):
 class LLTypeBytecodeWriter(BytecodeWriter):
 
     ExceptionDesc = exception.LLTypeExceptionDesc
+    StructTypeDesc = rcontainer.StructTypeDesc
 
     def create_interpreter(self, RGenOp):
         return LLTypeJitInterpreter(self.exceptiondesc, RGenOp)
+
+    def serialize_op_getfield(self, op):
+        return self.serialize_op_getfield_impl(op)
+
+    def serialize_op_setfield(self, op):
+        return self.serialize_op_setfield_impl(op)
 
 
 class OOTypeBytecodeWriter(BytecodeWriter):
 
     ExceptionDesc = exception.OOTypeExceptionDesc
+    StructTypeDesc = rcontainer.InstanceTypeDesc
     
     def create_interpreter(self, RGenOp):
         return OOTypeJitInterpreter(self.exceptiondesc, RGenOp)
 
+    def serialize_op_oogetfield(self, op):
+        return self.serialize_op_getfield_impl(op)
+
+    def serialize_op_oosetfield(self, op):
+        return self.serialize_op_setfield_impl(op)
 
 
 class GraphTransformer(object):

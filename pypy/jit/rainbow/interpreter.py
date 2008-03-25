@@ -1028,6 +1028,11 @@ class LLTypeJitInterpreter(JitInterpreter):
 class OOTypeJitInterpreter(JitInterpreter):
     ts = typesystem.oohelper
 
+    @arguments("red", "fielddesc", "bool", returns="red")
+    def opimpl_red_oogetfield(self, structbox, fielddesc, deepfrozen):
+        return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
+                                      structbox)
+
 
 class DebugTrace(object):
     def __init__(self, *args):

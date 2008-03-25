@@ -158,7 +158,7 @@ def genmalloc_varsize(jitstate, contdesc, sizebox):
     return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
 
 def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
-    assert isinstance(argbox, rvalue.PtrRedBox)
+    assert isinstance(argbox, (rvalue.PtrRedBox, rvalue.InstanceRedBox))
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
         try:
             resgv = fielddesc.perform_getfield(

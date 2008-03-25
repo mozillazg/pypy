@@ -1,5 +1,20 @@
-from pypy.rpython.lltypesystem import llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
+
+def deref(T):
+    if isinstance(T, lltype.Ptr):
+        return T.TO
+    assert isinstance(T, (ootype.Instance, ootype.Record))
+    return T
+
+def fieldType(T, name):
+    if isinstance(T, lltype.Struct):
+        return getattr(T, name)
+    elif isinstance(T, ootype.Instance):
+        _, FIELD = T._lookup_field(name)
+        return FIELD
+    else:
+        assert False
 
 class TypeSystemHelper(object):
 
