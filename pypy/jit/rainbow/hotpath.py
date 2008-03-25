@@ -354,12 +354,6 @@ def make_state_class(hotrunnerdesc):
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
                 hotrunnerdesc.sigtoken, "residual")
 
-            gv_greenargs = [None] * len(greenargs)
-            i = 0
-            for _ in green_args_spec:
-                gv_greenargs[i] = rgenop.genconst(greenargs[i])
-                i += 1
-
             jitstate = interp.fresh_jitstate(builder)
             redargs = ()
             red_i = 0
@@ -370,7 +364,9 @@ def make_state_class(hotrunnerdesc):
                 red_i += make_arg_redbox.consumes
             redargs = list(redargs)
 
-            rhotpath.setup_jitstate(interp, jitstate, gv_greenargs, redargs,
+            greenkey = self.getgreenkey(*greenargs)
+            greenargs = list(greenkey.values)
+            rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
                                     hotrunnerdesc.entryjitcode,
                                     hotrunnerdesc.sigtoken)
             builder.start_writing()
@@ -379,7 +375,6 @@ def make_state_class(hotrunnerdesc):
 
             FUNCPTR = lltype.Ptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
             generated = gv_generated.revealconst(FUNCPTR)
-            greenkey = self.getgreenkey(*greenargs)
             self.machine_codes[greenkey] = generated
             self.counters[argshash] = -1     # compiled
 
