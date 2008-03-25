@@ -5,13 +5,15 @@ from pypy.rpython import annlowlevel
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.unroll import unrolling_iterable
+from pypy.jit.codegen.i386.rgenop import cast_whatever_to_int
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
-from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key
 from pypy.jit.timeshifter.greenkey import GreenKey, newgreendict
+from pypy.jit.timeshifter.oop import maybe_on_top_of_llinterp
 from pypy.jit.rainbow import rhotpath, fallback
 from pypy.jit.rainbow.portal import getjitenterargdesc
 
@@ -78,19 +80,23 @@ class HotRunnerDesc:
         num_green_args = len(self.green_args_spec)
 
         def maybe_enter_jit(*args):
-            key = state.getkey(*args[:num_green_args])
-            counter = state.counters.get(key, 0)
+            greenargs = args[:num_green_args]
+            argshash = state.getkey(*greenargs)
+            counter = state.counters.get(argshash, 0)
             if counter >= 0:
                 counter += 1
                 if counter < self.jitdrivercls.getcurrentthreshold():
                     interpreter.debug_trace("jit_not_entered", *args)
-                    state.counters[key] = counter
+                    state.counters[argshash] = counter
                     return
                 interpreter.debug_trace("jit_compile", *args[:num_green_args])
-                if not state.compile(key):
+                mc = state.compile(argshash, *greenargs)
+                if mc is None:
                     return
+            else:
+                greenkey = state.getgreenkey(*greenargs)
+                mc = state.machine_codes[greenkey]
             interpreter.debug_trace("run_machine_code", *args)
-            mc = state.machine_codes[key]
             run = maybe_on_top_of_llinterp(exceptiondesc, mc)
             residualargs = state.make_residualargs(*args[num_green_args:])
             run(*residualargs)
@@ -299,19 +305,31 @@ def make_state_class(hotrunnerdesc):
     class HotEnterState:
         def __init__(self):
             self.machine_codes = newgreendict()
-            self.counters = newgreendict()     # -1 means "compiled"
+            self.counters = {}     # value of -1 means "compiled"
 
-            # XXX XXX be more clever and find a way where we don't need
-            # to allocate a GreenKey object for each call to
-            # maybe_enter_jit().  One way would be to replace the
-            # 'counters' with some hand-written fixed-sized hash table.
+            # Only use the hash of the arguments as the key.
             # Indeed, this is all a heuristic, so if things are designed
             # correctly, the occasional mistake due to hash collision is
-            # not too bad.  The fixed-size-ness would also let old
-            # recorded counters gradually disappear as they get replaced
-            # by more recent ones.
+            # not too bad.
+            
+            # Another idea would be to replace the 'counters' with some
+            # hand-written fixed-sized hash table.  The fixed-size-ness would
+            # also let old recorded counters gradually disappear as they get
+            # replaced by more recent ones.
 
-        def getkey(self, *greenvalues):
+        def getkey(self, *greenargs):
+            result = 0x345678
+            i = 0
+            mult = 1000003
+            for TYPE in green_args_spec:
+                item = greenargs[i]
+                result = intmask((result ^ cast_whatever_to_int(TYPE, item)) *
+                                 intmask(mult))
+                mult = mult + 82520 + 2*len(greenargs)
+                i += 1
+            return result
+
+        def getgreenkey(self, *greenvalues):
             if keydesc is None:
                 return empty_key
             rgenop = hotrunnerdesc.interpreter.rgenop
@@ -322,22 +340,25 @@ def make_state_class(hotrunnerdesc):
                 i += 1
             return GreenKey(lst_gv, keydesc)
 
-        def compile(self, greenkey):
+        def compile(self, argshash, *greenargs):
             try:
-                self._compile(greenkey)
-                return True
+                return self._compile(argshash, *greenargs)
             except Exception, e:
                 rhotpath.report_compile_time_exception(
                     hotrunnerdesc.interpreter, e)
-                return False
+                return None
 
-        def _compile(self, greenkey):
+        def _compile(self, argshash, *greenargs):
             interp = hotrunnerdesc.interpreter
             rgenop = interp.rgenop
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
                 hotrunnerdesc.sigtoken, "residual")
 
-            greenargs = list(greenkey.values)
+            gv_greenargs = [None] * len(greenargs)
+            i = 0
+            for _ in green_args_spec:
+                gv_greenargs[i] = rgenop.genconst(greenargs[i])
+                i += 1
 
             jitstate = interp.fresh_jitstate(builder)
             redargs = ()
@@ -349,7 +370,7 @@ def make_state_class(hotrunnerdesc):
                 red_i += make_arg_redbox.consumes
             redargs = list(redargs)
 
-            rhotpath.setup_jitstate(interp, jitstate, greenargs, redargs,
+            rhotpath.setup_jitstate(interp, jitstate, gv_greenargs, redargs,
                                     hotrunnerdesc.entryjitcode,
                                     hotrunnerdesc.sigtoken)
             builder.start_writing()
@@ -358,11 +379,13 @@ def make_state_class(hotrunnerdesc):
 
             FUNCPTR = lltype.Ptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
             generated = gv_generated.revealconst(FUNCPTR)
+            greenkey = self.getgreenkey(*greenargs)
             self.machine_codes[greenkey] = generated
-            self.counters[greenkey] = -1     # compiled
+            self.counters[argshash] = -1     # compiled
 
             if not we_are_translated():
                 hotrunnerdesc.residual_graph = generated._obj.graph  #for tests
+            return generated
 
         def make_residualargs(self, *redargs):
             residualargs = ()
