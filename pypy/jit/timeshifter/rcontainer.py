@@ -83,7 +83,7 @@ class AbstractStructTypeDesc(object):
     def __init__(self, RGenOp, TYPE):
         self.TYPE = TYPE
         self.PTRTYPE = self.Ptr(TYPE)
-        self.name = TYPE._name
+        self.name = self._get_type_name(TYPE)
         self.ptrkind = RGenOp.kindToken(self.PTRTYPE)
 
         self.immutable = TYPE._hints.get('immutable', False)
@@ -111,7 +111,10 @@ class AbstractStructTypeDesc(object):
         for name in TYPE._names:
             FIELDTYPE = getattr(TYPE, name)
             yield name, FIELDTYPE
-    
+
+    def _get_type_name(self, TYPE):
+        return TYPE._name
+
     def _compute_fielddescs(self, RGenOp):
         TYPE = self.TYPE
         innermostdesc = self
@@ -258,6 +261,11 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
         for name, (FIELDTYPE, defl) in TYPE._fields.iteritems():
             yield name, FIELDTYPE
 
+    def _get_type_name(self, TYPE):
+        if isinstance(TYPE, ootype.Record):
+            return TYPE._short_name()
+        else:
+            return TYPE._name
 
 def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
