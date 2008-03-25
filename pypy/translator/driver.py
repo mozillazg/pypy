@@ -444,6 +444,8 @@ class TranslationDriver(SimpleTaskEngine):
                                           writer, jitdrivercls,
                                           translate_support_code=True)
             hotrunnerdesc.rewrite_all()
+            from pypy.jit.rainbow import graphopt
+            graphopt.simplify_virtualizable_accesses(writer)
         else:
             from pypy.jit.rainbow.portal import PortalRewriter
             rewriter = PortalRewriter(self.hannotator, rtyper, RGenOp,
