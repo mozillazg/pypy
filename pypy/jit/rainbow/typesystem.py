@@ -10,7 +10,7 @@ def deref(T):
 def fieldType(T, name):
     if isinstance(T, lltype.Struct):
         return getattr(T, name)
-    elif isinstance(T, ootype.Instance):
+    elif isinstance(T, (ootype.Instance, ootype.Record)):
         _, FIELD = T._lookup_field(name)
         return FIELD
     else:
