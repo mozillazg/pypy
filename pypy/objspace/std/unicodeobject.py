@@ -15,6 +15,8 @@ from pypy.objspace.std.formatting import mod_format
 class W_UnicodeObject(W_Object):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
 
+    _immutable_ = True     # JIT hint
+
     def __init__(w_self, unistr):
         assert isinstance(unistr, unicode)
         w_self._value = unistr
