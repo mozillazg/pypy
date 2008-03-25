@@ -170,7 +170,7 @@ def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     return argbox.op_getfield(jitstate, fielddesc)
 
 def gensetfield(jitstate, fielddesc, destbox, valuebox):
-    assert isinstance(destbox, rvalue.PtrRedBox)
+    assert isinstance(destbox, (rvalue.PtrRedBox, rvalue.InstanceRedBox))
     destbox.op_setfield(jitstate, fielddesc, valuebox)
 
 def ll_gengetsubstruct(jitstate, fielddesc, argbox):

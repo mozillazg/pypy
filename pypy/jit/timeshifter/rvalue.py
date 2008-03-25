@@ -347,6 +347,16 @@ class AbstractPtrRedBox(RedBox):
             self.remember_field(fielddesc, box)
         return box
 
+    def op_setfield(self, jitstate, fielddesc, valuebox):
+        self.learn_nonzeroness(jitstate, True)
+        gv_ptr = self.genvar
+        if gv_ptr:
+            fielddesc.generate_set(jitstate, gv_ptr,
+                                   valuebox.getgenvar(jitstate))
+        else:
+            assert self.content is not None
+            self.content.op_setfield(jitstate, fielddesc, valuebox)
+
     def remember_field(self, fielddesc, box):
         if self.genvar.is_const:
             return      # no point in remembering field then
@@ -357,16 +367,6 @@ class AbstractPtrRedBox(RedBox):
 
 
 class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
-
-    def op_setfield(self, jitstate, fielddesc, valuebox):
-        self.learn_nonzeroness(jitstate, True)
-        gv_ptr = self.genvar
-        if gv_ptr:
-            fielddesc.generate_set(jitstate, gv_ptr,
-                                   valuebox.getgenvar(jitstate))
-        else:
-            assert self.content is not None
-            self.content.op_setfield(jitstate, fielddesc, valuebox)
 
     def op_getsubstruct(self, jitstate, fielddesc):
         self.learn_nonzeroness(jitstate, True)
