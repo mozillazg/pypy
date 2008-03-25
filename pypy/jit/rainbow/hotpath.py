@@ -91,11 +91,11 @@ class HotRunnerDesc:
                     return
                 interpreter.debug_trace("jit_compile", *args[:num_green_args])
                 mc = state.compile(argshash, *greenargs)
-                if not mc:      # xxx check if compile() could raise
-                    return      # ContinueRunningNormally to avoid this check
             else:
                 greenkey = state.getgreenkey(*greenargs)
-                mc = state.machine_codes[greenkey]
+                mc = state.machine_codes.get(greenkey, state.NULL_MC)
+            if not mc:
+                return
             interpreter.debug_trace("run_machine_code", *args)
             run = maybe_on_top_of_llinterp(exceptiondesc, mc)
             residualargs = state.make_residualargs(*args[num_green_args:])
@@ -303,6 +303,8 @@ def make_state_class(hotrunnerdesc):
         keydesc = None
 
     class HotEnterState:
+        NULL_MC = lltype.nullptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
+
         def __init__(self):
             self.machine_codes = newgreendict()
             self.counters = {}     # value of -1 means "compiled"
@@ -346,7 +348,7 @@ def make_state_class(hotrunnerdesc):
             except Exception, e:
                 rhotpath.report_compile_time_exception(
                     hotrunnerdesc.interpreter, e)
-                return lltype.nullptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
+                return self.NULL_MC
 
         def _compile(self, argshash, *greenargs):
             interp = hotrunnerdesc.interpreter
