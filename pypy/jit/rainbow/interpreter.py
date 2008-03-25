@@ -341,7 +341,8 @@ class JitInterpreter(object):
                 self.newjitstate(newjitstate)
                 if self.frame is not None:
                     newjitstate = rtimeshift.collect_split(
-                        self.jitstate, self.frame.pc)
+                        self.jitstate, self.frame.pc,
+                        self.frame.local_green)
                     assert newjitstate.frame.bytecode is self.frame.bytecode
                     assert newjitstate.frame.pc == self.frame.pc
                     self.newjitstate(newjitstate)
@@ -500,6 +501,7 @@ class JitInterpreter(object):
 
     @arguments("red", "jumptarget")
     def opimpl_red_goto_iftrue(self, switchbox, target):
+        # XXX not sure about passing no green vars
         decision = rtimeshift.split(self.jitstate, switchbox, self.frame.pc)
         if decision:
             self.frame.pc = target
@@ -511,6 +513,7 @@ class JitInterpreter(object):
 
     @arguments("exception")
     def opimpl_split_raisingop(self, ll_evalue):
+        # XXX not sure about passing no green vars
         rtimeshift.split_raisingop(self.jitstate, self.frame.pc, ll_evalue)
 
 
@@ -554,7 +557,8 @@ class JitInterpreter(object):
 
     @arguments()
     def opimpl_yellow_return(self):
-        self.jitstate.save_green_return_value(self.frame.local_green[0])
+        # save the greens to make the return value findable by collect_split
+        rtimeshift.save_greens(self.jitstate, self.frame.local_green)
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
 
@@ -611,7 +615,8 @@ class JitInterpreter(object):
     def opimpl_portal_call(self, greenargs, redargs):
         self.portalstate.portal_reentry(greenargs, redargs)
         newjitstate = rtimeshift.collect_split(
-            self.jitstate, self.frame.pc)
+            self.jitstate, self.frame.pc,
+            self.frame.local_green)
         assert newjitstate.frame.bytecode is self.frame.bytecode
         assert newjitstate.frame.pc == self.frame.pc
         self.newjitstate(newjitstate)
@@ -636,13 +641,15 @@ class JitInterpreter(object):
 
     @arguments(returns="green")
     def opimpl_yellow_retrieve_result(self):
-        return self.jitstate.get_gv_return_value()
+        # XXX all this jitstate.greens business is a bit messy
+        return self.jitstate.greens[0]
 
     @arguments("2byte", returns="red")
     def opimpl_yellow_retrieve_result_as_red(self, typeid):
+        # XXX all this jitstate.greens business is a bit messy
         redboxcls = self.frame.bytecode.redboxclasses[typeid]
         kind = self.frame.bytecode.typekinds[typeid]
-        return redboxcls(kind, self.jitstate.get_gv_return_value())
+        return redboxcls(kind, self.jitstate.greens[0])
 
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
