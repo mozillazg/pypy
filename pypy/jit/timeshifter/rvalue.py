@@ -239,6 +239,8 @@ class AbstractPtrRedBox(RedBox):
                 self.setgenvar_hint(gv_null, known_nonzero=False)
         return ok
 
+    learn_boolvalue = learn_nonzeroness
+
     def __repr__(self):
         if not self.genvar and self.content is not None:
             return '<virtual %s>' % (self.content,)
