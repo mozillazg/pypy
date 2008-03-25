@@ -1038,6 +1038,10 @@ class OOTypeJitInterpreter(JitInterpreter):
         rtimeshift.gensetfield(self.jitstate, fielddesc, destbox,
                                valuebox)
 
+    @arguments("structtypedesc", returns="red")
+    def opimpl_red_new(self, structtypedesc):
+        return structtypedesc.factory()
+
 
 class DebugTrace(object):
     def __init__(self, *args):

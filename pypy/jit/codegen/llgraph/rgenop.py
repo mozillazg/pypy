@@ -246,6 +246,13 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, 'malloc_varsize', vars_gv,
                                   gv_PTRTYPE.v))
 
+    def genop_new(self, (gv_TYPE, gv_OBJTYPE)):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_new: bad currently_writing")
+        vars_gv = [gv_TYPE.v]
+        return LLVar(llimpl.genop(self.b, 'new', vars_gv,
+                                  gv_OBJTYPE.v))
+
     def genop_same_as(self, gv_TYPE, gv_value):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_same_as: bad currently_writing")
