@@ -140,5 +140,4 @@ def dump_bytecode(jitcode, file=None):
             assert 0, "unexpected object: %r" % (arg,)
 
     if src.pc != len(jitcode.code):
-        import pdb; pdb.set_trace()
         print >> file, 'WARNING: the pc column is bogus! fix dump.py!'
