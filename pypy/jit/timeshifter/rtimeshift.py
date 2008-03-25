@@ -407,6 +407,7 @@ def guard_global_merge(jitstate, resumepoint):
     jitstate.resumepoint = resumepoint
 
 def split(jitstate, switchredbox, resumepoint, *greens_gv):
+    assert not greens_gv
     exitgvar = switchredbox.getgenvar(jitstate)
     if exitgvar.is_const:
         return exitgvar.revealconst(lltype.Bool)
@@ -416,6 +417,7 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
 
 def split_nonconstantcase(jitstate, exitgvar, resumepoint,
                           condbox, reverse, greens_gv, ll_evalue=NULL_OBJECT):
+    assert not greens_gv
     resuming = jitstate.get_resuming()
     if resuming is not None and resuming.mergesleft == 0:
         node = resuming.path.pop()
@@ -450,6 +452,7 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
     return True
 
 def split_raisingop(jitstate, resumepoint, ll_evalue, *greens_gv):
+    assert not greens_gv
     exitgvar = jitstate.get_gv_op_raised()
     if exitgvar.is_const:
         gotexc = exitgvar.revealconst(lltype.Bool)
@@ -460,7 +463,7 @@ def split_raisingop(jitstate, resumepoint, ll_evalue, *greens_gv):
     if gotexc:
         jitstate.residual_ll_exception(ll_evalue)
 
-def collect_split(jitstate_chain, resumepoint, greens_gv):
+def collect_split(jitstate_chain, resumepoint):
     # YYY split to avoid over-specialization
     # assumes that the head of the jitstate_chain is ready for writing,
     # and all the other jitstates in the chain are paused
@@ -471,7 +474,7 @@ def collect_split(jitstate_chain, resumepoint, greens_gv):
         assert isinstance(node, PromotionPathCollectSplit)
         for i in range(node.n):
             pending = pending.next
-        pending.greens.extend(greens_gv)
+        #pending.greens.extend(greens_gv)
         if pending.returnbox is not None:
             pending.frame.local_boxes.append(getreturnbox(pending))
         pending.next = None
@@ -482,7 +485,7 @@ def collect_split(jitstate_chain, resumepoint, greens_gv):
     while True:
         jitstate = pending
         pending = pending.next
-        jitstate.greens.extend(greens_gv)   # item 0 is the return value
+        #jitstate.greens.extend(greens_gv)   # item 0 is the return value
         if jitstate.returnbox is not None:
             jitstate.frame.local_boxes.append(getreturnbox(jitstate))
         jitstate.resumepoint = resumepoint
@@ -535,13 +538,11 @@ def save_locals(jitstate, *redboxes):
     jitstate.frame.local_boxes = redboxes
 
 def save_greens(jitstate, greens_gv):
+    assert not greens_gv
     jitstate.greens = list(greens_gv)
 
 def getlocalbox(jitstate, i):
     return jitstate.frame.local_boxes[i]
-
-def ll_getgreenbox(jitstate, i, T):
-    return jitstate.greens[i].revealconst(T)
 
 def getreturnbox(jitstate):
     retbox = jitstate.returnbox
@@ -1040,7 +1041,7 @@ class VirtualFrame(object):
 class JITState(object):
     _attrs_ = """curbuilder frame
                  exc_type_box exc_value_box
-                 greens
+                 gv_return_value
                  gv_op_raised
                  returnbox
                  promotion_path
@@ -1069,6 +1070,7 @@ class JITState(object):
         if newgreens is None:
             newgreens = []
         self.greens = newgreens
+        self.gv_return_value = None
         self.gv_op_raised = None
 
         # XXX can not be a dictionary
@@ -1288,6 +1290,13 @@ class JITState(object):
         self.gv_op_raised = None
         return result
 
+    def save_green_return_value(self, gv_result):
+        self.gv_return_value = gv_result
+
+    def get_gv_return_value(self):
+        result = self.gv_return_value
+        self.gv_return_value = None
+        return result
 
 def start_writing(jitstate=None, prevopen=None):
     if jitstate is not prevopen:
