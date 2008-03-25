@@ -71,14 +71,14 @@ class VirtualizableAccessTracker(object):
         if self.graph2safeargs[graph] != prevset:
             self.pending_graphs.add(graph)
 
-    def follow_call(self, args, graph, unsafe_vars):
+    def follow_call(self, args, graph, is_unsafe):
         safe_args = None
         assert len(args) == len(graph.getargs())
         for v1, v2 in zip(args, graph.getargs()):
             if is_vableptr(v2.concretetype):
                 if safe_args is None:
                     safe_args = []
-                if v1 not in unsafe_vars:
+                if not is_unsafe(v1):
                     safe_args.append(v2)
         if safe_args is not None:
             self.seeing_call(graph, safe_args)
@@ -90,25 +90,24 @@ class VirtualizableAccessTracker(object):
         unsafe = set(graph.getargs())
         if graph in self.graph2safeargs:
             unsafe -= self.graph2safeargs[graph]
-        unsafe -= self.safe_variables
 
-        def notsafe(v):
-            if v not in self.safe_variables:
-                unsafe.add(v)
+        def is_unsafe(v):
+            return (isinstance(v, Constant) or
+                    (v in unsafe and v not in self.safe_variables))
 
         pending_blocks = set(graph.iterblocks())
         while pending_blocks:
             block = pending_blocks.pop()
             for op in block.operations:
                 if op.opname == 'cast_pointer':
-                    if op.args[0] in unsafe:
-                        notsafe(op.result)
+                    if is_unsafe(op.args[0]):
+                        unsafe.add(op.result)
                 else:
-                    notsafe(op.result)
+                    unsafe.add(op.result)
             for link in block.exits:
                 for v1, v2 in zip(link.args, link.target.inputargs):
-                    if v1 in unsafe and v2 not in unsafe:
-                        notsafe(v2)
+                    if is_unsafe(v1) and v2 not in unsafe:
+                        unsafe.add(v2)
                         pending_blocks.add(link.target)
 
         # done following, now find and record all calls
@@ -117,17 +116,17 @@ class VirtualizableAccessTracker(object):
                 if op.opname == 'direct_call':
                     if is_vable_setter(op) or is_vable_getter(op):
                         v = op.args[1]
-                        self.safe_operations[op] = v not in unsafe
+                        self.safe_operations[op] = not is_unsafe(v)
                     elif hasattr(op.args[0].value._obj, 'graph'):
                         callargs = op.args[1:]
                         calltarget = op.args[0].value._obj.graph
-                        self.follow_call(callargs, calltarget, unsafe)
+                        self.follow_call(callargs, calltarget, is_unsafe)
                 elif op.opname == 'indirect_call':
                     callargs = op.args[1:-1]
                     calltargets = op.args[-1].value
                     if calltargets is not None:
                         for calltarget in calltargets:
-                            self.follow_call(callargs, calltarget, unsafe)
+                            self.follow_call(callargs, calltarget, is_unsafe)
 
     def propagate(self):
         while self.pending_graphs:

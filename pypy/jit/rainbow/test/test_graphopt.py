@@ -140,3 +140,31 @@ class TestGraphOpt(HotPathTest):
 
         self.run(f, [], 2)
         assert self.setters[operate] == 1
+
+    def test_prebuilt_vable(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i']
+
+        class State:
+            pass
+        state = State()
+        state.prebuilt = XY(6, 7)
+
+        def operate(xy):
+            xy.y = 27
+
+        def debug1(n):
+            XY(3, 4)
+            operate(state.prebuilt)
+
+        def f():
+            i = 1024
+            while i > 0:
+                i >>= 1
+                debug1(i)
+                MyJitDriver.jit_merge_point(i=i)
+                MyJitDriver.can_enter_jit(i=i)
+
+        self.run(f, [], 2)
+        assert self.setters[operate] == 1
