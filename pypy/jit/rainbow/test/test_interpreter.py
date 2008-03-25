@@ -1920,8 +1920,6 @@ class TestOOType(SimpleTests):
     def _skip(self):
         py.test.skip('in progress')
 
-    test_green_call = _skip
-    test_green_call_void_return = _skip
     test_degenerated_before_return = _skip
     test_degenerated_before_return_2 = _skip
     test_degenerated_at_return = _skip
@@ -1963,5 +1961,4 @@ class TestOOType(SimpleTests):
     test_red_int_add_ovf = _skip
     test_nonzeroness_assert_while_compiling = _skip
     test_segfault_while_compiling = _skip
-    test_substitute_graph_void = _skip
     test_void_args = _skip

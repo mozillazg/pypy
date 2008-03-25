@@ -19,8 +19,7 @@ class LLTypeHelper(TypeSystemHelper):
 class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
-    ROOT_TYPE = llmemory.Address # XXX: should be ootype.ROOT
-    #ROOT_TYPE = ootype.ROOT
+    ROOT_TYPE = ootype.ROOT
 
     def get_typeptr(self, obj):
         return obj.meta

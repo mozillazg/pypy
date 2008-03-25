@@ -178,7 +178,20 @@ class LLBuilder(GenBuilder):
         #           llimpl.cast(self.b, gv_FIELDTYPE.v, gv_value.v)]
         #return LLVar(llimpl.genop(self.b, 'setfield', vars_gv,
         #                          gv_Void.v))        
+
+    def genop_oogetfield(self, (gv_name, gv_OBJTYPE, gv_FIELDTYPE), gv_obj):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_oogetfield: bad currently_writing")
+        return LLVar(llimpl.genoogetfield(self.b, gv_obj.v,
+                                        gv_OBJTYPE.v, gv_name.v))
     
+    def genop_oosetfield(self, (gv_name, gv_OBJTYPE, gv_FIELDTYPE), gv_obj,
+                                                                  gv_value):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_setfield: bad currently_writing")
+        v_value = llimpl.cast(self.b, gv_FIELDTYPE.v, gv_value.v)
+        llimpl.genoosetfield(self.b, gv_obj.v, gv_OBJTYPE.v, gv_name.v, v_value)
+
     def genop_getsubstruct(self, (gv_name, gv_PTRTYPE, gv_FIELDTYPE), gv_ptr):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_getsubstruct: bad currently_writing")
