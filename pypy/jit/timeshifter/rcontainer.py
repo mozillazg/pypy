@@ -605,18 +605,18 @@ class FieldDesc(object):
             RESTYPE = lltype.Ptr(RESTYPE)
             self.fieldnonnull = True
         elif isinstance(RESTYPE, lltype.Ptr):
+            self._set_hints(PTRTYPE, RESTYPE)
             T = RESTYPE.TO
-            if hasattr(T, '_hints'):
-                # xxx hack for simple recursive cases
-                if not PTRTYPE.TO._hints.get('virtualizable', False):
-                    self.virtualizable = T._hints.get('virtualizable', False)
             self.gcref = T._gckind == 'gc'
             if isinstance(T, lltype.ContainerType):
                 if not T._is_varsize() or hasattr(T, 'll_newlist'):
                     self.canbevirtual = True
             else:
                 T = None
-            self.fieldnonnull = PTRTYPE.TO._hints.get('shouldntbenull', False)
+        elif isinstance(RESTYPE, ootype.Instance):
+            self._set_hints(PTRTYPE, RESTYPE)
+            self.gcref = True        # XXX: is it right?
+            self.canbevirtual = True # XXX: is it right?
         elif isinstance(RESTYPE, ootype.OOType):
             assert False, 'XXX: TODO'
         self.RESTYPE = RESTYPE
@@ -632,6 +632,14 @@ class FieldDesc(object):
             self.redboxcls = rvalue.ll_redboxcls(RESTYPE)
             
         self.immutable = deref(PTRTYPE)._hints.get('immutable', False)
+
+    def _set_hints(self, PTRTYPE, RESTYPE):
+        T = deref(RESTYPE)
+        if hasattr(T, '_hints'):
+            # xxx hack for simple recursive cases
+            if not deref(PTRTYPE)._hints.get('virtualizable', False):
+                self.virtualizable = T._hints.get('virtualizable', False)
+        self.fieldnonnull = deref(PTRTYPE)._hints.get('shouldntbenull', False)
 
     def _freeze_(self):
         return True
