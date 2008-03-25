@@ -219,29 +219,29 @@ class HotSplitFallbackPoint(FallbackPoint):
             pc = self.truepath_pc
         else:
             pc = self.falsepath_pc
-        gv_value = self.hotrunnerdesc.interpreter.rgenop.genconst(value)
-        self._compile_hot_path(gv_value, pc)
+        self._compile_hot_path(value, pc)
         if value:
             self.truepath_counter = -1    # means "compiled"
         else:
             self.falsepath_counter = -1   # means "compiled"
 
-    def _compile_hot_path(self, gv_case, pc):
+    def _compile_hot_path(self, case, pc):
         if self.falsepath_counter == -1 or self.truepath_counter == -1:
             # the other path was already compiled, we can reuse the jitstate
             jitstate = self.saved_jitstate
             self.saved_jitstate = None
-            promotebox = self.promotebox
+            switchbox = self.promotebox
         else:
             # clone the jitstate
             memo = rvalue.copy_memo()
             jitstate = self.saved_jitstate.clone(memo)
-            promotebox = memo.boxes[self.promotebox]
-        promotebox.setgenvar(gv_case)
+            switchbox = memo.boxes[self.promotebox]
         interpreter = self.hotrunnerdesc.interpreter
         interpreter.newjitstate(jitstate)
         interpreter.frame.pc = pc
+        gv_case = self.hotrunnerdesc.interpreter.rgenop.genconst(case)
         jitstate.curbuilder = self.flexswitch.add_case(gv_case)
+        switchbox.learn_boolvalue(jitstate, case)
         compile(interpreter)
 
 
