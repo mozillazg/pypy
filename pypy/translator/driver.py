@@ -442,7 +442,8 @@ class TranslationDriver(SimpleTaskEngine):
             jitdrivercls = ha.jitdriverclasses.keys()[0] # hack
             hotrunnerdesc = HotRunnerDesc(ha, rtyper, jitcode, RGenOp,
                                           writer, jitdrivercls,
-                                          translate_support_code=True)
+                                          translate_support_code=True,
+                                          verbose_level=1)
             hotrunnerdesc.rewrite_all()
             from pypy.jit.rainbow import graphopt
             graphopt.simplify_virtualizable_accesses(writer)
