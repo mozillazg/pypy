@@ -62,8 +62,10 @@ class TestGraphOpt(HotPathTest):
             reds = ['xy', 'i', 'res']
 
         def debug(xy):
+            unrelated = XY(7, 8)
             xy.x = 5
-            return xy.y
+            unrelated.y *= 2
+            return xy.y + unrelated.x
 
         def f(xy):
             i = 1024
@@ -84,3 +86,27 @@ class TestGraphOpt(HotPathTest):
         assert self.getters[f] == 0
         assert self.setters[debug] == 1
         assert self.getters[debug] == 1
+
+    def test_from_heap(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['lst', 'i', 'res']
+
+        def f(lst):
+            i = 1024
+            while i > 0:
+                i >>= 1
+                xy = lst[0]
+                res = xy.x+xy.y
+                MyJitDriver.jit_merge_point(lst=lst, res=res, i=i)
+                MyJitDriver.can_enter_jit(lst=lst, res=res, i=i)
+            return res
+
+        def main(x, y):
+            xy = XY(x, y)
+            return f([xy])
+
+        self.run(main, [20, 30], 2)
+        assert self.setters[XY.__init__.im_func] == 0
+        assert self.getters[f] == 4     # 2 in the copy before the portal,
+                                        # 2 in the portal itself
