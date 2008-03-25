@@ -1,3 +1,4 @@
+import sys
 import time
 
 
@@ -21,7 +22,9 @@ try:
 except ImportError:
     print "No jit"
 else:
-    pypyjit.enable(f1.func_code)
+    if len(sys.argv) > 1:
+        pypyjit.setthreshold(int(sys.argv[1]))
+    pypyjit.enable()
 
 res = f1(2117)
 print res
