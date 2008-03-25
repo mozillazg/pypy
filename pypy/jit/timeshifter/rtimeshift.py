@@ -237,9 +237,6 @@ def gengetarraysize(jitstate, fielddesc, argbox):
         argbox.getgenvar(jitstate))
     return rvalue.IntRedBox(fielddesc.indexkind, genvar)
 
-
-
-
 def genptrnonzero(jitstate, argbox, reverse):
     assert isinstance(argbox, rvalue.PtrRedBox)
     if argbox.is_constant():
@@ -416,16 +413,6 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
     else:
         return split_nonconstantcase(jitstate, exitgvar, resumepoint,
                                      switchredbox, False, list(greens_gv))
-
-def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
-                      ptrbox, reverse, *greens_gv):
-    assert isinstance(ptrbox, rvalue.PtrRedBox)
-    exitgvar = switchredbox.getgenvar(jitstate)
-    if exitgvar.is_const:
-        return exitgvar.revealconst(lltype.Bool)
-    else:
-        return split_nonconstantcase(jitstate, exitgvar, resumepoint,
-                                     ptrbox, reverse, list(greens_gv))
 
 def split_nonconstantcase(jitstate, exitgvar, resumepoint,
                           condbox, reverse, greens_gv, ll_evalue=NULL_OBJECT):

@@ -506,14 +506,6 @@ class JitInterpreter(object):
         if decision:
             self.frame.pc = target
 
-    @arguments("bool", "red", "red", "jumptarget")
-    def opimpl_red_goto_ifptrnonzero(self, reverse, ptrbox, switchbox, target):
-        # XXX not sure about passing no green vars
-        decision = rtimeshift.split_ptr_nonzero(self.jitstate, switchbox,
-                                                 self.frame.pc, ptrbox, reverse)
-        if decision:
-            self.frame.pc = target
-
     @arguments("red", "jumptarget")
     def opimpl_goto_if_constant(self, valuebox, target):
         if valuebox.is_constant():
@@ -549,8 +541,9 @@ class JitInterpreter(object):
                                    ptrbox2, True)
 
     @arguments("red", "bool")
-    def opimpl_learn_boolvalue(self, redbox, boolval):
-        redbox.learn_boolvalue(self.jitstate, boolval)
+    def opimpl_learn_nonzeroness(self, redbox, boolval):
+        assert isinstance(redbox, rvalue.PtrRedBox)
+        redbox.learn_nonzeroness(self.jitstate, boolval)
 
     @arguments()
     def opimpl_red_return(self):

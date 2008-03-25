@@ -2207,6 +2207,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_add': 2, 'int_gt': 1, 'int_rshift': 1})
 
     def test_learn_nonzeroness(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['a', 'i', 'tot', 'x']
         class A:
             pass
         class B:
@@ -2216,21 +2219,29 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 return A()
             return None
         def f(isnotnone, x):
-            hint(None, global_merge_point=True)
             a = g(isnotnone)
-            b = B()
-            b.a = a
-            if b.a:
+            i = 1024 * 1024
+            tot = 0
+            while i > 0:
+                i >>= 1
+                b = B()
+                b.a = a
                 if b.a:
-                    return 1 + x
-                return -1 + x
-            else:
-                if not b.a:
-                    return 2 + x
-                return -2 + x
-        res = self.interpret(f, [False, 5], policy=StopAtXPolicy(g))
-        assert res == 7
-        self.check_insns(int_add=2)
+                    if b.a:
+                        tot += 1 + x
+                    else:
+                        tot += -1 + x
+                else:
+                    if not b.a:
+                        tot += 2 + x
+                    else:
+                        tot += -2 + x
+                MyJitDriver.jit_merge_point(tot=tot, i=i, a=a, x=x)
+                MyJitDriver.can_enter_jit(tot=tot, i=i, a=a, x=x)
+            return tot
+        res = self.run(f, [False, 5], threshold=2, policy=StopAtXPolicy(g))
+        assert res == f(False, 5)
+        self.check_insns_in_loops(int_add=2)
 
     # void tests
     def test_void_args(self):
