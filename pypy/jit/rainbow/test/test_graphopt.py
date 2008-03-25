@@ -110,3 +110,33 @@ class TestGraphOpt(HotPathTest):
         assert self.setters[XY.__init__.im_func] == 0
         assert self.getters[f] == 4     # 2 in the copy before the portal,
                                         # 2 in the portal itself
+
+    def test_track_in_graph_bug(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i']
+
+        class State:
+            pass
+        state = State()
+        state.lst = [XY(6, 7), XY(8, 9)]
+
+        def operate(xy):
+            xy.y = 27
+
+        def debug1(n):
+            if n:
+                xy = XY(4, 5)
+            else:
+                operate(state.lst[0])
+
+        def f():
+            i = 1024
+            while i > 0:
+                i >>= 1
+                debug1(i)
+                MyJitDriver.jit_merge_point(i=i)
+                MyJitDriver.can_enter_jit(i=i)
+
+        self.run(f, [], 2)
+        assert self.setters[operate] == 1

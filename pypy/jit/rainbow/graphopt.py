@@ -92,21 +92,23 @@ class VirtualizableAccessTracker(object):
             unsafe -= self.graph2safeargs[graph]
         unsafe -= self.safe_variables
 
-        pending_blocks = set([graph.startblock])
+        def notsafe(v):
+            if v not in self.safe_variables:
+                unsafe.add(v)
+
+        pending_blocks = set(graph.iterblocks())
         while pending_blocks:
             block = pending_blocks.pop()
             for op in block.operations:
-                if is_vableptr(op.result.concretetype):
-                    if op.opname == 'cast_pointer':
-                        if op.args[0] in unsafe:
-                            unsafe.add(op.result)
-                    else:
-                        unsafe.add(op.result)
-                    unsafe -= self.safe_variables
+                if op.opname == 'cast_pointer':
+                    if op.args[0] in unsafe:
+                        notsafe(op.result)
+                else:
+                    notsafe(op.result)
             for link in block.exits:
                 for v1, v2 in zip(link.args, link.target.inputargs):
                     if v1 in unsafe and v2 not in unsafe:
-                        unsafe.add(v2)
+                        notsafe(v2)
                         pending_blocks.add(link.target)
 
         # done following, now find and record all calls
