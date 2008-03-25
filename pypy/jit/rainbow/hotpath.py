@@ -21,7 +21,8 @@ from pypy.jit.rainbow.portal import getjitenterargdesc
 class HotRunnerDesc:
 
     def __init__(self, hintannotator, rtyper, entryjitcode, RGenOp,
-                 codewriter, jitdrivercls, translate_support_code = True):
+                 codewriter, jitdrivercls, translate_support_code = True,
+                 verbose_level=3):
         self.hintannotator = hintannotator
         self.entryjitcode = entryjitcode
         self.rtyper = rtyper
@@ -32,6 +33,7 @@ class HotRunnerDesc:
         self.codewriter = codewriter
         self.jitdrivercls = jitdrivercls
         self.translate_support_code = translate_support_code
+        self.verbose_level = verbose_level
 
     def _freeze_(self):
         return True
@@ -86,7 +88,8 @@ class HotRunnerDesc:
             if counter >= 0:
                 counter += 1
                 if counter < self.jitdrivercls.getcurrentthreshold():
-                    interpreter.debug_trace("jit_not_entered", *args)
+                    if self.verbose_level >= 3:
+                        interpreter.debug_trace("jit_not_entered", *args)
                     state.counters[argshash] = counter
                     return
                 interpreter.debug_trace("jit_compile", *args[:num_green_args])
@@ -96,7 +99,8 @@ class HotRunnerDesc:
                 mc = state.machine_codes.get(greenkey, state.NULL_MC)
             if not mc:
                 return
-            interpreter.debug_trace("run_machine_code", *args)
+            if self.verbose_level >= 2:
+                interpreter.debug_trace("run_machine_code", *args)
             run = maybe_on_top_of_llinterp(exceptiondesc, mc)
             residualargs = state.make_residualargs(*args[num_green_args:])
             run(*residualargs)
