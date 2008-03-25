@@ -91,7 +91,7 @@ class HotRunnerDesc:
                     return
                 interpreter.debug_trace("jit_compile", *args[:num_green_args])
                 mc = state.compile(argshash, *greenargs)
-                if mc is None:
+                if not mc:
                     return
             else:
                 greenkey = state.getgreenkey(*greenargs)
@@ -346,7 +346,7 @@ def make_state_class(hotrunnerdesc):
             except Exception, e:
                 rhotpath.report_compile_time_exception(
                     hotrunnerdesc.interpreter, e)
-                return None
+                return lltype.nullptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
 
         def _compile(self, argshash, *greenargs):
             interp = hotrunnerdesc.interpreter
