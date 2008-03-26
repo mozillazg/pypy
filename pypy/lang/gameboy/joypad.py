@@ -1,56 +1,41 @@
-"""
-PyBoy GameBoy (TM) Emulator
- 
-Joypad Input
-"""
+
+from pypy.lang.gameboy import constants
 
 class Joypad(object):
-
-    # Registers
-    joyp = 0
-    cycles = 0
-
-    # Interrupt Controller
-    interrupt = None
-
-    # Driver JoypadDriver
-    driver = None
+    """
+    PyBoy GameBoy (TM) Emulator
+     
+    Joypad Input
+    """
 
     def __init__(self, joypadDriver, interrupt):
         self.driver = joypadDriver
         self.interrupt = interrupt
         self.reset()
 
-
-    def  reset(self):
+    def reset(self):
         self.joyp = 0xFF
         self.cycles = constants.JOYPAD_CLOCK
-
 
     def cycles(self):
         return self.cycles
 
-
-    def  emulate(self, ticks):
+    def emulate(self, ticks):
         self.cycles -= ticks
         if (self.cycles <= 0):
             if (self.driver.isRaised()):
                 self.update()
-
             self.cycles = constants.JOYPAD_CLOCK
 
-
-    def  write(self, address, data):
+    def write(self, address, data):
         if (address == constants.JOYP):
             self.joyp = (self.joyp & 0xCF) + (data & 0x30)
             self.update()
-
 
     def read(self, address):
         if (address == constants.JOYP):
             return self.joyp
         return 0xFF
-
 
     def update(self):
         data = self.joyp & 0xF0
@@ -68,3 +53,12 @@ class Joypad(object):
 
         self.joyp = data
 
+
+
+class Driver(object):
+    
+    def getButtons(self):
+        pass
+    
+    def getDirections(self):
+        pass

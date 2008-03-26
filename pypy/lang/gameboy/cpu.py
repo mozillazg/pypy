@@ -96,7 +96,6 @@ class CPU(object):
     
     Central Unit ProcessOR (Sharp LR35902 CPU)
     """
-    
     def __init__(self, interrupt, memory):
         self.interrupt = interrupt
         self.memory = memory
@@ -240,9 +239,6 @@ class CPU(object):
     def execute(self, opCode):
         OP_CODES[opCode](self)
         
-    def reverseArgumentsDoubleRegister(self, register, getter):
-        pass
-    
      # memory Access, 1 cycle
     def read(self, hi, lo=None):
         address = hi
@@ -340,7 +336,7 @@ class CPU(object):
         self.cycles -= 1
         
     # 1 cycle
-    def adc(self, getter, setter=None):
+    def addWithCarry(self, getter, setter=None):
         s = self.a.get() + getter() + ((self.f.get() & constants.C_FLAG) >> 4)
         self.f.set(0, False)
         self.zeroFlagAdd(s)
@@ -351,7 +347,7 @@ class CPU(object):
         self.a.set(s & 0xFF)  # 1 cycle
 
     # 1 cycle
-    def sbc(self, getter, setter=None):
+    def subtractWithCarry(self, getter, setter=None):
         s = self.a.get() - getter() - ((self.f.get() & constants.C_FLAG) >> 4)
         self.f.set(constants.N_FLAG, False)
         self.zeroFlagAdd(s)
@@ -362,7 +358,7 @@ class CPU(object):
         self.a.set(s & 0xFF)  # 1 cycle
         
     # 1 cycle
-    def sub(self, getter, setter=None):
+    def subtract(self, getter, setter=None):
         self.compareA(getter, setter) # 1 cycle
         self.a.sub(getter(useCycles=False), False)
 
@@ -420,49 +416,75 @@ class CPU(object):
         setter(data) # 1 cycle
 
     # 1 cycle
-    def rlc(self, getter, setter):
+    def rotateLeftCircular(self, getter, setter):
         s = ((getter() & 0x7F) << 1) + ((getter() & 0x80) >> 7)
-        flagsAndSetterFinish(s, setter, 0x80)
+        self.flagsAndSetterFinish(s, setter, 0x80)
+
+    # rotateLeftCircularA 1 cycle
+    def rotateLeftCircularA(self):
+        self.cFlagAdd(self.a.get(), 0x80, resetF=True)
+        self.a.set(((self.a.get() & 0x7F) << 1) + ((self.a.get() & 0x80) >> 7))
+
 
     # 1 cycle
-    def rl(self, getter, setter):
+    def rotateLeft(self, getter, setter):
         s = ((getter() & 0x7F) << 1)
         if (self.f.get() & constants.C_FLAG) != 0:
             s += 0x01
-        flagsAndSetterFinish(s, setter, 0x80) # 1 cycle
+        self.flagsAndSetterFinish(s, setter, 0x80) # 1 cycle
 
+     # RLA  1 cycle
+    def rotateLeftA(self):
+        s = ((self.a.get() & 0x7F) << 1)
+        if (self.f.get() & constants.C_FLAG) != 0:
+            s +=  0x01
+        self.cFlagAdd(self.a.get(), 0x80, resetF=True)
+        self.a.set(s) #  1 cycle
+        
     # 1 cycle
-    def rrc(self, getter, setter):
+    def rotateRightCircular(self, getter, setter):
         s = (getter() >> 1) + ((getter() & 0x01) << 7)
-        flagsAndSetterFinish(s, setter) # 1 cycle
+        self.flagsAndSetterFinish(s, setter) # 1 cycle
+   
+     # RRCA 1 cycle
+    def rotateRightCircularA(self):
+        self.cFlagAdd(self.a.get(), resetF=True)
+        self.a.set(((self.a.get() >> 1) & 0x7F) + ((self.a.get() << 7) & 0x80)) #1 cycle
 
     # 1 cycle
-    def rr(self, getter, setter):
+    def rotateRight(self, getter, setter):
         s = (getter() >> 1) + ((self.f.get() & constants.C_FLAG) << 3)
-        flagsAndSetterFinish(s, setter) # 1 cycle
+        self.flagsAndSetterFinish(s, setter) # 1 cycle
+
+     # RRA 1 cycle
+    def rotateRightA(self):
+        s = ((self.a.get() >> 1) & 0x7F)
+        if (self.f.get() & constants.C_FLAG) != 0:
+            s += 0x80
+        self.cFlagAdd(self.a.get(), resetF=True)
+        self.a.set(s) # 1 cycle
 
     # 2 cycles
-    def sla(self, getter, setter):
+    def shiftLeftArithmetic(self, getter, setter):
         s = (getter() << 1) & 0xFF
-        flagsAndSetterFinish(s, setter, 0x80) # 1 cycle
+        self.flagsAndSetterFinish(s, setter, 0x80) # 1 cycle
 
     # 1 cycle
-    def sra(self, getter, setter):
+    def shiftRightArithmetic(self, getter, setter):
         s = (getter() >> 1) + (getter() & 0x80)
-        flagsAndSetterFinish(s, setter) # 1 cycle
+        self.flagsAndSetterFinish(s, setter) # 1 cycle
 
-    # 1 cycle
-    def srl(self, getter, setter):
+    # 2 cycles
+    def shiftWordRightLogical(self, getter, setter):
         s = (getter() >> 1)
-        flagsAndSetterFinish(s, setter) # 1 cycle
+        self.flagsAndSetterFinish(s, setter) # 2 cycles
         
-     # 1 cycle
+     # 2 cycles
     def flagsAndSetterFinish(self, s, setter, compareAnd=0x01):
         self.f.set(0) # 1 cycle
         self.zeroFlagAdd(s)
-        # XXX where does "getter" come from here? should be "setter"?
-        self.cFlagAdd(getter(), compareAnd)
-        setter(s)
+        self.cFlagAdd(s, compareAnd)
+        setter(s) # 1 cycle
 
     # 1 cycle
     def swap(self, getter, setter):
@@ -472,45 +494,19 @@ class CPU(object):
         setter(s)
 
     # 2 cycles
-    def bit(self, getter, setter, n):
+    def testBit(self, getter, setter, n):
         self.f.set((self.f.get() & constants.C_FLAG) + constants.H_FLAG, False)
         if (getter() & (1 << n)) == 0:
             self.f.add(constants.Z_FLAG, False)
         self.cycles -= 2
 
-     # RLCA 1 cycle
-    def rlca(self):
-        self.cFlagAdd(self.a.get(), 0x80, resetF=True)
-        self.a.set(((self.a.get() & 0x7F) << 1) + ((self.a.get() & 0x80) >> 7))
-
-     # RLA  1 cycle
-    def rla(self):
-        s = ((self.a.get() & 0x7F) << 1)
-        if (self.f.get() & constants.C_FLAG) != 0:
-            s +=  0x01
-        self.cFlagAdd(self.a.get(), 0x80, resetF=True)
-        self.a.set(s) #  1 cycle
-
-     # RRCA 1 cycle
-    def rrca(self):
-        self.cFlagAdd(self.a.get(), resetF=True)
-        self.a.set(((self.a.get() >> 1) & 0x7F) + ((self.a.get() << 7) & 0x80)) #1 cycle
-
-     # RRA 1 cycle
-    def rra(self):
-        s = ((self.a.get() >> 1) & 0x7F)
-        if (self.f.get() & constants.C_FLAG) != 0:
-            s += 0x80
-        self.cFlagAdd(self.a.get(), resetF=True)
-        self.a.set(s) # 1 cycle
-
     # 2 cycles
-    def set(self, getter, setter, n):
+    def setBit(self, getter, setter, n):
         self.cycles -= 1                  # 1 cycle
         setter(getter() | (1 << n)) # 1 cycle
         
     # 1 cycle
-    def res(self, getter, setter, n):
+    def resetBit(self, getter, setter, n):
         setter(getter() & (~(1 << n))) # 1 cycle
         
      # LD A,(nnnn), 4 cycles
@@ -559,14 +555,14 @@ class CPU(object):
     def ldh_A_Ci(self):
         self.a.set(self.read(0xFF00 + self.bc.getLo())) # 1+2 cycles
         
-     # LDI A,(HL) 2 cycles
-    def ldi_A_HLi(self):
+     # loadAndIncrement A,(HL) 2 cycles
+    def loadAndIncrement_A_HLi(self):
         self.a.set(self.read(self.hl.get())) # 2 cycles
         self.hl.inc()# 2 cycles
         self.cycles += 2
         
-     # LDD A,(HL)  2 cycles
-    def ldd_A_HLi(self):
+     # loadAndDecrement A,(HL)  2 cycles
+    def loadAndDecrement_A_HLi(self):
         self.a.set(self.read(self.hl.get())) # 2 cycles
         self.hl.dec() # 2 cycles
         self.cycles += 2
@@ -579,14 +575,14 @@ class CPU(object):
     def ldh_Ci_A(self):
         self.write(0xFF00 + self.bc.getLo(), self.a.get()) # 2 cycles
         
-     # LDI (HL),A 2 cycles
-    def ldi_HLi_A(self):
+     # loadAndIncrement (HL),A 2 cycles
+    def loadAndIncrement_HLi_A(self):
         self.write(self.hl.get(), self.a.get()) # 2 cycles
         self.hl.inc() # 2 cycles
         self.cycles += 2
 
-     # LDD (HL),A  2 cycles
-    def ldd_HLi_A(self):
+     # loadAndDecrement (HL),A  2 cycles
+    def loadAndDecrement_HLi_A(self):
         self.write(self.hl.get(), self.a.get()) # 2 cycles
         self.hl.dec() # 2 cycles
         self.cycles += 2
@@ -596,7 +592,7 @@ class CPU(object):
         self.sp.set(self.hl.get()) # 1 cycle
         self.cycles -= 1
 
-    def cpl(self):
+    def complementA(self):
         self.a.set(self.a.get() ^ 0xFF, False)
         self.f.set(self.f.get() | (constants.N_FLAG + constants.H_FLAG))
 
@@ -721,7 +717,7 @@ class CPU(object):
         self.pc.set(hi, lo) # 2 cycles
 
      # RET cc 2,5 cycles
-    def ret_cc(self, cc):
+    def conditionalReturn(self, cc):
         if cc:
             self.ret() # 4 cycles
             # FIXME maybe this should be the same
@@ -730,7 +726,7 @@ class CPU(object):
             self.cycles -= 2
 
      # RETI 4 cycles
-    def reti(self):
+    def returnFormInterrupt(self):
         self.ret() # 4 cycles
          # enable interrupts
         self.ime = True
@@ -744,13 +740,13 @@ class CPU(object):
         self.call(nn) # 4 cycles
 
      # DI/EI 1 cycle
-    def di(self):
+    def disableInterrupts(self):
         # disable interrupts
         self.ime = False
         self.cycles -= 1; 
 
     # 1 cycle
-    def ei(self): 
+    def enableInterrupts(self): 
         # enable interrupts
         self.ime = True
         self.cycles -= 1
@@ -851,30 +847,30 @@ FIRST_ORDER_OP_CODES = [
     (0x18, CPU.jr_nn),
     (0x02, CPU.ld_BCi_A),
     (0x12, CPU.ld_DEi_A),
-    (0x22, CPU.ldi_HLi_A),
-    (0x32, CPU.ldd_HLi_A),
+    (0x22, CPU.loadAndIncrement_HLi_A),
+    (0x32, CPU.loadAndDecrement_HLi_A),
     (0x0A, CPU.ld_A_BCi),
     (0x1A, CPU.load_A_DEi),
-    (0x2A, CPU.ldi_A_HLi),
-    (0x3A, CPU.ldd_A_HLi),
-    (0x07, CPU.rlca),
-    (0x0F, CPU.rrca),
-    (0x17, CPU.rla),
-    (0x1F, CPU.rra),
+    (0x2A, CPU.loadAndIncrement_A_HLi),
+    (0x3A, CPU.loadAndDecrement_A_HLi),
+    (0x07, CPU.rotateLeftCircularA),
+    (0x0F, CPU.rotateRightCircularA),
+    (0x17, CPU.rotateLeftA),
+    (0x1F, CPU.rotateRightA),
     (0x27, CPU.daa),
-    (0x2F, CPU.cpl),
+    (0x2F, CPU.complementA),
     (0x37, CPU.scf),
     (0x3F, CPU.ccf),
     (0x76, CPU.halt),
-    (0xF3, CPU.di),
-    (0xFB, CPU.ei),
+    (0xF3, CPU.disableInterrupts),
+    (0xFB, CPU.enableInterrupts),
     (0xE2, CPU.ldh_Ci_A),
     (0xEA, CPU.ld_mem_A),
     (0xF2, CPU.ldh_A_Ci),
     (0xFA, CPU.ld_A_mem),
     (0xC3, CPU.jp_nnnn),
     (0xC9, CPU.ret),
-    (0xD9, CPU.reti),
+    (0xD9, CPU.returnFormInterrupt),
     (0xE9, CPU.ld_pc_hl),
     (0xF9, CPU.ld_SP_HL),
     (0xE0, CPU.ldh_mem_A),
@@ -884,9 +880,9 @@ FIRST_ORDER_OP_CODES = [
     (0xCB, CPU.fetchExecute),
     (0xCD, CPU.call_nnnn),
     (0xC6, lambda s: CPU.addA(s, s.fetch)),
-    (0xCE, lambda s: CPU.adc(s,  s.fetch)),
-    (0xD6, lambda s: CPU.sub(s,  s.fetch)),
-    (0xDE, lambda s: CPU.sbc(s,  s.fetch)),
+    (0xCE, lambda s: CPU.addWithCarry(s,  s.fetch)),
+    (0xD6, lambda s: CPU.subtract(s,  s.fetch)),
+    (0xDE, lambda s: CPU.subtractWithCarry(s,  s.fetch)),
     (0xE6, lambda s: CPU.AND(s,  s.fetch)),
     (0xEE, lambda s: CPU.XOR(s,  s.fetch)),
     (0xF6, lambda s: CPU.OR(s,   s.fetch)),
@@ -906,15 +902,15 @@ REGISTER_GROUP_OP_CODES = [
     (0x05, 0x08, CPU.dec),    
     (0x06, 0x08, CPU.loadFetchRegister),
     (0x80, 0x01, CPU.addA),    
-    (0x88, 0x01, CPU.adc),    
-    (0x90, 0x01, CPU.sub),    
-    (0x98, 0x01, CPU.sbc),    
+    (0x88, 0x01, CPU.addWithCarry),    
+    (0x90, 0x01, CPU.subtract),    
+    (0x98, 0x01, CPU.subtractWithCarry),    
     (0xA0, 0x01, CPU.AND),    
     (0xA8, 0x01, CPU.XOR),    
     (0xB0, 0x01, CPU.OR),
     (0xB8, 0x01, CPU.compareA),
     (0x06, 0x08, CPU.fetchLoad),
-    (0x40, 0x01, CPU.res,       range(0, 8))
+    (0x40, 0x01, CPU.resetBit,       range(0, 8))
 ]    
         
 
@@ -926,7 +922,7 @@ REGISTER_OP_CODES = [
     (0x09, 0x10, CPU.addHL,               REGISTER_SET_A),
     (0x03, 0x10, CPU.incDoubleRegister,   REGISTER_SET_A),
     (0x0B, 0x10, CPU.decDoubleRegister,   REGISTER_SET_A),
-    (0xC0, 0x08, CPU.ret_cc,              REGISTER_SET_B),
+    (0xC0, 0x08, CPU.conditionalReturn,              REGISTER_SET_B),
     (0xC2, 0x08, CPU.jp_cc_nnnn,          REGISTER_SET_B),
     (0xC4, 0x08, CPU.call_cc_nnnn,        REGISTER_SET_B),
     (0x20, 0x08, CPU.jr_cc_nn,            REGISTER_SET_B),
@@ -935,17 +931,17 @@ REGISTER_OP_CODES = [
 ]
 
 SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
-    (0x00, 0x01, CPU.rlc),    
-    (0x08, 0x01, CPU.rrc),    
-    (0x10, 0x01, CPU.rl),    
-    (0x18, 0x01, CPU.rr),    
-    (0x20, 0x01, CPU.sla),    
-    (0x28, 0x01, CPU.sra),    
+    (0x00, 0x01, CPU.rotateLeftCircular),    
+    (0x08, 0x01, CPU.rotateRightCircular),    
+    (0x10, 0x01, CPU.rotateLeft),    
+    (0x18, 0x01, CPU.rotateRight),    
+    (0x20, 0x01, CPU.shiftLeftArithmetic),    
+    (0x28, 0x01, CPU.shiftRightArithmetic),    
     (0x30, 0x01, CPU.swap),    
-    (0x38, 0x01, CPU.srl),
-    (0x40, 0x01, CPU.bit, range(0, 8)),    
-    (0xC0, 0x01, CPU.set, range(0, 8)),
-    (0x80, 0x01, CPU.res, range(0, 8))         
+    (0x38, 0x01, CPU.shiftWordRightLogical),
+    (0x40, 0x01, CPU.testBit, range(0, 8)),    
+    (0xC0, 0x01, CPU.setBit, range(0, 8)),
+    (0x80, 0x01, CPU.resetBit, range(0, 8))         
 ]
 
 # RAW OPCODE TABLE INITIALIZATION ----------------------------------------------

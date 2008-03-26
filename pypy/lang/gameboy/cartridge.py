@@ -164,33 +164,28 @@ class MBC(object):
     def write(self, address, data):
         pass
 
-    
 
-"""
-PyBoy GameBoy (TM) Emulator
-
-Memory Bank Controller 1 (2MB constants.ROM, 32KB constants.RAM)
- 
-0000-3FFF    ROM Bank 0 (16KB)
-4000-7FFF    ROM Bank 1-127 (16KB)
-A000-BFFF    RAM Bank 0-3 (8KB)
- """
 class MBC1(MBC):
+    """
+    PyBoy GameBoy (TM) Emulator
     
+    Memory Bank Controller 1 (2MB constants.ROM, 32KB constants.RAM)
+     
+    0000-3FFF    ROM Bank 0 (16KB)
+    4000-7FFF    ROM Bank 1-127 (16KB)
+    A000-BFFF    RAM Bank 0-3 (8KB)
+     """
     def __init__(self, rom, ram):
         self.minRamBankSize = 0
         self.maxRamBankSize = 4
         self.minRomBankSize = 2    
         self.maxRomBankSize = 128
-        
         self.setRom(rom)
         self.serRam(ram)
-        
         
     def reset(self):
         super.reset()
         self.memoryModel = 0
-
 
     def write(self, address, data):
         if (address <= 0x1FFF):  # 0000-1FFF
@@ -216,17 +211,17 @@ class MBC1(MBC):
         
         
         
-"""
-PyBoy GameBoy (TM) Emulator
-
-Memory Bank Controller 2 (256KB constants.ROM, 512x4bit constants.RAM)
-
-0000-3FFF    ROM Bank 0 (16KB)
-4000-7FFF    ROM Bank 1-15 (16KB)
-A000-A1FF    RAM Bank (512x4bit)
- """
-
 class MBC2(MBC):
+    """
+    PyBoy GameBoy (TM) Emulator
+    
+    Memory Bank Controller 2 (256KB constants.ROM, 512x4bit constants.RAM)
+    
+    0000-3FFF    ROM Bank 0 (16KB)
+    4000-7FFF    ROM Bank 1-15 (16KB)
+    A000-A1FF    RAM Bank (512x4bit)
+     """
+     
     RAM_BANK_SIZE = 512
 
     def __init__(self, rom, ram):
@@ -278,18 +273,20 @@ class MBC2(MBC):
             self.memoryModel = data & 0x01
         elif (address >= 0xA000 and address <= 0xBFFF and self.ramEnable): # A000-BFFF
             self.ram[self.ramBank + (address & 0x1FFF)] = data
-"""
-PyBoy GameBoy (TM) Emulator
 
-Memory Bank Controller 3 (2MB constants.ROM, 32KB constants.RAM, Real Time Clock)
 
-0000-3FFF    ROM Bank 0 (16KB)
-4000-7FFF    ROM Bank 1-127 (16KB)
-A000-BFFF    RAM Bank 0-3 (8KB)
-"""
 
 class MBC3(MBC):
-
+    """
+    PyBoy GameBoy (TM) Emulator
+    
+    Memory Bank Controller 3 (2MB constants.ROM, 32KB constants.RAM, Real Time Clock)
+    
+    0000-3FFF    ROM Bank 0 (16KB)
+    4000-7FFF    ROM Bank 1-127 (16KB)
+    A000-BFFF    RAM Bank 0-3 (8KB)
+    """
+    
     clockSeconds = 0
     clockMinutes = 0
     clockHours = 0
@@ -417,18 +414,16 @@ class MBC3(MBC):
 
 
 
-"""
-PyBoy GameBoy (TM) Emulator
-
-Memory Bank Controller 5 (8MB constants.ROM, 128KB constants.RAM)
- *
-0000-3FFF    ROM Bank 0 (16KB)
-4000-7FFF    ROM Bank 1-511 (16KB)
-A000-BFFF    RAM Bank 0-15 (8KB)
-"""
-
 class MBC5(MBC):
-
+    """
+    PyBoy GameBoy (TM) Emulator
+    
+    Memory Bank Controller 5 (8MB constants.ROM, 128KB constants.RAM)
+     *
+    0000-3FFF    ROM Bank 0 (16KB)
+    4000-7FFF    ROM Bank 1-511 (16KB)
+    A000-BFFF    RAM Bank 0-15 (8KB)
+    """
     def __init__(self, rom, ram, rumble):
         self.minRamBankSize = 0
         self.maxRamBankSize = 16
@@ -464,17 +459,16 @@ class HuC1(MBC):
         super.__init__(self, ram, rom)
 
 
-"""
-PyBoy GameBoy (TM) Emulator
-
-Hudson Memory Bank Controller 3 (2MB constants.ROM, 128KB constants.RAM, constants.RTC)
-
-0000-3FFF    ROM Bank 0 (16KB)
-4000-7FFF    ROM Bank 1-127 (16KB)
-A000-BFFF    RAM Bank 0-15 (8KB)
-"""
 class HuC3(MBC):
-
+    """
+    PyBoy GameBoy (TM) Emulator
+    
+    Hudson Memory Bank Controller 3 (2MB constants.ROM, 128KB constants.RAM, constants.RTC)
+    
+    0000-3FFF    ROM Bank 0 (16KB)
+    4000-7FFF    ROM Bank 1-127 (16KB)
+    A000-BFFF    RAM Bank 0-15 (8KB)
+    """
     def __init__(self, rom, ram, clock):
         self.minRamBankSize = 0
         self.maxRamBankSize = 4
@@ -528,6 +522,7 @@ class HuC3(MBC):
                 pass
             elif (self.ramFlag == 0x0A and self.ramSize > 0):
                 self.ram[self.ramBank + (address & 0x1FFF)] = data
+         
                     
     def writeWithRamFlag0x0B(self, address, data):
         if ((data & 0xF0) == 0x10):
@@ -551,6 +546,7 @@ class HuC3(MBC):
             pass
         elif ((data & 0xF0) == 0x60):
             self.ramValue = 0x01
+         
                     
     def updateClock(self):
         now = self.clock.getTime()

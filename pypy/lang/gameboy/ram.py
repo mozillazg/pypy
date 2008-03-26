@@ -7,18 +7,14 @@ Work and High RAM
 from pypy.lang.gameboy import constants
 
 class RAM(object):
-    
-    # Work RAM
-    wram = []
-
-    # High RAM
-    hram = []
 
     def __init__(self):
         self.reset()
 
     def reset(self):
+        # Work RAM
         self.wram =  [0x00]*8192
+        # High RAM
         self.hram =  [0x00]*128
 
     def write(self, address, data):

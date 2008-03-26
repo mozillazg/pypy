@@ -485,7 +485,7 @@ class Sound(object):
                     buffer[index + 0] -= self.audio2Volume
                 if ((self.nr51 & 0x02) != 0):
                     buffer[index + 1] -= self.audio2Volume
-             else:
+            else:
                 if ((self.nr51 & 0x20) != 0):
                     buffer[index + 0] += self.audio2Volume
                 if ((self.nr51 & 0x02) != 0):
@@ -661,7 +661,7 @@ class Sound(object):
                 #  7 steps
                 self.audio4Index &= 0x7FFFFF
                 polynomial = self.noiseStep7Table[self.audio4Index >> 21] >> ((self.audio4Index >> 16) & 31)
-             else:
+            else:
                 #  15 steps
                 self.audio4Index &= 0x7FFFFFFF
                 polynomial = self.noiseStep15Table[self.audio4Index >> 21] >> ((self.audio4Index >> 16) & 31)
@@ -670,7 +670,7 @@ class Sound(object):
                     buffer[index + 0] -= self.audio4Volume
                 if ((self.nr51 & 0x08) != 0):
                     buffer[index + 1] -= self.audio4Volume
-             else:
+            else:
                 if ((self.nr51 & 0x80) != 0):
                     buffer[index + 0] += self.audio4Volume
                 if ((self.nr51 & 0x08) != 0):
@@ -703,7 +703,6 @@ class Sound(object):
         if ((self.nr52 & 0x80) == 0x00):
             self.nr52 &= 0xF0
 
-
      # Frequency Table Generation
     def generateFrequencyTables(self):
         sampleRate = self.driver.getSampleRate()
@@ -715,7 +714,6 @@ class Sound(object):
             else:
                 self.frequencyTable[period] = skip
          # Polynomial Noise Frequency Ratios
-         # 
          # 4194304 Hz * 1/2^3 * 2 4194304 Hz * 1/2^3 * 1 4194304 Hz * 1/2^3 *
          # 1/2 4194304 Hz * 1/2^3 * 1/3 4194304 Hz * 1/2^3 * 1/4 4194304 Hz *
          # 1/2^3 * 1/5 4194304 Hz * 1/2^3 * 1/6 4194304 Hz * 1/2^3 * 1/7
@@ -724,8 +722,6 @@ class Sound(object):
             if ratio != 0:
                 divider = 2 * ratio
             self.noiseFreqRatioTable[ratio] = (constants.GAMEBOY_CLOCK / divider) * ((1 << 16) / sampleRate)
-
-
 
      # Noise Generation
     def generateNoiseTables(self):
