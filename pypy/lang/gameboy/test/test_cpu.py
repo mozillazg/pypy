@@ -935,36 +935,37 @@ def test_0xF0():
 
 # ld_A_mem
 def test_0xFA():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     value = 0x11
     valueA = 0x12
     cpu.a.set(valueA)
+    pc = cpu.pc.get();
     prepare_for_fetch(cpu, 0x12, 0x34)
     cpu.write(0x1234, value)
     cycle_test(cpu, 0xFA, 4)
-    assert_default_registers(cpu, a=value)
+    assert_default_registers(cpu, a=value, pc=pc+2)
 
 # ld_mem_A
 def test_0xEA():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     valueA = 0x56
     prepare_for_fetch(cpu, 0x12, 0x34)
-    cpu.c.set(value)
+    cpu.a.set(valueA)
     cycle_test(cpu, 0xEA, 4)
     assert cpu.read(0x1234) == valueA
     
     
 # ld_HL_SP_nn
 def test_0xF8():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     value = 0x12
-    prepare_for_fetch(cpu, value, 0x34)
-    sp = cpu.hl.get()
+    valueSp = 0x1234
+    prepare_for_fetch(cpu, value)
+    cpu.sp.set(valueSp)
+    pc = cpu.pc.get()
     cycle_test(cpu, 0xF8, 3)
-    assert_default_registers(cpu, hl=sp + value)
+    f = cpu.f.get();
+    assert_default_registers(cpu, hl=valueSp+value, f=f, sp=valueSp, pc=pc+1)
 
 # pop_BC to pop_AF
 def test_0xC1_to_0xF1():
@@ -982,77 +983,86 @@ def test_0xC1_to_0xF1():
 
 # ret
 def test_0xC9():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     value = 0x1234
+    valueSp = 0x5678
+    cpu.sp.set(valueSp)
     prepare_for_pop(cpu, value >> 8, value & 0xFF)
-    pc = cpu.pc.get()
     cycle_test(cpu, 0xC9, 4)
-    assert_default_registers(cpu, pc=cp+value)
+    assert_default_registers(cpu, pc=value, sp=valueSp+2)
     
 
 # reti
 def test_0xD9():
-    py.test.skip("changements to the cpu class")
+    py.test.skip("deeper knowledge necessary")
     cpu = get_cpu()
     value = 0x1234
     prepare_for_pop(cpu, value >> 8, value & 0xFF)
+    prepare_for_fetch(cpu, 0x00)
     pc = cpu.pc.get()
-    cycle_test(cpu, 0xD9, 4)
-    assert_default_registers(cpu, pc=cp+value)
+    cycle_test(cpu, 0xD9, 4+1)
+    assert_default_registers(cpu, pc=pc+value)
 
 # ld_PC_HL
 def test_0xE9():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     value = 0x1234
     cpu.hl.set(value)
     cycle_test(cpu, 0xE9, 1)
-    assert_default_registers(cpu, pc=value)
+    assert_default_registers(cpu, pc=value, hl=value)
 
 # ld_SP_HL
 def test_0xF9():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     value = 0x1234
     cpu.hl.set(value)
     cycle_test(cpu, 0xF9, 2)
-    assert_default_registers(cpu, sp=value)
+    assert_default_registers(cpu, sp=value, hl=value)
 
-# jp_NZ_nnnn
-def test_0xC2():
-    pass
-# jp_Z_nnnn
-def test_0xCA():
-    pass
-# jp_NC_nnnn
-def test_0xD2():
-    pass
-# jp_C_nnnn
-def test_0xDA():
-    pass
+# jp_NZ_nnnn to jp_C_nnnn
+def test_0xC2_to_0xDA():
+    cpu = get_cpu()
+    flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
+    opCode = 0xC2
+    value = 0x1234
+    for i in range(0, 4):
+        cpu.reset()
+        prepare_for_fetch(cpu, value >> 8, value & 0xFF)
+        pc = cpu.pc.get()
+        cpu.f.set(flags[i])
+        cycle_test(cpu, opCode, 4)
+        assert_default_registers(cpu, f=flags[i] & 0xFF, pc=value)
+        
+        cpu.reset()
+        prepare_for_fetch(cpu, value >> 8, value & 0xFF)
+        cpu.f.set(~flags[i])
+        pc = cpu.pc.get()
+        cycle_test(cpu, opCode, 3)
+        assert_default_registers(cpu, f=~flags[i] & 0xFF, pc=pc+2)
+        value += 3
+        opCode += 0x08
+        
 
 # ldh_Ci_A
 def test_0xE2():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     value = 0x12
     valueA = value+1
     cpu.c.set(value)
     cpu.a.set(valueA)
     cycle_test(cpu, 0xE2, 2)
-    assert cpu.read.get(0xFF00+value) == valueA
+    assert cpu.read(0xFF00+value) == valueA
 
 # ldh_A_Ci
 def test_0xF2():
-    py.test.skip("changements to the cpu class")
     cpu = get_cpu()
     valueC = 0x12
-    valeu = 0x11
+    valueA = 0x11
     cpu.c.set(valueC)
-    cpu.write.set(0xFF00+valueC, valueA)
+    cpu.b.set(0);
+    cpu.write(0xFF00+valueC, valueA)
     cycle_test(cpu, 0xF2, 2)
-    assert_default_regsiters(cpu, a=value)
+    assert_default_registers(cpu, a=valueA, bc=valueC)
 
 
 
@@ -1074,10 +1084,11 @@ def test_0xF3():
 
 # ei
 def test_0xFB():
-    py.test.skip("changements to the cpu class")
+    py.test.skip("interupt error")
     cpu = get_cpu()
-    cpu.ime == False
-    cycle_test(cpu, 0xF3, 1)
+    cpu.ime = False
+    prepare_for_fetch(cpu, 0x00)
+    cycle_test(cpu, 0xFB, 1+1)
     assert cpu.ime == True
 
 # call_NZ_nnnn

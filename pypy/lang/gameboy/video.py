@@ -287,7 +287,6 @@ class Video(object):
     def setDMA(self, data):
         self.dma = data
         for index in range(0, constants.OAM_SIZE):
-            #TODO convert to byte
             self.oam[index] = self.memory.read((self.dma << 8) + index)
 
 

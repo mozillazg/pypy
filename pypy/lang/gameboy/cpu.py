@@ -247,7 +247,7 @@ class CPU(object):
     def read(self, hi, lo=None):
         address = hi
         if lo != None:
-            address(hi << 8) + lo
+            address = (hi << 8) + lo
         self.cycles -= 1
         return self.memory.read(address)
 
@@ -312,7 +312,7 @@ class CPU(object):
         
      # LD PC,HL, 1 cycle
     def ld_pc_hl(self):
-        self.ld(self.hl, self.pc)
+        self.ld(self.hl.get, self.pc.set)
         
     def fetchLoad(self, getter, setter):
         self.ld(self.fetch, setter)
@@ -549,7 +549,7 @@ class CPU(object):
     def ld_mem_A(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
-        self.write(hi, lo, self.a.get()) # 2 cycles
+        self.write((hi << 8) + lo, self.a.get()) # 2 cycles
 
      # LDH A,(nn) 3 cycles
     def ldh_A_mem(self):
@@ -735,7 +735,7 @@ class CPU(object):
          # enable interrupts
         self.ime = True
         # execute next instruction
-        self.execute()
+        self.execute(self.fetch())
         # check pending interrupts
         self.interrupt()
 
@@ -755,7 +755,7 @@ class CPU(object):
         self.ime = True
         self.cycles -= 1
         # execute next instruction
-        self.execute()
+        self.execute(self.fetch())
         # check pending interrupts
         self.interrupt()
 
