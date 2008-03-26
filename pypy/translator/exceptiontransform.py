@@ -464,9 +464,8 @@ class OOTypeExceptionTransformer(BaseExceptionTransformer):
         llops.genop('oosetfield', [self.cexcdata, c_name, v_value])
 
     def gen_isnull(self, v, llops):
-        nonnull = self.gen_nonnull(v, llops)
-        return llops.genop('bool_not', [nonnull], lltype.Bool)
-
+        return llops.genop('ooisnull', [v], lltype.Bool)
+    
     def gen_nonnull(self, v, llops):
         return llops.genop('oononnull', [v], lltype.Bool)
 
