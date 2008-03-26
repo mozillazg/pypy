@@ -2198,3 +2198,106 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         fnptr = self.cast(gv_fn, 1, RESULT=lltype.Void)
         fnptr(12)
         # assert did not crash
+
+    def test_demo_f1_direct(self):
+        """This is similar to the sequence of calls that pypy-c-jit
+        does to its backend for the inner loop of the example below,
+        so generating good code for it would be nice:
+
+            def f1(n):
+                i = 0
+                x = 1
+                while i<n:
+                    j = 0
+                    while j<=i:
+                        j = j + 1
+                        x = x + (i&j)
+                    i = i + 1
+                return x
+
+        To see the code produced e.g. by the 386 backend, run:
+
+            PYPYJITLOG=log py.test ../i386/test/test_rgenop.py -k test_demo_f1
+            ../i386/viewcode.py log
+        """
+
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+
+        def fallback_loop(args_gv, expected_case):
+            L0 = builder.enter_next_block([signed_kind] * (len(args_gv) - 1)
+                                          + [bool_kind],
+                                          args_gv)
+            gv_switchvar = args_gv[-1]
+            flexswitch, default_builder = builder.flexswitch(gv_switchvar,
+                                                             args_gv)
+            default_builder.get_frame_info(args_gv)
+            gv_fbp = default_builder.rgenop.genconst(0x12345678)
+            gv_framebase = default_builder.genop_get_frame_base()
+            default_builder.genop_call(dummysigtoken,
+                                       gv_dummyfnptr,
+                                       [gv_fbp, gv_switchvar, gv_framebase])
+            gv_exc_type = default_builder.genop_getfield(exc_type_token,
+                                                         gv_exc_data)
+            gv_noexc = default_builder.genop_ptr_iszero(exc_type_kind,
+                                                        gv_exc_type)
+            excpath_builder = default_builder.jump_if_false(gv_noexc, [])
+            default_builder.finish_and_goto(args_gv, L0)
+
+            excpath_builder.start_writing()
+            excpath_builder.finish_and_return(sigtoken, None)
+
+            return flexswitch.add_case(rgenop.genconst(expected_case))
+
+        rgenop = self.RGenOpPacked()
+        FUNC = lltype.FuncType([], lltype.Void)
+        sigtoken = rgenop.sigToken(FUNC)
+        dummysigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed,
+                                                         lltype.Bool,
+                                                         llmemory.Address],
+                                                        lltype.Void))
+        gv_dummyfnptr = rgenop.genconst(llmemory.NULL)
+        signed_kind = rgenop.kindToken(lltype.Signed)
+        bool_kind = rgenop.kindToken(lltype.Bool)
+        EXCDATA = lltype.GcStruct('EXCDATA', ('exc_type', llmemory.Address))
+        exc_type_kind = rgenop.kindToken(llmemory.Address)
+        exc_type_token = rgenop.fieldToken(EXCDATA, 'exc_type')
+        gv_exc_data = rgenop.genconst(lltype.nullptr(EXCDATA))
+
+        builder, gv_fn, _ = rgenop.newgraph(sigtoken, "innerloop")
+        builder.start_writing()
+        gv_i = rgenop.genconst(50)
+        gv_j = rgenop.genconst(0)
+        gv_x = rgenop.genconst(1234)
+
+        args_gv = [gv_i, gv_j, gv_x]
+        L1 = builder.enter_next_block([signed_kind, signed_kind, signed_kind],
+                                      args_gv)
+        [gv_i, gv_j, gv_x] = args_gv
+
+        gv_cond = builder.genop2("int_le", gv_j, gv_i)
+
+        args_gv = [gv_i, gv_j, gv_x, gv_cond]
+        builder = fallback_loop(args_gv, True)
+        [gv_i, gv_j, gv_x, gv_cond] = args_gv
+
+        gv_nj, gv_ovf = builder.genraisingop2("int_add_ovf", gv_j,
+                                              rgenop.genconst(1))
+
+        args_gv = [gv_i, gv_j, gv_x, gv_nj, gv_ovf]
+        builder = fallback_loop(args_gv, False)
+        [gv_i, _, gv_x, gv_j, gv_ovf] = args_gv
+
+        gv_ij = builder.genop2("int_and", gv_i, gv_j)
+        gv_nx, gv_ovf = builder.genraisingop2("int_add_ovf", gv_x, gv_ij)
+
+        args_gv = [gv_i, gv_j, gv_x, gv_nx, gv_ovf]
+        builder = fallback_loop(args_gv, False)
+        [gv_i, gv_j, _, gv_x, gv_ovf] = args_gv
+
+        builder.finish_and_goto([gv_i, gv_j, gv_x], L1)
+        builder.end()
+        builder.show_incremental_progress()
+
+        fnptr = self.cast(gv_fn, 0, RESULT=lltype.Void)
+        #res = fnptr() -- xxx fix me, cannot be run so far
