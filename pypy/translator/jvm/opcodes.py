@@ -70,6 +70,7 @@ opcodes = _proc_dict({
     'ooupcast':                 DoNothing,
     'oodowncast':               [DownCast, StoreResult],
     'oois':                     'ref_is_eq',
+    'ooisnull':                 'is_null',
     'oononnull':                'is_not_null',
     'instanceof':               [CastTo, StoreResult],
     'subclassof':               [PushAllArgs, jvmgen.SWAP, jvmgen.CLASSISASSIGNABLEFROM, StoreResult],

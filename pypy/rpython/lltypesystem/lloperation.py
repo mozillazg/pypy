@@ -462,6 +462,7 @@ LL_OPERATIONS = {
     'ooupcast':             LLOp(oo=True, canfold=True),
     'oodowncast':           LLOp(oo=True, canfold=True),
     'oononnull':            LLOp(oo=True, canfold=True),
+    'ooisnull':             LLOp(oo=True, canfold=True),
     'oois':                 LLOp(oo=True, canfold=True),
     'instanceof':           LLOp(oo=True, canfold=True),
     'classof':              LLOp(oo=True, canfold=True),

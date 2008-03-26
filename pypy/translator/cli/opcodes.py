@@ -46,6 +46,7 @@ opcodes = {
     'cli_eventhandler':         [EventHandler],
     'cli_getstaticfield':       [GetStaticField],
     'oois':                     'ceq',
+    'ooisnull':                 [PushAllArgs, 'ldnull', 'ceq'],
     'oononnull':                [PushAllArgs, 'ldnull', 'ceq']+Not,
     'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
     'subclassof':               [PushAllArgs, 'call bool [pypylib]pypy.runtime.Utils::SubclassOf(class [mscorlib]System.Type, class[mscorlib]System.Type)'],

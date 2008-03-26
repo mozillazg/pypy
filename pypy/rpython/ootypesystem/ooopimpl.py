@@ -16,6 +16,10 @@ def op_oononnull(inst):
     checkinst(inst)
     return bool(inst)
 
+def op_ooisnull(inst):
+    checkinst(inst)
+    return not bool(inst)
+
 def op_oois(obj1, obj2):
     if is_inst(obj1):
         checkinst(obj2)
