@@ -6,7 +6,7 @@ class Interrupt(object):
     
     Interrupt Controller
     """
-
+    
     def __init__(self):
         self.reset()
 
@@ -14,11 +14,11 @@ class Interrupt(object):
         self.enable = 0
         self.flag = constants.VBLANK
 
-    def isPending(self):
-        return (self.enable & self.flag) != 0
-
-    def isPending(self, mask):
-        return (self.enable & self.flag & mask) != 0
+    def isPending(self, mask=None):
+        if mask==None:
+            return (self.enable & self.flag) != 0
+        else:
+            return (self.enable & self.flag & mask) != 0
 
     def raiseInterrupt(self, mask):
         self.flag |= mask
@@ -47,7 +47,6 @@ class Interrupt(object):
 
     def setInterruptEnable(self, data):
         self.enable = data
-
 
     def setInterruptFlag(self, data):
         self.flag = data

@@ -8,17 +8,6 @@ from pypy.lang.gameboy import constants
 
 class GameBoy(object):
 
-    # RAM
-    ram = None
-    cartridge = None
-    interrupt = None
-    cpu = None
-    serial = None
-    timer = None
-    joypad = None
-    video = None
-    sound = None
-
     def __init__(self, videoDriver, soundDriver, joypadDriver, storeDriver, clockDriver):
         self.ram = RAM()
         self.cartridge = Cartridge(storeDriver, clockDriver)

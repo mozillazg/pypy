@@ -11,13 +11,11 @@ class Timer(object):
         self.interrupt = interrupt
         self.reset()
 
-
     def reset(self):
         self.div = 0
         self.dividerCycles = constants.DIV_CLOCK
         self.tima = self.tma = self.tac = 0x00
         self.timerCycles = self.timerClock = constants.TIMER_CLOCK[self.tac & 0x03]
-
 
     def write(self,  address, data):
         if address==constants.DIV:
@@ -29,8 +27,6 @@ class Timer(object):
         elif address==constants.TAC:
             self.setTimerControl(data)
     
-
-
     def read(self,  address):
         if address==constants.DIV:
             return self.getDivider()
@@ -68,17 +64,14 @@ class Timer(object):
             self.timerCycles = self.timerClock = constants.TIMER_CLOCK[data & 0x03]
         self.tac = data
 
-
     def cycles(self):
         if ((self.tac & 0x04) != 0 and self.timerCycles < self.dividerCycles):
                 return self.timerCycles
         return self.dividerCycles
 
-
     def emulate(self,  ticks):
         self.emulateDivider(ticks)
         self.emulateTimer(ticks)
-
 
     def emulateDivider(self,  ticks):
         self.dividerCycles -= ticks
@@ -86,16 +79,12 @@ class Timer(object):
             self.div = (self.div + 1) & 0xFF
             self.dividerCycles += constants.DIV_CLOCK
     
-
-
     def emulateTimer(self,  ticks):
         if ((self.tac & 0x04) != 0):
             self.timerCycles -= ticks
-
             while (self.timerCycles <= 0):
                 self.tima = (self.tima + 1) & 0xFF
                 self.timerCycles += self.timerClock
-
                 if (self.tima == 0x00):
                     self.tima = self.tma
                     self.interrupt.raiseInterrupt(constants.TIMER)

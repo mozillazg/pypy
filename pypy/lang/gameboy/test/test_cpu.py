@@ -229,7 +229,11 @@ def test_flags_memory_access():
     assert cpu.isZ() == True
     cpu.rom[0x1234] = 0x12
     assert cpu.isZ() == True
-    
+   
+
+def fetch_execute_cycle_test(cpu, opCode, cycles=0):
+    prepare_for_fetch(cpu, opCode)
+    cycle_test(cpu, 0xCB, cycles)
     
 def cycle_test(cpu, opCode, cycles=0):
     startCycles = cpu.cycles
@@ -1105,16 +1109,16 @@ def test_0xDC():
     pass
 
 # push_BC to push_AF
-def test_0xC5():
-    py.test.skip("changements to the cpu class")
+def test_0xC5_to_0xF5():
     cpu = get_cpu()
     registers  = [cpu.bc, cpu.de, cpu.hl, cpu.af]
-    opCode = 0xC4
+    opCode = 0xC5
     value = 0x1234
     for register in registers:
+        register.set(value)
         cycle_test(cpu, opCode, 4)
-        assert cpu.memory.read(cpu.sp.get()) == value >> 8
-        assert cpu.memory.read(cpu.sp.get()-1) == value & 0xFF
+        assert cpu.memory.read(cpu.sp.get()+1) == value >> 8
+        assert cpu.memory.read(cpu.sp.get()) == value & 0xFF
         opCode += 0x10
         value += 0x0101
             
@@ -1177,11 +1181,22 @@ def test_0xCB():
 
 # rlc_B to rlc_A
 def test_0x00_to_0x07():
+    py.test.skip("Bug in cpu")
     cpu = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     opCode = 0x00
+    value = 0x12
     for register in registers:
+        cpu.reset()
+        register.set(value)
+        cycles = 2
+        if register == cpu.hli:
+            cycles = 4
+        fetch_execute_cycle_test(cpu, opCode, cycles)
+        rlc = ((value & 0x7F) << 1) + ((value & 0x80) >> 7)
+        assert register.get() ==  rcl
         opCode += 0x01
+        vaue += 1
 
 # rrc_B to rrc_F
 def test_0x08_to_0x0F():
