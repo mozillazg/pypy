@@ -114,21 +114,25 @@ class __extend__(Function):
 #
 # Public interface
 
+MAX_THRESHOLD = sys.maxint // 2
+
 class PyPyJITConfig:
     def __init__(self):
-        self.cur_threshold = sys.maxint    # disabled until the space is ready
+        self.cur_threshold = MAX_THRESHOLD  # disabled until the space is ready
         self.configured_threshold = JitDriver.getcurrentthreshold()
 
     def isenabled(self):
-        return self.cur_threshold < sys.maxint
+        return self.cur_threshold < MAX_THRESHOLD
 
     def enable(self):
         self.cur_threshold = self.configured_threshold
 
     def disable(self):
-        self.cur_threshold = sys.maxint
+        self.cur_threshold = MAX_THRESHOLD
 
     def setthreshold(self, threshold):
+        if threshold >= MAX_THRESHOLD:
+            threshold = MAX_THRESHOLD - 1
         self.configured_threshold = threshold
         if self.isenabled():
             self.cur_threshold = threshold

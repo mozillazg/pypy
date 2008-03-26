@@ -177,13 +177,13 @@ class TestHotPath(HotPathTest):
         self.check_traces([
             # running non-JITted leaves the initial profiling traces
             # recorded by jit_may_enter().  We see the values of n1 and total.
-            "jit_not_entered 19 20",
-            "jit_not_entered 18 39",
-            "jit_not_entered 17 57",
-            "jit_not_entered 16 74",
-            "jit_not_entered 15 90",
-            "jit_not_entered 14 105",
-            "jit_not_entered 13 119",
+            "jit_not_entered",  # 19 20
+            "jit_not_entered",  # 18 39
+            "jit_not_entered",  # 17 57
+            "jit_not_entered",  # 16 74
+            "jit_not_entered",  # 15 90
+            "jit_not_entered",  # 14 105
+            "jit_not_entered",  # 13 119
             # on the start of the next iteration, compile the 'total += n1'
             "jit_compile",
             "pause at hotsplit in ll_function",
@@ -278,8 +278,8 @@ class TestHotPath(HotPathTest):
         assert res == main(1, 10)
         self.check_traces([
             # start compiling the 3rd time we loop back
-                "jit_not_entered * struct rpy_string {...} 5 9 10 10",
-                "jit_not_entered * struct rpy_string {...} 5 8 90 10",
+                "jit_not_entered * struct rpy_string {...} 5",  # 9 10 10
+                "jit_not_entered * struct rpy_string {...} 5",  # 8 90 10
                 "jit_compile * struct rpy_string {...} 5",
             # stop compiling at the red split ending an extra iteration
                 "pause at hotsplit in ll_function",
@@ -331,8 +331,9 @@ class TestHotPath(HotPathTest):
 
         res = self.run(ll_function, [3], threshold=3, small=True)
         assert res == (3*4)/2
-        self.check_traces(['jit_not_entered 2 3',
-                           'jit_not_entered 1 5'])
+        self.check_traces(['jit_not_entered',  # 2 3
+                           'jit_not_entered',  # 1 5
+                           ])
 
         res = self.run(ll_function, [50], threshold=3, small=True)
         assert res == (50*51)/2
@@ -409,8 +410,8 @@ class TestHotPath(HotPathTest):
         res = self.run(main, [1, 71], threshold=3)
         assert res == 5041
         self.check_traces([
-            "jit_not_entered * stru...} 10 70 * array [ 70, 71, 71 ]",
-            "jit_not_entered * stru...} 10 69 * array [ 69, 71, 142 ]",
+            "jit_not_entered * stru...} 10",  # 70 * array [ 70, 71, 71 ]
+            "jit_not_entered * stru...} 10",  # 69 * array [ 69, 71, 142 ]
             "jit_compile * stru...} 10",
         # we first see the promotion of len(regs) in on_enter_jit()
             "pause at promote in TLRJitDriver.on_enter_jit_Hv",
