@@ -229,6 +229,8 @@ class StructTypeDesc(AbstractStructTypeDesc):
     
     StructFieldDesc = None # patched later with StructFieldDesc
 
+    _attrs_ = []
+
     def __new__(cls, RGenOp, TYPE):
         if TYPE._hints.get('virtualizable', False):
             return object.__new__(VirtualizableStructTypeDesc)
