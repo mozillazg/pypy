@@ -23,24 +23,22 @@ super_dispatch = PyFrame.dispatch
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
+
+    def compute_invariants(self, next_instr, pycode):
+        # compute the information that really only depends on next_instr
+        # and pycode
+        frame = self.frame
+        valuestackdepth = frame.valuestackdepth
+        blockstack = frame.blockstack
+        return (valuestackdepth, blockstack)
+
     def on_enter_jit(self, invariants, next_instr, pycode):
         # *loads* of nonsense for now
+        (depth, oldblockstack) = invariants
         frame = self.frame
         pycode = hint(pycode, deepfreeze=True)
 
         fastlocals_w = [None] * pycode.co_nlocals
-
-        stuff = frame.valuestackdepth
-        if len(frame.blockstack):
-            stuff |= (-sys.maxint-1)
-
-        stuff = hint(stuff, promote=True)
-        if stuff >= 0:
-            # blockdepth == 0, common case
-            # XXX or it was at some point but not now, not at all
-            # XXX as we expect to *be* in a loop...
-            frame.blockstack = []
-        depth = stuff & sys.maxint
 
         i = pycode.co_nlocals
         while True:
@@ -62,6 +60,8 @@ class PyPyJitDriver(JitDriver):
             hint(depth, concrete=True)
             virtualstack_w[depth] = frame.valuestack_w[depth]
         frame.valuestack_w = virtualstack_w
+
+        # XXX we should also make a completely virtual copy of oldblockstack
 
     def getcurrentthreshold():
         return pypyjitconfig.cur_threshold
