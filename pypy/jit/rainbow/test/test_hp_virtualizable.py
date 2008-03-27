@@ -1637,10 +1637,15 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             greens = ['pc', 's']
             reds = ['frame']
 
-            def on_enter_jit(self):
+            def compute_invariants(self, pc, s):
+                frame = self.frame
+                stacklen = len(frame.stack)
+                return stacklen
+
+            def on_enter_jit(self, invariant, pc, s):
                 frame = self.frame
                 origstack = frame.stack
-                stacklen = hint(len(origstack), promote=True)
+                stacklen = invariant
                 curstack = []
                 i = 0
                 while i < stacklen:

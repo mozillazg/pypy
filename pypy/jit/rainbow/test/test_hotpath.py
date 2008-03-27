@@ -176,14 +176,14 @@ class TestHotPath(HotPathTest):
         assert res == main(2, 5)
         self.check_traces([
             # running non-JITted leaves the initial profiling traces
-            # recorded by jit_may_enter().  We see the values of n1 and total.
-            "jit_not_entered",  # 19 20
-            "jit_not_entered",  # 18 39
-            "jit_not_entered",  # 17 57
-            "jit_not_entered",  # 16 74
-            "jit_not_entered",  # 15 90
-            "jit_not_entered",  # 14 105
-            "jit_not_entered",  # 13 119
+            # recorded by maybe_compile().  We see the values of n1 and total.
+            "jit_not_entered 19 20",
+            "jit_not_entered 18 39",
+            "jit_not_entered 17 57",
+            "jit_not_entered 16 74",
+            "jit_not_entered 15 90",
+            "jit_not_entered 14 105",
+            "jit_not_entered 13 119",
             # on the start of the next iteration, compile the 'total += n1'
             "jit_compile",
             "pause at hotsplit in ll_function",
@@ -278,8 +278,8 @@ class TestHotPath(HotPathTest):
         assert res == main(1, 10)
         self.check_traces([
             # start compiling the 3rd time we loop back
-                "jit_not_entered * struct rpy_string {...} 5",  # 9 10 10
-                "jit_not_entered * struct rpy_string {...} 5",  # 8 90 10
+                "jit_not_entered * struct rpy_string {...} 5 9 10 10",
+                "jit_not_entered * struct rpy_string {...} 5 8 90 10",
                 "jit_compile * struct rpy_string {...} 5",
             # stop compiling at the red split ending an extra iteration
                 "pause at hotsplit in ll_function",
@@ -331,8 +331,8 @@ class TestHotPath(HotPathTest):
 
         res = self.run(ll_function, [3], threshold=3, small=True)
         assert res == (3*4)/2
-        self.check_traces(['jit_not_entered',  # 2 3
-                           'jit_not_entered',  # 1 5
+        self.check_traces(['jit_not_entered 2 3',
+                           'jit_not_entered 1 5',
                            ])
 
         res = self.run(ll_function, [50], threshold=3, small=True)
@@ -406,6 +406,22 @@ class TestHotPath(HotPathTest):
             MyJitDriver.can_enter_jit(m=m)
         self.run(ll_function, [2], threshold=1, small=True)
 
+    def test_compute_invariants(self):
+        class MyJitDriver(JitDriver):
+            greens = ['m']
+            reds = ['n']
+            def compute_invariants(self, m):
+                return self.n + 10*m     # doesn't make sense, just for testing
+            def on_enter_jit(self, invariants, m):
+                self.n += invariants * 1000
+        def ll_function(n, m):
+            MyJitDriver.jit_merge_point(m=m, n=n)
+            MyJitDriver.can_enter_jit(m=m, n=n)
+            hint(m, concrete=True)
+            return n
+        res = self.run(ll_function, [2, 7], threshold=1, small=True)
+        assert res == 72002
+
     def test_hp_tlr(self):
         from pypy.jit.tl import tlr
 
@@ -419,32 +435,21 @@ class TestHotPath(HotPathTest):
         res = self.run(main, [1, 71], threshold=3)
         assert res == 5041
         self.check_traces([
-            "jit_not_entered * stru...} 10",  # 70 * array [ 70, 71, 71 ]
-            "jit_not_entered * stru...} 10",  # 69 * array [ 69, 71, 142 ]
+            "jit_not_entered * stru...} 10 70 * array [ 70, 71, 71 ]",
+            "jit_not_entered * stru...} 10 69 * array [ 69, 71, 142 ]",
             "jit_compile * stru...} 10",
-        # we first see the promotion of len(regs) in on_enter_jit()
-            "pause at promote in TLRJitDriver.on_enter_jit_Hv",
-        # followed by two fallback runs
-            "run_machine_code * stru...} 10 68 * array [ 68, 71, 213 ]",
-            "fallback_interp",
-            "fb_leave * stru...} 10 68 * array [ 68, 71, 213 ]",
-            "run_machine_code * stru...} 10 67 * array [ 67, 71, 284 ]",
-            "fallback_interp",
-            "fb_leave * stru...} 10 67 * array [ 67, 71, 284 ]",
-        # the third time, we resume compiling for len(regs) == 3
-            "run_machine_code * stru...} 10 66 * array [ 66, 71, 355 ]",
-            "jit_resume Signed path 3 in TLRJitDriver.on_enter_jit_Hv",
         # pause at the "int_is_true" from the JUMP_IF_A opcode
             "pause at hotsplit in hp_interpret",
-        # two fallback runs off this hotsplit
-            "resume_machine_code",
+        # start the newly produced machine code
+            "run_machine_code * stru...} 10 68 * array [ 68, 71, 213 ]",
+        # two fallback interpreter runs off this hotsplit
             "fallback_interp",
-            "fb_leave * stru...} 10 65 * array [ 65, 71, 426 ]",
-            "run_machine_code * stru...} 10 65 * array [ 65, 71, 426 ]",
+            "fb_leave * stru...} 10 67 * array [ 67, 71, 284 ]",
+            "run_machine_code * stru...} 10 67 * array [ 67, 71, 284 ]",
             "fallback_interp",
-            "fb_leave * stru...} 10 64 * array [ 64, 71, 497 ]",
+            "fb_leave * stru...} 10 66 * array [ 66, 71, 355 ]",
         # the third time, compile the path "stay in the loop"
-            "run_machine_code * stru...} 10 64 * array [ 64, 71, 497 ]",
+            "run_machine_code * stru...} 10 66 * array [ 66, 71, 355 ]",
             "jit_resume Bool path True in hp_interpret",
             "done at jit_merge_point",
         # the rest is running 100% in machine code

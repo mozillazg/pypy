@@ -53,9 +53,12 @@ class TLRJitDriver(JitDriver):
     greens = ['bytecode', 'pc']
     reds   = ['a', 'regs']
 
-    def on_enter_jit(self):
+    def compute_invariants(self, bytecode, pc):
+        return len(self.regs)
+
+    def on_enter_jit(self, invariant, bytecode, pc):
         # make a copy of the 'regs' list to make it a VirtualList for the JIT
-        length = hint(len(self.regs), promote=True)
+        length = invariant
         newregs = [0] * length
         i = 0
         while i < length:

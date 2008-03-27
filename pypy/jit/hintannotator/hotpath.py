@@ -128,6 +128,13 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
             i += 1
     assert i == len(vars)
 
+    compute_invariants_func = drivercls.compute_invariants.im_func
+    bk = rtyper.annotator.bookkeeper
+    s_func = bk.immutablevalue(compute_invariants_func)
+    r_func = rtyper.getrepr(s_func)
+    c_func = r_func.get_unique_llfn()
+    INVARIANTS = c_func.concretetype.TO.RESULT
+
     llops = LowLevelOpList(rtyper)
     # generate ops to make an instance of DriverCls
     classdef = rtyper.annotator.bookkeeper.getuniqueclassdef(drivercls)
@@ -145,7 +152,9 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
     s_func = rtyper.annotator.bookkeeper.immutablevalue(on_enter_jit_func)
     r_func = rtyper.getrepr(s_func)
     c_func = r_func.get_unique_llfn()
-    v_invariants = inputconst(lltype.Void, None)
+    v_invariants = varoftype(INVARIANTS, 'invariants')
+    c_hint = inputconst(lltype.Void, {'concrete': True})
+    llops.genop('hint', [v_invariants, c_hint], resulttype=INVARIANTS)
     vlist = allvars[:num_greens]
     llops.genop('direct_call', [c_func, v_self, v_invariants] + vlist)
     # generate ops to reload the 'reds' variables from 'self'
@@ -157,6 +166,7 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
         newvars.append(v_value)
     newvars = [v for v in newvars if v.concretetype is not lltype.Void]
     # done, fill the block and link it to make it the startblock
+    newblock.inputargs.append(v_invariants)
     newblock.operations[:] = llops
     newblock.closeblock(Link(newvars, graph.startblock))
     graph.startblock.isstartblock = False
