@@ -28,20 +28,29 @@ def test_is_pending():
     
 def test_raise_interrupt():
     interrupt = get_interrupt()
+    value = 0x12
+    mask = 0xAA
+    interrupt.flag = value
+    assert interrupt.flag == value
+    interrupt.raiseInterrupt(mask)
+    assert interrupt.flag == value|mask
     
 def test_lower():
     interrupt = get_interrupt()
+    value = 0x12
+    mask = 0xAA
+    interrupt.flag = value
+    assert interrupt.flag == value
+    interrupt.lower(mask)
+    assert interrupt.flag == value & (~mask)
     
-def test_write():
+def test_read_write():
     interrupt = get_interrupt()
-    
-def test_read():
-    interrupt = get_interrupt()
-    
-def test_interrupt_enable():
-    interrupt = get_interrupt()
-    
-    
-def test_interrupt_flag():
-    interrupt = get_interrupt()
-    
+    value = 0x12
+    interrupt.write(constants.IE, value)
+    assert interrupt.enable == value
+    assert interrupt.read(constants.IE) == value
+    value+=1
+    interrupt.write(constants.IF, value)
+    assert interrupt.flag == value
+    assert interrupt.read(constants.IF) == 0xE0 | value
