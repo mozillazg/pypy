@@ -102,13 +102,23 @@ def empty_stack():
 class TinyJitDriver(JitDriver):
     reds = ['args', 'loops', 'stack']
     greens = ['bytecode', 'pos']
-    
+
+    def compute_invariants(self, bytecode, pos):
+        # Some of the information that we maintain only really depends on
+        # bytecode and pos: the whole 'loops' list has this property.
+        # By being a bit careful we could also put len(args) in the
+        # invariants, but although it doesn't make much sense it is a
+        # priori possible for the same bytecode to be run with
+        # different len(args).
+        return self.loops
+
     def on_enter_jit(self, invariants, bytecode, pos):
         # Now some strange code that makes a copy of the 'args' list in
         # a complicated way...  this is a workaround forcing the whole 'args'
         # list to be virtual.  It is a way to tell the JIT compiler that it
         # doesn't have to worry about the 'args' list being unpredictably
         # modified.
+        oldloops = invariants
         oldargs = self.args
         argcount = hint(len(oldargs), promote=True)
         args = []
@@ -118,13 +128,13 @@ class TinyJitDriver(JitDriver):
             args.append(oldargs[n])
             n += 1
         self.args = args
-        oldloops = self.loops
-        argcount = hint(len(oldloops), promote=True)
+        # turn the green 'loops' from 'invariants' into a virtual list
+        argcount = len(oldloops)
         loops = []
         n = 0
         while n < argcount:
             hint(n, concrete=True)
-            loops.append(hint(oldloops[n], promote=True))
+            loops.append(oldloops[n])
             n += 1
         self.loops = loops
 

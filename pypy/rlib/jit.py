@@ -1,5 +1,6 @@
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.objectmodel import CDefinedIntSymbolic
+from pypy.rlib.unroll import unrolling_iterable
 
 def purefunction(func):
     func._pure_function_ = True
@@ -171,6 +172,25 @@ class JitDriver:
         return 10
     getcurrentthreshold = staticmethod(getcurrentthreshold)
 
+    def compute_invariants(self, *greens):
+        """This can compute a value or tuple that is passed as a green
+        argument 'invariants' to on_enter_jit().  It should in theory
+        only depend on the 'greens', but in practice it can peek at the
+        reds currently stored in 'self'.  This allows the extraction in
+        an interpreter-specific way of whatever red information that
+        ultimately depends on the greens only.
+        """
+
+    def _on_enter_jit(self, *greens):
+        """This is what theoretically occurs when we are entering the JIT.
+        In truth, compute_invariants() is called only once per set of greens
+        and its result is cached.  On the other hand, on_enter_jit() is
+        compiled into machine code and so it runs every time the execution
+        jumps from the regular interpreter to the machine code.
+        """
+        invariants = self.compute_invariants(*greens)
+        return self.on_enter_jit(invariants, *greens)
+
     def _check_class(cls):
         if cls is JitDriver:
             raise JitHintError("must subclass JitDriver")
@@ -190,15 +210,47 @@ class JitDriver:
         if hasattr(cls, 'on_enter_jit'):
             classdef = bookkeeper.getuniqueclassdef(cls)
             s_self = annmodel.SomeInstance(classdef)
-            args_s = [s_self, annmodel.s_None]
+            args_s = [s_self]
+            allargs_s = []
             for name in cls.greens:
                 s_value = livevars_s['s_' + name]
                 args_s.append(s_value)
+                allargs_s.append(s_value)
             for name in cls.reds:
                 s_value = livevars_s['s_' + name]
                 s_self.setattr(bookkeeper.immutablevalue(name), s_value)
-            key = "rlib.jit.JitDriver.on_enter_jit"
-            s_func = bookkeeper.immutablevalue(cls.on_enter_jit.im_func)
+                allargs_s.append(s_value)
+
+            key = "rlib.jit.JitDriver._on_enter_jit"
+            s_func = bookkeeper.immutablevalue(cls._on_enter_jit.im_func)
             s_result = bookkeeper.emulate_pbc_call(key, s_func, args_s)
             assert annmodel.s_None.contains(s_result)
+
+            wrapper = cls._get_compute_invariants_wrapper()
+            key = "rlib.jit.JitDriver._compute_invariants_wrapper"
+            s_func = bookkeeper.immutablevalue(wrapper)
+            bookkeeper.emulate_pbc_call(key, s_func, allargs_s)
     _emulate_method_calls = classmethod(_emulate_method_calls)
+
+    def _get_compute_invariants_wrapper(cls):
+        try:
+            return cls.__dict__['_compute_invariants_wrapper']
+        except KeyError:
+            num_green_args = len(cls.greens)
+            unroll_reds = unrolling_iterable(cls.reds)
+            # make a wrapper around compute_invariants() which takes all
+            # green and red arguments and puts the red ones in a fresh
+            # instance of the JitDriver subclass.  This logic is here
+            # in jit.py because it needs to be annotated and rtyped as
+            # a high-level function.
+            def _compute_invariants_wrapper(*args):
+                greenargs = args[:num_green_args]
+                self = cls()
+                i = num_green_args
+                for name in unroll_reds:
+                    setattr(self, name, args[i])
+                    i += 1
+                return self.compute_invariants(*greenargs)
+            cls._compute_invariants_wrapper = _compute_invariants_wrapper
+            return _compute_invariants_wrapper
+    _get_compute_invariants_wrapper = classmethod(_get_compute_invariants_wrapper)

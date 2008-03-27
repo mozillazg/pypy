@@ -55,7 +55,10 @@ class HotRunnerDesc:
         RESARGS = []
         self.red_args_spec = []
         self.green_args_spec = []
-        for v in newportalgraph.getargs():
+        args = newportalgraph.getargs()
+        if hasattr(self.jitdrivercls, 'on_enter_jit'):
+            args = args[:-1]  # ignore the final 'invariants' argument
+        for v in args:
             TYPE = v.concretetype
             ALLARGS.append(TYPE)
             if self.hintannotator.binding(v).is_green():
@@ -80,8 +83,7 @@ class HotRunnerDesc:
         num_green_args = len(self.green_args_spec)
 
         def maybe_enter_jit(*args):
-            greenargs = args[:num_green_args]
-            mc = state.maybe_compile(*greenargs)
+            mc = state.maybe_compile(*args)
             if not mc:
                 return
             if self.verbose_level >= 2:
@@ -283,6 +285,7 @@ class HotRunnerDesc:
 
 def make_state_class(hotrunnerdesc):
     # very minimal, just to make the first test pass
+    num_green_args = len(hotrunnerdesc.green_args_spec)
     green_args_spec = unrolling_iterable(hotrunnerdesc.green_args_spec)
     red_args_spec = unrolling_iterable(hotrunnerdesc.red_args_spec)
     green_args_names = unrolling_iterable(
@@ -293,6 +296,20 @@ def make_state_class(hotrunnerdesc):
         HASH_TABLE_SIZE = 2 ** 14
     else:
         HASH_TABLE_SIZE = 1
+
+    # ---------- hacks for the 'invariants' argument ----------
+    drivercls = hotrunnerdesc.jitdrivercls
+    if hasattr(drivercls, 'on_enter_jit'):
+        wrapper = drivercls._get_compute_invariants_wrapper()
+        bk = hotrunnerdesc.rtyper.annotator.bookkeeper
+        s_func = bk.immutablevalue(wrapper)
+        r_func = hotrunnerdesc.rtyper.getrepr(s_func)
+        ll_compute_invariants_wrapper = r_func.get_unique_llfn().value
+        INVARIANTS = lltype.typeOf(ll_compute_invariants_wrapper).TO.RESULT
+    else:
+        ll_compute_invariants_wrapper = None    # for the flow space
+        INVARIANTS = lltype.Void
+    # ---------------------------------------------------------
 
     class StateCell(object):
         __slots__ = []
@@ -327,7 +344,8 @@ def make_state_class(hotrunnerdesc):
             # correctly, the occasional mistake due to hash collision is
             # not too bad.
 
-        def maybe_compile(self, *greenargs):
+        def maybe_compile(self, *args):
+            greenargs = args[:num_green_args]
             argshash = self.getkeyhash(*greenargs)
             argshash &= (HASH_TABLE_SIZE - 1)
             cell = self.cells[argshash]
@@ -337,11 +355,11 @@ def make_state_class(hotrunnerdesc):
                 n = cell.counter + 1
                 if n < hotrunnerdesc.jitdrivercls.getcurrentthreshold():
                     if hotrunnerdesc.verbose_level >= 3:
-                        interp.debug_trace("jit_not_entered", *greenargs)
+                        interp.debug_trace("jit_not_entered", *args)
                     self.cells[argshash] = Counter(n)
                     return self.NULL_MC
                 interp.debug_trace("jit_compile", *greenargs)
-                return self.compile(argshash, *greenargs)
+                return self.compile(argshash, *args)
             else:
                 # machine code was already compiled for these greenargs
                 # (or we have a hash collision)
@@ -349,11 +367,11 @@ def make_state_class(hotrunnerdesc):
                 if cell.equalkey(*greenargs):
                     return cell.mc
                 else:
-                    return self.handle_hash_collision(cell, argshash,
-                                                      *greenargs)
+                    return self.handle_hash_collision(cell, argshash, *args)
         maybe_compile._dont_inline_ = True
 
-        def handle_hash_collision(self, cell, argshash, *greenargs):
+        def handle_hash_collision(self, cell, argshash, *args):
+            greenargs = args[:num_green_args]
             next = cell.next
             while not isinstance(next, Counter):
                 assert isinstance(next, MachineCodeEntryPoint)
@@ -370,11 +388,11 @@ def make_state_class(hotrunnerdesc):
             n = next.counter + 1
             if n < hotrunnerdesc.jitdrivercls.getcurrentthreshold():
                 if hotrunnerdesc.verbose_level >= 3:
-                    interp.debug_trace("jit_not_entered", *greenargs)
+                    interp.debug_trace("jit_not_entered", *args)
                 cell.next = Counter(n)
                 return self.NULL_MC
             interp.debug_trace("jit_compile", *greenargs)
-            return self.compile(argshash, *greenargs)
+            return self.compile(argshash, *args)
         handle_hash_collision._dont_inline_ = True
 
         def getkeyhash(self, *greenargs):
@@ -391,15 +409,15 @@ def make_state_class(hotrunnerdesc):
             return result
         getkeyhash._always_inline_ = True
 
-        def compile(self, argshash, *greenargs):
+        def compile(self, argshash, *args):
             try:
-                return self._compile(argshash, *greenargs)
+                return self._compile(argshash, *args)
             except Exception, e:
                 rhotpath.report_compile_time_exception(
                     hotrunnerdesc.interpreter, e)
                 return self.NULL_MC
 
-        def _compile(self, argshash, *greenargs):
+        def _compile(self, argshash, *args):
             interp = hotrunnerdesc.interpreter
             rgenop = interp.rgenop
             builder, gv_generated, inputargs_gv = rgenop.newgraph(
@@ -415,8 +433,18 @@ def make_state_class(hotrunnerdesc):
                 red_i += make_arg_redbox.consumes
             redargs = list(redargs)
 
+            greenargs = args[:num_green_args]
             greenargs_gv = [rgenop.genconst(greenargs[i])
                             for i in green_args_range]
+
+            # ---------- hacks for the 'invariants' argument ----------
+            if INVARIANTS is not lltype.Void:
+                run = maybe_on_top_of_llinterp(hotrunnerdesc.exceptiondesc,
+                                               ll_compute_invariants_wrapper)
+                invariants = run(*args)
+                greenargs_gv.append(rgenop.genconst(invariants))
+            # ---------------------------------------------------------
+
             rhotpath.setup_jitstate(interp, jitstate, greenargs_gv, redargs,
                                     hotrunnerdesc.entryjitcode,
                                     hotrunnerdesc.sigtoken)

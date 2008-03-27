@@ -1887,7 +1887,7 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['n', 'm', 'i', 'result']
-            def on_enter_jit(self):
+            def on_enter_jit(self, invariants):
                 self.n = hint(hint(self.n, promote=True), variable=True)
                 self.m = hint(hint(self.m, promote=True), variable=True)
         def f(n, m):
