@@ -23,11 +23,9 @@ super_dispatch = PyFrame.dispatch
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
-    def on_enter_jit(self):
+    def on_enter_jit(self, invariants, next_instr, pycode):
         # *loads* of nonsense for now
         frame = self.frame
-        pycode = self.pycode
-        pycode = hint(pycode, promote=True)    # xxx workaround
         pycode = hint(pycode, deepfreeze=True)
 
         fastlocals_w = [None] * pycode.co_nlocals

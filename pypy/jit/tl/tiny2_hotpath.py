@@ -103,7 +103,7 @@ class TinyJitDriver(JitDriver):
     reds = ['args', 'loops', 'stack']
     greens = ['bytecode', 'pos']
     
-    def on_enter_jit(self):
+    def on_enter_jit(self, invariants, bytecode, pos):
         # Now some strange code that makes a copy of the 'args' list in
         # a complicated way...  this is a workaround forcing the whole 'args'
         # list to be virtual.  It is a way to tell the JIT compiler that it
