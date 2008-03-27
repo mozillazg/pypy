@@ -5,6 +5,7 @@ from pypy.translator.simplify import join_blocks
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.annotation import model as annmodel
+from pypy.rpython.rmodel import inputconst
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.jit import JitHintError
@@ -137,14 +138,16 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
     num_greens = len(drivercls.greens)
     num_reds = len(drivercls.reds)
     assert len(allvars) == num_greens + num_reds
-    for name, v_value in zip(drivercls.greens + drivercls.reds, allvars):
+    for name, v_value in zip(drivercls.reds, allvars[num_greens:]):
         r_instance.setfield(v_self, name, v_value, llops)
-    # generate a call to on_enter_jit(self)
+    # generate a call to on_enter_jit(self, invariants, *greens)
     on_enter_jit_func = drivercls.on_enter_jit.im_func
     s_func = rtyper.annotator.bookkeeper.immutablevalue(on_enter_jit_func)
     r_func = rtyper.getrepr(s_func)
     c_func = r_func.get_unique_llfn()
-    llops.genop('direct_call', [c_func, v_self])
+    v_invariants = inputconst(lltype.Void, None)
+    vlist = allvars[:num_greens]
+    llops.genop('direct_call', [c_func, v_self, v_invariants] + vlist)
     # generate ops to reload the 'reds' variables from 'self'
     # XXX Warning!  the 'greens' variables are not reloaded.  This is
     # a bit of a mess color-wise, and probably not useful.

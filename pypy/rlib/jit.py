@@ -182,20 +182,23 @@ class JitDriver:
 
     def _emulate_method_calls(cls, bookkeeper, livevars_s):
         # annotate "cls.on_enter_jit()" if it is defined
-        # on_enter_jit(self) is called with a copy of the value of the
-        # red and green variables.  The red variables can be modified
-        # in order to give hints to the JIT about the redboxes.  The
-        # green variables should not be changed.
+        # on_enter_jit(self, invariants, *greenvars) is called with a copy
+        # of the value of the red variables on self.  The red variables
+        # can be modified in order to give hints to the JIT about the
+        # redboxes.
         from pypy.annotation import model as annmodel
         if hasattr(cls, 'on_enter_jit'):
             classdef = bookkeeper.getuniqueclassdef(cls)
-            s_arg = annmodel.SomeInstance(classdef)
-            for name, s_value in livevars_s.items():
-                assert name.startswith('s_')
-                name = name[2:]
-                s_arg.setattr(bookkeeper.immutablevalue(name), s_value)
+            s_self = annmodel.SomeInstance(classdef)
+            args_s = [s_self, annmodel.s_None]
+            for name in cls.greens:
+                s_value = livevars_s['s_' + name]
+                args_s.append(s_value)
+            for name in cls.reds:
+                s_value = livevars_s['s_' + name]
+                s_self.setattr(bookkeeper.immutablevalue(name), s_value)
             key = "rlib.jit.JitDriver.on_enter_jit"
             s_func = bookkeeper.immutablevalue(cls.on_enter_jit.im_func)
-            s_result = bookkeeper.emulate_pbc_call(key, s_func, [s_arg])
+            s_result = bookkeeper.emulate_pbc_call(key, s_func, args_s)
             assert annmodel.s_None.contains(s_result)
     _emulate_method_calls = classmethod(_emulate_method_calls)

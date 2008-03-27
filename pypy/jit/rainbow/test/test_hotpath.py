@@ -358,7 +358,7 @@ class TestHotPath(HotPathTest):
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['n']
-            def on_enter_jit(self):
+            def on_enter_jit(self, invariants):
                 self.n += 100     # doesn't make sense, just for testing
 
         def ll_function(n):
@@ -378,10 +378,8 @@ class TestHotPath(HotPathTest):
         class MyJitDriver(JitDriver):
             greens = ['void1', 'm']
             reds = ['void2', 'n']
-            def on_enter_jit(self):
-                self.n += self.m     # doesn't make sense, just for testing
-                # note that the green 'self.m' cannot be modified
-                # (changes would not be reloaded into the 'm' var currently)
+            def on_enter_jit(self, invariants, void1, m):
+                self.n += m     # doesn't make sense, just for testing
 
         def ll_function(n, m):
             MyJitDriver.jit_merge_point(n=n, m=m, void1=None, void2=None)
@@ -396,6 +394,17 @@ class TestHotPath(HotPathTest):
             "done at hp_return",
             "run_machine_code 200 2",
             ])
+
+    def test_on_enter_jit_args_are_green(self):
+        class MyJitDriver(JitDriver):
+            greens = ['m']
+            reds = []
+            def on_enter_jit(self, invariants, m):
+                hint(m, concrete=True)
+        def ll_function(m):
+            MyJitDriver.jit_merge_point(m=m)
+            MyJitDriver.can_enter_jit(m=m)
+        self.run(ll_function, [2], threshold=1, small=True)
 
     def test_hp_tlr(self):
         from pypy.jit.tl import tlr
