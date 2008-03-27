@@ -129,6 +129,7 @@ class TinyJitDriver(JitDriver):
             n += 1
         self.args = args
         # turn the green 'loops' from 'invariants' into a virtual list
+        oldloops = hint(oldloops, deepfreeze=True)
         argcount = len(oldloops)
         loops = []
         n = 0
