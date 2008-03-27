@@ -157,6 +157,17 @@ JOYP = 0xFF00
 JOYPAD_CLOCK = GAMEBOY_CLOCK >> 6
 
 
+BUTTON_DOWN = 0x08
+BUTTON_UP = 0x04
+BUTTON_LEFT = 0x02
+BUTTON_RIGHT = 0x01
+ 
+BUTTON_START = 0x08
+BUTTON_SELECT = 0x04
+BUTTON_B = 0x02
+BUTTON_A = 0x01
+
+
 
 # ___________________________________________________________________________
 # SERIAL
