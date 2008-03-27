@@ -859,7 +859,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         callback = CFUNCTYPE(c_int, *[c_int]*nb_args)(func)
         keepalive = self.__dict__.setdefault('_keepalive', [])
         keepalive.append((callback, func))
-        return cast(callback, c_void_p).value
+        return intmask(cast(callback, c_void_p).value)
         # NB. returns the address as an integer
 
     def test_directtesthelper_direct(self):
