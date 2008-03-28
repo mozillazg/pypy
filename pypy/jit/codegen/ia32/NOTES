@@ -1,0 +1,16 @@
+Hi Fijal :-)
+
+You're looking too much at the new backend and not enough at the old
+one.  There is no need to make operation classes at all; instead
+method call like genop2("int_add") should render the machine code
+directly and return a fresh IntVar.  Likewise, I don't know if the
+RegAlloc object makes sense for now: we don't need to remember the
+list of operations, and the position of each variable should probably
+just be stored in the GenVars directly as an attribute, with some
+methods to get them (again, as in the old backend).
+
+Also, don't worry about translation right now (skip the corresponding
+tests before you have more tests passing)
+
+
+Armin
