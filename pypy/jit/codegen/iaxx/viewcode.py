@@ -9,13 +9,20 @@ or
 """
 
 import autopath
-import operator, sys, os, re, py
+import operator, sys, os, re, py, new
 from bisect import bisect_left
 
 # don't use pypy.tool.udir here to avoid removing old usessions which
 # might still contain interesting executables
 udir = py.path.local.make_numbered_dir(prefix='viewcode-', keep=2)
 tmpfile = str(udir.join('dump.tmp'))
+
+# hack hack
+import pypy.tool
+mod = new.module('pypy.tool.udir')
+mod.udir = udir
+sys.modules['pypy.tool.udir'] = mod
+pypy.tool.udir = mod
 
 # ____________________________________________________________
 # Some support code from Psyco.  There is more over there,
@@ -225,20 +232,29 @@ class World(object):
                     break
         # hack hack hacked
 
-    def show(self):
-        g1 = Graph('codedump')
+    def show(self, showtext=True, showgraph=True):
+        if showgraph:
+            g1 = Graph('codedump')
+        self.ranges.sort()
         for r in self.ranges:
-            text, width = tab2columns(r.disassemble())
-            text = '0x%x\n\n%s' % (r.addr, text)
-            g1.emit_node('N_%x' % r.addr, shape="box", label=text,
-                         width=str(width*0.1125))
-            for lineno, targetaddr, final in r.findjumps():
-                if final:
-                    color = "black"
-                else:
-                    color = "red"
-                g1.emit_edge('N_%x' % r.addr, 'N_%x' % targetaddr, color=color)
-        g1.display()
+            disassembled = r.disassemble()
+            if showtext:
+                print disassembled
+            if showgraph:
+                text, width = tab2columns(disassembled)
+                text = '0x%x\n\n%s' % (r.addr, text)
+                g1.emit_node('N_%x' % r.addr, shape="box", label=text,
+                             width=str(width*0.1125))
+                for lineno, targetaddr, final in r.findjumps():
+                    if final:
+                        color = "black"
+                    else:
+                        color = "red"
+                    g1.emit_edge('N_%x' % r.addr, 'N_%x' % targetaddr, 
+                                 color=color)
+        sys.stdout.flush()
+        if showgraph:
+            g1.display()
 
 
 def tab2columns(text):
@@ -272,7 +288,7 @@ def tab2columns(text):
 # but needs to be a bit more subtle later
 
 from pypy.translator.tool.make_dot import DotGen
-from pypy.translator.tool.pygame.graphclient import display_layout
+from dotviewer.graphclient import display_page
 
 class Graph(DotGen):
 
@@ -286,7 +302,7 @@ class Graph(DotGen):
 
     def display(self):
         "Display a graph page locally."
-        display_layout(_Page(self))
+        display_page(_Page(self))
 
 
 class NoGraph(Exception):
@@ -330,10 +346,15 @@ class _PageContent:
 # ____________________________________________________________
 
 if __name__ == '__main__':
+    if '--text' in sys.argv:
+        sys.argv.remove('--text')
+        showgraph = False
+    else:
+        showgraph = True
     if len(sys.argv) == 1:
         f = sys.stdin
     else:
         f = open(sys.argv[1], 'r')
     world = World()
     world.parse(f)
-    world.show()
+    world.show(showtext=True, showgraph=showgraph)
