@@ -1,5 +1,6 @@
 
 from pypy.jit.codegen.i386.ri386 import *
+from pypy.jit.codegen.i386.ri386setup import Conditions
 from pypy.jit.codegen.model import GenVar
 from pypy.rlib.objectmodel import specialize
 from pypy.rpython.lltypesystem import lltype
@@ -39,6 +40,18 @@ def setup_opclasses(base):
 OPCLASSES1 = setup_opclasses(Op1)
 OPCLASSES2 = setup_opclasses(Op2)
 del setup_opclasses
+
+def setup_conditions():
+    result1 = [None] * 16
+    result2 = [None] * 16
+    for key, value in Conditions.items():
+        result1[value] = getattr(I386CodeBuilder, 'J'+key)
+        result2[value] = getattr(I386CodeBuilder, 'SET'+key)
+    return result1, result2
+EMIT_JCOND, EMIT_SETCOND = setup_conditions()
+INSN_JMP = len(EMIT_JCOND)
+EMIT_JCOND.append(I386CodeBuilder.JMP)    # not really a conditional jump
+del setup_conditions
 
 @specialize.memo()
 def getopclass1(opname):
