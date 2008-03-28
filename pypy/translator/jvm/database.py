@@ -538,7 +538,7 @@ class Database(OODatabase):
         ootype.Signed   : jvm.jIntArray,
         ootype.Unsigned : jvm.jIntArray,
         ootype.Char     : jvm.jCharArray,
-        ootype.Bool     : jvm.jByteArray,
+        ootype.Bool     : jvm.jBoolArray,
         ootype.UniChar  : jvm.jCharArray,
         ootype.String   : jvm.jStringArray,
         ootype.Float    : jvm.jDoubleArray,
