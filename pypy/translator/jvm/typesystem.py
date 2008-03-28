@@ -411,6 +411,7 @@ class JvmArrayType(JvmType):
         else:
             raise KeyError(methodnm)
         
+jBoolArray = JvmArrayType(jBool)
 jByteArray = JvmArrayType(jByte)
 jObjectArray = JvmArrayType(jObject)
 jStringArray = JvmArrayType(jString)
@@ -555,6 +556,8 @@ class NewArrayOpcodeFamily(object):
             s = "newarray char"
         elif desc == '[B':
             s = "newarray byte"
+        elif desc == '[Z':
+            s = "newarray boolean"
         else:
             s = "anewarray " + arraytype.element_type.descriptor.int_class_name()
         self.cache[arraytype] = obj = Opcode(s)
