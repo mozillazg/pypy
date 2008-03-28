@@ -238,9 +238,9 @@ def gengetarraysize(jitstate, fielddesc, argbox):
     return rvalue.IntRedBox(fielddesc.indexkind, genvar)
 
 def genptrnonzero(jitstate, argbox, reverse):
-    assert isinstance(argbox, rvalue.PtrRedBox)
+    assert isinstance(argbox, rvalue.AbstractPtrRedBox)
     if argbox.is_constant():
-        addr = rvalue.ll_getvalue(argbox, llmemory.Address)
+        addr = rvalue.ll_getvalue(argbox, jitstate.ts.ROOT_TYPE)
         return rvalue.ll_fromvalue(jitstate, bool(addr) ^ reverse)
     builder = jitstate.curbuilder
     if argbox.known_nonzero:
@@ -248,9 +248,9 @@ def genptrnonzero(jitstate, argbox, reverse):
     else:
         gv_addr = argbox.getgenvar(jitstate)
         if reverse:
-            gv_res = builder.genop_ptr_iszero(argbox.kind, gv_addr)
+            gv_res = jitstate.ts.genop_ptr_iszero(builder, argbox, gv_addr)
         else:
-            gv_res = builder.genop_ptr_nonzero(argbox.kind, gv_addr)
+            gv_res = jitstate.ts.genop_ptr_nonzero(builder, argbox, gv_addr)
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
 
 def genptreq(jitstate, argbox0, argbox1, reverse):

@@ -105,6 +105,11 @@ class InterpretationTest(object):
         return S
 
     malloc = staticmethod(lltype.malloc)
+    nullptr = staticmethod(lltype.nullptr)
+
+    @staticmethod
+    def malloc_immortal(T):
+        return lltype.malloc(T, immortal=True)
 
     def setup_class(cls):
         cls.on_llgraph = cls.RGenOp is LLRGenOp
@@ -1365,12 +1370,14 @@ class SimpleTests(InterpretationTest):
         assert count_depth(res) == 2
 
     def test_known_nonzero(self):
-        S = lltype.GcStruct('s', ('x', lltype.Signed))
-        global_s = lltype.malloc(S, immortal=True)
+        S = self.GcStruct('s', ('x', lltype.Signed))
+        malloc = self.malloc
+        nullptr = self.nullptr
+        global_s = self.malloc_immortal(S)
         global_s.x = 100
 
         def h():
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.x = 50
             return s
         def g(s, y):
@@ -1382,11 +1389,11 @@ class SimpleTests(InterpretationTest):
             hint(None, global_merge_point=True)
             x = hint(x, concrete=True)
             if x == 1:
-                return g(lltype.nullptr(S), y)
+                return g(nullptr(S), y)
             elif x == 2:
                 return g(global_s, y)
             elif x == 3:
-                s = lltype.malloc(S)
+                s = malloc(S)
                 s.x = y
                 return g(s, y)
             elif x == 4:
@@ -1998,6 +2005,11 @@ class TestOOType(SimpleTests):
         return I
 
     malloc = staticmethod(ootype.new)
+    nullptr = staticmethod(ootype.null)
+
+    @staticmethod
+    def malloc_immortal(T):
+        return ootype.new(T)
 
     def translate_insns(self, insns):
         replace = {

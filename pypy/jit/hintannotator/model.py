@@ -26,6 +26,7 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       oogetfield
                       oosetfield
                       oononnull
+                      ooisnull
                       ooupcast
                       oodowncast
                       oois
