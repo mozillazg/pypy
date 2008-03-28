@@ -43,6 +43,16 @@ class ForwardReference(OOType):
         raise TypeError("%r object is not hashable" % self.__class__.__name__)
 
 
+# warning: the name Object is rebount at the end of file
+class Object(OOType):
+    """
+    A type which everything can be casted to.
+    """
+
+    def _defl(self):
+        return self._null
+
+
 class Class(OOType):
 
     def _defl(self):
@@ -691,11 +701,51 @@ class DictItemsIterator(BuiltinADTType):
     
 # ____________________________________________________________
 
+class _object(object):
+
+    def __init__(self, obj):
+        self._TYPE = Object
+        self.obj = obj or None  # null obj ==> None
+
+    def __nonzero__(self):
+        return self.obj is not None
+
+    def __eq__(self, other):
+        if not isinstance(other, _object):
+            raise TypeError("comparing an _object with %r" % other)
+        return self.obj == other.obj
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        return hash(self.obj)
+
+    def _cast_to_object(self):
+        return self
+
+    def _cast_to(self, EXPECTED_TYPE):
+        if self.obj is None:
+            return null(EXPECTED_TYPE)
+        elif isinstance(EXPECTED_TYPE, Instance):
+            return oodowncast(EXPECTED_TYPE, self.obj)
+        elif isinstance(EXPECTED_TYPE, SpecializableType):
+            T = typeOf(self.obj)
+            if T != EXPECTED_TYPE:
+                raise RuntimeError("Invalid cast: %s --> %s" % (T, EXPECTED_TYPE))
+            return self.obj
+        else:
+            assert False, 'to be implemented'
+
+
 class _class(object):
     _TYPE = Class
 
     def __init__(self, INSTANCE):
         self._INSTANCE = INSTANCE
+
+    def _cast_to_object(self):
+        return _object(self)
 
 nullruntimeclass = _class(None)
 
@@ -765,6 +815,9 @@ class _instance(object):
             return intmask(id(self))
         else:
             return 0   # for all null instances
+
+    def _cast_to_object(self):
+        return _object(ooupcast(ROOT, self))
 
 
 def _null_mixin(klass):
@@ -876,6 +929,9 @@ class _view(object):
     def _identityhash(self):
         return self._inst._identityhash()
 
+    def _cast_to_object(self):
+        return _object(ooupcast(ROOT, self))
+
 if STATICNESS:
     instance_impl = _view
 else:
@@ -938,6 +994,9 @@ class _callable(object):
    def __hash__(self):
        return hash(frozendict(self.__dict__))
 
+   def _cast_to_object(self):
+       return _object(self)
+
 
 class _static_meth(_callable):
    allowed_types = (StaticMethod,)
@@ -975,6 +1034,9 @@ class _bound_meth(object):
     def __call__(self, *args):
         callb, checked_args = self.meth._checkargs(args)
         return callb(self.inst, *checked_args)
+
+    def _cast_to_object(self):
+        return _object(self)
 
 
 class _meth(_callable):
@@ -1101,6 +1163,8 @@ class _builtin_type(object):
 
         return object.__getattribute__(self, name)
 
+    def _cast_to_object(self):
+        return _object(self)
 
 class _string(_builtin_type):
 
@@ -1482,6 +1546,9 @@ class _record(object):
     def __ne__(self, other):
         return not (self == other)
 
+    def _cast_to_object(self):
+        return _object(self)
+
 class _null_record(_null_mixin(_record), _record):
 
     def __init__(self, RECORD):
@@ -1572,6 +1639,15 @@ def ooupcast(INSTANCE, instance):
 def oodowncast(INSTANCE, instance):
     return instance._downcast(INSTANCE)
 
+def cast_to_object(whatever):
+    TYPE = typeOf(whatever)
+    assert isinstance(TYPE, OOType)
+    return whatever._cast_to_object()
+
+def cast_from_object(EXPECTED_TYPE, obj):
+    assert typeOf(obj) is Object
+    return obj._cast_to(EXPECTED_TYPE)
+
 def ooidentityhash(inst):
     assert isinstance(typeOf(inst), (Instance, Record))
     return inst._identityhash()
@@ -1639,6 +1715,11 @@ def ooweakref_create(obj):
     ref = new(WeakReference)
     ref.ll_set(obj)
     return ref
+
+
+Object = Object()
+NULL = _object(None)
+Object._null = NULL
 
 ROOT = Instance('Root', None, _is_root=True)
 String = String()
