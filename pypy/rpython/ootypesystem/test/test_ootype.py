@@ -535,3 +535,34 @@ def test_lookup_graphs_abstract():
     assert len(TYPE_A._lookup_graphs('ofoo')) == 2
     assert len(TYPE_B._lookup_graphs('ofoo')) == 1
     assert len(TYPE_C._lookup_graphs('ofoo')) == 1
+
+def test_cast_object_instance():
+    A = Instance("Foo", ROOT)
+    a = new(A)
+    obj = cast_to_object(a)
+    assert typeOf(obj) is Object
+    assert cast_from_object(A, obj) == a
+    a2 = cast_from_object(ROOT, obj)
+    assert typeOf(a2) is ROOT
+    assert a2 == ooupcast(ROOT, a)
+
+def test_cast_object_record():
+    R = Record({'x': Signed})
+    r = new(R)
+    r.x = 42
+    obj = cast_to_object(r)
+    assert typeOf(obj) is Object
+    r2 = cast_from_object(R, obj)
+    assert typeOf(r2) is R
+    assert r == r2
+
+def test_cast_object_null():
+    A = Instance("Foo", ROOT)
+    B = Record({'x': Signed})
+    a = null(A)
+    b = null(B)
+    obj1 = cast_to_object(a)
+    obj2 = cast_to_object(b)
+    assert obj1 == obj2
+    assert cast_from_object(A, obj1) == a
+    assert cast_from_object(B, obj2) == b
