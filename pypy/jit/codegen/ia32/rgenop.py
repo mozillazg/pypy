@@ -7,6 +7,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.ia32.operation import *
 from pypy.jit.codegen.ia32.regalloc import RegAlloc
 from pypy.jit.codegen.i386.regalloc import write_stack_reserve
+from pypy.rlib.unroll import unrolling_iterable
 
 WORD = 4
 PROLOGUE_FIXED_WORDS = 5
@@ -35,13 +36,19 @@ for value in locals().values():
         LL_TO_GENVAR[value.ll_type] = value.token
         TOKEN_TO_GENVAR[value.token] = value
 
+UNROLLING_TOKEN_TO_GENVAR = unrolling_iterable(TOKEN_TO_GENVAR.items())
+
+def token_to_genvar(i):
+    for tok, value in UNROLLING_TOKEN_TO_GENVAR:
+        if tok == i:
+            return value()
+
 class Builder(GenBuilder):
     def __init__(self, rgenop, inputoperands, inputvars):
         self.rgenop = rgenop
         self.operations = []
         self.inputoperands = inputoperands
         self.inputvars = inputvars
-        self.coming_from = None
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         op = OpCall(sigtoken, gv_fnptr, list(args_gv))
@@ -116,7 +123,7 @@ class RI386GenOp(AbstractRGenOp):
     from pypy.jit.codegen.i386.codebuf import MachineCodeBlock
     from pypy.jit.codegen.i386.codebuf import InMemoryCodeBuilder
 
-    MC_SIZE = 65536 * 16
+    MC_SIZE = 65536
 
     def __init__(self):
         self.allocated_mc = None
@@ -139,10 +146,12 @@ class RI386GenOp(AbstractRGenOp):
     def genconst(self, llvalue):
         T = lltype.typeOf(llvalue)
         if T is llmemory.Address:
-            return AddrConst(llvalue)
+            raise NotImplementedError
+            #return AddrConst(llvalue)
         elif T is lltype.Signed:
             return IntConst(llvalue)
         elif isinstance(T, lltype.Ptr):
+            raise NotImplementedError
             lladdr = llmemory.cast_ptr_to_adr(llvalue)
             if T.TO._gckind == 'gc':
                 self.keepalive_gc_refs.append(lltype.cast_opaque_ptr(llmemory.GCREF, llvalue))
@@ -159,7 +168,7 @@ class RI386GenOp(AbstractRGenOp):
         mc.PUSH(edi)
         mc.PUSH(ebp)
         mc.MOV(ebp, esp)
-        inputargs_gv = [TOKEN_TO_GENVAR[i]() for i in sigtoken[0]]
+        inputargs_gv = [token_to_genvar(i) for i in sigtoken[0]]
         ofs = WORD * PROLOGUE_FIXED_WORDS
         inputoperands = []
         # <I don't understand>

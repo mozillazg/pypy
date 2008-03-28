@@ -15,7 +15,7 @@ class RegAlloc(object):
             if type(v) is IntConst: 
                 return imm(v.value)
             else:
-                xxx
+                raise NotImplementedError
         else:
             return self.positions[v]
 
