@@ -10,6 +10,7 @@ from pypy.annotation.model import SomeFloat, unionof, SomeUnicodeString
 from pypy.annotation.model import SomePBC, SomeInstance, SomeDict, SomeList
 from pypy.annotation.model import SomeExternalObject
 from pypy.annotation.model import SomeWeakRef
+from pypy.annotation.model import SomeOOObject
 from pypy.annotation.model import annotation_to_lltype, lltype_to_annotation, ll_to_annotation
 from pypy.annotation.model import add_knowntypedata
 from pypy.annotation.model import s_ImpossibleValue
@@ -564,6 +565,21 @@ def oodowncast(I, i):
     else:
         raise AnnotatorError, 'Cannot cast %s to %s' % (i.ootype, I.const)
 
+def cast_to_object(obj):
+    assert isinstance(obj.ootype, ootype.OOType)
+    return SomeOOObject()
+
+def cast_from_object(T, obj):
+    TYPE = T.const
+    if isinstance(TYPE, ootype.Instance):
+        return SomeOOInstance(TYPE)
+    elif isinstance(TYPE, ootype.Record):
+        return SomeOOInstance(TYPE) # XXX: SomeOORecord?
+    elif isinstance(TYPE, ootype.StaticMethod):
+        return SomeOOStaticMeth(TYPE)
+    else:
+        raise AnnotatorError, 'Cannot cast Object to %s' % TYPE
+
 BUILTIN_ANALYZERS[ootype.instanceof] = instanceof
 BUILTIN_ANALYZERS[ootype.new] = new
 BUILTIN_ANALYZERS[ootype.null] = null
@@ -573,6 +589,8 @@ BUILTIN_ANALYZERS[ootype.subclassof] = subclassof
 BUILTIN_ANALYZERS[ootype.ooidentityhash] = ooidentityhash
 BUILTIN_ANALYZERS[ootype.ooupcast] = ooupcast
 BUILTIN_ANALYZERS[ootype.oodowncast] = oodowncast
+BUILTIN_ANALYZERS[ootype.cast_to_object] = cast_to_object
+BUILTIN_ANALYZERS[ootype.cast_from_object] = cast_from_object
 
 #________________________________
 # weakrefs
