@@ -533,10 +533,7 @@ class LLFrame(object):
     def op_debug_llinterpcall(self, pythonfunction, *args_ll):
         return pythonfunction(*args_ll)
 
-    def op_can_enter_jit(self, *args):
-        pass
-
-    def op_jit_merge_point(self, *args):
+    def op_jit_marker(self, *args):
         pass
 
     def op_instrument_count(self, ll_tag, ll_label):

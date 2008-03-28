@@ -33,7 +33,7 @@ class HotPathHintAnnotator(HintAnnotator):
             raise JitHintError("found %d graphs with a jit_merge_point(),"
                                " expected 1 (for now)" % len(found_at))
         origportalgraph, _, origportalop = found_at[0]
-        drivercls = origportalop.args[0].value
+        drivercls = origportalop.args[1].value
         self.jitdriverclasses[drivercls] = True
         #
         # We make a copy of origportalgraph and mutate it to make it
@@ -77,7 +77,8 @@ def find_jit_merge_point(graph):
     found_at = []
     for block in graph.iterblocks():
         for op in block.operations:
-            if op.opname == 'jit_merge_point':
+            if (op.opname == 'jit_marker' and
+                op.args[0].value == 'jit_merge_point'):
                 found_at.append((graph, block, op))
     if len(found_at) > 1:
         raise JitHintError("multiple jit_merge_point() not supported")
@@ -103,8 +104,9 @@ def split_before_jit_merge_point(hannotator, graph):
             portalop = portalblock.operations[0]
         # split again, this time enforcing the order of the live vars
         # specified by the user in the jit_merge_point() call
-        assert portalop.opname == 'jit_merge_point'
-        livevars = [v for v in portalop.args[1:]
+        assert portalop.opname == 'jit_marker'
+        assert portalop.args[0].value == 'jit_merge_point'
+        livevars = [v for v in portalop.args[2:]
                       if v.concretetype is not lltype.Void]
         link = split_block(hannotator, portalblock, 0, livevars)
         return link.target
@@ -116,11 +118,12 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
     newblock = Block(vars)
 
     op = graph.startblock.operations[0]
-    assert op.opname == 'jit_merge_point'
-    assert op.args[0].value is drivercls
+    assert op.opname == 'jit_marker'
+    assert op.args[0].value == 'jit_merge_point'
+    assert op.args[1].value is drivercls
     allvars = []
     i = 0
-    for v in op.args[1:]:
+    for v in op.args[2:]:
         if v.concretetype is lltype.Void:
             allvars.append(Constant(None, concretetype=lltype.Void))
         else:

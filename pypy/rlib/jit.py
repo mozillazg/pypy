@@ -146,10 +146,11 @@ class Entry(ExtRegistryEntry):
             v_red = hop.inputarg(r_red, arg=i)
             reds_v.append(v_red)
         hop.exception_cannot_occur()
-        vlist = [hop.inputconst(lltype.Void, drivercls)]
+        vlist = [hop.inputconst(lltype.Void, self.instance.name),
+                 hop.inputconst(lltype.Void, drivercls)]
         vlist.extend(greens_v)
         vlist.extend(reds_v)
-        return hop.genop(self.instance.name, vlist,
+        return hop.genop('jit_marker', vlist,
                          resulttype=lltype.Void)
 
 # ____________________________________________________________

@@ -111,13 +111,10 @@ class HotRunnerDesc:
     def rewrite_graph(self, graph):
         for block in graph.iterblocks():
             for op in block.operations:
-                if op.opname == 'can_enter_jit':
+                if op.opname == 'jit_marker':
                     index = block.operations.index(op)
-                    if self.rewrite_can_enter_jit(graph, block, index):
-                        return True      # graph mutated, start over again
-                elif op.opname == 'jit_merge_point':
-                    index = block.operations.index(op)
-                    if self.rewrite_jit_merge_point(graph, block, index):
+                    meth = getattr(self, 'rewrite_' + op.args[0].value)
+                    if meth(graph, block, index):
                         return True      # graph mutated, start over again
         return False  # done
 
@@ -267,7 +264,8 @@ class HotRunnerDesc:
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
         #
         op = origblock.operations[origindex]
-        assert op.opname == 'jit_merge_point'
+        assert op.opname == 'jit_marker'
+        assert op.args[0].value == 'jit_merge_point'
         greens_v, reds_v = self.codewriter.decode_hp_hint_args(op)
         vlist = [Constant(portal_runner_ptr, lltype.Ptr(PORTALFUNC))]
         vlist += greens_v
