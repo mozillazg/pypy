@@ -462,9 +462,9 @@ class BytecodeWriter(object):
                 srcopname, srcargs = self.trace_back_bool_var(
                     block, block.exitswitch)
                 if srcopname is not None:
-                    if srcopname == 'ptr_nonzero':
+                    if srcopname in ('ptr_nonzero', 'oononnull'):
                         reverse = False
-                    elif srcopname == 'ptr_iszero':
+                    elif srcopname in ('ptr_iszero', 'ooisnull'):
                         reverse = True
                 if reverse is not None:
                     ptrindex = self.serialize_oparg("red", srcargs[0])
@@ -960,6 +960,9 @@ class BytecodeWriter(object):
         if srcopname in ('ptr_iszero', 'ptr_nonzero'):
             arg = self.serialize_oparg("red", srcargs[0])
             self.emit("learn_nonzeroness", arg, srcopname == "ptr_nonzero")
+        elif srcopname in ('ooisnull', 'oononnull'):
+            arg = self.serialize_oparg("red", srcargs[0])
+            self.emit("learn_nonzeroness", arg, srcopname == "oononnull")
 
     def serialize_op_direct_call(self, op):
         kind, withexc = self.guess_call_kind(op)

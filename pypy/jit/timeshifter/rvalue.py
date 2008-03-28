@@ -110,7 +110,10 @@ def ll_redboxbuilder(TYPE):
         return redboxbuilder_ptr
     elif TYPE is lltype.Float:
         return redboxbuilder_dbl
-    elif isinstance(TYPE, ootype.Instance) or isinstance(TYPE, ootype.Record):
+    elif (isinstance(TYPE, ootype.Instance) or
+          isinstance(TYPE, ootype.Record) or 
+          isinstance(TYPE, ootype.StaticMethod)):
+        # XXX: probably it won't translate, because we can't mix these types
         return redboxbuilder_inst
     else:
         assert isinstance(TYPE, lltype.Primitive)

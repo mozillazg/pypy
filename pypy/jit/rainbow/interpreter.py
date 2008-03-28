@@ -542,7 +542,7 @@ class JitInterpreter(object):
 
     @arguments("red", "bool")
     def opimpl_learn_nonzeroness(self, redbox, boolval):
-        assert isinstance(redbox, rvalue.PtrRedBox)
+        assert isinstance(redbox, rvalue.AbstractPtrRedBox)
         redbox.learn_nonzeroness(self.jitstate, boolval)
 
     @arguments()
@@ -1032,6 +1032,9 @@ class OOTypeJitInterpreter(JitInterpreter):
     def opimpl_red_oogetfield(self, structbox, fielddesc, deepfrozen):
         return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
                                       structbox)
+    @arguments("green", "fielddesc", returns="green")
+    def opimpl_green_oogetfield(self, gv_struct, fielddesc):
+        return fielddesc.perform_getfield(self.rgenop, gv_struct)
 
     @arguments("red", "fielddesc", "red")
     def opimpl_red_oosetfield(self, destbox, fielddesc, valuebox):
@@ -1041,6 +1044,14 @@ class OOTypeJitInterpreter(JitInterpreter):
     @arguments("structtypedesc", returns="red")
     def opimpl_red_new(self, structtypedesc):
         return structtypedesc.factory()
+
+    @arguments("red", returns="red")
+    def opimpl_red_oononnull(self, ptrbox):
+        return rtimeshift.genptrnonzero(self.jitstate, ptrbox, False)
+
+    @arguments("red", returns="red")
+    def opimpl_red_ooisnull(self, ptrbox):
+        return rtimeshift.genptrnonzero(self.jitstate, ptrbox, True)
 
 
 class DebugTrace(object):
