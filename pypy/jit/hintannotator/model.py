@@ -29,6 +29,8 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       ooisnull
                       ooupcast
                       oodowncast
+                      cast_to_object
+                      cast_from_object
                       oois
                       subclassof
                       instanceof
