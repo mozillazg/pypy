@@ -376,8 +376,7 @@ LL_OPERATIONS = {
     # __________ used by the JIT ________
 
     'call_boehm_gc_alloc':  LLOp(canraise=(MemoryError,)),
-    'can_enter_jit':        LLOp(),
-    'jit_merge_point':      LLOp(),
+    'jit_marker':           LLOp(),
 
     # __________ GC operations __________
 

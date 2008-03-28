@@ -1521,11 +1521,11 @@ class BytecodeWriter(object):
 
     def decode_hp_hint_args(self, op):
         # Returns (list-of-green-vars, list-of-red-vars) without Voids.
-        drivercls = op.args[0].value
+        drivercls = op.args[1].value
         numgreens = len(drivercls.greens)
         numreds = len(drivercls.reds)
-        greens_v = op.args[1:1+numgreens]
-        reds_v = op.args[1+numgreens:]
+        greens_v = op.args[2:2+numgreens]
+        reds_v = op.args[2+numgreens:]
         assert len(reds_v) == numreds
         return ([v for v in greens_v if v.concretetype is not lltype.Void],
                 [v for v in reds_v if v.concretetype is not lltype.Void])
@@ -1548,7 +1548,10 @@ class BytecodeWriter(object):
                     (v, self.varcolor(v), op.opname))
         return greens_v, reds_v
 
-    def serialize_op_jit_merge_point(self, op):
+    def serialize_op_jit_marker(self, op):
+        getattr(self, 'handle_%s_marker' % (op.args[0].value,))(op)
+
+    def handle_jit_merge_point_marker(self, op):
         # If jit_merge_point is the first operation of its block, and if
         # the block's input variables are in the right order, the graph
         # should have exactly the vars listed in the op as live vars.
@@ -1563,7 +1566,7 @@ class BytecodeWriter(object):
         self.emit('jit_merge_point')
         self.emit(self.keydesc_position(key))
 
-    def serialize_op_can_enter_jit(self, op):
+    def handle_can_enter_jit_marker(self, op):
         # no need to put anything in the bytecode here, except a marker
         # that is useful for the fallback interpreter
         self.check_hp_hint_args(op)
