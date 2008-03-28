@@ -235,11 +235,10 @@ def _generalcast(T, value):
         return lltype.cast_pointer(T, value)
     elif T == llmemory.Address:
         return llmemory.cast_ptr_to_adr(value)
-    elif isinstance(T, ootype.StaticMethod):
-        fn = value._obj
-        return ootype._static_meth(T, graph=fn.graph, _callable=fn._callable)
-    elif isinstance(T, ootype.Instance):
-        return ootype.ooupcast(T, value) # XXX: oodowncast?
+    elif T is ootype.Object:
+        return ootype.cast_to_object(value)
+    elif isinstance(T, ootype.OOType) and ootype.typeOf(value) is ootype.Object:
+        return ootype.cast_from_object(T, value)
     else:
         T1 = lltype.typeOf(value)
         if T1 is llmemory.Address:

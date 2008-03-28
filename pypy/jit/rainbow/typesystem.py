@@ -41,7 +41,7 @@ class LLTypeHelper(TypeSystemHelper):
 class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
-    ROOT_TYPE = ootype.ROOT
+    ROOT_TYPE = ootype.Object
 
     def get_typeptr(self, obj):
         return obj.meta

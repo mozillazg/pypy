@@ -43,7 +43,7 @@ class OOTypeMixin(object):
     _mixin_ = True
 
     def _revealconst(self, gv):
-        return gv.revealconst(ootype.ROOT) # ???
+        return gv.revealconst(ootype.Object)
 
 
 class RedBox(object):
@@ -110,10 +110,7 @@ def ll_redboxbuilder(TYPE):
         return redboxbuilder_ptr
     elif TYPE is lltype.Float:
         return redboxbuilder_dbl
-    elif (isinstance(TYPE, ootype.Instance) or
-          isinstance(TYPE, ootype.Record) or 
-          isinstance(TYPE, ootype.StaticMethod)):
-        # XXX: probably it won't translate, because we can't mix these types
+    elif isinstance(TYPE, ootype.OOType):
         return redboxbuilder_inst
     else:
         assert isinstance(TYPE, lltype.Primitive)
