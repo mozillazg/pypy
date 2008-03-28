@@ -130,9 +130,6 @@ class RI386GenOp(AbstractRGenOp):
         mc.PUSH(edi)
         mc.PUSH(ebp)
         mc.MOV(ebp, esp)
-        # XXX <I don't understand this>
-        write_stack_reserve(mc, 4)
-        # XXX <I don't understand this/>
         inputargs_gv = [TOKEN_TO_GENVAR[i]() for i in sigtoken[0]]
         ofs = WORD * PROLOGUE_FIXED_WORDS
         inputoperands = []
@@ -140,6 +137,9 @@ class RI386GenOp(AbstractRGenOp):
             input_gv = inputargs_gv[i]
             inputoperands.append(mem(ebp, ofs))
             ofs += input_gv.SIZE
+        # XXX <I don't understand this>
+        write_stack_reserve(mc, len(inputoperands) * WORD)
+        # XXX </I don't understand this>
         builder = Builder(self, inputoperands, inputargs_gv)
         mc.done()
         self.close_mc(mc)
