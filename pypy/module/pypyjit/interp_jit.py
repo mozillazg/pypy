@@ -111,21 +111,21 @@ class __extend__(Function):
 #
 # Public interface
 
-def ensure_sys_executable(space):
+def jit_startup(space, argv):
     # save the app-level sys.executable in JITInfo, where the machine
     # code backend can fish for it.  A bit hackish.
     from pypy.jit.codegen.hlinfo import highleveljitinfo
-    highleveljitinfo.sys_executable = space.str_w(
-        space.sys.get('executable'))
+    highleveljitinfo.sys_executable = argv[0]
 
-def startup(space):
-    # -- the next line would be nice, but the app-level sys.executable is not
-    # initialized yet :-(  What we need is a hook called by app_main.py
-    # after things have really been initialized...  For now we work around
-    # this problem by calling ensure_sys_executable() from pypyjit.enable().
-
-    #ensure_sys_executable(space)
-    pass
+    # recognize the option  --jit PARAM=VALUE,PARAM=VALUE...
+    # if it is at the beginning.  A bit ad-hoc.
+    if len(argv) > 2 and argv[1] == '--jit':
+        argv.pop(1)
+        try:
+            pypyjitdriver.set_user_param(argv.pop(1))
+        except ValueError:
+            from pypy.rlib.debug import debug_print
+            debug_print("WARNING: invalid --jit parameters string")
 
 
 def set_param(space, args):
