@@ -284,7 +284,7 @@ class LLBuilder(GenBuilder):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_ptr_eq: bad currently_writing")
         gv_PTRTYPE = gv_ptr1.getkind()
-        gv_ptr2 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v)        
+        gv_ptr2 = LLVar(llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v))
         return LLVar(llimpl.genop(self.b, 'ptr_eq', [gv_ptr1, gv_ptr2],
                                   gv_Bool.v))
 
@@ -292,7 +292,7 @@ class LLBuilder(GenBuilder):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_ptr_ne: bad currently_writing")
         gv_PTRTYPE = gv_ptr1.getkind()
-        gv_ptr2 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v)        
+        gv_ptr2 = LLVar(llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v))
         return LLVar(llimpl.genop(self.b, 'ptr_ne', [gv_ptr1, gv_ptr2],
                                   gv_Bool.v))
 
@@ -399,7 +399,8 @@ class LLBuilder(GenBuilder):
                      "alloc_frame_place: bad currently_writing")
         if gv_initial_value is None:
             gv_initial_value = self.rgenop.genzeroconst(gv_TYPE)
-        gv_initial_value = llimpl.cast(self.b, gv_TYPE.v, gv_initial_value.v)
+        gv_initial_value = LLVar(llimpl.cast(self.b, gv_TYPE.v,
+                                             gv_initial_value.v))
         v = LLVar(llimpl.genop(self.b, 'same_as', [gv_initial_value],
                                gv_TYPE.v))
         return LLPlace(v, llimpl.get_frame_info(self.b, [v]))
