@@ -370,7 +370,7 @@ def make_fact(rgenop):
 
     true_builder = builder.jump_if_true(gv_cond, [gv_x])
 
-    builder.enter_next_block([], [])
+    builder.enter_next_block([])
     builder.finish_and_return(sigtoken, rgenop.genconst(1))
 
     true_builder.start_writing()
@@ -691,8 +691,8 @@ def make_write_frame_place(rgenop, get_writer):
     place2 = builder.alloc_frame_place(signed_kind)
     gv_writer = rgenop.constPrebuiltGlobal(get_writer(place1, place2))
     builder.genop_call(writertoken, gv_writer, [gv_base, gv_x])
-    gv_y = builder.genop_absorb_place(signed_kind, place1)
-    gv_z = builder.genop_absorb_place(signed_kind, place2)
+    gv_y = builder.genop_absorb_place(place1)
+    gv_z = builder.genop_absorb_place(place2)
     gv_diff = builder.genop2("int_sub", gv_y, gv_z)
     builder.finish_and_return(sigtoken, gv_diff)
     builder.end()
@@ -743,7 +743,7 @@ def make_write_lots_of_frame_places(rgenop, get_writer):
     builder.genop_call(writertoken, gv_writer, [gv_base, gv_x])
     gv_sum = rgenop.genconst(0)
     for p in places:
-        gv_i = builder.genop_absorb_place(signed_kind, p)
+        gv_i = builder.genop_absorb_place(p)
         gv_sum = builder.genop2("int_add", gv_sum, gv_i)
     builder.finish_and_return(sigtoken, gv_sum)
     builder.end()
@@ -787,7 +787,7 @@ def make_read_frame_place(rgenop, get_reader):
     gv_base = builder.genop_get_frame_base()
     gv_reader = rgenop.constPrebuiltGlobal(get_reader(place))
     gv_z = builder.genop_call(readertoken, gv_reader, [gv_base])
-    builder.genop_absorb_place(signed_kind, place)   # mark end of use
+    builder.genop_absorb_place(place)   # mark end of use
     builder.finish_and_return(sigtoken, gv_z)
     builder.end()
 
@@ -1500,7 +1500,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         c_seven = rgenop.genconst(7)
         frameinfo = builder1.get_frame_info([v3, v4, c_seven, v5])
         # here would be a call
-        v8 = builder1.genop_absorb_place(signed_kind, place)
+        v8 = builder1.genop_absorb_place(place)
         args_gv = [v3, v4, v5, v8]
         label1 = builder1.enter_next_block(args_gv)
         [v9, v10, v11, v12] = args_gv
