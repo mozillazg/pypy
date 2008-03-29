@@ -135,8 +135,9 @@ def set_param(space, args):
     '''
     args_w, kwds_w = args.unpack()
     if len(args_w) > 1:
-        raise OperationError("set_param() takes at most 1 "
-                             "non-keyword argument, %d given" % len(args_w))
+        msg = ("set_param() takes at most 1 non-keyword argument, %d given"
+               % len(args_w))
+        raise OperationError(space.w_TypeError, space.wrap(msg))
     if len(args_w) == 1:
         text = space.str_w(args_w[0])
         try:
