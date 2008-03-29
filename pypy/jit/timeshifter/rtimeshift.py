@@ -1184,15 +1184,13 @@ class JITState(object):
                 content = virtualizable_box.content
                 assert isinstance(content, rcontainer.VirtualizableStruct)
                 content.check_forced_after_residual_call(self)
-            shape_kind = builder.rgenop.kindToken(lltype.Signed)
 
             for forced_box, forced_place in self.forced_boxes:
                 gv_forced = builder.genop_absorb_place(forced_place)
                 forced_box.setgenvar(gv_forced)
             self.forced_boxes = None
 
-            gv_shape = builder.genop_absorb_place(shape_kind,
-                                                  self.shape_place)
+            gv_shape = builder.genop_absorb_place(self.shape_place)
             self.shape_place = None
             
             return gv_shape
