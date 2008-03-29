@@ -57,10 +57,6 @@ class AbstractExceptionDesc:
         self.genop_set_exc_type (builder, gv_etype )
         self.genop_set_exc_value(builder, gv_evalue)
 
-    def gen_exc_occurred(self, builder):
-        gv_etype = self.genop_get_exc_type(builder)
-        return builder.genop_ptr_nonzero(self.exc_type_kind, gv_etype)
-
 
 class LLTypeExceptionDesc(AbstractExceptionDesc):
     
@@ -82,6 +78,10 @@ class LLTypeExceptionDesc(AbstractExceptionDesc):
     def genop_set_exc_value(self, builder, gv_value):
         builder.genop_setfield(self.exc_value_token, self.gv_excdata, gv_value)
 
+    def gen_exc_occurred(self, builder):
+        gv_etype = self.genop_get_exc_type(builder)
+        return builder.genop_ptr_nonzero(self.exc_type_kind, gv_etype)
+
 
 class OOTypeExceptionDesc(AbstractExceptionDesc):
     def _create_boxes(self, RGenOp):
@@ -102,3 +102,7 @@ class OOTypeExceptionDesc(AbstractExceptionDesc):
 
     def genop_set_exc_value(self, builder, gv_value):
         builder.genop_oosetfield(self.exc_value_token, self.gv_excdata, gv_value)
+
+    def gen_exc_occurred(self, builder):
+        gv_etype = self.genop_get_exc_type(builder)
+        return builder.genop_oononnull(self.exc_type_kind, gv_etype)

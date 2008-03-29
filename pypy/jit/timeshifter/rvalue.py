@@ -379,9 +379,8 @@ class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
 
 
 class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):
+    pass
 
-    def forcevar(self, jitstate, memo, forget_nonzeroness):
-        raise NotImplementedError
 
 # ____________________________________________________________
 
@@ -517,7 +516,7 @@ class FrozenInstanceConst(FrozenAbstractPtrConst, OOTypeMixin):
     PtrRedBox = InstanceRedBox
 
 
-class FrozenPtrVar(FrozenVar):
+class AbstractFrozenPtrVar(FrozenVar):
 
     def __init__(self, kind, known_nonzero):
         self.kind = kind
@@ -525,7 +524,7 @@ class FrozenPtrVar(FrozenVar):
 
     def exactmatch(self, box, outgoingvarboxes, memo):
         from pypy.jit.timeshifter.rcontainer import VirtualContainer
-        assert isinstance(box, PtrRedBox)
+        assert isinstance(box, AbstractPtrRedBox)
         memo.partialdatamatch[box] = None
         if not self.known_nonzero:
             memo.forget_nonzeroness[box] = None
@@ -540,12 +539,18 @@ class FrozenPtrVar(FrozenVar):
     def unfreeze(self, incomingvarboxes, memo):
         memo = memo.boxes
         if self not in memo:
-            newbox = PtrRedBox(self.kind, None, self.known_nonzero)
+            newbox = self.PtrRedBox(self.kind, None, self.known_nonzero)
             incomingvarboxes.append(newbox)
             memo[self] = newbox
             return newbox
         else:
             return memo[self]
+
+class FrozenPtrVar(AbstractFrozenPtrVar, LLTypeMixin):
+    PtrRedBox = PtrRedBox
+
+class FrozenInstanceVar(AbstractFrozenPtrVar, OOTypeMixin):
+    PtrRedBox = InstanceRedBox
 
 
 class FrozenPtrVarWithPartialData(FrozenPtrVar):
@@ -603,5 +608,5 @@ PtrRedBox.FrozenPtrVarWithPartialData = FrozenPtrVarWithPartialData
 
 InstanceRedBox.FrozenPtrVirtual = None
 InstanceRedBox.FrozenPtrConst = FrozenInstanceConst
-InstanceRedBox.FrozenPtrVar = None
+InstanceRedBox.FrozenPtrVar = FrozenInstanceVar
 InstanceRedBox.FrozenPtrVarWithPartialData = None
