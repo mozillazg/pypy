@@ -96,7 +96,7 @@ class ListTypeDesc(object):
 
     def factory(self, length, itembox):
         vlist = VirtualList(self, length, itembox)
-        box = rvalue.PtrRedBox(self.ptrkind, known_nonzero=True)
+        box = rvalue.PtrRedBox(known_nonzero=True)
         box.content = vlist
         vlist.ownbox = box
         return box
@@ -244,7 +244,7 @@ class VirtualList(VirtualContainer):
         builder = jitstate.curbuilder
         place = builder.alloc_frame_place(typedesc.ptrkind)
         vrti.forced_place = place
-        forced_box = rvalue.PtrRedBox(typedesc.ptrkind)
+        forced_box = rvalue.PtrRedBox()
         memo.forced_boxes.append((forced_box, place))
 
         vars_gv = memo.framevars_gv

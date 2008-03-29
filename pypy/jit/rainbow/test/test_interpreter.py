@@ -218,13 +218,12 @@ class InterpretationTest(object):
                 greenargs.append(rgenop.genconst(ll_val))
             else:
                 TYPE = lltype.typeOf(ll_val)
-                kind = rgenop.kindToken(TYPE)
                 boxcls = rvalue.ll_redboxcls(TYPE)
                 if i in opt_consts:
                     gv_arg = rgenop.genconst(ll_val)
                 else:
                     gv_arg = inputargs_gv[red_i]
-                redargs.append(boxcls(kind, gv_arg))
+                redargs.append(boxcls(gv_arg))
                 residualargs.append(ll_val)
                 red_i += 1
         jitstate = writer.interpreter.run(jitstate, jitcode, greenargs, redargs)
@@ -1808,7 +1807,7 @@ class SimpleTests(InterpretationTest):
                 builder = jitstate.curbuilder
                 gv_result = builder.genop2("int_sub", abox.getgenvar(jitstate),
                                            bbox.getgenvar(jitstate))
-                return IntRedBox(abox.kind, gv_result)
+                return IntRedBox(gv_result)
 
         def g(a, b):
             return a + b
@@ -1844,7 +1843,7 @@ class SimpleTests(InterpretationTest):
                 from pypy.jit.timeshifter.rvalue import IntRedBox
                 builder = jitstate.curbuilder
                 gv_result = builder.genop1("int_neg", mbox.getgenvar(jitstate))
-                return IntRedBox(mbox.kind, gv_result)
+                return IntRedBox(gv_result)
 
         class Fz(object):
             x = 10
@@ -1989,6 +1988,8 @@ class SimpleTests(InterpretationTest):
         res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
         assert res == 11
 
+class TestLLType(SimpleTests):
+    type_system = "lltype"
 
 class TestOOType(SimpleTests):
     type_system = "ootype"
@@ -2069,7 +2070,5 @@ class TestOOType(SimpleTests):
     test_void_args = _skip
 
 
-class TestLLType(SimpleTests):
-    type_system = "lltype"
 
 

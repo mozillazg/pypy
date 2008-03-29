@@ -236,13 +236,12 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
             self.interpreter.exceptiondesc.fetch_global_excdata(jitstate)
 
             RESTYPE = RESIDUAL_FUNCTYPE.RESULT
-            reskind = rgenop.kindToken(RESTYPE)
             boxbuilder = rvalue.ll_redboxbuilder(RESTYPE)
 
             if RESTYPE == lltype.Void:
                 retbox = None
             else:
-                retbox = boxbuilder(reskind, gv_res)
+                retbox = boxbuilder(gv_res)
             jitstate.returnbox = retbox
             assert jitstate.next is None
 
@@ -334,12 +333,11 @@ class RedJitEnterArgDesc:
         self.collect_residual_args = collect_residual_args
 
         TYPE = self.original_concretetype
-        kind = self.RGenOp.kindToken(TYPE)
         boxcls = rvalue.ll_redboxcls(TYPE)
         
         def make_arg_redbox(jitstate, inputargs_gv, i):
             gv_arg = inputargs_gv[i]
-            box = boxcls(kind, gv_arg)
+            box = boxcls(gv_arg)
             return box
         self.make_arg_redbox = make_arg_redbox
         make_arg_redbox.consumes = 1
@@ -369,7 +367,6 @@ class RedVirtualizableStructJitEnterArgDesc(RedJitEnterArgDesc):
         redirected_fielddescs = unrolling_iterable(
                                     typedesc.redirected_fielddescs)
         TYPE = self.original_concretetype
-        kind = self.RGenOp.kindToken(TYPE)
 
         def make_arg_redbox(jitstate, inputargs_gv, i):
             box = typedesc.factory()
@@ -382,8 +379,7 @@ class RedVirtualizableStructJitEnterArgDesc(RedJitEnterArgDesc):
             for fieldesc, j in redirected_fielddescs:
                 content_boxes[j] = fieldesc.makebox(None, inputargs_gv[i])
                 i += 1
-            content_boxes[-1] = rvalue.PtrRedBox(content_boxes[-1].kind,
-                                                 gv_outside,
+            content_boxes[-1] = rvalue.PtrRedBox(gv_outside,
                                                  known_nonzero = True)
             return box
         

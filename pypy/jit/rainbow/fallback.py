@@ -50,7 +50,7 @@ class FallbackInterpreter(object):
 
     def fetch_from_frame(self, box, gv):
         # fetch the value from the machine code stack
-        return self.rgenop.genconst_from_frame_var(box.kind, self.framebase,
+        return self.rgenop.genconst_from_frame_var(gv.getkind(), self.framebase,
                                                    self.frameinfo,
                                                    self.gv_to_index[gv])
 

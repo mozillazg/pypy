@@ -45,7 +45,7 @@ def make_dummy(rgenop):
     gv_z = builder.genop2("int_sub", gv_x, rgenop.genconst(1))
 
     args_gv = [gv_y, gv_z, gv_x]
-    builder.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_y2, gv_z2, gv_x2] = args_gv
 
     gv_s2 = builder.genop2("int_sub", gv_y2, gv_z2)
@@ -76,7 +76,6 @@ def largedummy_example():
 
 def make_largedummy(rgenop):
     # 'return v0-v1+v2-v3+v4-v5...+v98-v99'
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC100)
     builder, gv_largedummyfn, gvs = rgenop.newgraph(sigtoken, "largedummy")
     builder.start_writing()
@@ -84,7 +83,7 @@ def make_largedummy(rgenop):
     for i in range(0, 100, 2):
         gvs.append(builder.genop2("int_sub", gvs[i], gvs[i+1]))
 
-    builder.enter_next_block([signed_kind] * 150, gvs)
+    builder.enter_next_block(gvs)
     while len(gvs) > 101:
         gv_sum = builder.genop2("int_add", gvs.pop(), gvs.pop())
         gvs.append(gv_sum)
@@ -125,7 +124,6 @@ def get_largedummy_runner(RGenOp):
 def make_branching(rgenop):
     # 'if x > 5: return x-1
     #  else:     return y'
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC2)
     builder, gv_branchingfn, [gv_x, gv_y] = rgenop.newgraph(sigtoken,
                                                             "branching")
@@ -135,7 +133,7 @@ def make_branching(rgenop):
 
     # true path
     args_gv = [rgenop.genconst(1), gv_x, gv_y]
-    builder.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_one, gv_x2, gv_y2] = args_gv
 
     gv_s2 = builder.genop2("int_sub", gv_x2, gv_one)
@@ -160,10 +158,9 @@ def get_branching_runner(RGenOp):
     return branching_runner
 
 # loop start block
-def loop_start(rgenop, builder, signed_kind, gv_x, gv_y):
+def loop_start(rgenop, builder, gv_x, gv_y):
     args_gv = [gv_x, gv_y, rgenop.genconst(1)]
-    loopblock = builder.enter_next_block(
-        [signed_kind, signed_kind, signed_kind], args_gv)
+    loopblock = builder.enter_next_block(args_gv)
     [gv_x, gv_y, gv_z] = args_gv
 
     gv_cond = builder.genop2("int_gt", gv_x, rgenop.genconst(0))
@@ -171,16 +168,15 @@ def loop_start(rgenop, builder, signed_kind, gv_x, gv_y):
     return args_gv, loopblock, bodybuilder
 
 # loop exit
-def loop_exit(builder, sigtoken, signed_kind, gv_y, gv_z):
+def loop_exit(builder, sigtoken, gv_y, gv_z):
     args_gv = [gv_y, gv_z]
-    builder.enter_next_block(
-        [signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_y, gv_z] = args_gv
     gv_y3 = builder.genop2("int_add", gv_y, gv_z)
     builder.finish_and_return(sigtoken, gv_y3)
 
 # loop body
-def loop_body(rgenop, loopblock, bodybuilder, signed_kind, gv_x, gv_y, gv_z):
+def loop_body(rgenop, loopblock, bodybuilder, gv_x, gv_y, gv_z):
     bodybuilder.start_writing()
     gv_z2 = bodybuilder.genop2("int_mul", gv_x, gv_z)
     gv_y2 = bodybuilder.genop2("int_add", gv_x, gv_y)
@@ -195,17 +191,16 @@ def make_goto(rgenop):
     #     x = x - 1
     # y += z
     # return y
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC2)
     builder, gv_gotofn, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "goto")
     builder.start_writing()
 
     [gv_x, gv_y, gv_z],loopblock,bodybuilder = loop_start(
-        rgenop, builder, signed_kind, gv_x, gv_y)
+        rgenop, builder, gv_x, gv_y)
     loop_exit(
-        builder, sigtoken, signed_kind, gv_y, gv_z)
+        builder, sigtoken, gv_y, gv_z)
     loop_body(
-        rgenop, loopblock, bodybuilder, signed_kind, gv_x, gv_y, gv_z)
+        rgenop, loopblock, bodybuilder, gv_x, gv_y, gv_z)
 
     # done
     builder.end()
@@ -226,14 +221,13 @@ def make_if(rgenop):
     # if x > 5:
     #     x //= 2
     # return x + a
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC2)
     builder, gv_gotofn, [gv_x1, gv_unused] = rgenop.newgraph(sigtoken, "if")
     builder.start_writing()
 
     # check
     args_gv = [gv_x1, gv_unused]
-    builder.enter_next_block([signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_x1, gv_unused] = args_gv
 
     gv_cond = builder.genop2("int_gt", gv_x1, rgenop.genconst(5))
@@ -244,7 +238,7 @@ def make_if(rgenop):
 
     # end block
     args_gv = [gv_x2, gv_x1]
-    label = builder.enter_next_block([signed_kind, signed_kind], args_gv)
+    label = builder.enter_next_block(args_gv)
     [gv_x2, gv_a] = args_gv
     gv_res = builder.genop2("int_add", gv_x2, gv_a)
     builder.finish_and_return(sigtoken, gv_res)
@@ -277,7 +271,6 @@ def make_switch(rgenop):
         else:
             return v1
     """
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC2)
     builder, gv_switch, [gv0, gv1] = rgenop.newgraph(sigtoken, "switch")
     builder.start_writing()
@@ -326,7 +319,6 @@ def make_large_switch(rgenop):
         else:
             return v1
     """
-    signed_tok = rgenop.kindToken(lltype.Signed)
     f2_token = rgenop.sigToken(FUNC2)
     builder, gv_switch, (gv0, gv1) = rgenop.newgraph(f2_token, "large_switch")
     builder.start_writing()
@@ -370,7 +362,6 @@ def make_fact(rgenop):
     #         w = x*z
     #         return w
     #     return 1
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC)
     builder, gv_fact, [gv_x] = rgenop.newgraph(sigtoken, "fact")
     builder.start_writing()
@@ -407,7 +398,6 @@ def make_func_calling_pause(rgenop):
     #          return x
     #     else:
     #          return -x
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(FUNC)
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "abs")
     builder.start_writing()
@@ -451,7 +441,6 @@ def make_longwinded_and(rgenop):
     #     else:
     #        return 0
 
-    bool_kind = rgenop.kindToken(lltype.Bool)
     sigtoken = rgenop.sigToken(FUNC)
     builder, gv_f, [gv_y] = rgenop.newgraph(sigtoken, "abs")
     builder.start_writing()
@@ -463,7 +452,7 @@ def make_longwinded_and(rgenop):
     gv_x2 = builder.genop2("int_le", gv_y, rgenop.genconst(4))
 
     args_gv = [gv_x2]
-    label = builder.enter_next_block([bool_kind], args_gv)
+    label = builder.enter_next_block(args_gv)
     [gv_x2] = args_gv
 
     return_false_builder = builder.jump_if_false(gv_x2, [])
@@ -574,7 +563,7 @@ def make_something_a_bit_like_residual_red_call_with_exc(rgenop):
     gv_y2 = builder.genop_call(rgenop.sigToken(FUNC), gv_add1, [gv_y])
 
     args_gv = [gv_y2, gv_y]
-    label = builder.enter_next_block([signed_kind, signed_kind], args_gv)
+    label = builder.enter_next_block(args_gv)
     [gv_z, gv_w] = args_gv
 
     builder = builder.pause_writing(args_gv)
@@ -653,7 +642,7 @@ def make_read_frame_var(rgenop, get_reader):
     gv_z = builder.genop_call(readertoken, gv_reader, [gv_base])
 
     args_gv = [gv_y, gv_z]
-    builder.enter_next_block([signed_kind]*2, args_gv)
+    builder.enter_next_block(args_gv)
     [gv_y, gv_z] = args_gv
     builder.finish_and_return(sigtoken, gv_z)
     builder.end()
@@ -1136,7 +1125,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder.start_writing()
 
         args_gv = [gv_x, gv_y]
-        builder.enter_next_block([signed_kind, signed_kind], args_gv)
+        builder.enter_next_block(args_gv)
         [gv_x, gv_y] = args_gv
 
         gv_gt = builder.genop2("int_gt", gv_x, gv_y)
@@ -1236,13 +1225,12 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #    x = y
         # return x
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken,
                                                        "tightloop")
         builder.start_writing()
         args_gv = [gv_x]
-        loopstart = builder.enter_next_block([signed_kind], args_gv)
+        loopstart = builder.enter_next_block(args_gv)
         [gv_x] = args_gv
 
         gv_y = builder.genop2("int_sub", gv_x, rgenop.genconst(7))
@@ -1263,7 +1251,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_jump_to_block_with_many_vars(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_verysmall_callable, [gv_x] = rgenop.newgraph(sigtoken,
                                                                  "verysmall")
@@ -1280,7 +1267,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         builder2.start_writing()
         args_gv = [gv_x]
-        label = builder2.enter_next_block([signed_kind], args_gv)
+        label = builder2.enter_next_block(args_gv)
         [gv_x2] = args_gv
 
         gvs = []
@@ -1305,11 +1292,10 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_same_as(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "sameas")
         builder.start_writing()
-        gv_nineteen = builder.genop_same_as(signed_kind, rgenop.genconst(19))
+        gv_nineteen = builder.genop_same_as(rgenop.genconst(19))
         assert not gv_nineteen.is_const   # 'same_as' must return a variable
         builder.finish_and_return(sigtoken, gv_nineteen)
         builder.end()
@@ -1369,7 +1355,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_defaultonly_switch(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "defaultonly")
         builder.start_writing()
@@ -1384,8 +1369,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_bool_not_direct(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "bool_not")
         builder.start_writing()
@@ -1510,7 +1493,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1 = builder0.pause_writing([v1, v0, v2])
         builder1.start_writing()
         args_gv = [v1, v0, v2]
-        label0 = builder1.enter_next_block([signed_kind]*3, args_gv)
+        label0 = builder1.enter_next_block(args_gv)
         [v3, v4, v5] = args_gv
         place = builder1.alloc_frame_place(signed_kind, rgenop.genconst(0))
         v6 = builder1.genop_get_frame_base()
@@ -1519,7 +1502,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         # here would be a call
         v8 = builder1.genop_absorb_place(signed_kind, place)
         args_gv = [v3, v4, v5, v8]
-        label1 = builder1.enter_next_block([signed_kind]*4, args_gv)
+        label1 = builder1.enter_next_block(args_gv)
         [v9, v10, v11, v12] = args_gv
         # test duplicates in live vars while we're at it
         flexswitch0, builder2 = builder1.flexswitch(v12, [v9, v10, v12, v10])
@@ -1543,7 +1526,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         rgenop = self.RGenOp()
 
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(FUNC2)
         builder, gv_callable, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "f")
         builder.start_writing()
@@ -1552,7 +1534,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         false_builder = builder.jump_if_false(gv_cond, [])
 
         args_gv = [gv_y, gv_y]
-        label = builder.enter_next_block([signed_kind, signed_kind], args_gv)
+        label = builder.enter_next_block(args_gv)
         [gv_a, gv_b] = args_gv
 
         gv_result = builder.genop2("int_add", gv_a, gv_b)
@@ -1595,12 +1577,12 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         builder0.start_writing()
         args_gv = [v0, v1]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v3, v4] = args_gv
         v5 = builder0.genop1('int_is_true', v4)
         builder1 = builder0.jump_if_true(v5, [v3, v4])
         args_gv = [v3, v4, rgenop.genconst(True)]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, bool_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v6, v7, v8] = args_gv
         v9 = builder0.genop1('int_is_true', v7)
         builder2 = builder0.jump_if_true(v9, [v7, v8, v6])
@@ -1617,7 +1599,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         builder3.start_writing()
         args_gv = [v8, v7]
-        label2 = builder3.enter_next_block([bool_kind, signed_kind], args_gv)
+        label2 = builder3.enter_next_block(args_gv)
         [v14, v15] = args_gv
         v16 = builder3.genop2('int_mul', v15, rgenop.genconst(-468864544))
         v17 = builder3.genop1('cast_bool_to_int', v14)
@@ -1647,8 +1629,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #   return intmask(d)
 
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(rgenop.sigToken(FUNC3), 'compiled_dummyfn')
         builder0.start_writing()
@@ -1657,7 +1637,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1 = builder0.jump_if_true(v3, [v0, v1, v2])
 
         args_gv = [v0, v1, v2, rgenop.genconst(True)]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, bool_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v4, v5, v6, v7] = args_gv
 
         v8 = builder0.genop1('int_is_true', v4)
@@ -1665,7 +1645,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder3 = builder0.jump_if_false(v7, [v7, v6, v4])
 
         args_gv = [v6, v6, v7, v4]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, bool_kind, signed_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v9, v10, v11, v12] = args_gv
 
         v13 = builder0.genop2('int_sub', v12, rgenop.genconst(1))
@@ -1702,8 +1682,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #   return intmask(b+g+2*y)
 
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2, v3, v4] = rgenop.newgraph(rgenop.sigToken(FUNC5), 'compiled_dummyfn')
         builder0.start_writing()
@@ -1714,30 +1692,27 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1.start_writing()
 
         args_gv = [v0, v1, v2, v3]
-        label0 = builder1.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label0 = builder1.enter_next_block(args_gv)
         [v6, v7, v8, v9] = args_gv
 
         v10 = builder1.genop1('int_is_true', v8)
         builder2 = builder1.jump_if_false(v10, [v6, v7, v9, v8])
 
         args_gv = [v6, v7, v8, v9, rgenop.genconst(False)]
-        label1 = builder1.enter_next_block(
-            [signed_kind, signed_kind, signed_kind, signed_kind, bool_kind], args_gv)
+        label1 = builder1.enter_next_block(args_gv)
         [v11, v12, v13, v14, v15] = args_gv
 
         v16 = builder1.genop1('int_is_true', v14)
         builder3 = builder1.jump_if_true(v16, [v11, v13, v15, v14, v12])
 
         args_gv = [v11, v13, v14, v14, v15]
-        label2 = builder1.enter_next_block(
-            [signed_kind, signed_kind, signed_kind, signed_kind, bool_kind], args_gv)
+        label2 = builder1.enter_next_block(args_gv)
         [v17, v18, v19, v20, v21] = args_gv
 
         builder4 = builder1.jump_if_false(v21, [v17, v18, v19, v20, v21])
 
         args_gv = [v19, v18, v19, v20, v21, v17]
-        label3 = builder1.enter_next_block(
-            [signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind], args_gv)
+        label3 = builder1.enter_next_block(args_gv)
         [v22, v23, v24, v25, v26, v27] = args_gv
 
         v28 = builder1.genop2('int_sub', v27, rgenop.genconst(1))
@@ -1770,8 +1745,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_from_random_4_direct(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(
             rgenop.sigToken(FUNC3), 'compiled_dummyfn')
@@ -1779,7 +1752,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder0.start_writing()
 
         args_gv = [v0, v1, v2]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v3, v4, v5] = args_gv
 
         v6 = builder0.genop2('int_add', v5, v4)
@@ -1787,7 +1760,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1 = builder0.jump_if_false(v7, [v4, v5, v3, v6])
 
         args_gv = [v3, v4, v5]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v8, v9, v10] = args_gv
 
         v11 = builder0.genop1('int_is_true', v10)
@@ -1801,7 +1774,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder7 = builder1.jump_if_true(v25, [v24, v4, v5])
 
         args_gv = [v5, v6, v4]
-        label4 = builder1.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+        label4 = builder1.enter_next_block(args_gv)
         [v26, v27, v28] = args_gv
 
         builder1.finish_and_return(rgenop.sigToken(FUNC3), v27)
@@ -1851,40 +1824,38 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 ##          return intmask(a*-468864544+b*-340864157+c*-212863774+d*-84863387+e*43136996+f*171137383+g*299137766+h*427138153+i*555138536+j*683138923+k*811139306+l*939139693+m*1067140076+n*1195140463+o*1323140846+p*1451141233+q*1579141616+r*1707142003+s*1835142386+t*1963142773+u*2091143156+v*-2075823753+w*-1947823370+x*-1819822983+y*-1691822600+z*-1563822213)
 
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26] = rgenop.newgraph(rgenop.sigToken(FUNC27), 'compiled_dummyfn')
         builder0.start_writing()
         args_gv = [v0, v1, v2, v3, v6, v8, v9, v10, v11, v12, v13, v14, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49] = args_gv
         v50 = builder0.genop1('int_is_true', v29)
         builder1 = builder0.jump_if_true(v50, [v48, v38, v27, v30, v32, v34, v47, v40, v28, v41, v43, v45, v37, v46, v31, v33, v35, v39, v36, v42, v49, v44, v29])
         args_gv = [v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63, v64, v65, v66, v67, v68, v69, v70, v71, v72, v73] = args_gv
         v74 = builder0.genop1('int_is_true', v64)
         builder2 = builder0.jump_if_true(v74, [v54, v52, v65, v58, v60, v62, v64, v68, v56, v69, v71, v51, v73, v53, v67, v57, v55, v59, v61, v63, v66, v70, v72])
         args_gv = [v51, v52, v53, v54, v55, v64, v56, v57, v58, v59, v60, v61, v62, v63, v64, v65, v66, v67, v68, v69, v70, v71, v72, v73]
-        label2 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label2 = builder0.enter_next_block(args_gv)
         [v75, v76, v77, v78, v79, v80, v81, v82, v83, v84, v85, v86, v87, v88, v89, v90, v91, v92, v93, v94, v95, v96, v97, v98] = args_gv
         v99 = builder0.genop2('int_sub', v91, v97)
         v100 = builder0.genop2('int_ne', v97, v79)
         v101 = builder0.genop1('int_is_true', v78)
         builder3 = builder0.jump_if_true(v101, [v85, v93, v94, v87, v91, v97, v89, v98, v80, v82, v78, v86, v84, v99, v88, v100, v90, v92, v96, v75, v95, v76, v77, v79, v81])
         args_gv = [v75, v76, v77, v78, v99, v100, v79, v80, v81, v82, v83, v84, v85, v86, v87, v88, v89, v90, v91, v92, v93, v94, v95, v96, v97, v98]
-        label3 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label3 = builder0.enter_next_block(args_gv)
         [v102, v103, v104, v105, v106, v107, v108, v109, v110, v111, v112, v113, v114, v115, v116, v117, v118, v119, v120, v121, v122, v123, v124, v125, v126, v127] = args_gv
         v128 = builder0.genop1('int_is_true', v106)
         builder4 = builder0.jump_if_false(v128, [v114, v111, v116, v113, v118, v122, v110, v124, v103, v125, v105, v127, v107, v112, v121, v109, v115, v117, v119, v123, v102, v120, v104, v126, v106, v108])
         args_gv = [v102, v103, v104, v105, v106, v107, v108, v109, v110, v111, v112, v113, v114, v115, v116, v106, v117, v118, v119, v120, v122, v123, v124, v125, v126, v127]
-        label4 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label4 = builder0.enter_next_block(args_gv)
         [v129, v130, v131, v132, v133, v134, v135, v136, v137, v138, v139, v140, v141, v142, v143, v144, v145, v146, v147, v148, v149, v150, v151, v152, v153, v154] = args_gv
         v155 = builder0.genop2('int_gt', v141, v144)
         builder5 = builder0.jump_if_false(v134, [v149, v148, v141, v143, v145, v147, v151, v139, v152, v132, v154, v134, v136, v130, v140, v138, v142, v155, v144, v146, v150, v129, v137, v131, v153, v133, v135])
         args_gv = [v130, v131, v132, v133, v134, v135, v136, v137, v138, v139, v140, v141, v142, v143, v144, v145, v146, v147, v148, v155, v149, v150, v151, v152, v153, v154, v129]
-        label5 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label5 = builder0.enter_next_block(args_gv)
         [v156, v157, v158, v159, v160, v161, v162, v163, v164, v165, v166, v167, v168, v169, v170, v171, v172, v173, v174, v175, v176, v177, v178, v179, v180, v181, v182] = args_gv
         v183 = builder0.genop2('int_sub', v182, rgenop.genconst(1))
         v184 = builder0.genop1('int_is_true', v183)
@@ -2130,14 +2101,14 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder3 = builder1.pause_writing([v7])
         builder3.start_writing()
         args_gv = [v7]
-        label0 = builder3.enter_next_block([signed_kind], args_gv)
+        label0 = builder3.enter_next_block(args_gv)
         [v8] = args_gv
         builder4 = builder3.pause_writing([v8])
         builder2.start_writing()
         builder2.finish_and_goto([rgenop.genconst(-1)], label0)
         builder4.start_writing()
         args_gv = [v8]
-        label1 = builder4.enter_next_block([signed_kind], args_gv)
+        label1 = builder4.enter_next_block(args_gv)
         [v9] = args_gv
         builder4.finish_and_return(rgenop.sigToken(FUNC3), v9)
         builder0.end()
@@ -2225,9 +2196,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
             py.test.skip("requires RGenOpPacked")
 
         def fallback_loop(args_gv, expected_case):
-            L0 = builder.enter_next_block([signed_kind] * (len(args_gv) - 1)
-                                          + [bool_kind],
-                                          args_gv)
+            L0 = builder.enter_next_block(args_gv)
             gv_switchvar = args_gv[-1]
             flexswitch, default_builder = builder.flexswitch(gv_switchvar,
                                                              args_gv)
@@ -2239,8 +2208,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
                                        [gv_fbp, gv_switchvar, gv_framebase])
             gv_exc_type = default_builder.genop_getfield(exc_type_token,
                                                          gv_exc_data)
-            gv_noexc = default_builder.genop_ptr_iszero(exc_type_kind,
-                                                        gv_exc_type)
+            gv_noexc = default_builder.genop_ptr_iszero(gv_exc_type)
             excpath_builder = default_builder.jump_if_false(gv_noexc, [])
             default_builder.finish_and_goto(args_gv, L0)
 
@@ -2271,8 +2239,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         gv_x = rgenop.genconst(1234)
 
         args_gv = [gv_i, gv_j, gv_x]
-        L1 = builder.enter_next_block([signed_kind, signed_kind, signed_kind],
-                                      args_gv)
+        L1 = builder.enter_next_block(args_gv)
         [gv_i, gv_j, gv_x] = args_gv
 
         gv_cond = builder.genop2("int_le", gv_j, gv_i)

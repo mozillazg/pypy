@@ -83,7 +83,7 @@ class TestVirtualStruct:
         forcedbox = constbox23.forcevar(jitstate, replace_memo, False)
         assert not forcedbox.is_constant()
         assert jitstate.curbuilder.ops == [
-            ('same_as', (signed_kind, constbox23.genvar), forcedbox.genvar)]
+            ('same_as', (constbox23.genvar, ), forcedbox.genvar)]
         assert replace_memo.boxes == {constbox23: forcedbox}
 
         # change constbox to forcedbox inside newbox
@@ -101,7 +101,7 @@ class TestVirtualStruct:
     def test_merge_with_ptrvar(self):
         DontMerge = rvalue.DontMerge
         V0 = FakeGenVar()
-        ptrbox = rvalue.PtrRedBox("dummy pointer", V0)
+        ptrbox = rvalue.PtrRedBox(V0)
         S = self.STRUCT
         constbox20 = makebox(20)
         oldbox = vmalloc(S, constbox20)

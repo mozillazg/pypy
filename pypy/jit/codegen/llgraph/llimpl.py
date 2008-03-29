@@ -669,6 +669,10 @@ def show_incremental_progress(gv_func):
         eliminate_empty_blocks(graph)
         graph.show()
 
+
+def getkind(gv):
+    return constTYPE(_from_opaque(gv).concretetype)
+
 # ____________________________________________________________
 
 CONSTORVAR = lltype.Ptr(lltype.OpaqueType("ConstOrVar"))
@@ -777,6 +781,7 @@ setannotation(constTYPE,      s_ConstOrVar, specialize_as_constant=True)
 #setannotation(placeholder,    s_ConstOrVar, specialize_as_constant=True)
 
 setannotation(show_incremental_progress, None)
+setannotation(getkind, s_ConstOrVar)
 
 # read frame var support
 
