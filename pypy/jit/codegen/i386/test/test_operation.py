@@ -70,10 +70,10 @@ class TestOperation(I386TestMixin, OperationTests):
         builder1 = builder0.pause_writing([v2])
         builder1.start_writing()
         args_gv = [v2]
-        label0 = builder1.enter_next_block([signed_kind], args_gv)
+        label0 = builder1.enter_next_block(args_gv)
         [v3] = args_gv
         args_gv = [v3]
-        label1 = builder1.enter_next_block([signed_kind], args_gv)
+        label1 = builder1.enter_next_block(args_gv)
         [v4] = args_gv
         builder1.finish_and_return(rgenop.sigToken(FUNC0), v4)
         builder0.end()
