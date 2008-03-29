@@ -2051,7 +2051,6 @@ class TestOOType(SimpleTests):
     test_normalize_indirect_call_more = _skip
     test_green_char_at_merge = _skip
     test_self_referential_structures = _skip
-    test_known_nonzero = _skip
     test_debug_assert_ptr_nonzero = _skip
     test_indirect_red_call = _skip
     test_indirect_red_call_with_exc = _skip

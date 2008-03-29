@@ -792,14 +792,15 @@ class PromotionDesc:
                 if not we_are_translated():
                     import sys, pdb
                     print >> sys.stderr, "\n*** Error in ll_continue_compilation ***"
+                    print >> sys.stderr, e
                     pdb.post_mortem(sys.exc_info()[2])
                 lloperation.llop.debug_fatalerror(
                     lltype.Void, "compilation-time error %s" % e)
         self.ll_continue_compilation = ll_continue_compilation
         ll_continue_compilation._debugexc = True
 
-        FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED], lltype.Void)
-        FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
+        ts = interpreter.ts
+        FUNCTYPE, FUNCPTRTYPE = ts.get_FuncType([base_ptr_lltype(), ERASED], lltype.Void)
         self.FUNCPTRTYPE = FUNCPTRTYPE
         self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
 
