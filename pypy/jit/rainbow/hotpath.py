@@ -9,6 +9,7 @@ from pypy.rpython.llinterp import LLInterpreter
 from pypy.rlib.objectmodel import we_are_translated, UnboxedValue
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.jit import PARAMETERS
 from pypy.jit.codegen.i386.rgenop import cast_whatever_to_int
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
@@ -20,7 +21,7 @@ from pypy.jit.rainbow.portal import getjitenterargdesc
 class HotRunnerDesc:
 
     def __init__(self, hintannotator, rtyper, entryjitcode, RGenOp,
-                 codewriter, jitdrivercls, translate_support_code = True,
+                 codewriter, jitdriver, translate_support_code = True,
                  verbose_level=3):
         self.hintannotator = hintannotator
         self.entryjitcode = entryjitcode
@@ -30,7 +31,7 @@ class HotRunnerDesc:
         self.interpreter = codewriter.interpreter
         self.ts = self.interpreter.ts
         self.codewriter = codewriter
-        self.jitdrivercls = jitdrivercls
+        self.jitdriver = jitdriver
         self.translate_support_code = translate_support_code
         self.verbose_level = verbose_level
 
@@ -57,7 +58,7 @@ class HotRunnerDesc:
         self.red_args_spec = []
         self.green_args_spec = []
         args = newportalgraph.getargs()
-        if hasattr(self.jitdrivercls, 'on_enter_jit'):
+        if hasattr(self.jitdriver, 'on_enter_jit'):
             args = args[:-1]  # ignore the final 'invariants' argument
         for v in args:
             TYPE = v.concretetype
@@ -310,7 +311,7 @@ class HotRunnerDesc:
                 args_s = [annmodel.SomeInteger()]
                 s_result = annmodel.s_None
                 setter_fnptr = self.annhelper.delayedfunction(
-                    setter, args_s, s_result)
+                    ll_setter, args_s, s_result)
             self._set_param_fn_cache[param_name] = setter_fnptr
 
         vlist = [Constant(setter_fnptr, lltype.Ptr(SETTERFUNC)),
@@ -335,16 +336,14 @@ def make_state_class(hotrunnerdesc):
     green_args_range = unrolling_iterable(
         range(len(hotrunnerdesc.green_args_spec)))
     if hotrunnerdesc.green_args_spec:
-        INITIAL_HASH_TABLE_BITS = 14
         MAX_HASH_TABLE_BITS = 28
     else:
-        INITIAL_HASH_TABLE_BITS = 0
         MAX_HASH_TABLE_BITS = 0
 
     # ---------- hacks for the 'invariants' argument ----------
-    drivercls = hotrunnerdesc.jitdrivercls
-    if hasattr(drivercls, 'on_enter_jit'):
-        wrapper = drivercls._get_compute_invariants_wrapper()
+    jitdriver = hotrunnerdesc.jitdriver
+    if hasattr(jitdriver, 'on_enter_jit'):
+        wrapper = jitdriver._compute_invariants_wrapper
         bk = hotrunnerdesc.rtyper.annotator.bookkeeper
         s_func = bk.immutablevalue(wrapper)
         r_func = hotrunnerdesc.rtyper.getrepr(s_func)
@@ -381,9 +380,11 @@ def make_state_class(hotrunnerdesc):
         NULL_MC = lltype.nullptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
 
         def __init__(self):
-            self.set_param_threshold(40)
-            self.set_param_trace_eagerness(10)
-            self.set_param_hash_bits(INITIAL_HASH_TABLE_BITS)
+            # initialize the state with the default values of the
+            # parameters specified in rlib/jit.py
+            for name, default_value in PARAMETERS.items():
+                meth = getattr(self, 'set_param_' + name)
+                meth(default_value)
 
         def set_param_threshold(self, threshold):
             if threshold > THRESHOLD_MAX:

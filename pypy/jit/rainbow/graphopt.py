@@ -51,8 +51,9 @@ class VirtualizableAccessTracker(object):
                 for op in block.operations:
                     if op.opname == 'malloc':
                         self.add_safe_variable(graph, op.result)
-                    elif op.opname == 'jit_merge_point':
-                        for v in op.args[1:]:
+                    elif (op.opname == 'jit_marker' and
+                          op.args[0].value == 'jit_merge_point'):
+                        for v in op.args[2:]:
                             self.add_safe_variable(graph, v)
 
     def add_safe_variable(self, graph, v):

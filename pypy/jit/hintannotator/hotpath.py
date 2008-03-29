@@ -14,7 +14,7 @@ from pypy.rlib.jit import JitHintError
 class HotPathHintAnnotator(HintAnnotator):
 
     def build_hotpath_types(self):
-        self.jitdriverclasses = {}
+        self.jitdrivers = {}
         self.prepare_portal_graphs()
         graph = self.portalgraph_with_on_enter_jit
         input_args_hs = [SomeLLAbstractConstant(v.concretetype,
@@ -33,8 +33,8 @@ class HotPathHintAnnotator(HintAnnotator):
             raise JitHintError("found %d graphs with a jit_merge_point(),"
                                " expected 1 (for now)" % len(found_at))
         origportalgraph, _, origportalop = found_at[0]
-        drivercls = origportalop.args[1].value
-        self.jitdriverclasses[drivercls] = True
+        jitdriver = origportalop.args[1].value
+        self.jitdrivers[jitdriver] = True
         #
         # We make a copy of origportalgraph and mutate it to make it
         # the portal.  The portal really starts at the jit_merge_point()
@@ -58,12 +58,12 @@ class HotPathHintAnnotator(HintAnnotator):
         # and turned into rainbow bytecode.  On the other hand, the
         # 'self.portalgraph' is the copy that will run directly, in
         # non-JITting mode, so it should not contain the on_enter_jit() call.
-        if hasattr(drivercls, 'on_enter_jit'):
+        if hasattr(jitdriver, 'on_enter_jit'):
             anothercopy = copygraph(portalgraph)
             anothercopy.tag = 'portal'
             insert_on_enter_jit_handling(self.base_translator.rtyper,
                                          anothercopy,
-                                         drivercls)
+                                         jitdriver)
             self.portalgraph_with_on_enter_jit = anothercopy
         else:
             self.portalgraph_with_on_enter_jit = portalgraph  # same is ok
@@ -113,14 +113,14 @@ def split_before_jit_merge_point(hannotator, graph):
     else:
         return None
 
-def insert_on_enter_jit_handling(rtyper, graph, drivercls):
+def insert_on_enter_jit_handling(rtyper, graph, jitdriver):
     vars = [varoftype(v.concretetype, name=v) for v in graph.getargs()]
     newblock = Block(vars)
 
     op = graph.startblock.operations[0]
     assert op.opname == 'jit_marker'
     assert op.args[0].value == 'jit_merge_point'
-    assert op.args[1].value is drivercls
+    assert op.args[1].value is jitdriver
     allvars = []
     i = 0
     for v in op.args[2:]:
@@ -131,7 +131,8 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
             i += 1
     assert i == len(vars)
 
-    compute_invariants_func = drivercls.compute_invariants.im_func
+    # six lines just to get at the INVARIANTS type...
+    compute_invariants_func = jitdriver.compute_invariants.im_func
     bk = rtyper.annotator.bookkeeper
     s_func = bk.immutablevalue(compute_invariants_func)
     r_func = rtyper.getrepr(s_func)
@@ -139,33 +140,37 @@ def insert_on_enter_jit_handling(rtyper, graph, drivercls):
     INVARIANTS = c_func.concretetype.TO.RESULT
 
     llops = LowLevelOpList(rtyper)
-    # generate ops to make an instance of DriverCls
-    classdef = rtyper.annotator.bookkeeper.getuniqueclassdef(drivercls)
+    # generate ops to make an instance of RedVarsHolder
+    RedVarsHolder = jitdriver._RedVarsHolder
+    classdef = rtyper.annotator.bookkeeper.getuniqueclassdef(RedVarsHolder)
     s_instance = annmodel.SomeInstance(classdef)
     r_instance = rtyper.getrepr(s_instance)
-    v_self = r_instance.new_instance(llops)
-    # generate ops to store the 'greens' and 'reds' variables on 'self'
-    num_greens = len(drivercls.greens)
-    num_reds = len(drivercls.reds)
+    v_reds = r_instance.new_instance(llops)
+    # generate ops to store the 'reds' variables on the RedVarsHolder
+    num_greens = len(jitdriver.greens)
+    num_reds = len(jitdriver.reds)
     assert len(allvars) == num_greens + num_reds
-    for name, v_value in zip(drivercls.reds, allvars[num_greens:]):
-        r_instance.setfield(v_self, name, v_value, llops)
-    # generate a call to on_enter_jit(self, invariants, *greens)
-    on_enter_jit_func = drivercls.on_enter_jit.im_func
+    for name, v_value in zip(jitdriver.reds, allvars[num_greens:]):
+        r_instance.setfield(v_reds, name, v_value, llops)
+    # generate a call to on_enter_jit(self, reds, invariants, *greens)
+    on_enter_jit_func = jitdriver.on_enter_jit.im_func
     s_func = rtyper.annotator.bookkeeper.immutablevalue(on_enter_jit_func)
     r_func = rtyper.getrepr(s_func)
     c_func = r_func.get_unique_llfn()
+    ON_ENTER_JIT = c_func.concretetype.TO
+    assert ON_ENTER_JIT.ARGS[0] is lltype.Void
+    assert ON_ENTER_JIT.ARGS[1] == INVARIANTS
+    assert ON_ENTER_JIT.ARGS[2] == r_instance.lowleveltype
+    c_self = inputconst(lltype.Void, jitdriver)
     v_invariants = varoftype(INVARIANTS, 'invariants')
     c_hint = inputconst(lltype.Void, {'concrete': True})
     llops.genop('hint', [v_invariants, c_hint], resulttype=INVARIANTS)
     vlist = allvars[:num_greens]
-    llops.genop('direct_call', [c_func, v_self, v_invariants] + vlist)
-    # generate ops to reload the 'reds' variables from 'self'
-    # XXX Warning!  the 'greens' variables are not reloaded.  This is
-    # a bit of a mess color-wise, and probably not useful.
+    llops.genop('direct_call', [c_func, c_self, v_invariants, v_reds] + vlist)
+    # generate ops to reload the 'reds' variables from the RedVarsHolder
     newvars = allvars[:num_greens]
-    for name, v_value in zip(drivercls.reds, allvars[num_greens:]):
-        v_value = r_instance.getfield(v_self, name, llops)
+    for name, v_value in zip(jitdriver.reds, allvars[num_greens:]):
+        v_value = r_instance.getfield(v_reds, name, llops)
         newvars.append(v_value)
     newvars = [v for v in newvars if v.concretetype is not lltype.Void]
     # done, fill the block and link it to make it the startblock

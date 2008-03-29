@@ -17,22 +17,20 @@ class TestHotPath(AbstractAnnotatorTest):
                                         backendoptimize=backendoptimize)
 
     def test_simple_loop(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n1', 'total']
+        myjitdriver = JitDriver([], ['n1', 'total'])
 
         def ll_function(n):
             n1 = n * 2
             total = 0
             while True:
-                MyJitDriver.jit_merge_point(n1=n1, total=total)
+                myjitdriver.jit_merge_point(n1=n1, total=total)
                 if n1 <= 0:
                     break
                 if we_are_jitted():
                     total += 1000
                 total += n1
                 n1 -= 1
-                MyJitDriver.can_enter_jit(n1=n1, total=total)
+                myjitdriver.can_enter_jit(n1=n1, total=total)
             return total
 
         def main(n, m):
@@ -45,13 +43,11 @@ class TestHotPath(AbstractAnnotatorTest):
         assert 'int_mul' not in summary(graphs[0])
 
     def test_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['count', 'x', 'y']
+        myjitdriver = JitDriver([], ['count', 'x', 'y'])
 
         def add(count, x, y):
             result = x + y
-            MyJitDriver.can_enter_jit(count=count, x=x, y=y)
+            myjitdriver.can_enter_jit(count=count, x=x, y=y)
             return result
         add._dont_inline_ = True
         def sub(x, y):
@@ -59,7 +55,7 @@ class TestHotPath(AbstractAnnotatorTest):
         sub._dont_inline_ = True
         def main(count, x, y):
             while True:
-                MyJitDriver.jit_merge_point(count=count, x=x, y=y)
+                myjitdriver.jit_merge_point(count=count, x=x, y=y)
                 count -= 1
                 if not count:
                     break

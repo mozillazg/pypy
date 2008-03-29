@@ -53,26 +53,28 @@ class TLRJitDriver(JitDriver):
     greens = ['bytecode', 'pc']
     reds   = ['a', 'regs']
 
-    def compute_invariants(self, bytecode, pc):
-        return len(self.regs)
+    def compute_invariants(self, reds, bytecode, pc):
+        return len(reds.regs)
 
-    def on_enter_jit(self, invariant, bytecode, pc):
+    def on_enter_jit(self, invariant, reds, bytecode, pc):
         # make a copy of the 'regs' list to make it a VirtualList for the JIT
         length = invariant
         newregs = [0] * length
         i = 0
         while i < length:
             i = hint(i, concrete=True)
-            newregs[i] = self.regs[i]
+            newregs[i] = reds.regs[i]
             i += 1
-        self.regs = newregs
+        reds.regs = newregs
+
+tlrjitdriver = TLRJitDriver()
 
 def hp_interpret(bytecode, a):
     """A copy of interpret() with the hints required by the hotpath policy."""
     regs = []
     pc = 0
     while True:
-        TLRJitDriver.jit_merge_point(bytecode=bytecode, pc=pc, a=a, regs=regs)
+        tlrjitdriver.jit_merge_point(bytecode=bytecode, pc=pc, a=a, regs=regs)
         opcode = hint(ord(bytecode[pc]), concrete=True)
         pc += 1
         if opcode == MOV_A_R:
@@ -88,7 +90,7 @@ def hp_interpret(bytecode, a):
             pc += 1
             if a:
                 if target < pc:
-                    TLRJitDriver.can_enter_jit(bytecode=bytecode, pc=target,
+                    tlrjitdriver.can_enter_jit(bytecode=bytecode, pc=target,
                                                a=a, regs=regs)
                 pc = target
         elif opcode == SET_A:

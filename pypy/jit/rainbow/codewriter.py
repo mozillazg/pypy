@@ -1524,9 +1524,9 @@ class BytecodeWriter(object):
 
     def decode_hp_hint_args(self, op):
         # Returns (list-of-green-vars, list-of-red-vars) without Voids.
-        drivercls = op.args[1].value
-        numgreens = len(drivercls.greens)
-        numreds = len(drivercls.reds)
+        jitdriver = op.args[1].value
+        numgreens = len(jitdriver.greens)
+        numreds = len(jitdriver.reds)
         greens_v = op.args[2:2+numgreens]
         reds_v = op.args[2+numgreens:]
         assert len(reds_v) == numreds

@@ -103,23 +103,23 @@ class TinyJitDriver(JitDriver):
     reds = ['args', 'loops', 'stack']
     greens = ['bytecode', 'pos']
 
-    def compute_invariants(self, bytecode, pos):
+    def compute_invariants(self, reds, bytecode, pos):
         # Some of the information that we maintain only really depends on
         # bytecode and pos: the whole 'loops' list has this property.
         # By being a bit careful we could also put len(args) in the
         # invariants, but although it doesn't make much sense it is a
         # priori possible for the same bytecode to be run with
         # different len(args).
-        return self.loops
+        return reds.loops
 
-    def on_enter_jit(self, invariants, bytecode, pos):
+    def on_enter_jit(self, invariants, reds, bytecode, pos):
         # Now some strange code that makes a copy of the 'args' list in
         # a complicated way...  this is a workaround forcing the whole 'args'
         # list to be virtual.  It is a way to tell the JIT compiler that it
         # doesn't have to worry about the 'args' list being unpredictably
         # modified.
         oldloops = invariants
-        oldargs = self.args
+        oldargs = reds.args
         argcount = hint(len(oldargs), promote=True)
         args = []
         n = 0
@@ -127,7 +127,7 @@ class TinyJitDriver(JitDriver):
             hint(n, concrete=True)
             args.append(oldargs[n])
             n += 1
-        self.args = args
+        reds.args = args
         # turn the green 'loops' from 'invariants' into a virtual list
         oldloops = hint(oldloops, deepfreeze=True)
         argcount = len(oldloops)
@@ -137,7 +137,9 @@ class TinyJitDriver(JitDriver):
             hint(n, concrete=True)
             loops.append(oldloops[n])
             n += 1
-        self.loops = loops
+        reds.loops = loops
+
+tinyjitdriver = TinyJitDriver()
 
 def interpret(bytecode, args):
     """The interpreter's entry point and portal function.
@@ -146,7 +148,7 @@ def interpret(bytecode, args):
     stack = empty_stack()
     pos = 0
     while True:
-        TinyJitDriver.jit_merge_point(args=args, loops=loops, stack=stack,
+        tinyjitdriver.jit_merge_point(args=args, loops=loops, stack=stack,
                                       bytecode=bytecode, pos=pos)
         bytecode = hint(bytecode, deepfreeze=True)
         if pos >= len(bytecode):
@@ -188,7 +190,7 @@ def interpret(bytecode, args):
                 # case above into 'loops', which is a virtual list, so the
                 # promotion below is just a way to make the colors match.
                 pos = hint(pos, promote=True)
-                TinyJitDriver.can_enter_jit(args=args, loops=loops, stack=stack,
+                tinyjitdriver.can_enter_jit(args=args, loops=loops, stack=stack,
                                             bytecode=bytecode, pos=pos)
         else:
             stack = Stack(StrBox(opcode), stack)

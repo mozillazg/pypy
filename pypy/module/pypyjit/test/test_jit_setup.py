@@ -9,19 +9,8 @@ class AppTestPyPyJIT:
         # this just checks that the module is setting up things correctly, and
         # the resulting code makes sense on top of CPython.
         import pypyjit
-        #assert pypyjit.isenabled() -- should we start disabled or enabled?
-        pypyjit.disable()
-        assert not pypyjit.isenabled()
-        pypyjit.setthreshold(41)
-        assert not pypyjit.isenabled()
-        assert pypyjit.getthreshold() == 41
-        pypyjit.enable()
-        assert pypyjit.getthreshold() == 41
-        assert pypyjit.isenabled()
-        assert pypyjit.getthreshold() == 41
-        pypyjit.setthreshold(43)
-        assert pypyjit.isenabled()
-        assert pypyjit.getthreshold() == 43
+        pypyjit.set_param(threshold=5, hash_bits=9)
+        pypyjit.set_param("trace_eagerness=3,hash_bits=7")
 
         def f(x, y):
             return x*y+1
