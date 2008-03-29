@@ -551,8 +551,8 @@ class TestHotPath(HotPathTest):
             return repr(stack)
 
         POLICY = MyHintAnnotatorPolicy()
-        #res = self.run(main, [1, 11], threshold=2, policy=POLICY)
-        #assert ''.join(res.chars) == "The factorial of 11 is 39916800"
+        res = self.run(main, [1, 11], threshold=2, policy=POLICY)
+        assert ''.join(res.chars) == "The factorial of 11 is 39916800"
         # nothing is forced
         self.check_insns_in_loops(malloc=0)
 
