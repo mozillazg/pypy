@@ -1323,6 +1323,16 @@ class BaseTestRlist(BaseRtypingTest):
         res = self.interpret(f, [])
         assert res == 42
 
+    def test_catch_other_exc(self):
+        def f(x):
+            l1 = [x]
+            try:
+                return l1.pop(0)
+            except ValueError:
+                return 42
+        res = self.interpret(f, [5])
+        assert res == 5
+
 
 class TestLLtype(BaseTestRlist, LLRtypeMixin):
     rlist = ll_rlist
