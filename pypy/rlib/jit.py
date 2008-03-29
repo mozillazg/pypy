@@ -111,9 +111,18 @@ class Entry(ExtRegistryEntry):
     _type_ = _JitBoundClassMethod
 
     def compute_result_annotation(self, **kwds_s):
-        from pypy.annotation import model as annmodel
         drivercls = self.instance.drivercls
         drivercls._check_class()
+        meth = getattr(self, 'annotate_%s' % self.instance.name)
+        return meth(drivercls, **kwds_s)
+
+    def specialize_call(self, hop, **kwds_i):
+        drivercls = self.instance.drivercls
+        meth = getattr(self, 'specialize_%s' % self.instance.name)
+        return meth(drivercls, hop, **kwds_i)
+
+    def annotate_jit_merge_point(self, drivercls, **kwds_s):
+        from pypy.annotation import model as annmodel
         keys = kwds_s.keys()
         keys.sort()
         expected = ['s_' + name for name in drivercls.greens + drivercls.reds]
@@ -125,14 +134,15 @@ class Entry(ExtRegistryEntry):
         drivercls._emulate_method_calls(self.bookkeeper, kwds_s)
         return annmodel.s_None
 
-    def specialize_call(self, hop, **kwds_i):
+    annotate_can_enter_jit = annotate_jit_merge_point
+
+    def specialize_jit_merge_point(self, drivercls, hop, **kwds_i):
         # replace a call to MyDriverCls.hintname(**livevars)
         # with an operation 'hintname(MyDriverCls, livevars...)'
         # XXX to be complete, this could also check that the concretetype
         # of the variables are the same for each of the calls.
         from pypy.rpython.error import TyperError
         from pypy.rpython.lltypesystem import lltype
-        drivercls = self.instance.drivercls
         greens_v = []
         reds_v = []
         for name in drivercls.greens:
@@ -153,6 +163,28 @@ class Entry(ExtRegistryEntry):
         return hop.genop('jit_marker', vlist,
                          resulttype=lltype.Void)
 
+    specialize_can_enter_jit = specialize_jit_merge_point
+
+    def annotate_set_param(self, drivercls, **kwds_s):
+        from pypy.annotation import model as annmodel
+        if len(kwds_s) != 1:
+            raise Exception("DriverCls.set_param(): must specify exactly "
+                            "one keyword argument")
+        return annmodel.s_None
+
+    def specialize_set_param(self, drivercls, hop, **kwds_i):
+        from pypy.rpython.lltypesystem import lltype
+        [(name, i)] = kwds_i.items()
+        assert name.startswith('i_')
+        name = name[2:]
+        v_value = hop.inputarg(lltype.Signed, arg=i)
+        vlist = [hop.inputconst(lltype.Void, "set_param"),
+                 hop.inputconst(lltype.Void, drivercls),
+                 hop.inputconst(lltype.Void, name),
+                 v_value]
+        return hop.genop('jit_marker', vlist,
+                         resulttype=lltype.Void)
+
 # ____________________________________________________________
 # User interface for the hotpath JIT policy
 
@@ -168,10 +200,7 @@ class JitDriver:
 
     jit_merge_point = _JitHintClassMethod("jit_merge_point")
     can_enter_jit = _JitHintClassMethod("can_enter_jit")
-
-    def getcurrentthreshold():
-        return 10
-    getcurrentthreshold = staticmethod(getcurrentthreshold)
+    set_param = _JitHintClassMethod("set_param")
 
     def compute_invariants(self, *greens):
         """This can compute a value or tuple that is passed as a green

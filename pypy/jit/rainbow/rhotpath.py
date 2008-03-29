@@ -186,7 +186,7 @@ class HotSplitFallbackPoint(FallbackPoint):
         # 'value' should be a Bool, but depending on the backend
         # it could have been ERASED to about anything else
         value = bool(value)
-        threshold = self.hotrunnerdesc.jitdrivercls.getcurrentthreshold()
+        threshold = self.hotrunnerdesc.state.threshold
         if value:
             counter = self.truepath_counter + 1
             assert counter > 0, (
@@ -257,7 +257,7 @@ class PromoteFallbackPoint(FallbackPoint):
         # XXX unsafe with a moving GC
         hash = cast_whatever_to_int(lltype.typeOf(value), value)
         counter = self.counters.get(hash, 0) + 1
-        threshold = self.hotrunnerdesc.jitdrivercls.getcurrentthreshold()
+        threshold = self.hotrunnerdesc.state.threshold
         assert counter > 0, (
             "reaching a fallback point for an already-compiled path")
         if counter >= threshold:

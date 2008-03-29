@@ -70,14 +70,14 @@ class HotPathTest(test_interpreter.InterpretationTest):
         return self._run(main, main_args)
 
     def _rewrite(self, threshold, small):
-        assert len(self.hintannotator.jitdriverclasses) == 1
-        jitdrivercls = self.hintannotator.jitdriverclasses.keys()[0]    # hack
-        jitdrivercls.getcurrentthreshold = staticmethod(lambda : threshold) #..
+        assert len(self.hintannotator.jitdriverclasses) == 1     # xxx for now
+        jitdrivercls = self.hintannotator.jitdriverclasses.keys()[0]
         self.hotrunnerdesc = HotRunnerDesc(self.hintannotator, self.rtyper,
                                        self.jitcode, self.RGenOp, self.writer,
                                        jitdrivercls,
                                        self.translate_support_code)
         self.hotrunnerdesc.rewrite_all()
+        self.hotrunnerdesc.state.set_param_threshold(threshold)
         if self.simplify_virtualizable_accesses:
             from pypy.jit.rainbow import graphopt
             graphopt.simplify_virtualizable_accesses(self.writer)
@@ -421,6 +421,36 @@ class TestHotPath(HotPathTest):
             return n
         res = self.run(ll_function, [2, 7], threshold=1, small=True)
         assert res == 72002
+
+    def test_set_threshold(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'x']
+        def ll_function(x):
+            MyJitDriver.set_param(threshold=x)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                x += i
+                MyJitDriver.jit_merge_point(i=i, x=x)
+                MyJitDriver.can_enter_jit(i=i, x=x)
+            return x
+        res = self.run(ll_function, [2], threshold=9)
+        assert res == 1025
+        self.check_traces([
+            "jit_not_entered 512 514",
+            "jit_compile",
+            "pause at hotsplit in ll_function",
+            "run_machine_code 256 770",
+            "fallback_interp",
+            "fb_leave 128 898",
+            "run_machine_code 128 898",
+            "jit_resume Bool path True in ll_function",
+            "done at jit_merge_point",
+            "resume_machine_code",
+            "fallback_interp",
+            "fb_return 1025",
+            ])
 
     def test_hp_tlr(self):
         from pypy.jit.tl import tlr

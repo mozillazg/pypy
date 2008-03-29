@@ -78,6 +78,8 @@ class HotRunnerDesc:
     def make_enter_function(self):
         HotEnterState = make_state_class(self)
         state = HotEnterState()
+        self.state = state
+        self._set_param_fn_cache = {}
         exceptiondesc = self.exceptiondesc
         interpreter = self.interpreter
         num_green_args = len(self.green_args_spec)
@@ -113,12 +115,12 @@ class HotRunnerDesc:
             for op in block.operations:
                 if op.opname == 'jit_marker':
                     index = block.operations.index(op)
-                    meth = getattr(self, 'rewrite_' + op.args[0].value)
+                    meth = getattr(self, 'rewrite__' + op.args[0].value)
                     if meth(graph, block, index):
                         return True      # graph mutated, start over again
         return False  # done
 
-    def rewrite_can_enter_jit(self, graph, block, index):
+    def rewrite__can_enter_jit(self, graph, block, index):
         #
         # In the original graphs, replace the 'can_enter_jit' operations
         # with a call to the maybe_enter_jit() helper.
@@ -151,7 +153,7 @@ class HotRunnerDesc:
         block.operations[index] = newop
         return True
 
-    def rewrite_jit_merge_point(self, origportalgraph, origblock, origindex):
+    def rewrite__jit_merge_point(self, origportalgraph, origblock, origindex):
         #
         # Mutate the original portal graph from this:
         #
@@ -280,6 +282,45 @@ class HotRunnerDesc:
         checkgraph(origportalgraph)
         return True
 
+    def rewrite__set_param(self, graph, block, index):
+        # Replace a set_param marker with a call to a helper function
+        op = block.operations[index]
+        assert op.opname == 'jit_marker'
+        assert op.args[0].value == 'set_param'
+        param_name = op.args[2].value
+        v_param_value = op.args[3]
+        SETTERFUNC = lltype.FuncType([lltype.Signed], lltype.Void)
+
+        try:
+            setter_fnptr = self._set_param_fn_cache[param_name]
+        except KeyError:
+            meth = getattr(self.state, 'set_param_' + param_name, None)
+            if meth is None:
+                raise Exception("set_param(): no such parameter: %r" %
+                                (param_name,))
+
+            def ll_setter(value):
+                meth(value)
+            ll_setter.__name__ = 'set_' + param_name
+
+            if not self.translate_support_code:
+                setter_fnptr = llhelper(lltype.Ptr(SETTERFUNC), ll_setter)
+            else:
+                args_s = [annmodel.SomeInteger()]
+                s_result = annmodel.s_None
+                setter_fnptr = self.annhelper.delayedfunction(
+                    setter, args_s, s_result)
+            self._set_param_fn_cache[param_name] = setter_fnptr
+
+        vlist = [Constant(setter_fnptr, lltype.Ptr(SETTERFUNC)),
+                 v_param_value]
+        v_result = Variable()
+        v_result.concretetype = lltype.Void
+        newop = SpaceOperation('direct_call', vlist, v_result)
+        block.operations[index] = newop
+
+# ____________________________________________________________
+
 
 def make_state_class(hotrunnerdesc):
     # very minimal, just to make the first test pass
@@ -336,6 +377,7 @@ def make_state_class(hotrunnerdesc):
 
         def __init__(self):
             self.cells = [Counter(0)] * HASH_TABLE_SIZE
+            self.threshold = 10
 
             # Only use the hash of the arguments as the profiling key.
             # Indeed, this is all a heuristic, so if things are designed
@@ -351,7 +393,7 @@ def make_state_class(hotrunnerdesc):
                 # update the profiling counter
                 interp = hotrunnerdesc.interpreter
                 n = cell.counter + 1
-                if n < hotrunnerdesc.jitdrivercls.getcurrentthreshold():
+                if n < self.threshold:
                     if hotrunnerdesc.verbose_level >= 3:
                         interp.debug_trace("jit_not_entered", *args)
                     self.cells[argshash] = Counter(n)
@@ -384,7 +426,7 @@ def make_state_class(hotrunnerdesc):
             # not found at all, do profiling
             interp = hotrunnerdesc.interpreter
             n = next.counter + 1
-            if n < hotrunnerdesc.jitdrivercls.getcurrentthreshold():
+            if n < self.threshold:
                 if hotrunnerdesc.verbose_level >= 3:
                     interp.debug_trace("jit_not_entered", *args)
                 cell.next = Counter(n)
@@ -478,5 +520,8 @@ def make_state_class(hotrunnerdesc):
                 i += 1
             return residualargs
         make_residualargs._always_inline_ = True
+
+        def set_param_threshold(self, threshold):
+            self.threshold = threshold
 
     return HotEnterState
