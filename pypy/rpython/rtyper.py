@@ -797,11 +797,13 @@ class HighLevelOp(object):
         if self.llops.implicit_exceptions_checked is not None:
             # sanity check: complain if an has_implicit_exception() check is
             # missing in the rtyper.
-            for link in self.exceptionlinks:
-                if link.exitcase not in self.llops.implicit_exceptions_checked:
-                    raise TyperError("the graph catches %s, but the rtyper "
-                                     "did not explicitely handle it" % (
-                        link.exitcase.__name__,))
+            # XXX can't do this, see test_rlist.py:test_catch_other_exc
+            pass
+            #for link in self.exceptionlinks:
+            #    if link.exitcase not in self.llops.implicit_exceptions_checked:
+            #        raise TyperError("the graph catches %s, but the rtyper "
+            #                         "did not explicitely handle it" % (
+            #            link.exitcase.__name__,))
         self.llops.llop_raising_exceptions = len(self.llops)
 
     def exception_cannot_occur(self):
