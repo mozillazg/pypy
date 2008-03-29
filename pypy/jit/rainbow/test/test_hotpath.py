@@ -78,6 +78,7 @@ class HotPathTest(test_interpreter.InterpretationTest):
                                        self.translate_support_code)
         self.hotrunnerdesc.rewrite_all()
         self.hotrunnerdesc.state.set_param_threshold(threshold)
+        self.hotrunnerdesc.state.set_param_trace_eagerness(1)    # for tests
         if self.simplify_virtualizable_accesses:
             from pypy.jit.rainbow import graphopt
             graphopt.simplify_virtualizable_accesses(self.writer)
@@ -447,6 +448,42 @@ class TestHotPath(HotPathTest):
             "run_machine_code 128 898",
             "jit_resume Bool path True in ll_function",
             "done at jit_merge_point",
+            "resume_machine_code",
+            "fallback_interp",
+            "fb_return 1025",
+            ])
+
+    def test_set_trace_eagerness(self):
+        class MyJitDriver(JitDriver):
+            greens = []
+            reds = ['i', 'x']
+        def ll_function(x):
+            MyJitDriver.set_param(trace_eagerness=x)
+            i = 1024
+            while i > 0:
+                i >>= 1
+                x += i
+                MyJitDriver.jit_merge_point(i=i, x=x)
+                MyJitDriver.can_enter_jit(i=i, x=x)
+            return x
+        res = self.run(ll_function, [2], threshold=5)
+        assert res == 1025
+        self.check_traces([
+            "jit_not_entered 512 514",
+            "jit_not_entered 256 770",
+            "jit_not_entered 128 898",
+            "jit_not_entered 64 962",
+            "jit_compile",       # after the threshold of 5 is reached
+            "pause at hotsplit in ll_function",
+            "run_machine_code 32 994",
+            "fallback_interp",
+            "fb_leave 16 1010",
+            "run_machine_code 16 1010",
+            "fallback_interp",
+            "fb_leave 8 1018",
+            "run_machine_code 8 1018",
+            "jit_resume Bool path True in ll_function", # after 3 times already
+            "done at jit_merge_point",                  # 3*(eagerness=2) >= 5
             "resume_machine_code",
             "fallback_interp",
             "fb_return 1025",

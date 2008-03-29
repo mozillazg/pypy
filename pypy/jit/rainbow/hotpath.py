@@ -1,3 +1,4 @@
+import sys
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
 from pypy.objspace.flow.model import Link, checkgraph
 from pypy.annotation import model as annmodel
@@ -322,6 +323,8 @@ class HotRunnerDesc:
 # ____________________________________________________________
 
 
+THRESHOLD_MAX = (sys.maxint-1) / 2
+
 def make_state_class(hotrunnerdesc):
     # very minimal, just to make the first test pass
     num_green_args = len(hotrunnerdesc.green_args_spec)
@@ -332,9 +335,11 @@ def make_state_class(hotrunnerdesc):
     green_args_range = unrolling_iterable(
         range(len(hotrunnerdesc.green_args_spec)))
     if hotrunnerdesc.green_args_spec:
-        HASH_TABLE_SIZE = 2 ** 14
+        INITIAL_HASH_TABLE_BITS = 14
+        MAX_HASH_TABLE_BITS = 28
     else:
-        HASH_TABLE_SIZE = 1
+        INITIAL_HASH_TABLE_BITS = 0
+        MAX_HASH_TABLE_BITS = 0
 
     # ---------- hacks for the 'invariants' argument ----------
     drivercls = hotrunnerdesc.jitdrivercls
@@ -376,8 +381,29 @@ def make_state_class(hotrunnerdesc):
         NULL_MC = lltype.nullptr(hotrunnerdesc.RESIDUAL_FUNCTYPE)
 
         def __init__(self):
-            self.cells = [Counter(0)] * HASH_TABLE_SIZE
-            self.threshold = 10
+            self.set_param_threshold(40)
+            self.set_param_trace_eagerness(10)
+            self.set_param_hash_bits(INITIAL_HASH_TABLE_BITS)
+
+        def set_param_threshold(self, threshold):
+            if threshold > THRESHOLD_MAX:
+                threshold = THRESHOLD_MAX
+            self.threshold = threshold
+
+        def set_param_trace_eagerness(self, value):
+            if value <= 0:
+                value = 1
+            elif value > THRESHOLD_MAX:
+                value = THRESHOLD_MAX
+            self.trace_eagerness = value
+
+        def set_param_hash_bits(self, value):
+            if value < 0:
+                value = 0
+            elif value > MAX_HASH_TABLE_BITS:
+                value = MAX_HASH_TABLE_BITS
+            self.cells = [Counter(0)] * (1 << value)
+            self.hashtablemask = (1 << value) - 1
 
             # Only use the hash of the arguments as the profiling key.
             # Indeed, this is all a heuristic, so if things are designed
@@ -387,7 +413,7 @@ def make_state_class(hotrunnerdesc):
         def maybe_compile(self, *args):
             greenargs = args[:num_green_args]
             argshash = self.getkeyhash(*greenargs)
-            argshash &= (HASH_TABLE_SIZE - 1)
+            argshash &= self.hashtablemask
             cell = self.cells[argshash]
             if isinstance(cell, Counter):
                 # update the profiling counter
@@ -520,8 +546,5 @@ def make_state_class(hotrunnerdesc):
                 i += 1
             return residualargs
         make_residualargs._always_inline_ = True
-
-        def set_param_threshold(self, threshold):
-            self.threshold = threshold
 
     return HotEnterState
