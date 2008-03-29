@@ -18,6 +18,12 @@ class GenVarOrConst(object):
         pointer, but not converting a float to an integer.'''
         raise NotConstant(self)
 
+    def getkind(self):
+        ''' Return the kind of the GenVarOrConst which the backend needs to
+        store on it somehow.'''
+        raise NotImplementedError("abstract base class")
+
+
 class GenVar(GenVarOrConst):
     is_const = False
 
@@ -82,22 +88,21 @@ class GenBuilder(object):
 ##     def genop_malloc_fixedsize(self, alloctoken):
 ##     def genop_malloc_varsize(self, varsizealloctoken, gv_size):
 ##     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-##     def genop_same_as(self, kindtoken, gv_x):
+##     def genop_same_as(self, gv_x):
 ##     def genop_debug_pdb(self):    # may take an args_gv later
-##     def genop_ptr_iszero(self, kindtoken, gv_ptr)
-##     def genop_ptr_nonzero(self, kindtoken, gv_ptr)
-##     def genop_ptr_eq(self, kindtoken, gv_ptr1, gv_ptr2)
-##     def genop_ptr_ne(self, kindtoken, gv_ptr1, gv_ptr2)
-##     def genop_cast_int_to_ptr(self, kindtoken, gv_int)
+##     def genop_ptr_iszero(self, gv_ptr)
+##     def genop_ptr_nonzero(self, gv_ptr)
+##     def genop_ptr_eq(self, gv_ptr1, gv_ptr2)
+##     def genop_ptr_ne(self, gv_ptr1, gv_ptr2)
+##     def genop_cast_int_to_ptr(self, kind, gv_int)
 
     # the other thing that happens for a given chunk is entering and
     # leaving basic blocks inside it.
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         '''Called before generating the code for a basic block.
 
-        zip(kinds, args_gv) gives the kindtoken and GenVarOrConst for
-        each inputarg of the block.
+        args_gv gives the GenVarOrConst for each inputarg of the block.
 
         The Obscure Bit: args_gv must be mutated in place until it is a
         list of unique GenVars.  So GenConsts must be replaced with
@@ -226,7 +231,7 @@ class GenBuilder(object):
         '''
         raise NotImplementedError
 
-    def genop_absorb_place(self, kind, place):
+    def genop_absorb_place(self, place):
         '''Absorb a place.  This turns it into a regular variable,
         containing the last value written into that place.  The place
         itself is no longer a valid target for write_frame_place()
@@ -438,16 +443,16 @@ class ReplayBuilder(GenBuilder):
     def genraisingop2(self, opname, gv_arg1, gv_arg2):
         return dummy_var, dummy_var
 
-    def genop_ptr_iszero(self, kind, gv_ptr):
+    def genop_ptr_iszero(self, gv_ptr):
         return dummy_var
 
-    def genop_ptr_nonzero(self, kind, gv_ptr):
+    def genop_ptr_nonzero(self, gv_ptr):
         return dummy_var
 
-    def genop_ptr_eq(self, kind, gv_ptr1, gv_ptr2):
+    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
         return dummy_var
 
-    def genop_ptr_ne(self, kind, gv_ptr1, gv_ptr2):
+    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
         return dummy_var
 
     def genop_getfield(self, fieldtoken, gv_ptr):
@@ -480,13 +485,13 @@ class ReplayBuilder(GenBuilder):
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         return dummy_var
 
-    def genop_same_as(self, kind, gv_x):
+    def genop_same_as(self, gv_x):
         return dummy_var
 
     def genop_debug_pdb(self):    # may take an args_gv later
         pass
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self,  args_gv):
         return None
 
     def jump_if_false(self, gv_condition, args_gv):
@@ -517,5 +522,5 @@ class ReplayBuilder(GenBuilder):
     def alloc_frame_place(self, kind, gv_initial_value=None):
         return None
 
-    def genop_absorb_place(self, kind, place):
+    def genop_absorb_place(self, place):
         return dummy_var

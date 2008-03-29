@@ -219,7 +219,7 @@ class AbstractStructTypeDesc(object):
         vstruct = self.VirtualStructCls(self)
         vstruct.content_boxes = [desc.makedefaultbox()
                                  for desc in self.fielddescs]
-        box = rvalue.PtrRedBox(self.innermostdesc.ptrkind, known_nonzero=True)
+        box = rvalue.PtrRedBox(known_nonzero=True)
         box.content = vstruct
         vstruct.ownbox = box
         return box
@@ -274,7 +274,7 @@ def create_varsize(jitstate, contdesc, sizebox):
     alloctoken = contdesc.varsizealloctoken
     genvar = jitstate.curbuilder.genop_malloc_varsize(alloctoken, gv_size)
     # XXX MemoryError checking
-    return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
+    return rvalue.PtrRedBox(genvar, known_nonzero=True)
 
 
 class VirtualizableStructTypeDesc(StructTypeDesc):
@@ -395,8 +395,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 
     def factory(self):
         vstructbox = StructTypeDesc.factory(self)
-        outsidebox = rvalue.PtrRedBox(self.innermostdesc.ptrkind,
-                                      self.gv_null)
+        outsidebox = rvalue.PtrRedBox(self.gv_null)
         content = vstructbox.content
         assert isinstance(content, VirtualizableStruct)
         content.content_boxes.append(outsidebox)             
@@ -525,7 +524,7 @@ class InteriorDesc(object):
                 genvar = jitstate.curbuilder.genop_getarraysize(
                     arrayfielddesc.arraytoken,
                     argbox.getgenvar(jitstate))
-                return rvalue.IntRedBox(arrayfielddesc.indexkind, genvar)
+                return rvalue.IntRedBox(genvar)
 
             self.perform_getinteriorarraysize = perform_getinteriorarraysize
             self.gengetinteriorarraysize = gengetinteriorarraysize
@@ -655,7 +654,7 @@ class FieldDesc(object):
         return True
 
     def makedefaultbox(self):
-        return self.redboxcls(self.kind, self.gv_default)
+        return self.redboxcls(self.gv_default)
     
     def makebox(self, jitstate, gvar):
         if self.virtualizable:
@@ -664,7 +663,7 @@ class FieldDesc(object):
             assert isinstance(content, VirtualizableStruct)
             content.load_from(jitstate, gvar)
             return structbox
-        box = self.redboxcls(self.kind, gvar)
+        box = self.redboxcls(gvar)
         if self.fieldnonnull:
             assert isinstance(box, rvalue.PtrRedBox)
             box.known_nonzero = True
@@ -936,7 +935,7 @@ class VirtualStruct(VirtualContainer):
         builder = jitstate.curbuilder
         place = builder.alloc_frame_place(typedesc.ptrkind)
         vrti.forced_place = place
-        forced_box = rvalue.PtrRedBox(typedesc.ptrkind)
+        forced_box = rvalue.PtrRedBox()
         memo.forced_boxes.append((forced_box, place))
 
         vars_gv = memo.framevars_gv
@@ -1025,8 +1024,7 @@ class VirtualizableStruct(VirtualStruct):
             assert isinstance(typedesc, VirtualizableStructTypeDesc)
             builder = jitstate.curbuilder
             gv_outside = builder.genop_malloc_fixedsize(typedesc.alloctoken)
-            outsidebox = rvalue.PtrRedBox(self.content_boxes[-1].kind,
-                                          gv_outside,
+            outsidebox = rvalue.PtrRedBox(gv_outside,
                                           known_nonzero = True)
             self.content_boxes[-1] = outsidebox
             jitstate.add_virtualizable(self.ownbox)
@@ -1060,8 +1058,7 @@ class VirtualizableStruct(VirtualStruct):
         assert isinstance(typedesc, VirtualizableStructTypeDesc)
         assert self.content_boxes[-1].genvar is typedesc.gv_null
         boxes = self.content_boxes
-        boxes[-1] = rvalue.PtrRedBox(boxes[-1].kind,
-                                     gv_outside,
+        boxes[-1] = rvalue.PtrRedBox(gv_outside,
                                      known_nonzero=True)
         builder = jitstate.curbuilder
         builder.genop_call(typedesc.access_is_null_token,

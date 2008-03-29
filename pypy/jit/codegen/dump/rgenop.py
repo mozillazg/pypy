@@ -42,13 +42,12 @@ class Builder(GenBuilder):
         self.dump("%s.start_writing()" % self.name)
         self.llbuilder.start_writing()
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         self.dump("args_gv = [%s]" % self.rgenop.vlistname(args_gv))
-        lbl = self.llbuilder.enter_next_block(kinds, args_gv)
-        self.dump("%s = %s.enter_next_block([%s], args_gv)" % (
+        lbl = self.llbuilder.enter_next_block(args_gv)
+        self.dump("%s = %s.enter_next_block(args_gv)" % (
             self.rgenop.lblname(lbl),
-            self.name,
-            self.rgenop.kindtokensname(kinds)))
+            self.name))
         self.dump("%s = args_gv" % self.rgenop.vlistassname(args_gv))
         return lbl
 
@@ -143,59 +142,53 @@ class Builder(GenBuilder):
             self.rgenop.vname(gv_arg2)))
         return v1, v2
 
-    def genop_ptr_iszero(self, kind, gv_ptr):
-        v = self.llbuilder.genop_ptr_iszero(kind, gv_ptr)
-        self.dump("%s = %s.genop_ptr_iszero(%s, %s)" % (
+    def genop_ptr_iszero(self, gv_ptr):
+        v = self.llbuilder.genop_ptr_iszero(gv_ptr)
+        self.dump("%s = %s.genop_ptr_iszero(%s)" % (
             self.rgenop.vname(v),
             self.name,
-            self.rgenop.kindtokenname(kind),
             self.rgenop.vname(gv_ptr)))
         return v
 
-    def genop_ptr_nonzero(self, kind, gv_ptr):
-        v = self.llbuilder.genop_ptr_nonzero(kind, gv_ptr)
-        self.dump("%s = %s.genop_ptr_nonzero(%s, %s)" % (
+    def genop_ptr_nonzero(self, gv_ptr):
+        v = self.llbuilder.genop_ptr_nonzero(gv_ptr)
+        self.dump("%s = %s.genop_ptr_nonzero(%s)" % (
             self.rgenop.vname(v),
             self.name,
-            self.rgenop.kindtokenname(kind),
             self.rgenop.vname(gv_ptr)))
         return v
 
-    def genop_ptr_eq(self, kind, gv_ptr1, gv_ptr2):
-        v = self.llbuilder.genop_ptr_eq(kind, gv_ptr1, gv_ptr2)
-        self.dump("%s = %s.genop_ptr_eq(%s, %s, %s)" % (
+    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
+        v = self.llbuilder.genop_ptr_eq(gv_ptr1, gv_ptr2)
+        self.dump("%s = %s.genop_ptr_eq(%s, %s)" % (
             self.rgenop.vname(v),
             self.name,
-            self.rgenop.kindtokenname(kind),
             self.rgenop.vname(gv_ptr1),
             self.rgenop.vname(gv_ptr2)))
         return v
 
-    def genop_ptr_ne(self, kind, gv_ptr1, gv_ptr2):
-        v = self.llbuilder.genop_ptr_ne(kind, gv_ptr1, gv_ptr2)
-        self.dump("%s = %s.genop_ptr_ne(%s, %s, %s)" % (
+    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
+        v = self.llbuilder.genop_ptr_ne(gv_ptr1, gv_ptr2)
+        self.dump("%s = %s.genop_ptr_ne(%s, %s)" % (
             self.rgenop.vname(v),
             self.name,
-            self.rgenop.kindtokenname(kind),
             self.rgenop.vname(gv_ptr1),
             self.rgenop.vname(gv_ptr2)))
         return v
 
-    def genop_cast_int_to_ptr(self, kind, gv_int):
-        v = self.llbuilder.genop_cast_int_to_ptr(kind, gv_int)
-        self.dump("%s = %s.genop_cast_int_to_ptr(%s, %s)" % (
+    def genop_cast_int_to_ptr(self, gv_int):
+        v = self.llbuilder.genop_cast_int_to_ptr(gv_int)
+        self.dump("%s = %s.genop_cast_int_to_ptr(%s)" % (
             self.rgenop.vname(v),
             self.name,
-            self.rgenop.kindtokenname(kind),
             self.rgenop.vname(gv_int)))
         return v
 
-    def genop_same_as(self, kind, gv_x):
-        v = self.llbuilder.genop_same_as(kind, gv_x)
-        self.dump("%s = %s.genop_same_as(%s, %s)" % (
+    def genop_same_as(self, gv_x):
+        v = self.llbuilder.genop_same_as(gv_x)
+        self.dump("%s = %s.genop_same_as(%s)" % (
             self.rgenop.vname(v),
             self.name,
-            self.rgenop.kindtokenname(kind),
             self.rgenop.vname(gv_x)))
         return v
 

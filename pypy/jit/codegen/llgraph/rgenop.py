@@ -16,6 +16,9 @@ class LLVar(GenVar):
     def __repr__(self):
         return repr(RGenOp.reveal(self))
 
+    def getkind(self):
+        return LLConst(llimpl.getkind(self.v))
+
 
 class LLConst(GenConst):
     def __init__(self, v):
@@ -30,6 +33,9 @@ class LLConst(GenConst):
 
     def __repr__(self):
         return repr(RGenOp.reveal(self))
+
+    def getkind(self):
+        return LLConst(llimpl.getkind(self.v))
 
 
 _gv_TYPE_cache = {}
@@ -50,9 +56,10 @@ gv_flavor_gc = LLConst(llimpl.placeholder({'flavor': 'gc'}))
 gv_Address = gv_TYPE(llmemory.Address)
 
 class LLLabel(GenLabel):
-    def __init__(self, b, g):
+    def __init__(self, b, g, args_gv):
         self.b = b
         self.g = g
+        self.args_gv = args_gv
 
 class LLPlace:
     absorbed = False
@@ -253,22 +260,19 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, 'new', vars_gv,
                                   gv_OBJTYPE.v))
 
-    def genop_same_as(self, gv_TYPE, gv_value):
+    def genop_same_as(self, gv_value):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_same_as: bad currently_writing")
-        gv_value = llimpl.cast(self.b, gv_TYPE.v, gv_value.v)
-        return LLVar(llimpl.genop(self.b, 'same_as', [gv_value], gv_TYPE.v))
+        return LLVar(llimpl.genop(self.b, 'same_as', [gv_value], gv_value.getkind().v))
 
-    def genop_ptr_iszero(self, gv_PTRTYPE, gv_ptr):
+    def genop_ptr_iszero(self, gv_ptr):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_ptr_iszero: bad currently_writing")
-        gv_ptr = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr.v)
         return LLVar(llimpl.genop(self.b, 'ptr_iszero', [gv_ptr], gv_Bool.v))
 
-    def genop_ptr_nonzero(self, gv_PTRTYPE, gv_ptr):
+    def genop_ptr_nonzero(self, gv_ptr):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_ptr_nonzero: bad currently_writing")
-        gv_ptr = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr.v)
         return LLVar(llimpl.genop(self.b, 'ptr_nonzero', [gv_ptr], gv_Bool.v))
 
     def genop_oononnull(self, gv_OBJTYPE, gv_obj):
@@ -277,18 +281,18 @@ class LLBuilder(GenBuilder):
         gv_obj = llimpl.cast(self.b, gv_OBJTYPE.v, gv_obj.v)
         return LLVar(llimpl.genop(self.b, 'oononnull', [gv_obj], gv_Bool.v))
 
-    def genop_ptr_eq(self, gv_PTRTYPE, gv_ptr1, gv_ptr2):
+    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_ptr_eq: bad currently_writing")
-        gv_ptr1 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr1.v)
+        gv_PTRTYPE = gv_ptr1.getkind()
         gv_ptr2 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v)        
         return LLVar(llimpl.genop(self.b, 'ptr_eq', [gv_ptr1, gv_ptr2],
                                   gv_Bool.v))
 
-    def genop_ptr_ne(self, gv_PTRTYPE, gv_ptr1, gv_ptr2):
+    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_ptr_ne: bad currently_writing")
-        gv_ptr1 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr1.v)
+        gv_PTRTYPE = gv_ptr1.getkind()
         gv_ptr2 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v)        
         return LLVar(llimpl.genop(self.b, 'ptr_ne', [gv_ptr1, gv_ptr2],
                                   gv_Bool.v))
@@ -299,19 +303,20 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, 'cast_int_to_ptr', [gv_int],
                                   gv_PTRTYPE.v))
 
-    def _newblock(self, kinds):
+    def _newblock(self, args_gv):
         self.b = newb = llimpl.newblock()
-        return [LLVar(llimpl.geninputarg(newb, kind.v)) for kind in kinds]
+        return [LLVar(llimpl.geninputarg(newb, gv.getkind().v))
+                    for gv in args_gv]
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         ll_assert(self.rgenop.currently_writing is self,
                      "enter_next_block: bad currently_writing")
         lnk = llimpl.closeblock1(self.b)
-        newb_args_gv = self._newblock(kinds) 
+        newb_args_gv = self._newblock(args_gv) 
         llimpl.closelink(lnk, args_gv, self.b)
         for i in range(len(args_gv)):
             args_gv[i] = newb_args_gv[i]
-        return LLLabel(self.b, self.gv_f)
+        return LLLabel(self.b, self.gv_f, newb_args_gv)
 
     def finish_and_goto(self, args_gv, target):
         lnk = llimpl.closeblock1(self.b)
@@ -400,7 +405,7 @@ class LLBuilder(GenBuilder):
                                gv_TYPE.v))
         return LLPlace(v, llimpl.get_frame_info(self.b, [v]))
 
-    def genop_absorb_place(self, gv_TYPE, place):
+    def genop_absorb_place(self, place):
         ll_assert(self.rgenop.currently_writing is self,
                      "alloc_frame_place: bad currently_writing")
         ll_assert(not place.absorbed, "place already absorbed")
@@ -486,9 +491,9 @@ class RGenOp(AbstractRGenOp):
     def genzeroconst(gv_TYPE):
         return LLConst(llimpl.genzeroconst(gv_TYPE.v))
 
-    def replay(self, label, kinds):
+    def replay(self, label):
         builder = LLBuilder(self, label.g, llimpl.nullblock)
-        args_gv = builder._newblock(kinds)
+        args_gv = builder._newblock(label.args_gv)
         ll_assert(self.currently_writing is None,
                      "replay: currently_writing")
         self.currently_writing = builder

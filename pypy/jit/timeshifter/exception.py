@@ -37,8 +37,8 @@ class AbstractExceptionDesc:
         gv_evalue = self.genop_get_exc_value(builder)
         self.genop_set_exc_type (builder, self.gv_null_exc_type )
         self.genop_set_exc_value(builder, self.gv_null_exc_value)
-        etypebox  = rvalue.PtrRedBox(self.exc_type_kind,  gv_etype )
-        evaluebox = rvalue.PtrRedBox(self.exc_value_kind, gv_evalue)
+        etypebox  = rvalue.PtrRedBox( gv_etype )
+        evaluebox = rvalue.PtrRedBox(gv_evalue)
         etypebox .known_nonzero = known_occurred
         evaluebox.known_nonzero = known_occurred
         rtimeshift.setexctypebox (jitstate, etypebox)
@@ -61,10 +61,8 @@ class AbstractExceptionDesc:
 class LLTypeExceptionDesc(AbstractExceptionDesc):
     
     def _create_boxes(self, RGenOp):
-        self.null_exc_type_box = rvalue.PtrRedBox(self.exc_type_kind,
-                                                  self.gv_null_exc_type)
-        self.null_exc_value_box = rvalue.PtrRedBox(self.exc_value_kind,
-                                                   self.gv_null_exc_value)
+        self.null_exc_type_box = rvalue.PtrRedBox(self.gv_null_exc_type)
+        self.null_exc_value_box = rvalue.PtrRedBox(self.gv_null_exc_value)
 
     def genop_get_exc_type(self, builder):
         return builder.genop_getfield(self.exc_type_token, self.gv_excdata)
@@ -80,16 +78,14 @@ class LLTypeExceptionDesc(AbstractExceptionDesc):
 
     def gen_exc_occurred(self, builder):
         gv_etype = self.genop_get_exc_type(builder)
-        return builder.genop_ptr_nonzero(self.exc_type_kind, gv_etype)
+        return builder.genop_ptr_nonzero(gv_etype)
 
 
 class OOTypeExceptionDesc(AbstractExceptionDesc):
     def _create_boxes(self, RGenOp):
         # XXX: think more about exceptions
-        self.null_exc_type_box = rvalue.InstanceRedBox(self.exc_type_kind,
-                                                  self.gv_null_exc_type)
-        self.null_exc_value_box = rvalue.InstanceRedBox(self.exc_value_kind,
-                                                   self.gv_null_exc_value)
+        self.null_exc_type_box = rvalue.InstanceRedBox(self.gv_null_exc_type)
+        self.null_exc_value_box = rvalue.InstanceRedBox(self.gv_null_exc_value)
 
     def genop_get_exc_type(self, builder):
         return builder.genop_oogetfield(self.exc_type_token, self.gv_excdata)

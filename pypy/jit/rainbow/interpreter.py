@@ -473,7 +473,7 @@ class JitInterpreter(object):
     def opimpl_make_redbox(self, genconst, typeid):
         redboxcls = self.frame.bytecode.redboxclasses[typeid]
         kind = self.frame.bytecode.typekinds[typeid]
-        return redboxcls(kind, genconst)
+        return redboxcls(genconst)
 
     @arguments("red", returns="green_from_red")
     def opimpl_revealconst(self, box):
@@ -648,8 +648,7 @@ class JitInterpreter(object):
     def opimpl_yellow_retrieve_result_as_red(self, typeid):
         # XXX all this jitstate.greens business is a bit messy
         redboxcls = self.frame.bytecode.redboxclasses[typeid]
-        kind = self.frame.bytecode.typekinds[typeid]
-        return redboxcls(kind, self.jitstate.greens[0])
+        return redboxcls(self.jitstate.greens[0])
 
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):

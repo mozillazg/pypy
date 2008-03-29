@@ -183,7 +183,7 @@ class OopSpecDesc:
                                            self.gv_fnptr, args_gv)
             if self.can_raise:
                 jitstate.generated_oop_residual_can_raise = True
-        return self.redboxbuilder(self.result_kind, gv_result)
+        return self.redboxbuilder(gv_result)
 
     def residual_exception(self, jitstate, ExcCls):
         from pypy.jit.rainbow.codewriter import residual_exception_nontranslated

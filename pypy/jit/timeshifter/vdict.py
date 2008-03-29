@@ -142,7 +142,7 @@ class DictTypeDesc(object):
 
     def factory(self):
         vdict = self.VirtualDict(self)
-        box = rvalue.PtrRedBox(self.ptrkind, known_nonzero=True)
+        box = rvalue.PtrRedBox(known_nonzero=True)
         box.content = vdict
         vdict.ownbox = box
         return box

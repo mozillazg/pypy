@@ -2009,7 +2009,7 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 builder = jitstate.curbuilder
                 gv_result = builder.genop2("int_sub", abox.getgenvar(jitstate),
                                            bbox.getgenvar(jitstate))
-                return IntRedBox(abox.kind, gv_result)
+                return IntRedBox(gv_result)
 
         myjitdriver = JitDriver(greens = [],
                                 reds = ['a', 'b', 'i', 'res'])
@@ -2062,7 +2062,7 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 from pypy.jit.timeshifter.rvalue import IntRedBox
                 builder = jitstate.curbuilder
                 gv_result = builder.genop1("int_neg", mbox.getgenvar(jitstate))
-                return IntRedBox(mbox.kind, gv_result)
+                return IntRedBox(gv_result)
 
         myjitdriver = JitDriver(greens = ['m'],
                                 reds = ['n', 'i', 'res'])

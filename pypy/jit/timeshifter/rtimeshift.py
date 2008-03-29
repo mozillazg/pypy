@@ -44,7 +44,6 @@ class OpDesc(object):
         self.nb_args = len(ARGS)
         self.ARGS = ARGS
         self.RESULT = RESULT
-        self.result_kind = RGenOp.kindToken(RESULT)
         self.whatever_result = RESULT._defl()
         self.redboxcls = rvalue.ll_redboxcls(RESULT)
         self.canfold = self.llop.canfold
@@ -87,7 +86,7 @@ def ll_gen1(opdesc, jitstate, argbox):
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg = argbox.getgenvar(jitstate)
     genvar = jitstate.curbuilder.genop1(opdesc.opname, gv_arg)
-    return opdesc.redboxcls(opdesc.result_kind, genvar)
+    return opdesc.redboxcls(genvar)
 
 def ll_gen1_canraise(opdesc, jitstate, argbox):
     ARG0 = opdesc.ARG0
@@ -108,7 +107,7 @@ def ll_gen1_canraise(opdesc, jitstate, argbox):
     genvar, gv_raised = jitstate.curbuilder.genraisingop1(opdesc.opname,
                                                           gv_arg)
     jitstate.gv_op_raised = gv_raised    # for split_raisingop()
-    return opdesc.redboxcls(opdesc.result_kind, genvar)
+    return opdesc.redboxcls(genvar)
 
 def ll_gen2(opdesc, jitstate, argbox0, argbox1):
     ARG0 = opdesc.ARG0
@@ -123,7 +122,7 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
     gv_arg0 = argbox0.getgenvar(jitstate)
     gv_arg1 = argbox1.getgenvar(jitstate)
     genvar = jitstate.curbuilder.genop2(opdesc.opname, gv_arg0, gv_arg1)
-    return opdesc.redboxcls(opdesc.result_kind, genvar)
+    return opdesc.redboxcls(genvar)
 
 def ll_gen2_canraise(opdesc, jitstate, argbox0, argbox1):
     ARG0 = opdesc.ARG0
@@ -148,14 +147,14 @@ def ll_gen2_canraise(opdesc, jitstate, argbox0, argbox1):
     genvar, gv_raised = jitstate.curbuilder.genraisingop2(opdesc.opname,
                                                           gv_arg0, gv_arg1)
     jitstate.gv_op_raised = gv_raised    # for split_raisingop()
-    return opdesc.redboxcls(opdesc.result_kind, genvar)
+    return opdesc.redboxcls(genvar)
 
 def genmalloc_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
     alloctoken = contdesc.varsizealloctoken
     genvar = jitstate.curbuilder.genop_malloc_varsize(alloctoken, gv_size)
     # XXX MemoryError handling
-    return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
+    return rvalue.PtrRedBox(genvar, known_nonzero=True)
 
 def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     assert isinstance(argbox, rvalue.AbstractPtrRedBox)
@@ -231,11 +230,11 @@ def gengetarraysize(jitstate, fielddesc, argbox):
         except rcontainer.SegfaultException:
             pass
         else:
-            return rvalue.redboxbuilder_int(fielddesc.indexkind, resgv)
+            return rvalue.redboxbuilder_int(resgv)
     genvar = jitstate.curbuilder.genop_getarraysize(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate))
-    return rvalue.IntRedBox(fielddesc.indexkind, genvar)
+    return rvalue.IntRedBox(genvar)
 
 def genptrnonzero(jitstate, argbox, reverse):
     assert isinstance(argbox, rvalue.AbstractPtrRedBox)
@@ -251,7 +250,7 @@ def genptrnonzero(jitstate, argbox, reverse):
             gv_res = jitstate.ts.genop_ptr_iszero(builder, argbox, gv_addr)
         else:
             gv_res = jitstate.ts.genop_ptr_nonzero(builder, argbox, gv_addr)
-    return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
+    return rvalue.IntRedBox(gv_res)
 
 def genptreq(jitstate, argbox0, argbox1, reverse):
     assert isinstance(argbox0, rvalue.PtrRedBox)
@@ -272,22 +271,20 @@ def genptreq(jitstate, argbox0, argbox1, reverse):
     gv_addr0 = argbox0.getgenvar(jitstate)
     gv_addr1 = argbox1.getgenvar(jitstate)
     if reverse:
-        gv_res = builder.genop_ptr_ne(argbox0.kind, gv_addr0, gv_addr1)
+        gv_res = builder.genop_ptr_ne(gv_addr0, gv_addr1)
     else:
-        gv_res = builder.genop_ptr_eq(argbox0.kind, gv_addr0, gv_addr1)
-    return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
+        gv_res = builder.genop_ptr_eq(gv_addr0, gv_addr1)
+    return rvalue.IntRedBox(gv_res)
 
 # ____________________________________________________________
 # other jitstate/graph level operations
 
 def enter_next_block(jitstate, incoming):
     linkargs = []
-    kinds = []
     for redbox in incoming:
         assert not redbox.genvar.is_const
         linkargs.append(redbox.genvar)
-        kinds.append(redbox.kind)
-    newblock = jitstate.curbuilder.enter_next_block(kinds, linkargs)
+    newblock = jitstate.curbuilder.enter_next_block(linkargs)
     for i in range(len(incoming)):
         incoming[i].genvar = linkargs[i]
     return newblock
@@ -595,7 +592,7 @@ def gen_residual_call(jitstate, calldesc, funcbox, argboxes):
     args_gv = [argbox.getgenvar(jitstate) for argbox in argboxes]
     jitstate.prepare_for_residual_call()
     gv_result = builder.genop_call(calldesc.sigtoken, gv_funcbox, args_gv)
-    return calldesc.redboxbuilder(calldesc.result_kind, gv_result)
+    return calldesc.redboxbuilder(gv_result)
 
 def gvflags_after_residual_call(jitstate, exceptiondesc, check_forced):
     builder = jitstate.curbuilder
@@ -622,7 +619,7 @@ def after_residual_call(jitstate, exceptiondesc, check_forced):
     builder = jitstate.curbuilder
     if gv_flags is None:
         gv_flags = builder.rgenop.constPrebuiltGlobal(0)
-    return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Signed), gv_flags)
+    return rvalue.IntRedBox(gv_flags)
 
 def residual_fetch(jitstate, exceptiondesc, check_forced, flagsbox):
     flags = rvalue.ll_getvalue(flagsbox, lltype.Signed)
@@ -698,8 +695,7 @@ class PromotionPathRoot(AbstractPromotionPath):
         incoming = []
         memo = rvalue.unfreeze_memo()
         jitstate = self.frozen.unfreeze(incoming, memo)
-        kinds = [box.kind for box in incoming]
-        builder, vars_gv = self.rgenop.replay(self.replayableblock, kinds)
+        builder, vars_gv = self.rgenop.replay(self.replayableblock)
         for i in range(len(incoming)):
             assert incoming[i].genvar is None
             incoming[i].genvar = vars_gv[i]
@@ -1191,7 +1187,7 @@ class JITState(object):
             shape_kind = builder.rgenop.kindToken(lltype.Signed)
 
             for forced_box, forced_place in self.forced_boxes:
-                gv_forced = builder.genop_absorb_place(forced_box.kind, forced_place)
+                gv_forced = builder.genop_absorb_place(forced_place)
                 forced_box.setgenvar(gv_forced)
             self.forced_boxes = None
 

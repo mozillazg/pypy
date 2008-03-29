@@ -356,8 +356,7 @@ def generate_fallback_code(fbp, hotpromotiondesc, switchbox,
     # code was compiled and we should loop back to 'switchblock' to enter it,
     # or it may have set an exception.
     gv_exc_type = exceptiondesc.genop_get_exc_type(default_builder)
-    gv_noexc = default_builder.genop_ptr_iszero(
-        exceptiondesc.exc_type_kind, gv_exc_type)
+    gv_noexc = default_builder.genop_ptr_iszero(gv_exc_type)
     excpath_builder = default_builder.jump_if_false(gv_noexc, [])
 
     if check_exceptions:
@@ -440,7 +439,7 @@ def hp_after_residual_call(jitstate, hotrunnerdesc, withexc, check_forced):
     # to be passed along to the new block
     assert not gv_flags.is_const
     tok_signed = hotrunnerdesc.RGenOp.kindToken(lltype.Signed)
-    flagbox = rvalue.IntRedBox(tok_signed, gv_flags)
+    flagbox = rvalue.IntRedBox(gv_flags)
     jitstate.frame.local_boxes.append(flagbox)
 
     hotpromotiondesc = hotrunnerdesc.signed_hotpromotiondesc
@@ -490,8 +489,7 @@ def hp_after_raisingop(jitstate, hotrunnerdesc, ll_evalue):
             jitstate.residual_ll_exception(ll_evalue)
         return
     assert not gv_raised.is_const
-    tok_bool = hotrunnerdesc.RGenOp.kindToken(lltype.Bool)
-    raisedbox = rvalue.IntRedBox(tok_bool, gv_raised)
+    raisedbox = rvalue.IntRedBox(gv_raised)
     jitstate.frame.local_boxes.append(raisedbox)
     
     hotpromotiondesc = hotrunnerdesc.bool_hotpromotiondesc

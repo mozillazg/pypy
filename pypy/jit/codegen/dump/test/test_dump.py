@@ -28,11 +28,9 @@ class TestRDumpGenOp:
         builder, gv_callable, inputargs_gv = rgenop.newgraph(
             RDumpGenOp.sigToken(FUNC0), "foobar")
         builder.start_writing()
-        builder.genop_same_as(RDumpGenOp.kindToken(lltype.Signed),
-                              rgenop.genconst(0))
+        builder.genop_same_as(rgenop.genconst(0))
         log = self.getlog()
         assert 'rgenop.genconst(0)' in log
-        builder.genop_same_as(RDumpGenOp.kindToken(lltype.Bool),
-                              rgenop.genconst(False))
+        builder.genop_same_as(rgenop.genconst(False))
         log = self.getlog()
         assert 'rgenop.genconst(False)' in log

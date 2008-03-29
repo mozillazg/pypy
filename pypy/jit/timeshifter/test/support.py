@@ -1,17 +1,19 @@
 # Fake stuff for the tests.
 
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue, rcontainer
+from pypy.jit.rainbow.typesystem import LLTypeHelper
 
 
 class FakeJITState(object):
     def __init__(self):
         self.curbuilder = FakeBuilder()
+        self.ts = LLTypeHelper()
 
 class FakeRGenOp(object):
     def genzeroconst(self, kind):
-        if kind == "dummy pointer":
+        if kind == ("kind", llmemory.Address):
             return FakeGenConst("NULL")
         return FakeGenConst(0)
 
@@ -95,7 +97,7 @@ def makebox(value):
     if not isinstance(value, GenVarOrConst):
         assert isinstance(value, int)    # for now
         value = FakeGenConst(value)
-    return rvalue.IntRedBox(signed_kind, value)
+    return rvalue.IntRedBox(value)
 
 def getfielddesc(STRUCT, name):
     assert isinstance(STRUCT, lltype.Struct)

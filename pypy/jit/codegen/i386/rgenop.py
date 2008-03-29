@@ -37,6 +37,9 @@ class IntConst(GenConst):
     def repr(self):
         return "const=$%s" % (self.value,)
 
+    def getkind(self):
+        return None
+
 class AddrConst(GenConst):
 
     def __init__(self, addr):
@@ -52,6 +55,9 @@ class AddrConst(GenConst):
 
     def repr(self):
         return "const=<0x%x>" % (llmemory.cast_adr_to_int(self.addr),)
+
+    def getkind(self):
+        return None
 
 @specialize.arg(0)
 def cast_int_to_whatever(T, value):
@@ -257,7 +263,7 @@ class Builder(GenBuilder):
             self.operations.append(OpTouch(self.keepalives_gv))
             self.keepalives_gv = None
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         # we get better register allocation if we write a single large mc block
         self.insert_keepalives()
         for i in range(len(args_gv)):
@@ -400,25 +406,25 @@ class Builder(GenBuilder):
         self.operations.append(op_excflag)
         return op, op_excflag
 
-    def genop_ptr_iszero(self, kind, gv_ptr):
+    def genop_ptr_iszero(self, gv_ptr):
         cls = getopclass1('ptr_iszero')
         op = cls(gv_ptr)
         self.operations.append(op)
         return op
 
-    def genop_ptr_nonzero(self, kind, gv_ptr):
+    def genop_ptr_nonzero(self, gv_ptr):
         cls = getopclass1('ptr_nonzero')
         op = cls(gv_ptr)
         self.operations.append(op)
         return op
 
-    def genop_ptr_eq(self, kind, gv_ptr1, gv_ptr2):
+    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
         cls = getopclass2('ptr_eq')
         op = cls(gv_ptr1, gv_ptr2)
         self.operations.append(op)
         return op
 
-    def genop_ptr_ne(self, kind, gv_ptr1, gv_ptr2):
+    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
         cls = getopclass2('ptr_ne')
         op = cls(gv_ptr1, gv_ptr2)
         self.operations.append(op)
@@ -427,7 +433,7 @@ class Builder(GenBuilder):
     def genop_cast_int_to_ptr(self, kind, gv_int):
         return gv_int     # identity
 
-    def genop_same_as(self, kind, gv_x):
+    def genop_same_as(self, gv_x):
         if gv_x.is_const:    # must always return a var
             op = OpSameAs(gv_x)
             self.operations.append(op)
@@ -533,7 +539,7 @@ class Builder(GenBuilder):
         self.operations.append(place)
         return place
 
-    def genop_absorb_place(self, kind, place):
+    def genop_absorb_place(self, place):
         v = OpAbsorbPlace(place)
         self.operations.append(v)
         return v
@@ -650,8 +656,8 @@ class RI386GenOp(AbstractRGenOp):
         #inputargs_gv = ops
         return builder, IntConst(entrypoint), inputargs_gv[:]
 
-    def replay(self, label, kinds):
-        return ReplayBuilder(self), [dummy_var] * len(kinds)
+    def replay(self, label):
+        return ReplayBuilder(self), [dummy_var] * len(label.inputoperands)
 
     @specialize.genconst(1)
     def genconst(self, llvalue):
