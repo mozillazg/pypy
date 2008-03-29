@@ -1429,9 +1429,10 @@ class SimpleTests(InterpretationTest):
         self.check_insns(int_mul=1, int_add=0)
 
     def test_debug_assert_ptr_nonzero(self):
-        S = lltype.GcStruct('s', ('x', lltype.Signed))
+        S = self.GcStruct('s', ('x', lltype.Signed))
+        malloc = self.malloc
         def h():
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.x = 42
             return s
         def g(s):
@@ -2051,7 +2052,6 @@ class TestOOType(SimpleTests):
     test_normalize_indirect_call_more = _skip
     test_green_char_at_merge = _skip
     test_self_referential_structures = _skip
-    test_debug_assert_ptr_nonzero = _skip
     test_indirect_red_call = _skip
     test_indirect_red_call_with_exc = _skip
     test_indirect_gray_call = _skip
