@@ -1,4 +1,5 @@
 import py, os, sys
+py.test.skip("port me")
 from pypy.annotation import model as annmodel
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.translator.c.genc import CStandaloneBuilder

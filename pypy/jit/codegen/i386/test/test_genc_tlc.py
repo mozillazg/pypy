@@ -1,4 +1,5 @@
 import py
+py.test.skip("port me")
 from pypy.jit.timeshifter.test import test_0tlc
 from pypy.jit.codegen.i386.test.test_genc_portal import I386PortalTestMixin
 

@@ -1,4 +1,5 @@
 import py, os, sys
+py.test.skip("port me")
 from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.rlib.objectmodel import keepalive_until_here
