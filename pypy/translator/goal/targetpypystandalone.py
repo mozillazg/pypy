@@ -45,7 +45,7 @@ def create_entry_point(space, w_dict):
             try:
                 space.call_function(w_run_toplevel, w_call_startup_gateway)
 
-                if self.translateconfig.goal_options.jit:
+                if space.config.objspace.usemodules.pypyjit:
                     # initial setup of the JIT and handling of the
                     # '--jit PARAM=VALUE,PARAM=VALUE...' command-line option
                     # (for now it's a bit ad-hoc)
