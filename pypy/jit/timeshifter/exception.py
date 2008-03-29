@@ -101,4 +101,4 @@ class OOTypeExceptionDesc(AbstractExceptionDesc):
 
     def gen_exc_occurred(self, builder):
         gv_etype = self.genop_get_exc_type(builder)
-        return builder.genop_oononnull(self.exc_type_kind, gv_etype)
+        return builder.genop_oononnull(gv_etype)
