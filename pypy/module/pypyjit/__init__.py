@@ -5,11 +5,7 @@ class Module(MixedModule):
     }
 
     interpleveldefs = {
-        'getthreshold': 'interp_jit.getthreshold',
-        'setthreshold': 'interp_jit.setthreshold',
-        'enable':       'interp_jit.enable',
-        'disable':      'interp_jit.disable',
-        'isenabled':    'interp_jit.isenabled',
+        'set_param':    'interp_jit.set_param',
     }
 
     def setup_after_space_initialization(self):

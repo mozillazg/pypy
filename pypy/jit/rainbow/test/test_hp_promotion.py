@@ -12,14 +12,13 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         py.test.skip("fix this test")
 
     def test_easy_case(self):
-        class MyJitDriver(JitDriver):
-            greens = ['n']
-            reds = []
+        myjitdriver = JitDriver(greens = ['n'],
+                                reds = [])
         def ll_two(k):
             return (k+1)*2
         def ll_function(n):
-            MyJitDriver.jit_merge_point(n=n)
-            MyJitDriver.can_enter_jit(n=n)
+            myjitdriver.jit_merge_point(n=n)
+            myjitdriver.can_enter_jit(n=n)
             hint(n, concrete=True)
             n = hint(n, variable=True)     # n => constant red box
             k = hint(n, promote=True)      # no-op
@@ -31,14 +30,13 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns_excluding_return({})
 
     def test_simple_promotion(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n'])
         def ll_two(k):
             return (k+1)*2
         def ll_function(n):
-            MyJitDriver.jit_merge_point(n=n)
-            MyJitDriver.can_enter_jit(n=n)
+            myjitdriver.jit_merge_point(n=n)
+            myjitdriver.can_enter_jit(n=n)
             k = hint(n, promote=True)
             k = ll_two(k)
             return hint(k, variable=True)
@@ -48,15 +46,14 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_add=0, int_mul=0)
 
     def test_many_promotions(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'total']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'total'])
         def ll_two(k):
             return k*k
         def ll_function(n, total):
             while n > 0:
-                MyJitDriver.jit_merge_point(n=n, total=total)
-                MyJitDriver.can_enter_jit(n=n, total=total)
+                myjitdriver.jit_merge_point(n=n, total=total)
+                myjitdriver.can_enter_jit(n=n, total=total)
                 k = hint(n, promote=True)
                 k = ll_two(k)
                 total += hint(k, variable=True)
@@ -87,9 +84,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             ])
 
     def test_promote_after_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n'])
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         def ll_two(k, s):
             if k > 5:
@@ -97,8 +93,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             else:
                 s.x = k
         def ll_function(n):
-            MyJitDriver.jit_merge_point(n=n)
-            MyJitDriver.can_enter_jit(n=n)
+            myjitdriver.jit_merge_point(n=n)
+            myjitdriver.can_enter_jit(n=n)
             s = lltype.malloc(S)
             ll_two(n, s)
             k = hint(n, promote=True)
@@ -110,9 +106,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_mul=0, int_add=0)
 
     def test_promote_after_yellow_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'i'])
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         def ll_two(k, s):
             if k > 5:
@@ -126,8 +121,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             i = 10
             while i > 0:
                 i -= 1
-                MyJitDriver.jit_merge_point(n=n, i=i)
-                MyJitDriver.can_enter_jit(n=n, i=i)
+                myjitdriver.jit_merge_point(n=n, i=i)
+                myjitdriver.can_enter_jit(n=n, i=i)
                 s = lltype.malloc(S)
                 c = ll_two(n, s)
                 k = hint(s.x, promote=True)
@@ -140,9 +135,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_add=0)
 
     def test_promote_inside_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'i'])
         def ll_two(n):
             k = hint(n, promote=True)
             k *= 17
@@ -151,8 +145,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(n=n, i=i)
-                MyJitDriver.can_enter_jit(n=n, i=i)
+                myjitdriver.jit_merge_point(n=n, i=i)
+                myjitdriver.can_enter_jit(n=n, i=i)
                 res = ll_two(n + 1) - 1
             return res
 
@@ -161,9 +155,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
     def test_promote_inside_call2(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'm', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'm', 'i'])
         def ll_two(n):
             k = hint(n, promote=True)
             k *= 17
@@ -172,8 +165,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(n=n, m=m, i=i)
-                MyJitDriver.can_enter_jit(n=n, m=m, i=i)
+                myjitdriver.jit_merge_point(n=n, m=m, i=i)
+                myjitdriver.can_enter_jit(n=n, m=m, i=i)
                 if not n:
                     return -41
                 if m:
@@ -197,15 +190,14 @@ class TestHotPromotion(test_hotpath.HotPathTest):
                                    'int_rshift': 1})
 
     def test_two_promotions(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'm', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'm', 'i'])
         def ll_function(n, m):
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(n=n, m=m, i=i)
-                MyJitDriver.can_enter_jit(n=n, m=m, i=i)
+                myjitdriver.jit_merge_point(n=n, m=m, i=i)
+                myjitdriver.can_enter_jit(n=n, m=m, i=i)
                 n1 = hint(n, promote=True)
                 m1 = hint(m, promote=True)
                 s1 = n1 + m1
@@ -258,9 +250,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_insns(int_add=0, int_mul=0)
 
     def test_more_promotes(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'm', 'i', 's']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'm', 'i', 's'])
         S = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed))
         def ll_two(s, i, m):
             if i > 4:
@@ -282,8 +273,8 @@ class TestHotPromotion(test_hotpath.HotPathTest):
             s.y = 0
             i = 0
             while i < n:
-                MyJitDriver.jit_merge_point(n=n, m=m, i=i, s=s)
-                MyJitDriver.can_enter_jit(n=n, m=m, i=i, s=s)
+                myjitdriver.jit_merge_point(n=n, m=m, i=i, s=s)
+                myjitdriver.can_enter_jit(n=n, m=m, i=i, s=s)
                 k = ll_two(s, i, m)
                 if m & 1:
                     k *= 3
@@ -327,14 +318,13 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         assert res == ll_function(6, 3, 2, 2)
 
     def test_green_across_global_mp(self):
-        class MyJitDriver(JitDriver):
-            greens = ['n1', 'n2']
-            reds = ['total', 'n3', 'n4']
+        myjitdriver = JitDriver(greens = ['n1', 'n2'],
+                                reds = ['total', 'n3', 'n4'])
         def ll_function(n1, n2, n3, n4, total):
             while n2:
-                MyJitDriver.jit_merge_point(n1=n1, n2=n2, n3=n3, n4=n4,
+                myjitdriver.jit_merge_point(n1=n1, n2=n2, n3=n3, n4=n4,
                                             total=total)
-                MyJitDriver.can_enter_jit(n1=n1, n2=n2, n3=n3, n4=n4,
+                myjitdriver.can_enter_jit(n1=n1, n2=n2, n3=n3, n4=n4,
                                           total=total)
                 total += n4
                 total *= n2
@@ -380,15 +370,14 @@ class TestHotPromotion(test_hotpath.HotPathTest):
         self.check_flexswitches(1)
 
     def test_virtual_list_copy(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'y', 'repeat']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y', 'repeat'])
         def ll_function(x, y):
             repeat = 10
             while repeat > 0:
                 repeat -= 1
-                MyJitDriver.jit_merge_point(x=x, y=y, repeat=repeat)
-                MyJitDriver.can_enter_jit(x=x, y=y, repeat=repeat)
+                myjitdriver.jit_merge_point(x=x, y=y, repeat=repeat)
+                myjitdriver.can_enter_jit(x=x, y=y, repeat=repeat)
                 l = [y] * x
                 size = len(l)
                 size = hint(size, promote=True)

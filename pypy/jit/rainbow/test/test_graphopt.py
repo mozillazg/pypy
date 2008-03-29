@@ -35,17 +35,16 @@ class TestGraphOpt(HotPathTest):
             self.getters[func] = self.getters.get(func, 0) + gettercount
 
     def test_simple_case(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['xy', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['xy', 'i', 'res'])
 
         def f(xy):
             i = 1024
             while i > 0:
                 i >>= 1
                 res = xy.x+xy.y
-                MyJitDriver.jit_merge_point(xy=xy, res=res, i=i)
-                MyJitDriver.can_enter_jit(xy=xy, res=res, i=i)
+                myjitdriver.jit_merge_point(xy=xy, res=res, i=i)
+                myjitdriver.can_enter_jit(xy=xy, res=res, i=i)
             return res
 
         def main(x, y):
@@ -57,9 +56,8 @@ class TestGraphOpt(HotPathTest):
         assert self.getters[f] == 0
 
     def test_through_residual(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['xy', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['xy', 'i', 'res'])
 
         def debug(xy):
             unrelated = XY(7, 8)
@@ -73,8 +71,8 @@ class TestGraphOpt(HotPathTest):
                 i >>= 1
                 res = xy.x+xy.y
                 debug(xy)
-                MyJitDriver.jit_merge_point(xy=xy, res=res, i=i)
-                MyJitDriver.can_enter_jit(xy=xy, res=res, i=i)
+                myjitdriver.jit_merge_point(xy=xy, res=res, i=i)
+                myjitdriver.can_enter_jit(xy=xy, res=res, i=i)
             return res
 
         def main(x, y):
@@ -88,9 +86,8 @@ class TestGraphOpt(HotPathTest):
         assert self.getters[debug] == 1
 
     def test_from_heap(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['lst', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['lst', 'i', 'res'])
 
         def f(lst):
             i = 1024
@@ -98,8 +95,8 @@ class TestGraphOpt(HotPathTest):
                 i >>= 1
                 xy = lst[0]
                 res = xy.x+xy.y
-                MyJitDriver.jit_merge_point(lst=lst, res=res, i=i)
-                MyJitDriver.can_enter_jit(lst=lst, res=res, i=i)
+                myjitdriver.jit_merge_point(lst=lst, res=res, i=i)
+                myjitdriver.can_enter_jit(lst=lst, res=res, i=i)
             return res
 
         def main(x, y):
@@ -112,9 +109,8 @@ class TestGraphOpt(HotPathTest):
                                         # 2 in the portal itself
 
     def test_track_in_graph_bug(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i'])
 
         class State:
             pass
@@ -135,16 +131,15 @@ class TestGraphOpt(HotPathTest):
             while i > 0:
                 i >>= 1
                 debug1(i)
-                MyJitDriver.jit_merge_point(i=i)
-                MyJitDriver.can_enter_jit(i=i)
+                myjitdriver.jit_merge_point(i=i)
+                myjitdriver.can_enter_jit(i=i)
 
         self.run(f, [], 2)
         assert self.setters[operate] == 1
 
     def test_prebuilt_vable(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i'])
 
         class State:
             pass
@@ -163,8 +158,8 @@ class TestGraphOpt(HotPathTest):
             while i > 0:
                 i >>= 1
                 debug1(i)
-                MyJitDriver.jit_merge_point(i=i)
-                MyJitDriver.can_enter_jit(i=i)
+                myjitdriver.jit_merge_point(i=i)
+                myjitdriver.can_enter_jit(i=i)
 
         self.run(f, [], 2)
         assert self.setters[operate] == 1

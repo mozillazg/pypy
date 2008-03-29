@@ -10,9 +10,8 @@ class TestVList(test_hotpath.HotPathTest):
     type_system = "lltype"
 
     def test_vlist(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot'])
         def ll_function():
             tot = 0
             i = 1024
@@ -21,17 +20,16 @@ class TestVList(test_hotpath.HotPathTest):
                 lst = []
                 lst.append(12)
                 tot += lst[0]
-                MyJitDriver.jit_merge_point(tot=tot, i=i)
-                MyJitDriver.can_enter_jit(tot=tot, i=i)
+                myjitdriver.jit_merge_point(tot=tot, i=i)
+                myjitdriver.can_enter_jit(tot=tot, i=i)
             return tot
         res = self.run(ll_function, [], threshold=2)
         assert res == ll_function()
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1, 'int_add': 1})
 
     def test_enter_block(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'flag']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'flag'])
         def ll_function(flag):
             tot = 0
             i = 1024
@@ -44,8 +42,8 @@ class TestVList(test_hotpath.HotPathTest):
                     tot += lst[0]
                 else:
                     tot += lst[1]
-                MyJitDriver.jit_merge_point(tot=tot, i=i, flag=flag)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, flag=flag)
+                myjitdriver.jit_merge_point(tot=tot, i=i, flag=flag)
+                myjitdriver.can_enter_jit(tot=tot, i=i, flag=flag)
             return tot
         res = self.run(ll_function, [6], threshold=2)
         assert res == ll_function(6)
@@ -57,9 +55,8 @@ class TestVList(test_hotpath.HotPathTest):
                                    'int_is_true': 1})
 
     def test_merge(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'flag']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'flag'])
         def ll_function(flag):
             tot = 0
             i = 1024
@@ -71,8 +68,8 @@ class TestVList(test_hotpath.HotPathTest):
                 else:
                     lst.append(131)
                 tot += lst[-1]
-                MyJitDriver.jit_merge_point(tot=tot, i=i, flag=flag)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, flag=flag)
+                myjitdriver.jit_merge_point(tot=tot, i=i, flag=flag)
+                myjitdriver.can_enter_jit(tot=tot, i=i, flag=flag)
             return tot
         res = self.run(ll_function, [6], threshold=2, policy=P_OOPSPEC)
         assert res == ll_function(6)
@@ -100,9 +97,8 @@ class TestVList(test_hotpath.HotPathTest):
         self.check_insns({'int_is_true': 1})
 
     def test_force(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'flag']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'flag'])
         def ll_function(flag):
             i = 1024
             tot = 0
@@ -113,8 +109,8 @@ class TestVList(test_hotpath.HotPathTest):
                 if flag:
                     lst.append(12)
                 tot += lst[-1]
-                MyJitDriver.jit_merge_point(tot=tot, i=i, flag=flag)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, flag=flag)
+                myjitdriver.jit_merge_point(tot=tot, i=i, flag=flag)
+                myjitdriver.can_enter_jit(tot=tot, i=i, flag=flag)
             return tot
         res = self.run(ll_function, [6], 2, policy=P_OOPSPEC)
         assert res == ll_function(6)
@@ -122,9 +118,8 @@ class TestVList(test_hotpath.HotPathTest):
         assert res == ll_function(0)
 
     def test_oop_vlist(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot'])
         def ll_function():
             i = 1024
             tot = 0
@@ -152,8 +147,8 @@ class TestVList(test_hotpath.HotPathTest):
                         three     *      100 +
                         seven     *       10 +
                         nine      *        1)
-                MyJitDriver.jit_merge_point(tot=tot, i=i)
-                MyJitDriver.can_enter_jit(tot=tot, i=i)
+                myjitdriver.jit_merge_point(tot=tot, i=i)
+                myjitdriver.can_enter_jit(tot=tot, i=i)
             return tot
         assert ll_function() == 30185379 * 11
         res = self.run(ll_function, [], 2, policy=P_OOPSPEC)
@@ -162,9 +157,8 @@ class TestVList(test_hotpath.HotPathTest):
                                    'int_is_true': 1})
 
     def test_alloc_and_set(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot'])
         def ll_function():
             i = 1024
             tot = 0
@@ -172,8 +166,8 @@ class TestVList(test_hotpath.HotPathTest):
                 i >>= 1
                 lst = [0] * 9
                 tot += len(lst)
-                MyJitDriver.jit_merge_point(tot=tot, i=i)
-                MyJitDriver.can_enter_jit(tot=tot, i=i)
+                myjitdriver.jit_merge_point(tot=tot, i=i)
+                myjitdriver.can_enter_jit(tot=tot, i=i)
             return tot
         res = self.run(ll_function, [], 2, policy=P_OOPSPEC)
         assert res == 9 * 11
@@ -202,9 +196,8 @@ class TestVList(test_hotpath.HotPathTest):
 
     def test_frozen_list(self):
         lst = [5, 7, 9]
-        class MyJitDriver(JitDriver):
-            greens = ['x']
-            reds = ['i', 'tot']
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = ['i', 'tot'])
         def ll_function(x):
             i = 1024
             tot = 0
@@ -214,8 +207,8 @@ class TestVList(test_hotpath.HotPathTest):
                 z = mylist[x]
                 hint(z, concrete=True)
                 tot += z
-                MyJitDriver.jit_merge_point(x=x, tot=tot, i=i)
-                MyJitDriver.can_enter_jit(x=x, tot=tot, i=i)
+                myjitdriver.jit_merge_point(x=x, tot=tot, i=i)
+                myjitdriver.can_enter_jit(x=x, tot=tot, i=i)
             return tot
 
         res = self.run(ll_function, [1], 2, policy=P_OOPSPEC)
@@ -225,9 +218,8 @@ class TestVList(test_hotpath.HotPathTest):
 
     def test_frozen_list_indexerror(self):
         lst = [5, 7, 9]
-        class MyJitDriver(JitDriver):
-            greens = ['x']
-            reds = ['i', 'tot']
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = ['i', 'tot'])
         def ll_function(x):
             i = 1024
             tot = 0
@@ -241,8 +233,8 @@ class TestVList(test_hotpath.HotPathTest):
                 else:
                     hint(z, concrete=True)
                     tot += z
-                MyJitDriver.jit_merge_point(x=x, tot=tot, i=i)
-                MyJitDriver.can_enter_jit(x=x, tot=tot, i=i)
+                myjitdriver.jit_merge_point(x=x, tot=tot, i=i)
+                myjitdriver.can_enter_jit(x=x, tot=tot, i=i)
             return tot
 
         res = self.run(ll_function, [4], threshold=2, policy=P_OOPSPEC)

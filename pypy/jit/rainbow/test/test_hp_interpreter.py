@@ -17,8 +17,8 @@ import sys
 #    while i > 0:
 #        i >>= 1
 #        ...real test code here...
-#        MyJitDriver.jit_merge_point(...)
-#        MyJitDriver.can_enter_jit(...)
+#        myjitdriver.jit_merge_point(...)
+#        myjitdriver.can_enter_jit(...)
 #
 # and we use a threshold of 2, typically.  This ensures that in a single
 # call, the test code is run in all three ways:
@@ -32,17 +32,16 @@ import sys
 class TestHotInterpreter(test_hotpath.HotPathTest):
 
     def test_loop_convert_const_to_redbox(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x']
-            reds = ['y', 'tot']
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = ['y', 'tot'])
         def ll_function(x, y):
             tot = 0
             while x:    # conversion from green '0' to red 'tot'
                 hint(x, concrete=True)
                 tot += y
                 x -= 1
-                MyJitDriver.jit_merge_point(x=x, y=y, tot=tot)
-                MyJitDriver.can_enter_jit(x=x, y=y, tot=tot)
+                myjitdriver.jit_merge_point(x=x, y=y, tot=tot)
+                myjitdriver.can_enter_jit(x=x, y=y, tot=tot)
             return tot
 
         res = self.run(ll_function, [7, 2], threshold=1)
@@ -50,15 +49,14 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_excluding_return({'int_add': 6})
 
     def test_ifs(self):
-        class MyJitDriver(JitDriver):
-            greens = ['green']
-            reds = ['x', 'y', 'i']
+        myjitdriver = JitDriver(greens = ['green'],
+                                reds = ['x', 'y', 'i'])
         def f(green, x, y):
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(green=green, x=x, y=y, i=i)
-                MyJitDriver.can_enter_jit(green=green, x=x, y=y, i=i)
+                myjitdriver.jit_merge_point(green=green, x=x, y=y, i=i)
+                myjitdriver.can_enter_jit(green=green, x=x, y=y, i=i)
                 green = hint(green, concrete=True)
                 if x:                # red if, and compiling pause
                     res = 100
@@ -78,12 +76,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     assert res == f(g, x, y)
 
     def test_simple_opt_const_propagation2(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x', 'y']
-            reds = []
+        myjitdriver = JitDriver(greens = ['x', 'y'],
+                                reds = [])
         def ll_function(x, y):
-            MyJitDriver.jit_merge_point(x=x, y=y)
-            MyJitDriver.can_enter_jit(x=x, y=y)
+            myjitdriver.jit_merge_point(x=x, y=y)
+            myjitdriver.can_enter_jit(x=x, y=y)
             hint(x, concrete=True)
             hint(y, concrete=True)
             x = hint(x, variable=True)
@@ -97,12 +94,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_excluding_return({})
 
     def test_loop_folding(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x', 'y']
-            reds = []
+        myjitdriver = JitDriver(greens = ['x', 'y'],
+                                reds = [])
         def ll_function(x, y):
-            MyJitDriver.jit_merge_point(x=x, y=y)
-            MyJitDriver.can_enter_jit(x=x, y=y)
+            myjitdriver.jit_merge_point(x=x, y=y)
+            myjitdriver.can_enter_jit(x=x, y=y)
             hint(x, concrete=True)
             hint(y, concrete=True)
             x = hint(x, variable=True)
@@ -240,9 +236,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns({'int_gt': 1})
 
     def test_arith_plus_minus(self):
-        class MyJitDriver(JitDriver):
-            greens = ['encoded_insn', 'nb_insn']
-            reds = ['i', 'x', 'y', 'acc']
+        myjitdriver = JitDriver(greens = ['encoded_insn', 'nb_insn'],
+                                reds = ['i', 'x', 'y', 'acc'])
         def ll_plus_minus(encoded_insn, nb_insn, x, y):
             i = 1024
             while i > 0:
@@ -258,10 +253,10 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     elif op == 0x5:
                         acc -= y
                     pc += 1
-                MyJitDriver.jit_merge_point(encoded_insn=encoded_insn,
+                myjitdriver.jit_merge_point(encoded_insn=encoded_insn,
                                             nb_insn=nb_insn, x=x, y=y, i=i,
                                             acc=acc)
-                MyJitDriver.can_enter_jit(encoded_insn=encoded_insn,
+                myjitdriver.can_enter_jit(encoded_insn=encoded_insn,
                                           nb_insn=nb_insn, x=x, y=y, i=i,
                                           acc=acc)
             return acc
@@ -272,9 +267,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_call_3(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'y', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'y', 'res'])
         def ll_add_one(x):
             return x + 1
         def ll_two(x):
@@ -284,8 +278,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 res = ll_two(y) * y
-                MyJitDriver.jit_merge_point(y=y, i=i, res=res)
-                MyJitDriver.can_enter_jit(y=y, i=i, res=res)
+                myjitdriver.jit_merge_point(y=y, i=i, res=res)
+                myjitdriver.can_enter_jit(y=y, i=i, res=res)
             return res
         res = self.run(ll_function, [5], threshold=2)
         assert res == 10
@@ -293,9 +287,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_call_mixed_color_args(self):
-        class MyJitDriver(JitDriver):
-            greens = ['g1', 'g2']
-            reds = ['r1', 'r2', 'i', 'res']
+        myjitdriver = JitDriver(greens = ['g1', 'g2'],
+                                reds = ['r1', 'r2', 'i', 'res'])
 
         def ll_grr(a, b, c): return a + 3*b + 7*c
         def ll_rgr(a, b, c): return a + 3*b + 7*c
@@ -316,18 +309,17 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                        ll_rgg(r1, g2, g1) * 100000)
                 hint(g1, concrete=True)
                 hint(g2, concrete=True)
-                MyJitDriver.jit_merge_point(g1=g1, g2=g2, r1=r1, r2=r2,
+                myjitdriver.jit_merge_point(g1=g1, g2=g2, r1=r1, r2=r2,
                                             i=i, res=res)
-                MyJitDriver.can_enter_jit(g1=g1, g2=g2, r1=r1, r2=r2,
+                myjitdriver.can_enter_jit(g1=g1, g2=g2, r1=r1, r2=r2,
                                           i=i, res=res)
             return res
         res = self.run(ll_function, [1, 2, 4, 8], threshold=2)
         assert res == ll_function(1, 2, 4, 8)
 
     def test_call_mixed_color_args_with_void(self):
-        class MyJitDriver(JitDriver):
-            greens = ['g1', 'g2']
-            reds = ['r1', 'r2', 'i', 'res']
+        myjitdriver = JitDriver(greens = ['g1', 'g2'],
+                                reds = ['r1', 'r2', 'i', 'res'])
 
         def ll_vrg(a, b, c): return 1 + 3*b + 7*c
         def ll_gvr(a, b, c): return a + 3*1 + 7*c
@@ -349,18 +341,17 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                        ll_grv(g1, r2, vv) * 100000)
                 hint(g1, concrete=True)
                 hint(g2, concrete=True)
-                MyJitDriver.jit_merge_point(g1=g1, g2=g2, r1=r1, r2=r2,
+                myjitdriver.jit_merge_point(g1=g1, g2=g2, r1=r1, r2=r2,
                                             i=i, res=res)
-                MyJitDriver.can_enter_jit(g1=g1, g2=g2, r1=r1, r2=r2,
+                myjitdriver.can_enter_jit(g1=g1, g2=g2, r1=r1, r2=r2,
                                           i=i, res=res)
             return res
         res = self.run(ll_function, [1, 2, 4, 8], threshold=2)
         assert res == ll_function(1, 2, 4, 8)
 
     def test_void_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['y', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['y', 'i'])
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         def ll_do_nothing(s, x):
             s.x = x + 1
@@ -371,8 +362,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 s = lltype.malloc(S)
                 ll_do_nothing(s, y)
                 y = s.x
-                MyJitDriver.jit_merge_point(y=y, i=i)
-                MyJitDriver.can_enter_jit(y=y, i=i)
+                myjitdriver.jit_merge_point(y=y, i=i)
+                myjitdriver.can_enter_jit(y=y, i=i)
             return y
 
         res = self.run(ll_function, [3], threshold=2)
@@ -381,12 +372,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_green_return(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x']
-            reds = []
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = [])
         def ll_function(x):
-            MyJitDriver.jit_merge_point(x=x)
-            MyJitDriver.can_enter_jit(x=x)
+            myjitdriver.jit_merge_point(x=x)
+            myjitdriver.can_enter_jit(x=x)
             return hint(x, concrete=True) + 1
 
         res = self.run(ll_function, [3], threshold=1)
@@ -394,12 +384,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_excluding_return({})
 
     def test_void_return(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x']
-            reds = []
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = [])
         def ll_function(x):
-            MyJitDriver.jit_merge_point(x=x)
-            MyJitDriver.can_enter_jit(x=x)
+            myjitdriver.jit_merge_point(x=x)
+            myjitdriver.can_enter_jit(x=x)
             hint(x, concrete=True)
 
         res = self.run(ll_function, [3], threshold=1)
@@ -407,24 +396,22 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_excluding_return({})
 
     def test_fbinterp_void_return(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i'])
         def ll_function():
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(i=i)
-                MyJitDriver.can_enter_jit(i=i)
+                myjitdriver.jit_merge_point(i=i)
+                myjitdriver.can_enter_jit(i=i)
 
         res = self.run(ll_function, [], threshold=2)
         assert res is None
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_green_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['y']
-            reds = ['i']
+        myjitdriver = JitDriver(greens = ['y'],
+                                reds = ['i'])
         def ll_boring(x):
             return
         def ll_add_one(x):
@@ -433,8 +420,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             i = 1024
             while i > 0:
                 i >>= 1
-                MyJitDriver.jit_merge_point(y=y, i=i)
-                MyJitDriver.can_enter_jit(y=y, i=i)
+                myjitdriver.jit_merge_point(y=y, i=i)
+                myjitdriver.can_enter_jit(y=y, i=i)
                 ll_boring(y)
                 z = ll_add_one(y)
                 z = hint(z, concrete=True)
@@ -445,9 +432,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_recursive_via_residual(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'fudge', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'fudge', 'res', 'i'])
         def indirection(n, fudge):
             return ll_pseudo_factorial(n, fudge)
         def ll_pseudo_factorial(n, fudge):
@@ -460,8 +446,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     v = n * indirection(n - 1, fudge + n) - fudge
                 res += v
-                MyJitDriver.jit_merge_point(n=n, fudge=fudge, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, fudge=fudge, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, fudge=fudge, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, fudge=fudge, res=res, i=i)
             return res
         res = self.run(ll_pseudo_factorial, [3, 2], threshold=2,
                        policy=StopAtXPolicy(indirection))
@@ -470,9 +456,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
 
     def test_recursive_call(self):
         py.test.skip("in-progress")
-        class MyJitDriver(JitDriver):
-            greens = ['n']
-            reds = ['fudge', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['n'],
+                                reds = ['fudge', 'res', 'i'])
         def indirection(n, fudge):
             return ll_pseudo_factorial(n, fudge)
         def ll_pseudo_factorial(n, fudge):
@@ -484,8 +469,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     res = 1
                 else:
                     res = n * indirection(n - 1, fudge + n) - fudge
-                MyJitDriver.jit_merge_point(n=n, fudge=fudge, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, fudge=fudge, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, fudge=fudge, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, fudge=fudge, res=res, i=i)
             return res
         res = self.run(ll_pseudo_factorial, [3, 2], threshold=2)
         expected = ll_pseudo_factorial(3, 2)
@@ -502,15 +487,15 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 s1 = s
-                if MyJitDriver.case >= 2:
+                if myjitdriver.case >= 2:
                     hint(s1, concrete=True)     # green
-                    if MyJitDriver.case == 3:
+                    if myjitdriver.case == 3:
                         s1 = hint(s1, variable=True)    # constant redbox
                 #
                 res = s1.hello * s1.world
                 #
-                MyJitDriver.jit_merge_point(s=s, i=i, res=res)
-                MyJitDriver.can_enter_jit(s=s, i=i, res=res)
+                myjitdriver.jit_merge_point(s=s, i=i, res=res)
+                myjitdriver.can_enter_jit(s=s, i=i, res=res)
             return res
 
         def main(x, y):
@@ -519,27 +504,24 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             s1.world = y
             return ll_function(s1)
 
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['s', 'i', 'res']
-            case = 1
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['s', 'i', 'res'])
+        myjitdriver.case = 1
         res = self.run(main, [6, 7], threshold=2)
         assert res == 42
         self.check_insns_in_loops({'getfield': 2, 'int_mul': 1,
                                    'int_gt': 1, 'int_rshift': 1})
 
-        class MyJitDriver(JitDriver):
-            greens = ['s']
-            reds = ['i', 'res']
-            case = 2
+        myjitdriver = JitDriver(greens = ['s'],
+                                reds = ['i', 'res'])
+        myjitdriver.case = 2
         res = self.run(main, [8, 9], threshold=2)
         assert res == 72
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
-        class MyJitDriver(JitDriver):
-            greens = ['s']
-            reds = ['i', 'res']
-            case = 3
+        myjitdriver = JitDriver(greens = ['s'],
+                                reds = ['i', 'res'])
+        myjitdriver.case = 3
         res = self.run(main, [10, 11], threshold=2)
         assert res == 110
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
@@ -552,15 +534,15 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 a1 = a
-                if MyJitDriver.case >= 2:
+                if myjitdriver.case >= 2:
                     hint(a1, concrete=True)     # green
-                    if MyJitDriver.case == 3:
+                    if myjitdriver.case == 3:
                         a1 = hint(a1, variable=True)    # constant redbox
                 #
                 res = a1[0] * a1[1] + len(a1)
                 #
-                MyJitDriver.jit_merge_point(a=a, i=i, res=res)
-                MyJitDriver.can_enter_jit(a=a, i=i, res=res)
+                myjitdriver.jit_merge_point(a=a, i=i, res=res)
+                myjitdriver.can_enter_jit(a=a, i=i, res=res)
             return res
 
         def main(x, y):
@@ -569,28 +551,25 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             a[1] = y
             return ll_function(a)
 
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['a', 'i', 'res']
-            case = 1
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['a', 'i', 'res'])
+        myjitdriver.case = 1
         res = self.run(main, [6, 7], threshold=2)
         assert res == 44
         self.check_insns_in_loops({'getarrayitem': 2, 'int_mul': 1,
                                    'getarraysize': 1, 'int_add': 1,
                                    'int_gt': 1, 'int_rshift': 1})
 
-        class MyJitDriver(JitDriver):
-            greens = ['a']
-            reds = ['i', 'res']
-            case = 2
+        myjitdriver = JitDriver(greens = ['a'],
+                                reds = ['i', 'res'])
+        myjitdriver.case = 2
         res = self.run(main, [8, 9], threshold=2)
         assert res == 74
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
-        class MyJitDriver(JitDriver):
-            greens = ['a']
-            reds = ['i', 'res']
-            case = 3
+        myjitdriver = JitDriver(greens = ['a'],
+                                reds = ['i', 'res'])
+        myjitdriver.case = 3
         res = self.run(main, [10, 11], threshold=2)
         assert res == 112
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
@@ -673,9 +652,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 4 * 4
 
     def test_degenerate_with_voids(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'res'])
         S = lltype.GcStruct('S', ('y', lltype.Void),
                                  ('x', lltype.Signed))
         def ll_function():
@@ -686,8 +664,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 res = lltype.malloc(S)
                 res.x = 123
                 #
-                MyJitDriver.jit_merge_point(i=i, res=res)
-                MyJitDriver.can_enter_jit(i=i, res=res)
+                myjitdriver.jit_merge_point(i=i, res=res)
+                myjitdriver.can_enter_jit(i=i, res=res)
             return res
 
         res = self.run(ll_function, [], threshold=2)
@@ -695,9 +673,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_plus_minus(self):
-        class MyJitDriver(JitDriver):
-            greens = ['s']
-            reds = ['x', 'y', 'i', 'acc']
+        myjitdriver = JitDriver(greens = ['s'],
+                                reds = ['x', 'y', 'i', 'acc'])
         def ll_plus_minus(s, x, y):
             i = 1024
             while i > 0:
@@ -715,8 +692,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                         acc -= y
                     pc += 1
                 #
-                MyJitDriver.jit_merge_point(s=s, x=x, y=y, i=i, acc=acc)
-                MyJitDriver.can_enter_jit(s=s, x=x, y=y, i=i, acc=acc)
+                myjitdriver.jit_merge_point(s=s, x=x, y=y, i=i, acc=acc)
+                myjitdriver.can_enter_jit(s=s, x=x, y=y, i=i, acc=acc)
             return acc
 
         def main(copies, x, y):
@@ -732,9 +709,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         # this checks that red boxes are able to be virtualized dynamically by
         # the compiler (the P_NOVIRTUAL policy prevents the hint-annotator from
         # marking variables in blue)
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'i', 'res'])
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         def make(n):
             s = lltype.malloc(S)
@@ -748,8 +724,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 s = make(n)
                 res = s.n
                 #
-                MyJitDriver.jit_merge_point(n=n, i=i, res=res)
-                MyJitDriver.can_enter_jit(n=n, i=i, res=res)
+                myjitdriver.jit_merge_point(n=n, i=i, res=res)
+                myjitdriver.can_enter_jit(n=n, i=i, res=res)
             return res
         res = self.run(ll_function, [42], threshold=2)
         assert res == 42
@@ -757,9 +733,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
 
 
     def test_setarrayitem(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'res'])
         A = lltype.GcArray(lltype.Signed)
         a = lltype.malloc(A, 2, immortal=True)
         def ll_function():
@@ -771,8 +746,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 a[1] = 2
                 res = a[0]+a[1]
                 #
-                MyJitDriver.jit_merge_point(i=i, res=res)
-                MyJitDriver.can_enter_jit(i=i, res=res)
+                myjitdriver.jit_merge_point(i=i, res=res)
+                myjitdriver.can_enter_jit(i=i, res=res)
             return res
         res = self.run(ll_function, [], threshold=2)
         assert res == 3
@@ -781,9 +756,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_red_array(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'y', 'n', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y', 'n', 'i', 'res'])
         A = lltype.GcArray(lltype.Signed)
         def ll_function(x, y, n):
             i = 1024
@@ -796,8 +770,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 res = a[n]*len(a)
                 n = 1 - n
                 #
-                MyJitDriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
-                MyJitDriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
+                myjitdriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
             return res
 
         res = self.run(ll_function, [21, -21, 0], threshold=2)
@@ -809,9 +783,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_red_struct_array(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'y', 'n', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y', 'n', 'i', 'res'])
         S = lltype.Struct('s', ('x', lltype.Signed))
         A = lltype.GcArray(S)
         def ll_function(x, y, n):
@@ -825,8 +798,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 res = a[n].x*len(a)
                 n = 1 - n
                 #
-                MyJitDriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
-                MyJitDriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
+                myjitdriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
             return res
 
         res = self.run(ll_function, [21, -21, 0], threshold=2)
@@ -839,9 +812,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_red_varsized_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'y', 'n', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y', 'n', 'i', 'res'])
         A = lltype.Array(lltype.Signed)
         S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
         def ll_function(x, y, n):
@@ -856,8 +828,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 res = s.a[n]*s.foo
                 n = 1 - n
                 #
-                MyJitDriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
-                MyJitDriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, n=n, i=i, res=res)
+                myjitdriver.can_enter_jit(x=x, y=y, n=n, i=i, res=res)
             return res
 
         res = self.run(ll_function, [21, -21, 0], threshold=2)
@@ -866,9 +838,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                          getinteriorarraysize=1)
 
     def test_array_of_voids(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'i', 'res'])
         A = lltype.GcArray(lltype.Void)
         def ll_function(n):
             i = 1024
@@ -883,8 +854,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 # from disappearing
                 keepalive_until_here(b)
                 #
-                MyJitDriver.jit_merge_point(n=n, i=i, res=res)
-                MyJitDriver.can_enter_jit(n=n, i=i, res=res)
+                myjitdriver.jit_merge_point(n=n, i=i, res=res)
+                myjitdriver.can_enter_jit(n=n, i=i, res=res)
             return res
 
         res = self.run(ll_function, [2], threshold=3)
@@ -904,9 +875,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
 
     def test_red_subcontainer_escape(self):
         py.test.skip("broken")
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['k', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['k', 'i', 'res'])
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Signed))
         def ll_function(k):
@@ -923,8 +893,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 t.n = k*k
                 res = s
                 #
-                MyJitDriver.jit_merge_point(k=k, i=i, res=res)
-                MyJitDriver.can_enter_jit(k=k, i=i, res=res)
+                myjitdriver.jit_merge_point(k=k, i=i, res=res)
+                myjitdriver.can_enter_jit(k=k, i=i, res=res)
             return res
 
         res = self.run(ll_function, [7], threshold=2)
@@ -938,9 +908,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(malloc=1, setfield=2)
 
     def test_red_subcontainer_cast(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['k', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['k', 'i', 'res'])
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
         def ll_function(k):
@@ -961,8 +930,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 keepalive_until_here(t)
                 k += 1
                 #
-                MyJitDriver.jit_merge_point(k=k, i=i, res=res)
-                MyJitDriver.can_enter_jit(k=k, i=i, res=res)
+                myjitdriver.jit_merge_point(k=k, i=i, res=res)
+                myjitdriver.can_enter_jit(k=k, i=i, res=res)
             return res
         res = self.run(ll_function, [-10], threshold=2)
         assert res == 10*9
@@ -1037,9 +1006,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns({})
 
     def test_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'x', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'x', 'res'])
         def g(x):
             return x+1
         def f(x):
@@ -1047,8 +1015,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 res = 2*g(x)
-                MyJitDriver.jit_merge_point(x=x, i=i, res=res)
-                MyJitDriver.can_enter_jit(x=x, i=i, res=res)
+                myjitdriver.jit_merge_point(x=x, i=i, res=res)
+                myjitdriver.can_enter_jit(x=x, i=i, res=res)
             return res
 
         res = self.run(f, [20], threshold=2, policy=StopAtXPolicy(g))
@@ -1057,9 +1025,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_residual_red_call_with_exc(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'x', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'x', 'res'])
 
         def h(x):
             if x > 0:
@@ -1078,8 +1045,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     res = g(x)
                 except ValueError:
                     res = 7
-                MyJitDriver.jit_merge_point(x=x, i=i, res=res)
-                MyJitDriver.can_enter_jit(x=x, i=i, res=res)
+                myjitdriver.jit_merge_point(x=x, i=i, res=res)
+                myjitdriver.can_enter_jit(x=x, i=i, res=res)
             return res
 
         stop_at_h = StopAtXPolicy(h)
@@ -1094,9 +1061,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_add=0, int_mul=0)
 
     def test_residual_red_call_with_exc_more(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'x', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'x', 'res'])
 
         def h(x):
             if x > 0:
@@ -1114,8 +1080,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 except ValueError:
                     v = 7
                 res = res * 10 + v
-                MyJitDriver.jit_merge_point(x=x, i=i, res=res)
-                MyJitDriver.can_enter_jit(x=x, i=i, res=res)
+                myjitdriver.jit_merge_point(x=x, i=i, res=res)
+                myjitdriver.can_enter_jit(x=x, i=i, res=res)
             return res
 
         stop_at_h = StopAtXPolicy(h)
@@ -1140,9 +1106,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 212
 
     def test_simple_yellow_meth(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['flag', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['flag', 'res', 'i'])
 
         class Base(object):
             def m(self):
@@ -1163,8 +1128,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     o = Concrete()
                 res = o.m()        # yellow call
-                MyJitDriver.jit_merge_point(flag=flag, res=res, i=i)
-                MyJitDriver.can_enter_jit(flag=flag, res=res, i=i)
+                myjitdriver.jit_merge_point(flag=flag, res=res, i=i)
+                myjitdriver.can_enter_jit(flag=flag, res=res, i=i)
             return res
 
         res = self.run(f, [0], threshold=2)
@@ -1173,9 +1138,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_simple_red_meth(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['flag', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['flag', 'res', 'i'])
 
         class Base(object):
             def m(self, i):
@@ -1196,8 +1160,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     o = Concrete()
                 res = o.m(i)        # red call
-                MyJitDriver.jit_merge_point(flag=flag, res=res, i=i)
-                MyJitDriver.can_enter_jit(flag=flag, res=res, i=i)
+                myjitdriver.jit_merge_point(flag=flag, res=res, i=i)
+                myjitdriver.can_enter_jit(flag=flag, res=res, i=i)
             return res
 
         res = self.run(f, [0], threshold=2)
@@ -1206,9 +1170,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_simple_red_meth_vars_around(self):
-        class MyJitDriver(JitDriver):
-            greens = ['y']
-            reds = ['flag', 'x', 'z', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['y'],
+                                reds = ['flag', 'x', 'z', 'res', 'i'])
 
         class Base(object):
             def m(self, n):
@@ -1230,9 +1193,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     o = Concrete()
                 hint(y, concrete=True)
                 res = (o.m(x)+y)-z
-                MyJitDriver.jit_merge_point(flag=flag, res=res, i=i,
+                myjitdriver.jit_merge_point(flag=flag, res=res, i=i,
                                             x=x, y=y, z=z)
-                MyJitDriver.can_enter_jit(flag=flag, res=res, i=i,
+                myjitdriver.can_enter_jit(flag=flag, res=res, i=i,
                                           x=x, y=y, z=z)
             return res
 
@@ -1243,9 +1206,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_green_red_mismatch_in_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x', 'y']
-            reds = ['u', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['x', 'y'],
+                                reds = ['u', 'res', 'i'])
 
         def add(a,b, u):
             return a+b
@@ -1258,8 +1220,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 z = x+y
                 z = hint(z, concrete=True) + r  # this checks that 'r' is green
                 res = hint(z, variable=True)
-                MyJitDriver.jit_merge_point(x=x, y=y, u=u, res=res, i=i)
-                MyJitDriver.can_enter_jit(x=x, y=y, u=u, res=res, i=i)
+                myjitdriver.jit_merge_point(x=x, y=y, u=u, res=res, i=i)
+                myjitdriver.can_enter_jit(x=x, y=y, u=u, res=res, i=i)
             return res
 
         res = self.run(f, [4, 5, 0], threshold=2)
@@ -1279,9 +1241,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == 120
         
     def test_simple_indirect_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['flag']
-            reds = ['v', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['flag'],
+                                reds = ['v', 'res', 'i'])
 
         def g1(v):
             return v * 2
@@ -1298,8 +1259,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     g = g2
                 res = g(v)
-                MyJitDriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
             return res
 
         res = self.run(f, [0, 40], threshold=2)
@@ -1308,9 +1269,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_normalize_indirect_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['flag']
-            reds = ['v', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['flag'],
+                                reds = ['v', 'res', 'i'])
 
         def g1(v):
             return -17
@@ -1327,8 +1287,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     g = g2
                 res = g(v)
-                MyJitDriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
             return res
 
         res = self.run(f, [0, 40], threshold=2)
@@ -1341,9 +1301,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_normalize_indirect_call_more(self):
-        class MyJitDriver(JitDriver):
-            greens = ['flag']
-            reds = ['v', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['flag'],
+                                reds = ['v', 'res', 'i'])
 
         def g1(v):
             if v >= 0:
@@ -1364,8 +1323,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     g = g2
                 res = g(v) + w
-                MyJitDriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(flag=flag, v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(flag=flag, v=v, res=res, i=i)
             return res
 
         res = self.run(f, [0, 40], threshold=2)
@@ -1426,9 +1385,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert count_depth(res) == 2
 
     def test_known_nonzero(self):
-        class MyJitDriver(JitDriver):
-            greens = ['x']
-            reds = ['y', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = ['y', 'res', 'i'])
         S = lltype.GcStruct('s', ('x', lltype.Signed))
         global_s = lltype.malloc(S, immortal=True)
         global_s.x = 100
@@ -1467,8 +1425,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     else:
                         res = 0
                 #
-                MyJitDriver.jit_merge_point(x=x, y=y, res=res, i=i)
-                MyJitDriver.can_enter_jit(x=x, y=y, res=res, i=i)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res, i=i)
+                myjitdriver.can_enter_jit(x=x, y=y, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h)
@@ -1502,9 +1460,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_debug_assert_ptr_nonzero(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['m', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['m', 'res', 'i'])
         S = lltype.GcStruct('s', ('x', lltype.Signed))
         global_s = lltype.malloc(S)
         global_s.x = 42
@@ -1528,8 +1485,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     n *= m
                 res = n
                 #
-                MyJitDriver.jit_merge_point(m=m, res=res, i=i)
-                MyJitDriver.can_enter_jit(m=m, res=res, i=i)
+                myjitdriver.jit_merge_point(m=m, res=res, i=i)
+                myjitdriver.can_enter_jit(m=m, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h)
@@ -1540,9 +1497,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_mul=0, ptr_iszero=0, ptr_nonzero=0)
 
     def test_indirect_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'x', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'x', 'res', 'i'])
         def h1(n):
             return n*2
         def h2(n):
@@ -1556,8 +1512,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 h = l[n&1]
                 res = h(n) + x
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, x=x, res=res, i=i)
             return res
 
         res = self.run(f, [7, 3], threshold=2)
@@ -1596,9 +1552,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns(indirect_call=1)
 
     def test_indirect_gray_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'x', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'x', 'res', 'i'])
         def h1(w, n):
             w[0] =  n*2
         def h2(w, n):
@@ -1614,17 +1569,16 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 h(w, n)
                 res = w[0] + x
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, x=x, res=res, i=i)
             return res
 
         res = self.run(f, [7, 3], threshold=2)
         assert res == f(7,3)
 
     def test_indirect_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'x', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'x', 'res', 'i'])
         def h1(n):
             return n*2
         def h2(n):
@@ -1638,8 +1592,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 h = l[n&1]
                 res = h(n) + x
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, x=x, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h1, h2)
@@ -1652,9 +1606,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_indirect_residual_red_call_with_exc(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'x', 'res', 'i']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'x', 'res', 'i'])
         def h1(n):
             if n < 0:
                 raise ValueError
@@ -1673,8 +1626,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 except ValueError:
                     res = -42
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, x=x, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h1, h2)
@@ -1686,9 +1639,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(indirect_call=1, int_add=0, int_mul=0)
 
     def test_constant_indirect_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['m', 'n']
-            reds = ['x', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['m', 'n'],
+                                reds = ['x', 'res', 'i'])
         def h1(m, n, x):
             return x-2
         def h2(m, n, x):
@@ -1705,8 +1657,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 h = frozenl[hint(n, variable=True) & 1]
                 res = h(m, 5, x)
                 #
-                MyJitDriver.jit_merge_point(m=m, n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(m=m, n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(m=m, n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(m=m, n=n, x=x, res=res, i=i)
             return res
 
         res = self.run(f, [1, 7, 3], threshold=2)
@@ -1719,9 +1671,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_constant_indirect_red_call_no_result(self):
-        class MyJitDriver(JitDriver):
-            greens = ['m', 'n']
-            reds = ['x', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['m', 'n'],
+                                reds = ['x', 'res', 'i'])
         class A:
             pass
         glob_a = A()
@@ -1742,8 +1693,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 h(m, 5, x)
                 res = glob_a.x
                 #
-                MyJitDriver.jit_merge_point(m=m, n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(m=m, n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(m=m, n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(m=m, n=n, x=x, res=res, i=i)
             return res
 
         res = self.run(f, [1, 7, 3], threshold=2)
@@ -1754,9 +1705,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops(int_mul=0, int_sub=1, setfield=1, getfield=1)
 
     def test_indirect_sometimes_residual_pure_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['n']
-            reds = ['x', 'res', 'i']
+        myjitdriver = JitDriver(greens = ['n'],
+                                reds = ['x', 'res', 'i'])
         def h1(x):
             return x-2
         def h2(x):
@@ -1772,8 +1722,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 h = frozenl[n&1]
                 res = h(x)
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, x=x, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h1)
@@ -1788,9 +1738,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                    'int_gt': 1, 'int_rshift': 1})
 
     def test_indirect_sometimes_residual_pure_but_fixed_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = ['n', 'x']
-            reds = ['i', 'res']
+        myjitdriver = JitDriver(greens = ['n', 'x'],
+                                reds = ['i', 'res'])
         def h1(x):
             return x-2
         def h2(x):
@@ -1807,8 +1756,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 hint(z, concrete=True)
                 res = hint(z, variable=True)
                 #
-                MyJitDriver.jit_merge_point(n=n, x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, x=x, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h1)
@@ -1821,9 +1770,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_gt': 1, 'int_rshift': 1})
 
     def test_manual_marking_of_pure_functions(self):
-        class MyJitDriver(JitDriver):
-            greens = ['n']
-            reds = ['i', 'res']
+        myjitdriver = JitDriver(greens = ['n'],
+                                reds = ['i', 'res'])
         d = {}
         def h1(s):
             try:
@@ -1845,8 +1793,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 a = h1(s)
                 res = hint(a, variable=True)
                 #
-                MyJitDriver.jit_merge_point(n=n, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, res=res, i=i)
             return res
 
         P = StopAtXPolicy(h1)
@@ -1860,9 +1808,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
 
 
     def test_red_int_add_ovf(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'm', 'i', 'result']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'm', 'i', 'result'])
         def f(n, m):
             i = 1024
             while i > 0:
@@ -1871,8 +1818,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     result = ovfcheck(n + m)
                 except OverflowError:
                     result = -42 + m
-                MyJitDriver.jit_merge_point(n=n, m=m, i=i, result=result)
-                MyJitDriver.can_enter_jit(n=n, m=m, i=i, result=result)
+                myjitdriver.jit_merge_point(n=n, m=m, i=i, result=result)
+                myjitdriver.can_enter_jit(n=n, m=m, i=i, result=result)
             return result + 1
 
         res = self.run(f, [100, 20], threshold=2)
@@ -1887,9 +1834,11 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         class MyJitDriver(JitDriver):
             greens = []
             reds = ['n', 'm', 'i', 'result']
-            def on_enter_jit(self, invariants):
-                self.n = hint(hint(self.n, promote=True), variable=True)
-                self.m = hint(hint(self.m, promote=True), variable=True)
+            def on_enter_jit(self, invariants, reds):
+                reds.n = hint(hint(reds.n, promote=True), variable=True)
+                reds.m = hint(hint(reds.m, promote=True), variable=True)
+        myjitdriver = MyJitDriver()
+
         def f(n, m):
             i = 1024
             result = 0
@@ -1899,8 +1848,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                     result += ovfcheck(n + m)
                 except OverflowError:
                     result += -42 + m
-                MyJitDriver.jit_merge_point(n=n, m=m, i=i, result=result)
-                MyJitDriver.can_enter_jit(n=n, m=m, i=i, result=result)
+                myjitdriver.jit_merge_point(n=n, m=m, i=i, result=result)
+                myjitdriver.can_enter_jit(n=n, m=m, i=i, result=result)
             return result
 
         res = self.run(f, [100, 20], threshold=2)
@@ -1992,9 +1941,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == -7
 
     def test_switch(self):
-        class MyJitDriver(JitDriver):
-            greens = ['m']
-            reds = ['n', 'i', 'res']
+        myjitdriver = JitDriver(greens = ['m'],
+                                reds = ['n', 'i', 'res'])
         def g(n, x):
             if n == 0:
                 return 12 + x
@@ -2015,8 +1963,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 y = g(hint(m, concrete=True), n)   # gives a green switch
                 res = x - y
                 #
-                MyJitDriver.jit_merge_point(n=n, m=m, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, m=m, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, m=m, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, m=m, res=res, i=i)
             return res
 
         res = self.run(f, [7, 2], threshold=2)
@@ -2063,9 +2011,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                                            bbox.getgenvar(jitstate))
                 return IntRedBox(abox.kind, gv_result)
 
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['a', 'b', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['a', 'b', 'i', 'res'])
 
         A = lltype.GcArray(lltype.Signed)
 
@@ -2082,8 +2029,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 res[2*i] = x
                 res[2*i+1] = y
                 #
-                MyJitDriver.jit_merge_point(a=a, b=b, res=res, i=i)
-                MyJitDriver.can_enter_jit(a=a, b=b, res=res, i=i)
+                myjitdriver.jit_merge_point(a=a, b=b, res=res, i=i)
+                myjitdriver.can_enter_jit(a=a, b=b, res=res, i=i)
                 i += 1
             return res
 
@@ -2117,9 +2064,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 gv_result = builder.genop1("int_neg", mbox.getgenvar(jitstate))
                 return IntRedBox(mbox.kind, gv_result)
 
-        class MyJitDriver(JitDriver):
-            greens = ['m']
-            reds = ['n', 'i', 'res']
+        myjitdriver = JitDriver(greens = ['m'],
+                                reds = ['n', 'i', 'res'])
 
         class Fz(object):
             x = 10
@@ -2142,8 +2088,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 hint(y, concrete=True)
                 res = x + g(fz, y)   # this g() too
                 #
-                MyJitDriver.jit_merge_point(n=n, m=m, res=res, i=i)
-                MyJitDriver.can_enter_jit(n=n, m=m, res=res, i=i)
+                myjitdriver.jit_merge_point(n=n, m=m, res=res, i=i)
+                myjitdriver.can_enter_jit(n=n, m=m, res=res, i=i)
             return res
 
         class MyPolicy(HintAnnotatorPolicy):
@@ -2176,9 +2122,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
         assert res == f(0)
 
     def test_learn_boolvalue(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['n', 'i', 'tot', 'b']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['n', 'i', 'tot', 'b'])
         class A(object):
             pass
         def f(b, n):
@@ -2199,17 +2144,16 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                         tot += 2 + n
                     else:
                         tot += -2 + n
-                MyJitDriver.jit_merge_point(tot=tot, i=i, n=n, b=b)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, n=n, b=b)
+                myjitdriver.jit_merge_point(tot=tot, i=i, n=n, b=b)
+                myjitdriver.can_enter_jit(tot=tot, i=i, n=n, b=b)
             return tot
         res = self.run(f, [False, 5], threshold=2)
         assert res == f(False, 5)
         self.check_insns_in_loops({'int_add': 2, 'int_gt': 1, 'int_rshift': 1})
 
     def test_learn_nonzeroness(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['a', 'i', 'tot', 'x']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['a', 'i', 'tot', 'x'])
         class A:
             pass
         class B:
@@ -2236,8 +2180,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                         tot += 2 + x
                     else:
                         tot += -2 + x
-                MyJitDriver.jit_merge_point(tot=tot, i=i, a=a, x=x)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, a=a, x=x)
+                myjitdriver.jit_merge_point(tot=tot, i=i, a=a, x=x)
+                myjitdriver.can_enter_jit(tot=tot, i=i, a=a, x=x)
             return tot
         res = self.run(f, [False, 5], threshold=2, policy=StopAtXPolicy(g))
         assert res == f(False, 5)
@@ -2263,9 +2207,8 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
             def _freeze_(self):
                 return True
 
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['space', 'x', 'y', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['space', 'x', 'y', 'i', 'res'])
 
         def f(space, x, y):
             i = 1024
@@ -2277,9 +2220,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     res = space.sub(6, y)
                 #
-                MyJitDriver.jit_merge_point(space=space, x=x, y=y,
+                myjitdriver.jit_merge_point(space=space, x=x, y=y,
                                             res=res, i=i)
-                MyJitDriver.can_enter_jit(space=space, x=x, y=y,
+                myjitdriver.can_enter_jit(space=space, x=x, y=y,
                                           res=res, i=i)
             return res
 
@@ -2303,9 +2246,9 @@ class TestHotInterpreter(test_hotpath.HotPathTest):
                 else:
                     res = space.sub(6, y)
                 #
-                MyJitDriver.jit_merge_point(space=space, x=x, y=y,
+                myjitdriver.jit_merge_point(space=space, x=x, y=y,
                                             res=res, i=i)
-                MyJitDriver.can_enter_jit(space=space, x=x, y=y,
+                myjitdriver.can_enter_jit(space=space, x=x, y=y,
                                           res=res, i=i)
             return res
 

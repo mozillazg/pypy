@@ -25,6 +25,10 @@ def test_simple_loop():
     from pypy.jit.rainbow.test.test_hotpath import TestHotPath
     llinterp(TestHotPath.test_simple_loop)
 
+def test_set_threshold():
+    from pypy.jit.rainbow.test.test_hotpath import TestHotPath
+    llinterp(TestHotPath.test_set_threshold)
+
 def test_hp_tlr():
     from pypy.jit.rainbow.test.test_hotpath import TestHotPath
     llinterp(TestHotPath.test_hp_tlr)

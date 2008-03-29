@@ -28,10 +28,9 @@ class TestJIT(BaseRtypingTest, LLRtypeMixin):
         assert res == 42
 
     def test_set_param(self):
-        class MyJitDriver(JitDriver):
-            greens = reds = []
+        myjitdriver = JitDriver(greens=[], reds=[])
         def f(x):
-            MyJitDriver.set_param(foo=x)
+            myjitdriver.set_param("threshold", x)
 
         assert f(4) is None
         res = self.interpret(f, [4])

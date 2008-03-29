@@ -122,9 +122,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
     type_system = "lltype"
 
     def test_simple(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'xy']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'xy'])
 
         def f(xy):
             tot = 0
@@ -134,8 +133,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 x = xy_get_x(xy)
                 y = xy_get_y(xy)
                 tot += x+y
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+                myjitdriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                myjitdriver.can_enter_jit(tot=tot, i=i, xy=xy)
             return tot
 
         def main(x, y):
@@ -158,9 +157,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                     [lltype.Ptr(XY), lltype.Signed, lltype.Signed])
 
     def test_simple_set(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'xy']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'xy'])
    
         def f(xy):
             tot = 0
@@ -171,8 +169,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 xy_set_y(xy, 1)
                 y = xy_get_y(xy)
                 tot += x+y
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+                myjitdriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                myjitdriver.can_enter_jit(tot=tot, i=i, xy=xy)
             return tot
 
         def main(x, y):
@@ -193,9 +191,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                     [lltype.Ptr(XY), lltype.Signed, lltype.Signed])
 
     def test_set_effect(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'xy']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'xy'])
 
         def f(xy):
             tot = 0
@@ -207,8 +204,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 y = xy_get_y(xy)
                 v = x + y
                 tot += v
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xy=xy)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xy=xy)
+                myjitdriver.jit_merge_point(tot=tot, i=i, xy=xy)
+                myjitdriver.can_enter_jit(tot=tot, i=i, xy=xy)
             return tot
 
         def main(x, y):
@@ -230,9 +227,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                     [lltype.Ptr(XY), lltype.Signed, lltype.Signed])
 
     def test_simple_escape(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'xy', 'e']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'xy', 'e'])
 
         def f(e, xy):
             i = 1024
@@ -240,8 +236,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 i >>= 1
                 xy_set_y(xy, xy_get_y(xy) + 3)
                 e.xy = xy
-                MyJitDriver.jit_merge_point(i=i, xy=xy, e=e)
-                MyJitDriver.can_enter_jit(i=i, xy=xy, e=e)
+                myjitdriver.jit_merge_point(i=i, xy=xy, e=e)
+                myjitdriver.can_enter_jit(i=i, xy=xy, e=e)
             return e.xy.y
 
         def main(x, y):
@@ -264,9 +260,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 [lltype.Ptr(XY), lltype.Signed, lltype.Signed, lltype.Ptr(E)])
 
     def test_simple_return_it(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['which', 'i', 'xy1', 'xy2']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['which', 'i', 'xy1', 'xy2'])
 
         def f(which, xy1, xy2):
             i = 1024
@@ -274,8 +269,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 i >>= 1
                 xy_set_y(xy1, xy_get_y(xy1) + 3)
                 xy_set_y(xy2, xy_get_y(xy2) + 7)
-                MyJitDriver.jit_merge_point(i=i, which=which, xy1=xy1, xy2=xy2)
-                MyJitDriver.can_enter_jit(i=i, which=which, xy1=xy1, xy2=xy2)
+                myjitdriver.jit_merge_point(i=i, which=which, xy1=xy1, xy2=xy2)
+                myjitdriver.can_enter_jit(i=i, which=which, xy1=xy1, xy2=xy2)
             if which == 1:
                 return xy1
             else:
@@ -305,9 +300,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0, setfield=0)
 
     def test_simple_aliasing(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'xy1', 'xy2', 'res', 'which']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'xy1', 'xy2', 'res', 'which'])
 
         def f(which, xy1, xy2):
             xy_set_y(xy1, xy_get_y(xy1) + 3)
@@ -332,8 +326,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 xy = f(which, xy1, xy2)
                 assert xy is xy1 or xy is xy2
                 res = xy.x+xy.y
-                MyJitDriver.jit_merge_point(i=i, xy1=xy1, xy2=xy2, res=res, which=which)
-                MyJitDriver.can_enter_jit(i=i, xy1=xy1, xy2=xy2, res=res, which=which)
+                myjitdriver.jit_merge_point(i=i, xy1=xy1, xy2=xy2, res=res, which=which)
+                myjitdriver.can_enter_jit(i=i, xy1=xy1, xy2=xy2, res=res, which=which)
             return res
 
         res = self.run(main, [1, 20, 22], 2)
@@ -344,9 +338,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0)
 
     def test_simple_construct_no_escape(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'x', 'y']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'x', 'y'])
 
         def f(x, y):
             xy = lltype.malloc(XY)
@@ -363,8 +356,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
             while i:
                 i >>= 1
                 tot += f(x, y)
-                MyJitDriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
+                myjitdriver.jit_merge_point(tot=tot, i=i, x=x, y=y)
+                myjitdriver.can_enter_jit(tot=tot, i=i, x=x, y=y)
             return tot
 
         res = self.run(main, [20, 22], 2)
@@ -373,13 +366,12 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                                    'int_rshift': 1})
 
     def test_simple_construct_escape(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'y']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y'])
    
         def f(x, y):
-            MyJitDriver.jit_merge_point(x=x, y=y)
-            MyJitDriver.can_enter_jit(x=x, y=y)
+            myjitdriver.jit_merge_point(x=x, y=y)
+            myjitdriver.can_enter_jit(x=x, y=y)
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
@@ -401,9 +393,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
 
     def test_pass_in_construct_another_and_escape(self):
         py.test.skip("in-progress")
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'xy', 'x', 'y']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'xy', 'x', 'y'])
    
         def f(x, y):
             i = 1024
@@ -415,8 +406,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 xy.y = y
                 x = xy_get_x(xy)
                 y = xy_get_y(xy)            
-                MyJitDriver.jit_merge_point(xy=xy, i=i, x=x, y=y)
-                MyJitDriver.can_enter_jit(xy=xy, i=i, x=x, y=y)
+                myjitdriver.jit_merge_point(xy=xy, i=i, x=x, y=y)
+                myjitdriver.can_enter_jit(xy=xy, i=i, x=x, y=y)
             return xy
 
         def main(x, y):
@@ -429,9 +420,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0)
 
     def test_simple_with_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'xp']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'xp'])
 
         def f(xp):
             tot = 0
@@ -442,8 +432,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 p = xp_get_p(xp)
                 res = x+p.a+p.b
                 tot += res
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp)
+                myjitdriver.jit_merge_point(tot=tot, i=i, xp=xp)
+                myjitdriver.can_enter_jit(tot=tot, i=i, xp=xp)
             return tot
 
         def main(x, a, b):
@@ -461,9 +451,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=2)    
 
     def test_simple_with_setting_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'xp', 's', 'x']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'xp', 's', 'x'])
    
         def f(xp, s):
             tot = 0
@@ -476,8 +465,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 p.b = p.b*2
                 v = x+p.a+p.b
                 tot += v+xp.p.b
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, s=s, x=x)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, s=s, x=x)
+                myjitdriver.jit_merge_point(tot=tot, i=i, xp=xp, s=s, x=x)
+                myjitdriver.can_enter_jit(tot=tot, i=i, xp=xp, s=s, x=x)
             return tot
 
         def main(x, a, b):
@@ -495,9 +484,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=4)
 
     def test_simple_with_setting_new_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'xp', 'a', 'b']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'xp', 'a', 'b'])
    
         def f(xp, a, b):
             tot = 0
@@ -513,8 +501,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 x = xp_get_x(xp)
                 v = x+p.a+p.b
                 tot += v
-                MyJitDriver.jit_merge_point(tot=tot, i=i, xp=xp, a=a, b=b)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, xp=xp, a=a, b=b)
+                myjitdriver.jit_merge_point(tot=tot, i=i, xp=xp, a=a, b=b)
+                myjitdriver.can_enter_jit(tot=tot, i=i, xp=xp, a=a, b=b)
             return tot
 
         def main(x, a, b):
@@ -530,9 +518,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
 
 
     def test_simple_constr_with_setting_new_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'xp', 'x', 'a', 'b']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'xp', 'x', 'a', 'b'])
 
         def f(x, a, b):
             i = 1024
@@ -550,8 +537,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 p.b = p.b*2
                 x = xp_get_x(xp)
                 #
-                MyJitDriver.jit_merge_point(xp=xp, i=i, x=x, a=a, b=b)
-                MyJitDriver.can_enter_jit(xp=xp, i=i, x=x, a=a, b=b)
+                myjitdriver.jit_merge_point(xp=xp, i=i, x=x, a=a, b=b)
+                myjitdriver.can_enter_jit(xp=xp, i=i, x=x, a=a, b=b)
             return xp
 
         def main(x, a, b):
@@ -568,9 +555,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0, malloc=0)
 
     def test_simple_read(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'tot', 'e']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'tot', 'e'])
 
         def f(e):
             tot = 0
@@ -581,8 +567,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 xy_set_y(xy, xy_get_y(xy) + 3)
                 v = xy_get_x(xy)*2
                 tot += v
-                MyJitDriver.jit_merge_point(tot=tot, i=i, e=e)
-                MyJitDriver.can_enter_jit(tot=tot, i=i, e=e)
+                myjitdriver.jit_merge_point(tot=tot, i=i, e=e)
+                myjitdriver.can_enter_jit(tot=tot, i=i, e=e)
             return tot
 
         def main(x, y):
@@ -600,9 +586,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=3)
 
     def test_simple_escape_through_vstruct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['i', 'e', 'x', 'y']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['i', 'e', 'x', 'y'])
 
         def f(x, y):
             i = 1024
@@ -619,8 +604,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 newy = 2*y
                 xy_set_y(xy, newy)
                 #
-                MyJitDriver.jit_merge_point(e=e, i=i, x=x, y=y)
-                MyJitDriver.can_enter_jit(e=e, i=i, x=x, y=y)
+                myjitdriver.jit_merge_point(e=e, i=i, x=x, y=y)
+                myjitdriver.can_enter_jit(e=e, i=i, x=x, y=y)
             return e
 
         def main(x, y):
@@ -636,9 +621,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0, malloc=0)
 
     def test_residual_doing_nothing(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['xy', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['xy', 'i', 'res'])
 
         class Counter:
             counter = 0
@@ -653,8 +637,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 i >>= 1
                 g(xy)
                 res = xy.x + 1
-                MyJitDriver.jit_merge_point(xy=xy, res=res, i=i)
-                MyJitDriver.can_enter_jit(xy=xy, res=res, i=i)
+                myjitdriver.jit_merge_point(xy=xy, res=res, i=i)
+                myjitdriver.can_enter_jit(xy=xy, res=res, i=i)
             return res
 
         def main(x, y):
@@ -671,9 +655,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(direct_call=1)
 
     def test_late_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'z', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'z', 'i', 'res'])
 
         def g(e):
             xy = e.xy
@@ -695,8 +678,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                     res = z*3
                 g(e)
                 #
-                MyJitDriver.jit_merge_point(e=e, z=z, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, z=z, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, z=z, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, z=z, res=res, i=i)
             return res
 
         def main(x, y, z):
@@ -718,9 +701,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(0, 21, 11)
 
     def test_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'i', 'res'])
 
         def g(e):
             xy = e.xy
@@ -739,8 +721,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 g(e)
                 res = xy.x
                 #
-                MyJitDriver.jit_merge_point(e=e, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, res=res, i=i)
             return res
 
         def main(x, y):
@@ -762,9 +744,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(2, 20)
 
     def test_force_in_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'a', 'b', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'a', 'b', 'i', 'res'])
 
         def g(e):
             xp = e.xp
@@ -791,8 +772,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 g(e)            
                 res = xp.x
                 #
-                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
             return res
             
         def main(a, b, x):
@@ -814,9 +795,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(2, 20, 10)
 
     def test_force_multiple_reads_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'a', 'b', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'a', 'b', 'i', 'res'])
 
         def g(e):
             xp = e.xp
@@ -841,8 +821,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 g(e)            
                 res = xp.x
                 #
-                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
             return res
 
         def main(a, b, x):
@@ -864,9 +844,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(2, 20, 10)
 
     def test_force_unaliased_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'a', 'b', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'a', 'b', 'i', 'res'])
 
         def g(e):
             pq = e.pq
@@ -891,8 +870,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 g(e)            
                 res = pq.p.a
                 #
-                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
             return res
 
         def main(a, b, x):
@@ -914,9 +893,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(2, 20, 10)
 
     def test_force_aliased_residual_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'a', 'b', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'a', 'b', 'i', 'res'])
 
         def g(e):
             pq = e.pq
@@ -938,8 +916,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 g(e)            
                 res = pq.p.a
                 #
-                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
             return res
 
         def main(a, b, x):
@@ -961,9 +939,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(2, 20, 10)
 
     def test_force_in_residual_red_call_with_more_use(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['e', 'a', 'b', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['e', 'a', 'b', 'i', 'res'])
 
         def g(e):
             xp = e.xp
@@ -991,8 +968,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 s.b = s.b*5
                 res = xp.x
                 #
-                MyJitDriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
-                MyJitDriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.jit_merge_point(e=e, a=a, b=b, res=res, i=i)
+                myjitdriver.can_enter_jit(e=e, a=a, b=b, res=res, i=i)
             return res
 
         def main(a, b, x):
@@ -1014,9 +991,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(2, 20, 10)
 
     def test_virtualizable_escaped_as_argument_to_red_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'y', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y', 'i', 'res'])
 
         def g(xy):
             x = xy_get_x(xy)
@@ -1036,8 +1012,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 x = xy_get_x(xy)
                 y = xy_get_y(xy)
                 #
-                MyJitDriver.jit_merge_point(x=x, y=y, res=res, i=i)
-                MyJitDriver.can_enter_jit(x=x, y=y, res=res, i=i)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res, i=i)
+                myjitdriver.can_enter_jit(x=x, y=y, res=res, i=i)
             return res
 
         def main(x, y):
@@ -1052,9 +1028,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         assert res == main(20, 11)
 
     def test_setting_in_residual_call(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'i', 'res'])
 
         def g(xy):
             x = xy_get_x(xy)
@@ -1076,8 +1051,8 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                 y = xy_get_y(xy)
                 res = x*2 + y
                 #
-                MyJitDriver.jit_merge_point(x=x, res=res, i=i)
-                MyJitDriver.can_enter_jit(x=x, res=res, i=i)
+                myjitdriver.jit_merge_point(x=x, res=res, i=i)
+                myjitdriver.can_enter_jit(x=x, res=res, i=i)
             return res
 
         def main(x):
@@ -1099,9 +1074,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         py.test.skip("port me")
 
     def test_simple(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['xy', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['xy', 'i', 'res'])
 
         class XY(object):
             _virtualizable_ = True
@@ -1115,8 +1089,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 res = xy.x+xy.y
-                MyJitDriver.jit_merge_point(xy=xy, res=res, i=i)
-                MyJitDriver.can_enter_jit(xy=xy, res=res, i=i)
+                myjitdriver.jit_merge_point(xy=xy, res=res, i=i)
+                myjitdriver.can_enter_jit(xy=xy, res=res, i=i)
             return res
 
         def main(x, y):
@@ -1128,9 +1102,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0)
 
     def test_simple__class__(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['v', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['v', 'i', 'res'])
 
         class V(object):
             _virtualizable_ = True
@@ -1151,8 +1124,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 res = v.__class__
-                MyJitDriver.jit_merge_point(v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(v=v, res=res, i=i)
             return res
 
         def main(x, y):
@@ -1182,9 +1155,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert res == 2
 
     def test_simple_inheritance(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['xy', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['xy', 'i', 'res'])
 
         class X(object):
             _virtualizable_ = True
@@ -1203,8 +1175,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             while i > 0:
                 i >>= 1
                 res = xy.x+xy.y
-                MyJitDriver.jit_merge_point(xy=xy, res=res, i=i)
-                MyJitDriver.can_enter_jit(xy=xy, res=res, i=i)
+                myjitdriver.jit_merge_point(xy=xy, res=res, i=i)
+                myjitdriver.can_enter_jit(xy=xy, res=res, i=i)
             return res
 
         def main(x, y):
@@ -1221,9 +1193,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=0)
 
     def test_simple_interpreter_with_frame(self):
-        class MyJitDriver(JitDriver):
-            greens = ['pc', 'n', 's']
-            reds = ['frame']
+        myjitdriver = JitDriver(greens = ['pc', 'n', 's'],
+                                reds = ['frame'])
 
         class Log:
             acc = 0
@@ -1245,7 +1216,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 n = len(s)
                 pc = 0
                 while True:
-                    MyJitDriver.jit_merge_point(frame=self, pc=pc, n=n, s=s)
+                    myjitdriver.jit_merge_point(frame=self, pc=pc, n=n, s=s)
                     self.pc = pc
                     if hint(pc >= n, concrete=True):
                         break
@@ -1260,7 +1231,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                         if self.acc > 0:
                             pc -= 3
                             assert pc >= 0
-                            MyJitDriver.can_enter_jit(frame=self, pc=pc,
+                            myjitdriver.can_enter_jit(frame=self, pc=pc,
                                                       n=n, s=s)
                     elif op == 'd':
                         self.debug()
@@ -1545,9 +1516,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
 
         
     def test_virtual_list(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['v', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['v', 'i', 'res'])
 
         class V(object):
             _virtualizable_ = True
@@ -1571,8 +1541,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 g(v)
                 l2 = v.l
                 res = l[0]*2 + l[1] + l2[0] * 2 + l2[1]
-                MyJitDriver.jit_merge_point(v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(v=v, res=res, i=i)
             return res
 
         def main():
@@ -1585,9 +1555,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert res == main()
 
     def test_virtual_list_and_struct(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['v', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['v', 'i', 'res'])
 
         class S(object):
             def __init__(self, x, y):
@@ -1619,8 +1588,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 l2 = v.l
                 s2 = v.s
                 res = l[0]*2 + l[1] + l2[0] * 2 + l2[1] + s.x * 7 + s.y + s2.x * 7 + s2.y
-                MyJitDriver.jit_merge_point(v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(v=v, res=res, i=i)
             return res
 
         def main():
@@ -1633,17 +1602,17 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert res == main()
 
     def test_simple_interpreter_with_frame_with_stack(self):
-        class MyJitDriver(JitDriver):
+        class MyJitdriver(JitDriver):
             greens = ['pc', 's']
             reds = ['frame']
 
-            def compute_invariants(self, pc, s):
-                frame = self.frame
+            def compute_invariants(self, reds, pc, s):
+                frame = reds.frame
                 stacklen = len(frame.stack)
                 return stacklen
 
-            def on_enter_jit(self, invariant, pc, s):
-                frame = self.frame
+            def on_enter_jit(self, invariant, reds, pc, s):
+                frame = reds.frame
                 origstack = frame.stack
                 stacklen = invariant
                 curstack = []
@@ -1654,6 +1623,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                     i += 1
                 frame.stack = curstack
                 log.expected_stack = None
+
+        myjitdriver = MyJitdriver()
 
         class Log:
             stack = None
@@ -1676,7 +1647,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
             def interpret(self, s):
                 pc = 0
                 while True:
-                    MyJitDriver.jit_merge_point(frame=self, s=s, pc=pc)
+                    myjitdriver.jit_merge_point(frame=self, s=s, pc=pc)
                     self.pc = pc
                     if hint(pc >= len(s), concrete=True):
                         break
@@ -1703,7 +1674,7 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                         cond = self.stack.pop()
                         if cond > 0:
                             pc = hint(target, promote=True)
-                            MyJitDriver.can_enter_jit(frame=self, s=s, pc=pc)
+                            myjitdriver.can_enter_jit(frame=self, s=s, pc=pc)
                     elif op == 't':
                         self.trace = self.trace * 3 + self.stack[-1]
                     elif op == 'd':
@@ -1748,9 +1719,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
 
 
     def test_virtual_list_and_struct_fallback(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['v', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['v', 'i', 'res'])
 
         class Counter:
             pass
@@ -1790,8 +1760,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                 l.pop()
                 assert len(l) == 0
                 v.l = None
-                MyJitDriver.jit_merge_point(v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(v=v, res=res, i=i)
             return res
 
         def main():
@@ -1884,9 +1854,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
         assert res == 222
 
     def test_type_bug(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['x', 'v', 'i', 'res']
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'v', 'i', 'res'])
 
         class V(object):
             _virtualizable_ = True
@@ -1905,8 +1874,8 @@ class TestVirtualizableImplicit(test_hotpath.HotPathTest):
                     pass
                 res = x*2, v
                 #
-                MyJitDriver.jit_merge_point(x=x, v=v, res=res, i=i)
-                MyJitDriver.can_enter_jit(x=x, v=v, res=res, i=i)
+                myjitdriver.jit_merge_point(x=x, v=v, res=res, i=i)
+                myjitdriver.can_enter_jit(x=x, v=v, res=res, i=i)
             return res
 
         def main(x,y):

@@ -8,7 +8,8 @@ from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.jit import hint, _is_early_constant, JitDriver
 import pypy.interpreter.pyopcode   # for side-effects
-from pypy.interpreter.gateway import ObjSpace
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.gateway import ObjSpace, Arguments
 from pypy.interpreter.eval import Frame
 from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pyframe import PyFrame
@@ -24,18 +25,18 @@ class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
 
-    def compute_invariants(self, next_instr, pycode):
+    def compute_invariants(self, reds, next_instr, pycode):
         # compute the information that really only depends on next_instr
         # and pycode
-        frame = self.frame
+        frame = reds.frame
         valuestackdepth = frame.valuestackdepth
         blockstack = frame.blockstack
         return (valuestackdepth, blockstack)
 
-    def on_enter_jit(self, invariants, next_instr, pycode):
+    def on_enter_jit(self, invariants, reds, next_instr, pycode):
         # *loads* of nonsense for now
         (depth, oldblockstack) = invariants
-        frame = self.frame
+        frame = reds.frame
         pycode = hint(pycode, deepfreeze=True)
 
         fastlocals_w = [None] * pycode.co_nlocals
@@ -63,9 +64,7 @@ class PyPyJitDriver(JitDriver):
 
         # XXX we should also make a completely virtual copy of oldblockstack
 
-    def getcurrentthreshold():
-        return pypyjitconfig.cur_threshold
-    getcurrentthreshold = staticmethod(getcurrentthreshold)
+pypyjitdriver = PyPyJitDriver()
 
 class __extend__(PyFrame):
 
@@ -73,7 +72,7 @@ class __extend__(PyFrame):
         next_instr = r_uint(next_instr)
         try:
             while True:
-                PyPyJitDriver.jit_merge_point(
+                pypyjitdriver.jit_merge_point(
                     frame=self, ec=ec, next_instr=next_instr, pycode=pycode)
                 pycode = hint(pycode, deepfreeze=True)
                 co_code = pycode.co_code
@@ -89,7 +88,7 @@ class __extend__(PyFrame):
 
     def JUMP_ABSOLUTE(f, jumpto, next_instr, *ignored):
         ec = f.space.getexecutioncontext()
-        PyPyJitDriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
+        pypyjitdriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
                                     pycode=f.getcode())
         return jumpto
 
@@ -112,35 +111,6 @@ class __extend__(Function):
 #
 # Public interface
 
-MAX_THRESHOLD = sys.maxint // 2
-
-class PyPyJITConfig:
-    def __init__(self):
-        self.cur_threshold = MAX_THRESHOLD  # disabled until the space is ready
-        self.configured_threshold = JitDriver.getcurrentthreshold()
-
-    def isenabled(self):
-        return self.cur_threshold < MAX_THRESHOLD
-
-    def enable(self):
-        self.cur_threshold = self.configured_threshold
-
-    def disable(self):
-        self.cur_threshold = MAX_THRESHOLD
-
-    def setthreshold(self, threshold):
-        if threshold >= MAX_THRESHOLD:
-            threshold = MAX_THRESHOLD - 1
-        self.configured_threshold = threshold
-        if self.isenabled():
-            self.cur_threshold = threshold
-
-    def getthreshold(self):
-        return self.configured_threshold
-
-pypyjitconfig = PyPyJITConfig()
-
-
 def ensure_sys_executable(space):
     # save the app-level sys.executable in JITInfo, where the machine
     # code backend can fish for it.  A bit hackish.
@@ -149,9 +119,6 @@ def ensure_sys_executable(space):
         space.sys.get('executable'))
 
 def startup(space):
-    # -- for now, we start disabled and you have to use pypyjit.enable()
-    #pypyjitconfig.enable()
-
     # -- the next line would be nice, but the app-level sys.executable is not
     # initialized yet :-(  What we need is a hook called by app_main.py
     # after things have really been initialized...  For now we work around
@@ -161,19 +128,28 @@ def startup(space):
     pass
 
 
-def setthreshold(space, threshold):
-    pypyjitconfig.setthreshold(threshold)
-setthreshold.unwrap_spec = [ObjSpace, int]
+def set_param(space, args):
+    '''Configure the tunable JIT parameters.
+        * set_param(name=value, ...)            # as keyword arguments
+        * set_param("name=value,name=value")    # as a user-supplied string
+    '''
+    args_w, kwds_w = args.unpack()
+    if len(args_w) > 1:
+        raise OperationError("set_param() takes at most 1 "
+                             "non-keyword argument, %d given" % len(args_w))
+    if len(args_w) == 1:
+        text = space.str_w(args_w[0])
+        try:
+            pypyjitdriver.set_user_param(text)
+        except ValueError:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("error in JIT parameters string"))
+    for key, w_value in kwds_w.items():
+        intval = space.int_w(w_value)
+        try:
+            pypyjitdriver.set_param(key, intval)
+        except ValueError:
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("no JIT parameter '%s'" % (key,)))
 
-def getthreshold(space):
-    return space.wrap(pypyjitconfig.getthreshold())
-
-def enable(space):
-    ensure_sys_executable(space)
-    pypyjitconfig.enable()
-
-def disable(space):
-    pypyjitconfig.disable()
-
-def isenabled(space):
-    return space.newbool(pypyjitconfig.isenabled())
+set_param.unwrap_spec = [ObjSpace, Arguments]
