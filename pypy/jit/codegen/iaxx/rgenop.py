@@ -473,7 +473,7 @@ class Builder(GenBuilder):
         # XXX only for int return_kind, check calling conventions
         return self.returnvar(eax)
 
-    def genop_same_as(self, kind, gv_x):
+    def genop_same_as(self, gv_x):
         if gv_x.is_const:    # must always return a var
             return self.returnvar(gv_x.operand(self))
         else:
@@ -482,7 +482,7 @@ class Builder(GenBuilder):
     def genop_debug_pdb(self):    # may take an args_gv later
         self.mc.BREAKPOINT()
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         self._open()
         arg_positions = []
         seen = {}
@@ -951,13 +951,13 @@ class ReplayBuilder(GenBuilder):
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         return dummy_var
 
-    def genop_same_as(self, kind, gv_x):
+    def genop_same_as(self, gv_x):
         return dummy_var
 
     def genop_debug_pdb(self):    # may take an args_gv later
         pass
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         return None
 
     def jump_if_false(self, gv_condition, args_gv):
@@ -1031,8 +1031,8 @@ class RI386GenOp(AbstractRGenOp):
         initialstackdepth = ((numargs+MASK)&~MASK) + 1
         return initialstackdepth
 
-    def replay(self, label, kinds):
-        return ReplayBuilder(self), [dummy_var] * len(kinds)
+    def replay(self, label):
+        return ReplayBuilder(self), [dummy_var] * len(label.arg_positions)
 
     @specialize.genconst(1)
     def genconst(self, llvalue):
