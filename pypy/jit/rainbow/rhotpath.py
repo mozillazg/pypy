@@ -188,7 +188,11 @@ class HotSplitFallbackPoint(FallbackPoint):
         value = bool(value)
         threshold = self.hotrunnerdesc.state.threshold
         if value:
-            counter = self.truepath_counter + 1
+            if self.falsepath_counter >= 0: # if other path not compiled either
+                bump = self.hotrunnerdesc.state.trace_eagerness
+            else:
+                bump = 1
+            counter = self.truepath_counter + bump
             assert counter > 0, (
                 "reaching a fallback point for an already-compiled path")
             if counter >= threshold:
@@ -196,7 +200,11 @@ class HotSplitFallbackPoint(FallbackPoint):
             self.truepath_counter = counter
             return False
         else:
-            counter = self.falsepath_counter + 1
+            if self.truepath_counter >= 0: # if other path not compiled either
+                bump = self.hotrunnerdesc.state.trace_eagerness
+            else:
+                bump = 1
+            counter = self.falsepath_counter + bump
             assert counter > 0, (
                 "reaching a fallback point for an already-compiled path")
             if counter >= threshold:
@@ -256,7 +264,12 @@ class PromoteFallbackPoint(FallbackPoint):
     def check_should_compile(self, value):
         # XXX unsafe with a moving GC
         hash = cast_whatever_to_int(lltype.typeOf(value), value)
-        counter = self.counters.get(hash, 0) + 1
+        counter = self.counters.setdefault(hash, 0)
+        if len(self.counters) == 1:   # if no other path compiled so far
+            bump = self.hotrunnerdesc.state.trace_eagerness
+        else:
+            bump = 1
+        counter = counter + bump
         threshold = self.hotrunnerdesc.state.threshold
         assert counter > 0, (
             "reaching a fallback point for an already-compiled path")
