@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import hint, _is_early_constant
+from pypy.rlib.jit import hint, _is_early_constant, JitDriver
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 
@@ -27,5 +27,12 @@ class TestJIT(BaseRtypingTest, LLRtypeMixin):
         res = self.interpret(g, [])
         assert res == 42
 
+    def test_set_param(self):
+        class MyJitDriver(JitDriver):
+            greens = reds = []
+        def f(x):
+            MyJitDriver.set_param(foo=x)
 
-
+        assert f(4) is None
+        res = self.interpret(f, [4])
+        assert res is None
