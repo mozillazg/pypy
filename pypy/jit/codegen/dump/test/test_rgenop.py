@@ -1,4 +1,5 @@
 import py
+py.test.skip("port me")
 from pypy.jit.codegen.dump.rgenop import RDumpGenOp
 from pypy.jit.timeshifter.test.test_timeshift import Whatever
 from pypy.rpython.lltypesystem import lltype
