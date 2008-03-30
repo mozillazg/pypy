@@ -3,7 +3,8 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Rule, Atom, debug_print
 from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
     CutException
 from pypy.lang.prolog.interpreter import error
-from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant, purefunction
+from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant, \
+    purefunction, JitDriver
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
 
@@ -206,15 +207,6 @@ class Engine(object):
                 return builtin.call(self, query, continuation)
         return self.user_call(query, continuation, choice_point=False)
 
-    def _opaque_call(self, query, continuation):
-        from pypy.lang.prolog.builtin import builtins
-        signature = query.signature
-        builtin = builtins.get(signature, None)
-        if builtin is not None:
-            return builtin.call(self, query, continuation)
-        # do a real call
-        return self.user_call(query, continuation, choice_point=False)
-
     def main_loop(self, where, query, continuation, rule=None):
         next = (DONE, None, None, None)
         hint(where, concrete=True)
@@ -311,40 +303,7 @@ class Engine(object):
                  inline=False):
         if not choice_point:
             return (TRY_RULE, query, continuation, rule)
-        if not we_are_jitted():
-            return self.portal_try_rule(rule, query, continuation, choice_point)
-        if inline:
-            return self.main_loop(TRY_RULE, query, continuation, rule)
-        #if _is_early_constant(rule):
-        #    rule = hint(rule, promote=True)
-        #    return self.portal_try_rule(rule, query, continuation, choice_point)
-        return self._opaque_try_rule(rule, query, continuation, choice_point)
-
-    def _opaque_try_rule(self, rule, query, continuation, choice_point):
-        return self.portal_try_rule(rule, query, continuation, choice_point)
-
-    def portal_try_rule(self, rule, query, continuation, choice_point):
-        hint(None, global_merge_point=True)
-        hint(choice_point, concrete=True)
-        if not choice_point:
-            return self._try_rule(rule, query, continuation)
-        where = TRY_RULE
-        next = (DONE, None, None, None)
-        hint(where, concrete=True)
-        hint(rule, concrete=True)
-        signature = hint(query.signature, promote=True)
-        while 1:
-            hint(None, global_merge_point=True)
-            if where == DONE:
-                return next
-            if rule is not None:
-                assert rule.signature == signature
-            next = self.dispatch_bytecode(where, query, continuation, rule)
-            where, query, continuation, rule = next
-            rule = hint(rule, promote=True)
-            if query is not None:
-                signature = hint(query.signature, promote=True)
-            where = hint(where, promote=True)
+        return self.main_loop(TRY_RULE, query, continuation, rule)
 
     def _try_rule(self, rule, query, continuation):
         rule = hint(rule, deepfreeze=True)

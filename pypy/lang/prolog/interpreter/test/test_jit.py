@@ -1,4 +1,5 @@
 import py
+py.test.skip("port me")
 from pypy.jit.timeshifter.test.test_portal import PortalTest, P_NOVIRTUAL
 from pypy.lang.prolog.interpreter import portal
 from pypy.lang.prolog.interpreter import engine, term
@@ -6,7 +7,6 @@ from pypy.lang.prolog.interpreter.parsing import parse_query_term, get_engine
 
 POLICY = portal.PyrologHintAnnotatorPolicy()
 
-py.test.skip()
 
 class TestPortal(PortalTest):
     small = False
