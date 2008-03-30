@@ -110,6 +110,7 @@ class TestVirtualStruct:
         # do a getfield to prevent a merge
         box2 = oldbox.op_getfield(jitstate, self.fielddesc)
         assert box2 is constbox20
+        assert oldbox.access_info.read_fields == 1
         frozenbox = oldbox.freeze(rvalue.freeze_memo())
         # check that ptrbox does not match the frozen virtual struct ever
         py.test.raises(DontMerge, self.match, frozenbox, ptrbox, [ptrbox])
