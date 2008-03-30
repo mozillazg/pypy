@@ -1,5 +1,6 @@
-from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.codegen.i386 import codebuf_posix
+from pypy.rlib.rarithmetic import r_uint
+from pypy.rpython.lltypesystem import rffi, lltype
 
 
 def alloc(map_size):
@@ -46,7 +47,7 @@ class MachineCodeBlock:
     def reserve(self, _size):
         r = MachineCodeBlock(self._data, self._pos + _size, self._pos)
         for i in range(_size):
-            self.write(0)
+            self.write(r_uint(0))
         return r
 
 class ExistingCodeBlock(MachineCodeBlock):
@@ -64,7 +65,7 @@ class OwningMachineCodeBlock(MachineCodeBlock):
         MachineCodeBlock.__init__(self, _data, _size, 0)
 
     def __del__(self):
-        free(rffi.cast(PTR, self._data), self._size * 4)
+        free(rffi.cast(codebuf_posix.PTR, self._data), self._size * 4)
 
 # ------------------------------------------------------------
 
