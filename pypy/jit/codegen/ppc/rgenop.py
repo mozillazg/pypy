@@ -1269,6 +1269,21 @@ class RPPCGenOp(AbstractRGenOp):
             assert isinstance(place, GenConst)
             return place.revealconst(T)
 
+    @staticmethod
+    @specialize.arg(0)
+    def genconst_from_frame_var(kind, base, info, index):
+        place = info[index]
+        if isinstance(place, StackInfo):
+            #print '!!!', base, place.offset
+            #print '???', [peek_word_at(base + place.offset + i)
+            #              for i in range(-64, 65, 4)]
+            assert place.offset != 0
+            value = peek_word_at(base + place.offset)
+            return IntConst(value)
+        else:
+            assert isinstance(place, GenConst)
+            return place
+
 
     @staticmethod
     @specialize.arg(0)
