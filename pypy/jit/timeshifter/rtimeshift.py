@@ -2,7 +2,7 @@ import operator, weakref
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, lloperation, llmemory
 from pypy.jit.hintannotator.model import originalconcretetype
-from pypy.jit.timeshifter import rvalue, rcontainer, rvirtualizable
+from pypy.jit.timeshifter import rvalue, rcontainer, rvirtualizable, booleffect
 from pypy.jit.timeshifter.greenkey import newgreendict, empty_key
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -250,7 +250,9 @@ def genptrnonzero(jitstate, argbox, reverse):
             gv_res = jitstate.ts.genop_ptr_iszero(builder, argbox, gv_addr)
         else:
             gv_res = jitstate.ts.genop_ptr_nonzero(builder, argbox, gv_addr)
-    return rvalue.IntRedBox(gv_res)
+    boolbox = rvalue.BoolRedBox(gv_res)
+    boolbox.iftrue.append(booleffect.PtrIsNonZeroEffect(argbox, reverse))
+    return boolbox
 
 def genptreq(jitstate, argbox0, argbox1, reverse):
     assert isinstance(argbox0, rvalue.PtrRedBox)
