@@ -60,8 +60,9 @@ class FakeBuilder(object):
 
 
 class FakeGenVar(GenVar):
-    def __init__(self, count=0):
-        self.count=count
+    def __init__(self, count=0, kind="no clue"):
+        self.count = count
+        self.kind = kind
     
     def __repr__(self):
         return "V%d" % self.count
@@ -69,6 +70,8 @@ class FakeGenVar(GenVar):
     def __eq__(self, other):
         return self.count == other.count
 
+    def getkind(self):
+        return ("kind", self.kind)
 
 class FakeGenConst(GenConst):
     def __init__(self, _value=None):
@@ -76,6 +79,9 @@ class FakeGenConst(GenConst):
 
     def revealconst(self, T):
         return self._value
+
+    def getkind(self):
+        return ("kind", "no clue")
 
 # ____________________________________________________________
 

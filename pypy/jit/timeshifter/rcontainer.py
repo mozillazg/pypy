@@ -217,6 +217,7 @@ class AbstractStructTypeDesc(object):
 
     def factory(self):
         vstruct = self.VirtualStructCls(self)
+        vstruct.access_info = AccessInfo()
         vstruct.content_boxes = [desc.makedefaultbox()
                                  for desc in self.fielddescs]
         box = rvalue.PtrRedBox(known_nonzero=True)
@@ -788,6 +789,7 @@ class FrozenVirtualStruct(FrozenContainer):
     def __init__(self, typedesc):
         self.typedesc = typedesc
         #self.fz_content_boxes initialized later
+        #self.access_info initialized later
 
     def exactmatch(self, vstruct, outgoingvarboxes, memo):
         assert isinstance(vstruct, VirtualContainer)
@@ -828,6 +830,7 @@ class FrozenVirtualStruct(FrozenContainer):
         contmemo[self] = ownbox
         vstruct = ownbox.content
         assert isinstance(vstruct, VirtualStruct)
+        vstruct.access_info = self.access_info
         self_boxes = self.fz_content_boxes
         for i in range(len(self_boxes)):
             fz_box = self_boxes[i]
@@ -836,13 +839,21 @@ class FrozenVirtualStruct(FrozenContainer):
         return ownbox
 
 
+class AccessInfo(object):
+    def __init__(self):
+        self.read_fields = False
+        self.write_fields = False
+        # XXX what else is needed?
+
+
 class VirtualStruct(VirtualContainer):
-    _attrs_ = "typedesc content_boxes".split()
+    _attrs_ = "typedesc access_info content_boxes".split()
 
     allowed_in_virtualizable = True
     
     def __init__(self, typedesc):
         self.typedesc = typedesc
+        #self.access_info = ... set in factory
         #self.content_boxes = ... set in factory()
         #self.ownbox = ... set in factory()
 
@@ -887,6 +898,7 @@ class VirtualStruct(VirtualContainer):
         contmemo = memo.containers
         assert self not in contmemo     # contmemo no longer used
         result = contmemo[self] = FrozenVirtualStruct(self.typedesc)
+        result.access_info = self.access_info
         frozens = [box.freeze(memo) for box in self.content_boxes]
         result.fz_content_boxes = frozens
         return result
@@ -896,6 +908,7 @@ class VirtualStruct(VirtualContainer):
         contmemo = memo.containers
         assert self not in contmemo     # contmemo no longer used
         result = contmemo[self] = typedesc.VirtualStructCls(typedesc)
+        result.access_info = self.access_info
         result.content_boxes = [box.copy(memo)
                                 for box in self.content_boxes]
         result.ownbox = self.ownbox.copy(memo)
@@ -911,9 +924,11 @@ class VirtualStruct(VirtualContainer):
         self.ownbox = self.ownbox.replace(memo)
 
     def op_getfield(self, jitstate, fielddesc):
+        self.access_info.read_fields = True
         return self.content_boxes[fielddesc.fieldindex]
 
     def op_setfield(self, jitstate, fielddesc, valuebox):
+        self.access_info.write_fields = True
         self.content_boxes[fielddesc.fieldindex] = valuebox
 
     def op_getsubstruct(self, jitstate, fielddesc):
@@ -1260,6 +1275,7 @@ class VirtualizableStruct(VirtualStruct):
             memo.copyfields.append((gv_outside, fielddesc, box))
 
     def op_getfield(self, jitstate, fielddesc):
+        self.access_info.read_fields = True
         typedesc = self.typedesc
         assert isinstance(typedesc, VirtualizableStructTypeDesc)
         gv_outside = self.content_boxes[-1].genvar
@@ -1273,6 +1289,7 @@ class VirtualizableStruct(VirtualStruct):
             return box
         
     def op_setfield(self, jitstate, fielddesc, valuebox):
+        self.access_info.write_fields = True
         typedesc = self.typedesc
         assert isinstance(typedesc, VirtualizableStructTypeDesc)
         fieldindex = fielddesc.fieldindex

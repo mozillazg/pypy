@@ -562,7 +562,6 @@ class TestHotPath(HotPathTest):
         # clue what
 
     def test_loop_with_more_and_more_structs(self):
-        py.test.skip("shows problem with current merging logic")
         myjitdriver = JitDriver(greens = [],
                                 reds = ['n1', 'res'])
 
