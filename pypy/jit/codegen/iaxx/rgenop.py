@@ -44,6 +44,14 @@ class Var(GenVar):
 
     repr = __repr__
 
+class IntVar(Var):
+    pass
+
+class BoolVar(Var):
+    pass
+
+class FloatVar(Var):
+    pass
 
 ##class Const(GenConst):
 
