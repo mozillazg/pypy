@@ -541,9 +541,8 @@ class JitInterpreter(object):
                                    ptrbox2, True)
 
     @arguments("red", "bool")
-    def opimpl_learn_nonzeroness(self, redbox, boolval):
-        assert isinstance(redbox, rvalue.AbstractPtrRedBox)
-        redbox.learn_nonzeroness(self.jitstate, boolval)
+    def opimpl_learn_boolvalue(self, redbox, boolval):
+        redbox.learn_boolvalue(self.jitstate, boolval)
 
     @arguments()
     def opimpl_red_return(self):
