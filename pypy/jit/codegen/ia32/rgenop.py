@@ -6,6 +6,7 @@ from pypy.jit.codegen.i386.codebuf import CodeBlockOverflow
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
 from pypy.rlib import objectmodel
+from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import llhelper
 
 WORD = 4
@@ -45,13 +46,30 @@ class Var(GenVar):
     repr = __repr__
 
 class IntVar(Var):
-    pass
+    ll_type = lltype.Signed
+    token = 'i'
 
 class BoolVar(Var):
-    pass
+    ll_type = lltype.Bool
+    token = 'b'
 
 class FloatVar(Var):
-    pass
+    ll_type = lltype.Float
+    token = 'f'
+
+LL_TO_GENVAR = {}
+TOKEN_TO_GENVAR = {}
+for value in locals().values():
+    if hasattr(value, 'll_type'):
+        LL_TO_GENVAR[value.ll_type] = value.token
+        TOKEN_TO_GENVAR[value.token] = value
+
+UNROLLING_TOKEN_TO_GENVAR = unrolling_iterable(TOKEN_TO_GENVAR.items())
+
+def token_to_genvar(i):
+    for tok, value in UNROLLING_TOKEN_TO_GENVAR:
+        if tok == i:
+            return value()
 
 ##class Const(GenConst):
 
@@ -321,7 +339,7 @@ class Builder(GenBuilder):
 
     def _write_prologue(self, sigtoken):
         self._open()
-        numargs = sigtoken     # for now
+        numargs = len(sigtoken[0])
         #self.mc.BREAKPOINT()
         # self.stackdepth-1 is the return address; the arguments
         # come just before
@@ -457,7 +475,7 @@ class Builder(GenBuilder):
         return self.returnvar(eax)
         
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-        numargs = sigtoken      # for now
+        numargs = len(sigtoken[0])
         MASK = CALL_ALIGN-1
         if MASK:
             final_depth = self.stackdepth + numargs
@@ -519,7 +537,7 @@ class Builder(GenBuilder):
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         self._open()
-        initialstackdepth = self.rgenop._initial_stack_depth(sigtoken)
+        initialstackdepth = self.rgenop._initial_stack_depth(len(sigtoken[0]))
         self.mc.MOV(eax, gv_returnvar.operand(self))
         self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
         self.mc.RET()
@@ -1020,13 +1038,14 @@ class RI386GenOp(AbstractRGenOp):
         return Builder(self, stackdepth)
 
     def newgraph(self, sigtoken, name):
-        builder = self.newbuilder(self._initial_stack_depth(sigtoken))
+        arg_tokens, res_token = sigtoken
+        builder = self.newbuilder(self._initial_stack_depth(len(arg_tokens)))
         builder._open() # Force builder to have an mc
         entrypoint = builder.mc.tell()
         inputargs_gv = builder._write_prologue(sigtoken)
         return builder, IntConst(entrypoint), inputargs_gv
 
-    def _initial_stack_depth(self, sigtoken):
+    def _initial_stack_depth(self, numargs):
         # If a stack depth is a multiple of CALL_ALIGN then the
         # arguments are correctly aligned for a call.  We have to
         # precompute initialstackdepth to guarantee that.  For OS/X the
@@ -1034,7 +1053,6 @@ class RI386GenOp(AbstractRGenOp):
         # arguments are pushed, i.e. just before the return address is
         # pushed by the CALL instruction.  In other words, after
         # 'numargs' arguments have been pushed the stack is aligned:
-        numargs = sigtoken          # for now
         MASK = CALL_ALIGN - 1
         initialstackdepth = ((numargs+MASK)&~MASK) + 1
         return initialstackdepth
@@ -1107,11 +1125,8 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def sigToken(FUNCTYPE):
-        numargs = 0
-        for ARG in FUNCTYPE.ARGS:
-            if ARG is not lltype.Void:
-                numargs += 1
-        return numargs     # for now
+        return ([LL_TO_GENVAR[arg] for arg in FUNCTYPE.ARGS if arg
+                 is not lltype.Void], LL_TO_GENVAR[FUNCTYPE.RESULT])
 
     @staticmethod
     def erasedType(T):
