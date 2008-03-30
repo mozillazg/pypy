@@ -591,6 +591,11 @@ class AbstractFrozenPtrVar(FrozenVar):
             match = False
         if not memo.force_merge:
             if isinstance(box.content, VirtualContainer):
+                # heuristic: if a virtual is only written to, but never read
+                # it might not be "important enough" to keep it virtual
+                if (box.content.access_info.write_fields and not
+                    box.content.access_info.read_fields):
+                    return match
                 raise DontMerge   # XXX recursive data structures?
         return match
 
@@ -634,6 +639,7 @@ class FrozenPtrVirtual(FrozenValue):
     def exactmatch(self, box, outgoingvarboxes, memo):
         assert isinstance(box, PtrRedBox)
         if box.genvar:
+            # XXX should we consider self.fz_content.access_info here too?
             raise DontMerge
         else:
             assert box.content is not None

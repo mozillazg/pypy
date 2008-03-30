@@ -102,9 +102,14 @@ class TestVirtualStruct:
         DontMerge = rvalue.DontMerge
         V0 = FakeGenVar()
         ptrbox = rvalue.PtrRedBox(V0)
+        jitstate = FakeJITState()
         S = self.STRUCT
         constbox20 = makebox(20)
         oldbox = vmalloc(S, constbox20)
+
+        # do a getfield to prevent a merge
+        box2 = oldbox.op_getfield(jitstate, self.fielddesc)
+        assert box2 is constbox20
         frozenbox = oldbox.freeze(rvalue.freeze_memo())
         # check that ptrbox does not match the frozen virtual struct ever
         py.test.raises(DontMerge, self.match, frozenbox, ptrbox, [ptrbox])
@@ -113,7 +118,22 @@ class TestVirtualStruct:
         frozenptrbox = ptrbox.freeze(rvalue.freeze_memo())
         py.test.raises(DontMerge, self.match, frozenptrbox, oldbox, [oldbox])
 
+    def test_merge_with_ptrvar_virtual_never_read(self):
+        DontMerge = rvalue.DontMerge
+        V0 = FakeGenVar()
+        ptrbox = rvalue.PtrRedBox(V0)
+        jitstate = FakeJITState()
+        S = self.STRUCT
+        constbox20 = makebox(20)
+        oldbox = vmalloc(S, constbox20)
 
+        frozenptrbox = ptrbox.freeze(rvalue.freeze_memo())
+        assert self.match(frozenptrbox, oldbox, [oldbox])
+
+        # try it the other way round
+        # XXX what should happen here?
+        #frozenbox = oldbox.freeze(rvalue.freeze_memo())
+        #self.match(frozenbox, ptrbox, [ptrbox])
 
     def test_nested_structure_no_vars(self):
         NESTED = self.NESTEDSTRUCT

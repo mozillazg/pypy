@@ -1,5 +1,5 @@
 import py
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter import rcontainer
 from pypy.jit.timeshifter.test.support import *
@@ -39,7 +39,7 @@ def test_forcevar():
 
 def test_learn_nonzeroness():
     jitstate = FakeJITState()
-    gv = FakeGenVar()
+    gv = FakeGenVar(kind=llmemory.Address)
     box = rvalue.PtrRedBox(gv)
     assert not box.known_nonzero
     assert box.learn_nonzeroness(jitstate, True)
