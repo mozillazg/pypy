@@ -352,7 +352,7 @@ class FallbackInterpreter(object):
         return self.rgenop.genconst(addr1 != addr2)
 
     @arguments("red", "bool")
-    def opimpl_learn_nonzeroness(self, gv_value, boolval):
+    def opimpl_learn_boolvalue(self, gv_value, boolval):
         pass
 
     @arguments("red_varargs")
