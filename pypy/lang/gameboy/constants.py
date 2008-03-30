@@ -54,6 +54,12 @@ ROM_BANK_SIZE = 0x4000
 
 # constants.RAM Bank Size (8KB)
 RAM_BANK_SIZE = 0x2000
+
+
+
+CARTRIDGE_FILE_EXTENSION = ".gb"
+CARTRIDGE_COLOR_FILE_EXTENSION = ".gbc"
+BATTERY_FILE_EXTENSION = ".sav"
     
 # ___________________________________________________________________________
 # CPU FLAGS
@@ -222,6 +228,7 @@ NR52 = 0xFF26 # AUDENA */
 
 AUD3WAVERAM = 0xFF30
 
+BUFFER_LOG_SIZE = 5;
 # ___________________________________________________________________________
 # TIMER
 # ___________________________________________________________________________

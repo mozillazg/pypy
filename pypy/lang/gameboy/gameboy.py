@@ -63,7 +63,7 @@ class GameBoy(object):
 
 
     def cycles(self):
-        return min(self.video.cycles(), self.serial.cycles(),
+        return min( self.video.cycles(), self.serial.cycles(),
                     self.timer.cycles(), self.sound.cycles(),
                     self.joypad.cycles())
 
@@ -120,12 +120,12 @@ class GameBoy(object):
         for index in range(0, 48):
             bits = self.cartridge.read(0x0104 + index)
             pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60)\
-                    + ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06)\
-                    + ((bits >> 4) & 0x01)
+                     + ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06)\
+                     + ((bits >> 4) & 0x01)
 
             pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60)\
-                    + ((bits << 2) & 0x18) + ((bits << 1) & 0x06)\
-                    + ((bits << 0) & 0x01)
+                     + ((bits << 2) & 0x18) + ((bits << 1) & 0x06)\
+                     + ((bits << 0) & 0x01)
 
             self.video.write(0x8010 + (index << 3), pattern0)
             self.video.write(0x8012 + (index << 3), pattern0)

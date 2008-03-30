@@ -739,3 +739,34 @@ class Sound(object):
             if ((index & 31) == 0):
                 self.noiseStep15Table[index >> 5] = 0
             self.noiseStep15Table[index >> 5] |= (polynomial & 1) << (index & 31)
+            
+            
+            
+# SOUND DRIVER -----------------------------------------------------------------
+
+class SoundDriver(object):
+    
+    def __init__(self):
+        self.enabled = True
+    
+    
+    def isEnabled(self):
+        return self.enabled
+    
+    def getSampleRate(self):
+        self.sampleRate
+    
+    def getChannels(self):
+        return self.channelCount
+    
+    def getBitsPerSample(self):
+        return self.bitsPerSample
+    
+    def start(self):
+        pass
+        
+    def stop(self):
+        pass
+    
+    def write(self, buffer, length):
+        pass
