@@ -1432,29 +1432,6 @@ class BytecodeWriter(object):
             tsgraph = self.specialized_graph_of(graph, args_v, spaceop.result)
             yield graph, tsgraph
 
-    def trace_back_bool_var(self, block, v):
-        """Return the (opname, arguments) that created the exitswitch of
-        the block.  The opname is None if not found.
-        """
-        inverted = False
-        for i in range(len(block.operations)-1, -1, -1):
-            op = block.operations[i]
-            if op.result is v:
-                if op.opname == 'bool_not':
-                    inverted = not inverted
-                    [v] = op.args
-                elif op.opname == 'same_as':
-                    [v] = op.args
-                else:
-                    opname = op.opname
-                    opargs = op.args
-                    if inverted:
-                        opname = {'ptr_nonzero': 'ptr_iszero',
-                                  'ptr_iszero' : 'ptr_nonzero'}.get(opname)
-                    return opname, opargs    # found
-        # not found, comes from earlier block - give up
-        return None, None
-
     def guess_call_kind(self, spaceop):
         if spaceop.opname == 'direct_call':
             c_func = spaceop.args[0]
