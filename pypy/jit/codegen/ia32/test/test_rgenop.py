@@ -1,4 +1,4 @@
-from pypy.jit.codegen.iaxx.rgenop import RI386GenOp
+from pypy.jit.codegen.ia32.rgenop import RI386GenOp
 from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTests
 
 class TestRI386Genop(AbstractRGenOpTests):
