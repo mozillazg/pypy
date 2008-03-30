@@ -240,6 +240,22 @@ class DoubleRedBox(RedBox):
             return result
 
 
+class AccessInfo(object):
+    def __init__(self):
+        self.read_fields = 0
+        self.write_fields = 0
+        # XXX what else is needed?
+
+    def __repr__(self):
+        return "<AccessInfo read_fields=%s, write_fields=%s>" % (
+                self.read_fields, self.write_fields)
+
+    def copy(self):
+        result = AccessInfo()
+        result.read_fields = self.read_fields
+        result.write_fields = self.write_fields
+
+
 class AbstractPtrRedBox(RedBox):
     """
     Base class for PtrRedBox (lltype) and InstanceRedBox (ootype)
@@ -252,6 +268,7 @@ class AbstractPtrRedBox(RedBox):
         if genvar is not None and genvar.is_const:
             known_nonzero = bool(self._revealconst(genvar))
         self.known_nonzero = known_nonzero
+        self.access_info = AccessInfo()
 
     def setgenvar(self, newgenvar):
         RedBox.setgenvar(self, newgenvar)
@@ -296,6 +313,8 @@ class AbstractPtrRedBox(RedBox):
             boxmemo[self] = result
             if self.content:
                 result.content = self.content.copy(memo)
+            # XXX is this correct?
+            result.access_info = self.access_info
         assert isinstance(result, AbstractPtrRedBox)
         return result
 
@@ -336,6 +355,7 @@ class AbstractPtrRedBox(RedBox):
                 boxmemo[self] = result
                 result.fz_partialcontent = content.partialfreeze(memo)
                 return result
+            result.fz_access_info = self.access_info.copy()
             boxmemo[self] = result
             return result
 
@@ -375,6 +395,7 @@ class AbstractPtrRedBox(RedBox):
             self.content.enter_block(incoming, memo)
 
     def op_getfield(self, jitstate, fielddesc):
+        self.access_info.read_fields += 1
         self.learn_nonzeroness(jitstate, True)
         if self.content is not None:
             box = self.content.op_getfield(jitstate, fielddesc)
@@ -387,6 +408,7 @@ class AbstractPtrRedBox(RedBox):
         return box
 
     def op_setfield(self, jitstate, fielddesc, valuebox):
+        self.access_info.write_fields += 1
         self.learn_nonzeroness(jitstate, True)
         gv_ptr = self.genvar
         if gv_ptr:
@@ -591,10 +613,9 @@ class AbstractFrozenPtrVar(FrozenVar):
             match = False
         if not memo.force_merge:
             if isinstance(box.content, VirtualContainer):
-                # heuristic: if a virtual is only written to, but never read
+                # heuristic: if a virtual is neither written to, nor read from
                 # it might not be "important enough" to keep it virtual
-                if (box.content.access_info.write_fields and not
-                    box.content.access_info.read_fields):
+                if not box.access_info.read_fields:
                     return match
                 raise DontMerge   # XXX recursive data structures?
         return match
@@ -628,8 +649,12 @@ class FrozenPtrVarWithPartialData(FrozenPtrVar):
         exact = FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
         match = exact and partialdatamatch
         if not memo.force_merge and not match:
+            # heuristic: if a virtual is neither written to, nor read from
+            # it might not be "important enough" to keep it virtual
             from pypy.jit.timeshifter.rcontainer import VirtualContainer
             if isinstance(box.content, VirtualContainer):
+                if not box.access_info.read_fields:
+                    return match
                 raise DontMerge   # XXX recursive data structures?
         return match
 
@@ -639,7 +664,7 @@ class FrozenPtrVirtual(FrozenValue):
     def exactmatch(self, box, outgoingvarboxes, memo):
         assert isinstance(box, PtrRedBox)
         if box.genvar:
-            # XXX should we consider self.fz_content.access_info here too?
+            # XXX should we consider self.access_info here too?
             raise DontMerge
         else:
             assert box.content is not None
