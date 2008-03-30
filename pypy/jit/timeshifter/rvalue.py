@@ -143,10 +143,6 @@ def ll_getvalue(box, T):
     "Return the content of a known-to-be-constant RedBox."
     return box.genvar.revealconst(T)
 
-def ll_is_constant(box):
-    "Check if a red box is known to be constant."
-    return box.is_constant()
-
 
 class IntRedBox(RedBox):
     "A red box that contains a constant integer-like value."
