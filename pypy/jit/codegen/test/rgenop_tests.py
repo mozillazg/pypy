@@ -828,19 +828,177 @@ def get_ovfcheck_adder_runner(RGenOp):
         return res
     return runner
 
-
-class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
+class AbstractTestBase(test_boehm.AbstractGCTestClass):
     RGenOp = None
     RGenOpPacked = None
-
-    def compile(self, runner, argtypes):
-        return self.getcompiled(runner, argtypes,
-                                annotatorpolicy = GENOP_POLICY)
-
+    
     def cast(self, gv, nb_args, RESULT=lltype.Signed):
         F1 = lltype.FuncType([lltype.Signed] * nb_args, RESULT)
         return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
 
+class AbstractRGenOpTestsCompile(AbstractTestBase):
+    def compile(self, runner, argtypes):
+        return self.getcompiled(runner, argtypes,
+                                annotatorpolicy = GENOP_POLICY)
+    
+    def test_adder_compile(self):
+        fn = self.compile(get_adder_runner(self.RGenOp), [int, int])
+        res = fn(9080983, -9080941)
+        assert res == 42
+
+    def test_dummy_compile(self):
+        fn = self.compile(get_dummy_runner(self.RGenOp), [int, int])
+        res = fn(40, 37)
+        assert res == 42
+
+    def test_hide_and_reveal(self):
+        RGenOp = self.RGenOp
+        def hide_and_reveal(v):
+            rgenop = RGenOp()
+            gv = rgenop.genconst(v)
+            res = gv.revealconst(lltype.Signed)
+            keepalive_until_here(rgenop)
+            return res
+        res = hide_and_reveal(42)
+        assert res == 42
+        fn = self.compile(hide_and_reveal, [int])
+        res = fn(42)
+        assert res == 42
+
+
+    def test_hide_and_reveal_p(self):
+        RGenOp = self.RGenOp
+        S = lltype.GcStruct('s', ('x', lltype.Signed))
+        S_PTR = lltype.Ptr(S)
+        s1 = lltype.malloc(S)
+        s1.x = 8111
+        s2 = lltype.malloc(S)
+        s2.x = 8222
+        def hide_and_reveal_p(n):
+            rgenop = RGenOp()
+            if n == 1:
+                s = s1
+            else:
+                s = s2
+            gv = rgenop.genconst(s)
+            s_res = gv.revealconst(S_PTR)
+            keepalive_until_here(rgenop)
+            return s_res.x
+        res = hide_and_reveal_p(1)
+        assert res == 8111
+        res = hide_and_reveal_p(2)
+        assert res == 8222
+        fn = self.compile(hide_and_reveal_p, [int])
+        res = fn(1)
+        assert res == 8111
+        res = fn(2)
+        assert res == 8222
+
+    def test_largedummy_compile(self):
+        fn = self.compile(get_largedummy_runner(self.RGenOp), [int] * 100)
+        args, expected = largedummy_example()
+        res = fn(*args)
+        assert res == expected
+
+    def test_branching_compile(self):
+        fn = self.compile(get_branching_runner(self.RGenOp), [int, int])
+        res = fn(30, 17)
+        assert res == 29
+        res = fn(3, 17)
+        assert res == 17
+
+    def test_goto_compile(self):
+        fn = self.compile(get_goto_runner(self.RGenOp), [int, int])
+        res = fn(10, 17)
+        assert res == 3628872
+        res = fn(3, 17)
+        assert res == 29
+
+    def test_if_compile(self):
+        fn = self.compile(get_if_runner(self.RGenOp), [int, int])
+        res = fn(30, 0)
+        assert res == 45
+        res = fn(3, 0)
+        assert res == 6
+
+    def test_switch_compile(self):
+        fn = self.compile(get_switch_runner(self.RGenOp), [int, int])
+        res = fn(0, 2)
+        assert res == 42
+        res = fn(1, 17)
+        assert res == 38
+        res = fn(42, 18)
+        assert res == 18
+
+    def test_large_switch_compile(self):
+        fn = self.compile(get_large_switch_runner(self.RGenOp), [int, int])
+        res = fn(0, 2)
+        assert res == 42
+        for x in range(1,11):
+            res = fn(x, 7)
+            assert res == 2**x+7
+        res = fn(42, 18)
+        assert res == 18
+
+    def test_fact_compile(self):
+        fn = self.compile(get_fact_runner(self.RGenOp), [int])
+        res = fn(2)
+        assert res == 2
+        res = fn(11)
+        assert res == 39916800
+
+    def test_calling_pause_compile(self):
+        fn = self.compile(get_func_calling_pause_runner(self.RGenOp), [int])
+        res = fn(2)
+        assert res == 2
+        res = fn(-72)
+        assert res == 72
+
+    def test_pause_and_resume_compile(self):
+        fn = self.compile(get_pause_and_resume_runner(self.RGenOp), [int])
+
+        res = fn(1)
+        assert res == 0
+
+        res = fn(2)
+        assert res == 3
+
+        res = fn(3)
+        assert res == 8
+
+    def test_read_frame_var_compile(self):
+        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=False)
+        fn = self.compile(runner, [int])
+        res = fn(30)
+        assert res == 60
+
+    def test_genconst_from_frame_var_compile(self):
+        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=True)
+        fn = self.compile(runner, [int])
+        res = fn(30)
+        assert res == 60
+
+    def test_write_frame_place_compile(self):
+        fn = self.compile(get_write_frame_place_runner(self.RGenOp), [int])
+        res = fn(-42)
+        assert res == -100 - (-420)
+        res = fn(606)
+        assert res == 4242 - 6060
+
+    def test_read_frame_place_compile(self):
+        fn = self.compile(get_read_frame_place_runner(self.RGenOp), [int])
+        res = fn(-1)
+        assert res == 42
+
+
+    def test_ovfcheck_adder_compile(self):
+        fn = self.compile(get_ovfcheck_adder_runner(self.RGenOp), [int, int])
+        res = fn(9080983, -9080941)
+        assert res == (42 << 1) | 0
+        res = fn(-sys.maxint, -10)
+        assert (res & 1) == 1
+
+class AbstractRGenOpTestsDirect(AbstractTestBase):
     def directtesthelper(self, FUNCTYPE, func):
         # for machine code backends: build a ctypes function pointer
         # (with a real physical address) that will call back our 'func'
@@ -885,11 +1043,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(37)
         assert res == 42
 
-    def test_adder_compile(self):
-        fn = self.compile(get_adder_runner(self.RGenOp), [int, int])
-        res = fn(9080983, -9080941)
-        assert res == 42
-
     def test_dummy_direct(self):
         rgenop = self.RGenOp()
         gv_dummyfn = make_dummy(rgenop)
@@ -897,65 +1050,12 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(30, 17)
         assert res == 42
 
-    def test_dummy_compile(self):
-        fn = self.compile(get_dummy_runner(self.RGenOp), [int, int])
-        res = fn(40, 37)
-        assert res == 42
-
-    def test_hide_and_reveal(self):
-        RGenOp = self.RGenOp
-        def hide_and_reveal(v):
-            rgenop = RGenOp()
-            gv = rgenop.genconst(v)
-            res = gv.revealconst(lltype.Signed)
-            keepalive_until_here(rgenop)
-            return res
-        res = hide_and_reveal(42)
-        assert res == 42
-        fn = self.compile(hide_and_reveal, [int])
-        res = fn(42)
-        assert res == 42
-
-    def test_hide_and_reveal_p(self):
-        RGenOp = self.RGenOp
-        S = lltype.GcStruct('s', ('x', lltype.Signed))
-        S_PTR = lltype.Ptr(S)
-        s1 = lltype.malloc(S)
-        s1.x = 8111
-        s2 = lltype.malloc(S)
-        s2.x = 8222
-        def hide_and_reveal_p(n):
-            rgenop = RGenOp()
-            if n == 1:
-                s = s1
-            else:
-                s = s2
-            gv = rgenop.genconst(s)
-            s_res = gv.revealconst(S_PTR)
-            keepalive_until_here(rgenop)
-            return s_res.x
-        res = hide_and_reveal_p(1)
-        assert res == 8111
-        res = hide_and_reveal_p(2)
-        assert res == 8222
-        fn = self.compile(hide_and_reveal_p, [int])
-        res = fn(1)
-        assert res == 8111
-        res = fn(2)
-        assert res == 8222
-
     def test_largedummy_direct(self):
         rgenop = self.RGenOp()
         gv_largedummyfn = make_largedummy(rgenop)
         fnptr = self.cast(gv_largedummyfn, 100)
         args, expected = largedummy_example()
         res = fnptr(*args)
-        assert res == expected
-
-    def test_largedummy_compile(self):
-        fn = self.compile(get_largedummy_runner(self.RGenOp), [int] * 100)
-        args, expected = largedummy_example()
-        res = fn(*args)
         assert res == expected
 
     def test_branching_direct(self):
@@ -967,13 +1067,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(3, 17)
         assert res == 17
 
-    def test_branching_compile(self):
-        fn = self.compile(get_branching_runner(self.RGenOp), [int, int])
-        res = fn(30, 17)
-        assert res == 29
-        res = fn(3, 17)
-        assert res == 17
-
     def test_goto_direct(self):
         rgenop = self.RGenOp()
         gv_gotofn = make_goto(rgenop)
@@ -983,13 +1076,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(3, 17)    # <== or here
         assert res == 29
 
-    def test_goto_compile(self):
-        fn = self.compile(get_goto_runner(self.RGenOp), [int, int])
-        res = fn(10, 17)
-        assert res == 3628872
-        res = fn(3, 17)
-        assert res == 29
-
     def test_if_direct(self):
         rgenop = self.RGenOp()
         gv_iffn = make_if(rgenop)
@@ -997,13 +1083,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(30, 0)
         assert res == 45
         res = fnptr(3, 0)
-        assert res == 6
-
-    def test_if_compile(self):
-        fn = self.compile(get_if_runner(self.RGenOp), [int, int])
-        res = fn(30, 0)
-        assert res == 45
-        res = fn(3, 0)
         assert res == 6
 
     def test_switch_direct(self):
@@ -1017,15 +1096,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(42, 16)
         assert res == 16
 
-    def test_switch_compile(self):
-        fn = self.compile(get_switch_runner(self.RGenOp), [int, int])
-        res = fn(0, 2)
-        assert res == 42
-        res = fn(1, 17)
-        assert res == 38
-        res = fn(42, 18)
-        assert res == 18
-
     def test_large_switch_direct(self):
         rgenop = self.RGenOp()
         gv_switchfn = make_large_switch(rgenop)
@@ -1038,16 +1108,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(42, 16)
         assert res == 16
 
-    def test_large_switch_compile(self):
-        fn = self.compile(get_large_switch_runner(self.RGenOp), [int, int])
-        res = fn(0, 2)
-        assert res == 42
-        for x in range(1,11):
-            res = fn(x, 7)
-            assert res == 2**x+7
-        res = fn(42, 18)
-        assert res == 18
-
     def test_fact_direct(self):
         rgenop = self.RGenOp()
         gv_fact = make_fact(rgenop)
@@ -1057,13 +1117,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(10)
         assert res == 3628800
 
-    def test_fact_compile(self):
-        fn = self.compile(get_fact_runner(self.RGenOp), [int])
-        res = fn(2)
-        assert res == 2
-        res = fn(11)
-        assert res == 39916800
-
     def test_calling_pause_direct(self):
         rgenop = self.RGenOp()
         gv_abs = make_func_calling_pause(rgenop)
@@ -1072,13 +1125,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         assert res == 2
         res = fnptr(-42)
         assert res == 42
-
-    def test_calling_pause_compile(self):
-        fn = self.compile(get_func_calling_pause_runner(self.RGenOp), [int])
-        res = fn(2)
-        assert res == 2
-        res = fn(-72)
-        assert res == 72
 
     def test_longwinded_and_direct(self):
         rgenop = self.RGenOp()
@@ -1319,18 +1365,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(3)
         assert res == 8
 
-    def test_pause_and_resume_compile(self):
-        fn = self.compile(get_pause_and_resume_runner(self.RGenOp), [int])
-
-        res = fn(1)
-        assert res == 0
-
-        res = fn(2)
-        assert res == 3
-
-        res = fn(3)
-        assert res == 8
-
     def test_like_residual_red_call_with_exc_direct(self):
         rgenop = self.RGenOp()
         gv_callable = make_something_a_bit_like_residual_red_call_with_exc(rgenop)
@@ -1414,18 +1448,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(20)
         assert res == 40
 
-    def test_read_frame_var_compile(self):
-        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=False)
-        fn = self.compile(runner, [int])
-        res = fn(30)
-        assert res == 60
-
-    def test_genconst_from_frame_var_compile(self):
-        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=True)
-        fn = self.compile(runner, [int])
-        res = fn(30)
-        assert res == 60
-
     def test_write_frame_place_direct(self):
         def get_writer(place1, place2):
             fvw = FramePlaceWriter(self.RGenOp)
@@ -1441,13 +1463,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         assert res == -100 - 30
         res = fnptr(6)
         assert res == 42 - 60
-
-    def test_write_frame_place_compile(self):
-        fn = self.compile(get_write_frame_place_runner(self.RGenOp), [int])
-        res = fn(-42)
-        assert res == -100 - (-420)
-        res = fn(606)
-        assert res == 4242 - 6060
 
     def test_write_lots_of_frame_places_direct(self):
         def get_writer(places):
@@ -1475,11 +1490,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         gv_callable = make_read_frame_place(rgenop, get_reader)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(-1)
-        assert res == 42
-
-    def test_read_frame_place_compile(self):
-        fn = self.compile(get_read_frame_place_runner(self.RGenOp), [int])
-        res = fn(-1)
         assert res == 42
 
     def test_frame_vars_like_the_frontend_direct(self):
@@ -1949,13 +1959,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(37)
         assert res == (42 << 1) | 0
         res = fnptr(sys.maxint-2)
-        assert (res & 1) == 1
-
-    def test_ovfcheck_adder_compile(self):
-        fn = self.compile(get_ovfcheck_adder_runner(self.RGenOp), [int, int])
-        res = fn(9080983, -9080941)
-        assert res == (42 << 1) | 0
-        res = fn(-sys.maxint, -10)
         assert (res & 1) == 1
 
     def test_ovfcheck1_direct(self):
