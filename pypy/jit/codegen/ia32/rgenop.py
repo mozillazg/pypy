@@ -48,28 +48,33 @@ class Var(GenVar):
 class IntVar(Var):
     ll_type = lltype.Signed
     token = 'i'
+    SIZE = 1
 
 class BoolVar(Var):
     ll_type = lltype.Bool
     token = 'b'
+    SIZE = 1
 
 class FloatVar(Var):
     ll_type = lltype.Float
     token = 'f'
+    SIZE = 2
 
 LL_TO_GENVAR = {}
 TOKEN_TO_GENVAR = {}
+TOKEN_TO_SIZE = {}
 for value in locals().values():
     if hasattr(value, 'll_type'):
         LL_TO_GENVAR[value.ll_type] = value.token
         TOKEN_TO_GENVAR[value.token] = value
+        TOKEN_TO_SIZE[value.token] = value.SIZE
 
 UNROLLING_TOKEN_TO_GENVAR = unrolling_iterable(TOKEN_TO_GENVAR.items())
 
-def token_to_genvar(i):
+def token_to_genvar(i, arg):
     for tok, value in UNROLLING_TOKEN_TO_GENVAR:
         if tok == i:
-            return value()
+            return value(arg)
 
 ##class Const(GenConst):
 
@@ -337,13 +342,18 @@ class Builder(GenBuilder):
     def end(self):
         pass
 
-    def _write_prologue(self, sigtoken):
+    def _write_prologue(self, arg_tokens):
         self._open()
-        numargs = len(sigtoken[0])
         #self.mc.BREAKPOINT()
         # self.stackdepth-1 is the return address; the arguments
         # come just before
-        return [IntVar(self.stackdepth-2-n) for n in range(numargs)]
+        n = 0
+        result = []
+        for arg in arg_tokens:
+            arg_gv = token_to_genvar(arg, self.stackdepth-2-n)
+            n += arg_gv.SIZE
+            result.append(arg_gv)
+        return result
 
     def _close(self):
         self.closed = True
@@ -795,6 +805,8 @@ class Builder(GenBuilder):
     op_ptr_eq      = op_int_eq
     op_ptr_ne      = op_int_ne
 
+    def op_float_add(self, gv_x, gv_y):
+        xxx
 
 SIZE2SHIFT = {1: 0,
               2: 1,
@@ -1035,10 +1047,14 @@ class RI386GenOp(AbstractRGenOp):
 
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
-        builder = self.newbuilder(self._initial_stack_depth(len(arg_tokens)))
+        inputargs_gv = []
+        ofs = 0
+        for argtoken in arg_tokens:
+            ofs += TOKEN_TO_SIZE[argtoken]
+        builder = self.newbuilder(self._initial_stack_depth(ofs))
         builder._open() # Force builder to have an mc
         entrypoint = builder.mc.tell()
-        inputargs_gv = builder._write_prologue(sigtoken)
+        inputargs_gv = builder._write_prologue(arg_tokens)
         return builder, IntConst(entrypoint), inputargs_gv
 
     def _initial_stack_depth(self, numargs):
