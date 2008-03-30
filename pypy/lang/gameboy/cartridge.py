@@ -31,7 +31,7 @@ class InvalidMemoryBankTypeError(Exception):
 # ==============================================================================
 # CARTRIDGE
 
-class CartridgeLoader(object):
+class CartridgeManager(object):
     
     def __init__(self, storeDriver, clockDriver):
         self.store = storeDriver
@@ -118,6 +118,92 @@ class CartridgeLoader(object):
         return (checksum == self.getHeaderChecksum())
 
 
+def CartridgeStoreManager(object):
+    
+    def __init__(self):
+        self.cartridgeName = ""
+        
+    def setCartridgeName(self, cartridgeName):
+        self.cartridgeName = cartridgeName
+        self.batteryName = self.createBatteryName()
+        self.cartridgeFile = File(self.cartridgeName)
+        self.batteryFile = File(self.batteryName)
+    
+    def createBatteryName(self):
+        if self.cartridgeName.endsWith(constants.CARTRIDGE_FILE_EXTENSION):
+            self.batteryName = self.cartridgeName.replace(constants.CARTRIDGE_FILE_EXTENSION,
+                    constants.BATTERY_FILE_EXTENSION);
+        elif self.cartridgeName.endsWith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
+            self.batteryName = self.cartridgeName.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
+                    constants.BATTERY_FILE_EXTENSION);
+        else:
+            batteryName = cartridgeName + batteryName.BATTERY_FILE_EXTENSION;
+            
+    def getCartridgeName(self):
+        return self.cartridgeName
+    
+    def getCartridgeFile(self):
+        return self.cartridgeFile
+
+    def hasCartridge(self):
+        return self.cartridgeFile.exists()
+
+    def getCartridgeSize(self):
+        return self.cartridgeFile.length()
+
+    def readCartridge(self, buffer):
+        try:
+            self.readFile(self.cartridgeFile, buffer);
+        except:
+            raise Exception("Could not load cartridge: "
+                    + self.cartridgeFile.getPath())
+    
+    def getBatteryName(self):
+        return self.batteryName;
+    
+    def getBatteryFile(self):
+        return self.batteryFile
+
+    def hasBattery(self):
+        return self.batteryFile.exists()
+
+    def getBatterySize(self):
+        return self.batteryFile.length()
+
+    def readBattery(self, buffer):
+        try:
+            self.readFile(self.batteryFile, buffer)
+        except:
+            raise Exception("Could not load battery: "
+                    + self.batteryFile.getPath())
+
+    def writeBattery(self, buffer):
+        try:
+            self.writeFile(self.batteryFile, buffer)
+        except:
+            raise Exception("Could not save battery: "
+                    + batteryFile.getPath())
+
+    def removeBattery():
+        if not self.batteryFile.delete():
+           raise Exception("Could not delete battery: "
+                    + batteryFile.getPath())
+
+    def readFile(file, buffer):
+        input = FileInputStream(file);
+        try :
+            if (input.read(buffer, 0, buffer.length) != buffer.length):
+                raise Exception("Unexpected end of file");
+        finally:
+            input.close();
+
+    def writeFile(file, buffer):
+        output = FileOutputStream(file);
+        try :
+            output.write(buffer, 0, buffer.length);
+        finally:
+            output.close();
+    
 # ==============================================================================
 # CARTRIDGE TYPES
 

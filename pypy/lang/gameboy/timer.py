@@ -89,3 +89,13 @@ class Timer(object):
                     self.tima = self.tma
                     self.interrupt.raiseInterrupt(constants.TIMER)
     
+# CLOCK DRIVER -----------------------------------------------------------------
+
+class ClockDriver(object):
+    
+    def __init__(self):
+        pass
+    
+    def getTime(self):
+        return System.currentTimeMillis() / 1000
+        

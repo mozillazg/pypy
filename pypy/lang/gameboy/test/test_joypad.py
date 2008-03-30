@@ -1,6 +1,7 @@
 from pypy.lang.gameboy.joypad import *
 from pypy.lang.gameboy.interrupt import *
 from pypy.lang.gameboy import constants
+import math
 
 BUTTON_CODE = 0x3
 
@@ -12,6 +13,34 @@ def get_driver():
 
 def get_button():
     return Button(BUTTON_CODE)
+    
+def test_number_to_bool_bin():
+    assert len(number_to_bool_bin(16, 1)) == 1
+    assert len(number_to_bool_bin(1, 16)) == 16
+    for i in range(0, 20):
+        number = 0
+        binNumber = number_to_bool_bin(i)
+        size = len(binNumber)
+        str = ""
+        for j in range(0, size):
+            if binNumber[j]:
+                number += (1 << (size-j-1))
+                str += ("1")
+            else:
+                str += ("0")
+        print i, str, binNumber
+        assert number == i
+    
+def number_to_bool_bin(number, size=None):
+    if size == None:
+        if number == 0:
+            return []
+        size = int(math.ceil(math.log(number, 2)))+1
+    bin = [False]*size
+    for i in range(0, size):
+        if (number & (1 << i)) != 0:
+            bin[size-i-1] = True
+    return bin
 
 # TEST BUTTON ------------------------------------------------------------------
 
@@ -130,6 +159,39 @@ def test_toggle_buttons():
         assert button.isPressed() == False
         assert driver.getButtonCode() == 0
         assert driver.getDirectionCode() == 0
+        
+        
+def test_toggle_multiple_buttons():
+    driver = get_driver()
+    buttons = [(driver.buttonSelect, driver.select),
+                 (driver.buttonStart, driver.start),
+                 (driver.buttonA, driver.a),
+                 (driver.buttonB, driver.b)]
+    toggle_multiple_test(driver, driver.getButtonCode, buttons)
+    
+def test_toggle_mutliple_directions():
+    driver = get_driver()
+    directions = [(driver.buttonUp, driver.up),
+                 #(driver.buttonDown, driver.down),
+                 #(driver.buttonLeft, driver.left),
+                 (driver.buttonRight, driver.right)]
+    toggle_multiple_test(driver, driver.getDirectionCode, directions)
+    
+def toggle_multiple_test(driver, codeGetter, buttons):
+    size = len(buttons)
+    for i in range(0, 2**size):
+        toggled = number_to_bool_bin(i, size)
+        code = 0
+        for j in range(0, size):
+            if toggled[j]:
+                buttons[j][0]()
+                code |= buttons[j][1].codeValue
+            else:
+                buttons[j][0](False)
+            assert buttons[j][1].isPressed() == toggled[j]
+        assert codeGetter() == code
+                
+
 
 # TEST JOYPAD ------------------------------------------------------------------
 
