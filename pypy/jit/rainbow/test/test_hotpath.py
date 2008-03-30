@@ -558,8 +558,7 @@ class TestHotPath(HotPathTest):
 
         res = self.run(main, [3, 40], threshold=10, policy=POLICY)
         assert ''.join(res.chars) == " ".join([str(n) for n in range(40, 0, -1)])
-        # XXX should check something about the produced code as well, but no
-        # clue what
+        # self.check_insns_in_loops(malloc=2) I would like this, but fails right now
 
     def test_loop_with_more_and_more_structs(self):
         myjitdriver = JitDriver(greens = [],
