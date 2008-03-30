@@ -170,6 +170,9 @@ def test_toggle_multiple_buttons():
     toggle_multiple_test(driver, driver.getButtonCode, buttons)
     
 def test_toggle_mutliple_directions():
+    """ 
+    only testing non-opposite buttons, since they would exclude each other
+    """
     driver = get_driver()
     directions = [(driver.buttonUp, driver.up),
                  #(driver.buttonDown, driver.down),
