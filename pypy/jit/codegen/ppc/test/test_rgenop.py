@@ -1,4 +1,5 @@
 import py
+py.test.skip("Port this tests to new style")
 from pypy.jit.codegen.ppc.rgenop import RPPCGenOp
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTests, FUNC, FUNC2
