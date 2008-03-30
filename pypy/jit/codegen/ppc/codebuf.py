@@ -1,14 +1,18 @@
-from ctypes import POINTER, cast, c_void_p, c_int, c_char
+from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.codegen.i386 import codebuf_posix
+
 
 def alloc(map_size):
     flags = codebuf_posix.MAP_PRIVATE | codebuf_posix.MAP_ANONYMOUS
     prot = codebuf_posix.PROT_EXEC | codebuf_posix.PROT_READ | codebuf_posix.PROT_WRITE
-    res = codebuf_posix.mmap_(PTR(), map_size, prot, flags, -1, 0)
-    if not res:
+    hintp = rffi.cast(codebuf_posix.PTR, codebuf_posix.hint.pos)
+    res = codebuf_posix.mmap_(hintp, map_size, prot, flags, -1, 0)
+    if res == rffi.cast(codebuf_posix.PTR, -1):
         raise MemoryError
+    codebuf_posix.hint.pos += map_size
     return res
 
+PTR = lltype.Ptr(lltype.Array(lltype.Unsigned, hints={'nolength': True}))
 free = codebuf_posix.munmap_
 
 class CodeBlockOverflow(Exception):
@@ -25,18 +29,18 @@ class MachineCodeBlock:
         p = self._pos
         if p >= self._size:
             raise CodeBlockOverflow
-        self._data.contents[p] = data
+        self._data[p] = data
         self._pos = p + 1
 
     def getpos(self):
         return self._pos
 
     def setpos(self, _pos):
-        assert _pos >=0
+        assert _pos >= 0
         self._pos = _pos
 
     def tell(self):
-        baseaddr = cast(self._data, c_void_p).value
+        baseaddr = rffi.cast(lltype.Signed, self._data)
         return baseaddr + self._pos * 4
 
     def reserve(self, _size):
@@ -47,20 +51,20 @@ class MachineCodeBlock:
 
 class ExistingCodeBlock(MachineCodeBlock):
     def __init__(self, start, end):
-        _size = (end-start)/4
-        _data = cast(c_void_p(start), POINTER(c_int * _size))
+        _size = (end - start) / 4
+        _data = rffi.cast(PTR, start)
         MachineCodeBlock.__init__(self, _data, _size, 0)
 
 class OwningMachineCodeBlock(MachineCodeBlock):
     def __init__(self, size_in_bytes):
         assert size_in_bytes % 4 == 0
         res = alloc(size_in_bytes)
-        _size = size_in_bytes/4
-        _data = cast(res, POINTER(c_int * _size))
+        _size = size_in_bytes / 4
+        _data = rffi.cast(PTR, res)
         MachineCodeBlock.__init__(self, _data, _size, 0)
 
     def __del__(self):
-        free(cast(self._data, PTR), self._size * 4)
+        free(rffi.cast(PTR, self._data), self._size * 4)
 
 # ------------------------------------------------------------
 
