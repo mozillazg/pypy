@@ -276,7 +276,9 @@ def genptreq(jitstate, argbox0, argbox1, reverse):
         gv_res = builder.genop_ptr_ne(gv_addr0, gv_addr1)
     else:
         gv_res = builder.genop_ptr_eq(gv_addr0, gv_addr1)
-    return rvalue.IntRedBox(gv_res)
+    boolbox = rvalue.BoolRedBox(gv_res)
+    boolbox.iftrue.append(booleffect.PtrEqualEffect(argbox0, argbox1, reverse))
+    return boolbox
 
 # ____________________________________________________________
 # other jitstate/graph level operations

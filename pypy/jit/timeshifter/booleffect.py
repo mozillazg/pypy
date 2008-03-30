@@ -25,3 +25,26 @@ class PtrIsNonZeroEffect(Effect):
     def copy(self, memo):
         return PtrIsNonZeroEffect(self.ptrbox.copy(memo), self.reverse)
 
+class PtrEqualEffect(Effect):
+    def __init__(self, ptrbox1, ptrbox2, reverse=False):
+        assert isinstance(ptrbox1, rvalue.AbstractPtrRedBox)
+        assert isinstance(ptrbox2, rvalue.AbstractPtrRedBox)
+        self.ptrbox1 = ptrbox1
+        self.ptrbox2 = ptrbox2
+        self.reverse = reverse
+
+    def _apply(self, jitstate):
+        # the pointers _are_ equal
+        if self.ptrbox1.is_constant():
+            self.ptrbox2.genvar = self.ptrbox1.genvar
+            return True
+        if self.ptrbox2.is_constant():
+            self.ptrbox1.genvar = self.ptrbox2.genvar
+            return True
+        # XXX can do more?
+        return True
+
+
+    def copy(self, memo):
+        return PtrEqualEffect(self.ptrbox1.copy(memo),
+                              self.ptrbox2.copy(memo), self.reverse)

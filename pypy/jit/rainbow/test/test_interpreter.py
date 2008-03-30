@@ -1943,6 +1943,34 @@ class SimpleTests(InterpretationTest):
         assert res == 7
         self.check_insns(int_add=2)
 
+    def test_ptrequality(self):
+        class A(object):
+            _immutable_ = True
+            def __init__(self, a):
+                self.a = a
+
+        five = A(5)
+        seven = A(7)
+
+        def g(x):
+            if x:
+                return seven
+            return five
+        def f(green, red):
+            hint(None, global_merge_point=True)
+            hint(green, concrete=True)
+            a = g(red)
+            if green:
+                b = seven
+            else:
+                b = five
+            if a is b:
+                return a.a
+            return -1
+        res = self.interpret(f, [True, True], policy=StopAtXPolicy(g))
+        assert res == 7
+        self.check_insns(getfield=0)
+
     # void tests
     def test_void_args(self):
         class Space(object):
@@ -2068,6 +2096,7 @@ class TestOOType(SimpleTests):
     test_learn_boolvalue = _skip
     test_learn_nonzeroness = _skip
     test_void_args = _skip
+    test_ptrequality = _skip
 
 
 
