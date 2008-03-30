@@ -845,6 +845,10 @@ class AccessInfo(object):
         self.write_fields = False
         # XXX what else is needed?
 
+    def __repr__(self):
+        return "<AccessInfo read_fields=%s, write_fields=%s>" % (
+                self.read_fields, self.write_fields)
+
 
 class VirtualStruct(VirtualContainer):
     _attrs_ = "typedesc access_info content_boxes".split()
