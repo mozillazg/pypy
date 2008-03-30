@@ -343,7 +343,7 @@ class Builder(GenBuilder):
         #self.mc.BREAKPOINT()
         # self.stackdepth-1 is the return address; the arguments
         # come just before
-        return [Var(self.stackdepth-2-n) for n in range(numargs)]
+        return [IntVar(self.stackdepth-2-n) for n in range(numargs)]
 
     def _close(self):
         self.closed = True
@@ -383,7 +383,7 @@ class Builder(GenBuilder):
                 op = mem(edx, offset)
             self.mc.MOVZX(eax, op)
             op = eax
-        return self.returnvar(op)
+        return self.returnintvar(op)
 
     def genop_setfield(self, (offset, fieldsize), gv_ptr, gv_value):
         self.mc.MOV(eax, gv_value.operand(self))
@@ -400,7 +400,7 @@ class Builder(GenBuilder):
     def genop_getsubstruct(self, (offset, fieldsize), gv_ptr):
         self.mc.MOV(edx, gv_ptr.operand(self))
         self.mc.LEA(eax, mem(edx, offset))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def itemaddr(self, base, arraytoken, gv_index):
         # uses ecx
@@ -428,18 +428,18 @@ class Builder(GenBuilder):
             assert itemsize == 1 or itemsize == 2
             self.mc.MOVZX(eax, op)
             op = eax
-        return self.returnvar(op)
+        return self.returnintvar(op)
 
     def genop_getarraysubstruct(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
         op = self.itemaddr(edx, arraytoken, gv_index)
         self.mc.LEA(eax, op)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def genop_getarraysize(self, arraytoken, gv_ptr):
         lengthoffset, startoffset, itemoffset = arraytoken
         self.mc.MOV(edx, gv_ptr.operand(self))
-        return self.returnvar(mem(edx, lengthoffset))
+        return self.returnintvar(mem(edx, lengthoffset))
 
     def genop_setarrayitem(self, arraytoken, gv_ptr, gv_index, gv_value):
         self.mc.MOV(eax, gv_value.operand(self))
@@ -460,7 +460,7 @@ class Builder(GenBuilder):
         # XXX boehm only, no atomic/non atomic distinction for now
         self.push(imm(size))
         self.mc.CALL(rel32(gc_malloc_fnaddr()))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def genop_malloc_varsize(self, varsizealloctoken, gv_size):
         # XXX boehm only, no atomic/non atomic distinction for now
@@ -472,7 +472,7 @@ class Builder(GenBuilder):
         lengthoffset, _, _ = varsizealloctoken
         self.mc.MOV(ecx, gv_size.operand(self))
         self.mc.MOV(mem(eax, lengthoffset), ecx)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
         
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         numargs = len(sigtoken[0])
@@ -497,11 +497,11 @@ class Builder(GenBuilder):
         else:
             self.mc.CALL(gv_fnptr.operand(self))
         # XXX only for int return_kind, check calling conventions
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def genop_same_as(self, gv_x):
         if gv_x.is_const:    # must always return a var
-            return self.returnvar(gv_x.operand(self))
+            return self.returnintvar(gv_x.operand(self))
         else:
             return gv_x
 
@@ -517,7 +517,7 @@ class Builder(GenBuilder):
             # turn constants into variables; also make copies of vars that
             # are duplicate in args_gv
             if not isinstance(gv, Var) or gv.stackpos in seen:
-                gv = args_gv[i] = self.returnvar(gv.operand(self))
+                gv = args_gv[i] = self.returnintvar(gv.operand(self))
             # remember the var's position in the stack
             arg_positions.append(gv.stackpos)
             seen[gv.stackpos] = None
@@ -570,9 +570,15 @@ class Builder(GenBuilder):
         self.mc.PUSH(op)
         self.stackdepth += 1
 
-    def returnvar(self, op):
-        res = Var(self.stackdepth)
+    def returnintvar(self, op):
+        res = IntVar(self.stackdepth)
         self.push(op)
+        return res
+
+    def returnboolvar(self, op):
+        self.mc.MOVZX(eax, op)
+        res = BoolVar(self.stackdepth)
+        self.push(eax)
         return res
 
     @staticmethod
@@ -584,91 +590,85 @@ class Builder(GenBuilder):
     def op_int_add(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.ADD(eax, gv_y.operand(self))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_sub(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.SUB(eax, gv_y.operand(self))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_mul(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.IMUL(eax, gv_y.operand(self))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_floordiv(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CDQ()
         self.mc.IDIV(gv_y.nonimmoperand(self, ecx))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_mod(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CDQ()
         self.mc.IDIV(gv_y.nonimmoperand(self, ecx))
-        return self.returnvar(edx)
+        return self.returnintvar(edx)
 
     def op_int_and(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.AND(eax, gv_y.operand(self))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_or(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.OR(eax, gv_y.operand(self))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_xor(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.XOR(eax, gv_y.operand(self))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_lt(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETL(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_int_le(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETLE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_int_eq(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_int_ne(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETNE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_int_gt(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETG(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_int_ge(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETGE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_int_neg(self, gv_x):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.NEG(eax)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_abs(self, gv_x):
         self.mc.MOV(eax, gv_x.operand(self))
@@ -678,24 +678,24 @@ class Builder(GenBuilder):
         self.mc.SBB(eax, gv_x.operand(self))
         self.mc.SBB(edx, edx)
         self.mc.XOR(eax, edx)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_invert(self, gv_x):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.NOT(eax)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_lshift(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.MOV(ecx, gv_y.operand(self))   # XXX check if ecx >= 32
         self.mc.SHL(eax, cl)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_int_rshift(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.MOV(ecx, gv_y.operand(self))   # XXX check if ecx >= 32
         self.mc.SAR(eax, cl)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     op_uint_is_true = op_int_is_true
     op_uint_invert  = op_int_invert
@@ -705,33 +705,31 @@ class Builder(GenBuilder):
     def op_uint_mul(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.MUL(gv_y.nonimmoperand(self, edx))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_uint_floordiv(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.XOR(edx, edx)
         self.mc.DIV(gv_y.nonimmoperand(self, ecx))
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_uint_mod(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.XOR(edx, edx)
         self.mc.DIV(gv_y.nonimmoperand(self, ecx))
-        return self.returnvar(edx)
+        return self.returnintvar(edx)
 
     def op_uint_lt(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETB(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_uint_le(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETBE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     op_uint_eq = op_int_eq
     op_uint_ne = op_int_ne
@@ -740,15 +738,13 @@ class Builder(GenBuilder):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETA(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     def op_uint_ge(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.CMP(eax, gv_y.operand(self))
         self.mc.SETAE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnboolvar(al)
 
     op_uint_and    = op_int_and
     op_uint_or     = op_int_or
@@ -759,19 +755,19 @@ class Builder(GenBuilder):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.MOV(ecx, gv_y.operand(self))   # XXX check if ecx >= 32
         self.mc.SHR(eax, cl)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_bool_not(self, gv_x):
         self.mc.CMP(gv_x.operand(self), imm8(0))
         self.mc.SETE(al)
         self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     def op_cast_bool_to_int(self, gv_x):
         self.mc.CMP(gv_x.operand(self), imm8(0))
         self.mc.SETNE(al)
         self.mc.MOVZX(eax, al)
-        return self.returnvar(eax)
+        return self.returnintvar(eax)
 
     op_cast_bool_to_uint   = op_cast_bool_to_int
 
