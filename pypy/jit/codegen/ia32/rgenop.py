@@ -101,7 +101,7 @@ def token_to_genvar(i, arg):
 ##    revealconst._annspecialcase_ = 'specialize:arg(1)'
 
 
-class IntConst(GenConst):
+class Const(GenConst):
 
     def __init__(self, value):
         self.value = value
@@ -132,6 +132,14 @@ class IntConst(GenConst):
     def repr(self):
         return "const=$%s" % (self.value,)
 
+class IntConst(Const):
+    pass
+
+class FloatConst(Const):
+    pass
+
+class BoolConst(Const):
+    pass
 
 ##class FnPtrConst(IntConst):
 ##    def __init__(self, value, mc):
@@ -1077,8 +1085,10 @@ class RI386GenOp(AbstractRGenOp):
         T = lltype.typeOf(llvalue)
         if T is llmemory.Address:
             return AddrConst(llvalue)
-        elif isinstance(T, lltype.Primitive):
-            return IntConst(lltype.cast_primitive(lltype.Signed, llvalue))
+        elif T is lltype.Signed:
+            return IntConst(llvalue)
+        elif T is lltype.Bool:
+            return BoolConst(llvalue)
         elif isinstance(T, lltype.Ptr):
             lladdr = llmemory.cast_ptr_to_adr(llvalue)
             if T.TO._gckind == 'gc':
