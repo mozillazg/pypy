@@ -106,6 +106,7 @@ def redboxbuilder_int(gv_value): return IntRedBox(gv_value)
 def redboxbuilder_dbl(gv_value): return DoubleRedBox(gv_value)
 def redboxbuilder_ptr(gv_value): return PtrRedBox(gv_value)
 def redboxbuilder_inst(gv_value): return InstanceRedBox(gv_value)
+def redboxbuilder_bool(gv_value): return BoolRedBox(gv_value)
 
 def ll_redboxbuilder(TYPE):
     if TYPE is lltype.Void:
@@ -116,6 +117,8 @@ def ll_redboxbuilder(TYPE):
         return redboxbuilder_dbl
     elif isinstance(TYPE, ootype.OOType):
         return redboxbuilder_inst
+    elif TYPE == lltype.Bool:
+        return redboxbuilder_bool
     else:
         assert isinstance(TYPE, lltype.Primitive)
         # XXX what about long longs?
@@ -174,6 +177,44 @@ class IntRedBox(RedBox):
             memo[self] = result
             return result
 
+class BoolRedBox(RedBox):
+    # XXX make true and false singletons?
+
+    def __init__(self, genvar):
+        RedBox.__init__(self, genvar)
+        self.iftrue = []
+
+    def learn_boolvalue(self, jitstate, boolval):
+        if self.is_constant():
+            return self.genvar.revealconst(lltype.Bool) == boolval
+        else:
+            self.setgenvar(ll_gv_fromvalue(jitstate, boolval))
+            result = True
+            for effect in self.iftrue:
+                result = effect.learn_boolvalue(jitstate, boolval) and result
+            self.iftrue = []
+            return result
+            
+    def copy(self, memo):
+        memoboxes = memo.boxes
+        try:
+            return memoboxes[self]
+        except KeyError:
+            result = memoboxes[self] = BoolRedBox(self.genvar)
+            result.iftrue = [effect.copy(memo) for effect in self.iftrue]
+            return result
+
+    def freeze(self, memo):
+        memo = memo.boxes
+        try:
+            return memo[self]
+        except KeyError:
+            if self.is_constant():
+                result = FrozenBoolConst(self.genvar)
+            else:
+                result = FrozenBoolVar()
+            memo[self] = result
+            return result
 
 class DoubleRedBox(RedBox):
     "A red box that contains a constant double-precision floating point value."
@@ -444,6 +485,32 @@ class FrozenIntVar(FrozenVar):
         else:
             return memo[self]
 
+
+class FrozenBoolConst(FrozenConst):
+
+    def __init__(self, gv_const):
+        self.gv_const = gv_const
+
+    def is_constant_equal(self, box):
+        return (box.is_constant() and
+                self.gv_const.revealconst(lltype.Bool) ==
+                box.genvar.revealconst(lltype.Bool))
+
+    def unfreeze(self, incomingvarboxes, memo):
+        return BoolRedBox(self.gv_const)
+
+
+class FrozenBoolVar(FrozenVar):
+
+    def unfreeze(self, incomingvarboxes, memo):
+        memo = memo.boxes
+        if self not in memo:
+            newbox = BoolRedBox(None)
+            incomingvarboxes.append(newbox)
+            memo[self] = newbox
+            return newbox
+        else:
+            return memo[self]
 
 class FrozenDoubleConst(FrozenConst):
 
