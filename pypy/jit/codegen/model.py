@@ -386,10 +386,10 @@ class AbstractRGenOp(object):
         Python callable object, for testing purposes.
         """
         from pypy.rpython.lltypesystem import lltype
-        from ctypes import cast, c_void_p, CFUNCTYPE, c_int, c_float
+        from ctypes import cast, c_void_p, CFUNCTYPE, c_int, c_double
         def _to_ctypes(t): #limited type support for now
             if t == lltype.Float:
-                return c_float
+                return c_double
             if t == lltype.Void:
                 return None
             return c_int
