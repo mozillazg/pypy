@@ -8,6 +8,7 @@ from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
 from pypy.rlib import objectmodel
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import llhelper
+from pypy.rpython.lltypesystem import rffi
 
 WORD = 4
 DEBUG_CALL_ALIGN = True
@@ -34,9 +35,6 @@ class Var(GenVar):
         #
         self.stackpos = stackpos
 
-    def operand(self, builder):
-        return builder.stack_access(self.stackpos)
-
     def nonimmoperand(self, builder, tmpregister):
         return self.operand(builder)
 
@@ -46,16 +44,25 @@ class Var(GenVar):
     repr = __repr__
 
 class IntVar(Var):
+    def operand(self, builder):
+        return builder.stack_access(self.stackpos)
+
     ll_type = lltype.Signed
     token = 'i'
     SIZE = 1
 
 class BoolVar(Var):
+    def operand(self, builder):
+        return builder.stack_access(self.stackpos)
+
     ll_type = lltype.Bool
     token = 'b'
     SIZE = 1
 
 class FloatVar(Var):
+    def operand(self, builder):
+        return builder.stack_access64(self.stackpos)
+
     ll_type = lltype.Float
     token = 'f'
     SIZE = 2
@@ -136,7 +143,19 @@ class IntConst(Const):
     pass
 
 class FloatConst(Const):
-    pass
+    def __init__(self, floatval):
+        self.floatval = floatval
+
+    def operand(self, builder):
+        # XXX this is terrible, let's make it rpython and stuff later
+        rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
+        rawbuf[0] = self.floatval
+        one = rffi.cast(rffi.INTP, rawbuf)[0]
+        two = rffi.cast(rffi.INTP, rawbuf)[1]
+        oldpos = builder.stackdepth + 1
+        builder.push(imm(two))
+        builder.push(imm(one))
+        return builder.stack_access64(oldpos)
 
 class BoolConst(Const):
     pass
@@ -555,8 +574,12 @@ class Builder(GenBuilder):
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         self._open()
-        initialstackdepth = self.rgenop._initial_stack_depth(len(sigtoken[0]))
-        self.mc.MOV(eax, gv_returnvar.operand(self))
+        stackdepth = self.rgenop._compute_stack_depth(sigtoken)
+        initialstackdepth = self.rgenop._initial_stack_depth(stackdepth)
+        if isinstance(gv_returnvar, FloatVar) or isinstance(gv_returnvar, FloatConst):
+            self.mc.FLDL(gv_returnvar.operand(self))
+        else:
+            self.mc.MOV(eax, gv_returnvar.operand(self))
         self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
         self.mc.RET()
         self._close()
@@ -582,11 +605,19 @@ class Builder(GenBuilder):
     # ____________________________________________________________
 
     def stack_access(self, stackpos):
-        return mem(esp, WORD * (self.stackdepth-1 - stackpos))
+        return mem(esp, WORD * (self.stackdepth - 1 - stackpos))
+
+    def stack_access64(self, stackpos):
+        return mem64(esp, WORD * (self.stackdepth - 1 - stackpos))
 
     def push(self, op):
         self.mc.PUSH(op)
         self.stackdepth += 1
+
+    def pushfloat(self, op):
+        self.mc.SUB(esp, imm(WORD * FloatVar.SIZE))
+        self.stackdepth += 2
+        self.mc.FSTPL(op.operand(self))
 
     def returnintvar(self, op):
         res = IntVar(self.stackdepth)
@@ -597,6 +628,11 @@ class Builder(GenBuilder):
         self.mc.MOVZX(eax, op)
         res = BoolVar(self.stackdepth)
         self.push(eax)
+        return res
+
+    def returnfloatvar(self, op):
+        res = FloatVar(self.stackdepth)
+        self.pushfloat(res)
         return res
 
     @staticmethod
@@ -814,7 +850,10 @@ class Builder(GenBuilder):
     op_ptr_ne      = op_int_ne
 
     def op_float_add(self, gv_x, gv_y):
-        xxx
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FLDL(gv_y.operand(self))
+        self.mc.FADD()
+        return self.returnfloatvar(st0)
 
 SIZE2SHIFT = {1: 0,
               2: 1,
@@ -1053,19 +1092,24 @@ class RI386GenOp(AbstractRGenOp):
     def newbuilder(self, stackdepth):
         return Builder(self, stackdepth)
 
-    def newgraph(self, sigtoken, name):
-        arg_tokens, res_token = sigtoken
-        inputargs_gv = []
+    def _compute_stack_depth(self, sigtoken):
+        arg_tokens, rettoken = sigtoken
         ofs = 0
         for argtoken in arg_tokens:
             ofs += TOKEN_TO_SIZE[argtoken]
+        return ofs + TOKEN_TO_SIZE[rettoken]
+
+    def newgraph(self, sigtoken, name):
+        arg_tokens, res_token = sigtoken
+        inputargs_gv = []
+        ofs = self._compute_stack_depth(sigtoken)
         builder = self.newbuilder(self._initial_stack_depth(ofs))
         builder._open() # Force builder to have an mc
         entrypoint = builder.mc.tell()
         inputargs_gv = builder._write_prologue(arg_tokens)
         return builder, IntConst(entrypoint), inputargs_gv
 
-    def _initial_stack_depth(self, numargs):
+    def _initial_stack_depth(self, stackdepth):
         # If a stack depth is a multiple of CALL_ALIGN then the
         # arguments are correctly aligned for a call.  We have to
         # precompute initialstackdepth to guarantee that.  For OS/X the
@@ -1074,7 +1118,7 @@ class RI386GenOp(AbstractRGenOp):
         # pushed by the CALL instruction.  In other words, after
         # 'numargs' arguments have been pushed the stack is aligned:
         MASK = CALL_ALIGN - 1
-        initialstackdepth = ((numargs+MASK)&~MASK) + 1
+        initialstackdepth = ((stackdepth+MASK)&~MASK)
         return initialstackdepth
 
     def replay(self, label):
@@ -1089,6 +1133,8 @@ class RI386GenOp(AbstractRGenOp):
             return IntConst(llvalue)
         elif T is lltype.Bool:
             return BoolConst(llvalue)
+        elif T is lltype.Float:
+            return FloatConst(llvalue)
         elif isinstance(T, lltype.Ptr):
             lladdr = llmemory.cast_ptr_to_adr(llvalue)
             if T.TO._gckind == 'gc':
