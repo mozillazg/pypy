@@ -445,6 +445,8 @@ FADD.mode0(['\xDE\xC1'])
 
 FSTPL = Instruction()
 FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
+FSTL = Instruction()
+FSTL.mode1(MODRM64, ['\xDD', orbyte(2<<3), modrm(1)])
 
 # ------------------------- end of floating point ------------------------
 
