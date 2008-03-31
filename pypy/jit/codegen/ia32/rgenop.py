@@ -820,8 +820,11 @@ class Builder(GenBuilder):
 
     def op_uint_rshift(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
-        self.mc.MOV(ecx, gv_y.operand(self))   # XXX check if ecx >= 32
+        self.mc.MOV(ecx, gv_y.operand(self))
         self.mc.SHR(eax, cl)
+        self.mc.CMP(ecx, imm8(32))
+        self.mc.SBB(ecx, ecx)
+        self.mc.AND(eax, ecx)
         return self.returnintvar(eax)
 
     def op_bool_not(self, gv_x):
@@ -891,12 +894,12 @@ def gc_malloc_fnaddr():
             import py
             py.test.skip("must run in the main thread")
         try:
-            from ctypes import cast, c_void_p
-            from pypy.rpython.rctypes.tool import util
+            import ctypes
+            from ctypes import cast, c_void_p, util
             path = util.find_library('gc')
             if path is None:
                 raise ImportError("Boehm (libgc) not found")
-            boehmlib = util.load_library(path)
+            boehmlib = ctypes.cdll.LoadLibrary(path)
         except ImportError, e:
             import py
             py.test.skip(str(e))
@@ -1146,6 +1149,9 @@ class RI386GenOp(AbstractRGenOp):
             return IntConst(llvalue)
         elif T is lltype.Unsigned:
             return IntConst(intmask(llvalue))
+        elif T is lltype.Char or T is lltype.UniChar:
+            # XXX char constant support???
+            return IntConst(lltype.cast_primitive(lltype.Signed, llvalue))
         elif T is lltype.Bool:
             return BoolConst(llvalue)
         elif T is lltype.Float:
@@ -1201,8 +1207,6 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def kindToken(T):
-        if T is lltype.Float:
-            py.test.skip("not implemented: floats in the i386 back-end")
         return None     # for now
 
     @staticmethod
