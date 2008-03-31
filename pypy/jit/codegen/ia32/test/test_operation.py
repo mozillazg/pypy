@@ -51,7 +51,12 @@ class TestOperation(I386TestMixin, OperationTests):
         py.test.skip('unsupported')
 
     def test_is_true(self):
-        py.test.skip('xxx look at it')
+        # the backend currently uses "any integer != 0" to represent
+        # True.  So functions that return a Bool will actually return an
+        # int which may have any 32-bit value != 0 for True, which is
+        # not what a typical C compiler expects about functions
+        # returning _Bool.
+        py.test.skip('in-progress')
 
     # for the individual tests see
     # ====> ../../test/operation_tests.py
