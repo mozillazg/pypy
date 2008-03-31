@@ -586,6 +586,7 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
         self.check_insns_in_loops(getfield=3)
 
     def test_simple_escape_through_vstruct(self):
+        py.test.skip("not really supported")
         myjitdriver = JitDriver(greens = [],
                                 reds = ['i', 'e', 'x', 'y'])
 
