@@ -36,6 +36,25 @@ def residual_exception_nontranslated(jitstate, e, rtyper):
         jitstate.residual_ll_exception(ll_exc)
 
 
+def make_colororder(graph, hannotator):
+    # if the graph takes both red and green arguments, we need
+    # a way for the fallback interp to rezip the two lists
+    # 'greenargs' and 'redargs' into a single one
+    colororder = ""
+    in_order = True           # "in order" means allgreens+allreds
+    for v in graph.getargs():
+        if v.concretetype is lltype.Void:
+            continue
+        if hannotator.binding(v).is_green():
+            if "r" in colororder:
+                in_order = False
+            colororder += "g"
+        else:
+            colororder += "r"
+    if in_order:
+        colororder = None
+    return colororder
+
 class CallDesc:
     __metaclass__ = cachedtype
 
@@ -131,6 +150,9 @@ class IndirectCallsetDesc(object):
             fnptr    = codewriter.rtyper.getcallable(graph)
             keys.append(llmemory.cast_ptr_to_adr(fnptr))
             values.append(codewriter.get_jitcode(tsgraph))
+        # arbitrarily use the last graph to make the colororder -
+        # normalization should ensure that all colors are the same
+        colororder = make_colororder(tsgraph, codewriter.hannotator)
 
         def bytecode_for_address(fnaddress):
             # XXX optimize
@@ -143,7 +165,7 @@ class IndirectCallsetDesc(object):
         self.graphs = [graph for (graph, tsgraph) in graph2tsgraph]
         self.jitcodes = values
         self.calldesc = CallDesc(codewriter.RGenOp, codewriter.exceptiondesc,
-                                 lltype.typeOf(fnptr))
+                                 lltype.typeOf(fnptr), colororder)
 
 
 class BytecodeWriter(object):
@@ -301,22 +323,7 @@ class BytecodeWriter(object):
         RESULT = graph.getreturnvar().concretetype
         FUNCTYPE = lltype.FuncType(ARGS, RESULT)
 
-        # if the graph takes both red and green arguments, we need
-        # a way for the fallback interp to rezip the two lists
-        # 'greenargs' and 'redargs' into a single one
-        colororder = ""
-        in_order = True           # "in order" means allgreens+allreds
-        for v in graph.getargs():
-            if v.concretetype is lltype.Void:
-                continue
-            if self.hannotator.binding(v).is_green():
-                if "r" in colororder:
-                    in_order = False
-                colororder += "g"
-            else:
-                colororder += "r"
-        if in_order:
-            colororder = None
+        colororder = make_colororder(graph, self.hannotator)
         owncalldesc = CallDesc(self.RGenOp, self.exceptiondesc,
                                lltype.Ptr(FUNCTYPE), colororder)
         # detect the special ts_stub or ts_metacall graphs and replace
