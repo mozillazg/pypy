@@ -4,14 +4,14 @@ from pypy.jit.codegen import graph2rgenop
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import r_uint, intmask, ovfcheck
-from ctypes import cast, c_void_p, CFUNCTYPE, c_int, c_float
+from ctypes import cast, c_void_p, CFUNCTYPE, c_int, c_double
 from pypy import conftest
 
 class OperationTests(object):
     @staticmethod
     def _to_ctypes(t): #limited type support for now
         if t is float:
-            return c_float
+            return c_double
         return c_int
 
     def rgen(self, ll_function, argtypes, rettype=int): #XXX get rettype from annotation
