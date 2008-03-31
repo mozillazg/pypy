@@ -52,6 +52,7 @@ class IntVar(Var):
     SIZE = 1
 
 class BoolVar(Var):
+    # represents a boolean as an integer which *must* be exactly 0 or 1
     def operand(self, builder):
         return builder.stack_access(self.stackpos)
 
@@ -629,7 +630,7 @@ class Builder(GenBuilder):
 
     def returnboolfloatvar(self):
         self.mc.FSTSW()
-        self.mc.OR(eax, imm(4))
+        self.mc.OR(eax, imm(4))     # ???
         res = BoolVar(self.stackdepth)
         self.push(eax)
         return res
@@ -643,7 +644,15 @@ class Builder(GenBuilder):
     def identity(gv_x):
         return gv_x
 
-    op_int_is_true = identity
+    def op_int_is_true(self, gv_x):
+        self.mc.CMP(gv_x.operand(self), imm8(0))
+        self.mc.SETNE(al)
+        return self.returnboolvar(al)
+
+    def op_ptr_iszero(self, gv_x):
+        self.mc.CMP(gv_x.operand(self), imm8(0))
+        self.mc.SETE(al)
+        return self.returnboolvar(al)
 
     def op_int_add(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
@@ -833,13 +842,10 @@ class Builder(GenBuilder):
     def op_bool_not(self, gv_x):
         self.mc.CMP(gv_x.operand(self), imm8(0))
         self.mc.SETE(al)
-        self.mc.MOVZX(eax, al)
-        return self.returnintvar(eax)
+        return self.returnboolvar(al)
 
     def op_cast_bool_to_int(self, gv_x):
-        self.mc.CMP(gv_x.operand(self), imm8(0))
-        self.mc.SETNE(al)
-        self.mc.MOVZX(eax, al)
+        self.mc.MOVZX(eax, gv_x.operand(self))
         return self.returnintvar(eax)
 
     op_cast_bool_to_uint   = op_cast_bool_to_int
@@ -864,7 +870,6 @@ class Builder(GenBuilder):
     op_unichar_ne = op_int_ne
 
     op_ptr_nonzero = op_int_is_true
-    op_ptr_iszero  = op_bool_not        # for now
     op_ptr_eq      = op_int_eq
     op_ptr_ne      = op_int_ne
 
