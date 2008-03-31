@@ -147,6 +147,8 @@ class IntConst(Const):
 
 class FloatConst(Const):
     def __init__(self, floatval):
+        # XXX we should take more care who is creating this and
+        #     eventually release this buffer
         # never moves and never dies
         self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw',
                                     immortal=True)
@@ -629,12 +631,6 @@ class Builder(GenBuilder):
         self.push(eax)
         return res
 
-    def returnboolfloatvar(self):
-        self.mc.FSTSW()
-        self.mc.SAHF()
-        self.mc.SETNZ(al)
-        return self.returnboolvar(al)
-
     def returnfloatvar(self, op):
         res = FloatVar(self.stackdepth + 1)
         self.pushfloat(res)
@@ -876,25 +872,25 @@ class Builder(GenBuilder):
     def op_float_add(self, gv_x, gv_y):
         self.mc.FLDL(gv_y.operand(self))
         self.mc.FLDL(gv_x.operand(self))
-        self.mc.FADD()
+        self.mc.FADDP()
         return self.returnfloatvar(st0)
 
     def op_float_sub(self, gv_x, gv_y):
-        self.mc.FLDL(gv_x.operand(self))
         self.mc.FLDL(gv_y.operand(self))
-        self.mc.FSUB()
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FSUBP()
         return self.returnfloatvar(st0)
 
     def op_float_mul(self, gv_x, gv_y):
         self.mc.FLDL(gv_x.operand(self))
         self.mc.FLDL(gv_y.operand(self))
-        self.mc.FMUL()
+        self.mc.FMULP()
         return self.returnfloatvar(st0)
 
     def op_float_truediv(self, gv_x, gv_y):
-        self.mc.FLDL(gv_x.operand(self))
         self.mc.FLDL(gv_y.operand(self))
-        self.mc.FDIV()
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FDIVP()
         return self.returnfloatvar(st0)
 
     def op_float_neg(self, gv_x):
@@ -910,7 +906,51 @@ class Builder(GenBuilder):
     def op_float_is_true(self, gv_x):
         self.mc.FLDL(gv_x.operand(self))
         self.mc.FTST()
-        return self.returnboolfloatvar()
+        self.mc.FNSTSW()
+        self.mc.SAHF()
+        self.mc.SETNZ(al)
+        return self.returnboolvar(al)
+
+    def _load_float_ctword(self, gv_x, gv_y):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FLDL(gv_y.operand(self))
+        self.mc.FUCOMPP()
+        self.mc.FNSTSW()        
+
+    @specialize.arg(3)
+    def _float_compare(self, gv_x, gv_y, immval):
+        self._load_float_ctword(gv_x, gv_y)
+        self.mc.TEST(ah, imm8(immval))
+        self.mc.SETE(al)
+        return self.returnboolvar(al)
+
+    def op_float_lt(self, gv_x, gv_y):
+        return self._float_compare(gv_x, gv_y, 69)
+        
+    def op_float_le(self, gv_x, gv_y):
+        return self._float_compare(gv_x, gv_y, 5)
+
+    def op_float_eq(self, gv_x, gv_y):
+        self._load_float_ctword(gv_x, gv_y)
+        self.mc.SAHF()
+        self.mc.SETE(al)
+        self.mc.SETNP(dl)
+        self.mc.AND(edx, eax)
+        return self.returnboolvar(al)
+
+    def op_float_ne(self, gv_x, gv_y):
+        self._load_float_ctword(gv_x, gv_y)
+        self.mc.SAHF()
+        self.mc.SETNE(al)
+        self.mc.SETP(dl)
+        self.mc.OR(edx, eax)
+        return self.returnboolvar(al)
+
+    def op_float_gt(self, gv_x, gv_y):
+        return self._float_compare(gv_y, gv_x, 69)
+
+    def op_float_ge(self, gv_x, gv_y):
+        return self._float_compare(gv_y, gv_x, 5)
 
 SIZE2SHIFT = {1: 0,
               2: 1,
