@@ -76,6 +76,7 @@ for value in locals().values():
         TOKEN_TO_GENVAR[value.token] = value
         TOKEN_TO_SIZE[value.token] = value.SIZE
 LL_TO_GENVAR[lltype.Unsigned] = 'i'
+LL_TO_GENVAR[lltype.Void] = 'v'
 
 UNROLLING_TOKEN_TO_GENVAR = unrolling_iterable(TOKEN_TO_GENVAR.items())
 
@@ -1148,7 +1149,9 @@ class RI386GenOp(AbstractRGenOp):
         ofs = 0
         for argtoken in arg_tokens:
             ofs += TOKEN_TO_SIZE[argtoken]
-        return ofs + TOKEN_TO_SIZE[rettoken]
+        if rettoken != 'v':
+            return ofs + TOKEN_TO_SIZE[rettoken]
+        return ofs
 
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
