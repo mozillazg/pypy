@@ -295,18 +295,6 @@ class Builder(GenBuilder):
         r = genmethod(gv_arg)
         return r
 
-    def genop_ptr_iszero(self, gv_ptr):
-        return self.op_ptr_iszero(gv_ptr)
-
-    def genop_ptr_nonzero(self, gv_ptr):
-        return self.op_ptr_nonzero(gv_ptr)
-
-    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
-        return self.op_ptr_eq(gv_ptr1, gv_ptr2)
-
-    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
-        return self.op_ptr_ne(gv_ptr1, gv_ptr2)
-
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         self.insns.append(insn.SpillCalleeSaves())
         for i in range(len(args_gv)):

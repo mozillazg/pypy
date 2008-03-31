@@ -33,10 +33,10 @@ class LLTypeHelper(TypeSystemHelper):
         return builder.genop_malloc_fixedsize(alloctoken)
 
     def genop_ptr_iszero(self, builder, argbox, gv_addr):
-        return builder.genop_ptr_iszero(gv_addr)
+        return builder.genop1("ptr_iszero", gv_addr)
 
     def genop_ptr_nonzero(self, builder, argbox, gv_addr):
-        return builder.genop_ptr_nonzero(gv_addr)
+        return builder.genop1("ptr_nonzero", gv_addr)
 
     def get_FuncType(self, ARGS, RESULT):
         FUNCTYPE = lltype.FuncType(ARGS, RESULT)

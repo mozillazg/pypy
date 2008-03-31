@@ -154,20 +154,6 @@ def generate_operation(rgenop, builder, op, var2gv):
     elif op.opname == 'same_as':
         gv_result = builder.genop_same_as(var2gv(op.args[0]))
 
-    elif op.opname == 'ptr_iszero':
-        gv_result = builder.genop_ptr_iszero(var2gv(op.args[0]))
-        
-    elif op.opname == 'ptr_nonzero':
-        gv_result = builder.genop_ptr_nonzero(var2gv(op.args[0]))
-        
-    elif op.opname == 'ptr_eq':
-        gv_result = builder.genop_ptr_eq(var2gv(op.args[0]),
-                                         var2gv(op.args[1]))
-        
-    elif op.opname == 'ptr_ne':
-        gv_result = builder.genop_ptr_ne(var2gv(op.args[0]),
-                                         var2gv(op.args[1]))
-
     elif op.opname == 'cast_int_to_ptr':
         gv_result = builder.genop_cast_int_to_ptr(var2gv(op.args[0]))
 

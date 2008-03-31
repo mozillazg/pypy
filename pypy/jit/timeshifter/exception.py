@@ -78,7 +78,7 @@ class LLTypeExceptionDesc(AbstractExceptionDesc):
 
     def gen_exc_occurred(self, builder):
         gv_etype = self.genop_get_exc_type(builder)
-        return builder.genop_ptr_nonzero(gv_etype)
+        return builder.genop1("ptr_nonzero", gv_etype)
 
 
 class OOTypeExceptionDesc(AbstractExceptionDesc):

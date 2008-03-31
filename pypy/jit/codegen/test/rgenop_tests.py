@@ -2234,7 +2234,7 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
                                        [gv_fbp, gv_switchvar, gv_framebase])
             gv_exc_type = default_builder.genop_getfield(exc_type_token,
                                                          gv_exc_data)
-            gv_noexc = default_builder.genop_ptr_iszero(gv_exc_type)
+            gv_noexc = default_builder.genop1("ptr_iszero", gv_exc_type)
             excpath_builder = default_builder.jump_if_false(gv_noexc, [])
             default_builder.finish_and_goto(args_gv, L0)
 
@@ -2253,7 +2253,8 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         gv_dummyfnptr = rgenop.genconst(llmemory.NULL)
         signed_kind = rgenop.kindToken(lltype.Signed)
         bool_kind = rgenop.kindToken(lltype.Bool)
-        EXCDATA = lltype.GcStruct('EXCDATA', ('exc_type', llmemory.Address))
+        FOO = lltype.GcStruct('FOO')
+        EXCDATA = lltype.GcStruct('EXCDATA', ('exc_type', lltype.Ptr(FOO)))
         exc_type_kind = rgenop.kindToken(llmemory.Address)
         exc_type_token = rgenop.fieldToken(EXCDATA, 'exc_type')
         gv_exc_data = rgenop.genconst(lltype.nullptr(EXCDATA))
