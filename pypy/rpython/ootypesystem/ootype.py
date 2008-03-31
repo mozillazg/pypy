@@ -266,6 +266,8 @@ class StaticMethod(SpecializableType):
 
 class Meth(StaticMethod):
 
+    SELFTYPE = None
+
     def __init__(self, args, result):
         StaticMethod.__init__(self, args, result)
 
@@ -330,7 +332,9 @@ class BuiltinADTType(BuiltinType):
         for name, meth in self._GENERIC_METHODS.iteritems():
             args = [self._specialize_type(arg, generic_types) for arg in meth.ARGS]
             result = self._specialize_type(meth.RESULT, generic_types)
-            methods[name] = Meth(args, result)
+            METH = Meth(args, result)
+            METH.SELFTYPE = self
+            methods[name] = METH
         self._METHODS = frozendict(methods)
         self._can_raise = tuple(can_raise)
 

@@ -207,6 +207,11 @@ def test_overloaded_method_upcast():
     c = new(C)
     assert c.foo(c) == 42
 
+def test_method_selftype():
+    LIST = List(Signed)
+    _, meth = LIST._lookup('ll_setitem_fast')
+    METH = typeOf(meth)
+    assert METH.SELFTYPE is LIST
 
 def test_explicit_name_clash():
     C = Instance("test", ROOT, {})
