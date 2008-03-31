@@ -577,7 +577,7 @@ class Builder(GenBuilder):
         initialstackdepth = self.rgenop._initial_stack_depth(stackdepth)
         if isinstance(gv_returnvar, FloatVar) or isinstance(gv_returnvar, FloatConst):
             self.mc.FLDL(gv_returnvar.operand(self))
-        else:
+        elif gv_returnvar is not None:
             self.mc.MOV(eax, gv_returnvar.operand(self))
         self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
         self.mc.RET()
