@@ -145,18 +145,13 @@ class IntConst(Const):
 
 class FloatConst(Const):
     def __init__(self, floatval):
-        self.floatval = floatval
+        # never moves and never dies
+        self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw',
+                                    immortal=True)
+        self.rawbuf[0] = floatval
 
     def operand(self, builder):
-        # XXX this is terrible, let's make it rpython and stuff later
-        rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
-        rawbuf[0] = self.floatval
-        one = rffi.cast(rffi.INTP, rawbuf)[0]
-        two = rffi.cast(rffi.INTP, rawbuf)[1]
-        oldpos = builder.stackdepth + 1
-        builder.push(imm(two))
-        builder.push(imm(one))
-        return builder.stack_access64(oldpos)
+        return heap64(rffi.cast(rffi.INT, self.rawbuf))
 
 class BoolConst(Const):
     pass
@@ -632,7 +627,7 @@ class Builder(GenBuilder):
         return res
 
     def returnfloatvar(self, op):
-        res = FloatVar(self.stackdepth)
+        res = FloatVar(self.stackdepth + 1)
         self.pushfloat(res)
         return res
 
@@ -866,8 +861,8 @@ class Builder(GenBuilder):
     op_ptr_ne      = op_int_ne
 
     def op_float_add(self, gv_x, gv_y):
-        self.mc.FLDL(gv_x.operand(self))
         self.mc.FLDL(gv_y.operand(self))
+        self.mc.FLDL(gv_x.operand(self))
         self.mc.FADD()
         return self.returnfloatvar(st0)
 
