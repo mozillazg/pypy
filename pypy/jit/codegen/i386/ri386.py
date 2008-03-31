@@ -256,6 +256,12 @@ def memregister(register):
 def mem(basereg, offset=0):
     return memSIB(basereg, None, 0, offset)
 
+def heap(offset):
+    return memSIB(None, None, 0, offset)
+
+def heap64(offset):
+    return memSIB64(None, None, 0, offset)
+
 def mem64(basereg, offset=0):
     return memSIB64(basereg, None, 0, offset)
 

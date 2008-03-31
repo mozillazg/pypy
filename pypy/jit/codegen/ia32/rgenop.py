@@ -626,6 +626,13 @@ class Builder(GenBuilder):
         self.push(eax)
         return res
 
+    def returnboolfloatvar(self):
+        self.mc.FSTSW()
+        self.mc.OR(eax, imm(4))
+        res = BoolVar(self.stackdepth)
+        self.push(eax)
+        return res
+
     def returnfloatvar(self, op):
         res = FloatVar(self.stackdepth + 1)
         self.pushfloat(res)
@@ -865,6 +872,39 @@ class Builder(GenBuilder):
         self.mc.FLDL(gv_x.operand(self))
         self.mc.FADD()
         return self.returnfloatvar(st0)
+
+    def op_float_sub(self, gv_x, gv_y):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FLDL(gv_y.operand(self))
+        self.mc.FSUB()
+        return self.returnfloatvar(st0)
+
+    def op_float_mul(self, gv_x, gv_y):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FLDL(gv_y.operand(self))
+        self.mc.FMUL()
+        return self.returnfloatvar(st0)
+
+    def op_float_truediv(self, gv_x, gv_y):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FLDL(gv_y.operand(self))
+        self.mc.FDIV()
+        return self.returnfloatvar(st0)
+
+    def op_float_neg(self, gv_x):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FCHS()
+        return self.returnfloatvar(st0)
+
+    def op_float_abs(self, gv_x):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FABS()
+        return self.returnfloatvar(st0)
+
+    def op_float_is_true(self, gv_x):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.FTST()
+        return self.returnboolfloatvar()
 
 SIZE2SHIFT = {1: 0,
               2: 1,
