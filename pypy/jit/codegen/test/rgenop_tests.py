@@ -16,6 +16,7 @@ FUNC2 = lltype.FuncType([lltype.Signed]*2, lltype.Signed)
 FUNC3 = lltype.FuncType([lltype.Signed]*3, lltype.Signed)
 FUNC5 = lltype.FuncType([lltype.Signed]*5, lltype.Signed)
 FUNC27= lltype.FuncType([lltype.Signed]*27, lltype.Signed)
+FUNCMIX = lltype.FuncType([lltype.Signed, lltype.Float], lltype.Float)
 
 def make_adder(rgenop, n):
     # 'return x+n'
@@ -168,6 +169,49 @@ def get_branching_runner(RGenOp):
         keepalive_until_here(rgenop)    # to keep the code blocks alive
         return res
     return branching_runner
+
+def make_float_loop(rgenop):
+    """
+    def f(x, y):
+        i = 0
+        res = 0.0
+        while i < x:
+            res -= -y * float(i)
+            i += 1
+        return res
+    """
+    sigtoken = rgenop.sigToken(FUNCMIX)
+    builder, gv_loopfn, [gv_x, gv_y] = rgenop.newgraph(sigtoken,
+                                                            "floatloop")
+    builder.start_writing()
+    args_gv = [gv_x, gv_y, rgenop.genconst(0), rgenop.genconst(0.0)]
+    loopblock = builder.enter_next_block(args_gv)
+    [gv_x, gv_y, gv_i, gv_res] = args_gv
+
+    gv_cond = builder.genop2("int_lt", gv_i, gv_x)
+    bodybuilder = builder.jump_if_true(gv_cond, args_gv)
+
+    builder.finish_and_return(sigtoken, gv_res)
+
+    bodybuilder.start_writing()
+    gv_y1 = bodybuilder.genop1("float_neg", gv_y)
+    gv_i1 = bodybuilder.genop1("cast_int_to_float", gv_i)
+    gv_v0 = bodybuilder.genop2("float_mul", gv_y1, gv_i1)
+    gv_res0 = bodybuilder.genop2("float_sub", gv_res, gv_v0)
+    gv_i2 = bodybuilder.genop2("int_add", gv_i, rgenop.genconst(1))
+    bodybuilder.finish_and_goto([gv_x, gv_y, gv_i2, gv_res0], loopblock)
+    builder.end()
+    return gv_loopfn
+
+def get_float_loop_runner(RGenOp):
+    def float_loop_runner(x, y):
+        rgenop = RGenOp()
+        gv_floatloopfn = make_float_loop(rgenop)
+        floatfn = gv_floatloopfn.revealconst(lltype.Ptr(FUNC2))
+        res = floatfn(x, y)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return float_loop_runner
 
 # loop start block
 def loop_start(rgenop, builder, gv_x, gv_y):
@@ -852,6 +896,10 @@ class AbstractTestBase(test_boehm.AbstractGCTestClass):
         F1 = lltype.FuncType([lltype.Float] * nb_args, lltype.Float)
         return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
 
+    def cast_whatever(self, gv, ARGS, RESULT=lltype.Signed):
+        F1 = lltype.FuncType(ARGS, RESULT)
+        return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)        
+
 class AbstractRGenOpTestsCompile(AbstractTestBase):
     def compile(self, runner, argtypes):
         return self.getcompiled(runner, argtypes,
@@ -1065,6 +1113,22 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         fnptr = self.cast_float(gv_add_5, 1)
         res = fnptr(1.2)
         assert res == 4.4
+
+    def test_float_loop_direct(self):
+        def f(x, y):
+            i = 0
+            res = 0.0
+            while i < x:
+                res -= -y * float(i)
+                i += 1
+            return res
+
+        rgenop = self.RGenOp()
+        gv_float = make_float_loop(rgenop)
+        fnptr = self.cast_whatever(gv_float, [lltype.Signed, lltype.Float],
+                                   lltype.Float)
+        res = fnptr(5, 1.3)
+        assert res == f(5, 1.3)
 
     def test_dummy_direct(self):
         rgenop = self.RGenOp()
