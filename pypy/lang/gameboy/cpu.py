@@ -599,13 +599,17 @@ class CPU(object):
      # DAA 1 cycle
     def daa(self):
         delta = 0
-        if ((self.f.get() & constants.H_FLAG) != 0 or (self.a.get() & 0x0F) > 0x09):
+        if self.isH(): 
             delta |= 0x06
-        if ((self.f.get() & constants.C_FLAG) != 0 or (self.a.get() & 0xF0) > 0x90):
+        if self.isC():
             delta |= 0x60
-        if ((self.a.get() & 0xF0) > 0x80 and (self.a.get() & 0x0F) > 0x09):
+        if (self.a.get() & 0x0F) > 0x09:
+            delta |= 0x06
+            if (self.a.get() & 0xF0) > 0x80:
+                delta |= 0x60
+        if (self.a.get() & 0xF0) > 0x90:
             delta |= 0x60
-        if ((self.f.get() & constants.N_FLAG) == 0):
+        if not self.isN():
             self.a.set((self.a.get() + delta) & 0xFF) # 1 cycle
         else:
             self.a.set((self.a.get() - delta) & 0xFF) # 1 cycle
@@ -651,9 +655,11 @@ class CPU(object):
 
      # CCF/SCF
     def ccf(self):
+        # Flip C-flag and keep Z-flag
         self.f.set((self.f.get() & (constants.Z_FLAG | constants.C_FLAG)) ^ constants.C_FLAG, False)
 
     def scf(self):
+        # Set C-flag to true and keep Z-flag
         self.f.set((self.f.get() & constants.Z_FLAG) | constants.C_FLAG, False)
 
      # NOP 1 cycle
@@ -709,6 +715,12 @@ class CPU(object):
 
     def isC(self):
         return (self.f.get() & constants.C_FLAG) != 0
+
+    def isH(self):
+        return (self.f.get() & constants.H_FLAG) != 0
+
+    def isN(self):
+        return (self.f.get() & constants.N_FLAG) != 0
 
      # RET 4 cycles
     def ret(self):
@@ -825,7 +837,6 @@ def register_lambda(function, registerOrGetter):
         return lambda s: function(s, registerOrGetter)
         
 def initialize_op_code_table(table):
-    print ""
     result = [None] * (0xFF+1)
     for entry in  table:
         if (entry is None) or (len(entry) == 0) or entry[-1] is None:
