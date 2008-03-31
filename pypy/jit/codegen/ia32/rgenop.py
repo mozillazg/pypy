@@ -1028,6 +1028,8 @@ def remap_stack_layout(builder, outputargs_gv, target):
 ##        target.stackdepth,
 ##        target.arg_positions))
 
+    # XXX rewrite in a float-friendly way
+
     N = target.stackdepth
     if builder.stackdepth < N:
         builder.mc.SUB(esp, imm(WORD * (N - builder.stackdepth)))
