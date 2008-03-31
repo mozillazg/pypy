@@ -10,6 +10,7 @@ class PseudoAnnhelper(object):
     rtyper = None
 GENOP_POLICY = MixLevelAnnotatorPolicy(PseudoAnnhelper())
 
+FLOATFUNC = lltype.FuncType([lltype.Float], lltype.Float)
 FUNC  = lltype.FuncType([lltype.Signed], lltype.Signed)
 FUNC2 = lltype.FuncType([lltype.Signed]*2, lltype.Signed)
 FUNC3 = lltype.FuncType([lltype.Signed]*3, lltype.Signed)
@@ -22,6 +23,17 @@ def make_adder(rgenop, n):
     builder, gv_add_one, [gv_x] = rgenop.newgraph(sigtoken, "adder")
     builder.start_writing()
     gv_result = builder.genop2("int_add", gv_x, rgenop.genconst(n))
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_add_one
+
+def make_float_adder(rgenop, n):
+    # 'return x+n'
+    sigtoken = rgenop.sigToken(FLOATFUNC)
+    builder, gv_add_one, [gv_x] = rgenop.newgraph(sigtoken, "float_adder")
+    builder.start_writing()
+    c2 = rgenop.genconst(n)
+    gv_result = builder.genop2("float_add", gv_x, c2)
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_add_one
@@ -836,6 +848,10 @@ class AbstractTestBase(test_boehm.AbstractGCTestClass):
         F1 = lltype.FuncType([lltype.Signed] * nb_args, RESULT)
         return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
 
+    def cast_float(self, gv, nb_args):
+        F1 = lltype.FuncType([lltype.Float] * nb_args, lltype.Float)
+        return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
+
 class AbstractRGenOpTestsCompile(AbstractTestBase):
     def compile(self, runner, argtypes):
         return self.getcompiled(runner, argtypes,
@@ -1042,6 +1058,13 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         fnptr = self.cast(gv_add_5, 1)
         res = fnptr(37)
         assert res == 42
+
+    def test_float_adder(self):
+        rgenop = self.RGenOp()
+        gv_add_5 = make_float_adder(rgenop, 3.2)
+        fnptr = self.cast_float(gv_add_5, 1)
+        res = fnptr(1.2)
+        assert res == 4.4
 
     def test_dummy_direct(self):
         rgenop = self.RGenOp()
