@@ -423,6 +423,7 @@ TEST.mode2(REG,   MODRM, ['\x85', register(1,8), modrm(2)])
 TEST.mode2(MODRM, REG,   ['\x85', register(2,8), modrm(1)])
 TEST.mode2(EAX,   IMM32, ['\xA9', immediate(2)])
 TEST.mode2(MODRM, IMM32, ['\xF7', orbyte(0<<3), modrm(1), immediate(2)])
+#TEST.mode2(REG8,  IMM8,  ['\xF6', register(2,8,'b'), modrm(2, 'b')])
 
 INT = Instruction()
 INT.mode1(IMM8, ['\xCD', immediate(1, 'b')])
@@ -446,13 +447,13 @@ FADD = Instruction()
 FADD.mode0(['\xDE\xC1'])
 
 FSUB = Instruction()
-FSUB.mode0(['\xDE\xE9'])
+FSUB.mode0(['\xDE\xE1'])
 
 FMUL = Instruction()
 FMUL.mode0(['\xDE\xC9'])
 
 FDIV = Instruction()
-FDIV.mode0(['\xDE\xF9'])
+FDIV.mode0(['\xDE\xF1'])
 
 FCHS = Instruction()
 FCHS.mode0(['\xD9\xE0'])
@@ -464,8 +465,11 @@ FTST = Instruction()
 FTST.mode0(['\xD9\xE4'])
 
 # store status control word
-FSTSW = Instruction()
-FSTSW.mode0(['\xDF\xE0'])
+FNSTSW = Instruction()
+FNSTSW.mode0(['\xDF\xE0'])
+
+FUCOMP = Instruction()
+FUCOMP.mode0(['\xDD\xE9'])
 
 FSTPL = Instruction()
 FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
