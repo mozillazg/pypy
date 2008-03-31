@@ -32,8 +32,7 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
     # casts
     test_cast_direct = skipped
 
-    # void returns
-    test_void_return = skipped
+    # lltype.Address in function arguments
     test_demo_f1_direct = skipped
 
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
