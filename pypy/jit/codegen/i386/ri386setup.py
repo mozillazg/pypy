@@ -444,17 +444,17 @@ SAHF.mode0(['\x9E'])
 FLDL = Instruction()
 FLDL.mode1(MODRM64, ['\xDD', modrm(1)])
 
-FADD = Instruction()
-FADD.mode0(['\xDE\xC1'])
+FADDP = Instruction()
+FADDP.mode0(['\xDE\xC1'])
 
-FSUB = Instruction()
-FSUB.mode0(['\xDE\xE1'])
+FSUBP = Instruction()
+FSUBP.mode0(['\xDE\xE1'])
 
-FMUL = Instruction()
-FMUL.mode0(['\xDE\xC9'])
+FMULP = Instruction()
+FMULP.mode0(['\xDE\xC9'])
 
-FDIV = Instruction()
-FDIV.mode0(['\xDE\xF1'])
+FDIVP = Instruction()
+FDIVP.mode0(['\xDE\xF1'])
 
 FCHS = Instruction()
 FCHS.mode0(['\xD9\xE0'])
@@ -471,6 +471,9 @@ FNSTSW.mode0(['\xDF\xE0'])
 
 FUCOMP = Instruction()
 FUCOMP.mode0(['\xDD\xE9'])
+
+FUCOMPP = Instruction()
+FUCOMPP.mode0(['\xDA\xE9'])
 
 FSTPL = Instruction()
 FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
