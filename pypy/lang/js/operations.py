@@ -121,18 +121,48 @@ class Array(ListOp):
         bytecode.emit('LOAD_ARRAY', len(self.nodes))
 
 class Assignment(Expression):
-    pass
+    def _get_name(self):
+        addoper = OPERANDS[self.operand]
+        if addoper:
+            addoper = '_' + self.prefix.upper() + addoper
+        return addoper
+
+OPERANDS = {
+    '='  : '',
+    '+=' : 'ADD',
+    '-=' : 'SUB',
+    '*=' : 'MUL',
+    '/=' : 'DIV',
+    '++' : 'INCR',
+    '--' : 'DECR',
+    }
+
+class SimpleIncrement(Expression):
+    def __init__(self, pos, left, atype):
+        self.pos   = pos
+        self.left  = left
+        self.atype = atype
+
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        if self.atype == '++':
+            bytecode.emit('INCR')
+        elif self.atype == '--':
+            bytecode.emit('DECR')
 
 class SimpleAssignment(Assignment):
-    def __init__(self, pos, left, right, operand):
+    def __init__(self, pos, left, right, operand, prefix=''):
         self.identifier = left.get_literal()
         self.right = right
         self.pos = pos
         self.operand = operand
+        self.prefix = prefix
 
     def emit(self, bytecode):
-        self.right.emit(bytecode)
-        bytecode.emit('STORE', self.identifier)
+        if self.right is not None:
+            self.right.emit(bytecode)
+        bytecode_name = 'STORE' + self._get_name()
+        bytecode.emit(bytecode_name, self.identifier)
 
 class VariableAssignment(Assignment):
     def __init__(self, pos, left, right, operand):
@@ -147,7 +177,7 @@ class VariableAssignment(Assignment):
         bytecode.emit('STORE_VAR', self.depth, self.identifier)
 
 class MemberAssignment(Assignment):
-    def __init__(self, pos, what, item, right, operand):
+    def __init__(self, pos, what, item, right, operand, prefix=''):
         # XXX we can optimise here what happens if what is identifier,
         #     but let's leave it alone for now
         self.pos = pos
@@ -155,26 +185,30 @@ class MemberAssignment(Assignment):
         self.item = item
         self.right = right
         self.operand = operand
+        self.prefix = prefix
 
     def emit(self, bytecode):
-        self.right.emit(bytecode)
+        if self.right is not None:
+            self.right.emit(bytecode)
         self.item.emit(bytecode)
         self.what.emit(bytecode)
-        bytecode.emit('STORE_MEMBER')
+        bytecode.emit('STORE_MEMBER' + self._get_name())
 
 class MemberDotAssignment(Assignment):
-    def __init__(self, pos, what, name, right, operand):
+    def __init__(self, pos, what, name, right, operand, prefix=''):
         self.pos = pos
         self.what = what
         self.itemname = name
         self.right = right
         self.operand = operand
+        self.prefix = prefix
 
     def emit(self, bytecode):
-        self.right.emit(bytecode)
+        if self.right is not None:
+            self.right.emit(bytecode)
         bytecode.emit('LOAD_STRINGCONSTANT', self.itemname)
         self.what.emit(bytecode)
-        bytecode.emit('STORE_MEMBER')
+        bytecode.emit('STORE_MEMBER' + self._get_name())
 
 class StuffAssignment(Expression):
     def __init__(self, pos, left, right, operand):
@@ -506,11 +540,6 @@ StrictNe = create_binary_op('ISNOT')
 #         r3 = r1.GetBase()
 #         r4 = r1.GetPropertyName()
 #         return W_Boolean(r3.Delete(r4))
-
-PreIncrement = create_unary_op('PREINCR')
-PostIncrement = create_unary_op('POSTINCR')
-PreDecrement = create_unary_op('PREDECRE')
-PostDecrement = create_unary_op('POSTDECR')
 
 #class Index(BinaryOp):
 #    def eval(self, ctx):

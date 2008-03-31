@@ -40,15 +40,9 @@ class ASTBuilder(RPythonVisitor):
         #'!': operations.Not,
         '+': operations.UPlus,
         '-': operations.UMinus,
-        '++': operations.PreIncrement,
-        '--': operations.PreDecrement,
         #'typeof': operations.Typeof,
         #'void': operations.Void,
         #'delete': operations.Delete,
-    }
-    POSTFIX_TO_CLS = {
-        '++': operations.PostIncrement,
-        '--': operations.PostDecrement,
     }
     LISTOP_TO_CLS = {
         '[': operations.Array,
@@ -161,14 +155,35 @@ class ASTBuilder(RPythonVisitor):
         op = node.children[0]
         pos = self.get_pos(op)
         child = self.dispatch(node.children[1])
+        if op.additional_info in ['++', '--']:
+            return self._dispatch_assignment(pos, child, op.additional_info,
+                                             'pre')
         return self.UNOP_TO_CLS[op.additional_info](pos, child)
+
+    def _dispatch_assignment(self, pos, left, atype, prepost):
+        from pypy.lang.js.operations import Identifier, Member, MemberDot,\
+             VariableIdentifier
+
+        if isinstance(left, Identifier):
+            return operations.SimpleAssignment(pos, left, None, atype, prepost)
+        elif isinstance(left, VariableIdentifier):
+            return operations.VariableAssignment(pos, left, None, atype,
+                                                 prepost)
+        elif isinstance(left, Member):
+            return operations.MemberAssignment(pos, left.left, left.expr,
+                                               None, atype, prepost)
+        elif isinstance(left, MemberDot):
+            return operations.MemberDotAssignment(pos, left.left, left.name,
+                                                  None, atype, prepost)
+        else:
+            return operations.SimpleIncrement(pos, left, atype)
 
     def visit_postfixexpression(self, node):
         op = node.children[1]
         pos = self.get_pos(op)
         child = self.dispatch(node.children[0])
-        return self.POSTFIX_TO_CLS[op.additional_info](pos, child)
-
+        # all postfix expressions are assignments
+        return self._dispatch_assignment(pos, child, op.additional_info, 'post')
     
     def listop(self, node):
         op = node.children[0]

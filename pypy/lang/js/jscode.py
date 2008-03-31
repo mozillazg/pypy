@@ -241,21 +241,46 @@ class LOAD_FUNCTION(Opcode):
     def __repr__(self):
         return 'LOAD_FUNCTION' # XXX
 
-class STORE_MEMBER(Opcode):
+class BaseStoreMember(Opcode):
     pass
     #def eval(self, ctx, ):
     #    XXX
 
-class STORE(Opcode):
+class STORE_MEMBER(Opcode):
+    pass
+
+class STORE_MEMBER_POSTINCR(Opcode):
+    pass
+
+class STORE_MEMBER_PREINCR(Opcode):
+    pass
+
+class STORE_MEMBER_SUB(Opcode):
+    pass
+
+class BaseStore(Opcode):
     def __init__(self, name):
         self.name = name
     
     def eval(self, ctx, stack):
         value = stack[-1]
+        value = self.process(ctx, self.name, value)
         ctx.assign(self.name, value)
 
     def __repr__(self):
-        return 'STORE "%s"' % self.name
+        return '%s "%s"' % (self.__class__.__name__, self.name)
+
+class STORE(BaseStore):
+    def process(self, ctx, name, value):
+        return value
+
+class STORE_ADD(BaseStore):
+    def process(self, ctx, name, value):
+        xxx
+
+class STORE_POSTINCR(BaseStore):
+    def process(self, ctx, name, value):
+        xxx
 
 class STORE_VAR(Opcode):
     def __init__(self, depth, name):
@@ -338,17 +363,11 @@ class UPLUS(BaseUnaryOperation):
 class UMINUS(BaseUnaryOperation):
     pass
 
-#class PREINCR(BaseUnaryOperation):
-#    pass
+class INCR(BaseUnaryOperation):
+    pass
 
-#class POSTINCR(BaseUnaryOperation):
-#    pass
- 
-#class PREDECR(BaseUnaryOperation):
-#    pass
-
-#class POSTDECR(BaseUnaryOperation):
-#    pass
+class DECR(BaseUnaryOperation):
+    pass
 
 class GT(BaseBinaryComparison):
     def decision(self, ctx, op1, op2):
