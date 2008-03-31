@@ -440,8 +440,29 @@ FLDL = Instruction()
 FLDL.mode1(MODRM64, ['\xDD', modrm(1)])
 
 FADD = Instruction()
-#FADD.mode1(MODRM64, ['\xDC', modrm(1)])
 FADD.mode0(['\xDE\xC1'])
+
+FSUB = Instruction()
+FSUB.mode0(['\xDE\xE9'])
+
+FMUL = Instruction()
+FMUL.mode0(['\xDE\xC9'])
+
+FDIV = Instruction()
+FDIV.mode0(['\xDE\xF9'])
+
+FCHS = Instruction()
+FCHS.mode0(['\xD9\xE0'])
+
+FABS = Instruction()
+FABS.mode0(['\xD9\xE1'])
+
+FTST = Instruction()
+FTST.mode0(['\xD9\xE4'])
+
+# store status control word
+FSTSW = Instruction()
+FSTSW.mode0(['\xDF\xE0'])
 
 FSTPL = Instruction()
 FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
