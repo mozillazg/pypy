@@ -966,6 +966,7 @@ class Builder(GenBuilder):
         return self._float_compare(gv_y, gv_x, 5)
 
     def op_cast_float_to_int(self, gv_x):
+        # XXX gcc is also checking something in control word
         self.mc.FLDL(gv_x.operand(self))
         self.mc.SUB(esp, imm(WORD))
         self.stackdepth += 1
@@ -974,6 +975,7 @@ class Builder(GenBuilder):
         return res
 
     def op_cast_int_to_float(self, gv_x):
+        # XXX gcc is also checking something in control word
         self.mc.FILD(gv_x.operand(self))
         return self.returnfloatvar(st0)
 
