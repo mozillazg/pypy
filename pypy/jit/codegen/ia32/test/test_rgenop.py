@@ -34,6 +34,7 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
 
     # void returns
     test_void_return = skipped
+    test_demo_f1_direct = skipped
 
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RI386GenOp
