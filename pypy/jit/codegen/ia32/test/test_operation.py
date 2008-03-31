@@ -44,9 +44,6 @@ class I386TestMixin(object):
     RGenOp = RGenOpPacked
 
 class TestOperation(I386TestMixin, OperationTests):
-    def test_float_cast(self):
-        py.test.skip("looks bogus to me")
-
     def test_ptr_comparison(self):
         py.test.skip('unsupported')
 
