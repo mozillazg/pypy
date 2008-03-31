@@ -406,30 +406,6 @@ class Builder(GenBuilder):
         self.operations.append(op_excflag)
         return op, op_excflag
 
-    def genop_ptr_iszero(self, gv_ptr):
-        cls = getopclass1('ptr_iszero')
-        op = cls(gv_ptr)
-        self.operations.append(op)
-        return op
-
-    def genop_ptr_nonzero(self, gv_ptr):
-        cls = getopclass1('ptr_nonzero')
-        op = cls(gv_ptr)
-        self.operations.append(op)
-        return op
-
-    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
-        cls = getopclass2('ptr_eq')
-        op = cls(gv_ptr1, gv_ptr2)
-        self.operations.append(op)
-        return op
-
-    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
-        cls = getopclass2('ptr_ne')
-        op = cls(gv_ptr1, gv_ptr2)
-        self.operations.append(op)
-        return op
-
     def genop_cast_int_to_ptr(self, kind, gv_int):
         return gv_int     # identity
 
@@ -730,6 +706,7 @@ class RI386GenOp(AbstractRGenOp):
     def sigToken(FUNCTYPE):
         numargs = 0
         for ARG in FUNCTYPE.ARGS:
+            RI386GenOp.kindToken(ARG)     # for the skip()
             if ARG is not lltype.Void:
                 numargs += 1
         return numargs     # for now

@@ -265,36 +265,10 @@ class LLBuilder(GenBuilder):
                      "genop_same_as: bad currently_writing")
         return LLVar(llimpl.genop(self.b, 'same_as', [gv_value], gv_value.getkind().v))
 
-    def genop_ptr_iszero(self, gv_ptr):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_iszero: bad currently_writing")
-        return LLVar(llimpl.genop(self.b, 'ptr_iszero', [gv_ptr], gv_Bool.v))
-
-    def genop_ptr_nonzero(self, gv_ptr):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_nonzero: bad currently_writing")
-        return LLVar(llimpl.genop(self.b, 'ptr_nonzero', [gv_ptr], gv_Bool.v))
-
     def genop_oononnull(self, gv_obj):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_oononnull: bad currently_writing")
         return LLVar(llimpl.genop(self.b, 'oononnull', [gv_obj], gv_Bool.v))
-
-    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_eq: bad currently_writing")
-        gv_PTRTYPE = gv_ptr1.getkind()
-        gv_ptr2 = LLVar(llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v))
-        return LLVar(llimpl.genop(self.b, 'ptr_eq', [gv_ptr1, gv_ptr2],
-                                  gv_Bool.v))
-
-    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_ne: bad currently_writing")
-        gv_PTRTYPE = gv_ptr1.getkind()
-        gv_ptr2 = LLVar(llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v))
-        return LLVar(llimpl.genop(self.b, 'ptr_ne', [gv_ptr1, gv_ptr2],
-                                  gv_Bool.v))
 
     def genop_cast_int_to_ptr(self, gv_PTRTYPE, gv_int):
         ll_assert(self.rgenop.currently_writing is self,

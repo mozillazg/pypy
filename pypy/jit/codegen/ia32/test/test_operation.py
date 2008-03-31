@@ -44,8 +44,7 @@ class I386TestMixin(object):
     RGenOp = RGenOpPacked
 
 class TestOperation(I386TestMixin, OperationTests):
-    def test_ptr_comparison(self):
-        py.test.skip('unsupported')
+    pass
 
     # for the individual tests see
     # ====> ../../test/operation_tests.py

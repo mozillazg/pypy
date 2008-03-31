@@ -90,10 +90,6 @@ class GenBuilder(object):
 ##     def genop_call(self, sigtoken, gv_fnptr, args_gv):
 ##     def genop_same_as(self, gv_x):
 ##     def genop_debug_pdb(self):    # may take an args_gv later
-##     def genop_ptr_iszero(self, gv_ptr)
-##     def genop_ptr_nonzero(self, gv_ptr)
-##     def genop_ptr_eq(self, gv_ptr1, gv_ptr2)
-##     def genop_ptr_ne(self, gv_ptr1, gv_ptr2)
 ##     def genop_cast_int_to_ptr(self, kind, gv_int)
 
     # the other thing that happens for a given chunk is entering and
@@ -442,18 +438,6 @@ class ReplayBuilder(GenBuilder):
     @specialize.arg(1)
     def genraisingop2(self, opname, gv_arg1, gv_arg2):
         return dummy_var, dummy_var
-
-    def genop_ptr_iszero(self, gv_ptr):
-        return dummy_var
-
-    def genop_ptr_nonzero(self, gv_ptr):
-        return dummy_var
-
-    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
-        return dummy_var
-
-    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
-        return dummy_var
 
     def genop_getfield(self, fieldtoken, gv_ptr):
         return dummy_var

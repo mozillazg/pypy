@@ -273,9 +273,9 @@ def genptreq(jitstate, argbox0, argbox1, reverse):
     gv_addr0 = argbox0.getgenvar(jitstate)
     gv_addr1 = argbox1.getgenvar(jitstate)
     if reverse:
-        gv_res = builder.genop_ptr_ne(gv_addr0, gv_addr1)
+        gv_res = builder.genop2("ptr_ne", gv_addr0, gv_addr1)
     else:
-        gv_res = builder.genop_ptr_eq(gv_addr0, gv_addr1)
+        gv_res = builder.genop2("ptr_eq", gv_addr0, gv_addr1)
     boolbox = rvalue.BoolRedBox(gv_res)
     boolbox.iftrue.append(booleffect.PtrEqualEffect(argbox0, argbox1, reverse))
     return boolbox

@@ -142,40 +142,6 @@ class Builder(GenBuilder):
             self.rgenop.vname(gv_arg2)))
         return v1, v2
 
-    def genop_ptr_iszero(self, gv_ptr):
-        v = self.llbuilder.genop_ptr_iszero(gv_ptr)
-        self.dump("%s = %s.genop_ptr_iszero(%s)" % (
-            self.rgenop.vname(v),
-            self.name,
-            self.rgenop.vname(gv_ptr)))
-        return v
-
-    def genop_ptr_nonzero(self, gv_ptr):
-        v = self.llbuilder.genop_ptr_nonzero(gv_ptr)
-        self.dump("%s = %s.genop_ptr_nonzero(%s)" % (
-            self.rgenop.vname(v),
-            self.name,
-            self.rgenop.vname(gv_ptr)))
-        return v
-
-    def genop_ptr_eq(self, gv_ptr1, gv_ptr2):
-        v = self.llbuilder.genop_ptr_eq(gv_ptr1, gv_ptr2)
-        self.dump("%s = %s.genop_ptr_eq(%s, %s)" % (
-            self.rgenop.vname(v),
-            self.name,
-            self.rgenop.vname(gv_ptr1),
-            self.rgenop.vname(gv_ptr2)))
-        return v
-
-    def genop_ptr_ne(self, gv_ptr1, gv_ptr2):
-        v = self.llbuilder.genop_ptr_ne(gv_ptr1, gv_ptr2)
-        self.dump("%s = %s.genop_ptr_ne(%s, %s)" % (
-            self.rgenop.vname(v),
-            self.name,
-            self.rgenop.vname(gv_ptr1),
-            self.rgenop.vname(gv_ptr2)))
-        return v
-
     def genop_cast_int_to_ptr(self, gv_int):
         v = self.llbuilder.genop_cast_int_to_ptr(gv_int)
         self.dump("%s = %s.genop_cast_int_to_ptr(%s)" % (
