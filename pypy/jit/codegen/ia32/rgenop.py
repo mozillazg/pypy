@@ -741,13 +741,25 @@ class Builder(GenBuilder):
 
     def op_int_lshift(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
-        self.mc.MOV(ecx, gv_y.operand(self))   # XXX check if ecx >= 32
+        self.mc.MOV(ecx, gv_y.operand(self))
         self.mc.SHL(eax, cl)
+        self.mc.CMP(ecx, imm8(32))
+        self.mc.SBB(ecx, ecx)
+        self.mc.AND(eax, ecx)
         return self.returnintvar(eax)
 
     def op_int_rshift(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
-        self.mc.MOV(ecx, gv_y.operand(self))   # XXX check if ecx >= 32
+        self.mc.MOV(ecx, imm8(31))
+        if isinstance(gv_y, IntConst):
+            intval = gv_y.value
+            if intval < 0 or intval > 31:
+                intval = 31
+            self.mc.MOV(cl, imm8(intval))
+        else:
+            op2 = gv_y.operand(self)
+            self.mc.CMP(op2, ecx)
+            self.mc.CMOVBE(ecx, op2)
         self.mc.SAR(eax, cl)
         return self.returnintvar(eax)
 
