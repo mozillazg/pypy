@@ -360,10 +360,10 @@ class TestToASTExpr(BaseTestToAST):
             'SUB'])
         self.check('++5', [
             'LOAD_INTCONSTANT 5',
-            'PREINCR'])
+            'INCR'])
         self.check('5--', [
             'LOAD_INTCONSTANT 5',
-            'POSTDECR'])
+            'DECR'])
         self.check('"hello " + \'world\'',
                    ['LOAD_STRINGCONSTANT "hello "',
                     'LOAD_STRINGCONSTANT "world"',
@@ -477,6 +477,25 @@ class TestToAstFunction(BaseTestToAST):
                                'LOAD_VARIABLE "a"',
                                'STORE_MEMBER',
                                'POP'])
+
+    def test_different_assignments(self):
+        self.check('x += y', [
+            'LOAD_VARIABLE "y"',
+            'STORE_ADD "x"',
+            'POP'])
+        self.check('x++', ['STORE_POSTINCR "x"',
+                           'POP'])
+        self.check('++x[2]', [
+            'LOAD_INTCONSTANT 2',
+            'LOAD_VARIABLE "x"',
+            'STORE_MEMBER_PREINCR',
+            'POP'])
+        self.check('x.y -= 2',
+                   ['LOAD_INTCONSTANT 2',
+                    'LOAD_STRINGCONSTANT "y"',
+                    'LOAD_VARIABLE "x"',
+                    'STORE_MEMBER_SUB',
+                    'POP'])
 
 from pypy.lang.js.jsparser import parse
     
