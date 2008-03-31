@@ -3,7 +3,8 @@ import re
 from pypy.rlib.jit import JitDriver, hint, JitHintError
 from pypy.jit.rainbow.test import test_interpreter
 from pypy.jit.rainbow.hotpath import HotRunnerDesc
-from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
+from pypy.jit.hintannotator.policy import HintAnnotatorPolicy, \
+    StopAtXPolicy
 from pypy.rpython.llinterp import LLInterpreter
 from pypy import conftest
 
@@ -587,3 +588,33 @@ class TestHotPath(HotPathTest):
         res = self.run(ll_function, [40], threshold=2)
         assert "".join(res.chars) == " ".join([str(i) for i in range(1, 80)])
         self.check_insns(malloc=1)
+
+    def test_indirect_call_fallback_color_order(self):
+        class A(object):
+            def g(self, green, red):
+                return red + green
+
+        class B(A):
+            def g(self, green, red):
+                return red - green
+        
+        myjitdriver = JitDriver(greens = ['x'],
+                                reds = ['a', 'i', 'tot'])
+        def g(isnotnone):
+            if isnotnone:
+                return A()
+            return B()
+        def f(isnotnone, x):
+            a = g(isnotnone)
+            i = 1024 * 1024
+            tot = 0
+            while i > 0:
+                i >>= 1
+                tot += a.g(x, i)
+                hint(x, concrete=True)
+                myjitdriver.jit_merge_point(tot=tot, i=i, a=a, x=x)
+                myjitdriver.can_enter_jit(tot=tot, i=i, a=a, x=x)
+            return tot
+        res = self.run(f, [False, 5], threshold=4, policy=StopAtXPolicy(g))
+        assert res == f(False, 5)
+
