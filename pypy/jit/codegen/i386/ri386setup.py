@@ -480,6 +480,9 @@ FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
 FSTL = Instruction()
 FSTL.mode1(MODRM64, ['\xDD', orbyte(2<<3), modrm(1)])
 
+FISTP = Instruction()
+FISTP.mode1(MODRM, ['xDB', orbyte(3<<3), modrm(1)])
+
 # ------------------------- end of floating point ------------------------
 
 UD2 = Instruction()      # reserved as an illegal instruction
