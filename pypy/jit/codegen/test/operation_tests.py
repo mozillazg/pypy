@@ -141,6 +141,28 @@ class OperationTests(object):
             assert fp(-12, -12) == fn(-12, -12), op
             assert fp(-12, -13) == fn(-12, -13), op
 
+    def test_float_comparison(self):
+        for op, fn in [('bool(x < y)', lambda x, y: bool(x < y)),
+                       ('bool(x <= y)', lambda x, y: bool(x <= y)),
+                       ('bool(x == y)', lambda x, y: bool(x == y)),
+                       ('bool(x != y)', lambda x, y: bool(x != y)),
+                       ('bool(x >  y)', lambda x, y: bool(x >  y)),
+                       ('bool(x >= y)', lambda x, y: bool(x >= y)),
+                       ]:
+            fp = self.rgen(fn, [float, float], bool)
+            assert fp(12., 11.) == fn(12., 11.), op
+            assert fp(12., 12.) == fn(12., 12.), op
+            assert fp(12., 13.) == fn(12., 13.), op
+            assert fp(-12., 11.) == fn(-12., 11.), op
+            assert fp(-12., 12.) == fn(-12., 12.), op
+            assert fp(-12., 13.) == fn(-12., 13.), op
+            assert fp(12., -11.) == fn(12., -11.), op
+            assert fp(12., -12.) == fn(12., -12.), op
+            assert fp(12., -13.) == fn(12., -13.), op
+            assert fp(-12., -11.) == fn(-12., -11.), op
+            assert fp(-12., -12.) == fn(-12., -12.), op
+            assert fp(-12., -13.) == fn(-12., -13.), op
+
     def test_unsigned_comparison(self):
         for op, fn in [('int(x <  y)', lambda x, y: int(x <  y)),
                        ('int(x <= y)', lambda x, y: int(x <= y)),
@@ -323,12 +345,18 @@ class OperationTests(object):
     def test_float_cast(self): #because of different rettype
         for op, fn in [('bool(x)', lambda x: bool(x)),
                        ('bool(2.0 - x)', lambda x: bool(x - 2.0)),
+                       ('int(x)', lambda x: int(x)),
                        ]:
             fp = self.rgen(fn, [float], bool)
             assert fp(6.0) == fn(6.0), op
             assert fp(2.0) == fn(2.0), op
             assert fp(0.0) == fn(0.0), op
             assert fp(-2.0) == fn(-2.0), op
+            assert fp(1.3) == fn(1.3), op
+        for op, fn in [('float(x)', lambda x: float(x)),
+                       ('float(2.0-x)', lambda x: float(2.0-x))]:
+            fp2 = self.rgen(fn, [int], float)
+            assert fp2(2) == fn(2)
 
     def test_constants_in_mul(self):
         for op in ['x * y', 'y * x']:
