@@ -47,6 +47,9 @@ class IntVar(Var):
     def operand(self, builder):
         return builder.stack_access(self.stackpos)
 
+    def newvar(self, builder):
+        return builder.returnintvar(self.operand(builder))
+
     ll_type = lltype.Signed
     token = 'i'
     SIZE = 1
@@ -56,6 +59,9 @@ class BoolVar(Var):
     def operand(self, builder):
         return builder.stack_access(self.stackpos)
 
+    def newvar(self, builder):
+        return builder.returnboolvar(self.operand(builder))
+
     ll_type = lltype.Bool
     token = 'b'
     SIZE = 1
@@ -63,6 +69,9 @@ class BoolVar(Var):
 class FloatVar(Var):
     def operand(self, builder):
         return builder.stack_access64(self.stackpos)
+
+    def newvar(self, builder):
+        return builder.returnfloatvar(self.operand(builder))
 
     ll_type = lltype.Float
     token = 'f'
@@ -143,7 +152,8 @@ class Const(GenConst):
         return "const=$%s" % (self.value,)
 
 class IntConst(Const):
-    pass
+    def newvar(self, builder):
+        return builder.returnintvar(self.operand(builder))
 
 class FloatConst(Const):
     def __init__(self, floatval):
@@ -154,11 +164,15 @@ class FloatConst(Const):
                                     immortal=True)
         self.rawbuf[0] = floatval
 
+    def newvar(self, builder):
+        return builder.returnfloatvar(self.operand(builder))
+
     def operand(self, builder):
         return heap64(rffi.cast(rffi.INT, self.rawbuf))
 
 class BoolConst(Const):
-    pass
+    def newvar(self, builder):
+        return builder.returnboolvar(self.operand(builder))
 
 ##class FnPtrConst(IntConst):
 ##    def __init__(self, value, mc):
@@ -538,8 +552,7 @@ class Builder(GenBuilder):
 
     def genop_same_as(self, gv_x):
         if gv_x.is_const:    # must always return a var
-            # XXX must return a var of the correct type
-            return self.returnintvar(gv_x.operand(self))
+            return gv_x.newvar(self)
         else:
             return gv_x
 
@@ -555,7 +568,7 @@ class Builder(GenBuilder):
             # turn constants into variables; also make copies of vars that
             # are duplicate in args_gv
             if not isinstance(gv, Var) or gv.stackpos in seen:
-                gv = args_gv[i] = self.returnintvar(gv.operand(self))
+                gv = args_gv[i] = gv.newvar(self)
             # remember the var's position in the stack
             arg_positions.append(gv.stackpos)
             seen[gv.stackpos] = None
@@ -951,6 +964,18 @@ class Builder(GenBuilder):
 
     def op_float_ge(self, gv_x, gv_y):
         return self._float_compare(gv_y, gv_x, 5)
+
+    def op_cast_float_to_int(self, gv_x):
+        self.mc.FLDL(gv_x.operand(self))
+        self.mc.SUB(esp, imm(WORD))
+        self.stackdepth += 1
+        res = IntVar(self.stackdepth)
+        self.mc.FISTP(res.operand(self))
+        return res
+
+    def op_cast_int_to_float(self, gv_x):
+        self.mc.FILD(gv_x.operand(self))
+        return self.returnfloatvar(st0)
 
 SIZE2SHIFT = {1: 0,
               2: 1,
