@@ -536,6 +536,7 @@ class Builder(GenBuilder):
 
     def genop_same_as(self, gv_x):
         if gv_x.is_const:    # must always return a var
+            # XXX must return a var of the correct type
             return self.returnintvar(gv_x.operand(self))
         else:
             return gv_x
