@@ -744,6 +744,41 @@ class TestVirtualizableExplicit(test_hotpath.HotPathTest):
                        policy=StopAtXPolicy(g))
         assert res == main(2, 20)
 
+    def test_escape_though_virtual_passed_to_residual(self):
+        myjitdriver = JitDriver(greens = [],
+                                reds = ['x', 'y', 'i', 'res'])
+
+        def g(e):
+            xy = e.xy
+            x = xy_get_x(xy)
+            y = xy_get_y(xy)
+            return x + y
+
+        def f(x, y):
+            i = 1024
+            while i > 0:
+                i >>= 1
+                #
+                xy = lltype.malloc(XY)
+                xy.vable_access = lltype.nullptr(XY_ACCESS)
+                xy.x = x
+                xy.y = y
+                e = lltype.malloc(E)
+                e.xy = xy
+                res = g(e)
+                #
+                myjitdriver.jit_merge_point(res=res, i=i, x=x, y=y)
+                myjitdriver.can_enter_jit(res=res, i=i, x=x, y=y)
+            return res
+
+        res = self.run(f, [2, 20], threshold=2,
+                       policy=StopAtXPolicy(g))
+        assert res == 22
+
+        res = self.run(f, [2, 20], threshold=1,
+                       policy=StopAtXPolicy(g))
+        assert res == 22
+
     def test_force_in_residual_red_call(self):
         myjitdriver = JitDriver(greens = [],
                                 reds = ['e', 'a', 'b', 'i', 'res'])
