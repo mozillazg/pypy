@@ -434,6 +434,9 @@ BREAKPOINT = Instruction()    # INT 3
 BREAKPOINT.mode0(['\xCC'])
 BREAKPOINT.as_alias = "INT3"
 
+SAHF = Instruction()
+SAHF.mode0(['\x9E'])
+
 # ------------------------- floating point instructions ------------------
 
 FLDL = Instruction()

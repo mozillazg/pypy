@@ -630,10 +630,9 @@ class Builder(GenBuilder):
 
     def returnboolfloatvar(self):
         self.mc.FSTSW()
-        self.mc.OR(eax, imm(4))     # ???
-        res = BoolVar(self.stackdepth)
-        self.push(eax)
-        return res
+        self.mc.SAHF()
+        self.mc.SETNZ(al)
+        return self.returnboolvar(al)
 
     def returnfloatvar(self, op):
         res = FloatVar(self.stackdepth + 1)
