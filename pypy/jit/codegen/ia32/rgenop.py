@@ -75,6 +75,7 @@ for value in locals().values():
         LL_TO_GENVAR[value.ll_type] = value.token
         TOKEN_TO_GENVAR[value.token] = value
         TOKEN_TO_SIZE[value.token] = value.SIZE
+LL_TO_GENVAR[lltype.Unsigned] = 'i'
 
 UNROLLING_TOKEN_TO_GENVAR = unrolling_iterable(TOKEN_TO_GENVAR.items())
 
@@ -1143,6 +1144,8 @@ class RI386GenOp(AbstractRGenOp):
             return AddrConst(llvalue)
         elif T is lltype.Signed:
             return IntConst(llvalue)
+        elif T is lltype.Unsigned:
+            return IntConst(intmask(llvalue))
         elif T is lltype.Bool:
             return BoolConst(llvalue)
         elif T is lltype.Float:
