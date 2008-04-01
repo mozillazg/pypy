@@ -192,15 +192,5 @@ class VListTest(InterpretationTest):
 class TestOOType(VListTest):
     type_system = "ootype"
 
-    def _skip(self):
-        py.test.skip('in progress')
-
-    test_alloc_and_set = _skip
-    test_lists_deepfreeze = _skip
-    test_frozen_list = _skip
-    test_frozen_list_indexerror = _skip
-    test_bogus_index_while_compiling = _skip
-
-
 class TestLLType(VListTest):
     type_system = "lltype"
