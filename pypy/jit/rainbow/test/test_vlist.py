@@ -189,17 +189,12 @@ class VListTest(InterpretationTest):
         assert res == -7
 
 
-class TestLLType(VListTest):
-    type_system = "lltype"
-
 class TestOOType(VListTest):
     type_system = "ootype"
 
     def _skip(self):
         py.test.skip('in progress')
 
-    test_merge = _skip
-    test_replace = _skip
     test_force = _skip
     test_oop_vlist = _skip
     test_alloc_and_set = _skip
@@ -207,3 +202,7 @@ class TestOOType(VListTest):
     test_frozen_list = _skip
     test_frozen_list_indexerror = _skip
     test_bogus_index_while_compiling = _skip
+
+
+class TestLLType(VListTest):
+    type_system = "lltype"
