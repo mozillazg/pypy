@@ -662,7 +662,7 @@ class FrozenPtrVarWithPartialData(FrozenPtrVar):
 class FrozenPtrVirtual(FrozenValue):
 
     def exactmatch(self, box, outgoingvarboxes, memo):
-        assert isinstance(box, PtrRedBox)
+        assert isinstance(box, AbstractPtrRedBox)
         if box.genvar:
             # XXX should we consider self.access_info here too?
             raise DontMerge
@@ -695,7 +695,7 @@ PtrRedBox.FrozenPtrConst = FrozenPtrConst
 PtrRedBox.FrozenPtrVar = FrozenPtrVar
 PtrRedBox.FrozenPtrVarWithPartialData = FrozenPtrVarWithPartialData
 
-InstanceRedBox.FrozenPtrVirtual = None
+InstanceRedBox.FrozenPtrVirtual = FrozenPtrVirtual
 InstanceRedBox.FrozenPtrConst = FrozenInstanceConst
 InstanceRedBox.FrozenPtrVar = FrozenInstanceVar
 InstanceRedBox.FrozenPtrVarWithPartialData = None
