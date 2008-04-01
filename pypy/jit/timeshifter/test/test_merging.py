@@ -106,28 +106,27 @@ class TestMerging:
         gc = FakeGenConst(prebuilt_s)
         box = rvalue.PtrRedBox(gc)
         frozen = box.freeze(rvalue.freeze_memo())
-        assert box.future_usage is not None # attached by freeze
-        frozen_timestamp = 0
+        assert box.most_recent_frozen is not None # attached by freeze
 
         jitstate = FakeJITState()
 
         x_box = rtimeshift.gengetfield(jitstate, False, self.fielddesc, box)
         assert x_box.genvar.revealconst(lltype.Signed) == 42
         assert x_box.future_usage is not None   # attached by gengetfield()
-        x_box.future_usage.see_promote(timestamp=1)
+        x_box.see_promote()
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         assert frozen.exactmatch(box, [], memo)
 
         prebuilt_s2 = lltype.malloc(self.STRUCT)
         prebuilt_s2.x = 42
         box2 = rvalue.PtrRedBox(FakeGenConst(prebuilt_s2))
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         assert not frozen.exactmatch(box2, [], memo)
         # ^^^no DontMerge because box2.x is equal, so we don't loose its value
 
         prebuilt_s3 = lltype.malloc(self.STRUCT)
         prebuilt_s3.x = 43
         box3 = rvalue.PtrRedBox(FakeGenConst(prebuilt_s3))
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, box3, [], memo)
