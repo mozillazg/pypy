@@ -115,6 +115,16 @@ class LLTypeListTypeDesc(AbstractListTypeDesc):
 
         self.devirtualize = make, fill_into
 
+    def gen_newlist(self, builder, args_gv):
+        return builder.genop_call(self.tok_ll_newlist,
+                                  self.gv_ll_newlist,
+                                  args_gv)
+
+    def gen_setitem_fast(self, builder, args_gv):
+        return builder.genop_call(self.tok_ll_setitem_fast,
+                                  self.gv_ll_setitem_fast,
+                                  args_gv)
+
         
 
 class OOTypeListTypeDesc(AbstractListTypeDesc):
@@ -123,10 +133,23 @@ class OOTypeListTypeDesc(AbstractListTypeDesc):
     PtrRedBox = rvalue.InstanceRedBox
 
     def _setup(self, RGenOp, rtyper, LIST):
-        pass
+        self.alloctoken = RGenOp.allocToken(LIST)
+        self.tok_ll_resize = RGenOp.methToken(LIST, '_ll_resize')
+        self.tok_ll_setitem_fast = RGenOp.methToken(LIST,
+                                                    'll_setitem_fast')
 
     def _define_devirtualize(self):
         pass # XXX
+
+    def gen_newlist(self, builder, args_gv):
+        gv_lst = builder.genop_new(self.alloctoken)
+        builder.genop_oosend(self.tok_ll_resize, gv_lst, args_gv)
+        return gv_lst
+
+    def gen_setitem_fast(self, builder, args_gv):
+        gv_lst = args_gv.pop(0)
+        return builder.genop_oosend(self.tok_ll_setitem_fast,
+                                    gv_lst, args_gv)
 
 class FrozenVirtualList(FrozenContainer):
 
@@ -211,17 +234,13 @@ class VirtualList(VirtualContainer):
 
         debug_print(lltype.Void, "FORCE LIST (%d items)" % (len(boxes),))
         args_gv = [builder.rgenop.genconst(len(boxes))]
-        gv_list = builder.genop_call(typedesc.tok_ll_newlist,
-                                     typedesc.gv_ll_newlist,
-                                     args_gv)
+        gv_list = typedesc.gen_newlist(builder, args_gv)
         self.setforced(gv_list)
 
         for i in range(len(boxes)):
             gv_item = boxes[i].getgenvar(jitstate)
             args_gv = [gv_list, builder.rgenop.genconst(i), gv_item]
-            builder.genop_call(typedesc.tok_ll_setitem_fast,
-                               typedesc.gv_ll_setitem_fast,
-                               args_gv)
+            typedesc.gen_setitem_fast(builder, args_gv)
 
     def freeze(self, memo):
         contmemo = memo.containers
