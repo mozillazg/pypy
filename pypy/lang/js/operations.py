@@ -166,6 +166,7 @@ class SimpleAssignment(Assignment):
 
 class VariableAssignment(Assignment):
     def __init__(self, pos, left, right, operand):
+        xxx # shall never land here for now
         self.identifier = left.identifier
         self.right = right
         self.pos = pos

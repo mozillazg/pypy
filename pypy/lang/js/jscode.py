@@ -245,60 +245,17 @@ class LOAD_FUNCTION(Opcode):
     def __repr__(self):
         return 'LOAD_FUNCTION' # XXX
 
-class BaseStoreMember(Opcode):
-    pass
-    #def eval(self, ctx, ):
-    #    XXX
+# class STORE_VAR(Opcode):
+#     def __init__(self, depth, name):
+#         self.name = name
+#         self.depth = depth
 
-class STORE_MEMBER(Opcode):
-    pass
+#     def eval(self, ctx, stack):
+#         value = stack[-1]
+#         ctx.scope[self.depth].Put(self.name, value)
 
-class STORE_MEMBER_POSTINCR(Opcode):
-    pass
-
-class STORE_MEMBER_PREINCR(Opcode):
-    pass
-
-class STORE_MEMBER_SUB(Opcode):
-    pass
-
-class BaseStore(Opcode):
-    def __init__(self, name):
-        self.name = name
-    
-    def eval(self, ctx, stack):
-        value = self.process(ctx, self.name, stack)
-        ctx.assign(self.name, value)
-
-    def __repr__(self):
-        return '%s "%s"' % (self.__class__.__name__, self.name)
-
-class STORE(BaseStore):
-    def process(self, ctx, name, stack):
-        return stack[-1]
-
-class STORE_ADD(BaseStore):
-    def process(self, ctx, name, stack):
-        xxx
-
-class STORE_POSTINCR(BaseStore):
-    def process(self, ctx, name, stack):
-        value = ctx.resolve_identifier(name)
-        newval = increment(ctx, value)
-        stack.append(newval)
-        return newval
-
-class STORE_VAR(Opcode):
-    def __init__(self, depth, name):
-        self.name = name
-        self.depth = depth
-
-    def eval(self, ctx, stack):
-        value = stack[-1]
-        ctx.scope[self.depth].Put(self.name, value)
-
-    def __repr__(self):
-        return 'STORE "%s"' % self.name
+#     def __repr__(self):
+#         return 'STORE_VAR "%s"' % self.name
 
 class LOAD_OBJECT(Opcode):
     def __init__(self, counter):
@@ -342,15 +299,18 @@ class COMMA(BaseUnaryOperation):
         # XXX
 
 class SUB(BaseBinaryOperation):
-    def operation(self, ctx, left, right):
+    @staticmethod
+    def operation(ctx, left, right):
         return sub(ctx, left, right)
 
 class ADD(BaseBinaryOperation):
-    def operation(self, ctx, left, right):
+    @staticmethod
+    def operation(ctx, left, right):
         return plus(ctx, left, right)
 
 class BITAND(BaseBinaryBitwiseOp):
-    def operation(self, ctx, op1, op2):
+    @staticmethod
+    def operation(ctx, op1, op2):
         return W_IntNumber(op1&op2)
 
 
@@ -406,6 +366,60 @@ class IS(BaseBinaryComparison):
 class ISNOT(BaseBinaryComparison):
     def decision(self, ctx, op1, op2):
         return newbool(not StrictEC(ctx, op1, op2))
+
+
+class BaseStoreMember(Opcode):
+    pass
+    #def eval(self, ctx, ):
+    #    XXX
+
+class STORE_MEMBER(Opcode):
+    pass
+
+class STORE_MEMBER_POSTINCR(Opcode):
+    pass
+
+class STORE_MEMBER_PREINCR(Opcode):
+    pass
+
+class STORE_MEMBER_SUB(Opcode):
+    pass
+
+class BaseStore(Opcode):
+    def __init__(self, name):
+        self.name = name
+    
+    def eval(self, ctx, stack):
+        value = self.process(ctx, self.name, stack)
+        ctx.assign(self.name, value)
+
+    def __repr__(self):
+        return '%s "%s"' % (self.__class__.__name__, self.name)
+
+class STORE(BaseStore):
+    def process(self, ctx, name, stack):
+        return stack[-1]
+
+class BaseAssignOper(BaseStore):
+    def process(self, ctx, name, stack):
+        right = stack.pop()
+        left = ctx.resolve_identifier(name)
+        result = self.operation(ctx, left, right)
+        stack.append(result)
+        return result
+
+class STORE_ADD(BaseAssignOper):
+    operation = staticmethod(ADD.operation)
+
+class STORE_SUB(BaseAssignOper):
+    operation = staticmethod(SUB.operation)
+
+class STORE_POSTINCR(BaseStore):
+    def process(self, ctx, name, stack):
+        value = ctx.resolve_identifier(name)
+        newval = increment(ctx, value)
+        stack.append(newval)
+        return newval
 
 class LABEL(Opcode):
     def __init__(self, num):
