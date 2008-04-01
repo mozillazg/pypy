@@ -167,7 +167,8 @@ class ASTBuilder(RPythonVisitor):
         if isinstance(left, Identifier):
             return operations.SimpleAssignment(pos, left, None, atype, prepost)
         elif isinstance(left, VariableIdentifier):
-            return operations.VariableAssignment(pos, left, None, atype,
+            # XXX exchange to VariableAssignment
+            return operations.SimpleAssignment(pos, left, None, atype,
                                                  prepost)
         elif isinstance(left, Member):
             return operations.MemberAssignment(pos, left.left, left.expr,
@@ -326,7 +327,8 @@ class ASTBuilder(RPythonVisitor):
         if isinstance(left, Identifier):
             return operations.SimpleAssignment(pos, left, right, atype)
         elif isinstance(left, VariableIdentifier):
-            return operations.VariableAssignment(pos, left, right, atype)
+            # XXX exchange to VariableAssignment
+            return operations.SimpleAssignment(pos, left, right, atype)
         elif isinstance(left, Member):
             return operations.MemberAssignment(pos, left.left, left.expr,
                                                right, atype)

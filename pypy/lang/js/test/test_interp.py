@@ -266,6 +266,10 @@ def test_while():
     print(i);
     """, ["0","1","2","3"])
 
+def test_assignments():
+    yield assertv, "var x = 3; x += 4; x;", 7
+    yield assertv, "x = 8; x -= 3; x;", 5
+
 def test_object_creation():
     yield assertv, """
     o = new Object();
