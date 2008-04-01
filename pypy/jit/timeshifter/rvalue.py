@@ -14,8 +14,9 @@ def enter_block_memo():
 def freeze_memo():
     return Memo()
 
-def exactmatch_memo(force_merge=False):
+def exactmatch_memo(rgenop, force_merge=False):
     memo = Memo()
+    memo.rgenop = rgenop
     memo.partialdatamatch = {}
     memo.forget_nonzeroness = {}
     memo.force_merge=force_merge
@@ -346,30 +347,41 @@ class AbstractPtrRedBox(RedBox):
         try:
             return boxmemo[self]
         except KeyError:
-            future_usage = self.retrieve_future_usage()
             content = self.content
-            if not self.genvar:
-                from pypy.jit.timeshifter import rcontainer
-                assert isinstance(content, rcontainer.VirtualContainer)
-                result = self.FrozenPtrVirtual(future_usage)
+            if content is None:
+                result = self.most_recent_frozen
+                if result is None:
+                    if self.genvar.is_const:
+                        result = self.FrozenPtrConst(self.genvar)
+                    elif content is None:
+                        result = self.FrozenPtrVar(self.known_nonzero)
+                    self.most_recent_frozen = result
+                else:
+                    # sanity-check the most_recent_frozen object
+                    if self.genvar.is_const:
+                        assert isinstance(result, self.FrozenPtrConst)
+                    else:
+                        assert isinstance(result, self.FrozenPtrVar)
                 boxmemo[self] = result
-                result.fz_content = content.freeze(memo)
-                return result
-            elif self.genvar.is_const:
-                result = self.FrozenPtrConst(future_usage, self.genvar)
-            elif content is None:
-                result = self.FrozenPtrVar(future_usage, self.known_nonzero)
             else:
-                # if self.content is not None, it's a PartialDataStruct
-                from pypy.jit.timeshifter import rcontainer
-                assert isinstance(content, rcontainer.PartialDataStruct)
-                result = self.FrozenPtrVarWithPartialData(future_usage,
-                                                          known_nonzero=True)
-                boxmemo[self] = result
-                result.fz_partialcontent = content.partialfreeze(memo)
-                return result
-            result.fz_access_info = self.access_info.copy()
-            boxmemo[self] = result
+                self.most_recent_frozen = None   # for now
+                if not self.genvar:
+                    from pypy.jit.timeshifter import rcontainer
+                    assert isinstance(content, rcontainer.VirtualContainer)
+                    result = self.FrozenPtrVirtual()
+                    # store the result in the memo before content.freeze(),
+                    # for recursive data structures
+                    boxmemo[self] = result
+                    result.fz_content = content.freeze(memo)
+                else:
+                    # if self.content is not None, it's a PartialDataStruct
+                    from pypy.jit.timeshifter import rcontainer
+                    assert isinstance(content, rcontainer.PartialDataStruct)
+                    result = self.FrozenPtrVarWithPartialData(known_nonzero=True)
+                    # store the result in the memo before content.freeze(),
+                    # for recursive data structures
+                    boxmemo[self] = result
+                    result.fz_partialcontent = content.partialfreeze(memo)
             return result
 
     def getgenvar(self, jitstate):
@@ -431,6 +443,19 @@ class AbstractPtrRedBox(RedBox):
             assert self.content is not None
             self.content.op_setfield(jitstate, fielddesc, valuebox)
 
+    def getfield_dont_generate_code(self, rgenop, fielddesc):
+        if self.content is not None:
+            return self.content.getfield_dont_generate_code(rgenop, fielddesc)
+        elif self.genvar.is_const:
+            # this raises if something's wrong, never returns None right
+            try:
+                gv_result = fielddesc.perform_getfield(rgenop, self.genvar)
+            except rcontainer.SegfaultException:
+                return None
+            return fielddesc.redboxcls(gv_result)
+        else:
+            return None
+
     def remember_field(self, fielddesc, box):
         if self.genvar.is_const:
             return      # no point in remembering field then
@@ -481,6 +506,11 @@ class FrozenConst(FrozenValue):
             outgoingvarboxes.append(box)
             return False
 
+    def check_future_promotions(self, box, memo):
+        if (self.will_be_promoted and box.is_constant()
+            and not self.is_constant_equal(box)):
+            raise DontMerge
+
 
 class FrozenVar(FrozenValue):
 
@@ -513,6 +543,8 @@ class FrozenIntConst(FrozenConst):
         # XXX could return directly the original IntRedBox
         return IntRedBox(self.gv_const)
 
+IntRedBox.FrozenConstCls = FrozenIntConst
+
 
 class FrozenIntVar(FrozenVar):
 
@@ -540,6 +572,8 @@ class FrozenBoolConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return BoolRedBox(self.gv_const)
 
+BoolRedBox.FrozenConstCls = FrozenBoolConst
+
 
 class FrozenBoolVar(FrozenVar):
 
@@ -566,6 +600,8 @@ class FrozenDoubleConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return DoubleRedBox(self.gv_const)
 
+DoubleRedBox.FrozenConstCls = FrozenDoubleConst
+
 
 class FrozenDoubleVar(FrozenVar):
 
@@ -582,8 +618,8 @@ class FrozenDoubleVar(FrozenVar):
 
 class FrozenAbstractPtrConst(FrozenConst):
 
-    def __init__(self, future_usage, gv_const):
-        FrozenConst.__init__(self, future_usage)
+    def __init__(self, gv_const):
+        FrozenConst.__init__(self)
         self.gv_const = gv_const
 
     def is_constant_equal(self, box):
@@ -600,6 +636,8 @@ class FrozenAbstractPtrConst(FrozenConst):
         if self.is_constant_nullptr():
             memo.forget_nonzeroness[box] = None
         match = FrozenConst.exactmatch(self, box, outgoingvarboxes, memo)
+        if not match:
+            self.check_future_promotions(box, memo)
         #if not memo.force_merge and not match:
         #    from pypy.jit.timeshifter.rcontainer import VirtualContainer
         #    if isinstance(box.content, VirtualContainer):
@@ -609,18 +647,46 @@ class FrozenAbstractPtrConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return self.PtrRedBox(self.gv_const)
 
+    const_children = None
+
+    def get_const_child(self, fielddesc, gv_value):
+        # constant children of a constant immutable FrozenPtrConst
+        # are only used to track future promotions; they have no
+        # other effect on exactmatch().
+        if self.const_children is None:
+            self.const_children = {}
+        else:
+            try:
+                return self.const_children[fielddesc]
+            except KeyError:
+                pass
+        newfz = fielddesc.frozenconstcls(gv_value)
+        self.const_children[fielddesc] = newfz
+        return newfz
+
+    def check_future_promotions(self, box, memo):
+        FrozenConst.check_future_promotions(self, box, memo)
+        if self.const_children is not None:
+            for fielddesc, fz_child in self.const_children.items():
+                box_child = box.getfield_dont_generate_code(memo.rgenop, 
+                                                            fielddesc)
+                if box_child is not None:
+                    fz_child.check_future_promotions(box_child, memo)
+
 
 class FrozenPtrConst(FrozenAbstractPtrConst, LLTypeMixin):
     PtrRedBox = PtrRedBox
+PtrRedBox.FrozenConstCls = FrozenPtrConst
 
 class FrozenInstanceConst(FrozenAbstractPtrConst, OOTypeMixin):
     PtrRedBox = InstanceRedBox
+InstanceRedBox.FrozenConstCls = FrozenInstanceConst
 
 
 class AbstractFrozenPtrVar(FrozenVar):
 
-    def __init__(self, future_usage, known_nonzero):
-        FrozenVar.__init__(self, future_usage)
+    def __init__(self, known_nonzero):
+        FrozenVar.__init__(self)
         self.known_nonzero = known_nonzero
 
     def exactmatch(self, box, outgoingvarboxes, memo):

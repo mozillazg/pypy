@@ -23,12 +23,16 @@ class AbstractContainer(object):
     _attrs_ = []
 
     def op_getfield(self, jitstate, fielddesc):
-        raise NotImplementedError
+        rgenop = jitstate.curbuilder.rgenop
+        return self.getfield_dont_generate_code(rgenop, fielddesc)
 
     def op_setfield(self, jitstate, fielddesc, valuebox):
         raise NotImplementedError
 
     def op_getsubstruct(self, jitstate, fielddesc):
+        raise NotImplementedError
+
+    def getfield_dont_generate_code(self, rgenop, fielddesc):
         raise NotImplementedError
 
 
@@ -639,6 +643,9 @@ class FieldDesc(object):
             if self.virtualizable:
                 self.structdesc = StructTypeDesc(RGenOp, T)
             self.redboxcls = rvalue.ll_redboxcls(RESTYPE)
+            # fish for the FrozenConst subclass
+            dummybox = self.redboxcls(self.gv_default)
+            self.frozenconstcls = dummybox.FrozenConstCls
             
         self.immutable = deref(PTRTYPE)._hints.get('immutable', False)
 
@@ -909,14 +916,14 @@ class VirtualStruct(VirtualContainer):
             content_boxes[i] = content_boxes[i].replace(memo)
         self.ownbox = self.ownbox.replace(memo)
 
-    def op_getfield(self, jitstate, fielddesc):
-        return self.content_boxes[fielddesc.fieldindex]
-
     def op_setfield(self, jitstate, fielddesc, valuebox):
         self.content_boxes[fielddesc.fieldindex] = valuebox
 
     def op_getsubstruct(self, jitstate, fielddesc):
         return self.ownbox
+
+    def getfield_dont_generate_code(self, rgenop, fielddesc):
+        return self.content_boxes[fielddesc.fieldindex]
 
     def make_rti(self, jitstate, memo):
         try:
@@ -1284,6 +1291,9 @@ class VirtualizableStruct(VirtualStruct):
             fielddesc.generate_set(jitstate, gv_ptr,
                                    valuebox.getgenvar(jitstate))
 
+    def getfield_dont_generate_code(self, rgenop, fielddesc):
+        xxx
+
     def op_ptreq(self, jitstate, otherbox, reverse):
         if self is otherbox.content:
             answer = True
@@ -1346,7 +1356,7 @@ class PartialDataStruct(AbstractContainer):
     def __init__(self):
         self.data = []
 
-    def op_getfield(self, jitstate, fielddesc):
+    def getfield_dont_generate_code(self, rgenop, fielddesc):
         searchindex = fielddesc.fieldindex
         for index, box in self.data:
             if index == searchindex:
