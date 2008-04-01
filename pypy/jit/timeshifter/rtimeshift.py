@@ -165,7 +165,11 @@ def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
         except rcontainer.SegfaultException:
             pass
         else:
-            return fielddesc.makebox(jitstate, resgv)
+            result = fielddesc.makebox(jitstate, resgv)
+            if argbox.future_usage is not None:
+                future_usage = argbox.future_usage.retrieve_child_usage(fielddesc)
+                result.future_usage = future_usage
+            return result
     return argbox.op_getfield(jitstate, fielddesc)
 
 def gensetfield(jitstate, fielddesc, destbox, valuebox):
