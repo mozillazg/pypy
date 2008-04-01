@@ -488,6 +488,9 @@ class W_List(W_Root):
     def get_args(self):
         return self.list_w
 
+    def tolist(self):
+        return self.list_w
+
     def __repr__(self):
         return 'W_List(%s)' % (self.list_w,)
     

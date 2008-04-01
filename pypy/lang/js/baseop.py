@@ -2,7 +2,8 @@
 """ Base operations implementations
 """
 
-from pypy.lang.js.jsobj import W_String, W_IntNumber, W_FloatNumber
+from pypy.lang.js.jsobj import W_String, W_IntNumber, W_FloatNumber,\
+     W_PrimitiveObject
 from pypy.rlib.rarithmetic import r_uint, intmask, INFINITY, NAN, ovfcheck,\
      isnan, isinf
 
@@ -199,3 +200,13 @@ def StrictEC(ctx, x, y):
     if type1 == "boolean":
         return x.ToBoolean() == x.ToBoolean()
     return x == y
+
+
+def commonnew(ctx, obj, args):
+    if not isinstance(obj, W_PrimitiveObject):
+        raise ThrowException(W_String('it is not a constructor'))
+    try:
+        res = obj.Construct(ctx=ctx, args=args)
+    except JsTypeError:
+        raise ThrowException(W_String('it is not a constructor'))
+    return res

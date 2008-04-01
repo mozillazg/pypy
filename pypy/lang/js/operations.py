@@ -552,7 +552,7 @@ class ArgumentList(ListOp):
     def emit(self, bytecode):
         for node in self.nodes:
             node.emit(bytecode)
-        bytecode.emit('LOAD_ARRAY', len(self.nodes))
+        bytecode.emit('LOAD_LIST', len(self.nodes))
 
 ##############################################################################
 #
@@ -577,26 +577,21 @@ class Null(Expression):
 #
 ##############################################################################
 
-def commonnew(ctx, obj, args):
-    if not isinstance(obj, W_PrimitiveObject):
-        raise ThrowException(W_String('it is not a constructor'))
-    try:
-        res = obj.Construct(ctx=ctx, args=args)
-    except JsTypeError:
-        raise ThrowException(W_String('it is not a constructor'))
-    return res
-
 #class New(UnaryOp):
 #    def eval(self, ctx):
 #        x = self.expr.eval(ctx).GetValue()
 #        return commonnew(ctx, x, [])
     
-
-# class NewWithArgs(BinaryOp):
-#     def eval(self, ctx):
-#         x = self.left.eval(ctx).GetValue()
-#         args = self.right.eval(ctx).get_args()
-#         return commonnew(ctx, x, args)
+class NewWithArgs(Expression):
+    def __init__(self, pos, left, right):
+        self.pos = pos
+        self.left = left
+        self.right = right
+    
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        self.right.emit(bytecode)
+        bytecode.emit('NEW')
 
 class BaseNumber(Expression):
     pass
