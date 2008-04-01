@@ -407,7 +407,7 @@ def oop_list_method_resize(jitstate, oopspecdesc, deepfrozen, selfbox, lengthbox
         if len(item_boxes) < length:
             diff = length - len(item_boxes)
             item_boxes += [content.itembox] * diff
-        else:
+        elif len(item_boxes) > length:
             assert False, 'XXX'
     else:
         oopspecdesc.residual_call(jitstate, [selfbox],
