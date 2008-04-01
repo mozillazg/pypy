@@ -24,6 +24,12 @@ def plus(ctx, nleft, nright):
         fright = nright.ToNumber()
         return W_FloatNumber(fleft + fright)
 
+def increment(ctx, nleft, constval=1):
+    if isinstance(nleft, W_IntNumber):
+        return W_IntNumber(nleft.intval + constval)
+    else:
+        return plus(ctx, nleft, W_IntNumber(constval))
+
 def sub(ctx, nleft, nright):
     if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
         ileft = nleft.ToInt32()
