@@ -413,9 +413,6 @@ class W_IntNumber(W_BaseNumber):
     def __init__(self, intval):
         self.intval = intmask(intval)
 
-    def __str__(self):
-        return str(self.intval)+"W"
-
     def ToString(self, ctx=None):
         return str(self.intval)
 
@@ -435,14 +432,14 @@ class W_IntNumber(W_BaseNumber):
     def GetPropertyName(self):
         return self.ToString()
 
+    def __repr__(self):
+        return 'W_IntNumber(%s)' % (self.intval,)
+
 class W_FloatNumber(W_BaseNumber):
     """ Number known to be a float
     """
     def __init__(self, floatval):
         self.floatval = floatval
-
-    def __str__(self):
-        return str(self.floatval)+"W"
     
     def ToString(self, ctx = None):
         if isnan(self.floatval):
@@ -474,6 +471,9 @@ class W_FloatNumber(W_BaseNumber):
         if isnan(self.floatval) or isinf(self.floatval):
             return r_uint(0)
         return r_uint(self.floatval)
+
+    def __repr__(self):
+        return 'W_FloatNumber(%s)' % (self.floatval,)
             
 class W_List(W_Root):
     def __init__(self, list_w):
@@ -487,10 +487,10 @@ class W_List(W_Root):
     
     def get_args(self):
         return self.list_w
-    
-    def __str__(self):
-        return str(self.list_w)
 
+    def __repr__(self):
+        return 'W_List(%s)' % (self.list_w,)
+    
 class ExecutionContext(object):
     def __init__(self, scope, this=None, variable=None, 
                     debug=False, jsproperty=None):

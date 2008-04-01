@@ -6,7 +6,7 @@ from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
-     compare_e
+     compare_e, increment
 from pypy.rlib.jit import hint
 
 class AlreadyRun(Exception):
@@ -28,6 +28,10 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True):
     if check_stack:
         assert not stack
 
+class T(list):
+    def append(self, element):
+        assert element is not None
+        super(T, self).append(element)
 
 class JsCode(object):
     """ That object stands for code of a single javascript function
@@ -36,7 +40,7 @@ class JsCode(object):
         self.opcodes = []
         self.label_count = 0
         self.has_labels = True
-        self.stack = []
+        self.stack = T()
 
     def emit_label(self):
         num = self.prealocate_label()
@@ -121,8 +125,8 @@ class Opcode(object):
 
 class BaseBinaryComparison(Opcode):
     def eval(self, ctx, stack):
-        s4 = stack.pop()#.GetValue()
-        s2 = stack.pop()#.GetValue()
+        s4 = stack.pop()
+        s2 = stack.pop()
         stack.append(self.decision(ctx, s2, s4))
 
     def decision(self, ctx, op1, op2):
@@ -130,8 +134,8 @@ class BaseBinaryComparison(Opcode):
 
 class BaseBinaryBitwiseOp(Opcode):
     def eval(self, ctx, stack):
-        s5 = stack.pop().ToInt32()#.GetValue().ToInt32()
-        s6 = stack.pop().ToInt32()#.GetValue().ToInt32()
+        s5 = stack.pop().ToInt32()
+        s6 = stack.pop().ToInt32()
         stack.append(self.operation(ctx, s5, s6))
     
     def operation(self, ctx, op1, op2):
@@ -139,8 +143,8 @@ class BaseBinaryBitwiseOp(Opcode):
 
 class BaseBinaryOperation(Opcode):
     def eval(self, ctx, stack):
-        right = stack.pop()#.GetValue()
-        left = stack.pop()#.GetValue()
+        right = stack.pop()
+        left = stack.pop()
         stack.append(self.operation(ctx, left, right))
 
 class BaseUnaryOperation(Opcode):
@@ -218,7 +222,7 @@ class LOAD_ARRAY(Opcode):
         proto = ctx.get_global().Get('Array').Get('prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         for i in range(self.counter):
-            array.Put(str(self.counter - i - 1), stack.pop())#.GetValue())
+            array.Put(str(self.counter - i - 1), stack.pop())
         stack.append(array)
 
     def __repr__(self):
@@ -263,24 +267,26 @@ class BaseStore(Opcode):
         self.name = name
     
     def eval(self, ctx, stack):
-        value = stack[-1]
-        value = self.process(ctx, self.name, value)
+        value = self.process(ctx, self.name, stack)
         ctx.assign(self.name, value)
 
     def __repr__(self):
         return '%s "%s"' % (self.__class__.__name__, self.name)
 
 class STORE(BaseStore):
-    def process(self, ctx, name, value):
-        return value
+    def process(self, ctx, name, stack):
+        return stack[-1]
 
 class STORE_ADD(BaseStore):
-    def process(self, ctx, name, value):
+    def process(self, ctx, name, stack):
         xxx
 
 class STORE_POSTINCR(BaseStore):
-    def process(self, ctx, name, value):
-        xxx
+    def process(self, ctx, name, stack):
+        value = ctx.resolve_identifier(name)
+        newval = increment(ctx, value)
+        stack.append(newval)
+        return newval
 
 class STORE_VAR(Opcode):
     def __init__(self, depth, name):
@@ -301,8 +307,8 @@ class LOAD_OBJECT(Opcode):
     def eval(self, ctx, stack):
         w_obj = create_object(ctx, 'Object')
         for _ in range(self.counter):
-            name = stack.pop().ToString(ctx)#.GetValue().ToString(ctx)
-            w_elem = stack.pop()#.GetValue()
+            name = stack.pop().ToString(ctx)
+            w_elem = stack.pop()
             w_obj.Put(name, w_elem)
         stack.append(w_obj)
 
@@ -314,7 +320,7 @@ class LOAD_MEMBER(Opcode):
         self.name = name
 
     def eval(self, ctx, stack):
-        w_obj = stack.pop().ToObject(ctx)#GetValue().ToObject(ctx)
+        w_obj = stack.pop().ToObject(ctx)
         stack.append(w_obj.Get(self.name))
         #stack.append(W_Reference(self.name, w_obj))
 
@@ -323,8 +329,8 @@ class LOAD_MEMBER(Opcode):
 
 class LOAD_ELEMENT(Opcode):
     def eval(self, ctx, stack):
-        name = stack.pop().ToString(ctx)#GetValue().ToString(ctx)
-        w_obj = stack.pop().ToObject(ctx)#GetValue().ToObject(ctx)
+        name = stack.pop().ToString(ctx)
+        w_obj = stack.pop().ToObject(ctx)
         stack.append(w_obj.Get(name))
         #stack.append(W_Reference(name, w_obj))
 
@@ -508,8 +514,7 @@ class CALL(Opcode):
     def eval(self, ctx, stack):
         r1 = stack.pop()
         args = stack.pop()
-        r3 = r1#.GetValue()
-        if not isinstance(r3, W_PrimitiveObject):
+        if not isinstance(r1, W_PrimitiveObject):
             raise ThrowException(W_String("it is not a callable"))
             
         if isinstance(r1, W_Reference):
@@ -521,7 +526,7 @@ class CALL(Opcode):
         else:
             r7 = r6
         try:
-            res = r3.Call(ctx=ctx, args=args.tolist(), this=r7)
+            res = r1.Call(ctx=ctx, args=args.tolist(), this=r7)
         except JsTypeError:
             raise ThrowException(W_String('it is not a function'))
         stack.append(res)
