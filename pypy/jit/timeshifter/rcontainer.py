@@ -643,9 +643,9 @@ class FieldDesc(object):
             if self.virtualizable:
                 self.structdesc = StructTypeDesc(RGenOp, T)
             self.redboxcls = rvalue.ll_redboxcls(RESTYPE)
-            # fish for the FrozenConst subclass
+            # fish for the getfrozen() static method
             dummybox = self.redboxcls(self.gv_default)
-            self.frozenconstcls = dummybox.FrozenConstCls
+            self.getfrozen = dummybox.getfrozen
             
         self.immutable = deref(PTRTYPE)._hints.get('immutable', False)
 

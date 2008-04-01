@@ -168,7 +168,7 @@ def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
             result = fielddesc.makebox(jitstate, resgv)
             fz = argbox.most_recent_frozen
             if fz is not None:
-                newfz = fz.get_const_child(fielddesc, resgv)
+                newfz = fz.get_ghost_child(fielddesc, resgv)
                 result.most_recent_frozen = newfz
             return result
     return argbox.op_getfield(jitstate, fielddesc)

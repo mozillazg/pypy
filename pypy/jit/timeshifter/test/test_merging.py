@@ -138,3 +138,34 @@ class TestMerging:
         box3 = rvalue.PtrRedBox(FakeGenConst(prebuilt_s3))
         memo = rvalue.exactmatch_memo(rgenop)
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, box3, [], memo)
+
+    def test_promote_field_of_variable_immutable(self):
+        rgenop = FakeRGenOp()
+        gv = FakeGenVar()
+        box = rvalue.PtrRedBox(gv)
+        frozen = box.freeze(rvalue.freeze_memo())
+        assert box.most_recent_frozen is not None # attached by freeze
+
+        jitstate = FakeJITState()
+
+        x_box = rtimeshift.gengetfield(jitstate, False, self.fielddesc, box)
+        assert not x_box.genvar.is_const
+        assert x_box.most_recent_frozen is not None # attached by gengetfield()
+        x_box.see_promote()
+
+        memo = rvalue.exactmatch_memo(rgenop)
+        assert frozen.exactmatch(box, [], memo)
+
+        prebuilt_s2 = lltype.malloc(self.STRUCT)
+        prebuilt_s2.x = 42
+        box2 = rvalue.PtrRedBox(FakeGenConst(prebuilt_s2))
+        memo = rvalue.exactmatch_memo(rgenop)
+        py.test.raises(rvalue.DontMerge, frozen.exactmatch, box2, [], memo)
+
+        gv2 = FakeGenVar()
+        box3 = rvalue.PtrRedBox(gv2)
+        x_box3 = rtimeshift.gengetfield(jitstate, False, self.fielddesc, box3)
+        x_box3.see_promote()
+        x_box3.setgenvar(FakeGenConst(42))
+        memo = rvalue.exactmatch_memo(rgenop)
+        py.test.raises(rvalue.DontMerge, frozen.exactmatch, box3, [], memo)
