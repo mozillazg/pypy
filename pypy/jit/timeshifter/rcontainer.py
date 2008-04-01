@@ -86,8 +86,9 @@ class AbstractStructTypeDesc(object):
         self.name = self._get_type_name(TYPE)
         self.ptrkind = RGenOp.kindToken(self.PTRTYPE)
 
-        self.immutable = TYPE._hints.get('immutable', False)
-        self.noidentity = TYPE._hints.get('noidentity', False)
+        hints = getattr(TYPE, '_hints', {})
+        self.immutable = hints.get('immutable', False)
+        self.noidentity = hints.get('noidentity', False)
 
         fixsize = not TYPE._is_varsize()
 
@@ -260,14 +261,19 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
         pass
 
     def _iter_fields(self, TYPE):
-        for name, (FIELDTYPE, defl) in TYPE._fields.iteritems():
+        try:
+            fields = TYPE._fields
+        except AttributeError:
+            return
+        for name, (FIELDTYPE, defl) in fields.iteritems():
             yield name, FIELDTYPE
 
     def _get_type_name(self, TYPE):
-        if isinstance(TYPE, ootype.Record):
-            return TYPE._short_name()
-        else:
+        try:
             return TYPE._name
+        except AttributeError:
+            return TYPE._short_name()
+
 
 def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)

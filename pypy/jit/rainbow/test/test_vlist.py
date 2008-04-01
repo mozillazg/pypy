@@ -5,7 +5,7 @@ from pypy.rlib.jit import hint
 
 
 
-class TestVList(InterpretationTest):
+class VListTest(InterpretationTest):
     type_system = "lltype"
 
     def test_vlist(self):
@@ -187,3 +187,24 @@ class TestVList(InterpretationTest):
 
         res = self.interpret(f, [2], [0], policy=P_OOPSPEC)
         assert res == -7
+
+
+class TestLLType(VListTest):
+    type_system = "lltype"
+
+class TestOOType(VListTest):
+    type_system = "ootype"
+
+    def _skip(self):
+        py.test.skip('in progress')
+
+    test_enter_block = _skip
+    test_merge = _skip
+    test_replace = _skip
+    test_force = _skip
+    test_oop_vlist = _skip
+    test_alloc_and_set = _skip
+    test_lists_deepfreeze = _skip
+    test_frozen_list = _skip
+    test_frozen_list_indexerror = _skip
+    test_bogus_index_while_compiling = _skip

@@ -4,7 +4,7 @@ from pypy.rpython.ootypesystem import ootype
 def deref(T):
     if isinstance(T, lltype.Ptr):
         return T.TO
-    assert isinstance(T, (ootype.Instance, ootype.Record))
+    assert isinstance(T, (ootype.Instance, ootype.BuiltinType))
     return T
 
 def fieldType(T, name):

@@ -13,6 +13,8 @@ STATICNESS = True
 
 class OOType(LowLevelType):
 
+    oopspec_name = None
+
     def _is_compatible(TYPE1, TYPE2):
         if TYPE1 == TYPE2:
             return True
@@ -476,6 +478,7 @@ class List(BuiltinADTType):
     # placeholder, because we want backends to distinguish that.
     SELFTYPE_T = object()
     ITEMTYPE_T = object()
+    oopspec_name = 'list'
 
     def __init__(self, ITEMTYPE=None):
         self._ITEMTYPE = ITEMTYPE
@@ -564,6 +567,7 @@ class Dict(BuiltinADTType):
     SELFTYPE_T = object()
     KEYTYPE_T = object()
     VALUETYPE_T = object()
+    oopspec_name = 'dict'
 
     def __init__(self, KEYTYPE=None, VALUETYPE=None):
         self._KEYTYPE = KEYTYPE
@@ -1015,6 +1019,9 @@ class _static_meth(_callable):
 
    def __repr__(self):
        return 'sm %s' % self._name
+
+   def _as_ptr(self):
+       return self
 
 class _forward_static_meth(_static_meth):
    allowed_types = (StaticMethod, ForwardReference)

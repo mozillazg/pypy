@@ -6,6 +6,12 @@ from pypy.jit.timeshifter import rvalue, rvirtualizable, oop
 from pypy.rpython.lltypesystem import lloperation
 debug_print = lloperation.llop.debug_print
 
+def TypeDesc(RGenOp, rtyper, exceptiondesc, LIST):
+    if rtyper.type_system.name == 'lltypesystem':
+        return LLTypeListTypeDesc(RGenOp, rtyper, exceptiondesc, LIST)
+    else:
+        return OOTypeListTypeDesc(RGenOp, rtyper, exceptiondesc, LIST)
+
 
 class ItemDesc(object):
     __metaclass__ = cachedtype
@@ -24,51 +30,20 @@ class ItemDesc(object):
                 if not T._is_varsize():
                     self.canbevirtual = True
 
-class ListTypeDesc(object):
+class AbstractListTypeDesc(object):
     __metaclass__ = cachedtype
 
     def __init__(self, RGenOp, rtyper, exceptiondesc, LIST):
         self.LIST = LIST
-        self.LISTPTR = lltype.Ptr(LIST)
+        self.LISTPTR = self.Ptr(LIST)
         self.ptrkind = RGenOp.kindToken(self.LISTPTR)
         self.null = self.LISTPTR._defl()
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
         self.exceptiondesc = exceptiondesc
 
-        argtypes = [lltype.Signed]
-        ll_newlist_ptr = rtyper.annotate_helper_fn(LIST.ll_newlist,
-                                                   argtypes)
-        self.gv_ll_newlist = RGenOp.constPrebuiltGlobal(ll_newlist_ptr)
-        self.tok_ll_newlist = RGenOp.sigToken(lltype.typeOf(ll_newlist_ptr).TO)
-
-        argtypes = [self.LISTPTR, lltype.Signed, LIST.ITEM]
-        ll_setitem_fast = rtyper.annotate_helper_fn(LIST.ll_setitem_fast,
-                                                    argtypes)
-        self.gv_ll_setitem_fast = RGenOp.constPrebuiltGlobal(ll_setitem_fast)
-        self.tok_ll_setitem_fast = RGenOp.sigToken(
-            lltype.typeOf(ll_setitem_fast).TO)
-
+        self._setup(RGenOp, rtyper, LIST)
         self._define_devirtualize()
         self._define_allocate()
-
-    def _define_devirtualize(self):
-        LIST = self.LIST
-        LISTPTR = self.LISTPTR
-        itemdesc = ItemDesc(LIST.ITEM)
-
-        def make(vrti):
-            n = len(vrti.varindexes)
-            l = LIST.ll_newlist(n)
-            return lltype.cast_opaque_ptr(llmemory.GCREF, l)
-        
-        def fill_into(vablerti, l, base, vrti):
-            l = lltype.cast_opaque_ptr(LISTPTR, l)
-            n = len(vrti.varindexes)
-            for i in range(n):
-                v = vrti._read_field(vablerti, itemdesc, base, i)
-                l.ll_setitem_fast(i, v)
-
-        self.devirtualize = make, fill_into
 
     def _define_allocate(self):
         LIST = self.LIST
@@ -96,13 +71,62 @@ class ListTypeDesc(object):
 
     def factory(self, length, itembox):
         vlist = VirtualList(self, length, itembox)
-        box = rvalue.PtrRedBox(known_nonzero=True)
+        box = self.PtrRedBox(known_nonzero=True)
         box.content = vlist
         vlist.ownbox = box
         return box
 
-TypeDesc = ListTypeDesc
 
+class LLTypeListTypeDesc(AbstractListTypeDesc):
+
+    Ptr = staticmethod(lltype.Ptr)
+    PtrRedBox = rvalue.PtrRedBox
+
+    def _setup(self, RGenOp, rtyper, LIST):
+        argtypes = [lltype.Signed]
+        ll_newlist_ptr = rtyper.annotate_helper_fn(LIST.ll_newlist,
+                                                   argtypes)
+        self.gv_ll_newlist = RGenOp.constPrebuiltGlobal(ll_newlist_ptr)
+        self.tok_ll_newlist = RGenOp.sigToken(lltype.typeOf(ll_newlist_ptr).TO)
+
+        argtypes = [self.LISTPTR, lltype.Signed, LIST.ITEM]
+        ll_setitem_fast = rtyper.annotate_helper_fn(LIST.ll_setitem_fast,
+                                                    argtypes)
+        self.gv_ll_setitem_fast = RGenOp.constPrebuiltGlobal(ll_setitem_fast)
+        self.tok_ll_setitem_fast = RGenOp.sigToken(
+            lltype.typeOf(ll_setitem_fast).TO)
+
+    def _define_devirtualize(self):
+        LIST = self.LIST
+        LISTPTR = self.LISTPTR
+        itemdesc = ItemDesc(LIST.ITEM)
+
+        def make(vrti):
+            n = len(vrti.varindexes)
+            l = LIST.ll_newlist(n)
+            return lltype.cast_opaque_ptr(llmemory.GCREF, l)
+        
+        def fill_into(vablerti, l, base, vrti):
+            l = lltype.cast_opaque_ptr(LISTPTR, l)
+            n = len(vrti.varindexes)
+            for i in range(n):
+                v = vrti._read_field(vablerti, itemdesc, base, i)
+                l.ll_setitem_fast(i, v)
+
+        self.devirtualize = make, fill_into
+
+        
+
+class OOTypeListTypeDesc(AbstractListTypeDesc):
+
+    Ptr = staticmethod(lambda T: T)
+    PtrRedBox = rvalue.InstanceRedBox
+
+    def _setup(self, RGenOp, rtyper, LIST):
+        pass
+
+    def _define_devirtualize(self):
+        pass # XXX
 
 class FrozenVirtualList(FrozenContainer):
 
@@ -163,6 +187,7 @@ class VirtualList(VirtualContainer):
 
     def __init__(self, typedesc, length=0, itembox=None):
         self.typedesc = typedesc
+        self.itembox = itembox
         self.item_boxes = [itembox] * length
         # self.ownbox = ...    set in factory()
 
@@ -354,6 +379,18 @@ def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
         return oopspecdesc.residual_call(jitstate, [selfbox],
                                          deepfrozen=deepfrozen)
 oop_list_nonzero.couldfold = True
+
+def oop_list_method_resize(jitstate, oopspecdesc, deepfrozen, selfbox, lengthbox):
+    content = selfbox.content
+    if isinstance(content, VirtualList):
+        item_boxes = content.item_boxes
+        length = rvalue.ll_getvalue(lengthbox, lltype.Signed)
+        if len(item_boxes) < length:
+            diff = length - len(item_boxes)
+            item_boxes += [itembox] * diff
+    else:
+        oopspecdesc.residual_call(jitstate, [selfbox],
+                                  deepfrozen=deepfrozen)
 
 def oop_list_append(jitstate, oopspecdesc, deepfrozen, selfbox, itembox):
     content = selfbox.content

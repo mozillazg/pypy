@@ -5,6 +5,7 @@ from pypy.rlib.jit import JitHintError
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.annlowlevel import cachedtype
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
@@ -732,13 +733,13 @@ class BytecodeWriter(object):
         self.exceptioninstance_positions[exc_class] = result
         return result
 
-    def oopspecdesc_position(self, fnobj, canraise):
-        key = fnobj, canraise
+    def oopspecdesc_position(self, opname, oparg, canraise):
+        key = opname, oparg, canraise
         if key in self.oopspecdesc_positions:
             return self.oopspecdesc_positions[key]
         oopspecdesc = oop.OopSpecDesc(self.RGenOp, self.rtyper,
                                       self.exceptiondesc,
-                                      fnobj, canraise)
+                                      opname, oparg, canraise)
         result = len(self.oopspecdescs)
         self.oopspecdescs.append(oopspecdesc)
         self.oopspecdesc_positions[key] = result
@@ -1053,7 +1054,7 @@ class BytecodeWriter(object):
     def handle_oopspec_call(self, op, withexc):
         from pypy.jit.timeshifter.oop import Index
         fnobj = get_funcobj(op.args[0].value)
-        oopspecdescindex = self.oopspecdesc_position(fnobj, withexc)
+        oopspecdescindex = self.oopspecdesc_position('call', fnobj, withexc)
         oopspecdesc = self.oopspecdescs[oopspecdescindex]
         opargs = op.args[1:]
         args_v = []
@@ -1591,9 +1592,54 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         return self.serialize_op_setfield_impl(op)
 
     def serialize_op_new(self, op):
+        TYPE = op.args[0].value
+        if TYPE.oopspec_name is not None:
+            # XXX: works only for List
+            oopspecdescindex = self.oopspecdesc_position('new', TYPE, False)
+            oopspecdesc = self.oopspecdescs[oopspecdescindex]
+            deepfrozen = False
+            index = self.serialize_oparg("red", flowmodel.Constant(0, lltype.Signed))
+            self.emit('red_oopspec_call_1')
+            self.emit(oopspecdescindex)
+            self.emit(deepfrozen)
+            self.emit(index)
+            self.register_redvar(op.result)
+            return
+
         index = self.structtypedesc_position(op.args[0].value)
         self.emit("red_new", index)
         self.register_redvar(op.result)
+
+    def serialize_op_oosend(self, op):
+        if self.hannotator.bookkeeper.is_green_call(op):
+            assert False, 'TODO'
+
+        withexc = self.can_raise(op)
+        name = op.args[0].value
+        opargs = op.args[1:]
+        SELFTYPE = opargs[0].concretetype
+        if SELFTYPE.oopspec_name is not None:
+            hasresult = op.result.concretetype != lltype.Void
+            _, meth = SELFTYPE._lookup(name)
+            oopspecdescindex = self.oopspecdesc_position('send', meth, withexc)
+            oopspecdesc = self.oopspecdescs[oopspecdescindex]
+            args_v = []
+            args = []
+            for v in opargs:
+                args_v.append(v)
+                args.append(self.serialize_oparg("red", v))
+
+            hs_self = self.hannotator.binding(opargs[0])
+            deepfrozen = hs_self.deepfrozen
+
+            self.emit("red_oopspec_call%s_%s" % ("_noresult" * (not hasresult),
+                                                 len(args)))
+            self.emit(oopspecdescindex)
+            self.emit(deepfrozen)
+            self.emit(*args)
+
+        else:
+            assert False, 'TODO'
 
 
 class GraphTransformer(object):
