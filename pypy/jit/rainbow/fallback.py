@@ -339,6 +339,17 @@ class FallbackInterpreter(object):
         addr = gv_ptr.revealconst(llmemory.Address)
         return self.rgenop.genconst(not addr)
 
+    @arguments("green", returns="green")
+    def opimpl_green_ptr_nonzero(self, gv_ptr):
+        addr = gv_ptr.revealconst(llmemory.Address)
+        return self.rgenop.genconst(bool(addr))
+
+    @arguments("green", returns="green")
+    def opimpl_green_ptr_iszero(self, gv_ptr):
+        addr = gv_ptr.revealconst(llmemory.Address)
+        return self.rgenop.genconst(not addr)
+
+
     @arguments("red", "red", returns="red")
     def opimpl_red_ptr_eq(self, gv_ptr1, gv_ptr2):
         addr1 = gv_ptr1.revealconst(llmemory.Address)

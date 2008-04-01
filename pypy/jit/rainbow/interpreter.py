@@ -540,6 +540,17 @@ class JitInterpreter(object):
         return rtimeshift.genptreq(self.jitstate, ptrbox1,
                                    ptrbox2, True)
 
+    @arguments("green", returns="green")
+    def opimpl_green_ptr_nonzero(self, gv_ptr):
+        addr = gv_ptr.revealconst(llmemory.Address)
+        return self.rgenop.genconst(bool(addr))
+
+    @arguments("green", returns="green")
+    def opimpl_green_ptr_iszero(self, gv_ptr):
+        addr = gv_ptr.revealconst(llmemory.Address)
+        return self.rgenop.genconst(not bool(addr))
+
+
     @arguments("red", "bool")
     def opimpl_learn_boolvalue(self, redbox, boolval):
         redbox.learn_boolvalue(self.jitstate, boolval)
