@@ -1163,7 +1163,9 @@ class _builtin_type(object):
         TYPE = object.__getattribute__(self, "_TYPE")
         _, meth = TYPE._lookup(name)
         if meth is not None:
-            return meth._bound(TYPE, self)
+            res = meth._bound(TYPE, self)
+            res._name = name
+            return res
 
         return object.__getattribute__(self, name)
 

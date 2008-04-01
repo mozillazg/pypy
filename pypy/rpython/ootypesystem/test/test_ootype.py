@@ -213,6 +213,12 @@ def test_method_selftype():
     METH = typeOf(meth)
     assert METH.SELFTYPE is LIST
 
+def test_bound_method_name():
+    LIST = List(Signed)
+    lst = new(LIST)
+    meth = lst.ll_getitem_fast
+    assert meth._name == 'll_getitem_fast'
+
 def test_explicit_name_clash():
     C = Instance("test", ROOT, {})
 
