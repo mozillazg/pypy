@@ -33,6 +33,9 @@ class FakeRGenOp(object):
     def constPrebuiltGlobal(value):
         return FakeGenConst(value)
 
+    def genconst(self, value):
+        return FakeGenConst(value)
+
 
 class FakeBuilder(object):
     ops_with_no_retval = set(['setfield'])

@@ -47,11 +47,21 @@ class OOTypeMixin(object):
         return gv.revealconst(ootype.Object)
 
 class FutureUsage(object):
-    promote_timestamp = 0
+    def __init__(self):
+        self.promote_timestamp = 0
+        self.children = {}
 
     def see_promote(self, timestamp):
         if timestamp > self.promote_timestamp:
             self.promote_timestamp = timestamp
+
+    def retrieve_child_usage(self, fielddesc):
+        try:
+            return self.children[fielddesc]
+        except KeyError:
+            future_usage = FutureUsage()
+            self.children[fielddesc] = future_usage
+            return future_usage
 
 
 class RedBox(object):
@@ -350,23 +360,25 @@ class AbstractPtrRedBox(RedBox):
         try:
             return boxmemo[self]
         except KeyError:
+            future_usage = self.retrieve_future_usage()
             content = self.content
             if not self.genvar:
                 from pypy.jit.timeshifter import rcontainer
                 assert isinstance(content, rcontainer.VirtualContainer)
-                result = self.FrozenPtrVirtual()
+                result = self.FrozenPtrVirtual(future_usage)
                 boxmemo[self] = result
                 result.fz_content = content.freeze(memo)
                 return result
             elif self.genvar.is_const:
-                result = self.FrozenPtrConst(self.genvar)
+                result = self.FrozenPtrConst(future_usage, self.genvar)
             elif content is None:
-                result = self.FrozenPtrVar(self.known_nonzero)
+                result = self.FrozenPtrVar(future_usage, self.known_nonzero)
             else:
                 # if self.content is not None, it's a PartialDataStruct
                 from pypy.jit.timeshifter import rcontainer
                 assert isinstance(content, rcontainer.PartialDataStruct)
-                result = self.FrozenPtrVarWithPartialData(known_nonzero=True)
+                result = self.FrozenPtrVarWithPartialData(future_usage,
+                                                          known_nonzero=True)
                 boxmemo[self] = result
                 result.fz_partialcontent = content.partialfreeze(memo)
                 return result
@@ -473,9 +485,20 @@ class FrozenValue(object):
         return False
 
     def check_timestamp(self, box, memo):
-        if (box.is_constant() and 
-            self.future_usage.promote_timestamp > memo.frozen_timestamp):
-            raise DontMerge
+        fu = self.future_usage
+        if fu is not None:
+            if (box.is_constant() and
+                fu.promote_timestamp > memo.frozen_timestamp):
+                raise DontMerge
+            if fu.children:
+                assert isinstance(box, AbstractPtrRedBox)
+                for fielddesc, fuchild in fu.children.items():
+                    frozenchild = self.maybe_get_child_box(fielddesc)
+                    boxchild = box.maybe_get_child_box(fielddesc)
+                    if frozenchild is not None and boxchild is not None:
+                        assert frozenchild.future_usage is fuchild
+                        frozenchild.check_timestamp(boxchild, memo)
+                    # XXX use the memo here too!
 
 
 class FrozenConst(FrozenValue):
@@ -589,7 +612,8 @@ class FrozenDoubleVar(FrozenVar):
 
 class FrozenAbstractPtrConst(FrozenConst):
 
-    def __init__(self, gv_const):
+    def __init__(self, future_usage, gv_const):
+        FrozenConst.__init__(self, future_usage)
         self.gv_const = gv_const
 
     def is_constant_equal(self, box):
@@ -606,15 +630,19 @@ class FrozenAbstractPtrConst(FrozenConst):
         if self.is_constant_nullptr():
             memo.forget_nonzeroness[box] = None
         match = FrozenConst.exactmatch(self, box, outgoingvarboxes, memo)
-        if not memo.force_merge and not match:
-            from pypy.jit.timeshifter.rcontainer import VirtualContainer
-            if isinstance(box.content, VirtualContainer):
-                raise DontMerge   # XXX recursive data structures?
+        #if not memo.force_merge and not match:
+        #    from pypy.jit.timeshifter.rcontainer import VirtualContainer
+        #    if isinstance(box.content, VirtualContainer):
+        #        raise DontMerge   # XXX recursive data structures?
         return match
 
     def unfreeze(self, incomingvarboxes, memo):
         return self.PtrRedBox(self.gv_const)
 
+    def maybe_get_child_box(self, fielddesc):
+        XXX  # pfpfpfpfpf no fun at all! we make a non-frozen box and freeze it? uh how do we make the non-frozen box?
+        fielddesc.makebox(fielddesc.perform_getfield(rgenop:-(, self.gv_const)) # in theory
+                # :-( :-( :-(
 
 class FrozenPtrConst(FrozenAbstractPtrConst, LLTypeMixin):
     PtrRedBox = PtrRedBox
@@ -625,7 +653,8 @@ class FrozenInstanceConst(FrozenAbstractPtrConst, OOTypeMixin):
 
 class AbstractFrozenPtrVar(FrozenVar):
 
-    def __init__(self, known_nonzero):
+    def __init__(self, future_usage, known_nonzero):
+        FrozenVar.__init__(self, future_usage)
         self.known_nonzero = known_nonzero
 
     def exactmatch(self, box, outgoingvarboxes, memo):
