@@ -302,7 +302,7 @@ class VirtualList(VirtualContainer):
                 vars_gv.append(box.genvar)
             else:
                 varindexes.append(j)
-                assert isinstance(box, rvalue.PtrRedBox)
+                assert isinstance(box, rvalue.AbstractPtrRedBox)
                 content = box.content
                 assert content.allowed_in_virtualizable
                 vrtis.append(content.make_rti(jitstate, memo))
@@ -349,7 +349,7 @@ class VirtualList(VirtualContainer):
             
         for box in boxes:
             if not box.genvar:
-                assert isinstance(box, rvalue.PtrRedBox)
+                assert isinstance(box, rvalue.AbstractPtrRedBox)
                 content = box.content
                 assert content.allowed_in_virtualizable
                 content.store_back_gv_reshaped(shapemask, memo)
@@ -406,7 +406,9 @@ def oop_list_method_resize(jitstate, oopspecdesc, deepfrozen, selfbox, lengthbox
         length = rvalue.ll_getvalue(lengthbox, lltype.Signed)
         if len(item_boxes) < length:
             diff = length - len(item_boxes)
-            item_boxes += [itembox] * diff
+            item_boxes += [content.itembox] * diff
+        else:
+            assert False, 'XXX'
     else:
         oopspecdesc.residual_call(jitstate, [selfbox],
                                   deepfrozen=deepfrozen)
@@ -431,7 +433,7 @@ def oop_list_insert(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembo
 def oop_list_concat(jitstate, oopspecdesc, deepfrozen, selfbox, otherbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
-        assert isinstance(otherbox, rvalue.PtrRedBox)
+        assert isinstance(otherbox, rvalue.AbstractPtrRedBox)
         othercontent = otherbox.content
         if othercontent is not None and isinstance(othercontent, VirtualList):
             newbox = oopspecdesc.typedesc.factory(0, None)
@@ -492,6 +494,8 @@ def oop_list_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itemb
             oopspecdesc.residual_exception(jitstate, IndexError)
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
+
+oop_list_method_setitem_fast = oop_list_setitem
 
 def oop_list_delitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
     content = selfbox.content
