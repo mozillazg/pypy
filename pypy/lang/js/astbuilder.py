@@ -130,7 +130,6 @@ class ASTBuilder(RPythonVisitor):
     def visit_memberexpression(self, node):
         if isinstance(node.children[0], Symbol) and \
            node.children[0].additional_info == 'new': # XXX could be a identifier?
-            raise NotImplementedError
             pos = self.get_pos(node)
             left = self.dispatch(node.children[1])
             right = self.dispatch(node.children[2])

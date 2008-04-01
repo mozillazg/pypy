@@ -2,11 +2,11 @@
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, W_Reference, ActivationObject,\
      create_object, W_Object, w_Undefined, W_Boolean, newbool,\
-     w_True, w_False
+     w_True, w_False, W_List
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
-     compare_e, increment
+     compare_e, increment, commonnew
 from pypy.rlib.jit import hint
 
 class AlreadyRun(Exception):
@@ -228,6 +228,16 @@ class LOAD_ARRAY(Opcode):
 
     def __repr__(self):
         return 'LOAD_ARRAY %d' % (self.counter,)
+
+class LOAD_LIST(Opcode):
+    def __init__(self, counter):
+        self.counter = counter
+
+    def eval(self, ctx, stack):
+        to_cut = len(stack)-self.counter
+        list_w = stack[to_cut:]
+        del stack[to_cut:]
+        stack.append(W_List(list_w))
 
 class LOAD_FUNCTION(Opcode):
     def __init__(self, funcobj):
@@ -588,6 +598,14 @@ class TRYCATCHBLOCK(Opcode):
 
     def __repr__(self):
         return "TRYCATCHBLOCK" # XXX shall we add stuff here???
+
+class NEW(Opcode):        
+    def eval(self, ctx, stack):
+        y = stack.pop()
+        x = stack.pop()
+        assert isinstance(y, W_List)
+        args = y.get_args()
+        stack.append(commonnew(ctx, x, args))
 
 OpcodeMap = {}
 
