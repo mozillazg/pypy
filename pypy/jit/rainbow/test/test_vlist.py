@@ -198,7 +198,6 @@ class TestOOType(VListTest):
     def _skip(self):
         py.test.skip('in progress')
 
-    test_enter_block = _skip
     test_merge = _skip
     test_replace = _skip
     test_force = _skip
