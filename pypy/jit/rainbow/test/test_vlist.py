@@ -195,7 +195,6 @@ class TestOOType(VListTest):
     def _skip(self):
         py.test.skip('in progress')
 
-    test_oop_vlist = _skip
     test_alloc_and_set = _skip
     test_lists_deepfreeze = _skip
     test_frozen_list = _skip
