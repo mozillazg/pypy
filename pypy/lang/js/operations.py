@@ -725,9 +725,10 @@ class Throw(Statement):
     def __init__(self, pos, exp):
         self.pos = pos
         self.exp = exp
-    
-    def execute(self, ctx):
-        raise ThrowException(self.exp.eval(ctx).GetValue())
+
+    def emit(self, bytecode):
+        self.exp.emit(bytecode)
+        bytecode.emit('THROW')
 
 class Try(Statement):
     def __init__(self, pos, tryblock, catchparam, catchblock, finallyblock):
@@ -736,30 +737,23 @@ class Try(Statement):
         self.catchparam = catchparam
         self.catchblock = catchblock
         self.finallyblock = finallyblock
-    
-    def execute(self, ctx):
-        e = None
-        tryresult = w_Undefined
-        try:
-            tryresult = self.tryblock.execute(ctx)
-        except ThrowException, excpt:
-            e = excpt
-            if self.catchblock is not None:
-                obj = W_Object()
-                obj.Put(self.catchparam.get_literal(), e.exception)
-                ctx.push_object(obj)
-                tryresult = self.catchblock.execute(ctx)
-                ctx.pop_object()
-        
-        if self.finallyblock is not None:
-            tryresult = self.finallyblock.execute(ctx)
-        
-        #if there is no catchblock reraise the exception
-        if (e is not None) and (self.catchblock is None):
-            raise e
-        
-        return tryresult
-    
+
+    def emit(self, bytecode):
+        # a bit naive operator for now
+        trycode = JsCode()
+        self.tryblock.emit(trycode)
+        if self.catchblock:
+            catchcode = JsCode()
+            self.catchblock.emit(catchcode)
+        else:
+            catchcode = None
+        if self.finallyblock:
+            finallycode = JsCode()
+            self.finallyblock.emit(finallycode)
+        else:
+            finallycode = None
+        bytecode.emit('TRYCATCHBLOCK', trycode, self.catchparam.get_literal(),
+                      catchcode, finallycode)    
 
 #class Typeof(UnaryOp):
 #    def eval(self, ctx):

@@ -19,7 +19,8 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True):
             opcode = opcodes[i]
             opcode = hint(opcode, deepfreeze=True)
             if isinstance(opcode, op):
-                opcode.eval(ctx, stack)
+                result = opcode.eval(ctx, stack)
+                assert result is None
                 break
         if isinstance(opcode, BaseJump):
             i = opcode.do_jump(stack, i)
@@ -548,6 +549,45 @@ class CALL(Opcode):
 class DUP(Opcode):
     def eval(self, ctx, stack):
         stack.append(stack[-1])
+
+class THROW(Opcode):
+    def eval(self, ctx, stack):
+        val = stack.pop()
+        raise ThrowException(val)
+
+class TRYCATCHBLOCK(Opcode):
+    def __init__(self, trycode, catchparam, catchcode, finallycode):
+        self.trycode     = trycode
+        self.catchcode   = catchcode
+        self.catchparam  = catchparam
+        self.finallycode = finallycode
+    
+    def eval(self, ctx, stack):
+        try:
+            try:
+                self.trycode.run(ctx)
+            except ThrowException, e:
+                if self.catchcode is not None:
+                    # XXX just copied, I don't know if it's right
+                    obj = W_Object()
+                    obj.Put(self.catchparam, e.exception)
+                    ctx.push_object(obj)
+                    try:
+                        self.catchcode.run(ctx)
+                    finally:
+                        ctx.pop_object()
+                if self.finallycode is not None:
+                    self.finallycode.run(ctx)
+                if not self.catchcode:
+                    raise
+        except ReturnException:
+            # we run finally block here and re-raise the exception
+            if self.finallycode is not None:
+                self.finallycode.run(ctx)
+            raise
+
+    def __repr__(self):
+        return "TRYCATCHBLOCK" # XXX shall we add stuff here???
 
 OpcodeMap = {}
 

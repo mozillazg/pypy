@@ -175,7 +175,6 @@ def test_array_initializer():
     """, ['', '0'])
 
 def test_throw():
-    py.test.skip("Not implemented")
     assertp("throw(3);", "uncaught exception: 3")
     
 def test_group():
@@ -189,7 +188,6 @@ def test_block():
     yield assertp, "{3; print(5);}", '5'
 
 def test_try_catch_finally():
-    py.test.skip("Not implemented")
     yield assertp, """
     try {
         throw(3);
