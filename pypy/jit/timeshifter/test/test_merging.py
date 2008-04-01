@@ -35,19 +35,23 @@ class TestMerging:
         gc = FakeGenConst(42)
         box = rvalue.IntRedBox(gc)
         frozen = box.freeze(rvalue.freeze_memo())
-        frozen_timestamp = 0
-        assert box.future_usage is not None    # attached by freeze()
-        box.future_usage.see_promote(timestamp=1)
+        assert box.most_recent_frozen is not None    # attached by freeze()
+        box.see_promote()
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         gv = FakeGenVar()
         newbox = rvalue.IntRedBox(gv)
         assert not frozen.exactmatch(newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         gc2 = FakeGenConst(43)
         newbox = rvalue.IntRedBox(gc2)
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, newbox, [], memo)
+
+        memo = rvalue.exactmatch_memo()
+        gc3 = FakeGenConst(42)
+        newbox = rvalue.IntRedBox(gc3)
+        assert frozen.exactmatch(newbox, [], memo)
 
     def test_promote_var(self):
         """We have a frozen variable which gets promoted after
@@ -56,16 +60,15 @@ class TestMerging:
         gv = FakeGenVar()
         box = rvalue.IntRedBox(gv)
         frozen = box.freeze(rvalue.freeze_memo())
-        frozen_timestamp = 0
-        assert box.future_usage is not None    # attached by freeze()
-        box.future_usage.see_promote(timestamp=1)
+        assert box.most_recent_frozen is not None    # attached by freeze()
+        box.see_promote()
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         gv2 = FakeGenVar()
         newbox = rvalue.IntRedBox(gv2)
         assert frozen.exactmatch(newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         gc = FakeGenConst(43)
         newbox = rvalue.IntRedBox(gc)
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, newbox, [], memo)
@@ -77,18 +80,17 @@ class TestMerging:
         gc = FakeGenConst(42)
         box = rvalue.IntRedBox(gc)
         box.freeze(rvalue.freeze_memo())
-        assert box.future_usage is not None    # attached by freeze()
-        box.future_usage.see_promote(timestamp=1)
+        assert box.most_recent_frozen is not None    # attached by freeze()
+        box.see_promote()
 
-        frozen_timestamp = 2
         frozen = box.freeze(rvalue.freeze_memo())
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         gv = FakeGenVar()
         newbox = rvalue.IntRedBox(gv)
         assert not frozen.exactmatch(newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo(frozen_timestamp=frozen_timestamp)
+        memo = rvalue.exactmatch_memo()
         gc2 = FakeGenConst(43)
         newbox = rvalue.IntRedBox(gc2)
         assert not frozen.exactmatch(newbox, [], memo)
