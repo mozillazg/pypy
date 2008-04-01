@@ -146,10 +146,8 @@ class LLBuilder(GenBuilder):
                                     gv_Bool.v))
         return gv_res, gv_exc
 
-    def genop_call(self, (ARGS_gv, gv_RESULT, _), gv_callable, args_gv):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_call: bad currently_writing")
-        vars_gv = [gv_callable]
+    def _cast_args_gv(self, ARGS_gv, args_gv):
+        vars_gv = []
         j = 0
         for i in range(len(ARGS_gv)):
             if ARGS_gv[i] is gv_Void:
@@ -158,11 +156,26 @@ class LLBuilder(GenBuilder):
                 gv_arg = LLVar(llimpl.cast(self.b, ARGS_gv[i].v, args_gv[j].v))
                 j += 1
             vars_gv.append(gv_arg)
+        return vars_gv
+
+    def genop_call(self, (ARGS_gv, gv_RESULT, _), gv_callable, args_gv):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_call: bad currently_writing")
+        vars_gv = [gv_callable]
+        vars_gv += self._cast_args_gv(ARGS_gv, args_gv)
         if gv_callable.is_const:
             v = llimpl.genop(self.b, 'direct_call', vars_gv, gv_RESULT.v)
         else:
             vars_gv.append(gv_dummy_placeholder)
             v = llimpl.genop(self.b, 'indirect_call', vars_gv, gv_RESULT.v)
+        return LLVar(v)
+
+    def genop_oosend(self, (gv_methname, (ARGS_gv, gv_RESULT, _)), gv_self, args_gv):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_oosend: bad currently_writing")
+        vars_gv = [gv_methname, gv_self]
+        vars_gv += self._cast_args_gv(ARGS_gv, args_gv)
+        v = llimpl.genop(self.b, 'oosend', vars_gv, gv_RESULT.v)
         return LLVar(v)
 
     def genop_getfield(self, (gv_name, gv_PTRTYPE, gv_FIELDTYPE), gv_ptr):
@@ -458,6 +471,14 @@ class RGenOp(AbstractRGenOp):
         return ([gv_TYPE(A) for A in FUNCTYPE.ARGS],
                 gv_TYPE(FUNCTYPE.RESULT),
                 gv_TYPE(FUNCTYPE))
+
+    @staticmethod
+    @specialize.memo()
+    def methToken(TYPE, methname):
+        _, meth = TYPE._lookup(methname)
+        METH = ootype.typeOf(meth)
+        gv_methname = LLConst(llimpl.constFieldName(methname))
+        return (gv_methname, RGenOp.sigToken(METH))
 
     constPrebuiltGlobal = genconst
 

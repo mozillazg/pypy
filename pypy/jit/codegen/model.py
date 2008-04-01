@@ -349,6 +349,12 @@ class AbstractRGenOp(object):
     #    raise NotImplementedError
 
     #@staticmethod
+    #@specialize.memo()
+    #def methToken(TYPE, methname):
+    #    """Return a token describing the method methname of type TYPE."""
+    #    raise NotImplementedError
+
+    #@staticmethod
     #@specialize.arg(0)
     #def read_frame_var(T, base, info, index):
     #    """Read from the stack frame of a caller.  The 'base' is the
