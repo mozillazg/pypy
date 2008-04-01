@@ -64,8 +64,7 @@ class RedBox(object):
         return bool(self.genvar) and self.genvar.is_const
     
     def getkind(self):
-        if self.genvar is None:
-            return None
+        assert self.genvar is not None
         return self.genvar.getkind()
 
     def getgenvar(self, jitstate):
@@ -83,6 +82,25 @@ class RedBox(object):
         if not self.is_constant() and self not in memo:
             incoming.append(self)
             memo[self] = None
+
+    def freeze(self, memo):
+        memo = memo.boxes
+        try:
+            return memo[self]
+        except KeyError:
+            assert self.genvar is not None
+            result = self.most_recent_frozen
+            if result is None:
+                result = self.getfrozen(self.genvar)
+                self.most_recent_frozen = result
+            else:
+                # sanity-check the most_recent_frozen object
+                if self.genvar.is_const:
+                    assert isinstance(result, FrozenConst)
+                else:
+                    assert isinstance(result, FrozenVar)
+            memo[self] = result
+            return result
 
     def forcevar(self, jitstate, memo, forget_nonzeroness):
         if self.is_constant():
@@ -172,20 +190,13 @@ class IntRedBox(RedBox):
             result = memo[self] = IntRedBox(self.genvar)
             return result
 
-    def freeze(self, memo):
-        memo = memo.boxes
-        try:
-            return memo[self]
-        except KeyError:
-            result = self.most_recent_frozen
-            if result is None:
-                if self.is_constant():
-                    result = FrozenIntConst(self.genvar)
-                else:
-                    result = FrozenIntVar()
-                self.most_recent_frozen = result
-            memo[self] = result
-            return result
+    @staticmethod
+    def getfrozen(gv_value):
+        if gv_value.is_const:
+            return FrozenIntConst(gv_value)
+        else:
+            return FrozenIntVar()
+
 
 class BoolRedBox(RedBox):
     # XXX make true and false singletons?
@@ -214,18 +225,13 @@ class BoolRedBox(RedBox):
             result.iftrue = [effect.copy(memo) for effect in self.iftrue]
             return result
 
-    def freeze(self, memo):
-        memo = memo.boxes
-        try:
-            return memo[self]
-        except KeyError:
-            xxx # use self.most_recent_frozen
-            if self.is_constant():
-                result = FrozenBoolConst(self.genvar)
-            else:
-                result = FrozenBoolVar()
-            memo[self] = result
-            return result
+    @staticmethod
+    def getfrozen(gv_value):
+        if gv_value.is_const:
+            return FrozenBoolConst(gv_value)
+        else:
+            return FrozenBoolVar()
+
 
 class DoubleRedBox(RedBox):
     "A red box that contains a constant double-precision floating point value."
@@ -238,34 +244,12 @@ class DoubleRedBox(RedBox):
             result = memo[self] = DoubleRedBox(self.genvar)
             return result
 
-    def freeze(self, memo):
-        memo = memo.boxes
-        try:
-            return memo[self]
-        except KeyError:
-            xxx # use self.most_recent_frozen
-            if self.is_constant():
-                result = FrozenDoubleConst(self.genvar)
-            else:
-                result = FrozenDoubleVar()
-            memo[self] = result
-            return result
-
-
-class AccessInfo(object):
-    def __init__(self):
-        self.read_fields = 0
-        self.write_fields = 0
-        # XXX what else is needed?
-
-    def __repr__(self):
-        return "<AccessInfo read_fields=%s, write_fields=%s>" % (
-                self.read_fields, self.write_fields)
-
-    def copy(self):
-        result = AccessInfo()
-        result.read_fields = self.read_fields
-        result.write_fields = self.write_fields
+    @staticmethod
+    def getfrozen(gv_value):
+        if gv_value.is_const:
+            return FrozenDoubleConst(gv_value)
+        else:
+            return FrozenDoubleVar()
 
 
 class AbstractPtrRedBox(RedBox):
@@ -280,7 +264,6 @@ class AbstractPtrRedBox(RedBox):
         if genvar is not None and genvar.is_const:
             known_nonzero = bool(self._revealconst(genvar))
         self.known_nonzero = known_nonzero
-        self.access_info = AccessInfo()
 
     def setgenvar(self, newgenvar):
         RedBox.setgenvar(self, newgenvar)
@@ -325,8 +308,6 @@ class AbstractPtrRedBox(RedBox):
             boxmemo[self] = result
             if self.content:
                 result.content = self.content.copy(memo)
-            # XXX is this correct?
-            result.access_info = self.access_info
         assert isinstance(result, AbstractPtrRedBox)
         return result
 
@@ -349,11 +330,12 @@ class AbstractPtrRedBox(RedBox):
         except KeyError:
             content = self.content
             if content is None:
+                assert self.genvar is not None
                 result = self.most_recent_frozen
                 if result is None:
                     if self.genvar.is_const:
                         result = self.FrozenPtrConst(self.genvar)
-                    elif content is None:
+                    else:
                         result = self.FrozenPtrVar(self.known_nonzero)
                     self.most_recent_frozen = result
                 else:
@@ -362,26 +344,25 @@ class AbstractPtrRedBox(RedBox):
                         assert isinstance(result, self.FrozenPtrConst)
                     else:
                         assert isinstance(result, self.FrozenPtrVar)
+                return result
+            self.most_recent_frozen = None   # for now
+            if not self.genvar:
+                from pypy.jit.timeshifter import rcontainer
+                assert isinstance(content, rcontainer.VirtualContainer)
+                result = self.FrozenPtrVirtual()
+                # store the result in the memo before content.freeze(),
+                # for recursive data structures
                 boxmemo[self] = result
+                result.fz_content = content.freeze(memo)
             else:
-                self.most_recent_frozen = None   # for now
-                if not self.genvar:
-                    from pypy.jit.timeshifter import rcontainer
-                    assert isinstance(content, rcontainer.VirtualContainer)
-                    result = self.FrozenPtrVirtual()
-                    # store the result in the memo before content.freeze(),
-                    # for recursive data structures
-                    boxmemo[self] = result
-                    result.fz_content = content.freeze(memo)
-                else:
-                    # if self.content is not None, it's a PartialDataStruct
-                    from pypy.jit.timeshifter import rcontainer
-                    assert isinstance(content, rcontainer.PartialDataStruct)
-                    result = self.FrozenPtrVarWithPartialData(known_nonzero=True)
-                    # store the result in the memo before content.freeze(),
-                    # for recursive data structures
-                    boxmemo[self] = result
-                    result.fz_partialcontent = content.partialfreeze(memo)
+                # if self.content is not None, it's a PartialDataStruct
+                from pypy.jit.timeshifter import rcontainer
+                assert isinstance(content, rcontainer.PartialDataStruct)
+                result = self.FrozenPtrVarWithPartialData(known_nonzero=True)
+                # store the result in the memo before content.freeze(),
+                # for recursive data structures
+                boxmemo[self] = result
+                result.fz_partialcontent = content.partialfreeze(memo)
             return result
 
     def getgenvar(self, jitstate):
@@ -420,7 +401,6 @@ class AbstractPtrRedBox(RedBox):
             self.content.enter_block(incoming, memo)
 
     def op_getfield(self, jitstate, fielddesc):
-        self.access_info.read_fields += 1
         self.learn_nonzeroness(jitstate, True)
         if self.content is not None:
             box = self.content.op_getfield(jitstate, fielddesc)
@@ -430,10 +410,13 @@ class AbstractPtrRedBox(RedBox):
         box = fielddesc.generate_get(jitstate, gv_ptr)
         if fielddesc.immutable:
             self.remember_field(fielddesc, box)
+        fz = self.most_recent_frozen
+        if fz is not None:
+            newfz = fz.get_ghost_child(fielddesc, box.genvar)
+            box.most_recent_frozen = newfz
         return box
 
     def op_setfield(self, jitstate, fielddesc, valuebox):
-        self.access_info.write_fields += 1
         self.learn_nonzeroness(jitstate, True)
         gv_ptr = self.genvar
         if gv_ptr:
@@ -476,9 +459,22 @@ class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
             assert self.content is not None
             return self.content.op_getsubstruct(jitstate, fielddesc)
 
+    @staticmethod
+    def getfrozen(gv_value):
+        if gv_value.is_const:
+            return FrozenPtrConst(gv_value)
+        else:
+            return FrozenPtrVar(known_nonzero=False)
+
 
 class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):
-    pass
+
+    @staticmethod
+    def getfrozen(gv_value):
+        if gv_value.is_const:
+            return FrozenInstanceConst(gv_value)
+        else:
+            return FrozenInstanceVar()
 
 
 # ____________________________________________________________
@@ -486,6 +482,7 @@ class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):
 class FrozenValue(object):
     """An abstract value frozen in a saved state.
     """
+    _attrs_ = ['will_be_promoted']
     will_be_promoted = False
 
     def is_constant_equal(self, box):
@@ -493,6 +490,11 @@ class FrozenValue(object):
 
     def is_constant_nullptr(self):
         return False
+
+    def check_future_promotions(self, box, memo):
+        if (self.will_be_promoted and box.is_constant()
+            and not self.is_constant_equal(box)):
+            raise DontMerge
 
 
 class FrozenConst(FrozenValue):
@@ -505,11 +507,6 @@ class FrozenConst(FrozenValue):
                 raise DontMerge
             outgoingvarboxes.append(box)
             return False
-
-    def check_future_promotions(self, box, memo):
-        if (self.will_be_promoted and box.is_constant()
-            and not self.is_constant_equal(box)):
-            raise DontMerge
 
 
 class FrozenVar(FrozenValue):
@@ -543,8 +540,6 @@ class FrozenIntConst(FrozenConst):
         # XXX could return directly the original IntRedBox
         return IntRedBox(self.gv_const)
 
-IntRedBox.FrozenConstCls = FrozenIntConst
-
 
 class FrozenIntVar(FrozenVar):
 
@@ -572,8 +567,6 @@ class FrozenBoolConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return BoolRedBox(self.gv_const)
 
-BoolRedBox.FrozenConstCls = FrozenBoolConst
-
 
 class FrozenBoolVar(FrozenVar):
 
@@ -600,8 +593,6 @@ class FrozenDoubleConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return DoubleRedBox(self.gv_const)
 
-DoubleRedBox.FrozenConstCls = FrozenDoubleConst
-
 
 class FrozenDoubleVar(FrozenVar):
 
@@ -616,7 +607,36 @@ class FrozenDoubleVar(FrozenVar):
             return memo[self]
 
 
-class FrozenAbstractPtrConst(FrozenConst):
+class FrozenPtrMixin(object):
+    _mixin_ = True
+    ghost_children = None
+
+    def get_ghost_child(self, fielddesc, gv_value):
+        # ghost children of a constant immutable FrozenPtrConst
+        # are only used to track future promotions; they have no
+        # other effect on exactmatch().
+        if self.ghost_children is None:
+            self.ghost_children = {}
+        else:
+            try:
+                return self.ghost_children[fielddesc]
+            except KeyError:
+                pass
+        newfz = fielddesc.getfrozen(gv_value)
+        self.ghost_children[fielddesc] = newfz
+        return newfz
+
+    def check_future_promotions(self, box, memo):
+        FrozenValue.check_future_promotions(self, box, memo)
+        if self.ghost_children is not None:
+            for fielddesc, fz_child in self.ghost_children.items():
+                box_child = box.getfield_dont_generate_code(memo.rgenop, 
+                                                            fielddesc)
+                if box_child is not None:
+                    fz_child.check_future_promotions(box_child, memo)
+
+
+class FrozenAbstractPtrConst(FrozenPtrMixin, FrozenConst):
 
     def __init__(self, gv_const):
         FrozenConst.__init__(self)
@@ -647,43 +667,15 @@ class FrozenAbstractPtrConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return self.PtrRedBox(self.gv_const)
 
-    const_children = None
-
-    def get_const_child(self, fielddesc, gv_value):
-        # constant children of a constant immutable FrozenPtrConst
-        # are only used to track future promotions; they have no
-        # other effect on exactmatch().
-        if self.const_children is None:
-            self.const_children = {}
-        else:
-            try:
-                return self.const_children[fielddesc]
-            except KeyError:
-                pass
-        newfz = fielddesc.frozenconstcls(gv_value)
-        self.const_children[fielddesc] = newfz
-        return newfz
-
-    def check_future_promotions(self, box, memo):
-        FrozenConst.check_future_promotions(self, box, memo)
-        if self.const_children is not None:
-            for fielddesc, fz_child in self.const_children.items():
-                box_child = box.getfield_dont_generate_code(memo.rgenop, 
-                                                            fielddesc)
-                if box_child is not None:
-                    fz_child.check_future_promotions(box_child, memo)
-
 
 class FrozenPtrConst(FrozenAbstractPtrConst, LLTypeMixin):
     PtrRedBox = PtrRedBox
-PtrRedBox.FrozenConstCls = FrozenPtrConst
 
 class FrozenInstanceConst(FrozenAbstractPtrConst, OOTypeMixin):
     PtrRedBox = InstanceRedBox
-InstanceRedBox.FrozenConstCls = FrozenInstanceConst
 
 
-class AbstractFrozenPtrVar(FrozenVar):
+class AbstractFrozenPtrVar(FrozenPtrMixin, FrozenVar):
 
     def __init__(self, known_nonzero):
         FrozenVar.__init__(self)
@@ -698,13 +690,7 @@ class AbstractFrozenPtrVar(FrozenVar):
         match = FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
         if self.known_nonzero and not box.known_nonzero:
             match = False
-        if not memo.force_merge:
-            if isinstance(box.content, VirtualContainer):
-                # heuristic: if a virtual is neither written to, nor read from
-                # it might not be "important enough" to keep it virtual
-                if not box.access_info.read_fields:
-                    return match
-                raise DontMerge   # XXX recursive data structures?
+        self.check_future_promotions(box, memo)
         return match
 
     def unfreeze(self, incomingvarboxes, memo):
@@ -736,12 +722,8 @@ class FrozenPtrVarWithPartialData(FrozenPtrVar):
         exact = FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
         match = exact and partialdatamatch
         if not memo.force_merge and not match:
-            # heuristic: if a virtual is neither written to, nor read from
-            # it might not be "important enough" to keep it virtual
             from pypy.jit.timeshifter.rcontainer import VirtualContainer
             if isinstance(box.content, VirtualContainer):
-                if not box.access_info.read_fields:
-                    return match
                 raise DontMerge   # XXX recursive data structures?
         return match
 
@@ -751,7 +733,6 @@ class FrozenPtrVirtual(FrozenValue):
     def exactmatch(self, box, outgoingvarboxes, memo):
         assert isinstance(box, PtrRedBox)
         if box.genvar:
-            # XXX should we consider self.access_info here too?
             raise DontMerge
         else:
             assert box.content is not None
