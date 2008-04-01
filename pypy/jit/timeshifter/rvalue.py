@@ -14,9 +14,8 @@ def enter_block_memo():
 def freeze_memo():
     return Memo()
 
-def exactmatch_memo(frozen_timestamp, force_merge=False):
+def exactmatch_memo(force_merge=False):
     memo = Memo()
-    memo.frozen_timestamp = frozen_timestamp
     memo.partialdatamatch = {}
     memo.forget_nonzeroness = {}
     memo.force_merge=force_merge
@@ -46,27 +45,10 @@ class OOTypeMixin(object):
     def _revealconst(self, gv):
         return gv.revealconst(ootype.Object)
 
-class FutureUsage(object):
-    def __init__(self):
-        self.promote_timestamp = 0
-        self.children = {}
-
-    def see_promote(self, timestamp):
-        if timestamp > self.promote_timestamp:
-            self.promote_timestamp = timestamp
-
-    def retrieve_child_usage(self, fielddesc):
-        try:
-            return self.children[fielddesc]
-        except KeyError:
-            future_usage = FutureUsage()
-            self.children[fielddesc] = future_usage
-            return future_usage
-
 
 class RedBox(object):
-    _attrs_ = ['genvar', 'future_usage']
-    future_usage = None
+    _attrs_ = ['genvar', 'most_recent_frozen']
+    most_recent_frozen = None
 
     def __init__(self, genvar=None):
         self.genvar = genvar    # None or a genvar
@@ -115,10 +97,10 @@ class RedBox(object):
         memo = memo.boxes
         return memo.setdefault(self, self)
 
-    def retrieve_future_usage(self):
-        if self.future_usage is None:
-            self.future_usage = FutureUsage()
-        return self.future_usage
+    def see_promote(self):
+        if self.most_recent_frozen is not None:
+            self.most_recent_frozen.will_be_promoted = True
+            self.most_recent_frozen = None
 
 
 def ll_redboxcls(TYPE):
@@ -194,11 +176,13 @@ class IntRedBox(RedBox):
         try:
             return memo[self]
         except KeyError:
-            future_usage = self.retrieve_future_usage()
-            if self.is_constant():
-                result = FrozenIntConst(future_usage, self.genvar)
-            else:
-                result = FrozenIntVar(future_usage)
+            result = self.most_recent_frozen
+            if result is None:
+                if self.is_constant():
+                    result = FrozenIntConst(self.genvar)
+                else:
+                    result = FrozenIntVar()
+                self.most_recent_frozen = result
             memo[self] = result
             return result
 
@@ -475,30 +459,13 @@ class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):
 class FrozenValue(object):
     """An abstract value frozen in a saved state.
     """
-    def __init__(self, future_usage):
-        self.future_usage = future_usage
+    will_be_promoted = False
 
     def is_constant_equal(self, box):
         return False
 
     def is_constant_nullptr(self):
         return False
-
-    def check_timestamp(self, box, memo):
-        fu = self.future_usage
-        if fu is not None:
-            if (box.is_constant() and
-                fu.promote_timestamp > memo.frozen_timestamp):
-                raise DontMerge
-            if fu.children:
-                assert isinstance(box, AbstractPtrRedBox)
-                for fielddesc, fuchild in fu.children.items():
-                    frozenchild = self.maybe_get_child_box(fielddesc)
-                    boxchild = box.maybe_get_child_box(fielddesc)
-                    if frozenchild is not None and boxchild is not None:
-                        assert frozenchild.future_usage is fuchild
-                        frozenchild.check_timestamp(boxchild, memo)
-                    # XXX use the memo here too!
 
 
 class FrozenConst(FrozenValue):
@@ -507,7 +474,8 @@ class FrozenConst(FrozenValue):
         if self.is_constant_equal(box):
             return True
         else:
-            self.check_timestamp(box, memo)
+            if self.will_be_promoted and box.is_constant():
+                raise DontMerge
             outgoingvarboxes.append(box)
             return False
 
@@ -515,7 +483,8 @@ class FrozenConst(FrozenValue):
 class FrozenVar(FrozenValue):
 
     def exactmatch(self, box, outgoingvarboxes, memo):
-        self.check_timestamp(box, memo)
+        if self.will_be_promoted and box.is_constant():
+            raise DontMerge
         memo = memo.boxes
         if self not in memo:
             memo[self] = box
@@ -530,8 +499,7 @@ class FrozenVar(FrozenValue):
 
 class FrozenIntConst(FrozenConst):
 
-    def __init__(self, future_usage, gv_const):
-        FrozenConst.__init__(self, future_usage)
+    def __init__(self, gv_const):
         self.gv_const = gv_const
 
     def is_constant_equal(self, box):
@@ -639,10 +607,6 @@ class FrozenAbstractPtrConst(FrozenConst):
     def unfreeze(self, incomingvarboxes, memo):
         return self.PtrRedBox(self.gv_const)
 
-    def maybe_get_child_box(self, fielddesc):
-        XXX  # pfpfpfpfpf no fun at all! we make a non-frozen box and freeze it? uh how do we make the non-frozen box?
-        fielddesc.makebox(fielddesc.perform_getfield(rgenop:-(, self.gv_const)) # in theory
-                # :-( :-( :-(
 
 class FrozenPtrConst(FrozenAbstractPtrConst, LLTypeMixin):
     PtrRedBox = PtrRedBox
