@@ -218,6 +218,7 @@ class BoolRedBox(RedBox):
         try:
             return memo[self]
         except KeyError:
+            xxx # use self.most_recent_frozen
             if self.is_constant():
                 result = FrozenBoolConst(self.genvar)
             else:
@@ -241,6 +242,7 @@ class DoubleRedBox(RedBox):
         try:
             return memo[self]
         except KeyError:
+            xxx # use self.most_recent_frozen
             if self.is_constant():
                 result = FrozenDoubleConst(self.genvar)
             else:
