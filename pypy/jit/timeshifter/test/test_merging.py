@@ -32,23 +32,25 @@ class TestMerging:
         """We have a frozen constant 42 which gets a (no-op) promotion after
         it is frozen.  Then it should fail to merge with a live constant 43.
         """
+        rgenop = FakeRGenOp()
+
         gc = FakeGenConst(42)
         box = rvalue.IntRedBox(gc)
         frozen = box.freeze(rvalue.freeze_memo())
         assert box.most_recent_frozen is not None    # attached by freeze()
         box.see_promote()
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gv = FakeGenVar()
         newbox = rvalue.IntRedBox(gv)
         assert not frozen.exactmatch(newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gc2 = FakeGenConst(43)
         newbox = rvalue.IntRedBox(gc2)
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gc3 = FakeGenConst(42)
         newbox = rvalue.IntRedBox(gc3)
         assert frozen.exactmatch(newbox, [], memo)
@@ -57,18 +59,20 @@ class TestMerging:
         """We have a frozen variable which gets promoted after
         it is frozen.  Then it should fail to merge with any live constant.
         """
+        rgenop = FakeRGenOp()
+
         gv = FakeGenVar()
         box = rvalue.IntRedBox(gv)
         frozen = box.freeze(rvalue.freeze_memo())
         assert box.most_recent_frozen is not None    # attached by freeze()
         box.see_promote()
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gv2 = FakeGenVar()
         newbox = rvalue.IntRedBox(gv2)
         assert frozen.exactmatch(newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gc = FakeGenConst(43)
         newbox = rvalue.IntRedBox(gc)
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, newbox, [], memo)
@@ -77,6 +81,8 @@ class TestMerging:
         """In the merging logic, frozen boxes ignore promotions that
         occurred before the freezing.
         """
+        rgenop = FakeRGenOp()
+
         gc = FakeGenConst(42)
         box = rvalue.IntRedBox(gc)
         box.freeze(rvalue.freeze_memo())
@@ -85,12 +91,12 @@ class TestMerging:
 
         frozen = box.freeze(rvalue.freeze_memo())
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gv = FakeGenVar()
         newbox = rvalue.IntRedBox(gv)
         assert not frozen.exactmatch(newbox, [], memo)
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         gc2 = FakeGenConst(43)
         newbox = rvalue.IntRedBox(gc2)
         assert not frozen.exactmatch(newbox, [], memo)
@@ -100,6 +106,8 @@ class TestMerging:
         there is an incoming live s2 for which we already know the value of
         s2.x, and for which the merge would loose that information.
         """
+        rgenop = FakeRGenOp()
+
         prebuilt_s = lltype.malloc(self.STRUCT)
         prebuilt_s.x = 42
 
@@ -112,21 +120,21 @@ class TestMerging:
 
         x_box = rtimeshift.gengetfield(jitstate, False, self.fielddesc, box)
         assert x_box.genvar.revealconst(lltype.Signed) == 42
-        assert x_box.future_usage is not None   # attached by gengetfield()
+        assert x_box.most_recent_frozen is not None # attached by gengetfield()
         x_box.see_promote()
 
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         assert frozen.exactmatch(box, [], memo)
 
         prebuilt_s2 = lltype.malloc(self.STRUCT)
         prebuilt_s2.x = 42
         box2 = rvalue.PtrRedBox(FakeGenConst(prebuilt_s2))
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         assert not frozen.exactmatch(box2, [], memo)
         # ^^^no DontMerge because box2.x is equal, so we don't loose its value
 
         prebuilt_s3 = lltype.malloc(self.STRUCT)
         prebuilt_s3.x = 43
         box3 = rvalue.PtrRedBox(FakeGenConst(prebuilt_s3))
-        memo = rvalue.exactmatch_memo()
+        memo = rvalue.exactmatch_memo(rgenop)
         py.test.raises(rvalue.DontMerge, frozen.exactmatch, box3, [], memo)

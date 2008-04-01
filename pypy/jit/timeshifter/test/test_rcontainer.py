@@ -3,7 +3,7 @@ import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.test.support import FakeJITState, FakeGenVar
-from pypy.jit.timeshifter.test.support import FakeGenConst
+from pypy.jit.timeshifter.test.support import FakeGenConst, FakeRGenOp
 from pypy.jit.timeshifter.test.support import signed_kind
 from pypy.jit.timeshifter.test.support import vmalloc, makebox
 from pypy.jit.timeshifter.test.support import getfielddesc
@@ -42,9 +42,10 @@ class TestVirtualStruct:
         # of 'box' that correspond to FrozenVar placeholders in frozenbox.
         # Otherwise, it is the list of subboxes of 'box' that should be
         # generalized to become variables.
+        rgenop = FakeRGenOp()
         outgoingvarboxes = []
         res = frozenbox.exactmatch(box, outgoingvarboxes,
-                                   rvalue.exactmatch_memo())
+                                   rvalue.exactmatch_memo(rgenop))
         assert outgoingvarboxes == expected_outgoing
         return res
 

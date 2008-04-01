@@ -166,9 +166,10 @@ def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
             pass
         else:
             result = fielddesc.makebox(jitstate, resgv)
-            if argbox.future_usage is not None:
-                future_usage = argbox.future_usage.retrieve_child_usage(fielddesc)
-                result.future_usage = future_usage
+            fz = argbox.most_recent_frozen
+            if fz is not None:
+                newfz = fz.get_const_child(fielddesc, resgv)
+                result.most_recent_frozen = newfz
             return result
     return argbox.op_getfield(jitstate, fielddesc)
 
