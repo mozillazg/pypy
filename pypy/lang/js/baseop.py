@@ -6,6 +6,7 @@ from pypy.lang.js.jsobj import W_String, W_IntNumber, W_FloatNumber,\
      W_PrimitiveObject
 from pypy.rlib.rarithmetic import r_uint, intmask, INFINITY, NAN, ovfcheck,\
      isnan, isinf
+from pypy.lang.js.execution import ThrowException, JsTypeError
 
 def plus(ctx, nleft, nright):
     if isinstance(nleft, W_String) or isinstance(nright, W_String):

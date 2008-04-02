@@ -12,7 +12,7 @@ def test_simple():
     bytecode.emit('LOAD_FLOATCONSTANT', 4)
     bytecode.emit('ADD')
     bytecode.run(ExecutionContext([W_Object()]), check_stack=False)
-    assert bytecode.stack[0].GetValue().ToNumber() == 6.0
+    assert bytecode.stack[0].ToNumber() == 6.0
 
 def assertp(code, prints):
     l = []
@@ -39,7 +39,7 @@ def assertv(code, value):
         assert isinstance(bytecode.opcodes[-1], POP)
         bytecode.opcodes.pop()
         bytecode.run(ExecutionContext([ctx]), check_stack=False)
-        code_val = bytecode.stack[0].GetValue()
+        code_val = bytecode.stack[0]
     except ThrowException, excpt:
         code_val = excpt.exception
     print code_val, value

@@ -2,7 +2,7 @@
 from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
      ovfcheck_float_to_int
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
-     RangeError
+     RangeError, ReturnException
 
 class SeePage(NotImplementedError):
     pass
@@ -29,8 +29,8 @@ def internal_property(name, value):
     return Property(name, value, True, True, True, True)
 
 class W_Root(object):
-    def GetValue(self):
-        return self
+    #def GetValue(self):
+    #    return self
 
     def ToBoolean(self):
         return False
@@ -159,9 +159,8 @@ class W_PrimitiveObject(W_Root):
         try: #this is a hack to be compatible to spidermonkey
             self.Call(ctx, args, this=obj)
             return obj
-        except ExecutionReturned, e:
+        except ReturnException, e:
             return e.value
-        
         
     def Get(self, P):
         try:
@@ -557,8 +556,7 @@ class ExecutionContext(object):
                 return obj.propdict[identifier].value
             except KeyError:
                 pass
-        raise Exception("XXX shall never land here, fix")
-        #return W_Reference(identifier)
+        raise ThrowException(W_String("ReferenceError: %s is not defined" % identifier))
 
 def global_context(w_global):
     assert isinstance(w_global, W_PrimitiveObject)
@@ -591,36 +589,36 @@ def empty_context():
                             jsproperty = Property('', w_Undefined))
     return ctx
 
-class W_Reference(W_Root):
-    """Reference Type"""
-    def __init__(self, property_name, base=None):
-        self.base = base
-        self.property_name = property_name
+# class W_Reference(W_Root):
+#     """Reference Type"""
+#     def __init__(self, property_name, base=None):
+#         self.base = base
+#         self.property_name = property_name
 
-    def check_empty(self):
-        if self.base is None:
-            exception = "ReferenceError: %s is not defined"%(self.property_name,)
-            raise ThrowException(W_String(exception))        
+#     def check_empty(self):
+#         if self.base is None:
+#             exception = "ReferenceError: %s is not defined"%(self.property_name,)
+#             raise ThrowException(W_String(exception))        
 
-    #def GetValue(self):
-    #    self.check_empty()
-    #    return self.base.Get(self.property_name)
+#     #def GetValue(self):
+#     #    self.check_empty()
+#     #    return self.base.Get(self.property_name)
 
-    #def PutValue(self, w, ctx):
-    #    base = self.base
-    #    if base is None:
-    #        base = ctx.scope[-1]
-    #    base.Put(self.property_name, w)
-    #    return w
+#     #def PutValue(self, w, ctx):
+#     #    base = self.base
+#     #    if base is None:
+#     #        base = ctx.scope[-1]
+#     #    base.Put(self.property_name, w)
+#     #    return w
 
-    #def GetBase(self):
-    #    return self.base
+#     #def GetBase(self):
+#     #    return self.base
 
-    #def GetPropertyName(self):
-    #    return self.property_name
+#     #def GetPropertyName(self):
+#     #    return self.property_name
 
-    def __str__(self):
-        return "<" + str(self.base) + " -> " + str(self.property_name) + ">"
+#     def __str__(self):
+#         return "<" + str(self.base) + " -> " + str(self.property_name) + ">"
     
 def create_object(ctx, prototypename, callfunc=None, Value=w_Undefined):
     proto = ctx.get_global().Get(prototypename).Get('prototype')

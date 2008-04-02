@@ -152,7 +152,7 @@ def parseFloatjs(ctx, args, this):
     
 
 def printjs(ctx, args, this):
-    writer(",".join([i.GetValue().ToString(ctx) for i in args]))
+    writer(",".join([i.ToString(ctx) for i in args]))
     return w_Undefined
 
 def isnanjs(ctx, args, this):

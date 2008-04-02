@@ -27,4 +27,3 @@ codes = [
 escapedict = dict(zip(codes, escapes))
 unescapedict = dict(zip(escapes, codes))
 
-SLASH = "\\"
