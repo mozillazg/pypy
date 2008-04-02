@@ -928,19 +928,6 @@ class For(Statement):
         bytecode.emit('JUMP', precond)
         bytecode.emit('LABEL', finish)
     
-    def execute(self, ctx):
-        self.setup.eval(ctx).GetValue()
-        while self.condition.eval(ctx).ToBoolean():
-            try:
-                self.body.execute(ctx)
-                self.update.eval(ctx)
-            except ExecutionReturned, e:
-                if e.type == 'break':
-                    break
-                elif e.type == 'continue':
-                    self.update.eval(ctx)
-                    continue
-    
 class Boolean(Expression):
     def __init__(self, pos, boolval):
         self.pos = pos
