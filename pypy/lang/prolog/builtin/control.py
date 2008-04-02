@@ -33,7 +33,7 @@ class AndContinuation(engine.Continuation):
         self.continuation = continuation
 
     def _call(self, engine):
-        next_call = self.next_call.dereference(engine.heap)
+        next_call = self.next_call.dereference(engine)
         next_call = helper.ensure_callable(next_call)
         return engine.call(next_call, self.continuation, choice_point=False)
 
@@ -46,11 +46,11 @@ expose_builtin(impl_and, ",", unwrap_spec=["callable", "raw"],
                handles_continuation=True)
 
 def impl_or(engine, call1, call2, continuation):
-    oldstate = engine.heap.branch()
+    oldstate = engine.branch()
     try:
         return engine.call(call1, continuation)
     except error.UnificationFailed:
-        engine.heap.revert(oldstate)
+        engine.revert(oldstate)
     return engine.call(call2, continuation, choice_point=False)
 
 expose_builtin(impl_or, ";", unwrap_spec=["callable", "callable"],
@@ -68,11 +68,11 @@ def impl_not(engine, call):
 expose_builtin(impl_not, ["not", "\\+"], unwrap_spec=["callable"])
 
 def impl_if(engine, if_clause, then_clause, continuation):
-    oldstate = engine.heap.branch()
+    oldstate = engine.branch()
     try:
         engine.call(if_clause)
     except error.UnificationFailed:
-        engine.heap.revert(oldstate)
+        engine.revert(oldstate)
         raise
     return engine.call(helper.ensure_callable(then_clause), continuation,
                        choice_point=False)

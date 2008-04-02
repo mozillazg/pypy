@@ -43,7 +43,7 @@ def var_representation(var_to_pos, engine, write):
     for var, real_var in var_to_pos.iteritems():
         if var.startswith("_"):
             continue
-        val = f.format(real_var.getvalue(engine.heap))
+        val = f.format(real_var.getvalue(engine))
         write("%s = %s\n" % (var, val))
 
 def getch():

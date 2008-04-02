@@ -29,7 +29,7 @@ class ChoicePoint(object):
     def __init__(self, engine, continuation, stop_cut=False):
         self._init_current()
         self.engine = engine
-        self.oldstate = engine.heap.branch()
+        self.oldstate = engine.branch()
         self.continuation = continuation
         self.stop_cut = stop_cut
         self.any_choice = True
@@ -50,7 +50,7 @@ class ChoicePoint(object):
             else:
                 self.exception = e
         except UnificationFailed:
-            self.engine.heap.revert(self.oldstate)
+            self.engine.revert(self.oldstate)
             if last:
                 raise
             return

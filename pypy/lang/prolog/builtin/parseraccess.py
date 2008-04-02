@@ -9,14 +9,14 @@ def impl_current_op(engine, precedence, typ, name, continuation):
     for prec, allops in engine.getoperations():
         for form, ops in allops:
             for op in ops:
-                oldstate = engine.heap.branch()
+                oldstate = engine.branch()
                 try:
-                    precedence.unify(term.Number(prec), engine.heap)
-                    typ.unify(term.Atom.newatom(form), engine.heap)
-                    name.unify(term.Atom(op), engine.heap)
+                    precedence.unify(term.Number(prec), engine)
+                    typ.unify(term.Atom.newatom(form), engine)
+                    name.unify(term.Atom(op), engine)
                     return continuation.call(engine, choice_point=True)
                 except error.UnificationFailed:
-                    engine.heap.revert(oldstate)
+                    engine.revert(oldstate)
     raise error.UnificationFailed()
 expose_builtin(impl_current_op, "current_op", unwrap_spec=["obj", "obj", "obj"],
                handles_continuation=True)
@@ -53,6 +53,7 @@ def impl_op(engine, precedence, typ, name):
             else:
                 operations.append((precedence, [(typ, [name])]))
     engine.parser = parsing.make_parser_at_runtime(engine.operations)
+impl_op._look_inside_me_ = False
 expose_builtin(impl_op, "op", unwrap_spec=["int", "atom", "atom"])
 
 

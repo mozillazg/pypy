@@ -28,6 +28,7 @@ def impl_consult(engine, var):
         finally:
             os.close(fd)
         engine.runstring(file_content)
+impl_consult._look_inside_me_ = False
 expose_builtin(impl_consult, "consult", unwrap_spec=["obj"])
 
 
