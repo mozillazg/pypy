@@ -6,12 +6,12 @@ Implements the javascript operations nodes for the interpretation tree
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_Object,\
      w_Undefined, W_NewBuiltin, W_String, create_object, W_List,\
-     W_PrimitiveObject, W_Reference, ActivationObject, W_Array, W_Boolean,\
+     W_PrimitiveObject, ActivationObject, W_Array, W_Boolean,\
      w_Null, W_BaseNumber, isnull_or_undefined
 from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
 from pypy.lang.js.execution import JsTypeError, ThrowException
 from pypy.lang.js.jscode import JsCode, JsFunction
-from constants import unescapedict, SLASH
+from constants import unescapedict
 from pypy.rlib.unroll import unrolling_iterable
 
 import sys
@@ -205,6 +205,7 @@ class MemberDotAssignment(Assignment):
         self.prefix = prefix
 
     def emit(self, bytecode):
+        # XXX optimize this a bit
         if self.right is not None:
             self.right.emit(bytecode)
         bytecode.emit('LOAD_STRINGCONSTANT', self.itemname)
@@ -618,11 +619,11 @@ class String(Expression):
         internalstring = string[1:stop]
         
         for c in internalstring:
-            if last == SLASH:
+            if last == "\\":
                 unescapeseq = unescapedict[last+c]
                 temp.append(unescapeseq)
                 c = ' ' # Could be anything
-            elif c != SLASH:
+            elif c != "\\":
                 temp.append(c)
             last = c
         return ''.join(temp)

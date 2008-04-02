@@ -1,6 +1,6 @@
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
-     W_Array, W_PrimitiveObject, W_Reference, ActivationObject,\
+     W_Array, W_PrimitiveObject, ActivationObject,\
      create_object, W_Object, w_Undefined, W_Boolean, newbool,\
      w_True, w_False, W_List
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
@@ -92,6 +92,8 @@ class JsCode(object):
         return "\n".join([repr(i) for i in self.opcodes])
 
     def __eq__(self, list_of_opcodes):
+        if not isinstance(list_of_opcodes, list):
+            return False
         if len(list_of_opcodes) != len(self.opcodes):
             return False
         return all([i == j for i, j in zip(self.opcodes, list_of_opcodes)])
@@ -383,20 +385,19 @@ class ISNOT(BaseBinaryComparison):
 
 
 class BaseStoreMember(Opcode):
-    pass
-    #def eval(self, ctx, ):
-    #    XXX
+    def eval(self, ctx, stack):
+        XXX
 
-class STORE_MEMBER(Opcode):
-    pass
-
-class STORE_MEMBER_POSTINCR(Opcode):
+class STORE_MEMBER(BaseStoreMember):
     pass
 
-class STORE_MEMBER_PREINCR(Opcode):
+class STORE_MEMBER_POSTINCR(BaseStoreMember):
     pass
 
-class STORE_MEMBER_SUB(Opcode):
+class STORE_MEMBER_PREINCR(BaseStoreMember):
+    pass
+
+class STORE_MEMBER_SUB(BaseStoreMember):
     pass
 
 class BaseStore(Opcode):
@@ -544,17 +545,8 @@ class CALL(Opcode):
         args = stack.pop()
         if not isinstance(r1, W_PrimitiveObject):
             raise ThrowException(W_String("it is not a callable"))
-            
-        if isinstance(r1, W_Reference):
-            r6 = r1.GetBase()
-        else:
-            r6 = None
-        if isinstance(args, ActivationObject):
-            r7 = None
-        else:
-            r7 = r6
         try:
-            res = r1.Call(ctx=ctx, args=args.tolist(), this=r7)
+            res = r1.Call(ctx=ctx, args=args.tolist(), this=None)
         except JsTypeError:
             raise ThrowException(W_String('it is not a function'))
         stack.append(res)
