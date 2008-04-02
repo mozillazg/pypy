@@ -460,10 +460,16 @@ class TestToAstFunction(BaseTestToAST):
             'STORE "x"',
             'POP'])
 
+    def test_var_declr(self):
+        self.check('x; var x;', [
+            'DECLARE_VAR "x"',
+            'LOAD_VARIABLE "x"',
+            'POP'])
+
     def test_call(self):
         self.check('print("stuff")',[
             'LOAD_STRINGCONSTANT "stuff"',
-            'LOAD_ARRAY 1',
+            'LOAD_LIST 1',
             'LOAD_VARIABLE "print"',
             'CALL',
             'POP'])

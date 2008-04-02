@@ -557,7 +557,7 @@ class ExecutionContext(object):
                 return obj.propdict[identifier].value
             except KeyError:
                 pass
-        raise Exception("stuff")
+        raise Exception("XXX shall never land here, fix")
         #return W_Reference(identifier)
 
 def global_context(w_global):

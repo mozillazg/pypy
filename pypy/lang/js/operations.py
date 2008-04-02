@@ -212,26 +212,6 @@ class MemberDotAssignment(Assignment):
         bytecode.emit('STORE_MEMBER' + self._get_name())
 
 class StuffAssignment(Expression):
-    def __init__(self, pos, left, right, operand):
-        self.pos = pos
-        # check the sanity of lefthandside
-        if isinstance(left, Identifier):
-            self.identifier = left.name
-            self.single_assignement = True
-        elif isinstance(left, Member):
-            import pdb
-            pdb.set_trace()
-            self.lefthandside = left
-            self.single_assignement = False
-        self.right = right
-        self.operand = operand
-
-    def emit(self, bytecode):
-        op = self.operand
-        if op == '==':
-            bytecode.emit('STORE', self.identifier)
-        else:
-            XXX
 
     def eval(self, ctx):
         v1 = self.left.eval(ctx)
@@ -672,8 +652,6 @@ class SourceElements(Statement):
 
         for node in self.nodes:
             node.emit(bytecode)
-            # we don't need to pop after certain instructions, let's
-            # list them
 
     def execute(self, ctx):
         for varname in self.var_decl:
@@ -766,9 +744,9 @@ class VariableDeclaration(Expression):
     def emit(self, bytecode):
         if self.expr is not None:
             self.expr.emit(bytecode)
+            bytecode.emit('STORE', self.identifier)
         else:
-            bytecode.emit('LOAD_UNDEFINED')
-        bytecode.emit('STORE', self.identifier)
+            return True
     
     def eval(self, ctx):
         name = self.identifier.get_literal()
@@ -797,12 +775,8 @@ class VariableDeclList(Expression):
 
     def emit(self, bytecode):
         for node in self.nodes:
-            node.emit(bytecode)
-    
-    def eval(self, ctx):
-        for var in self.nodes:
-            var.eval(ctx)
-        return w_Undefined
+            if node.emit(bytecode) is None:
+                bytecode.emit('POP')                
     
 class Variable(Statement):
     def __init__(self, pos, body):
@@ -811,7 +785,6 @@ class Variable(Statement):
 
     def emit(self, bytecode):
         self.body.emit(bytecode)
-        bytecode.emit('POP')
     
     def execute(self, ctx):
         return self.body.eval(ctx)
