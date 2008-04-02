@@ -3,10 +3,13 @@ from pypy.lang.gameboy import constants
 
 class Register(object):
     def __init__(self, cpu, value=0):
-        self.value = 0
+        self.resetValue = self.value = value
         self.cpu = cpu
-        if value is not 0:
+        if value != 0:
             self.set(value)
+        
+    def reset(self):
+        self.value = self.resetValue
         
     def set(self, value, useCycles=True):
         self.value = value & 0xFF
@@ -25,16 +28,20 @@ class Register(object):
 # ___________________________________________________________________________
 
 class DoubleRegister(Register):
-    def __init__(self, cpu, hi=None, lo=None):
+    def __init__(self, cpu, hi=None, lo=None, resetValue=None):
         self.cpu = cpu
-        if hi==None:
-            self.hi = Register(self.cpu)
-        else:
+        if isinstance(hi, (Register)) :
             self.hi = hi
+        else:
+            self.hi = Register(self.cpu)
         if lo==None:
             self.lo = Register(self.cpu)
         else:
             self.lo = lo
+        if (resetValue != None):
+            self.resetValue = resetValue
+        elif (hi!=None and lo==None and resetValue==None):
+            self.resetValue = hi
         
     def set(self, hi=0, lo=None, useCycles=True):
         if (lo is None):
@@ -45,6 +52,10 @@ class DoubleRegister(Register):
         else:
             self.setHi(hi, useCycles)
             self.setLo(lo, useCycles)
+            
+    
+    def reset(self):
+        self.set(self.resetValue, None, False)
             
     def setHi(self, hi=0, useCycles=True):
         self.hi.set(hi, useCycles)
@@ -102,31 +113,37 @@ class CPU(object):
         self.ime = False
         self.halted = False
         self.cycles = 0
-        self.bc = DoubleRegister(self)
-        self.b = self.bc.hi
-        self.c = self.bc.lo
-        self.de = DoubleRegister(self)
-        self.d = self.de.hi
-        self.e = self.de.lo
-        self.hl = DoubleRegister(self)
-        self.h = self.hl.hi
-        self.l = self.hl.lo
+        
+        self.b = Register(self)
+        self.c = Register(self)
+        self.bc = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
+        
+        self.d = Register(self)
+        self.e = Register(self)
+        self.de = DoubleRegister(self, self.d, self.e, constants.RESET_DE)
+
+        self.h = Register(self)
+        self.l = Register(self)
+        self.hl = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
+        
         self.hli = ImmediatePseudoRegister(self, self.hl)
-        self.pc = DoubleRegister(self)
-        self.sp = DoubleRegister(self)
-        self.af = DoubleRegister(self)
-        self.a = self.af.hi
-        self.f = self.af.lo
+        self.pc = DoubleRegister(self, constants.RESET_PC)
+        self.sp = DoubleRegister(self, constants.RESET_SP)
+        
+        self.a = Register(self, constants.RESET_A)
+        self.f = Register(self, constants.RESET_F)
+        self.af = DoubleRegister(self, self.a, self.f)
+
         self.reset()
 
     def reset(self):
-        self.a.set(constants.RESET_A)
-        self.f.set(constants.RESET_F)
-        self.bc.set(constants.RESET_BC)
-        self.de.set(constants.RESET_DE)
-        self.hl.set(constants.RESET_HL)
-        self.sp.set(constants.RESET_SP)
-        self.pc.set(constants.RESET_PC)
+        self.a.reset();
+        self.f.reset();
+        self.bc.reset();
+        self.de.reset();
+        self.hl.reset();
+        self.sp.reset();
+        self.pc.reset();
         self.ime = False
         self.halted = False
         self.cycles = 0
@@ -180,6 +197,10 @@ class CPU(object):
         if self.halted:
             val += 0x80
         return val
+    
+    # Flags ............................................
+    
+    
                     
     def setROM(self, banks):
         self.rom = banks
@@ -204,7 +225,7 @@ class CPU(object):
 
      # Interrupts
     def interrupt(self, address=None):
-        if address is not None:
+        if address != None:
             self.ime = False
             self.call(address)
             return
@@ -307,7 +328,7 @@ class CPU(object):
         self.ld(self.fetch, register.set)
         
      # LD PC,HL, 1 cycle
-    def ld_pc_hl(self):
+    def storeHlInPC(self):
         self.ld(self.hl.get, self.pc.set)
         
     def fetchLoad(self, getter, setter):
@@ -510,22 +531,22 @@ class CPU(object):
         setter(getter() & (~(1 << n))) # 1 cycle
         
      # LD A,(nnnn), 4 cycles
-    def ld_A_mem(self):
+    def storeFetchedMemoryInA(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
         self.a.set(self.read(hi, lo))  # 1+1 cycles
 
     # 2 cycles
-    def ld_BCi_A(self):
+    def writeAAtBCAddress(self):
         self.write(self.bc.get(), self.a.get())
         
-    def ld_DEi_A(self):
+    def writeAAtDEAddress(self):
         self.write(self.de.get(), self.a.get())
            
-    def ld_A_BCi(self):
+    def storeMemoryAtBCInA(self):
         self.a.set(self.read(self.bc.get()))
 
-    def load_A_DEi(self):
+    def storeMemoryAtDEInA(self):
         self.a.set(self.read(self.de.get()))
 
      # LD (rr),A  2 cycles
@@ -542,17 +563,17 @@ class CPU(object):
         self.cycles += 1
 
      # LD (nnnn),A  4 cycles
-    def ld_mem_A(self):
+    def storeAatFetchedAddress(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
         self.write((hi << 8) + lo, self.a.get()) # 2 cycles
 
      # LDH A,(nn) 3 cycles
-    def ldh_A_mem(self):
+    def storeMemoryAtExpandedFetchAddressInA(self):
         self.a.set(self.read(0xFF00 + self.fetch())) # 1+1+1 cycles
         
      # LDH A,(C) 2 cycles
-    def ldh_A_Ci(self):
+    def storeExpandedCinA(self):
         self.a.set(self.read(0xFF00 + self.bc.getLo())) # 1+2 cycles
         
      # loadAndIncrement A,(HL) 2 cycles
@@ -568,11 +589,11 @@ class CPU(object):
         self.cycles += 2
         
      # LDH (nn),A 3 cycles
-    def ldh_mem_A(self):
+    def writeAatExpandedFetchAddress(self):
         self.write(0xFF00 + self.fetch(), self.a.get()) # 2 + 1 cycles
 
      # LDH (C),A 2 cycles
-    def ldh_Ci_A(self):
+    def writeAAtExpandedCAddress(self):
         self.write(0xFF00 + self.bc.getLo(), self.a.get()) # 2 cycles
         
      # loadAndIncrement (HL),A 2 cycles
@@ -588,7 +609,7 @@ class CPU(object):
         self.cycles += 2
 
      # LD SP,HL 2 cycles
-    def ld_SP_HL(self):
+    def storeHlInSp(self):
         self.sp.set(self.hl.get()) # 1 cycle
         self.cycles -= 1
 
@@ -597,7 +618,7 @@ class CPU(object):
         self.f.set(self.f.get() | (constants.N_FLAG + constants.H_FLAG))
 
      # DAA 1 cycle
-    def daa(self):
+    def decimalAdjustAccumulator(self):
         delta = 0
         if self.isH(): 
             delta |= 0x06
@@ -627,17 +648,17 @@ class CPU(object):
         register.dec()
 
      # ADD SP,nn 4 cycles
-    def add_SP_nn(self):
-        self.sp.set(self.SP_nn()) # 1+1 cycle
+    def incrementSPByFetch(self):
+        self.sp.set(self.getFetchAddedSP()) # 1+1 cycle
         self.cycles -= 2
 
      # LD HL,SP+nn   3  cycles
-    def ld_HL_SP_nn(self):
-        self.hl.set(self.SP_nn()) # 1+1 cycle
+    def storeFetchAddedSPInHL(self):
+        self.hl.set(self.getFetchAddedSP()) # 1+1 cycle
         self.cycles -= 1
 
     # 1 cycle
-    def SP_nn(self):
+    def getFetchAddedSP(self):
         offset = self.fetch() # 1 cycle
         s = (self.sp.get() + offset) & 0xFFFF
         self.f.set(0, False)
@@ -654,11 +675,11 @@ class CPU(object):
         return s
 
      # CCF/SCF
-    def ccf(self):
+    def complementCarryFlag(self):
         # Flip C-flag and keep Z-flag
         self.f.set((self.f.get() & (constants.Z_FLAG | constants.C_FLAG)) ^ constants.C_FLAG, False)
 
-    def scf(self):
+    def setCarryFlag(self):
         # Set C-flag to true and keep Z-flag
         self.f.set((self.f.get() & constants.Z_FLAG) | constants.C_FLAG, False)
 
@@ -667,40 +688,40 @@ class CPU(object):
         self.cycles -= 1
 
      # JP nnnn, 4 cycles
-    def jp_nnnn(self):
+    def unconditionalJump(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
         self.pc.set(hi,lo) # 2 cycles
 
      # JP cc,nnnn 3,4 cycles
-    def jp_cc_nnnn(self, cc):
+    def conditionalJump(self, cc):
         if cc:
-            self.jp_nnnn() # 4 cycles
+            self.unconditionalJump() # 4 cycles
         else:
             self.pc.add(2) # 3 cycles
 
      # JR +nn, 3 cycles
-    def jr_nn(self):
+    def relativeUnconditionalJump(self):
         self.pc.add(self.fetch()) # 3 + 1 cycles
         self.cycles += 1
 
      # JR cc,+nn, 2,3 cycles
-    def jr_cc_nn(self, cc):
+    def relativeConditionalJump(self, cc):
         if cc:
-            self.jr_nn() # 3 cycles
+            self.relativeUnconditionalJump() # 3 cycles
         else:
             self.pc.inc() # 2 cycles
     
      # CALL nnnn, 6 cycles
-    def call_nnnn(self):
+    def unconditionalCall(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
         self.call((hi << 8) + lo)  # 4 cycles
 
      # CALL cc,nnnn, 3,6 cycles
-    def call_cc_nnnn(self, getter):
+    def conditionalCall(self, getter):
         if getter():
-            self.call_nnnn() # 6 cycles
+            self.unconditionalCall() # 6 cycles
         else:
             self.pc.add(2) # 3 cycles
     
@@ -855,41 +876,41 @@ FIRST_ORDER_OP_CODES = [
     (0x00, CPU.nop),
     (0x08, CPU.load_mem_SP),
     (0x10, CPU.stop),
-    (0x18, CPU.jr_nn),
-    (0x02, CPU.ld_BCi_A),
-    (0x12, CPU.ld_DEi_A),
+    (0x18, CPU.relativeUnconditionalJump),
+    (0x02, CPU.writeAAtBCAddress),
+    (0x12, CPU.writeAAtDEAddress),
     (0x22, CPU.loadAndIncrement_HLi_A),
     (0x32, CPU.loadAndDecrement_HLi_A),
-    (0x0A, CPU.ld_A_BCi),
-    (0x1A, CPU.load_A_DEi),
+    (0x0A, CPU.storeMemoryAtBCInA),
+    (0x1A, CPU.storeMemoryAtDEInA),
     (0x2A, CPU.loadAndIncrement_A_HLi),
     (0x3A, CPU.loadAndDecrement_A_HLi),
     (0x07, CPU.rotateLeftCircularA),
     (0x0F, CPU.rotateRightCircularA),
     (0x17, CPU.rotateLeftA),
     (0x1F, CPU.rotateRightA),
-    (0x27, CPU.daa),
+    (0x27, CPU.decimalAdjustAccumulator),
     (0x2F, CPU.complementA),
-    (0x37, CPU.scf),
-    (0x3F, CPU.ccf),
+    (0x37, CPU.setCarryFlag),
+    (0x3F, CPU.complementCarryFlag),
     (0x76, CPU.halt),
     (0xF3, CPU.disableInterrupts),
     (0xFB, CPU.enableInterrupts),
-    (0xE2, CPU.ldh_Ci_A),
-    (0xEA, CPU.ld_mem_A),
-    (0xF2, CPU.ldh_A_Ci),
-    (0xFA, CPU.ld_A_mem),
-    (0xC3, CPU.jp_nnnn),
+    (0xE2, CPU.writeAAtExpandedCAddress),
+    (0xEA, CPU.storeAatFetchedAddress),
+    (0xF2, CPU.storeExpandedCinA),
+    (0xFA, CPU.storeFetchedMemoryInA),
+    (0xC3, CPU.unconditionalJump),
     (0xC9, CPU.ret),
     (0xD9, CPU.returnFormInterrupt),
-    (0xE9, CPU.ld_pc_hl),
-    (0xF9, CPU.ld_SP_HL),
-    (0xE0, CPU.ldh_mem_A),
-    (0xE8, CPU.add_SP_nn),
-    (0xF0, CPU.ldh_A_mem),
-    (0xF8, CPU.ld_HL_SP_nn),
+    (0xE9, CPU.storeHlInPC),
+    (0xF9, CPU.storeHlInSp),
+    (0xE0, CPU.writeAatExpandedFetchAddress),
+    (0xE8, CPU.incrementSPByFetch),
+    (0xF0, CPU.storeMemoryAtExpandedFetchAddressInA),
+    (0xF8, CPU.storeFetchAddedSPInHL),
     (0xCB, CPU.fetchExecute),
-    (0xCD, CPU.call_nnnn),
+    (0xCD, CPU.unconditionalCall),
     (0xC6, lambda s: CPU.addA(s, s.fetch)),
     (0xCE, lambda s: CPU.addWithCarry(s,  s.fetch)),
     (0xD6, lambda s: CPU.subtract(s,  s.fetch)),
@@ -926,19 +947,19 @@ REGISTER_GROUP_OP_CODES = [
         
 
 REGISTER_SET_A = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getSP]
-REGISTER_SET_B = [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]
-REGISTER_SET_C = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getAF]
+REGISTER_SET_B = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getAF]
+FLAG_REGISTER_SET = [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]
 REGISTER_OP_CODES = [ 
-    (0x01, 0x10, CPU.fetchDoubleRegister, REGISTER_SET_A),
-    (0x09, 0x10, CPU.addHL,               REGISTER_SET_A),
-    (0x03, 0x10, CPU.incDoubleRegister,   REGISTER_SET_A),
-    (0x0B, 0x10, CPU.decDoubleRegister,   REGISTER_SET_A),
-    (0xC0, 0x08, CPU.conditionalReturn,              REGISTER_SET_B),
-    (0xC2, 0x08, CPU.jp_cc_nnnn,          REGISTER_SET_B),
-    (0xC4, 0x08, CPU.call_cc_nnnn,        REGISTER_SET_B),
-    (0x20, 0x08, CPU.jr_cc_nn,            REGISTER_SET_B),
-    (0xC1, 0x10, CPU.popDoubleRegister,   REGISTER_SET_C),
-    (0xC5, 0x10, CPU.pushDoubleRegister,  REGISTER_SET_C)
+    (0x01, 0x10, CPU.fetchDoubleRegister,     REGISTER_SET_A),
+    (0x09, 0x10, CPU.addHL,                   REGISTER_SET_A),
+    (0x03, 0x10, CPU.incDoubleRegister,       REGISTER_SET_A),
+    (0x0B, 0x10, CPU.decDoubleRegister,       REGISTER_SET_A),
+    (0xC0, 0x08, CPU.conditionalReturn,       FLAG_REGISTER_SET),
+    (0xC2, 0x08, CPU.conditionalJump,         FLAG_REGISTER_SET),
+    (0xC4, 0x08, CPU.conditionalCall,         FLAG_REGISTER_SET),
+    (0x20, 0x08, CPU.relativeConditionalJump, FLAG_REGISTER_SET),
+    (0xC1, 0x10, CPU.popDoubleRegister,       REGISTER_SET_B),
+    (0xC5, 0x10, CPU.pushDoubleRegister,      REGISTER_SET_B)
 ]
 
 SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
