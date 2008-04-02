@@ -711,6 +711,23 @@ class SimpleTests(InterpretationTest):
         assert res == 72
         self.check_insns({})
 
+    def test_complex_struct(self):
+        S = self.GcStruct('S', ('n', lltype.Signed))
+        PTRS = self.Ptr(S)
+        T = self.GcStruct('T', ('s', PTRS), ('n', lltype.Signed))
+        malloc = self.malloc
+        
+        def ll_function(x, y):
+            t = malloc(T)
+            t.s = malloc(S)
+            t.s.n = y
+            t.n = x
+            return t.n + t.s.n
+
+        res = self.interpret(ll_function, [20, 22])
+        assert res == 42
+        self.check_insns({'int_add': 1})
+
     def test_simple_array(self):
         A = lltype.GcArray(lltype.Signed, 
                             hints={'immutable': True})
@@ -792,7 +809,6 @@ class SimpleTests(InterpretationTest):
     def test_degenerated_before_return(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-        malloc = self.malloc
 
         def ll_function(flag):
             t = lltype.malloc(T)
