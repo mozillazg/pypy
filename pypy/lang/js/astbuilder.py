@@ -37,12 +37,12 @@ class ASTBuilder(RPythonVisitor):
     }
     UNOP_TO_CLS = {
         #'~': operations.BitwiseNot,
-        #'!': operations.Not,
+        '!': operations.Not,
         '+': operations.UPlus,
         '-': operations.UMinus,
-        #'typeof': operations.Typeof,
-        #'void': operations.Void,
-        #'delete': operations.Delete,
+        'typeof': operations.Typeof,
+        'void': operations.Void,
+        'delete': operations.Delete,
     }
     LISTOP_TO_CLS = {
         '[': operations.Array,
@@ -431,7 +431,7 @@ class ASTBuilder(RPythonVisitor):
         condition = self.dispatch(node.children[0])
         truepart = self.dispatch(node.children[2])
         falsepart = self.dispatch(node.children[3])
-        return operations.Conditional(pos, condition, truepart, falsepart)
+        return operations.If(pos, condition, truepart, falsepart)
     
     def visit_trystatement(self, node):
         pos = self.get_pos(node)

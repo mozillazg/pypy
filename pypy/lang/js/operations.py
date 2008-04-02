@@ -409,13 +409,6 @@ class If(Statement):
         else:
             bytecode.emit('LABEL', one)
 
-    def execute(self, ctx):
-        temp = self.condition.eval(ctx).GetValue()
-        if temp.ToBoolean():
-            return self.thenPart.execute(ctx)
-        else:
-            return self.elsePart.execute(ctx)
-
 #class Group(UnaryOp):
 #    def eval(self, ctx):
 #        return self.expr.eval(ctx)
@@ -501,7 +494,7 @@ StrictEq = create_binary_op('IS')
 StrictNe = create_binary_op('ISNOT')    
 
 In = create_binary_op('IN')
-
+Typeof = create_unary_op('TYPEOF')
 
 # class Delete(UnaryOp):
 #     """
@@ -514,6 +507,14 @@ In = create_binary_op('IN')
 #         r3 = r1.GetBase()
 #         r4 = r1.GetPropertyName()
 #         return W_Boolean(r3.Delete(r4))
+
+class Delete(Expression):
+    def __init__(self, pos, what):
+        self.pos = pos
+        self.what = what
+
+    #def emit(self, bytecode):
+    #    
 
 #class Index(BinaryOp):
 #    def eval(self, ctx):
@@ -540,9 +541,8 @@ Division = create_binary_op('DIV')
 Sub = create_binary_op('SUB')
 
 class Null(Expression):
-    def eval(self, ctx):
-        return w_Null
-
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_NULL')
 
 ##############################################################################
 #
@@ -721,13 +721,6 @@ class Try(Statement):
         bytecode.emit('TRYCATCHBLOCK', trycode, self.catchparam.get_literal(),
                       catchcode, finallycode)    
 
-#class Typeof(UnaryOp):
-#    def eval(self, ctx):
-#        val = self.expr.eval(ctx)
-#        if isinstance(val, W_Reference) and val.GetBase() is None:
-#            return W_String("undefined")
-#        return W_String(val.GetValue().type())
-
 class VariableDeclaration(Expression):
     def __init__(self, pos, identifier, expr=None):
         self.pos = pos
@@ -782,11 +775,15 @@ class Variable(Statement):
     def execute(self, ctx):
         return self.body.eval(ctx)
 
-#class Void(UnaryOp):
-#    def eval(self, ctx):
-#        self.expr.eval(ctx)
-#        return w_Undefined
+class Void(Expression):
+    def __init__(self, pos, expr):
+        self.pos = pos
+        self.expr = expr
     
+    def emit(self, bytecode):
+        self.expr.emit(bytecode)
+        bytecode.emit('POP')
+        bytecode.emit('LOAD_UNDEFINED')
 
 class With(Statement):
     def __init__(self, pos, identifier, body):
@@ -916,15 +913,11 @@ class Boolean(Expression):
     def __init__(self, pos, boolval):
         self.pos = pos
         self.bool = boolval
-    
-    def eval(self, ctx):
-        return W_Boolean(self.bool)
-    
 
-#class Not(UnaryOp):
-#    def eval(self, ctx):
-#        return W_Boolean(not self.expr.eval(ctx).GetValue().ToBoolean())
+    def emit(self, bytecode):
+        bytecode.emit('LOAD_BOOLCONSTANT', self.bool)
 
+Not = create_unary_op('NOT')
 UMinus = create_unary_op('UMINUS')
 UPlus = create_unary_op('UPLUS')
 
