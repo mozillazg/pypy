@@ -100,26 +100,26 @@ class W_ArrayObject(W_NativeObject):
 TEST = False
 
 def evaljs(ctx, args, this):
-    raise NotImplementedError
     if len(args) >= 1:
         if  isinstance(args[0], W_String):
-            code = args[0]
+            src = args[0].strval
         else:
             return args[0]
     else:
-        code = W_String('')
+        src = ''
     try:
-        node = load_source(code.ToString(ctx), 'evalcode')
+        node = load_source(src, 'evalcode')
     except ParseError, e:
-        raise ThrowException(W_String('SintaxError: '+str(e)))    
-    
-    if TEST:
-        try:
-            return node.execute(ctx)
-        except ThrowException, e:
-            return W_String("error")
-    else:
-        return node.execute(ctx)
+        raise ThrowException(W_String('SyntaxError: '+str(e)))
+
+    bytecode = JsCode()
+    node.emit(bytecode)
+    # XXX awful hack, we shall have a general way of doing that
+    from pypy.lang.js.jscode import POP
+    assert isinstance(bytecode.opcodes[-1], POP)
+    bytecode.opcodes.pop()
+    bytecode.run(ctx, check_stack=False)
+    return bytecode.stack[-1]
 
 def parseIntjs(ctx, args, this):
     if len(args) < 1:
