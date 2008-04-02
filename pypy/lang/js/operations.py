@@ -501,15 +501,8 @@ Ne = create_binary_op('NE')
 StrictEq = create_binary_op('IS')
 StrictNe = create_binary_op('ISNOT')    
 
-# class In(BinaryOp):
-#     """
-#     The in operator, eg: "property in object"
-#     """
-#     def decision(self, ctx, op1, op2):
-#         if not isinstance(op2, W_Object):
-#             raise ThrowException(W_String("TypeError"))
-#         name = op1.ToString(ctx)
-#         return W_Boolean(op2.HasProperty(name))
+In = create_binary_op('IN')
+
 
 # class Delete(UnaryOp):
 #     """
@@ -921,6 +914,19 @@ class For(Statement):
         self.condition = condition
         self.update = update
         self.body = body
+
+    def emit(self, bytecode):
+        self.setup.emit(bytecode)
+        bytecode.emit('POP')
+        precond = bytecode.emit_label()
+        finish = bytecode.prealocate_label()
+        self.condition.emit(bytecode)
+        bytecode.emit('JUMP_IF_FALSE', finish)
+        self.body.emit(bytecode)
+        self.update.emit(bytecode)
+        bytecode.emit('POP')
+        bytecode.emit('JUMP', precond)
+        bytecode.emit('LABEL', finish)
     
     def execute(self, ctx):
         self.setup.eval(ctx).GetValue()

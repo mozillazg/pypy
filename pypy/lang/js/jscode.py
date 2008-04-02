@@ -319,6 +319,14 @@ class SUB(BaseBinaryOperation):
     def operation(ctx, left, right):
         return sub(ctx, left, right)
 
+class IN(BaseBinaryOperation):
+    @staticmethod
+    def operation(ctx, left, right):
+        if not isinstance(right, W_Object):
+            raise ThrowException(W_String("TypeError"))
+        name = left.ToString(ctx)
+        return W_Boolean(right.HasProperty(name))
+
 class ADD(BaseBinaryOperation):
     @staticmethod
     def operation(ctx, left, right):
