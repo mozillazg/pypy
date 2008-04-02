@@ -41,6 +41,14 @@ def test_register_bounds():
     register.set(value)
     assert register.get() == 0xFF
     
+def test_reset():
+    value = 0x12
+    register = Register(get_cpu(), value)
+    register.set(value+1)
+    assert register.get() == value+1
+    register.reset()
+    assert register.get() == value
+    
 # ------------------------------------------------------------
 # TEST DOUBLE REGISTER
 
@@ -123,7 +131,15 @@ def test_double_register_methods():
     assert oldCycles-register.cpu.cycles == 3
     assert register.get() == value+addValue
     
+       
+def test_double_register_reset():
+    value = 0x1234;
     
+    register = DoubleRegister(get_cpu(), value)
+    register.set(value+1)
+    assert register.get() == value+1;
+    register.reset()
+    assert register.get() == value
 # ------------------------------------------------------------
 # TEST CPU
 
@@ -186,20 +202,20 @@ def test_read_write():
     assert cpu.read(address) == value
     
 
-def test_jr_cc_nn():
+def test_relativeConditionalJump():
     cpu = get_cpu()
     pc = cpu.pc.get()
     value = 0x12
     cpu.rom[constants.RESET_PC] = value
     # test jr_nn
     startCycles = cpu.cycles
-    cpu.jr_cc_nn(True)
+    cpu.relativeConditionalJump(True)
     assert startCycles-cpu.cycles == 3
     assert_registers(cpu, pc=pc+value+1)
     # test pc.inc
     startCycles = cpu.cycles
     pc = cpu.pc.get()
-    cpu.jr_cc_nn(False)
+    cpu.relativeConditionalJump(False)
     assert startCycles-cpu.cycles == 2
     assert cpu.pc.get() == pc+1
     

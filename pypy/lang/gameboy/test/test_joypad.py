@@ -28,7 +28,6 @@ def test_number_to_bool_bin():
                 str += ("1")
             else:
                 str += ("0")
-        print i, str, binNumber
         assert number == i
     
 def number_to_bool_bin(number, size=None):
