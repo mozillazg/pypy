@@ -13,7 +13,7 @@ from pypy.jit.codegen.ppc import codebuf
 from pypy.jit.codegen.ppc.instruction import rSP, rFP, rSCRATCH, gprs
 from pypy.jit.codegen.ppc import instruction as insn
 from pypy.jit.codegen.ppc.regalloc import RegisterAllocation
-from pypy.jit.codegen.ppc.emit_moves import emit_moves, emit_moves_safe
+from pypy.jit.codegen.emit_moves import emit_moves, emit_moves_safe
 
 from pypy.jit.codegen.ppc.ppcgen.rassemblermaker import make_rassembler
 from pypy.jit.codegen.ppc.ppcgen.ppc_assembler import MyPPCAssembler
