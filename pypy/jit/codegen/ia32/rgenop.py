@@ -263,24 +263,15 @@ class FlexSwitch(CodeGenSwitch):
         return targetbuilder
     
     def _add_case(self, gv_case, targetbuilder):
-        # XXX this code needs to be simplified, now that we always
-        # have a default case
         start = self.nextfreepos
         end   = self.endfreepos
         mc = self.rgenop.InMemoryCodeBuilder(start, end)
         mc.CMP(eax, gv_case.operand(None))
         self._je_key = targetbuilder.come_from(mc, 'JE', self._je_key)
         pos = mc.tell()
-        if self.default_case_builder:
-            self.default_case_key = self.default_case_builder.come_from(
-                mc, 'JMP', self.default_case_key)
-        else:
-            illegal_start = mc.tell()
-            mc.JMP(rel32(0))
-            ud2_addr = mc.tell()
-            mc.UD2()
-            illegal_mc = self.rgenop.InMemoryCodeBuilder(illegal_start, end)
-            illegal_mc.JMP(rel32(ud2_addr))
+        assert self.defaultcaseaddr != 0
+        self.default_case_key = self.default_case_builder.come_from(
+            mc, 'JMP', self.default_case_key)
         mc.done()
         self._je_key = 0
         self.nextfreepos = pos
