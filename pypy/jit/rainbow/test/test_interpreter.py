@@ -2158,11 +2158,29 @@ class TestOOType(SimpleTests):
         res = self.interpret(ll_function, [1], [])
         assert res.x == 3
 
+    def test_degenerated_via_substructure(self):
+        S = ootype.Instance('S', ootype.ROOT, {'x': lltype.Signed})
+        T = ootype.Instance('T', S, {'y': lltype.Float})
+
+        def ll_function(flag):
+            t = ootype.new(T)
+            t.x = 3
+            s = ootype.new(S)
+            s.x = 7
+            if flag:
+                pass
+            else:
+                s = ootype.ooupcast(S, t)
+            t.x += 1
+            return s.x * t.x
+        res = self.interpret(ll_function, [1], [])
+        assert res == 7 * 4
+        res = self.interpret(ll_function, [0], [])
+        assert res == 4 * 4
 
     def _skip(self):
         py.test.skip('in progress')
 
-    #test_degenerated_via_substructure = _skip
     test_plus_minus = _skip
     test_red_array = _skip
     test_red_struct_array = _skip
