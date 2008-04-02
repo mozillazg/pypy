@@ -386,7 +386,11 @@ class ISNOT(BaseBinaryComparison):
 
 class BaseStoreMember(Opcode):
     def eval(self, ctx, stack):
-        XXX
+        left = stack.pop()
+        elem = stack.pop()
+        value = stack.pop()
+        left.Put(elem.ToString(), value)
+        stack.append(left)
 
 class STORE_MEMBER(BaseStoreMember):
     pass
