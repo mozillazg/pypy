@@ -33,7 +33,7 @@ class ASTBuilder(RPythonVisitor):
         '.': operations.MemberDot,
         '[': operations.Member,
         ',': operations.Comma,
-        #'in': operations.In,
+        'in': operations.In,
     }
     UNOP_TO_CLS = {
         #'~': operations.BitwiseNot,
