@@ -239,6 +239,9 @@ class LOAD_LIST(Opcode):
         del stack[to_cut:]
         stack.append(W_List(list_w))
 
+    def __repr__(self):
+        return 'LOAD_LIST %d' % (self.counter,)
+
 class LOAD_FUNCTION(Opcode):
     def __init__(self, funcobj):
         self.funcobj = funcobj
