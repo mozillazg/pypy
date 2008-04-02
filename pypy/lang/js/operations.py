@@ -290,15 +290,14 @@ class Unconditional(Statement):
         self.target = target
     
 class Break(Unconditional):
-    def execute(self, ctx):
-        raise ExecutionReturned('break', None, None)
-    
+    def emit(self, bytecode):
+        assert self.target is None
+        bytecode.emit_break()    
 
 class Continue(Unconditional):
-    def execute(self, ctx):
-        raise ExecutionReturned('continue', None, None)
-    
-
+    def emit(self, bytecode):
+        assert self.target is None
+        bytecode.emit_continue()
 
 class Call(Expression):
     def __init__(self, pos, left, args):
@@ -815,38 +814,23 @@ class WhileBase(Statement):
 class Do(WhileBase):
     opcode = 'DO'
     
-    def execute(self, ctx):
-        try:
-            self.body.execute(ctx)
-        except ExecutionReturned, e:
-            if e.type == 'break':
-                return
-            elif e.type == 'continue':
-                pass
-        while self.condition.eval(ctx).ToBoolean():
-            try:
-                self.body.execute(ctx)
-            except ExecutionReturned, e:
-                if e.type == 'break':
-                    break
-                elif e.type == 'continue':
-                    continue
-
     def emit(self, bytecode):
-        startlabel = bytecode.emit_label()
+        startlabel = bytecode.emit_startloop_label()
+        end = bytecode.preallocate_endloop_label()
         self.body.emit(bytecode)
         self.condition.emit(bytecode)
         bytecode.emit('JUMP_IF_TRUE', startlabel)
+        bytecode.emit_endloop_label(end)
     
 class While(WhileBase):
     def emit(self, bytecode):
-        startlabel = bytecode.emit_label()
+        startlabel = bytecode.emit_startloop_label()
         self.condition.emit(bytecode)
-        endlabel = bytecode.prealocate_label()
+        endlabel = bytecode.prealocate_endloop_label()
         bytecode.emit('JUMP_IF_FALSE', endlabel)
         self.body.emit(bytecode)
         bytecode.emit('JUMP', startlabel)
-        bytecode.emit('LABEL', endlabel)
+        bytecode.emit_endloop_label(endlabel)
 
     def execute(self, ctx):
         while self.condition.eval(ctx).ToBoolean():
@@ -918,15 +902,15 @@ class For(Statement):
     def emit(self, bytecode):
         self.setup.emit(bytecode)
         bytecode.emit('POP')
-        precond = bytecode.emit_label()
-        finish = bytecode.prealocate_label()
+        precond = bytecode.emit_startloop_label()
+        finish = bytecode.prealocate_endloop_label()
         self.condition.emit(bytecode)
         bytecode.emit('JUMP_IF_FALSE', finish)
         self.body.emit(bytecode)
         self.update.emit(bytecode)
         bytecode.emit('POP')
         bytecode.emit('JUMP', precond)
-        bytecode.emit('LABEL', finish)
+        bytecode.emit_endloop_label(finish)
     
 class Boolean(Expression):
     def __init__(self, pos, boolval):

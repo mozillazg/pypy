@@ -42,16 +42,44 @@ class JsCode(object):
         self.label_count = 0
         self.has_labels = True
         self.stack = T()
+        self.startlooplabel = []
+        self.endlooplabel = []
 
-    def emit_label(self):
-        num = self.prealocate_label()
+    def emit_label(self, num = -1):
+        if num == -1:
+            num = self.prealocate_label()
         self.emit('LABEL', num)
+        return num
+
+    def emit_startloop_label(self):
+        num = self.emit_label()
+        self.startlooplabel.append(num)
         return num
 
     def prealocate_label(self):
         num = self.label_count
         self.label_count += 1
-        return num        
+        return num
+
+    def prealocate_endloop_label(self):
+        num = self.prealocate_label()
+        self.endlooplabel.append(num)
+        return num
+
+    def emit_endloop_label(self, label):
+        self.endlooplabel.pop()
+        self.startlooplabel.pop()
+        self.emit_label(label)
+
+    def emit_break(self):
+        if not self.endlooplabel:
+            raise ThrowError(W_String("Break outside loop"))
+        self.emit('JUMP', self.endlooplabel[-1])
+
+    def emit_continue(self):
+        if not self.startlooplabel:
+            raise ThrowError(W_String("Continue outside loop"))
+        self.emit('JUMP', self.startlooplabel[-1])
 
     def emit(self, operation, *args):
         opcode = None
