@@ -806,83 +806,6 @@ class SimpleTests(InterpretationTest):
         assert res == 7
         self.check_insns({})
 
-    def test_degenerated_before_return(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-
-        def ll_function(flag):
-            t = lltype.malloc(T)
-            t.s.n = 3
-            s = lltype.malloc(S)
-            s.n = 4
-            if flag:
-                s = t.s
-            s.n += 1
-            return s.n * t.s.n
-        res = self.interpret(ll_function, [0], [])
-        assert res == 5 * 3
-        res = self.interpret(ll_function, [1], [])
-        assert res == 4 * 4
-
-    def test_degenerated_before_return_2(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-
-        def ll_function(flag):
-            t = lltype.malloc(T)
-            t.s.n = 3
-            s = lltype.malloc(S)
-            s.n = 4
-            if flag:
-                pass
-            else:
-                s = t.s
-            s.n += 1
-            return s.n * t.s.n
-        res = self.interpret(ll_function, [1], [])
-        assert res == 5 * 3
-        res = self.interpret(ll_function, [0], [])
-        assert res == 4 * 4
-
-    def test_degenerated_at_return(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-
-        def ll_function(flag):
-            t = lltype.malloc(T)
-            t.n = 3.25
-            t.s.n = 3
-            s = lltype.malloc(S)
-            s.n = 4
-            if flag:
-                s = t.s
-            return s
-
-        res = self.interpret(ll_function, [0], [])
-        assert res.n == 4
-        res = self.interpret(ll_function, [1], [])
-        assert res.n == 3
-
-    def test_degenerated_via_substructure(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-
-        def ll_function(flag):
-            t = lltype.malloc(T)
-            t.s.n = 3
-            s = lltype.malloc(S)
-            s.n = 7
-            if flag:
-                pass
-            else:
-                s = t.s
-            t.s.n += 1
-            return s.n * t.s.n
-        res = self.interpret(ll_function, [1], [])
-        assert res == 7 * 4
-        res = self.interpret(ll_function, [0], [])
-        assert res == 4 * 4
-
     def test_degenerate_with_voids(self):
         S = self.GcStruct('S', ('y', lltype.Void),
                                ('x', lltype.Signed))
@@ -2064,6 +1987,84 @@ class SimpleTests(InterpretationTest):
 class TestLLType(SimpleTests):
     type_system = "lltype"
 
+    def test_degenerated_before_return(self):
+        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+
+        def ll_function(flag):
+            t = lltype.malloc(T)
+            t.s.n = 3
+            s = lltype.malloc(S)
+            s.n = 4
+            if flag:
+                s = t.s
+            s.n += 1
+            return s.n * t.s.n
+        res = self.interpret(ll_function, [0], [])
+        assert res == 5 * 3
+        res = self.interpret(ll_function, [1], [])
+        assert res == 4 * 4
+
+    def test_degenerated_before_return_2(self):
+        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+
+        def ll_function(flag):
+            t = lltype.malloc(T)
+            t.s.n = 3
+            s = lltype.malloc(S)
+            s.n = 4
+            if flag:
+                pass
+            else:
+                s = t.s
+            s.n += 1
+            return s.n * t.s.n
+        res = self.interpret(ll_function, [1], [])
+        assert res == 5 * 3
+        res = self.interpret(ll_function, [0], [])
+        assert res == 4 * 4
+
+    def test_degenerated_at_return(self):
+        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+
+        def ll_function(flag):
+            t = lltype.malloc(T)
+            t.n = 3.25
+            t.s.n = 3
+            s = lltype.malloc(S)
+            s.n = 4
+            if flag:
+                s = t.s
+            return s
+
+        res = self.interpret(ll_function, [0], [])
+        assert res.n == 4
+        res = self.interpret(ll_function, [1], [])
+        assert res.n == 3
+
+    def test_degenerated_via_substructure(self):
+        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+
+        def ll_function(flag):
+            t = lltype.malloc(T)
+            t.s.n = 3
+            s = lltype.malloc(S)
+            s.n = 7
+            if flag:
+                pass
+            else:
+                s = t.s
+            t.s.n += 1
+            return s.n * t.s.n
+        res = self.interpret(ll_function, [1], [])
+        assert res == 7 * 4
+        res = self.interpret(ll_function, [0], [])
+        assert res == 4 * 4
+
+
 class TestOOType(SimpleTests):
     type_system = "ootype"
 
@@ -2100,13 +2101,68 @@ class TestOOType(SimpleTests):
                 del insns[a]
         return insns
 
+    def test_degenerated_before_return(self):
+        S = ootype.Instance('S', ootype.ROOT, {'x': ootype.Signed})
+        T = ootype.Instance('T', S, {'y': ootype.Float})
+
+        def ll_function(flag):
+            t = ootype.new(T)
+            t.x = 3
+            s = ootype.new(S)
+            s.x = 4
+            if flag:
+                s = ootype.ooupcast(S, t)
+            s.x += 1
+            return s.x * t.x
+        res = self.interpret(ll_function, [0], [])
+        assert res == 5 * 3
+        res = self.interpret(ll_function, [1], [])
+        assert res == 4 * 4
+
+    def test_degenerated_before_return_2(self):
+        S = ootype.Instance('S', ootype.ROOT, {'x': lltype.Signed})
+        T = ootype.Instance('T', S, {'y': lltype.Float})
+
+        def ll_function(flag):
+            t = ootype.new(T)
+            t.x = 3
+            s = ootype.new(S)
+            s.x = 4
+            if flag:
+                pass
+            else:
+                s = ootype.ooupcast(S, t)
+            s.x += 1
+            return s.x * t.x
+        res = self.interpret(ll_function, [1], [])
+        assert res == 5 * 3
+        res = self.interpret(ll_function, [0], [])
+        assert res == 4 * 4
+
+    def test_degenerated_at_return(self):
+        S = ootype.Instance('S', ootype.ROOT, {'x': lltype.Signed})
+        T = ootype.Instance('T', S, {'y': lltype.Float})
+
+        def ll_function(flag):
+            t = ootype.new(T)
+            t.y = 3.25
+            t.x = 3
+            s = ootype.new(S)
+            s.x = 4
+            if flag:
+                s = ootype.ooupcast(S, t)
+            return s
+
+        res = self.interpret(ll_function, [0], [])
+        assert res.x == 4
+        res = self.interpret(ll_function, [1], [])
+        assert res.x == 3
+
+
     def _skip(self):
         py.test.skip('in progress')
 
-    test_degenerated_before_return = _skip
-    test_degenerated_before_return_2 = _skip
-    test_degenerated_at_return = _skip
-    test_degenerated_via_substructure = _skip
+    #test_degenerated_via_substructure = _skip
     test_plus_minus = _skip
     test_red_array = _skip
     test_red_struct_array = _skip

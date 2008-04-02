@@ -140,6 +140,12 @@ def cast(block, gv_TYPE, gv_var):
         if TYPE is llmemory.GCREF or v.concretetype is llmemory.GCREF:
             lltype.cast_opaque_ptr(TYPE, v.concretetype._defl()) # sanity check
             opname = 'cast_opaque_ptr'
+        elif isinstance(TYPE, ootype.Instance):
+            FROMTYPE = v.concretetype
+            if ootype.isSubclass(FROMTYPE, TYPE):
+                opname = 'ooupcast'
+            else:
+                opname = 'oodowncast'
         else:
             assert v.concretetype == lltype.erasedType(TYPE)
             opname = 'cast_pointer'
@@ -157,6 +163,14 @@ def erasedvar(v, block):
         v2 = flowmodel.Variable()
         v2.concretetype = T
         op = flowmodel.SpaceOperation("cast_pointer", [v], v2)
+        block.operations.append(op)
+        return v2
+    elif isinstance(T, ootype.Instance):
+        while T._superclass is not ootype.ROOT:
+            T = T._superclass
+        v2 = flowmodel.Variable()
+        v2.concretetype = T
+        op = flowmodel.SpaceOperation("ooupcast", [v], v2)
         block.operations.append(op)
         return v2
     return v

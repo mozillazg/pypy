@@ -274,6 +274,15 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
         except AttributeError:
             return TYPE._short_name()
 
+    def _compute_fielddescs(self, RGenOp):
+        AbstractStructTypeDesc._compute_fielddescs(self, RGenOp)
+        TYPE = self.TYPE
+        if isinstance(TYPE, ootype.Instance):
+            SUPERTYPE = TYPE._superclass
+            if SUPERTYPE is not None:
+                desc = InstanceTypeDesc(RGenOp, SUPERTYPE)
+                self.fielddescs = desc.fielddescs + self.fielddescs
+                self.fielddesc_by_name.update(desc.fielddesc_by_name)
 
 def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
