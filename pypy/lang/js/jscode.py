@@ -389,20 +389,25 @@ class BaseStoreMember(Opcode):
         left = stack.pop()
         elem = stack.pop()
         value = stack.pop()
+        self.operation()
         left.Put(elem.ToString(), value)
         stack.append(left)
 
 class STORE_MEMBER(BaseStoreMember):
-    pass
+    def operation(self):
+        pass
 
 class STORE_MEMBER_POSTINCR(BaseStoreMember):
-    pass
+    def operation(self):
+        raise NotImplementedError
 
 class STORE_MEMBER_PREINCR(BaseStoreMember):
-    pass
+    def operation(self):
+        raise NotImplementedError    
 
 class STORE_MEMBER_SUB(BaseStoreMember):
-    pass
+    def operation(self):
+        raise NotImplementedError
 
 class BaseStore(Opcode):
     def __init__(self, name):
