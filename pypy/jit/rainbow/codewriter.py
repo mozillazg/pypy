@@ -1591,6 +1591,12 @@ class OOTypeBytecodeWriter(BytecodeWriter):
     def serialize_op_oosetfield(self, op):
         return self.serialize_op_setfield_impl(op)
 
+    def serialize_op_ooupcast(self, op):
+        return self.serialize_op_cast_pointer(op)
+
+    def serialize_op_oodowncast(self, op):
+        return self.serialize_op_cast_pointer(op)
+
     def serialize_op_new(self, op):
         TYPE = op.args[0].value
         if TYPE.oopspec_name is not None:
