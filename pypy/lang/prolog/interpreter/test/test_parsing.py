@@ -37,10 +37,10 @@ greater_than(succ(X), succ(Y)) :- greater_than(X, Y).
     term = parse_query_term(
         """add_numeral(succ(succ(null)), succ(succ(null)), X).""")
     e.run(term)
-    var = Var(0).getvalue(e.heap)
-    print var, e.heap
+    var = Var().getvalue(e)
+    print var, e
     # does not raise
-    var.unify(four, e.heap)
+    var.unify(four, e)
     term = parse_query_term(
         """greater_than(succ(succ(succ(null))), succ(succ(null))).""")
     e.run(term)

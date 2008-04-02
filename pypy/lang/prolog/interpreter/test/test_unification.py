@@ -60,9 +60,9 @@ def test_run():
     e.add_rule(Term("f", [X, X]))
     e.add_rule(Term(":-", [Term("f", [X, Y]),
                            Term("f", [Y, X])]))
-    X = e.heap.newvar()
+    X = Var()
     e.run(Term("f", [Atom.newatom("b"), X]))
-    assert X.dereference(e.heap).name == "b"
+    assert X.dereference(e).name == "b"
     e.run(Term("f", [Atom.newatom("b"), Atom.newatom("a")]))
 
 
