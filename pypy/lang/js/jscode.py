@@ -1,12 +1,12 @@
 
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, ActivationObject,\
-     create_object, W_Object, w_Undefined, W_Boolean, newbool,\
-     w_True, w_False, W_List
+     create_object, W_Object, w_Undefined, newbool,\
+     w_True, w_False, W_List, w_Null
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
-     compare_e, increment, commonnew
+     compare_e, increment, commonnew, mult, division, uminus, mod
 from pypy.rlib.jit import hint
 
 class AlreadyRun(Exception):
@@ -195,6 +195,13 @@ class LOAD_INTCONSTANT(Opcode):
     def __repr__(self):
         return 'LOAD_INTCONSTANT %s' % (self.w_intvalue.intval,)
 
+class LOAD_BOOLCONSTANT(Opcode):
+    def __init__(self, value):
+        self.boolval = value
+
+    def eval(self, ctx, stack):
+        stack.append(newbool(self.boolval))
+
 class LOAD_FLOATCONSTANT(Opcode):
     def __init__(self, value):
         self.w_floatvalue = W_FloatNumber(float(value))
@@ -221,6 +228,10 @@ class LOAD_STRINGCONSTANT(Opcode):
 class LOAD_UNDEFINED(Opcode):
     def eval(self, ctx, stack):
         stack.append(w_Undefined)
+
+class LOAD_NULL(Opcode):
+    def eval(self, ctx, stack):
+        stack.append(w_Null)
 
 class LOAD_VARIABLE(Opcode):
     def __init__(self, identifier):
@@ -353,7 +364,20 @@ class IN(BaseBinaryOperation):
         if not isinstance(right, W_Object):
             raise ThrowException(W_String("TypeError"))
         name = left.ToString(ctx)
-        return W_Boolean(right.HasProperty(name))
+        return newbool(right.HasProperty(name))
+
+class TYPEOF(BaseUnaryOperation):
+    def eval(self, ctx, stack):
+        one = stack.pop()
+        stack.append(W_String(one.type()))
+
+#class Typeof(UnaryOp):
+#    def eval(self, ctx):
+#        val = self.expr.eval(ctx)
+#        if isinstance(val, W_Reference) and val.GetBase() is None:
+#            return W_String("undefined")
+#        return W_String(val.GetValue().type())
+
 
 class ADD(BaseBinaryOperation):
     @staticmethod
@@ -365,21 +389,36 @@ class BITAND(BaseBinaryBitwiseOp):
     def operation(ctx, op1, op2):
         return W_IntNumber(op1&op2)
 
-
 class MUL(BaseBinaryOperation):
-    pass
+    @staticmethod
+    def operation(ctx, op1, op2):
+        return mult(ctx, op1, op2)
 
 class DIV(BaseBinaryOperation):
-    pass
+    @staticmethod
+    def operation(ctx, op1, op2):
+        return division(ctx, op1, op2)
 
 class MOD(BaseBinaryOperation):
-    pass
+    @staticmethod
+    def operation(ctx, op1, op2):
+        return mod(ctx, op1, op2)
 
 class UPLUS(BaseUnaryOperation):
-    pass
+    def eval(self, ctx, stack):
+        if isinstance(stack[-1], W_IntNumber):
+            return
+        if isinstance(stack[-1], W_FloatNumber):
+            return
+        stack.append(stack.pop().ToNumber(ctx))
 
 class UMINUS(BaseUnaryOperation):
-    pass
+    def eval(self, ctx, stack):
+        stack.append(uminus(stack.pop()))
+
+class NOT(BaseUnaryOperation):
+    def eval(self, ctx, stack):
+        stack.append(newbool(not stack.pop().ToBoolean()))
 
 class INCR(BaseUnaryOperation):
     pass

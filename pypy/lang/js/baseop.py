@@ -62,6 +62,7 @@ def mod(ctx, nleft, nright): # XXX this one is really not following spec
     return W_IntNumber(ileft % iright)
 
 def division(ctx, nleft, nright):
+    # XXX optimise for ints and floats
     fleft = nleft.ToNumber()
     fright = nright.ToNumber()
     if fright == 0:
@@ -211,3 +212,8 @@ def commonnew(ctx, obj, args):
     except JsTypeError:
         raise ThrowException(W_String('it is not a constructor'))
     return res
+
+def uminus(obj):
+    if isinstance(obj, W_IntNumber):
+        return W_IntNumber(-obj.intval)
+    return W_FloatNumber(-obj.ToNumber())

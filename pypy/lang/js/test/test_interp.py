@@ -5,6 +5,7 @@ from pypy.lang.js.operations import IntNumber, FloatNumber, Position, Plus
 from pypy.lang.js.jsobj import W_Object, ExecutionContext, W_Root, w_Null
 from pypy.lang.js.execution import ThrowException
 from pypy.lang.js.jscode import JsCode, POP
+from pypy.lang.js.baseop import AbstractEC
 
 def test_simple():
     bytecode = JsCode()
@@ -44,7 +45,7 @@ def assertv(code, value):
         code_val = excpt.exception
     print code_val, value
     if isinstance(value, W_Root):
-        assert AEC(jsint.global_context, code_val, value) == True
+        assert AbstractEC(jsint.global_context, code_val, value) == True
     elif isinstance(value, bool):
         assert code_val.ToBoolean() == value
     elif isinstance(value, int):
@@ -465,6 +466,7 @@ def test_unary_plus():
     assertp("print(+1);", '1')
 
 def test_delete():
+    py.test.skip("Unsupported")
     assertp("""
     var x = {};
     x.y = 1;
