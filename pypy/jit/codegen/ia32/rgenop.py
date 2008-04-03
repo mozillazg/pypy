@@ -421,6 +421,11 @@ class Builder(GenBuilder):
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
 
+    @specialize.arg(1)
+    def genraisingop2(self, opname, gv_arg1, gv_arg2):
+        genmethod = getattr(self, 'op_' + opname)
+        return genmethod(gv_arg1, gv_arg2)
+
     def genop_getfield(self, (offset, fieldsize), gv_ptr):
         self.mc.MOV(edx, gv_ptr.operand(self))
         if fieldsize == WORD:
@@ -642,7 +647,9 @@ class Builder(GenBuilder):
         return res
 
     def returnboolvar(self, op):
-        if isinstance(op, IMM8):
+        if op is eax:
+            pass
+        elif isinstance(op, IMM8):
             self.mc.MOV(eax, op)
         else:
             self.mc.MOVZX(eax, op)
@@ -685,6 +692,12 @@ class Builder(GenBuilder):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.ADD(eax, gv_y.operand(self))
         return self.returnintvar(eax)
+
+    def op_int_add_ovf(self, gv_x, gv_y):
+        self.mc.MOV(eax, gv_x.operand(self))
+        self.mc.ADD(eax, gv_y.operand(self))
+        self.mc.SETO(dl)
+        return self.returnintvar(eax), self.returnboolvar(dl)
 
     def op_int_sub(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
