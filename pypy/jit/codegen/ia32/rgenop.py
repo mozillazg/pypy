@@ -489,7 +489,7 @@ class Builder(GenBuilder):
     def genop_get_frame_base(self):
         # XXX really?
         self.mc.MOV(eax, esp)
-        self.mc.SUB(eax, imm(self.stackdepth - 1))
+        self.mc.SUB(eax, imm((self.stackdepth - 1) * WORD))
         return self.returnintvar(eax)
 
     def get_frame_info(self, vars_gv):
@@ -1478,7 +1478,7 @@ class RI386GenOp(AbstractRGenOp):
     def read_frame_var(T, base, info, index):
         assert T is lltype.Signed
         v = info[index]
-        value = peek_word_at(base + v.stackpos)
+        value = peek_word_at(base + v.stackpos * WORD)
         return value
 
     @staticmethod
@@ -1487,19 +1487,19 @@ class RI386GenOp(AbstractRGenOp):
         v = info[index]
         if isinstance(v, GenConst):
             return
-        return IntConst(peek_word_at(base + v.stackpos))
+        return IntConst(peek_word_at(base + v.stackpos * WORD))
 
     @staticmethod
     @specialize.arg(0)
     def write_frame_place(T, base, place, value):
         assert T is lltype.Signed
-        poke_word_into(base + place.stackpos, value)
+        poke_word_into(base + place.stackpos * WORD, value)
 
     @staticmethod
     @specialize.arg(0)
     def read_frame_place(T, base, place):
         assert T is lltype.Signed
-        return peek_word_at(base + place.stackpos)
+        return peek_word_at(base + place.stackpos * WORD)
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
