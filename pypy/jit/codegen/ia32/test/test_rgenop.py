@@ -21,10 +21,6 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
     test_read_frame_place_direct = skipped
     test_frame_vars_like_the_frontend_direct = skipped
 
-    # overflow
-    test_ovfcheck1_direct = skipped
-    test_ovfcheck2_direct = skipped
-
     # lltype.Address in function arguments
     test_demo_f1_direct = skipped
 
