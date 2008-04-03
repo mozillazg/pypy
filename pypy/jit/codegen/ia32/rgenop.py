@@ -295,6 +295,22 @@ class FlexSwitch(CodeGenSwitch):
         targetbuilder._open()
         return targetbuilder
 
+def _create_ovf_one_version(opname, flag):
+    def op_ovf(self, gv_x):
+        gv = getattr(self, opname)(gv_x)
+        getattr(self.mc, 'SET' + flag)(al)
+        return gv, self.returnboolvar(al)
+    op_ovf.func_name = opname + '_ovf'
+    return op_ovf
+
+def _create_ovf_two_version(opname, flag):
+    def op_ovf(self, gv_x, gv_y):
+        gv = getattr(self, opname)(gv_x, gv_y)
+        getattr(self.mc, 'SET' + flag)(al)
+        return gv, self.returnboolvar(al)
+    op_ovf.func_name = opname + '_ovf'
+    return op_ovf
+
 class Builder(GenBuilder):
 
     def __init__(self, rgenop, stackdepth):
@@ -425,6 +441,11 @@ class Builder(GenBuilder):
     def genraisingop2(self, opname, gv_arg1, gv_arg2):
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
+
+    @specialize.arg(1)
+    def genraisingop1(self, opname, gv_arg):
+        genmethod = getattr(self, 'op_' + opname)
+        return genmethod(gv_arg)
 
     def genop_getfield(self, (offset, fieldsize), gv_ptr):
         self.mc.MOV(edx, gv_ptr.operand(self))
@@ -693,21 +714,21 @@ class Builder(GenBuilder):
         self.mc.ADD(eax, gv_y.operand(self))
         return self.returnintvar(eax)
 
-    def op_int_add_ovf(self, gv_x, gv_y):
-        self.mc.MOV(eax, gv_x.operand(self))
-        self.mc.ADD(eax, gv_y.operand(self))
-        self.mc.SETO(dl)
-        return self.returnintvar(eax), self.returnboolvar(dl)
+    op_int_add_ovf = _create_ovf_two_version('op_int_add', 'O')
 
     def op_int_sub(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.SUB(eax, gv_y.operand(self))
         return self.returnintvar(eax)
 
+    op_int_sub_ovf = _create_ovf_two_version('op_int_sub', 'O')
+
     def op_int_mul(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.IMUL(eax, gv_y.operand(self))
         return self.returnintvar(eax)
+
+    op_int_mul_ovf = _create_ovf_two_version('op_int_mul', 'O')
 
     def op_int_floordiv(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
@@ -777,7 +798,10 @@ class Builder(GenBuilder):
         self.mc.NEG(eax)
         return self.returnintvar(eax)
 
+    op_int_neg_ovf = _create_ovf_one_version('op_int_neg', 'O')
+
     def op_int_abs(self, gv_x):
+        # XXX cannot we employ fp unit to do that for us? :)
         self.mc.MOV(eax, gv_x.operand(self))
         # ABS-computing code from Psyco, found by exhaustive search
         # on *all* short sequences of operations :-)
@@ -786,6 +810,8 @@ class Builder(GenBuilder):
         self.mc.SBB(edx, edx)
         self.mc.XOR(eax, edx)
         return self.returnintvar(eax)
+
+    op_int_abs_ovf = _create_ovf_one_version('op_int_abs', 'L')
 
     def op_int_invert(self, gv_x):
         self.mc.MOV(eax, gv_x.operand(self))
