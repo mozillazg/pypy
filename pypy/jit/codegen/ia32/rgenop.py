@@ -1459,7 +1459,11 @@ class RI386GenOp(AbstractRGenOp):
 
     @staticmethod
     def genconst_from_frame_var(kind, base, info, index):
-        xxx
+        # eh, kind here should be "what we're looking for?"
+        v = info[index]
+        if isinstance(v, GenConst):
+            return
+        return IntConst(peek_word_at(base + v.stackpos + 1))
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
