@@ -1151,7 +1151,8 @@ def _remap_bigger_values(args_gv, arg_positions):
             res_positions.append(pos)
             res_positions.append(pos - 1)
     # no repeats please
-    assert sorted(dict.fromkeys(res_positions).keys()) == sorted(res_positions)
+    if not objectmodel.we_are_translated():
+        assert sorted(dict.fromkeys(res_positions).keys()) == sorted(res_positions)
     return res_gv, res_positions
 
 def remap_stack_layout(builder, outputargs_gv, target):
