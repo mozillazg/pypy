@@ -45,15 +45,19 @@ class Var(GenVar):
     repr = __repr__
 
 class IntVar(Var):
+    ll_type = lltype.Signed
+    token = 'i'
+    SIZE = 1
+
     def operand(self, builder):
         return builder.stack_access(self.stackpos)
 
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
 
-    ll_type = lltype.Signed
-    token = 'i'
-    SIZE = 1
+class AddressVar(IntVar):
+    ll_type = llmemory.Address
+    token = 'a'
 
 class BoolVar(Var):
     # represents a boolean as an integer which *must* be exactly 0 or 1
