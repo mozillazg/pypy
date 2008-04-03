@@ -1338,6 +1338,11 @@ class RI386GenOp(AbstractRGenOp):
 
     @staticmethod
     @specialize.memo()
+    def kindToken(T):
+        return None
+
+    @staticmethod
+    @specialize.memo()
     def varsizeAllocToken(T):
         if isinstance(T, lltype.Array):
             return RI386GenOp.arrayToken(T)
@@ -1361,11 +1366,6 @@ class RI386GenOp(AbstractRGenOp):
 
     @staticmethod
     @specialize.memo()
-    def kindToken(T):
-        return None     # for now
-
-    @staticmethod
-    @specialize.memo()
     def sigToken(FUNCTYPE):
         return ([LL_TO_GENVAR[arg] for arg in FUNCTYPE.ARGS if arg
                  is not lltype.Void], LL_TO_GENVAR[FUNCTYPE.RESULT])
@@ -1381,5 +1381,12 @@ class RI386GenOp(AbstractRGenOp):
         else:
             assert 0, "XXX not implemented"
 
+    @staticmethod
+    @specialize.arg(1)
+    def genzeroconst(kind):
+        # XXX kind probably goes away
+        return zero_const
+
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
+zero_const = AddrConst(llmemory.NULL)

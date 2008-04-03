@@ -22,15 +22,12 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
     test_frame_vars_like_the_frontend_direct = skipped
 
     # unsupported operations
-    test_genzeroconst = skipped
+    #test_genzeroconst = skipped
 
     # overflow
     test_ovfcheck_adder_direct = skipped
     test_ovfcheck1_direct = skipped
     test_ovfcheck2_direct = skipped
-
-    # casts
-    #test_cast_direct = skipped
 
     # lltype.Address in function arguments
     test_demo_f1_direct = skipped
