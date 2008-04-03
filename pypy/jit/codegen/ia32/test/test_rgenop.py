@@ -10,14 +10,6 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RI386GenOp
     from pypy.jit.codegen.ia32.test.test_operation import RGenOpPacked
 
-    def skipped(self):
-        py.test.skip("unsupported")
-
-    # frame access related
-    test_write_lots_of_frame_places_direct = skipped
-    test_frame_vars_like_the_frontend_direct = skipped
-    test_demo_f1_direct = skipped
-
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RI386GenOp
     from pypy.jit.codegen.ia32.test.test_operation import RGenOpPacked
