@@ -950,40 +950,6 @@ class SimpleTests(InterpretationTest):
         assert res == 24
         self.check_insns({'int_lt': 1, 'int_mul': 1})
 
-    def test_red_subcontainer(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-        def ll_function(k):
-            t = lltype.malloc(T)
-            s = t.s
-            s.n = k
-            if k < 0:
-                return -123
-            result = s.n * (k-1)
-            keepalive_until_here(t)
-            return result
-        res = self.interpret(ll_function, [7], [])
-        assert res == 42
-        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
-
-
-    def test_red_subcontainer_cast(self):
-        S = lltype.GcStruct('S', ('n', lltype.Signed))
-        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-        def ll_function(k):
-            t = lltype.malloc(T)
-            s = lltype.cast_pointer(lltype.Ptr(S), t)
-            s.n = k
-            if k < 0:
-                return -123
-            result = s.n * (k-1)
-            keepalive_until_here(t)
-            return result
-        res = self.interpret(ll_function, [7], [])
-        assert res == 42
-        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
-
-
     def test_merge_structures(self):
         S = self.GcStruct('S', ('n', lltype.Signed))
         T = self.GcStruct('T', ('s', self.Ptr(S)), ('n', lltype.Signed))
@@ -2064,6 +2030,39 @@ class TestLLType(SimpleTests):
         res = self.interpret(ll_function, [0], [])
         assert res == 4 * 4
 
+    def test_red_subcontainer(self):
+        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+        def ll_function(k):
+            t = lltype.malloc(T)
+            s = t.s
+            s.n = k
+            if k < 0:
+                return -123
+            result = s.n * (k-1)
+            keepalive_until_here(t)
+            return result
+        res = self.interpret(ll_function, [7], [])
+        assert res == 42
+        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
+
+
+    def test_red_subcontainer_cast(self):
+        S = lltype.GcStruct('S', ('n', lltype.Signed))
+        T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
+        def ll_function(k):
+            t = lltype.malloc(T)
+            s = lltype.cast_pointer(lltype.Ptr(S), t)
+            s.n = k
+            if k < 0:
+                return -123
+            result = s.n * (k-1)
+            keepalive_until_here(t)
+            return result
+        res = self.interpret(ll_function, [7], [])
+        assert res == 42
+        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
+
 
 class TestOOType(SimpleTests):
     type_system = "ootype"
@@ -2178,6 +2177,23 @@ class TestOOType(SimpleTests):
         res = self.interpret(ll_function, [0], [])
         assert res == 4 * 4
 
+    def test_red_subclass(self):
+        S = ootype.Instance('S', ootype.ROOT, {'x': lltype.Signed})
+        T = ootype.Instance('T', S, {'y': lltype.Float})
+
+        def ll_function(k):
+            t = ootype.new(T)
+            s = ootype.ooupcast(S, t)
+            s.x = k
+            if k < 0:
+                return -123
+            result = s.x * (k-1)
+            return result
+        res = self.interpret(ll_function, [7], [])
+        assert res == 42
+        self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
+
+
     def _skip(self):
         py.test.skip('in progress')
 
@@ -2185,8 +2201,6 @@ class TestOOType(SimpleTests):
     test_red_struct_array = _skip
     test_red_varsized_struct = _skip
     test_array_of_voids = _skip
-    test_red_subcontainer = _skip
-    test_red_subcontainer_cast = _skip
     test_deepfrozen_interior = _skip
     test_compile_time_const_tuple = _skip
     test_residual_red_call = _skip
