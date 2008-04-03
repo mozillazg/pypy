@@ -329,7 +329,7 @@ class BuiltinADTType(BuiltinType):
 
     immutable = False # conservative
 
-    def _setup_methods(self, generic_types, can_raise=[]):
+    def _setup_methods(self, generic_types, can_raise=[], pure_meth=[]):
         methods = {}
         for name, meth in self._GENERIC_METHODS.iteritems():
             args = [self._specialize_type(arg, generic_types) for arg in meth.ARGS]
@@ -339,6 +339,10 @@ class BuiltinADTType(BuiltinType):
             methods[name] = METH
         self._METHODS = frozendict(methods)
         self._can_raise = tuple(can_raise)
+        if pure_meth == 'ALL':
+            self._pure_meth = tuple(methods.keys())
+        else:
+            self._pure_meth = tuple(pure_meth)
 
     def _lookup(self, meth_name):
         METH = self._METHODS.get(meth_name)
@@ -346,7 +350,10 @@ class BuiltinADTType(BuiltinType):
         if METH is not None:
             cls = self._get_interp_class()
             can_raise = meth_name in self._can_raise
-            meth = _meth(METH, _name=meth_name, _callable=getattr(cls, meth_name), _can_raise=can_raise)
+            pure_meth = meth_name in self._pure_meth
+            meth = _meth(METH, _name=meth_name,
+                         _callable=getattr(cls, meth_name),
+                         _can_raise=can_raise, _pure_meth=pure_meth)
             meth._virtual = False
         return self, meth
 
@@ -384,7 +391,7 @@ class AbstractString(BuiltinADTType):
             "ll_contains": Meth([self.CHAR], Bool),
             "ll_replace_chr_chr": Meth([self.CHAR, self.CHAR], self.SELFTYPE_T),
             })
-        self._setup_methods(generic_types)
+        self._setup_methods(generic_types, pure_meth='ALL')
 
     def _example(self):
         return self._defl()

@@ -13,7 +13,6 @@ from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter, LLException
-from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
 from pypy.annotation.policy import AnnotatorPolicy
 from pypy.objspace.flow.model import summary, Variable
@@ -818,7 +817,9 @@ class SimpleTests(InterpretationTest):
         assert res.x == 123
 
     def test_plus_minus(self):
-        def ll_plus_minus(s, x, y):
+        PROGRAMS = ["+-+"]
+        def ll_plus_minus(i, x, y):
+            s = PROGRAMS[i] # to prevent constant-folding
             acc = x
             n = len(s)
             pc = 0
@@ -831,10 +832,9 @@ class SimpleTests(InterpretationTest):
                     acc -= y
                 pc += 1
             return acc
-        ll_plus_minus.convert_arguments = [LLSupport.to_rstr, int, int]
-        res = self.interpret(ll_plus_minus, ["+-+", 0, 2], [0])
-        assert res == ll_plus_minus("+-+", 0, 2)
-        self.check_insns({'int_add': 2, 'int_sub': 1})
+        res = self.interpret(ll_plus_minus, [0, 0, 2], [0])
+        assert res == ll_plus_minus(0, 0, 2)
+        self.check_insns({'int_add': 2, 'int_sub': 1, 'direct_call': 1})
 
     def test_red_virtual_container(self):
         # this checks that red boxes are able to be virtualized dynamically by
@@ -2181,7 +2181,6 @@ class TestOOType(SimpleTests):
     def _skip(self):
         py.test.skip('in progress')
 
-    test_plus_minus = _skip
     test_red_array = _skip
     test_red_struct_array = _skip
     test_red_varsized_struct = _skip
@@ -2217,7 +2216,3 @@ class TestOOType(SimpleTests):
     test_void_args = _skip
     test_ptrequality = _skip
     test_green_ptrequality = _skip
-
-
-
-
