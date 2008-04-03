@@ -40,6 +40,7 @@ def poke_word_into(addr, value):
         p[0] = value
 
 class Var(GenVar):
+    token = 'x'
 
     def __init__(self, stackpos):
         # 'stackpos' is an index relative to the pushed arguments
@@ -79,6 +80,7 @@ class IntVar(Var):
 class AddressVar(IntVar):
     ll_type = llmemory.Address
     token = 'a'
+    SIZE = 1
 
 class BoolVar(Var):
     # represents a boolean as an integer which *must* be exactly 0 or 1
@@ -107,11 +109,11 @@ class FloatVar(Var):
 LL_TO_GENVAR = {}
 TOKEN_TO_GENVAR = {}
 TOKEN_TO_SIZE = {}
-for value in locals().values():
-    if hasattr(value, 'll_type'):
-        LL_TO_GENVAR[value.ll_type] = value.token
-        TOKEN_TO_GENVAR[value.token] = value
-        TOKEN_TO_SIZE[value.token] = value.SIZE
+for value in [IntVar, FloatVar, BoolVar, AddressVar]:
+    assert hasattr(value, 'll_type')
+    LL_TO_GENVAR[value.ll_type] = value.token
+    TOKEN_TO_GENVAR[value.token] = value
+    TOKEN_TO_SIZE[value.token] = value.SIZE
 LL_TO_GENVAR[lltype.Unsigned] = 'i'
 LL_TO_GENVAR[lltype.Void] = 'v'
 
