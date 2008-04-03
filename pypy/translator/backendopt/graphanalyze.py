@@ -148,3 +148,9 @@ class ImpurityAnalyzer(GraphAnalyzer):
         except AttributeError:
             pass
         return GraphAnalyzer.analyze_direct_call(self, graph, seen)
+
+    def analyze_external_method(self, op, TYPE, meth):
+        if getattr(meth, "_pure_meth", False):
+            return False
+        else:
+            return GraphAnalyzer.analyze_external_method(self, op, TYPE, meth)
