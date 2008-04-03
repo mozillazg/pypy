@@ -72,6 +72,7 @@ class FloatVar(Var):
         return builder.stack_access64(self.stackpos)
 
     def newvar(self, builder):
+        raise NotImplementedError("This requires moving around float mem")
         return builder.returnfloatvar(self.operand(builder))
 
     ll_type = lltype.Float
@@ -557,6 +558,9 @@ class Builder(GenBuilder):
 
     def genop_debug_pdb(self):    # may take an args_gv later
         self.mc.BREAKPOINT()
+
+    def genop_cast_int_to_ptr(self, kind, gv_int):
+        return gv_int     # identity
 
     def enter_next_block(self, args_gv):
         self._open()
