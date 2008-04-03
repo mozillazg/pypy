@@ -1486,7 +1486,7 @@ class RI386GenOp(AbstractRGenOp):
         # eh, kind here should be "what we're looking for?"
         v = info[index]
         if isinstance(v, GenConst):
-            return
+            return v
         return IntConst(peek_word_at(base + v.stackpos * WORD))
 
     @staticmethod
