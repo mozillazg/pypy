@@ -229,6 +229,7 @@ class BoolConst(Const):
 
 
 class AddrConst(GenConst):
+    SIZE = 1
 
     def __init__(self, addr):
         self.addr = addr
@@ -497,9 +498,10 @@ class Builder(GenBuilder):
         else:
             if fieldsize == 1:
                 op = mem8(edx, offset)
-            else:
-                assert fieldsize == 2
+            elif fieldsize == 2:
                 op = mem(edx, offset)
+            else:
+                raise NotImplementedError("fieldsize != 1,2,4")
             self.mc.MOVZX(eax, op)
             op = eax
         return self.returnintvar(op)
@@ -520,8 +522,10 @@ class Builder(GenBuilder):
         else:
             if fieldsize == 2:
                 self.mc.o16()    # followed by the MOV below
+            elif fieldsize == WORD:
+                pass
             else:
-                assert fieldsize == WORD
+                raise NotImplementedError("fieldsize != 1,2,4")
             self.mc.MOV(mem(edx, offset), eax)
 
     def genop_getsubstruct(self, (offset, fieldsize), gv_ptr):
@@ -552,7 +556,8 @@ class Builder(GenBuilder):
         op = self.itemaddr(edx, arraytoken, gv_index)
         _, _, itemsize = arraytoken
         if itemsize != WORD:
-            assert itemsize == 1 or itemsize == 2
+            if itemsize > 2:
+                raise NotImplementedError("itemsize != 1,2,4")
             self.mc.MOVZX(eax, op)
             op = eax
         return self.returnintvar(op)
@@ -580,7 +585,7 @@ class Builder(GenBuilder):
             elif itemsize == 2:
                 self.mc.o16()    # followed by the MOV below
             else:
-                raise AssertionError
+                raise NotImplementedError("setarrayitme for fieldsize != 1,2,4")
         self.mc.MOV(destop, eax)
 
     def genop_malloc_fixedsize(self, size):
@@ -1361,7 +1366,8 @@ class RI386GenOp(AbstractRGenOp):
         self.mcs.append(mc)
 
     def check_no_open_mc(self):
-        assert len(self.mcs) == self.total_code_blocks
+        if len(self.mcs) != self.total_code_blocks:
+            raise Exception("Open MC!")
 
     def newbuilder(self, stackdepth):
         return Builder(self, stackdepth)
