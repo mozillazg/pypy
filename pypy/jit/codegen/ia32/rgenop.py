@@ -28,6 +28,17 @@ def peek_word_at(addr):
         p = cast(c_void_p(addr), POINTER(c_int))
         return p[0]
 
+def poke_word_into(addr, value):
+    # now the Very Obscure Bit: when translated, 'addr' is an
+    # address.  When not, it's an integer.  It just happens to
+    # make the test pass, but that's probably going to change.
+    if objectmodel.we_are_translated():
+        addr.signed[0] = value
+    else:
+        from ctypes import cast, c_void_p, c_int, POINTER
+        p = cast(c_void_p(addr), POINTER(c_int))
+        p[0] = value
+
 class Var(GenVar):
 
     def __init__(self, stackpos):
@@ -478,7 +489,7 @@ class Builder(GenBuilder):
     def genop_get_frame_base(self):
         # XXX really?
         self.mc.MOV(eax, esp)
-        self.mc.SUB(eax, imm(self.stackdepth))
+        self.mc.SUB(eax, imm(self.stackdepth - 1))
         return self.returnintvar(eax)
 
     def get_frame_info(self, vars_gv):
@@ -687,7 +698,10 @@ class Builder(GenBuilder):
 
     def returnintvar(self, op):
         res = IntVar(self.stackdepth)
-        self.push(op)
+        if op is None:
+            self.push(imm(0))
+        else:
+            self.push(op)
         return res
 
     def returnboolvar(self, op):
@@ -1058,6 +1072,16 @@ class Builder(GenBuilder):
         # XXX gcc is also checking something in control word
         self.mc.FILD(gv_x.operand(self))
         return self.returnfloatvar(st0)
+
+    def alloc_frame_place(self, kind, gv_initial_value=None):
+        # XXX kind
+        if gv_initial_value is not None:
+            return self.returnintvar(gv_initial_value.operand(self))
+        else:
+            return self.returnintvar(None)
+
+    def genop_absorb_place(self, v):
+        return v
 
 SIZE2SHIFT = {1: 0,
               2: 1,
@@ -1454,7 +1478,7 @@ class RI386GenOp(AbstractRGenOp):
     def read_frame_var(T, base, info, index):
         assert T is lltype.Signed
         v = info[index]
-        value = peek_word_at(base + v.stackpos + 1)
+        value = peek_word_at(base + v.stackpos)
         return value
 
     @staticmethod
@@ -1463,7 +1487,19 @@ class RI386GenOp(AbstractRGenOp):
         v = info[index]
         if isinstance(v, GenConst):
             return
-        return IntConst(peek_word_at(base + v.stackpos + 1))
+        return IntConst(peek_word_at(base + v.stackpos))
+
+    @staticmethod
+    @specialize.arg(0)
+    def write_frame_place(T, base, place, value):
+        assert T is lltype.Signed
+        poke_word_into(base + place.stackpos, value)
+
+    @staticmethod
+    @specialize.arg(0)
+    def read_frame_place(T, base, place):
+        assert T is lltype.Signed
+        return peek_word_at(base + place.stackpos)
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
