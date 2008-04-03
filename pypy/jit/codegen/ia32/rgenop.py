@@ -9,6 +9,7 @@ from pypy.rlib import objectmodel
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rffi
+from pypy.jit.codegen.emit_moves import emit_moves, emit_moves_safe
 
 WORD = 4
 DEBUG_CALL_ALIGN = True
@@ -39,7 +40,7 @@ class Var(GenVar):
         return self.operand(builder)
 
     def __repr__(self):
-        return 'var@%d' % (self.stackpos,)
+        return self.token + 'var@%d' % (self.stackpos,)
 
     repr = __repr__
 
@@ -269,7 +270,7 @@ class FlexSwitch(CodeGenSwitch):
         mc.CMP(eax, gv_case.operand(None))
         self._je_key = targetbuilder.come_from(mc, 'JE', self._je_key)
         pos = mc.tell()
-        assert self.defaultcaseaddr != 0
+        assert self.default_case_builder
         self.default_case_key = self.default_case_builder.come_from(
             mc, 'JMP', self.default_case_key)
         mc.done()
@@ -630,7 +631,10 @@ class Builder(GenBuilder):
         return res
 
     def returnboolvar(self, op):
-        self.mc.MOVZX(eax, op)
+        if isinstance(op, IMM8):
+            self.mc.MOV(eax, op)
+        else:
+            self.mc.MOVZX(eax, op)
         res = BoolVar(self.stackdepth)
         self.push(eax)
         return res
@@ -1008,6 +1012,29 @@ def gc_malloc_fnaddr():
 
 # ____________________________________________________________
 
+def _remap_bigger_values(args_gv, arg_positions):
+    """ This function cheates and changes all FloatVars into double
+    IntVars. This might be probably optimized in some way in order
+    to provide greater performance, but should be enough for now
+    """
+    res_gv = []
+    res_positions = []
+    for i in range(len(args_gv)):
+        gv = args_gv[i]
+        pos = arg_positions[i]
+        if gv.SIZE == 1:
+            res_gv.append(gv)
+            res_positions.append(pos)
+        else:
+            assert gv.SIZE == 2
+            res_gv.append(IntVar(gv.stackpos))
+            res_gv.append(IntVar(gv.stackpos - 1))
+            res_positions.append(pos)
+            res_positions.append(pos - 1)
+    # no repeats please
+    assert sorted(dict.fromkeys(res_positions).keys()) == sorted(res_positions)
+    return res_gv, res_positions
+
 def remap_stack_layout(builder, outputargs_gv, target):
 ##    import os
 ##    s = ', '.join([gv.repr() for gv in outputargs_gv])
@@ -1026,8 +1053,10 @@ def remap_stack_layout(builder, outputargs_gv, target):
         builder.mc.SUB(esp, imm(WORD * (N - builder.stackdepth)))
         builder.stackdepth = N
 
-    M = len(outputargs_gv)
+    #outputargs_gv, arg_positions = _remap_bigger_values(outputargs_gv,
+    #                                                    target.arg_positions)
     arg_positions = target.arg_positions
+    M = len(outputargs_gv)
     assert M == len(arg_positions)
     targetlayout = [None] * N
     srccount = [-N] * N

@@ -35,6 +35,9 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
     # lltype.Address in function arguments
     test_demo_f1_direct = skipped
 
+    # float stack remap
+    test_float_loop_direct = skipped
+
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RI386GenOp
     from pypy.jit.codegen.ia32.test.test_operation import RGenOpPacked
