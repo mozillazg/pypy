@@ -215,7 +215,10 @@ class FloatConst(Const):
 
 class BoolConst(Const):
     SIZE = 1
-    
+
+    def operand(self, builder):
+        return imm8(self.value)
+
     def newvar(self, builder):
         return builder.returnboolvar(self.operand(builder))
 
@@ -232,6 +235,9 @@ class AddrConst(GenConst):
 
     def operand(self, builder):
         return imm(llmemory.cast_adr_to_int(self.addr))
+
+    def newvar(self, builder):
+        return builder.returnintvar(self.operand(builder))
 
     def nonimmoperand(self, builder, tmpregister):
         builder.mc.MOV(tmpregister, self.operand(builder))
