@@ -120,6 +120,9 @@ for value in [IntVar, FloatVar, BoolVar, AddressVar]:
     TOKEN_TO_GENVAR[value.token] = value
     TOKEN_TO_SIZE[value.token] = value.SIZE
 LL_TO_GENVAR[lltype.Unsigned] = 'i'
+LL_TO_GENVAR[lltype.Char] = 'i'
+# we might want to have different value for chare
+# but I see no point now
 LL_TO_GENVAR[lltype.Void] = 'v'
 
 UNROLLING_TOKEN_TO_GENVAR = unrolling_iterable(TOKEN_TO_GENVAR.items())
@@ -1461,10 +1464,18 @@ class RI386GenOp(AbstractRGenOp):
                 llmemory.ItemOffset(A.OF))
 
     @staticmethod
+    @specialize.arg(0)
+    def map_arg(arg):
+        if isinstance(arg, lltype.Ptr):
+            return llmemory.Address
+        return arg
+
+    @classmethod
     @specialize.memo()
-    def sigToken(FUNCTYPE):
-        return ([LL_TO_GENVAR[arg] for arg in FUNCTYPE.ARGS if arg
-                 is not lltype.Void], LL_TO_GENVAR[FUNCTYPE.RESULT])
+    def sigToken(cls, FUNCTYPE):
+        return ([LL_TO_GENVAR[cls.map_arg(arg)] for arg in FUNCTYPE.ARGS if arg
+                 is not lltype.Void],
+                LL_TO_GENVAR[cls.map_arg(FUNCTYPE.RESULT)])
 
     @staticmethod
     def erasedType(T):
