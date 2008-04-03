@@ -14,7 +14,6 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
         py.test.skip("unsupported")
 
     # frame access related
-    test_read_frame_var_direct = skipped
     test_genconst_from_frame_var_direct = skipped
     test_write_frame_place_direct = skipped
     test_write_lots_of_frame_places_direct = skipped
