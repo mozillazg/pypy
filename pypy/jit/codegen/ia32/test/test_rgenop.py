@@ -13,6 +13,3 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RI386GenOp
     from pypy.jit.codegen.ia32.test.test_operation import RGenOpPacked
-
-    def setup_class(cls):
-        py.test.skip("skip compilation tests")
