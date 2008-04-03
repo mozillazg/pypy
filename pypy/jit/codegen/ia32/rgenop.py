@@ -41,6 +41,8 @@ def poke_word_into(addr, value):
 
 class Var(GenVar):
     token = 'x'
+    # XXX hack for annotator
+    stackpos = 0
 
     def __init__(self, stackpos):
         # 'stackpos' is an index relative to the pushed arguments
@@ -60,6 +62,9 @@ class Var(GenVar):
 
     def nonimmoperand(self, builder, tmpregister):
         return self.operand(builder)
+
+    def operand(self, builder):
+        raise NotImplementedError
 
     def __repr__(self):
         return self.token + 'var@%d' % (self.stackpos,)
@@ -188,6 +193,8 @@ class IntConst(Const):
 
 class FloatConst(Const):
     SIZE = 2
+    # XXX hack for annotator
+    rawbuf = lltype.nullptr(rffi.DOUBLEP.TO)
     
     def __init__(self, floatval):
         # XXX we should take more care who is creating this and
