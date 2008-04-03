@@ -26,6 +26,7 @@ class Index:
 
 class AbstractOopSpecDesc:
     __metaclass__ = cachedtype
+    is_method = False
 
     def __init__(self, RGenOp, rtyper, exceptiondesc, fnobj, can_raise):
         self.rtyper = rtyper
