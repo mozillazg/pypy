@@ -153,10 +153,14 @@ class Const(GenConst):
         return "const=$%s" % (self.value,)
 
 class IntConst(Const):
+    SIZE = 1
+    
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
 
 class FloatConst(Const):
+    SIZE = 2
+    
     def __init__(self, floatval):
         # XXX we should take more care who is creating this and
         #     eventually release this buffer
@@ -166,12 +170,14 @@ class FloatConst(Const):
         self.rawbuf[0] = floatval
 
     def newvar(self, builder):
-        return builder.returnfloatvar(self.operand(builder))
+        return builder.newfloatfrommem(self.rawbuf)
 
     def operand(self, builder):
         return heap64(rffi.cast(rffi.INT, self.rawbuf))
 
 class BoolConst(Const):
+    SIZE = 1
+    
     def newvar(self, builder):
         return builder.returnboolvar(self.operand(builder))
 
@@ -524,6 +530,7 @@ class Builder(GenBuilder):
             final_depth = self.stackdepth + numargs
             delta = ((final_depth+MASK)&~MASK)-final_depth
             if delta:
+                xxx
                 self.mc.SUB(esp, imm(delta*WORD))
                 self.stackdepth += delta
         for i in range(numargs-1, -1, -1):
@@ -620,7 +627,7 @@ class Builder(GenBuilder):
         self.mc.PUSH(op)
         self.stackdepth += 1
 
-    def pushfloat(self, op):
+    def pushfloatfromst0(self, op):
         self.mc.SUB(esp, imm(WORD * FloatVar.SIZE))
         self.stackdepth += 2
         self.mc.FSTPL(op.operand(self))
@@ -641,7 +648,19 @@ class Builder(GenBuilder):
 
     def returnfloatvar(self, op):
         res = FloatVar(self.stackdepth + 1)
-        self.pushfloat(res)
+        if op is st0:
+            self.pushfloatfromst0(res)
+        else:
+            raise NotImplementedError("Return float var not on fp stack")
+        return res
+
+    def newfloatfrommem(self, rawbuf):
+        # XXX obscure pointer arithmetics on ints. Think how do to it
+        #     better
+        res = FloatVar(self.stackdepth + 1)
+        self.mc.PUSH(heap(rffi.cast(rffi.INT, rawbuf)))
+        self.mc.PUSH(heap(rffi.cast(rffi.INT, rawbuf) + WORD))
+        self.stackdepth += 2
         return res
 
     @staticmethod
@@ -1027,6 +1046,7 @@ def _remap_bigger_values(args_gv, arg_positions):
             res_positions.append(pos)
         else:
             assert gv.SIZE == 2
+            assert isinstance(gv, FloatVar)
             res_gv.append(IntVar(gv.stackpos))
             res_gv.append(IntVar(gv.stackpos - 1))
             res_positions.append(pos)
@@ -1053,9 +1073,8 @@ def remap_stack_layout(builder, outputargs_gv, target):
         builder.mc.SUB(esp, imm(WORD * (N - builder.stackdepth)))
         builder.stackdepth = N
 
-    #outputargs_gv, arg_positions = _remap_bigger_values(outputargs_gv,
-    #                                                    target.arg_positions)
-    arg_positions = target.arg_positions
+    outputargs_gv, arg_positions = _remap_bigger_values(outputargs_gv,
+                                                        target.arg_positions)
     M = len(outputargs_gv)
     assert M == len(arg_positions)
     targetlayout = [None] * N

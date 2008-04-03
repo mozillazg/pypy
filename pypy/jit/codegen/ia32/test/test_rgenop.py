@@ -36,7 +36,6 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
     test_demo_f1_direct = skipped
 
     # float stack remap
-    test_float_loop_direct = skipped
 
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RI386GenOp
