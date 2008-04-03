@@ -9,7 +9,6 @@ from pypy.rlib import objectmodel
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rffi
-from pypy.jit.codegen.emit_moves import emit_moves, emit_moves_safe
 
 WORD = 4
 DEBUG_CALL_ALIGN = True
@@ -17,6 +16,17 @@ if sys.platform == 'darwin':
     CALL_ALIGN = 4
 else:
     CALL_ALIGN = 1
+
+def peek_word_at(addr):
+    # now the Very Obscure Bit: when translated, 'addr' is an
+    # address.  When not, it's an integer.  It just happens to
+    # make the test pass, but that's probably going to change.
+    if objectmodel.we_are_translated():
+        return addr.signed[0]
+    else:
+        from ctypes import cast, c_void_p, c_int, POINTER
+        p = cast(c_void_p(addr), POINTER(c_int))
+        return p[0]
 
 class Var(GenVar):
 
@@ -464,6 +474,15 @@ class Builder(GenBuilder):
             self.mc.MOVZX(eax, op)
             op = eax
         return self.returnintvar(op)
+
+    def genop_get_frame_base(self):
+        # XXX really?
+        self.mc.MOV(eax, esp)
+        self.mc.SUB(eax, imm(self.stackdepth))
+        return self.returnintvar(eax)
+
+    def get_frame_info(self, vars_gv):
+        return vars_gv
 
     def genop_setfield(self, (offset, fieldsize), gv_ptr, gv_value):
         self.mc.MOV(eax, gv_value.operand(self))
@@ -1429,6 +1448,18 @@ class RI386GenOp(AbstractRGenOp):
     def genzeroconst(kind):
         # XXX kind probably goes away
         return zero_const
+
+    @staticmethod
+    @specialize.arg(0)
+    def read_frame_var(T, base, info, index):
+        assert T is lltype.Signed
+        v = info[index]
+        value = peek_word_at(base + v.stackpos + 1)
+        return value
+
+    @staticmethod
+    def genconst_from_frame_var(kind, base, info, index):
+        xxx
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
