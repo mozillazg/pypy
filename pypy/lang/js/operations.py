@@ -62,8 +62,7 @@ class ExprStatement(Node):
         bytecode.emit('POP')
 
 class Expression(Statement):
-    def execute(self, ctx):
-        return self.eval(ctx)
+    pass
 
 class ListOp(Expression):
     def __init__(self, pos, nodes):
@@ -252,18 +251,6 @@ class Block(Statement):
     def emit(self, bytecode):
         for node in self.nodes:
             node.emit(bytecode)
-    
-    def execute(self, ctx):
-        try:
-            last = w_Undefined
-            for node in self.nodes:
-                last = node.execute(ctx)
-            return last
-        except ExecutionReturned, e:
-            if e.type == 'return':
-                return e.value
-            else:
-                raise e
     
 BitwiseAnd = create_binary_op('BITAND')    
 
@@ -644,28 +631,7 @@ class SourceElements(Statement):
             funccode.emit(bytecode)
 
         for node in self.nodes:
-            node.emit(bytecode)
-
-    def execute(self, ctx):
-        for varname in self.var_decl:
-            ctx.variable.Put(varname, w_Undefined, dd=True)
-        for funcname, funccode in self.func_decl.items():
-            ctx.variable.Put(funcname, funccode.eval(ctx))
-        node = self
-        
-        try:
-            last = w_Undefined
-            for node in self.nodes:
-                last = node.execute(ctx)
-            return last
-        except Exception, e:
-            if isinstance(e, ExecutionReturned) and e.type == 'return':
-                return e.value
-            else:
-                # TODO: proper exception handling
-                print "%s:%d: %s"%(self.sourcename, node.pos.lineno, node)
-                raise
-    
+            node.emit(bytecode)    
 
 class Program(Statement):
     def __init__(self, pos, body):
@@ -771,9 +737,6 @@ class Variable(Statement):
 
     def emit(self, bytecode):
         self.body.emit(bytecode)
-    
-    def execute(self, ctx):
-        return self.body.eval(ctx)
 
 class Void(Expression):
     def __init__(self, pos, expr):
@@ -796,17 +759,6 @@ class With(Statement):
         bytecode.emit('WITH_START', self.identifier)
         self.body.emit(bytecode)
         bytecode.emit('WITH_END')
-
-    def execute(self, ctx):
-        obj = self.identifier.eval(ctx).GetValue().ToObject(ctx)
-        ctx.push_object(obj)
-
-        try:
-            retval = self.body.execute(ctx)
-        finally:
-            ctx.pop_object()
-        return retval
-
 
 class WhileBase(Statement):
     def __init__(self, pos, condition, body):
@@ -833,18 +785,7 @@ class While(WhileBase):
         bytecode.emit('JUMP_IF_FALSE', endlabel)
         self.body.emit(bytecode)
         bytecode.emit('JUMP', startlabel)
-        bytecode.emit_endloop_label(endlabel)
-
-    def execute(self, ctx):
-        while self.condition.eval(ctx).ToBoolean():
-            try:
-                self.body.execute(ctx)
-            except ExecutionReturned, e:
-                if e.type == 'break':
-                    break
-                elif e.type == 'continue':
-                    continue
-    
+        bytecode.emit_endloop_label(endlabel)    
 
 class ForVarIn(Statement):
     def __init__(self, pos, vardecl, lobject, body):
