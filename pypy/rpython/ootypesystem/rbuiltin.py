@@ -75,15 +75,14 @@ def rtype_builtin_isinstance(hop):
 
     v_obj, v_cls = hop.inputargs(instance_repr, class_repr)
     if isinstance(v_cls, Constant):
-        c_cls = hop.inputconst(ootype.Void, v_cls.value.class_._INSTANCE)
+        c_cls = hop.inputconst(ootype.Void, v_cls.value._INSTANCE)
         return hop.genop('instanceof', [v_obj, c_cls], resulttype=ootype.Bool)
     else:
         return hop.gendirectcall(ll_isinstance, v_obj, v_cls)
 
-def ll_isinstance(inst, meta):
-    c1 = inst.meta.class_
-    c2 = meta.class_
-    return ootype.subclassof(c1, c2)
+def ll_isinstance(inst, class_):
+    c1 = ootype.classof(inst)
+    return ootype.subclassof(c1, class_)
 
 def rtype_instantiate(hop):
     if hop.args_s[0].is_constant():

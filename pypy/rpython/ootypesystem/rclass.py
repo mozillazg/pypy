@@ -423,14 +423,21 @@ class InstanceRepr(AbstractInstanceRepr):
                 return hop.genop("oosend", [cname, v_inst],
                                  resulttype = hop.r_result.lowleveltype)
         elif attr == '__class__':
-            if hop.r_result.lowleveltype is ootype.Void:
+            expected_type = hop.r_result.lowleveltype
+            if expected_type is ootype.Void:
                 # special case for when the result of '.__class__' is constant
                 [desc] = hop.s_result.descriptions
                 return hop.inputconst(ootype.Void, desc.pyobj)
+            elif expected_type == ootype.Class:
+                return hop.genop('classof', [v_inst],
+                                 resulttype = ootype.Class)
             else:
-                cmeta = inputconst(ootype.Void, "meta")
-                return hop.genop('oogetfield', [v_inst, cmeta],
-                                 resulttype=CLASSTYPE)
+                assert expected_type == META
+                _, meth = v_inst.concretetype._lookup('getmeta')
+                assert meth
+                c_getmeta = hop.inputconst(ootype.Void, 'getmeta')
+                return hop.genop('oosend', [c_getmeta, v_inst],
+                                 resulttype = META)
         else:
             raise TyperError("no attribute %r on %r" % (attr, self))
 
