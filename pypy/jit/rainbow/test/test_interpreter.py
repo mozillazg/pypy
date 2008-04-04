@@ -991,22 +991,6 @@ class SimpleTests(InterpretationTest):
         assert res == True
         self.check_insns({'setfield': 2, 'getfield': 1})
 
-    def test_deepfrozen_interior(self):
-        T = lltype.Struct('T', ('x', lltype.Signed))
-        A = lltype.Array(T)
-        S = lltype.GcStruct('S', ('a', A))
-        s = lltype.malloc(S, 3, zero=True)
-        s.a[2].x = 42
-        def f(n):
-            s1 = hint(s, variable=True)
-            s1 = hint(s1, deepfreeze=True)
-            return s1.a[n].x
-
-        # malloc-remove the interior ptr
-        res = self.interpret(f, [2], [0], backendoptimize=True)
-        assert res == 42
-        self.check_insns({})
-
     def test_compile_time_const_tuple(self):
         d = {(4, 5): 42, (6, 7): 12}
         def f(a, b):
@@ -2063,6 +2047,22 @@ class TestLLType(SimpleTests):
         assert res == 42
         self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
 
+    def test_deepfrozen_interior(self):
+        T = lltype.Struct('T', ('x', lltype.Signed))
+        A = lltype.Array(T)
+        S = lltype.GcStruct('S', ('a', A))
+        s = lltype.malloc(S, 3, zero=True)
+        s.a[2].x = 42
+        def f(n):
+            s1 = hint(s, variable=True)
+            s1 = hint(s1, deepfreeze=True)
+            return s1.a[n].x
+
+        # malloc-remove the interior ptr
+        res = self.interpret(f, [2], [0], backendoptimize=True)
+        assert res == 42
+        self.check_insns({})
+
 
 class TestOOType(SimpleTests):
     type_system = "ootype"
@@ -2201,10 +2201,7 @@ class TestOOType(SimpleTests):
     test_red_struct_array = _skip
     test_red_varsized_struct = _skip
     test_array_of_voids = _skip
-    test_deepfrozen_interior = _skip
-    test_compile_time_const_tuple = _skip
-    test_residual_red_call = _skip
-    test_residual_red_call_with_exc = _skip
+    test_compile_time_const_tuple = _skip    # needs vdict
     test_simple_meth = _skip
     test_simple_red_meth = _skip
     test_simple_red_meth_vars_around = _skip
