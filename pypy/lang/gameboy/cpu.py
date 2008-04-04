@@ -99,6 +99,75 @@ class ImmediatePseudoRegister(object):
             if not useCycles:
                 self.cpu.cycles += 1
             return self.cpu.read(self.hl.get(useCycles))
+        
+class FlagRegister(Register):
+    
+    def __init__(self, cpu):
+        self.cpu = cpu
+        self.reset()
+         
+    def reset(self, keepZ=False, keepN=False, keepH=False, keepC=False,\
+                keepP=False, keepS=False):
+        if not keepZ:
+            self.zFlag = True
+        if not keepN:
+            self.nFlag = False
+        if not keepH:
+            self.hFlag = False
+        if not keepC:
+            self.cFlag = False
+        if not keepP:
+            self.pFlag = False
+        if not keepS:
+            self.sFlag = False
+        self.lower = 0x00
+            
+    def get(self, useCycles=True):
+        value = 0
+        value += (int(self.cFlag) << 4)
+        value += (int(self.hFlag) << 5)
+        value += (int(self.nFlag) << 6)
+        value += (int(self.zFlag) << 7)
+        return value + self.lower
+            
+    def set(self, value, useCycles=True):
+        self.cFlag = bool(value & (1 << 4))
+        self.hFlag = bool(value & (1 << 5))
+        self.nFlag = bool(value & (1 << 6))
+        self.zFlag = bool(value & (1 << 7))
+        self.lower = value & 0x0F
+        if useCycles:
+            self.cpu.cycles -= 1
+        
+    def zeroFlagAdd(self, a, reset=False):
+        if (reset):
+             self.reset()
+        if isinstance(a, (Register)):
+            a = a.get()
+        self.zFlag = (a==0)
+            
+    def cFlagAdd(self, s, compareAnd=0x01, reset=False):
+        if (reset):
+             self.reset()
+        if (s & compareAnd) != 0:
+            self.cFlag = True
+
+    def hFlagCompare(self, a, b):
+        if isinstance(a, (Register)):
+            a = a.get()
+        if isinstance(b, (Register)):
+            b = b.get()
+        if (a & 0x0F) < (b & 0x0F):
+            self.hFlag = True
+            
+    def cFlagCompare(self,  a, b):
+        if isinstance(a, (Register)):
+            a = a.get()
+        if isinstance(b, (Register)):
+            b = b.get()
+        if a < b:
+            self.cFlag = True
+        
 # ___________________________________________________________________________
 
 class CPU(object):
@@ -131,12 +200,19 @@ class CPU(object):
         self.sp = DoubleRegister(self, constants.RESET_SP)
         
         self.a = Register(self, constants.RESET_A)
-        self.f = Register(self, constants.RESET_F)
+        self.f = FlagRegister(self)
         self.af = DoubleRegister(self, self.a, self.f)
 
         self.reset()
 
     def reset(self):
+        self.resetRegisters()
+        self.f.reset()
+        self.ime = False
+        self.halted = False
+        self.cycles = 0
+        
+    def resetRegisters(self):
         self.a.reset();
         self.f.reset();
         self.bc.reset();
@@ -144,9 +220,6 @@ class CPU(object):
         self.hl.reset();
         self.sp.reset();
         self.pc.reset();
-        self.ime = False
-        self.halted = False
-        self.cycles = 0
         
     def getAF(self):
         return self.af
@@ -198,25 +271,50 @@ class CPU(object):
             val += 0x80
         return val
     
-    # Flags ............................................
     
+
+    def isZ(self):
+        """ zero flag"""
+        return self.f.zFlag
+
+    def isC(self):
+        """ carry flag, true if the result did not fit in the register"""
+        return self.f.cFlag
+
+    def isH(self):
+        """ half carry, carry from bit 3 to 4"""
+        return self.f.hFlag
+
+    def isN(self):
+        """ subtract flag, true if the last operation was a subtraction"""
+        return self.f.nFlag
+    
+    def isS(self):
+        return self.f.sFlag
+    
+    def isP(self):
+        return self.f.pFlag
+    
+    def isNotZ(self):
+        return not self.isZ()
+
+    def isNotC(self):
+        return not self.isC()
+    
+    def isNotH(self):
+        return not self.isH()
+
+    def isNotN(self):
+        return not self.isN()
+    
+    
+    # Flags ............................................
     
                     
     def setROM(self, banks):
         self.rom = banks
        
-    def zeroFlagAdd(self, s, resetF=False):
-        if (resetF):
-             self.f.set(0, False)        
-        if s == 0:
-            self.f.add(constants.Z_FLAG, False)
             
-    def cFlagAdd(self, s, compareAnd=0x01, resetF=False):
-        if (resetF):
-             self.f.set(0, False) 
-        if (s & compareAnd) != 0:
-            self.f.add(constants.C_FLAG, False)
-
     def emulate(self, ticks):
         self.cycles += ticks
         self.interrupt()
@@ -229,29 +327,32 @@ class CPU(object):
             self.ime = False
             self.call(address)
             return
-        if (self.halted):
+        if self.halted:
             if (self.interrupt.isPending()):
                 self.halted = False
                 # Zerd no Densetsu
                 self.cycles -= 4
             elif (self.cycles > 0):
                 self.cycles = 0
-        if (self.ime and self.interrupt.isPending()):
-            if (self.interrupt.isPending(constants.VBLANK)):
-                self.interrupt(0x40)
-                self.interrupt.lower(constants.VBLANK)
-            elif (self.interrupt.isPending(constants.LCD)):
-                self.interrupt(0x48)
-                self.interrupt.lower(constants.LCD)
-            elif (self.interrupt.isPending(constants.TIMER)):
-                self.interrupt(0x50)
-                self.interrupt.lower(constants.TIMER)
-            elif (self.interrupt.isPending(constants.SERIAL)):
-                self.interrupt(0x58)
-                self.interrupt.lower(constants.SERIAL)
-            elif (self.interrupt.isPending(constants.JOYPAD)):
-                self.interrupt(0x60)
-                self.interrupt.lower(constants.JOYPAD)
+        if self.ime and self.interrupt.isPending():
+            self.lowerPendingInterrupt()
+            
+    def lowerPendingInterrupt(self):
+        if (self.interrupt.isPending(constants.VBLANK)):
+            self.interrupt(0x40)
+            self.interrupt.lower(constants.VBLANK)
+        elif (self.interrupt.isPending(constants.LCD)):
+            self.interrupt(0x48)
+            self.interrupt.lower(constants.LCD)
+        elif (self.interrupt.isPending(constants.TIMER)):
+            self.interrupt(0x50)
+            self.interrupt.lower(constants.TIMER)
+        elif (self.interrupt.isPending(constants.SERIAL)):
+            self.interrupt(0x58)
+            self.interrupt.lower(constants.SERIAL)
+        elif (self.interrupt.isPending(constants.JOYPAD)):
+            self.interrupt(0x60)
+            self.interrupt.lower(constants.JOYPAD)
 
      # Execution
     def fetchExecute(self):
@@ -336,46 +437,46 @@ class CPU(object):
 
      # ALU, 1 cycle
     def addA(self, getter, setter=None):
-        data = getter()
-        s = (self.a.get() + data) & 0xFF
-        self.zeroFlagAdd(s, resetF=True)
-        if s < self.a.get():
-            self.f.add(constants.C_FLAG, False)
-        if (s & 0x0F) < (self.a.get() & 0x0F):
-            self.f.add(constants.H_FLAG, False)
-        self.a.set(s) # 1 cycle
+        added = (self.a.get() + getter()) & 0xFF
+        self.f.zeroFlagAdd(added, reset=True)
+        self.f.hFlagCompare(added, self.a)
+        self.f.cFlagCompare(added, self.a)
+        self.a.set(added) # 1 cycle
         
     # 2 cycles
     def addHL(self, register):
-        self.hl.set(self.hl.get() + register.get()); # 1 cycle
-        s = self.hl.get()
-        self.f.set((self.f.get() & constants.Z_FLAG), False)
-        if ((s >> 8) & 0x0F) < (self.hl.getHi() & 0x0F):
-            self.f.add(constants.H_FLAG, False)
-        if  s < self.hl.get():
-            self.f.add(constants.C_FLAG, False)
+        added = (self.hl.get() + register.get()) & 0xFFFF # 1 cycle
+        self.f.reset(keepZ=True)
+        self.f.hFlagCompare((added >> 8), self.hl)
+        self.f.cFlagCompare(added, self.hl)
+        self.hl.set(added);
         self.cycles -= 1
         
     # 1 cycle
     def addWithCarry(self, getter, setter=None):
-        s = self.a.get() + getter() + ((self.f.get() & constants.C_FLAG) >> 4)
-        self.f.set(0, False)
-        self.zeroFlagAdd(s)
+        s = self.a.get() + getter();
+        if self.f.cFlag:
+            s +=1
+        self.f.reset()
+        self.f.zeroFlagAdd(s)
         if s >= 0x100:
-            self.f.add(constants.C_FLAG, False)
+            self.f.cFlag= True
         if ((s ^ self.a.get() ^ getter()) & 0x10) != 0:
-            self.f.add(constants.H_FLAG, False)
+            self.f.hFlag= True
         self.a.set(s & 0xFF)  # 1 cycle
 
     # 1 cycle
     def subtractWithCarry(self, getter, setter=None):
-        s = self.a.get() - getter() - ((self.f.get() & constants.C_FLAG) >> 4)
-        self.f.set(constants.N_FLAG, False)
-        self.zeroFlagAdd(s)
+        s = self.a.get() - getter();
+        if self.f.cFlag:
+            s -= 1
+        self.f.reset()
+        self.f.nFlag = True
+        self.f.zeroFlagAdd(s)
         if (s & 0xFF00) != 0:
-            self.f.add(constants.C_FLAG, False)
+            self.f.cFlag = True
         if ((s ^ self.a.get() ^ getter()) & 0x10) != 0:
-            self.f.add(constants.H_FLAG, False)
+            self.f.hFlag = True
         self.a.set(s & 0xFF)  # 1 cycle
         
     # 1 cycle
@@ -386,30 +487,31 @@ class CPU(object):
     # 1 cycle
     def compareA(self, getter, setter=None):
         s = (self.a.get() - getter()) & 0xFF
-        self.f.set(constants.N_FLAG)  # 1 cycle
-        self.zeroFlagAdd(s)
+        self.f.reset()
+        self.f.nFlag = True
+        self.f.zeroFlagAdd(s)
         self.hcFlagFinish(s)
+        self.cycles -= 1
             
     def hcFlagFinish(self, data):
         if data > self.a.get():
-            self.f.add(constants.C_FLAG, False)
-        if (data & 0x0F) > (self.a.get() & 0x0F):
-            self.f.add(constants.H_FLAG, False)
+            self.f.cFlag = True
+        self.f.hFlagCompare(self.a, data)
         
     # 1 cycle
     def AND(self, getter, setter=None):
         self.a.set(self.a.get() & getter())  # 1 cycle
-        self.zeroFlagAdd(self.a.get(), resetF=True)
+        self.f.zeroFlagAdd(self.a, reset=True)
 
     # 1 cycle
     def XOR(self, getter, setter=None):
         self.a.set( self.a.get() ^ getter())  # 1 cycle
-        self.zeroFlagAdd(self.a.get(), resetF=True)
+        self.f.zeroFlagAdd(self.a, reset=True)
 
     # 1 cycle
     def OR(self, getter, setter=None):
         self.a.set(self.a.get() | getter())  # 1 cycle
-        self.zeroFlagAdd(self.a.get(), resetF=True)
+        self.f.zeroFlagAdd(self.a, reset=True)
 
     def incDoubleRegister(self, doubleRegister):
         doubleRegister.inc()
@@ -420,20 +522,19 @@ class CPU(object):
     # 1 cycle
     def inc(self, getter, setter):
         data = (getter() + 1) & 0xFF
-        self.decIncFlagFinish(data, setter)
+        self.decIncFlagFinish(data, setter, 0x00)
         
     # 1 cycle
     def dec(self, getter, setter):
         data = (getter() - 1) & 0xFF
-        self.decIncFlagFinish(data, setter) 
-        self.f.add(constants.N_FLAG, False)
+        self.decIncFlagFinish(data, setter, 0x0F)
+        self.f.nFlag = True
      
-    def decIncFlagFinish(self, data, setter):
-        self.f.set(0, False)
-        self.zeroFlagAdd(data)
-        if (data & 0x0F) == 0x0F:
-            self.f.add(constants.H_FLAG, False)
-        self.f.add((self.f.get() & constants.C_FLAG), False)
+    def decIncFlagFinish(self, data, setter, compare):
+        self.f.reset(keepC=True)
+        self.f.zeroFlagAdd(data)
+        if (data & 0x0F) == compare:
+            self.f.hFlag = True
         setter(data) # 1 cycle
 
     # 1 cycle
@@ -443,23 +544,23 @@ class CPU(object):
 
     # rotateLeftCircularA 1 cycle
     def rotateLeftCircularA(self):
-        self.cFlagAdd(self.a.get(), 0x80, resetF=True)
+        self.f.cFlagAdd(self.a.get(), 0x80, reset=True)
         self.a.set(((self.a.get() & 0x7F) << 1) + ((self.a.get() & 0x80) >> 7))
 
 
     # 1 cycle
     def rotateLeft(self, getter, setter):
         s = ((getter() & 0x7F) << 1)
-        if (self.f.get() & constants.C_FLAG) != 0:
+        if self.f.cFlag:
             s += 0x01
         self.flagsAndSetterFinish(s, setter, 0x80) # 1 cycle
 
      # RLA  1 cycle
     def rotateLeftA(self):
         s = ((self.a.get() & 0x7F) << 1)
-        if (self.f.get() & constants.C_FLAG) != 0:
+        if self.f.cFlag:
             s +=  0x01
-        self.cFlagAdd(self.a.get(), 0x80, resetF=True)
+        self.f.cFlagAdd(self.a.get(), 0x80, reset=True)
         self.a.set(s) #  1 cycle
         
     # 1 cycle
@@ -469,20 +570,22 @@ class CPU(object):
    
      # RRCA 1 cycle
     def rotateRightCircularA(self):
-        self.cFlagAdd(self.a.get(), resetF=True)
+        self.f.cFlagAdd(self.a.get(), reset=True)
         self.a.set(((self.a.get() >> 1) & 0x7F) + ((self.a.get() << 7) & 0x80)) #1 cycle
 
     # 1 cycle
     def rotateRight(self, getter, setter):
-        s = (getter() >> 1) + ((self.f.get() & constants.C_FLAG) << 3)
+        s = (getter() >> 1)
+        if self.f.cFlag:
+            s +=  0x08
         self.flagsAndSetterFinish(s, setter) # 1 cycle
 
      # RRA 1 cycle
     def rotateRightA(self):
         s = ((self.a.get() >> 1) & 0x7F)
-        if (self.f.get() & constants.C_FLAG) != 0:
+        if self.f.cFlag:
             s += 0x80
-        self.cFlagAdd(self.a.get(), resetF=True)
+        self.f.cFlagAdd(self.a.get(), reset=True)
         self.a.set(s) # 1 cycle
 
     # 2 cycles
@@ -502,23 +605,22 @@ class CPU(object):
         
      # 2 cycles
     def flagsAndSetterFinish(self, s, setter, compareAnd=0x01):
-        self.f.set(0) # 1 cycle
-        self.zeroFlagAdd(s)
-        self.cFlagAdd(s, compareAnd)
+        self.f.zeroFlagAdd(s,  reset=True)
+        self.f.cFlagAdd(s, compareAnd)
         setter(s) # 1 cycle
 
     # 1 cycle
     def swap(self, getter, setter):
         s = ((getter() << 4) & 0xF0) + ((getter() >> 4) & 0x0F)
-        self.f.set(0) # 1 cycle
-        self.zeroFlagAdd(s)
+        self.f.zeroFlagAdd(s, reset=True)
         setter(s)
 
     # 2 cycles
     def testBit(self, getter, setter, n):
-        self.f.set((self.f.get() & constants.C_FLAG) + constants.H_FLAG, False)
+        self.f.reset(keepC=True)
+        self.f.hFlag = True
         if (getter() & (1 << n)) == 0:
-            self.f.add(constants.Z_FLAG, False)
+            self.f.zFlag = True
         self.cycles -= 2
 
     # 2 cycles
@@ -559,7 +661,7 @@ class CPU(object):
         hi = self.fetch() # 1 cycle
         address = (hi << 8) + lo
         self.write(address, self.sp.getLo())  # 2 cycles
-        self.write((address + 1) & 0xFFFF, self.sp.getHi()) # 2 cycles
+        self.write((address + 1), self.sp.getHi()) # 2 cycles
         self.cycles += 1
 
      # LD (nnnn),A  4 cycles
@@ -613,9 +715,11 @@ class CPU(object):
         self.sp.set(self.hl.get()) # 1 cycle
         self.cycles -= 1
 
+    #
     def complementA(self):
-        self.a.set(self.a.get() ^ 0xFF, False)
-        self.f.set(self.f.get() | (constants.N_FLAG + constants.H_FLAG))
+        self.a.set(self.a.get() ^ 0xFF)
+        self.f.nFlag = True
+        self.f.hFlag = True
 
      # DAA 1 cycle
     def decimalAdjustAccumulator(self):
@@ -634,10 +738,10 @@ class CPU(object):
             self.a.set((self.a.get() + delta) & 0xFF) # 1 cycle
         else:
             self.a.set((self.a.get() - delta) & 0xFF) # 1 cycle
-        self.f.set((self.f.get() & constants.N_FLAG), False)
+        self.f.reset(keepN=True)
         if delta >= 0x60:
-            self.f.add(constants.C_FLAG, False)
-        self.zeroFlagAdd(self.a.get())
+            self.f.cFlag = True
+        self.f.zeroFlagAdd(self.a)
 
      # INC rr
     def incDoubleRegister(self, register):
@@ -661,27 +765,27 @@ class CPU(object):
     def getFetchAddedSP(self):
         offset = self.fetch() # 1 cycle
         s = (self.sp.get() + offset) & 0xFFFF
-        self.f.set(0, False)
+        self.f.reset()
         if (offset >= 0):
             if s < self.sp.get():
-                self.f.add(constants.C_FLAG, False)
+                self.f.cFlag = True
             if (s & 0x0F00) < (self.sp.get() & 0x0F00):
-                self.f.add(constants.H_FLAG, False)
+                self.f.hFlag = True
         else:
             if s > self.sp.get():
-                self.f.add(constants.C_FLAG, False)
+                self.f.cFlag = True
             if (s & 0x0F00) > (self.sp.get() & 0x0F00):
-                self.f.add(constants.H_FLAG, False)
+                self.f.hFlag = True
         return s
 
      # CCF/SCF
     def complementCarryFlag(self):
-        # Flip C-flag and keep Z-flag
-        self.f.set((self.f.get() & (constants.Z_FLAG | constants.C_FLAG)) ^ constants.C_FLAG, False)
+        self.f.reset(keepZ=True, keepC=True)
+        self.f.cFlag = not self.f.cFlag;
 
     def setCarryFlag(self):
-        # Set C-flag to true and keep Z-flag
-        self.f.set((self.f.get() & constants.Z_FLAG) | constants.C_FLAG, False)
+        self.f.reset(keepZ=True)
+        self.f.cFlag = True
 
      # NOP 1 cycle
     def nop(self):
@@ -724,24 +828,6 @@ class CPU(object):
             self.unconditionalCall() # 6 cycles
         else:
             self.pc.add(2) # 3 cycles
-    
-    def isNZ(self):
-        return not self.isZ()
-
-    def isNC(self):
-        return not self.isC()
-
-    def isZ(self):
-        return (self.f.get() & constants.Z_FLAG) != 0
-
-    def isC(self):
-        return (self.f.get() & constants.C_FLAG) != 0
-
-    def isH(self):
-        return (self.f.get() & constants.H_FLAG) != 0
-
-    def isN(self):
-        return (self.f.get() & constants.N_FLAG) != 0
 
      # RET 4 cycles
     def ret(self):
@@ -769,7 +855,7 @@ class CPU(object):
         self.interrupt()
 
      # RST nn 4 cycles
-    def rst(self, nn):
+    def restart(self, nn):
         self.call(nn) # 4 cycles
 
      # DI/EI 1 cycle
@@ -919,14 +1005,14 @@ FIRST_ORDER_OP_CODES = [
     (0xEE, lambda s: CPU.XOR(s,  s.fetch)),
     (0xF6, lambda s: CPU.OR(s,   s.fetch)),
     (0xFE, lambda s: CPU.compareA(s,  s.fetch)),
-    (0xC7, lambda s: CPU.rst(s, 0x00)),
-    (0xCF, lambda s: CPU.rst(s, 0x08)),
-    (0xD7, lambda s: CPU.rst(s, 0x10)),
-    (0xDF, lambda s: CPU.rst(s, 0x18)),
-    (0xE7, lambda s: CPU.rst(s, 0x20)),
-    (0xEF, lambda s: CPU.rst(s, 0x28)),
-    (0xF7, lambda s: CPU.rst(s, 0x30)),
-    (0xFF, lambda s: CPU.rst(s, 0x38)),
+    (0xC7, lambda s: CPU.restart(s, 0x00)),
+    (0xCF, lambda s: CPU.restart(s, 0x08)),
+    (0xD7, lambda s: CPU.restart(s, 0x10)),
+    (0xDF, lambda s: CPU.restart(s, 0x18)),
+    (0xE7, lambda s: CPU.restart(s, 0x20)),
+    (0xEF, lambda s: CPU.restart(s, 0x28)),
+    (0xF7, lambda s: CPU.restart(s, 0x30)),
+    (0xFF, lambda s: CPU.restart(s, 0x38)),
 ]
 
 REGISTER_GROUP_OP_CODES = [
@@ -948,7 +1034,7 @@ REGISTER_GROUP_OP_CODES = [
 
 REGISTER_SET_A = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getSP]
 REGISTER_SET_B = [CPU.getBC, CPU.getDE, CPU.getHL, CPU.getAF]
-FLAG_REGISTER_SET = [CPU.isNZ, CPU.isZ, CPU.isNC, CPU.isC]
+FLAG_REGISTER_SET = [CPU.isNotZ, CPU.isZ, CPU.isNotC, CPU.isC]
 REGISTER_OP_CODES = [ 
     (0x01, 0x10, CPU.fetchDoubleRegister,     REGISTER_SET_A),
     (0x09, 0x10, CPU.addHL,                   REGISTER_SET_A),

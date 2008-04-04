@@ -224,17 +224,17 @@ def test_flags():
     cpu = get_cpu()
     cpu.f.set(constants.Z_FLAG)
     assert cpu.isZ() == True
-    assert cpu.isNZ() == False
+    assert cpu.isNotZ() == False
     cpu.f.set(~constants.Z_FLAG)
     assert cpu.isZ() == False
-    assert cpu.isNZ() == True
+    assert cpu.isNotZ() == True
     
     cpu.f.set(constants.C_FLAG)
     assert cpu.isC() == True
-    assert cpu.isNC() == False
+    assert cpu.isNotC() == False
     cpu.f.set(~constants.C_FLAG)
     assert cpu.isC() == False
-    assert cpu.isNC() == True
+    assert cpu.isNotC() == True
  
 def test_flags_memory_access(): 
     cpu = get_cpu()
@@ -679,10 +679,10 @@ def test_0x27():
 def test_0x2F():
     cpu = get_cpu()
     value = 0x12
+    fValue = cpu.f.get()
     cpu.a.set(value)
-    cpu.f.set(value)
     cycle_test(cpu, 0x2F, 1)
-    assert_default_registers(cpu, a=value^0xFF, f=value|constants.N_FLAG+constants.H_FLAG)
+    assert_default_registers(cpu, a=value^0xFF, f=fValue+constants.N_FLAG+constants.H_FLAG)
 
 # scf
 def test_0x37():
@@ -840,7 +840,7 @@ def test_0xA8_to_0xAF():
         else:
             assert cpu.a.get() == (valueA ^ value)
         if cpu.a.get() == 0:
-            assert cpu.f.get() == constants.Z_FLAG
+            assert cpu.f.zFlag == True
         else:
             assert cpu.f.get() == 0
         value += 1
@@ -916,7 +916,7 @@ def test_0xC0():
         prepare_for_pop(cpu, value >> 8, value & 0xFF)
         cpu.f.set(~flags[i])
         cycle_test(cpu, opCode, 2)
-        assert_default_registers(cpu, f=~flags[i] & 0xFF)
+        assert_default_registers(cpu, f=cpu.f.get())
         value += 3
         opCode += 0x08
 
