@@ -45,17 +45,16 @@ class W_Root(object):
         # XXX should raise not implemented
         return self
 
-    def ToNumber(self):
+    def ToNumber(self, ctx):
         return 0.0
     
     def ToInt32(self):
-        return int(self.ToNumber())
+        return int(self.ToNumber(ctx))
     
     def ToUInt32(self):
         return r_uint(0)
     
     def Get(self, P):
-        print P
         raise NotImplementedError
     
     def Put(self, P, V, dd=False,
@@ -81,7 +80,7 @@ class W_Undefined(W_Root):
     def __str__(self):
         return "w_undefined"
     
-    def ToNumber(self):
+    def ToNumber(self, ctx):
         return NaN
 
     def ToBoolean(self):
@@ -246,6 +245,9 @@ class W_Object(W_PrimitiveObject):
         W_PrimitiveObject.__init__(self, ctx, Prototype,
                                    Class, Value, callfunc)
 
+    def ToNumber(self, ctx):
+        return self.Get('valueOf').Call(ctx, args=[], this=self).ToNumber(ctx)
+
 class W_NewBuiltin(W_PrimitiveObject):
     def __init__(self, ctx, Prototype=None, Class='function',
                  Value=w_Undefined, callfunc=None):
@@ -320,7 +322,7 @@ class W_Array(W_ListObject):
             if P == 'length':
                 try:
                     res = V.ToUInt32()
-                    if V.ToNumber() < 0:
+                    if V.ToNumber(ctx) < 0:
                         raise RangeError()
                     self.propdict['length'].value = W_IntNumber(res)
                     self.length = res
@@ -357,7 +359,7 @@ class W_Boolean(W_Primitive):
             return "true"
         return "false"
     
-    def ToNumber(self):
+    def ToNumber(self, ctx):
         if self.boolval:
             return 1.0
         return 0.0
@@ -393,7 +395,7 @@ class W_String(W_Primitive):
     def GetPropertyName(self):
         return self.ToString()
 
-    def ToNumber(self):
+    def ToNumber(self, ctx):
         if not self.strval:
             return 0.0
         try:
@@ -426,7 +428,7 @@ class W_IntNumber(W_BaseNumber):
     def ToBoolean(self):
         return bool(self.intval)
 
-    def ToNumber(self):
+    def ToNumber(self, ctx):
         # XXX
         return float(self.intval)
 
@@ -466,7 +468,7 @@ class W_FloatNumber(W_BaseNumber):
             return False
         return bool(self.floatval)
 
-    def ToNumber(self):
+    def ToNumber(self, ctx):
         return self.floatval
 
     def ToInt32(self):

@@ -10,7 +10,7 @@ from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
 from pypy.lang.js.jscode import JsCode
-from pypy.rlib.rarithmetic import NAN, INFINITY
+from pypy.rlib.rarithmetic import NAN, INFINITY, isnan
 
 ASTBUILDER = ASTBuilder()
 
@@ -63,18 +63,19 @@ class W_BooleanObject(W_NativeObject):
 
 class W_NumberObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
-        import pdb
-        pdb.set_trace()
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
-            return W_FloatNumber(args[0].ToNumber())
+            return W_FloatNumber(args[0].ToNumber(ctx))
         elif len(args) >= 1 and args[0] is w_Undefined:
             return W_FloatNumber(NAN)
         else:
             return W_FloatNumber(0.0)
 
+    def ToNumber(self, ctx):
+        return 0.0
+
     def Construct(self, ctx, args=[]):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
-            Value = W_FloatNumber(args[0].ToNumber())
+            Value = W_FloatNumber(args[0].ToNumber(ctx))
             return create_object(ctx, 'Number', Value = Value)
         return create_object(ctx, 'Number', Value = W_FloatNumber(0.0))
 
@@ -158,12 +159,12 @@ def printjs(ctx, args, this):
 def isnanjs(ctx, args, this):
     if len(args) < 1:
         return W_Boolean(True)
-    return W_Boolean(args[0].ToNumber() == NaN)
+    return W_Boolean(isnan(args[0].ToNumber(ctx)))
 
 def isfinitejs(ctx, args, this):
     if len(args) < 1:
         return W_Boolean(True)
-    n = args[0].ToNumber()
+    n = args[0].ToNumber(ctx)
     if n == Infinity or n == -Infinity or n == NaN:
         return W_Boolean(False)
     else:
@@ -188,7 +189,7 @@ def arrayjs(ctx, args, this):
 
 def numberjs(ctx, args, this):
     if len(args) > 0:
-        return W_FloatNumber(args[0].ToNumber())
+        return W_FloatNumber(args[0].ToNumber(ctx))
     return W_IntNumber(0)
         
 def absjs(ctx, args, this):
@@ -197,16 +198,16 @@ def absjs(ctx, args, this):
         if val.intval > 0:
             return val # fast path
         return W_IntNumber(-val.intval)
-    return W_FloatNumber(abs(args[0].ToNumber()))
+    return W_FloatNumber(abs(args[0].ToNumber(ctx)))
 
 def floorjs(ctx, args, this):
-    return W_IntNumber(int(math.floor(args[0].ToNumber())))
+    return W_IntNumber(int(math.floor(args[0].ToNumber(ctx))))
 
 def powjs(ctx, args, this):
-    return W_FloatNumber(math.pow(args[0].ToNumber(), args[1].ToNumber()))
+    return W_FloatNumber(math.pow(args[0].ToNumber(ctx), args[1].ToNumber(ctx)))
 
 def sqrtjs(ctx, args, this):
-    return W_FloatNumber(math.sqrt(args[0].ToNumber()))
+    return W_FloatNumber(math.sqrt(args[0].ToNumber(ctx)))
 
 def versionjs(ctx, args, this):
     return w_Undefined

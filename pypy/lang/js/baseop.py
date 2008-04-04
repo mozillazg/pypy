@@ -22,8 +22,8 @@ def plus(ctx, nleft, nright):
         except OverflowError:
             return W_FloatNumber(float(ileft) + float(iright))
     else:
-        fleft = nleft.ToNumber()
-        fright = nright.ToNumber()
+        fleft = nleft.ToNumber(ctx)
+        fright = nright.ToNumber(ctx)
         return W_FloatNumber(fleft + fright)
 
 def increment(ctx, nleft, constval=1):
@@ -40,8 +40,8 @@ def sub(ctx, nleft, nright):
             return W_IntNumber(ovfcheck(ileft - iright))
         except OverflowError:
             return W_FloatNumber(float(ileft) - float(iright))
-    fleft = nleft.ToNumber()
-    fright = nright.ToNumber()
+    fleft = nleft.ToNumber(ctx)
+    fright = nright.ToNumber(ctx)
     return W_FloatNumber(fleft - fright)
 
 def mult(ctx, nleft, nright):
@@ -52,8 +52,8 @@ def mult(ctx, nleft, nright):
             return W_IntNumber(ovfcheck(ileft * iright))
         except OverflowError:
             return W_FloatNumber(float(ileft) * float(iright))
-    fleft = nleft.ToNumber()
-    fright = nright.ToNumber()
+    fleft = nleft.ToNumber(ctx)
+    fright = nright.ToNumber(ctx)
     return W_FloatNumber(fleft * fright)
 
 def mod(ctx, nleft, nright): # XXX this one is really not following spec
@@ -63,8 +63,8 @@ def mod(ctx, nleft, nright): # XXX this one is really not following spec
 
 def division(ctx, nleft, nright):
     # XXX optimise for ints and floats
-    fleft = nleft.ToNumber()
-    fright = nright.ToNumber()
+    fleft = nleft.ToNumber(ctx)
+    fright = nright.ToNumber(ctx)
     if fright == 0:
         if fleft < 0:
             val = -INFINITY
@@ -86,8 +86,8 @@ def compare(ctx, x, y):
     s1 = x.ToPrimitive(ctx, 'Number')
     s2 = y.ToPrimitive(ctx, 'Number')
     if not (isinstance(s1, W_String) and isinstance(s2, W_String)):
-        s4 = s1.ToNumber()
-        s5 = s2.ToNumber()
+        s4 = s1.ToNumber(ctx)
+        s5 = s2.ToNumber(ctx)
         if isnan(s4) or isnan(s5):
             return False
         return s4 > s5
@@ -106,8 +106,8 @@ def compare_e(ctx, x, y):
     s1 = x.ToPrimitive(ctx, 'Number')
     s2 = y.ToPrimitive(ctx, 'Number')
     if not (isinstance(s1, W_String) and isinstance(s2, W_String)):
-        s4 = s1.ToNumber()
-        s5 = s2.ToNumber()
+        s4 = s1.ToNumber(ctx)
+        s5 = s2.ToNumber(ctx)
         if isnan(s4) or isnan(s5):
             return False
         return s4 >= s5
@@ -133,8 +133,8 @@ def AbstractEC(ctx, x, y):
         if type1 == "undefined" or type1 == "null":
             return True
         if type1 == "number":
-            n1 = x.ToNumber()
-            n2 = y.ToNumber()
+            n1 = x.ToNumber(ctx)
+            n2 = y.ToNumber(ctx)
             if isnan(n1) or isnan(n2):
                 return False
             if n1 == n2:
@@ -151,13 +151,13 @@ def AbstractEC(ctx, x, y):
            (type1 == "null" and type2 == "undefined"):
             return True
         if type1 == "number" and type2 == "string":
-            return AbstractEC(ctx, x, W_FloatNumber(y.ToNumber()))
+            return AbstractEC(ctx, x, W_FloatNumber(y.ToNumber(ctx)))
         if type1 == "string" and type2 == "number":
-            return AbstractEC(ctx, W_FloatNumber(x.ToNumber()), y)
+            return AbstractEC(ctx, W_FloatNumber(x.ToNumber(ctx)), y)
         if type1 == "boolean":
-            return AbstractEC(ctx, W_FloatNumber(x.ToNumber()), y)
+            return AbstractEC(ctx, W_FloatNumber(x.ToNumber(ctx)), y)
         if type2 == "boolean":
-            return AbstractEC(ctx, x, W_FloatNumber(y.ToNumber()))
+            return AbstractEC(ctx, x, W_FloatNumber(y.ToNumber(ctx)))
         if (type1 == "string" or type1 == "number") and \
             type2 == "object":
             return AbstractEC(ctx, x, y.ToPrimitive(ctx))
@@ -175,7 +175,7 @@ def AbstractEC(ctx, x, y):
     if isinstance(x, W_String) and isinstance(y, W_String):
         r = x.ToString(ctx) == y.ToString(ctx)
     else:
-        r = x.ToNumber() == y.ToNumber()
+        r = x.ToNumber(ctx) == y.ToNumber(ctx)
     return r
 
 def StrictEC(ctx, x, y):
@@ -190,8 +190,8 @@ def StrictEC(ctx, x, y):
     if type1 == "undefined" or type1 == "null":
         return True
     if type1 == "number":
-        n1 = x.ToNumber()
-        n2 = y.ToNumber()
+        n1 = x.ToNumber(ctx)
+        n2 = y.ToNumber(ctx)
         if isnan(n1) or isnan(n2):
             return False
         if n1 == n2:
@@ -216,4 +216,4 @@ def commonnew(ctx, obj, args):
 def uminus(obj):
     if isinstance(obj, W_IntNumber):
         return W_IntNumber(-obj.intval)
-    return W_FloatNumber(-obj.ToNumber())
+    return W_FloatNumber(-obj.ToNumber(ctx))

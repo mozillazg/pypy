@@ -13,7 +13,7 @@ def test_simple():
     bytecode.emit('LOAD_FLOATCONSTANT', 4)
     bytecode.emit('ADD')
     bytecode.run(ExecutionContext([W_Object()]), check_stack=False)
-    assert bytecode.stack[0].ToNumber() == 6.0
+    assert bytecode.stack[0].ToNumber(None) == 6.0
 
 def assertp(code, prints):
     l = []
@@ -47,7 +47,7 @@ def assertv(code, value):
     elif isinstance(value, int):
         assert code_val.ToInt32() == value
     elif isinstance(value, float):
-        assert code_val.ToNumber() == value
+        assert code_val.ToNumber(None) == value
     else:
         assert code_val.ToString(ctx) == value
 
@@ -623,3 +623,10 @@ def test_pypy_repr():
 
 def test_number():
     assertp("print(Number(void 0))", "NaN")
+    assertp("""
+    function MyObject( value ) {
+      this.value = value;
+      this.valueOf = new Function( "return this.value" );
+    }
+    print (Number(new MyObject(100)));
+    """, "100")
