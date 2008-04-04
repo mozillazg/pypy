@@ -114,12 +114,7 @@ def evaljs(ctx, args, this):
 
     bytecode = JsCode()
     node.emit(bytecode)
-    # XXX awful hack, we shall have a general way of doing that
-    from pypy.lang.js.jscode import POP
-    assert isinstance(bytecode.opcodes[-1], POP)
-    bytecode.opcodes.pop()
-    bytecode.run(ctx, check_stack=False)
-    return bytecode.stack[-1]
+    return bytecode.run(ctx, retlast=True)
 
 def parseIntjs(ctx, args, this):
     if len(args) < 1:
@@ -263,12 +258,7 @@ class W_Function(W_NewBuiltin):
         ast = ASTBUILDER.dispatch(funcnode)
         bytecode = JsCode()
         ast.emit(bytecode)
-        # XXX awful hack
-        from pypy.lang.js.jscode import POP
-        assert isinstance(bytecode.opcodes[-1], POP)
-        bytecode.opcodes.pop()
-        bytecode.run(ctx, check_stack=False)
-        return bytecode.stack[-1]
+        return bytecode.run(ctx, retlast=True)
     
     def Construct(self, ctx, args=[]):
         return self.Call(ctx, args, this=None)
@@ -559,12 +549,14 @@ class Interpreter(object):
         self.w_Global = w_Global
         self.w_Object = w_Object
 
-    def run(self, script):
+    def run(self, script, interactive=False):
         """run the interpreter"""
         bytecode = JsCode()
         script.emit(bytecode)
-        bytecode.run(self.global_context)
-        # XXX not sure what this should return
+        if interactive:
+            return bytecode.run(self.global_context, retlast=True)
+        else:
+            bytecode.run(self.global_context)
 
 def wrap_arguments(pyargs):
     "receives a list of arguments and wrap then in their js equivalents"

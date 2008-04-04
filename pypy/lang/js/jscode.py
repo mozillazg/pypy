@@ -13,7 +13,10 @@ from pypy.rlib.rarithmetic import intmask
 class AlreadyRun(Exception):
     pass
 
-def run_bytecode(opcodes, ctx, stack, check_stack=True):
+def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
+    if retlast:
+        assert opcodes[-1] == 'POP'
+        opcodes.pop()
     i = 0
     to_pop = 0
     try:
@@ -36,7 +39,10 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True):
     finally:
         for i in range(to_pop):
             ctx.pop_object()
-                
+
+    if retlast:
+        assert len(stack) == 1
+        return stack[0]
     if check_stack:
         assert not stack
 
@@ -102,10 +108,10 @@ class JsCode(object):
         raise ValueError("Unknown opcode %s" % (operation,))
     emit._annspecialcase_ = 'specialize:arg(1)'
 
-    def run(self, ctx, check_stack=True):
+    def run(self, ctx, check_stack=True, retlast=False):
         if self.has_labels:
             self.remove_labels()
-        run_bytecode(self.opcodes, ctx, self.stack, check_stack)
+        return run_bytecode(self.opcodes, ctx, self.stack, check_stack, retlast)
 
     def remove_labels(self):
         """ Basic optimization to remove all labels and change
