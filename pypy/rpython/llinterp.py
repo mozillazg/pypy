@@ -37,7 +37,7 @@ def type_name(etype):
         return ''.join(etype.name).rstrip('\x00')
     else:
         # ootype!
-        return etype.class_._INSTANCE._name.split(".")[-1] 
+        return etype._INSTANCE._name.split(".")[-1] 
 
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
