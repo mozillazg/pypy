@@ -766,6 +766,11 @@ class NEW(Opcode):
         args = y.get_args()
         stack.append(commonnew(ctx, x, args))
 
+class NEW_NO_ARGS(Opcode):
+    def eval(self, ctx, stack):
+        x = stack.pop()
+        stack.append(commonnew(ctx, x, []))
+
 # ------------ iterator support ----------------
 
 class LOAD_ITERATOR(Opcode):
