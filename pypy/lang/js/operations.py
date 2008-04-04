@@ -788,8 +788,14 @@ class Void(Expression):
 class With(Statement):
     def __init__(self, pos, identifier, body):
         self.pos = pos
-        self.identifier = identifier
+        assert isinstance(identifier, VariableIdentifier)
+        self.identifier = identifier.identifier
         self.body = body
+
+    def emit(self, bytecode):
+        bytecode.emit('WITH_START', self.identifier)
+        self.body.emit(bytecode)
+        bytecode.emit('WITH_END')
 
     def execute(self, ctx):
         obj = self.identifier.eval(ctx).GetValue().ToObject(ctx)
@@ -860,24 +866,7 @@ class ForVarIn(Statement):
         self.body.emit(bytecode)
         bytecode.emit('JUMP', precond)
         bytecode.emit_endloop_label(finish)
-        bytecode.emit('POP')
-
-    def execute(self, ctx):
-        self.vardecl.eval(ctx)
-        obj = self.object.eval(ctx).GetValue().ToObject(ctx)
-        for prop in obj.propdict.values():
-            if prop.de:
-                continue
-            iterator = self.vardecl.eval(ctx)
-            iterator.PutValue(prop.value, ctx)
-            try:
-                result = self.body.execute(ctx)
-            except ExecutionReturned, e:
-                if e.type == 'break':
-                    break
-                elif e.type == 'continue':
-                    continue
-    
+        bytecode.emit('POP')    
 
 class ForIn(Statement):
     def __init__(self, pos, name, lobject, body):
