@@ -526,10 +526,14 @@ class Null(Expression):
 #
 ##############################################################################
 
-#class New(UnaryOp):
-#    def eval(self, ctx):
-#        x = self.expr.eval(ctx).GetValue()
-#        return commonnew(ctx, x, [])
+class New(Expression):
+    def __init__(self, pos, left):
+        self.pos = pos
+        self.left = left
+
+    def emit(self, bytecode):
+        self.left.emit(bytecode)
+        bytecode.emit('NEW_NO_ARGS')
     
 class NewWithArgs(Expression):
     def __init__(self, pos, left, right):

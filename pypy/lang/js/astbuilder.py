@@ -345,7 +345,6 @@ class ASTBuilder(RPythonVisitor):
         if len(node.children) == 1:
             return self.dispatch(node.children[0])
         else:
-            raise NotImplementedError
             pos = self.get_pos(node)
             val = self.dispatch(node.children[1])
             return operations.New(pos, val)
