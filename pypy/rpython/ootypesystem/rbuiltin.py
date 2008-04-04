@@ -98,16 +98,11 @@ def rtype_instantiate(hop):
     else:
         r_instance = hop.s_result.rtyper_makerepr(hop.rtyper)
         INSTANCE = r_instance.lowleveltype
-        c_instance = hop.inputconst(ootype.Void, INSTANCE)
-        v_cls = hop.inputarg(hop.args_r[0], arg=0)
-        v_obj = hop.gendirectcall(ll_instantiate, c_instance, v_cls)
+        class_repr = rclass.get_type_repr(hop.rtyper)
+        v_cls = hop.inputarg(class_repr, arg=0)
+        v_obj = hop.genop('runtimenew', [v_cls], resulttype=ootype.ROOT)
         v_instance = hop.genop('oodowncast', [v_obj], resulttype=hop.r_result.lowleveltype)
-        c_meta = hop.inputconst(ootype.Void, "meta")
-        hop.genop("oosetfield", [v_instance, c_meta, v_cls], resulttype=ootype.Void)
         return v_instance
-
-def ll_instantiate(INST, C):
-    return ootype.runtimenew(C.class_)
 
 BUILTIN_TYPER = {}
 BUILTIN_TYPER[ootype.new] = rtype_new
