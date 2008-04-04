@@ -802,8 +802,8 @@ class Builder(GenBuilder):
 
     def newfloatfrommem(self, base, reg, shift, ofs):
         res = FloatVar(self.stackdepth + 1)
-        self.mc.PUSH(memSIB(base, reg, shift, ofs))
         self.mc.PUSH(memSIB(base, reg, shift, ofs + WORD))
+        self.mc.PUSH(memSIB(base, reg, shift, ofs))
         self.stackdepth += 2
         return res
 
