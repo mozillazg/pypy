@@ -390,11 +390,13 @@ class ASTBuilder(RPythonVisitor):
     visit_regularvarfor = visit_regularfor
     
     def visit_infor(self, node):
+        from pypy.lang.js.operations import Identifier
         pos = self.get_pos(node)
         left = self.dispatch(node.children[1])
         right = self.dispatch(node.children[2])
         body= self.dispatch(node.children[3])
-        return operations.ForIn(pos, left, right, body)
+        assert isinstance(left, Identifier)
+        return operations.ForIn(pos, left.name, right, body)
     
     def visit_invarfor(self, node):
         pos = self.get_pos(node)

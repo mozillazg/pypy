@@ -865,12 +865,24 @@ class ForVarIn(Statement):
     
 
 class ForIn(Statement):
-    def __init__(self, pos, iterator, lobject, body):
+    def __init__(self, pos, name, lobject, body):
         self.pos = pos
         #assert isinstance(iterator, Node)
-        self.iterator = iterator
+        self.iteratorname = name
         self.object = lobject
         self.body = body
+
+    def emit(self, bytecode):
+        self.object.emit(bytecode)
+        bytecode.emit('LOAD_ITERATOR')
+        precond = bytecode.emit_startloop_label()
+        finish = bytecode.prealocate_endloop_label()
+        bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
+        bytecode.emit('NEXT_ITERATOR', self.iteratorname)
+        self.body.emit(bytecode)
+        bytecode.emit('JUMP', precond)
+        bytecode.emit_endloop_label(finish)
+        bytecode.emit('POP')
 
     def execute(self, ctx):
         obj = self.object.eval(ctx).GetValue().ToObject(ctx)

@@ -2,7 +2,7 @@
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, ActivationObject,\
      create_object, W_Object, w_Undefined, newbool,\
-     w_True, w_False, W_List, w_Null
+     w_True, w_False, W_List, w_Null, W_Iterator
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
@@ -685,6 +685,34 @@ class NEW(Opcode):
         assert isinstance(y, W_List)
         args = y.get_args()
         stack.append(commonnew(ctx, x, args))
+
+# ------------ iterator support ----------------
+
+class LOAD_ITERATOR(Opcode):
+    def eval(self, ctx, stack):
+        obj = stack.pop().ToObject(ctx)
+        props = [prop.value for prop in obj.propdict.values() if not prop.de]
+        stack.append(W_Iterator(props))
+
+class JUMP_IF_ITERATOR_EMPTY(BaseJump):
+    def eval(self, ctx, stack):
+        pass
+    
+    def do_jump(self, stack, pos):
+        iterator = stack[-1]
+        assert isinstance(iterator, W_Iterator)
+        if iterator.empty():
+            return self.where
+        return pos + 1
+
+class NEXT_ITERATOR(Opcode):
+    def __init__(self, name):
+        self.name = name
+
+    def eval(self, ctx, stack):
+        iterator = stack[-1]
+        assert isinstance(iterator, W_Iterator)
+        ctx.assign(self.name, iterator.next())
 
 OpcodeMap = {}
 
