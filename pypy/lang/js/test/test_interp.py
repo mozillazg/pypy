@@ -466,7 +466,11 @@ def test_unary_plus():
     assertp("print(+1);", '1')
 
 def test_delete():
-    py.test.skip("Unsupported")
+    assertp("""
+    x = 0;
+    delete x;
+    print(this.x)
+    """, 'undefined')
     assertp("""
     var x = {};
     x.y = 1;
