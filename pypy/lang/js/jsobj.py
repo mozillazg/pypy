@@ -536,7 +536,7 @@ class ExecutionContext(object):
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
-                if P.ro:
+                if P.dd:
                     return False
                 del obj.propdict[name]
                 return True
@@ -544,9 +544,9 @@ class ExecutionContext(object):
                 pass
         return False
 
-    def put(self, name, value):
+    def put(self, name, value, dd=False):
         assert name is not None
-        self.variable.Put(name, value)
+        self.variable.Put(name, value, dd=dd)
     
     def get_global(self):
         return self.scope[-1]
