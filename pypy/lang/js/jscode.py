@@ -382,6 +382,17 @@ class TYPEOF(BaseUnaryOperation):
         one = stack.pop()
         stack.append(W_String(one.type()))
 
+class TYPEOF_VARIABLE(Opcode):
+    def __init__(self, name):
+        self.name = name
+
+    def eval(self, ctx, stack):
+        try:
+            var = ctx.resolve_identifier(self.name)
+            stack.append(var.type())
+        except ThrowException:
+            stack.append(w_Undefined)
+
 #class Typeof(UnaryOp):
 #    def eval(self, ctx):
 #        val = self.expr.eval(ctx)

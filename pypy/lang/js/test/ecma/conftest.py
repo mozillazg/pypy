@@ -57,7 +57,7 @@ class JSTestFile(py.test.collect.Module):
         #actually run the file :)
         t = load_file(str(self.fspath))
         try:
-            t.execute(self.interp.global_context)
+            self.interp.run(t)
         except ParseError, e:
             raise Failed(msg=e.nice_error_message(filename=str(self.fspath)), excinfo=None)
         except JsBaseExcept:
