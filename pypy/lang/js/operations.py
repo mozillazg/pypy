@@ -781,7 +781,7 @@ class Do(WhileBase):
     
     def emit(self, bytecode):
         startlabel = bytecode.emit_startloop_label()
-        end = bytecode.preallocate_endloop_label()
+        end = bytecode.prealocate_endloop_label()
         self.body.emit(bytecode)
         self.condition.emit(bytecode)
         bytecode.emit('JUMP_IF_TRUE', startlabel)

@@ -31,8 +31,8 @@ def test_funcvarfinder():
 def test_callcall():
     p = to_ast('x()()')
     c1 = p.body.nodes[0]
-    assert isinstance(c1, Call)
-    assert isinstance(c1.left, Call)
+    assert isinstance(c1.expr, Call)
+    assert isinstance(c1.expr.left, Call)
 
 def test_sourcename():    
     p = to_ast('x()()').body

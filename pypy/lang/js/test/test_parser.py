@@ -438,7 +438,8 @@ class TestToAstStatement(BaseTestToAST):
                                 'LOAD_VARIABLE "stuff"',
                                 'POP',
                                 'LOAD_VARIABLE "x"',
-                                'JUMP_IF_TRUE 0'],[
+                                'JUMP_IF_TRUE 0',
+                                'LABEL 1'],[
                                 'LOAD_VARIABLE "stuff"',
                                 'POP',
                                 'LOAD_VARIABLE "x"',
