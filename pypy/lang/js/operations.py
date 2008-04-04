@@ -134,6 +134,10 @@ OPERANDS = {
     '/=' : 'DIV',
     '++' : 'INCR',
     '--' : 'DECR',
+    '%=' : 'MOD',
+    '&=' : 'BITAND',
+    '|=' : 'BITOR',
+    '^=' : 'BITXOR',
     }
 
 class SimpleIncrement(Expression):
@@ -252,24 +256,14 @@ class Block(Statement):
         for node in self.nodes:
             node.emit(bytecode)
     
-BitwiseAnd = create_binary_op('BITAND')    
+BitwiseAnd = create_binary_op('BITAND')
+BitwiseXor = create_binary_op('BITXOR')
+BitwiseOr = create_binary_op('BITOR')
 
 #class BitwiseNot(UnaryOp):
 #    def eval(self, ctx):
 #        op1 = self.expr.eval(ctx).GetValue().ToInt32()
 #        return W_IntNumber(~op1)
-    
-
-# class BitwiseOr(BinaryOp):
-#     def decision(self, ctx, op1, op2):
-#         return W_IntNumber(op1|op2)
-    
-
-
-# class BitwiseXor(BinaryOp):
-#     def decision(self, ctx, op1, op2):
-#         return W_IntNumber(op1^op2)
-    
 
 class Unconditional(Statement):
     def __init__(self, pos, target):
@@ -294,8 +288,17 @@ class Call(Expression):
     
     def emit(self, bytecode):
         self.args.emit(bytecode)
-        self.left.emit(bytecode)
-        bytecode.emit('CALL')
+        left = self.left
+        if isinstance(left, MemberDot):
+            left.left.emit(bytecode)
+            # XXX optimise
+            bytecode.emit('LOAD_STRINGCONSTANT', left.name)
+            bytecode.emit('CALL_METHOD')
+        elif isinstance(left, Member):
+            raise NotImplementedError
+        else:
+            left.emit(bytecode)
+            bytecode.emit('CALL')
 
 Comma = create_binary_op('COMMA')    
 
@@ -443,23 +446,9 @@ Lt = create_binary_op('LT')
 #
 ##############################################################################
 
-# class Ursh(BinaryOp):
-#     def decision(self, ctx, op1, op2):
-#         a = op1.ToUInt32()
-#         b = op2.ToUInt32()
-#         return W_IntNumber(a >> (b & 0x1F))
-
-# class Rsh(BinaryOp):
-#     def decision(self, ctx, op1, op2):
-#         a = op1.ToInt32()
-#         b = op2.ToUInt32()
-#         return W_IntNumber(a >> intmask(b & 0x1F))
-
-# class Lsh(BinaryOp):
-#     def decision(self, ctx, op1, op2):
-#         a = op1.ToInt32()
-#         b = op2.ToUInt32()
-#         return W_IntNumber(a << intmask(b & 0x1F))
+Ursh = create_binary_op('URSH')
+Rsh = create_binary_op('RSH')
+Lsh = create_binary_op('LSH')
 
 ##############################################################################
 #
@@ -720,7 +709,7 @@ class VariableIdentifier(Expression):
     def get_literal(self):
         return self.identifier
 
-class VariableDeclList(Expression):
+class VariableDeclList(Statement):
     def __init__(self, pos, nodes):
         self.pos = pos
         self.nodes = nodes
@@ -839,7 +828,8 @@ class For(Statement):
 
     def emit(self, bytecode):
         self.setup.emit(bytecode)
-        bytecode.emit('POP')
+        if isinstance(self.setup, Expression):
+            bytecode.emit('POP')
         precond = bytecode.emit_startloop_label()
         finish = bytecode.prealocate_endloop_label()
         self.condition.emit(bytecode)

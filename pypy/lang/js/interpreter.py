@@ -250,10 +250,10 @@ class W_Function(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         tam = len(args)
         if tam >= 1:
-            fbody  = args[tam-1].GetValue().ToString(ctx)
+            fbody  = args[tam-1].ToString(ctx)
             argslist = []
             for i in range(tam-1):
-                argslist.append(args[i].GetValue().ToString(ctx))
+                argslist.append(args[i].ToString(ctx))
             fargs = ','.join(argslist)
             functioncode = "function (%s) {%s}"%(fargs, fbody)
         else:

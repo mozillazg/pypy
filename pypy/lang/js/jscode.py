@@ -8,6 +8,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
      compare_e, increment, commonnew, mult, division, uminus, mod
 from pypy.rlib.jit import hint
+from pypy.rlib.rarithmetic import intmask
 
 class AlreadyRun(Exception):
     pass
@@ -399,6 +400,34 @@ class BITAND(BaseBinaryBitwiseOp):
     def operation(ctx, op1, op2):
         return W_IntNumber(op1&op2)
 
+class BITXOR(BaseBinaryBitwiseOp):
+    @staticmethod
+    def operation(ctx, op1, op2):
+        return W_IntNumber(op1^op2)
+
+class BITOR(BaseBinaryBitwiseOp):
+    @staticmethod
+    def operation(ctx, op1, op2):
+        return W_IntNumber(op1|op2)
+
+class URSH(BaseBinaryBitwiseOp):
+    def eval(self, ctx, stack):
+        op2 = stack.pop().ToUInt32()
+        op1 = stack.pop().ToUInt32()
+        stack.append(W_IntNumber(op1 >> (op2 & 0x1F)))
+
+class RSH(BaseBinaryBitwiseOp):
+    def eval(self, ctx, stack):
+        op2 = stack.pop().ToUInt32()
+        op1 = stack.pop().ToInt32()
+        stack.append(W_IntNumber(op1 >> intmask(op2 & 0x1F)))
+
+class LSH(BaseBinaryBitwiseOp):
+    def eval(self, ctx, stack):
+        op2 = stack.pop().ToUInt32()
+        op1 = stack.pop().ToInt32()
+        stack.append(W_IntNumber(op1 << intmask(op2 & 0x1F)))
+
 class MUL(BaseBinaryOperation):
     @staticmethod
     def operation(ctx, op1, op2):
@@ -517,11 +546,37 @@ class BaseAssignOper(BaseStore):
         stack.append(result)
         return result
 
+class BaseAssignBitOper(BaseStore):
+    def process(self, ctx, name, stack):
+        right = stack.pop().ToInt32()
+        left = ctx.resolve_identifier(name).ToInt32()
+        result = self.operation(ctx, left, right)
+        stack.append(result)
+        return result
+
 class STORE_ADD(BaseAssignOper):
     operation = staticmethod(ADD.operation)
 
 class STORE_SUB(BaseAssignOper):
     operation = staticmethod(SUB.operation)
+
+class STORE_MUL(BaseAssignOper):
+    operation = staticmethod(MUL.operation)
+
+class STORE_DIV(BaseAssignOper):
+    operation = staticmethod(DIV.operation)
+
+class STORE_MOD(BaseAssignOper):
+    operation = staticmethod(MOD.operation)
+
+class STORE_BITAND(BaseAssignBitOper):
+    operation = staticmethod(BITAND.operation)
+
+class STORE_BITOR(BaseAssignBitOper):
+    operation = staticmethod(BITOR.operation)
+
+class STORE_BITXOR(BaseAssignBitOper):
+    operation = staticmethod(BITXOR.operation)
 
 class STORE_POSTINCR(BaseStore):
     def process(self, ctx, name, stack):
@@ -644,6 +699,21 @@ class CALL(Opcode):
         except JsTypeError:
             raise ThrowException(W_String('it is not a function'))
         stack.append(res)
+
+class CALL_METHOD(Opcode):
+    def eval(self, ctx, stack):
+        method = stack.pop()
+        what = stack.pop().ToObject(ctx)
+        args = stack.pop()
+        r1 = what.Get(method.ToString())
+        if not isinstance(r1, W_PrimitiveObject):
+            raise ThrowException(W_String("it is not a callable"))
+        try:
+            res = r1.Call(ctx=ctx, args=args.tolist(), this=what)
+        except JsTypeError:
+            raise ThrowException(W_String('it is not a function'))
+        stack.append(res)
+        
 
 class DUP(Opcode):
     def eval(self, ctx, stack):
