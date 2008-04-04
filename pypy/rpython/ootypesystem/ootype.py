@@ -59,6 +59,9 @@ class Class(OOType):
 
     def _defl(self):
         return nullruntimeclass
+
+    def _example(self):
+        return _class(ROOT)
     
 Class = Class()
 

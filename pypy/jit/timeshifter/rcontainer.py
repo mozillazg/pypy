@@ -637,12 +637,10 @@ class FieldDesc(object):
                     self.canbevirtual = True
             else:
                 T = None
-        elif isinstance(RESTYPE, ootype.Instance):
+        elif isinstance(RESTYPE, ootype.OOType):
             self._set_hints(PTRTYPE, RESTYPE)
             self.gcref = True        # XXX: is it right?
             self.canbevirtual = True # XXX: is it right?
-        elif isinstance(RESTYPE, ootype.OOType):
-            assert False, 'XXX: TODO'
         self.RESTYPE = RESTYPE
         self.ptrkind = RGenOp.kindToken(PTRTYPE)
         self.kind = RGenOp.kindToken(RESTYPE)
