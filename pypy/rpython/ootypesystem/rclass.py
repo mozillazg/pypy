@@ -11,7 +11,7 @@ from pypy.rpython.exceptiondata import standardexceptions
 from pypy.tool.pairtype import pairtype
 from pypy.tool.sourcetools import func_with_new_name
 
-OBJECT = ootype.Instance("Object", ootype.ROOT)
+OBJECT = ootype.ROOT
 META = ootype.Instance("Meta", ootype.ROOT,
                        fields={"class_": ootype.Class})
 
