@@ -490,7 +490,7 @@ class UPLUS(BaseUnaryOperation):
 
 class UMINUS(BaseUnaryOperation):
     def eval(self, ctx, stack):
-        stack.append(uminus(stack.pop()))
+        stack.append(uminus(stack.pop(), ctx))
 
 class NOT(BaseUnaryOperation):
     def eval(self, ctx, stack):
@@ -543,7 +543,7 @@ class BaseStoreMember(Opcode):
         name = elem.ToString()
         value = self.operation(ctx, left, name, value)
         left.Put(name, value)
-        stack.append(left)
+        stack.append(value)
 
 class STORE_MEMBER(BaseStoreMember):
     def operation(self, ctx, left, elem, value):
