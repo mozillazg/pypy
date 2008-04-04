@@ -620,3 +620,6 @@ def test_pypy_repr():
     py.test.skip("I don't understand, but it does not work")
     assertv("pypy_repr(3);", 'W_IntNumber')
     assertv("pypy_repr(3.0);", 'W_FloatNumber')
+
+def test_number():
+    assertp("print(Number(void 0))", "NaN")

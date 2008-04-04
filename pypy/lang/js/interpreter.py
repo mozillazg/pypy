@@ -10,6 +10,7 @@ from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
 from pypy.lang.js.jscode import JsCode
+from pypy.rlib.rarithmetic import NAN, INFINITY
 
 ASTBUILDER = ASTBuilder()
 
@@ -64,6 +65,8 @@ class W_NumberObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
             return W_FloatNumber(args[0].ToNumber())
+        elif isnull_or_undefined(args[0]):
+            return W_FloatNumber(NAN)
         else:
             return W_FloatNumber(0.0)
 
@@ -553,6 +556,9 @@ class Interpreter(object):
         """run the interpreter"""
         bytecode = JsCode()
         script.emit(bytecode)
+        if not we_are_translated():
+            # debugging
+            self._code = bytecode
         if interactive:
             return bytecode.run(self.global_context, retlast=True)
         else:
