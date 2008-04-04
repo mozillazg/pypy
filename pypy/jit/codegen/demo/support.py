@@ -20,6 +20,10 @@ elif demo_conftest.option.backend == 'i386':
     from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
     from pypy.jit.codegen.i386.codebuf import machine_code_dumper
     run_in_subprocess = True
+elif demo_conftest.option.backend == 'ia32':
+    from pypy.jit.codegen.ia32.rgenop import RI386GenOp as RGenOp
+    from pypy.jit.codegen.i386.codebuf import machine_code_dumper
+    run_in_subprocess = True
 elif demo_conftest.option.backend == 'ppc':
     from pypy.jit.codegen.ppc.rgenop import RPPCGenOp as RGenOp
     run_in_subprocess = True
