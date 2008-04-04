@@ -215,38 +215,6 @@ class MemberDotAssignment(Assignment):
         self.what.emit(bytecode)
         bytecode.emit('STORE_MEMBER' + self._get_name())
 
-class StuffAssignment(Expression):
-
-    def eval(self, ctx):
-        v1 = self.left.eval(ctx)
-        v3 = self.right.eval(ctx).GetValue()
-        op = self.type
-        if op == "=":
-            val = v3
-        elif op == "*=":
-            val = mult(ctx, v1.GetValue(), v3)
-        elif op == "+=":
-            val = plus(ctx, v1.GetValue(), v3)
-        elif op == "-=":
-            val = sub(ctx, v1.GetValue(), v3)
-        elif op == "/=":
-            val = division(ctx, v1.GetValue(), v3)
-        elif op == "%=":
-            val = mod(ctx, v1.GetValue(), v3)
-        elif op == "&=":
-            val = W_IntNumber(v1.GetValue().ToInt32() & v3.ToInt32())
-        elif op == "|=":
-            val = W_IntNumber(v1.GetValue().ToInt32() | v3.ToInt32())
-        elif op == "^=":
-            val = W_IntNumber(v1.GetValue().ToInt32() ^ v3.ToInt32())
-        else:
-            print op
-            raise NotImplementedError()
-        
-        v1.PutValue(val, ctx)
-        return val
-    
-
 class Block(Statement):
     def __init__(self, pos, nodes):
         self.pos = pos
@@ -308,13 +276,6 @@ class Conditional(Expression):
         self.condition = condition
         self.truepart = truepart
         self.falsepart = falsepart
-    
-    def eval(self, ctx):
-        if self.condition.eval(ctx).GetValue().ToBoolean():
-            return self.truepart.eval(ctx).GetValue()
-        else:
-            return self.falsepart.eval(ctx).GetValue()
-    
 
 class Member(Expression):
     "this is for object[name]"
@@ -709,14 +670,6 @@ class VariableDeclaration(Expression):
             bytecode.emit('STORE', self.identifier)
         else:
             return True
-    
-    def eval(self, ctx):
-        name = self.identifier.get_literal()
-        if self.expr is None:
-            ctx.variable.Put(name, w_Undefined, dd=True)
-        else:
-            ctx.variable.Put(name, self.expr.eval(ctx).GetValue(), dd=True)
-        return self.identifier.eval(ctx)
 
 class VariableIdentifier(Expression):
     def __init__(self, pos, depth, identifier):
@@ -725,7 +678,7 @@ class VariableIdentifier(Expression):
         self.identifier = identifier
 
     def emit(self, bytecode):
-        bytecode.emit('LOAD_REALVAR', self.depth, self.identifier)
+        bytecode.emit('LOAD_VARIABLE', self.identifier)
 
     def get_literal(self):
         return self.identifier

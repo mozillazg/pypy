@@ -285,6 +285,7 @@ class LOAD_REALVAR(Opcode):
         self.identifier = identifier
 
     def eval(self, ctx, stack):
+        xxx
         scope = ctx.scope[self.depth]
         stack.append(scope.Get(self.identifier))
         #stack.append(W_Reference(self.identifier, scope))
@@ -627,7 +628,14 @@ class STORE_POSTINCR(BaseStore):
     def process(self, ctx, name, stack):
         value = ctx.resolve_identifier(name)
         newval = increment(ctx, value)
-        stack.append(newval)
+        stack.append(value)
+        return newval
+
+class STORE_POSTDECR(BaseStore):
+    def process(self, ctx, name, stack):
+        value = ctx.resolve_identifier(name)
+        newval = increment(ctx, value, -1)
+        stack.append(value)
         return newval
 
 class LABEL(Opcode):
