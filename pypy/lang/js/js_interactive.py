@@ -66,7 +66,7 @@ class JSInterpreter(code.InteractiveConsole):
         traceback.
         """
         try:
-            res = self.interpreter.run(ast)
+            res = self.interpreter.run(ast, interactive=True)
             if res not in (None, w_Undefined):
                 try:
                     print res.ToString(self.interpreter.w_Global)
