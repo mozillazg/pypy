@@ -66,6 +66,9 @@ class Var(GenVar):
     def operand(self, builder):
         raise NotImplementedError
 
+    def movetonewaddr(self, builder, arg):
+        raise NotImplementedError
+
     def __repr__(self):
         return self.token + 'var@%d' % (self.stackpos,)
 
@@ -82,6 +85,11 @@ class IntVar(Var):
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
 
+    def movetonewaddr(self, builder, arg):
+        dstop = builder.itemaddr(arg)
+        builder.mc.MOV(eax, self.operand(builder))
+        builder.mc.MOV(dstop, eax)
+
 class AddressVar(IntVar):
     ll_type = llmemory.Address
     token = 'a'
@@ -95,6 +103,11 @@ class BoolVar(Var):
     def newvar(self, builder):
         return builder.returnboolvar(self.operand(builder))
 
+    def movetonewaddr(self, builder, arg):
+        dstop = builder.itemaddr(arg)
+        builder.mc.MOV(eax, self.operand(builder))
+        builder.mc.MOV(destop, al)
+
     ll_type = lltype.Bool
     token = 'b'
     SIZE = 1
@@ -106,6 +119,14 @@ class FloatVar(Var):
     def newvar(self, builder):
         raise NotImplementedError("This requires moving around float mem")
         return builder.returnfloatvar(self.operand(builder))
+
+    def movetonewaddr(self, builder, arg):
+        dstop1 = builder.itemaddr(arg)
+        dstop2 = builder.itemaddr(arg, WORD)
+        builder.mc.MOV(eax, builder.stack_access(self.stackpos))
+        builder.mc.MOV(dstop1, eax)
+        builder.mc.MOV(eax, builder.stack_access(self.stackpos - 1))
+        builder.mc.MOV(dstop2, eax)
 
     ll_type = lltype.Float
     token = 'f'
@@ -185,6 +206,9 @@ class Const(GenConst):
         except TypeError:   # from Symbolics
             return "const=%r" % (self.value,)
 
+    def movetonewaddr(self, builder, addr):
+        raise NotImplementedError
+
     def repr(self):
         return "const=$%s" % (self.value,)
 
@@ -193,6 +217,10 @@ class IntConst(Const):
     
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
+
+    def movetonewaddr(self, builder, arg):
+        dstop = builder.itemaddr(arg)
+        builder.mc.MOV(dstop, self.operand(builder))
 
 class FloatConst(Const):
     SIZE = 2
@@ -208,10 +236,22 @@ class FloatConst(Const):
         self.rawbuf[0] = floatval
 
     def newvar(self, builder):
-        return builder.newfloatfrommem(self.rawbuf)
+        return builder.newfloatfrommem(None, None, 0,
+            rffi.cast(rffi.INT, self.rawbuf))
 
     def operand(self, builder):
         return heap64(rffi.cast(rffi.INT, self.rawbuf))
+
+    def movetonewaddr(self, builder, arg):
+        dstop1 = builder.itemaddr(arg)
+        dstop2 = builder.itemaddr(arg, WORD)
+        builder.mc.MOV(dstop1, imm(rffi.cast(rffi.INTP, self.rawbuf)[0]))
+        builder.mc.MOV(dstop2, imm(rffi.cast(rffi.INTP, self.rawbuf)[1]))
+
+    def repr(self):
+        return "const=$%s" % (self.rawbuf[0],)
+
+    __repr__ = repr
 
 class BoolConst(Const):
     SIZE = 1
@@ -222,13 +262,17 @@ class BoolConst(Const):
     def newvar(self, builder):
         return builder.returnboolvar(self.operand(builder))
 
+    def movetonewaddr(self, builder, arg):
+        dstop = builder.itemaddr(arg)
+        builder.mc.MOV(dstop, self.operand(builder))
+
 ##class FnPtrConst(IntConst):
 ##    def __init__(self, value, mc):
 ##        self.value = value
 ##        self.mc = mc    # to keep it alive
 
 
-class AddrConst(GenConst):
+class AddrConst(IntConst):
     SIZE = 1
 
     def __init__(self, addr):
@@ -239,10 +283,6 @@ class AddrConst(GenConst):
 
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
-
-    def nonimmoperand(self, builder, tmpregister):
-        builder.mc.MOV(tmpregister, self.operand(builder))
-        return tmpregister
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -533,38 +573,49 @@ class Builder(GenBuilder):
         self.mc.LEA(eax, mem(edx, offset))
         return self.returnintvar(eax)
 
-    def itemaddr(self, base, arraytoken, gv_index):
+    def _compute_itemaddr(self, arg, addoffset=0):
+        base, arraytoken, gv_index = arg
+        lengthoffset, startoffset, itemoffset = arraytoken
+        if isinstance(gv_index, IntConst):
+            startoffset += itemoffset * gv_index.value
+            return (base, None, 0, startoffset + addoffset)
+        elif itemoffset in SIZE2SHIFT:
+            self.mc.MOV(ecx, gv_index.operand(self))
+            return (base, ecx, SIZE2SHIFT[itemoffset], startoffset +
+                    addoffset)
+        else:
+            self.mc.IMUL(ecx, gv_index.operand(self), imm(itemoffset))
+            return (base, ecx, 0, startoffset + addoffset)
+        
+    def itemaddr(self, arg, addoffset=0):
         # uses ecx
+        base, arraytoken, gv_index = arg
         lengthoffset, startoffset, itemoffset = arraytoken
         if itemoffset == 1:
             memSIBx = memSIB8
         else:
             memSIBx = memSIB
-        if isinstance(gv_index, IntConst):
-            startoffset += itemoffset * gv_index.value
-            op = memSIBx(base, None, 0, startoffset)
-        elif itemoffset in SIZE2SHIFT:
-            self.mc.MOV(ecx, gv_index.operand(self))
-            op = memSIBx(base, ecx, SIZE2SHIFT[itemoffset], startoffset)
-        else:
-            self.mc.IMUL(ecx, gv_index.operand(self), imm(itemoffset))
-            op = memSIBx(base, ecx, 0, startoffset)
-        return op
+        base, reg, shift, ofs = self._compute_itemaddr(arg, addoffset)
+        return memSIBx(base, reg, shift, ofs)
 
     def genop_getarrayitem(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
-        op = self.itemaddr(edx, arraytoken, gv_index)
         _, _, itemsize = arraytoken
-        if itemsize != WORD:
-            if itemsize > 2:
-                raise NotImplementedError("itemsize != 1,2,4")
+        if itemsize > WORD:
+            # XXX assert not different type than float, probably
+            #     need to sneak one in arraytoken
+            base, reg, shift, ofs = self._compute_itemaddr((edx, arraytoken,
+                                                            gv_index))
+            return self.newfloatfrommem(base, reg, shift, ofs)
+        op = self.itemaddr((edx, arraytoken, gv_index))
+        if itemsize < WORD:
             self.mc.MOVZX(eax, op)
             op = eax
         return self.returnintvar(op)
 
     def genop_getarraysubstruct(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
-        op = self.itemaddr(edx, arraytoken, gv_index)
+        op = self.itemaddr((edx, arraytoken, gv_index))
         self.mc.LEA(eax, op)
         return self.returnintvar(eax)
 
@@ -574,19 +625,23 @@ class Builder(GenBuilder):
         return self.returnintvar(mem(edx, lengthoffset))
 
     def genop_setarrayitem(self, arraytoken, gv_ptr, gv_index, gv_value):
-        self.mc.MOV(eax, gv_value.operand(self))
-        self.mc.MOV(edx, gv_ptr.operand(self))
-        destop = self.itemaddr(edx, arraytoken, gv_index)
         _, _, itemsize = arraytoken
-        if itemsize != WORD:
-            if itemsize == 1:
-                self.mc.MOV(destop, al)
-                return
-            elif itemsize == 2:
-                self.mc.o16()    # followed by the MOV below
-            else:
-                raise NotImplementedError("setarrayitme for fieldsize != 1,2,4")
-        self.mc.MOV(destop, eax)
+        self.mc.MOV(edx, gv_ptr.operand(self))
+        destaddr = self.itemaddr((edx, arraytoken, gv_index))
+        gv_value.movetonewaddr(self, (edx, arraytoken, gv_index))
+        #if itemsize <= WORD:
+        #    self.mc.MOV(eax, gv_value.operand(self))
+        #    if itemsize != WORD:
+        #        if itemsize == 1:
+        #            self.mc.MOV(destop, al)
+        #            return
+        #        elif itemsize == 2:
+        #            self.mc.o16()    # followed by the MOV below
+        #        else:
+        #            raise NotImplementedError("setarrayitme for fieldsize == 3")
+        #    self.mc.MOV(destop, eax)
+        #else:    
+        #    self.move_bigger_value(destop, gv_value, itemsize)
 
     def genop_malloc_fixedsize(self, size):
         # XXX boehm only, no atomic/non atomic distinction for now
@@ -597,7 +652,7 @@ class Builder(GenBuilder):
     def genop_malloc_varsize(self, varsizealloctoken, gv_size):
         # XXX boehm only, no atomic/non atomic distinction for now
         # XXX no overflow checking for now
-        op_size = self.itemaddr(None, varsizealloctoken, gv_size)
+        op_size = self.itemaddr((None, varsizealloctoken, gv_size))
         self.mc.LEA(edx, op_size)
         self.push(edx)
         self.mc.CALL(rel32(gc_malloc_fnaddr()))
@@ -745,12 +800,10 @@ class Builder(GenBuilder):
             raise NotImplementedError("Return float var not on fp stack")
         return res
 
-    def newfloatfrommem(self, rawbuf):
-        # XXX obscure pointer arithmetics on ints. Think how do to it
-        #     better
+    def newfloatfrommem(self, base, reg, shift, ofs):
         res = FloatVar(self.stackdepth + 1)
-        self.mc.PUSH(heap(rffi.cast(rffi.INT, rawbuf)))
-        self.mc.PUSH(heap(rffi.cast(rffi.INT, rawbuf) + WORD))
+        self.mc.PUSH(memSIB(base, reg, shift, ofs))
+        self.mc.PUSH(memSIB(base, reg, shift, ofs + WORD))
         self.stackdepth += 2
         return res
 
@@ -1145,7 +1198,7 @@ def gc_malloc_fnaddr():
 # ____________________________________________________________
 
 def _remap_bigger_values(args_gv, arg_positions):
-    """ This function cheates and changes all FloatVars into double
+    """ This function cheats and changes all FloatVars into double
     IntVars. This might be probably optimized in some way in order
     to provide greater performance, but should be enough for now
     """
@@ -1159,11 +1212,16 @@ def _remap_bigger_values(args_gv, arg_positions):
             res_positions.append(pos)
         else:
             assert gv.SIZE == 2
-            assert isinstance(gv, FloatVar)
-            res_gv.append(IntVar(gv.stackpos))
-            res_gv.append(IntVar(gv.stackpos - 1))
+            if isinstance(gv, FloatVar):
+                res_gv.append(IntVar(gv.stackpos))
+                res_gv.append(IntVar(gv.stackpos - 1))
+            else:
+                assert isinstance(gv, FloatConst)
+                buf = rffi.cast(rffi.INTP, gv.rawbuf)
+                res_gv.append(IntConst(buf[0]))
+                res_gv.append(IntConst(buf[1]))
             res_positions.append(pos)
-            res_positions.append(pos - 1)
+            res_positions.append(pos - 1)    
     # no repeats please
     if not objectmodel.we_are_translated():
         assert sorted(dict.fromkeys(res_positions).keys()) == sorted(res_positions)
@@ -1468,9 +1526,9 @@ class RI386GenOp(AbstractRGenOp):
                     arrayfield_offset+items_offset,
                     item_size)
 
-    @staticmethod
+    @classmethod
     @specialize.memo()    
-    def arrayToken(A):
+    def arrayToken(cls, A):
         return (llmemory.ArrayLengthOffset(A),
                 llmemory.ArrayItemsOffset(A),
                 llmemory.ItemOffset(A.OF))
