@@ -619,6 +619,17 @@ def empty_context():
 
 #     def __str__(self):
 #         return "<" + str(self.base) + " -> " + str(self.property_name) + ">"
+
+class W_Iterator(W_Root):
+    def __init__(self, elements_w):
+        self.elements_w = elements_w
+
+    def next(self):
+        if self.elements_w:
+            return self.elements_w.pop()
+
+    def empty(self):
+        return len(self.elements_w) == 0
     
 def create_object(ctx, prototypename, callfunc=None, Value=w_Undefined):
     proto = ctx.get_global().Get(prototypename).Get('prototype')
