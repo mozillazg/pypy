@@ -82,7 +82,7 @@ class JSTestItem(py.test.collect.Item):
         ctx = JSTestFile.interp.global_context
         r3 = ctx.resolve_identifier('run_test')
         w_test_number = W_IntNumber(self.number)
-        result = r3.Call(ctx=ctx, args=[w_test_number,]).ToString()
+        result = r3.Call(ctx=ctx, args=[w_test_number]).ToString()
         if result != "passed":
             raise Failed(msg=result)
         elif result == -1:
