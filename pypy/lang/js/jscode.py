@@ -14,18 +14,28 @@ class AlreadyRun(Exception):
 
 def run_bytecode(opcodes, ctx, stack, check_stack=True):
     i = 0
-    while i < len(opcodes):
-        for name, op in opcode_unrolling:
-            opcode = opcodes[i]
-            opcode = hint(opcode, deepfreeze=True)
-            if isinstance(opcode, op):
-                result = opcode.eval(ctx, stack)
-                assert result is None
-                break
-        if isinstance(opcode, BaseJump):
-            i = opcode.do_jump(stack, i)
-        else:
-            i += 1
+    to_pop = 0
+    try:
+        while i < len(opcodes):
+            for name, op in opcode_unrolling:
+                opcode = opcodes[i]
+                opcode = hint(opcode, deepfreeze=True)
+                if isinstance(opcode, op):
+                    result = opcode.eval(ctx, stack)
+                    assert result is None
+                    break
+            if isinstance(opcode, BaseJump):
+                i = opcode.do_jump(stack, i)
+            else:
+                i += 1
+            if isinstance(opcode, WITH_START):
+                to_pop += 1
+            elif isinstance(opcode, WITH_END):
+                to_pop -= 1
+    finally:
+        for i in range(to_pop):
+            ctx.pop_object()
+                
     if check_stack:
         assert not stack
 
@@ -713,6 +723,19 @@ class NEXT_ITERATOR(Opcode):
         iterator = stack[-1]
         assert isinstance(iterator, W_Iterator)
         ctx.assign(self.name, iterator.next())
+
+# ---------------- with support ---------------------
+
+class WITH_START(Opcode):
+    def __init__(self, name):
+        self.name = name
+
+    def eval(self, ctx, stack):
+        ctx.push_object(ctx.resolve_identifier(self.name).ToObject(ctx))
+
+class WITH_END(Opcode):
+    def eval(self, ctx, stack):
+        ctx.pop_object()
 
 OpcodeMap = {}
 
