@@ -7,6 +7,8 @@ import sys, os
 class ProcessorAutodetectError(Exception):
     pass
 
+x86_backend = 'i386'
+
 def autodetect():
     mach = None
     try:
@@ -17,7 +19,7 @@ def autodetect():
     if not mach:
         platform = sys.platform.lower()
         if platform.startswith('win'):   # assume an Intel Windows
-            return 'i386'
+            return x86_backend
         # assume we have 'uname'
         mach = os.popen('uname -m', 'r').read().strip()
         if not mach:
@@ -25,12 +27,12 @@ def autodetect():
     if mach == 'x86_64' and sys.maxint == 2147483647:
         mach = 'x86'     # it's a 64-bit processor but in 32-bits mode, maybe
     try:
-        return {'i386': 'i386',
-                'i486': 'i386',
-                'i586': 'i386',
-                'i686': 'i386',
-                'i86pc': 'i386',    # Solaris/Intel
-                'x86':   'i386',    # Apple
+        return {'i386': x86_backend,
+                'i486': x86_backend,
+                'i586': x86_backend,
+                'i686': x86_backend,
+                'i86pc': x86_backend,    # Solaris/Intel
+                'x86':   x86_backend,    # Apple
                 'Power Macintosh': 'ppc', 
                 }[mach]
     except KeyError:
