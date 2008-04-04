@@ -213,7 +213,7 @@ def commonnew(ctx, obj, args):
         raise ThrowException(W_String('it is not a constructor'))
     return res
 
-def uminus(obj):
+def uminus(obj, ctx):
     if isinstance(obj, W_IntNumber):
         return W_IntNumber(-obj.intval)
     return W_FloatNumber(-obj.ToNumber(ctx))

@@ -474,10 +474,18 @@ class Interpreter(object):
         put_values(w_Number, {
             'constructor': w_FncPrototype,
             'prototype': w_NumPrototype,
-            'NaN': W_FloatNumber(NaN),
-            'POSITIVE_INFINITY': W_FloatNumber(Infinity),
-            'NEGATIVE_INFINITY': W_FloatNumber(-Infinity),
         })
+        w_Number.propdict['prototype'].ro = True
+        w_Number.Put('MAX_VALUE', W_FloatNumber(1.7976931348623157e308),
+                     ro=True, dd=True)
+        w_Number.Put('MIN_VALUE', W_FloatNumber(0), ro=True, dd=True)
+        w_Number.Put('NaN', W_FloatNumber(NaN), ro=True, dd=True)
+        # ^^^ this is exactly in test case suite
+        w_Number.Put('POSITIVE_INFINITY', W_FloatNumber(Infinity),
+                     ro=True, dd=True)
+        w_Number.Put('NEGATIVE_INFINITY', W_FloatNumber(-Infinity),
+                     ro=True, dd=True)
+        
 
         w_Global.Put('Number', w_Number)
         
