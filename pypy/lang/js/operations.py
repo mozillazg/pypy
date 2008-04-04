@@ -489,6 +489,23 @@ class Delete(Expression):
         self.pos = pos
         self.what = what
 
+    def emit(self, bytecode):
+        what = self.what
+        if isinstance(what, Identifier):
+            bytecode.emit('DELETE', what.name)
+        elif isinstance(what, MemberDot):
+            what.left.emit(bytecode)
+            # XXX optimize
+            bytecode.emit('LOAD_STRINGCONSTANT', what.name)
+            bytecode.emit('DELETE_MEMBER')
+        elif isinstance(what, Member):
+            what.left.emit(bytecode)
+            what.right.emit(bytecode)
+            bytecode.emit('DELETE_MEMBER')
+        else:
+            what.left.emit(bytecode)
+            bytecode.emit('LOAD_BOOLCONSTANT', True)
+
     #def emit(self, bytecode):
     #    
 

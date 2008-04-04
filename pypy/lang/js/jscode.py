@@ -812,6 +812,29 @@ class WITH_END(Opcode):
     def eval(self, ctx, stack):
         ctx.pop_object()
 
+# ------------------ delete -------------------------
+
+class DELETE(Opcode):
+    def __init__(self, name):
+        self.name = name
+
+    def eval(self, ctx, stack):
+        stack.append(newbool(ctx.delete_identifier(self.name)))
+
+class DELETE_MEMBER(Opcode):
+    def eval(self, ctx, stack):
+        what = stack.pop().ToString()
+        obj = stack.pop().ToObject(ctx)
+        try:
+            P = obj.propdict[what]
+            if P.ro:
+                stack.append(newbool(False))
+                return
+            del obj.propdict[what]
+            stack.append(newbool(True))
+        except KeyError:
+            stack.append(newbool(False))
+
 OpcodeMap = {}
 
 for name, value in locals().items():

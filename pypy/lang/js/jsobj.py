@@ -531,6 +531,19 @@ class ExecutionContext(object):
         # if not, we need to put this thing in current scope
         self.variable.Put(name, value)
 
+    def delete_identifier(self, name):
+        for obj in self.scope:
+            assert isinstance(obj, W_PrimitiveObject)
+            try:
+                P = obj.propdict[name]
+                if P.ro:
+                    return False
+                del obj.propdict[name]
+                return True
+            except KeyError:
+                pass
+        return False
+
     def put(self, name, value):
         assert name is not None
         self.variable.Put(name, value)
