@@ -642,7 +642,7 @@ class AbstractClassesPBCRepr(Repr):
         if s_pbc.is_constant():
             self.lowleveltype = Void
         else:
-            self.lowleveltype = rtyper.type_system.rclass.CLASSTYPE
+            self.lowleveltype = self.getlowleveltype()
 
     def get_access_set(self, attrname):
         """Return the ClassAttrFamily corresponding to accesses to 'attrname'
@@ -774,8 +774,6 @@ class __extend__(pairtype(AbstractClassesPBCRepr, rclass.AbstractClassRepr)):
         if r_clspbc.lowleveltype is Void:
             return inputconst(r_cls, r_clspbc.s_pbc.const)
         # convert from ptr-to-object-vtable to ptr-to-more-precise-vtable
-        assert (r_clspbc.lowleveltype ==
-            r_clspbc.rtyper.type_system.rclass.CLASSTYPE)
         return r_cls.fromclasstype(v, llops)
 
 class __extend__(pairtype(AbstractClassesPBCRepr, AbstractClassesPBCRepr)):
