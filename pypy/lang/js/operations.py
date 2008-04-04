@@ -843,10 +843,25 @@ class While(WhileBase):
 class ForVarIn(Statement):
     def __init__(self, pos, vardecl, lobject, body):
         self.pos = pos
-        self.vardecl = vardecl
+        assert isinstance(vardecl, VariableDeclaration)
+        self.iteratorname = vardecl.identifier
         self.object = lobject
         self.body = body
+
     
+    def emit(self, bytecode):
+        bytecode.emit('DECLARE_VAR', self.iteratorname)
+        self.object.emit(bytecode)
+        bytecode.emit('LOAD_ITERATOR')
+        precond = bytecode.emit_startloop_label()
+        finish = bytecode.prealocate_endloop_label()
+        bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
+        bytecode.emit('NEXT_ITERATOR', self.iteratorname)
+        self.body.emit(bytecode)
+        bytecode.emit('JUMP', precond)
+        bytecode.emit_endloop_label(finish)
+        bytecode.emit('POP')
+
     def execute(self, ctx):
         self.vardecl.eval(ctx)
         obj = self.object.eval(ctx).GetValue().ToObject(ctx)
@@ -883,22 +898,6 @@ class ForIn(Statement):
         bytecode.emit('JUMP', precond)
         bytecode.emit_endloop_label(finish)
         bytecode.emit('POP')
-
-    def execute(self, ctx):
-        obj = self.object.eval(ctx).GetValue().ToObject(ctx)
-        for prop in obj.propdict.values():
-            if prop.de:
-                continue
-            iterator = self.iterator.eval(ctx)
-            iterator.PutValue(prop.value, ctx)
-            try:
-                result = self.body.execute(ctx)
-            except ExecutionReturned, e:
-                if e.type == 'break':
-                    break
-                elif e.type == 'continue':
-                    continue
-    
 
 class For(Statement):
     def __init__(self, pos, setup, condition, update, body):
