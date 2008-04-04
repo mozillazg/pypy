@@ -7,49 +7,52 @@ from pypy.rpython.rmodel import mangle as pbcmangle
 from pypy.rpython.rclass import AbstractClassRepr, AbstractInstanceRepr, \
                                 getinstancerepr, getclassrepr, get_type_repr
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.exceptiondata import standardexceptions
 from pypy.tool.pairtype import pairtype
 from pypy.tool.sourcetools import func_with_new_name
 
-CLASSTYPE = ootype.Instance("Object_meta", ootype.ROOT,
-        fields={"class_": ootype.Class})
-OBJECT = ootype.Instance("Object", ootype.ROOT,
-        fields={'meta': CLASSTYPE})
+OBJECT = ootype.Instance("Object", ootype.ROOT)
+META = ootype.Instance("Meta", ootype.ROOT,
+                       fields={"class_": ootype.Class})
 
 
 class ClassRepr(AbstractClassRepr):
     def __init__(self, rtyper, classdef):
         AbstractClassRepr.__init__(self, rtyper, classdef)
-
+        # This is the Repr for a reference to the class 'classdef' or
+        # any subclass.  In the simple case, the lowleveltype is just
+        # ootype.Class.  If we need to store class attributes, we use a
+        # "meta" class where the attributes are defined, and the class
+        # reference is a reference to an instance of this meta class.
+        extra_access_sets = self.rtyper.class_pbc_attributes.get(
+            classdef, {})
+        has_class_attributes = bool(extra_access_sets)
         if self.classdef is not None:
             self.rbase = getclassrepr(self.rtyper, self.classdef.basedef)
-            base_type = self.rbase.lowleveltype
-            self.lowleveltype = ootype.Instance(
-                    self.classdef.name + "_meta", base_type)
+            meta_base_type = self.rbase.lowleveltype
+            baseclass_has_meta = meta_base_type != ootype.Class
         else:
-            # we are ROOT
-            self.lowleveltype = CLASSTYPE
+            baseclass_has_meta = False
+
+        if not has_class_attributes and not baseclass_has_meta:
+            self.lowleveltype = ootype.Class   # simple case
+        else:
+            if self.classdef is None:
+                raise TyperError("the root 'object' class should not have"
+                                 " class attributes")
+            if self.classdef.classdesc.pyobj in standardexceptions:
+                raise TyperError("Standard exception class %r should not have"
+                                 " class attributes" % (self.classdef.name,))
+            if not baseclass_has_meta:
+                meta_base_type = META
+            self.lowleveltype = ootype.Instance(
+                    self.classdef.name + "_meta", meta_base_type)
 
     def _setup_repr(self):
-        clsfields = {}
         pbcfields = {}
-        if self.classdef is not None:
+        if self.lowleveltype != ootype.Class:
             # class attributes
             llfields = []
-            """
-            attrs = self.classdef.attrs.items()
-            attrs.sort()
-            for name, attrdef in attrs:
-                if attrdef.readonly:
-                    s_value = attrdef.s_value
-                    s_unboundmethod = self.prepare_method(s_value)
-                    if s_unboundmethod is not None:
-                        allmethods[name] = True
-                        s_value = s_unboundmethod
-                    r = self.rtyper.getrepr(s_value)
-                    mangled_name = 'cls_' + name
-                    clsfields[name] = mangled_name, r
-                    llfields.append((mangled_name, r.lowleveltype))
-            """
             # attributes showing up in getattrs done on the class as a PBC
             extra_access_sets = self.rtyper.class_pbc_attributes.get(
                 self.classdef, {})
@@ -61,18 +64,20 @@ class ClassRepr(AbstractClassRepr):
             
             self.rbase.setup()
             ootype.addFields(self.lowleveltype, dict(llfields))
-        #self.clsfields = clsfields
         self.pbcfields = pbcfields
         self.meta_instance = None
  
     def get_meta_instance(self, cast_to_root_meta=True):
+        if self.lowleveltype == ootype.Class:
+            raise TyperError("no meta-instance for class %r" % 
+                             (self.classdef,))
         if self.meta_instance is None:
             self.meta_instance = ootype.new(self.lowleveltype) 
             self.setup_meta_instance(self.meta_instance, self)
         
         meta_instance = self.meta_instance
         if cast_to_root_meta:
-            meta_instance = ootype.ooupcast(CLASSTYPE, meta_instance)
+            meta_instance = ootype.ooupcast(META, meta_instance)
         return meta_instance
 
     def setup_meta_instance(self, meta_instance, rsubcls):
@@ -88,14 +93,6 @@ class ClassRepr(AbstractClassRepr):
                 llvalue = r.convert_desc_or_const(value)
                 setattr(meta_instance, mangled_name, llvalue)
 
-            #mro = list(rsubcls.classdef.getmro())
-            #for fldname in self.clsfields:
-            #    mangled_name, r = self.clsfields[fldname]
-            #    if r.lowleveltype is Void:
-            #        continue
-            #    value = rsubcls.classdef.classdesc.read_attribute(fldname, None)
-            #    if value is not None:
-            #        assign(mangled_name, value)
             # extra PBC attributes
             for (access_set, attr), (mangled_name, r) in self.pbcfields.items():
                 if rsubcls.classdef.classdesc not in access_set.descs:
@@ -107,15 +104,20 @@ class ClassRepr(AbstractClassRepr):
                     assign(mangled_name, attrvalue)
 
             # then initialize the 'super' portion of the vtable
-            meta_instance_super = ootype.ooupcast(
-                    self.rbase.lowleveltype, meta_instance)
-            self.rbase.setup_meta_instance(meta_instance_super, rsubcls)
+            self.rbase.setup_meta_instance(meta_instance, rsubcls)
 
     getruntime = get_meta_instance
     
     def fromclasstype(self, vclass, llops):
-        return llops.genop('oodowncast', [vclass],
-                resulttype=self.lowleveltype)
+        assert ootype.isSubclass(vclass.concretetype, META)
+        if self.lowleveltype == ootype.Class:
+            c_class_ = inputconst(ootype.Void, 'class_')
+            return llops.genop('oogetfield', [vclass, c_class_],
+                    resulttype=ootype.Class)
+        else:
+            assert ootype.isSubclass(self.lowleveltype, vclass.concretetype)
+            return llops.genop('oodowncast', [vclass],
+                    resulttype=self.lowleveltype)
 
     def getpbcfield(self, vcls, access_set, attr, llops):
         if (access_set, attr) not in self.pbcfields:
@@ -127,12 +129,11 @@ class ClassRepr(AbstractClassRepr):
 
     def rtype_issubtype(self, hop):
         class_repr = get_type_repr(self.rtyper)
-        vmeta1, vmeta2 = hop.inputargs(class_repr, class_repr)
-        return hop.gendirectcall(ll_issubclass, vmeta1, vmeta2)
+        vcls1, vcls2 = hop.inputargs(class_repr, class_repr)
+        return hop.genop('subclassof', [vcls1, vcls2], resulttype=ootype.Bool)
 
-def ll_issubclass(meta1, meta2):
-    class1 = meta1.class_
-    class2 = meta2.class_
+def ll_issubclass(class1, class2):
+    # helper for exceptiondata.py
     return ootype.subclassof(class1, class2)
 
 # ____________________________________________________________
@@ -237,7 +238,7 @@ class InstanceRepr(AbstractInstanceRepr):
                     mangled = mangle(meth_name, self.rtyper.getconfig())
                     allmethods[mangled] = meth_name, s_meth
                 # else: it's the __init__ of a builtin exception
-            
+
         #
         # hash() support
         if self.rtyper.needs_hash_support(self.classdef):
@@ -254,6 +255,12 @@ class InstanceRepr(AbstractInstanceRepr):
         classattributes = {}
         baseInstance = self.lowleveltype._superclass
         classrepr = getclassrepr(self.rtyper, self.classdef)
+
+        # if this class has a corresponding metaclass, attach
+        # a getmeta() method to get the corresponding meta_instance
+        if classrepr.lowleveltype != ootype.Class:
+            oovalue = classrepr.get_meta_instance()
+            self.attach_class_attr_accessor('getmeta', oovalue)
 
         for mangled, (name, s_value) in allmethods.iteritems():
             methdescs = s_value.descriptions
@@ -329,7 +336,12 @@ class InstanceRepr(AbstractInstanceRepr):
         
         for mangled, (s_value, value) in self.classattributes.items():
             r = self.rtyper.getrepr(s_value)
-            m = self.attach_class_attr_accessor(mangled, value, r)
+            if value is None:
+                self.attach_abstract_class_attr_accessor(mangled,
+                                                         r.lowleveltype)
+            else:
+                oovalue = r.convert_desc_or_const(value)
+                self.attach_class_attr_accessor(mangled, oovalue)
 
         # step 4: do the same with instance fields whose default
         # values are overridden in subclasses. Not sure it's the best
@@ -359,21 +371,21 @@ class InstanceRepr(AbstractInstanceRepr):
 
         ootype.overrideDefaultForFields(self.lowleveltype, overridden_defaults)
 
-    def attach_class_attr_accessor(self, mangled, value, r_value):
+    def attach_abstract_class_attr_accessor(self, mangled, attrtype):
+        M = ootype.Meth([], attrtype)
+        m = ootype.meth(M, _name=mangled, abstract=True)
+        ootype.addMethods(self.lowleveltype, {mangled: m})
+
+    def attach_class_attr_accessor(self, mangled, oovalue):
         def ll_getclassattr(self):
             return oovalue
 
-        M = ootype.Meth([], r_value.lowleveltype)
-        if value is None:
-            m = ootype.meth(M, _name=mangled, abstract=True)
-        else:
-            oovalue = r_value.convert_desc_or_const(value)
-            ll_getclassattr = func_with_new_name(ll_getclassattr,
-                                                 'll_get_' + mangled)
-            graph = self.rtyper.annotate_helper(ll_getclassattr, [self.lowleveltype])
-            m = ootype.meth(M, _name=mangled, _callable=ll_getclassattr,
-                            graph=graph)
-
+        M = ootype.Meth([], ootype.typeOf(oovalue))
+        ll_getclassattr = func_with_new_name(ll_getclassattr,
+                                             'll_get_' + mangled)
+        graph = self.rtyper.annotate_helper(ll_getclassattr, [self.lowleveltype])
+        m = ootype.meth(M, _name=mangled, _callable=ll_getclassattr,
+                        graph=graph)
         ootype.addMethods(self.lowleveltype, {mangled: m})
 
     def get_ll_hash_function(self):
@@ -446,8 +458,7 @@ class InstanceRepr(AbstractInstanceRepr):
         if hop.args_s[0].can_be_none():
             return hop.gendirectcall(ll_inst_type, vinst)
         else:
-            cmeta = inputconst(ootype.Void, "meta")
-            return hop.genop('oogetfield', [vinst, cmeta], resulttype=CLASSTYPE)
+            return hop.genop('classof', [vinst], resulttype=ootype.Class)
 
     def null_instance(self):
         return ootype.null(self.lowleveltype)
@@ -463,10 +474,6 @@ class InstanceRepr(AbstractInstanceRepr):
         classrepr = getclassrepr(self.rtyper, self.classdef) 
         v_instance =  llops.genop("new",
             [inputconst(ootype.Void, self.lowleveltype)], self.lowleveltype)
-        cmeta = inputconst(ootype.Void, "meta")
-        cmeta_instance = inputconst(CLASSTYPE, classrepr.get_meta_instance())
-        llops.genop("oosetfield", [v_instance, cmeta, cmeta_instance], 
-                  resulttype=ootype.Void)
         return v_instance
         
     def initialize_prebuilt_instance(self, value, classdef, result):
@@ -539,7 +546,7 @@ def ll_inst_hash(ins):
 
 def ll_inst_type(obj):
     if obj:
-        return obj.meta
+        return ootype.classof(obj)
     else:
         # type(None) -> NULL  (for now)
-        return ootype.null(CLASSTYPE)
+        return ootype.nullruntimeclass
