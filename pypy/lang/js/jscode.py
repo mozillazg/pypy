@@ -503,13 +503,22 @@ class BaseStoreMember(Opcode):
         left = stack.pop()
         elem = stack.pop()
         value = stack.pop()
-        self.operation()
-        left.Put(elem.ToString(), value)
+        name = elem.ToString()
+        value = self.operation(ctx, left, name, value)
+        left.Put(name, value)
         stack.append(left)
 
 class STORE_MEMBER(BaseStoreMember):
-    def operation(self):
-        pass
+    def operation(self, ctx, left, elem, value):
+        return value
+
+class BaseStoreMemberAssign(BaseStoreMember):
+    def operation(self, ctx, left, name, value):
+        prev = left.Get(name)
+        return self.decision(ctx, value, prev)
+
+class STORE_MEMBER_ADD(BaseStoreMemberAssign):
+    decision = staticmethod(ADD.operation)
 
 class STORE_MEMBER_POSTINCR(BaseStoreMember):
     def operation(self):

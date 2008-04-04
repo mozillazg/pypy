@@ -36,10 +36,9 @@ class JSTestFile(py.test.collect.Module):
             cls.tc.PutValue(W_IntNumber(0), cls.interp.global_context)
 
         cls.interp = Interpreter()
-        ctx = cls.interp.global_context
         shellpath = rootdir/'shell.js'
         t = load_file(str(shellpath))
-        t.execute(ctx)
+        cls.interp.run(t)
         cls.testcases = cls.interp.global_context.resolve_identifier('testcases')
         cls.tc = cls.interp.global_context.resolve_identifier('tc')
     init_interp = classmethod(init_interp)
