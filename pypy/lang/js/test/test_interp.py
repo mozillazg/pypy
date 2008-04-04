@@ -350,6 +350,9 @@ def test_typeof():
     var x = 3;
     typeof x == 'number';
     """, True)
+    assertv("""
+    typeof x
+    """, 'undefined')
     
 def test_semicolon():
     assertp(';', [])

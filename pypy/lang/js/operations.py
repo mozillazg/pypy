@@ -470,19 +470,19 @@ StrictEq = create_binary_op('IS')
 StrictNe = create_binary_op('ISNOT')    
 
 In = create_binary_op('IN')
-Typeof = create_unary_op('TYPEOF')
 
-# class Delete(UnaryOp):
-#     """
-#     the delete op, erases properties from objects
-#     """
-#     def eval(self, ctx):
-#         r1 = self.expr.eval(ctx)
-#         if not isinstance(r1, W_Reference):
-#             return W_Boolean(True)
-#         r3 = r1.GetBase()
-#         r4 = r1.GetPropertyName()
-#         return W_Boolean(r3.Delete(r4))
+class Typeof(Expression):
+    def __init__(self, pos, left):
+        self.pos = pos
+        self.left = left
+
+    def emit(self, bytecode):
+        # obscure hack to be compatible
+        if isinstance(self.left, Identifier):
+            bytecode.emit('TYPEOF_VARIABLE', self.left.name)
+        else:
+            self.left.emit(bytecode)
+            bytecode.emit('TYPEOF')
 
 class Delete(Expression):
     def __init__(self, pos, what):

@@ -375,8 +375,8 @@ class W_String(W_Primitive):
     def __init__(self, strval):
         self.strval = strval
 
-    def __str__(self):
-        return self.strval+"W"
+    def __repr__(self):
+        return 'W_String(%s)' % (self.strval,)
 
     def ToObject(self, ctx):
         return create_object(ctx, 'String', Value=self)
