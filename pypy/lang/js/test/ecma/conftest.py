@@ -37,8 +37,9 @@ class JSTestFile(py.test.collect.Module):
 
         cls.interp = Interpreter()
         shellpath = rootdir/'shell.js'
-        t = load_file(str(shellpath))
-        cls.interp.run(t)
+        if not hasattr(cls, 'shellfile'):
+            cls.shellfile = load_file(str(shellpath))
+        cls.interp.run(cls.shellfile)
         cls.testcases = cls.interp.global_context.resolve_identifier('testcases')
         cls.tc = cls.interp.global_context.resolve_identifier('tc')
     init_interp = classmethod(init_interp)
