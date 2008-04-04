@@ -46,10 +46,10 @@ class W_Root(object):
         return self
 
     def ToNumber(self):
-        return NaN
+        return 0.0
     
     def ToInt32(self):
-        return 0
+        return int(self.ToNumber())
     
     def ToUInt32(self):
         return r_uint(0)
@@ -392,6 +392,14 @@ class W_String(W_Primitive):
 
     def GetPropertyName(self):
         return self.ToString()
+
+    def ToNumber(self):
+        if not self.strval:
+            return 0.0
+        try:
+            return float(self.strval)
+        except ValueError:
+            return NaN
 
 class W_BaseNumber(W_Primitive):
     """ Base class for numbers, both known to be floats

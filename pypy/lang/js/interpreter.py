@@ -63,9 +63,11 @@ class W_BooleanObject(W_NativeObject):
 
 class W_NumberObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
+        import pdb
+        pdb.set_trace()
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
             return W_FloatNumber(args[0].ToNumber())
-        elif isnull_or_undefined(args[0]):
+        elif len(args) >= 1 and args[0] is w_Undefined:
             return W_FloatNumber(NAN)
         else:
             return W_FloatNumber(0.0)

@@ -77,6 +77,7 @@ function TestCase( n, d, e, a ) {
   this.actual      = a;
   this.passed      = true;
   this.reason      = "";
+  print (n, d, e, a);
   this.bugnumber   = BUGNUMBER;
 
   this.passed = getTestCaseResult( this.expect, this.actual );
