@@ -69,7 +69,7 @@ class JSInterpreter(code.InteractiveConsole):
             res = self.interpreter.run(ast)
             if res not in (None, w_Undefined):
                 try:
-                    print res.GetValue().ToString(self.interpreter.w_Global)
+                    print res.ToString(self.interpreter.w_Global)
                 except ThrowException, exc:
                     print exc.exception.ToString(self.interpreter.w_Global)
         except SystemExit:

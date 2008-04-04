@@ -36,11 +36,7 @@ def assertv(code, value):
     try:
         bytecode = JsCode()
         interpreter.load_source(code, '').emit(bytecode)
-        # XXX terrible hack
-        assert isinstance(bytecode.opcodes[-1], POP)
-        bytecode.opcodes.pop()
-        bytecode.run(ExecutionContext([ctx]), check_stack=False)
-        code_val = bytecode.stack[0]
+        code_val = bytecode.run(ExecutionContext([ctx]), retlast=True)
     except ThrowException, excpt:
         code_val = excpt.exception
     print code_val, value
