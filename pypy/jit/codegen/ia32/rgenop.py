@@ -1534,18 +1534,15 @@ class RI386GenOp(AbstractRGenOp):
                 llmemory.ItemOffset(A.OF))
 
     @staticmethod
-    @specialize.arg(0)
-    def map_arg(arg):
-        if isinstance(arg, lltype.Ptr):
-            return llmemory.Address
-        return arg
-
-    @classmethod
     @specialize.memo()
-    def sigToken(cls, FUNCTYPE):
-        return ([LL_TO_GENVAR[cls.map_arg(arg)] for arg in FUNCTYPE.ARGS if arg
+    def sigToken(FUNCTYPE):
+        def map_arg(arg):
+            if isinstance(arg, lltype.Ptr):
+                return llmemory.Address
+            return arg
+        return ([LL_TO_GENVAR[map_arg(arg)] for arg in FUNCTYPE.ARGS if arg
                  is not lltype.Void],
-                LL_TO_GENVAR[cls.map_arg(FUNCTYPE.RESULT)])
+                LL_TO_GENVAR[map_arg(FUNCTYPE.RESULT)])
 
     @staticmethod
     def erasedType(T):
