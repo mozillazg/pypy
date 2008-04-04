@@ -61,7 +61,8 @@ class AbstractClassRepr(Repr):
                 raise TyperError("not a subclass of %r: %r" % (
                     self.classdef.name, desc))
         
-        return getclassrepr(self.rtyper, subclassdef).getruntime()
+        r_subclass = getclassrepr(self.rtyper, subclassdef)
+        return r_subclass.getruntime(self.lowleveltype)
 
     def convert_const(self, value):
         if not isinstance(value, (type, types.ClassType)):

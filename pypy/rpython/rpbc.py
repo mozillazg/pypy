@@ -665,7 +665,9 @@ class AbstractClassesPBCRepr(Repr):
             raise TyperError("%r not in %r" % (cls, self))
         if self.lowleveltype is Void:
             return None
-        return rclass.get_type_repr(self.rtyper).convert_desc(desc)
+        subclassdef = desc.getuniqueclassdef()
+        r_subclass = rclass.getclassrepr(self.rtyper, subclassdef)
+        return r_subclass.getruntime(self.lowleveltype)
 
     def convert_const(self, cls):
         if cls is None:

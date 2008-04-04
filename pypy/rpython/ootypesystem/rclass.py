@@ -83,7 +83,7 @@ class ClassRepr(AbstractClassRepr):
     def setup_meta_instance(self, meta_instance, rsubcls):
         if self.classdef is None:
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
-            setattr(meta_instance, 'class_', rinstance.lowleveltype._class)
+            meta_instance.class_ = ootype.runtimeClass(rinstance.lowleveltype)
         else:
             # setup class attributes: for each attribute name at the level
             # of 'self', look up its value in the subclass rsubcls
@@ -106,8 +106,15 @@ class ClassRepr(AbstractClassRepr):
             # then initialize the 'super' portion of the vtable
             self.rbase.setup_meta_instance(meta_instance, rsubcls)
 
-    getruntime = get_meta_instance
-    
+    def getruntime(self, expected_type):
+        if expected_type == ootype.Class:
+            rinstance = getinstancerepr(self.rtyper, self.classdef)
+            return ootype.runtimeClass(rinstance.lowleveltype)
+        else:
+            assert ootype.isSubclass(expected_type, META)
+            meta = self.get_meta_instance(cast_to_root_meta=False)
+            return ootype.ooupcast(expected_type, meta)
+
     def fromclasstype(self, vclass, llops):
         assert ootype.isSubclass(vclass.concretetype, META)
         if self.lowleveltype == ootype.Class:
