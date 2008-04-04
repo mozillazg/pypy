@@ -15,8 +15,11 @@ class AlreadyRun(Exception):
 
 def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
     if retlast:
-        assert opcodes[-1] == 'POP'
-        opcodes.pop()
+        if opcodes[-1] == 'POP':
+            opcodes.pop()
+            popped = True
+        else:
+            popped = False
     i = 0
     to_pop = 0
     try:
@@ -41,8 +44,12 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
             ctx.pop_object()
 
     if retlast:
-        assert len(stack) == 1
-        return stack[0]
+        if popped:
+            assert len(stack) == 1
+            return stack[0]
+        else:
+            assert not stack
+            return w_Undefined
     if check_stack:
         assert not stack
 
