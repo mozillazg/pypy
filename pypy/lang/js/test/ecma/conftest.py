@@ -66,7 +66,7 @@ class JSTestFile(py.test.collect.Module):
             raise Failed(excinfo=py.code.ExceptionInfo())
         testcases = self.interp.global_context.resolve_identifier('testcases')
         self.tc = self.interp.global_context.resolve_identifier('tc')
-        testcount = testcases.GetValue().Get('length').GetValue().ToInt32()
+        testcount = testcases.Get('length').ToInt32()
         self.testcases = testcases
         return range(testcount)
 
@@ -80,9 +80,9 @@ class JSTestItem(py.test.collect.Item):
         
     def run(self):
         ctx = JSTestFile.interp.global_context
-        r3 = ctx.resolve_identifier('run_test').GetValue()
+        r3 = ctx.resolve_identifier('run_test')
         w_test_number = W_IntNumber(self.number)
-        result = r3.Call(ctx=ctx, args=[w_test_number,]).GetValue().ToString()
+        result = r3.Call(ctx=ctx, args=[w_test_number,]).ToString()
         if result != "passed":
             raise Failed(msg=result)
         elif result == -1:

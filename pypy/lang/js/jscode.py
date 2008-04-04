@@ -2,7 +2,7 @@
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, ActivationObject,\
      create_object, W_Object, w_Undefined, newbool,\
-     w_True, w_False, W_List, w_Null, W_Iterator
+     w_True, w_False, W_List, w_Null, W_Iterator, W_Root
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
@@ -46,9 +46,16 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
     if check_stack:
         assert not stack
 
+#def run_bytecode_unguarded(opcodes, ctx, stack, check_stack=True, retlast=False):
+#    try:
+#        run_bytecode(opcodes, ctx, stack, check_stack, retlast)
+#    except ThrowException:
+#        print 
+#        raise
+
 class T(list):
     def append(self, element):
-        assert element is not None
+        assert isinstance(element, W_Root)
         super(T, self).append(element)
 
 class JsCode(object):
@@ -111,7 +118,12 @@ class JsCode(object):
     def run(self, ctx, check_stack=True, retlast=False):
         if self.has_labels:
             self.remove_labels()
-        return run_bytecode(self.opcodes, ctx, self.stack, check_stack, retlast)
+        if 1:
+            return run_bytecode(self.opcodes, ctx, self.stack, check_stack,
+                                retlast)
+        else:
+            return run_bytecode_unguarded(self.opcodes, ctx, self,stack,
+                                          check_stack, retlast)
 
     def remove_labels(self):
         """ Basic optimization to remove all labels and change
@@ -395,9 +407,9 @@ class TYPEOF_VARIABLE(Opcode):
     def eval(self, ctx, stack):
         try:
             var = ctx.resolve_identifier(self.name)
-            stack.append(var.type())
+            stack.append(W_String(var.type()))
         except ThrowException:
-            stack.append(w_Undefined)
+            stack.append(W_String('undefined'))
 
 #class Typeof(UnaryOp):
 #    def eval(self, ctx):

@@ -218,7 +218,7 @@ function writeFormattedResult( expect, actual, string, passed ) {
 }
 
 function writeHeaderToLog( string ) {
-  // print( string );
+  print( string );
 }
 /* end of print functions */
 
