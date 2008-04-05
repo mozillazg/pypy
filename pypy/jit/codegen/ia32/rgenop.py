@@ -310,30 +310,34 @@ class Builder(GenBuilder):
         self.mc.LEA(eax, mem(edx, offset))
         return self.returnintvar(eax)
 
-    def _compute_itemaddr(self, arg, addoffset=0):
-        base, arraytoken, gv_index = arg
+    def _compute_itemaddr(self, base, arraytoken, gv_index):
         lengthoffset, startoffset, itemoffset = arraytoken
         if isinstance(gv_index, IntConst):
             startoffset += itemoffset * gv_index.value
-            return (base, None, 0, startoffset + addoffset)
+            return (base, None, 0, startoffset)
         elif itemoffset in SIZE2SHIFT:
             self.mc.MOV(ecx, gv_index.operand(self))
-            return (base, ecx, SIZE2SHIFT[itemoffset], startoffset +
-                    addoffset)
+            return (base, ecx, SIZE2SHIFT[itemoffset], startoffset)
         else:
             self.mc.IMUL(ecx, gv_index.operand(self), imm(itemoffset))
-            return (base, ecx, 0, startoffset + addoffset)
+            return (base, ecx, 0, startoffset)
         
-    def itemaddr(self, arg, addoffset=0):
+    def itemaddr(self, base, arraytoken, gv_index):
         # uses ecx
-        base, arraytoken, gv_index = arg
         lengthoffset, startoffset, itemoffset = arraytoken
+        addr = self._compute_itemaddr(base, arraytoken, gv_index)
         if itemoffset == 1:
-            memSIBx = memSIB8
+            return self.mem_access8(addr)
         else:
-            memSIBx = memSIB
-        base, reg, shift, ofs = self._compute_itemaddr(arg, addoffset)
-        return memSIBx(base, reg, shift, ofs)
+            return self.mem_access(addr)
+
+    def mem_access(self, addr, addofs=0):
+        base, reg, shift, ofs = addr
+        return memSIB(base, reg, shift, ofs + addofs)
+
+    def mem_access8(self, addr, addofs=0):
+        base, reg, shift, ofs = addr
+        return memSIB8(base, reg, shift, ofs + addofs)
 
     def genop_getarrayitem(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
@@ -341,10 +345,10 @@ class Builder(GenBuilder):
         if itemsize > WORD:
             # XXX assert not different type than float, probably
             #     need to sneak one in arraytoken
-            base, reg, shift, ofs = self._compute_itemaddr((edx, arraytoken,
-                                                            gv_index))
-            return self.newfloatfrommem(base, reg, shift, ofs)
-        op = self.itemaddr((edx, arraytoken, gv_index))
+            addr = self._compute_itemaddr(edx, arraytoken,
+                                           gv_index)
+            return self.newfloatfrommem(addr)
+        op = self.itemaddr(edx, arraytoken, gv_index)
         if itemsize < WORD:
             self.mc.MOVZX(eax, op)
             op = eax
@@ -352,7 +356,7 @@ class Builder(GenBuilder):
 
     def genop_getarraysubstruct(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
-        op = self.itemaddr((edx, arraytoken, gv_index))
+        op = self.itemaddr(edx, arraytoken, gv_index)
         self.mc.LEA(eax, op)
         return self.returnintvar(eax)
 
@@ -364,8 +368,8 @@ class Builder(GenBuilder):
     def genop_setarrayitem(self, arraytoken, gv_ptr, gv_index, gv_value):
         _, _, itemsize = arraytoken
         self.mc.MOV(edx, gv_ptr.operand(self))
-        destaddr = self.itemaddr((edx, arraytoken, gv_index))
-        gv_value.movetonewaddr(self, (edx, arraytoken, gv_index))
+        destaddr = self._compute_itemaddr(edx, arraytoken, gv_index)
+        gv_value.movetonewaddr(self, destaddr)
         #if itemsize <= WORD:
         #    self.mc.MOV(eax, gv_value.operand(self))
         #    if itemsize != WORD:
@@ -374,6 +378,7 @@ class Builder(GenBuilder):
         #            return
         #        elif itemsize == 2:
         #            self.mc.o16()    # followed by the MOV below
+        #            ^^^^^^^^^^^^^ [fijal] what's this for?
         #        else:
         #            raise NotImplementedError("setarrayitme for fieldsize == 3")
         #    self.mc.MOV(destop, eax)
@@ -389,7 +394,7 @@ class Builder(GenBuilder):
     def genop_malloc_varsize(self, varsizealloctoken, gv_size):
         # XXX boehm only, no atomic/non atomic distinction for now
         # XXX no overflow checking for now
-        op_size = self.itemaddr((None, varsizealloctoken, gv_size))
+        op_size = self.itemaddr(None, varsizealloctoken, gv_size)
         self.mc.LEA(edx, op_size)
         self.push(edx)
         self.mc.CALL(rel32(gc_malloc_fnaddr()))
@@ -537,7 +542,7 @@ class Builder(GenBuilder):
             raise NotImplementedError("Return float var not on fp stack")
         return res
 
-    def newfloatfrommem(self, base, reg, shift, ofs):
+    def newfloatfrommem(self, (base, reg, shift, ofs)):
         res = FloatVar(self.stackdepth + 1)
         self.mc.PUSH(memSIB(base, reg, shift, ofs + WORD))
         self.mc.PUSH(memSIB(base, reg, shift, ofs))
