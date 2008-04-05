@@ -51,8 +51,7 @@ class DoubleRegister(Register):
                 self.cpu.cycles += 1
         else:
             self.setHi(hi, useCycles)
-            self.setLo(lo, useCycles)
-            
+            self.setLo(lo, useCycles)   
     
     def reset(self):
         self.set(self.resetValue, None, False)
@@ -270,8 +269,6 @@ class CPU(object):
         if self.halted:
             val += 0x80
         return val
-    
-    
 
     def isZ(self):
         """ zero flag"""
@@ -306,31 +303,23 @@ class CPU(object):
 
     def isNotN(self):
         return not self.isN()
-    
-    
+       
     # Flags ............................................
-    
                     
     def setROM(self, banks):
-        self.rom = banks
-       
+        self.rom = banks       
             
     def emulate(self, ticks):
         self.cycles += ticks
-        self.interrupt()
+        self.handlePendingInterrupt()
         while (self.cycles > 0):
             self.execute()
 
      # Interrupts
-    def interrupt(self, address=None):
-        if address != None:
-            self.ime = False
-            self.call(address)
-            return
+    def handlePendingInterrupt(self):
         if self.halted:
             if (self.interrupt.isPending()):
                 self.halted = False
-                # Zerd no Densetsu
                 self.cycles -= 4
             elif (self.cycles > 0):
                 self.cycles = 0
@@ -338,21 +327,10 @@ class CPU(object):
             self.lowerPendingInterrupt()
             
     def lowerPendingInterrupt(self):
-        if (self.interrupt.isPending(constants.VBLANK)):
-            self.interrupt(0x40)
-            self.interrupt.lower(constants.VBLANK)
-        elif (self.interrupt.isPending(constants.LCD)):
-            self.interrupt(0x48)
-            self.interrupt.lower(constants.LCD)
-        elif (self.interrupt.isPending(constants.TIMER)):
-            self.interrupt(0x50)
-            self.interrupt.lower(constants.TIMER)
-        elif (self.interrupt.isPending(constants.SERIAL)):
-            self.interrupt(0x58)
-            self.interrupt.lower(constants.SERIAL)
-        elif (self.interrupt.isPending(constants.JOYPAD)):
-            self.interrupt(0x60)
-            self.interrupt.lower(constants.JOYPAD)
+        for flag in self.interrupt.interruptFlags:
+            if flag.isPending():
+                self.call(flag.callCode, disableIme=True)
+                flag.setPending(False)
 
      # Execution
     def fetchExecute(self):
@@ -383,6 +361,11 @@ class CPU(object):
             data = self.memory.read(self.pc.get())
         self.pc.inc() # 2 cycles
         return data
+    
+    def fetchDoubleAddress(self):
+        lo = self.fetch() # 1 cycle
+        hi = self.fetch() # 1 cycle
+        return (hi << 8) + lo
         
     def fetchDoubleRegister(self, register):
         self.popDoubleRegister(CPU.fetch, register)
@@ -415,7 +398,9 @@ class CPU(object):
         self.cycles += 1
         
     # 4 cycles
-    def call(self, address):
+    def call(self, address, disableIME=False):
+        if disableIME:
+            self.ime = False
         self.push(self.pc.getHi()) # 2 cycles
         self.push(self.pc.getLo()) # 2 cycles
         self.pc.set(address)       # 1 cycle
@@ -457,24 +442,23 @@ class CPU(object):
         s = self.a.get() + getter();
         if self.f.cFlag:
             s +=1
-        self.f.reset()
-        self.f.zeroFlagAdd(s)
+        self.carryFlagFinish(getter, 0x10)
         if s >= 0x100:
             self.f.cFlag= True
-        if ((s ^ self.a.get() ^ getter()) & 0x10) != 0:
-            self.f.hFlag= True
-        self.a.set(s & 0xFF)  # 1 cycle
 
     # 1 cycle
     def subtractWithCarry(self, getter, setter=None):
         s = self.a.get() - getter();
         if self.f.cFlag:
             s -= 1
-        self.f.reset()
-        self.f.nFlag = True
-        self.f.zeroFlagAdd(s)
+        self.carryFlagFinish(getter, 0x10)
         if (s & 0xFF00) != 0:
             self.f.cFlag = True
+        self.f.nFlag = True
+        
+    def carryFlagFinish(self, getter):
+        self.f.reset()
+        self.f.zeroFlagAdd(s)
         if ((s ^ self.a.get() ^ getter()) & 0x10) != 0:
             self.f.hFlag = True
         self.a.set(s & 0xFF)  # 1 cycle
@@ -546,7 +530,6 @@ class CPU(object):
     def rotateLeftCircularA(self):
         self.f.cFlagAdd(self.a.get(), 0x80, reset=True)
         self.a.set(((self.a.get() & 0x7F) << 1) + ((self.a.get() & 0x80) >> 7))
-
 
     # 1 cycle
     def rotateLeft(self, getter, setter):
@@ -634,9 +617,7 @@ class CPU(object):
         
      # LD A,(nnnn), 4 cycles
     def storeFetchedMemoryInA(self):
-        lo = self.fetch() # 1 cycle
-        hi = self.fetch() # 1 cycle
-        self.a.set(self.read(hi, lo))  # 1+1 cycles
+        self.a.set(self.read(self.fetchDoubleAddress()))  # 1+1 + 2 cycles
 
     # 2 cycles
     def writeAAtBCAddress(self):
@@ -657,18 +638,14 @@ class CPU(object):
 
      # LD (nnnn),SP  5 cycles
     def load_mem_SP(self):
-        lo = self.fetch() # 1 cycle
-        hi = self.fetch() # 1 cycle
-        address = (hi << 8) + lo
+        address = self.fetchDoubleAddress() # 2 cycles
         self.write(address, self.sp.getLo())  # 2 cycles
         self.write((address + 1), self.sp.getHi()) # 2 cycles
         self.cycles += 1
 
      # LD (nnnn),A  4 cycles
-    def storeAatFetchedAddress(self):
-        lo = self.fetch() # 1 cycle
-        hi = self.fetch() # 1 cycle
-        self.write((hi << 8) + lo, self.a.get()) # 2 cycles
+    def storeAAtFetchedAddress(self):
+        self.write(self.fetchDoubleAddress(), self.a.get()) # 2 cycles
 
      # LDH A,(nn) 3 cycles
     def storeMemoryAtExpandedFetchAddressInA(self):
@@ -715,7 +692,7 @@ class CPU(object):
         self.sp.set(self.hl.get()) # 1 cycle
         self.cycles -= 1
 
-    #
+    # CPA
     def complementA(self):
         self.a.set(self.a.get() ^ 0xFF)
         self.f.nFlag = True
@@ -793,9 +770,8 @@ class CPU(object):
 
      # JP nnnn, 4 cycles
     def unconditionalJump(self):
-        lo = self.fetch() # 1 cycle
-        hi = self.fetch() # 1 cycle
-        self.pc.set(hi,lo) # 2 cycles
+        self.pc.set(self.fetchDoubleAddress()) # 1+2 cycles
+        self.cycles -= 1
 
      # JP cc,nnnn 3,4 cycles
     def conditionalJump(self, cc):
@@ -818,9 +794,7 @@ class CPU(object):
     
      # CALL nnnn, 6 cycles
     def unconditionalCall(self):
-        lo = self.fetch() # 1 cycle
-        hi = self.fetch() # 1 cycle
-        self.call((hi << 8) + lo)  # 4 cycles
+        self.call(self.fetchDoubleAddress())  # 4+2 cycles
 
      # CALL cc,nnnn, 3,6 cycles
     def conditionalCall(self, getter):
@@ -847,12 +821,8 @@ class CPU(object):
      # RETI 4 cycles
     def returnFormInterrupt(self):
         self.ret() # 4 cycles
-         # enable interrupts
-        self.ime = True
-        # execute next instruction
-        self.execute(self.fetch())
-        # check pending interrupts
-        self.interrupt()
+        self.enableInterrupts()
+        self.cycles += 1
 
      # RST nn 4 cycles
     def restart(self, nn):
@@ -860,19 +830,15 @@ class CPU(object):
 
      # DI/EI 1 cycle
     def disableInterrupts(self):
-        # disable interrupts
         self.ime = False
         self.cycles -= 1; 
 
     # 1 cycle
     def enableInterrupts(self): 
-        # enable interrupts
         self.ime = True
         self.cycles -= 1
-        # execute next instruction
         self.execute(self.fetch())
-        # check pending interrupts
-        self.interrupt()
+        self.handlePendingInterrupt()
 
      # HALT/STOP
     def halt(self):
@@ -880,8 +846,7 @@ class CPU(object):
         # emulate bug when interrupts are pending
         if (not self.ime and self.interrupt.isPending()):
             self.execute(self.memory.read(self.pc.get()))
-        # check pending interrupts
-        self.interrupt()
+        self.handlePendingInterrupt()
 
     # 0 cycles
     def stop(self):
@@ -957,7 +922,7 @@ def initialize_op_code_table(table):
     return result
 
 # OPCODE TABLES ---------------------------------------------------------------
-     
+                        
 FIRST_ORDER_OP_CODES = [
     (0x00, CPU.nop),
     (0x08, CPU.load_mem_SP),
@@ -983,7 +948,7 @@ FIRST_ORDER_OP_CODES = [
     (0xF3, CPU.disableInterrupts),
     (0xFB, CPU.enableInterrupts),
     (0xE2, CPU.writeAAtExpandedCAddress),
-    (0xEA, CPU.storeAatFetchedAddress),
+    (0xEA, CPU.storeAAtFetchedAddress),
     (0xF2, CPU.storeExpandedCinA),
     (0xFA, CPU.storeFetchedMemoryInA),
     (0xC3, CPU.unconditionalJump),

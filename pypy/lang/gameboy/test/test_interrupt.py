@@ -7,15 +7,15 @@ def get_interrupt():
 
 
 
-def test_rest():
+def test_reset():
     interrupt = get_interrupt()
     assert interrupt.enable == 0
-    assert interrupt.flag  == constants.VBLANK
+    assert interrupt.getInterruptFlag()  == 0xE0 | constants.VBLANK
     interrupt.enable = 1
     interrupt.flag = ~constants.VBLANK
     interrupt.reset()
     assert interrupt.enable == 0
-    assert interrupt.flag  == constants.VBLANK
+    assert interrupt.getInterruptFlag()  == 0xE0 | constants.VBLANK
     
     
 def test_is_pending():
@@ -23,34 +23,41 @@ def test_is_pending():
     assert interrupt.isPending() == False
     assert interrupt.isPending(0x00) == False
     interrupt.setInterruptEnable(True)
-    assert interrupt.isPending() == True
+    assert interrupt.isPending()
     
     
-def test_raise_interrupt():
+def test_is_pending_common_masks():
     interrupt = get_interrupt()
-    value = 0x12
-    mask = 0xAA
-    interrupt.flag = value
-    assert interrupt.flag == value
-    interrupt.raiseInterrupt(mask)
-    assert interrupt.flag == value|mask
+    for flag in interrupt.interruptFlags:
+        interrupt.reset()
+        interrupt.enable = True
+        assert interrupt.vBlank.isPending()
+        flag.setPending(True)
+        assert interrupt.isPending(flag.mask)
+        
     
-def test_lower():
+def test_raise_lower_interrupt():
     interrupt = get_interrupt()
-    value = 0x12
-    mask = 0xAA
-    interrupt.flag = value
-    assert interrupt.flag == value
-    interrupt.lower(mask)
-    assert interrupt.flag == value & (~mask)
+    masks= [constants.LCD, constants.TIMER, 
+            constants.JOYPAD, constants.SERIAL]
+    interrupt.setInterruptEnable(True)
+    interrupt.vBlank.setPending(True)
+    for mask in masks:
+        interrupt.raiseInterrupt(mask)
+        assert interrupt.maskMapping[mask].isPending() == True
+        assert interrupt.isPending(mask) == True
+        interrupt.lower(mask)
+        assert interrupt.isPending(mask) == False
     
 def test_read_write():
     interrupt = get_interrupt()
-    value = 0x12
+    value = 1
     interrupt.write(constants.IE, value)
     assert interrupt.enable == value
     assert interrupt.read(constants.IE) == value
-    value+=1
+    
+    interrupt.reset()
+    value = constants.LCD
     interrupt.write(constants.IF, value)
-    assert interrupt.flag == value
+    assert interrupt.getInterruptFlag() == 0xE0 | value
     assert interrupt.read(constants.IF) == 0xE0 | value

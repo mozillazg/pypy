@@ -1,5 +1,24 @@
 from pypy.lang.gameboy import constants
 
+
+class InterruptFlag(object):
+    
+    def __init__(self, _reset, mask, callCode):
+        self._reset = _reset
+        self.mask = mask
+        self.callCode = callCode
+        self.reset()
+        
+    def reset(self):
+        self._isPending = self._reset
+        
+    def isPending(self):
+        return self._isPending
+    
+    def setPending(self, _isPending):
+        self._isPending = _isPending
+    
+
 class Interrupt(object):
     """
     PyBoy GameBoy (TM) Emulator
@@ -8,23 +27,50 @@ class Interrupt(object):
     """
     
     def __init__(self):
+        self.createInterruptFlags()
+        self.createFlagList()
+        self.createFlagMaskMapping()
         self.reset()
+        
+    def createInterruptFlags(self):
+        self.vBlank = InterruptFlag(True, constants.VBLANK, 0x40)
+        self.lcd = InterruptFlag(False, constants.LCD, 0x48)
+        self.timer = InterruptFlag(False, constants.TIMER, 0x50)
+        self.serial = InterruptFlag(False, constants.SERIAL, 0x58)
+        self.joypad = InterruptFlag(False, constants.JOYPAD, 0x60)
+        
+    def createFlagList(self):
+        self.interruptFlags = [
+            self.vBlank, self.lcd, 
+            self.timer, self.serial,
+            self.joypad
+        ]
 
+    def createFlagMaskMapping(self):
+        self.maskMapping = {}
+        for flag in self.interruptFlags:
+            self.maskMapping[flag.mask] = flag
+        
     def reset(self):
-        self.enable = 0
-        self.flag = constants.VBLANK
+        self.enable = False
+        for flag in self.interruptFlags:
+            flag.reset()
 
     def isPending(self, mask=None):
+        if not self.enable:
+            return False
         if mask==None:
-            return (self.enable & self.flag) != 0
+            return self.vBlank.isPending()
+        elif self.vBlank.isPending():
+            return self.maskMapping[mask].isPending()
         else:
-            return (self.enable & self.flag & mask) != 0
+            return False
 
     def raiseInterrupt(self, mask):
-        self.flag |= mask
+        self.maskMapping[mask].setPending(True)
 
     def lower(self, mask):
-        self.flag &= ~mask
+        self.maskMapping[mask].setPending(False)
 
     def write(self, address, data):
         if  address == constants.IE:
@@ -40,13 +86,21 @@ class Interrupt(object):
         return 0xFF
 
     def getInterruptEnable(self):
-        return self.enable
-
-    def getInterruptFlag(self):
-        return 0xE0 | self.flag
+        return int(self.enable)
 
     def setInterruptEnable(self, data):
-        self.enable = data
+        self.enable = bool(data)
+        
+    def getInterruptFlag(self):
+        flag = 0x00
+        for interruptFlag in self.interruptFlags:
+            if interruptFlag.isPending():
+                flag |= interruptFlag.mask
+        return 0xE0 | flag
 
     def setInterruptFlag(self, data):
-        self.flag = data
+        for flag in self.interruptFlags:
+            if (data & flag.mask) != 0:
+                flag.setPending(True)
+            else:
+                flag.setPending(False)
