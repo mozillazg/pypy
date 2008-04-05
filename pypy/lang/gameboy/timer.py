@@ -4,6 +4,7 @@ PyBoy GameBoy (TM) Emulator
 Timer and Divider
 """
 from pypy.lang.gameboy import constants
+from math import ceil
 
 class Timer(object):
 
@@ -15,7 +16,7 @@ class Timer(object):
         self.div = 0
         self.dividerCycles = constants.DIV_CLOCK
         self.tima = self.tma = self.tac = 0x00
-        self.timerCycles = self.timerClock = constants.TIMER_CLOCK[self.tac & 0x03]
+        self.timerCycles = self.timerClock = constants.TIMER_CLOCK[0]
 
     def write(self,  address, data):
         if address==constants.DIV:
@@ -61,7 +62,7 @@ class Timer(object):
 
     def setTimerControl(self,  data):
         if ((self.tac & 0x03) != (data & 0x03)):
-            self.timerCycles = self.timerClock = constants.TIMER_CLOCK[data & 0x03]
+            self.timerClock =  self.timerCycles = constants.TIMER_CLOCK[data & 0x03]
         self.tac = data
 
     def cycles(self):
@@ -75,20 +76,30 @@ class Timer(object):
 
     def emulateDivider(self,  ticks):
         self.dividerCycles -= ticks
-        while (self.dividerCycles <= 0):
-            self.div = (self.div + 1) & 0xFF
-            self.dividerCycles += constants.DIV_CLOCK
-    
+        if self.dividerCycles > 0:
+            return
+        count = int(ceil(-1.0*self.dividerCycles / constants.DIV_CLOCK))
+        self.div = (self.div + count) & 0xFF
+        self.dividerCycles += constants.DIV_CLOCK*count
+            
     def emulateTimer(self,  ticks):
-        if ((self.tac & 0x04) != 0):
-            self.timerCycles -= ticks
-            while (self.timerCycles <= 0):
-                self.tima = (self.tima + 1) & 0xFF
-                self.timerCycles += self.timerClock
-                if (self.tima == 0x00):
-                    self.tima = self.tma
-                    self.interrupt.raiseInterrupt(constants.TIMER)
-    
+        if (self.tac & 0x04) == 0:
+            return
+        self.timerCycles -= ticks
+        if self.timerCycles > 0:
+            return
+        count = int(ceil(-1.0*self.timerCycles / self.timerClock))
+        self.timaZeroPassCheck(count)
+        self.tima = (self.tima + count) & 0xFF
+        self.timerCycles += self.timerClock * count
+
+    def timaZeroPassCheck(self, count):
+        if (self.tima < 0) and (self.tima + count >= 0):
+            self.tima = self.tma - count
+            print "raising"
+            self.interrupt.raiseInterrupt(constants.TIMER)
+            print self.interrupt.timer.isPending(), self.interrupt.isPending(constants.TIMER)
+        
 # CLOCK DRIVER -----------------------------------------------------------------
 
 class ClockDriver(object):

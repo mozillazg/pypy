@@ -19,14 +19,14 @@ class Serial(object):
         return self.cycles
 
     def emulate(self, ticks):
-        if ((self.sc & 0x81) == 0x81):
-            self.cycles -= ticks
-            if (self.cycles <= 0):
-                self.sb = 0xFF
-                self.sc &= 0x7F
-                self.cycles = constants.SERIAL_IDLE_CLOCK
-                self.interrupt.raiseInterrupt(constants.SERIAL)
-
+        if ((self.sc & 0x81) != 0x81):
+            return
+        self.cycles -= ticks
+        if (self.cycles <= 0):
+            self.sb = 0xFF
+            self.sc &= 0x7F
+            self.cycles = constants.SERIAL_IDLE_CLOCK
+            self.interrupt.raiseInterrupt(constants.SERIAL)
 
     def setSerialData(self, data):
         self.sb = data

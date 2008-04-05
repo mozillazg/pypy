@@ -5,11 +5,7 @@ from pypy.lang.gameboy import constants
 
 
 def get_timer():
-    return Timer(get_timer_interrupt())
-
-def get_timer_interrupt():
-    return Interrupt()
-    
+    return Timer(Interrupt())
 
     
 # ------------------------------------------------------------------------------
@@ -47,26 +43,93 @@ def test_read_write():
     timer.reset()
     
     
-    
-    
-def test_setTimerControl():
+def test_getTimerControl():
     timer = get_timer()
     value = 0x12
     timer.write(constants.TAC, value)
     assert timer.getTimerControl() == 0xF8 | value 
     assert timer.read(constants.TAC) == 0xF8 |value
+
+def test_setTimerControl():
+    timer = get_timer()
+    value = 0x12
+    timer.setTimerControl(value)
+    assert timer.tac == value
+    assert timer.timerCycles == constants.TIMER_CLOCK[value & 0x03]
+    assert timer.timerClock  == constants.TIMER_CLOCK[value & 0x03]
+    timer.reset()
+    timer.tac = value+1
+    timer.timerClock = 0
+    timer.timerCycles = 0
+    timer.setTimerControl(value+1)
+    assert timer.tac == value+1
+    assert timer.timerClock == 0
+    assert timer.timerClock == 0
     
+def test_read_write_Divider():
+    timer = get_timer()
+    value = 0x12
+    timer.div = value
+    assert timer.getDivider() == timer.div
+    # divider resets on write
+    timer.setDivider(value)
+    assert timer.getDivider() == 0
     
 def test_cycles():
-    py.test.skip("not yet implemented")
     timer = get_timer()
+    value = 10
+    timer.dividerCycles = value
+    assert timer.cycles() == timer.dividerCycles
+    timer.tac = 0x04
+    timer.timerCycles = value-1
+    timer.timerCycles = value
+    assert timer.cycles() == timer.timerCycles
     
-
-def test_emulateDivider():
-    py.test.skip("not yet implemented")
+def test_emulateDivider_normal():
     timer = get_timer()
+    value = 2
+    timer.timerCycles = 0
+    timer.emulateTimer(value)
     
-
-def test_emulateTimer():
-    py.test.skip("not yet implemented")
+def test_test_emulateDivider_zero():
     timer = get_timer()
+    value = 2
+    timer.timerCycles = value
+    timer.emulateTimer(value)
+    assert timer.timerCycles == value
+    
+def test_emulateTimer_tac_return():
+    timer = get_timer()
+    timer.tac = 0
+    timer.timerCycles = -10
+    cycles = timer.timerCycles
+    timer.emulateTimer(10)
+    assert timer.timerCycles == cycles
+    
+def test_emulateTimer_timer_cycles_return():
+    timer = get_timer()
+    timer.tac = 0x04
+    value = 10
+    timer.timerCycles = value+1
+    cycles = timer.timerCycles
+    timer.emulateTimer(value)
+    assert timer.timerCycles == 1
+    
+    timer = get_timer()
+    timer.tac = 0x04
+    
+    
+def test_emulateTimer_interrupt():
+    timer = get_timer()
+    ticks = 0
+    timer.tac = 0x04
+    timer.tima = -1
+    # raise an interupt as we pass 0
+    assert timer.interrupt.isPending(constants.TIMER) == False
+    timer.timerCycles = -timer.timerClock+1
+    timer.emulateTimer(ticks)
+    assert timer.timerCycles == 1
+    assert timer.tima == timer.tma
+    assert timer.interrupt.timer.isPending()
+    
+    
