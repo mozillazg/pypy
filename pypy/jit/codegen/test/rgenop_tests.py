@@ -2330,6 +2330,43 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         result = fnptr(42)
         assert result == 47
 
+    def test_interior_access_float(self):
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+        T = lltype.Struct('T', ('x', lltype.Float))
+        A = lltype.Array(T)
+        S = lltype.GcStruct('S', ('a', A))
+        rgenop = self.RGenOpPacked()
+        FUNC = lltype.FuncType([lltype.Float], lltype.Float)
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken,
+                                                 "interior_access_float")
+        builder.start_writing()
+        gv_s = builder.genop_malloc_varsize(rgenop.varsizeAllocToken(S),
+                                            rgenop.genconst(5))
+        # generate an expanded 'setinteriorfield'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_t1 = builder.genop_getarraysubstruct(rgenop.arrayToken(A),
+                                                gv_a1, rgenop.genconst(3))
+        builder.genop_setfield(rgenop.fieldToken(T, 'x'), gv_t1, gv_x)
+        # generate an expanded 'getinteriorfield'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_t1 = builder.genop_getarraysubstruct(rgenop.arrayToken(A),
+                                                gv_a1, rgenop.genconst(3))
+        gv_y = builder.genop_getfield(rgenop.fieldToken(T, 'x'), gv_t1)
+        # generate an expanded 'getinteriorarraysize'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_z = builder.genop_getarraysize(rgenop.arrayToken(A), gv_a1)
+        # return
+        gv_z1 = builder.genop1('cast_int_to_float', gv_z)
+        gv_result = builder.genop2("float_add", gv_y, gv_z1)
+        builder.finish_and_return(sigtoken, gv_result)
+        builder.end()
+
+        fnptr = self.cast_whatever(gv_fn, [lltype.Float], lltype.Float)
+        result = fnptr(42.3)
+        assert result == 42.3 + 5
+
     def test_void_return(self):
         # XXX minimal test only
         rgenop = self.RGenOp()
