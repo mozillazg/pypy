@@ -6,7 +6,7 @@ from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
-from pypy.jit.rainbow.interpreter import SIGN_EXTEND2, arguments
+from pypy.jit.rainbow.interpreter import arguments
 
 
 class FallStoreBackMemo(object):
@@ -205,14 +205,21 @@ class FallbackInterpreter(object):
 
     def load_byte(self):
         pc = self.pc
-        assert pc >= 0
         result = ord(self.bytecode.code[pc])
         self.pc = pc + 1
         return result
 
     def load_int(self):
-        result = 0
-        shift = 0
+        pc = self.pc
+        result = ord(self.bytecode.code[pc])
+        self.pc = pc + 1
+        if result > 0x7F:
+            result = self._load_larger_int(result)
+        return result
+
+    def _load_larger_int(self, result):    # slow path
+        result = result & 0x7F
+        shift = 7
         pc = self.pc
         while 1:
             byte = ord(self.bytecode.code[pc])
@@ -223,10 +230,10 @@ class FallbackInterpreter(object):
                 break
         self.pc = pc
         return intmask(result)
+    _load_larger_int._dont_inline_ = True
 
     def load_4byte(self):
         pc = self.pc
-        assert pc >= 0
         result = ((ord(self.bytecode.code[pc + 0]) << 24) |
                   (ord(self.bytecode.code[pc + 1]) << 16) |
                   (ord(self.bytecode.code[pc + 2]) <<  8) |
