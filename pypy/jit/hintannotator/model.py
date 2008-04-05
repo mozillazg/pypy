@@ -12,12 +12,16 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       indirect_call
                       int_is_true int_neg int_abs int_invert bool_not
                       int_neg_ovf int_abs_ovf
+                      float_is_true
                       uint_is_true
                       cast_int_to_char
+                      cast_int_to_float
+                      cast_float_to_int
                       cast_int_to_uint
                       cast_uint_to_int
                       cast_char_to_int
                       cast_bool_to_int
+                      cast_bool_to_float
                       cast_ptr_to_int
                       ptr_nonzero
                       ptr_iszero
@@ -43,9 +47,12 @@ BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift
                        int_floordiv_ovf int_lshift_ovf int_add_nonneg_ovf
                        uint_add uint_sub uint_mul uint_mod uint_and
                        uint_lshift uint_rshift uint_floordiv
+                       float_add float_sub float_mul float_truediv
                        char_gt char_lt char_le char_ge char_eq char_ne
                        int_gt int_lt int_le int_ge int_eq int_ne
                        uint_gt uint_lt uint_le uint_ge uint_eq uint_ne 
+
+                       float_gt float_lt float_le float_ge float_eq float_ne
                        getarrayitem setarrayitem
                        getarraysubstruct
                        ptr_eq ptr_ne""".split()
