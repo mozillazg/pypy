@@ -346,6 +346,8 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer,
         try:
             match = frozen.exactmatch(jitstate, outgoingvarboxes, memo)
         except rvalue.DontMerge:
+            #import sys, pdb
+            #pdb.post_mortem(sys.exc_info()[2])
             continue
         if match:
             linkargs = []
