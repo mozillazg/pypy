@@ -117,6 +117,21 @@ class BaseAnnotatorTest(AbstractAnnotatorTest):
         assert len(hs.origins) == 4
         assert hs.concretetype == lltype.Signed
 
+    def test_simple_float(self):
+        def ll_function(x, y):
+            if x:
+                z = x+y * y
+            else:
+                z = x-y / y
+            if int(x):
+                z += x > y + x < y + z == y + z != y
+            else:
+                z += x >= y + x <= y
+            return z
+        hs = self.hannotate(ll_function, [float, float])
+        assert isinstance(hs, SomeLLAbstractConstant)
+        assert hs.concretetype == lltype.Float
+
     def test_simple_hint_result(self):
         def ll_function(cond, x,y):
             if cond:
