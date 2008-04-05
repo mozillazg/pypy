@@ -1833,8 +1833,9 @@ class SimpleTests(InterpretationTest):
         self.check_insns(int_add=2)
 
     def test_freeze_booleffects_correctly(self):
-        py.test.skip("shows bug in BoolRedVars")
+        py.test.skip("fix this!")
         class B(object):
+            _immutable_ = True
             def __init__(self, data, last=None):
                 self.data = data
                 self.last = last
@@ -1845,29 +1846,30 @@ class SimpleTests(InterpretationTest):
             for i in range(a):
                 result = B(i, result)
             return result
+        def h(cond):
+            return not cond
+        globalb = B(4)
         def f(x, y):
             hint(None, global_merge_point=True)
+            b = g(x)
             a = A()
-            a.b = g(x)
+            a.b = b
 
-            cond = a.b is None
+            cond = a.b is globalb
             if y:
                 result = y
             else:
-                cond = bool(x)
                 result = 50
-            if cond:
-                result -= 5
-            else:
+                cond = h(cond)
+            if not cond:
                 result += a.b.data
-            if a.b is not None:
-                result -= 4
             else:
-                result -= 5
+                result -= a.b.data
             return result
-        res = self.interpret(f, [0, 0], policy=StopAtXPolicy(g))
-        assert res == f(0, 0)
-        self.check_insns(int_add=2)
+        res_normal = f(10, 0)
+        res = self.interpret(f, [10, 0], policy=StopAtXPolicy(g, h))
+        assert res == res_normal
+        self.check_insns(getfield=5)
 
 
     def test_ptrequality(self):
