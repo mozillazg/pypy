@@ -2261,6 +2261,36 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         res = fnptr(3.1, -3.2, 2)
         assert res == 2.3*3
 
+    def test_fieldaccess(self):
+        def f(x, y, z):
+            s = lltype.malloc(S.TO)
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+        T = lltype.GcStruct('T', ('x', lltype.Signed),
+                          ('y', lltype.Float),
+                          ('z', lltype.Signed))
+        rgenop = self.RGenOpPacked()
+        ARGS = [lltype.Signed, lltype.Float, lltype.Signed]
+        FUNC = lltype.FuncType(ARGS, lltype.Float)
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x, gv_y, gv_z] = rgenop.newgraph(sigtoken,
+                                                             "fieldaccess")
+        builder.start_writing()
+        gv_s = builder.genop_malloc_fixedsize(rgenop.allocToken(T))
+        builder.genop_setfield(rgenop.fieldToken(T, 'x'), gv_s, gv_x)
+        builder.genop_setfield(rgenop.fieldToken(T, 'y'), gv_s, gv_y)
+        builder.genop_setfield(rgenop.fieldToken(T, 'z'), gv_s, gv_z)
+        gv_y1 = builder.genop_getfield(rgenop.fieldToken(T, 'y'), gv_s)
+        gv_z1 = builder.genop_getfield(rgenop.fieldToken(T, 'z'), gv_s)
+        gv_z2 = builder.genop1('cast_int_to_float', gv_z1)
+        gv_res = builder.genop2('float_add', gv_y1, gv_z2)
+        builder.finish_and_return(sigtoken, gv_res)
+        builder.end()
+
+        fnptr = self.cast_whatever(gv_fn, ARGS, lltype.Float)
+        result = fnptr(1, 3.2, 3)
+        assert result == 3.2 + 3
+
     def test_interior_access(self):
         # for assembler backends, the 'interior' lloperations can be
         # simply expressed as a sequence of genop_getsubstruct and
