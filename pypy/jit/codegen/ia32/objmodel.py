@@ -58,7 +58,7 @@ class IntVar(Var):
         builder.mc.MOV(eax, self.operand(builder))
         builder.mc.MOV(dstop, eax)
 
-class AddressVar(IntVar):
+class AddrVar(IntVar):
     ll_type = llmemory.Address
     token = 'a'
     SIZE = 1
@@ -105,7 +105,7 @@ class FloatVar(Var):
 LL_TO_GENVAR = {}
 TOKEN_TO_GENVAR = {}
 TOKEN_TO_SIZE = {}
-for value in [IntVar, FloatVar, BoolVar, AddressVar]:
+for value in [IntVar, FloatVar, BoolVar, AddrVar]:
     assert hasattr(value, 'll_type')
     LL_TO_GENVAR[value.ll_type] = value.token
     TOKEN_TO_GENVAR[value.token] = value
