@@ -349,17 +349,8 @@ class Builder(GenBuilder):
     def genop_getarrayitem(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
         _, _, itemsize, kindtoken = arraytoken
-        if itemsize > WORD:
-            # XXX assert not different type than float, probably
-            #     need to sneak one in arraytoken
-            addr = self._compute_itemaddr(edx, arraytoken,
-                                           gv_index)
-            return self.newfloatfrommem(addr)
-        op = self.itemaddr(edx, arraytoken, gv_index)
-        if itemsize < WORD:
-            self.mc.MOVZX(eax, op)
-            op = eax
-        return self.returnintvar(op)
+        addr = self._compute_itemaddr(edx, arraytoken, gv_index)
+        return self.newvarfromaddr(kindtoken, addr)
 
     def genop_getarraysubstruct(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
@@ -548,6 +539,19 @@ class Builder(GenBuilder):
         else:
             raise NotImplementedError("Return float var not on fp stack")
         return res
+
+
+    def newvarfromaddr(self, kindtoken, addr):
+        # XXX probably we can still do something here with unrolling
+        #     iterable, but let's not be too smart...
+        if kindtoken == 'i':
+            return self.returnintvar(self.mem_access(addr))
+        elif kindtoken == 'b':
+            return self.returnboolvar(self.mem_access(addr))
+        elif kindtoken == 'f':
+            return self.newfloatfrommem(addr)
+        else:
+            raise NotImplementedError("Return var of kind %s" % (kindtoken,))
 
     def newfloatfrommem(self, (base, reg, shift, ofs)):
         res = FloatVar(self.stackdepth + 1)
