@@ -7,7 +7,7 @@ from pypy.jit.codegen.ia32.rgenop import RI386GenOp
 from pypy.rpython.memory.lltypelayout import convert_offset_to_int
 
 def conv(n):
-    if not isinstance(n, int):
+    if not isinstance(n, (int, str)):
         if isinstance(n, tuple):
             n = tuple(map(conv, n))
         else:

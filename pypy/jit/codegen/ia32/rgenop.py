@@ -39,6 +39,13 @@ def poke_word_into(addr, value):
         p = cast(c_void_p(addr), POINTER(c_int))
         p[0] = value
 
+def map_arg(arg):
+    # a small helper that provides correct type signature
+    if isinstance(arg, lltype.Ptr):
+        return llmemory.Address
+    if isinstance(arg, (lltype.Array, lltype.Struct)):
+        return lltype.Void
+    return arg
 
 class Label(GenLabel):
 
@@ -311,7 +318,7 @@ class Builder(GenBuilder):
         return self.returnintvar(eax)
 
     def _compute_itemaddr(self, base, arraytoken, gv_index):
-        lengthoffset, startoffset, itemoffset = arraytoken
+        lengthoffset, startoffset, itemoffset, _ = arraytoken
         if isinstance(gv_index, IntConst):
             startoffset += itemoffset * gv_index.value
             return (base, None, 0, startoffset)
@@ -324,7 +331,7 @@ class Builder(GenBuilder):
         
     def itemaddr(self, base, arraytoken, gv_index):
         # uses ecx
-        lengthoffset, startoffset, itemoffset = arraytoken
+        lengthoffset, startoffset, itemoffset, _ = arraytoken
         addr = self._compute_itemaddr(base, arraytoken, gv_index)
         if itemoffset == 1:
             return self.mem_access8(addr)
@@ -341,7 +348,7 @@ class Builder(GenBuilder):
 
     def genop_getarrayitem(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
-        _, _, itemsize = arraytoken
+        _, _, itemsize, kindtoken = arraytoken
         if itemsize > WORD:
             # XXX assert not different type than float, probably
             #     need to sneak one in arraytoken
@@ -361,12 +368,12 @@ class Builder(GenBuilder):
         return self.returnintvar(eax)
 
     def genop_getarraysize(self, arraytoken, gv_ptr):
-        lengthoffset, startoffset, itemoffset = arraytoken
+        lengthoffset, startoffset, itemoffset, _ = arraytoken
         self.mc.MOV(edx, gv_ptr.operand(self))
         return self.returnintvar(mem(edx, lengthoffset))
 
     def genop_setarrayitem(self, arraytoken, gv_ptr, gv_index, gv_value):
-        _, _, itemsize = arraytoken
+        itemsize = arraytoken[2]
         self.mc.MOV(edx, gv_ptr.operand(self))
         destaddr = self._compute_itemaddr(edx, arraytoken, gv_index)
         gv_value.movetonewaddr(self, destaddr)
@@ -398,7 +405,7 @@ class Builder(GenBuilder):
         self.mc.LEA(edx, op_size)
         self.push(edx)
         self.mc.CALL(rel32(gc_malloc_fnaddr()))
-        lengthoffset, _, _ = varsizealloctoken
+        lengthoffset = varsizealloctoken[0]
         self.mc.MOV(ecx, gv_size.operand(self))
         self.mc.MOV(mem(eax, lengthoffset), ecx)
         return self.returnintvar(eax)
@@ -1262,26 +1269,24 @@ class RI386GenOp(AbstractRGenOp):
             arrayfield = T._arrayfld
             ARRAYFIELD = getattr(T, arrayfield)
             arraytoken = RI386GenOp.arrayToken(ARRAYFIELD)
-            length_offset, items_offset, item_size = arraytoken
+            length_offset, items_offset, item_size, _ = arraytoken
             arrayfield_offset = llmemory.offsetof(T, arrayfield)
             return (arrayfield_offset+length_offset,
                     arrayfield_offset+items_offset,
-                    item_size)
+                    item_size,
+                    '?')
 
     @classmethod
     @specialize.memo()    
     def arrayToken(cls, A):
         return (llmemory.ArrayLengthOffset(A),
                 llmemory.ArrayItemsOffset(A),
-                llmemory.ItemOffset(A.OF))
+                llmemory.ItemOffset(A.OF),
+                LL_TO_GENVAR[map_arg(A.OF)])
 
     @staticmethod
     @specialize.memo()
     def sigToken(FUNCTYPE):
-        def map_arg(arg):
-            if isinstance(arg, lltype.Ptr):
-                return llmemory.Address
-            return arg
         return ([LL_TO_GENVAR[map_arg(arg)] for arg in FUNCTYPE.ARGS if arg
                  is not lltype.Void],
                 LL_TO_GENVAR[map_arg(FUNCTYPE.RESULT)])
