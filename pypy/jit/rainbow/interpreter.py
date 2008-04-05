@@ -1,4 +1,4 @@
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic, noop
 from pypy.rlib.debug import debug_print
@@ -74,8 +74,6 @@ class JitCode(object):
         from pypy.jit.rainbow import dump
         dump.dump_bytecode(self, file=file)
         print >> file
-
-SIGN_EXTEND2 = 1 << 15
 
 class STOP(object):
     pass
@@ -255,7 +253,7 @@ class JitInterpreter(object):
         self.queue = rtimeshift.DispatchQueue(bytecode.num_mergepoints)
         rtimeshift.enter_frame(self.jitstate, self.queue)
         self.frame = self.jitstate.frame
-        self.frame.pc = 0
+        self.frame.pc = r_uint(0)
         self.frame.bytecode = bytecode
         self.frame.local_boxes = redargs
         self.frame.local_green = greenargs
@@ -362,8 +360,16 @@ class JitInterpreter(object):
         return self.frame.bytecode
 
     def load_int(self):
-        result = 0
-        shift = 0
+        pc = self.frame.pc
+        result = ord(self.frame.bytecode.code[pc])
+        self.frame.pc = pc + 1
+        if result > 0x7F:
+            result = self._load_larger_int(result)
+        return result
+
+    def _load_larger_int(self, result):    # slow path
+        result = result & 0x7F
+        shift = 7
         pc = self.frame.pc
         while 1:
             byte = ord(self.frame.bytecode.code[pc])
@@ -374,20 +380,19 @@ class JitInterpreter(object):
                 break
         self.frame.pc = pc
         return intmask(result)
+    _load_larger_int._dont_inline_ = True
 
     def load_4byte(self):
         pc = self.frame.pc
-        assert pc >= 0
-        result = ((ord(self.frame.bytecode.code[pc + 0]) << 24) |
-                  (ord(self.frame.bytecode.code[pc + 1]) << 16) |
-                  (ord(self.frame.bytecode.code[pc + 2]) <<  8) |
-                  (ord(self.frame.bytecode.code[pc + 3]) <<  0))
+        result = ((r_uint(ord(self.frame.bytecode.code[pc + 0])) << 24) |
+                  (r_uint(ord(self.frame.bytecode.code[pc + 1])) << 16) |
+                  (r_uint(ord(self.frame.bytecode.code[pc + 2])) <<  8) |
+                  (r_uint(ord(self.frame.bytecode.code[pc + 3])) <<  0))
         self.frame.pc = pc + 4
-        return intmask(result)
+        return result
 
     def load_bool(self):
         pc = self.frame.pc
-        assert pc >= 0
         result = ord(self.frame.bytecode.code[pc])
         self.frame.pc = pc + 1
         return bool(result)
@@ -899,7 +904,7 @@ class JitInterpreter(object):
     def hp_direct_call(self, greenargs, redargs, targetbytecode):
         frame = rtimeshift.VirtualFrame(self.frame, None)
         self.frame = self.jitstate.frame = frame
-        frame.pc = 0
+        frame.pc = r_uint(0)
         frame.bytecode = targetbytecode
         frame.local_boxes = redargs
         frame.local_green = greenargs
