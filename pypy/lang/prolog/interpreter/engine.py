@@ -39,6 +39,7 @@ class LimitedScopeContinuation(Continuation):
         return self.continuation.call(engine, choice_point=False)
 
 class TrailChunk(object):
+    _immutable_ = True
     def __init__(self, prev=None):
         self.trail = []
         self.prev = prev
@@ -290,13 +291,11 @@ class Engine(Heap):
                                                        continuation)
                     raise
             else:
-                inline = rule.body is None # inline facts
                 try:
                     # for the last rule (rulechain is None), this will always
                     # return, because choice_point is False
                     result = self.try_rule(rule, query, continuation,
-                                           choice_point=choice_point,
-                                           inline=inline)
+                                           choice_point=choice_point)
                     self.discard(oldstate)
                     return result
                 except UnificationFailed:
@@ -305,8 +304,7 @@ class Engine(Heap):
             rule = rulechain.rule
             rulechain = rulechain.next
 
-    def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True,
-                 inline=False):
+    def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True):
         if not choice_point:
             return (TRY_RULE, query, continuation, rule)
         return self.main_loop(TRY_RULE, query, continuation, rule)
