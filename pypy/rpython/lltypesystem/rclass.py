@@ -168,7 +168,7 @@ class ClassRepr(AbstractClassRepr):
         return vtable
 
     def getruntime(self, expected_type):
-        assert expected_type == CLASSTYPE
+        assert lltype.castable(CLASSTYPE, expected_type) >= 0
         return self.getvtable()
 
     def setup_vtable(self, vtable, rsubcls):
