@@ -422,6 +422,9 @@ class TranslationDriver(SimpleTaskEngine):
         if cpu == 'i386':
             from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
             RGenOp.MC_SIZE = 32 * 1024 * 1024
+        elif cpu == 'ia32':
+            from pypy.jit.codegen.ia32.rgenop import RI386GenOp as RGenOp
+            RGenOp.MC_SIZE = 32 * 1024 * 1024
         elif cpu == 'ppc':
             from pypy.jit.codegen.ppc.rgenop import RPPCGenOp as RGenOp
             RGenOp.MC_SIZE = 32 * 1024 * 1024
