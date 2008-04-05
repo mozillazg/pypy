@@ -1833,7 +1833,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns(int_add=2)
 
     def test_freeze_booleffects_correctly(self):
-        py.test.skip("fix this!")
         class B(object):
             _immutable_ = True
             def __init__(self, data, last=None):
