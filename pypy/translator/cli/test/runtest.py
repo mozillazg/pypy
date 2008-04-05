@@ -100,7 +100,7 @@ class TestEntryPoint(BaseEntryPoint):
             if hasattr(self.db, 'exceptiontransformer'):
                 ilasm.opcode('call', 'bool rpyexc_occured()')
                 ilasm.opcode('brfalse', 'print_result') # no exceptions
-                ilasm.opcode('call', 'Object rpyexc_fetch_value()')
+                ilasm.opcode('call', '[mscorlib]System.Object rpyexc_fetch_value()')
                 ilasm.call('string class [pypylib]pypy.test.Result::FormatException(object)')
                 ilasm.call('void class [mscorlib]System.Console::WriteLine(string)')
                 ilasm.opcode('br', 'return')
