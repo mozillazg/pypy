@@ -9,7 +9,7 @@ from pypy.rlib import objectmodel
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.codegen.ia32.objmodel import IntVar, FloatVar, Var,\
      BoolVar, IntConst, AddrConst, BoolConst, FloatConst,\
-     LL_TO_GENVAR, TOKEN_TO_SIZE, token_to_genvar, WORD
+     LL_TO_GENVAR, TOKEN_TO_SIZE, token_to_genvar, WORD, AddrVar
 
 DEBUG_CALL_ALIGN = True
 if sys.platform == 'darwin':
@@ -42,10 +42,10 @@ def poke_word_into(addr, value):
 def map_arg(arg):
     # a small helper that provides correct type signature
     if isinstance(arg, lltype.Ptr):
-        return llmemory.Address
+        arg = llmemory.Address
     if isinstance(arg, (lltype.Array, lltype.Struct)):
-        return lltype.Void
-    return arg
+        arg = lltype.Void
+    return LL_TO_GENVAR[arg]
 
 class Label(GenLabel):
 
@@ -275,8 +275,10 @@ class Builder(GenBuilder):
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg)
 
-    def genop_getfield(self, (offset, fieldsize), gv_ptr):
+    def genop_getfield(self, (offset, fieldsize, kindtoken), gv_ptr):
         self.mc.MOV(edx, gv_ptr.operand(self))
+        return self.newvarfromaddr(kindtoken, (edx, None, 0, offset))
+        
         if fieldsize == WORD:
             op = mem(edx, offset)
         else:
@@ -298,21 +300,11 @@ class Builder(GenBuilder):
     def get_frame_info(self, vars_gv):
         return vars_gv
 
-    def genop_setfield(self, (offset, fieldsize), gv_ptr, gv_value):
-        self.mc.MOV(eax, gv_value.operand(self))
+    def genop_setfield(self, (offset, fieldsize, kt), gv_ptr, gv_value):
         self.mc.MOV(edx, gv_ptr.operand(self))
-        if fieldsize == 1:
-            self.mc.MOV(mem8(edx, offset), al)
-        else:
-            if fieldsize == 2:
-                self.mc.o16()    # followed by the MOV below
-            elif fieldsize == WORD:
-                pass
-            else:
-                raise NotImplementedError("fieldsize != 1,2,4")
-            self.mc.MOV(mem(edx, offset), eax)
+        gv_value.movetonewaddr(self, (edx, None, 0, offset))
 
-    def genop_getsubstruct(self, (offset, fieldsize), gv_ptr):
+    def genop_getsubstruct(self, (offset, fieldsize, kt), gv_ptr):
         self.mc.MOV(edx, gv_ptr.operand(self))
         self.mc.LEA(eax, mem(edx, offset))
         return self.returnintvar(eax)
@@ -521,6 +513,14 @@ class Builder(GenBuilder):
             self.push(op)
         return res
 
+    def returnaddrvar(self, op):
+        res = AddrVar(self.stackdepth)
+        if op is None:
+            self.push(imm(0))
+        else:
+            self.push(op)
+        return res
+
     def returnboolvar(self, op):
         if op is eax:
             pass
@@ -546,6 +546,8 @@ class Builder(GenBuilder):
         #     iterable, but let's not be too smart...
         if kindtoken == 'i':
             return self.returnintvar(self.mem_access(addr))
+        elif kindtoken == 'a':
+            return self.returnaddrvar(self.mem_access(addr))
         elif kindtoken == 'b':
             return self.returnboolvar(self.mem_access(addr))
         elif kindtoken == 'f':
@@ -1251,7 +1253,7 @@ class RI386GenOp(AbstractRGenOp):
             fieldsize = 0      # not useful for getsubstruct
         else:
             fieldsize = llmemory.sizeof(FIELD)
-        return (llmemory.offsetof(T, name), fieldsize)
+        return (llmemory.offsetof(T, name), fieldsize, map_arg(FIELD))
 
     @staticmethod
     @specialize.memo()
@@ -1286,14 +1288,13 @@ class RI386GenOp(AbstractRGenOp):
         return (llmemory.ArrayLengthOffset(A),
                 llmemory.ArrayItemsOffset(A),
                 llmemory.ItemOffset(A.OF),
-                LL_TO_GENVAR[map_arg(A.OF)])
+                map_arg(A.OF))
 
     @staticmethod
     @specialize.memo()
     def sigToken(FUNCTYPE):
-        return ([LL_TO_GENVAR[map_arg(arg)] for arg in FUNCTYPE.ARGS if arg
-                 is not lltype.Void],
-                LL_TO_GENVAR[map_arg(FUNCTYPE.RESULT)])
+        return ([map_arg(arg) for arg in FUNCTYPE.ARGS if arg
+                 is not lltype.Void], map_arg(FUNCTYPE.RESULT))
 
     @staticmethod
     def erasedType(T):
