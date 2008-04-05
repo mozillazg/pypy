@@ -306,7 +306,7 @@ def start_new_block(states_dic, jitstate, key, global_resumer, index=-1):
     outgoingvarboxes = []
     res = frozen.exactmatch(jitstate, outgoingvarboxes, memo)
     assert res, "exactmatch() failed"
-    cleanup_partial_data(memo.partialdatamatch)
+    cleanup_partial_data(memo)
     newblock = enter_next_block(jitstate, outgoingvarboxes)
     if index < 0:
         states_dic[key].append((frozen, newblock))
@@ -359,7 +359,7 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer,
         # We need a more general block.  Do it by generalizing all the
         # redboxes from outgoingvarboxes, by making them variables.
         # Then we make a new block based on this new state.
-        cleanup_partial_data(memo.partialdatamatch)
+        cleanup_partial_data(memo)
         forget_nonzeroness = memo.forget_nonzeroness
         replace_memo = rvalue.copy_memo()
         for box in outgoingvarboxes:
@@ -375,13 +375,17 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer,
     start_new_block(states_dic, jitstate, key, global_resumer)
     return False   
 
-def cleanup_partial_data(partialdatamatch):
+def cleanup_partial_data(memo):
     # remove entries from PartialDataStruct unless they matched
     # their frozen equivalent
-    for box, keep in partialdatamatch.iteritems():
+    for box, keep in memo.partialdatamatch.iteritems():
         content = box.content
         if isinstance(content, rcontainer.PartialDataStruct):
             box.content = content.cleanup_partial_data(keep)
+    # XXX could do better by freezing booleffects. not sure if it's worth it
+    for box in memo.forgetbooleffects.iterkeys():
+        assert isinstance(box, rvalue.BoolRedBox)
+        box.iftrue = []
 
 def merge_generalized(jitstate):
     resuming = jitstate.get_resuming()

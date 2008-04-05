@@ -1,8 +1,11 @@
 from pypy.jit.timeshifter import rvalue
 
 class Effect(object):
+    def __init__(self, reverse):
+        self.reverse = reverse
+
     def learn_boolvalue(self, jitstate, boolval):
-        if boolval:
+        if boolval ^ self.reverse:
             return self._apply(jitstate)
         else:
             return self._apply_reverse(jitstate)
@@ -15,9 +18,9 @@ class Effect(object):
 
 class PtrIsNonZeroEffect(Effect):
     def __init__(self, ptrbox, reverse=False):
+        Effect.__init__(self, reverse)
         assert isinstance(ptrbox, rvalue.AbstractPtrRedBox)
         self.ptrbox = ptrbox
-        self.reverse = reverse
 
     def learn_boolvalue(self, jitstate, boolval):
         return self.ptrbox.learn_nonzeroness(jitstate, boolval ^ self.reverse)
@@ -27,11 +30,11 @@ class PtrIsNonZeroEffect(Effect):
 
 class PtrEqualEffect(Effect):
     def __init__(self, ptrbox1, ptrbox2, reverse=False):
+        Effect.__init__(self, reverse)
         assert isinstance(ptrbox1, rvalue.AbstractPtrRedBox)
         assert isinstance(ptrbox2, rvalue.AbstractPtrRedBox)
         self.ptrbox1 = ptrbox1
         self.ptrbox2 = ptrbox2
-        self.reverse = reverse
 
     def _apply(self, jitstate):
         # the pointers _are_ equal
@@ -43,7 +46,6 @@ class PtrEqualEffect(Effect):
             return True
         # XXX can do more?
         return True
-
 
     def copy(self, memo):
         return PtrEqualEffect(self.ptrbox1.copy(memo),

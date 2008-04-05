@@ -17,6 +17,7 @@ def freeze_memo():
 def exactmatch_memo(force_merge=False):
     memo = Memo()
     memo.partialdatamatch = {}
+    memo.forgetbooleffects = {}
     memo.forget_nonzeroness = {}
     memo.force_merge=force_merge
     return memo
@@ -511,6 +512,11 @@ class FrozenBoolVar(FrozenVar):
             return newbox
         else:
             return memo[self]
+
+    def exactmatch(self, box, outgoingvarboxes, memo):
+        memo.forgetbooleffects[box] = True
+        return FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
+
 
 class FrozenDoubleConst(FrozenConst):
 
