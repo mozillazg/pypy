@@ -5,6 +5,7 @@ from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.c.test import test_boehm
 from ctypes import c_void_p, cast, CFUNCTYPE, c_int
+from pypy.jit.codegen.support import ctypes_mapping
 
 class PseudoAnnhelper(object):
     rtyper = None
@@ -667,32 +668,41 @@ def make_call_functions_with_different_signatures(rgenop):
 
     return gv_callable
 
-class FrameVarReader:
-    FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Signed))
-    def __init__(self, RGenOp, via_genconst):
-        def reader(base):
-            if via_genconst:
-                gv = RGenOp.genconst_from_frame_var(
-                        RGenOp.kindToken(lltype.Signed),
-                        base, self.frameinfo, 0)
-                return gv.revealconst(lltype.Signed)
-            else:
-                return RGenOp.read_frame_var(lltype.Signed, base,
-                                             self.frameinfo, 0)
-        self.reader = reader
-    def get_reader(self, info):
-        self.frameinfo = info
-        return llhelper(self.FUNC, self.reader)
+def get_frame_reader(tp):
+    class FrameVarReader:
+        FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], tp))
+        def __init__(self, RGenOp, via_genconst):
+            def reader(base):
+                if via_genconst:
+                    gv = RGenOp.genconst_from_frame_var(
+                            RGenOp.kindToken(tp),
+                            base, self.frameinfo, 0)
+                    return gv.revealconst(tp)
+                else:
+                    return RGenOp.read_frame_var(tp, base,
+                                                 self.frameinfo, 0)
+            self.reader = reader
+        def get_reader(self, info):
+            self.frameinfo = info
+            return llhelper(self.FUNC, self.reader)
+    return FrameVarReader
 
-def make_read_frame_var(rgenop, get_reader):
-    signed_kind = rgenop.kindToken(lltype.Signed)
+FrameVarReader = get_frame_reader(lltype.Signed)
+FrameVarFloatReader = get_frame_reader(lltype.Float)
+
+def make_read_frame_var(rgenop, get_reader, reader, FUNC):
     sigtoken = rgenop.sigToken(FUNC)
-    readertoken = rgenop.sigToken(FrameVarReader.FUNC.TO)
+    readertoken = rgenop.sigToken(reader.FUNC.TO)
 
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "f")
     builder.start_writing()
 
-    gv_y = builder.genop2("int_mul", gv_x, rgenop.genconst(2))
+    if FUNC.RESULT is lltype.Signed:
+        gv_y = builder.genop2("int_mul", gv_x, rgenop.genconst(2))
+    elif FUNC.RESULT is lltype.Float:
+        gv_y = builder.genop2("float_mul", gv_x, rgenop.genconst(2.0))
+    else:
+        gv_y = None
     gv_base = builder.genop_get_frame_base()
     info = builder.get_frame_info([gv_y])
     gv_reader = rgenop.constPrebuiltGlobal(get_reader(info))
@@ -706,12 +716,13 @@ def make_read_frame_var(rgenop, get_reader):
 
     return gv_f
 
-def get_read_frame_var_runner(RGenOp, via_genconst):
-    fvr = FrameVarReader(RGenOp, via_genconst)
+def get_read_frame_var_runner(RGenOp, via_genconst, reader, FUNC):
+    fvr = reader(RGenOp, via_genconst)
 
     def read_frame_var_runner(x):
         rgenop = RGenOp()
-        gv_f = make_read_frame_var(rgenop, fvr.get_reader)
+        gv_f = make_read_frame_var(rgenop, fvr.get_reader,
+                                   reader, FUNC)
         fn = gv_f.revealconst(lltype.Ptr(FUNC))
         res = fn(x)
         keepalive_until_here(rgenop)    # to keep the code blocks alive
@@ -1032,13 +1043,15 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         assert res == 8
 
     def test_read_frame_var_compile(self):
-        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=False)
+        runner = get_read_frame_var_runner(self.RGenOp, False,
+                                           FrameVarReader, FUNC)
         fn = self.compile(runner, [int])
         res = fn(30)
         assert res == 60
 
     def test_genconst_from_frame_var_compile(self):
-        runner = get_read_frame_var_runner(self.RGenOp, via_genconst=True)
+        runner = get_read_frame_var_runner(self.RGenOp, True,
+                                           FrameVarReader, FUNC)
         fn = self.compile(runner, [int])
         res = fn(30)
         assert res == 60
@@ -1067,8 +1080,8 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
     def directtesthelper(self, FUNCTYPE, func):
         # for machine code backends: build a ctypes function pointer
         # (with a real physical address) that will call back our 'func'
-        nb_args = len(FUNCTYPE.TO.ARGS)
-        callback = CFUNCTYPE(c_int, *[c_int]*nb_args)(func)
+        args = tuple([ctypes_mapping[i] for i in FUNCTYPE.TO.ARGS])
+        callback = CFUNCTYPE(ctypes_mapping[FUNCTYPE.TO.RESULT], *args)(func)
         keepalive = self.__dict__.setdefault('_keepalive', [])
         keepalive.append((callback, func))
         return intmask(cast(callback, c_void_p).value)
@@ -1518,10 +1531,25 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
             return reader_ptr
 
         rgenop = self.RGenOp()
-        gv_callable = make_read_frame_var(rgenop, get_reader)
+        gv_callable = make_read_frame_var(rgenop, get_reader, FrameVarReader,
+                                          FUNC)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(20)
         assert res == 40
+
+    def test_read_frame_var_float_direct(self):
+        def get_reader(info):
+            fvr = FrameVarFloatReader(self.RGenOp, via_genconst=False)
+            fvr.frameinfo = info
+            reader_ptr = self.directtesthelper(fvr.FUNC, fvr.reader)
+            return reader_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_read_frame_var(rgenop, get_reader,
+                                          FrameVarFloatReader, FLOATFUNC)
+        fnptr = self.cast_float(gv_callable, 1)
+        res = fnptr(3.2)
+        assert res == 6.4
 
     def test_genconst_from_frame_var_direct(self):
         def get_reader(info):
@@ -1531,7 +1559,8 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
             return reader_ptr
 
         rgenop = self.RGenOp()
-        gv_callable = make_read_frame_var(rgenop, get_reader)
+        gv_callable = make_read_frame_var(rgenop, get_reader, FrameVarReader,
+                                          FUNC)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(20)
         assert res == 40

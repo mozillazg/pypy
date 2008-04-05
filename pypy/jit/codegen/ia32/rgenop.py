@@ -10,6 +10,8 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.codegen.ia32.objmodel import IntVar, FloatVar, Var,\
      BoolVar, IntConst, AddrConst, BoolConst, FloatConst,\
      LL_TO_GENVAR, TOKEN_TO_SIZE, token_to_genvar, WORD, AddrVar
+from pypy.jit.codegen.support import ctypes_mapping
+from ctypes import cast, c_void_p, POINTER
 
 DEBUG_CALL_ALIGN = True
 if sys.platform == 'darwin':
@@ -17,15 +19,21 @@ if sys.platform == 'darwin':
 else:
     CALL_ALIGN = 1
 
-def peek_word_at(addr):
+@specialize.arg(0)
+def peek_value_at(T, addr):
     # now the Very Obscure Bit: when translated, 'addr' is an
     # address.  When not, it's an integer.  It just happens to
     # make the test pass, but that's probably going to change.
     if objectmodel.we_are_translated():
-        return addr.signed[0]
+        if T is lltype.Signed:
+            return addr.signed[0]
+        elif T is lltype.Float:
+            return addr.float[0]
+        else:
+            raise NotImplementedError("Not implemented types " + str(T))
     else:
-        from ctypes import cast, c_void_p, c_int, POINTER
-        p = cast(c_void_p(addr), POINTER(c_int))
+        tp = ctypes_mapping[T]
+        p = cast(c_void_p(addr), POINTER(tp))
         return p[0]
 
 def poke_word_into(addr, value):
@@ -394,6 +402,7 @@ class Builder(GenBuilder):
         return self.returnintvar(eax)
         
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
+        # WUAAA, this does not support floats
         numargs = len(sigtoken[0])
         MASK = CALL_ALIGN-1
         if MASK:
@@ -1316,9 +1325,8 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.arg(0)
     def read_frame_var(T, base, info, index):
-        assert T is lltype.Signed
         v = info[index]
-        value = peek_word_at(base - v.stackpos * WORD)
+        value = peek_value_at(T, base - v.stackpos * WORD)
         return value
 
     @staticmethod
@@ -1327,7 +1335,7 @@ class RI386GenOp(AbstractRGenOp):
         v = info[index]
         if isinstance(v, GenConst):
             return v
-        return IntConst(peek_word_at(base - v.stackpos * WORD))
+        return IntConst(peek_value_at(lltype.Signed, base - v.stackpos * WORD))
 
     @staticmethod
     @specialize.arg(0)
@@ -1339,7 +1347,7 @@ class RI386GenOp(AbstractRGenOp):
     @specialize.arg(0)
     def read_frame_place(T, base, place):
         assert T is lltype.Signed
-        return peek_word_at(base - place.stackpos * WORD)
+        return peek_value_at(T, base - place.stackpos * WORD)
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
