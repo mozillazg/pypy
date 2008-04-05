@@ -34,7 +34,7 @@ class Var(GenVar):
     def operand(self, builder):
         raise NotImplementedError
 
-    def movetonewaddr(self, builder, arg):
+    def movetonewaddr(self, builder, addr):
         raise NotImplementedError
 
     def __repr__(self):
@@ -53,8 +53,8 @@ class IntVar(Var):
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
 
-    def movetonewaddr(self, builder, arg):
-        dstop = builder.itemaddr(arg)
+    def movetonewaddr(self, builder, addr):
+        dstop = builder.mem_access(addr)
         builder.mc.MOV(eax, self.operand(builder))
         builder.mc.MOV(dstop, eax)
 
@@ -64,6 +64,10 @@ class AddressVar(IntVar):
     SIZE = 1
 
 class BoolVar(Var):
+    ll_type = lltype.Bool
+    token = 'b'
+    SIZE = 1
+
     # represents a boolean as an integer which *must* be exactly 0 or 1
     def operand(self, builder):
         return builder.stack_access(self.stackpos)
@@ -71,14 +75,10 @@ class BoolVar(Var):
     def newvar(self, builder):
         return builder.returnboolvar(self.operand(builder))
 
-    def movetonewaddr(self, builder, arg):
-        dstop = builder.itemaddr(arg)
+    def movetonewaddr(self, builder, addr):
+        dstop = builder.mem_access(addr)
         builder.mc.MOV(eax, self.operand(builder))
         builder.mc.MOV(destop, al)
-
-    ll_type = lltype.Bool
-    token = 'b'
-    SIZE = 1
 
 class FloatVar(Var):
     def operand(self, builder):
@@ -88,9 +88,9 @@ class FloatVar(Var):
         raise NotImplementedError("This requires moving around float mem")
         return builder.returnfloatvar(self.operand(builder))
 
-    def movetonewaddr(self, builder, arg):
-        dstop1 = builder.itemaddr(arg)
-        dstop2 = builder.itemaddr(arg, WORD)
+    def movetonewaddr(self, builder, addr):
+        dstop1 = builder.mem_access(addr)
+        dstop2 = builder.mem_access(addr, WORD)
         builder.mc.MOV(eax, builder.stack_access(self.stackpos))
         builder.mc.MOV(dstop1, eax)
         builder.mc.MOV(eax, builder.stack_access(self.stackpos - 1))
@@ -186,8 +186,8 @@ class IntConst(Const):
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
 
-    def movetonewaddr(self, builder, arg):
-        dstop = builder.itemaddr(arg)
+    def movetonewaddr(self, builder, addr):
+        dstop = builder.mem_access(addr)
         builder.mc.MOV(dstop, self.operand(builder))
 
 class FloatConst(Const):
@@ -204,15 +204,15 @@ class FloatConst(Const):
         self.rawbuf[0] = floatval
 
     def newvar(self, builder):
-        return builder.newfloatfrommem(None, None, 0,
-            rffi.cast(rffi.INT, self.rawbuf))
+        return builder.newfloatfrommem((None, None, 0,
+            rffi.cast(rffi.INT, self.rawbuf)))
 
     def operand(self, builder):
         return heap64(rffi.cast(rffi.INT, self.rawbuf))
 
-    def movetonewaddr(self, builder, arg):
-        dstop1 = builder.itemaddr(arg)
-        dstop2 = builder.itemaddr(arg, WORD)
+    def movetonewaddr(self, builder, addr):
+        dstop1 = builder.mem_access(addr)
+        dstop2 = builder.mem_access(addr, WORD)
         builder.mc.MOV(dstop1, imm(rffi.cast(rffi.INTP, self.rawbuf)[0]))
         builder.mc.MOV(dstop2, imm(rffi.cast(rffi.INTP, self.rawbuf)[1]))
 
@@ -230,8 +230,8 @@ class BoolConst(Const):
     def newvar(self, builder):
         return builder.returnboolvar(self.operand(builder))
 
-    def movetonewaddr(self, builder, arg):
-        dstop = builder.itemaddr(arg)
+    def movetonewaddr(self, builder, addr):
+        dstop = builder.mem_access(addr)
         builder.mc.MOV(dstop, self.operand(builder))
 
 ##class FnPtrConst(IntConst):
