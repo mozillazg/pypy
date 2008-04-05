@@ -388,7 +388,7 @@ class BaseInliner(object):
             classdef = self.lltype_to_classdef[VALUE]
             rtyper = self.translator.rtyper
             classrepr = rclass.getclassrepr(rtyper, classdef)
-            vtable = classrepr.getruntime()
+            vtable = classrepr.getruntime(classrepr.lowleveltype)
             var_etype = copiedlink.args[0]
             var_evalue = copiedlink.args[1]
             for exceptionlink in afterblock.exits[1:]:
