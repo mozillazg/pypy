@@ -400,9 +400,12 @@ def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
 oop_list_nonzero.couldfold = True
 
 def oop_list_method_resize(jitstate, oopspecdesc, deepfrozen, selfbox, lengthbox):
+    # only used by ootypesystem
     content = selfbox.content
     if isinstance(content, VirtualList):
         item_boxes = content.item_boxes
+        # I think this is always true, better to assert it
+        assert lengthbox.is_constant()
         length = rvalue.ll_getvalue(lengthbox, lltype.Signed)
         if len(item_boxes) < length:
             diff = length - len(item_boxes)
