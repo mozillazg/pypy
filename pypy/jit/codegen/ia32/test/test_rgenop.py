@@ -13,3 +13,6 @@ class TestRI386GenopDirect(AbstractRGenOpTestsDirect):
 class TestRI386GenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RI386GenOp
     from pypy.jit.codegen.ia32.test.test_operation import RGenOpPacked
+
+    def test_read_frame_float_var_compile(self):
+        py.test.skip("no support for addr.float[0]")
