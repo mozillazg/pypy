@@ -736,6 +736,7 @@ def get_frame_place_writer(TP):
                                           lltype.Void))
         def __init__(self, RGenOp):
             def writer(base, value):
+                print value
                 if value > 5:
                     RGenOp.write_frame_place(TP, base,
                                              self.place1, value * 7)
@@ -799,6 +800,22 @@ def get_write_frame_place_runner(RGenOp):
         keepalive_until_here(rgenop)    # to keep the code blocks alive
         return res
     return write_frame_place_runner
+
+def make_float_caller(rgenop):
+    FUNC = lltype.FuncType([lltype.Signed, lltype.Float], lltype.Float)
+    sigtoken = rgenop.sigToken(FLOATFUNC)
+    innertoken = rgenop.sigToken(FUNC)
+    builder, gv_f, [gv_y, gv_x] = rgenop.newgraph(innertoken, "inner")
+    builder.start_writing()
+    builder.finish_and_return(innertoken, gv_x)
+    builder.end()
+    builder, gv_f2, [gv_x] = rgenop.newgraph(sigtoken, "outer")
+    builder.start_writing()
+    gv_res = builder.genop_call(innertoken, gv_f, [rgenop.genconst(3), gv_x])
+    builder.finish_and_return(sigtoken, gv_res)
+    builder.end()
+
+    return gv_f2
 
 class ManyFramePlaceWriter:
     FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address, lltype.Signed],
@@ -1156,6 +1173,12 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         fnptr = self.cast_float(gv_add_5, 1)
         res = fnptr(1.2)
         assert res == 4.4
+
+    def test_float_call(self):
+        rgenop = self.RGenOp()
+        gv_f = make_float_caller(rgenop)
+        fnptr = self.cast_float(gv_f, 1)
+        assert fnptr(1.2) == 1.2
 
     def test_float_loop_direct(self):
         def f(x, y):
@@ -1624,9 +1647,9 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
                                              FramePlaceWriterFloat)
         fnptr = self.cast_float(gv_callable, 1)
         res = fnptr(3.3)
-        assert res == -33.3 - 33.
+        assert res == (-33.3 - 3.3*10)
         res = fnptr(6.3)
-        assert res == -18.9    
+        assert res == -18.9
 
     def test_write_lots_of_frame_places_direct(self):
         def get_writer(places):
