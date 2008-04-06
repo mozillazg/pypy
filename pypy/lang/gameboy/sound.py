@@ -6,6 +6,23 @@ Audio Processor Unit (Sharp LR35902 APU)
 
 from pypy.lang.gameboy import constants
 
+
+class Channel(object):
+
+    # Audio Channel 1 int
+    nr10=0
+    nr11=0
+    nr12=0
+    nr13=0
+    nr14=0
+    audio1Index=0
+    audio1Length=0
+    audio1Frequency=0
+    
+    def __init__(self):
+        pass
+    
+    
 class Sound(object):
 
     # Audio Channel 1 int
@@ -82,28 +99,6 @@ class Sound(object):
         self.generateNoiseTables()
         self.reset()
 
-    def start(self):
-        self.driver.start()
-
-    def stop(self):
-        self.driver.stop()
-
-    def cycles(self):
-        return self.cycles
-
-    def emulate(self, ticks):
-        self.cycles -= ticks
-        while (self.cycles <= 0):
-            self.updateAudio()
-            if (self.driver.isEnabled()):
-                self.frames += self.driver.getSampleRate()
-                length = (self.frames / constants.SOUND_CLOCK) << 1
-                self.mixAudio(self.buffer, length)
-                self.driver.write(self.buffer, length)
-                self.frames %= constants.SOUND_CLOCK
-
-            self.cycles += constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK
-
     def reset(self):
         self.cycles = constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK
         self.frames = 0
@@ -139,8 +134,28 @@ class Sound(object):
             if (address & 1) == 0:
                 write = 0x00
             self.write(address, write)
+            
+    def start(self):
+        self.driver.start()
 
+    def stop(self):
+        self.driver.stop()
 
+    def cycles(self):
+        return self.cycles
+
+    def emulate(self, ticks):
+        self.cycles -= ticks
+        while (self.cycles <= 0):
+            self.updateAudio()
+            if self.driver.isEnabled():
+                self.frames += self.driver.getSampleRate()
+                length = (self.frames / constants.SOUND_CLOCK) << 1
+                self.mixAudio(self.buffer, length)
+                self.driver.write(self.buffer, length)
+                self.frames %= constants.SOUND_CLOCK
+
+            self.cycles += constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK
     def read(self, address):
         if address==constants.NR10:
             return self.getAudio1Sweep()
@@ -245,28 +260,28 @@ class Sound(object):
             self.setAudio3WavePattern(address, data)
 
     def updateAudio(self):
-        if ((self.nr52 & 0x80) == 0):
+        if (self.nr52 & 0x80) == 0:
             return
-        if ((self.nr52 & 0x01) != 0):
+        if (self.nr52 & 0x01) != 0:
             self.updateAudio1()
-        if ((self.nr52 & 0x02) != 0):
+        if (self.nr52 & 0x02) != 0:
             self.updateAudio2()
-        if ((self.nr52 & 0x04) != 0):
+        if (self.nr52 & 0x04) != 0:
             self.updateAudio3()
-        if ((self.nr52 & 0x08) != 0):
+        if (self.nr52 & 0x08) != 0:
             self.updateAudio4()
 
     def mixAudio(self,buffer, length):
         buffer = [0]*length
-        if ((self.nr52 & 0x80) == 0):
+        if (self.nr52 & 0x80) == 0:
             return
-        if ((self.nr52 & 0x01) != 0):
+        if (self.nr52 & 0x01) != 0:
             self.mixAudio1(buffer, length)
-        if ((self.nr52 & 0x02) != 0):
+        if (self.nr52 & 0x02) != 0:
             self.mixAudio2(buffer, length)
-        if ((self.nr52 & 0x04) != 0):
+        if (self.nr52 & 0x04) != 0:
             self.mixAudio3(buffer, length)
-        if ((self.nr52 & 0x08) != 0):
+        if (self.nr52 & 0x08) != 0:
             self.mixAudio4(buffer, length)
 
      # Audio Channel 1
@@ -321,11 +336,11 @@ class Sound(object):
             self.audio1EnvelopeLength = (constants.SOUND_CLOCK / 64) * (self.nr12 & 0x07)
 
     def updateAudio1(self):
-        if ((self.nr14 & 0x40) != 0 and self.audio1Length > 0):
+        if (self.nr14 & 0x40) != 0 and self.audio1Length > 0:
             self.audio1Length-=1
-            if (self.audio1Length <= 0):
+            if self.audio1Length <= 0:
                 self.nr52 &= ~0x01
-        if (self.audio1EnvelopeLength > 0):
+        if self.audio1EnvelopeLength > 0:
             self.audio1EnvelopeLength-=1
             if (self.audio1EnvelopeLength <= 0):
                 if ((self.nr12 & 0x08) != 0):
