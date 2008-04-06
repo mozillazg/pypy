@@ -802,16 +802,14 @@ def get_write_frame_place_runner(RGenOp):
     return write_frame_place_runner
 
 def make_float_caller(rgenop):
-    FUNC = lltype.FuncType([lltype.Signed, lltype.Float], lltype.Float)
     sigtoken = rgenop.sigToken(FLOATFUNC)
-    innertoken = rgenop.sigToken(FUNC)
-    builder, gv_f, [gv_y, gv_x] = rgenop.newgraph(innertoken, "inner")
+    builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "inner")
     builder.start_writing()
-    builder.finish_and_return(innertoken, gv_x)
+    builder.finish_and_return(sigtoken, gv_x)
     builder.end()
     builder, gv_f2, [gv_x] = rgenop.newgraph(sigtoken, "outer")
     builder.start_writing()
-    gv_res = builder.genop_call(innertoken, gv_f, [rgenop.genconst(3), gv_x])
+    gv_res = builder.genop_call(sigtoken, gv_f, [gv_x])
     builder.finish_and_return(sigtoken, gv_res)
     builder.end()
 
