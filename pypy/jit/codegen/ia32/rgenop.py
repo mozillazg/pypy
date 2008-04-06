@@ -545,10 +545,12 @@ class Builder(GenBuilder):
         res = FloatVar(self.stackdepth + 1)
         if op is st0:
             self.pushfloatfromst0(res)
+        elif op is None:
+            self.push(imm(0))
+            self.push(imm(0))
         else:
             raise NotImplementedError("Return float var not on fp stack")
         return res
-
 
     def newvarfromaddr(self, kindtoken, addr):
         # XXX probably we can still do something here with unrolling
@@ -564,6 +566,18 @@ class Builder(GenBuilder):
         else:
             raise NotImplementedError("Return var of kind %s" % (kindtoken,))
 
+    def newvar(self, kindtoken):
+        if kindtoken == 'i':
+            return self.returnintvar(None)
+        elif kindtoken == 'a':
+            return self.returnaddrvar(None)
+        elif kindtoken == 'b':
+            return self.returnboolvar(None)
+        elif kindtoken == 'f':
+            return self.returnfloatvar(None)
+        else:
+            raise NotImplementedError("Return var of kind %s" % (kindtoken,))
+    
     def newfloatfrommem(self, (base, reg, shift, ofs)):
         res = FloatVar(self.stackdepth + 1)
         self.mc.PUSH(memSIB(base, reg, shift, ofs + WORD))
@@ -913,12 +927,9 @@ class Builder(GenBuilder):
         return self.returnfloatvar(st0)
 
     def alloc_frame_place(self, kind, gv_initial_value=None):
-        # XXX kind
         if gv_initial_value is not None:
-            res = self.returnintvar(gv_initial_value.operand(self))
-        else:
-            res = self.returnintvar(None)
-        return res
+            return gv_initial_value.newvar(self)
+        return self.newvar(kind)
 
     def genop_absorb_place(self, v):
         return v
@@ -1272,7 +1283,7 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def kindToken(T):
-        return None
+        return map_arg(T)
 
     @staticmethod
     @specialize.memo()
