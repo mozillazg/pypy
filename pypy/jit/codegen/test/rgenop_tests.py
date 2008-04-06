@@ -1070,6 +1070,14 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         res = fn(30)
         assert res == 60
 
+    def test_read_frame_float_var_compile(self):
+        runner = get_read_frame_var_runner(self.RGenOp, False,
+                                           FrameVarFloatReader, FLOATFUNC)
+
+        fn = self.compile(runner, [float])
+        res = fn(3.3)
+        assert res == 3.3 * 2
+
     def test_genconst_from_frame_var_compile(self):
         runner = get_read_frame_var_runner(self.RGenOp, True,
                                            FrameVarReader, FUNC)
