@@ -25,26 +25,28 @@ def peek_value_at(T, addr):
     # address.  When not, it's an integer.  It just happens to
     # make the test pass, but that's probably going to change.
     if objectmodel.we_are_translated():
-        if T is lltype.Signed:
-            return addr.signed[0]
-        elif T is lltype.Float:
+        if T is lltype.Float:
             return addr.float[0]
         else:
-            raise NotImplementedError("Not implemented types " + str(T))
+            return addr.signed[0]
     else:
         tp = ctypes_mapping[T]
         p = cast(c_void_p(addr), POINTER(tp))
         return p[0]
 
-def poke_word_into(addr, value):
+@specialize.arg(0)
+def poke_value_into(T, addr, value):
     # now the Very Obscure Bit: when translated, 'addr' is an
     # address.  When not, it's an integer.  It just happens to
     # make the test pass, but that's probably going to change.
     if objectmodel.we_are_translated():
-        addr.signed[0] = value
+        if T is lltype.Float:
+            addr.float[0] = value
+        else:
+            addr.signed[0] = value
     else:
-        from ctypes import cast, c_void_p, c_int, POINTER
-        p = cast(c_void_p(addr), POINTER(c_int))
+        tp = ctypes_mapping[T]
+        p = cast(c_void_p(addr), POINTER(tp))
         p[0] = value
 
 def map_arg(arg):
@@ -402,19 +404,17 @@ class Builder(GenBuilder):
         return self.returnintvar(eax)
         
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-        # WUAAA, this does not support floats
         numargs = len(sigtoken[0])
         MASK = CALL_ALIGN-1
         if MASK:
             final_depth = self.stackdepth + numargs
             delta = ((final_depth+MASK)&~MASK)-final_depth
             if delta:
-                xxx
                 self.mc.SUB(esp, imm(delta*WORD))
                 self.stackdepth += delta
         for i in range(numargs-1, -1, -1):
             gv_arg = args_gv[i]
-            self.push(gv_arg.operand(self))
+            gv_arg.newvar(self)
         if DEBUG_CALL_ALIGN:
             self.mc.MOV(eax, esp)
             self.mc.AND(eax, imm8((WORD*CALL_ALIGN)-1))
@@ -425,7 +425,10 @@ class Builder(GenBuilder):
             self.mc.CALL(rel32(target))
         else:
             self.mc.CALL(gv_fnptr.operand(self))
-        # XXX only for int return_kind, check calling conventions
+        # XXX implement different calling conventions and different types
+        RESULT = sigtoken[1]
+        if RESULT == "f":
+            return self.returnfloatvar(st0)
         return self.returnintvar(eax)
 
     def genop_same_as(self, gv_x):
@@ -1351,8 +1354,7 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.arg(0)
     def write_frame_place(T, base, place, value):
-        assert T is lltype.Signed
-        poke_word_into(base - place.stackpos * WORD, value)
+        poke_value_into(T, base - place.stackpos * WORD, value)
 
     @staticmethod
     @specialize.arg(0)

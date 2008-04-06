@@ -85,10 +85,8 @@ class FloatVar(Var):
         return builder.stack_access64(self.stackpos)
 
     def newvar(self, builder):
-        # XXX not tested and not sure if ever needed
-        raise NotImplementedError("write test first")
         ofs = (builder.stackdepth - self.stackpos - 1) * WORD
-        return builder.newfloatfrommem(esp, None, 0, ofs)
+        return builder.newfloatfrommem((esp, None, 0, ofs))
 
     def movetonewaddr(self, builder, addr):
         dstop1 = builder.mem_access(addr)
