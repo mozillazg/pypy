@@ -413,8 +413,7 @@ class Builder(GenBuilder):
                 self.mc.SUB(esp, imm(delta*WORD))
                 self.stackdepth += delta
         for i in range(numargs-1, -1, -1):
-            gv_arg = args_gv[i]
-            gv_arg.newvar(self)
+            args_gv[i].newvar(self)
         if DEBUG_CALL_ALIGN:
             self.mc.MOV(eax, esp)
             self.mc.AND(eax, imm8((WORD*CALL_ALIGN)-1))
@@ -584,7 +583,11 @@ class Builder(GenBuilder):
     def newfloatfrommem(self, (base, reg, shift, ofs)):
         res = FloatVar(self.stackdepth + 1)
         self.mc.PUSH(memSIB(base, reg, shift, ofs + WORD))
-        self.mc.PUSH(memSIB(base, reg, shift, ofs))
+        # XXX pom pom pom, stupid hack
+        if base is esp:
+            self.mc.PUSH(memSIB(base, reg, shift, ofs + WORD))
+        else:
+            self.mc.PUSH(memSIB(base, reg, shift, ofs))
         self.stackdepth += 2
         return res
 
