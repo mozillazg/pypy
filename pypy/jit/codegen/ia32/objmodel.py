@@ -201,8 +201,7 @@ class FloatConst(Const):
         # XXX we should take more care who is creating this and
         #     eventually release this buffer
         # never moves and never dies
-        self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw',
-                                    immortal=True)
+        self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
         self.rawbuf[0] = floatval
 
     def newvar(self, builder):
