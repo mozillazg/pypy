@@ -1372,7 +1372,6 @@ class RI386GenOp(AbstractRGenOp):
             assert 0, "XXX not implemented"
 
     @staticmethod
-    @specialize.arg(0)
     def genzeroconst(kind):
         return ZERO_CONST[kind]
 
