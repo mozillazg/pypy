@@ -6,6 +6,9 @@ from pypy.jit.timeshifter import rvalue, rvirtualizable, oop
 from pypy.rpython.lltypesystem import lloperation
 debug_print = lloperation.llop.debug_print
 
+class NotConstInAVlist(Exception):
+    pass
+
 def TypeDesc(RGenOp, rtyper, exceptiondesc, LIST):
     if rtyper.type_system.name == 'lltypesystem':
         return LLTypeListTypeDesc(RGenOp, rtyper, exceptiondesc, LIST)
@@ -60,8 +63,11 @@ class AbstractListTypeDesc(object):
                 box = item_boxes[i]
                 if box is not None:
                     gv_value = box_gv_reader(box)
-                    v = gv_value.revealconst(LIST.ITEM)
-                    l.ll_setitem_fast(i, v)
+                    if gv_value.is_const:
+                        v = gv_value.revealconst(LIST.ITEM)
+                        l.ll_setitem_fast(i, v)
+                    else:
+                        raise NotConstInAVlist("Cannot put variable to a vlist")
 
         self.allocate = allocate
         self.populate = populate
