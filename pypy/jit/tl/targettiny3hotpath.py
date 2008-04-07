@@ -60,3 +60,7 @@ def portal(driver):
     compiler.
     """
     return None, MyHintAnnotatorPolicy()
+
+if __name__ == '__main__':
+    import sys
+    entry_point(sys.argv)
