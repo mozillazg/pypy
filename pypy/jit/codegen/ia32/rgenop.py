@@ -1196,7 +1196,8 @@ class RI386GenOp(AbstractRGenOp):
     
     def __init__(self):
         self.mcs = []   # machine code blocks where no-one is currently writing
-        self.keepalive_gc_refs = [] 
+        self.keepalive_gc_refs = []
+        self.keepalive_float_consts = []
         self.total_code_blocks = 0
 
     def open_mc(self):
@@ -1271,7 +1272,7 @@ class RI386GenOp(AbstractRGenOp):
             return BoolConst(llvalue)
         elif T is lltype.Float:
             res = FloatConst(llvalue)
-            self.keepalive_gc_refs.append(res)
+            self.keepalive_float_consts.append(res)
             return res
         elif isinstance(T, lltype.Ptr):
             lladdr = llmemory.cast_ptr_to_adr(llvalue)
