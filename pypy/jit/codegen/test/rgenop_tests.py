@@ -736,7 +736,6 @@ def get_frame_place_writer(TP):
                                           lltype.Void))
         def __init__(self, RGenOp):
             def writer(base, value):
-                print value
                 if value > 5:
                     RGenOp.write_frame_place(TP, base,
                                              self.place1, value * 7)
@@ -867,16 +866,19 @@ def get_write_lots_of_frame_places_runner(RGenOp):
     return write_lots_of_frame_places_runner
 
 
-class FramePlaceReader:
-    FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Signed))
-    def __init__(self, RGenOp):
-        def reader(base):
-            return RGenOp.read_frame_place(lltype.Signed, base,
-                                         self.place)
-        self.reader = reader
-    def get_reader(self, place):
-        self.place = place
-        return llhelper(self.FUNC, self.reader)
+def get_frame_place_reader(TP):
+    class FramePlaceReader:
+        FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], TP))
+        def __init__(self, RGenOp):
+            def reader(base):
+                return RGenOp.read_frame_place(TP, base,
+                                             self.place)
+            self.reader = reader
+        def get_reader(self, place):
+            self.place = place
+            return llhelper(self.FUNC, self.reader)
+    return FramePlaceReader
+FramePlaceReader = get_frame_place_reader(lltype.Signed)
 
 def make_read_frame_place(rgenop, get_reader):
     signed_kind = rgenop.kindToken(lltype.Signed)
