@@ -294,9 +294,9 @@ class Builder(GenBuilder):
         return genmethod(gv_arg)
 
     def genop_getfield(self, (offset, fieldsize, kindtoken), gv_ptr):
-        assert fieldsize != 2
         self.mc.MOV(edx, gv_ptr.operand(self))
-        return self.newvarfromaddr(kindtoken, (edx, None, 0, offset))
+        return self.newvarfromaddr(kindtoken, (edx, None, 0, offset),
+                                   fieldsize)
         
         if fieldsize == WORD:
             op = mem(edx, offset)
@@ -362,7 +362,7 @@ class Builder(GenBuilder):
         self.mc.MOV(edx, gv_ptr.operand(self))
         _, _, itemsize, kindtoken = arraytoken
         addr = self._compute_itemaddr(edx, arraytoken, gv_index)
-        return self.newvarfromaddr(kindtoken, addr)
+        return self.newvarfromaddr(kindtoken, addr, itemsize)
 
     def genop_getarraysubstruct(self, arraytoken, gv_ptr, gv_index):
         self.mc.MOV(edx, gv_ptr.operand(self))
@@ -565,10 +565,19 @@ class Builder(GenBuilder):
             raise NotImplementedError("Return float var not on fp stack")
         return res
 
-    def newvarfromaddr(self, kindtoken, addr):
+    def newvarfromaddr(self, kindtoken, addr, size):
         # XXX probably we can still do something here with unrolling
         #     iterable, but let's not be too smart...
         if kindtoken == 'i':
+            # XXX kind of a hack
+            if size == 1:
+                self.mc.MOVZX(eax, self.mem_access8(addr))
+                return self.returnintvar(eax)
+            elif size == 2:
+                # XXX never tested
+                self.mc.MOV(eax, self.mem_access(addr))
+                self.mc.o16()
+                return self.returnintvar(eax)
             return self.returnintvar(self.mem_access(addr))
         elif kindtoken == 'a':
             return self.returnaddrvar(self.mem_access(addr))
