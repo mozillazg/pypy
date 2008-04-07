@@ -27,8 +27,12 @@ def peek_value_at(T, addr):
     if objectmodel.we_are_translated():
         if T is lltype.Float:
             return addr.float[0]
+        elif T is llmemory.Address:
+            return addr.address[0]
+        elif isinstance(T, lltype.Ptr):
+            return lltype.cast_int_to_ptr(T, addr.signed[0])
         else:
-            return addr.signed[0]
+            return lltype.cast_primitive(T, addr.signed[0])
     else:
         tp = ctypes_mapping[T]
         p = cast(c_void_p(addr), POINTER(tp))
@@ -42,8 +46,12 @@ def poke_value_into(T, addr, value):
     if objectmodel.we_are_translated():
         if T is lltype.Float:
             addr.float[0] = value
+        elif isinstance(T, lltype.Ptr):
+            addr.signed[0] = intmask(lltype.cast_ptr_to_int(value))
+        elif T is llmemory.Address:
+            addr.signed[0] = intmask(llmemory.cast_adr_to_int(value))
         else:
-            addr.signed[0] = value
+            addr.signed[0] = lltype.cast_primitive(lltype.Signed, value)
     else:
         tp = ctypes_mapping[T]
         p = cast(c_void_p(addr), POINTER(tp))
