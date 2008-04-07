@@ -285,12 +285,12 @@ class Builder(GenBuilder):
 
     @specialize.arg(1)
     def genraisingop2(self, opname, gv_arg1, gv_arg2):
-        genmethod = getattr(self, 'op_' + opname)
+        genmethod = getattr(self, 'op_raising_' + opname)
         return genmethod(gv_arg1, gv_arg2)
 
     @specialize.arg(1)
     def genraisingop1(self, opname, gv_arg):
-        genmethod = getattr(self, 'op_' + opname)
+        genmethod = getattr(self, 'op_raising_' + opname)
         return genmethod(gv_arg)
 
     def genop_getfield(self, (offset, fieldsize, kindtoken), gv_ptr):
@@ -633,21 +633,21 @@ class Builder(GenBuilder):
         self.mc.ADD(eax, gv_y.operand(self))
         return self.returnintvar(eax)
 
-    op_int_add_ovf = _create_ovf_two_version('op_int_add', 'O')
+    op_raising_int_add_ovf = _create_ovf_two_version('op_int_add', 'O')
 
     def op_int_sub(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.SUB(eax, gv_y.operand(self))
         return self.returnintvar(eax)
 
-    op_int_sub_ovf = _create_ovf_two_version('op_int_sub', 'O')
+    op_raising_int_sub_ovf = _create_ovf_two_version('op_int_sub', 'O')
 
     def op_int_mul(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
         self.mc.IMUL(eax, gv_y.operand(self))
         return self.returnintvar(eax)
 
-    op_int_mul_ovf = _create_ovf_two_version('op_int_mul', 'O')
+    op_raising_int_mul_ovf = _create_ovf_two_version('op_int_mul', 'O')
 
     def op_int_floordiv(self, gv_x, gv_y):
         self.mc.MOV(eax, gv_x.operand(self))
@@ -717,7 +717,7 @@ class Builder(GenBuilder):
         self.mc.NEG(eax)
         return self.returnintvar(eax)
 
-    op_int_neg_ovf = _create_ovf_one_version('op_int_neg', 'O')
+    op_raising_int_neg_ovf = _create_ovf_one_version('op_int_neg', 'O')
 
     def op_int_abs(self, gv_x):
         # XXX cannot we employ fp unit to do that for us? :)
@@ -730,7 +730,7 @@ class Builder(GenBuilder):
         self.mc.XOR(eax, edx)
         return self.returnintvar(eax)
 
-    op_int_abs_ovf = _create_ovf_one_version('op_int_abs', 'L')
+    op_raising_int_abs_ovf = _create_ovf_one_version('op_int_abs', 'L')
 
     def op_int_invert(self, gv_x):
         self.mc.MOV(eax, gv_x.operand(self))
@@ -942,13 +942,19 @@ class Builder(GenBuilder):
         return self._float_compare(gv_y, gv_x, 5)
 
     def op_cast_float_to_int(self, gv_x):
-        # XXX gcc is also checking something in control word
         self.mc.FLDL(gv_x.operand(self))
         self.mc.SUB(esp, imm(WORD))
-        self.stackdepth += 1
         res = IntVar(self.stackdepth)
+        self.stackdepth += 1
         self.mc.FISTP(res.operand(self))
         return res
+
+    def op_raising_cast_float_to_int(self, gv_x):
+        # XXX think how to change it to bool
+        gv_res = self.op_cast_float_to_int(gv_x)
+        gv_cw = self.returnintvar(None)
+        self.mc.FNSTCW(gv_cw.operand(self))
+        return gv_res, gv_cw
 
     def op_cast_int_to_float(self, gv_x):
         # XXX gcc is also checking something in control word
