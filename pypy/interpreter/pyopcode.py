@@ -98,6 +98,10 @@ class __extend__(pyframe.PyFrame):
         except MemoryError:
             next_instr = self.handle_asynchronous_error(ec,
                 self.space.w_MemoryError)
+        except NotImplementedError, e:
+            # this one is a subclass of RuntimeError, but this only
+            # obscures reports (ie we got stack overflow instead of crash)
+            raise
         except RuntimeError, e:
             if we_are_translated():
                 # stack overflows should be the only kind of RuntimeErrors
