@@ -202,12 +202,14 @@ class FloatConst(Const):
         if we_are_translated():
             self.buf = lltype.malloc(FLOATBUF.TO, 1)
             self.buf[0] = floatval
+            self.is_pbc = False
         else:
+            self.is_pbc = True
             self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
             self.rawbuf[0] = floatval
 
     def _compute_addr(self):
-        if we_are_translated():
+        if not self.is_pbc:
             addr = llmemory.cast_ptr_to_adr(self.buf) + \
                    llmemory.itemoffsetof(FLOATBUF.TO, 0)
             return llmemory.cast_adr_to_int(addr)
