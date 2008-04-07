@@ -41,6 +41,9 @@ class Var(GenVar):
     def __repr__(self):
         return self.token + 'var@%d' % (self.stackpos,)
 
+    def getkind(self):
+        return self.token
+
     repr = __repr__
 
 class IntVar(Var):
@@ -181,6 +184,9 @@ class Const(GenConst):
     def repr(self):
         return "const=$%s" % (self.value,)
 
+    def getkind(self):
+        return self.token
+
 class IntConst(Const):
     SIZE = 1
     
@@ -220,7 +226,7 @@ class FloatConst(Const):
     @specialize.arg(1)
     def revealconst(self, T):
         assert T is lltype.Float
-        if we_are_translated():
+        if not self.is_pbc:
             return self.buf[0]
         else:
             return self.rawbuf[0]
@@ -293,3 +299,10 @@ class AddrConst(IntConst):
 
     def repr(self):
         return "const=<0x%x>" % (llmemory.cast_adr_to_int(self.addr),)
+
+ZERO_CONST = {
+    'a' : AddrConst(llmemory.NULL),
+    'i' : IntConst(0),
+    'b' : BoolConst(0),
+    'f' : FloatConst(0.0)
+    }
