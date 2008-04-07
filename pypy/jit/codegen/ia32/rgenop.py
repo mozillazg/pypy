@@ -1035,9 +1035,14 @@ def remap_stack_layout(builder, outputargs_gv, target):
     if builder.stackdepth < N:
         builder.mc.SUB(esp, imm(WORD * (N - builder.stackdepth)))
         builder.stackdepth = N
-
+        
+    for pos in arg_positions:
+        assert pos >= 0
     outputargs_gv, arg_positions = _remap_bigger_values(outputargs_gv,
                                                         target.arg_positions)
+    for pos in arg_positions:
+        assert pos >= 0
+
     M = len(outputargs_gv)
     assert M == len(arg_positions)
     targetlayout = [None] * N
