@@ -9,7 +9,8 @@ from pypy.rlib import objectmodel
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.codegen.ia32.objmodel import IntVar, FloatVar, Var,\
      BoolVar, IntConst, AddrConst, BoolConst, FloatConst,\
-     LL_TO_GENVAR, TOKEN_TO_SIZE, token_to_genvar, WORD, AddrVar
+     LL_TO_GENVAR, TOKEN_TO_SIZE, token_to_genvar, WORD, AddrVar,\
+     ZERO_CONST
 from pypy.jit.codegen.support import ctypes_mapping
 from ctypes import cast, c_void_p, POINTER
 
@@ -1373,7 +1374,7 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.arg(1)
     def genzeroconst(kind):
-        return zero_const
+        return ZERO_CONST[kind]
 
     @staticmethod
     @specialize.arg(0)
@@ -1404,4 +1405,3 @@ class RI386GenOp(AbstractRGenOp):
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
-zero_const = AddrConst(llmemory.NULL)
