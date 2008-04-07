@@ -265,6 +265,38 @@ class TestPortal(PortalTest):
         assert res == ord('2')
         self.check_insns(indirect_call=0)
 
+    def test_float_promote(self):
+        class Base(object):
+            pass
+        class Int(Base):
+            def __init__(self, n):
+                self.n = n
+            def double(self):
+                return float(2*self.n)
+
+        class Float(Base):
+            def __init__(self, n):
+                self.n = n
+            def double(self):
+                return 2*self.n
+
+        def ll_main(n):
+            if n > 3:
+                o = Int(int(n))
+            else:
+                o = Float(n)
+            return ll_function(o)
+
+        def ll_function(o):
+            hint(None, global_merge_point=True)
+            hint(o.__class__, promote=True)
+            return o.double()
+
+        res = self.timeshift_from_portal(ll_main, ll_function, [2.8], policy=P_NOVIRTUAL)
+        assert res == 2.8*2
+        res = self.timeshift_from_portal(ll_main, ll_function, [3.6], policy=P_NOVIRTUAL)
+        assert res == 3*2
+
     def test_isinstance(self):
         class Base(object):
             pass
