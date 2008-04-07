@@ -294,6 +294,7 @@ class Builder(GenBuilder):
         return genmethod(gv_arg)
 
     def genop_getfield(self, (offset, fieldsize, kindtoken), gv_ptr):
+        assert fieldsize != 2
         self.mc.MOV(edx, gv_ptr.operand(self))
         return self.newvarfromaddr(kindtoken, (edx, None, 0, offset))
         
@@ -319,6 +320,7 @@ class Builder(GenBuilder):
         return vars_gv
 
     def genop_setfield(self, (offset, fieldsize, kt), gv_ptr, gv_value):
+        assert fieldsize != 2
         self.mc.MOV(edx, gv_ptr.operand(self))
         gv_value.movetonewaddr(self, (edx, None, 0, offset))
 
@@ -377,6 +379,7 @@ class Builder(GenBuilder):
         itemsize = arraytoken[2]
         self.mc.MOV(edx, gv_ptr.operand(self))
         destaddr = self._compute_itemaddr(edx, arraytoken, gv_index)
+        assert itemsize != 2
         gv_value.movetonewaddr(self, destaddr)
         #if itemsize <= WORD:
         #    self.mc.MOV(eax, gv_value.operand(self))
@@ -1036,7 +1039,7 @@ def remap_stack_layout(builder, outputargs_gv, target):
         builder.mc.SUB(esp, imm(WORD * (N - builder.stackdepth)))
         builder.stackdepth = N
         
-    for pos in arg_positions:
+    for pos in target.arg_positions:
         assert pos >= 0
     outputargs_gv, arg_positions = _remap_bigger_values(outputargs_gv,
                                                         target.arg_positions)
