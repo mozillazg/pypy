@@ -2401,8 +2401,9 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         if self.RGenOpPacked is None:
             py.test.skip("requires RGenOpPacked")
         T = lltype.GcStruct('T', ('x', lltype.Signed),
-                          ('y', lltype.Float),
-                          ('z', lltype.Signed))
+                            ('y', lltype.Float),
+                            ('k', lltype.Char),
+                            ('z', lltype.Bool))
         rgenop = self.RGenOpPacked()
         ARGS = [lltype.Signed, lltype.Float, lltype.Signed]
         FUNC = lltype.FuncType(ARGS, lltype.Float)
@@ -2413,10 +2414,14 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         gv_s = builder.genop_malloc_fixedsize(rgenop.allocToken(T))
         builder.genop_setfield(rgenop.fieldToken(T, 'x'), gv_s, gv_x)
         builder.genop_setfield(rgenop.fieldToken(T, 'y'), gv_s, gv_y)
-        builder.genop_setfield(rgenop.fieldToken(T, 'z'), gv_s, gv_z)
+        gv_z1 = builder.genop1('int_is_true', gv_z)
+        builder.genop_setfield(rgenop.fieldToken(T, 'z'), gv_s, gv_z1)
+        gv_z2 = builder.genop1('cast_int_to_char', gv_z)
+        builder.genop_setfield(rgenop.fieldToken(T, 'k'), gv_s, gv_z2)
         gv_y1 = builder.genop_getfield(rgenop.fieldToken(T, 'y'), gv_s)
-        gv_z1 = builder.genop_getfield(rgenop.fieldToken(T, 'z'), gv_s)
-        gv_z2 = builder.genop1('cast_int_to_float', gv_z1)
+        gv_z1 = builder.genop_getfield(rgenop.fieldToken(T, 'k'), gv_s)
+        gv_z1b = builder.genop1('cast_char_to_int', gv_z1)
+        gv_z2 = builder.genop1('cast_int_to_float', gv_z1b)
         gv_res = builder.genop2('float_add', gv_y1, gv_z2)
         builder.finish_and_return(sigtoken, gv_res)
         builder.end()
