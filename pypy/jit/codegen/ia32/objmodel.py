@@ -2,7 +2,7 @@
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.jit.codegen.i386.ri386 import *
 
 WORD = 4
@@ -190,30 +190,47 @@ class IntConst(Const):
         dstop = builder.mem_access(addr)
         builder.mc.MOV(dstop, self.operand(builder))
 
+FLOATBUF = lltype.Ptr(lltype.GcArray(lltype.Float))
+
 class FloatConst(Const):
     SIZE = 2
     # XXX hack for annotator
-    rawbuf = lltype.nullptr(rffi.DOUBLEP.TO)
+    buf = lltype.nullptr(FLOATBUF.TO)
     
     def __init__(self, floatval):
-        # XXX we should take more care who is creating this and
-        #     eventually release this buffer
-        # never moves and never dies
-        self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
-        self.rawbuf[0] = floatval
+        if we_are_translated():
+            self.buf = lltype.malloc(FLOATBUF.TO, 1)
+        else:
+            self.buf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
+        self.buf[0] = floatval
+
+    def _compute_addr(self):
+        if we_are_translated():
+            addr = llmemory.cast_ptr_to_adr(self.buf) + \
+                   llmemory.itemoffsetof(FLOATBUF.TO, 0)
+            return llmemory.cast_adr_to_int(addr)
+        else:
+            return rffi.cast(rffi.INT, self.buf)
+
+    @specialize.arg(1)
+    def revealconst(self, T):
+        assert T is lltype.Float
+        return self.buf[0]
 
     def newvar(self, builder):
-        return builder.newfloatfrommem((None, None, 0,
-            rffi.cast(rffi.INT, self.rawbuf)))
+        offset = self._compute_addr()
+        return builder.newfloatfrommem((None, None, 0, offset))
 
     def operand(self, builder):
-        return heap64(rffi.cast(rffi.INT, self.rawbuf))
+        return heap64(self._compute_addr())
 
     def movetonewaddr(self, builder, addr):
         dstop1 = builder.mem_access(addr)
         dstop2 = builder.mem_access(addr, WORD)
-        builder.mc.MOV(dstop1, imm(rffi.cast(rffi.INTP, self.rawbuf)[0]))
-        builder.mc.MOV(dstop2, imm(rffi.cast(rffi.INTP, self.rawbuf)[1]))
+        offset = self._compute_addr()
+        b = rffi.cast(rffi.INTP, offset)
+        builder.mc.MOV(dstop1, imm(b[0]))
+        builder.mc.MOV(dstop2, imm(b[1]))
 
     def repr(self):
         return "const=$%s" % (self.rawbuf[0],)

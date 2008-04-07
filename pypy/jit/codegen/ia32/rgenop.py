@@ -1006,7 +1006,7 @@ def _remap_bigger_values(args_gv, arg_positions):
                 res_gv.append(IntVar(gv.stackpos - 1))
             else:
                 assert isinstance(gv, FloatConst)
-                buf = rffi.cast(rffi.INTP, gv.rawbuf)
+                buf = rffi.cast(rffi.INTP, gv._compute_addr())
                 res_gv.append(IntConst(buf[0]))
                 res_gv.append(IntConst(buf[1]))
             res_positions.append(pos)
@@ -1362,7 +1362,10 @@ class RI386GenOp(AbstractRGenOp):
         v = info[index]
         if isinstance(v, GenConst):
             return v
-        return IntConst(peek_value_at(lltype.Signed, base - v.stackpos * WORD))
+        if kind == "f":
+            return FloatConst(peek_value_at(lltype.Float, base - v.stackpos * WORD))
+        else:
+            return IntConst(peek_value_at(lltype.Signed, base - v.stackpos * WORD))
 
     @staticmethod
     @specialize.arg(0)
