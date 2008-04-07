@@ -51,7 +51,7 @@ class IntBox(Box):
     def as_int(self):
         return self.intval
     def as_float(self):
-        return myfloat(self.intval)
+        return float(self.intval)
     def as_str(self):
         return str(self.intval)
 
@@ -202,7 +202,7 @@ def interpret(bytecode, args):
                 try:
                     v = IntBox(int(opcode))
                 except ValueError:
-                    v = FloatBox(myfloat(opcode))
+                    v = FloatBox(float(opcode))
                 stack = Stack(v, stack)
             except ValueError:
                 pass # ignore rest
@@ -249,9 +249,6 @@ def myint(s, start=0):
             raise ValueError
     return n
 
-@specialize.argtype(0)
-def myfloat(i):
-    return float(i)
 # ------------------------------
 
 
