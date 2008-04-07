@@ -26,6 +26,7 @@ class Var(GenVar):
         #          ...              <--- esp+4
         #          local var        <--- esp
         #
+        assert stackpos >= 0
         self.stackpos = stackpos
 
     def nonimmoperand(self, builder, tmpregister):
