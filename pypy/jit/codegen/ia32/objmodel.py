@@ -197,6 +197,7 @@ class FloatConst(Const):
     SIZE = 2
     # XXX hack for annotator
     buf = lltype.nullptr(FLOATBUF.TO)
+    is_pbc = False
     
     def __init__(self, floatval):
         if we_are_translated():

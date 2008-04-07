@@ -1247,9 +1247,7 @@ class RI386GenOp(AbstractRGenOp):
         ofs = 0
         for argtoken in arg_tokens:
             ofs += TOKEN_TO_SIZE[argtoken]
-        if rettoken != 'v':
-            return ofs + TOKEN_TO_SIZE[rettoken]
-        return ofs
+        return ofs + WORD
 
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
