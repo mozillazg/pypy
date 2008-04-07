@@ -151,6 +151,7 @@ def token_to_genvar(i, arg):
 
 
 class Const(GenConst):
+    token = "x"
 
     def __init__(self, value):
         self.value = value
@@ -189,6 +190,7 @@ class Const(GenConst):
 
 class IntConst(Const):
     SIZE = 1
+    token = "i"
     
     def newvar(self, builder):
         return builder.returnintvar(self.operand(builder))
@@ -204,6 +206,7 @@ class FloatConst(Const):
     # XXX hack for annotator
     buf = lltype.nullptr(FLOATBUF.TO)
     is_pbc = False
+    token = "f"
     
     def __init__(self, floatval):
         if we_are_translated():
@@ -253,6 +256,7 @@ class FloatConst(Const):
 
 class BoolConst(Const):
     SIZE = 1
+    token = "b"
 
     def operand(self, builder):
         return imm8(self.value)
@@ -272,6 +276,7 @@ class BoolConst(Const):
 
 class AddrConst(IntConst):
     SIZE = 1
+    token = "a"
 
     def __init__(self, addr):
         self.addr = addr
