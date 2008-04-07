@@ -4,13 +4,14 @@ of space-separated words.  Most words push themselves on a stack; some
 words have another action.  The result is the space-separated words
 from the stack.
 
-    Hello World          => 'Hello World'
     6 7 ADD              => '13'              'ADD' is a special word
     7 * 5 = 7 5 MUL      => '7 * 5 = 35'      '*' and '=' are not special words
+    3.8                  => 3.8
 
-Arithmetic on non-integers gives a 'symbolic' result:
+Arithmetic on integers and floats automatically casts arguments
+to floats (always).
 
-    X 2 MUL              => 'X*2'
+    3.8 1 ADD            => 4.8
 
 Input arguments can be passed on the command-line, and used as #1, #2, etc.:
 
@@ -48,30 +49,34 @@ class IntBox(Box):
         self.intval = intval
     def as_int(self):
         return self.intval
+    def as_float(self):
+        return float(self.intval)
     def as_str(self):
         return str(self.intval)
 
-class StrBox(Box):
+class FloatBox(Box):
     _immutable_ = True
-    def __init__(self, strval):
-        self.strval = strval
+    def __init__(self, floatval):
+        self.floatval = floatval
     def as_int(self):
-        return myint(self.strval)
+        return int(self.floatval)
+    def as_float(self):
+        return self.floatval
     def as_str(self):
-        return self.strval
+        return str(self.floatval)
 
-
+# consider if we need both
 def func_add_int(ix, iy): return ix + iy
 def func_sub_int(ix, iy): return ix - iy
 def func_mul_int(ix, iy): return ix * iy
 
-def func_add_str(sx, sy): return sx + '+' + sy
-def func_sub_str(sx, sy): return sx + '-' + sy
-def func_mul_str(sx, sy): return sx + '*' + sy
+def func_add_float(fx, fy): return fx + fy
+def func_sub_float(fx, fy): return fx - fy
+def func_mul_float(fx, fy): return fx * fy
 
-def op2(stack, func_int, func_str):
+def op2(stack, func_int, func_float):
     # Operate on the top two stack items.  The promotion hints force the
-    # class of each arguments (IntBox or StrBox) to turn into a compile-time
+    # class of each arguments (IntBox or FloatBox) to turn into a compile-time
     # constant if they weren't already.  The effect we seek is to make the
     # calls to as_int() direct calls at compile-time, instead of indirect
     # ones.  The JIT compiler cannot look into indirect calls, but it
@@ -80,10 +85,10 @@ def op2(stack, func_int, func_str):
     hint(y.__class__, promote=True)
     stack, x = stack.pop()
     hint(x.__class__, promote=True)
-    try:
+    if isinstance(x, IntBox) and isinstance(y, IntBox):
         z = IntBox(func_int(x.as_int(), y.as_int()))
-    except ValueError:
-        z = StrBox(func_str(x.as_str(), y.as_str()))
+    else:
+        z = FloatBox(func_float(x.as_float(), y.as_float()))
     stack = Stack(z, stack)
     return stack
 
@@ -97,7 +102,6 @@ class Stack(object):
 
 def empty_stack():
     return None
-
 
 class TinyJitDriver(JitDriver):
     reds = ['args', 'loops', 'stack']
@@ -157,11 +161,11 @@ def interpret(bytecode, args):
         hint(opcode, concrete=True)    # same as in tiny1.py
         pos += 1
         if   opcode == 'ADD':
-            stack = op2(stack, func_add_int, func_add_str)
+            stack = op2(stack, func_add_int, func_add_float)
         elif opcode == 'SUB':
-            stack = op2(stack, func_sub_int, func_sub_str)
+            stack = op2(stack, func_sub_int, func_sub_float)
         elif opcode == 'MUL':
-            stack = op2(stack, func_mul_int, func_mul_str)
+            stack = op2(stack, func_mul_int, func_mul_float)
         elif opcode[0] == '#':
             n = myint(opcode, start=1)
             stack = Stack(args[n-1], stack)
@@ -193,7 +197,14 @@ def interpret(bytecode, args):
                 tinyjitdriver.can_enter_jit(args=args, loops=loops, stack=stack,
                                             bytecode=bytecode, pos=pos)
         else:
-            stack = Stack(StrBox(opcode), stack)
+            try:
+                try:
+                    v = IntBox(int(opcode))
+                except ValueError:
+                    v = FloatBox(float(opcode))
+                stack = Stack(v, stack)
+            except ValueError:
+                pass # ignore rest
     return stack
 
 
@@ -243,22 +254,22 @@ def test_main():
     main = """#1 5 ADD""".split()
     res = interpret(main, [IntBox(20)])
     assert repr(res) == '25'
-    res = interpret(main, [StrBox('foo')])
-    assert repr(res) == 'foo+5'
+    res = interpret(main, [FloatBox(3.2)])
+    assert repr(res) == '8.2'
 
 FACTORIAL = """The factorial of #1 is
                   1 { #1 MUL #1 1 SUB ->#1 #1 }""".split()
 
 def test_factorial():
     res = interpret(FACTORIAL, [IntBox(5)])
-    assert repr(res) == 'The factorial of 5 is 120'
+    assert repr(res) == '5 120'
 
 FIBONACCI = """Fibonacci numbers:
                   { #1 #2 #1 #2 ADD ->#2 ->#1 #3 1 SUB ->#3 #3 }""".split()
 
 def test_fibonacci():
     res = interpret(FIBONACCI, [IntBox(1), IntBox(1), IntBox(10)])
-    assert repr(res) == "Fibonacci numbers: 1 1 2 3 5 8 13 21 34 55"
+    assert repr(res) == "1 1 2 3 5 8 13 21 34 55"
 
 
 FIBONACCI_SINGLE = """#3 1 SUB ->#3 { #2 #1 #2 ADD ->#2 ->#1 #3 1 SUB ->#3 #3 } #1""".split()
