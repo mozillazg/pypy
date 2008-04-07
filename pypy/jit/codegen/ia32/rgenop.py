@@ -464,8 +464,11 @@ class Builder(GenBuilder):
             if not isinstance(gv, Var) or gv.stackpos in seen:
                 gv = args_gv[i] = gv.newvar(self)
             # remember the var's position in the stack
+            assert gv.stackpos >= 0
             arg_positions.append(gv.stackpos)
             seen[gv.stackpos] = None
+        for pos in arg_positions:
+            assert pos >= 0
         return Label(self.mc.tell(), arg_positions, self.stackdepth)
 
     def jump_if_false(self, gv_condition, args_gv):
