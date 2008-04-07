@@ -1189,6 +1189,23 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         res = fnptr(37)
         assert res == 42
 
+    def test_cast_raising(self):
+        rgenop = self.RGenOp()
+        FUNC = lltype.FuncType([lltype.Float], lltype.Signed)
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, 'cast_raising')
+        builder.start_writing()
+
+        gv_x1, gv_flag = builder.genraisingop1('cast_float_to_int', gv_x)
+        
+        builder.finish_and_return(sigtoken, gv_x1)
+        builder.end()
+
+        fnptr = self.cast_whatever(gv_fn, [lltype.Float], lltype.Signed)
+
+        res = fnptr(3.4)
+        assert res == 3
+
     def test_float_adder(self):
         rgenop = self.RGenOp()
         gv_add_5 = make_float_adder(rgenop, 3.2)
