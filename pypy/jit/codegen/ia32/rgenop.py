@@ -1012,8 +1012,12 @@ def _remap_bigger_values(args_gv, arg_positions):
             res_positions.append(pos)
             res_positions.append(pos - 1)    
     # no repeats please
-    if not objectmodel.we_are_translated():
-        assert sorted(dict.fromkeys(res_positions).keys()) == sorted(res_positions)
+    all = {}
+    for key in res_positions:
+        assert key not in all
+        all[key] = True
+    #if not objectmodel.we_are_translated():
+    #    assert sorted(dict.fromkeys(res_positions).keys()) == sorted(res_positions)
     return res_gv, res_positions
 
 def remap_stack_layout(builder, outputargs_gv, target):
@@ -1266,7 +1270,9 @@ class RI386GenOp(AbstractRGenOp):
         elif T is lltype.Bool:
             return BoolConst(llvalue)
         elif T is lltype.Float:
-            return FloatConst(llvalue)
+            res = FloatConst(llvalue)
+            self.keepalive_gc_refs.append(res)
+            return res
         elif isinstance(T, lltype.Ptr):
             lladdr = llmemory.cast_ptr_to_adr(llvalue)
             if T.TO._gckind == 'gc':
