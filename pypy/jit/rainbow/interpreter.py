@@ -253,7 +253,7 @@ class JitInterpreter(object):
         self.queue = rtimeshift.DispatchQueue(bytecode.num_mergepoints)
         rtimeshift.enter_frame(self.jitstate, self.queue)
         self.frame = self.jitstate.frame
-        self.frame.pc = r_uint(0)
+        self.frame.pc = 0
         self.frame.bytecode = bytecode
         self.frame.local_boxes = redargs
         self.frame.local_green = greenargs
@@ -384,10 +384,10 @@ class JitInterpreter(object):
 
     def load_4byte(self):
         pc = self.frame.pc
-        result = ((r_uint(ord(self.frame.bytecode.code[pc + 0])) << 24) |
-                  (r_uint(ord(self.frame.bytecode.code[pc + 1])) << 16) |
-                  (r_uint(ord(self.frame.bytecode.code[pc + 2])) <<  8) |
-                  (r_uint(ord(self.frame.bytecode.code[pc + 3])) <<  0))
+        result = (((ord(self.frame.bytecode.code[pc + 0])) << 24) |
+                  ((ord(self.frame.bytecode.code[pc + 1])) << 16) |
+                  ((ord(self.frame.bytecode.code[pc + 2])) <<  8) |
+                  ((ord(self.frame.bytecode.code[pc + 3])) <<  0))
         self.frame.pc = pc + 4
         return result
 
@@ -904,7 +904,7 @@ class JitInterpreter(object):
     def hp_direct_call(self, greenargs, redargs, targetbytecode):
         frame = rtimeshift.VirtualFrame(self.frame, None)
         self.frame = self.jitstate.frame = frame
-        frame.pc = r_uint(0)
+        frame.pc = 0
         frame.bytecode = targetbytecode
         frame.local_boxes = redargs
         frame.local_green = greenargs
