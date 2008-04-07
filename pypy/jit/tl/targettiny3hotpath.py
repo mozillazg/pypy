@@ -32,7 +32,7 @@ def entry_point(args):
         try:
             real_args.append(tiny3.IntBox(int(arg)))
         except ValueError:
-            real_args.append(tiny3.FloatBox(float(arg)))
+            real_args.append(tiny3.FloatBox(tiny3.myfloat(arg)))
     res = tiny3.interpret(bytecode, real_args)
     print tiny3.repr(res)
     return 0
