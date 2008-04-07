@@ -1019,8 +1019,6 @@ def remap_stack_layout(builder, outputargs_gv, target):
 ##        target.stackdepth,
 ##        target.arg_positions))
 
-    # XXX rewrite in a float-friendly way
-
     N = target.stackdepth
     if builder.stackdepth < N:
         builder.mc.SUB(esp, imm(WORD * (N - builder.stackdepth)))
@@ -1336,7 +1334,6 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.arg(1)
     def genzeroconst(kind):
-        # XXX kind probably goes away
         return zero_const
 
     @staticmethod
@@ -1348,7 +1345,6 @@ class RI386GenOp(AbstractRGenOp):
 
     @staticmethod
     def genconst_from_frame_var(kind, base, info, index):
-        # eh, kind here should be "what we're looking for?"
         v = info[index]
         if isinstance(v, GenConst):
             return v
@@ -1362,7 +1358,6 @@ class RI386GenOp(AbstractRGenOp):
     @staticmethod
     @specialize.arg(0)
     def read_frame_place(T, base, place):
-        assert T is lltype.Signed
         return peek_value_at(T, base - place.stackpos * WORD)
 
 global_rgenop = RI386GenOp()
