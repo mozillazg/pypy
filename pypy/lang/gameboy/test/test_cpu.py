@@ -324,6 +324,24 @@ def assert_registers(cpu, a=None, bc=None, de=None, f=None, hl=None, sp=None, pc
     if pc is not None:
         assert cpu.pc.get() == pc, "Register pc is %s but should be %s" % (hex(cpu.pc.get()), hex(pc))
         
+
+def assert_default_flags(cpu, zFlag=True, nFlag=False, hFlag=False, cFlag=False, pFlag=False, sFlag=False):        
+    assert_flags(cpu, zFlag, nFlag, hFlag, cFlag, pFlag, sFlag)
+
+def assert_flags(cpu, zFlag=None, nFlag=None, hFlag=None, cFlag=None, pFlag=None, sFlag=None):
+    if zFlag is not None:
+        assert cpu.f.zFlag == zFlag, "Z-Flag is %s but should be %s" % (cpu.f.zFlag, zFlag)
+    if nFlag is not None:
+        assert cpu.f.nFlag == nFlag, "N-Flag is %s but should be %s" % (cpu.f.nFlag, nFlag)
+    if hFlag is not None:
+        assert cpu.f.hFlag == hFlag,  "H-Flag is %s but should be %s" % (cpu.f.hFlag, hFlag)
+    if cFlag is not None:
+        assert cpu.f.cFlag == cFlag,  "C-Flag is %s but should be %s" % (cpu.f.cFlag, cFlag)
+    if pFlag is not None:
+        assert cpu.f.pFlag == pFlag,  "P-Flag is %s but should be %s" % (cpu.f.pFlag, pFlag)
+    if sFlag is not None:
+        assert cpu.f.sFlag == sFlag,  "S-Flag is %s but should be %s" % (cpu.f.sFlag, sFlag)
+
 def prepare_for_fetch(cpu, value, valueLo=None):
     pc = cpu.pc.get()
     if valueLo is not None:
@@ -561,6 +579,23 @@ def test_0x0B_to_0c38_dec_double_registers():
         cpu.reset()
         opCode += 0x10
         value += 3
+        
+def test_inc():
+    cpu = get_cpu()
+    # cycle testing is done in the other tests
+    a = cpu.a
+    a.set(0xFF)
+    cpu.f.cFlag = True
+    cpu.inc(a.get, a.set)
+    assert_default_flags(cpu, zFlag=True, hFlag=True, cFlag=True)
+    
+    a.set(0x01)
+    cpu.inc(a.get, a.set)
+    assert_default_flags(cpu, zFlag=False, hFlag=False, cFlag=True)
+    
+    a.set(0x0F)
+    cpu.inc(a.get, a.set)
+    assert_default_flags(cpu, zFlag=False, hFlag=True, cFlag=True)
 
 # inc_B C D E H L  A
 def test_0x04_to_0x3C_inc_registers():
@@ -589,6 +624,21 @@ def test_0x34():
     assert cpu.read(cpu.hl.get()) == value
     cycle_test(cpu, 0x34, 3)
     assert cpu.read(cpu.hl.get()) == value +1
+    
+
+def test_dec():
+    cpu = get_cpu()
+    # cycle testing is done in the other tests
+    a = cpu.a
+    a.set(1)
+    cpu.f.cFlag = True
+    cpu.dec(a.get, a.set)
+    assert_default_flags(cpu, zFlag=True, hFlag=False, nFlag=True, cFlag=True)
+    
+    a.set(0x0F+1)
+    cpu.dec(a.get, a.set)
+    assert_default_flags(cpu, zFlag=False, hFlag=True, nFlag=True, cFlag=True)
+    
 
 # dec_B C D E H L  A
 def test_0x05_to_0x3D_dec_registers():
@@ -647,28 +697,92 @@ def test_0x36():
     cpu.hl.set(address)
     oldPC = cpu.pc.get()
     cycle_test(cpu, 0x36, 3)
-    assert cpu.read(cpu.hl.get()) == value 
-    assert cpu.pc.get() - oldPC == 1
+    assert cpu.read(cpu.hl.get()) == value
+    assert_default_registers(cpu, pc=oldPC+1, hl=address)
     
 # rlca
 def test_0x07():
     cpu = get_cpu()
+    value = 0x80
+    cpu.a.set(value)
+    cycle_test(cpu, 0x07, 1)   
+    assert_default_registers(cpu, a=((value << 1) | (value >> 7)) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    
+    cpu.reset()
+    value = 0x40
+    cpu.a.set(value)
     cycle_test(cpu, 0x07, 1)
+    assert_default_registers(cpu, a=((value << 1) | (value >> 7)) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=True)
     
 # rrca
 def test_0x0F():
     cpu = get_cpu()
+    value = 0x01
+    cpu.a.set(value)
     cycle_test(cpu, 0x0F, 1)
+    assert_default_registers(cpu, a=((value >> 1) | (value << 7)) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    
+    cpu.reset()
+    value = 0x02
+    cpu.a.set(value)
+    cycle_test(cpu, 0x0F, 1)
+    assert_default_registers(cpu, a=((value >> 1) | (value << 7)) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=True)
 
 # rla
 def test_0x17():
     cpu = get_cpu()
+    value = 0x01
+    cpu.a.set(value)
+    cpu.f.cFlag = False
     cycle_test(cpu, 0x17, 1)
-
+    assert_default_registers(cpu, a=(value << 1) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    
+    cpu.reset()
+    value = 0x01
+    cpu.a.set(value)
+    cpu.f.cFlag = True
+    cycle_test(cpu, 0x17, 1)
+    assert_default_registers(cpu, a=((value << 1)+1) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    
+    cpu.reset()
+    value = 0x40
+    cpu.a.set(value)
+    cpu.f.cFlag = False
+    cycle_test(cpu, 0x17, 1)
+    assert_default_registers(cpu, a=(value << 1) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=True)
+    
 # rra
 def test_0x1F():
     cpu = get_cpu()
+    value = 0x40
+    cpu.a.set(value)
+    cpu.f.cFlag = False
     cycle_test(cpu, 0x1F, 1)
+    assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    
+    cpu.reset()
+    value = 0x40
+    cpu.a.set(value)
+    cpu.f.cFlag = True
+    cycle_test(cpu, 0x1F, 1)
+    assert_default_registers(cpu, a=(0x08+(value >> 1)) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    
+    cpu.reset()
+    value = 0x02
+    cpu.a.set(value)
+    cpu.f.cFlag = False
+    cycle_test(cpu, 0x1F, 1)
+    assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
+    assert_default_flags(cpu, zFlag=False, cFlag=True)
 
 # daa
 def test_0x27():
@@ -682,24 +796,35 @@ def test_0x2F():
     fValue = cpu.f.get()
     cpu.a.set(value)
     cycle_test(cpu, 0x2F, 1)
-    assert_default_registers(cpu, a=value^0xFF, f=fValue+constants.N_FLAG+constants.H_FLAG)
+    assert_default_registers(cpu, a=value^0xFF, f=None)
+    assert_default_flags(cpu, nFlag=True, hFlag=True)
 
 # scf
 def test_0x37():
     cpu = get_cpu()
-    value = 0x12
-    cpu.f.set(value)
+    cpu.f.cFlag = False
     cycle_test(cpu, 0x37, 0)
-    assert_default_registers(cpu, f=(value & constants.Z_FLAG)|constants.C_FLAG)
+    assert_default_registers(cpu, f=None)
+    assert_default_flags(cpu, cFlag=True)
+    
+    cpu.f.cFlag = True
+    cycle_test(cpu, 0x37, 0)
+    assert_default_registers(cpu, f=None)
+    assert_default_flags(cpu, cFlag=True)
 
 # ccf
 def test_0x3F():
     cpu = get_cpu()
-    value = 0x12
-    cpu.f.set(value)
+    cpu.f.cFlag = True
     cycle_test(cpu, 0x3F, 0)
-    assert_default_registers(cpu, f=(value & (constants.Z_FLAG|constants.C_FLAG))^constants.C_FLAG)
-
+    assert_default_registers(cpu, f=None)
+    assert_default_flags(cpu, cFlag=False)
+    
+    cpu.f.cFlag = False
+    cycle_test(cpu, 0x3F, 0)
+    assert_default_registers(cpu, f=None)
+    assert_default_flags(cpu, cFlag=True)
+    
 # halt
 def test_0x76():
     py.test.skip("test not completed yet")
@@ -707,6 +832,7 @@ def test_0x76():
     assert cpu.halted == False
     cycle_test(cpu, 0x76, 0)
     assert cpu.halted == True
+    assert_default_registers(cpu)
 
 
 # ld_B_B to ld_A_A
