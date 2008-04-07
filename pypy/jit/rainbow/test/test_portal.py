@@ -291,11 +291,12 @@ class TestPortal(PortalTest):
             hint(None, global_merge_point=True)
             hint(o.__class__, promote=True)
             return o.double()
+        ll_main.convert_result = str
 
         res = self.timeshift_from_portal(ll_main, ll_function, [2.8], policy=P_NOVIRTUAL)
-        assert res == 2.8*2
+        assert float(res) == 2.8*2
         res = self.timeshift_from_portal(ll_main, ll_function, [3.6], policy=P_NOVIRTUAL)
-        assert res == 3*2
+        assert float(res) == 3*2
 
     def test_isinstance(self):
         class Base(object):
