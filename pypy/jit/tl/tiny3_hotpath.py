@@ -29,6 +29,7 @@ The '}' pops an integer value off the stack and loops if it is not zero:
 
 """
 from pypy.rlib.jit import hint, _is_early_constant, JitDriver
+from pypy.rlib.objectmodel import specialize
 
 #
 # See pypy/doc/jit.txt for a higher-level overview of the JIT techniques
@@ -50,7 +51,7 @@ class IntBox(Box):
     def as_int(self):
         return self.intval
     def as_float(self):
-        return float(self.intval)
+        return myfloat(self.intval)
     def as_str(self):
         return str(self.intval)
 
@@ -201,7 +202,7 @@ def interpret(bytecode, args):
                 try:
                     v = IntBox(int(opcode))
                 except ValueError:
-                    v = FloatBox(float(opcode))
+                    v = FloatBox(myfloat(opcode))
                 stack = Stack(v, stack)
             except ValueError:
                 pass # ignore rest
@@ -247,6 +248,10 @@ def myint(s, start=0):
         if n < 0:
             raise ValueError
     return n
+
+@specialize.argtype(0)
+def myfloat(i):
+    return float(i)
 # ------------------------------
 
 
