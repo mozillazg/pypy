@@ -44,7 +44,7 @@ class I386PortalTestMixin(object):
             decoders = main.convert_arguments
             assert len(decoders) == len(main_args)
         else:
-            decoders = [int] * len(main_args)
+            decoders = [type(arg) for arg in main_args]
         decoders = unrolling_iterable(decoders)
         numargs = len(main_args)
         USAGE = '%s: %d arguments expected\n' % (self.testname, numargs)
