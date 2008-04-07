@@ -200,9 +200,10 @@ class FloatConst(Const):
     def __init__(self, floatval):
         if we_are_translated():
             self.buf = lltype.malloc(FLOATBUF.TO, 1)
+            self.buf[0] = floatval
         else:
-            self.buf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
-        self.buf[0] = floatval
+            self.rawbuf = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
+            self.rawbuf[0] = floatval
 
     def _compute_addr(self):
         if we_are_translated():
@@ -210,12 +211,15 @@ class FloatConst(Const):
                    llmemory.itemoffsetof(FLOATBUF.TO, 0)
             return llmemory.cast_adr_to_int(addr)
         else:
-            return rffi.cast(rffi.INT, self.buf)
+            return rffi.cast(rffi.INT, self.rawbuf)
 
     @specialize.arg(1)
     def revealconst(self, T):
         assert T is lltype.Float
-        return self.buf[0]
+        if we_are_translated():
+            return self.buf[0]
+        else:
+            return self.rawbuf[0]
 
     def newvar(self, builder):
         offset = self._compute_addr()
