@@ -76,7 +76,7 @@ class BoolVar(Var):
         return builder.returnboolvar(self.operand(builder))
 
     def movetonewaddr(self, builder, addr):
-        destop = builder.mem_access(addr)
+        destop = builder.mem_access8(addr)
         builder.mc.MOV(eax, self.operand(builder))
         builder.mc.MOV(destop, al)
 
