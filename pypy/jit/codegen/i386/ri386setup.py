@@ -486,6 +486,9 @@ FISTP.mode1(MODRM, ['\xDB', orbyte(3<<3), modrm(1)])
 FILD = Instruction()
 FILD.mode1(MODRM, ['\xDB', orbyte(0<<3), modrm(1)])
 
+FNSTCW = Instruction()
+FNSTCW.mode1(MODRM, ['\xD9', orbyte(7<<3), modrm(1)])
+
 # ------------------------- end of floating point ------------------------
 
 UD2 = Instruction()      # reserved as an illegal instruction

@@ -137,7 +137,8 @@ def run_test(instrname, instr, args_lists):
         all = instr.as_all_suffixes
         for m, extra in args:
             if m in (i386.MODRM, i386.MODRM8) or all:
-                suffix = suffixes[sizes[m]] + suffix
+                if not instrname == 'FNSTCW':
+                    suffix = suffixes[sizes[m]] + suffix
         following = ""
         if instr.indirect:
             suffix = ""
@@ -190,7 +191,6 @@ def run_test(instrname, instr, args_lists):
 def rec_test_all(instrname, modes, args=[]):
     if modes:
         m = modes[0]
-        # XXX evil hack
         if instrname.startswith('F') and m is i386.MODRM:
             lst = modrm_noreg_tests()
         else:
