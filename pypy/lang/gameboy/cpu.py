@@ -523,13 +523,12 @@ class CPU(object):
 
     # 1 cycle
     def rotateLeftCircular(self, getter, setter):
-        s = ((getter() & 0x7F) << 1) + ((getter() & 0x80) >> 7)
+        s = (getter()  << 1) + (getter() >> 7)
         self.flagsAndSetterFinish(s, setter, 0x80)
 
     # rotateLeftCircularA 1 cycle
     def rotateLeftCircularA(self):
-        self.f.cFlagAdd(self.a.get(), 0x80, reset=True)
-        self.a.set(((self.a.get() & 0x7F) << 1) + ((self.a.get() & 0x80) >> 7))
+        self.rotateLeftCircular(self.a.get, self.a.set)
 
     # 1 cycle
     def rotateLeft(self, getter, setter):
@@ -540,21 +539,16 @@ class CPU(object):
 
      # RLA  1 cycle
     def rotateLeftA(self):
-        s = ((self.a.get() & 0x7F) << 1)
-        if self.f.cFlag:
-            s +=  0x01
-        self.f.cFlagAdd(self.a.get(), 0x80, reset=True)
-        self.a.set(s) #  1 cycle
+        self.rotateLeft(self.a.get, self.a.set)
         
     # 1 cycle
     def rotateRightCircular(self, getter, setter):
-        s = (getter() >> 1) + ((getter() & 0x01) << 7)
+        s = (getter() >> 1) + (getter() << 7)
         self.flagsAndSetterFinish(s, setter) # 1 cycle
    
      # RRCA 1 cycle
     def rotateRightCircularA(self):
-        self.f.cFlagAdd(self.a.get(), reset=True)
-        self.a.set(((self.a.get() >> 1) & 0x7F) + ((self.a.get() << 7) & 0x80)) #1 cycle
+        self.rotateRightCircular(self.a.get, self.a.set)
 
     # 1 cycle
     def rotateRight(self, getter, setter):
@@ -565,11 +559,7 @@ class CPU(object):
 
      # RRA 1 cycle
     def rotateRightA(self):
-        s = ((self.a.get() >> 1) & 0x7F)
-        if self.f.cFlag:
-            s += 0x80
-        self.f.cFlagAdd(self.a.get(), reset=True)
-        self.a.set(s) # 1 cycle
+        self.rotateRight(self.a.get, self.a.set)
 
     # 2 cycles
     def shiftLeftArithmetic(self, getter, setter):
@@ -588,13 +578,14 @@ class CPU(object):
         
      # 2 cycles
     def flagsAndSetterFinish(self, s, setter, compareAnd=0x01):
+        s &= 0xFF
         self.f.zeroFlagAdd(s,  reset=True)
         self.f.cFlagAdd(s, compareAnd)
         setter(s) # 1 cycle
 
     # 1 cycle
     def swap(self, getter, setter):
-        s = ((getter() << 4) & 0xF0) + ((getter() >> 4) & 0x0F)
+        s = ((getter() << 4) + (getter() >> 4)) & 0xFF
         self.f.zeroFlagAdd(s, reset=True)
         setter(s)
 
