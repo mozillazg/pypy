@@ -15,7 +15,7 @@ class InterruptFlag(object):
     def isPending(self):
         return self._isPending
     
-    def setPending(self, _isPending):
+    def setPending(self, _isPending=True):
         self._isPending = _isPending
     
 

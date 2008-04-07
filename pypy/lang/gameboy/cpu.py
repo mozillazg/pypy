@@ -13,7 +13,7 @@ class Register(object):
         
     def set(self, value, useCycles=True):
         self.value = value & 0xFF
-        if (useCycles):
+        if useCycles:
             self.cpu.cycles -= 1
         
     def get(self, useCycles=True):
@@ -25,7 +25,7 @@ class Register(object):
     def sub(self, value, useCycles=True):
         self.set(self.get(useCycles)-value, useCycles)
     
-# ___________________________________________________________________________
+# ------------------------------------------------------------------------------
 
 class DoubleRegister(Register):
     def __init__(self, cpu, hi=None, lo=None, resetValue=None):
@@ -54,7 +54,7 @@ class DoubleRegister(Register):
             self.setLo(lo, useCycles)   
     
     def reset(self):
-        self.set(self.resetValue, None, False)
+        self.set(self.resetValue, None, useCycles=False)
             
     def setHi(self, hi=0, useCycles=True):
         self.hi.set(hi, useCycles)
@@ -63,27 +63,31 @@ class DoubleRegister(Register):
         self.lo.set(lo, useCycles)
         
     def get(self, useCycles=True):
-        return (self.hi.get()<<8) + self.lo.get()
+        return (self.hi.get(useCycles)<<8) + self.lo.get(useCycles)
     
     def getHi(self, useCycles=True):
-        return self.hi.get()
+        return self.hi.get(useCycles)
         
     def getLo(self, useCycles=True):
-        return self.lo.get()
+        return self.lo.get(useCycles)
     
     def inc(self, useCycles=True):
-        self.set(self.get() +1)
-        self.cpu.cycles -= 1
+        self.set(self.get(useCycles) +1, None, useCycles)
+        if useCycles:
+            self.cpu.cycles -= 1
         
     def dec(self, useCycles=True):
-        self.set(self.get() - 1)
-        self.cpu.cycles -= 1
+        self.set(self.get(useCycles) - 1, None, useCycles)
+        if useCycles:
+            self.cpu.cycles -= 1
         
     def add(self, n=2, useCycles=True):
-        self.set(self.get() + n)
-        self.cpu.cycles -= 2
+        self.set(self.get(useCycles) + n, None, useCycles)
+        if useCycles:
+            self.cpu.cycles -= 2
     
-    
+# ------------------------------------------------------------------------------
+
 class ImmediatePseudoRegister(object):
         def __init__(self, cpu, hl):
             self.cpu = cpu
@@ -98,7 +102,9 @@ class ImmediatePseudoRegister(object):
             if not useCycles:
                 self.cpu.cycles += 1
             return self.cpu.read(self.hl.get(useCycles))
-        
+    
+# ------------------------------------------------------------------------------
+  
 class FlagRegister(Register):
     
     def __init__(self, cpu):
@@ -108,7 +114,7 @@ class FlagRegister(Register):
     def reset(self, keepZ=False, keepN=False, keepH=False, keepC=False,\
                 keepP=False, keepS=False):
         if not keepZ:
-            self.zFlag = True
+            self.zFlag = False
         if not keepN:
             self.nFlag = False
         if not keepH:
@@ -138,12 +144,12 @@ class FlagRegister(Register):
         if useCycles:
             self.cpu.cycles -= 1
         
-    def zeroFlagAdd(self, a, reset=False):
+    def zFlagCompare(self, a, reset=False):
         if (reset):
              self.reset()
         if isinstance(a, (Register)):
             a = a.get()
-        self.zFlag = (a==0)
+        self.zFlag = ((a & 0xFF) == 0)
             
     def cFlagAdd(self, s, compareAnd=0x01, reset=False):
         if (reset):
@@ -167,7 +173,7 @@ class FlagRegister(Register):
         if a < b:
             self.cFlag = True
         
-# ___________________________________________________________________________
+# # ------------------------------------------------------------------------------
 
 class CPU(object):
     """
@@ -207,6 +213,7 @@ class CPU(object):
     def reset(self):
         self.resetRegisters()
         self.f.reset()
+        self.f.zFlag = True
         self.ime = False
         self.halted = False
         self.cycles = 0
@@ -329,8 +336,9 @@ class CPU(object):
     def lowerPendingInterrupt(self):
         for flag in self.interrupt.interruptFlags:
             if flag.isPending():
-                self.call(flag.callCode, disableIme=True)
+                self.call(flag.callCode, disableIME=True, useCycles=False)
                 flag.setPending(False)
+                return
 
      # Execution
     def fetchExecute(self):
@@ -371,14 +379,14 @@ class CPU(object):
         self.popDoubleRegister(CPU.fetch, register)
 
      # Stack, 2 cycles
-    def push(self, data):
-        self.sp.dec() # 2 cycles
-        self.memory.write(self.sp.get(), data)
+    def push(self, data, useCycles=True):
+        self.sp.dec(useCycles) # 2 cycles
+        self.memory.write(self.sp.get(useCycles), data)
         
      # PUSH rr 4 cycles
-    def pushDoubleRegister(self, register):
-        self.push(register.getHi()) # 2 cycles
-        self.push(register.getLo()) # 2 cycles
+    def pushDoubleRegister(self, register, useCycles=True):
+        self.push(register.getHi(), useCycles) # 2 cycles
+        self.push(register.getLo(), useCycles) # 2 cycles
 
     # 1 cycle
     def pop(self):
@@ -398,13 +406,14 @@ class CPU(object):
         self.cycles += 1
         
     # 4 cycles
-    def call(self, address, disableIME=False):
+    def call(self, address, disableIME=False, useCycles=True):
         if disableIME:
             self.ime = False
-        self.push(self.pc.getHi()) # 2 cycles
-        self.push(self.pc.getLo()) # 2 cycles
-        self.pc.set(address)       # 1 cycle
-        self.cycles += 1
+        self.push(self.pc.getHi(useCycles), useCycles) # 2 cycles
+        self.push(self.pc.getLo(useCycles), useCycles) # 2 cycles
+        self.pc.set(address, useCycles)       # 1 cycle
+        if useCycles:
+            self.cycles += 2
         
      # 1 cycle
     def ld(self, getter, setter):
@@ -423,7 +432,7 @@ class CPU(object):
      # ALU, 1 cycle
     def addA(self, getter, setter=None):
         added = (self.a.get() + getter()) & 0xFF
-        self.f.zeroFlagAdd(added, reset=True)
+        self.f.zFlagCompare(added, reset=True)
         self.f.hFlagCompare(added, self.a)
         self.f.cFlagCompare(added, self.a)
         self.a.set(added) # 1 cycle
@@ -439,29 +448,30 @@ class CPU(object):
         
     # 1 cycle
     def addWithCarry(self, getter, setter=None):
-        s = self.a.get() + getter();
+        data = getter()
+        s = self.a.get() + data
         if self.f.cFlag:
             s +=1
-        self.carryFlagFinish(getter, 0x10)
-        if s >= 0x100:
-            self.f.cFlag= True
+        self.carryFlagFinish(s,data)
 
     # 1 cycle
     def subtractWithCarry(self, getter, setter=None):
-        s = self.a.get() - getter();
+        data = getter()
+        s = self.a.get() - data
         if self.f.cFlag:
             s -= 1
-        self.carryFlagFinish(getter, 0x10)
-        if (s & 0xFF00) != 0:
-            self.f.cFlag = True
+        self.carryFlagFinish(s, data)
         self.f.nFlag = True
         
-    def carryFlagFinish(self, getter):
+    def carryFlagFinish(self, s, data):
         self.f.reset()
-        self.f.zeroFlagAdd(s)
-        if ((s ^ self.a.get() ^ getter()) & 0x10) != 0:
+        # set the hfalg if the 0x10 bit was affected
+        if ((s ^ self.a.get() ^ data) & 0x10) != 0:
             self.f.hFlag = True
-        self.a.set(s & 0xFF)  # 1 cycle
+        if s >= 0x100:
+            self.f.cFlag= True
+        self.f.zFlagCompare(s)
+        self.a.set(s)  # 1 cycle
         
     # 1 cycle
     def subtract(self, getter, setter=None):
@@ -473,7 +483,7 @@ class CPU(object):
         s = (self.a.get() - getter()) & 0xFF
         self.f.reset()
         self.f.nFlag = True
-        self.f.zeroFlagAdd(s)
+        self.f.zFlagCompare(s)
         self.hcFlagFinish(s)
         self.cycles -= 1
             
@@ -485,17 +495,17 @@ class CPU(object):
     # 1 cycle
     def AND(self, getter, setter=None):
         self.a.set(self.a.get() & getter())  # 1 cycle
-        self.f.zeroFlagAdd(self.a, reset=True)
+        self.f.zFlagCompare(self.a, reset=True)
 
     # 1 cycle
     def XOR(self, getter, setter=None):
         self.a.set( self.a.get() ^ getter())  # 1 cycle
-        self.f.zeroFlagAdd(self.a, reset=True)
+        self.f.zFlagCompare(self.a, reset=True)
 
     # 1 cycle
     def OR(self, getter, setter=None):
         self.a.set(self.a.get() | getter())  # 1 cycle
-        self.f.zeroFlagAdd(self.a, reset=True)
+        self.f.zFlagCompare(self.a, reset=True)
 
     def incDoubleRegister(self, doubleRegister):
         doubleRegister.inc()
@@ -516,7 +526,7 @@ class CPU(object):
      
     def decIncFlagFinish(self, data, setter, compare):
         self.f.reset(keepC=True)
-        self.f.zeroFlagAdd(data)
+        self.f.zFlagCompare(data)
         if (data & 0x0F) == compare:
             self.f.hFlag = True
         setter(data) # 1 cycle
@@ -579,14 +589,14 @@ class CPU(object):
      # 2 cycles
     def flagsAndSetterFinish(self, s, setter, compareAnd=0x01):
         s &= 0xFF
-        self.f.zeroFlagAdd(s,  reset=True)
+        self.f.zFlagCompare(s,  reset=True)
         self.f.cFlagAdd(s, compareAnd)
         setter(s) # 1 cycle
 
     # 1 cycle
     def swap(self, getter, setter):
         s = ((getter() << 4) + (getter() >> 4)) & 0xFF
-        self.f.zeroFlagAdd(s, reset=True)
+        self.f.zFlagCompare(s, reset=True)
         setter(s)
 
     # 2 cycles
@@ -709,7 +719,7 @@ class CPU(object):
         self.f.reset(keepN=True)
         if delta >= 0x60:
             self.f.cFlag = True
-        self.f.zeroFlagAdd(self.a)
+        self.f.zFlagCompare(self.a)
 
      # INC rr
     def incDoubleRegister(self, register):
@@ -812,8 +822,7 @@ class CPU(object):
      # RETI 4 cycles
     def returnFormInterrupt(self):
         self.ret() # 4 cycles
-        self.enableInterrupts()
-        self.cycles += 1
+        self.enableInterrupts() # 1 cycle
 
      # RST nn 4 cycles
     def restart(self, nn):
@@ -827,8 +836,7 @@ class CPU(object):
     # 1 cycle
     def enableInterrupts(self): 
         self.ime = True
-        self.cycles -= 1
-        self.execute(self.fetch())
+        self.execute(self.fetch()) #  1
         self.handlePendingInterrupt()
 
      # HALT/STOP
@@ -875,7 +883,8 @@ def create_load_group_op_codes():
     opCode = 0x40
     for storeRegister in GROUPED_REGISTERS:
         for loadRegister in GROUPED_REGISTERS:
-            opCodes.append((opCode, load_group_lambda(storeRegister, loadRegister)))
+            if loadRegister != CPU.getHLi or storeRegister != CPU.getHLi:
+                opCodes.append((opCode, load_group_lambda(storeRegister, loadRegister)))
             opCode += 1
     return opCodes
             
@@ -983,8 +992,7 @@ REGISTER_GROUP_OP_CODES = [
     (0xA8, 0x01, CPU.XOR),    
     (0xB0, 0x01, CPU.OR),
     (0xB8, 0x01, CPU.compareA),
-    (0x06, 0x08, CPU.fetchLoad),
-    (0x40, 0x01, CPU.resetBit,       range(0, 8))
+    (0x06, 0x08, CPU.fetchLoad)
 ]    
         
 
@@ -1013,8 +1021,8 @@ SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
     (0x28, 0x01, CPU.shiftRightArithmetic),    
     (0x30, 0x01, CPU.swap),    
     (0x38, 0x01, CPU.shiftWordRightLogical),
-    (0x40, 0x01, CPU.testBit, range(0, 8)),    
-    (0xC0, 0x01, CPU.setBit, range(0, 8)),
+    (0x40, 0x01, CPU.testBit,  range(0, 8)),    
+    (0xC0, 0x01, CPU.setBit,   range(0, 8)),
     (0x80, 0x01, CPU.resetBit, range(0, 8))         
 ]
 
