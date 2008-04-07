@@ -456,6 +456,9 @@ class _signed_fakeaccessor(_fakeaccessor):
 class _char_fakeaccessor(_fakeaccessor):
     TYPE = lltype.Char
 
+class _float_fakeaccessor(_fakeaccessor):
+    TYPE = lltype.Float
+
 class _address_fakeaccessor(_fakeaccessor):
     TYPE = Address
 
@@ -482,10 +485,12 @@ supported_access_types = {"signed":    lltype.Signed,
                           "unsigned":  lltype.Unsigned,
                           "char":      lltype.Char,
                           "address":   Address,
+                          "float":     lltype.Float,
                           }
 
 fakeaddress.signed = property(_signed_fakeaccessor)
 fakeaddress.char = property(_char_fakeaccessor)
+fakeaddress.float = property(_float_fakeaccessor)
 fakeaddress.address = property(_address_fakeaccessor)
 fakeaddress._TYPE = Address
 
