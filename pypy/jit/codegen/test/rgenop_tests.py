@@ -879,17 +879,27 @@ def get_frame_place_reader(TP):
             return llhelper(self.FUNC, self.reader)
     return FramePlaceReader
 FramePlaceReader = get_frame_place_reader(lltype.Signed)
+FramePlaceFloatReader = get_frame_place_reader(lltype.Float)
 
-def make_read_frame_place(rgenop, get_reader):
-    signed_kind = rgenop.kindToken(lltype.Signed)
-    sigtoken = rgenop.sigToken(FUNC)
-    readertoken = rgenop.sigToken(FramePlaceReader.FUNC.TO)
+def make_read_frame_place(rgenop, get_reader, TP):
+    kind = rgenop.kindToken(TP)
+    if TP is lltype.Signed:
+        F = FUNC
+        reader = FramePlaceReader
+    else:
+        F = FLOATFUNC
+        reader = FramePlaceFloatReader
+    sigtoken = rgenop.sigToken(F)
+    readertoken = rgenop.sigToken(reader.FUNC.TO)
 
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "f")
     builder.start_writing()
 
-    place = builder.alloc_frame_place(signed_kind,
-                                      rgenop.genconst(42))
+    if TP is lltype.Signed:
+        place = builder.alloc_frame_place(kind,
+                                          rgenop.genconst(42))
+    else:
+        place = builder.alloc_frame_place(kind, rgenop.genconst(3.3))
     gv_base = builder.genop_get_frame_base()
     gv_reader = rgenop.constPrebuiltGlobal(get_reader(place))
     gv_z = builder.genop_call(readertoken, gv_reader, [gv_base])
@@ -899,12 +909,15 @@ def make_read_frame_place(rgenop, get_reader):
 
     return gv_f
 
-def get_read_frame_place_runner(RGenOp):
-    fpr = FramePlaceReader(RGenOp)
+def get_read_frame_place_runner(RGenOp, TP):
+    if TP is lltype.Signed:
+        fpr = FramePlaceReader(RGenOp)
+    else:
+        fpr = FramePlaceFloatReader(RGenOp)
 
     def read_frame_place_runner(x):
         rgenop = RGenOp()
-        gv_f = make_read_frame_place(rgenop, fpr.get_reader)
+        gv_f = make_read_frame_place(rgenop, fpr.get_reader, TP)
         fn = gv_f.revealconst(lltype.Ptr(FUNC))
         res = fn(x)
         keepalive_until_here(rgenop)    # to keep the code blocks alive
@@ -1102,6 +1115,15 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         res = fn(30)
         assert res == 60
 
+
+    def test_genconst_from_frame_float_var_compile(self):
+        runner = get_read_frame_var_runner(self.RGenOp, True,
+                                           FrameVarFloatReader, FLOATFUNC)
+
+        fn = self.compile(runner, [float])
+        res = fn(3.3)
+        assert res == 3.3 * 2
+
     def test_write_frame_place_compile(self):
         fn = self.compile(get_write_frame_place_runner(self.RGenOp), [int])
         res = fn(-42)
@@ -1110,10 +1132,10 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         assert res == 4242 - 6060
 
     def test_read_frame_place_compile(self):
-        fn = self.compile(get_read_frame_place_runner(self.RGenOp), [int])
+        fn = self.compile(get_read_frame_place_runner(self.RGenOp,
+                                                      lltype.Signed), [int])
         res = fn(-1)
         assert res == 42
-
 
     def test_ovfcheck_adder_compile(self):
         fn = self.compile(get_ovfcheck_adder_runner(self.RGenOp), [int, int])
@@ -1674,10 +1696,23 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
             return reader_ptr
 
         rgenop = self.RGenOp()
-        gv_callable = make_read_frame_place(rgenop, get_reader)
+        gv_callable = make_read_frame_place(rgenop, get_reader, lltype.Signed)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(-1)
         assert res == 42
+
+    def test_read_float_frame_place_direct(self):
+        def get_reader(place):
+            fpr = FramePlaceFloatReader(self.RGenOp)
+            fpr.place = place
+            reader_ptr = self.directtesthelper(fpr.FUNC, fpr.reader)
+            return reader_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_read_frame_place(rgenop, get_reader, lltype.Float)
+        fnptr = self.cast_float(gv_callable, 1)
+        res = fnptr(-3.3)
+        assert res == 3.3
 
     def test_frame_vars_like_the_frontend_direct(self):
         rgenop = self.RGenOp()
