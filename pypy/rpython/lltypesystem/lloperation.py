@@ -122,7 +122,10 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         op = self.instance    # the LLOp object that was called
         args_v = [hop.inputarg(r, i+1) for i, r in enumerate(hop.args_r[1:])]
-        hop.exception_is_here()
+        if op.canraise:
+            hop.exception_is_here()
+        else:
+            hop.exception_cannot_occur()
         return hop.genop(op.opname, args_v, resulttype=hop.r_result.lowleveltype)
 
 
