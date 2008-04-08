@@ -15,7 +15,7 @@ class TestTL(HotPathTest):
             else:
                 assert 0
             bytecode = [s for s in bytecode.split(' ') if s != '']
-            args = [tiny3.IntBox(arg1), tiny3.IntBox(arg3), tiny3.IntBox(arg3)]
+            args = [tiny3.IntBox(arg1), tiny3.IntBox(arg2), tiny3.IntBox(arg3)]
             return tiny3.repr(tiny3.interpret(bytecode, args))
 
         res = self.run(main, [1, 5, 0, 0], threshold=2,
