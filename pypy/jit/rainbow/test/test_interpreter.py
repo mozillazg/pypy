@@ -145,8 +145,8 @@ class InterpretationTest(object):
             graph2 = t.graphs[0]
         else:
             graph2 = graphof(t, portal)
-        self.graph = graph2
-        self.maingraph = graphof(rtyper.annotator.translator, func)
+            self.graph = graph2
+            self.maingraph = graphof(rtyper.annotator.translator, func)
         writer = self.create_writer(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
         # the bytecode writer can ask for llhelpers about lists and dicts
