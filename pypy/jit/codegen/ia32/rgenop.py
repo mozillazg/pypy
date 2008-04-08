@@ -318,7 +318,7 @@ class Builder(GenBuilder):
         return self.returnintvar(eax)
 
     def get_frame_info(self, vars_gv):
-        return vars_gv
+        return vars_gv[:]
 
     def genop_setfield(self, (offset, fieldsize, kt), gv_ptr, gv_value):
         assert fieldsize != 2
