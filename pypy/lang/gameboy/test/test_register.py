@@ -91,6 +91,8 @@ def test_double_register_bounds():
     value = 0xFFFF1234
     register.set(value)
     assert register.get() == 0x1234
+    register.set(0)
+    assert register.get() == 0
     
 def test_double_register_hilo():
     register = DoubleRegister(get_cpu())
@@ -120,7 +122,6 @@ def test_double_register_hilo():
     
     
 def test_double_register_methods():
-    print("test_double_register_methods")
     value = 0x1234
     register = DoubleRegister(get_cpu())
     register.set(value)

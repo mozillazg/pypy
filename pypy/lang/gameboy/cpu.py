@@ -51,7 +51,7 @@ class DoubleRegister(Register):
                 self.cpu.cycles += 1
         else:
             self.setHi(hi, useCycles)
-            self.setLo(lo, useCycles)   
+            self.setLo(lo, useCycles) 
     
     def reset(self):
         self.set(self.resetValue, None, useCycles=False)
@@ -94,14 +94,14 @@ class ImmediatePseudoRegister(object):
             self.hl = hl
             
         def set(self, value, useCycles=True):
-            self.cpu.write(self.hl.get(useCycles), value)
+            self.cpu.write(self.hl.get(useCycles), value) # 2 + 0
             if not useCycles:
                 self.cpu.cycles += 2
         
         def get(self, useCycles=True):
             if not useCycles:
                 self.cpu.cycles += 1
-            return self.cpu.read(self.hl.get(useCycles))
+            return self.cpu.read(self.hl.get(useCycles)) # 1
     
 # ------------------------------------------------------------------------------
   
@@ -336,7 +336,8 @@ class CPU(object):
     def lowerPendingInterrupt(self):
         for flag in self.interrupt.interruptFlags:
             if flag.isPending():
-                self.call(flag.callCode, disableIME=True, useCycles=False)
+                self.ime = False
+                self.call(flag.callCode, useCycles=False)
                 flag.setPending(False)
                 return
 
@@ -406,14 +407,12 @@ class CPU(object):
         self.cycles += 1
         
     # 4 cycles
-    def call(self, address, disableIME=False, useCycles=True):
-        if disableIME:
-            self.ime = False
+    def call(self, address, useCycles=True):
         self.push(self.pc.getHi(useCycles), useCycles) # 2 cycles
         self.push(self.pc.getLo(useCycles), useCycles) # 2 cycles
-        self.pc.set(address, useCycles)       # 1 cycle
+        self.pc.set(address, None, useCycles)       # 1 cycle
         if useCycles:
-            self.cycles += 2
+            self.cycles += 1
         
      # 1 cycle
     def ld(self, getter, setter):
@@ -531,12 +530,13 @@ class CPU(object):
             self.f.hFlag = True
         setter(data) # 1 cycle
 
-    # 1 cycle
+    # RLC 1 cycle
     def rotateLeftCircular(self, getter, setter):
-        s = (getter()  << 1) + (getter() >> 7)
+        data = getter()
+        s = (data  << 1) + (data >> 7)
         self.flagsAndSetterFinish(s, setter, 0x80)
 
-    # rotateLeftCircularA 1 cycle
+    # RLCA rotateLeftCircularA 1 cycle
     def rotateLeftCircularA(self):
         self.rotateLeftCircular(self.a.get, self.a.set)
 
@@ -551,7 +551,7 @@ class CPU(object):
     def rotateLeftA(self):
         self.rotateLeft(self.a.get, self.a.set)
         
-    # 1 cycle
+    # RRC 1 cycle
     def rotateRightCircular(self, getter, setter):
         s = (getter() >> 1) + (getter() << 7)
         self.flagsAndSetterFinish(s, setter) # 1 cycle
@@ -822,7 +822,8 @@ class CPU(object):
      # RETI 4 cycles
     def returnFormInterrupt(self):
         self.ret() # 4 cycles
-        self.enableInterrupts() # 1 cycle
+        self.enableInterrupts() # 1 cycle + others
+        self.cycles += 1
 
      # RST nn 4 cycles
     def restart(self, nn):
@@ -834,7 +835,7 @@ class CPU(object):
         self.cycles -= 1; 
 
     # 1 cycle
-    def enableInterrupts(self): 
+    def enableInterrupts(self):
         self.ime = True
         self.execute(self.fetch()) #  1
         self.handlePendingInterrupt()
