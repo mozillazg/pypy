@@ -813,6 +813,7 @@ setannotation(get_frame_info, annmodel.SomePtr(llmemory.GCREF))
 
 def read_frame_var(T, base, info, index):
     vars = info._obj.info.args
+    assert index >= 0
     v = vars[index]
     if isinstance(v, flowmodel.Constant):
         val = v.value
@@ -833,6 +834,7 @@ setannotation(genconst_from_frame_var, s_ConstOrVar)
 
 def write_frame_var(base, info, index, value):
     vars = info._obj.info.args
+    assert index >= 0
     v = vars[index]
     assert isinstance(v, flowmodel.Variable)
     llframe = base.ptr
