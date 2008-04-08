@@ -2,12 +2,10 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter.rcontainer import VirtualContainer, FrozenContainer
 from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue, rvirtualizable, oop
+from pypy.rlib.debug import ll_assert
 
 from pypy.rpython.lltypesystem import lloperation
 debug_print = lloperation.llop.debug_print
-
-class NotConstInAVlist(Exception):
-    pass
 
 def TypeDesc(RGenOp, rtyper, exceptiondesc, LIST):
     if rtyper.type_system.name == 'lltypesystem':
@@ -63,11 +61,9 @@ class AbstractListTypeDesc(object):
                 box = item_boxes[i]
                 if box is not None:
                     gv_value = box_gv_reader(box)
-                    if gv_value.is_const:
-                        v = gv_value.revealconst(LIST.ITEM)
-                        l.ll_setitem_fast(i, v)
-                    else:
-                        raise NotConstInAVlist("Cannot put variable to a vlist")
+                    ll_assert(gv_value.is_const, "vlist.populate() got a var")
+                    v = gv_value.revealconst(LIST.ITEM)
+                    l.ll_setitem_fast(i, v)
 
         self.allocate = allocate
         self.populate = populate
