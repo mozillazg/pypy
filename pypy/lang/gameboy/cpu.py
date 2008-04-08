@@ -325,7 +325,7 @@ class CPU(object):
      # Interrupts
     def handlePendingInterrupt(self):
         if self.halted:
-            if (self.interrupt.isPending()):
+            if self.interrupt.isPending():
                 self.halted = False
                 self.cycles -= 4
             elif (self.cycles > 0):

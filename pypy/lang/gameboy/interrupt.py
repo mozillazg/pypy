@@ -88,8 +88,8 @@ class Interrupt(object):
     def getInterruptEnable(self):
         return int(self.enable)
 
-    def setInterruptEnable(self, data):
-        self.enable = bool(data)
+    def setInterruptEnable(self, isEnabled=True):
+        self.enable = bool(isEnabled)
         
     def getInterruptFlag(self):
         flag = 0x00
