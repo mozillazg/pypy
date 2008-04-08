@@ -97,4 +97,5 @@ class TestPortal(I386PortalTestMixin,
 
     # for the individual tests see
     # ====> ../../../rainbow/test/test_portal.py
-    pass
+    def test_simple_recursive_portal_call_with_exc(self):
+        py.test.skip("FIXME")
