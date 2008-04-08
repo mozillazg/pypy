@@ -417,8 +417,10 @@ class TranslationDriver(SimpleTaskEngine):
                                        "Hint-annotate")
 
     def task_rainbow_lltype(self):
-        from pypy.jit.codegen import detect_cpu
-        cpu = detect_cpu.autodetect()
+        cpu = self.config.translation.jitbackend
+        if cpu is None:
+            from pypy.jit.codegen import detect_cpu
+            cpu = detect_cpu.autodetect()
         if cpu == 'i386':
             from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
             RGenOp.MC_SIZE = 32 * 1024 * 1024
