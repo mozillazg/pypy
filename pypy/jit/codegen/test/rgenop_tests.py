@@ -1747,7 +1747,12 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         place = builder1.alloc_frame_place(signed_kind, rgenop.genconst(0))
         v6 = builder1.genop_get_frame_base()
         c_seven = rgenop.genconst(7)
-        frameinfo = builder1.get_frame_info([v3, v4, c_seven, v5])
+        lst = [v3, v4, c_seven, v5]
+        frameinfo = builder1.get_frame_info(lst)
+        assert frameinfo is not lst  # it's ok for the backend to return any
+                                     # opaque object, but if it returns 'lst'
+                                     # it should make a copy so that the
+                                     # frontend doesn't mutate it afterwards
         # here would be a call
         v8 = builder1.genop_absorb_place(place)
         args_gv = [v3, v4, v5, v8]
