@@ -1231,7 +1231,6 @@ def test_0xC9():
 
 # reti
 def test_0xD9_returnFormInterrupt():
-    py.test.skip("cycle bug in cpu")
     cpu = get_cpu()
     value = 0x1234
     cpu.sp.set(0)
@@ -1241,8 +1240,10 @@ def test_0xD9_returnFormInterrupt():
     cycle_test(cpu, 0xD9, 4+2) 
     assert_default_registers(cpu, pc=value+1, sp=2)
     
-def test_0xD9_handleInterrupt():
+def test_handleInterrupt():
     py.test.skip("figuring out how to do it")
+    cpu = get_cpu()
+    
 
 # ld_PC_HL 
 def test_0xE9():
@@ -1321,12 +1322,11 @@ def test_0xF3():
 
 # ei
 def test_0xFB():
-    py.test.skip("cycle bug in cpu")
     cpu = get_cpu()
     cpu.sp.set(0)
     cpu.ime = False
     cpu.halted = False
-    prepare_for_fetch(cpu, 0x00)
+    prepare_for_fetch(cpu, 0x00) # nop 1 cycle
     cycle_test(cpu, 0xFB, 1+1)
     assert cpu.ime == True
     
@@ -1334,13 +1334,18 @@ def test_0xFB():
     cpu.sp.set(0)
     cpu.ime = True
     cpu.halted = False
+    prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
     cpu.interrupt.vBlank.setPending()
+    cpu.interrupt.serial.setPending()
     cpu.interrupt.setInterruptEnable(True)
     assert cpu.interrupt.isPending() == True
-    prepare_for_fetch(cpu, 0x00)
-    cycle_test(cpu, 0xFB, 1+1+4)
+    assert cpu.halted == False
+    assert cpu.ime == True  
+    cycle_test(cpu, 0xFB, 1+1)
     assert cpu.interrupt.isPending() == False
-    assert cpu.ime == True
+    assert cpu.interrupt.vBlank.isPending() == False
+    assert cpu.pc.get() == cpu.interrupt.vBlank.callCode
+    assert cpu.ime == False
 
 # call_NZ_nnnn
 def test_0xC4():
@@ -1408,7 +1413,6 @@ def test_0xFE():
 
 # rst(0x00) to rst(0x38)
 def test_0xC7_to_0xFF():
-    py.test.skip("cycle bug in cpu")
     cpu = get_cpu()
     opCode = 0xC7
     rstValue = 0x00
@@ -1427,9 +1431,22 @@ def test_0xC7_to_0xFF():
 def test_0xCB():
     pass
 
+def test_rotateLeftCircular_flags():
+    cpu = get_cpu()
+    a = cpu.a
+    a.set(0x01)
+    cpu.rotateLeftA()
+    assert_default_flags(cpu, zFlag=False, cFlag=False)
+    assert_default_registers(cpu, a=0x02, f=None)
+    
+    cpu.reset()
+    a.set(0x40)
+    cpu.rotateLeftA()
+    assert_default_flags(cpu, zFlag=False, cFlag=True)
+    assert_default_registers(cpu, a=0x80, f=None)
+    
 # rlc_B to rlc_A
-def test_0x00_to_0x07():
-    py.test.skip("Bug in cpu")
+def test_0x00_to_0x07_rotateLeftCircular():
     cpu = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     opCode = 0x00
@@ -1442,9 +1459,9 @@ def test_0x00_to_0x07():
             cycles = 4
         fetch_execute_cycle_test(cpu, opCode, cycles)
         rlc = ((value & 0x7F) << 1) + ((value & 0x80) >> 7)
-        assert register.get() ==  rcl
+        assert register.get() ==  rlc
         opCode += 0x01
-        vaue += 1
+        value += 1
 
 # rrc_B to rrc_F
 def test_0x08_to_0x0F():
