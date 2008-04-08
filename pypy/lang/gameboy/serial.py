@@ -15,14 +15,14 @@ class Serial(object):
         self.sb = 0x00
         self.sc = 0x00
 
-    def cycles(self):
+    def getCycles(self):
         return self.cycles
 
     def emulate(self, ticks):
-        if ((self.sc & 0x81) != 0x81):
+        if (self.sc & 0x81) != 0x81:
             return
         self.cycles -= ticks
-        if (self.cycles <= 0):
+        if self.cycles <= 0:
             self.sb = 0xFF
             self.sc &= 0x7F
             self.cycles = constants.SERIAL_IDLE_CLOCK

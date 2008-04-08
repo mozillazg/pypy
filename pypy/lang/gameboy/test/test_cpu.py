@@ -1241,9 +1241,39 @@ def test_0xD9_returnFormInterrupt():
     assert_default_registers(cpu, pc=value+1, sp=2)
     
 def test_handleInterrupt():
-    py.test.skip("figuring out how to do it")
     cpu = get_cpu()
+    cpu.halted = True
+    cpu.cycles = 0xFF
+    cpu.handlePendingInterrupt()
+    assert cpu.cycles == 0
     
+    cpu.reset()
+    cpu.halted = True
+    cpu.interrupt.setInterruptEnable()
+    cpu.interrupt.vBlank.setPending()
+    assert cpu.interrupt.isPending() == True
+    cpu.cycles = 4
+    cpu.handlePendingInterrupt()
+    assert cpu.cycles == 0
+    assert cpu.halted == False
+    
+    cpu.reset()
+    cpu.halted = False
+    cpu.ime = True
+    cpu.pc.set(0x1234)
+    cpu.sp.set(0x02)
+    sp = cpu.sp.get()
+    cpu.interrupt.setInterruptEnable()
+    cpu.interrupt.vBlank.setPending()
+    cpu.interrupt.lcd.setPending()
+    assert cpu.interrupt.isPending() == True
+    cpu.cycles = 0
+    cpu.handlePendingInterrupt()
+    assert cpu.cycles == 0
+    assert cpu.halted == False 
+    assert_default_registers(cpu, pc=cpu.interrupt.vBlank.callCode, sp=sp-2)
+    assert cpu.pop() == 0x34
+    assert cpu.pop() == 0x12
 
 # ld_PC_HL 
 def test_0xE9():
