@@ -53,3 +53,18 @@ def test_emulate():
     assert serial.sc == 0x81 & 0x7F
     assert serial.cycles == constants.SERIAL_IDLE_CLOCK
     assert serial.interrupt.serial.isPending() == True
+    
+    
+def test_read_write():
+    serial = get_serial()
+    value = 0x12
+    serial.write(constants.SB, value)
+    assert serial.read(constants.SB) == value
+    assert serial.sb == value 
+    
+    value += 1
+    serial.write(constants.SC, value)
+    assert serial.read(constants.SC) == value
+    assert serial.sc == value
+    
+    assert serial.read(0) == 0xFF

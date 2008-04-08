@@ -42,3 +42,16 @@ class Serial(object):
     def getSerialControl(self):
         return self.sc
 
+    def write(self, address, data):
+        if address == constants.SB:
+            self.setSerialData(data)
+        elif address == constants.SC:
+            self.setSerialControl(data)
+            
+    def read(self, address):
+        if address == constants.SB:
+            return self.getSerialData()
+        elif address == constants.SC:
+            return self.getSerialControl()
+        else:
+            return 0xFF
