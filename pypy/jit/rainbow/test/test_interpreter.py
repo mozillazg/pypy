@@ -2332,9 +2332,6 @@ class TestOOType(SimpleTests):
     test_red_varsized_struct = _skip
     test_array_of_voids = _skip
     test_compile_time_const_tuple = _skip    # needs vdict
-    test_simple_meth = _skip
-    test_simple_red_meth = _skip
-    test_simple_red_meth_vars_around = _skip
     test_simple_indirect_call = _skip
     test_normalize_indirect_call = _skip
     test_normalize_indirect_call_more = _skip

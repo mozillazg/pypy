@@ -8,6 +8,7 @@ from pypy.jit.timeshifter.rcontainer import SegfaultException
 from pypy.jit.rainbow import rhotpath
 from pypy.jit.rainbow import typesystem
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -37,7 +38,8 @@ class JitCode(object):
                  interiordescs, exceptioninstances, oopspecdescs,
                  promotiondescs, called_bytecodes, num_mergepoints,
                  graph_color, calldescs, metacalldescs,
-                 indirectcalldescs, is_portal, owncalldesc, gv_ownfnptr):
+                 indirectcalldescs, strings, is_portal, owncalldesc,
+                 gv_ownfnptr):
         # XXX quite a lot of lists of descs here...  At least we
         # share identical lists between the numberous prebuilt
         # JitCode instances.
@@ -60,6 +62,7 @@ class JitCode(object):
         self.calldescs = calldescs
         self.metacalldescs = metacalldescs
         self.indirectcalldescs = indirectcalldescs
+        self.strings = strings
         self.is_portal = is_portal
         self.owncalldesc = owncalldesc
         self.gv_ownfnptr = gv_ownfnptr
@@ -165,6 +168,10 @@ class arguments(object):
                     index = self.load_int()
                     function = self.getjitcode().indirectcalldescs[index]
                     args += (function, )
+                elif argspec == "string":
+                    index = self.load_int()
+                    string = self.getjitcode().strings[index]
+                    args += (string, )
                 elif argspec == "oopspec":
                     oopspecindex = self.load_int()
                     oopspec = self.getjitcode().oopspecdescs[oopspecindex]
@@ -651,6 +658,15 @@ class JitInterpreter(object):
         gv = funcptrbox.getgenvar(self.jitstate)
         addr = gv.revealconst(llmemory.Address)
         bytecode = callset.bytecode_for_address(addr)
+        self.run(self.jitstate, bytecode, greenargs, redargs,
+                 start_bytecode_loop=False)
+
+    @arguments("green_varargs", "red_varargs", "string")
+    def opimpl_red_oosend(self, greenargs, redargs, methname):
+        selfbox = redargs[0]
+        vstruct = selfbox.content
+        assert isinstance(vstruct, rcontainer.VirtualStruct), 'TODO???'
+        bytecode = vstruct.typedesc.methodcodes[methname]
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)
 

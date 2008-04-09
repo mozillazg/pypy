@@ -256,6 +256,12 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
     StructFieldDesc = None # patched later with InstanceFieldDesc
     PtrRedBox = rvalue.InstanceRedBox
 
+    _attrs_ = ['methodcodes']
+
+    def __init__(self, RGenOp, TYPE):
+        AbstractStructTypeDesc.__init__(self, RGenOp, TYPE)
+        self.methodcodes = {} # method name --> jitcode
+
     def Ptr(self, TYPE):
         return TYPE
 
