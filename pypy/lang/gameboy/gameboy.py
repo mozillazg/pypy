@@ -12,11 +12,11 @@ class GameBoy(object):
         self.ram = RAM()
         self.cartridge = Cartridge(storeDriver, clockDriver)
         self.interrupt = Interrupt()
-        self.cpu = CPU(self.interrupt, this)
+        self.cpu = CPU(self.interrupt, self)
         self.serial = Serial(self.interrupt)
         self.timer = Timer(self.interrupt)
         self.joypad = Joypad(joypadDriver, self.interrupt)
-        self.video = Video(videoDriver, self.interrupt, this)
+        self.video = Video(videoDriver, self.interrupt, self)
         self.sound = Sound(soundDriver)
 
 
