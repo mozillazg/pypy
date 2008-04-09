@@ -171,6 +171,20 @@ class SetMaxHeapSizeEntry(ExtRegistryEntry):
         [v_nbytes] = hop.inputargs(lltype.Signed)
         return hop.genop('gc_set_max_heap_size', [v_nbytes],
                          resulttype=lltype.Void)
+def can_move(P):
+    return True
+can_move._annspecialcase_ = 'specialize:arg(0)'
+
+class CanMoveEntry(ExtRegistryEntry):
+    _about_ = can_move
+
+    def compute_result_annotation(self, s_TP):
+        from pypy.annotation import model as annmodel
+        return annmodel.SomeBool()
+
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        return hop.genop('gc_can_move', [], resulttype=lltype.Bool)
 
 class CollectEntry(ExtRegistryEntry):
     _about_ = (disable_finalizers, enable_finalizers)
@@ -182,3 +196,4 @@ class CollectEntry(ExtRegistryEntry):
     def specialize_call(self, hop):
         opname = 'gc__' + self.instance.__name__
         return hop.genop(opname, [], resulttype=hop.r_result)
+
