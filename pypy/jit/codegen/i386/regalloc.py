@@ -553,7 +553,7 @@ class DeadOperation(Operation):
     def generate(self, allocator):
         pass
 dead_operation = DeadOperation()
-gv_frame_base = GenVar()
+gv_frame_base = GenVar386()
 
 class Place(Operation):
     """Place of a variable that must live in the stack.  Its position is

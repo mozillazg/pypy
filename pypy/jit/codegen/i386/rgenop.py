@@ -3,7 +3,7 @@ import ctypes
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
-from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
+from pypy.jit.codegen.model import GenConst, CodeGenSwitch
 from pypy.jit.codegen.model import ReplayBuilder, dummy_var
 from pypy.jit.codegen.i386.codebuf import CodeBlockOverflow
 from pypy.jit.codegen.i386.operation import *
@@ -251,7 +251,7 @@ class Builder(GenBuilder):
         self.graphctx.ensure_stack_vars(allocator.nstackmax)
         del self.operations[:]
         if renaming:
-            self.inputargs_gv = [GenVar() for v in final_vars_gv]
+            self.inputargs_gv = [GenVar386() for v in final_vars_gv]
         else:
             # just keep one copy of each Variable that is alive
             self.inputargs_gv = final_vars_gv
@@ -617,7 +617,7 @@ class RI386GenOp(AbstractRGenOp):
         inputargs_gv = []
         inputoperands = []
         for i in range(numargs):
-            inputargs_gv.append(GenVar())
+            inputargs_gv.append(GenVar386())
             ofs = WORD * (GraphCtx.PROLOGUE_FIXED_WORDS+i)
             inputoperands.append(mem(ebp, ofs))
         builder = Builder(self, graphctx, inputargs_gv, inputoperands)
