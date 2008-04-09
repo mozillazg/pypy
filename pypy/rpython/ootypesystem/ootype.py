@@ -731,7 +731,12 @@ class _object(object):
     def __eq__(self, other):
         if not isinstance(other, _object):
             raise TypeError("comparing an _object with %r" % other)
-        return self.obj == other.obj
+        if self.obj is None:
+            return other.obj is None
+        elif other.obj is None:
+            return self.obj is None
+        else:
+            return self.obj == other.obj
 
     def __ne__(self, other):
         return not (self == other)

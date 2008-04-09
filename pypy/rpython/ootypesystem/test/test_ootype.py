@@ -577,3 +577,11 @@ def test_cast_object_null():
     assert obj1 == obj2
     assert cast_from_object(A, obj1) == a
     assert cast_from_object(B, obj2) == b
+
+def test_cast_object_compare_null():
+    A = Instance("Foo", ROOT)
+    a = new(A)
+    obj1 = cast_to_object(a)
+    assert NULL != obj1
+    assert obj1 != NULL
+    
