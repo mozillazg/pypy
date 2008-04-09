@@ -5,8 +5,7 @@ Audio Processor Unit (Sharp LR35902 APU)
 """
 
 from pypy.lang.gameboy import constants
-
-
+    
 class Channel(object):
 
     # Audio Channel 1 int
@@ -21,6 +20,16 @@ class Channel(object):
     
     def __init__(self):
         pass
+    
+class SquareWaveGenerator(Channel):
+    pass
+    
+class VoluntaryWaveGenerator(Channel):
+    pass
+
+class NoiseGenerator(Channel):
+    pass
+
     
     
 class Sound(object):
@@ -149,13 +158,17 @@ class Sound(object):
         while (self.cycles <= 0):
             self.updateAudio()
             if self.driver.isEnabled():
-                self.frames += self.driver.getSampleRate()
-                length = (self.frames / constants.SOUND_CLOCK) << 1
-                self.mixAudio(self.buffer, length)
-                self.driver.write(self.buffer, length)
-                self.frames %= constants.SOUND_CLOCK
+                self.mixDownAudio()
 
             self.cycles += constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK
+            
+    def mixDownAudio(self):
+        self.frames += self.driver.getSampleRate()
+        length = (self.frames / constants.SOUND_CLOCK) << 1
+        self.mixAudio(self.buffer, length)
+        self.driver.write(self.buffer, length)
+        self.frames %= constants.SOUND_CLOCK
+        
     def read(self, address):
         if address==constants.NR10:
             return self.getAudio1Sweep()
