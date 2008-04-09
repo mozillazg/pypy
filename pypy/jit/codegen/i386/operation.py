@@ -9,7 +9,7 @@ from pypy.rlib.objectmodel import specialize
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.jit.codegen.i386.ri386 import *
 from pypy.jit.codegen.i386.ri386setup import Conditions
-from pypy.jit.codegen.model import GenVar
+from pypy.jit.codegen import model as codegenmodel
 
 
 WORD = 4    # bytes
@@ -19,7 +19,11 @@ else:
     CALL_ALIGN = 1
 
 
-class Operation(GenVar):
+class GenVar386(codegenmodel.GenVar):
+    def getkind(self):
+        return None
+
+class Operation(GenVar386):
     clobbers_cc = True
     side_effects = True
 
