@@ -79,6 +79,7 @@ class AbstractStructTypeDesc(object):
     firstsubstructdesc = None
     materialize = None
     StructFieldDesc = None
+    PtrRedBox = None
 
     def __init__(self, RGenOp, TYPE):
         self.TYPE = TYPE
@@ -220,7 +221,7 @@ class AbstractStructTypeDesc(object):
         vstruct = self.VirtualStructCls(self)
         vstruct.content_boxes = [desc.makedefaultbox()
                                  for desc in self.fielddescs]
-        box = rvalue.PtrRedBox(known_nonzero=True)
+        box = self.PtrRedBox(known_nonzero=True)
         box.content = vstruct
         vstruct.ownbox = box
         return box
@@ -229,6 +230,7 @@ class AbstractStructTypeDesc(object):
 class StructTypeDesc(AbstractStructTypeDesc):
     
     StructFieldDesc = None # patched later with StructFieldDesc
+    PtrRedBox = rvalue.PtrRedBox
 
     _attrs_ = []
 
@@ -253,6 +255,7 @@ class StructTypeDesc(AbstractStructTypeDesc):
 class InstanceTypeDesc(AbstractStructTypeDesc):
 
     StructFieldDesc = None # patched later with InstanceFieldDesc
+    PtrRedBox = rvalue.InstanceRedBox
 
     def Ptr(self, TYPE):
         return TYPE
@@ -410,7 +413,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 
     def factory(self):
         vstructbox = StructTypeDesc.factory(self)
-        outsidebox = rvalue.PtrRedBox(self.gv_null)
+        outsidebox = self.PtrRedBox(self.gv_null)
         content = vstructbox.content
         assert isinstance(content, VirtualizableStruct)
         content.content_boxes.append(outsidebox)             
@@ -613,7 +616,8 @@ def unbox_indexes(jitstate, indexboxes):
 class FieldDesc(object):
     __metaclass__ = cachedtype
     _attrs_ = 'structdesc'
-    
+
+    PtrRedBox = None
     allow_void = False
     virtualizable = False
     gv_default = None
@@ -678,7 +682,7 @@ class FieldDesc(object):
             return structbox
         box = self.redboxcls(gvar)
         if self.fieldnonnull:
-            assert isinstance(box, rvalue.PtrRedBox)
+            assert isinstance(box, rvalue.AbstractPtrRedBox)
             box.known_nonzero = True
         return box
 
@@ -713,6 +717,9 @@ class NamedFieldDesc(FieldDesc):
     def compact_repr(self): # goes in ll helper names
         return "Fld_%s_in_%s" % (self.fieldname, self.PTRTYPE._short_name())
 
+    def __repr__(self):
+        return "<%s(%s)>" % (self.__class__.__name__, self.fieldname)
+
     def generate_get(self, jitstate, genvar):
         builder = jitstate.curbuilder
         gv_item = builder.genop_getfield(self.fieldtoken, genvar)
@@ -729,11 +736,15 @@ class NamedFieldDesc(FieldDesc):
 
 class StructFieldDesc(NamedFieldDesc):
 
+    PtrRedBox = rvalue.PtrRedBox
+    
     def __init__(self, RGenOp, PTRTYPE, name, index):
         NamedFieldDesc.__init__(self, RGenOp, PTRTYPE, name)
         self.fieldindex = index
 
 class InstanceFieldDesc(NamedFieldDesc):
+
+    PtrRedBox = rvalue.InstanceRedBox
 
     def __init__(self, RGenOp, PTRTYPE, name, index):
         NamedFieldDesc.__init__(self, RGenOp, PTRTYPE, name)
@@ -750,6 +761,8 @@ class InstanceFieldDesc(NamedFieldDesc):
 
 
 class ArrayFieldDesc(FieldDesc):
+
+    PtrRedBox = rvalue.PtrRedBox
     allow_void = True
 
     def __init__(self, RGenOp, TYPE):
