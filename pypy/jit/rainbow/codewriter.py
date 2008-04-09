@@ -146,7 +146,6 @@ class IndirectCallsetDesc(object):
 
         keys = []
         values = []
-        common_args_r = None
         for graph, tsgraph in graph2tsgraph:
             fnptr    = codewriter.rtyper.getcallable(graph)
             keys.append(llmemory.cast_ptr_to_adr(fnptr))
@@ -163,8 +162,6 @@ class IndirectCallsetDesc(object):
 
         self.bytecode_for_address = bytecode_for_address
 
-        self.graphs = [graph for (graph, tsgraph) in graph2tsgraph]
-        self.jitcodes = values
         self.calldesc = CallDesc(codewriter.RGenOp, codewriter.exceptiondesc,
                                  lltype.typeOf(fnptr), colororder)
 
@@ -234,6 +231,7 @@ class BytecodeWriter(object):
         self.calldescs = []
         self.indirectcalldescs = []
         self.metacalldescs = []
+        self.strings = []
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -271,6 +269,8 @@ class BytecodeWriter(object):
         self.metacalldesc_positions = {}
         # mapping fnobjs to index
         self.indirectcalldesc_positions = {}
+        # mapping string to index
+        self.string_positions = {}
 
         self.graph = graph
         self.mergepoint_set = {}
@@ -301,6 +301,7 @@ class BytecodeWriter(object):
                           self.sharelist("calldescs"),
                           self.sharelist("metacalldescs"),
                           self.sharelist("indirectcalldescs"),
+                          self.sharelist("strings"),
                           self.is_portal,
                           owncalldesc,
                           gv_ownfnptr)
@@ -820,6 +821,14 @@ class BytecodeWriter(object):
         for i in range(len(key) + 1, 0, -1):
             subkey = key[:i]
             self.indirectcalldesc_positions[subkey] = result
+        return result
+
+    def string_position(self, s):
+        if s in self.string_positions:
+            return self.string_positions[s]
+        result = len(self.strings)
+        self.strings.append(s)
+        self.string_positions[s] = result
         return result
 
     def interiordesc(self, op, PTRTYPE, nb_offsets):
@@ -1420,6 +1429,12 @@ class BytecodeWriter(object):
         elif spaceop.opname == 'indirect_call':
             graphs = spaceop.args[-1].value
             args_v = spaceop.args[1:-1]
+        elif spaceop.opname == 'oosend':
+            meth_name = spaceop.args[0].value
+            v_self = spaceop.args[1]
+            SELF = v_self.concretetype
+            graphs = SELF._lookup_graphs(meth_name)
+            args_v = spaceop.args[1:]
         else:
             raise AssertionError(spaceop.opname)
         return graphs, args_v
@@ -1617,14 +1632,15 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         self.register_redvar(op.result)
 
     def serialize_op_oosend(self, op):
-        if self.hannotator.bookkeeper.is_green_call(op):
+        kind, withexc = self.guess_call_kind(op)
+        if kind == 'green':
             assert False, 'TODO'
 
-        withexc = self.can_raise(op)
         name = op.args[0].value
         opargs = op.args[1:]
         SELFTYPE = opargs[0].concretetype
         if SELFTYPE.oopspec_name is not None:
+            # we are calling a method like List.ll_getitem or so
             hasresult = op.result.concretetype != lltype.Void
             _, meth = SELFTYPE._lookup(name)
             oopspecdescindex = self.oopspecdesc_position('send', meth, withexc)
@@ -1643,9 +1659,53 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             self.emit(oopspecdescindex)
             self.emit(deepfrozen)
             self.emit(*args)
+            return
 
+        # normal oosend
+        # XXX: share code with serialize_op_indirect_call
+        has_result = (self.varcolor(op.result) != "gray" and
+                      op.result.concretetype != lltype.Void)
+        assert not self.hannotator.policy.hotpath
+        emitted_args = []
+        for v in op.args[1:]:
+            if v.concretetype == lltype.Void:
+                continue
+            emitted_args.append(self.serialize_oparg("red", v))
+
+
+        if has_result:
+            self.register_redvar(op.result)
+
+        graph2tsgraph = dict(self.graphs_from(op))
+        #type2graph = self.collect_graphs_and_types(op, graph2tsgraph)
+        self.fill_methodcodes(SELFTYPE, name, graph2tsgraph)
+        args = graph2tsgraph.values()[0].getargs()
+        emitted_args = self.args_of_call(op.args[1:], args)
+        self.emit("red_oosend")
+        self.emit(*emitted_args)
+        #setdescindex = self.oosenddesc_position(type2graph)
+        #self.emit(setdescindex)
+        methnameindex = self.string_position(name)
+        self.emit(methnameindex)
+        if kind == "yellow":
+            self.emit("yellow_retrieve_result_as_red")
+            self.emit(self.type_position(op.result.concretetype))
+        elif kind in ("gray", "red"):
+            pass
         else:
-            assert False, 'TODO'
+            assert 0, "unknown call kind %s" % (kind, )
+
+    def fill_methodcodes(self, INSTANCE, methname, graph2tsgraph):
+        TYPES = [INSTANCE] + INSTANCE._subclasses
+        for T in TYPES:
+            descindex = self.structtypedesc_position(T)
+            desc = self.structtypedescs[descindex]
+            if methname in desc.methodcodes:
+                break # we already filled the codes for this type
+            _, meth = T._lookup(methname)
+            tsgraph = graph2tsgraph[meth.graph]
+            jitcode = self.get_jitcode(tsgraph)
+            desc.methodcodes[methname] = jitcode
 
 
 class GraphTransformer(object):
