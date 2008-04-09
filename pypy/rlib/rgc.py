@@ -173,14 +173,14 @@ class SetMaxHeapSizeEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_set_max_heap_size', [v_nbytes],
                          resulttype=lltype.Void)
-def can_move(P):
+def can_move(p):
     return True
-can_move._annspecialcase_ = 'specialize:arg(0)'
+can_move._annspecialcase_ = 'specialize:argtype(0)'
 
 class CanMoveEntry(ExtRegistryEntry):
     _about_ = can_move
 
-    def compute_result_annotation(self, s_TP):
+    def compute_result_annotation(self, s_p):
         from pypy.annotation import model as annmodel
         return annmodel.SomeBool()
 

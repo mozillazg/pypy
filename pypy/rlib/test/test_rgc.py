@@ -23,9 +23,9 @@ def test_can_move():
     T1 = lltype.GcArray(lltype.Float)
     def f(i):
         if i:
-            return rgc.can_move(T0)
+            return rgc.can_move(lltype.malloc(T0))
         else:
-            return rgc.can_move(T1)
+            return rgc.can_move(lltype.malloc(T1, 1))
 
     t, typer, graph = gengraph(f, [int])
     ops = list(graph.iterblockops())
