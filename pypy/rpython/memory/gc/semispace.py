@@ -537,5 +537,8 @@ class SemiSpaceGC(MovingGCBase):
         finally:
             self.finalizer_lock_count -= 1
 
+    def can_move(self, addr):
+        return True
+
     STATISTICS_NUMBERS = 0
 

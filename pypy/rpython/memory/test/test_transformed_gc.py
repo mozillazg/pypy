@@ -37,6 +37,7 @@ def rtype(func, inputtypes, specialize=True, gcname='ref', stacklessgc=False,
 class GCTest(object):
     gcpolicy = None
     stacklessgc = False
+    GC_CAN_MOVE = False
 
     def runner(self, f, nbargs=0, statistics=False, transformer=False,
                **extraconfigopts):
@@ -447,8 +448,18 @@ class GenericGCTests(GCTest):
         res = run([])
         assert res == 0
 
+    def test_can_move(self):
+        TP = lltype.GcArray(lltype.Float)
+        def func():
+            from pypy.rlib import rgc
+            return rgc.can_move(lltype.malloc(TP, 1))
+        run = self.runner(func)
+        res = run([])
+        assert res == self.GC_CAN_MOVE
 
 class GenericMovingGCTests(GenericGCTests):
+    GC_CAN_MOVE = True
+    
     def test_many_ids(self):
         py.test.skip("fails for bad reasons in lltype.py :-(")
         class A(object):
@@ -476,7 +487,6 @@ class GenericMovingGCTests(GenericGCTests):
             lltype.free(idarray, flavor='raw')
         run = self.runner(f)
         run([])
-
 
 class TestMarkSweepGC(GenericGCTests):
     gcname = "marksweep"
