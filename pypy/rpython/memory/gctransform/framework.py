@@ -221,6 +221,9 @@ class FrameworkGCTransformer(GCTransformer):
             [s_gc], annmodel.s_None)
         self.enable_finalizers_ptr = getfn(GCClass.enable_finalizers.im_func,
             [s_gc], annmodel.s_None)
+        self.can_move_ptr = getfn(GCClass.can_move.im_func,
+                                  [s_gc, annmodel.SomeAddress()],
+                                  annmodel.SomeBool())
 
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, True, False, False)
@@ -529,6 +532,13 @@ class FrameworkGCTransformer(GCTransformer):
         hop.genop("direct_call", [self.collect_ptr, self.c_const_gc],
                   resultvar=op.result)
         self.pop_roots(hop, livevars)
+
+    def gct_gc_can_move(self, hop):
+        op = hop.spaceop
+        v_addr = hop.genop('cast_ptr_to_adr',
+                           [op.args[0]], resulttype=llmemory.Address)
+        hop.genop("direct_call", [self.can_move_ptr, self.c_const_gc, v_addr],
+                  resultvar=op.result)
 
     def gct_gc__disable_finalizers(self, hop):
         # cannot collect()
