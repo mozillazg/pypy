@@ -568,8 +568,8 @@ def setexcvaluebox(jitstate, box):
     jitstate.exc_value_box = box
 
 def setexception(jitstate, typebox, valuebox):
-    assert isinstance(typebox, rvalue.PtrRedBox)
-    assert isinstance(valuebox, rvalue.PtrRedBox)
+    assert isinstance(typebox, rvalue.AbstractPtrRedBox)
+    assert isinstance(valuebox, rvalue.AbstractPtrRedBox)
     ok1 = typebox .learn_nonzeroness(jitstate, True)
     ok2 = valuebox.learn_nonzeroness(jitstate, True)
     assert ok1 & ok2       # probably... maybe it's false but it would be
