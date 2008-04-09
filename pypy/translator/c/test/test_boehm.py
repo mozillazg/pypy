@@ -367,6 +367,16 @@ class TestUsingBoehm(AbstractGCTestClass):
         res = c_fn(10000)
         assert res == 0
 
+    def test_can_move(self):
+        from pypy.rlib import rgc
+        class A:
+            pass
+        def fn():
+            return rgc.can_move(A())
+
+        c_fn = self.getcompiled(fn, [])
+        assert c_fn() == False
+
     # reusing some tests from pypy.rpython.memory.test.snippet
     large_tests_ok = True
 

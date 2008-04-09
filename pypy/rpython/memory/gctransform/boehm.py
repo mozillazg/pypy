@@ -4,6 +4,7 @@ from pypy.rpython.memory.gctransform.support import type_contains_pyobjs, \
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython import rmodel
 
 class BoehmGCTransformer(GCTransformer):
     malloc_zero_filled = True
@@ -140,6 +141,8 @@ class BoehmGCTransformer(GCTransformer):
                           resulttype = lltype.Signed)
         hop.genop('int_invert', [v_int], resultvar=hop.spaceop.result)
 
+    def gct_gc_can_move(self, hop):
+        return hop.cast_result(rmodel.inputconst(lltype.Bool, False))
 
 ########## weakrefs ##########
 # Boehm: weakref objects are small structures containing only a Boehm
