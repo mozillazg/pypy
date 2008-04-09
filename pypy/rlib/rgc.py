@@ -187,7 +187,7 @@ class CanMoveEntry(ExtRegistryEntry):
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
         hop.exception_cannot_occur()
-        return hop.genop('gc_can_move', [], resulttype=lltype.Bool)
+        return hop.genop('gc_can_move', hop.args_v, resulttype=hop.r_result)
 
 class CollectEntry(ExtRegistryEntry):
     _about_ = (disable_finalizers, enable_finalizers)
