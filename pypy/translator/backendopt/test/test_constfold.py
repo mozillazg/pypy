@@ -3,6 +3,7 @@ from pypy.objspace.flow.model import checkgraph, Constant, summary
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib import objectmodel
 from pypy.translator.backendopt.constfold import constant_fold_graph
@@ -37,6 +38,21 @@ def test_simple():
 
     graph, t = get_graph(fn, [])
     assert summary(graph) == {'getfield': 1, 'direct_call': 1}
+    constant_fold_graph(graph)
+    assert summary(graph) == {'direct_call': 1}
+    check_graph(graph, [], 124, t)
+
+def test_simple_ootype():
+    S1 = ootype.Instance('S1', ootype.ROOT, {'x': lltype.Signed}, _hints={'immutable': True})
+    s1 = ootype.new(S1)
+    s1.x = 123
+    def g(y):
+        return y + 1
+    def fn():
+        return g(s1.x)
+
+    graph, t = get_graph(fn, [])
+    assert summary(graph) == {'oogetfield': 1, 'direct_call': 1}
     constant_fold_graph(graph)
     assert summary(graph) == {'direct_call': 1}
     check_graph(graph, [], 124, t)
