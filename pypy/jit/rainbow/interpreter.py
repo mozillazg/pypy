@@ -656,7 +656,7 @@ class JitInterpreter(object):
     def opimpl_indirect_call_const(self, greenargs, redargs,
                                       funcptrbox, callset):
         gv = funcptrbox.getgenvar(self.jitstate)
-        addr = gv.revealconst(llmemory.Address)
+        addr = gv.revealconst(self.ts.ROOT_TYPE)
         bytecode = callset.bytecode_for_address(addr)
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)

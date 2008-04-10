@@ -147,8 +147,9 @@ class IndirectCallsetDesc(object):
         keys = []
         values = []
         for graph, tsgraph in graph2tsgraph:
-            fnptr    = codewriter.rtyper.getcallable(graph)
-            keys.append(llmemory.cast_ptr_to_adr(fnptr))
+            fnptr = codewriter.rtyper.getcallable(graph)
+            fnaddress = codewriter.cast_fnptr_to_root(fnptr)
+            keys.append(fnaddress)
             values.append(codewriter.get_jitcode(tsgraph))
         # arbitrarily use the last graph to make the colororder -
         # normalization should ensure that all colors are the same
@@ -193,6 +194,9 @@ class BytecodeWriter(object):
             self.residual_call_targets = {}
 
     def create_interpreter(self, RGenOp):
+        raise NotImplementedError
+
+    def cast_fnptr_to_root(self, fnptr):
         raise NotImplementedError
 
     def sharelist(self, name):
@@ -1563,6 +1567,9 @@ class LLTypeBytecodeWriter(BytecodeWriter):
     ExceptionDesc = exception.LLTypeExceptionDesc
     StructTypeDesc = rcontainer.StructTypeDesc
 
+    def cast_fnptr_to_root(self, fnptr):
+        return llmemory.cast_ptr_to_adr(fnptr)
+
     def create_interpreter(self, RGenOp):
         return LLTypeJitInterpreter(self.exceptiondesc, RGenOp)
 
@@ -1596,7 +1603,10 @@ class OOTypeBytecodeWriter(BytecodeWriter):
 
     ExceptionDesc = exception.OOTypeExceptionDesc
     StructTypeDesc = rcontainer.InstanceTypeDesc
-    
+
+    def cast_fnptr_to_root(self, fnptr):
+        return ootype.cast_to_object(fnptr)
+
     def create_interpreter(self, RGenOp):
         return OOTypeJitInterpreter(self.exceptiondesc, RGenOp)
 
