@@ -372,18 +372,18 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_adr_cast(self):
-        py.test.skip("XXX")
         from pypy.rpython.annlowlevel import llstr
         from pypy.rpython.lltypesystem.rstr import STR
         def f():
             a = llstr("xyz")
             b = (llmemory.cast_ptr_to_adr(a) + llmemory.offsetof(STR, 'chars')
                  + llmemory.itemoffsetof(STR.chars, 0))
-            rffi.cast(rffi.VOIDP, b)
-        # assert did not crash
-        f()
-        interpret(f, [])
-
+            buf = rffi.cast(rffi.VOIDP, b)
+            return buf[2]
+        assert f() == ord("z")
+        res = interpret(f, [])
+        assert res == 'z'
+    
     def test_funcptr1(self):
         def dummy(n):
             return n+1
