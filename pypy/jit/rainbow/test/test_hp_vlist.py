@@ -242,32 +242,6 @@ class TestVList(test_hotpath.HotPathTest):
         self.check_insns_in_loops({'int_rshift': 1, 'int_add': 1,
                                    'int_is_true': 1})
 
-    def test_beginning_of_list(self):
-        class MyJitDriver(JitDriver):
-            greens = []
-            reds = ['lst', 'i', 'result']
-            def on_enter_jit(self, invariants, reds):
-                reds.lst = list(reds.lst)
-        myjitdriver = MyJitDriver()
-        def f(x):
-            lst = [x]
-            i = x
-            result = 0
-            while i:
-                i -= 1
-                result += lst.pop()
-                lst.append(result)
-                lst.append(result)
-                myjitdriver.jit_merge_point(lst=lst, result=result, i=i)
-                myjitdriver.can_enter_jit(lst=lst, result=result, i=i)
-            return result + len(lst)
-                
-        res = self.run(f, [10], threshold=2, policy=P_OOPSPEC)
-        assert res == f(10)
-        # XXX fails due to merging problems
-        #self.check_insns(int_is_true=2, int_sub=2) # made a second loop
-
-
     def test_bogus_index_while_compiling(self):
         py.test.skip("implement me")
         class Y:

@@ -1052,7 +1052,6 @@ class JitInterpreter(object):
         self.opcode_descs.append(opdesc)
         return index
 
-
 class LLTypeJitInterpreter(JitInterpreter):
     ts = typesystem.llhelper
 
