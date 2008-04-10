@@ -18,10 +18,11 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rlib import rposix
 from pypy.rlib import rgc
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem.rstr import mallocstr
-from pypy.rpython.annlowlevel import hlstr
+from pypy.rpython.annlowlevel import hlstr, llstr
 from pypy.rpython.lltypesystem.llmemory import raw_memcopy, sizeof,\
      itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof
 from pypy.rpython.lltypesystem.rstr import STR
@@ -527,13 +528,14 @@ class RegisterOs(BaseLazyRegistering):
                     lltype.free(outbuf, flavor='raw')
             else:
                 data_start = cast_ptr_to_adr(llstr(data)) + \
-                    fieldoffsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+                    offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
                 outbuf = rffi.cast(rffi.VOIDP, data_start)
                 written = rffi.cast(lltype.Signed, os_write(
                     rffi.cast(rffi.INT, fd),
                     outbuf, rffi.cast(rffi.SIZE_T, count)))
                 if written < 0:
                     raise OSError(rposix.get_errno(), "os_write failed")
+                keepalive_until_here(data)
             return written
 
         def os_write_oofakeimpl(fd, data):
