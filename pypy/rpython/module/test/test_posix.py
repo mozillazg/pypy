@@ -72,7 +72,10 @@ class BaseTestPosix(BaseRtypingTest):
 
     def test_write(self):
         def f(fi):
-            text = 'This is a test'
+            if fi > 0:
+                text = 'This is a test'
+            else:
+                text = '333'
             return posix.write(fi,text)
         fi = os.open(path,os.O_WRONLY,0777)
         text = 'This is a test'
@@ -152,7 +155,7 @@ class TestLLtype(BaseTestPosix, LLRtypeMixin):
     pass
 
 class TestLLtypeNonMovingGc(BaseTestPosix, LLRtypeMixin):
-    MOVING_GV = False
+    MOVING_GC = False
 
 class TestOOtype(BaseTestPosix, OORtypeMixin):
     def test_fstat(self):
