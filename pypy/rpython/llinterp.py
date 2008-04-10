@@ -755,7 +755,7 @@ class LLFrame(object):
         self.heap.collect()
 
     def op_gc_can_move(self, p):
-        return self.moving_gc
+        return self.llinterpreter.moving_gc
 
     def op_gc__disable_finalizers(self):
         self.heap.disable_finalizers()
