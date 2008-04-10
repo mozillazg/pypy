@@ -80,7 +80,7 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
              for v in graph1.getargs()])
     hannotator.simplify()
     if conftest.option.view:
-        hannotator.translator.view()
+        hannotator.translator.viewcg()
     return hs, hannotator, rtyper
 
 
