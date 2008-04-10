@@ -585,3 +585,18 @@ def test_cast_object_compare_null():
     assert NULL != obj1
     assert obj1 != NULL
     
+def test_object_ooidentityhash():
+    A = Instance("Foo", ROOT)
+    a = new(A)
+    obj1 = cast_to_object(a)
+    obj2 = cast_to_object(a)
+    assert ooidentityhash(obj1) == ooidentityhash(obj2)
+
+def test_object_ooidentityhash_sm():
+    M = StaticMethod([Signed], Signed)
+    def m_(x):
+       return x
+    m = static_meth(M, "m", _callable=m_)
+    obj1 = cast_to_object(m)
+    obj2 = cast_to_object(m)
+    assert ooidentityhash(obj1) == ooidentityhash(obj2)
