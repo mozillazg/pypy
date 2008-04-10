@@ -631,6 +631,14 @@ class Ptr(LowLevelType):
                          hints={'interior_ptr_type':True})            
         return R
 
+    def __eq__(self, other):
+        if not isinstance(other, Ptr):
+            return False
+        if (_exchangable_arrays(self.TO, other.TO) or
+            _exchangable_arrays(other.TO, self.TO)):
+            return True
+        return LowLevelType.__eq__(self, other)
+
 class InteriorPtr(LowLevelType):
     def __init__(self, PARENTTYPE, TO, offsets):
         self.PARENTTYPE = PARENTTYPE
