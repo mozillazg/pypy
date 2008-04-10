@@ -1237,15 +1237,19 @@ class SimpleTests(InterpretationTest):
         res = self.interpret(f, [ord('b'), 0], [], policy=P_NOVIRTUAL)
         assert res == 1
 
-    def test_self_referential_structures(self):
+    def _make_self_referential_type(self):
         S = lltype.GcForwardReference()
-        S.become(lltype.GcStruct('s',
-                                 ('ps', lltype.Ptr(S))))
+        S.become(lltype.GcStruct('s', ('ps', lltype.Ptr(S))))
+        return S
+
+    def test_self_referential_structures(self):
+        S = self._make_self_referential_type()
+        malloc = self.malloc
 
         def f(x):
-            s = lltype.malloc(S)
+            s = malloc(S)
             if x:
-                s.ps = lltype.malloc(S)
+                s.ps = malloc(S)
             return s
         def count_depth(s):
             x = 0
@@ -2216,6 +2220,11 @@ class TestOOType(SimpleTests):
     def malloc_immortal(T):
         return ootype.new(T)
 
+    def _make_self_referential_type(self):
+        S = ootype.Instance('s', ootype.ROOT, {})
+        S._add_fields({'ps': S})
+        return S
+
     def translate_insns(self, insns):
         replace = {
             'getfield': 'oogetfield',
@@ -2333,4 +2342,3 @@ class TestOOType(SimpleTests):
     test_array_of_voids = _skip
     test_compile_time_const_tuple = _skip    # needs vdict
     test_green_char_at_merge = _skip
-    test_self_referential_structures = _skip
