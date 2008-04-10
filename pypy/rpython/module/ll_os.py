@@ -17,12 +17,13 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rlib import rposix
+from pypy.rlib import rgc
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem.rstr import mallocstr
 from pypy.rpython.annlowlevel import hlstr
 from pypy.rpython.lltypesystem.llmemory import raw_memcopy, sizeof,\
-     itemoffsetof, cast_ptr_to_adr, offsetof
+     itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof
 from pypy.rpython.lltypesystem.rstr import STR
 
 posix = __import__(os.name)
@@ -512,17 +513,25 @@ class RegisterOs(BaseLazyRegistering):
 
         def os_write_llimpl(fd, data):
             count = len(data)
-            outbuf = lltype.malloc(rffi.CCHARP.TO, count, flavor='raw')
-            try:
-                for i in range(count):
-                    outbuf[i] = data[i]
+            if rgc.can_move(data):
+                outbuf = lltype.malloc(rffi.CCHARP.TO, count, flavor='raw')
+                try:
+                    for i in range(count):
+                        outbuf[i] = data[i]
+                    written = rffi.cast(lltype.Signed, os_write(
+                        rffi.cast(rffi.INT, fd),
+                        outbuf, rffi.cast(rffi.SIZE_T, count)))
+                    if written < 0:
+                        raise OSError(rposix.get_errno(), "os_write failed")
+                finally:
+                    lltype.free(outbuf, flavor='raw')
+            else:
+                outbuf = rffi.cast(rffi.VOIDP, data)
                 written = rffi.cast(lltype.Signed, os_write(
                     rffi.cast(rffi.INT, fd),
                     outbuf, rffi.cast(rffi.SIZE_T, count)))
                 if written < 0:
                     raise OSError(rposix.get_errno(), "os_write failed")
-            finally:
-                lltype.free(outbuf, flavor='raw')
             return written
 
         def os_write_oofakeimpl(fd, data):
