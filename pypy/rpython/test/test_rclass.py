@@ -632,6 +632,41 @@ class BaseTestRclass(BaseRtypingTest):
             return a.revealconst(1) + b.revealconst(2) + a.revealconst(3)
         assert self.interpret(fn, []) == 3 + 8 + 9
 
+    def test_immutable(self):
+        class I(object):
+            _immutable_ = True
+            
+            def __init__(self, v):
+                self.v = v
+
+        i = I(3)
+        def f():
+            return i.v
+
+        t, typer, graph = self.gengraph(f, [], backendopt=True)
+        assert summary(graph) == {}
+
+    def test_immutable_inheritance(self):
+        class I(object):
+            def __init__(self, v):
+                self.v = v
+        
+        class J(I):
+            _immutable_ = True
+            def __init__(self, v, w):
+                self.w = w
+                I.__init__(self, v)
+
+        j = J(3, 4)
+        def f():
+            j.v = j.v * 1 # make the annotator think it is mutated
+            j.w = j.w * 1 # make the annotator think it is mutated
+            return j.v + j.w
+
+        t, typer, graph = self.gengraph(f, [], backendopt=True)
+        summ = summary(graph)
+        assert summ == {"setfield": 2} or summ == {"oosetfield": 2}
+
 
 class TestLltype(BaseTestRclass, LLRtypeMixin):
 
@@ -699,40 +734,6 @@ class TestLltype(BaseTestRclass, LLRtypeMixin):
         assert destrptra is not None
         assert destrptrb is not None
 
-    def test_immutable(self):
-        class I(object):
-            _immutable_ = True
-            
-            def __init__(self, v):
-                self.v = v
-
-        i = I(3)
-        def f():
-            return i.v
-
-        t, typer, graph = self.gengraph(f, [], backendopt=True)
-        assert summary(graph) == {}
-
-    def test_immutable_inheritance(self):
-        class I(object):
-            def __init__(self, v):
-                self.v = v
-        
-        class J(I):
-            _immutable_ = True
-            def __init__(self, v, w):
-                self.w = w
-                I.__init__(self, v)
-
-        j = J(3, 4)
-        def f():
-            j.v = j.v * 1 # make the annotator think it is mutated
-            j.w = j.w * 1 # make the annotator think it is mutated
-            return j.v + j.w
-
-        t, typer, graph = self.gengraph(f, [], backendopt=True)
-        assert summary(graph) == {"setfield": 2}
-        
     def test_instance_repr(self):
         from pypy.rlib.objectmodel import current_object_addr_as_int
         class FooBar(object):
