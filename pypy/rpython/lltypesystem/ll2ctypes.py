@@ -382,6 +382,22 @@ class _array_of_unknown_length(_parentable_mixin, lltype._parentable):
 
 # ____________________________________________________________
 
+def _find_parent(llobj):
+    parent, parentindex = lltype.parentlink(llobj)
+    if parent is None:
+        return llobj, 0
+    next_p, next_i = _find_parent(parent)
+    if isinstance(parentindex, int):
+        c_tp = get_ctypes_type(lltype.typeOf(parent))
+        sizeof = ctypes.sizeof(get_ctypes_type(lltype.typeOf(parent).OF))
+        ofs = c_tp.items.offset + parentindex * sizeof
+        return next_p, next_i + ofs
+    else:
+        c_tp = get_ctypes_type(lltype.typeOf(parent))
+        ofs = getattr(c_tp, parentindex).offset
+        return next_p, next_i + ofs
+
+
 # XXX THIS IS A HACK XXX
 # ctypes does not keep callback arguments alive. So we do. Forever
 # we need to think deeper how to approach this problem
@@ -425,6 +441,11 @@ def lltype2ctypes(llobj, normalize=True):
         if T.TO._gckind != 'raw' and not T.TO._hints.get('callback', None):
             raise Exception("can only pass 'raw' data structures to C, not %r"
                             % (T.TO._gckind,))
+
+        index = 0
+        if isinstance(container, lltype._subarray):
+            topmost, index = _find_parent(container)
+            container = topmost
         if container._storage is None:
             raise RuntimeError("attempting to pass a freed structure to C")
         if container._storage is True:
@@ -441,6 +462,11 @@ def lltype2ctypes(llobj, normalize=True):
             container._ctypes_storage_was_allocated()
         storage = container._storage
         p = ctypes.pointer(storage)
+        if index:
+            p = ctypes.cast(p, ctypes.c_void_p)
+            p = ctypes.c_void_p(p.value + index)
+            c_tp = get_ctypes_type(T.TO)
+            storage._normalized_ctype = c_tp
         if normalize and getattr(T.TO, '_arrayfld', None):
             # XXX doesn't cache
             c_tp = build_ctypes_struct(T.TO, [],
@@ -461,7 +487,6 @@ def lltype2ctypes(llobj, normalize=True):
 
     if T is lltype.SingleFloat:
         return ctypes.c_float(float(llobj))
-
     return llobj
 
 def ctypes2lltype(T, cobj):
@@ -642,6 +667,8 @@ def force_cast(RESTYPE, value):
     """Cast a value to a result type, trying to use the same rules as C."""
     if not isinstance(RESTYPE, lltype.LowLevelType):
         raise TypeError("rffi.cast() first arg should be a TYPE")
+    if isinstance(value, llmemory.fakeaddress):
+        value = value.ptr
     TYPE1 = lltype.typeOf(value)
     cvalue = lltype2ctypes(value)
     cresulttype = get_ctypes_type(RESTYPE)
@@ -684,6 +711,8 @@ class ForceCastEntry(ExtRegistryEntry):
         RESTYPE = s_RESTYPE.const
         v_arg = hop.inputarg(hop.args_r[1], arg=1)
         TYPE1 = v_arg.concretetype
+        if TYPE1 is llmemory.Address:
+            v_arg = gen_cast(hop.llops, lltype.Ptr(lltype.FixedSizeArray(lltype.Char, 1)), v_arg)
         return gen_cast(hop.llops, RESTYPE, v_arg)
 
 def typecheck_ptradd(T):
