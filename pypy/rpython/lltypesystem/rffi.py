@@ -2,17 +2,20 @@ import py
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
+from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
-from pypy.rlib import rarithmetic
+from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
-from pypy.rpython.annlowlevel import llhelper
+from pypy.rpython.annlowlevel import llhelper, llstr
 import os
 
 class UnhandledRPythonException(Exception):
@@ -467,7 +470,37 @@ def charp2str(cp):
         l.append(cp[i])
         i += 1
     return "".join(l)
+    
+# str -> char*
+def get_nonmovingbuffer(data):
+    """
+    Either returns a non-moving copy or performs neccessary pointer arithmetic
+    to return a pointer to the characters of a string if the string is already
+    nonmovable.
+    Must be followed by a free_nonmovingbuffer call.
+    """
+    from pypy.rpython.lltypesystem import rstr
+    if rgc.can_move(data):
+        count = len(data)
+        buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
+        for i in range(count):
+            buf[i] = data[i]
+        return buf
+    else:
+        data_start = cast_ptr_to_adr(llstr(data)) + \
+            offsetof(rstr.STR, 'chars') + itemoffsetof(rstr.STR.chars, 0)
+        return cast(VOIDP, data_start)
 
+# (str, char*) -> None
+def free_nonmovingbuffer(data, buf):
+    """
+    Either free a non-moving buffer or keep the original storage alive.
+    """
+    if rgc.can_move(data):
+        lltype.free(buf, flavor='raw')
+    else:
+        keepalive_until_here(data)
+    
 # char* -> str, with an upper bound on the length in case there is no \x00
 def charp2strn(cp, maxlen):
     l = []
