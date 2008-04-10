@@ -158,56 +158,6 @@ class VListTest(InterpretationTest):
         assert res == -42
         self.check_insns({})
 
-    def test_beginning_of_list(self):
-        def f(x):
-            lst = [x]
-            i = x
-            result = 0
-            while i:
-                i -= 1
-                result += lst.pop()
-                lst.append(result)
-                lst.append(result)
-            return result + len(lst)
-                
-        res = self.interpret(f, [10], policy=P_OOPSPEC)
-        assert res == f(10)
-        self.check_insns(int_is_true=2, int_sub=2) # made a second loop
-        # the following calls are generated:
-        # 1 newlist
-        # 1 resize
-        # 2 setitems
-        # 2 length
-        #self.check_insns(direct_call=6) # how does the check work in ootype? XXX
-
-    def test_beginning_of_list_operations(self):
-        def f(x):
-            lst = [x, x, 1]
-            i = x
-            result = 0
-            while i:
-                i -= 1
-                one = lst.pop()
-                assert one == 1
-                result += lst.pop() + lst[-1]
-                lst.append(result)
-                lst.append(result)
-                lst[-2] = 14
-                lst.append(42)
-                del lst[-1]
-                lst.append(bool(lst))
-            return result + len(lst)
-                
-        res = self.interpret(f, [10], policy=P_OOPSPEC)
-        assert res == f(10)
-        self.check_insns(int_is_true=2, int_sub=2) # made a second loop
-        # the following calls are generated:
-        # 1 newlist
-        # 1 resize
-        # 2 setitems
-        # 2 length
-        #self.check_insns(direct_call=6) # how does the check work in ootype? XXX
-
     def test_bogus_index_while_compiling(self):
         py.test.skip("implement me")
         class Y:
@@ -239,8 +189,8 @@ class VListTest(InterpretationTest):
         assert res == -7
 
 
-class TestLLType(VListTest):
-    type_system = "lltype"
-
 class TestOOType(VListTest):
     type_system = "ootype"
+
+class TestLLType(VListTest):
+    type_system = "lltype"
