@@ -258,6 +258,10 @@ def _generalcast(T, value):
         return ootype._static_meth(T, graph=fn.graph, _callable=fn._callable)
     else:
         T1 = lltype.typeOf(value)
+        if isinstance(T1, ootype.OOType) and T is ootype.Signed:
+            obj = ootype.cast_to_object(value)
+            return ootype.ooidentityhash(obj)
+        
         if T1 is llmemory.Address:
             value = llmemory.cast_adr_to_int(value)
         elif isinstance(T1, lltype.Ptr):
