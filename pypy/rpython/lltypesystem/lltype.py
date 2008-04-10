@@ -774,9 +774,6 @@ def castable(PTRTYPE, CURTYPE):
                         % (CURTYPE, PTRTYPE))
     if CURTYPE == PTRTYPE:
         return 0
-    if (_exchangable_arrays(PTRTYPE.TO, CURTYPE.TO) or
-        _exchangable_arrays(CURTYPE.TO, PTRTYPE.TO)):
-        return 0
     if (not isinstance(CURTYPE.TO, (Struct, PyObjectType)) or
         not isinstance(PTRTYPE.TO, (Struct, PyObjectType))):
         raise InvalidCast(CURTYPE, PTRTYPE)
