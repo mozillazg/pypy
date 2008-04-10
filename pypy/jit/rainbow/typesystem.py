@@ -38,6 +38,12 @@ class LLTypeHelper(TypeSystemHelper):
     def genop_ptr_nonzero(self, builder, argbox, gv_addr):
         return builder.genop1("ptr_nonzero", gv_addr)
 
+    def genop_ptr_eq(self, builder, gv_addr0, gv_addr1):
+        return builder.genop2("ptr_eq", gv_addr0, gv_addr1)
+
+    def genop_ptr_ne(self, builder, gv_addr0, gv_addr1):
+        return builder.genop2("ptr_ne", gv_addr0, gv_addr1)
+
     def get_FuncType(self, ARGS, RESULT):
         FUNCTYPE = lltype.FuncType(ARGS, RESULT)
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
@@ -59,6 +65,13 @@ class OOTypeHelper(TypeSystemHelper):
 
     def genop_ptr_nonzero(self, builder, argbox, gv_addr):
         return builder.genop_oononnull(gv_addr)
+
+    def genop_ptr_eq(self, builder, gv_addr0, gv_addr1):
+        return builder.genop2("oois", gv_addr0, gv_addr1)
+
+    def genop_ptr_ne(self, builder, gv_addr0, gv_addr1):
+        assert False, 'TODO'
+        #return builder.genop2("ptr_ne", gv_addr0, gv_addr1)
 
     def get_FuncType(self, ARGS, RESULT):
         FUNCTYPE = ootype.StaticMethod(ARGS, RESULT)
