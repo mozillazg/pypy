@@ -744,6 +744,15 @@ class _object(object):
     def __hash__(self):
         return hash(self.obj)
 
+    def _identityhash(self):
+        if self:
+            try:
+                return self.obj._identityhash()
+            except AttributeError:
+                return intmask(id(self.obj))
+        else:
+            return 0 # for all null objects
+
     def _cast_to_object(self):
         return self
 
@@ -1677,7 +1686,8 @@ def cast_from_object(EXPECTED_TYPE, obj):
     return obj._cast_to(EXPECTED_TYPE)
 
 def ooidentityhash(inst):
-    assert isinstance(typeOf(inst), (Instance, Record))
+    T = typeOf(inst)
+    assert T is Object or isinstance(T, (Instance, Record))
     return inst._identityhash()
 
 def oohash(inst):
