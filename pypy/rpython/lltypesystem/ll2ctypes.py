@@ -204,7 +204,11 @@ def convert_struct(container, cstruct=None):
             return
         # regular case: allocate a new ctypes Structure of the proper type
         cls = get_ctypes_type(STRUCT)
-        cstruct = cls._malloc()
+        if STRUCT._arrayfld:
+            n = len(getattr(container, STRUCT._arrayfld).items)
+        else:
+            n = None
+        cstruct = cls._malloc(n)
     add_storage(container, _struct_mixin, cstruct)
     for field_name in STRUCT._names:
         FIELDTYPE = getattr(STRUCT, field_name)
@@ -218,7 +222,9 @@ def convert_struct(container, cstruct=None):
                 csubstruct = getattr(cstruct, field_name)
                 convert_struct(field_value, csubstruct)
             else:
-                raise NotImplementedError('inlined field', FIELDTYPE)
+                csubarray = getattr(cstruct, field_name)
+                convert_array(field_value, csubarray)
+                #raise NotImplementedError('inlined field', FIELDTYPE)
     remove_regular_struct_content(container)
 
 def remove_regular_struct_content(container):
@@ -228,10 +234,11 @@ def remove_regular_struct_content(container):
         if not isinstance(FIELDTYPE, lltype.ContainerType):
             delattr(container, field_name)
 
-def convert_array(container):
+def convert_array(container, carray=None):
     ARRAY = container._TYPE
     cls = get_ctypes_type(ARRAY)
-    carray = cls._malloc(container.getlength())
+    if carray is None:
+        carray = cls._malloc(container.getlength())
     add_storage(container, _array_mixin, carray)
     if not isinstance(ARRAY.OF, lltype.ContainerType):
         for i in range(container.getlength()):
@@ -434,7 +441,12 @@ def lltype2ctypes(llobj, normalize=True):
             container._ctypes_storage_was_allocated()
         storage = container._storage
         p = ctypes.pointer(storage)
-        if normalize and hasattr(storage, '_normalized_ctype'):
+        if normalize and getattr(T.TO, '_arrayfld', None):
+            # XXX doesn't cache
+            c_tp = build_ctypes_struct(T.TO, [],
+                         len(getattr(storage, T.TO._arrayfld).items))
+            p = ctypes.cast(p, ctypes.POINTER(c_tp))
+        elif normalize and hasattr(storage, '_normalized_ctype'):
             p = ctypes.cast(p, ctypes.POINTER(storage._normalized_ctype))
         return p
 
