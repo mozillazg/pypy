@@ -66,7 +66,8 @@ class FallbackInterpreter(object):
             # if shapemask != -1 in store_back_virtualizables(), we should
             # not reach this point before we reach the "State sanitized" line.
             reshaping = content in self.containers_needing_reshaping
-            gv_result = content.allocate_gv_container(self.rgenop, reshaping)
+            gv_result = content.allocate_gv_container(
+                self.rgenop, self.getinitialboxgv, reshaping)
             self.containers_gv[content] = gv_result
             content.populate_gv_container(self.rgenop, gv_result,
                                           self.getinitialboxgv)
