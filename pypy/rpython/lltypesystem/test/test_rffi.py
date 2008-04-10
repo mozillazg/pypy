@@ -633,7 +633,18 @@ def test_ptradd():
     
 def test_ptradd_interpret():
     interpret(test_ptradd, [])
-
+    
+def test_nonmovingbuffer():
+    def f():
+        buf = lltype.nullptr(CCHARP.TO)
+        d = 'some cool data that should not move'
+        try:
+            buf = get_nonmovingbuffer(d)
+            for i in range(len(d)):
+                assert buf[i] == d[i]
+        finally:
+            free_nonmovingbuffer(d, buf)
+    interpret(f, [])
 
 class TestCRffi(BaseTestRffi):
     def compile(self, func, args, **kwds):
