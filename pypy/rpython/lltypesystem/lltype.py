@@ -631,14 +631,6 @@ class Ptr(LowLevelType):
                          hints={'interior_ptr_type':True})            
         return R
 
-    def __eq__(self, other):
-        if not isinstance(other, Ptr):
-            return False
-        if (_exchangable_arrays(self.TO, other.TO) or
-            _exchangable_arrays(other.TO, self.TO)):
-            return True
-        return LowLevelType.__eq__(self, other)
-
 class InteriorPtr(LowLevelType):
     def __init__(self, PARENTTYPE, TO, offsets):
         self.PARENTTYPE = PARENTTYPE
@@ -769,12 +761,6 @@ def _castdepth(OUTSIDE, INSIDE):
             return dwn
         OUTSIDE = getattr(OUTSIDE, first)
     return -1
-
-def _exchangable_arrays(ONE, TWO):
-    if (isinstance(ONE, FixedSizeArray) and isinstance(TWO, Array) and
-        TWO._hints['nolength']):
-        return True
-    return False
 
 def castable(PTRTYPE, CURTYPE):
     if CURTYPE.TO._gckind != PTRTYPE.TO._gckind:
