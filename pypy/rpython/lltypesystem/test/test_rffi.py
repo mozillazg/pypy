@@ -9,6 +9,7 @@ from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret, MallocMismatch
+from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.translator.backendopt.all import backend_optimizations
@@ -633,18 +634,25 @@ def test_ptradd():
     
 def test_ptradd_interpret():
     interpret(test_ptradd, [])
-    
-def test_nonmovingbuffer():
-    def f():
-        buf = lltype.nullptr(CCHARP.TO)
-        d = 'some cool data that should not move'
-        try:
-            buf = get_nonmovingbuffer(d)
-            for i in range(len(d)):
-                assert buf[i] == d[i]
-        finally:
-            free_nonmovingbuffer(d, buf)
-    interpret(f, [])
+
+class BaseInterpretedTestRffi(BaseRtypingTest):
+    def test_nonmovingbuffer(self):
+        def f():
+            buf = lltype.nullptr(CCHARP.TO)
+            d = 'some cool data that should not move'
+            try:
+                buf = get_nonmovingbuffer(d)
+                for i in range(len(d)):
+                    assert buf[i] == d[i]
+            finally:
+                free_nonmovingbuffer(d, buf)
+        self.interpret(f, [])
+        
+class TestNonmovingBuffer(BaseInterpretedTestRffi, LLRtypeMixin):
+    pass
+
+class TestLLtypeNonMovingGc(BaseInterpretedTestRffi, LLRtypeMixin):
+    MOVING_GC = False
 
 class TestCRffi(BaseTestRffi):
     def compile(self, func, args, **kwds):
