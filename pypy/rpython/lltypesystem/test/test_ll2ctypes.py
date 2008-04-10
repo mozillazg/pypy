@@ -11,6 +11,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
+from pypy.rpython.test.test_llinterp import interpret
 
 class TestLL2Ctypes(object):
 
@@ -367,6 +368,7 @@ class TestLL2Ctypes(object):
             rffi.cast(rffi.VOIDP, b)
         # assert did not crash
         f()
+        interpret(f, [])
 
     def test_funcptr1(self):
         def dummy(n):
