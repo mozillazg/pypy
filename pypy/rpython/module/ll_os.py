@@ -526,7 +526,9 @@ class RegisterOs(BaseLazyRegistering):
                 finally:
                     lltype.free(outbuf, flavor='raw')
             else:
-                outbuf = rffi.cast(rffi.VOIDP, data)
+                data_start = cast_ptr_to_adr(llstr(data)) + \
+                    fieldoffsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+                outbuf = rffi.cast(rffi.VOIDP, data_start)
                 written = rffi.cast(lltype.Signed, os_write(
                     rffi.cast(rffi.INT, fd),
                     outbuf, rffi.cast(rffi.SIZE_T, count)))
