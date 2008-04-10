@@ -204,6 +204,11 @@ def test_cast_pointer():
     assert typeOf(p3) == Ptr(S3)
     assert p1b == cast_pointer(Ptr(S1bis), p3)
     py.test.raises(RuntimeError, "cast_pointer(Ptr(S1), p3)")
+    A1 = FixedSizeArray(Char, 1)
+    A2 = Array(Char, hints={'nolength':True})
+    p = malloc(A1, flavor='raw')
+    p2 = cast_pointer(Ptr(A2), p)
+    assert p2 == p
 
 def test_best_effort_gced_parent_detection():
     py.test.skip("test not relevant any more")

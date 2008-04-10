@@ -761,12 +761,21 @@ def _castdepth(OUTSIDE, INSIDE):
             return dwn
         OUTSIDE = getattr(OUTSIDE, first)
     return -1
- 
+
+def _exchangable_arrays(ONE, TWO):
+    if (isinstance(ONE, FixedSizeArray) and isinstance(TWO, Array) and
+        TWO._hints['nolength']):
+        return True
+    return False
+
 def castable(PTRTYPE, CURTYPE):
     if CURTYPE.TO._gckind != PTRTYPE.TO._gckind:
         raise TypeError("cast_pointer() cannot change the gc status: %s to %s"
                         % (CURTYPE, PTRTYPE))
     if CURTYPE == PTRTYPE:
+        return 0
+    if (_exchangable_arrays(PTRTYPE.TO, CURTYPE.TO) or
+        _exchangable_arrays(CURTYPE.TO, PTRTYPE.TO)):
         return 0
     if (not isinstance(CURTYPE.TO, (Struct, PyObjectType)) or
         not isinstance(PTRTYPE.TO, (Struct, PyObjectType))):
