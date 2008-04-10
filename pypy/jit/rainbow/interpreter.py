@@ -1083,6 +1083,11 @@ class OOTypeJitInterpreter(JitInterpreter):
     def opimpl_red_ooisnull(self, ptrbox):
         return rtimeshift.genptrnonzero(self.jitstate, ptrbox, True)
 
+    @arguments("red", "red", returns="red")
+    def opimpl_red_oois(self, ptrbox1, ptrbox2):
+        return rtimeshift.genptreq(self.jitstate, ptrbox1,
+                                   ptrbox2, False)
+
 
 class DebugTrace(object):
     def __init__(self, *args):

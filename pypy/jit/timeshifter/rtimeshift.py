@@ -255,12 +255,12 @@ def genptrnonzero(jitstate, argbox, reverse):
     return boolbox
 
 def genptreq(jitstate, argbox0, argbox1, reverse):
-    assert isinstance(argbox0, rvalue.PtrRedBox)
-    assert isinstance(argbox1, rvalue.PtrRedBox)
+    assert isinstance(argbox0, rvalue.AbstractPtrRedBox)
+    assert isinstance(argbox1, rvalue.AbstractPtrRedBox)
     builder = jitstate.curbuilder
     if argbox0.is_constant() and argbox1.is_constant():
-        addr0 = rvalue.ll_getvalue(argbox0, llmemory.Address)
-        addr1 = rvalue.ll_getvalue(argbox1, llmemory.Address)
+        addr0 = rvalue.ll_getvalue(argbox0, jitstate.ts.ROOT_TYPE)
+        addr1 = rvalue.ll_getvalue(argbox1, jitstate.ts.ROOT_TYPE)
         return rvalue.ll_fromvalue(jitstate, (addr0 == addr1) ^ reverse)
     if argbox0.content is not None:
         resultbox = argbox0.content.op_ptreq(jitstate, argbox1, reverse)
@@ -273,9 +273,9 @@ def genptreq(jitstate, argbox0, argbox1, reverse):
     gv_addr0 = argbox0.getgenvar(jitstate)
     gv_addr1 = argbox1.getgenvar(jitstate)
     if reverse:
-        gv_res = builder.genop2("ptr_ne", gv_addr0, gv_addr1)
+        gv_res = jitstate.ts.genop_ptr_ne(builder, gv_addr0, gv_addr1)
     else:
-        gv_res = builder.genop2("ptr_eq", gv_addr0, gv_addr1)
+        gv_res = jitstate.ts.genop_ptr_eq(builder, gv_addr0, gv_addr1)
     boolbox = rvalue.BoolRedBox(gv_res)
     boolbox.iftrue.append(booleffect.PtrEqualEffect(argbox0, argbox1, reverse))
     return boolbox

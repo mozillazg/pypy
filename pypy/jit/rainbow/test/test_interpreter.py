@@ -2334,5 +2334,3 @@ class TestOOType(SimpleTests):
     test_compile_time_const_tuple = _skip    # needs vdict
     test_green_char_at_merge = _skip
     test_self_referential_structures = _skip
-    test_ptrequality = _skip
-    test_green_ptrequality = _skip
