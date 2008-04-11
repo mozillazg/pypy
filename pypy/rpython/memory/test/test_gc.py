@@ -417,3 +417,14 @@ class TestGenerationalGC(TestSemiSpaceGC):
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
+
+    def test_ref_from_rawmalloced_to_regular(self):
+        import gc
+        def concat(j):
+            lst = []
+            for i in range(j):
+                lst.append(str(i))
+            gc.collect()
+            return len("".join(lst))
+        res = self.interpret(concat, [100])
+        assert res == concat(100)
