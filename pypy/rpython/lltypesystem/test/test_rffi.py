@@ -648,10 +648,10 @@ class BaseInterpretedTestRffi(BaseRtypingTest):
                 free_nonmovingbuffer(d, buf)
         self.interpret(f, [])
         
-class TestNonmovingBuffer(BaseInterpretedTestRffi, LLRtypeMixin):
-    pass
+class TestNonmovingBufferMovingGc(BaseInterpretedTestRffi, LLRtypeMixin):
+    MOVING_GC = True
 
-class TestLLtypeNonMovingGc(BaseInterpretedTestRffi, LLRtypeMixin):
+class TestNonmovingBufferNonMovingGc(BaseInterpretedTestRffi, LLRtypeMixin):
     MOVING_GC = False
 
 class TestCRffi(BaseTestRffi):

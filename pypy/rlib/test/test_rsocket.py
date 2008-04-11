@@ -1,6 +1,7 @@
 import py, errno, sys
 from pypy.rlib import rsocket
 from pypy.rlib.rsocket import *
+from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 import socket as cpy_socket
 
 # cannot test error codes in Win32 because ll2ctypes doesn't save
@@ -257,23 +258,23 @@ def test_getaddrinfo_http():
     py.test.raises(GAIError, getaddrinfo, 'www.very-invalidaddress.com', None)
 
 def test_getaddrinfo_snake():
-    lst = getaddrinfo('snake.cs.uni-duesseldorf.de', None)
+    lst = getaddrinfo('codespeak.net', None)
     assert isinstance(lst, list)
     found = False
     for family, socktype, protocol, canonname, addr in lst:
-        if addr.get_host() == '134.99.112.214':
+        if addr.get_host() == '213.239.226.252':
             found = True
     assert found, lst
 
 def test_getaddrinfo_no_reverse_lookup():
     # It seems that getaddrinfo never runs a reverse lookup on Linux.
     # Python2.3 on Windows returns the hostname.
-    lst = getaddrinfo('134.99.112.214', None, flags=AI_NUMERICHOST)
+    lst = getaddrinfo('213.239.226.252', None, flags=AI_NUMERICHOST)
     assert isinstance(lst, list)
     found = False
     for family, socktype, protocol, canonname, addr in lst:
-        assert canonname != 'snake.cs.uni-duesseldorf.de'
-        if addr.get_host() == '134.99.112.214':
+        assert canonname != 'codespeak.net'
+        if addr.get_host() == '213.239.226.252':
             found = True
     assert found, lst
 
@@ -369,7 +370,30 @@ def test_unix_socket_connect():
 
     clientsock.close()
     s.close()
+    
+class BaseSendRecvTest(BaseRtypingTest):
+    def test_socketpair(self):
+        if sys.platform == "win32":
+            py.test.skip('No socketpair on Windows')
+            
+        def f():
+            s1, s2 = socketpair()
+            s1.sendall('?')
+            buf = s2.recv(100)
+            assert buf == '?'
+            count = s2.send('x'*99)
+            assert 1 <= count <= 99
+            buf = s1.recv(100)
+            assert buf == 'x'*count
+            s1.close()
+            s2.close()
+        self.interpret(f,[])
 
+class TestSendRecvMovingGc(BaseSendRecvTest, LLRtypeMixin):
+    MOVING_GC = True
+
+class TestSendRecvNonMovingGc(BaseSendRecvTest, LLRtypeMixin):
+    MOVING_GC = False
 
 class TestTCP:
     PORT = 50007
