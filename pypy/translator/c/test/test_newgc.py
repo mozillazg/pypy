@@ -899,3 +899,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
     should_be_moving = True
+
+class TestHybridGC(TestGenerationalGC):
+    gcpolicy = "hybrid"
+    should_be_moving = True
