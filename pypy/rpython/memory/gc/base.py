@@ -290,7 +290,7 @@ def choose_gc_from_config(config):
             from pypy.rpython.memory.gc.generation import GenerationGC
             return GenerationGC, GC_PARAMS
         else:
-            GC_PARAMS['large_size'] = 1024    # XXX adjust
+            GC_PARAMS['large_object'] = 1024    # XXX adjust
             from pypy.rpython.memory.gc.hybrid import HybridGC
             return HybridGC, GC_PARAMS
     else:
