@@ -55,7 +55,7 @@ implementing the same interface as ``_ctypes`` in CPython is in
 Discussion and limitations
 =============================
 
-Reimplementing ctypes features were in general possible. PyPy supports
+Reimplementing ctypes features was in general possible. PyPy supports
 pluggable garbage collectors, some of them are moving collectors, this
 means that the strategy of passing direct references inside Python
 objects to an external library is not feasible (unless the GCs
