@@ -489,7 +489,7 @@ def get_nonmovingbuffer(data):
     else:
         data_start = cast_ptr_to_adr(llstr(data)) + \
             offsetof(rstr.STR, 'chars') + itemoffsetof(rstr.STR.chars, 0)
-        return cast(VOIDP, data_start)
+        return cast(CCHARP, data_start)
 
 # (str, char*) -> None
 def free_nonmovingbuffer(data, buf):
