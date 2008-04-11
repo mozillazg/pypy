@@ -13,8 +13,6 @@ Terminology:
 * interpreter level code - code written in RPython, compiled
   to something else, say C, part of the interpreter.
 
-* for more information on PyPy see the `PyPy documentation`_.
-
 PyPy's ctypes implementation in its current state proves the
 feasibility of implementing a module with the same interface and
 behavior for PyPy as ctypes for CPython.
@@ -32,7 +30,6 @@ implemented ``_ctypes`` which is a C module in CPython mostly in pure
 Python based on a lower-level layer extension module ``_rawffi``.
 
 .. _`libffi`: http://sources.redhat.com/libffi/
-.. _`PyPy documentation`: http://codespeak.net/pypy/dist/pypy/doc/
 
 Low-level part: ``_rawffi``
 ============================
