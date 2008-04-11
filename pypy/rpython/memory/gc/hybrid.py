@@ -6,7 +6,7 @@ from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
 
-GCFLAG_MARK = GenerationGC.first_unused_gcflag << 0
+GCFLAG_UNVISITED = GenerationGC.first_unused_gcflag << 0
 
 
 class HybridGC(GenerationGC):
@@ -29,6 +29,7 @@ class HybridGC(GenerationGC):
         self.nonlarge_max = large_object - 1
         assert self.nonlarge_max <= self.lb_young_var_basesize
         self.large_objects_collect_trigger = self.space_size
+        self.pending_external_object_list = self.AddressDeque()
 
     def setup(self):
         self.large_objects_list = self.AddressDeque()
@@ -92,7 +93,7 @@ class HybridGC(GenerationGC):
             raise MemoryError()
         if raw_malloc_usage(totalsize) > self.nonlarge_max:
             result = self.malloc_varsize_marknsweep(totalsize)
-            flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS
+            flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
         else:
             result = self.malloc_varsize_collecting_nursery(totalsize)
             flags = self.GCFLAGS_FOR_NEW_YOUNG_OBJECTS
@@ -129,32 +130,51 @@ class HybridGC(GenerationGC):
         self.large_objects_list.append(result + size_gc_header)
         return result
 
+    # ___________________________________________________________________
     # the following methods are hook into SemiSpaceGC.semispace_collect()
 
     def starting_full_collect(self):
-        # This hook is not really necessary but it's a nice place
-        # to put the following comment:
-        # No object should have a GCFLAG_MARK at this point
-        # (except some prebuilt objects but they are ignored).
-        pass
+        # At the start of a collection, all raw_malloc'ed objects should
+        # have the GCFLAG_UNVISITED bit set.  No other object ever has
+        # this bit set.
+        ll_assert(not self.pending_external_object_list.non_empty(),
+                  "pending_external_object_list should be empty at start")
 
     def visit_external_object(self, obj):
-        # leave a GCFLAG_MARK on all external objects visited (some
-        # prebuilt objects will also get the flag, but it doesn't matter)
-        self.header(obj).tid |= GCFLAG_MARK
+        hdr = self.header(obj)
+        if hdr.tid & GCFLAG_UNVISITED:
+            # This is a not-visited-yet raw_malloced object.
+            hdr.tid -= GCFLAG_UNVISITED
+            self.pending_external_object_list.append(obj)
+
+    def scan_copied(self, scan):
+        # Alternate between scanning the regular objects we just moved
+        # and scanning the raw_malloc'ed object we just visited.
+        progress = True
+        while progress:
+            newscan = GenerationGC.scan_copied(self, scan)
+            progress = newscan != scan
+            scan = newscan
+            while self.pending_external_object_list.non_empty():
+                obj = self.pending_external_object_list.popleft()
+                self.trace_and_copy(obj)
+                progress = True
+        return scan
 
     def finished_full_collect(self):
+        ll_assert(not self.pending_external_object_list.non_empty(),
+                  "pending_external_object_list should be empty at end")
         # free all mark-n-sweep-managed objects that have not been marked
         large_objects = self.large_objects_list
         remaining_large_objects = self.AddressDeque()
         while large_objects.non_empty():
             obj = large_objects.popleft()
-            if self.header(obj).tid & GCFLAG_MARK:
-                self.header(obj).tid -= GCFLAG_MARK
-                remaining_large_objects.append(obj)
-            else:
+            if self.header(obj).tid & GCFLAG_UNVISITED:
                 addr = obj - self.gcheaderbuilder.size_gc_header
                 llmemory.raw_free(addr)
+            else:
+                self.header(obj).tid |= GCFLAG_UNVISITED
+                remaining_large_objects.append(obj)
         large_objects.delete()
         self.large_objects_list = remaining_large_objects
         # As we just collected, it's fine to raw_malloc'ate up to space_size
