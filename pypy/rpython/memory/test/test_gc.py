@@ -414,3 +414,6 @@ class TestGenerationalGC(TestSemiSpaceGC):
             return 0
         res = self.interpret(malloc_a_lot, [], backendopt=True, coalloc=True)
         assert res == 0
+
+class TestHybridGC(TestGenerationalGC):
+    from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
