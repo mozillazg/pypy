@@ -1276,7 +1276,7 @@ if hasattr(_c, 'inet_ntop'):
             finally:
                 lltype.free(dstbuf, flavor='raw')
         finally:
-            lltype.free_nonmovingbuffer(packed, srcbuf)
+            rffi.free_nonmovingbuffer(packed, srcbuf)
 
 def setdefaulttimeout(timeout):
     if timeout < 0.0:

@@ -370,30 +370,6 @@ def test_unix_socket_connect():
 
     clientsock.close()
     s.close()
-    
-class BaseSendRecvTest(BaseRtypingTest):
-    def test_socketpair(self):
-        if sys.platform == "win32":
-            py.test.skip('No socketpair on Windows')
-            
-        def f():
-            s1, s2 = socketpair()
-            s1.sendall('?')
-            buf = s2.recv(100)
-            assert buf == '?'
-            count = s2.send('x'*99)
-            assert 1 <= count <= 99
-            buf = s1.recv(100)
-            assert buf == 'x'*count
-            s1.close()
-            s2.close()
-        self.interpret(f,[])
-
-class TestSendRecvMovingGc(BaseSendRecvTest, LLRtypeMixin):
-    MOVING_GC = True
-
-class TestSendRecvNonMovingGc(BaseSendRecvTest, LLRtypeMixin):
-    MOVING_GC = False
 
 class TestTCP:
     PORT = 50007
