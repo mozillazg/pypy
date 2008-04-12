@@ -711,8 +711,6 @@ class ForceCastEntry(ExtRegistryEntry):
         RESTYPE = s_RESTYPE.const
         v_arg = hop.inputarg(hop.args_r[1], arg=1)
         TYPE1 = v_arg.concretetype
-        if TYPE1 is llmemory.Address:
-            v_arg = gen_cast(hop.llops, lltype.Ptr(lltype.FixedSizeArray(lltype.Char, 1)), v_arg)
         return gen_cast(hop.llops, RESTYPE, v_arg)
 
 def typecheck_ptradd(T):
