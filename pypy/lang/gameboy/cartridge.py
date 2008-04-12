@@ -699,12 +699,12 @@ class HuC3(MBC):
 # MEMORY BANK MAPPING ----------------------------------------------------------
 
 MEMORY_BANK_TYPE_RANGES = [
-   (constants.TYPE_MBC1,             constants.TYPE_MBC1_RAM_BATTERY,        MBC1),
-   (constants.TYPE_MBC2,             constants.TYPE_MBC2_BATTERY,            MBC2),
-   (constants.TYPE_MBC3_RTC_BATTERY, constants.TYPE_MBC3_RAM_BATTERY,        MBC3),
-   (constants.TYPE_MBC5,             constants.TYPE_MBC5_RUMBLE_RAM_BATTERY, MBC5),
-   (constants.TYPE_HUC3_RTC_RAM,     constants.TYPE_HUC3_RTC_RAM,            HuC3),
-   (constants.TYPE_HUC1_RAM_BATTERY, constants.TYPE_HUC1_RAM_BATTERY,        HuC1)
+    (constants.TYPE_MBC1,             constants.TYPE_MBC1_RAM_BATTERY,        MBC1),
+    (constants.TYPE_MBC2,             constants.TYPE_MBC2_BATTERY,            MBC2),
+    (constants.TYPE_MBC3_RTC_BATTERY, constants.TYPE_MBC3_RAM_BATTERY,        MBC3),
+    (constants.TYPE_MBC5,             constants.TYPE_MBC5_RUMBLE_RAM_BATTERY, MBC5),
+    (constants.TYPE_HUC3_RTC_RAM,     constants.TYPE_HUC3_RTC_RAM,            HuC3),
+    (constants.TYPE_HUC1_RAM_BATTERY, constants.TYPE_HUC1_RAM_BATTERY,        HuC1)
 ]
 
 
@@ -717,7 +717,9 @@ def initialize_mapping_table():
             positions = range(entry[0], entry[1]+1)
         for pos in positions:
             result[pos] = entry[-1]
-    assert None not in result
+    # XXX the following assert is disabled because it seems bogous
+    # in constants, they don't have 256 types...
+    # assert None not in result
     return result
 
 MEMORY_BANK_MAPPING = initialize_mapping_table()
