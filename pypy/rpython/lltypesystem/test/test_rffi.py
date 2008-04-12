@@ -430,6 +430,38 @@ class BaseTestRffi:
         unregister_keepalive(pos, TP)
         assert res == 8
 
+    def test_nonmovingbuffer(self):
+        d = 'some cool data that should not move'
+        def f():
+            buf = lltype.nullptr(CCHARP.TO)
+            try:
+                buf = get_nonmovingbuffer(d)
+                counter = 0
+                for i in range(len(d)):
+                    if buf[i] == d[i]:
+                        counter += 1
+                return counter
+            finally:
+                free_nonmovingbuffer(d, buf)
+        fn = self.compile(f, [], gcpolicy='ref')
+        assert fn() == len(d)
+
+    def test_nonmovingbuffer_semispace(self):
+        d = 'some cool data that should not move'
+        def f():
+            buf = lltype.nullptr(CCHARP.TO)
+            try:
+                buf = get_nonmovingbuffer(d)
+                counter = 0
+                for i in range(len(d)):
+                    if buf[i] == d[i]:
+                        counter += 1
+                return counter
+            finally:
+                free_nonmovingbuffer(d, buf)
+        fn = self.compile(f, [], gcpolicy='semispace')
+        assert fn(expected_extra_mallocs=9) == len(d)
+
 class TestRffiInternals:
     def test_struct_create(self):
         X = CStruct('xx', ('one', INT))
@@ -635,25 +667,6 @@ def test_ptradd():
 def test_ptradd_interpret():
     interpret(test_ptradd, [])
 
-class BaseInterpretedTestRffi(BaseRtypingTest):
-    def test_nonmovingbuffer(self):
-        def f():
-            buf = lltype.nullptr(CCHARP.TO)
-            d = 'some cool data that should not move'
-            try:
-                buf = get_nonmovingbuffer(d)
-                for i in range(len(d)):
-                    assert buf[i] == d[i]
-            finally:
-                free_nonmovingbuffer(d, buf)
-        self.interpret(f, [])
-        
-class TestNonmovingBufferMovingGc(BaseInterpretedTestRffi, LLRtypeMixin):
-    MOVING_GC = True
-
-class TestNonmovingBufferNonMovingGc(BaseInterpretedTestRffi, LLRtypeMixin):
-    MOVING_GC = False
-
 class TestCRffi(BaseTestRffi):
     def compile(self, func, args, **kwds):
         return compile_c(func, args, **kwds)
@@ -668,6 +681,12 @@ class TestLLVMRffi(BaseTestRffi):
             kwds['optimize'] = kwds['backendopt']
             del kwds['backendopt']
         return compile_llvm(func, args, **kwds)
+
+    def test_nonmovingbuffer(self):
+        py.test.skip("Somewhat buggy...")
+
+    def test_nonmovingbuffer_semispace(self):
+        py.test.skip("LLVM backend error - unsupported operator")
 
     def test_hashdefine(self):
         py.test.skip("Macros cannot be called as llexternals by design, rffi does not have any special support for them")
