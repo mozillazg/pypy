@@ -903,3 +903,6 @@ class TestGenerationalGC(TestSemiSpaceGC):
 class TestHybridGC(TestGenerationalGC):
     gcpolicy = "hybrid"
     should_be_moving = True
+
+    def test_gc_set_max_heap_size(self):
+        py.test.skip("not implemented")
