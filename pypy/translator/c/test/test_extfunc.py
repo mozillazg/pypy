@@ -77,6 +77,25 @@ def test_open_read_write_seek_close():
     assert open(filename, 'r').read() == "hello world\n"
     os.unlink(filename)
 
+def test_open_read_write_seek_close_moving():
+    filename = str(udir.join('test_open_read_write_close.txt'))
+    def does_stuff():
+        fd = os.open(filename, os.O_WRONLY | os.O_CREAT, 0777)
+        count = os.write(fd, "hello world\n")
+        assert count == len("hello world\n")
+        os.close(fd)
+        fd = os.open(filename, os.O_RDONLY, 0777)
+        result = os.lseek(fd, 1, 0)
+        assert result == 1
+        data = os.read(fd, 500)
+        assert data == "ello world\n"
+        os.close(fd)
+
+    f1 = compile(does_stuff, [], gcpolicy='semispace')
+    f1(expected_extra_mallocs=9)
+    assert open(filename, 'r').read() == "hello world\n"
+    os.unlink(filename)
+
 def test_big_read():
     filename = str(udir.join('test_open_read_write_close.txt'))
     def does_stuff():
