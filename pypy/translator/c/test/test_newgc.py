@@ -2,6 +2,7 @@ import autopath
 import sys
 import py
 from py.test import raises
+import os
 
 from pypy.objspace.flow.model import summary
 from pypy.translator.translator import TranslationContext
@@ -11,6 +12,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.test import snippet
 from pypy import conftest
+from pypy.tool.udir import udir
 
 def compile_func(fn, inputtypes, t=None, gcpolicy="ref"):
     from pypy.config.pypyoption import get_pypy_config
@@ -813,6 +815,25 @@ class TestUsingFramework(AbstractGCTestClass):
         c_fn = self.getcompiled(f)
         assert c_fn() == 0
 
+    def test_open_read_write_seek_close(self):
+        filename = str(udir.join('test_open_read_write_close.txt'))
+        def does_stuff():
+            fd = os.open(filename, os.O_WRONLY | os.O_CREAT, 0777)
+            count = os.write(fd, "hello world\n")
+            assert count == len("hello world\n")
+            os.close(fd)
+            fd = os.open(filename, os.O_RDONLY, 0777)
+            result = os.lseek(fd, 1, 0)
+            assert result == 1
+            data = os.read(fd, 500)
+            assert data == "ello world\n"
+            os.close(fd)
+
+        f1 = self.getcompiled(does_stuff, [])
+        f1()
+        assert open(filename, 'r').read() == "hello world\n"
+        os.unlink(filename)
+
 
 class TestUsingStacklessFramework(TestUsingFramework):
 
@@ -839,6 +860,9 @@ class TestUsingStacklessFramework(TestUsingFramework):
 
     def test_weakref(self):
         py.test.skip("fails for some reason I couldn't figure out yet :-(")
+
+    def test_open_read_write_seek_close(self):
+        py.test.skip("str complaining")
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
     gcpolicy = "semispace"
@@ -894,7 +918,6 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
         c_fn = self.getcompiled(fn)
         res = c_fn()
         assert res == 2
-
 
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
