@@ -155,6 +155,9 @@ class TestLLtype(BaseTestPosix, LLRtypeMixin):
     pass
 
 class TestLLtypeNonMovingGc(BaseTestPosix, LLRtypeMixin):
+    def interpret(self, f, args):
+        return f(*args)
+    
     MOVING_GC = False
 
 class TestOOtype(BaseTestPosix, OORtypeMixin):
