@@ -30,10 +30,18 @@ class HybridGC(GenerationGC):
         assert self.nonlarge_max <= self.lb_young_var_basesize
         self.large_objects_collect_trigger = self.space_size
         self.pending_external_object_list = self.AddressDeque()
+        # XXX we could use two limits: it could be larger for objects
+        # that contain gc references than for objects that don't.  The
+        # idea is that separately allocated objects are allocated
+        # immediately "old" and it's not good to have too many pointers
+        # from old to young objects.
 
     def setup(self):
         self.large_objects_list = self.AddressDeque()
         GenerationGC.setup(self)
+
+    def set_max_heap_size(self, size):
+        raise NotImplementedError
 
     # NB. to simplify the code, only varsized objects can be considered
     # 'large'.
