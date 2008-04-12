@@ -24,6 +24,7 @@ from pypy.rpython.annlowlevel import hlstr, llstr
 from pypy.rpython.lltypesystem.llmemory import raw_memcopy, sizeof,\
      itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof
 from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rpython.annlowlevel import llstr
 
 posix = __import__(os.name)
 
