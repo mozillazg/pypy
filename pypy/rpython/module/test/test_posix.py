@@ -154,12 +154,6 @@ class BaseTestPosix(BaseRtypingTest):
 class TestLLtype(BaseTestPosix, LLRtypeMixin):
     pass
 
-class TestLLtypeNonMovingGc(BaseTestPosix, LLRtypeMixin):
-    def interpret(self, f, args):
-        return f(*args)
-    
-    MOVING_GC = False
-
 class TestOOtype(BaseTestPosix, OORtypeMixin):
     def test_fstat(self):
         py.test.skip("ootypesystem does not support os.fstat")
