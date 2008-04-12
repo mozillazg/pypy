@@ -286,6 +286,7 @@ class Video(object):
                 self.interrupt.raiseInterrupt(constants.LCD)
         else:
             self.stat &= 0xFB
+            
         if (self.lineY < 144):
             self.stat = (self.stat & 0xFC) | 0x02
             self.cycles += constants.MODE_2_TICKS
