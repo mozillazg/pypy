@@ -492,11 +492,11 @@ class GCTransformer(BaseGCTransformer):
         flags = hop.spaceop.args[1].value
         flavor = flags['flavor']
         meth = getattr(self, 'gct_fv_%s_malloc' % flavor, None)
-        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor)
         c_size = rmodel.inputconst(lltype.Signed, llmemory.sizeof(TYPE))
         v_raw = meth(hop, flags, TYPE, c_size)
         hop.cast_result(v_raw)
-    
+ 
     def gct_coalloc(self, hop):
         TYPE = hop.spaceop.result.concretetype.TO
         assert not TYPE._is_varsize()
@@ -527,12 +527,11 @@ class GCTransformer(BaseGCTransformer):
         return v_raw        
 
     def gct_malloc_varsize(self, hop):
-
         flags = hop.spaceop.args[1].value
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
-        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor)
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
     def gct_coalloc_varsize(self, hop):
@@ -608,3 +607,6 @@ class GCTransformer(BaseGCTransformer):
             hop.genop('raw_free', [v])
         else:
             assert False, "%s has no support for free with flavor %r" % (self, flavor)           
+
+    def gct_gc_can_move(self, hop):
+        return hop.cast_result(rmodel.inputconst(lltype.Bool, False))

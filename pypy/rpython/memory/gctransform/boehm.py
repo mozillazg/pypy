@@ -141,9 +141,6 @@ class BoehmGCTransformer(GCTransformer):
                           resulttype = lltype.Signed)
         hop.genop('int_invert', [v_int], resultvar=hop.spaceop.result)
 
-    def gct_gc_can_move(self, hop):
-        return hop.cast_result(rmodel.inputconst(lltype.Bool, False))
-
 ########## weakrefs ##########
 # Boehm: weakref objects are small structures containing only a Boehm
 # disappearing link.  We don't have to hide the link's value with
