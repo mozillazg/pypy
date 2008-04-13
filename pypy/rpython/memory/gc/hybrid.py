@@ -17,24 +17,28 @@ class HybridGC(GenerationGC):
     first_unused_gcflag = GenerationGC.first_unused_gcflag << 1
 
     def __init__(self, *args, **kwds):
-        large_object = kwds.pop('large_object', 32)
+        large_object = kwds.pop('large_object', 24)
+        large_object_gcptrs = kwds.pop('large_object_gcptrs', 32)
         GenerationGC.__init__(self, *args, **kwds)
 
         # Objects whose total size is at least 'large_object' bytes are
-        # allocated separately in a mark-n-sweep fashion.  In this
-        # class, we assume that the 'large_object' limit is not very high,
-        # so that all objects that wouldn't easily fit in the nursery
-        # are considered large by this limit.  This is the meaning of
-        # the 'assert' below.
+        # allocated separately in a mark-n-sweep fashion.  If the object
+        # has GC pointers in its varsized part, we use instead the
+        # higher limit 'large_object_gcptrs'.  The idea is that
+        # separately allocated objects are allocated immediately "old"
+        # and it's not good to have too many pointers from old to young
+        # objects.
+
+        # In this class, we assume that the 'large_object' limit is not
+        # very high, so that all objects that wouldn't easily fit in the
+        # nursery are considered large by this limit.  This is the
+        # meaning of the 'assert' below.
         self.nonlarge_max = large_object - 1
-        assert self.nonlarge_max <= self.lb_young_var_basesize
+        self.nonlarge_gcptrs_max = large_object_gcptrs - 1
+        assert self.nonlarge_gcptrs_max <= self.lb_young_var_basesize
+        assert self.nonlarge_max <= self.nonlarge_gcptrs_max
         self.large_objects_collect_trigger = self.space_size
         self.pending_external_object_list = self.AddressDeque()
-        # XXX we could use two limits: it could be larger for objects
-        # that contain gc references than for objects that don't.  The
-        # idea is that separately allocated objects are allocated
-        # immediately "old" and it's not good to have too many pointers
-        # from old to young objects.
 
     def setup(self):
         self.large_objects_list = self.AddressDeque()
@@ -60,11 +64,16 @@ class HybridGC(GenerationGC):
         # below 'nonlarge_max'.  All the following logic is usually
         # constant-folded because self.nonlarge_max, size and itemsize
         # are all constants (the arguments are constant due to
-        # inlining).
-        if not raw_malloc_usage(itemsize):
-            too_many_items = raw_malloc_usage(nonvarsize) > self.nonlarge_max
+        # inlining) and self.has_gcptr_in_varsize() is constant-folded.
+        if self.has_gcptr_in_varsize(typeid):
+            nonlarge_max = self.nonlarge_gcptrs_max
         else:
-            maxlength = self.nonlarge_max - raw_malloc_usage(nonvarsize)
+            nonlarge_max = self.nonlarge_max
+
+        if not raw_malloc_usage(itemsize):
+            too_many_items = raw_malloc_usage(nonvarsize) > nonlarge_max
+        else:
+            maxlength = nonlarge_max - raw_malloc_usage(nonvarsize)
             maxlength = maxlength // raw_malloc_usage(itemsize)
             too_many_items = length > maxlength
 
@@ -99,7 +108,11 @@ class HybridGC(GenerationGC):
             totalsize = ovfcheck(nonvarsize + varsize)
         except OverflowError:
             raise MemoryError()
-        if raw_malloc_usage(totalsize) > self.nonlarge_max:
+        if self.has_gcptr_in_varsize(typeid):
+            nonlarge_max = self.nonlarge_gcptrs_max
+        else:
+            nonlarge_max = self.nonlarge_max
+        if raw_malloc_usage(totalsize) > nonlarge_max:
             result = self.malloc_varsize_marknsweep(totalsize)
             flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
         else:
