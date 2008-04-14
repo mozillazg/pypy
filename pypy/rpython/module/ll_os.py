@@ -25,6 +25,8 @@ from pypy.rpython.lltypesystem.llmemory import raw_memcopy, sizeof,\
      itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof
 from pypy.rpython.lltypesystem.rstr import STR
 from pypy.rpython.annlowlevel import llstr
+from pypy.rlib import rgc
+from pypy.rlib.objectmodel import keepalive_until_here
 
 posix = __import__(os.name)
 
@@ -485,19 +487,37 @@ class RegisterOs(BaseLazyRegistering):
         def os_read_llimpl(fd, count):
             if count < 0:
                 raise OSError(errno.EINVAL, None)
-            inbuf = lltype.malloc(rffi.CCHARP.TO, count, flavor='raw')
-            try:
-                got = rffi.cast(lltype.Signed, os_read(fd, inbuf, count))
-                if got < 0:
-                    raise OSError(rposix.get_errno(), "os_read failed")
-                s = mallocstr(got)
-                source = cast_ptr_to_adr(inbuf) + \
-                         itemoffsetof(lltype.typeOf(inbuf).TO, 0)
-                dest = cast_ptr_to_adr(s) + offset
-                raw_memcopy(source, dest, sizeof(lltype.Char) * got)
-            finally:
-                lltype.free(inbuf, flavor='raw')
-            return hlstr(s)
+            inbuf = rgc.malloc_nonmovable(STR, count)
+            if inbuf:
+                try:
+                    realbuf = cast_ptr_to_adr(inbuf) + offset
+                    c_buf = rffi.cast(rffi.VOIDP, realbuf)
+                    got = rffi.cast(lltype.Signed, os_read(fd, c_buf, count))
+                    if got < 0:
+                        raise OSError(rposix.get_errno(), "os_read failed")
+                    if got != count:
+                        # we need to realloc
+                        s = mallocstr(got)
+                        dest = cast_ptr_to_adr(s) + offset
+                        raw_memcopy(realbuf, dest, sizeof(lltype.Char) * got)
+                        return hlstr(s)
+                    return hlstr(inbuf)
+                finally:
+                    keepalive_until_here(inbuf)
+            else:
+                inbuf = lltype.malloc(rffi.CCHARP.TO, count, flavor='raw')
+                try:
+                    got = rffi.cast(lltype.Signed, os_read(fd, inbuf, count))
+                    if got < 0:
+                        raise OSError(rposix.get_errno(), "os_read failed")
+                    s = mallocstr(got)
+                    source = cast_ptr_to_adr(inbuf) + \
+                             itemoffsetof(lltype.typeOf(inbuf).TO, 0)
+                    dest = cast_ptr_to_adr(s) + offset
+                    raw_memcopy(source, dest, sizeof(lltype.Char) * got)
+                finally:
+                    lltype.free(inbuf, flavor='raw')
+                return hlstr(s)
 
         def os_read_oofakeimpl(fd, count):
             return OOSupport.to_rstr(os.read(fd, count))
