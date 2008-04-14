@@ -457,9 +457,61 @@ class GenericGCTests(GCTest):
         res = run([])
         assert res == self.GC_CAN_MOVE
 
+    def _test_malloc_nonmovable(self):
+        TP = lltype.GcArray(lltype.Char)
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP, 3)
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        # this test would have different outcome for different
+        # gcs, please assert differently
+        run = self.runner(func)
+        return run([])
+
+    def _test_malloc_nonmovable_fixsize(self):
+        TP = lltype.GcStruct('T', ('x', lltype.Float))
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP)
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        # this test would have different outcome for different
+        # gcs, please assert differently
+        run = self.runner(func)
+        return run([])            
+
+    def test_malloc_nonmovable(self):
+        res = self._test_malloc_nonmovable()
+        if self.GC_CAN_MOVE:
+            expected = 1
+        else:
+            expected = 0
+        assert res == expected
+
+    def test_malloc_nonmovable_fixsize(self):
+        res = self._test_malloc_nonmovable_fixsize()
+        if self.GC_CAN_MOVE:
+            expected = 1
+        else:
+            expected = 0
+        assert res == expected
+
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
-    
+
     def test_many_ids(self):
         py.test.skip("fails for bad reasons in lltype.py :-(")
         class A(object):

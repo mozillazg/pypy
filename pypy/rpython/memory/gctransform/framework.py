@@ -295,20 +295,6 @@ class FrameworkGCTransformer(GCTransformer):
                                            inline=True)
         else:
             self.write_barrier_ptr = None
-        if hasattr(GCClass, "coalloc_fixedsize_clear"):
-            self.coalloc_clear_ptr = getfn(
-                GCClass.coalloc_fixedsize_clear.im_func,
-                [s_gc, annmodel.SomeAddress(),
-                 annmodel.SomeInteger(nonneg=True),
-                 annmodel.SomeInteger(nonneg=True)],
-                s_gcref, inline=True)
-            self.coalloc_varsize_clear_ptr = getfn(
-                GCClass.coalloc_varsize_clear.im_func,
-                [s_gc, annmodel.SomeAddress()] +
-                [annmodel.SomeInteger(nonneg=True) for i in range(5)],
-                s_gcref, inline=True)
-        else:
-            self.coalloc_clear_ptr = self.coalloc_varsize_clear_ptr = None
         self.statistics_ptr = getfn(GCClass.statistics.im_func,
                                     [s_gc, annmodel.SomeInteger()],
                                     annmodel.SomeInteger())
@@ -489,43 +475,6 @@ class FrameworkGCTransformer(GCTransformer):
 
     gct_fv_gc_malloc_varsize = gct_fv_gc_malloc
 
-    def gct_fv_gc_coalloc(self, hop, coallocator, flags, TYPE, *args):
-        if self.coalloc_clear_ptr is None:
-            return self.gct_fv_gc_malloc(
-                    hop, flags, TYPE, *args)
-        op = hop.spaceop
-        flavor = flags['flavor']
-        assert not flags.get("nocollect", False)
-
-        PTRTYPE = op.result.concretetype
-        assert PTRTYPE.TO == TYPE
-        type_id = self.get_type_id(TYPE)
-
-        c_type_id = rmodel.inputconst(lltype.Signed, type_id)
-        info = self.layoutbuilder.type_info_list[type_id]
-        c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
-        has_finalizer = bool(self.finalizer_funcptr_for_type(TYPE))
-        assert not has_finalizer
-
-        v_coallocator = gen_cast(hop.llops, llmemory.Address, coallocator)
-
-        if not op.opname.endswith('_varsize'):
-            malloc_ptr = self.coalloc_clear_ptr
-            args = [self.c_const_gc, v_coallocator, c_type_id, c_size]
-        else:
-            v_length = op.args[-1]
-            c_ofstolength = rmodel.inputconst(lltype.Signed, info.ofstolength)
-            c_varitemsize = rmodel.inputconst(lltype.Signed, info.varitemsize)
-            malloc_ptr = self.coalloc_varsize_clear_ptr
-            args = [self.c_const_gc, v_coallocator, c_type_id, v_length, c_size,
-                    c_varitemsize, c_ofstolength]
-        livevars = self.push_roots(hop)
-        v_result = hop.genop("direct_call", [malloc_ptr] + args,
-                             resulttype=llmemory.GCREF)
-        self.pop_roots(hop, livevars)
-        return v_result
-    gct_fv_gc_coalloc_varsize = gct_fv_gc_coalloc
-
     def gct_gc__collect(self, hop):
         op = hop.spaceop
         livevars = self.push_roots(hop)
@@ -641,6 +590,22 @@ class FrameworkGCTransformer(GCTransformer):
         hop.genop("direct_call", [self.set_max_heap_size_ptr,
                                   self.c_const_gc,
                                   v_size])
+
+    def gct_malloc_nonmovable_varsize(self, hop):
+        TYPE = hop.spaceop.result.concretetype
+        if self.gcdata.gc.moving_gc:
+            # first approximation
+            c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
+            return hop.cast_result(c)
+        return self.gct_malloc_varsize(hop)
+
+    def gct_malloc_nonmovable(self, hop):
+        TYPE = hop.spaceop.result.concretetype
+        if self.gcdata.gc.moving_gc:
+            # first approximation
+            c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
+            return hop.cast_result(c)
+        return self.gct_malloc(hop)
 
     def transform_generic_set(self, hop):
         from pypy.objspace.flow.model import Constant
