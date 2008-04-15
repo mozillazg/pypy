@@ -508,25 +508,24 @@ def alloc_buffer_for_hlstr(count):
         offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
         realbuf = cast_ptr_to_adr(buf) + offset
         c_buf = cast(VOIDP, realbuf)
-        return c_buf, buf, True
+        return c_buf, buf
     else:
         raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
-        return raw_buf, lltype.nullptr(STR), False
+        return raw_buf, lltype.nullptr(STR)
 
-def hlstr_from_buffer(buf, is_collected, allocated_size, needed_size):
+def hlstr_from_buffer(buf, allocated_size, needed_size):
     from pypy.rpython.lltypesystem.rstr import STR, mallocstr
     offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
-    if is_collected:
+    if buf:
         if allocated_size != needed_size:
             new_buf = lltype.nullptr(STR)
             try:
                 new_buf = mallocstr(needed_size)
                 dest = cast_ptr_to_adr(new_buf) + offset
-                source = cast_ptr_to_adr(buf) + \
-                         itemoffsetof(lltype.typeOf(buf).TO, 0)
+                realbuf = cast_ptr_to_adr(buf) + offset
                 ## FIXME: This is bad, because dest could potentially move
                 ## if there are threads involved.
-                raw_memcopy(source, dest, sizeof(lltype.Char) * needed_size)
+                raw_memcopy(realbuf, dest, sizeof(lltype.Char) * needed_size)
                 return hlstr(new_buf)
             finally:
                 keepalive_until_here(new_buf)
@@ -536,7 +535,7 @@ def hlstr_from_buffer(buf, is_collected, allocated_size, needed_size):
         try:
             new_buf = mallocstr(needed_size)
             source = cast_ptr_to_adr(buf) + \
-                     itemoffsetof(lltype.typeOf(buf).TO, 0)
+                     itemoffsetof(CCHARP.TO, 0)
             dest = cast_ptr_to_adr(new_buf) + offset
             ## FIXME: see above
             raw_memcopy(source, dest, sizeof(lltype.Char) * needed_size)
@@ -544,8 +543,8 @@ def hlstr_from_buffer(buf, is_collected, allocated_size, needed_size):
         finally:
             keepalive_until_here(new_buf)
         
-def keep_buffer_for_hlstr_alive_until_here(buf, is_collected):
-    if is_collected:
+def keep_buffer_for_hlstr_alive_until_here(buf):
+    if buf:
         keepalive_until_here(buf)
     else:
         lltype.free(buf, flavor='raw')
