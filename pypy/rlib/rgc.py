@@ -173,9 +173,21 @@ class SetMaxHeapSizeEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_set_max_heap_size', [v_nbytes],
                          resulttype=lltype.Void)
+
+class CollectEntry(ExtRegistryEntry):
+    _about_ = (disable_finalizers, enable_finalizers)
+
+    def compute_result_annotation(self):
+        from pypy.annotation import model as annmodel
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        opname = 'gc__' + self.instance.__name__
+        hop.exception_cannot_occur()
+        return hop.genop(opname, [], resulttype=hop.r_result)
+
 def can_move(p):
     return True
-can_move._annspecialcase_ = 'specialize:argtype(0)'
 
 class CanMoveEntry(ExtRegistryEntry):
     _about_ = can_move
@@ -189,14 +201,34 @@ class CanMoveEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_can_move', hop.args_v, resulttype=hop.r_result)
 
-class CollectEntry(ExtRegistryEntry):
-    _about_ = (disable_finalizers, enable_finalizers)
+def malloc_nonmovable(TP, n=None):
+    """ Allocate a non-moving buffer or return nullptr.
+    When running directly, will pretend that gc is always
+    moving (might be configurable in a future)
+    """
+    from pypy.rpython.lltypesystem import lltype
+    return lltype.nullptr(TP)
 
-    def compute_result_annotation(self):
-        from pypy.annotation import model as annmodel
-        return annmodel.s_None
+class MallocNonMovingEntry(ExtRegistryEntry):
+    _about_ = malloc_nonmovable
+
+    def compute_result_annotation(self, s_TP, s_n=None):
+        # basically return the same as malloc
+        from pypy.annotation.builtin import malloc
+        return malloc(s_TP, s_n)
 
     def specialize_call(self, hop):
-        opname = 'gc__' + self.instance.__name__
+        from pypy.rpython.lltypesystem import lltype
+        # XXX assume flavor and zero to be None by now
+        assert hop.args_s[0].is_constant()
+        vlist = [hop.inputarg(lltype.Void, arg=0)]
+        opname = 'malloc_nonmovable'
+        flags = {'flavor': 'gc'}
+        vlist.append(hop.inputconst(lltype.Void, flags))
+
+        if hop.nb_args == 2:
+            vlist.append(hop.inputarg(lltype.Signed, arg=1))
+            opname += '_varsize'
+
         hop.exception_cannot_occur()
-        return hop.genop(opname, [], resulttype=hop.r_result)
+        return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
