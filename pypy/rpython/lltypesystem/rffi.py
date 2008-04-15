@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
-from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof, raw_memcopy
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
@@ -15,7 +15,7 @@ from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
-from pypy.rpython.annlowlevel import llhelper, llstr
+from pypy.rpython.annlowlevel import llhelper, llstr, hlstr
 import os
 
 class UnhandledRPythonException(Exception):
@@ -500,7 +500,56 @@ def free_nonmovingbuffer(data, buf):
         lltype.free(buf, flavor='raw')
     else:
         keepalive_until_here(data)
-    
+
+def alloc_buffer_for_hlstr(count):
+    from pypy.rpython.lltypesystem.rstr import STR
+    buf = rgc.malloc_nonmovable(STR, count)
+    if buf:
+        offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+        realbuf = cast_ptr_to_adr(buf) + offset
+        c_buf = cast(VOIDP, realbuf)
+        return c_buf, buf, True
+    else:
+        raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
+        return raw_buf, lltype.nullptr(STR), False
+
+def hlstr_from_buffer(buf, is_collected, allocated_size, needed_size):
+    from pypy.rpython.lltypesystem.rstr import STR, mallocstr
+    offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+    if is_collected:
+        if allocated_size != needed_size:
+            new_buf = lltype.nullptr(STR)
+            try:
+                new_buf = mallocstr(needed_size)
+                dest = cast_ptr_to_adr(new_buf) + offset
+                source = cast_ptr_to_adr(buf) + \
+                         itemoffsetof(lltype.typeOf(buf).TO, 0)
+                ## FIXME: This is bad, because dest could potentially move
+                ## if there are threads involved.
+                raw_memcopy(source, dest, sizeof(lltype.Char) * needed_size)
+                return hlstr(new_buf)
+            finally:
+                keepalive_until_here(new_buf)
+        return hlstr(buf)
+    else:
+        new_buf = lltype.nullptr(STR)
+        try:
+            new_buf = mallocstr(needed_size)
+            source = cast_ptr_to_adr(buf) + \
+                     itemoffsetof(lltype.typeOf(buf).TO, 0)
+            dest = cast_ptr_to_adr(new_buf) + offset
+            ## FIXME: see above
+            raw_memcopy(source, dest, sizeof(lltype.Char) * needed_size)
+            return hlstr(new_buf)
+        finally:
+            keepalive_until_here(new_buf)
+        
+def keep_buffer_for_hlstr_alive_until_here(buf, is_collected):
+    if is_collected:
+        keepalive_until_here(buf)
+    else:
+        lltype.free(buf, flavor='raw')
+
 # char* -> str, with an upper bound on the length in case there is no \x00
 def charp2strn(cp, maxlen):
     l = []
