@@ -702,6 +702,8 @@ class TestLLVMRffi(BaseTestRffi):
     def test_nonmovingbuffer(self):
         py.test.skip("Somewhat buggy...")
 
+    test_nonmoving_hlstr = test_nonmovingbuffer
+
     def test_nonmovingbuffer_semispace(self):
         py.test.skip("LLVM backend error - unsupported operator")
 
