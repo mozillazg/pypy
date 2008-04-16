@@ -6,6 +6,7 @@ from pypy.rlib.rposix import get_errno, set_errno
 from pypy.translator.c.test.test_genc import compile as compile_c
 from pypy.translator.llvm.test.runtest import compile_function as compile_llvm
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
+from pypy.rpython.lltypesystem.rstr import STR
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret, MallocMismatch
@@ -429,6 +430,22 @@ class BaseTestRffi:
         res = eating_callback(pos, g)
         unregister_keepalive(pos, TP)
         assert res == 8
+
+    def test_nonmoving_hlstr(self):
+        d = 'non-moving data stuff'
+        def f():
+            gc_buf = lltype.nullptr(STR)
+            raw_buf = lltype.nullptr(CCHARP.TO)
+            try:
+                raw_buf, gc_buf = alloc_buffer_for_hlstr(len(d))
+                for i in range(len(d)):
+                    raw_buf[i] = d[i]
+                return hlstr_from_buffer(raw_buf, gc_buf, len(d), len(d)-1)
+            finally:
+                keep_buffer_for_hlstr_alive_until_here(raw_buf, gc_buf)
+        fn = self.compile(f, [], gcpolicy='ref')
+        assert fn() == d[:-1]
+    
 
     def test_nonmovingbuffer(self):
         d = 'some cool data that should not move'
