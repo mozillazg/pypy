@@ -16,6 +16,7 @@ from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.rpython.annlowlevel import llhelper, llstr, hlstr
+from pypy.rpython.lltypesystem.rstr import STR, mallocstr
 import os
 
 class UnhandledRPythonException(Exception):
@@ -501,53 +502,49 @@ def free_nonmovingbuffer(data, buf):
     else:
         keepalive_until_here(data)
 
+
+str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+
 def alloc_buffer_for_hlstr(count):
-    from pypy.rpython.lltypesystem.rstr import STR
-    buf = rgc.malloc_nonmovable(STR, count)
-    if buf:
-        offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
-        realbuf = cast_ptr_to_adr(buf) + offset
-        c_buf = cast(VOIDP, realbuf)
-        return c_buf, buf
+    gc_buf = rgc.malloc_nonmovable(STR, count)
+    if gc_buf:
+        realbuf = cast_ptr_to_adr(gc_buf) + str_chars_offset
+        raw_buf = cast(CCHARP.TO, realbuf)
+        return raw_buf, gc_buf
     else:
         raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
         return raw_buf, lltype.nullptr(STR)
 
-def hlstr_from_buffer(buf, allocated_size, needed_size):
-    from pypy.rpython.lltypesystem.rstr import STR, mallocstr
-    offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
-    if buf:
+def hlstr_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
+    if gc_buf:
         if allocated_size != needed_size:
             new_buf = lltype.nullptr(STR)
             try:
                 new_buf = mallocstr(needed_size)
-                dest = cast_ptr_to_adr(new_buf) + offset
-                realbuf = cast_ptr_to_adr(buf) + offset
+                dest = cast_ptr_to_adr(new_buf) + str_chars_offset
                 ## FIXME: This is bad, because dest could potentially move
                 ## if there are threads involved.
-                raw_memcopy(realbuf, dest, sizeof(lltype.Char) * needed_size)
+                raw_memcopy(raw_buf, dest, sizeof(lltype.Char) * needed_size)
                 return hlstr(new_buf)
             finally:
                 keepalive_until_here(new_buf)
-        return hlstr(buf)
+        return hlstr(gc_buf)
     else:
         new_buf = lltype.nullptr(STR)
         try:
             new_buf = mallocstr(needed_size)
-            source = cast_ptr_to_adr(buf) + \
-                     itemoffsetof(CCHARP.TO, 0)
-            dest = cast_ptr_to_adr(new_buf) + offset
+            dest = cast_ptr_to_adr(new_buf) + str_chars_offset
             ## FIXME: see above
-            raw_memcopy(source, dest, sizeof(lltype.Char) * needed_size)
+            raw_memcopy(raw_buf, dest, sizeof(lltype.Char) * needed_size)
             return hlstr(new_buf)
         finally:
             keepalive_until_here(new_buf)
         
-def keep_buffer_for_hlstr_alive_until_here(buf):
-    if buf:
-        keepalive_until_here(buf)
+def keep_buffer_for_hlstr_alive_until_here(raw_buf, gc_buf):
+    if gc_buf:
+        keepalive_until_here(gc_buf)
     else:
-        lltype.free(buf, flavor='raw')
+        lltype.free(raw_buf, flavor='raw')
 
 # char* -> str, with an upper bound on the length in case there is no \x00
 def charp2strn(cp, maxlen):
