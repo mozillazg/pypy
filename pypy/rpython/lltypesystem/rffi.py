@@ -502,8 +502,16 @@ def free_nonmovingbuffer(data, buf):
     else:
         keepalive_until_here(data)
 
-
+# int -> (char*, str)
 def alloc_buffer(count):
+    """
+    Returns a (raw_buffer, gc_buffer) pair, allocated with count bytes.
+    The raw_buffer can be safely passed to a native function which expects it
+    to not move. Call str_from_buffer with the returned values to get a safe
+    high-level string. When the garbage collector cooperates, this allows for
+    the process to be performed without an extra copy.
+    Make sure to call keep_buffer_alive_until_here on the returned values.
+    """
     str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
     gc_buf = rgc.malloc_nonmovable(STR, count)
     if gc_buf:
@@ -514,7 +522,13 @@ def alloc_buffer(count):
         raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
         return raw_buf, lltype.nullptr(STR)
 
+# (char*, str, int, int) -> None
 def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
+    """
+    Converts from a pair returned by alloc_buffer to a high-level string.
+    The returned string will be truncated to needed_size.
+    """
+    assert allocated_size >= needed_size
     str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
     if gc_buf:
         if allocated_size != needed_size:
@@ -539,11 +553,17 @@ def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
             return hlstr(new_buf)
         finally:
             keepalive_until_here(new_buf)
-        
+
+# (char*, str) -> None
 def keep_buffer_alive_until_here(raw_buf, gc_buf):
+    """
+    Keeps buffers alive or frees temporary buffers created by alloc_buffer.
+    This must be called after a call to alloc_buffer, usually in a try/finally
+    block.
+    """
     if gc_buf:
         keepalive_until_here(gc_buf)
-    else:
+    elif raw_buf:
         lltype.free(raw_buf, flavor='raw')
 
 # char* -> str, with an upper bound on the length in case there is no \x00
