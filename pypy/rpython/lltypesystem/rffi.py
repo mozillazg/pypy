@@ -503,7 +503,7 @@ def free_nonmovingbuffer(data, buf):
         keepalive_until_here(data)
 
 
-def alloc_buffer_for_hlstr(count):
+def alloc_buffer(count):
     str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
     gc_buf = rgc.malloc_nonmovable(STR, count)
     if gc_buf:
@@ -514,7 +514,7 @@ def alloc_buffer_for_hlstr(count):
         raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
         return raw_buf, lltype.nullptr(STR)
 
-def hlstr_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
+def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
     str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
     if gc_buf:
         if allocated_size != needed_size:
@@ -540,7 +540,7 @@ def hlstr_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
         finally:
             keepalive_until_here(new_buf)
         
-def keep_buffer_for_hlstr_alive_until_here(raw_buf, gc_buf):
+def keep_buffer_alive_until_here(raw_buf, gc_buf):
     if gc_buf:
         keepalive_until_here(gc_buf)
     else:

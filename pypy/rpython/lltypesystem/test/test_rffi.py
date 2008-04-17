@@ -431,18 +431,18 @@ class BaseTestRffi:
         unregister_keepalive(pos, TP)
         assert res == 8
 
-    def test_nonmoving_hlstr(self):
+    def test_nonmoving(self):
         d = 'non-moving data stuff'
         def f():
             gc_buf = lltype.nullptr(STR)
             raw_buf = lltype.nullptr(CCHARP.TO)
             try:
-                raw_buf, gc_buf = alloc_buffer_for_hlstr(len(d))
+                raw_buf, gc_buf = alloc_buffer(len(d))
                 for i in range(len(d)):
                     raw_buf[i] = d[i]
-                return hlstr_from_buffer(raw_buf, gc_buf, len(d), len(d)-1)
+                return str_from_buffer(raw_buf, gc_buf, len(d), len(d)-1)
             finally:
-                keep_buffer_for_hlstr_alive_until_here(raw_buf, gc_buf)
+                keep_buffer_alive_until_here(raw_buf, gc_buf)
         fn = self.compile(f, [], gcpolicy='ref')
         assert fn() == d[:-1]
     
@@ -702,7 +702,7 @@ class TestLLVMRffi(BaseTestRffi):
     def test_nonmovingbuffer(self):
         py.test.skip("Somewhat buggy...")
 
-    test_nonmoving_hlstr = test_nonmovingbuffer
+    test_nonmoving = test_nonmovingbuffer
 
     def test_nonmovingbuffer_semispace(self):
         py.test.skip("LLVM backend error - unsupported operator")

@@ -490,14 +490,14 @@ class RegisterOs(BaseLazyRegistering):
             raw_buf = lltype.nullptr(rffi.CCHARP.TO)    
             gc_buf = lltype.nullptr(STR)
             try:
-                raw_buf, gc_buf = rffi.alloc_buffer_for_hlstr(count)
+                raw_buf, gc_buf = rffi.alloc_buffer(count)
                 void_buf = rffi.cast(rffi.VOIDP, raw_buf)
                 got = rffi.cast(lltype.Signed, os_read(fd, void_buf, count))
                 if got < 0:
                     raise OSError(rposix.get_errno(), "os_read failed")
-                return rffi.hlstr_from_buffer(raw_buf, gc_buf, count, got)
+                return rffi.str_from_buffer(raw_buf, gc_buf, count, got)
             finally:
-                rffi.keep_buffer_for_hlstr_alive_until_here(raw_buf, gc_buf)
+                rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
             
         def os_read_oofakeimpl(fd, count):
             return OOSupport.to_rstr(os.read(fd, count))
