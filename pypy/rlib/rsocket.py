@@ -814,14 +814,13 @@ class RSocket(object):
         if timeout == 1:
             raise SocketTimeout
         elif timeout == 0:
-            buf = mallocbuf(buffersize)
+            raw_buf, gc_buf = rffi.alloc_buffer(buffersize)
             try:
-                read_bytes = _c.socketrecv(self.fd, buf, buffersize, flags)
+                read_bytes = _c.socketrecv(self.fd, raw_buf, buffersize, flags)
                 if read_bytes >= 0:
-                    assert read_bytes <= buffersize
-                    return ''.join([buf[i] for i in range(read_bytes)])
+                    return rffi.str_from_buffer(raw_buf, gc_buf, buffersize, read_bytes)
             finally:
-                lltype.free(buf, flavor='raw')
+                rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
         raise self.error_handler()
 
     def recvfrom(self, buffersize, flags=0):
@@ -832,11 +831,11 @@ class RSocket(object):
         if timeout == 1:
             raise SocketTimeout
         elif timeout == 0:
-            buf = mallocbuf(buffersize)
+            raw_buf, gc_buf = rffi.alloc_buffer(buffersize)
             try:
                 address, addr_p, addrlen_p = self._addrbuf()
                 try:
-                    read_bytes = _c.recvfrom(self.fd, buf, buffersize, flags,
+                    read_bytes = _c.recvfrom(self.fd, raw_buf, buffersize, flags,
                                              addr_p, addrlen_p)
                     addrlen = rffi.cast(lltype.Signed, addrlen_p[0])
                 finally:
@@ -847,10 +846,10 @@ class RSocket(object):
                         address.addrlen = addrlen
                     else:
                         address = None
-                    data = ''.join([buf[i] for i in range(read_bytes)])
+                    data = rffi.str_from_buffer(raw_buf, gc_buf, buffersize, read_bytes)
                     return (data, address)
             finally:
-                lltype.free(buf, flavor='raw')
+                rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
         raise self.error_handler()
 
     def send_raw(self, dataptr, length, flags=0):
