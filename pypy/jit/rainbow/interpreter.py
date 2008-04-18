@@ -38,8 +38,8 @@ class JitCode(object):
                  interiordescs, exceptioninstances, oopspecdescs,
                  promotiondescs, called_bytecodes, num_mergepoints,
                  graph_color, calldescs, metacalldescs,
-                 indirectcalldescs, strings, is_portal, owncalldesc,
-                 gv_ownfnptr):
+                 indirectcalldescs, strings, methdescs, is_portal,
+                 owncalldesc, gv_ownfnptr):
         # XXX quite a lot of lists of descs here...  At least we
         # share identical lists between the numberous prebuilt
         # JitCode instances.
@@ -63,6 +63,7 @@ class JitCode(object):
         self.metacalldescs = metacalldescs
         self.indirectcalldescs = indirectcalldescs
         self.strings = strings
+        self.methdescs = methdescs
         self.is_portal = is_portal
         self.owncalldesc = owncalldesc
         self.gv_ownfnptr = gv_ownfnptr
@@ -172,6 +173,10 @@ class arguments(object):
                     index = self.load_int()
                     string = self.getjitcode().strings[index]
                     args += (string, )
+                elif argspec == "methdesc":
+                    index = self.load_int()
+                    tok = self.getjitcode().methdescs[index]
+                    args += (tok, )
                 elif argspec == "oopspec":
                     oopspecindex = self.load_int()
                     oopspec = self.getjitcode().oopspecdescs[oopspecindex]
@@ -661,15 +666,6 @@ class JitInterpreter(object):
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)
 
-    @arguments("green_varargs", "red_varargs", "string")
-    def opimpl_red_oosend(self, greenargs, redargs, methname):
-        selfbox = redargs[0]
-        vstruct = selfbox.content
-        assert isinstance(vstruct, rcontainer.VirtualStruct), 'TODO???'
-        bytecode = vstruct.typedesc.methodcodes[methname]
-        self.run(self.jitstate, bytecode, greenargs, redargs,
-                 start_bytecode_loop=False)
-
     @arguments(returns="green")
     def opimpl_yellow_retrieve_result(self):
         # XXX all this jitstate.greens business is a bit messy
@@ -1088,6 +1084,21 @@ class OOTypeJitInterpreter(JitInterpreter):
         return rtimeshift.genptreq(self.jitstate, ptrbox1,
                                    ptrbox2, False)
 
+    @arguments("green_varargs", "red_varargs", "string")
+    def opimpl_red_oosend(self, greenargs, redargs, methname):
+        selfbox = redargs[0]
+        vstruct = selfbox.content
+        assert isinstance(vstruct, rcontainer.VirtualStruct), 'TODO???'
+        bytecode = vstruct.typedesc.methodcodes[methname]
+        self.run(self.jitstate, bytecode, greenargs, redargs,
+                 start_bytecode_loop=False)
+
+    @arguments("red_varargs", "methdesc", "bool")
+    def opimpl_external_oosend(self, redargs, methdesc, has_result):
+        result = rtimeshift.gen_external_oosend(self.jitstate, redargs,
+                                                methdesc)
+        if has_result:
+            self.red_result(result)
 
 class DebugTrace(object):
     def __init__(self, *args):

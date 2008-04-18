@@ -902,7 +902,8 @@ class VirtualStruct(VirtualContainer):
                 self.ownbox.setgenvar_hint(gv, known_nonzero=True)
                 self.ownbox.content = None
                 return
-        debug_print(lltype.Void, "FORCE CONTAINER: "+ typedesc.TYPE._name)
+        name = getattr(typedesc.TYPE, '_name', str(typedesc.TYPE))
+        debug_print(lltype.Void, "FORCE CONTAINER: "+ name)
         #debug_pdb(lltype.Void)
         genvar = jitstate.ts.genop_malloc_fixedsize(builder, typedesc.alloctoken)
         # force the box pointing to this VirtualStruct
