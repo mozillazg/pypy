@@ -2341,4 +2341,3 @@ class TestOOType(SimpleTests):
     test_red_varsized_struct = _skip
     test_array_of_voids = _skip
     test_compile_time_const_tuple = _skip    # needs vdict
-    test_green_char_at_merge = _skip

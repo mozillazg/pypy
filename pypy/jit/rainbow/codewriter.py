@@ -166,6 +166,14 @@ class IndirectCallsetDesc(object):
         self.calldesc = CallDesc(codewriter.RGenOp, codewriter.exceptiondesc,
                                  lltype.typeOf(fnptr), colororder)
 
+class MethodDesc(object):
+
+    def __init__(self, RGenOp, SELFTYPE, methname):
+        _, meth = SELFTYPE._lookup(methname)
+        METH = ootype.typeOf(meth)
+        self.methtoken = RGenOp.methToken(SELFTYPE, methname)
+        self.redboxbuilder = rvalue.ll_redboxbuilder(METH.RESULT)
+
 
 class BytecodeWriter(object):
 
@@ -236,6 +244,7 @@ class BytecodeWriter(object):
         self.indirectcalldescs = []
         self.metacalldescs = []
         self.strings = []
+        self.methdescs = []
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -275,6 +284,8 @@ class BytecodeWriter(object):
         self.indirectcalldesc_positions = {}
         # mapping string to index
         self.string_positions = {}
+        # mapping methdesc to index
+        self.methdesc_positions = {}
 
         self.graph = graph
         self.mergepoint_set = {}
@@ -306,6 +317,7 @@ class BytecodeWriter(object):
                           self.sharelist("metacalldescs"),
                           self.sharelist("indirectcalldescs"),
                           self.sharelist("strings"),
+                          self.sharelist("methdescs"),
                           self.is_portal,
                           owncalldesc,
                           gv_ownfnptr)
@@ -833,6 +845,16 @@ class BytecodeWriter(object):
         result = len(self.strings)
         self.strings.append(s)
         self.string_positions[s] = result
+        return result
+
+    def methdesc_position(self, TYPE, name):
+        key = (TYPE, name)
+        if key in self.methdesc_positions:
+            return self.methdesc_positions[tok]
+        result = len(self.methdescs)
+        desc = MethodDesc(self.RGenOp, TYPE, name)
+        self.methdescs.append(desc)
+        self.methdesc_positions[key] = result
         return result
 
     def interiordesc(self, op, PTRTYPE, nb_offsets):
@@ -1649,9 +1671,11 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         name = op.args[0].value
         opargs = op.args[1:]
         SELFTYPE = opargs[0].concretetype
+        has_result = (self.varcolor(op.result) != "gray" and
+                      op.result.concretetype != lltype.Void)
+
         if SELFTYPE.oopspec_name is not None:
             # we are calling a method like List.ll_getitem or so
-            hasresult = op.result.concretetype != lltype.Void
             _, meth = SELFTYPE._lookup(name)
             oopspecdescindex = self.oopspecdesc_position('send', meth, withexc)
             oopspecdesc = self.oopspecdescs[oopspecdescindex]
@@ -1664,43 +1688,47 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             hs_self = self.hannotator.binding(opargs[0])
             deepfrozen = hs_self.deepfrozen
 
-            self.emit("red_oopspec_call%s_%s" % ("_noresult" * (not hasresult),
+            self.emit("red_oopspec_call%s_%s" % ("_noresult" * (not has_result),
                                                  len(args)))
             self.emit(oopspecdescindex)
             self.emit(deepfrozen)
             self.emit(*args)
             return
 
-        # normal oosend
-        # XXX: share code with serialize_op_indirect_call
-        has_result = (self.varcolor(op.result) != "gray" and
-                      op.result.concretetype != lltype.Void)
+        # real oosend, either red or const
         assert not self.hannotator.policy.hotpath
-        emitted_args = []
-        for v in op.args[1:]:
-            if v.concretetype == lltype.Void:
-                continue
-            emitted_args.append(self.serialize_oparg("red", v))
 
+        if kind == "residual":
+            # oosend to an external method (e.g. ootype.String.*)
+            emitted_args = []
+            for v in op.args[1:]:
+                if v.concretetype == lltype.Void:
+                    continue
+                emitted_args.append(self.serialize_oparg("red", v))
+            self.emit("external_oosend")
+            self.emit(len(emitted_args))
+            self.emit(*emitted_args)
+            methdescindex = self.methdesc_position(SELFTYPE, name)
+            self.emit(methdescindex)
+            self.emit(has_result)
+        else:
+            # normal oosend
+            graph2tsgraph = dict(self.graphs_from(op))
+            self.fill_methodcodes(SELFTYPE, name, graph2tsgraph)
+            args = graph2tsgraph.values()[0].getargs()
+            emitted_args = self.args_of_call(op.args[1:], args)
+            self.emit("red_oosend")
+            self.emit(*emitted_args)
+            methnameindex = self.string_position(name)
+            self.emit(methnameindex)
 
         if has_result:
             self.register_redvar(op.result)
 
-        graph2tsgraph = dict(self.graphs_from(op))
-        #type2graph = self.collect_graphs_and_types(op, graph2tsgraph)
-        self.fill_methodcodes(SELFTYPE, name, graph2tsgraph)
-        args = graph2tsgraph.values()[0].getargs()
-        emitted_args = self.args_of_call(op.args[1:], args)
-        self.emit("red_oosend")
-        self.emit(*emitted_args)
-        #setdescindex = self.oosenddesc_position(type2graph)
-        #self.emit(setdescindex)
-        methnameindex = self.string_position(name)
-        self.emit(methnameindex)
         if kind == "yellow":
             self.emit("yellow_retrieve_result_as_red")
             self.emit(self.type_position(op.result.concretetype))
-        elif kind in ("gray", "red"):
+        elif kind in ("gray", "red", "residual"):
             pass
         else:
             assert 0, "unknown call kind %s" % (kind, )

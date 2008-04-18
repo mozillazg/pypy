@@ -88,6 +88,7 @@ class GenBuilder(object):
 ##     def genop_malloc_fixedsize(self, alloctoken):
 ##     def genop_malloc_varsize(self, varsizealloctoken, gv_size):
 ##     def genop_call(self, sigtoken, gv_fnptr, args_gv):
+##     def genop_oosend(self, methtoken, gv_self, args_gv):
 ##     def genop_same_as(self, gv_x):
 ##     def genop_debug_pdb(self):    # may take an args_gv later
 ##     def genop_cast_int_to_ptr(self, kind, gv_int)
@@ -473,6 +474,9 @@ class ReplayBuilder(GenBuilder):
         return dummy_var
         
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
+        return dummy_var
+
+    def genop_oosend(self, methtoken, gv_obj, args_gv):
         return dummy_var
 
     def genop_same_as(self, gv_x):

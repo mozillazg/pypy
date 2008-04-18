@@ -595,6 +595,14 @@ def learn_nonzeroness(jitstate, ptrbox, nonzeroness):
 ##def ll_gvar_from_constant(jitstate, ll_value):
 ##    return jitstate.curbuilder.rgenop.genconst(ll_value)
 
+def gen_external_oosend(jitstate, argboxes, methdesc):
+    builder = jitstate.curbuilder
+    selfbox = argboxes[0]
+    gv_selfbox = selfbox.getgenvar(jitstate)
+    args_gv = [argbox.getgenvar(jitstate) for argbox in argboxes[1:]]
+    jitstate.prepare_for_residual_call() # XXX?
+    gv_result = builder.genop_oosend(methdesc.methtoken, gv_selfbox, args_gv)
+    return methdesc.redboxbuilder(gv_result)
 
 def gen_residual_call(jitstate, calldesc, funcbox, argboxes):
     builder = jitstate.curbuilder
