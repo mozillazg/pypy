@@ -489,6 +489,7 @@ class List(BuiltinADTType):
     SELFTYPE_T = object()
     ITEMTYPE_T = object()
     oopspec_name = 'list'
+    oopspec_new = 'new(0)'
 
     def __init__(self, ITEMTYPE=None):
         self._ITEMTYPE = ITEMTYPE
@@ -578,6 +579,7 @@ class Dict(BuiltinADTType):
     KEYTYPE_T = object()
     VALUETYPE_T = object()
     oopspec_name = 'dict'
+    oopspec_new = 'new()'
 
     def __init__(self, KEYTYPE=None, VALUETYPE=None):
         self._KEYTYPE = KEYTYPE
@@ -1446,6 +1448,7 @@ class _dict(_builtin_type):
         assert key in self._dict
         assert key == self._last_key
         return self._dict[key]
+    ll_get.oopargcheck = lambda d, key: bool(d)
 
     def ll_set(self, key, value):
         # NOT_RPYTHON
@@ -1469,6 +1472,7 @@ class _dict(_builtin_type):
         assert typeOf(key) == self._TYPE._KEYTYPE
         self._last_key = key
         return key in self._dict
+    ll_contains.oopargcheck = lambda d, key: bool(d)
 
     def ll_clear(self):
         self._dict.clear()

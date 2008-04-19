@@ -4,7 +4,7 @@ from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
 from pypy.rlib.jit import hint
 
 
-class TestVDict(InterpretationTest):
+class VDictTest(InterpretationTest):
     type_system = "lltype"
 
     def test_vdict(self):
@@ -73,3 +73,10 @@ class TestVDict(InterpretationTest):
         res = self.interpret(ll_function, [3, 2], [0, 1], policy=P_OOPSPEC)
         assert res == 54
         self.check_insns({})
+
+
+class TestOOType(VDictTest):
+    type_system = "ootype"
+
+class TestLLType(VDictTest):
+    type_system = "lltype"
