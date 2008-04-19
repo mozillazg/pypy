@@ -1085,23 +1085,25 @@ class BytecodeWriter(object):
 
             self.emit(label(("after indirect call", op)))
 
-
-    def handle_oopspec_call(self, op, withexc):
+    def serialize_argtuple(self, opargs, argtuple):
         from pypy.jit.timeshifter.oop import Index
-        fnobj = get_funcobj(op.args[0].value)
-        oopspecdescindex = self.oopspecdesc_position('call', fnobj, withexc)
-        oopspecdesc = self.oopspecdescs[oopspecdescindex]
-        opargs = op.args[1:]
         args_v = []
         args = []
-        for obj in oopspecdesc.argtuple:
+        for obj in argtuple:
             if isinstance(obj, Index):
                 v = opargs[obj.n]
             else:
                 v = flowmodel.Constant(obj, lltype.typeOf(obj))
             args_v.append(v)
             args.append(self.serialize_oparg("red", v))
+        return args, args_v
 
+    def handle_oopspec_call(self, op, withexc):
+        fnobj = get_funcobj(op.args[0].value)
+        oopspecdescindex = self.oopspecdesc_position('call', fnobj, withexc)
+        oopspecdesc = self.oopspecdescs[oopspecdescindex]
+        opargs = op.args[1:]
+        args, args_v = self.serialize_argtuple(opargs, oopspecdesc.argtuple)
         if oopspecdesc.is_method:
             hs_self = self.hannotator.binding(
                 opargs[oopspecdesc.argtuple[0].n])
@@ -1650,12 +1652,12 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             # XXX: works only for List
             oopspecdescindex = self.oopspecdesc_position('new', TYPE, False)
             oopspecdesc = self.oopspecdescs[oopspecdescindex]
+            args, args_v = self.serialize_argtuple([], oopspecdesc.argtuple)
             deepfrozen = False
-            index = self.serialize_oparg("red", flowmodel.Constant(0, lltype.Signed))
-            self.emit('red_oopspec_call_1')
+            self.emit('red_oopspec_call_%s' % len(args))
             self.emit(oopspecdescindex)
             self.emit(deepfrozen)
-            self.emit(index)
+            self.emit(*args)
             self.register_redvar(op.result)
             return
 
@@ -1693,6 +1695,8 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             self.emit(oopspecdescindex)
             self.emit(deepfrozen)
             self.emit(*args)
+            if has_result:
+                self.register_redvar(op.result)
             return
 
         # real oosend, either red or const

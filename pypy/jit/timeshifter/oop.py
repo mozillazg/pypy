@@ -163,6 +163,18 @@ class AbstractOopSpecDesc:
     def __repr__(self):
         return '<%s(%s)>' % (self.__class__.__name__, self.method)
 
+def parse_oopspec(oopspec, argnames):
+    # parse the oopspec and fill in the arguments
+    operation_name, args = oopspec.split('(', 1)
+    assert args.endswith(')')
+    args = args[:-1] + ','     # trailing comma to force tuple syntax
+    if args.strip() == ',':
+        args = '()'
+    nb_args = len(argnames)
+    argname2index = dict(zip(argnames, [Index(n) for n in range(nb_args)]))
+    argtuple = eval(args, argname2index)
+    return operation_name, argtuple
+
 class CallOopSpecDesc(AbstractOopSpecDesc):
 
     def _setup_oopdesc(self, RGenOp, fnobj):
@@ -172,16 +184,9 @@ class CallOopSpecDesc(AbstractOopSpecDesc):
         ll_func = fnobj._callable
         nb_args = len(FUNCTYPE.ARGS)
 
-        # parse the oopspec and fill in the arguments
-        operation_name, args = ll_func.oopspec.split('(', 1)
-        assert args.endswith(')')
-        args = args[:-1] + ','     # trailing comma to force tuple syntax
-        if args.strip() == ',':
-            args = '()'
         argnames = ll_func.func_code.co_varnames[:nb_args]
-        argname2index = dict(zip(argnames, [Index(n) for n in range(nb_args)]))
-        self.argtuple = eval(args, argname2index)
-        # end of rather XXX'edly hackish parsing
+        operation_name, argtuple = parse_oopspec(ll_func.oopspec, argnames)
+        self.argtuple = argtuple
 
         self.OOPARGTYPES = []
         arg_llsig_to_oopsig = {}
@@ -245,6 +250,9 @@ class NewOopSpecDesc(AbstractOopSpecDesc):
         self.typename = TYPE.oopspec_name
         self.method = 'oop_new%s' % self.typename
         self.is_method = False
+        opname, argtuple = parse_oopspec(TYPE.oopspec_new, [])
+        assert opname == 'new'
+        self.argtuple = argtuple
 
         def allocate():
             return ootype.new(TYPE)
@@ -262,7 +270,7 @@ class SendOopSpecDesc(AbstractOopSpecDesc):
         METH = ootype.typeOf(meth)
         assert METH.SELFTYPE is not None, 'fix ootype'
         self.SELFTYPE = METH.SELFTYPE
-        self.ARGS = METH.ARGS
+        self.ARGS = [METH.SELFTYPE] + list(METH.ARGS)
         self.RESULT = METH.RESULT
 
         # we assume the number and position of the arguments are the
@@ -312,8 +320,15 @@ def maybe_on_top_of_llinterp(exceptiondesc, fnptr):
     exc_data_ptr = exceptiondesc.exc_data_ptr
     assert exceptiondesc.rtyper is not None
     llinterp = LLInterpreter(exceptiondesc.rtyper, exc_data_ptr=exc_data_ptr)
-    def on_top_of_llinterp(*args):
-        return llinterp.eval_graph(get_funcobj(fnptr).graph, list(args))
+    funcobj = get_funcobj(fnptr)
+    if hasattr(funcobj, 'graph'):
+        def on_top_of_llinterp(*args):
+            return llinterp.eval_graph(funcobj.graph, list(args))
+    else:
+        assert isinstance(fnptr, ootype._meth)
+        assert hasattr(fnptr, '_callable')
+        def on_top_of_llinterp(*args):
+            return fnptr._callable(*args)
     return on_top_of_llinterp
 
 class Entry(ExtRegistryEntry):

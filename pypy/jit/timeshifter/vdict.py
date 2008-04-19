@@ -1,6 +1,7 @@
 import operator
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rdict
+from pypy.rpython.ootypesystem import ootype
 from pypy.jit.timeshifter.rcontainer import VirtualContainer, FrozenContainer
 from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue, oop
@@ -8,9 +9,15 @@ from pypy.rlib.objectmodel import r_dict
 
 HASH = lltype.Signed
 
+def TypeDesc(RGenOp, rtyper, exceptiondesc, DICT):
+    if rtyper.type_system.name == 'lltypesystem':
+        return LLTypeDictTypeDesc(RGenOp, rtyper, exceptiondesc, DICT)
+    else:
+        return OOTypeDictTypeDesc(RGenOp, rtyper, exceptiondesc, DICT)
+
+
 # XXXXXXXXXX! ARGH.
 # cannot use a dictionary as the item_boxes at all, because of order issues
-
 
 class LLEqDesc(object):
     __metaclass__ = cachedtype
@@ -101,37 +108,17 @@ class LLEqDesc(object):
         VirtualDict.FrozenVirtualDict = FrozenVirtualDict
 
 
-class DictTypeDesc(object):
+class AbstractDictTypeDesc(object):
     __metaclass__ = cachedtype
 
     def __init__(self, RGenOp, rtyper, exceptiondesc, DICT):
-        bk = rtyper.annotator.bookkeeper
         self.DICT = DICT
-        self.DICTPTR = lltype.Ptr(DICT)
+        self.DICTPTR = self.Ptr(DICT)
         self.ptrkind = RGenOp.kindToken(self.DICTPTR)
 
-        argtypes = [bk.immutablevalue(DICT)]
-        ll_newdict_ptr = rtyper.annotate_helper_fn(rdict.ll_newdict,
-                                                   argtypes)
-        self.gv_ll_newdict = RGenOp.constPrebuiltGlobal(ll_newdict_ptr)
-        self.tok_ll_newdict = RGenOp.sigToken(lltype.typeOf(ll_newdict_ptr).TO)
+        self._setup(RGenOp, rtyper, DICT)
 
-        argtypes = [self.DICTPTR, DICT.KEY, DICT.VALUE, HASH]
-        ll_insertclean = rtyper.annotate_helper_fn(rdict.ll_dict_insertclean,
-                                                    argtypes)
-        self.gv_ll_insertclean = RGenOp.constPrebuiltGlobal(ll_insertclean)
-        self.tok_ll_insertclean = RGenOp.sigToken(
-            lltype.typeOf(ll_insertclean).TO)
-
-        # XXX some fishing that only works if the DICT does not come from
-        # an r_dict
-        if DICT.keyeq is None:
-            keyeq = operator.eq
-        else:
-            assert isinstance(DICT.keyeq, lltype.staticAdtMethod)
-            keyeq = DICT.keyeq.__get__(42)
-        assert isinstance(DICT.keyhash, lltype.staticAdtMethod)
-        keyhash = DICT.keyhash.__get__(42)
+        keyeq, keyhash = self._get_eq_hash(DICT)
         keydesc = LLEqDesc(DICT.KEY, keyeq, keyhash)
         self.VirtualDict = keydesc.VirtualDict
 
@@ -142,7 +129,7 @@ class DictTypeDesc(object):
 
     def factory(self):
         vdict = self.VirtualDict(self)
-        box = rvalue.PtrRedBox(known_nonzero=True)
+        box = self.PtrRedBox(known_nonzero=True)
         box.content = vdict
         vdict.ownbox = box
         return box
@@ -165,8 +152,69 @@ class DictTypeDesc(object):
         self.allocate = allocate
         self.perform_setitem = perform_setitem
 
-TypeDesc = DictTypeDesc
 
+class LLTypeDictTypeDesc(AbstractDictTypeDesc):
+
+    Ptr = staticmethod(lltype.Ptr)
+    PtrRedBox = rvalue.PtrRedBox
+
+    def _setup(self, RGenOp, rtyper, DICT):
+        bk = rtyper.annotator.bookkeeper
+        argtypes = [bk.immutablevalue(DICT)]
+        ll_newdict_ptr = rtyper.annotate_helper_fn(rdict.ll_newdict,
+                                                   argtypes)
+        self.gv_ll_newdict = RGenOp.constPrebuiltGlobal(ll_newdict_ptr)
+        self.tok_ll_newdict = RGenOp.sigToken(lltype.typeOf(ll_newdict_ptr).TO)
+
+        argtypes = [self.DICTPTR, DICT.KEY, DICT.VALUE, HASH]
+        ll_insertclean = rtyper.annotate_helper_fn(rdict.ll_dict_insertclean,
+                                                    argtypes)
+        self.gv_ll_insertclean = RGenOp.constPrebuiltGlobal(ll_insertclean)
+        self.tok_ll_insertclean = RGenOp.sigToken(
+            lltype.typeOf(ll_insertclean).TO)
+
+    def _get_eq_hash(self, DICT):
+        # XXX some fishing that only works if the DICT does not come from
+        # an r_dict
+        if DICT.keyeq is None:
+            keyeq = operator.eq
+        else:
+            assert isinstance(DICT.keyeq, lltype.staticAdtMethod)
+            keyeq = DICT.keyeq.__get__(42)
+        assert isinstance(DICT.keyhash, lltype.staticAdtMethod)
+        keyhash = DICT.keyhash.__get__(42)
+        return keyeq, keyhash
+
+    def gen_newdict(self, builder, args_gv):
+        return builder.genop_call(self.tok_ll_newdict,
+                                  self.gv_ll_newdict,
+                                  args_gv)
+
+    def gen_insertclean(self, builder, args_gv):
+        return builder.genop_call(typedesc.tok_ll_insertclean,
+                                  typedesc.gv_ll_insertclean,
+                                  args_gv)
+
+
+
+class OOTypeDictTypeDesc(AbstractDictTypeDesc):
+
+    Ptr = staticmethod(lambda T: T)
+    PtrRedBox = rvalue.InstanceRedBox
+
+    def _setup(self, RGenOp, rtyper, DICT):
+        assert not isinstance(DICT, ootype.CustomDict), 'TODO'
+        self.alloctoken = RGenOp.allocToken(DICT)
+        self.tok_ll_set = RGenOp.methToken(DICT, 'll_set')
+
+    def _get_eq_hash(self, DICT):
+        return operator.eq, hash
+
+    def gen_newdict(self, builder, args_gv):
+        XXX
+
+    def gen_insertclean(self, builder, args_gv):
+        XXX
 
 class AbstractFrozenVirtualDict(FrozenContainer):
     _attrs_ = ('typedesc',)
@@ -232,18 +280,14 @@ class AbstractVirtualDict(VirtualContainer):
         items = self.getitems_and_makeempty(builder.rgenop)
 
         args_gv = []
-        gv_dict = builder.genop_call(typedesc.tok_ll_newdict,
-                                     typedesc.gv_ll_newdict,
-                                     args_gv)
+        gv_dict = typedesc.gen_newdict(builder, args_gv)
         self.ownbox.setgenvar_hint(gv_dict, known_nonzero=True)
         self.ownbox.content = None
         for gv_key, valuebox, hash in items:
             gv_hash = builder.rgenop.genconst(hash)
             gv_value = valuebox.getgenvar(jitstate)
             args_gv = [gv_dict, gv_key, gv_value, gv_hash]
-            builder.genop_call(typedesc.tok_ll_insertclean,
-                               typedesc.gv_ll_insertclean,
-                               args_gv)
+            typedesc.gen_insertclean(builder, args_gv)
 
     def freeze(self, memo):
         contmemo = memo.containers
@@ -333,3 +377,7 @@ def oop_dict_contains(jitstate, oopspecdesc, deepfrozen, selfbox, keybox):
         return oopspecdesc.residual_call(jitstate, [selfbox, keybox],
                                          deepfrozen=deepfrozen)
 oop_dict_contains.couldfold = True
+
+oop_dict_method_set = oop_dict_setitem
+oop_dict_method_get = oop_dict_getitem
+oop_dict_method_contains = oop_dict_contains
