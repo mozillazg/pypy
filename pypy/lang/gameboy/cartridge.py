@@ -2,7 +2,7 @@
 # ___________________________________________________________________________
 
 from pypy.lang.gameboy import constants
-
+import os;
 
 def hasCartridgeBattery(self, cartridgeType):    
     return (cartridgeType == constants.TYPE_MBC1_RAM_BATTERY \
@@ -33,12 +33,52 @@ class InvalidMemoryBankTypeError(Exception):
 
 class CartridgeManager(object):
     
-    def __init__(self, storeDriver, clockDriver):
-        self.store = storeDriver
+    def __init__(self, clockDriver):
         self.clock = clockDriver
+        self.cartridge = None
+        
+    def reset(self):
+        if not self.hasBattery():
+            self.ram[0:len(self.ram):1] = 0xFF
+        self.mbc.reset()
+
+    def read(self, address):
+        return self.mbc.read(address)
     
+    def write(self, address, data):
+        self.mbc.write(address, data)
+    
+    def load(self, cartridge):
+        self.cartridge = cartridge
+        self.rom  = self.cartridge.read()
+        self.checkROM()
+        self.createRAM()
+        self.loadBattery()
+        self.mbc = self.createBankController(self.getCartridgeType(), rom, ram, clock)
+        
+    def checkROM(self):
+        if not self.verifyHeader():
+            raise Exeption("Cartridge header is corrupted")
+        if romSize < self.getROMSize():
+            raise Exeption("Cartridge is truncated")
+        
+    def createRAM(self):
+        ramSize = self.getRAMSize()
+        if (getCartridgeType() >= constants.TYPE_MBC2
+                and getCartridgeType() <= constants.TYPE_MBC2_BATTERY):
+            ramSize = 512
+        self.ram = [0xFF]*ramSize
+        
+    def loadBattery(self):
+        if self.store.hasBattery(cartridgeName):
+            self.store.readBattery(cartridgeName, self.ram)
+
+    def save(self, cartridgeName):
+        if self.hasBattery():
+            self.store.writeBattery(cartridgeName, self.ram)
+            
     def getCartridgeType(self):
-        return self.rom[constants.CARTRIDGE_TYPE_ADDRESS] & 0xFF
+        return self.rom[constants.MEMORY_BANK_MAPPING] & 0xFF
     
     def getRom(self):
         return self.rom
@@ -70,50 +110,6 @@ class CartridgeManager(object):
     def hasBattery(self):
         return hasCartridgeBattery(self.getCartridgeType())
     
-    def reset(self):
-        if not self.hasBattery():
-            self.ram[0:len(self.ram):1] = 0xFF
-        self.mbc.reset()
-
-    def read(self, address):
-        return self.mbc.read(address)
-    
-    def write(self, address, data):
-        self.mbc.write(address, data)
-    
-    def load(self, cartridgeName):
-        self.loadROM()
-        self.checkROM()
-        self.createRAM()
-        self.loadBattery()
-        self.mbc = self.createBankController(self.getCartridgeType(), rom, ram, clock)
-    
-    def loadROM(self):
-        romSize = self.store.getCartridgeSize(cartridgeName)
-        self.rom = [0]*romSize
-        self.store.readCartridge(cartridgeName, self.rom)
-        
-    def checkROM(self):
-        if not self.verifyHeader():
-            raise Exeption("Cartridge header is corrupted")
-        if romSize < self.getROMSize():
-            raise Exeption("Cartridge is truncated")
-        
-    def createRAM(self):
-        ramSize = self.getRAMSize()
-        if (getCartridgeType() >= constants.TYPE_MBC2
-                and getCartridgeType() <= constants.TYPE_MBC2_BATTERY):
-            ramSize = 512
-        self.ram = [0xFF]*ramSize
-        
-    def loadBattery(self):
-        if self.store.hasBattery(cartridgeName):
-            self.store.readBattery(cartridgeName, ram)
-
-    def save(self, cartridgeName):
-        if self.hasBattery():
-            self.store.writeBattery(cartridgeName, self.ram)
-    
     def verify(self):
         checksum = 0
         for address in range(len(self.rom)):
@@ -132,92 +128,55 @@ class CartridgeManager(object):
     def createBankController(self, type, rom, ram, clockDriver):
         return MEMORY_BANK_MAPPING[type](rom, ram, clockDriver)
 
-def CartridgeStoreManager(object):
+
     
-    def __init__(self):
-        self.cartridgeName = ""
+def Cartridge(object):
+    
+    def __init__(file=None):
+        if file != None:
+            self.load(file)
         
-    def setCartridgeName(self, cartridgeName):
-        self.cartridgeName = cartridgeName
-        self.batteryName = self.createBatteryName()
-        self.cartridgeFile = open(self.cartridgeName)
-        self.batteryFile = open(self.batteryName)
+    def load(self, cartridgeFilePath):
+        self.cartridgeName = ""
+        self.cartridgeFile = open(file)
+        self._loadBattery(cartridgeFilePath)
+        
+        
+    def _loadBattery(self, cartridgeFilePath):
+        self.batteryFilePath = self._createBatteryFilePath(cartridgeFilePath)
+        if self.hasBattery():
+            self.batteryFile = open(self.batteryFilePath)
     
-    def createBatteryName(self):
-        if self.cartridgeName.endsWith(constants.CARTRIDGE_FILE_EXTENSION):
-            self.batteryName = self.cartridgeName.replace(constants.CARTRIDGE_FILE_EXTENSION,
+    def _createBatteryFilePath(self, cartridgeFilePath):
+        if cartridgeFilePath.endsWith(constants.CARTRIDGE_FILE_EXTENSION):
+            return cartridgeFilePath.replace(constants.CARTRIDGE_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION);
-        elif self.cartridgeName.endsWith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
-            self.batteryName = self.cartridgeName.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
+        elif cartridgeFilePath.endsWith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
+            return cartridgeFilePath.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION);
         else:
-            batteryName = cartridgeName + batteryName.BATTERY_FILE_EXTENSION;
-            
-    def getCartridgeName(self):
-        return self.cartridgeName
+            return cartridgeFilePath + constants.BATTERY_FILE_EXTENSION;
     
-    def getCartridgeFile(self):
-        return self.cartridgeFile
-
-    def hasCartridge(self):
-        return self.cartridgeFile.exists()
-
-    def getCartridgeSize(self):
-        return self.cartridgeFile.length()
-
-    def readCartridge(self, buffer):
-        try:
-            self.readFile(self.cartridgeFile, buffer);
-        except:
-            raise Exception("Could not load cartridge: "
-                    + self.cartridgeFile.getPath())
-    
-    def getBatteryName(self):
-        return self.batteryName;
-    
-    def getBatteryFile(self):
-        return self.batteryFile
-
     def hasBattery(self):
-        return self.batteryFile.exists()
-
-    def getBatterySize(self):
-        return self.batteryFile.length()
-
-    def readBattery(self, buffer):
-        try:
-            self.readFile(self.batteryFile, buffer)
-        except:
-            raise Exception("Could not load battery: "
-                    + self.batteryFile.getPath())
-
-    def writeBattery(self, buffer):
-        try:
-            self.writeFile(self.batteryFile, buffer)
-        except:
-            raise Exception("Could not save battery: "
-                    + batteryFile.getPath())
-
-    def removeBattery():
-        if not self.batteryFile.delete():
-           raise Exception("Could not delete battery: "
-                    + batteryFile.getPath())
-
-    def readFile(file, buffer):
-        input = FileInputStream(file);
-        try :
-            if (input.read(buffer, 0, buffer.length) != buffer.length):
-                raise Exception("Unexpected end of file");
-        finally:
-            input.close();
-
-    def writeFile(file, buffer):
-        output = FileOutputStream(file);
-        try :
-            output.write(buffer, 0, buffer.length);
-        finally:
-            output.close();
+        return os.path.exists(self.batteryFilePath)
     
+    def read(self):
+        return map(self.cartridgeFile.read(), self.mapToByte)
+        
+    def mapToByte(value):
+        return ord(value) & 0xFF
+    
+    def write(self, buffer):
+        self.cartridgeFile.read(map(buffer, chr))
+    
+    
+    def readBattery(self):
+        return  map(self.batteryFile.read(),  self.mapToByte)
+    
+    def writeBattery(self, ram):
+        self.batteryFile.write(map(ram, chr))
+        
+        
 # ==============================================================================
 # CARTRIDGE TYPES
 
@@ -267,7 +226,6 @@ class MBC(object):
     
     def write(self, address, data):
         pass
-
 
 class MBC1(MBC):
     """
@@ -371,9 +329,6 @@ class MBC2(MBC):
     def writeRAM(self, address, data):
         if self.ramEnable:
             self.ram[address & 0x01FF] = (byte) (data & 0x0F)
-
-
-
 
 class MBC3(MBC):
     """
@@ -517,8 +472,6 @@ class MBC3(MBC):
                 self.clockControl |= 0x80
         self.clockTime = now
 
-
-
 class MBC5(MBC):
     """
     PyBoy GameBoy (TM) Emulator
@@ -566,7 +519,6 @@ class HuC1(MBC):
     def __init__(self, ram, rom, clockDriver):
         self.reset()
         super.__init__(rom, ram, clockDriver)
-
 
 class HuC3(MBC):
     """
