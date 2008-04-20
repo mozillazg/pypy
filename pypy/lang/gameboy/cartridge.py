@@ -2,7 +2,7 @@
 # ___________________________________________________________________________
 
 from pypy.lang.gameboy import constants
-import os;
+import os
 
 def hasCartridgeBattery(self, cartridgeType):    
     return (cartridgeType == constants.TYPE_MBC1_RAM_BATTERY \
@@ -15,7 +15,7 @@ def hasCartridgeBattery(self, cartridgeType):
                 or cartridgeType == constants.TYPE_HUC1_RAM_BATTERY)
 
 def hasCartridgeType(self, catridgeType):
-    return constants.CATRIDGE_TYPE_MAPPING.has_key(cartridgeType);    
+    return constants.CATRIDGE_TYPE_MAPPING.has_key(cartridgeType)    
 
 def createBankController(self, cartridgeType, rom, ram, clock):
         if hasCartridgeType(cartridgeType):
@@ -150,12 +150,12 @@ def Cartridge(object):
     def _createBatteryFilePath(self, cartridgeFilePath):
         if cartridgeFilePath.endsWith(constants.CARTRIDGE_FILE_EXTENSION):
             return cartridgeFilePath.replace(constants.CARTRIDGE_FILE_EXTENSION,
-                    constants.BATTERY_FILE_EXTENSION);
+                    constants.BATTERY_FILE_EXTENSION)
         elif cartridgeFilePath.endsWith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
             return cartridgeFilePath.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
-                    constants.BATTERY_FILE_EXTENSION);
+                    constants.BATTERY_FILE_EXTENSION)
         else:
-            return cartridgeFilePath + constants.BATTERY_FILE_EXTENSION;
+            return cartridgeFilePath + constants.BATTERY_FILE_EXTENSION
     
     def hasBattery(self):
         return os.path.exists(self.batteryFilePath)
