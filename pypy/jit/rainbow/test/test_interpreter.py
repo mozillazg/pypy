@@ -1,6 +1,6 @@
 import py
 from pypy.translator.translator import TranslationContext, graphof
-from pypy.translator.simplify import simplify_graph
+from pypy.translator.simplify import simplify_graph, get_funcobj
 from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
@@ -229,8 +229,8 @@ class InterpretationTest(object):
         if jitstate is not None:
             writer.interpreter.finish_jitstate(sigtoken)
         builder.end()
-        generated = gv_generated.revealconst(lltype.Ptr(self.RESIDUAL_FUNCTYPE))
-        graph = generated._obj.graph
+        generated = gv_generated.revealconst(self.Ptr(self.RESIDUAL_FUNCTYPE))
+        graph = get_funcobj(generated).graph
         self.residual_graph = graph
         if conftest.option.view:
             graph.show()

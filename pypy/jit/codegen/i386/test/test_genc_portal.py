@@ -93,7 +93,7 @@ class I386PortalTestMixin(object):
 
 
 class TestPortal(I386PortalTestMixin,
-                 test_portal.TestPortal):
+                 test_portal.TestPortalLLType):
 
     # for the individual tests see
     # ====> ../../../rainbow/test/test_portal.py

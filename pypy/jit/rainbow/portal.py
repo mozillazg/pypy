@@ -1,11 +1,13 @@
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue, rcontainer
+from pypy.jit.rainbow import typesystem
 from pypy.objspace.flow import model as flowmodel
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import llhelper, cachedtype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.translator.simplify import get_funcobj
 
 # graph transformations for transforming the portal graph(s)
 class PortalRewriter(object):
@@ -17,6 +19,11 @@ class PortalRewriter(object):
         self.codewriter = codewriter
         self.RGenOp = RGenOp
         self.translate_support_code = translate_support_code
+        if rtyper.type_system.name == 'lltypesystem':
+            self.ts = typesystem.llhelper
+        else:
+            self.ts = typesystem.oohelper
+
 
     def rewrite(self, origportalgraph, portalgraph, view=False):
         self.origportalgraph = origportalgraph
@@ -25,7 +32,8 @@ class PortalRewriter(object):
         self.readportalgraph = None
         self.make_args_specification()
         self.PortalState = make_state_class(
-            self.args_specification, self.RESIDUAL_FUNCTYPE, self.sigtoken,
+            self.args_specification, self.RESIDUAL_FUNCTYPE,
+            self.PTR_RESIDUAL_FUNCTYPE, self.sigtoken,
             self.codewriter.all_graphs[self.portalgraph],
             self.rtyper,
             self.codewriter)
@@ -51,8 +59,8 @@ class PortalRewriter(object):
                 ARGS.extend(argdesc.residual_argtypes())
             args_specification.append(arg_spec)
         self.args_specification = args_specification
-        self.RESIDUAL_FUNCTYPE = lltype.FuncType(ARGS, RESTYPE)
-        self.PORTAL_FUNCTYPE = lltype.FuncType(ORIGARGS, RESTYPE)
+        self.RESIDUAL_FUNCTYPE, self.PTR_RESIDUAL_FUNCTYPE = self.ts.get_FuncType(ARGS, RESTYPE)
+        self.PORTAL_FUNCTYPE, self.PTR_PORTAL_FUNCTYPE = self.ts.get_FuncType(ORIGARGS, RESTYPE)
         self.sigtoken = self.RGenOp.sigToken(self.RESIDUAL_FUNCTYPE)
 
     def make_state_instance(self):
@@ -68,7 +76,7 @@ class PortalRewriter(object):
         if not self.translate_support_code:
             # this case is used for most tests: the jit stuff should be run
             # directly to make these tests faster
-            portal_entry_graph_ptr = llhelper(lltype.Ptr(self.PORTAL_FUNCTYPE),
+            portal_entry_graph_ptr = llhelper(self.PTR_PORTAL_FUNCTYPE,
                                               self.portal_entry)
         else:
             # this translates portal_entry into low-level graphs, recursively
@@ -79,7 +87,7 @@ class PortalRewriter(object):
             from pypy.annotation import model as annmodel
             annhelper = annlowlevel.MixLevelHelperAnnotator(self.rtyper)
             FUNC = self.PORTAL_FUNCTYPE
-            RESFUNC = self.RESIDUAL_FUNCTYPE
+            PTR_RESFUNC = self.PTR_RESIDUAL_FUNCTYPE
             args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
             s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
             self.portal_entry_graph = annhelper.getgraph(
@@ -92,14 +100,15 @@ class PortalRewriter(object):
                 return state.get_residual_fnptr()
             self.get_residual_fnptr_graph = annhelper.getgraph(
                 ll_get_residual_fnptr, [],
-                annmodel.lltype_to_annotation(lltype.Ptr(RESFUNC)))
+                annmodel.lltype_to_annotation(PTR_RESFUNC))
             annhelper.finish()
 
         # the following gives a pdb prompt when portal_entry raises an exception
-        portal_entry_graph_ptr._obj.__dict__['_debugexc'] = True
+        fnobj = get_funcobj(portal_entry_graph_ptr)
+        fnobj.__dict__['_debugexc'] = True
         # XXX hack hack hack
         args = [flowmodel.Constant(portal_entry_graph_ptr,
-                                   lltype.Ptr(self.PORTAL_FUNCTYPE))]
+                                   self.PTR_PORTAL_FUNCTYPE)]
         args += self.origportalgraph.getargs()
         result = flowmodel.Variable()
         result.concretetype = self.origportalgraph.getreturnvar().concretetype
@@ -119,11 +128,12 @@ class PortalRewriter(object):
         else:
             residual_graph_ptr = llinterp.eval_graph(
                 self.get_residual_fnptr_graph, [])
-        residual_graph = residual_graph_ptr._obj.graph
+        residual_graph = get_funcobj(residual_graph_ptr).graph
         return residual_graph
 
 
-def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
+def make_state_class(args_specification, RESIDUAL_FUNCTYPE,
+                     PTR_RESIDUAL_FUNCTYPE, sigtoken,
                      portal_jitcode, rtyper, codewriter):
     args_specification = unrolling_iterable(args_specification)
     class PortalState(object):
@@ -194,12 +204,12 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
                 gv_generated = self.compile(key, *args)
             residualargs = self.make_residualargs(*args)
 
-            fn = gv_generated.revealconst(lltype.Ptr(RESIDUAL_FUNCTYPE))
+            fn = gv_generated.revealconst(PTR_RESIDUAL_FUNCTYPE)
             if not we_are_translated():
                 # run the generated code on top of the llinterp for testing
                 exc_data_ptr = codewriter.exceptiondesc.exc_data_ptr
                 llinterp = LLInterpreter(rtyper, exc_data_ptr=exc_data_ptr)
-                res = llinterp.eval_graph(fn._obj.graph, residualargs)
+                res = llinterp.eval_graph(get_funcobj(fn).graph, residualargs)
                 return res
             else:
                 return fn(*residualargs)
@@ -289,11 +299,11 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
                 gv_generated = cache[key]
             except KeyError:
                 return lltype.nullptr(RESIDUAL_FUNCTYPE)
-            fn = gv_generated.revealconst(lltype.Ptr(RESIDUAL_FUNCTYPE))
+            fn = gv_generated.revealconst(PTR_RESIDUAL_FUNCTYPE)
             return fn
             
         def readallportals(self):
-            return [gv_gen.revealconst(lltype.Ptr(RESIDUAL_FUNCTYPE))
+            return [gv_gen.revealconst(PTR_RESIDUAL_FUNCTYPE)
                     for gv_gen in self.cache.values()]
 
         def get_residual_fnptr(self):
