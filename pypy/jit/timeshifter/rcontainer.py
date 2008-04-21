@@ -100,7 +100,13 @@ class AbstractStructTypeDesc(object):
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
 
         self._compute_fielddescs(RGenOp)
-        self._define_helpers(TYPE, fixsize)
+
+        if self._get_gckind(TYPE):     # no 'allocate' for inlined substructs
+            if self.immutable and self.noidentity:
+                self._define_materialize()
+            if fixsize:
+                self._define_devirtualize()
+            self._define_allocate(fixsize)
 
 
     def Ptr(self, TYPE):
@@ -197,13 +203,15 @@ class AbstractStructTypeDesc(object):
     def _define_materialize(self):
         TYPE = self.TYPE
         descs = unrolling_iterable(self.fielddescs)
+        malloc = self.malloc
+        cast_pointer = self.cast_pointer
         
         def materialize(rgenop, boxes):
-            s = lltype.malloc(TYPE)
+            s = malloc(TYPE)
             i = 0
             for desc in descs:
                 v = rvalue.ll_getvalue(boxes[i], desc.RESTYPE)
-                tgt = lltype.cast_pointer(desc.PTRTYPE, s)
+                tgt = cast_pointer(desc.PTRTYPE, s)
                 setattr(tgt, desc.fieldname, v)
                 i = i + 1
             return rgenop.genconst(s)
@@ -239,17 +247,12 @@ class StructTypeDesc(AbstractStructTypeDesc):
         else:
             return object.__new__(StructTypeDesc)
 
-    def Ptr(self, TYPE):
-        return lltype.Ptr(TYPE)
+    Ptr = staticmethod(lltype.Ptr)
+    malloc = staticmethod(lltype.malloc)
+    cast_pointer = staticmethod(lltype.cast_pointer)
 
-    def _define_helpers(self, TYPE, fixsize):
-        if TYPE._gckind == 'gc':    # no 'allocate' for inlined substructs
-            if self.immutable and self.noidentity:
-                self._define_materialize()
-            if fixsize:
-                self._define_devirtualize()
-            self._define_allocate(fixsize)
-
+    def _get_gckind(self, TYPE):
+        return TYPE._gckind == 'gc'
 
 class InstanceTypeDesc(AbstractStructTypeDesc):
 
@@ -265,8 +268,16 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
     def Ptr(self, TYPE):
         return TYPE
 
-    def _define_helpers(self, TYPE, fixsize):
-        pass
+    malloc = staticmethod(ootype.new)
+
+    @staticmethod
+    def cast_pointer(TYPE, obj):
+        if isinstance(TYPE, ootype.Instance):
+            return ootype.ooupcast(TYPE, obj)
+        return obj
+
+    def _get_gckind(self, TYPE):
+        return 'gc' # all instances and records are garbage collected
 
     def _iter_fields(self, TYPE):
         try:
