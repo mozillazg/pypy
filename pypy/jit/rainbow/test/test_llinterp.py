@@ -7,7 +7,7 @@ if option.quicktest:
 
 
 
-class TestLLInterpreted(test_portal.TestPortal):
+class TestLLInterpreted(test_portal.TestPortalLLType):
     translate_support_code = True
 
     # for the individual tests see

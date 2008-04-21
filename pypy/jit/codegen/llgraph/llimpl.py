@@ -7,7 +7,7 @@ that can be used to produce any other kind of graph.
 from pypy.rpython.lltypesystem import lltype, llmemory, rtupletype as llrtupletype
 from pypy.rpython.ootypesystem import ootype, rtupletype as oortupletype
 from pypy.objspace.flow import model as flowmodel
-from pypy.translator.simplify import eliminate_empty_blocks
+from pypy.translator.simplify import eliminate_empty_blocks, get_funcobj
 from pypy.translator.unsimplify import varoftype
 from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.extregistry import ExtRegistryEntry
@@ -75,13 +75,19 @@ def newgraph(gv_FUNCTYPE, name):
     casting_link(graph.prereturnblock, [v1], graph.returnblock)
     substartblock = flowmodel.Block(erasedinputargs)
     casting_link(graph.startblock, inputargs, substartblock)
-    fptr = lltype.functionptr(FUNCTYPE, name,
-                              graph=graph)
+    if isinstance(FUNCTYPE, lltype.FuncType):
+        fptr = lltype.functionptr(FUNCTYPE, name,
+                                  graph=graph)
+    else:
+        assert isinstance(FUNCTYPE, ootype.StaticMethod)
+        fptr = ootype.static_meth(FUNCTYPE, name,
+                                  graph=graph)
     return genconst(fptr)
 
 def _getgraph(gv_func):
-     graph = _from_opaque(gv_func).value._obj.graph
-     return graph
+    fnptr = _from_opaque(gv_func).value
+    graph = get_funcobj(fnptr).graph
+    return graph
 
 def end(gv_func):
     graph = _getgraph(gv_func)

@@ -9,7 +9,7 @@ class LLVMPortalTestMixin(I386PortalTestMixin):
     RGenOp = RLLVMGenOp
 
 class TestPortal(LLVMPortalTestMixin,
-                 test_portal.TestPortal):
+                 test_portal.TestPortalLLType):
 
     # for the individual tests see
     # ====> ../../../timeshifter/test/test_portal.py

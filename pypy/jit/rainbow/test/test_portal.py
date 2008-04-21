@@ -82,7 +82,7 @@ class PortalTest(InterpretationTest):
         return calls
         
 
-class TestPortal(PortalTest):
+class BaseTestPortal(PortalTest):
     type_system = "lltype"
             
     def test_simple(self):
@@ -601,3 +601,25 @@ class TestPortal(PortalTest):
         res = self.timeshift_from_portal(ll_function, ll_function, [])
         assert res == ll_function()
         self.check_insns({})
+
+
+
+class TestPortalOOType(BaseTestPortal):
+    type_system = 'ootype'
+
+    def _skip(self):
+        py.test.skip('in progress')
+
+    test_dfa_compile2 = _skip
+    test_dfa_compile3 = _skip
+    test_method_call_nonpromote = _skip
+    test_method_call_promote = _skip
+    test_float_promote = _skip
+    test_isinstance = _skip
+    test_greenmethod_call_nonpromote = _skip
+    test_virt_obj_method_call_promote = _skip
+    test_simple_recursive_portal_call_with_exc = _skip
+
+class TestPortalLLType(BaseTestPortal):
+    type_system = 'lltype'
+
