@@ -7,7 +7,8 @@ from pypy.rpython.ootypesystem import ootype
 
 def TUPLE_TYPE(field_lltypes):
     if len(field_lltypes) == 0:
-        return Void      # empty tuple
+        return ootype.Void      # empty tuple
     else:
         fields = [('item%d' % i, TYPE) for i, TYPE in enumerate(field_lltypes)]
-        return ootype.Record(dict(fields))
+        hints = {'immutable': True, 'noidentity': True}
+        return ootype.Record(dict(fields), _hints=hints)
