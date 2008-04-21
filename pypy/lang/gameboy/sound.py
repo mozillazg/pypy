@@ -113,8 +113,8 @@ class Sound(object):
         self.frames = 0
         self.audio1Index = self.audio2Index = self.audio3Index = self.audio4Index = 0
         self.write(constants.NR10, 0x80)
-        self.write(constants.NR11, 0x3F); #  0xBF
-        self.write(constants.NR12, 0x00); #  0xF3
+        self.write(constants.NR11, 0x3F) #  0xBF
+        self.write(constants.NR12, 0x00) #  0xF3
         self.write(constants.NR13, 0xFF)
         self.write(constants.NR14, 0xBF)
 
@@ -134,9 +134,9 @@ class Sound(object):
         self.write(constants.NR43, 0x00)
         self.write(constants.NR44, 0xBF)
 
-        self.write(constants.NR50, 0x00); #  0x77
+        self.write(constants.NR50, 0x00) #  0x77
         self.write(constants.NR51, 0xF0)
-        self.write(constants.NR52, 0xFF); #  0xF0
+        self.write(constants.NR52, 0xFF) #  0xF0
 
         for address in range(0xFF30, 0xFF3F):
             write = 0xFF

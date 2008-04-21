@@ -102,7 +102,7 @@ class JoypadDriver(object):
         return code
     
     def isRaised(self):
-        raised = self.raised;
+        raised = self.raised
         self.raised = False
         return raised
     
