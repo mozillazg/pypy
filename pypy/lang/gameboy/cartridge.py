@@ -54,7 +54,7 @@ class CartridgeManager(object):
         self.checkROM()
         self.createRAM()
         self.loadBattery()
-        self.mbc = self.createBankController(self.getCartridgeType(), rom, ram, clock)
+        self.mbc = self.createBankController(self.getMemoryBankType(), rom, ram, clock)
         
     def checkROM(self):
         if not self.verifyHeader():
@@ -64,8 +64,8 @@ class CartridgeManager(object):
         
     def createRAM(self):
         ramSize = self.getRAMSize()
-        if (getCartridgeType() >= constants.TYPE_MBC2
-                and getCartridgeType() <= constants.TYPE_MBC2_BATTERY):
+        if (getMemoryBankType() >= constants.TYPE_MBC2
+                and getMemoryBankType() <= constants.TYPE_MBC2_BATTERY):
             ramSize = 512
         self.ram = [0xFF]*ramSize
         
@@ -77,7 +77,7 @@ class CartridgeManager(object):
         if self.hasBattery():
             self.store.writeBattery(cartridgeName, self.ram)
             
-    def getCartridgeType(self):
+    def getMemoryBankType(self):
         return self.rom[constants.MEMORY_BANK_MAPPING] & 0xFF
     
     def getRom(self):
@@ -108,7 +108,7 @@ class CartridgeManager(object):
         return ((rom[constants.CHECKSUM_A_ADDRESS] & 0xFF) << 8) + (rom[constants.CHECKSUM_B_ADDRESS] & 0xFF)
     
     def hasBattery(self):
-        return hasCartridgeBattery(self.getCartridgeType())
+        return hasCartridgeBattery(self.getMemoryBankType())
     
     def verify(self):
         checksum = 0
@@ -130,28 +130,41 @@ class CartridgeManager(object):
 
 
     
-def Cartridge(object):
+class Cartridge(object):
     
-    def __init__(file=None):
+    def __init__(self, file=None):
+        self.reset()
         if file != None:
             self.load(file)
         
+    def reset(self):
+        self.cartridgeName =""
+        self.cartridgeFilePath = ""
+        self.cartridgeFile = None
+        
+        self.batteryName =""
+        self.batteryFilePath = ""
+        self.batteryFile = None
+        
+        
     def load(self, cartridgeFilePath):
-        self.cartridgeName = ""
-        self.cartridgeFile = open(file)
+        self.cartridgeFilePath = cartridgeFilePath
+        self.cartridgeName = os.path.basename(cartridgeFilePath)
+        self.cartridgeFile = open(cartridgeFilePath)
         self._loadBattery(cartridgeFilePath)
         
         
     def _loadBattery(self, cartridgeFilePath):
         self.batteryFilePath = self._createBatteryFilePath(cartridgeFilePath)
+        self.batteryName = os.path.basename(self.batteryFilePath)
         if self.hasBattery():
             self.batteryFile = open(self.batteryFilePath)
     
     def _createBatteryFilePath(self, cartridgeFilePath):
-        if cartridgeFilePath.endsWith(constants.CARTRIDGE_FILE_EXTENSION):
+        if cartridgeFilePath.endswith(constants.CARTRIDGE_FILE_EXTENSION):
             return cartridgeFilePath.replace(constants.CARTRIDGE_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION)
-        elif cartridgeFilePath.endsWith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
+        elif cartridgeFilePath.endswith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
             return cartridgeFilePath.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION)
         else:
@@ -161,22 +174,27 @@ def Cartridge(object):
         return os.path.exists(self.batteryFilePath)
     
     def read(self):
-        return map(self.cartridgeFile.read(), self.mapToByte)
-        
-    def mapToByte(value):
-        return ord(value) & 0xFF
-    
-    def write(self, buffer):
-        self.cartridgeFile.read(map(buffer, chr))
-    
+        self.cartridgeFile.seek(0)
+        return map(map_to_byte, self.cartridgeFile.read())
     
     def readBattery(self):
-        return  map(self.batteryFile.read(),  self.mapToByte)
+        self.batteryFile.seek(0)
+        return  map(map_to_byte, self.batteryFile.read())
     
     def writeBattery(self, ram):
-        self.batteryFile.write(map(ram, chr))
+        self.batteryFile = open(self.batteryFilePath, "w")
+        self.batteryFile.write(("").join(map(chr, ram)))
+        self.batteryFile = open(self.batteryFilePath, "r+")
         
+    def removeBattery(self):
+        if self.hasBattery():
+            os.remove(self.batteryFilePath)
         
+     
+
+def map_to_byte(value):
+    return ord(value) & 0xFF
+   
 # ==============================================================================
 # CARTRIDGE TYPES
 
@@ -669,9 +687,6 @@ def initialize_mapping_table():
             positions = range(entry[0], entry[1]+1)
         for pos in positions:
             result[pos] = entry[-1]
-    # XXX the following assert is disabled because it seems bogous
-    # in constants, they don't have 256 types...
-    # assert None not in result
     return result
 
 MEMORY_BANK_MAPPING = initialize_mapping_table()
