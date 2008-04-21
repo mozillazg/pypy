@@ -913,7 +913,8 @@ class VirtualStruct(VirtualContainer):
                 self.ownbox.setgenvar_hint(gv, known_nonzero=True)
                 self.ownbox.content = None
                 return
-        name = getattr(typedesc.TYPE, '_name', str(typedesc.TYPE))
+        #name = getattr(typedesc.TYPE, '_name', str(typedesc.TYPE))
+        name = str(typedesc.TYPE)
         debug_print(lltype.Void, "FORCE CONTAINER: "+ name)
         #debug_pdb(lltype.Void)
         genvar = jitstate.ts.genop_malloc_fixedsize(builder, typedesc.alloctoken)
