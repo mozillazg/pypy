@@ -219,13 +219,13 @@ class CPU(object):
         self.cycles = 0
         
     def resetRegisters(self):
-        self.a.reset();
-        self.f.reset();
-        self.bc.reset();
-        self.de.reset();
-        self.hl.reset();
-        self.sp.reset();
-        self.pc.reset();
+        self.a.reset()
+        self.f.reset()
+        self.bc.reset()
+        self.de.reset()
+        self.hl.reset()
+        self.sp.reset()
+        self.pc.reset()
         
     def getAF(self):
         return self.af
@@ -442,7 +442,7 @@ class CPU(object):
         self.f.reset(keepZ=True)
         self.f.hFlagCompare((added >> 8), self.hl)
         self.f.cFlagCompare(added, self.hl)
-        self.hl.set(added);
+        self.hl.set(added)
         self.cycles -= 1
         
     # 1 cycle
@@ -759,7 +759,7 @@ class CPU(object):
      # CCF/SCF
     def complementCarryFlag(self):
         self.f.reset(keepZ=True, keepC=True)
-        self.f.cFlag = not self.f.cFlag;
+        self.f.cFlag = not self.f.cFlag
 
     def setCarryFlag(self):
         self.f.reset(keepZ=True)
@@ -832,7 +832,7 @@ class CPU(object):
      # DI/EI 1 cycle
     def disableInterrupts(self):
         self.ime = False
-        self.cycles -= 1; 
+        self.cycles -= 1
 
     # 1 cycle
     def enableInterrupts(self):
