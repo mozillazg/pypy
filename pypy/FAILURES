@@ -1,0 +1,3 @@
+rpython/memory/test/test_transformed_gc.py -k test_tree_cloning
+rpython/test/test_rbuiltin.py
+rpython/module/test/test_posix.py
