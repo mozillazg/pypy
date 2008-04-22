@@ -43,7 +43,7 @@ class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
 
     def __init__(self, typer, tracing=True, exc_data_ptr=None,
-                 malloc_check=True, moving_gc=True):
+                 malloc_check=True):
         self.bindings = {}
         self.typer = typer
         # 'heap' is module or object that provides malloc, etc for lltype ops
@@ -54,7 +54,6 @@ class LLInterpreter(object):
         self.malloc_check = malloc_check
         self.frame_class = LLFrame
         self.mallocs = {}
-        self.moving_gc = moving_gc
         if tracing:
             self.tracer = Tracer()
 
@@ -754,14 +753,14 @@ class LLFrame(object):
     def op_gc__collect(self):
         self.heap.collect()
 
-    def op_gc_can_move(self, p):
-        return self.llinterpreter.moving_gc
-
     def op_gc__disable_finalizers(self):
         self.heap.disable_finalizers()
 
     def op_gc__enable_finalizers(self):
         self.heap.enable_finalizers()
+
+    def op_gc_can_move(self, addr):
+        return self.heap.can_move(addr)
 
     def op_gc_free(self, addr):
         # what can you do?

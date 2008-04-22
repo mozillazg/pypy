@@ -72,8 +72,7 @@ def clear_tcache():
 
 def get_interpreter(func, values, view='auto', viewbefore='auto', policy=None,
                     someobjects=False, type_system="lltype", backendopt=False,
-                    config=None, malloc_check=True,
-                    moving_gc=True, **extraconfigopts):
+                    config=None, malloc_check=True, **extraconfigopts):
     extra_key = [(key, value) for key, value in extraconfigopts.iteritems()]
     extra_key.sort()
     extra_key = tuple(extra_key)
@@ -98,8 +97,7 @@ def get_interpreter(func, values, view='auto', viewbefore='auto', policy=None,
                                    viewbefore, policy, type_system=type_system,
                                    backendopt=backendopt, config=config,
                                    **extraconfigopts)
-        interp = LLInterpreter(typer, malloc_check=malloc_check,
-                               moving_gc=moving_gc)
+        interp = LLInterpreter(typer, malloc_check=malloc_check)
         _tcache[key] = (t, interp, graph)
         # keep the cache small 
         _lastinterpreted.append(key) 
@@ -113,12 +111,11 @@ def get_interpreter(func, values, view='auto', viewbefore='auto', policy=None,
 
 def interpret(func, values, view='auto', viewbefore='auto', policy=None,
               someobjects=False, type_system="lltype", backendopt=False,
-              config=None, malloc_check=True, moving_gc=True):
+              config=None, malloc_check=True):
     interp, graph = get_interpreter(func, values, view, viewbefore, policy,
                                     someobjects, type_system=type_system,
                                     backendopt=backendopt, config=config,
-                                    malloc_check=malloc_check,
-                                    moving_gc=moving_gc)
+                                    malloc_check=malloc_check)
     result = interp.eval_graph(graph, values)
     if malloc_check and interp.mallocs:
         raise MallocMismatch(interp.mallocs)
@@ -126,11 +123,10 @@ def interpret(func, values, view='auto', viewbefore='auto', policy=None,
 
 def interpret_raises(exc, func, values, view='auto', viewbefore='auto',
                      policy=None, someobjects=False, type_system="lltype",
-                     backendopt=False, moving_gc=True):
+                     backendopt=False):
     interp, graph  = get_interpreter(func, values, view, viewbefore, policy,
                                      someobjects, type_system=type_system,
-                                     backendopt=backendopt,
-                                     moving_gc=moving_gc)
+                                     backendopt=backendopt)
     info = py.test.raises(LLException, "interp.eval_graph(graph, values)")
     try:
         got = interp.find_exception(info.value)
