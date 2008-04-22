@@ -761,7 +761,7 @@ def _castdepth(OUTSIDE, INSIDE):
             return dwn
         OUTSIDE = getattr(OUTSIDE, first)
     return -1
-
+ 
 def castable(PTRTYPE, CURTYPE):
     if CURTYPE.TO._gckind != PTRTYPE.TO._gckind:
         raise TypeError("cast_pointer() cannot change the gc status: %s to %s"
