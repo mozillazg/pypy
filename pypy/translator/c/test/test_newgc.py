@@ -829,7 +829,7 @@ class TestUsingFramework(AbstractGCTestClass):
             assert data == "ello world\n"
             os.close(fd)
 
-        f1 = self.getcompiled(does_stuff, [])
+        f1 = self.getcompiled(does_stuff)
         f1()
         assert open(filename, 'r').read() == "hello world\n"
         os.unlink(filename)
