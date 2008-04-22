@@ -701,6 +701,11 @@ class LLFrame(object):
                               lltype.ContainerType)
         return getattr(obj, field)
 
+    def op_force_cast(self, RESTYPE, obj):
+        from pypy.rpython.lltypesystem import ll2ctypes
+        return ll2ctypes.force_cast(RESTYPE, obj)
+    op_force_cast.need_result_type = True
+
     def op_cast_int_to_ptr(self, RESTYPE, int1):
         return lltype.cast_int_to_ptr(RESTYPE, int1)
     op_cast_int_to_ptr.need_result_type = True

@@ -317,6 +317,7 @@ LL_OPERATIONS = {
     'cast_float_to_uint':   LLOp(canfold=True),    # XXX need OverflowError?
     'cast_float_to_longlong':LLOp(canfold=True),
     'truncate_longlong_to_int':LLOp(canfold=True),
+    'force_cast':           LLOp(sideeffects=False),    # only for rffi.cast()
 
     # __________ pointer operations __________
 

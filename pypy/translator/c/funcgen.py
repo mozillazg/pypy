@@ -696,6 +696,8 @@ class FunctionCodeGenerator(object):
         typename = cdecl(self.db.gettype(TYPE), '')        
         return "%(result)s = (%(typename)s)(%(val)s);" % locals()
 
+    OP_FORCE_CAST = OP_CAST_PRIMITIVE   # xxx the same logic works
+
     def OP_RESUME_POINT(self, op):
         return '/* resume point %s */'%(op.args[0],)
 
