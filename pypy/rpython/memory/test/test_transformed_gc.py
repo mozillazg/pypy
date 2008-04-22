@@ -762,22 +762,6 @@ class TestMarkSweepGC(GenericGCTests):
         res = run([3, 0])
         assert res == 1
 
-    def test_coalloc(self):
-        def malloc_a_lot():
-            i = 0
-            while i < 10:
-                i += 1
-                a = [1] * 10
-                j = 0
-                while j < 30:
-                    j += 1
-                    a.append(j)
-            return 0
-        run, statistics = self.runner(malloc_a_lot, statistics=True,
-                                      backendopt=True, coalloc=True)
-        run([])
-
-
 
 class TestStacklessMarkSweepGC(TestMarkSweepGC):
     gcname = "marksweep"
