@@ -375,9 +375,12 @@ class FunctionCodeGenerator(object):
         for op in self.gen_link(enterlink):
             yield '\t' + op
         yield '\t  block%d_back:' % self.blocknum[headblock]
-        for i, op in enumerate(headblock.operations):
-            for line in self.gen_op(op):
-                yield '\t' + line
+        if headblock.operations:
+            for i, op in enumerate(headblock.operations):
+                for line in self.gen_op(op):
+                    yield '\t' + line
+        else:
+            yield '\t;'
         yield '}'
         for op in self.gen_link(exitlink):
             yield op
