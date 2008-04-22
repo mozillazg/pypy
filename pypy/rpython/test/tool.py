@@ -6,7 +6,6 @@ from pypy.rpython.test.test_llinterp import gengraph, interpret, interpret_raise
 class BaseRtypingTest(object):
 
     FLOAT_PRECISION = 8
-    MOVING_GC = True
 
     def gengraph(self, func, argtypes=[], viewbefore='auto', policy=None,
              backendopt=False, config=None):
@@ -14,12 +13,10 @@ class BaseRtypingTest(object):
                         backendopt=backendopt, config=config)
     
     def interpret(self, fn, args, **kwds):
-        return interpret(fn, args, type_system=self.type_system,
-                         moving_gc=self.MOVING_GC, **kwds)
+        return interpret(fn, args, type_system=self.type_system, **kwds)
 
     def interpret_raises(self, exc, fn, args, **kwds):
-        return interpret_raises(exc, fn, args, type_system=self.type_system,
-                                moving_gc=self.MOVING_GC, **kwds)
+        return interpret_raises(exc, fn, args, type_system=self.type_system, **kwds)
 
     def float_eq(self, x, y):
         return x == y
@@ -43,7 +40,7 @@ class BaseRtypingTest(object):
         if skipLL and self.type_system == 'lltype':
             py.test.skip("lltypesystem doesn't support %s, yet" % reason)        
         if skipOO and self.type_system == 'ootype':
-            py.test.skip("ootypesystem doesn't support %s, yet" % reason)
+            py.test.skip("ootypesystem doesn't support %s, yet" % reason)    
 
 class LLRtypeMixin(object):
     type_system = 'lltype'
