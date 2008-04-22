@@ -105,6 +105,9 @@ class GCBase(object):
     def id(self, ptr):
         return lltype.cast_ptr_to_int(ptr)
 
+    def can_move(self, addr):
+        return False
+
     def set_max_heap_size(self, size):
         pass
 
@@ -259,6 +262,9 @@ class MovingGCBase(GCBase):
         if self.object_id_dict_ends_at >= 0:
             self.object_id_dict_ends_at = i + 1
         return i + 1       # this produces id() values 1, 2, 3, 4...
+
+    def can_move(self, addr):
+        return True
 
     def notify_objects_just_moved(self):
         self.object_id_dict_ends_at = -1

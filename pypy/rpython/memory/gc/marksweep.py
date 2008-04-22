@@ -38,6 +38,7 @@ class MarkSweepGC(GCBase):
     POOLNODEPTR = lltype.Ptr(POOLNODE)
     POOLNODE.become(lltype.Struct('gc_pool_node', ('linkedlist', HDRPTR),
                                                   ('nextnode', POOLNODEPTR)))
+
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, start_heap_size=4096):
         self.heap_usage = 0          # at the end of the latest collection
         self.bytes_malloced = 0      # since the latest collection
@@ -692,8 +693,6 @@ class MarkSweepGC(GCBase):
         # reinstall the pool that was current at the beginning of x_clone()
         clonedata.pool = self.x_swap_pool(curpool)
 
-    def can_move(self, addr):
-        return False
 
 class PrintingMarkSweepGC(MarkSweepGC):
     _alloc_flavor_ = "raw"
