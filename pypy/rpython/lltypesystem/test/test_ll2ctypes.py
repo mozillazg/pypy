@@ -382,9 +382,8 @@ class TestLL2Ctypes(object):
             buf = rffi.cast(rffi.VOIDP, b)
             return buf[2]
         assert f() == 'z'
-        # XXX let's say we don't run it on top of llinterp
-        #res = interpret(f, [])
-        #assert res == 'z'
+        res = interpret(f, [])
+        assert res == 'z'
     
     def test_funcptr1(self):
         def dummy(n):

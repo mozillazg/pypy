@@ -527,8 +527,8 @@ class TestRffiInternals:
         graph = graphof(a.translator, f)
         s = summary(graph)
         # there should be not too many operations here by now
-        expected = {'cast_int_to_uint': 1, 'direct_call': 1,
-                    'cast_primitive': 2, 'cast_int_to_float': 1}
+        print s
+        expected = {'force_cast': 3, 'cast_int_to_float': 1, 'direct_call': 1}
         for k, v in expected.items():
             assert s[k] == v
     
