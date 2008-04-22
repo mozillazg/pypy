@@ -70,7 +70,10 @@ def configure_simple_type(type_name):
     return l
 
 base_names = ['double', 'uchar', 'schar', 'sshort', 'ushort', 'uint', 'sint',
-              'ulong', 'slong', 'float', 'pointer', 'void',
+              # ffi_type_slong and ffi_type_ulong are omitted because
+              # their meaning changes too much from one libffi version to
+              # another.  DON'T USE THEM!  use cast_type_to_ffitype().
+              'float', 'pointer', 'void',
               # by size
               'sint8', 'uint8', 'sint16', 'uint16', 'sint32', 'uint32',
               'sint64', 'uint64']
@@ -90,6 +93,18 @@ size_t = cConfig.size_t
 for name in type_names:
     locals()[name] = configure_simple_type(name)
 
+def _signed_type_for(TYPE):
+    sz = rffi.sizeof(TYPE)
+    if sz == 4:   return ffi_type_sint32
+    elif sz == 8: return ffi_type_sint64
+    else: raise ValueError("unsupported type size for %r" % (TYPE,))
+
+def _unsigned_type_for(TYPE):
+    sz = rffi.sizeof(TYPE)
+    if sz == 4:   return ffi_type_uint32
+    elif sz == 8: return ffi_type_uint64
+    else: raise ValueError("unsupported type size for %r" % (TYPE,))
+
 TYPE_MAP = {
     rffi.DOUBLE : ffi_type_double,
     rffi.FLOAT  : ffi_type_float,
@@ -99,8 +114,12 @@ TYPE_MAP = {
     rffi.USHORT : ffi_type_ushort,
     rffi.UINT   : ffi_type_uint,
     rffi.INT    : ffi_type_sint,
-    rffi.ULONG  : ffi_type_ulong,
-    rffi.LONG   : ffi_type_slong,
+    # xxx don't use ffi_type_slong and ffi_type_ulong - their meaning
+    # changes from a libffi version to another :-((
+    rffi.ULONG     : _unsigned_type_for(rffi.ULONG),
+    rffi.LONG      : _signed_type_for(rffi.LONG),
+    rffi.ULONGLONG : _unsigned_type_for(rffi.ULONGLONG),
+    rffi.LONGLONG  : _signed_type_for(rffi.LONGLONG),
     lltype.Void : ffi_type_void,
     }
 

@@ -5,6 +5,7 @@
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.translator.c.test.test_genc import compile
 from pypy.rlib.libffi import *
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.lltypesystem import rffi, lltype
 import os, sys
@@ -78,7 +79,8 @@ class TestDLOperations:
     def test_wrong_args(self):
         libc = CDLL('libc.so.6')
         # XXX assume time_t is long
-        ctime = libc.getpointer('time', [ffi_type_pointer], ffi_type_ulong)
+        ulong = cast_type_to_ffitype(rffi.ULONG)
+        ctime = libc.getpointer('time', [ffi_type_pointer], ulong)
         x = lltype.malloc(lltype.GcStruct('xxx'))
         y = lltype.malloc(lltype.GcArray(rffi.LONG), 3)
         z = lltype.malloc(lltype.Array(rffi.LONG), 4, flavor='raw')
@@ -93,7 +95,8 @@ class TestDLOperations:
     def test_call_time(self):
         libc = CDLL('libc.so.6')
         # XXX assume time_t is long
-        ctime = libc.getpointer('time', [ffi_type_pointer], ffi_type_ulong)
+        ulong = cast_type_to_ffitype(rffi.ULONG)
+        ctime = libc.getpointer('time', [ffi_type_pointer], ulong)
         ctime.push_arg(lltype.nullptr(rffi.CArray(rffi.LONG)))
         t0 = ctime.call(rffi.LONG)
         time.sleep(2)
@@ -140,14 +143,17 @@ class TestDLOperations:
         assert snd == rffi.cast(rffi.VOIDP, a)
         
     def test_callback(self):
+        slong = cast_type_to_ffitype(rffi.LONG)
         libc = CDLL('libc.so.6')
-        qsort = libc.getpointer('qsort', [ffi_type_pointer, ffi_type_slong,
-                                          ffi_type_slong, ffi_type_pointer],
+        qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
+                                          slong, ffi_type_pointer],
                                 ffi_type_void)
 
         def callback(ll_args, ll_res, stuff):
-            a1 = rffi.cast(rffi.INTP, rffi.cast(rffi.VOIDPP, ll_args[0])[0])[0]
-            a2 = rffi.cast(rffi.INTP, rffi.cast(rffi.VOIDPP, ll_args[0])[1])[0]
+            p_a1 = rffi.cast(rffi.VOIDPP, ll_args[0])[0]
+            p_a2 = rffi.cast(rffi.VOIDPP, ll_args[1])[0]
+            a1 = rffi.cast(rffi.INTP, p_a1)[0]
+            a2 = rffi.cast(rffi.INTP, p_a2)[0]
             res = rffi.cast(rffi.INTP, ll_res)
             if a1 > a2:
                 res[0] = 1
@@ -170,6 +176,8 @@ class TestDLOperations:
         qsort.call(lltype.Void)
         assert [to_sort[i] for i in range(4)] == [1,2,3,4]
         lltype.free(to_sort, flavor='raw')
+        keepalive_until_here(ptr)  # <= this test is not translated, but don't
+                                   #    forget this in code that is meant to be
 
     def test_compile(self):
         import py
@@ -241,11 +249,12 @@ class TestDLOperations:
 
         lib = CDLL(lib_name)
 
-        size = ffi_type_slong.c_size*2
-        alignment = ffi_type_slong.c_alignment
+        slong = cast_type_to_ffitype(rffi.LONG)
+        size = slong.c_size*2
+        alignment = slong.c_alignment
         tp = make_struct_ffitype(size, alignment)
 
-        sum_x_y = lib.getrawpointer('sum_x_y', [tp], ffi_type_slong)
+        sum_x_y = lib.getrawpointer('sum_x_y', [tp], slong)
 
         buffer = lltype.malloc(rffi.LONGP.TO, 3, flavor='raw')
         buffer[0] = 200
