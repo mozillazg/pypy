@@ -815,7 +815,6 @@ class TestUsingFramework(AbstractGCTestClass):
         assert c_fn() == 0
 
     def test_callback_with_collect(self):
-        py.test.skip("Segfaults")
         from pypy.rlib.libffi import ffi_type_pointer, cast_type_to_ffitype,\
              CDLL, ffi_type_void, CallbackFuncPtr, ffi_type_sint
         from pypy.rpython.lltypesystem import rffi
