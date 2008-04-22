@@ -673,13 +673,6 @@ class LLFrame(object):
             self.llinterpreter.remember_malloc(ptr, self)
         return ptr
 
-    def op_coalloc(self, obj, coallocator, flags):
-        flavor = flags['flavor']
-        assert flavor == "gc"
-        zero = flags.get('zero', False)
-        ptr = self.heap.coalloc(obj, coallocator, zero=zero)
-        return ptr
-
     def op_malloc_varsize(self, obj, flags, size):
         flavor = flags['flavor']
         zero = flags.get('zero', False)
@@ -691,14 +684,6 @@ class LLFrame(object):
             return ptr
         except MemoryError:
             self.make_llexception()
-
-    def op_coalloc_varsize(self, obj, coallocator, flags, size):
-        flavor = flags['flavor']
-        zero = flags.get('zero', False)
-        assert flavor == "gc"
-        zero = flags.get('zero', False)
-        ptr = self.heap.coalloc(obj, coallocator, size, zero=zero)
-        return ptr
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
