@@ -476,11 +476,13 @@ class GenericGCTests(GCTest):
         return run([])
 
     def _test_malloc_nonmovable_fixsize(self):
-        TP = lltype.GcStruct('T', ('x', lltype.Float))
+        S = lltype.GcStruct('S', ('x', lltype.Float))
+        TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
         def func():
             try:
                 from pypy.rlib import rgc
                 a = rgc.malloc_nonmovable(TP)
+                rgc.collect()
                 if a:
                     assert not rgc.can_move(a)
                     return 0
