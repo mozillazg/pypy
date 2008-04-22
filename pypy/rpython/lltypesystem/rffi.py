@@ -521,6 +521,7 @@ def alloc_buffer(count):
     else:
         raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
         return raw_buf, lltype.nullptr(STR)
+alloc_buffer._always_inline_ = True     # to get rid of the returned tuple obj
 
 # (char*, str, int, int) -> None
 def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
