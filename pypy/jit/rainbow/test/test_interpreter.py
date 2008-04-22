@@ -1003,6 +1003,17 @@ class SimpleTests(InterpretationTest):
         assert res == 42
         self.check_insns({})
 
+    def test_green_deepfrozen_oosend(self):
+        py.test.skip('in progress')
+        d = {1: 2, 2: 4, 3: 9}
+        def f(k):
+            d1 = hint(d, deepfreeze=True)
+            k1 = hint(k, concrete=True)
+            return d1[k1]
+        res = self.interpret(f, [3], [])
+        assert res == 9
+        self.check_insns({})
+
     def test_residual_red_call(self):
         def g(x):
             return x+1
@@ -2198,7 +2209,7 @@ class TestLLType(SimpleTests):
         self.check_insns({})
 
 
-class TestOOType(SimpleTests):
+class OOTypeMixin(object):
     type_system = "ootype"
 
     @staticmethod
@@ -2238,6 +2249,8 @@ class TestOOType(SimpleTests):
                 insns[b] = insns[a]
                 del insns[a]
         return insns
+
+class TestOOType(OOTypeMixin, SimpleTests):
 
     def test_degenerated_before_return(self):
         S = ootype.Instance('S', ootype.ROOT, {'x': ootype.Signed})

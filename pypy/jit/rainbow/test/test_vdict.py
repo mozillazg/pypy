@@ -1,6 +1,7 @@
 import py
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
 from pypy.rlib.jit import hint
 
 
@@ -75,7 +76,7 @@ class VDictTest(InterpretationTest):
         self.check_insns({})
 
 
-class TestOOType(VDictTest):
+class TestOOType(OOTypeMixin, VDictTest):
     type_system = "ootype"
 
 class TestLLType(VDictTest):

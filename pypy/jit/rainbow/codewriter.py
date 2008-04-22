@@ -1009,8 +1009,7 @@ class BytecodeWriter(object):
             return self.handle_green_call(op, withexc, exclude_last=True)
         targets = dict(self.graphs_from(op))
         fnptrindex = self.serialize_oparg("red", op.args[0])
-        has_result = (self.varcolor(op.result) != "gray" and
-                      op.result.concretetype != lltype.Void)
+        has_result = self.has_result(op)
 
         if self.hannotator.policy.hotpath:
             if not targets:
@@ -1149,8 +1148,7 @@ class BytecodeWriter(object):
         graphs, args_v = self.decompose_call_op(op)
         fnptr = op.args[0]
         pos = self.calldesc_position(fnptr.concretetype)
-        has_result = (self.varcolor(op.result) != "gray" and
-                      op.result.concretetype != lltype.Void)
+        has_result = self.has_result(op)
         func = self.serialize_oparg("red", fnptr)
         emitted_args = []
         for v in args_v:
@@ -1483,6 +1481,15 @@ class BytecodeWriter(object):
             tsgraph = self.specialized_graph_of(graph, args_v, spaceop.result)
             yield graph, tsgraph
 
+    def check_green_deepfrozen_call(self, spaceop):
+        hs_result = self.hannotator.binding(spaceop.result)
+        return (hs_result.is_green() and
+                hs_result.concretetype is not lltype.Void)
+
+    def has_result(self, op):
+        return (self.varcolor(op.result) != "gray" and
+                op.result.concretetype != lltype.Void)
+
     def guess_call_kind(self, spaceop):
         if spaceop.opname == 'direct_call':
             c_func = spaceop.args[0]
@@ -1493,11 +1500,17 @@ class BytecodeWriter(object):
                 self.hannotator.policy.oopspec):
                 if fnobj._callable.oopspec.startswith('vable.'):
                     return 'vable', None
-                hs_result = self.hannotator.binding(spaceop.result)
-                if (hs_result.is_green() and
-                    hs_result.concretetype is not lltype.Void):
+                if self.check_green_deepfrozen_call(spaceop):
                     return 'green', self.can_raise(spaceop)
                 return 'oopspec', self.can_raise(spaceop)
+        elif spaceop.opname == 'oosend':
+            SELFTYPE, methname, opargs = self.decompose_oosend(spaceop)
+            if SELFTYPE.oopspec_name is not None:
+                if self.check_green_deepfrozen_call(spaceop):
+                    return 'green', self.can_raise(spaceop)
+                return 'oopspec', self.can_raise(spaceop)
+            if not SELFTYPE._lookup_graphs(methname):
+                return 'builtin', self.can_raise(spaceop)
         if self.hannotator.bookkeeper.is_green_call(spaceop):
             return 'green', None
         withexc = self.can_raise(spaceop)
@@ -1628,6 +1641,12 @@ class OOTypeBytecodeWriter(BytecodeWriter):
     ExceptionDesc = exception.OOTypeExceptionDesc
     StructTypeDesc = rcontainer.InstanceTypeDesc
 
+    def decompose_oosend(self, op):
+        name = op.args[0].value
+        opargs = op.args[1:]
+        SELFTYPE = opargs[0].concretetype
+        return SELFTYPE, name, opargs
+
     def cast_fnptr_to_root(self, fnptr):
         return ootype.cast_to_object(fnptr)
 
@@ -1666,76 +1685,71 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         self.register_redvar(op.result)
 
     def serialize_op_oosend(self, op):
+        assert not self.hannotator.policy.hotpath, 'TODO'
         kind, withexc = self.guess_call_kind(op)
-        if kind == 'green':
-            assert False, 'TODO'
+        handler = getattr(self, "handle_%s_oosend" % (kind, ))
+        return handler(op, withexc)
 
-        name = op.args[0].value
-        opargs = op.args[1:]
-        SELFTYPE = opargs[0].concretetype
-        has_result = (self.varcolor(op.result) != "gray" and
-                      op.result.concretetype != lltype.Void)
+    def handle_green_oosend(self, op, withexc):
+        assert False, 'TODO'
 
-        if SELFTYPE.oopspec_name is not None:
-            # we are calling a method like List.ll_getitem or so
-            _, meth = SELFTYPE._lookup(name)
-            oopspecdescindex = self.oopspecdesc_position('send', meth, withexc)
-            oopspecdesc = self.oopspecdescs[oopspecdescindex]
-            args_v = []
-            args = []
-            for v in opargs:
-                args_v.append(v)
-                args.append(self.serialize_oparg("red", v))
-
-            hs_self = self.hannotator.binding(opargs[0])
-            deepfrozen = hs_self.deepfrozen
-
-            self.emit("red_oopspec_call%s_%s" % ("_noresult" * (not has_result),
-                                                 len(args)))
-            self.emit(oopspecdescindex)
-            self.emit(deepfrozen)
-            self.emit(*args)
-            if has_result:
-                self.register_redvar(op.result)
-            return
-
-        # real oosend, either red or const
-        assert not self.hannotator.policy.hotpath
-
-        if kind == "residual":
-            # oosend to an external method (e.g. ootype.String.*)
-            emitted_args = []
-            for v in op.args[1:]:
-                if v.concretetype == lltype.Void:
-                    continue
-                emitted_args.append(self.serialize_oparg("red", v))
-            self.emit("external_oosend")
-            self.emit(len(emitted_args))
-            self.emit(*emitted_args)
-            methdescindex = self.methdesc_position(SELFTYPE, name)
-            self.emit(methdescindex)
-            self.emit(has_result)
-        else:
-            # normal oosend
-            graph2tsgraph = dict(self.graphs_from(op))
-            self.fill_methodcodes(SELFTYPE, name, graph2tsgraph)
-            args = graph2tsgraph.values()[0].getargs()
-            emitted_args = self.args_of_call(op.args[1:], args)
-            self.emit("red_oosend")
-            self.emit(*emitted_args)
-            methnameindex = self.string_position(name)
-            self.emit(methnameindex)
-
+    def handle_oopspec_oosend(self, op, withexc):
+        SELFTYPE, name, opargs = self.decompose_oosend(op)
+        has_result = self.has_result(op)
+        assert SELFTYPE.oopspec_name is not None
+        _, meth = SELFTYPE._lookup(name)
+        oopspecdescindex = self.oopspecdesc_position('send', meth, withexc)
+        oopspecdesc = self.oopspecdescs[oopspecdescindex]
+        args_v = []
+        args = []
+        for v in opargs:
+            args_v.append(v)
+            args.append(self.serialize_oparg("red", v))
+        hs_self = self.hannotator.binding(opargs[0])
+        deepfrozen = hs_self.deepfrozen
+        self.emit("red_oopspec_call%s_%s" % ("_noresult" * (not has_result),
+                                             len(args)))
+        self.emit(oopspecdescindex)
+        self.emit(deepfrozen)
+        self.emit(*args)
         if has_result:
             self.register_redvar(op.result)
 
-        if kind == "yellow":
-            self.emit("yellow_retrieve_result_as_red")
-            self.emit(self.type_position(op.result.concretetype))
-        elif kind in ("gray", "red", "residual"):
-            pass
-        else:
-            assert 0, "unknown call kind %s" % (kind, )
+    def handle_builtin_oosend(self, op, withexc):
+        SELFTYPE, name, opargs = self.decompose_oosend(op)
+        has_result = self.has_result(op)
+        emitted_args = []
+        for v in op.args[1:]:
+            if v.concretetype == lltype.Void:
+                continue
+            emitted_args.append(self.serialize_oparg("red", v))
+        self.emit("builtin_oosend")
+        self.emit(len(emitted_args))
+        self.emit(*emitted_args)
+        methdescindex = self.methdesc_position(SELFTYPE, name)
+        self.emit(methdescindex)
+        self.emit(has_result)
+        if has_result:
+            self.register_redvar(op.result)
+
+    def handle_red_oosend(self, op, withexc):
+        SELFTYPE, name, opargs = self.decompose_oosend(op)
+        has_result = self.has_result(op)
+        graph2tsgraph = dict(self.graphs_from(op))
+        self.fill_methodcodes(SELFTYPE, name, graph2tsgraph)
+        args = graph2tsgraph.values()[0].getargs()
+        emitted_args = self.args_of_call(op.args[1:], args)
+        self.emit("red_oosend")
+        self.emit(*emitted_args)
+        methnameindex = self.string_position(name)
+        self.emit(methnameindex)
+        if has_result:
+            self.register_redvar(op.result)
+
+    def handle_yellow_oosend(self, op, withexc):
+        self.handle_red_oosend(op, withexc)
+        self.emit("yellow_retrieve_result_as_red")
+        self.emit(self.type_position(op.result.concretetype))
 
     def fill_methodcodes(self, INSTANCE, methname, graph2tsgraph):
         TYPES = [INSTANCE] + INSTANCE._subclasses

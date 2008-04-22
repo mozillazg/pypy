@@ -1094,7 +1094,7 @@ class OOTypeJitInterpreter(JitInterpreter):
                  start_bytecode_loop=False)
 
     @arguments("red_varargs", "methdesc", "bool")
-    def opimpl_external_oosend(self, redargs, methdesc, has_result):
+    def opimpl_builtin_oosend(self, redargs, methdesc, has_result):
         result = rtimeshift.gen_external_oosend(self.jitstate, redargs,
                                                 methdesc)
         if has_result:

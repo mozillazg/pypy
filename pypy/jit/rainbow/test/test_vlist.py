@@ -1,6 +1,7 @@
 import py
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
 from pypy.rlib.jit import hint
 
 
@@ -189,7 +190,7 @@ class VListTest(InterpretationTest):
         assert res == -7
 
 
-class TestOOType(VListTest):
+class TestOOType(OOTypeMixin, VListTest):
     type_system = "ootype"
 
 class TestLLType(VListTest):
