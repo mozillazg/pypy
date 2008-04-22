@@ -491,10 +491,8 @@ class GCTransformer(BaseGCTransformer):
         assert not TYPE._is_varsize()
         flags = hop.spaceop.args[1].value
         flavor = flags['flavor']
-        if flavor == 'nonmovable':
-            flavor = 'gc'
         meth = getattr(self, 'gct_fv_%s_malloc' % flavor, None)
-        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor)
+        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor) 
         c_size = rmodel.inputconst(lltype.Signed, llmemory.sizeof(TYPE))
         v_raw = meth(hop, flags, TYPE, c_size)
         hop.cast_result(v_raw)
@@ -511,16 +509,15 @@ class GCTransformer(BaseGCTransformer):
                           resulttype=llmemory.Address)
         if flags.get('zero'):
             hop.genop("raw_memclear", [v_raw, c_size])
-        return v_raw
+        return v_raw        
 
     def gct_malloc_varsize(self, hop):
-        op = hop.spaceop
-        TYPE = op.result.concretetype.TO
+
         flags = hop.spaceop.args[1].value
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
-        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor)
+        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
     gct_malloc_nonmovable = gct_malloc
