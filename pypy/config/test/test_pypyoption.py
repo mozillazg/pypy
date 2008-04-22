@@ -16,16 +16,10 @@ def test_required():
     conf.objspace.std.withprebuiltint = True
     py.test.raises(ConfigError, "conf.objspace.std.withsmallint = True")
 
-def test_stacklessgc_required():
-    conf = get_pypy_config()
-    conf.translation.gcrootfinder = "stackless"
-    assert conf.translation.stackless
-    assert conf.translation.type_system == "lltype"
-    assert conf.translation.gctransformer == "framework"
-    assert conf.translation.gc == "generation"
+def test_conflicting_gcrootfinder():
     conf = get_pypy_config()
     conf.translation.gc = "boehm"
-    py.test.raises(ConfigError, "conf.translation.gcrootfinder = 'stackless'")
+    py.test.raises(ConfigError, "conf.translation.gcrootfinder = 'asmgcc'")
 
 
 def test_frameworkgc():

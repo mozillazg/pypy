@@ -65,13 +65,11 @@ translation_optiondescription = OptionDescription(
                  }),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
-                 ["n/a", "shadowstack", "stackless", "llvmgc", "asmgcc"],
+                 ["n/a", "shadowstack", "llvmgc", "asmgcc"],
                  "shadowstack",
                  cmdline="--gcrootfinder",
                  requires={
                      "shadowstack": [("translation.gctransformer", "framework")],
-                     "stackless": [("translation.gctransformer", "framework"),
-                                   ("translation.stackless", True)],
                      "llvmgc": [("translation.gctransformer", "framework"),
                                 ("translation.backend", "llvm")],
                      "asmgcc": [("translation.gctransformer", "framework"),
@@ -79,7 +77,6 @@ translation_optiondescription = OptionDescription(
                     },
                  suggests={
                      "shadowstack": [("translation.gc", "generation")],
-                     "stackless": [("translation.gc", "generation")],
                      "llvmgc": [("translation.gc", "generation")],
                      "asmgcc": [("translation.gc", "generation")],
                  }),

@@ -824,6 +824,7 @@ class TestUsingFramework(AbstractGCTestClass):
         slong = cast_type_to_ffitype(rffi.LONG)
 
         def callback(ll_args, ll_res, stuff):
+            gc.collect()
             p_a1 = rffi.cast(rffi.VOIDPP, ll_args[0])[0]
             p_a2 = rffi.cast(rffi.VOIDPP, ll_args[1])[0]
             a1 = rffi.cast(rffi.INTP, p_a1)[0]
@@ -833,7 +834,6 @@ class TestUsingFramework(AbstractGCTestClass):
                 res[0] = 1
             else:
                 res[0] = -1
-            gc.collect()
 
         def f():
             libc = CDLL('libc.so.6')
@@ -863,31 +863,6 @@ class TestUsingFramework(AbstractGCTestClass):
         c_fn = self.getcompiled(f)
         assert c_fn() == 1
 
-class TestUsingStacklessFramework(TestUsingFramework):
-
-    def getcompiled(self, f):
-        # XXX quick hack
-        from pypy.translator.c.test.test_stackless import StacklessTest
-        runner = StacklessTest()
-        runner.gcpolicy = self.gcpolicy
-        runner.stacklessgc = True
-        try:
-            res = runner.wrap_stackless_function(f)
-        except py.process.cmdexec.Error, e:
-            if 'Fatal RPython error: MemoryError' in e.err:
-                res = MemoryError
-            else:
-                raise
-        self.t = runner.t
-        def compiled():
-            if res is MemoryError:
-                raise MemoryError
-            else:
-                return res
-        return compiled
-
-    def test_weakref(self):
-        py.test.skip("fails for some reason I couldn't figure out yet :-(")
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
     gcpolicy = "semispace"
