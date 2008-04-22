@@ -13,18 +13,6 @@ from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.rarithmetic import intmask, r_uint, r_singlefloat
 from pypy.module._rawffi.tracker import tracker
 
-def _signed_type_for(TYPE):
-    sz = rffi.sizeof(TYPE)
-    if sz == 4:   return ffi_type_sint32
-    elif sz == 8: return ffi_type_sint64
-    else: raise ValueError("unsupported type size for %r" % (TYPE,))
-
-def _unsigned_type_for(TYPE):
-    sz = rffi.sizeof(TYPE)
-    if sz == 4:   return ffi_type_uint32
-    elif sz == 8: return ffi_type_uint64
-    else: raise ValueError("unsupported type size for %r" % (TYPE,))
-
 TYPEMAP = {
     # XXX A mess with unsigned/signed/normal chars :-/
     'c' : ffi_type_uchar,
@@ -33,14 +21,12 @@ TYPEMAP = {
     'h' : ffi_type_sshort,
     'u' : ffi_type_uint, # XXX think deeper how to map it properly
     'H' : ffi_type_ushort,
-    'i' : ffi_type_sint,
-    'I' : ffi_type_uint,
-    # xxx don't use ffi_type_slong and ffi_type_ulong - their meaning
-    # changes from a libffi version to another :-((
-    'l' : _signed_type_for(rffi.LONG),
-    'L' : _unsigned_type_for(rffi.ULONG),
-    'q' : _signed_type_for(rffi.LONGLONG),
-    'Q' : _unsigned_type_for(rffi.ULONGLONG),
+    'i' : cast_type_to_ffitype(rffi.INT),
+    'I' : cast_type_to_ffitype(rffi.UINT),
+    'l' : cast_type_to_ffitype(rffi.LONG),
+    'L' : cast_type_to_ffitype(rffi.ULONG),
+    'q' : cast_type_to_ffitype(rffi.LONGLONG),
+    'Q' : cast_type_to_ffitype(rffi.ULONGLONG),
     'f' : ffi_type_float,
     'd' : ffi_type_double,
     's' : ffi_type_pointer,

@@ -10,6 +10,7 @@ from pypy.translator.c import genc, gc
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.test import snippet
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy import conftest
 
 def compile_func(fn, inputtypes, t=None, gcpolicy="ref"):
@@ -815,15 +816,18 @@ class TestUsingFramework(AbstractGCTestClass):
 
     def test_callback_with_collect(self):
         py.test.skip("Segfaults")
-        from pypy.rlib.libffi import ffi_type_pointer, ffi_type_slong,\
+        from pypy.rlib.libffi import ffi_type_pointer, cast_type_to_ffitype,\
              CDLL, ffi_type_void, CallbackFuncPtr, ffi_type_sint
         from pypy.rpython.lltypesystem import rffi
         from pypy.rlib import rgc
         import gc
+        slong = cast_type_to_ffitype(rffi.LONG)
 
         def callback(ll_args, ll_res, stuff):
-            a1 = rffi.cast(rffi.INTP, rffi.cast(rffi.VOIDPP, ll_args[0])[0])[0]
-            a2 = rffi.cast(rffi.INTP, rffi.cast(rffi.VOIDPP, ll_args[0])[1])[0]
+            p_a1 = rffi.cast(rffi.VOIDPP, ll_args[0])[0]
+            p_a2 = rffi.cast(rffi.VOIDPP, ll_args[1])[0]
+            a1 = rffi.cast(rffi.INTP, p_a1)[0]
+            a2 = rffi.cast(rffi.INTP, p_a2)[0]
             res = rffi.cast(rffi.INTP, ll_res)
             if a1 > a2:
                 res[0] = 1
@@ -833,8 +837,8 @@ class TestUsingFramework(AbstractGCTestClass):
 
         def f():
             libc = CDLL('libc.so.6')
-            qsort = libc.getpointer('qsort', [ffi_type_pointer, ffi_type_slong,
-                                              ffi_type_slong, ffi_type_pointer],
+            qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
+                                              slong, ffi_type_pointer],
                                 ffi_type_void)
 
             ptr = CallbackFuncPtr([ffi_type_pointer, ffi_type_pointer],
@@ -853,6 +857,7 @@ class TestUsingFramework(AbstractGCTestClass):
             qsort.call(lltype.Void)
             result = [to_sort[i] for i in range(4)] == [1,2,3,4]
             lltype.free(to_sort, flavor='raw')
+            keepalive_until_here(ptr)
             return int(result)
 
         c_fn = self.getcompiled(f)
