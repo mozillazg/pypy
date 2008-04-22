@@ -61,11 +61,20 @@ class BaseTestImpurityAnalyzer(object):
         res = impurity.analyze_direct_call(self.translator.graphs[0])
         assert res is False     # not impure
 
+# XXX failing test
+##    def test_builtin_method(self):
+##        def fn(flag):
+##            if flag:
+##                s = "foo" + str(flag)
+##            else:
+##                s = "bar" + str(flag)
+##            return len(s)
+##        impurity = self.translate(fn, [bool])
+##        res = impurity.analyze_direct_call(self.translator.graphs[0])
+##        assert res is False     # not impure
 
 class TestLLType(LLRtypeMixin, BaseTestImpurityAnalyzer):
     pass
 
-# no chance on OOType before we add "pure" annotations on
-# all the relevant built-in methods
-#class TestOOType(OORtypeMixin, BaseTestImpurityAnalyzer):
-#    pass
+class TestOOType(OORtypeMixin, BaseTestImpurityAnalyzer):
+    pass
