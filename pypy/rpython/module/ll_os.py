@@ -487,10 +487,8 @@ class RegisterOs(BaseLazyRegistering):
         def os_read_llimpl(fd, count):
             if count < 0:
                 raise OSError(errno.EINVAL, None)
-            raw_buf = lltype.nullptr(rffi.CCHARP.TO)    
-            gc_buf = lltype.nullptr(STR)
+            raw_buf, gc_buf = rffi.alloc_buffer(count)
             try:
-                raw_buf, gc_buf = rffi.alloc_buffer(count)
                 void_buf = rffi.cast(rffi.VOIDP, raw_buf)
                 got = rffi.cast(lltype.Signed, os_read(fd, void_buf, count))
                 if got < 0:
@@ -512,10 +510,9 @@ class RegisterOs(BaseLazyRegistering):
                                    rffi.SIZE_T)
 
         def os_write_llimpl(fd, data):
-            buf = lltype.nullptr(rffi.CCHARP.TO)
+            count = len(data)
+            buf = rffi.get_nonmovingbuffer(data)
             try:
-                count = len(data)
-                buf = rffi.get_nonmovingbuffer(data)
                 written = rffi.cast(lltype.Signed, os_write(
                     rffi.cast(rffi.INT, fd),
                     buf, rffi.cast(rffi.SIZE_T, count)))

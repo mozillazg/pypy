@@ -434,10 +434,8 @@ class BaseTestRffi:
     def test_nonmoving(self):
         d = 'non-moving data stuff'
         def f():
-            gc_buf = lltype.nullptr(STR)
-            raw_buf = lltype.nullptr(CCHARP.TO)
+            raw_buf, gc_buf = alloc_buffer(len(d))
             try:
-                raw_buf, gc_buf = alloc_buffer(len(d))
                 for i in range(len(d)):
                     raw_buf[i] = d[i]
                 return str_from_buffer(raw_buf, gc_buf, len(d), len(d)-1)
@@ -450,9 +448,8 @@ class BaseTestRffi:
     def test_nonmovingbuffer(self):
         d = 'some cool data that should not move'
         def f():
-            buf = lltype.nullptr(CCHARP.TO)
+            buf = get_nonmovingbuffer(d)
             try:
-                buf = get_nonmovingbuffer(d)
                 counter = 0
                 for i in range(len(d)):
                     if buf[i] == d[i]:
@@ -466,9 +463,8 @@ class BaseTestRffi:
     def test_nonmovingbuffer_semispace(self):
         d = 'some cool data that should not move'
         def f():
-            buf = lltype.nullptr(CCHARP.TO)
+            buf = get_nonmovingbuffer(d)
             try:
-                buf = get_nonmovingbuffer(d)
                 counter = 0
                 for i in range(len(d)):
                     if buf[i] == d[i]:
