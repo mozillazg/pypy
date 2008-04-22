@@ -5,7 +5,6 @@ from pypy.translator.c import gc
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.memory.gctransform import framework
-from pypy.rpython.memory.gctransform import stacklessframework
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.marksweep import X_CLONE, X_POOL, X_POOL_PTR
 from pypy.rlib.objectmodel import compute_unique_id
@@ -714,20 +713,6 @@ class TestMarkSweepGC(GenericGCTests):
         run, statistics = self.runner(malloc_a_lot, statistics=True,
                                       backendopt=True, coalloc=True)
         run([])
-
-
-
-class TestStacklessMarkSweepGC(TestMarkSweepGC):
-    gcname = "marksweep"
-
-    stacklessgc = True
-    class gcpolicy(gc.StacklessFrameworkGcPolicy):
-        class transformerclass(stacklessframework.StacklessFrameworkGCTransformer):
-            GC_PARAMS = {'start_heap_size': 4096 }
-            root_stack_depth = 200
-
-    def test_instances(self):
-        py.test.skip("fails for a stupid reasons")
 
 
 class TestPrintingGC(GenericGCTests):
