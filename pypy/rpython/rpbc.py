@@ -11,6 +11,7 @@ from pypy.rpython.rmodel import Repr, inputconst, CanBeNull, \
         mangle, inputdesc, warning, impossible_repr
 from pypy.rpython import rclass
 from pypy.rpython import robject
+from pypy.rpython.annlowlevel import llstr
 
 from pypy.rpython import callparse
 
@@ -604,6 +605,9 @@ class NoneFrozenPBCRepr(Repr):
 
     def none_call(self, hop):
         raise TyperError("attempt to call constant None")
+
+    def ll_str(self, none):
+        return llstr("None")
 
     rtype_simple_call = none_call
     rtype_call_args = none_call
