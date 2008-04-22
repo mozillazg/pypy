@@ -533,9 +533,8 @@ def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
     str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
     if gc_buf:
         if allocated_size != needed_size:
-            new_buf = lltype.nullptr(STR)
+            new_buf = lltype.malloc(STR, needed_size)
             try:
-                new_buf = lltype.malloc(STR, needed_size)
                 dest = cast_ptr_to_adr(new_buf) + str_chars_offset
                 ## FIXME: This is bad, because dest could potentially move
                 ## if there are threads involved.
@@ -545,9 +544,8 @@ def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
                 keepalive_until_here(new_buf)
         return hlstr(gc_buf)
     else:
-        new_buf = lltype.nullptr(STR)
+        new_buf = lltype.malloc(STR, needed_size)
         try:
-            new_buf = lltype.malloc(STR, needed_size)
             dest = cast_ptr_to_adr(new_buf) + str_chars_offset
             ## FIXME: see above
             raw_memcopy(cast_ptr_to_adr(raw_buf), dest, sizeof(lltype.Char) * needed_size)
