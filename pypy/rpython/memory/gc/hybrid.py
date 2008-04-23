@@ -143,6 +143,10 @@ class HybridGC(GenerationGC):
         # In order to free the large objects from time to time, we
         # arbitrarily force a full collect() if none occurs when we have
         # allocated 'self.space_size' bytes of large objects.
+        # XXX we should probably track the total raw_malloc'ed size
+        # XXX and adjust sizes based on it; otherwise we risk doing
+        # XXX many many collections if the program allocates a lot
+        # XXX more than the current self.space_size.
         self.large_objects_collect_trigger -= raw_malloc_usage(totalsize)
         if self.large_objects_collect_trigger < 0:
             self.semispace_collect()
