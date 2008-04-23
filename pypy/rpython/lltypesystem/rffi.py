@@ -18,6 +18,7 @@ from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.rpython.annlowlevel import llhelper, llstr, hlstr
 from pypy.rpython.lltypesystem.rstr import STR
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import llmemory
 import os
 
 class UnhandledRPythonException(Exception):
@@ -538,7 +539,8 @@ def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
                 dest = cast_ptr_to_adr(new_buf) + str_chars_offset
                 ## FIXME: This is bad, because dest could potentially move
                 ## if there are threads involved.
-                raw_memcopy(cast_ptr_to_adr(raw_buf), dest, sizeof(lltype.Char) * needed_size)
+                raw_memcopy(cast_ptr_to_adr(raw_buf), dest,
+                            llmemory.sizeof(lltype.Char) * needed_size)
                 return hlstr(new_buf)
             finally:
                 keepalive_until_here(new_buf)
@@ -548,7 +550,8 @@ def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
         try:
             dest = cast_ptr_to_adr(new_buf) + str_chars_offset
             ## FIXME: see above
-            raw_memcopy(cast_ptr_to_adr(raw_buf), dest, sizeof(lltype.Char) * needed_size)
+            raw_memcopy(cast_ptr_to_adr(raw_buf), dest,
+                        llmemory.sizeof(lltype.Char) * needed_size)
             return hlstr(new_buf)
         finally:
             keepalive_until_here(new_buf)
