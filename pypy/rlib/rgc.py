@@ -262,9 +262,18 @@ def resize_raw_array(arr, old_size, new_size):
 class ResizeRawArrayEntry(ExtRegistryEntry):
     _about_ = resize_raw_array
 
-def cast_raw_array_to_shape(T, arr):
+def cast_raw_array_to_shape(T, arr, size):
     """ Cast raw array returned by raw_array_of_shape to type T.
     """
-    from pypy.rpython.lltypesystem import rffi, lltype
-    return rffi.cast(lltype.Ptr(T), arr)
+    from pypy.rpython.lltypesystem import lltype
+    res = lltype.malloc(T, size)
+    if isinstance(T, lltype.Array):
+        array_elem = res
+    elif isinstance(T, lltype.Struct):
+        array_elem = getattr(res, T._arrayfld)
+    else:
+        raise TypeError("Cannot cast %s" % T)
+    for num in range(size):
+        array_elem[num] = arr[num]
+    return res
 
