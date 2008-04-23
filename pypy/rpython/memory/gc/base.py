@@ -59,14 +59,7 @@ class GCBase(object):
 
         size = self.fixed_size(typeid)
         needs_finalizer = bool(self.getfinalizer(typeid))
-        weakptr_offset = self.weakpointer_offset(typeid)
-        #XXX cannot compare weakptr_offset with -1
-        #contains_weakptr = weakpointer_offset. != -1
-        if isinstance(weakptr_offset, int):
-            assert weakptr_offset == -1
-            contains_weakptr = False
-        else:
-            contains_weakptr = True
+        contains_weakptr = self.weakpointer_offset(typeid) >= 0
         assert not (needs_finalizer and contains_weakptr)
         if self.is_varsize(typeid):
             assert not contains_weakptr
