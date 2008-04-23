@@ -318,18 +318,22 @@ class SemiSpaceGC(MovingGCBase):
             #llop.debug_print(lltype.Void, obj, "already copied to", self.get_forwarding_address(obj))
             return self.get_forwarding_address(obj)
         else:
-            newaddr = self.free
             objsize = self.get_size(obj)
-            totalsize = self.size_gc_header() + objsize
-            llarena.arena_reserve(newaddr, totalsize)
-            raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
-            self.free += totalsize
-            newobj = newaddr + self.size_gc_header()
+            newobj = self.make_a_copy(obj, objsize)
             #llop.debug_print(lltype.Void, obj, "copied to", newobj,
             #                 "tid", self.header(obj).tid,
             #                 "size", totalsize)
             self.set_forwarding_address(obj, newobj, objsize)
             return newobj
+
+    def make_a_copy(self, obj, objsize):
+        totalsize = self.size_gc_header() + objsize
+        newaddr = self.free
+        self.free += totalsize
+        llarena.arena_reserve(newaddr, totalsize)
+        raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
+        newobj = newaddr + self.size_gc_header()
+        return newobj
 
     def trace_and_copy(self, obj):
         self.trace(obj, self._trace_copy, None)
