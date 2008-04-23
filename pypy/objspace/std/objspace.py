@@ -4,7 +4,8 @@ from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter import pyframe
-from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table
+from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table, \
+     BytecodeCorruption
 from pypy.rlib.objectmodel import instantiate
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache 
