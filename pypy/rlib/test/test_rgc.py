@@ -49,6 +49,3 @@ def test_raw_array():
         return hlstr(rgc.cast_raw_array_to_shape(STR, arr, 2))
 
     assert f() == 'ab'
-#    from pypy.translator.c.test.test_genc import compile
-#    fn = compile(f, [])
-#    assert fn() == 'ab'
