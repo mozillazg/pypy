@@ -42,6 +42,16 @@ class GCManagedHeap(object):
         else:
             return lltype.malloc(TYPE, n, flavor=flavor, zero=zero)
 
+    def malloc_nonmovable(self, TYPE, n=None, zero=False):
+        typeid = self.get_type_id(TYPE)
+        if self.gc.moving_gc:
+            return lltype.nullptr(TYPE)
+        addr = self.gc.malloc(typeid, n, zero=zero)
+        result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
+        if not self.gc.malloc_zero_filled:
+            gctypelayout.zero_gc_pointers(result)
+        return result
+
     def free(self, TYPE, flavor='gc'):
         assert flavor != 'gc'
         return lltype.free(TYPE, flavor=flavor)

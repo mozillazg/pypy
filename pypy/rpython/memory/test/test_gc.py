@@ -396,6 +396,39 @@ class GCTest(object):
             return rgc.can_move(lltype.malloc(TP, 1))
         assert self.interpret(func, []) == self.GC_CAN_MOVE
 
+    
+    def test_malloc_nonmovable(self):
+        TP = lltype.GcArray(lltype.Char)
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP, 3)
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
+
+    def test_malloc_nonmovable_fixsize(self):
+        S = lltype.GcStruct('S', ('x', lltype.Float))
+        TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP)
+                rgc.collect()
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
+
 class TestMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.marksweep import MarkSweepGC as GCClass
 

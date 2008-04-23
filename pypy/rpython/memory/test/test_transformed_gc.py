@@ -457,12 +457,13 @@ class GenericGCTests(GCTest):
         res = run([])
         assert res == self.GC_CAN_MOVE
 
-    def _test_malloc_nonmovable(self):
+    def test_malloc_nonmovable(self):
         TP = lltype.GcArray(lltype.Char)
         def func():
             try:
                 from pypy.rlib import rgc
                 a = rgc.malloc_nonmovable(TP, 3)
+                rgc.collect()
                 if a:
                     assert not rgc.can_move(a)
                     return 0
@@ -470,12 +471,10 @@ class GenericGCTests(GCTest):
             except Exception, e:
                 return 2
 
-        # this test would have different outcome for different
-        # gcs, please assert differently
         run = self.runner(func)
-        return run([])
+        assert int(self.GC_CAN_MOVE) == run([])
 
-    def _test_malloc_nonmovable_fixsize(self):
+    def test_malloc_nonmovable_fixsize(self):
         S = lltype.GcStruct('S', ('x', lltype.Float))
         TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
         def func():
@@ -490,26 +489,23 @@ class GenericGCTests(GCTest):
             except Exception, e:
                 return 2
 
-        # this test would have different outcome for different
-        # gcs, please assert differently
         run = self.runner(func)
-        return run([])            
+        assert run([]) == int(self.GC_CAN_MOVE)
 
-    def test_malloc_nonmovable(self):
-        res = self._test_malloc_nonmovable()
-        if self.GC_CAN_MOVE:
-            expected = 1
-        else:
-            expected = 0
-        assert res == expected
+    def test_raw_array(self):
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib import rgc
 
-    def test_malloc_nonmovable_fixsize(self):
-        res = self._test_malloc_nonmovable_fixsize()
-        if self.GC_CAN_MOVE:
-            expected = 1
-        else:
-            expected = 0
-        assert res == expected
+        def f():
+            arr = rgc.raw_array_of_shape(STR, 1)
+            arr[0] = 'a'
+            arr = rgc.resize_raw_array(arr, 1, 2)
+            arr[1] = 'b'
+            return len(hlstr(rgc.cast_raw_array_to_shape(STR, arr, 2)))
+
+        run = self.runner(f)
+        assert run([]) == 2
 
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
