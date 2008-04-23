@@ -33,6 +33,13 @@ class GenerationGC(SemiSpaceGC):
     prebuilt_gc_objects_are_static_roots = False
     first_unused_gcflag = SemiSpaceGC.first_unused_gcflag << 2
 
+    # the following values override the default arguments of __init__ when
+    # translating to a real backend.
+    TRANSLATION_PARAMS = {'space_size': 8*1024*1024, # XXX adjust
+                          'nursery_size': 896*1024,
+                          'min_nursery_size': 48*1024,
+                          'auto_nursery_size': True}
+
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE,
                  nursery_size=128,
                  min_nursery_size=128,

@@ -16,6 +16,12 @@ class HybridGC(GenerationGC):
     """
     first_unused_gcflag = GenerationGC.first_unused_gcflag << 1
 
+    # the following values override the default arguments of __init__ when
+    # translating to a real backend.
+    TRANSLATION_PARAMS = GenerationGC.TRANSLATION_PARAMS.copy()
+    TRANSLATION_PARAMS['large_object'] = 1024    # XXX adjust
+    TRANSLATION_PARAMS['large_object_gcptrs'] = 8192    # XXX adjust
+
     def __init__(self, *args, **kwds):
         large_object = kwds.pop('large_object', 24)
         large_object_gcptrs = kwds.pop('large_object_gcptrs', 32)
