@@ -1,4 +1,4 @@
 rpython/test/test_rbuiltin.py
 rpython/module/test/test_posix.py
-rpython/lltypesystem/test/test_lloperation.py
-rpython/memory/test/test_transformed_gc.py -k test_malloc_nonmovable_fixsize
+
+
