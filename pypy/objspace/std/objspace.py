@@ -4,6 +4,7 @@ from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter import pyframe
+from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table
 from pypy.rlib.objectmodel import instantiate
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache 
@@ -17,6 +18,7 @@ from pypy.rlib.rarithmetic import base_int, r_int, r_uint, \
      r_longlong, r_ulonglong
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint, we_are_jitted
+from pypy.rlib.unroll import unrolling_iterable
 import sys
 import os
 import __builtin__
@@ -39,6 +41,19 @@ def registerimplementation(implcls):
     # hint to objspace.std.model to register the implementation class
     assert issubclass(implcls, W_Object)
     _registered_implementations[implcls] = True
+
+
+compare_table = [
+    "lt",   # "<"
+    "le",   # "<="
+    "eq",   # "=="
+    "ne",   # "!="
+    "gt",   # ">"
+    "ge",   # ">="
+    ]
+
+unrolling_compare_ops = unrolling_iterable(
+    enumerate(compare_table))
 
 ##################################################################
 
@@ -149,6 +164,29 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 # def CALL_METHOD(...):
                 from pypy.objspace.std.callmethod import CALL_METHOD
 
+            if self.config.objspace.std.optimized_comparison_op:
+                def COMPARE_OP(f, testnum, *ignored):
+                    import operator
+                    w_2 = f.popvalue()
+                    w_1 = f.popvalue()
+                    w_result = None
+                    if (type(w_2) is W_IntObject and type(w_1) is W_IntObject
+                        and testnum < len(compare_table)):
+                        for i, attr in unrolling_compare_ops:
+                            if i == testnum:
+                                op = getattr(operator, attr)
+                                w_result = f.space.newbool(op(w_1.intval,
+                                                              w_2.intval))
+                                break
+                    else:
+                        for i, attr in unrolling_compare_dispatch_table:
+                            if i == testnum:
+                                w_result = getattr(f, attr)(w_1, w_2)
+                                break
+                        else:
+                            raise BytecodeCorruption, "bad COMPARE_OP oparg"
+                    f.pushvalue(w_result)
+
             if self.config.objspace.std.logspaceoptypes:
                 _space_op_types = []
                 for name, func in pyframe.PyFrame.__dict__.iteritems():
@@ -182,7 +220,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
                                 w_result = operation(w_1)
                                 f.pushvalue(w_result)
                             return func_with_new_name(opimpl, "opcode_impl_for_%s" % operationname)
-                        locals()[name] = make_opimpl(operationname)
+                        locals()[name] = make_opimpl(operationname)                    
 
         self.FrameClass = StdObjSpaceFrame
 

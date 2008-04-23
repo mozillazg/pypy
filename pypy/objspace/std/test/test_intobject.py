@@ -418,3 +418,9 @@ class AppTestIntOptimizedAdd(AppTestInt):
     def setup_class(cls):
         from pypy.conftest import gettestobjspace
         cls.space = gettestobjspace(**{"objspace.std.optimized_int_add": True})
+
+class AppTestIntOptimizedComp(AppTestInt):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.std.optimized_comparison_op": True})
+        
