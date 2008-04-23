@@ -263,6 +263,12 @@ class GenerationGC(SemiSpaceGC):
         # the next usage.
 
     def reset_young_gcflags(self):
+        # This empties self.old_objects_pointing_to_young, and puts the
+        # GCFLAG_NO_YOUNG_PTRS back on all these objects.  Note that
+        # trace_and_copy() above would also put the GCFLAG_NO_YOUNG_PTRS
+        # back on the same objects (unless they die, and then it doesn't
+        # matter) -- except that trace_and_copy() doesn't see the prebuilt
+        # objects.
         oldlist = self.old_objects_pointing_to_young
         while oldlist.non_empty():
             obj = oldlist.pop()
