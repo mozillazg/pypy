@@ -38,7 +38,6 @@ def test_can_move():
     assert res == True
     
 def test_raw_array():
-    py.test.skip("Not working")
     from pypy.rpython.lltypesystem.rstr import STR
     from pypy.rpython.annlowlevel import hlstr
     
@@ -47,7 +46,7 @@ def test_raw_array():
         arr[0] = 'a'
         arr = rgc.resize_raw_array(arr, 1, 2)
         arr[1] = 'b'
-        return hlstr(rgc.cast_raw_array_to_shape(STR, arr))
+        return hlstr(rgc.cast_raw_array_to_shape(STR, arr, 2))
 
     assert f() == 'ab'
 #    from pypy.translator.c.test.test_genc import compile
