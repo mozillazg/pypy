@@ -346,7 +346,7 @@ class BaseExceptionTransformer(object):
         block.recloseblock(l0, l)
 
         insert_zeroing_op = False
-        if spaceop.opname == 'malloc':
+        if spaceop.opname == 'malloc' or spaceop.opname == 'malloc_nonmovable':
             flavor = spaceop.args[1].value['flavor']
             if flavor == 'gc':
                 insert_zeroing_op = True
