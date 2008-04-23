@@ -21,6 +21,7 @@ def stdout_ignore_ll_functions(msg):
 
 class GCTest(object):
     GC_PARAMS = {}
+    GC_CAN_MOVE = False
 
     def setup_class(cls):
         cls._saved_logstate = py.log._getstate()
@@ -388,12 +389,19 @@ class GCTest(object):
         res = self.interpret(f, [])
         assert res == 42
 
+    def test_can_move(self):
+        TP = lltype.GcArray(lltype.Float)
+        def func():
+            from pypy.rlib import rgc
+            return rgc.can_move(lltype.malloc(TP, 1))
+        assert self.interpret(func, []) == self.GC_CAN_MOVE
 
 class TestMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.marksweep import MarkSweepGC as GCClass
 
 class TestSemiSpaceGC(GCTest, snippet.SemiSpaceGCTests):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
+    GC_CAN_MOVE = True
 
 class TestGrowingSemiSpaceGC(TestSemiSpaceGC):
     GC_PARAMS = {'space_size': 64}
