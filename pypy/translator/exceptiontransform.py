@@ -346,6 +346,9 @@ class BaseExceptionTransformer(object):
         block.recloseblock(l0, l)
 
         insert_zeroing_op = False
+        # XXX this is not right. it also inserts zero_gc_pointers_inside
+        # XXX on a path that malloc_nonmovable returns null, but does not raise
+        # XXX which might end up with a segfault. But we don't have such gc now
         if spaceop.opname == 'malloc' or spaceop.opname == 'malloc_nonmovable':
             flavor = spaceop.args[1].value['flavor']
             if flavor == 'gc':
