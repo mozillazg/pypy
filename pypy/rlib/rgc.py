@@ -232,3 +232,39 @@ class MallocNonMovingEntry(ExtRegistryEntry):
 
         hop.exception_cannot_occur()
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
+
+def raw_array_of_shape(T, init_size):
+    """ Allocates a raw array of given shape. This array is suitable
+    for resizing by resize_raw_array or finalizing calling
+    cast_raw_array_to_shape
+    """
+    from pypy.rpython.lltypesystem import lltype
+    return lltype.malloc(lltype.Array(lltype.Char, hints={'nolength':True}),
+                         init_size, flavor='raw')
+
+class RawArrayOfShapeEntry(ExtRegistryEntry):
+    _about_ = raw_array_of_shape
+
+def resize_raw_array(arr, old_size, new_size):
+    """ Resize raw array returned by raw_array_of_shape from old_size
+    to new_size. Returns pointer to new array (in case resizing copied
+    contents of old array to new place
+    """
+    from pypy.rpython.lltypesystem import lltype
+    # we don't have any realloc on top of cpython
+    new_ar = lltype.malloc(lltype.Array(lltype.Char, hints={'nolength':True}),
+                           new_size, flavor='raw')
+    for i in range(old_size):
+        new_ar[i] = arr[i]
+    lltype.free(arr, flavor='raw')
+    return new_ar
+
+class ResizeRawArrayEntry(ExtRegistryEntry):
+    _about_ = resize_raw_array
+
+def cast_raw_array_to_shape(T, arr):
+    """ Cast raw array returned by raw_array_of_shape to type T.
+    """
+    from pypy.rpython.lltypesystem import rffi, lltype
+    return rffi.cast(lltype.Ptr(T), arr)
+
