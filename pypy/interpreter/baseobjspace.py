@@ -65,6 +65,9 @@ class W_Root(object):
         raise OperationError(space.w_TypeError,
                              space.wrap("__class__ assignment: only for heap types"))
 
+    def user_setup(self, space, w_subtype):
+        assert False, "only for interp-level user subclasses from typedef.py"
+
     def getname(self, space, default):
         try:
             return space.str_w(space.getattr(self, space.wrap('__name__')))
