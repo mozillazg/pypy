@@ -684,6 +684,12 @@ class LLFrame(object):
             return ptr
         except MemoryError:
             self.make_llexception()
+            
+    def op_malloc_nonmovable(self, obj, flags, size):
+        raise NotImplementedError
+        
+    def op_malloc_nonmovable_varsize(self, obj, flags, size):
+        raise NotImplementedError
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
