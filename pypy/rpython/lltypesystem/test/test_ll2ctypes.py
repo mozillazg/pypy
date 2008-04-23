@@ -6,7 +6,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
 from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
-from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
+from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED, force_cast
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -817,3 +817,13 @@ class TestLL2Ctypes(object):
         c1 = lltype2ctypes(a1)
         c2 = lltype2ctypes(a2)
         assert type(c1) is type(c2)
+
+    def test_varsized_struct(self): 
+        STR = lltype.Struct('rpy_string', ('hash',  lltype.Signed),
+                            ('chars', lltype.Array(lltype.Char, hints={'immutable': True})))
+        s = lltype.malloc(STR, 3, flavor='raw')
+        one = force_cast(rffi.VOIDP, s)
+        # sanity check
+        #assert lltype2ctypes(one).contents.items._length_ > 0
+        two = force_cast(lltype.Ptr(STR), one)
+        assert s == two

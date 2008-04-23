@@ -241,9 +241,12 @@ def convert_array(container, carray=None):
         carray = cls._malloc(container.getlength())
     add_storage(container, _array_mixin, carray)
     if not isinstance(ARRAY.OF, lltype.ContainerType):
+        # fish that we have enough space
+        ctypes_array = ctypes.cast(carray.items,
+                                   ctypes.POINTER(carray.items._type_))
         for i in range(container.getlength()):
             item_value = container.items[i]    # fish fish
-            carray.items[i] = lltype2ctypes(item_value)
+            ctypes_array[i] = lltype2ctypes(item_value)
         remove_regular_array_content(container)
     else:
         assert isinstance(ARRAY.OF, lltype.Struct)
@@ -262,7 +265,10 @@ def struct_use_ctypes_storage(container, ctypes_storage):
     remove_regular_struct_content(container)
     for field_name in STRUCT._names:
         FIELDTYPE = getattr(STRUCT, field_name)
-        if isinstance(FIELDTYPE, lltype.ContainerType):
+        if isinstance(FIELDTYPE, lltype.Array):
+            convert_array(getattr(container, field_name),
+                          getattr(ctypes_storage, field_name))
+        elif isinstance(FIELDTYPE, lltype.ContainerType):
             struct_use_ctypes_storage(getattr(container, field_name),
                                       getattr(ctypes_storage, field_name))
 
@@ -498,8 +504,10 @@ def ctypes2lltype(T, cobj):
             return lltype.nullptr(T.TO)
         if isinstance(T.TO, lltype.Struct):
             if T.TO._arrayfld is not None:
-                raise NotImplementedError("XXX var-sized structs")
-            container = lltype._struct(T.TO)
+                lgt = getattr(cobj.contents, T.TO._arrayfld).length
+                container = lltype._struct(T.TO, lgt)
+            else:
+                container = lltype._struct(T.TO)
             struct_use_ctypes_storage(container, cobj.contents)
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):
