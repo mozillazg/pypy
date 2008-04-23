@@ -269,31 +269,19 @@ def choose_gc_from_config(config):
     """
     if config.translation.gctransformer != "framework":   # for tests
         config.translation.gc = "marksweep"     # crash if inconsistent
-    if config.translation.gc == "marksweep":
-        GC_PARAMS = {'start_heap_size': 8*1024*1024} # XXX adjust
-        from pypy.rpython.memory.gc.marksweep import MarkSweepGC
-        return MarkSweepGC, GC_PARAMS
-    if config.translation.gc == "statistics":
-        GC_PARAMS = {'start_heap_size': 8*1024*1024} # XXX adjust
-        from pypy.rpython.memory.gc.marksweep import PrintingMarkSweepGC
-        return PrintingMarkSweepGC, GC_PARAMS
-    elif config.translation.gc == "semispace":
-        GC_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
-        from pypy.rpython.memory.gc.semispace import SemiSpaceGC
-        return SemiSpaceGC, GC_PARAMS
-    elif config.translation.gc in ("generation", "hybrid"):
-        GC_PARAMS = {'space_size': 8*1024*1024, # XXX adjust
-                     'nursery_size': 896*1024,
-                     'min_nursery_size': 48*1024,
-                     'auto_nursery_size': True}
-        if config.translation.gc == "generation":
-            from pypy.rpython.memory.gc.generation import GenerationGC
-            return GenerationGC, GC_PARAMS
-        else:
-            GC_PARAMS['large_object'] = 1024    # XXX adjust
-            GC_PARAMS['large_object_gcptrs'] = 8192    # XXX adjust
-            from pypy.rpython.memory.gc.hybrid import HybridGC
-            return HybridGC, GC_PARAMS
-    else:
+
+    classes = {"marksweep": "marksweep.MarkSweepGC",
+               "statistics": "marksweep.PrintingMarkSweepGC",
+               "semispace": "semispace.SemiSpaceGC",
+               "generation": "generation.GenerationGC",
+               "hybrid": "hybrid.HybridGC",
+               }
+    try:
+        modulename, classname = classes[config.translation.gc].split('.')
+    except KeyError:
         raise ValueError("unknown value for translation.gc: %r" % (
             config.translation.gc,))
+    module = __import__("pypy.rpython.memory.gc." + modulename,
+                        globals(), locals(), [classname])
+    GCClass = getattr(module, classname)
+    return GCClass, GCClass.TRANSLATION_PARAMS

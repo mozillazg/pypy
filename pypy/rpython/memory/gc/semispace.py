@@ -38,6 +38,10 @@ class SemiSpaceGC(MovingGCBase):
                                   ('forw', llmemory.Address))
     FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
 
+    # the following values override the default arguments of __init__ when
+    # translating to a real backend.
+    TRANSLATION_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
+
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
                  max_space_size=sys.maxint//2+1):
         MovingGCBase.__init__(self)
