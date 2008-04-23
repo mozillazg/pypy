@@ -1,12 +1,14 @@
 import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
-from pypy.rpython.memory.gc.generation import GenerationGC
+from pypy.rpython.memory.gc.generation import GenerationGC, GCFLAG_FORWARDED
+from pypy.rpython.memory.gc.generation import GCFLAG_NO_YOUNG_PTRS
 from pypy.rpython.lltypesystem import llmemory, llarena
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
 
 GCFLAG_UNVISITED = GenerationGC.first_unused_gcflag << 0
+GCFLAG_AGING = GenerationGC.first_unused_gcflag << 1
 
 
 class HybridGC(GenerationGC):
@@ -14,7 +16,7 @@ class HybridGC(GenerationGC):
     except that objects above a certain size are handled separately:
     they are allocated via raw_malloc/raw_free in a mark-n-sweep fashion.
     """
-    first_unused_gcflag = GenerationGC.first_unused_gcflag << 1
+    first_unused_gcflag = GenerationGC.first_unused_gcflag << 2
 
     # the following values override the default arguments of __init__ when
     # translating to a real backend.
@@ -150,8 +152,7 @@ class HybridGC(GenerationGC):
         self.large_objects_collect_trigger -= raw_malloc_usage(totalsize)
         if self.large_objects_collect_trigger < 0:
             self.semispace_collect()
-        # XXX maybe we should use llarena.arena_malloc above a certain size?
-        result = llmemory.raw_malloc(totalsize)
+        result = self.allocate_external_object(totalsize)
         if not result:
             raise MemoryError()
         # The parent classes guarantee zero-filled allocations, so we
@@ -160,6 +161,11 @@ class HybridGC(GenerationGC):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         self.large_objects_list.append(result + size_gc_header)
         return result
+
+    def allocate_external_object(self, totalsize):
+        # XXX maybe we should use arena_malloc() above a certain size?
+        # If so, we'd also use arena_reset() in malloc_varsize_marknsweep().
+        return llmemory.raw_malloc(totalsize)
 
     # ___________________________________________________________________
     # the following methods are hook into SemiSpaceGC.semispace_collect()
@@ -171,12 +177,59 @@ class HybridGC(GenerationGC):
         ll_assert(not self.pending_external_object_list.non_empty(),
                   "pending_external_object_list should be empty at start")
 
+    def surviving(self, obj):
+        # To use during a collection.  The objects that survive are the
+        # ones with GCFLAG_FORWARDED set and GCFLAG_UNVISITED not set.
+        # This is equivalent to self.is_forwarded() for all objects except
+        # the ones obtained by raw_malloc.
+        flags = self.header(obj).tid & (GCFLAG_FORWARDED|GCFLAG_UNVISITED)
+        return flags == GCFLAG_FORWARDED
+
     def visit_external_object(self, obj):
         hdr = self.header(obj)
         if hdr.tid & GCFLAG_UNVISITED:
             # This is a not-visited-yet raw_malloced object.
             hdr.tid -= GCFLAG_UNVISITED
             self.pending_external_object_list.append(obj)
+
+    def make_a_copy(self, obj, objsize):
+        # During a full collect, all copied objects might implicitly come
+        # from the nursery.  If they do, we must add the GCFLAG_NO_YOUNG_PTRS.
+        # If they don't, we count how many times they are copied and when
+        # some threshold is reached we make the copy a non-movable "external"
+        # object.  For now we use a single flag GCFLAG_AGING, so threshold==2.
+        tid = self.header(obj).tid
+        if not (tid & GCFLAG_NO_YOUNG_PTRS):
+            tid |= GCFLAG_NO_YOUNG_PTRS    # object comes from the nursery
+        elif not (tid & GCFLAG_AGING):
+            tid |= GCFLAG_AGING
+        else:
+            newobj = self.make_a_nonmoving_copy(obj, objsize)
+            if newobj:
+                return newobj
+            tid &= ~GCFLAG_AGING
+        # skip GenerationGC.make_a_copy() as we already did the right
+        # thing about GCFLAG_NO_YOUNG_PTRS
+        newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
+        self.header(newobj).tid = tid
+        return newobj
+
+    def make_a_nonmoving_copy(self, obj, objsize):
+        # NB. the object can have a finalizer or be a weakref, but
+        # it's not an issue.
+        totalsize = self.size_gc_header() + objsize
+        newaddr = self.allocate_external_object(totalsize)
+        if not newaddr:
+            return llmemory.NULL   # can't raise MemoryError during a collect()
+
+        llmemory.raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
+        newobj = newaddr + self.size_gc_header()
+        hdr = self.header(newobj)
+        hdr.tid |= self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS
+        # GCFLAG_UNVISITED is not set
+        self.large_objects_list.append(newobj)
+        self.pending_external_object_list.append(newobj)
+        return newobj
 
     def scan_copied(self, scan):
         # Alternate between scanning the regular objects we just moved

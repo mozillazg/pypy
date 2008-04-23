@@ -373,13 +373,13 @@ class GenerationGC(SemiSpaceGC):
         # weakref; otherwise invalidate the weakref
         while self.young_objects_with_weakrefs.non_empty():
             obj = self.young_objects_with_weakrefs.pop()
-            if not self.is_forwarded(obj):
+            if not self.surviving(obj):
                 continue # weakref itself dies
             obj = self.get_forwarding_address(obj)
             offset = self.weakpointer_offset(self.get_type_id(obj))
             pointing_to = (obj + offset).address[0]
             if self.is_in_nursery(pointing_to):
-                if self.is_forwarded(pointing_to):
+                if self.surviving(pointing_to):
                     (obj + offset).address[0] = self.get_forwarding_address(
                         pointing_to)
                 else:
