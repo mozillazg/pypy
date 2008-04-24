@@ -1093,6 +1093,11 @@ class OOTypeJitInterpreter(JitInterpreter):
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)
 
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_direct_oosend(self, greenargs, redargs, targetbytecode):
+        self.run(self.jitstate, targetbytecode, greenargs, redargs,
+                 start_bytecode_loop=False)
+
     @arguments("methdesc", "green_varargs")
     def opimpl_green_oosend(self, methdesc, greenargs):
         # we pass None as fnptr, since it's not needed/used

@@ -1013,6 +1013,21 @@ class SimpleTests(InterpretationTest):
         assert res == 9
         self.check_insns({})
 
+    def test_direct_oosend_with_green_self(self):
+        class Foo:
+            def __init__(self, x):
+                self.data = [x]
+            def getitem(self, i):
+                return self.data[i]
+
+        obj = Foo(42)
+        def fn(x):
+            obj1 = hint(obj, deepfreeze=True)
+            return obj1.getitem(0)
+        res = self.interpret(fn, [42], [])
+        assert res == 42
+        self.check_insns({'direct_call': 1})
+
     def test_residual_red_call(self):
         def g(x):
             return x+1

@@ -1540,6 +1540,9 @@ class BytecodeWriter(object):
                 return 'oopspec', self.can_raise(spaceop)
             if not SELFTYPE._lookup_graphs(methname):
                 return 'builtin', self.can_raise(spaceop)
+            hs_self = self.hannotator.binding(spaceop.args[1])
+            if hs_self.is_green():
+                return 'direct', self.can_raise(spaceop)
         if self.hannotator.bookkeeper.is_green_call(spaceop):
             return 'green', None
         withexc = self.can_raise(spaceop)
@@ -1784,6 +1787,23 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         self.emit(*emitted_args)
         methnameindex = self.string_position(name)
         self.emit(methnameindex)
+        if has_result:
+            self.register_redvar(op.result)
+
+    def handle_direct_oosend(self, op, withexc):
+        SELFTYPE, name, opargs = self.decompose_oosend(op)
+        has_result = self.has_result(op)
+        _, meth = SELFTYPE._lookup(name)
+        graph2tsgraph = dict(self.graphs_from(op))
+        targetgraph = graph2tsgraph[meth.graph]
+        graphindex = self.graph_position(targetgraph)
+        bytecode = self.all_graphs[targetgraph]
+        args = targetgraph.getargs()
+        emitted_args = self.args_of_call(op.args[1:], args)
+        assert not self.hannotator.policy.hotpath, 'TODO'
+        self.emit('direct_oosend')
+        self.emit(*emitted_args)
+        self.emit(graphindex)
         if has_result:
             self.register_redvar(op.result)
 
