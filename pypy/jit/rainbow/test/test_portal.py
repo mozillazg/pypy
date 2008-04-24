@@ -610,7 +610,6 @@ class TestPortalOOType(BaseTestPortal):
     def _skip(self):
         py.test.skip('in progress')
 
-    test_dfa_compile3 = _skip
     test_method_call_nonpromote = _skip
     test_method_call_promote = _skip
     test_float_promote = _skip
