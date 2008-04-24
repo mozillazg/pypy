@@ -1004,7 +1004,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns({})
 
     def test_green_deepfrozen_oosend(self):
-        py.test.skip('in progress')
         d = {1: 2, 2: 4, 3: 9}
         def f(k):
             d1 = hint(d, deepfreeze=True)

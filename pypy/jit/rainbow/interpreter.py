@@ -1093,6 +1093,11 @@ class OOTypeJitInterpreter(JitInterpreter):
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)
 
+    @arguments("methdesc", "green_varargs")
+    def opimpl_green_oosend(self, methdesc, greenargs):
+        # we pass None as fnptr, since it's not needed/used
+        methdesc.green_call(self, None, greenargs)
+
     @arguments("red_varargs", "methdesc", "bool")
     def opimpl_builtin_oosend(self, redargs, methdesc, has_result):
         result = rtimeshift.gen_external_oosend(self.jitstate, redargs,

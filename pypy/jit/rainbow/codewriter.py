@@ -56,32 +56,28 @@ def make_colororder(graph, hannotator):
         colororder = None
     return colororder
 
-class CallDesc:
+class BaseCallDesc(object):
+
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE, colororder=None):
-        self.exceptiondesc = exceptiondesc
-        self.sigtoken = RGenOp.sigToken(get_functype(FUNCTYPE))
-        self.result_kind = RGenOp.kindToken(get_functype(FUNCTYPE).RESULT)
-        self.colororder = colororder
-        # xxx what if the result is virtualizable?
-        self.redboxbuilder = rvalue.ll_redboxbuilder(get_functype(FUNCTYPE).RESULT)
-        whatever_return_value = get_functype(FUNCTYPE).RESULT._defl()
-        numargs = len(get_functype(FUNCTYPE).ARGS)
-        voidargcount = 0
-        for ARG in get_functype(FUNCTYPE).ARGS:
-            if ARG == lltype.Void:
-                voidargcount += 1
-        argiter = unrolling_iterable(get_functype(FUNCTYPE).ARGS)
-        RETURN = get_functype(FUNCTYPE).RESULT
-        if RETURN is lltype.Void:
+    def _define_return_value(self, RGenOp, FUNCTYPE):
+        RESULT = get_functype(FUNCTYPE).RESULT
+        if RESULT is lltype.Void:
             self.gv_whatever_return_value = None
         else:
+            whatever_return_value = RESULT._defl()
             self.gv_whatever_return_value = RGenOp.constPrebuiltGlobal(
                 whatever_return_value)
 
-        def perform_call(rgenop, gv_fnptr, args_gv):
-            fnptr = gv_fnptr.revealconst(FUNCTYPE)
+    def _define_do_perform_call(self, ARGS, RESULT):
+        numargs = len(ARGS)
+        voidargcount = 0
+        for ARG in ARGS:
+            if ARG == lltype.Void:
+                voidargcount += 1
+        argiter = unrolling_iterable(ARGS)
+    
+        def do_perform_call(rgenop, fn_or_meth, args_gv):
             assert len(args_gv) + voidargcount == numargs
             args = ()
             j = 0
@@ -93,13 +89,14 @@ class CallDesc:
                     arg = genconst.revealconst(ARG)
                     args += (arg, )
                     j += 1
-            result = maybe_on_top_of_llinterp(self.exceptiondesc, fnptr)(*args)
-            if RETURN is lltype.Void:
+            result = maybe_on_top_of_llinterp(self.exceptiondesc, fn_or_meth)(*args)
+            if RESULT is lltype.Void:
                 return None
             else:
                 return rgenop.genconst(result)
 
-        self.perform_call = perform_call
+        self.do_perform_call = do_perform_call
+        return do_perform_call
 
     def _freeze_(self):
         return True
@@ -119,6 +116,26 @@ class CallDesc:
         if gv_result is not None:
             interpreter.green_result(gv_result)
 
+
+class CallDesc(BaseCallDesc):
+
+    def __init__(self, RGenOp, exceptiondesc, FUNCTYPE, colororder=None):
+        self.exceptiondesc = exceptiondesc
+        self.sigtoken = RGenOp.sigToken(get_functype(FUNCTYPE))
+        self.result_kind = RGenOp.kindToken(get_functype(FUNCTYPE).RESULT)
+        self.colororder = colororder
+        # xxx what if the result is virtualizable?
+        self.redboxbuilder = rvalue.ll_redboxbuilder(get_functype(FUNCTYPE).RESULT)
+
+        T = get_functype(FUNCTYPE)
+        do_perform_call = self._define_do_perform_call(T.ARGS, T.RESULT)
+        self._define_return_value(RGenOp, FUNCTYPE)
+
+        def perform_call(rgenop, gv_fnptr, greenargs):
+            fnptr = gv_fnptr.revealconst(FUNCTYPE)
+            return do_perform_call(rgenop, fnptr, greenargs)
+        self.perform_call = perform_call
+        
     def perform_call_mixed(self, rgenop, gv_fnptr, greens_gv, reds_gv):
         if self.colororder is None:
             args_gv = greens_gv + reds_gv
@@ -166,14 +183,26 @@ class IndirectCallsetDesc(object):
         self.calldesc = CallDesc(codewriter.RGenOp, codewriter.exceptiondesc,
                                  lltype.typeOf(fnptr), colororder)
 
-class MethodDesc(object):
+class MethodDesc(BaseCallDesc):
 
-    def __init__(self, RGenOp, SELFTYPE, methname):
+    def __init__(self, RGenOp, exceptiondesc, SELFTYPE, methname):
+        self.exceptiondesc = exceptiondesc
+        self.SELFTYPE = SELFTYPE
+        self.methname = methname
+        
         _, meth = SELFTYPE._lookup(methname)
         METH = ootype.typeOf(meth)
         self.methtoken = RGenOp.methToken(SELFTYPE, methname)
         self.redboxbuilder = rvalue.ll_redboxbuilder(METH.RESULT)
+        self.colororder = None
+        ARGS = (SELFTYPE,) + METH.ARGS
+        do_perform_call = self._define_do_perform_call(ARGS, METH.RESULT)
+        self._define_return_value(RGenOp, METH)
 
+        def perform_call(rgenop, gv_fnptr, args_gv):
+            assert gv_fnptr is None
+            return do_perform_call(rgenop, meth, args_gv)
+        self.perform_call = perform_call
 
 class BytecodeWriter(object):
 
@@ -852,7 +881,7 @@ class BytecodeWriter(object):
         if key in self.methdesc_positions:
             return self.methdesc_positions[tok]
         result = len(self.methdescs)
-        desc = MethodDesc(self.RGenOp, TYPE, name)
+        desc = MethodDesc(self.RGenOp, self.exceptiondesc, TYPE, name)
         self.methdescs.append(desc)
         self.methdesc_positions[key] = result
         return result
@@ -1691,7 +1720,19 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         return handler(op, withexc)
 
     def handle_green_oosend(self, op, withexc):
-        assert False, 'TODO'
+        SELFTYPE, name, opargs = self.decompose_oosend(op)
+        has_result = self.has_result(op)
+        pos = self.methdesc_position(SELFTYPE, name)
+        emitted_args = []
+        for v in op.args[1:]:
+            if v.concretetype != lltype.Void:
+                emitted_args.append(self.serialize_oparg("green", v))
+        self.emit("green_oosend")
+        self.emit(pos)
+        self.emit(len(emitted_args))
+        self.emit(*emitted_args)
+        if op.result.concretetype != ootype.Void:
+            self.register_greenvar(op.result)
 
     def handle_oopspec_oosend(self, op, withexc):
         SELFTYPE, name, opargs = self.decompose_oosend(op)
