@@ -1,4 +1,2 @@
 rpython/test/test_rbuiltin.py
-rpython/module/test/test_posix.py
-
 
