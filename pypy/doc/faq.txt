@@ -242,9 +242,16 @@ generator which can produce a Just-In-Time Compiler from the
 interpreter.  The resulting JIT works for the full Python language in a
 way that doesn't need type inference at all.
 
+For more motivation and details about our approach see also [D05.1]_,
+section 3.
+
 .. [BRETT] Brett Cannon,
            Localized Type Inference of Atomic Types in Python,
            http://www.ocf.berkeley.edu/~bac/thesis.pdf
+
+.. [D05.1] Compiling Dynamic Language Implementations,
+           Report from the PyPy project to the E.U.,
+           http://codespeak.net/svn/pypy/extradoc/eu-report/D05.1_Publish_on_translating_a_very-high-level_description.pdf
 
 ------------------------------
 What is this RPython language?
