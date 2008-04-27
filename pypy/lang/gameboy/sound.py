@@ -510,20 +510,12 @@ class VoluntaryWaveGenerator(Channel):
         
 class Sound(object):
 
-    # Output Control int
-    outputLevel=0
-    outputTerminal=0
-    outputEnable=0
-
-     # Sound DriverSoundDriver
-    #driver
-    buffer  = [0]*512# = new byte[512]
-    #int
-    #frames
-    #cycles
-
-
     def __init__(self, soundDriver):
+        self.buffer  = [0]*512
+        self.outputLevel=0
+        self.outputTerminal=0
+        self.outputEnable=0
+        
         self.driver = soundDriver
         self.createAudioChannels()
         
@@ -541,7 +533,16 @@ class Sound(object):
     def reset(self):
         self.cycles = constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK
         self.frames = 0
-        self.audio1Index = self.audio2Index = self.audio3Index = self.audio4Index = 0
+        self.channel1.reset()
+        self.channel2.reset()
+        self.channel3.reset()
+        self.channel4.reset()
+        
+        self.channel1.audioIndex = 0
+        self.channel2.audioIndex = 0
+        self.channel3.audioIndex = 0
+        self.channel4.audioIndex = 0
+        
         self.write(constants.NR10, 0x80)
         self.write(constants.NR11, 0x3F) #  0xBF
         self.write(constants.NR12, 0x00) #  0xF3
@@ -700,7 +701,7 @@ class Sound(object):
             self.setOutputEnable(data)
         
         elif (address >= constants.AUD3WAVERAM and address <= constants.AUD3WAVERAM + 0x3F):
-            self.setAudio3WavePattern(address, data)
+            self.channel3.setAudioWavePattern(address, data)
 
     def updateAudio(self):
         if (self.outputEnable & 0x80) == 0:
@@ -714,8 +715,7 @@ class Sound(object):
         if (self.outputEnable & 0x08) != 0:
             self.channel4.updateAudio()
 
-    def mixAudio(self,buffer, length):
-        buffer = [0]*length
+    def mixAudio(self, buffer, length):
         if (self.outputEnable & 0x80) == 0:
             return
         if (self.outputEnable & 0x01) != 0:
@@ -727,7 +727,6 @@ class Sound(object):
         if (self.outputEnable & 0x08) != 0:
             self.channel4.mixAudio(buffer, length)
 
-    
      # Output Control
     def getOutputLevel(self):
         return self.outputLevel
