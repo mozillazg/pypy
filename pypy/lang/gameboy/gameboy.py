@@ -5,48 +5,60 @@ Gameboy Scheduler and Memory Mapper
 
 """
 from pypy.lang.gameboy import constants
+from pyp.lang.gameboy.cpu import *
+from pyp.lang.gameboy.cartridge import *
+from pyp.lang.gameboy.joypad import *
+from pyp.lang.gameboy.ram import *
+from pyp.lang.gameboy.serial import *
+from pyp.lang.gameboy.sound import *
+from pyp.lang.gameboy.video import *
+from pyp.lang.gameboy.cartridge import *
+
 
 class GameBoy(object):
 
-    def __init__(self, videoDriver, soundDriver, joypadDriver, storeDriver, clockDriver):
+    def __init__(self):
+        sel.createDriver()
+        self.createGamboyPieces()
+
+    def createDrivers(self):
+        self.createDrivers()
+        self.clock = Clock()
+        self.videoDriver = VideoDriver()
+        self.soundDriver = SoundDriver()
+        self.joypadDriver = JoypadDriver()
+        
+    def createGameboyPieces(self): 
         self.ram = RAM()
-        self.cartridge = Cartridge(storeDriver, clockDriver)
+        self.cartridge = Cartridge(storeDriver, self.clock)
         self.interrupt = Interrupt()
         self.cpu = CPU(self.interrupt, self)
         self.serial = Serial(self.interrupt)
         self.timer = Timer(self.interrupt)
-        self.joypad = Joypad(joypadDriver, self.interrupt)
-        self.video = Video(videoDriver, self.interrupt, self)
-        self.sound = Sound(soundDriver)
-
+        self.joypad = Joypad(self.joypadDriver, self.interrupt)
+        self.video = Video(self.videoDriver, self.interrupt, self)
+        self.sound = Sound(self.soundDriver)  
 
     def getCartridge(self):
         return self.cartridge
 
-
     def getFrameSkip(self):
         return self.video.getFrameSkip()
-
 
     def setFrameSkip(self, frameSkip):
         self.video.setFrameSkip(frameSkip)
 
-
     def load(self, cartridgeName):
         self.cartridge.load(cartridgeName)
-
 
     def save(self, cartridgeName):
         self.cartridge.save(cartridgeName)
 
-
     def start(self):
         self.sound.start()
 
-
     def stop(self):
         self.sound.stop()
-
 
     def reset(self):
         self.ram.reset()
@@ -61,26 +73,21 @@ class GameBoy(object):
         self.cpu.setROM(self.cartridge.getROM())
         self.drawLogo()
 
-
     def cycles(self):
         return min( self.video.cycles(), self.serial.cycles(),
                     self.timer.cycles(), self.sound.cycles(),
                     self.joypad.cycles())
 
-
     def emulate(self, ticks):
         while (ticks > 0):
             count = self.cycles()
-
             self.cpu.emulate(count)
             self.serial.emulate(count)
             self.timer.emulate(count)
             self.video.emulate(count)
             self.sound.emulate(count)
             self.joypad.emulate(count)
-
             ticks -= count
-    
 
     def write(self, address, data):
         self.getreceiver(address).write(address, data)
