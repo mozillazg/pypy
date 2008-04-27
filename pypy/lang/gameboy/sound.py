@@ -9,28 +9,56 @@ from pypy.lang.gameboy import constants
 class Channel(object):
 
     # Audio Channel 1 int
-    nr10=0
-    nr11=0
-    nr12=0
-    nr13=0
-    nr14=0
-    audio1Index=0
-    audio1Length=0
-    audio1Frequency=0
+    nr0 = 0
+    nr1 = 0
+    nr2 = 0
+    nr3 = 0
+    nr4 = 0
+    audioIndex = 0
+    audioLength = 0
+    audioFrequency = 0
     
     def __init__(self):
         pass
     
+    def reset(self):
+        self.audioIndex = 0
+        
+    
+# ------------------------------------------------------------------------------
+
+
 class SquareWaveGenerator(Channel):
     pass
+
+
+# ------------------------------------------------------------------------------
+
     
 class VoluntaryWaveGenerator(Channel):
     pass
 
+
+# ------------------------------------------------------------------------------
+
+
 class NoiseGenerator(Channel):
     pass
 
+
+# ------------------------------------------------------------------------------
+
+class Sound(object):
     
+    def __init__(self, soundDriver):
+        self.soundDriver = soundDriver
+        self.createAudioChannels()
+    
+    def createAudioChannels(self):
+        self.channel1 = SquareWaveGenerator(self.sampleRate)
+        self.channel2 = SquareWaveGenerator(self.sampleRate)
+        self.channel3 = VoluntaryWaveGenerator(self.sampleRate)
+        self.channel4 = NoiseGenerator(self.sampleRate)
     
 class Sound(object):
 

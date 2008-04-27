@@ -51,6 +51,8 @@ class Joypad(object):
             self.interrupt.raiseInterrupt(constants.JOYPAD)
 
 
+# ------------------------------------------------------------------------------
+
 
 class JoypadDriver(object):
     """
@@ -158,7 +160,8 @@ class JoypadDriver(object):
         self.b.toggleButton(pressed)
         self.raised = True
     
-    
+  
+# ------------------------------------------------------------------------------  
     
     
 class Button(object):
