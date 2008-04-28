@@ -717,7 +717,13 @@ class FunctionCodeGenerator(object):
                     argv.append('RPyString_AsString(%s)' % self.expr(arg))
                 continue
             elif T == Signed:
-                format.append('%d')
+                format.append('%ld')
+            elif T == Unsigned:
+                format.append('%lu')
+            elif T == SignedLongLong:
+                format.append('%lld')
+            elif T == UnsignedLongLong:
+                format.append('%llu')
             elif T == Float:
                 format.append('%f')
             elif isinstance(T, Ptr) or T == Address:
@@ -727,12 +733,19 @@ class FunctionCodeGenerator(object):
                     format.append(arg.value.replace('%', '%%'))
                     continue
                 format.append('%c')
+            elif T == UniChar:
+                format.append("\\u%x")
             elif T == Bool:
                 format.append('%s')
                 argv.append('(%s) ? "True" : "False"' % self.expr(arg))
                 continue
             else:
-                raise Exception("don't know how to debug_print %r" % (T,))
+                if isinstance(arg, Constant):
+                    msg = repr(arg)
+                else:
+                    msg = '(value of type ' + str(T) + ')'
+                format.append(msg.replace('%', '%%'))
+                continue
             argv.append(self.expr(arg))
         return "fprintf(stderr, %s%s);" % (
             c_string_constant(' '.join(format) + '\n\000'),
@@ -767,5 +780,9 @@ class FunctionCodeGenerator(object):
             
     def OP_IS_EARLY_CONSTANT(self, op):
         return self.expr(op.result)  + ' = 0;' # Allways false
+
+    def OP_JIT_MARKER(self, op):
+        return '/* JIT_MARKER %s */' % op
+
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

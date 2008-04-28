@@ -1,10 +1,17 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter.rcontainer import VirtualContainer, FrozenContainer
 from pypy.jit.timeshifter.rcontainer import cachedtype
-from pypy.jit.timeshifter import rvalue, rvirtualizable
+from pypy.jit.timeshifter import rvalue, rvirtualizable, oop
+from pypy.rlib.debug import ll_assert
 
 from pypy.rpython.lltypesystem import lloperation
 debug_print = lloperation.llop.debug_print
+
+def TypeDesc(RGenOp, rtyper, exceptiondesc, LIST):
+    if rtyper.type_system.name == 'lltypesystem':
+        return LLTypeListTypeDesc(RGenOp, rtyper, exceptiondesc, LIST)
+    else:
+        return OOTypeListTypeDesc(RGenOp, rtyper, exceptiondesc, LIST)
 
 
 class ItemDesc(object):
@@ -24,18 +31,60 @@ class ItemDesc(object):
                 if not T._is_varsize():
                     self.canbevirtual = True
 
-class ListTypeDesc(object):
+class AbstractListTypeDesc(object):
     __metaclass__ = cachedtype
 
-    def __init__(self, hrtyper, LIST):
-        RGenOp = hrtyper.RGenOp
-        rtyper = hrtyper.rtyper
+    def __init__(self, RGenOp, rtyper, exceptiondesc, LIST):
         self.LIST = LIST
-        self.LISTPTR = lltype.Ptr(LIST)
+        self.LISTPTR = self.Ptr(LIST)
         self.ptrkind = RGenOp.kindToken(self.LISTPTR)
         self.null = self.LISTPTR._defl()
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
+        self.exceptiondesc = exceptiondesc
 
+        self._setup(RGenOp, rtyper, LIST)
+        self._define_devirtualize()
+        self._define_allocate()
+
+    def _define_allocate(self):
+        LIST = self.LIST
+        LISTPTR = self.LISTPTR
+
+        def allocate(rgenop, n):
+            l = LIST.ll_newlist(n)
+            return rgenop.genconst(l)
+
+        def populate(item_boxes, gv_lst, box_gv_reader):
+            l = gv_lst.revealconst(LISTPTR)
+            # NB. len(item_boxes) may be l.ll_length()+1 if need_reshaping :-(
+            for i in range(l.ll_length()):
+                box = item_boxes[i]
+                if box is not None:
+                    gv_value = box_gv_reader(box)
+                    ll_assert(gv_value.is_const, "vlist.populate() got a var")
+                    v = gv_value.revealconst(LIST.ITEM)
+                    l.ll_setitem_fast(i, v)
+
+        self.allocate = allocate
+        self.populate = populate
+
+    def _freeze_(self):
+        return True
+
+    def factory(self, length, itembox):
+        vlist = VirtualList(self, length, itembox)
+        box = self.PtrRedBox(known_nonzero=True)
+        box.content = vlist
+        vlist.ownbox = box
+        return box
+
+
+class LLTypeListTypeDesc(AbstractListTypeDesc):
+
+    Ptr = staticmethod(lltype.Ptr)
+    PtrRedBox = rvalue.PtrRedBox
+
+    def _setup(self, RGenOp, rtyper, LIST):
         argtypes = [lltype.Signed]
         ll_newlist_ptr = rtyper.annotate_helper_fn(LIST.ll_newlist,
                                                    argtypes)
@@ -48,8 +97,6 @@ class ListTypeDesc(object):
         self.gv_ll_setitem_fast = RGenOp.constPrebuiltGlobal(ll_setitem_fast)
         self.tok_ll_setitem_fast = RGenOp.sigToken(
             lltype.typeOf(ll_setitem_fast).TO)
-
-        self._define_devirtualize()
 
     def _define_devirtualize(self):
         LIST = self.LIST
@@ -70,18 +117,41 @@ class ListTypeDesc(object):
 
         self.devirtualize = make, fill_into
 
-    def _freeze_(self):
-        return True
+    def gen_newlist(self, builder, args_gv):
+        return builder.genop_call(self.tok_ll_newlist,
+                                  self.gv_ll_newlist,
+                                  args_gv)
 
-    def factory(self, length, itembox):
-        vlist = VirtualList(self, length, itembox)
-        box = rvalue.PtrRedBox(self.ptrkind, known_nonzero=True)
-        box.content = vlist
-        vlist.ownbox = box
-        return box
+    def gen_setitem_fast(self, builder, args_gv):
+        return builder.genop_call(self.tok_ll_setitem_fast,
+                                  self.gv_ll_setitem_fast,
+                                  args_gv)
 
-TypeDesc = ListTypeDesc
+        
 
+class OOTypeListTypeDesc(AbstractListTypeDesc):
+
+    Ptr = staticmethod(lambda T: T)
+    PtrRedBox = rvalue.InstanceRedBox
+
+    def _setup(self, RGenOp, rtyper, LIST):
+        self.alloctoken = RGenOp.allocToken(LIST)
+        self.tok_ll_resize = RGenOp.methToken(LIST, '_ll_resize')
+        self.tok_ll_setitem_fast = RGenOp.methToken(LIST,
+                                                    'll_setitem_fast')
+
+    def _define_devirtualize(self):
+        pass # XXX
+
+    def gen_newlist(self, builder, args_gv):
+        gv_lst = builder.genop_new(self.alloctoken)
+        builder.genop_oosend(self.tok_ll_resize, gv_lst, args_gv)
+        return gv_lst
+
+    def gen_setitem_fast(self, builder, args_gv):
+        gv_lst = args_gv.pop(0)
+        return builder.genop_oosend(self.tok_ll_setitem_fast,
+                                    gv_lst, args_gv)
 
 class FrozenVirtualList(FrozenContainer):
 
@@ -142,6 +212,7 @@ class VirtualList(VirtualContainer):
 
     def __init__(self, typedesc, length=0, itembox=None):
         self.typedesc = typedesc
+        self.itembox = itembox
         self.item_boxes = [itembox] * length
         # self.ownbox = ...    set in factory()
 
@@ -165,17 +236,13 @@ class VirtualList(VirtualContainer):
 
         debug_print(lltype.Void, "FORCE LIST (%d items)" % (len(boxes),))
         args_gv = [builder.rgenop.genconst(len(boxes))]
-        gv_list = builder.genop_call(typedesc.tok_ll_newlist,
-                                     typedesc.gv_ll_newlist,
-                                     args_gv)
+        gv_list = typedesc.gen_newlist(builder, args_gv)
         self.setforced(gv_list)
 
         for i in range(len(boxes)):
             gv_item = boxes[i].getgenvar(jitstate)
             args_gv = [gv_list, builder.rgenop.genconst(i), gv_item]
-            builder.genop_call(typedesc.tok_ll_setitem_fast,
-                               typedesc.gv_ll_setitem_fast,
-                               args_gv)
+            typedesc.gen_setitem_fast(builder, args_gv)
 
     def freeze(self, memo):
         contmemo = memo.containers
@@ -223,7 +290,7 @@ class VirtualList(VirtualContainer):
         builder = jitstate.curbuilder
         place = builder.alloc_frame_place(typedesc.ptrkind)
         vrti.forced_place = place
-        forced_box = rvalue.PtrRedBox(typedesc.ptrkind)
+        forced_box = rvalue.PtrRedBox()
         memo.forced_boxes.append((forced_box, place))
 
         vars_gv = memo.framevars_gv
@@ -237,7 +304,7 @@ class VirtualList(VirtualContainer):
                 vars_gv.append(box.genvar)
             else:
                 varindexes.append(j)
-                assert isinstance(box, rvalue.PtrRedBox)
+                assert isinstance(box, rvalue.AbstractPtrRedBox)
                 content = box.content
                 assert content.allowed_in_virtualizable
                 vrtis.append(content.make_rti(jitstate, memo))
@@ -268,14 +335,44 @@ class VirtualList(VirtualContainer):
                 assert content.allowed_in_virtualizable
                 content.reshape(jitstate, shapemask, memo)
 
+    def store_back_gv_reshaped(self, shapemask, memo):
+        if self in memo.containers:
+            return
+        typedesc = self.typedesc
+        memo.containers[self] = None
+        bitmask = 1<<memo.bitcount
+        memo.bitcount += 1
 
-def oop_newlist(jitstate, oopspecdesc, lengthbox, itembox=None):
+        boxes = self.item_boxes
+        outside_box = boxes[-1]
+        if bitmask&shapemask:
+            gv_forced = memo.box_gv_reader(outside_box)
+            memo.forced_containers_gv[self] = gv_forced
+            
+        for box in boxes:
+            if not box.genvar:
+                assert isinstance(box, rvalue.AbstractPtrRedBox)
+                content = box.content
+                assert content.allowed_in_virtualizable
+                content.store_back_gv_reshaped(shapemask, memo)
+
+    def allocate_gv_container(self, rgenop, need_reshaping=False):
+        length = len(self.item_boxes)
+        if need_reshaping:
+            length -= 1      # hack hack hack
+        return self.typedesc.allocate(rgenop, length)
+
+    def populate_gv_container(self, rgenop, gv_listptr, box_gv_reader):
+        self.typedesc.populate(self.item_boxes, gv_listptr, box_gv_reader)
+
+
+def oop_newlist(jitstate, oopspecdesc, deepfrozen, lengthbox, itembox=None):
     if lengthbox.is_constant():
         length = rvalue.ll_getvalue(lengthbox, lltype.Signed)
         return oopspecdesc.typedesc.factory(length, itembox)
     return oopspecdesc.residual_call(jitstate, [lengthbox, itembox])
 
-def oop_list_copy(jitstate, oopspecdesc, selfbox):
+def oop_list_copy(jitstate, oopspecdesc, deepfrozen, selfbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         copybox = oopspecdesc.typedesc.factory(0, None)
@@ -304,14 +401,31 @@ def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
                                          deepfrozen=deepfrozen)
 oop_list_nonzero.couldfold = True
 
-def oop_list_append(jitstate, oopspecdesc, selfbox, itembox):
+def oop_list_method_resize(jitstate, oopspecdesc, deepfrozen, selfbox, lengthbox):
+    # only used by ootypesystem
+    content = selfbox.content
+    if isinstance(content, VirtualList):
+        item_boxes = content.item_boxes
+        # I think this is always true, better to assert it
+        assert lengthbox.is_constant()
+        length = rvalue.ll_getvalue(lengthbox, lltype.Signed)
+        if len(item_boxes) < length:
+            diff = length - len(item_boxes)
+            item_boxes += [content.itembox] * diff
+        elif len(item_boxes) > length:
+            assert False, 'XXX'
+    else:
+        oopspecdesc.residual_call(jitstate, [selfbox],
+                                  deepfrozen=deepfrozen)
+
+def oop_list_append(jitstate, oopspecdesc, deepfrozen, selfbox, itembox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         content.item_boxes.append(itembox)
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, itembox])
 
-def oop_list_insert(jitstate, oopspecdesc, selfbox, indexbox, itembox):
+def oop_list_insert(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -321,10 +435,10 @@ def oop_list_insert(jitstate, oopspecdesc, selfbox, indexbox, itembox):
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
-def oop_list_concat(jitstate, oopspecdesc, selfbox, otherbox):
+def oop_list_concat(jitstate, oopspecdesc, deepfrozen, selfbox, otherbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
-        assert isinstance(otherbox, rvalue.PtrRedBox)
+        assert isinstance(otherbox, rvalue.AbstractPtrRedBox)
         othercontent = otherbox.content
         if othercontent is not None and isinstance(othercontent, VirtualList):
             newbox = oopspecdesc.typedesc.factory(0, None)
@@ -335,7 +449,7 @@ def oop_list_concat(jitstate, oopspecdesc, selfbox, otherbox):
             return newbox
     return oopspecdesc.residual_call(jitstate, [selfbox, otherbox])
 
-def oop_list_pop(jitstate, oopspecdesc, selfbox, indexbox=None):
+def oop_list_pop(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox=None):
     content = selfbox.content
     if indexbox is None:
         if isinstance(content, VirtualList):
@@ -355,7 +469,7 @@ def oop_list_pop(jitstate, oopspecdesc, selfbox, indexbox=None):
             return oopspecdesc.residual_exception(jitstate, IndexError)
     return oopspecdesc.residual_call(jitstate, [selfbox, indexbox])
 
-def oop_list_reverse(jitstate, oopspecdesc, selfbox):
+def oop_list_reverse(jitstate, oopspecdesc, deepfrozen, selfbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         content.item_boxes.reverse()
@@ -375,7 +489,7 @@ def oop_list_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
                                          deepfrozen=deepfrozen)
 oop_list_getitem.couldfold = True
 
-def oop_list_setitem(jitstate, oopspecdesc, selfbox, indexbox, itembox):
+def oop_list_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -386,7 +500,9 @@ def oop_list_setitem(jitstate, oopspecdesc, selfbox, indexbox, itembox):
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
-def oop_list_delitem(jitstate, oopspecdesc, selfbox, indexbox):
+oop_list_method_setitem_fast = oop_list_setitem
+
+def oop_list_delitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)

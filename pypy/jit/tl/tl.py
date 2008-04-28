@@ -1,7 +1,7 @@
 '''Toy Language'''
 
 import py
-from pypy.jit.tl.opcode import *
+from pypy.jit.tl.tlopcode import *
 from pypy.rlib.jit import hint
 
 def char2int(c):

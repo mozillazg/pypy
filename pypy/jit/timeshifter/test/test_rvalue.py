@@ -1,5 +1,5 @@
 import py
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue
 from pypy.jit.timeshifter import rcontainer
 from pypy.jit.timeshifter.test.support import *
@@ -8,7 +8,7 @@ from pypy.jit.timeshifter.test.support import *
 def test_create_int_redbox_var():
     jitstate = FakeJITState()
     gv = FakeGenVar()
-    box = rvalue.IntRedBox("dummy kind", gv)
+    box = rvalue.IntRedBox(gv)
     assert not box.is_constant()
     assert box.getgenvar(jitstate) is gv
     gv2 = FakeGenVar()
@@ -19,7 +19,7 @@ def test_create_int_redbox_var():
 def test_create_int_redbox_const():
     jitstate = FakeJITState()
     gv = FakeGenConst()
-    box = rvalue.IntRedBox("dummy kind", gv)
+    box = rvalue.IntRedBox(gv)
     assert box.is_constant()
     assert box.getgenvar(jitstate) is gv
     gv2 = FakeGenVar()
@@ -28,10 +28,10 @@ def test_create_int_redbox_const():
 def test_forcevar():
     jitstate = FakeJITState()
     gv = FakeGenVar()
-    intbox = rvalue.IntRedBox("dummy kind", gv)
+    intbox = rvalue.IntRedBox(gv)
     assert intbox.forcevar(jitstate, rvalue.copy_memo(), False) is intbox
     
-    doublebox = rvalue.DoubleRedBox("dummy kind", FakeGenConst())
+    doublebox = rvalue.DoubleRedBox(FakeGenConst())
     box2 = doublebox.forcevar(jitstate, rvalue.copy_memo(), False)
     assert doublebox is not box2
     assert not box2.is_constant()
@@ -39,8 +39,8 @@ def test_forcevar():
 
 def test_learn_nonzeroness():
     jitstate = FakeJITState()
-    gv = FakeGenVar()
-    box = rvalue.PtrRedBox("dummy pointer", gv)
+    gv = FakeGenVar(kind=llmemory.Address)
+    box = rvalue.PtrRedBox(gv)
     assert not box.known_nonzero
     assert box.learn_nonzeroness(jitstate, True)
     assert box.known_nonzero
@@ -48,7 +48,7 @@ def test_learn_nonzeroness():
     assert not box.learn_nonzeroness(jitstate, False)
     assert box.learn_nonzeroness(jitstate, True)
 
-    box = rvalue.PtrRedBox("dummy pointer", gv)
+    box = rvalue.PtrRedBox(gv)
     assert box.learn_nonzeroness(jitstate, False)
     assert box.is_constant()
     assert box.genvar._value == "NULL"
@@ -58,9 +58,9 @@ def test_learn_nonzeroness():
 def test_box_get_set_field():
     jitstate = FakeJITState()
     V0 = FakeGenVar()
-    box = rvalue.PtrRedBox("dummy pointer", V0)
+    box = rvalue.PtrRedBox(V0)
     STRUCT = lltype.Struct("dummy", ("foo", lltype.Signed))
-    desc = rcontainer.StructFieldDesc(FakeHRTyper(), lltype.Ptr(STRUCT), "foo", 0)
+    desc = rcontainer.StructFieldDesc(FakeRGenOp, lltype.Ptr(STRUCT), "foo", 0)
     box2 = box.op_getfield(jitstate, desc)
     V1 = box2.genvar
     assert box.known_nonzero
@@ -68,6 +68,6 @@ def test_box_get_set_field():
 
     jitstate.curbuilder.ops = []
     V42 = FakeGenVar(42)
-    valuebox = rvalue.IntRedBox("dummy kind", V42)
+    valuebox = rvalue.IntRedBox(V42)
     box.op_setfield(jitstate, desc, valuebox)
     assert jitstate.curbuilder.ops == [('setfield', (('field', STRUCT, 'foo'), V0, V42), None)]

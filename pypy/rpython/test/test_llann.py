@@ -1,4 +1,6 @@
+import py
 from pypy.rpython.lltypesystem.lltype import *
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECTPTR
 from pypy.rpython.rclass import fishllattr
 from pypy.translator.translator import TranslationContext
@@ -7,9 +9,11 @@ from pypy.rpython.annlowlevel import annotate_lowlevel_helper
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.annlowlevel import PseudoHighLevelCallable
 from pypy.rpython.annlowlevel import llhelper, cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import llstructofhelpers
 from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.test.test_llinterp import interpret
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow.objspace import FlowObjSpace 
 from pypy.conftest import option
 
@@ -426,9 +430,11 @@ def test_pseudohighlevelcallable():
 def test_llhelper():
     S = GcStruct('S', ('x', Signed), ('y', Signed))
     def f(s,z):
+        assert we_are_translated()
         return s.x*s.y+z
 
     def g(s):
+        assert we_are_translated()
         return s.x+s.y
 
     F = Ptr(FuncType([Ptr(S), Signed], Signed))
@@ -445,6 +451,84 @@ def test_llhelper():
 
     res = interpret(h, [8, 5, 2])
     assert res == 99
+
+def test_oohelper():
+    S = ootype.Instance('S', ootype.ROOT, {'x': Signed, 'y': Signed})
+    def f(s,z):
+        #assert we_are_translated()
+        return s.x*s.y+z
+
+    def g(s):
+        #assert we_are_translated()
+        return s.x+s.y
+
+    F = ootype.StaticMethod([S, Signed], Signed)
+    G = ootype.StaticMethod([S], Signed)
+        
+    def h(x, y, z):
+        s = ootype.new(S)
+        s.x = x
+        s.y = y
+        fsm = llhelper(F, f)
+        gsm = llhelper(G, g)
+        assert typeOf(fsm) == F
+        return fsm(s, z)+fsm(s, z*2)+gsm(s)
+
+    res = h(8, 5, 2)
+    assert res == 99
+    res = interpret(h, [8, 5, 2], type_system='ootype')
+    assert res == 99
+
+
+def test_prebuilt_llhelper():
+    py.test.skip("does not work")
+    S = GcStruct('S', ('x', Signed), ('y', Signed))
+    def f(s,z):
+        assert we_are_translated()
+        return s.x*s.y+z
+
+    def g(s):
+        assert we_are_translated()
+        return s.x+s.y
+
+    F = Ptr(FuncType([Ptr(S), Signed], Signed))
+    G = Ptr(FuncType([Ptr(S)], Signed))
+    fptr = llhelper(F, f)
+    gptr = llhelper(G, g)
+        
+    def h(x, y, z):
+        s = malloc(S)
+        s.x = x
+        s.y = y
+        assert typeOf(fptr) == F
+        return fptr(s, z)+fptr(s, z*2)+gptr(s)
+
+    res = interpret(h, [8, 5, 2])
+    assert res == 99
+
+
+def test_llstructofhelpers():
+    F = Ptr(FuncType([], Signed))
+    S1 = Struct('S1', ('f1', F))
+    S2 = Struct('S2', ('parent', S1), ('f2', F))
+
+    def myf1():
+        return 401 + we_are_translated()
+
+    def myf2():
+        return 602 + we_are_translated()
+
+    initdata = {'parent.f1': myf1,
+                'f2': myf2}
+
+    def h():
+        s2 = llstructofhelpers(Ptr(S2), initdata)
+        assert typeOf(s2) == Ptr(S2)
+        return s2.parent.f1() + s2.f2()
+
+    assert h() == 401 + 602
+    res = interpret(h, [])
+    assert res == 401 + 602 + 2
 
 
 def test_cast_instance_to_base_ptr():

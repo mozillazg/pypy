@@ -632,6 +632,41 @@ class BaseTestRclass(BaseRtypingTest):
             return a.revealconst(1) + b.revealconst(2) + a.revealconst(3)
         assert self.interpret(fn, []) == 3 + 8 + 9
 
+    def test_immutable(self):
+        class I(object):
+            _immutable_ = True
+            
+            def __init__(self, v):
+                self.v = v
+
+        i = I(3)
+        def f():
+            return i.v
+
+        t, typer, graph = self.gengraph(f, [], backendopt=True)
+        assert summary(graph) == {}
+
+    def test_immutable_inheritance(self):
+        class I(object):
+            def __init__(self, v):
+                self.v = v
+        
+        class J(I):
+            _immutable_ = True
+            def __init__(self, v, w):
+                self.w = w
+                I.__init__(self, v)
+
+        j = J(3, 4)
+        def f():
+            j.v = j.v * 1 # make the annotator think it is mutated
+            j.w = j.w * 1 # make the annotator think it is mutated
+            return j.v + j.w
+
+        t, typer, graph = self.gengraph(f, [], backendopt=True)
+        summ = summary(graph)
+        assert summ == {"setfield": 2} or summ == {"oosetfield": 2}
+
 
 class TestLltype(BaseTestRclass, LLRtypeMixin):
 
@@ -699,40 +734,6 @@ class TestLltype(BaseTestRclass, LLRtypeMixin):
         assert destrptra is not None
         assert destrptrb is not None
 
-    def test_immutable(self):
-        class I(object):
-            _immutable_ = True
-            
-            def __init__(self, v):
-                self.v = v
-
-        i = I(3)
-        def f():
-            return i.v
-
-        t, typer, graph = self.gengraph(f, [], backendopt=True)
-        assert summary(graph) == {}
-
-    def test_immutable_inheritance(self):
-        class I(object):
-            def __init__(self, v):
-                self.v = v
-        
-        class J(I):
-            _immutable_ = True
-            def __init__(self, v, w):
-                self.w = w
-                I.__init__(self, v)
-
-        j = J(3, 4)
-        def f():
-            j.v = j.v * 1 # make the annotator think it is mutated
-            j.w = j.w * 1 # make the annotator think it is mutated
-            return j.v + j.w
-
-        t, typer, graph = self.gengraph(f, [], backendopt=True)
-        assert summary(graph) == {"setfield": 2}
-        
     def test_instance_repr(self):
         from pypy.rlib.objectmodel import current_object_addr_as_int
         class FooBar(object):
@@ -809,3 +810,35 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
         assert destra == destrc
         assert destrb is not None
         assert destra is not None
+
+    def test_cast_object(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+        B = ootype.Record({'x': ootype.Signed}) 
+
+        def fn_instance():
+            a = ootype.new(A)
+            obj = ootype.cast_to_object(a)
+            a2 = ootype.cast_from_object(A, obj)
+            a3 = ootype.cast_from_object(ootype.ROOT, obj)
+            assert a is a2
+            assert a is a3
+        self.interpret(fn_instance, [])
+
+        def fn_record():
+            b = ootype.new(B)
+            b.x = 42
+            obj = ootype.cast_to_object(b)
+            b2 = ootype.cast_from_object(B, obj)
+            assert b2.x == 42
+            assert b is b2
+        self.interpret(fn_record, [])
+       
+        def fn_null():
+            a = ootype.null(A)
+            b = ootype.null(B)
+            obj1 = ootype.cast_to_object(a)
+            obj2 = ootype.cast_to_object(b)
+            assert obj1 == obj2
+            assert ootype.cast_from_object(A, obj1) == a
+            assert ootype.cast_from_object(B, obj2) == b
+        self.interpret(fn_null, [])

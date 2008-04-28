@@ -79,8 +79,7 @@ def compile_graph(rgenop, graph, random_seed=0):
                     break    # done along this branch
                 else:
                     # create a label and proceed
-                    kinds = map(varkind, block.inputargs)
-                    labels[block] = builder.enter_next_block(kinds, args_gv)
+                    labels[block] = builder.enter_next_block(args_gv)
 
             # generate the operations
             varmap = dict(zip(block.inputargs, args_gv))
@@ -153,33 +152,10 @@ def generate_operation(rgenop, builder, op, var2gv):
                                                var2gv(op.args[1]),
                                                var2gv(op.args[2]))
     elif op.opname == 'same_as':
-        token = rgenop.kindToken(op.args[0].concretetype)
-        gv_result = builder.genop_same_as(token, var2gv(op.args[0]))
-
-    elif op.opname == 'ptr_iszero':
-        token = rgenop.kindToken(op.args[0].concretetype)
-        gv_result = builder.genop_ptr_iszero(token, var2gv(op.args[0]))
-        
-    elif op.opname == 'ptr_nonzero':
-        token = rgenop.kindToken(op.args[0].concretetype)
-        gv_result = builder.genop_ptr_nonzero(token, var2gv(op.args[0]))
-        
-    elif op.opname == 'ptr_eq':
-        token = rgenop.kindToken(op.args[0].concretetype)
-        gv_result = builder.genop_ptr_eq(token,
-                                         var2gv(op.args[0]),
-                                         var2gv(op.args[1]))
-        
-    elif op.opname == 'ptr_ne':
-        token = rgenop.kindToken(op.args[0].concretetype)
-        gv_result = builder.genop_ptr_ne(token,
-                                         var2gv(op.args[0]),
-                                         var2gv(op.args[1]))
+        gv_result = builder.genop_same_as(var2gv(op.args[0]))
 
     elif op.opname == 'cast_int_to_ptr':
-        token = rgenop.kindToken(op.result.concretetype)
-        gv_result = builder.genop_cast_int_to_ptr(token,
-                                                  var2gv(op.args[0]))
+        gv_result = builder.genop_cast_int_to_ptr(var2gv(op.args[0]))
 
     elif len(op.args) == 1:
         gv_result = builder.genop1(op.opname, var2gv(op.args[0]))

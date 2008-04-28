@@ -3040,6 +3040,25 @@ class TestAnnotateTestCase:
 
         a.build_types(f, [str])
 
+    def test_empty_list_blocks_harmlessly(self):
+        class X:
+            pass
+        x = X()
+        x.foobar = []
+        def f(n):
+            if n < 0:
+                # this example shows up in cases where the next line is
+                # really unreachable, but in ways that the annotator cannot
+                # figure out
+                return x.foobar[~n]
+            else:
+                return 42
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.const == 42
+
+
 def g(n):
     return [0,1,2,n]
 

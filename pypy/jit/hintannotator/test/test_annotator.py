@@ -72,10 +72,16 @@ class AbstractAnnotatorTest:
 
         # build hint annotator types
         policy = self.fixpolicy(policy)
-        hannotator = HintAnnotator(base_translator=t, policy=policy)
-        hs = hannotator.build_types(graph1, [SomeLLAbstractConstant(v.concretetype,
-                                                                    {OriginFlags(): True})
-                                             for v in graph1.getargs()])
+        if policy.hotpath:
+            from pypy.jit.hintannotator.hotpath import HotPathHintAnnotator
+            hannotator = HotPathHintAnnotator(base_translator=t, policy=policy)
+            self.hannotator = hannotator
+            hs = hannotator.build_hotpath_types()
+        else:
+            hannotator = HintAnnotator(base_translator=t, policy=policy)
+            hs = hannotator.build_types(graph1,
+                [SomeLLAbstractConstant(v.concretetype, {OriginFlags(): True})
+                 for v in graph1.getargs()])
         hannotator.simplify()
         t = hannotator.translator
         if conftest.option.view:
@@ -110,6 +116,21 @@ class BaseAnnotatorTest(AbstractAnnotatorTest):
         assert isinstance(hs, SomeLLAbstractConstant)
         assert len(hs.origins) == 4
         assert hs.concretetype == lltype.Signed
+
+    def test_simple_float(self):
+        def ll_function(x, y):
+            if x:
+                z = x+y * y
+            else:
+                z = x-y / y
+            if int(x):
+                z += x > y + x < y + z == y + z != y
+            else:
+                z += x >= y + x <= y
+            return z
+        hs = self.hannotate(ll_function, [float, float])
+        assert isinstance(hs, SomeLLAbstractConstant)
+        assert hs.concretetype == lltype.Float
 
     def test_simple_hint_result(self):
         def ll_function(cond, x,y):

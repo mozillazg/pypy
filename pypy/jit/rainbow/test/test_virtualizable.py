@@ -1,5 +1,5 @@
-from pypy.jit.timeshifter.test.test_portal import PortalTest, P_OOPSPEC
-from pypy.jit.timeshifter.test.test_timeshift import StopAtXPolicy
+from pypy.jit.rainbow.test.test_portal import PortalTest, P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import StopAtXPolicy
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.rvirtualizable import VABLERTIPTR
 from pypy.rlib.jit import hint
@@ -115,6 +115,7 @@ E3 = lltype.GcStruct('e', ('pq', lltype.Ptr(PQ)),
 
 
 class TestVirtualizableExplicit(PortalTest):
+    type_system = "lltype"
 
     def test_simple(self):
    
@@ -738,6 +739,7 @@ class TestVirtualizableExplicit(PortalTest):
         assert res == 42
         
 class TestVirtualizableImplicit(PortalTest):
+    type_system = "lltype"
 
     def test_simple(self):
 
@@ -869,8 +871,8 @@ class TestVirtualizableImplicit(PortalTest):
         assert res == 42
         if self.on_llgraph:
             calls = self.count_direct_calls()
-            call_count = sum([count for graph, count in calls.iteritems()
-                              if not graph.name.startswith('rpyexc_')])
+            call_count = sum(calls.values())
+            # one call to "continue_compilation" and one call to debug
             assert call_count == 2
 
 

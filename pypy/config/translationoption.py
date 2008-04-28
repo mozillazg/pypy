@@ -36,6 +36,9 @@ translation_optiondescription = OptionDescription(
                      "js":     [("translation.type_system", "ootype")],
                      },
                  cmdline="-b --backend"),
+    ChoiceOption("jitbackend", "Backent to use for JIT code generation",
+                 ["ia32", "i386", "ppc"], cmdline="--jit-backend",
+                 default=None),
     BoolOption("llvm_via_c", "compile llvm via C",
                default=False, cmdline="--llvm-via-c",
                requires=[("translation.backend", "llvm")]),
@@ -142,7 +145,7 @@ translation_optiondescription = OptionDescription(
     ChoiceOption("fork_before",
                  "(UNIX) Create restartable checkpoint before step",
                  ["annotate", "rtype", "backendopt", "database", "source",
-                  "hintannotate", "timeshift"],
+                  "hintannotate", "rainbow"],
                  default=None, cmdline="--fork-before"),
 
     # options for ootype

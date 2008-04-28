@@ -19,6 +19,7 @@ class AnsiLog:
         'ERROR': ((1, 31), False),
         'info': ((35,), False),
         'stub': ((34,), False),
+        'trace': ((32,), False),
     }
 
     def __init__(self, kw_to_color={}, file=None):

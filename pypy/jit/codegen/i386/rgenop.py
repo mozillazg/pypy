@@ -3,7 +3,7 @@ import ctypes
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
-from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
+from pypy.jit.codegen.model import GenConst, CodeGenSwitch
 from pypy.jit.codegen.model import ReplayBuilder, dummy_var
 from pypy.jit.codegen.i386.codebuf import CodeBlockOverflow
 from pypy.jit.codegen.i386.operation import *
@@ -37,6 +37,9 @@ class IntConst(GenConst):
     def repr(self):
         return "const=$%s" % (self.value,)
 
+    def getkind(self):
+        return None
+
 class AddrConst(GenConst):
 
     def __init__(self, addr):
@@ -52,6 +55,9 @@ class AddrConst(GenConst):
 
     def repr(self):
         return "const=<0x%x>" % (llmemory.cast_adr_to_int(self.addr),)
+
+    def getkind(self):
+        return None
 
 @specialize.arg(0)
 def cast_int_to_whatever(T, value):
@@ -245,7 +251,7 @@ class Builder(GenBuilder):
         self.graphctx.ensure_stack_vars(allocator.nstackmax)
         del self.operations[:]
         if renaming:
-            self.inputargs_gv = [GenVar() for v in final_vars_gv]
+            self.inputargs_gv = [GenVar386() for v in final_vars_gv]
         else:
             # just keep one copy of each Variable that is alive
             self.inputargs_gv = final_vars_gv
@@ -257,7 +263,7 @@ class Builder(GenBuilder):
             self.operations.append(OpTouch(self.keepalives_gv))
             self.keepalives_gv = None
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         # we get better register allocation if we write a single large mc block
         self.insert_keepalives()
         for i in range(len(args_gv)):
@@ -332,8 +338,13 @@ class Builder(GenBuilder):
         self.rgenop.close_mc(mc)
 
     def finish_and_return(self, sigtoken, gv_returnvar):
-        gvs = [gv_returnvar]
-        mc = self.generate_block_code(gvs, [eax])
+        if gv_returnvar is not None:
+            gvs = [gv_returnvar]
+            gvo = [eax]
+        else:
+            gvs = []
+            gvo = []
+        mc = self.generate_block_code(gvs, gvo)
         # --- epilogue ---
         mc.MOV(esp, ebp)
         mc.POP(ebp)
@@ -395,34 +406,10 @@ class Builder(GenBuilder):
         self.operations.append(op_excflag)
         return op, op_excflag
 
-    def genop_ptr_iszero(self, kind, gv_ptr):
-        cls = getopclass1('ptr_iszero')
-        op = cls(gv_ptr)
-        self.operations.append(op)
-        return op
-
-    def genop_ptr_nonzero(self, kind, gv_ptr):
-        cls = getopclass1('ptr_nonzero')
-        op = cls(gv_ptr)
-        self.operations.append(op)
-        return op
-
-    def genop_ptr_eq(self, kind, gv_ptr1, gv_ptr2):
-        cls = getopclass2('ptr_eq')
-        op = cls(gv_ptr1, gv_ptr2)
-        self.operations.append(op)
-        return op
-
-    def genop_ptr_ne(self, kind, gv_ptr1, gv_ptr2):
-        cls = getopclass2('ptr_ne')
-        op = cls(gv_ptr1, gv_ptr2)
-        self.operations.append(op)
-        return op
-
     def genop_cast_int_to_ptr(self, kind, gv_int):
         return gv_int     # identity
 
-    def genop_same_as(self, kind, gv_x):
+    def genop_same_as(self, gv_x):
         if gv_x.is_const:    # must always return a var
             op = OpSameAs(gv_x)
             self.operations.append(op)
@@ -528,7 +515,7 @@ class Builder(GenBuilder):
         self.operations.append(place)
         return place
 
-    def genop_absorb_place(self, kind, place):
+    def genop_absorb_place(self, place):
         v = OpAbsorbPlace(place)
         self.operations.append(v)
         return v
@@ -630,7 +617,7 @@ class RI386GenOp(AbstractRGenOp):
         inputargs_gv = []
         inputoperands = []
         for i in range(numargs):
-            inputargs_gv.append(GenVar())
+            inputargs_gv.append(GenVar386())
             ofs = WORD * (GraphCtx.PROLOGUE_FIXED_WORDS+i)
             inputoperands.append(mem(ebp, ofs))
         builder = Builder(self, graphctx, inputargs_gv, inputoperands)
@@ -645,8 +632,8 @@ class RI386GenOp(AbstractRGenOp):
         #inputargs_gv = ops
         return builder, IntConst(entrypoint), inputargs_gv[:]
 
-    def replay(self, label, kinds):
-        return ReplayBuilder(self), [dummy_var] * len(kinds)
+    def replay(self, label):
+        return ReplayBuilder(self), [dummy_var] * len(label.inputoperands)
 
     @specialize.genconst(1)
     def genconst(self, llvalue):
@@ -719,6 +706,7 @@ class RI386GenOp(AbstractRGenOp):
     def sigToken(FUNCTYPE):
         numargs = 0
         for ARG in FUNCTYPE.ARGS:
+            RI386GenOp.kindToken(ARG)     # for the skip()
             if ARG is not lltype.Void:
                 numargs += 1
         return numargs     # for now
@@ -744,6 +732,16 @@ class RI386GenOp(AbstractRGenOp):
         else:
             assert isinstance(v, GenConst)
             return v.revealconst(T)
+
+    @staticmethod
+    def genconst_from_frame_var(kind, base, info, index):
+        v = info[index]
+        if isinstance(v, StorageInStack):
+            value = peek_word_at(base + v.get_offset())
+            return IntConst(value)
+        else:
+            assert isinstance(v, GenConst)
+            return v
 
     @staticmethod
     @specialize.arg(0)

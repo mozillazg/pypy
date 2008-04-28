@@ -1,10 +1,8 @@
 from pypy.objspace.flow.model import FunctionGraph, Constant, Variable, c_last_exception
-from pypy.rlib.rarithmetic import intmask, r_uint, ovfcheck, r_longlong
-from pypy.rlib.rarithmetic import r_ulonglong, ovfcheck_lshift
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
-from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 import sys, os
 import math
@@ -76,6 +74,8 @@ class LLInterpreter(object):
                     self.tracer.dump('LLException: %s\n' % (e,))
                 raise
             except Exception, e:
+                if getattr(e, '_go_through_llinterp_uncaught_', False):
+                    raise
                 log.error("AN ERROR OCCURED: %s" % (e, ))
                 self.print_traceback()
                 if self.tracer:
@@ -218,8 +218,6 @@ class LLFrame(object):
             val = varorconst.value
         except AttributeError:
             val = self.bindings[varorconst]
-        if isinstance(val, ComputedIntSymbolic):
-            val = val.compute_fn()
         if varorconst.concretetype is not lltype.Void:
             try:
                 val = lltype.enforce(varorconst.concretetype, val)
@@ -243,8 +241,19 @@ class LLFrame(object):
         ophandler = getattr(self, 'op_' + opname, None)
         if ophandler is None:
             # try to import the operation from opimpl.py
-            ophandler = lloperation.LL_OPERATIONS[opname].fold
-            setattr(self.__class__, 'op_' + opname, staticmethod(ophandler))
+            llop = lloperation.LL_OPERATIONS[opname]
+            if llop.canraise:
+                assert not getattr(llop.fold, 'need_result_type', False)
+                # ^^^ for now
+                def ophandler(self, *args):
+                    try:
+                        return llop.fold(*args)
+                    except llop.canraise:
+                        self.make_llexception()
+            else:
+                ophandler = staticmethod(llop.fold)
+            setattr(self.__class__, 'op_' + opname, ophandler)
+            ophandler = getattr(self, 'op_' + opname)
         return ophandler
     # _______________________________________________________
     # evaling functions
@@ -423,6 +432,18 @@ class LLFrame(object):
         if exc is None:
             original = sys.exc_info()
             exc = original[1]
+            # it makes no sense to convert some exception classes that
+            # just mean something buggy crashed
+            if isinstance(exc, (AssertionError, AttributeError,
+                                TypeError, NameError,
+                                KeyboardInterrupt, SystemExit,
+                                ImportError, SyntaxError)):
+                raise original[0], original[1], original[2]     # re-raise it
+            # for testing the JIT (see ContinueRunningNormally) we need
+            # to let some exceptions introduced by the JIT go through
+            # the llinterpreter uncaught
+            if getattr(exc, '_go_through_llinterp_uncaught_', False):
+                raise original[0], original[1], original[2]     # re-raise it
             extraargs = (original,)
         else:
             extraargs = ()
@@ -445,6 +466,8 @@ class LLFrame(object):
         except LLException, e:
             raise
         except Exception, e:
+            if getattr(e, '_go_through_llinterp_uncaught_', False):
+                raise
             if getattr(obj, '_debugexc', False):
                 log.ERROR('The llinterpreter got an '
                           'unexpected exception when calling')
@@ -499,9 +522,6 @@ class LLFrame(object):
         import pdb
         pdb.set_trace()
 
-    def op_debug_assert(self, x, msg):
-        assert x, msg
-
     def op_debug_fatalerror(self, ll_msg, ll_exc=None):
         msg = ''.join(ll_msg.chars)
         if ll_exc is None:
@@ -512,6 +532,9 @@ class LLFrame(object):
 
     def op_debug_llinterpcall(self, pythonfunction, *args_ll):
         return pythonfunction(*args_ll)
+
+    def op_jit_marker(self, *args):
+        pass
 
     def op_instrument_count(self, ll_tag, ll_label):
         pass # xxx for now
@@ -707,7 +730,7 @@ class LLFrame(object):
         self.heap.free(obj, flavor=flavor)
 
     def op_zero_gc_pointers_inside(self, obj):
-        raise NotImplementedError("zero_gc_pointers_inside")
+        llmemory.zero_gc_pointers_inside(obj)
 
     def op_getfield(self, obj, field):
         checkptr(obj)
@@ -887,129 +910,9 @@ class LLFrame(object):
     def op_call_boehm_gc_alloc(self):
         raise NotImplementedError("call_boehm_gc_alloc")
 
-    # ____________________________________________________________
-    # Overflow-detecting variants
-
-    def op_int_neg_ovf(self, x):
-        assert type(x) is int
-        try:
-            return ovfcheck(-x)
-        except OverflowError:
-            self.make_llexception()
-
-    def op_int_abs_ovf(self, x):
-        assert type(x) is int
-        try:
-            return ovfcheck(abs(x))
-        except OverflowError:
-            self.make_llexception()
-
-    def op_llong_neg_ovf(self, x):
-        assert type(x) is r_longlong
-        try:
-            return ovfcheck(-x)
-        except OverflowError:
-            self.make_llexception()
-
-    def op_llong_abs_ovf(self, x):
-        assert type(x) is r_longlong
-        try:
-            return ovfcheck(abs(x))
-        except OverflowError:
-            self.make_llexception()
-
-    def op_int_lshift_ovf(self, x, y):
-        assert isinstance(x, int)
-        assert isinstance(y, int)
-        try:
-            return ovfcheck_lshift(x, y)
-        except OverflowError:
-            self.make_llexception()
-
-    def op_int_lshift_ovf_val(self, x, y):
-        assert isinstance(x, int)
-        assert isinstance(y, int)
-        try:
-            return ovfcheck_lshift(x, y)
-        except (OverflowError, ValueError):
-            self.make_llexception()
-
-    def _makefunc2(fn, operator, xtype, ytype=None):
-        import sys
-        d = sys._getframe(1).f_locals
-        if ytype is None:
-            ytype = xtype
-        if '_ovf' in fn:
-            checkfn = 'ovfcheck'
-        elif fn.startswith('op_int_'):
-            checkfn = 'intmask'
-        else:
-            checkfn = ''
-        if operator == '//':
-            code = '''r = %(checkfn)s(x // y)
-                if x^y < 0 and x%%y != 0:
-                    r += 1
-                return r
-                '''%locals()
-        elif operator == '%':
-            code = '''r = %(checkfn)s(x %% y)
-                if x^y < 0 and x%%y != 0:
-                    r -= y
-                return r
-                '''%locals()
-        else:
-            code = 'return %(checkfn)s(x %(operator)s y)'%locals()
-        exec py.code.Source("""
-        def %(fn)s(self, x, y):
-            assert isinstance(x, %(xtype)s)
-            assert isinstance(y, %(ytype)s)
-            try:
-                %(code)s
-            except (OverflowError, ValueError, ZeroDivisionError):
-                self.make_llexception()
-        """ % locals()).compile() in globals(), d
-
-    _makefunc2('op_int_add_ovf', '+', '(int, llmemory.AddressOffset)')
-    _makefunc2('op_int_mul_ovf', '*', '(int, llmemory.AddressOffset)', 'int')
-    _makefunc2('op_int_sub_ovf',          '-',  'int')
-    _makefunc2('op_int_floordiv_ovf',     '//', 'int')
-    _makefunc2('op_int_floordiv_zer',     '//', 'int')
-    _makefunc2('op_int_floordiv_ovf_zer', '//', 'int')
-    _makefunc2('op_int_mod_ovf',          '%',  'int')
-    _makefunc2('op_int_mod_zer',          '%',  'int')
-    _makefunc2('op_int_mod_ovf_zer',      '%',  'int')
-    _makefunc2('op_int_lshift_val',       '<<', 'int')
-    _makefunc2('op_int_rshift_val',       '>>', 'int')
-
-    _makefunc2('op_uint_floordiv_zer',    '//', 'r_uint')
-    _makefunc2('op_uint_mod_zer',         '%',  'r_uint')
-    _makefunc2('op_uint_lshift_val',      '<<', 'r_uint')
-    _makefunc2('op_uint_rshift_val',      '>>', 'r_uint')
-
-    _makefunc2('op_llong_floordiv_zer',   '//', 'r_longlong')
-    _makefunc2('op_llong_mod_zer',        '%',  'r_longlong')
-    _makefunc2('op_llong_lshift_val',     '<<', 'r_longlong')
-    _makefunc2('op_llong_rshift_val',     '>>', 'r_longlong')
-
-    _makefunc2('op_ullong_floordiv_zer',  '//', 'r_ulonglong')
-    _makefunc2('op_ullong_mod_zer',       '%',  'r_ulonglong')
-    _makefunc2('op_ullong_lshift_val',    '<<', 'r_ulonglong')
-    _makefunc2('op_ullong_rshift_val',    '>>', 'r_ulonglong')
-
-    def op_int_add_nonneg_ovf(self, x, y):
-        if isinstance(y, int):
-            assert y >= 0
-        return self.op_int_add_ovf(x, y)
-
-    def op_cast_float_to_int(self, f):
-        assert type(f) is float
-        try:
-            return ovfcheck(int(f))
-        except OverflowError:
-            self.make_llexception()
+    # special case
 
     def op_int_is_true(self, x):
-        # special case
         if type(x) is CDefinedIntSymbolic:
             x = x.default
         assert isinstance(x, int)

@@ -13,7 +13,7 @@ from pypy.jit.codegen.ppc import codebuf
 from pypy.jit.codegen.ppc.instruction import rSP, rFP, rSCRATCH, gprs
 from pypy.jit.codegen.ppc import instruction as insn
 from pypy.jit.codegen.ppc.regalloc import RegisterAllocation
-from pypy.jit.codegen.ppc.emit_moves import emit_moves, emit_moves_safe
+from pypy.jit.codegen.emit_moves import emit_moves, emit_moves_safe
 
 from pypy.jit.codegen.ppc.ppcgen.rassemblermaker import make_rassembler
 from pypy.jit.codegen.ppc.ppcgen.ppc_assembler import MyPPCAssembler
@@ -295,18 +295,6 @@ class Builder(GenBuilder):
         r = genmethod(gv_arg)
         return r
 
-    def genop_ptr_iszero(self, kind, gv_ptr):
-        return self.op_ptr_iszero(gv_ptr)
-
-    def genop_ptr_nonzero(self, kind, gv_ptr):
-        return self.op_ptr_nonzero(gv_ptr)
-
-    def genop_ptr_eq(self, kind, gv_ptr1, gv_ptr2):
-        return self.op_ptr_eq(gv_ptr1, gv_ptr2)
-
-    def genop_ptr_ne(self, kind, gv_ptr1, gv_ptr2):
-        return self.op_ptr_ne(gv_ptr1, gv_ptr2)
-
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         self.insns.append(insn.SpillCalleeSaves())
         for i in range(len(args_gv)):
@@ -390,7 +378,7 @@ class Builder(GenBuilder):
                                         [gv_size, gv_result, IntConst(lengthoffset)]))
         return gv_result
 
-    def genop_same_as(self, kindtoken, gv_arg):
+    def genop_same_as(self, gv_arg):
         if not isinstance(gv_arg, Var):
             gv_result = Var()
             gv_arg.load(self.insns, gv_result)
@@ -398,7 +386,7 @@ class Builder(GenBuilder):
         else:
             return gv_arg
 
-    def genop_cast_int_to_ptr(self, ptrkindtoken, gv_int):
+    def genop_cast_int_to_ptr(self, kind, gv_int):
         return gv_int
 
 ##     def genop_debug_pdb(self):    # may take an args_gv later
@@ -427,12 +415,12 @@ class Builder(GenBuilder):
         self.insns.append(insn.CopyIntoStack(place, gv_initial_value))
         return place
 
-    def genop_absorb_place(self, kind, place):
+    def genop_absorb_place(self, place):
         var = Var()
         self.insns.append(insn.CopyOffStack(var, place))
         return var
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         if DEBUG_PRINT:
             print 'enter_next_block1', args_gv
         seen = {}
@@ -1185,8 +1173,8 @@ class RPPCGenOp(AbstractRGenOp):
     def genzeroconst(kind):
         return zero_const
 
-    def replay(self, label, kinds):
-        return ReplayBuilder(self), [dummy_var] * len(kinds)
+    def replay(self, label):
+        return ReplayBuilder(self), [dummy_var] * len(label.args_gv)
 
     @staticmethod
     def erasedType(T):
@@ -1268,6 +1256,21 @@ class RPPCGenOp(AbstractRGenOp):
         else:
             assert isinstance(place, GenConst)
             return place.revealconst(T)
+
+    @staticmethod
+    @specialize.arg(0)
+    def genconst_from_frame_var(kind, base, info, index):
+        place = info[index]
+        if isinstance(place, StackInfo):
+            #print '!!!', base, place.offset
+            #print '???', [peek_word_at(base + place.offset + i)
+            #              for i in range(-64, 65, 4)]
+            assert place.offset != 0
+            value = peek_word_at(base + place.offset)
+            return IntConst(value)
+        else:
+            assert isinstance(place, GenConst)
+            return place
 
 
     @staticmethod

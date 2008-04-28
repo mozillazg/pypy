@@ -423,6 +423,8 @@ TEST.mode2(REG,   MODRM, ['\x85', register(1,8), modrm(2)])
 TEST.mode2(MODRM, REG,   ['\x85', register(2,8), modrm(1)])
 TEST.mode2(EAX,   IMM32, ['\xA9', immediate(2)])
 TEST.mode2(MODRM, IMM32, ['\xF7', orbyte(0<<3), modrm(1), immediate(2)])
+TEST.mode2(AL,    IMM8,  ['\xA8', immediate(2,'b')])
+TEST.mode2(REG8,  IMM8,  ['\xF6', register(1,1,'b'), '\xC0', immediate(2,'b')])
 
 INT = Instruction()
 INT.mode1(IMM8, ['\xCD', immediate(1, 'b')])
@@ -434,17 +436,58 @@ BREAKPOINT = Instruction()    # INT 3
 BREAKPOINT.mode0(['\xCC'])
 BREAKPOINT.as_alias = "INT3"
 
+SAHF = Instruction()
+SAHF.mode0(['\x9E'])
+
 # ------------------------- floating point instructions ------------------
 
-FLD = Instruction()
-FLD.mode1(MODRM64, ['\xD9', modrm(1)])
+FLDL = Instruction()
+FLDL.mode1(MODRM64, ['\xDD', modrm(1)])
 
-FADD = Instruction()
-#FADD.mode1(MODRM64, ['\xDC', modrm(1)])
-FADD.mode0(['\xDE\xC1'])
+FADDP = Instruction()
+FADDP.mode0(['\xDE\xC1'])
 
-#FISTP = Instruction()
-#FISTP.mode1(MODRM64, ['\xDF', modrm(1)])
+FSUBP = Instruction()
+FSUBP.mode0(['\xDE\xE1'])
+
+FMULP = Instruction()
+FMULP.mode0(['\xDE\xC9'])
+
+FDIVP = Instruction()
+FDIVP.mode0(['\xDE\xF1'])
+
+FCHS = Instruction()
+FCHS.mode0(['\xD9\xE0'])
+
+FABS = Instruction()
+FABS.mode0(['\xD9\xE1'])
+
+FTST = Instruction()
+FTST.mode0(['\xD9\xE4'])
+
+# store status control word
+FNSTSW = Instruction()
+FNSTSW.mode0(['\xDF\xE0'])
+
+FUCOMP = Instruction()
+FUCOMP.mode0(['\xDD\xE9'])
+
+FUCOMPP = Instruction()
+FUCOMPP.mode0(['\xDA\xE9'])
+
+FSTPL = Instruction()
+FSTPL.mode1(MODRM64, ['\xDD', orbyte(3<<3), modrm(1)])
+FSTL = Instruction()
+FSTL.mode1(MODRM64, ['\xDD', orbyte(2<<3), modrm(1)])
+
+FISTP = Instruction()
+FISTP.mode1(MODRM, ['\xDB', orbyte(3<<3), modrm(1)])
+
+FILD = Instruction()
+FILD.mode1(MODRM, ['\xDB', orbyte(0<<3), modrm(1)])
+
+FNSTCW = Instruction()
+FNSTCW.mode1(MODRM, ['\xD9', orbyte(7<<3), modrm(1)])
 
 # ------------------------- end of floating point ------------------------
 

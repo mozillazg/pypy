@@ -12,9 +12,20 @@ def op_oodowncast(INST, inst):
     return ootype.oodowncast(INST, inst)
 op_oodowncast.need_result_type = True
 
+def op_cast_to_object(inst):
+    return ootype.cast_to_object(inst)
+
+def op_cast_from_object(TYPE, obj):
+    return ootype.cast_from_object(TYPE, obj)
+op_cast_from_object.need_result_type = True
+
 def op_oononnull(inst):
     checkinst(inst)
     return bool(inst)
+
+def op_ooisnull(inst):
+    checkinst(inst)
+    return not bool(inst)
 
 def op_oois(obj1, obj2):
     if is_inst(obj1):
@@ -23,6 +34,9 @@ def op_oois(obj1, obj2):
     elif isinstance(obj1, ootype._class):
         assert isinstance(obj2, ootype._class)
         return obj1 is obj2
+    elif isinstance(obj1, ootype._object):
+        assert isinstance(obj2, ootype._object)
+        return obj1 == obj2
     else:
         assert False, "oois on something silly"
 
@@ -35,6 +49,11 @@ def op_classof(inst):
 def op_subclassof(class1, class2):
     return ootype.subclassof(class1, class2)
 
+def op_oogetfield(inst, name):
+    checkinst(inst)
+    if not ootype.typeOf(inst)._hints.get('immutable'):
+        raise TypeError("cannot fold oogetfield on mutable struct")
+    return getattr(inst, name)
 
 def is_inst(inst):
     return isinstance(ootype.typeOf(inst), (ootype.Instance, ootype.BuiltinType, ootype.StaticMethod))

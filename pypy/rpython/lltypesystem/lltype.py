@@ -697,7 +697,7 @@ _to_primitive = {
 def cast_primitive(TGT, value):
     ORIG = typeOf(value)
     if not isinstance(TGT, Primitive) or not isinstance(ORIG, Primitive):
-        raise TypeError, "can only primitive to primitive"
+        raise TypeError, "can cast only primitive to primitive"
     if ORIG == TGT:
         return value
     if ORIG == Char or ORIG == UniChar:

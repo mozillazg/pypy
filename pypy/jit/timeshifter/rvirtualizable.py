@@ -1,19 +1,22 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
-from pypy.rpython.annlowlevel import cachedtype
+from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import llstructofhelpers
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 
 debug_print = lloperation.llop.debug_print
 debug_pdb = lloperation.llop.debug_pdb
 
-def define_touch_update(TOPPTR, redirected_fielddescs, access_touched):
+def define_touch_update(TOPPTR, redirected_fielddescs, get_access_touched):
     redirected_fielddescs = unrolling_iterable(redirected_fielddescs)
 
     def touch_update(strucref):
         struc = lltype.cast_opaque_ptr(TOPPTR, strucref)
         vable_rti = struc.vable_rti
-        vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+        if we_are_translated():
+            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
         vable_rti.touch(struc.vable_base)
         vable_base = struc.vable_base
 
@@ -27,6 +30,7 @@ def define_touch_update(TOPPTR, redirected_fielddescs, access_touched):
             tgt = lltype.cast_pointer(fielddesc.PTRTYPE, struc)            
             setattr(tgt, fielddesc.fieldname, v)
         ACCESSPTR = TOPPTR.TO.vable_access
+        access_touched = get_access_touched()
         struc.vable_access = lltype.cast_pointer(ACCESSPTR, access_touched)
 
     return touch_update
@@ -37,7 +41,8 @@ def define_getset_field_ptrs(fielddesc, j):
         T = fielddesc.RESTYPE
         if fielddesc.canbevirtual and fielddesc.gcref:
             vable_rti = struc.vable_rti
-            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+            if we_are_translated():
+                vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
             vable_rti.touched_ptr_field(struc.vable_base, j)
         struc = lltype.cast_pointer(fielddesc.PTRTYPE, struc)
         setattr(struc, fielddesc.fieldname, value)
@@ -47,7 +52,8 @@ def define_getset_field_ptrs(fielddesc, j):
         tgt = lltype.cast_pointer(fielddesc.PTRTYPE, struc)
         if fielddesc.canbevirtual and fielddesc.gcref:
             vable_rti = struc.vable_rti
-            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+            if we_are_translated():
+                vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
             vable_base = struc.vable_base
             if vable_rti.is_field_virtual(vable_base, j):
                 # this will force
@@ -58,13 +64,15 @@ def define_getset_field_ptrs(fielddesc, j):
         
     def set_field_untouched(struc, value):
         vable_rti = struc.vable_rti
-        vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+        if we_are_translated():
+            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
         vable_rti.touch_update(lltype.cast_opaque_ptr(llmemory.GCREF, struc))
         set_field_touched(struc, value)
 
     def get_field_untouched(struc):
         vable_rti = struc.vable_rti
-        vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+        if we_are_translated():
+            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
         return vable_rti.read_field(fielddesc, struc.vable_base, j)
         
     return ((get_field_untouched, set_field_untouched),
@@ -94,6 +102,9 @@ class RTI(object):
         return vrti._get_forced(vablerti, fielddesc, base)
     _read_field._annspecialcase_ = "specialize:arg(2)"
 
+    # hack for testing: make the llinterpreter believe this is a Ptr to base
+    # instance
+    _TYPE = base_ptr_lltype()
 
 class VirtualizableRTI(RTI):
     _attrs_ = "frameinfo touch_update shape_place".split()
@@ -162,3 +173,25 @@ class VirtualRTI(RTI):
         return bool(self.bitmask & shapemask)
 
 
+class GetSetters:
+    """A convenient place to put the set of getter/setter functions
+    that needs to be converted to a low-level ACCESS structure."""
+
+    def __init__(self, ACCESS, parent=None):
+        functions = {}
+        # initialize 'functions' with everything from the parent
+        if parent is not None:
+            for key, value in parent.functions.items():
+                functions['parent.' + key] = value
+        self.functions = functions
+
+        def get_access():
+            return llstructofhelpers(lltype.Ptr(ACCESS), functions)
+        self.get_access = get_access
+
+        def get_gv_access(builder):
+            return builder.rgenop.genconst(get_access())
+        self.get_gv_access = get_gv_access
+
+    def define(self, name, func):
+        self.functions[name] = func

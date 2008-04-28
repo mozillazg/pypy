@@ -219,6 +219,21 @@ def invoke_around_extcall(before, after):
     llhelper(rffi.AroundFnPtr, before)
     llhelper(rffi.AroundFnPtr, after)
 
+def noop(*args, **kwds):
+    pass     # an RPython-friendly noop function
+
+class Entry(ExtRegistryEntry):
+    _about_ = noop
+
+    def compute_result_annotation(self, *args_s, **kwds_s):
+        from pypy.annotation import model as annmodel
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        hop.exception_cannot_occur()
+        return hop.inputconst(lltype.Void, None)
+
 
 class UnboxedValue(object):
     """A mixin class to use for classes that have exactly one field which

@@ -1,17 +1,19 @@
 # Fake stuff for the tests.
 
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.timeshifter import rvalue, rcontainer
+from pypy.jit.rainbow.typesystem import LLTypeHelper
 
 
 class FakeJITState(object):
     def __init__(self):
         self.curbuilder = FakeBuilder()
+        self.ts = LLTypeHelper()
 
 class FakeRGenOp(object):
     def genzeroconst(self, kind):
-        if kind == "dummy pointer":
+        if kind == ("kind", llmemory.Address):
             return FakeGenConst("NULL")
         return FakeGenConst(0)
 
@@ -57,14 +59,10 @@ class FakeBuilder(object):
             raise AttributeError, name
 
 
-class FakeHRTyper(object):
-    RGenOp = FakeRGenOp
-
-fakehrtyper = FakeHRTyper()
-
 class FakeGenVar(GenVar):
-    def __init__(self, count=0):
-        self.count=count
+    def __init__(self, count=0, kind="no clue"):
+        self.count = count
+        self.kind = kind
     
     def __repr__(self):
         return "V%d" % self.count
@@ -72,6 +70,8 @@ class FakeGenVar(GenVar):
     def __eq__(self, other):
         return self.count == other.count
 
+    def getkind(self):
+        return ("kind", self.kind)
 
 class FakeGenConst(GenConst):
     def __init__(self, _value=None):
@@ -80,6 +80,9 @@ class FakeGenConst(GenConst):
     def revealconst(self, T):
         return self._value
 
+    def getkind(self):
+        return ("kind", "no clue")
+
 # ____________________________________________________________
 
 signed_kind = FakeRGenOp.kindToken(lltype.Signed)
@@ -87,7 +90,7 @@ signed_kind = FakeRGenOp.kindToken(lltype.Signed)
 def vmalloc(TYPE, *boxes):
     jitstate = FakeJITState()
     assert isinstance(TYPE, lltype.Struct)   # for now
-    structdesc = rcontainer.StructTypeDesc(fakehrtyper, TYPE)
+    structdesc = rcontainer.StructTypeDesc(FakeRGenOp, TYPE)
     box = structdesc.factory()
     for fielddesc, valuebox in zip(structdesc.fielddescs, boxes):
         if valuebox is None:
@@ -100,9 +103,9 @@ def makebox(value):
     if not isinstance(value, GenVarOrConst):
         assert isinstance(value, int)    # for now
         value = FakeGenConst(value)
-    return rvalue.IntRedBox(signed_kind, value)
+    return rvalue.IntRedBox(value)
 
 def getfielddesc(STRUCT, name):
     assert isinstance(STRUCT, lltype.Struct)
-    structdesc = rcontainer.StructTypeDesc(fakehrtyper, STRUCT)
+    structdesc = rcontainer.StructTypeDesc(FakeRGenOp, STRUCT)
     return structdesc.fielddesc_by_name[name]

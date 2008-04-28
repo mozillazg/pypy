@@ -360,7 +360,13 @@ def llhelper(F, f):
     #       prebuilt_g()
 
     # the next line is the implementation for the purpose of direct running
-    return lltype.functionptr(F.TO, f.func_name, _callable=f)
+    # (see test_prebuilt_llhelper)
+    if isinstance(F, ootype.OOType):
+        return ootype.static_meth(F, f.func_name, _callable=f,
+                                  _debugexc = getattr(f, '_debugexc', False))
+    else:
+        return lltype.functionptr(F.TO, f.func_name, _callable=f,
+                                  _debugexc = getattr(f, '_debugexc', False))
 
 class LLHelperEntry(extregistry.ExtRegistryEntry):
     _about_ = llhelper
@@ -369,15 +375,72 @@ class LLHelperEntry(extregistry.ExtRegistryEntry):
         assert s_F.is_constant()
         assert s_callable.is_constant()
         F = s_F.const
-        args_s = [annmodel.lltype_to_annotation(T) for T in F.TO.ARGS]
+        if isinstance(F, ootype.OOType):
+            FUNC = F
+            resultcls = annmodel.SomeOOStaticMeth
+        else:
+            FUNC = F.TO
+            resultcls = annmodel.SomePtr
+        
+        args_s = [annmodel.lltype_to_annotation(T) for T in FUNC.ARGS]
         key = (llhelper, s_callable.const)
         s_res = self.bookkeeper.emulate_pbc_call(key, s_callable, args_s)
-        assert annmodel.lltype_to_annotation(F.TO.RESULT).contains(s_res)
-        return annmodel.SomePtr(F)
+        assert annmodel.lltype_to_annotation(FUNC.RESULT).contains(s_res)
+        return resultcls(F)
 
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         return hop.args_r[1].get_unique_llfn()
+
+# ____________________________________________________________
+
+def llstructofhelpers(P, initdata):
+    """Ad hoc.  Returns an immortal structure of type P.TO whose fields
+    are low-level function pointers, initialized according to the
+    constant dict 'initdata'."""
+    # implementation for the purpose of direct running only
+    # XXX this is a workaround for the fact that prebuilt llhelpers cannot
+    # be translated
+    # XXX this is all happy hacking :-/
+    result = lltype.malloc(P.TO, immortal=True, zero=True)
+    for name, callable in initdata.items():
+        F = eval('P.TO.%s' % name)
+        fnptr = llhelper(F, callable)
+        exec 'result.%s = fnptr' % name
+    return result
+
+class LLStructOfHelpersEntry(extregistry.ExtRegistryEntry):
+    _about_ = llstructofhelpers
+
+    def compute_result_annotation(self, s_P, s_initdata):
+        assert s_P.is_constant()
+        assert s_initdata.is_constant()
+        P = s_P.const
+        initdata = s_initdata.const
+        for name, callable in initdata.items():
+            F = eval('P.TO.%s' % name)
+            s_callable = self.bookkeeper.immutablevalue(callable)
+            args_s = [annmodel.lltype_to_annotation(T) for T in F.TO.ARGS]
+            key = (llhelper, s_callable.const)
+            s_res = self.bookkeeper.emulate_pbc_call(key, s_callable, args_s)
+            assert annmodel.lltype_to_annotation(F.TO.RESULT).contains(s_res)
+        return annmodel.SomePtr(P)
+
+    def specialize_call(self, hop):
+        bk = hop.rtyper.annotator.bookkeeper
+        P = hop.args_s[0].const
+        initdata = hop.args_s[1].const
+        result = lltype.malloc(P.TO, immortal=True, zero=True)
+        for name, callable in initdata.items():
+            F = eval('P.TO.%s' % name)
+            s_callable = bk.immutablevalue(callable)
+            r_callable = hop.rtyper.getrepr(s_callable)
+            c_fnptr = r_callable.get_unique_llfn()
+            assert isinstance(c_fnptr, Constant)
+            fnptr = c_fnptr.value
+            exec 'result.%s = fnptr' % name
+        hop.exception_cannot_occur()
+        return hop.inputconst(P, result)
 
 # ____________________________________________________________
 

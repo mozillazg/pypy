@@ -11,22 +11,23 @@ class FindallContinuation(engine.Continuation):
         self.template = template
 
     def _call(self, engine):
-        clone = self.template.getvalue(engine.heap)
+        clone = self.template.getvalue(engine)
         self.found.append(clone)
         raise error.UnificationFailed()
 
 def impl_findall(engine, template, goal, bag):
-    oldstate = engine.heap.branch()
+    oldstate = engine.branch()
     collector = FindallContinuation(template)
     try:
         engine.call(goal, collector)
     except error.UnificationFailed:
-        engine.heap.revert(oldstate)
+        engine.revert(oldstate)
     result = term.Atom.newatom("[]")
     for i in range(len(collector.found) - 1, -1, -1):
         copy = collector.found[i]
         d = {}
-        copy = copy.copy(engine.heap, d)
+        copy = copy.copy(engine, d)
         result = term.Term(".", [copy, result])
-    bag.unify(result, engine.heap)
+    bag.unify(result, engine)
+impl_findall._look_inside_me_ = False
 expose_builtin(impl_findall, "findall", unwrap_spec=['raw', 'callable', 'raw'])

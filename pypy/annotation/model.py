@@ -554,6 +554,10 @@ class SomeLLADTMeth(SomeObject):
     def can_be_none(self):
         return False
 
+class SomeOOObject(SomeObject):
+    def __init__(self):
+        self.ootype = ootype.Object
+
 class SomeOOClass(SomeObject):
     def __init__(self, ootype):
         self.ootype = ootype
@@ -609,8 +613,8 @@ def annotation_to_lltype(s_val, info=None):
         info = ''
     else:
         info = '%s: ' % info
-    raise ValueError("%sshould return a low-level type,\ngot instead %r" % (
-        info, s_val))
+    raise ValueError("%sshould take/return a low-level type,\ngot instead %r"
+                     % (info, s_val))
 
 ll_to_annotation_map = dict([(ll, ann) for ann, ll in annotation_to_ll_map if ll is not NUMBER])
 

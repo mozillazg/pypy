@@ -85,6 +85,7 @@ def wrap_builtin_operation(name, pattern, unwrap_spec, can_overflow, intversion)
         code.end_block("else")
     code.emit("return norm_float(term.Float(%s))" % pattern)
     code.end_block("def")
+    code.emit("general_%s._look_inside_me_ = False" % (name, ))
     miniglobals = globals().copy()
     exec py.code.Source(code.tostring()).compile() in miniglobals
     result = miniglobals["prolog_" + name]
@@ -95,7 +96,6 @@ wrap_builtin_operation._annspecialcase_ = 'specialize:memo'
 
 def eval_arithmetic(engine, query):
     return query.eval_arithmetic(engine)
-eval_arithmetic._look_inside_me_ = True
 
 def norm_float(obj):
     v = obj.floatval

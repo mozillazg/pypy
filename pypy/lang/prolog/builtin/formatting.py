@@ -147,10 +147,12 @@ class TermFormatter(object):
 def impl_write_term(engine, term, options):
     f = TermFormatter.from_option_list(engine, options)
     os.write(1, f.format(term)) # XXX use streams
+impl_write_term._look_inside_me_ = False
 expose_builtin(impl_write_term, "write_term", unwrap_spec=["concrete", "list"])
 
 def impl_nl(engine):
     os.write(1, "\n") # XXX use streams
+impl_nl._look_inside_me_ = False
 expose_builtin(impl_nl, "nl", unwrap_spec=[])
 
 def impl_write(engine, term):

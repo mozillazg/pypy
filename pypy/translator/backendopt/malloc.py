@@ -548,6 +548,7 @@ class OOTypeMallocRemover(BaseMallocRemover):
     FIELD_ACCESS = dict.fromkeys(["oogetfield",
                                   "oosetfield",
                                   "oononnull",
+                                  "ooisnull",
                                   #"oois",  # ???
                                   #"instanceof", # ???
                                   ])
@@ -611,10 +612,10 @@ class OOTypeMallocRemover(BaseMallocRemover):
             # equivalent.  We can, and indeed must, use the same
             # flattened list of variables for both, as a "setfield"
             # via one pointer must be reflected in the other.
-        elif op.opname == "oononnull":
+        elif op.opname in ("ooisnull", "oononnull"):
             # we know the pointer is not NULL if it comes from
             # a successful malloc
-            c = Constant(True, lltype.Bool)
+            c = Constant(op.opname == "oononnull", lltype.Bool)
             newop = SpaceOperation('same_as', [c], op.result)
             self.newops.append(newop)
         else:

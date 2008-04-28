@@ -516,18 +516,6 @@ class Builder(GenBuilder):
     def op_ptr_nonzero(self, gv_x):     return self._is_true(gv_x, 'null')
     def op_ptr_iszero(self, gv_x):      return self._is_false(gv_x, 'null')
 
-    def genop_ptr_iszero(self, kind, gv_ptr):
-        return self.op_ptr_iszero(gv_ptr)
-
-    def genop_ptr_nonzero(self, kind, gv_ptr):
-        return self.op_ptr_nonzero(gv_ptr)
-
-    def genop_ptr_eq(self, kind, gv_ptr1, gv_ptr2):
-        return self.op_ptr_eq(gv_ptr1, gv_ptr2)
-
-    def genop_ptr_ne(self, kind, gv_ptr1, gv_ptr2):
-        return self.op_ptr_ne(gv_ptr1, gv_ptr2)
-
     def op_float_is_true(self, gv_x):   return self._is_true(gv_x, '0.0') #XXX fails for doubles
 
     def genop_getfield(self, fieldtoken, gv_ptr):

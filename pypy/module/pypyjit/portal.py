@@ -1,12 +1,11 @@
 import pypy
-from pypy.module.pypyjit.interp_jit import PORTAL
-from pypy.module.pypyjit.newbool import NewBoolDesc
+#from pypy.module.pypyjit.newbool import NewBoolDesc
 from pypy.translator.translator import graphof
 from pypy.annotation.specialize import getuniquenondirectgraph
 from pypy.jit.hintannotator.policy import ManualGraphPolicy
 
 class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
-    PORTAL = PORTAL
+    hotpath = True
     
     def look_inside_graph_of_module(self, graph, func, mod):
         if mod.startswith('pypy.objspace'):
@@ -75,7 +74,7 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
                 descr_impl,
                 pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
 
-    def fill_timeshift_graphs(self, portal_graph):
+    def fill_timeshift_graphs(self):
         import pypy
 
         # --------------------
@@ -102,7 +101,7 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
         self.seegraph(pypy.interpreter.pyframe.PyFrame.execute_frame, False)
         # --------------------
         # special timeshifting logic for newbool
-        self.seegraph(pypy.objspace.std.Space.newbool, NewBoolDesc)
+        #self.seegraph(pypy.objspace.std.Space.newbool, NewBoolDesc)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
                      pypy.objspace.std.Space.is_true)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
@@ -127,9 +126,6 @@ forbidden_modules = {'pypy.interpreter.gateway': True,
 
 def get_portal(drv):
     t = drv.translator
-    portal = getattr(PORTAL, 'im_func', PORTAL)
-    portal_graph = graphof(t, portal)
-
     policy = PyPyHintAnnotatorPolicy()
     policy.seetranslator(t)
-    return portal, policy
+    return None, policy

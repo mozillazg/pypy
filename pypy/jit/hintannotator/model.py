@@ -12,21 +12,29 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       indirect_call
                       int_is_true int_neg int_abs int_invert bool_not
                       int_neg_ovf int_abs_ovf
+                      float_is_true
                       uint_is_true
                       cast_int_to_char
+                      cast_int_to_float
+                      cast_float_to_int
                       cast_int_to_uint
                       cast_uint_to_int
                       cast_char_to_int
                       cast_bool_to_int
+                      cast_bool_to_float
                       cast_ptr_to_int
                       ptr_nonzero
                       ptr_iszero
                       is_early_constant
+                      jit_marker
                       oogetfield
                       oosetfield
                       oononnull
+                      ooisnull
                       ooupcast
                       oodowncast
+                      cast_to_object
+                      cast_from_object
                       oois
                       subclassof
                       instanceof
@@ -39,9 +47,12 @@ BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift
                        int_floordiv_ovf int_lshift_ovf int_add_nonneg_ovf
                        uint_add uint_sub uint_mul uint_mod uint_and
                        uint_lshift uint_rshift uint_floordiv
+                       float_add float_sub float_mul float_truediv
                        char_gt char_lt char_le char_ge char_eq char_ne
                        int_gt int_lt int_le int_ge int_eq int_ne
                        uint_gt uint_lt uint_le uint_ge uint_eq uint_ne 
+
+                       float_gt float_lt float_le float_ge float_eq float_ne
                        getarrayitem setarrayitem
                        getarraysubstruct
                        ptr_eq ptr_ne""".split()
@@ -249,13 +260,16 @@ class SomeLLAbstractVariable(SomeLLAbstractValue):
         SomeLLAbstractValue.__init__(self, T, deepfrozen)
         assert T is not lltype.Void   # use bookkeeper.valueoftype()
 
-def variableoftype(TYPE, deepfrozen=False):
+def variableoftype(TYPE, deepfrozen=False, cause=None):
     # the union of all annotations of the given TYPE - that's a
     # SomeLLAbstractVariable, unless TYPE is Void
     if TYPE is lltype.Void:
         return s_void
     else:
-        return SomeLLAbstractVariable(TYPE, deepfrozen=deepfrozen)
+        hs_res = SomeLLAbstractVariable(TYPE, deepfrozen=deepfrozen)
+        if cause is not None:
+            getbookkeeper().setcause(hs_res, cause)
+        return hs_res
 
 
 class SomeLLAbstractContainer(SomeLLAbstractValue):
@@ -334,7 +348,8 @@ class __extend__(SomeLLAbstractValue):
 
     def hint(hs_v1, hs_flags):
         if hs_flags.const.get('variable', False): # only for testing purposes!!!
-            return SomeLLAbstractVariable(hs_v1.concretetype)
+            return variableoftype(hs_v1.concretetype,
+                                  cause='a hint variable=True')
         if hs_flags.const.get('forget', False):
             # turn a variable to a constant
             origin = getbookkeeper().myorigin()
@@ -352,19 +367,24 @@ class __extend__(SomeLLAbstractValue):
             if hs_flags.const.get(name, False):
                 return
 
-        raise HintError("hint %s makes no sense on %r" % (hs_flags.const,
-                                                          hs_v1))
+        cause = getbookkeeper().getcause(hs_v1)
+        if cause is None:
+            causeinfo = ''
+        else:
+            causeinfo = '\n  caused by %s' % (cause,)
+        raise HintError("hint %s makes no sense on %r%s" % (hs_flags.const,
+                                                            hs_v1, causeinfo))
     def is_early_constant(hs_v1):
         return SomeLLAbstractConstant(lltype.Bool, {})
 
     def getfield(hs_v1, hs_fieldname):
         S = hs_v1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
-        return variableoftype(FIELD_TYPE, hs_v1.deepfrozen)
+        return variableoftype(FIELD_TYPE, hs_v1.deepfrozen, cause=hs_v1)
 
     def oogetfield(hs_v1, hs_fieldname):
         _, FIELD_TYPE = hs_v1.concretetype._lookup_field(hs_fieldname.const)
-        return variableoftype(FIELD_TYPE, hs_v1.deepfrozen)
+        return variableoftype(FIELD_TYPE, hs_v1.deepfrozen, cause=hs_v1)
 
     def setfield(hs_v1, hs_fieldname, hs_value):
         pass
@@ -375,7 +395,9 @@ class __extend__(SomeLLAbstractValue):
     def getsubstruct(hs_v1, hs_fieldname):
         S = hs_v1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
-        return SomeLLAbstractVariable(lltype.Ptr(FIELD_TYPE), hs_v1.deepfrozen)
+        hs = SomeLLAbstractVariable(lltype.Ptr(FIELD_TYPE), hs_v1.deepfrozen)
+        getbookkeeper().setcause(hs, hs_v1)
+        return hs
 
     def _getinterior(hs_v1, *offsets_hs):
         hs_container = hs_v1
@@ -408,7 +430,9 @@ class __extend__(SomeLLAbstractValue):
 
     def cast_pointer(hs_v1):
         RESTYPE = getbookkeeper().current_op_concretetype()
-        return SomeLLAbstractVariable(RESTYPE, hs_v1.deepfrozen)
+        hs = SomeLLAbstractVariable(RESTYPE, hs_v1.deepfrozen)
+        getbookkeeper().setcause(hs, hs_v1)
+        return hs
 
     ooupcast = cast_pointer
     oodowncast = cast_pointer
@@ -424,7 +448,8 @@ class __extend__(SomeLLAbstractValue):
     def _call_multiple_graphs(hs_v1, graph_list, RESULT, *args_hs):
         if graph_list is None:
             # cannot follow indirect calls to unknown targets
-            return variableoftype(RESULT)
+            return variableoftype(RESULT,
+                                  cause='an indirect call to unknown targets')
 
         bookkeeper = getbookkeeper()
         myorigin = bookkeeper.myorigin()
@@ -452,7 +477,8 @@ class __extend__(SomeLLAbstractValue):
         # just hope the annotations are correct
         if (bookkeeper.getdesc(graph)._cache.get(None, None) is
             bookkeeper.annotator.translator.graphs[0]):
-            return variableoftype(RESULT)
+            return variableoftype(RESULT, cause="recursive call from the "
+                                                "entry point to itself")
 
         myorigin = bookkeeper.myorigin()
         myorigin.__class__ = CallOpOriginFlags     # thud
@@ -479,7 +505,7 @@ class __extend__(SomeLLAbstractValue):
         if not graph_list:
             # it's a graphless method of a BuiltinADTType
             bk = getbookkeeper()
-            return handle_highlevel_operation_novirtual(bk, True, TYPE.immutable, hs_c1, *args_hs)
+            return handle_highlevel_operation_novirtual(bk, True, name, TYPE.immutable, hs_c1, *args_hs)
         elif len(graph_list) == 1:
             # like a direct_call
             graph = graph_list.pop()
@@ -487,6 +513,9 @@ class __extend__(SomeLLAbstractValue):
         else:
             # like an indirect_call
             return hs_c1._call_multiple_graphs(graph_list, METH.RESULT, hs_c1, *args_hs) # prepend hs_c1 to the args
+
+    def jit_marker(*args_hs):
+        pass
 
 class __extend__(SomeLLAbstractConstant):
 
@@ -544,7 +573,8 @@ class __extend__(SomeLLAbstractConstant):
                                           myorigin=origin,
                                           deepfrozen=hs_c1.deepfrozen)
         else:
-            return variableoftype(FIELD_TYPE)
+            return variableoftype(FIELD_TYPE,
+                                  cause="getfield on non-immutable %s" % (S,))
 
     def getsubstruct(hs_c1, hs_fieldname):
         S = hs_c1.concretetype.TO
@@ -603,14 +633,17 @@ class __extend__(SomeLLAbstractContainer):
 class __extend__(pairtype(SomeLLAbstractValue, SomeLLAbstractValue)):
 
     def getarrayitem((hs_v1, hs_v2)):
-        return variableoftype(hs_v1.concretetype.TO.OF, hs_v1.deepfrozen)
+        return variableoftype(hs_v1.concretetype.TO.OF, hs_v1.deepfrozen,
+                              cause=hs_v1)
 
     def setarrayitem((hs_v1, hs_v2), hs_v3):
         pass
 
     def getarraysubstruct((hs_v1, hs_v2)):
-        return SomeLLAbstractVariable(lltype.Ptr(hs_v1.concretetype.TO.OF),
+        hs = SomeLLAbstractVariable(lltype.Ptr(hs_v1.concretetype.TO.OF),
                                       hs_v1.deepfrozen)
+        getbookkeeper().setcause(hs, (hs_v1, hs_v2))
+        return hs
 
     def union((hs_v1, hs_v2)):
         if hs_v1.deepfrozen != hs_v2.deepfrozen:
@@ -634,7 +667,15 @@ class __extend__(pairtype(SomeLLAbstractVariable, SomeLLAbstractConstant),
         if (getattr(hs_v1, 'eager_concrete', False) or
             getattr(hs_v2, 'eager_concrete', False)):
             pair(hs_v1, hs_v2).invalid_union()
-        return variableoftype(hs_v1.concretetype, hs_v1.deepfrozen)
+        hs_res = variableoftype(hs_v1.concretetype, hs_v1.deepfrozen)
+        # we cannot use cause=... here because getbookkeeper() returns None.
+        # here is a hack to try to preserve 'cause' anyway...
+        if hs_res == hs_v1:
+            return hs_v1
+        elif hs_res == hs_v2:
+            return hs_v2
+        else:
+            return hs_res
 
 
 class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
@@ -664,7 +705,8 @@ class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
                                           myorigin=origin,
                                           deepfrozen=hs_c1.deepfrozen)
         else:
-            return variableoftype(READ_TYPE)
+            return variableoftype(READ_TYPE,
+                                  cause="getarrayitem on non-immutable %s" % A)
 
     def getarraysubstruct((hs_c1, hs_index)):
         A = hs_c1.concretetype.TO
@@ -718,7 +760,7 @@ class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractConstant)):
 
 # ____________________________________________________________
 
-def handle_highlevel_operation_novirtual(bookkeeper, ismethod, immutable, *args_hs):
+def handle_highlevel_operation_novirtual(bookkeeper, ismethod, name, immutable, *args_hs):
     RESULT = bookkeeper.current_op_concretetype()
     deepfrozen = ismethod and args_hs[0].deepfrozen # if self is deepfrozen, the result is it too
     if ismethod and (immutable or args_hs[0].deepfrozen):
@@ -733,7 +775,10 @@ def handle_highlevel_operation_novirtual(bookkeeper, ismethod, immutable, *args_
                                           eager_concrete = False,   # probably
                                           myorigin = myorigin,
                                           deepfrozen=deepfrozen)
-    return variableoftype(RESULT, deepfrozen=deepfrozen)
+        cause = args_hs
+    else:
+        cause = "oopspec call to %s()" % name
+    return variableoftype(RESULT, deepfrozen=deepfrozen, cause=cause)
     
 
 def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
@@ -757,7 +802,9 @@ def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
         # "blue variables" disabled, we just return a red var all the time.
         # Exception: an operation on a frozen container is constant-foldable.
         ismethod = '.' in operation_name
-        return handle_highlevel_operation_novirtual(bookkeeper, ismethod, False, *args_hs)
+        return handle_highlevel_operation_novirtual(bookkeeper, ismethod,
+                                                    operation_name, False,
+                                                    *args_hs)
 
     # --- the code below is not used any more except by test_annotator.py ---
     if operation_name == 'newlist':
@@ -797,7 +844,8 @@ def cannot_follow_call(bookkeeper, graph, args_hs, RESTYPE):
                                        eager_concrete = False,   # probably
                                        myorigin = myorigin)
     else:
-        h_res = variableoftype(RESTYPE)
+        h_res = variableoftype(RESTYPE,
+                               cause="non-pure residual call to %s" % graph)
     return h_res
 
 # ____________________________________________________________
@@ -806,11 +854,15 @@ def cannot_follow_call(bookkeeper, graph, args_hs, RESTYPE):
 
 def var_unary(hs_v, *rest_hs):
     RESTYPE = getbookkeeper().current_op_concretetype()
-    return SomeLLAbstractVariable(RESTYPE)
+    hs_res = SomeLLAbstractVariable(RESTYPE)
+    getbookkeeper().setcause(hs_res, hs_v)
+    return hs_res
 
 def var_binary((hs_v1, hs_v2), *rest_hs):
     RESTYPE = getbookkeeper().current_op_concretetype()
-    return SomeLLAbstractVariable(RESTYPE)
+    hs_res = SomeLLAbstractVariable(RESTYPE)
+    getbookkeeper().setcause(hs_res, (hs_v1, hs_v2))
+    return hs_res
 
 def const_unary(llop, hs_c1):
     #XXX unsure hacks

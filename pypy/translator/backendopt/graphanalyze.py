@@ -98,3 +98,59 @@ class GraphAnalyzer(object):
         for graph in graphs:
             for block, op in graph.iterblockops():
                 self.analyze(op)
+
+
+class ImpurityAnalyzer(GraphAnalyzer):
+    """An impure graph has side-effects or depends on state that
+    can be mutated.  A pure graph always gives the same answer for
+    given arguments."""
+
+    def analyze_exceptblock(self, block, seen=None):
+        return True      # for now, we simplify and say that functions
+                         # raising exceptions cannot be pure
+
+    def operation_is_true(self, op):
+        # must return True if the operation is *impure*
+        operation = LL_OPERATIONS[op.opname]
+        if operation.canfold:
+            return False     # pure
+        if operation is llop.debug_assert:
+            return False     # debug_assert is pure enough
+        if operation in (llop.getfield, llop.getarrayitem):
+            TYPE = op.args[0].concretetype.TO
+            return not TYPE._hints.get('immutable')  # impure if not immutable
+        if operation is llop.getinteriorfield:
+            # if any of the containers along the way is immutable,
+            # the final field cannot be modified (as it is inside
+            # that particular immutable container).
+            TYPE = op.args[0].concretetype.TO
+            if TYPE._hints.get('immutable'):
+                return False    # pure
+            for v_index in op.args[1:-1]:
+                if v_index.concretetype is lltype.Void:
+                    name = v_index.value
+                    assert isinstance(name, str)
+                    TYPE = getattr(TYPE, name)
+                else:
+                    assert v_index.concretetype is lltype.Signed
+                    TYPE = TYPE.OF
+                if TYPE._hints.get('immutable'):
+                    return False    # pure
+            return True      # all mutable, impure
+        # --- operation not special-cased, impure ---
+        return True
+
+    def analyze_direct_call(self, graph, seen=None):
+        try:
+            func = graph.func
+            if getattr(func, "_pure_function_", False):
+                return False
+        except AttributeError:
+            pass
+        return GraphAnalyzer.analyze_direct_call(self, graph, seen)
+
+    def analyze_external_method(self, op, TYPE, meth):
+        if getattr(meth, "_pure_meth", False):
+            return False
+        else:
+            return GraphAnalyzer.analyze_external_method(self, op, TYPE, meth)

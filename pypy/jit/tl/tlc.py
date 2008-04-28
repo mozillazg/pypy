@@ -1,8 +1,8 @@
 '''Toy Language with Cons Cells'''
 
 import py
-from pypy.jit.tl.opcode import *
-from pypy.jit.tl import opcode as tlopcode
+from pypy.jit.tl.tlopcode import *
+from pypy.jit.tl import tlopcode
 from pypy.rlib.jit import hint
 
 class Obj(object):

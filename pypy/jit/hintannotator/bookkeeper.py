@@ -8,7 +8,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.ootypesystem import ootype
 from pypy.tool.algo.unionfind import UnionFind
-from pypy.translator.backendopt import graphanalyze
+from pypy.translator.backendopt.graphanalyze import ImpurityAnalyzer
 from pypy.translator.unsimplify import copyvar
 
 TLS = tlsobject()
@@ -101,6 +101,7 @@ class GraphDesc(object):
         newgraph = FunctionGraph('%s_%s' % (graph.name, suffix), newstartblock)
         newgraph.getreturnvar().concretetype = v_res.concretetype
         newstartblock.closeblock(Link([v_res], newgraph.returnblock))
+        newgraph.ts_stub_for = graph
         return newgraph
 
 
@@ -112,29 +113,6 @@ class TsGraphCallFamily:
         self.tsgraphs.update(other.tsgraphs)
     absorb = update # UnionFind API
 
-
-class ImpurityAnalyzer(graphanalyze.GraphAnalyzer):
-    """An impure graph has side-effects or depends on state that
-    can be mutated.  A pure graph always gives the same answer for
-    given arguments."""
-
-    def analyze_exceptblock(self, block, seen=None):
-        return True      # for now, we simplify and say that functions
-                         # raising exceptions cannot be pure
-
-    def operation_is_true(self, op):
-        operation = lloperation.LL_OPERATIONS[op.opname]
-        ARGTYPES = [v.concretetype for v in op.args]
-        return not operation.is_pure(*ARGTYPES)
-
-    def analyze_direct_call(self, graph, seen=None):
-        try:
-            func = graph.func
-            if getattr(func, "_pure_function_", False):
-                return False
-        except AttributeError:
-            pass
-        return graphanalyze.GraphAnalyzer.analyze_direct_call(self, graph, seen)
 
 class HintBookkeeper(object):
 
@@ -148,12 +126,27 @@ class HintBookkeeper(object):
         self.tsgraphsigs = {}
         self.nonstuboriggraphcount = 0
         self.stuboriggraphcount = 0
+        self._abstractvariable_cause = {}
         if hannotator is not None:     # for tests
             t = hannotator.base_translator
             self.impurity_analyzer = ImpurityAnalyzer(t)
         # circular imports hack
         global hintmodel
         from pypy.jit.hintannotator import model as hintmodel
+
+    def setcause(self, hs, causes):
+        if not isinstance(causes, (list, tuple)):
+            causes = (causes,)
+        for cause in causes:
+            if isinstance(cause, annmodel.SomeObject):
+                cause = self.getcause(cause)
+            if cause is not None:
+                self._abstractvariable_cause[id(hs)] = hs, cause
+                break
+
+    def getcause(self, hs):
+        hs, cause = self._abstractvariable_cause.get(id(hs), (hs, None))
+        return cause
 
     def getdesc(self, graph):
         try:

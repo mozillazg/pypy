@@ -1,4 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 
 class Memo(object):
     _annspecialcase_ = 'specialize:ctr_location'
@@ -16,6 +17,7 @@ def freeze_memo():
 def exactmatch_memo(force_merge=False):
     memo = Memo()
     memo.partialdatamatch = {}
+    memo.forgetbooleffects = {}
     memo.forget_nonzeroness = {}
     memo.force_merge=force_merge
     return memo
@@ -32,11 +34,23 @@ def make_vrti_memo():
 class DontMerge(Exception):
     pass
 
-class RedBox(object):
-    _attrs_ = ['kind', 'genvar']
+class LLTypeMixin(object):
+    _mixin_ = True
 
-    def __init__(self, kind, genvar=None):
-        self.kind = kind
+    def _revealconst(self, gv):
+        return gv.revealconst(llmemory.Address)
+
+class OOTypeMixin(object):
+    _mixin_ = True
+
+    def _revealconst(self, gv):
+        return gv.revealconst(ootype.Object)
+
+
+class RedBox(object):
+    _attrs_ = ['genvar']
+
+    def __init__(self, genvar=None):
         self.genvar = genvar    # None or a genvar
 
     def __repr__(self):
@@ -47,6 +61,11 @@ class RedBox(object):
 
     def is_constant(self):
         return bool(self.genvar) and self.genvar.is_const
+    
+    def getkind(self):
+        if self.genvar is None:
+            return None
+        return self.genvar.getkind()
 
     def getgenvar(self, jitstate):
         return self.genvar
@@ -69,7 +88,7 @@ class RedBox(object):
             # cannot mutate constant boxes in-place
             builder = jitstate.curbuilder
             box = self.copy(memo)
-            box.genvar = builder.genop_same_as(self.kind, self.genvar)
+            box.genvar = builder.genop_same_as(self.genvar)
             return box
         else:
             return self
@@ -83,10 +102,12 @@ def ll_redboxcls(TYPE):
     assert TYPE is not lltype.Void, "cannot make red boxes of voids"
     return ll_redboxbuilder(TYPE)
 
-def redboxbuilder_void(kind, gv_value):return None
-def redboxbuilder_int(kind, gv_value): return IntRedBox(kind, gv_value)
-def redboxbuilder_dbl(kind, gv_value): return DoubleRedBox(kind,gv_value)
-def redboxbuilder_ptr(kind, gv_value): return PtrRedBox(kind, gv_value)
+def redboxbuilder_void(gv_value): return None
+def redboxbuilder_int(gv_value): return IntRedBox(gv_value)
+def redboxbuilder_dbl(gv_value): return DoubleRedBox(gv_value)
+def redboxbuilder_ptr(gv_value): return PtrRedBox(gv_value)
+def redboxbuilder_inst(gv_value): return InstanceRedBox(gv_value)
+def redboxbuilder_bool(gv_value): return BoolRedBox(gv_value)
 
 def ll_redboxbuilder(TYPE):
     if TYPE is lltype.Void:
@@ -95,6 +116,10 @@ def ll_redboxbuilder(TYPE):
         return redboxbuilder_ptr
     elif TYPE is lltype.Float:
         return redboxbuilder_dbl
+    elif isinstance(TYPE, ootype.OOType):
+        return redboxbuilder_inst
+    elif TYPE == lltype.Bool:
+        return redboxbuilder_bool
     else:
         assert isinstance(TYPE, lltype.Primitive)
         # XXX what about long longs?
@@ -104,16 +129,14 @@ def ll_fromvalue(jitstate, value):
     "Make a constant RedBox from a low-level value."
     gv = ll_gv_fromvalue(jitstate, value)
     T = lltype.typeOf(value)
-    kind = jitstate.curbuilder.rgenop.kindToken(T)
     cls = ll_redboxcls(T)
-    return cls(kind, gv)
+    return cls(gv)
 
 def redbox_from_prebuilt_value(RGenOp, value):
     T = lltype.typeOf(value)
-    kind = RGenOp.kindToken(T)
     gv = RGenOp.constPrebuiltGlobal(value)
     cls = ll_redboxcls(T)
-    return cls(kind, gv)
+    return cls(gv)
 
 def ll_gv_fromvalue(jitstate, value):
     rgenop = jitstate.curbuilder.rgenop
@@ -123,10 +146,6 @@ def ll_gv_fromvalue(jitstate, value):
 def ll_getvalue(box, T):
     "Return the content of a known-to-be-constant RedBox."
     return box.genvar.revealconst(T)
-
-def ll_is_constant(box):
-    "Check if a red box is known to be constant."
-    return box.is_constant()
 
 
 class IntRedBox(RedBox):
@@ -144,7 +163,7 @@ class IntRedBox(RedBox):
         try:
             return memo[self]
         except KeyError:
-            result = memo[self] = IntRedBox(self.kind, self.genvar)
+            result = memo[self] = IntRedBox(self.genvar)
             return result
 
     def freeze(self, memo):
@@ -153,12 +172,50 @@ class IntRedBox(RedBox):
             return memo[self]
         except KeyError:
             if self.is_constant():
-                result = FrozenIntConst(self.kind, self.genvar)
+                result = FrozenIntConst(self.genvar)
             else:
-                result = FrozenIntVar(self.kind)
+                result = FrozenIntVar()
             memo[self] = result
             return result
 
+class BoolRedBox(RedBox):
+    # XXX make true and false singletons?
+
+    def __init__(self, genvar):
+        RedBox.__init__(self, genvar)
+        self.iftrue = []
+
+    def learn_boolvalue(self, jitstate, boolval):
+        if self.is_constant():
+            return self.genvar.revealconst(lltype.Bool) == boolval
+        else:
+            self.setgenvar(ll_gv_fromvalue(jitstate, boolval))
+            result = True
+            for effect in self.iftrue:
+                result = effect.learn_boolvalue(jitstate, boolval) and result
+            self.iftrue = []
+            return result
+            
+    def copy(self, memo):
+        memoboxes = memo.boxes
+        try:
+            return memoboxes[self]
+        except KeyError:
+            result = memoboxes[self] = BoolRedBox(self.genvar)
+            result.iftrue = [effect.copy(memo) for effect in self.iftrue]
+            return result
+
+    def freeze(self, memo):
+        memo = memo.boxes
+        try:
+            return memo[self]
+        except KeyError:
+            if self.is_constant():
+                result = FrozenBoolConst(self.genvar)
+            else:
+                result = FrozenBoolVar()
+            memo[self] = result
+            return result
 
 class DoubleRedBox(RedBox):
     "A red box that contains a constant double-precision floating point value."
@@ -168,7 +225,7 @@ class DoubleRedBox(RedBox):
         try:
             return memo[self]
         except KeyError:
-            result = memo[self] = DoubleRedBox(self.kind, self.genvar)
+            result = memo[self] = DoubleRedBox(self.genvar)
             return result
 
     def freeze(self, memo):
@@ -177,27 +234,30 @@ class DoubleRedBox(RedBox):
             return memo[self]
         except KeyError:
             if self.is_constant():
-                result = FrozenDoubleConst(self.kind, self.genvar)
+                result = FrozenDoubleConst(self.genvar)
             else:
-                result = FrozenDoubleVar(self.kind)
+                result = FrozenDoubleVar()
             memo[self] = result
             return result
 
 
-class PtrRedBox(RedBox):
+class AbstractPtrRedBox(RedBox):
+    """
+    Base class for PtrRedBox (lltype) and InstanceRedBox (ootype)
+    """
+
     content = None   # or an AbstractContainer
 
-    def __init__(self, kind, genvar=None, known_nonzero=False):
-        self.kind = kind
+    def __init__(self, genvar=None, known_nonzero=False):
         self.genvar = genvar    # None or a genvar
         if genvar is not None and genvar.is_const:
-            known_nonzero = bool(genvar.revealconst(llmemory.Address))
+            known_nonzero = bool(self._revealconst(genvar))
         self.known_nonzero = known_nonzero
 
     def setgenvar(self, newgenvar):
         RedBox.setgenvar(self, newgenvar)
         self.known_nonzero = (newgenvar.is_const and
-                              bool(newgenvar.revealconst(llmemory.Address)))
+                              bool(self._revealconst(newgenvar)))
 
     def setgenvar_hint(self, newgenvar, known_nonzero):
         RedBox.setgenvar(self, newgenvar)
@@ -214,7 +274,9 @@ class PtrRedBox(RedBox):
             if self.known_nonzero:
                 ok = False
             elif not self.is_constant():
-                gv_null = jitstate.curbuilder.rgenop.genzeroconst(self.kind)
+                assert self.genvar is not None
+                kind = self.genvar.getkind()
+                gv_null = jitstate.curbuilder.rgenop.genzeroconst(kind)
                 self.setgenvar_hint(gv_null, known_nonzero=False)
         return ok
 
@@ -226,55 +288,16 @@ class PtrRedBox(RedBox):
         else:
             return RedBox.__repr__(self)
 
-    def op_getfield(self, jitstate, fielddesc):
-        self.learn_nonzeroness(jitstate, True)
-        if self.content is not None:
-            box = self.content.op_getfield(jitstate, fielddesc)
-            if box is not None:
-                return box
-        gv_ptr = self.getgenvar(jitstate)
-        box = fielddesc.generate_get(jitstate, gv_ptr)
-        if fielddesc.immutable:
-            self.remember_field(fielddesc, box)
-        return box
-
-    def op_setfield(self, jitstate, fielddesc, valuebox):
-        self.learn_nonzeroness(jitstate, True)
-        gv_ptr = self.genvar
-        if gv_ptr:
-            fielddesc.generate_set(jitstate, gv_ptr,
-                                   valuebox.getgenvar(jitstate))
-        else:
-            assert self.content is not None
-            self.content.op_setfield(jitstate, fielddesc, valuebox)
-
-    def op_getsubstruct(self, jitstate, fielddesc):
-        self.learn_nonzeroness(jitstate, True)
-        gv_ptr = self.genvar
-        if gv_ptr:
-            return fielddesc.generate_getsubstruct(jitstate, gv_ptr)
-        else:
-            assert self.content is not None
-            return self.content.op_getsubstruct(jitstate, fielddesc)
-
-    def remember_field(self, fielddesc, box):
-        if self.genvar.is_const:
-            return      # no point in remembering field then
-        if self.content is None:
-            from pypy.jit.timeshifter import rcontainer
-            self.content = rcontainer.PartialDataStruct()
-        self.content.remember_field(fielddesc, box)
-
     def copy(self, memo):
         boxmemo = memo.boxes
         try:
             result = boxmemo[self]
         except KeyError:
-            result = PtrRedBox(self.kind, self.genvar, self.known_nonzero)
+            result = self.__class__(self.genvar, self.known_nonzero)
             boxmemo[self] = result
             if self.content:
                 result.content = self.content.copy(memo)
-        assert isinstance(result, PtrRedBox)
+        assert isinstance(result, AbstractPtrRedBox)
         return result
 
     def replace(self, memo):
@@ -286,7 +309,7 @@ class PtrRedBox(RedBox):
             if self.content:
                 self.content.replace(memo)
             result = self
-        assert isinstance(result, PtrRedBox)
+        assert isinstance(result, AbstractPtrRedBox)
         return result
 
     def freeze(self, memo):
@@ -298,20 +321,19 @@ class PtrRedBox(RedBox):
             if not self.genvar:
                 from pypy.jit.timeshifter import rcontainer
                 assert isinstance(content, rcontainer.VirtualContainer)
-                result = FrozenPtrVirtual(self.kind)
+                result = self.FrozenPtrVirtual()
                 boxmemo[self] = result
                 result.fz_content = content.freeze(memo)
                 return result
             elif self.genvar.is_const:
-                result = FrozenPtrConst(self.kind, self.genvar)
+                result = self.FrozenPtrConst(self.genvar)
             elif content is None:
-                result = FrozenPtrVar(self.kind, self.known_nonzero)
+                result = self.FrozenPtrVar(self.known_nonzero)
             else:
                 # if self.content is not None, it's a PartialDataStruct
                 from pypy.jit.timeshifter import rcontainer
                 assert isinstance(content, rcontainer.PartialDataStruct)
-                result = FrozenPtrVarWithPartialData(self.kind,
-                                                     known_nonzero=True)
+                result = self.FrozenPtrVarWithPartialData(known_nonzero=True)
                 boxmemo[self] = result
                 result.fz_partialcontent = content.partialfreeze(memo)
                 return result
@@ -337,7 +359,7 @@ class PtrRedBox(RedBox):
             # cannot mutate constant boxes in-place
             builder = jitstate.curbuilder
             box = self.copy(memo)
-            box.genvar = builder.genop_same_as(self.kind, self.genvar)
+            box.genvar = builder.genop_same_as(self.genvar)
         else:
             # force virtual containers
             self.getgenvar(jitstate)
@@ -353,14 +375,58 @@ class PtrRedBox(RedBox):
         if self.content:
             self.content.enter_block(incoming, memo)
 
+    def op_getfield(self, jitstate, fielddesc):
+        self.learn_nonzeroness(jitstate, True)
+        if self.content is not None:
+            box = self.content.op_getfield(jitstate, fielddesc)
+            if box is not None:
+                return box
+        gv_ptr = self.getgenvar(jitstate)
+        box = fielddesc.generate_get(jitstate, gv_ptr)
+        if fielddesc.immutable:
+            self.remember_field(fielddesc, box)
+        return box
+
+    def op_setfield(self, jitstate, fielddesc, valuebox):
+        self.learn_nonzeroness(jitstate, True)
+        gv_ptr = self.genvar
+        if gv_ptr:
+            fielddesc.generate_set(jitstate, gv_ptr,
+                                   valuebox.getgenvar(jitstate))
+        else:
+            assert self.content is not None
+            self.content.op_setfield(jitstate, fielddesc, valuebox)
+
+    def remember_field(self, fielddesc, box):
+        if self.genvar.is_const:
+            return      # no point in remembering field then
+        if self.content is None:
+            from pypy.jit.timeshifter import rcontainer
+            self.content = rcontainer.PartialDataStruct()
+        self.content.remember_field(fielddesc, box)
+
+
+class PtrRedBox(AbstractPtrRedBox, LLTypeMixin):
+
+    def op_getsubstruct(self, jitstate, fielddesc):
+        self.learn_nonzeroness(jitstate, True)
+        gv_ptr = self.genvar
+        if gv_ptr:
+            return fielddesc.generate_getsubstruct(jitstate, gv_ptr)
+        else:
+            assert self.content is not None
+            return self.content.op_getsubstruct(jitstate, fielddesc)
+
+
+class InstanceRedBox(AbstractPtrRedBox, OOTypeMixin):
+    pass
+
+
 # ____________________________________________________________
 
 class FrozenValue(object):
     """An abstract value frozen in a saved state.
     """
-    def __init__(self, kind):
-        self.kind = kind
-
     def is_constant_equal(self, box):
         return False
 
@@ -395,8 +461,7 @@ class FrozenVar(FrozenValue):
 
 class FrozenIntConst(FrozenConst):
 
-    def __init__(self, kind, gv_const):
-        self.kind = kind
+    def __init__(self, gv_const):
         self.gv_const = gv_const
 
     def is_constant_equal(self, box):
@@ -406,7 +471,7 @@ class FrozenIntConst(FrozenConst):
 
     def unfreeze(self, incomingvarboxes, memo):
         # XXX could return directly the original IntRedBox
-        return IntRedBox(self.kind, self.gv_const)
+        return IntRedBox(self.gv_const)
 
 
 class FrozenIntVar(FrozenVar):
@@ -414,7 +479,7 @@ class FrozenIntVar(FrozenVar):
     def unfreeze(self, incomingvarboxes, memo):
         memo = memo.boxes
         if self not in memo:
-            newbox = IntRedBox(self.kind, None)
+            newbox = IntRedBox(None)
             incomingvarboxes.append(newbox)
             memo[self] = newbox
             return newbox
@@ -422,10 +487,40 @@ class FrozenIntVar(FrozenVar):
             return memo[self]
 
 
+class FrozenBoolConst(FrozenConst):
+
+    def __init__(self, gv_const):
+        self.gv_const = gv_const
+
+    def is_constant_equal(self, box):
+        return (box.is_constant() and
+                self.gv_const.revealconst(lltype.Bool) ==
+                box.genvar.revealconst(lltype.Bool))
+
+    def unfreeze(self, incomingvarboxes, memo):
+        return BoolRedBox(self.gv_const)
+
+
+class FrozenBoolVar(FrozenVar):
+
+    def unfreeze(self, incomingvarboxes, memo):
+        memo = memo.boxes
+        if self not in memo:
+            newbox = BoolRedBox(None)
+            incomingvarboxes.append(newbox)
+            memo[self] = newbox
+            return newbox
+        else:
+            return memo[self]
+
+    def exactmatch(self, box, outgoingvarboxes, memo):
+        memo.forgetbooleffects[box] = True
+        return FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
+
+
 class FrozenDoubleConst(FrozenConst):
 
-    def __init__(self, kind, gv_const):
-        self.kind = kind
+    def __init__(self, gv_const):
         self.gv_const = gv_const
 
     def is_constant_equal(self, box):
@@ -434,7 +529,7 @@ class FrozenDoubleConst(FrozenConst):
                 box.genvar.revealconst(lltype.Float))
 
     def unfreeze(self, incomingvarboxes, memo):
-        return DoubleRedBox(self.kind, self.gv_const)
+        return DoubleRedBox(self.gv_const)
 
 
 class FrozenDoubleVar(FrozenVar):
@@ -442,7 +537,7 @@ class FrozenDoubleVar(FrozenVar):
     def unfreeze(self, incomingvarboxes, memo):
         memo = memo.boxes
         if self not in memo:
-            newbox = DoubleRedBox(self.kind, None)
+            newbox = DoubleRedBox(None)
             incomingvarboxes.append(newbox)
             memo[self] = newbox
             return newbox
@@ -450,22 +545,21 @@ class FrozenDoubleVar(FrozenVar):
             return memo[self]
 
 
-class FrozenPtrConst(FrozenConst):
+class FrozenAbstractPtrConst(FrozenConst):
 
-    def __init__(self, kind, gv_const):
-        self.kind = kind
+    def __init__(self, gv_const):
         self.gv_const = gv_const
 
     def is_constant_equal(self, box):
         return (box.is_constant() and
-                self.gv_const.revealconst(llmemory.Address) ==
-                box.genvar.revealconst(llmemory.Address))
+                self._revealconst(self.gv_const) ==
+                self._revealconst(box.genvar))
 
     def is_constant_nullptr(self):
-        return not self.gv_const.revealconst(llmemory.Address)
+        return not self._revealconst(self.gv_const)
 
     def exactmatch(self, box, outgoingvarboxes, memo):
-        assert isinstance(box, PtrRedBox)
+        assert isinstance(box, AbstractPtrRedBox)
         memo.partialdatamatch[box] = None     # could do better
         if self.is_constant_nullptr():
             memo.forget_nonzeroness[box] = None
@@ -477,25 +571,31 @@ class FrozenPtrConst(FrozenConst):
         return match
 
     def unfreeze(self, incomingvarboxes, memo):
-        return PtrRedBox(self.kind, self.gv_const)
+        return self.PtrRedBox(self.gv_const)
 
 
-class FrozenPtrVar(FrozenVar):
+class FrozenPtrConst(FrozenAbstractPtrConst, LLTypeMixin):
+    PtrRedBox = PtrRedBox
 
-    def __init__(self, kind, known_nonzero):
-        self.kind = kind
+class FrozenInstanceConst(FrozenAbstractPtrConst, OOTypeMixin):
+    PtrRedBox = InstanceRedBox
+
+
+class AbstractFrozenPtrVar(FrozenVar):
+
+    def __init__(self, known_nonzero):
         self.known_nonzero = known_nonzero
 
     def exactmatch(self, box, outgoingvarboxes, memo):
-        assert isinstance(box, PtrRedBox)
+        from pypy.jit.timeshifter.rcontainer import VirtualContainer
+        assert isinstance(box, AbstractPtrRedBox)
         memo.partialdatamatch[box] = None
         if not self.known_nonzero:
             memo.forget_nonzeroness[box] = None
         match = FrozenVar.exactmatch(self, box, outgoingvarboxes, memo)
         if self.known_nonzero and not box.known_nonzero:
             match = False
-        if not memo.force_merge and not match:
-            from pypy.jit.timeshifter.rcontainer import VirtualContainer
+        if not memo.force_merge:
             if isinstance(box.content, VirtualContainer):
                 raise DontMerge   # XXX recursive data structures?
         return match
@@ -503,12 +603,18 @@ class FrozenPtrVar(FrozenVar):
     def unfreeze(self, incomingvarboxes, memo):
         memo = memo.boxes
         if self not in memo:
-            newbox = PtrRedBox(self.kind, None, self.known_nonzero)
+            newbox = self.PtrRedBox(None, self.known_nonzero)
             incomingvarboxes.append(newbox)
             memo[self] = newbox
             return newbox
         else:
             return memo[self]
+
+class FrozenPtrVar(AbstractFrozenPtrVar, LLTypeMixin):
+    PtrRedBox = PtrRedBox
+
+class FrozenInstanceVar(AbstractFrozenPtrVar, OOTypeMixin):
+    PtrRedBox = InstanceRedBox
 
 
 class FrozenPtrVarWithPartialData(FrozenPtrVar):
@@ -532,10 +638,9 @@ class FrozenPtrVarWithPartialData(FrozenPtrVar):
 class FrozenPtrVirtual(FrozenValue):
 
     def exactmatch(self, box, outgoingvarboxes, memo):
-        assert isinstance(box, PtrRedBox)
+        assert isinstance(box, AbstractPtrRedBox)
         if box.genvar:
-            outgoingvarboxes.append(box)
-            match = False
+            raise DontMerge
         else:
             assert box.content is not None
             match = self.fz_content.exactmatch(box.content, outgoingvarboxes,
@@ -559,3 +664,13 @@ class FrozenPtrVirtual(FrozenValue):
 ##        else:
 ##            outgoingvarboxes.append(box)
 ##            return False
+
+PtrRedBox.FrozenPtrVirtual = FrozenPtrVirtual
+PtrRedBox.FrozenPtrConst = FrozenPtrConst
+PtrRedBox.FrozenPtrVar = FrozenPtrVar
+PtrRedBox.FrozenPtrVarWithPartialData = FrozenPtrVarWithPartialData
+
+InstanceRedBox.FrozenPtrVirtual = FrozenPtrVirtual
+InstanceRedBox.FrozenPtrConst = FrozenInstanceConst
+InstanceRedBox.FrozenPtrVar = FrozenInstanceVar
+InstanceRedBox.FrozenPtrVarWithPartialData = None

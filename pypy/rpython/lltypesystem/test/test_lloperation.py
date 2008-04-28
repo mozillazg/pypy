@@ -48,7 +48,7 @@ def test_table_complete():
 
 def test_llinterp_complete():
     for opname, llop in LL_OPERATIONS.items():
-        if llop.canfold:
+        if llop.tryfold:
             continue
         if opname.startswith('gc_x_') or opname.startswith('llvm_'):
             continue   # ignore experimental stuff

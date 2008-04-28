@@ -497,6 +497,9 @@ class _float_fakeaccessor(_fakeaccessor):
 class _char_fakeaccessor(_fakeaccessor):
     TYPE = lltype.Char
 
+class _float_fakeaccessor(_fakeaccessor):
+    TYPE = lltype.Float
+
 class _address_fakeaccessor(_fakeaccessor):
     TYPE = Address
 
@@ -529,6 +532,7 @@ supported_access_types = {"signed":    lltype.Signed,
 fakeaddress.signed = property(_signed_fakeaccessor)
 fakeaddress.float = property(_float_fakeaccessor)
 fakeaddress.char = property(_char_fakeaccessor)
+fakeaddress.float = property(_float_fakeaccessor)
 fakeaddress.address = property(_address_fakeaccessor)
 fakeaddress._TYPE = Address
 
@@ -730,3 +734,24 @@ def _reccopy(source, dest):
                 setattr(dest._obj, name, llvalue)
     else:
         raise TypeError(T)
+
+
+def zero_gc_pointers_inside(obj):
+    T = lltype.typeOf(obj).TO
+    if isinstance(T, lltype.Struct):
+        for name in T._names:
+            FIELDTYPE = getattr(T, name)
+            if isinstance(FIELDTYPE, lltype.Ptr):
+                if FIELDTYPE.TO._gckind == 'gc':
+                    setattr(obj, name, lltype.nullptr(FIELDTYPE.TO))
+            elif isinstance(FIELDTYPE, lltype.ContainerType):
+                zero_gc_pointers_inside(getattr(obj, name))
+    elif isinstance(T, lltype.Array):
+        ITEMTYPE = T.OF
+        if isinstance(ITEMTYPE, lltype.Ptr):
+            if ITEMTYPE.TO._gckind == 'gc':
+                for i in range(len(obj)):
+                    obj[i] = lltype.nullptr(ITEMTYPE.TO)
+        elif isinstance(ITEMTYPE, lltype.ContainerType):
+            for i in range(len(obj)):
+                zero_gc_pointers_inside(obj[i])
