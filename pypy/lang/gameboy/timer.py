@@ -102,7 +102,7 @@ class Timer(object):
         
 # CLOCK DRIVER -----------------------------------------------------------------
 
-class ClockDriver(object):
+class Clock(object):
     
     def __init__(self):
         pass
