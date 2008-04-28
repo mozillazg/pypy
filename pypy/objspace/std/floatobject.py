@@ -87,35 +87,47 @@ def str__Float(space, w_float):
     s = formatd("%.12g", x)
     return space.wrap(should_not_look_like_an_int(s))
 
-def lt__Float_Float(space, w_float1, w_float2):
-    i = w_float1.floatval
-    j = w_float2.floatval
-    return space.newbool( i < j )
 
-def le__Float_Float(space, w_float1, w_float2):
-    i = w_float1.floatval
-    j = w_float2.floatval
-    return space.newbool( i <= j )
+def declare_new_float_comparison(opname):
+    import operator
+    from pypy.tool.sourcetools import func_with_new_name
+    op = getattr(operator, opname)
+    def f(space, w_int1, w_int2):
+        i = w_int1.floatval
+        j = w_int2.floatval
+        return space.newbool(op(i, j))
+    name = opname + "__Float_Float"
+    return func_with_new_name(f, name), name
 
-def eq__Float_Float(space, w_float1, w_float2):
-    i = w_float1.floatval
-    j = w_float2.floatval
-    return space.newbool( i == j )
+def declare_new_int_float_comparison(opname):
+    import operator
+    from pypy.tool.sourcetools import func_with_new_name
+    op = getattr(operator, opname)
+    def f(space, w_int1, w_float2):
+        i = w_int1.intval
+        j = w_float2.floatval
+        return space.newbool(op(float(i), j))
+    name = opname + "__Int_Float"
+    return func_with_new_name(f, name), name
 
-def ne__Float_Float(space, w_float1, w_float2):
-    i = w_float1.floatval
-    j = w_float2.floatval
-    return space.newbool( i != j )
+def declare_new_float_int_comparison(opname):
+    import operator
+    from pypy.tool.sourcetools import func_with_new_name
+    op = getattr(operator, opname)
+    def f(space, w_float1, w_int2):
+        i = w_float1.floatval
+        j = w_int2.intval
+        return space.newbool(op(i, float(j)))
+    name = opname + "__Float_Int"
+    return func_with_new_name(f, name), name
 
-def gt__Float_Float(space, w_float1, w_float2):
-    i = w_float1.floatval
-    j = w_float2.floatval
-    return space.newbool( i > j )
-
-def ge__Float_Float(space, w_float1, w_float2):
-    i = w_float1.floatval
-    j = w_float2.floatval
-    return space.newbool( i >= j )
+for op in ['lt', 'le', 'eq', 'ne', 'gt', 'ge']:
+    func, name = declare_new_float_comparison(op)
+    globals()[name] = func
+    func, name = declare_new_int_float_comparison(op)
+    globals()[name] = func
+    func, name = declare_new_float_int_comparison(op)
+    globals()[name] = func
 
 # for overflowing comparisons between longs and floats
 # XXX we might have to worry (later) about eq__Float_Int, for the case

@@ -157,6 +157,16 @@ class AppTestAppFloatTest:
         assert 13.01 > 13L
         assert 13.0 >= 13L
         assert 13.01 >= 13L
+        assert 12.0 == 12
+        assert 12.1 != 12
+        assert infinite != 123456789
+        assert 12.9 < 13
+        assert -infinite < -13
+        assert 12.9 <= 13
+        assert 13.0 <= 13
+        assert 13.01 > 13
+        assert 13.0 >= 13
+        assert 13.01 >= 13
         assert infinite > verylonglong
         assert infinite >= verylonglong
         assert 1234.56 < verylonglong
@@ -177,3 +187,8 @@ class AppTestAppFloatTest:
         assert verylonglong <= infinite
         assert verylonglong > 1234.56
         assert verylonglong >= 1234.56
+        assert 13 >= 12.9
+        assert 13 >= 13.0
+        assert 13 < 13.01
+        assert 13 <= 13.0
+        assert 13 <= 13.01
