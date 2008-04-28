@@ -600,8 +600,9 @@ def make_op(name, symbol, arity, specialnames):
     op = None
     skip = False
     arithmetic = False
+    check_immutable_args = False
 
-    if name.startswith('del') or name.startswith('set') or name.startswith('inplace_'):
+    if name.startswith('del') or name.startswith('set'):
         # skip potential mutators
         if debug: print "Skip", name
         skip = True
@@ -619,6 +620,7 @@ def make_op(name, symbol, arity, specialnames):
     else:
         op = FunctionByName[name]
         arithmetic = (name + '_ovf') in FunctionByName
+        check_immutable_args = name.startswith('inplace_')
 
     if not op:
         if not skip:
@@ -626,8 +628,7 @@ def make_op(name, symbol, arity, specialnames):
     else:
         if debug: print "Can constant-fold operation: %s" % name
 
-    def generic_operator(self, *args_w):
-        assert len(args_w) == arity, name+" got the wrong number of arguments"
+    def try_to_constant_fold(self, *args_w):
         if op:
             args = []
             for w_arg in args_w:
@@ -639,6 +640,12 @@ def make_op(name, symbol, arity, specialnames):
                     args.append(arg)
             else:
                 # All arguments are constants: call the operator now
+                if check_immutable_args:
+                    try:
+                        map(hash, args)
+                    except TypeError:
+                        raise TypeError("operation %r should not be applied on"
+                                        " constant objects %r" % (name, args))
                 #print >> sys.stderr, 'Constant operation', op
                 try:
                     result = op(*args)
@@ -662,6 +669,12 @@ def make_op(name, symbol, arity, specialnames):
                             # type cannot sanely appear in flow graph,
                             # store operation with variable result instead
                             pass
+
+    def generic_operator(self, *args_w):
+        assert len(args_w) == arity, name+" got the wrong number of arguments"
+        result = try_to_constant_fold(self, *args_w)
+        if result is not None:
+            return result
 
         #print >> sys.stderr, 'Variable operation', name, args_w
         w_result = self.do_operation_with_implicit_exceptions(name, *args_w)

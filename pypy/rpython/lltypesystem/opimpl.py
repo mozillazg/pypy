@@ -1,6 +1,10 @@
 import sys
 import math
+import py
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib.objectmodel import ComputedIntSymbolic
+from pypy.rlib.rarithmetic import intmask, r_uint, ovfcheck, r_longlong
+from pypy.rlib.rarithmetic import r_ulonglong, ovfcheck_lshift
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import opimpls
 
@@ -62,17 +66,28 @@ def get_primitive_op_src(fullopname):
         if opname in ops_unary:
             def op_function(x):
                 if not isinstance(x, argtype):
-                    raise TypeError("%r arg must be %s, got %r instead" % (
-                        fullopname, typname, type(x).__name__))
+                    if argtype is int:
+                        x = _compute_int(x)
+                    else:
+                        raise TypeError("%r arg must be %s, got %r instead" % (
+                            fullopname, typname, type(x).__name__))
                 return adjust_result(func(x))
         else:
             def op_function(x, y):
                 if not isinstance(x, argtype):
-                    raise TypeError("%r arg 1 must be %s, got %r instead" % (
-                        fullopname, typname, type(x).__name__))
+                    if argtype is int:
+                        x = _compute_int(x)
+                    else:
+                        raise TypeError("%r arg 1 must be %s, got %r instead"
+                                        % (fullopname, typname,
+                                           type(x).__name__))
                 if not isinstance(y, argtype):
-                    raise TypeError("%r arg 2 must be %s, got %r instead" % (
-                        fullopname, typname, type(y).__name__))
+                    if argtype is int:
+                        y = _compute_int(y)
+                    else:
+                        raise TypeError("%r arg 2 must be %s, got %r instead"
+                                        % (fullopname, typname,
+                                           type(y).__name__))
                 return adjust_result(func(x, y))
 
     return func_with_new_name(op_function, 'op_' + fullopname)
@@ -170,27 +185,35 @@ def op_bool_not(b):
     assert type(b) is bool
     return not b
 
+def _compute_int(val):
+    if isinstance(val, ComputedIntSymbolic):
+        val = val.compute_fn()
+    assert isinstance(val, int)
+    return val
+
 def op_int_add(x, y):
-    assert isinstance(x, (int, llmemory.AddressOffset))
-    assert isinstance(y, (int, llmemory.AddressOffset))
+    if not (type(x) is int and type(y) is int):
+        if not isinstance(x, llmemory.AddressOffset): x = _compute_int(x)
+        if not isinstance(y, llmemory.AddressOffset): y = _compute_int(y)
     return intmask(x + y)
 
 def op_int_mul(x, y):
-    assert isinstance(x, (int, llmemory.AddressOffset))
-    assert isinstance(y, (int, llmemory.AddressOffset))
+    if not (type(x) is int and type(y) is int):
+        if not isinstance(x, llmemory.AddressOffset): x = _compute_int(x)
+        if not isinstance(y, llmemory.AddressOffset): y = _compute_int(y)
     return intmask(x * y)
 
 def op_int_floordiv(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    x = _compute_int(x)
+    y = _compute_int(y)
     r = x//y
     if x^y < 0 and x%y != 0:
         r += 1
     return r
 
 def op_int_mod(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    x = _compute_int(x)
+    y = _compute_int(y)
     r = x%y
     if x^y < 0 and x%y != 0:
         r -= y
@@ -382,9 +405,114 @@ def op_getarrayitem(p, index):
         raise TypeError("cannot fold getfield on mutable array")
     return p[index]
 
+def op_debug_assert(x, msg):
+    assert x, msg
+
 def op_debug_print(*args):
     for arg in args:
-        print arg
+        print >> sys.stderr, arg,
+    print >> sys.stderr
+
+class DebugFatalError(AssertionError):
+    pass
+
+def op_debug_fatalerror(*args):
+    raise DebugFatalError(*args)
+
+# ____________________________________________________________
+# Overflow-detecting variants
+
+def op_int_neg_ovf(x):
+    assert type(x) is int
+    return ovfcheck(-x)
+
+def op_int_abs_ovf(x):
+    assert type(x) is int
+    return ovfcheck(abs(x))
+
+def op_llong_neg_ovf(x):
+    assert type(x) is r_longlong
+    return ovfcheck(-x)
+
+def op_llong_abs_ovf(x):
+    assert type(x) is r_longlong
+    return ovfcheck(abs(x))
+
+def op_int_lshift_ovf(x, y):
+    assert isinstance(x, int)
+    assert isinstance(y, int)
+    return ovfcheck_lshift(x, y)
+
+def op_int_lshift_ovf_val(x, y):
+    assert isinstance(x, int)
+    assert isinstance(y, int)
+    return ovfcheck_lshift(x, y)
+
+def _makefunc2(fn, operator, xtype, ytype=None):
+    if ytype is None:
+        ytype = xtype
+    if '_ovf' in fn:
+        checkfn = 'ovfcheck'
+    elif fn.startswith('op_int_'):
+        checkfn = 'intmask'
+    else:
+        checkfn = ''
+    if operator == '//':
+        code = '''r = %(checkfn)s(x // y)
+            if x^y < 0 and x%%y != 0:
+                r += 1
+            return r
+            '''%locals()
+    elif operator == '%':
+        code = '''r = %(checkfn)s(x %% y)
+            if x^y < 0 and x%%y != 0:
+                r -= y
+            return r
+            '''%locals()
+    else:
+        code = 'return %(checkfn)s(x %(operator)s y)'%locals()
+    exec py.code.Source("""
+        def %(fn)s(x, y):
+            assert isinstance(x, %(xtype)s)
+            assert isinstance(y, %(ytype)s)
+            %(code)s
+    """ % locals()).compile() in globals()
+
+_makefunc2('op_int_add_ovf', '+', '(int, llmemory.AddressOffset)')
+_makefunc2('op_int_mul_ovf', '*', '(int, llmemory.AddressOffset)', 'int')
+_makefunc2('op_int_sub_ovf',          '-',  'int')
+_makefunc2('op_int_floordiv_ovf',     '//', 'int')
+_makefunc2('op_int_floordiv_zer',     '//', 'int')
+_makefunc2('op_int_floordiv_ovf_zer', '//', 'int')
+_makefunc2('op_int_mod_ovf',          '%',  'int')
+_makefunc2('op_int_mod_zer',          '%',  'int')
+_makefunc2('op_int_mod_ovf_zer',      '%',  'int')
+_makefunc2('op_int_lshift_val',       '<<', 'int')
+_makefunc2('op_int_rshift_val',       '>>', 'int')
+
+_makefunc2('op_uint_floordiv_zer',    '//', 'r_uint')
+_makefunc2('op_uint_mod_zer',         '%',  'r_uint')
+_makefunc2('op_uint_lshift_val',      '<<', 'r_uint')
+_makefunc2('op_uint_rshift_val',      '>>', 'r_uint')
+
+_makefunc2('op_llong_floordiv_zer',   '//', 'r_longlong')
+_makefunc2('op_llong_mod_zer',        '%',  'r_longlong')
+_makefunc2('op_llong_lshift_val',     '<<', 'r_longlong')
+_makefunc2('op_llong_rshift_val',     '>>', 'r_longlong')
+
+_makefunc2('op_ullong_floordiv_zer',  '//', 'r_ulonglong')
+_makefunc2('op_ullong_mod_zer',       '%',  'r_ulonglong')
+_makefunc2('op_ullong_lshift_val',    '<<', 'r_ulonglong')
+_makefunc2('op_ullong_rshift_val',    '>>', 'r_ulonglong')
+
+def op_int_add_nonneg_ovf(x, y):
+    if isinstance(y, int):
+        assert y >= 0
+    return op_int_add_ovf(x, y)
+
+def op_cast_float_to_int(f):
+    assert type(f) is float
+    return ovfcheck(int(f))
 
 # ____________________________________________________________
 

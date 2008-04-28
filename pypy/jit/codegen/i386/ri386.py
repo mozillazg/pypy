@@ -19,7 +19,7 @@ class REG(OPERAND):
             raise ValueError
 
 class FLOATREG(OPERAND):
-    width = 4
+    width = 8
 
     def __repr__(self):
         return '<ST(%d)>' % self.num
@@ -222,6 +222,15 @@ ch = CH()
 dh = DH()
 bh = BH()
 
+st0 = ST0()
+st1 = ST1()
+st2 = ST2()
+st3 = ST3()
+st4 = ST4()
+st5 = ST5()
+st6 = ST6()
+st7 = ST7()
+
 registers = [eax, ecx, edx, ebx, esp, ebp, esi, edi]
 registers8 = [al, cl, dl, bl, ah, ch, dh, bh]
 
@@ -246,6 +255,15 @@ def memregister(register):
 
 def mem(basereg, offset=0):
     return memSIB(basereg, None, 0, offset)
+
+def heap(offset):
+    return memSIB(None, None, 0, offset)
+
+def heap64(offset):
+    return memSIB64(None, None, 0, offset)
+
+def mem64(basereg, offset=0):
+    return memSIB64(basereg, None, 0, offset)
 
 def memSIB(base, index, scaleshift, offset):
     return _SIBencode(MODRM, base, index, scaleshift, offset)

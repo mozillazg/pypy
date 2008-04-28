@@ -1,4 +1,5 @@
 import random, sys, py
+from pypy.rlib.objectmodel import specialize
 from pypy.rpython.annlowlevel import MixLevelAnnotatorPolicy, llhelper
 from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib.objectmodel import keepalive_until_here
@@ -6,6 +7,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.c.test import test_boehm
 from ctypes import c_void_p, cast, CFUNCTYPE, c_int
+from pypy.jit.codegen.support import ctypes_mapping
 
 class PseudoAnnhelper(object):
     rtyper = None
@@ -18,6 +20,8 @@ class LLType(object):
     FUNC5 = lltype.FuncType([lltype.Signed]*5, lltype.Signed)
     FUNC27= lltype.FuncType([lltype.Signed]*27, lltype.Signed)
     FUNC100 = lltype.FuncType([lltype.Signed]*100, lltype.Signed)
+    FLOATFUNC = lltype.FuncType([lltype.Float], lltype.Float)
+    FUNCMIX = lltype.FuncType([lltype.Signed, lltype.Float], lltype.Float)
 
     @staticmethod
     def Ptr(T):
@@ -40,6 +44,8 @@ class OOType(object):
     FUNC5 = ootype.StaticMethod([lltype.Signed]*5, lltype.Signed)
     FUNC27= ootype.StaticMethod([lltype.Signed]*27, lltype.Signed)
     FUNC100 = ootype.StaticMethod([lltype.Signed]*100, lltype.Signed)
+    FLOATFUNC = ootype.StaticMethod([lltype.Float], lltype.Float)
+    FUNCMIX = ootype.StaticMethod([lltype.Signed, lltype.Float], lltype.Float)
 
     @staticmethod
     def Ptr(T):
@@ -65,6 +71,18 @@ def make_adder(T, rgenop, n):
     builder.end()
     return gv_add_one
 
+def make_float_adder(T, rgenop, n):
+    # 'return x+n'
+    sigtoken = rgenop.sigToken(T.FLOATFUNC)
+    builder, gv_add_one, [gv_x] = rgenop.newgraph(sigtoken, "float_adder")
+    builder.start_writing()
+    c2 = rgenop.genconst(n)
+    gv_result = builder.genop2("float_add", gv_x, c2)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_add_one
+
+
 def get_adder_runner(T, RGenOp):
     def runner(x, y):
         rgenop = RGenOp()
@@ -77,14 +95,13 @@ def get_adder_runner(T, RGenOp):
 
 def make_dummy(T, rgenop):
     # 'return x - (y - (x-1))'
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC2)
     builder, gv_dummyfn, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "dummy")
     builder.start_writing()
     gv_z = builder.genop2("int_sub", gv_x, rgenop.genconst(1))
 
     args_gv = [gv_y, gv_z, gv_x]
-    builder.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_y2, gv_z2, gv_x2] = args_gv
 
     gv_s2 = builder.genop2("int_sub", gv_y2, gv_z2)
@@ -113,7 +130,6 @@ def largedummy_example():
 
 def make_largedummy(T, rgenop):
     # 'return v0-v1+v2-v3+v4-v5...+v98-v99'
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC100)
     builder, gv_largedummyfn, gvs = rgenop.newgraph(sigtoken, "largedummy")
     builder.start_writing()
@@ -121,7 +137,7 @@ def make_largedummy(T, rgenop):
     for i in range(0, 100, 2):
         gvs.append(builder.genop2("int_sub", gvs[i], gvs[i+1]))
 
-    builder.enter_next_block([signed_kind] * 150, gvs)
+    builder.enter_next_block(gvs)
     while len(gvs) > 101:
         gv_sum = builder.genop2("int_add", gvs.pop(), gvs.pop())
         gvs.append(gv_sum)
@@ -162,7 +178,6 @@ def get_largedummy_runner(T, RGenOp):
 def make_branching(T, rgenop):
     # 'if x > 5: return x-1
     #  else:     return y'
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC2)
     builder, gv_branchingfn, [gv_x, gv_y] = rgenop.newgraph(sigtoken,
                                                             "branching")
@@ -172,7 +187,7 @@ def make_branching(T, rgenop):
 
     # true path
     args_gv = [rgenop.genconst(1), gv_x, gv_y]
-    builder.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_one, gv_x2, gv_y2] = args_gv
 
     gv_s2 = builder.genop2("int_sub", gv_x2, gv_one)
@@ -196,11 +211,54 @@ def get_branching_runner(T, RGenOp):
         return res
     return branching_runner
 
+def make_float_loop(T, rgenop):
+    """
+    def f(x, y):
+        i = 0
+        res = 0.0
+        while i < x:
+            res -= -y * float(i)
+            i += 1
+        return res
+    """
+    sigtoken = rgenop.sigToken(T.FUNCMIX)
+    builder, gv_loopfn, [gv_x, gv_y] = rgenop.newgraph(sigtoken,
+                                                            "floatloop")
+    builder.start_writing()
+    args_gv = [gv_x, gv_y, rgenop.genconst(0), rgenop.genconst(0.0)]
+    loopblock = builder.enter_next_block(args_gv)
+    [gv_x, gv_y, gv_i, gv_res] = args_gv
+
+    gv_cond = builder.genop2("int_lt", gv_i, gv_x)
+    bodybuilder = builder.jump_if_true(gv_cond, args_gv)
+
+    builder.finish_and_return(sigtoken, gv_res)
+
+    bodybuilder.start_writing()
+    gv_y1 = bodybuilder.genop1("float_neg", gv_y)
+    gv_i1 = bodybuilder.genop1("cast_int_to_float", gv_i)
+    gv_v0 = bodybuilder.genop2("float_mul", gv_y1, gv_i1)
+    gv_v1 = bodybuilder.genop_same_as(gv_v0)
+    gv_res0 = bodybuilder.genop2("float_sub", gv_res, gv_v1)
+    gv_i2 = bodybuilder.genop2("int_add", gv_i, rgenop.genconst(1))
+    bodybuilder.finish_and_goto([gv_x, gv_y, gv_i2, gv_res0], loopblock)
+    builder.end()
+    return gv_loopfn
+
+def get_float_loop_runner(T, RGenOp):
+    def float_loop_runner(x, y):
+        rgenop = RGenOp()
+        gv_floatloopfn = make_float_loop(T, rgenop)
+        floatfn = gv_floatloopfn.revealconst(T.Ptr(T.FUNC2))
+        res = floatfn(x, y)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return float_loop_runner
+
 # loop start block
-def loop_start(rgenop, builder, signed_kind, gv_x, gv_y):
+def loop_start(rgenop, builder, gv_x, gv_y):
     args_gv = [gv_x, gv_y, rgenop.genconst(1)]
-    loopblock = builder.enter_next_block(
-        [signed_kind, signed_kind, signed_kind], args_gv)
+    loopblock = builder.enter_next_block(args_gv)
     [gv_x, gv_y, gv_z] = args_gv
 
     gv_cond = builder.genop2("int_gt", gv_x, rgenop.genconst(0))
@@ -208,16 +266,15 @@ def loop_start(rgenop, builder, signed_kind, gv_x, gv_y):
     return args_gv, loopblock, bodybuilder
 
 # loop exit
-def loop_exit(builder, sigtoken, signed_kind, gv_y, gv_z):
+def loop_exit(builder, sigtoken, gv_y, gv_z):
     args_gv = [gv_y, gv_z]
-    builder.enter_next_block(
-        [signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_y, gv_z] = args_gv
     gv_y3 = builder.genop2("int_add", gv_y, gv_z)
     builder.finish_and_return(sigtoken, gv_y3)
 
 # loop body
-def loop_body(rgenop, loopblock, bodybuilder, signed_kind, gv_x, gv_y, gv_z):
+def loop_body(rgenop, loopblock, bodybuilder, gv_x, gv_y, gv_z):
     bodybuilder.start_writing()
     gv_z2 = bodybuilder.genop2("int_mul", gv_x, gv_z)
     gv_y2 = bodybuilder.genop2("int_add", gv_x, gv_y)
@@ -232,17 +289,16 @@ def make_goto(T, rgenop):
     #     x = x - 1
     # y += z
     # return y
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC2)
     builder, gv_gotofn, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "goto")
     builder.start_writing()
 
     [gv_x, gv_y, gv_z],loopblock,bodybuilder = loop_start(
-        rgenop, builder, signed_kind, gv_x, gv_y)
+        rgenop, builder, gv_x, gv_y)
     loop_exit(
-        builder, sigtoken, signed_kind, gv_y, gv_z)
+        builder, sigtoken, gv_y, gv_z)
     loop_body(
-        rgenop, loopblock, bodybuilder, signed_kind, gv_x, gv_y, gv_z)
+        rgenop, loopblock, bodybuilder, gv_x, gv_y, gv_z)
 
     # done
     builder.end()
@@ -263,14 +319,13 @@ def make_if(T, rgenop):
     # if x > 5:
     #     x //= 2
     # return x + a
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC2)
     builder, gv_gotofn, [gv_x1, gv_unused] = rgenop.newgraph(sigtoken, "if")
     builder.start_writing()
 
     # check
     args_gv = [gv_x1, gv_unused]
-    builder.enter_next_block([signed_kind, signed_kind], args_gv)
+    builder.enter_next_block(args_gv)
     [gv_x1, gv_unused] = args_gv
 
     gv_cond = builder.genop2("int_gt", gv_x1, rgenop.genconst(5))
@@ -281,7 +336,7 @@ def make_if(T, rgenop):
 
     # end block
     args_gv = [gv_x2, gv_x1]
-    label = builder.enter_next_block([signed_kind, signed_kind], args_gv)
+    label = builder.enter_next_block(args_gv)
     [gv_x2, gv_a] = args_gv
     gv_res = builder.genop2("int_add", gv_x2, gv_a)
     builder.finish_and_return(sigtoken, gv_res)
@@ -314,7 +369,6 @@ def make_switch(T, rgenop):
         else:
             return v1
     """
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC2)
     builder, gv_switch, [gv0, gv1] = rgenop.newgraph(sigtoken, "switch")
     builder.start_writing()
@@ -363,7 +417,6 @@ def make_large_switch(T, rgenop):
         else:
             return v1
     """
-    signed_tok = rgenop.kindToken(lltype.Signed)
     f2_token = rgenop.sigToken(T.FUNC2)
     builder, gv_switch, (gv0, gv1) = rgenop.newgraph(f2_token, "large_switch")
     builder.start_writing()
@@ -407,7 +460,6 @@ def make_fact(T, rgenop):
     #         w = x*z
     #         return w
     #     return 1
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC)
     builder, gv_fact, [gv_x] = rgenop.newgraph(sigtoken, "fact")
     builder.start_writing()
@@ -416,7 +468,7 @@ def make_fact(T, rgenop):
 
     true_builder = builder.jump_if_true(gv_cond, [gv_x])
 
-    builder.enter_next_block([], [])
+    builder.enter_next_block([])
     builder.finish_and_return(sigtoken, rgenop.genconst(1))
 
     true_builder.start_writing()
@@ -444,7 +496,6 @@ def make_func_calling_pause(T, rgenop):
     #          return x
     #     else:
     #          return -x
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC)
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "abs")
     builder.start_writing()
@@ -488,7 +539,6 @@ def make_longwinded_and(T, rgenop):
     #     else:
     #        return 0
 
-    bool_kind = rgenop.kindToken(lltype.Bool)
     sigtoken = rgenop.sigToken(T.FUNC)
     builder, gv_f, [gv_y] = rgenop.newgraph(sigtoken, "abs")
     builder.start_writing()
@@ -500,7 +550,7 @@ def make_longwinded_and(T, rgenop):
     gv_x2 = builder.genop2("int_le", gv_y, rgenop.genconst(4))
 
     args_gv = [gv_x2]
-    label = builder.enter_next_block([bool_kind], args_gv)
+    label = builder.enter_next_block(args_gv)
     [gv_x2] = args_gv
 
     return_false_builder = builder.jump_if_false(gv_x2, [])
@@ -518,7 +568,6 @@ def make_longwinded_and(T, rgenop):
 
 def make_condition_result_cross_link(T, rgenop):
 
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC)
     builder, gv_f, [gv_y] = rgenop.newgraph(sigtoken, "foo")
     builder.start_writing()
@@ -547,7 +596,6 @@ def make_pause_and_resume(T, rgenop):
     #     z = x - 1
     #     w = y*z
     #     return w
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC)
     builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "fn")
     builder.start_writing()
@@ -599,7 +647,6 @@ def make_something_a_bit_like_residual_red_call_with_exc(T, rgenop):
     #     v = u * z
     #     return add1(u)
     gv_add1 = make_adder(T, rgenop, 1)
-    signed_kind = rgenop.kindToken(lltype.Signed)
     sigtoken = rgenop.sigToken(T.FUNC2)
     builder, gv_f, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "f")
     builder.start_writing()
@@ -611,7 +658,7 @@ def make_something_a_bit_like_residual_red_call_with_exc(T, rgenop):
     gv_y2 = builder.genop_call(rgenop.sigToken(T.FUNC), gv_add1, [gv_y])
 
     args_gv = [gv_y2, gv_y]
-    label = builder.enter_next_block([signed_kind, signed_kind], args_gv)
+    label = builder.enter_next_block(args_gv)
     [gv_z, gv_w] = args_gv
 
     builder = builder.pause_writing(args_gv)
@@ -658,84 +705,122 @@ def make_call_functions_with_different_signatures(T, rgenop):
 
     return gv_callable
 
-class FrameVarReader:
-    FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Signed))
-    def __init__(self, RGenOp):
-        def reader(base):
-            return RGenOp.read_frame_var(lltype.Signed, base,
-                                         self.frameinfo, 0)
-        self.reader = reader
-    def get_reader(self, info):
-        self.frameinfo = info
-        return llhelper(self.FUNC, self.reader)
+def get_frame_reader(tp):
+    class FrameVarReader:
+        FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], tp))
+        def __init__(self, RGenOp, via_genconst):
+            def reader(base):
+                if via_genconst:
+                    gv = RGenOp.genconst_from_frame_var(
+                            RGenOp.kindToken(tp),
+                            base, self.frameinfo, 0)
+                    return gv.revealconst(tp)
+                else:
+                    return RGenOp.read_frame_var(tp, base,
+                                                 self.frameinfo, 0)
+            self.reader = reader
+        def get_reader(self, info):
+            self.frameinfo = info
+            return llhelper(self.FUNC, self.reader)
+    return FrameVarReader
 
-def make_read_frame_var(T, rgenop, get_reader):
-    signed_kind = rgenop.kindToken(lltype.Signed)
-    sigtoken = rgenop.sigToken(T.FUNC)
-    readertoken = rgenop.sigToken(FrameVarReader.FUNC.TO)
+FrameVarReader = get_frame_reader(lltype.Signed)
+FrameVarFloatReader = get_frame_reader(lltype.Float)
+
+def make_read_frame_var(T, rgenop, get_reader, reader, FUNC):
+    sigtoken = rgenop.sigToken(FUNC)
+    readertoken = rgenop.sigToken(reader.FUNC.TO)
 
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "f")
     builder.start_writing()
 
-    gv_y = builder.genop2("int_mul", gv_x, rgenop.genconst(2))
+    if FUNC.RESULT is lltype.Signed:
+        gv_y = builder.genop2("int_mul", gv_x, rgenop.genconst(2))
+    elif FUNC.RESULT is lltype.Float:
+        gv_y = builder.genop2("float_mul", gv_x, rgenop.genconst(2.0))
+    else:
+        gv_y = None
     gv_base = builder.genop_get_frame_base()
     info = builder.get_frame_info([gv_y])
     gv_reader = rgenop.constPrebuiltGlobal(get_reader(info))
     gv_z = builder.genop_call(readertoken, gv_reader, [gv_base])
 
     args_gv = [gv_y, gv_z]
-    builder.enter_next_block([signed_kind]*2, args_gv)
+    builder.enter_next_block(args_gv)
     [gv_y, gv_z] = args_gv
     builder.finish_and_return(sigtoken, gv_z)
     builder.end()
 
     return gv_f
 
-def get_read_frame_var_runner(T, RGenOp):
-    fvr = FrameVarReader(RGenOp)
+def get_read_frame_var_runner(T, RGenOp, via_genconst, reader, FUNC):
+    fvr = reader(RGenOp, via_genconst)
 
     def read_frame_var_runner(x):
         rgenop = RGenOp()
-        gv_f = make_read_frame_var(T, rgenop, fvr.get_reader)
-        fn = gv_f.revealconst(T.Ptr(T.FUNC))
+        gv_f = make_read_frame_var(T, rgenop, fvr.get_reader,
+                                   reader, FUNC)
+        fn = gv_f.revealconst(T.Ptr(FUNC))
         res = fn(x)
         keepalive_until_here(rgenop)    # to keep the code blocks alive
         return res
     return read_frame_var_runner
 
-class FramePlaceWriter:
-    FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address, lltype.Signed],
-                                      lltype.Void))
-    def __init__(self, RGenOp):
-        def writer(base, value):
-            if value > 5:
-                RGenOp.write_frame_place(lltype.Signed, base,
-                                         self.place1, value * 7)
-            RGenOp.write_frame_place(lltype.Signed, base,
-                                     self.place2, value * 10)
-        self.writer = writer
-    def get_writer(self, place1, place2):
-        self.place1 = place1
-        self.place2 = place2
-        return llhelper(self.FUNC, self.writer)
+def get_frame_place_writer(TP):
+    class FramePlaceWriter:
+        FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address, TP],
+                                          lltype.Void))
+        def __init__(self, RGenOp):
+            def writer(base, value):
+                if value > 5:
+                    RGenOp.write_frame_place(TP, base,
+                                             self.place1, value * 7)
+                RGenOp.write_frame_place(TP, base,
+                                         self.place2, value * 10)
+            self.writer = writer
+        def get_writer(self, place1, place2):
+            self.place1 = place1
+            self.place2 = place2
+            return llhelper(self.FUNC, self.writer)
+    return FramePlaceWriter
 
-def make_write_frame_place(T, rgenop, get_writer):
-    signed_kind = rgenop.kindToken(lltype.Signed)
-    sigtoken = rgenop.sigToken(T.FUNC)
-    writertoken = rgenop.sigToken(FramePlaceWriter.FUNC.TO)
+FramePlaceWriter = get_frame_place_writer(lltype.Signed)
+FramePlaceWriterFloat = get_frame_place_writer(lltype.Float)
+
+@specialize.arg(2, 3)
+def make_write_frame_place(T, rgenop, get_writer, TP, frame_writer):
+    kind = rgenop.kindToken(TP)
+    if TP is lltype.Signed:
+        F = T.FUNC
+    else:
+        F = T.FLOATFUNC
+    sigtoken = rgenop.sigToken(F)
+    writertoken = rgenop.sigToken(frame_writer.FUNC.TO)
 
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "f")
     builder.start_writing()
 
     gv_base = builder.genop_get_frame_base()
+
     gv_k = rgenop.genconst(-100)
-    place1 = builder.alloc_frame_place(signed_kind, gv_initial_value=gv_k)
-    place2 = builder.alloc_frame_place(signed_kind)
+    if TP is lltype.Signed:
+        gv_k = rgenop.genconst(-100)
+    elif TP is lltype.Float:
+        gv_k = rgenop.genconst(-33.3)
+    else:
+        raise NotImplementedError
+    place1 = builder.alloc_frame_place(kind, gv_initial_value=gv_k)
+    place2 = builder.alloc_frame_place(kind)
+
     gv_writer = rgenop.constPrebuiltGlobal(get_writer(place1, place2))
     builder.genop_call(writertoken, gv_writer, [gv_base, gv_x])
-    gv_y = builder.genop_absorb_place(signed_kind, place1)
-    gv_z = builder.genop_absorb_place(signed_kind, place2)
-    gv_diff = builder.genop2("int_sub", gv_y, gv_z)
+    gv_y = builder.genop_absorb_place(place1)
+    gv_z = builder.genop_absorb_place(place2)
+    if TP is lltype.Float:
+        op = "float_sub"
+    else:
+        op = "int_sub"
+    gv_diff = builder.genop2(op, gv_y, gv_z)
     builder.finish_and_return(sigtoken, gv_diff)
     builder.end()
 
@@ -746,12 +831,26 @@ def get_write_frame_place_runner(T, RGenOp):
 
     def write_frame_place_runner(x):
         rgenop = RGenOp()
-        gv_f = make_write_frame_place(T, rgenop, fvw.get_writer)
+        gv_f = make_write_frame_place(T, rgenop, fvw.get_writer,
+                                      lltype.Signed, FramePlaceWriter)
         fn = gv_f.revealconst(T.Ptr(T.FUNC))
         res = fn(x)
         keepalive_until_here(rgenop)    # to keep the code blocks alive
         return res
     return write_frame_place_runner
+
+def make_float_caller(T, rgenop):
+    sigtoken = rgenop.sigToken(T.FLOATFUNC)
+    builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "inner")
+    builder.start_writing()
+    builder.finish_and_return(sigtoken, gv_x)
+    builder.end()
+    builder, gv_f2, [gv_x] = rgenop.newgraph(sigtoken, "outer")
+    builder.start_writing()
+    gv_res = builder.genop_call(sigtoken, gv_f, [gv_x])
+    builder.finish_and_return(sigtoken, gv_res)
+    builder.end()
+    return gv_f2
 
 class ManyFramePlaceWriter:
     FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address, lltype.Signed],
@@ -785,7 +884,7 @@ def make_write_lots_of_frame_places(T, rgenop, get_writer):
     builder.genop_call(writertoken, gv_writer, [gv_base, gv_x])
     gv_sum = rgenop.genconst(0)
     for p in places:
-        gv_i = builder.genop_absorb_place(signed_kind, p)
+        gv_i = builder.genop_absorb_place(p)
         gv_sum = builder.genop2("int_add", gv_sum, gv_i)
     builder.finish_and_return(sigtoken, gv_sum)
     builder.end()
@@ -805,42 +904,59 @@ def get_write_lots_of_frame_places_runner(T, RGenOp):
     return write_lots_of_frame_places_runner
 
 
-class FramePlaceReader:
-    FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Signed))
-    def __init__(self, RGenOp):
-        def reader(base):
-            return RGenOp.read_frame_place(lltype.Signed, base,
-                                         self.place)
-        self.reader = reader
-    def get_reader(self, place):
-        self.place = place
-        return llhelper(self.FUNC, self.reader)
+def get_frame_place_reader(TP):
+    class FramePlaceReader:
+        FUNC = lltype.Ptr(lltype.FuncType([llmemory.Address], TP))
+        def __init__(self, RGenOp):
+            def reader(base):
+                return RGenOp.read_frame_place(TP, base,
+                                             self.place)
+            self.reader = reader
+        def get_reader(self, place):
+            self.place = place
+            return llhelper(self.FUNC, self.reader)
+    return FramePlaceReader
+FramePlaceReader = get_frame_place_reader(lltype.Signed)
+FramePlaceFloatReader = get_frame_place_reader(lltype.Float)
 
-def make_read_frame_place(T, rgenop, get_reader):
-    signed_kind = rgenop.kindToken(lltype.Signed)
-    sigtoken = rgenop.sigToken(T.FUNC)
-    readertoken = rgenop.sigToken(FramePlaceReader.FUNC.TO)
+
+def make_read_frame_place(T, rgenop, get_reader, TP):
+    kind = rgenop.kindToken(TP)
+    if TP is lltype.Signed:
+        F = T.FUNC
+        reader = FramePlaceReader
+    else:
+        F = T.FLOATFUNC
+        reader = FramePlaceFloatReader
+    sigtoken = rgenop.sigToken(F)
+    readertoken = rgenop.sigToken(reader.FUNC.TO)
 
     builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "f")
     builder.start_writing()
 
-    place = builder.alloc_frame_place(signed_kind,
-                                      rgenop.genconst(42))
+    if TP is lltype.Signed:
+        place = builder.alloc_frame_place(kind,
+                                          rgenop.genconst(42))
+    else:
+        place = builder.alloc_frame_place(kind, rgenop.genconst(3.3))
     gv_base = builder.genop_get_frame_base()
     gv_reader = rgenop.constPrebuiltGlobal(get_reader(place))
     gv_z = builder.genop_call(readertoken, gv_reader, [gv_base])
-    builder.genop_absorb_place(signed_kind, place)   # mark end of use
+    builder.genop_absorb_place(place)   # mark end of use
     builder.finish_and_return(sigtoken, gv_z)
     builder.end()
 
     return gv_f
 
-def get_read_frame_place_runner(T, RGenOp):
-    fpr = FramePlaceReader(RGenOp)
+def get_read_frame_place_runner(T, RGenOp, TP):
+    if TP is lltype.Signed:
+        fpr = FramePlaceReader(RGenOp)
+    else:
+        fpr = FramePlaceFloatReader(RGenOp)
 
     def read_frame_place_runner(x):
         rgenop = RGenOp()
-        gv_f = make_read_frame_place(T, rgenop, fpr.get_reader)
+        gv_f = make_read_frame_place(T, rgenop, fpr.get_reader, TP)
         fn = gv_f.revealconst(T.Ptr(T.FUNC))
         res = fn(x)
         keepalive_until_here(rgenop)    # to keep the code blocks alive
@@ -871,74 +987,33 @@ def get_ovfcheck_adder_runner(T, RGenOp):
     return runner
 
 
-class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
+class AbstractTestBase(test_boehm.AbstractGCTestClass):
     RGenOp = None
     RGenOpPacked = None
     T = LLType
 
+    def cast(self, gv, nb_args, RESULT=lltype.Signed):
+        F1 = lltype.FuncType([lltype.Signed] * nb_args, RESULT)
+        return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
+
+    def cast_float(self, gv, nb_args):
+        F1 = lltype.FuncType([lltype.Float] * nb_args, lltype.Float)
+        return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
+
+    def cast_whatever(self, gv, ARGS, RESULT=lltype.Signed):
+        F1 = lltype.FuncType(ARGS, RESULT)
+        return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)        
+
+
+class AbstractRGenOpTestsCompile(AbstractTestBase):
     def compile(self, runner, argtypes):
         return self.getcompiled(runner, argtypes,
                                 annotatorpolicy = GENOP_POLICY)
 
-    def cast(self, gv, nb_args):
-        F1 = lltype.FuncType([lltype.Signed] * nb_args, lltype.Signed)
-        return self.RGenOp.get_python_callable(lltype.Ptr(F1), gv)
-
-    def directtesthelper(self, FUNCTYPE, func):
-        # for machine code backends: build a ctypes function pointer
-        # (with a real physical address) that will call back our 'func'
-        nb_args = len(FUNCTYPE.TO.ARGS)
-        callback = CFUNCTYPE(c_int, *[c_int]*nb_args)(func)
-        keepalive = self.__dict__.setdefault('_keepalive', [])
-        keepalive.append((callback, func))
-        return cast(callback, c_void_p).value
-        # NB. returns the address as an integer
-
-    def test_directtesthelper_direct(self):
-        # def callable(x, y):
-        #     return f(x) + x + y
-        rgenop = self.RGenOp()
-        T = self.T
-
-        def f(x):
-            return x + 1
-
-        gv_f = rgenop.genconst(self.directtesthelper(T.Ptr(T.FUNC), f))
-
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        sigtoken1 = rgenop.sigToken(T.FUNC)
-        sigtoken2 = rgenop.sigToken(T.FUNC2)
-        builder, gv_callable, [gv_x, gv_y] = rgenop.newgraph(sigtoken2, "callable")
-        builder.start_writing()
-
-        gv_t1 = builder.genop_call(sigtoken1, gv_f, [gv_x])
-        gv_t2 = builder.genop2("int_add", gv_t1, gv_x)
-        gv_result = builder.genop2("int_add", gv_t2, gv_y)
-        builder.finish_and_return(sigtoken2, gv_result)
-        builder.end()
-
-        fnptr = self.cast(gv_callable, 2)
-
-        res = fnptr(10, 5)
-        assert res == 11 + 10 + 5
-
-    def test_adder_direct(self):
-        rgenop = self.RGenOp()
-        gv_add_5 = make_adder(self.T, rgenop, 5)
-        fnptr = self.cast(gv_add_5, 1)
-        res = fnptr(37)
-        assert res == 42
 
     def test_adder_compile(self):
         fn = self.compile(get_adder_runner(self.T, self.RGenOp), [int, int])
         res = fn(9080983, -9080941)
-        assert res == 42
-
-    def test_dummy_direct(self):
-        rgenop = self.RGenOp()
-        gv_dummyfn = make_dummy(self.T, rgenop)
-        fnptr = self.cast(gv_dummyfn, 2)
-        res = fnptr(30, 17)
         assert res == 42
 
     def test_dummy_compile(self):
@@ -988,18 +1063,243 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fn(2)
         assert res == 8222
 
+    def test_largedummy_compile(self):
+        fn = self.compile(get_largedummy_runner(self.T, self.RGenOp), [int] * 100)
+        args, expected = largedummy_example()
+        res = fn(*args)
+        assert res == expected
+
+    def test_branching_compile(self):
+        fn = self.compile(get_branching_runner(self.T, self.RGenOp), [int, int])
+        res = fn(30, 17)
+        assert res == 29
+        res = fn(3, 17)
+        assert res == 17
+
+    def test_goto_compile(self):
+        fn = self.compile(get_goto_runner(self.T, self.RGenOp), [int, int])
+        res = fn(10, 17)
+        assert res == 3628872
+        res = fn(3, 17)
+        assert res == 29
+
+    def test_if_compile(self):
+        fn = self.compile(get_if_runner(self.T, self.RGenOp), [int, int])
+        res = fn(30, 0)
+        assert res == 45
+        res = fn(3, 0)
+        assert res == 6
+
+    def test_switch_compile(self):
+        fn = self.compile(get_switch_runner(self.T, self.RGenOp), [int, int])
+        res = fn(0, 2)
+        assert res == 42
+        res = fn(1, 17)
+        assert res == 38
+        res = fn(42, 18)
+        assert res == 18
+
+    def test_large_switch_compile(self):
+        fn = self.compile(get_large_switch_runner(self.T, self.RGenOp), [int, int])
+        res = fn(0, 2)
+        assert res == 42
+        for x in range(1,11):
+            res = fn(x, 7)
+            assert res == 2**x+7
+        res = fn(42, 18)
+        assert res == 18
+
+    def test_fact_compile(self):
+        fn = self.compile(get_fact_runner(self.T, self.RGenOp), [int])
+        res = fn(2)
+        assert res == 2
+        res = fn(11)
+        assert res == 39916800
+
+    def test_calling_pause_compile(self):
+        fn = self.compile(get_func_calling_pause_runner(self.T, self.RGenOp), [int])
+        res = fn(2)
+        assert res == 2
+        res = fn(-72)
+        assert res == 72
+
+    def test_pause_and_resume_compile(self):
+        fn = self.compile(get_pause_and_resume_runner(self.T, self.RGenOp), [int])
+
+        res = fn(1)
+        assert res == 0
+
+        res = fn(2)
+        assert res == 3
+
+        res = fn(3)
+        assert res == 8
+
+    def test_read_frame_var_compile(self):
+        runner = get_read_frame_var_runner(self.T, self.RGenOp, False,
+                                           FrameVarReader, self.T.FUNC)
+        fn = self.compile(runner, [int])
+        res = fn(30)
+        assert res == 60
+
+    def test_read_frame_float_var_compile(self):
+        runner = get_read_frame_var_runner(self.T, self.RGenOp, False,
+                                           FrameVarFloatReader,
+                                           self.T.FLOATFUNC)
+
+        fn = self.compile(runner, [float])
+        res = fn(3.3)
+        assert res == 3.3 * 2
+    
+
+    def test_genconst_from_frame_var_compile(self):
+        runner = get_read_frame_var_runner(self.T, self.RGenOp, True,
+                                           FrameVarReader, self.T.FUNC)
+        fn = self.compile(runner, [int])
+        res = fn(30)
+        assert res == 60
+
+
+    def test_genconst_from_frame_float_var_compile(self):
+        runner = get_read_frame_var_runner(self.T, self.RGenOp, True,
+                                           FrameVarFloatReader,
+                                           self.T.FLOATFUNC)
+
+        fn = self.compile(runner, [float])
+        res = fn(3.3)
+        assert res == 3.3 * 2
+
+    def test_write_frame_place_compile(self):
+        fn = self.compile(get_write_frame_place_runner(self.T, self.RGenOp), [int])
+        res = fn(-42)
+        assert res == -100 - (-420)
+        res = fn(606)
+        assert res == 4242 - 6060
+
+    def test_read_frame_place_compile(self):
+        runner = get_read_frame_place_runner(self.T, self.RGenOp,
+                                             lltype.Signed)
+        fn = self.compile(runner, [int])
+        res = fn(-1)
+        assert res == 42
+
+    def test_ovfcheck_adder_compile(self):
+        fn = self.compile(get_ovfcheck_adder_runner(self.T, self.RGenOp), [int, int])
+        res = fn(9080983, -9080941)
+        assert res == (42 << 1) | 0
+        res = fn(-sys.maxint, -10)
+        assert (res & 1) == 1
+
+
+class AbstractRGenOpTestsDirect(AbstractTestBase):
+    def directtesthelper(self, FUNCTYPE, func):
+        # for machine code backends: build a ctypes function pointer
+        # (with a real physical address) that will call back our 'func'
+        nb_args = len(FUNCTYPE.TO.ARGS)
+        callback = CFUNCTYPE(c_int, *[c_int]*nb_args)(func)
+        keepalive = self.__dict__.setdefault('_keepalive', [])
+        keepalive.append((callback, func))
+        return cast(callback, c_void_p).value
+        # NB. returns the address as an integer
+
+    def test_directtesthelper_direct(self):
+        # def callable(x, y):
+        #     return f(x) + x + y
+        rgenop = self.RGenOp()
+        T = self.T
+
+        def f(x):
+            return x + 1
+
+        gv_f = rgenop.genconst(self.directtesthelper(T.Ptr(T.FUNC), f))
+
+        sigtoken1 = rgenop.sigToken(T.FUNC)
+        sigtoken2 = rgenop.sigToken(T.FUNC2)
+        builder, gv_callable, [gv_x, gv_y] = rgenop.newgraph(sigtoken2, "callable")
+        builder.start_writing()
+
+        gv_t1 = builder.genop_call(sigtoken1, gv_f, [gv_x])
+        gv_t2 = builder.genop2("int_add", gv_t1, gv_x)
+        gv_result = builder.genop2("int_add", gv_t2, gv_y)
+        builder.finish_and_return(sigtoken2, gv_result)
+        builder.end()
+
+        fnptr = self.cast(gv_callable, 2)
+
+        res = fnptr(10, 5)
+        assert res == 11 + 10 + 5
+
+    def test_adder_direct(self):
+        rgenop = self.RGenOp()
+        gv_add_5 = make_adder(self.T, rgenop, 5)
+        fnptr = self.cast(gv_add_5, 1)
+        res = fnptr(37)
+        assert res == 42
+
+
+
+
+    def test_cast_raising(self):
+        rgenop = self.RGenOp()
+        FUNC = lltype.FuncType([lltype.Float], lltype.Signed)
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, 'cast_raising')
+        builder.start_writing()
+
+        gv_x1, gv_flag = builder.genraisingop1('cast_float_to_int', gv_x)
+        
+        builder.finish_and_return(sigtoken, gv_x1)
+        builder.end()
+
+        fnptr = self.cast_whatever(gv_fn, [lltype.Float], lltype.Signed)
+
+        res = fnptr(3.4)
+        assert res == 3
+    
+
+    def test_float_adder(self):
+        rgenop = self.RGenOp()
+        gv_add_5 = make_float_adder(self.T, rgenop, 3.2)
+        fnptr = self.cast_float(gv_add_5, 1)
+        res = fnptr(1.2)
+        assert res == 4.4
+
+    def test_float_call(self):
+        rgenop = self.RGenOp()
+        gv_f = make_float_caller(self.T, rgenop)
+        fnptr = self.cast_float(gv_f, 1)
+        assert fnptr(1.2) == 1.2
+
+    def test_float_loop_direct(self):
+        def f(x, y):
+            i = 0
+            res = 0.0
+            while i < x:
+                res -= -y * float(i)
+                i += 1
+            return res
+
+        rgenop = self.RGenOp()
+        gv_float = make_float_loop(self.T, rgenop)
+        fnptr = self.cast_whatever(gv_float, [lltype.Signed, lltype.Float],
+                                   lltype.Float)
+        res = fnptr(5, 1.3)
+        assert res == f(5, 1.3)
+
+    def test_dummy_direct(self):
+        rgenop = self.RGenOp()
+        gv_dummyfn = make_dummy(self.T, rgenop)
+        fnptr = self.cast(gv_dummyfn, 2)
+        res = fnptr(30, 17)
+        assert res == 42
+
+
     def test_largedummy_direct(self):
         rgenop = self.RGenOp()
         gv_largedummyfn = make_largedummy(self.T, rgenop)
         fnptr = self.cast(gv_largedummyfn, 100)
         args, expected = largedummy_example()
         res = fnptr(*args)
-        assert res == expected
-
-    def test_largedummy_compile(self):
-        fn = self.compile(get_largedummy_runner(self.T, self.RGenOp), [int] * 100)
-        args, expected = largedummy_example()
-        res = fn(*args)
         assert res == expected
 
     def test_branching_direct(self):
@@ -1011,13 +1311,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(3, 17)
         assert res == 17
 
-    def test_branching_compile(self):
-        fn = self.compile(get_branching_runner(self.T, self.RGenOp), [int, int])
-        res = fn(30, 17)
-        assert res == 29
-        res = fn(3, 17)
-        assert res == 17
-
     def test_goto_direct(self):
         rgenop = self.RGenOp()
         gv_gotofn = make_goto(self.T, rgenop)
@@ -1027,13 +1320,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(3, 17)    # <== or here
         assert res == 29
 
-    def test_goto_compile(self):
-        fn = self.compile(get_goto_runner(self.T, self.RGenOp), [int, int])
-        res = fn(10, 17)
-        assert res == 3628872
-        res = fn(3, 17)
-        assert res == 29
-
     def test_if_direct(self):
         rgenop = self.RGenOp()
         gv_iffn = make_if(self.T, rgenop)
@@ -1041,13 +1327,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(30, 0)
         assert res == 45
         res = fnptr(3, 0)
-        assert res == 6
-
-    def test_if_compile(self):
-        fn = self.compile(get_if_runner(self.T, self.RGenOp), [int, int])
-        res = fn(30, 0)
-        assert res == 45
-        res = fn(3, 0)
         assert res == 6
 
     def test_switch_direct(self):
@@ -1061,15 +1340,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(42, 16)
         assert res == 16
 
-    def test_switch_compile(self):
-        fn = self.compile(get_switch_runner(self.T, self.RGenOp), [int, int])
-        res = fn(0, 2)
-        assert res == 42
-        res = fn(1, 17)
-        assert res == 38
-        res = fn(42, 18)
-        assert res == 18
-
     def test_large_switch_direct(self):
         rgenop = self.RGenOp()
         gv_switchfn = make_large_switch(self.T, rgenop)
@@ -1082,16 +1352,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(42, 16)
         assert res == 16
 
-    def test_large_switch_compile(self):
-        fn = self.compile(get_large_switch_runner(self.T, self.RGenOp), [int, int])
-        res = fn(0, 2)
-        assert res == 42
-        for x in range(1,11):
-            res = fn(x, 7)
-            assert res == 2**x+7
-        res = fn(42, 18)
-        assert res == 18
-
     def test_fact_direct(self):
         rgenop = self.RGenOp()
         gv_fact = make_fact(self.T, rgenop)
@@ -1101,13 +1361,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(10)
         assert res == 3628800
 
-    def test_fact_compile(self):
-        fn = self.compile(get_fact_runner(self.T, self.RGenOp), [int])
-        res = fn(2)
-        assert res == 2
-        res = fn(11)
-        assert res == 39916800
-
     def test_calling_pause_direct(self):
         rgenop = self.RGenOp()
         gv_abs = make_func_calling_pause(self.T, rgenop)
@@ -1116,13 +1369,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         assert res == 2
         res = fnptr(-42)
         assert res == 42
-
-    def test_calling_pause_compile(self):
-        fn = self.compile(get_func_calling_pause_runner(self.T, self.RGenOp), [int])
-        res = fn(2)
-        assert res == 2
-        res = fn(-72)
-        assert res == 72
 
     def test_longwinded_and_direct(self):
         rgenop = self.RGenOp()
@@ -1162,14 +1408,13 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
     def test_multiple_cmps(self):
         # return x>y + 10*x<y + 100*x<=y + 1000*x>=y + 10000*x==y + 100000*x!=y
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC2)
         builder, gv_callable, [gv_x, gv_y] = rgenop.newgraph(sigtoken,
                                                              "multicmp")
         builder.start_writing()
 
         args_gv = [gv_x, gv_y]
-        builder.enter_next_block([signed_kind, signed_kind], args_gv)
+        builder.enter_next_block(args_gv)
         [gv_x, gv_y] = args_gv
 
         gv_gt = builder.genop2("int_gt", gv_x, gv_y)
@@ -1214,7 +1459,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         # return
         # 1>x + 10*(1<x) + 100*(1>=x) + 1000*(1<=x) + 10000*(1==x) + 100000*(1!=x)
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken,
                                                        "multicmp")
@@ -1269,13 +1513,12 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #    x = y
         # return x
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken,
                                                        "tightloop")
         builder.start_writing()
         args_gv = [gv_x]
-        loopstart = builder.enter_next_block([signed_kind], args_gv)
+        loopstart = builder.enter_next_block(args_gv)
         [gv_x] = args_gv
 
         gv_y = builder.genop2("int_sub", gv_x, rgenop.genconst(7))
@@ -1296,7 +1539,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_jump_to_block_with_many_vars(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC)
         builder, gv_verysmall_callable, [gv_x] = rgenop.newgraph(sigtoken,
                                                                  "verysmall")
@@ -1313,7 +1555,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         builder2.start_writing()
         args_gv = [gv_x]
-        label = builder2.enter_next_block([signed_kind], args_gv)
+        label = builder2.enter_next_block(args_gv)
         [gv_x2] = args_gv
 
         gvs = []
@@ -1337,11 +1579,10 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_same_as(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "sameas")
         builder.start_writing()
-        gv_nineteen = builder.genop_same_as(signed_kind, rgenop.genconst(19))
+        gv_nineteen = builder.genop_same_as(rgenop.genconst(19))
         assert not gv_nineteen.is_const   # 'same_as' must return a variable
         builder.finish_and_return(sigtoken, gv_nineteen)
         builder.end()
@@ -1363,18 +1604,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         assert res == 3
 
         res = fnptr(3)
-        assert res == 8
-
-    def test_pause_and_resume_compile(self):
-        fn = self.compile(get_pause_and_resume_runner(self.T, self.RGenOp), [int])
-
-        res = fn(1)
-        assert res == 0
-
-        res = fn(2)
-        assert res == 3
-
-        res = fn(3)
         assert res == 8
 
     def test_like_residual_red_call_with_exc_direct(self):
@@ -1401,7 +1630,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_defaultonly_switch(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "defaultonly")
         builder.start_writing()
@@ -1416,8 +1644,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_bool_not_direct(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
         sigtoken = rgenop.sigToken(self.T.FUNC)
         builder, gv_callable, [gv_x] = rgenop.newgraph(sigtoken, "bool_not")
         builder.start_writing()
@@ -1439,21 +1665,46 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_read_frame_var_direct(self):
         def get_reader(info):
-            fvr = FrameVarReader(self.RGenOp)
+            fvr = FrameVarReader(self.RGenOp, via_genconst=False)
             fvr.frameinfo = info
             reader_ptr = self.directtesthelper(fvr.FUNC, fvr.reader)
             return reader_ptr
 
         rgenop = self.RGenOp()
-        gv_callable = make_read_frame_var(self.T, rgenop, get_reader)
+        gv_callable = make_read_frame_var(self.T, rgenop, get_reader,
+                                          FrameVarReader, self.T.FUNC)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(20)
         assert res == 40
 
-    def test_read_frame_var_compile(self):
-        fn = self.compile(get_read_frame_var_runner(self.T, self.RGenOp), [int])
-        res = fn(30)
-        assert res == 60
+    def test_read_frame_var_float_direct(self):
+        def get_reader(info):
+            fvr = FrameVarFloatReader(self.RGenOp, via_genconst=False)
+            fvr.frameinfo = info
+            reader_ptr = self.directtesthelper(fvr.FUNC, fvr.reader)
+            return reader_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_read_frame_var(self.T, rgenop, get_reader,
+                                          FrameVarFloatReader,
+                                          self.T.FLOATFUNC)
+        fnptr = self.cast_float(gv_callable, 1)
+        res = fnptr(3.2)
+        assert res == 6.4
+
+    def test_genconst_from_frame_var_direct(self):
+        def get_reader(info):
+            fvr = FrameVarReader(self.RGenOp, via_genconst=True)
+            fvr.frameinfo = info
+            reader_ptr = self.directtesthelper(fvr.FUNC, fvr.reader)
+            return reader_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_read_frame_var(self.T, rgenop, get_reader,
+                                          FrameVarReader, self.T.FUNC)
+        fnptr = self.cast(gv_callable, 1)
+        res = fnptr(20)
+        assert res == 40
 
     def test_write_frame_place_direct(self):
         def get_writer(place1, place2):
@@ -1464,19 +1715,32 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
             return writer_ptr
 
         rgenop = self.RGenOp()
-        gv_callable = make_write_frame_place(self.T, rgenop, get_writer)
+        gv_callable = make_write_frame_place(self.T, rgenop, get_writer,
+                                             lltype.Signed,
+                                             FramePlaceWriter)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(3)
         assert res == -100 - 30
         res = fnptr(6)
         assert res == 42 - 60
 
-    def test_write_frame_place_compile(self):
-        fn = self.compile(get_write_frame_place_runner(self.T, self.RGenOp), [int])
-        res = fn(-42)
-        assert res == -100 - (-420)
-        res = fn(606)
-        assert res == 4242 - 6060
+    def test_write_frame_place_float_direct(self):
+        def get_writer(place1, place2):
+            fvw = FramePlaceWriterFloat(self.RGenOp)
+            fvw.place1 = place1
+            fvw.place2 = place2
+            writer_ptr = self.directtesthelper(fvw.FUNC, fvw.writer)
+            return writer_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_write_frame_place(self.T, rgenop, get_writer,
+                                             lltype.Float,
+                                             FramePlaceWriterFloat)
+        fnptr = self.cast_float(gv_callable, 1)
+        res = fnptr(3.3)
+        assert res == (-33.3 - 3.3*10)
+        res = fnptr(6.3)
+        assert res == -18.9
 
     def test_write_lots_of_frame_places_direct(self):
         def get_writer(places):
@@ -1501,20 +1765,30 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
             return reader_ptr
 
         rgenop = self.RGenOp()
-        gv_callable = make_read_frame_place(self.T, rgenop, get_reader)
+        gv_callable = make_read_frame_place(self.T, rgenop, get_reader,
+                                            lltype.Signed)
         fnptr = self.cast(gv_callable, 1)
         res = fnptr(-1)
         assert res == 42
 
-    def test_read_frame_place_compile(self):
-        fn = self.compile(get_read_frame_place_runner(self.T, self.RGenOp), [int])
-        res = fn(-1)
-        assert res == 42
+    def test_read_float_frame_place_direct(self):
+        def get_reader(place):
+            fpr = FramePlaceFloatReader(self.RGenOp)
+            fpr.place = place
+            reader_ptr = self.directtesthelper(fpr.FUNC, fpr.reader)
+            return reader_ptr
+
+        rgenop = self.RGenOp()
+        gv_callable = make_read_frame_place(self.T, rgenop,
+                                            get_reader, lltype.Float)
+        fnptr = self.cast_float(gv_callable, 1)
+        res = fnptr(-3.3)
+        assert res == 3.3
 
     def test_frame_vars_like_the_frontend_direct(self):
         rgenop = self.RGenOp()
-        sigtoken = rgenop.sigToken(self.T.FUNC3)
         signed_kind = rgenop.kindToken(lltype.Signed)
+        sigtoken = rgenop.sigToken(self.T.FUNC3)
         # ------------------------------------------
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(sigtoken,
                                                               'fvltf')
@@ -1522,16 +1796,16 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1 = builder0.pause_writing([v1, v0, v2])
         builder1.start_writing()
         args_gv = [v1, v0, v2]
-        label0 = builder1.enter_next_block([signed_kind]*3, args_gv)
+        label0 = builder1.enter_next_block(args_gv)
         [v3, v4, v5] = args_gv
         place = builder1.alloc_frame_place(signed_kind, rgenop.genconst(0))
         v6 = builder1.genop_get_frame_base()
         c_seven = rgenop.genconst(7)
         frameinfo = builder1.get_frame_info([v3, v4, c_seven, v5])
         # here would be a call
-        v8 = builder1.genop_absorb_place(signed_kind, place)
+        v8 = builder1.genop_absorb_place(place)
         args_gv = [v3, v4, v5, v8]
-        label1 = builder1.enter_next_block([signed_kind]*4, args_gv)
+        label1 = builder1.enter_next_block(args_gv)
         [v9, v10, v11, v12] = args_gv
         # test duplicates in live vars while we're at it
         flexswitch0, builder2 = builder1.flexswitch(v12, [v9, v10, v12, v10])
@@ -1555,7 +1829,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         rgenop = self.RGenOp()
 
-        signed_kind = rgenop.kindToken(lltype.Signed)
         sigtoken = rgenop.sigToken(self.T.FUNC2)
         builder, gv_callable, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "f")
         builder.start_writing()
@@ -1564,7 +1837,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         false_builder = builder.jump_if_false(gv_cond, [])
 
         args_gv = [gv_y, gv_y]
-        label = builder.enter_next_block([signed_kind, signed_kind], args_gv)
+        label = builder.enter_next_block(args_gv)
         [gv_a, gv_b] = args_gv
 
         gv_result = builder.genop2("int_add", gv_a, gv_b)
@@ -1600,19 +1873,17 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #        goto = 0
         #  return intmask(a*-468864544+b*-340864157)
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(rgenop.sigToken(self.T.FUNC3), 'compiled_dummyfn')
 
         builder0.start_writing()
         args_gv = [v0, v1]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v3, v4] = args_gv
         v5 = builder0.genop1('int_is_true', v4)
         builder1 = builder0.jump_if_true(v5, [v3, v4])
         args_gv = [v3, v4, rgenop.genconst(True)]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, bool_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v6, v7, v8] = args_gv
         v9 = builder0.genop1('int_is_true', v7)
         builder2 = builder0.jump_if_true(v9, [v7, v8, v6])
@@ -1629,7 +1900,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         builder3.start_writing()
         args_gv = [v8, v7]
-        label2 = builder3.enter_next_block([bool_kind, signed_kind], args_gv)
+        label2 = builder3.enter_next_block(args_gv)
         [v14, v15] = args_gv
         v16 = builder3.genop2('int_mul', v15, rgenop.genconst(-468864544))
         v17 = builder3.genop1('cast_bool_to_int', v14)
@@ -1659,8 +1930,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #   return intmask(d)
 
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(rgenop.sigToken(self.T.FUNC3), 'compiled_dummyfn')
         builder0.start_writing()
@@ -1669,7 +1938,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1 = builder0.jump_if_true(v3, [v0, v1, v2])
 
         args_gv = [v0, v1, v2, rgenop.genconst(True)]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, bool_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v4, v5, v6, v7] = args_gv
 
         v8 = builder0.genop1('int_is_true', v4)
@@ -1677,7 +1946,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder3 = builder0.jump_if_false(v7, [v7, v6, v4])
 
         args_gv = [v6, v6, v7, v4]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, bool_kind, signed_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v9, v10, v11, v12] = args_gv
 
         v13 = builder0.genop2('int_sub', v12, rgenop.genconst(1))
@@ -1714,8 +1983,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         #   return intmask(b+g+2*y)
 
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2, v3, v4] = rgenop.newgraph(rgenop.sigToken(self.T.FUNC5), 'compiled_dummyfn')
         builder0.start_writing()
@@ -1726,30 +1993,27 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1.start_writing()
 
         args_gv = [v0, v1, v2, v3]
-        label0 = builder1.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label0 = builder1.enter_next_block(args_gv)
         [v6, v7, v8, v9] = args_gv
 
         v10 = builder1.genop1('int_is_true', v8)
         builder2 = builder1.jump_if_false(v10, [v6, v7, v9, v8])
 
         args_gv = [v6, v7, v8, v9, rgenop.genconst(False)]
-        label1 = builder1.enter_next_block(
-            [signed_kind, signed_kind, signed_kind, signed_kind, bool_kind], args_gv)
+        label1 = builder1.enter_next_block(args_gv)
         [v11, v12, v13, v14, v15] = args_gv
 
         v16 = builder1.genop1('int_is_true', v14)
         builder3 = builder1.jump_if_true(v16, [v11, v13, v15, v14, v12])
 
         args_gv = [v11, v13, v14, v14, v15]
-        label2 = builder1.enter_next_block(
-            [signed_kind, signed_kind, signed_kind, signed_kind, bool_kind], args_gv)
+        label2 = builder1.enter_next_block(args_gv)
         [v17, v18, v19, v20, v21] = args_gv
 
         builder4 = builder1.jump_if_false(v21, [v17, v18, v19, v20, v21])
 
         args_gv = [v19, v18, v19, v20, v21, v17]
-        label3 = builder1.enter_next_block(
-            [signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind], args_gv)
+        label3 = builder1.enter_next_block(args_gv)
         [v22, v23, v24, v25, v26, v27] = args_gv
 
         v28 = builder1.genop2('int_sub', v27, rgenop.genconst(1))
@@ -1782,8 +2046,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
     def test_from_random_4_direct(self):
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(
             rgenop.sigToken(self.T.FUNC3), 'compiled_dummyfn')
@@ -1791,7 +2053,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder0.start_writing()
 
         args_gv = [v0, v1, v2]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v3, v4, v5] = args_gv
 
         v6 = builder0.genop2('int_add', v5, v4)
@@ -1799,7 +2061,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder1 = builder0.jump_if_false(v7, [v4, v5, v3, v6])
 
         args_gv = [v3, v4, v5]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v8, v9, v10] = args_gv
 
         v11 = builder0.genop1('int_is_true', v10)
@@ -1813,7 +2075,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder7 = builder1.jump_if_true(v25, [v24, v4, v5])
 
         args_gv = [v5, v6, v4]
-        label4 = builder1.enter_next_block([signed_kind, signed_kind, signed_kind], args_gv)
+        label4 = builder1.enter_next_block(args_gv)
         [v26, v27, v28] = args_gv
 
         builder1.finish_and_return(rgenop.sigToken(self.T.FUNC3), v27)
@@ -1863,40 +2125,38 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 ##          return intmask(a*-468864544+b*-340864157+c*-212863774+d*-84863387+e*43136996+f*171137383+g*299137766+h*427138153+i*555138536+j*683138923+k*811139306+l*939139693+m*1067140076+n*1195140463+o*1323140846+p*1451141233+q*1579141616+r*1707142003+s*1835142386+t*1963142773+u*2091143156+v*-2075823753+w*-1947823370+x*-1819822983+y*-1691822600+z*-1563822213)
 
         rgenop = self.RGenOp()
-        signed_kind = rgenop.kindToken(lltype.Signed)
-        bool_kind = rgenop.kindToken(lltype.Bool)
 
         builder0, gv_callable, [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26] = rgenop.newgraph(rgenop.sigToken(self.T.FUNC27), 'compiled_dummyfn')
         builder0.start_writing()
         args_gv = [v0, v1, v2, v3, v6, v8, v9, v10, v11, v12, v13, v14, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26]
-        label0 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label0 = builder0.enter_next_block(args_gv)
         [v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49] = args_gv
         v50 = builder0.genop1('int_is_true', v29)
         builder1 = builder0.jump_if_true(v50, [v48, v38, v27, v30, v32, v34, v47, v40, v28, v41, v43, v45, v37, v46, v31, v33, v35, v39, v36, v42, v49, v44, v29])
         args_gv = [v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49]
-        label1 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label1 = builder0.enter_next_block(args_gv)
         [v51, v52, v53, v54, v55, v56, v57, v58, v59, v60, v61, v62, v63, v64, v65, v66, v67, v68, v69, v70, v71, v72, v73] = args_gv
         v74 = builder0.genop1('int_is_true', v64)
         builder2 = builder0.jump_if_true(v74, [v54, v52, v65, v58, v60, v62, v64, v68, v56, v69, v71, v51, v73, v53, v67, v57, v55, v59, v61, v63, v66, v70, v72])
         args_gv = [v51, v52, v53, v54, v55, v64, v56, v57, v58, v59, v60, v61, v62, v63, v64, v65, v66, v67, v68, v69, v70, v71, v72, v73]
-        label2 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label2 = builder0.enter_next_block(args_gv)
         [v75, v76, v77, v78, v79, v80, v81, v82, v83, v84, v85, v86, v87, v88, v89, v90, v91, v92, v93, v94, v95, v96, v97, v98] = args_gv
         v99 = builder0.genop2('int_sub', v91, v97)
         v100 = builder0.genop2('int_ne', v97, v79)
         v101 = builder0.genop1('int_is_true', v78)
         builder3 = builder0.jump_if_true(v101, [v85, v93, v94, v87, v91, v97, v89, v98, v80, v82, v78, v86, v84, v99, v88, v100, v90, v92, v96, v75, v95, v76, v77, v79, v81])
         args_gv = [v75, v76, v77, v78, v99, v100, v79, v80, v81, v82, v83, v84, v85, v86, v87, v88, v89, v90, v91, v92, v93, v94, v95, v96, v97, v98]
-        label3 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label3 = builder0.enter_next_block(args_gv)
         [v102, v103, v104, v105, v106, v107, v108, v109, v110, v111, v112, v113, v114, v115, v116, v117, v118, v119, v120, v121, v122, v123, v124, v125, v126, v127] = args_gv
         v128 = builder0.genop1('int_is_true', v106)
         builder4 = builder0.jump_if_false(v128, [v114, v111, v116, v113, v118, v122, v110, v124, v103, v125, v105, v127, v107, v112, v121, v109, v115, v117, v119, v123, v102, v120, v104, v126, v106, v108])
         args_gv = [v102, v103, v104, v105, v106, v107, v108, v109, v110, v111, v112, v113, v114, v115, v116, v106, v117, v118, v119, v120, v122, v123, v124, v125, v126, v127]
-        label4 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label4 = builder0.enter_next_block(args_gv)
         [v129, v130, v131, v132, v133, v134, v135, v136, v137, v138, v139, v140, v141, v142, v143, v144, v145, v146, v147, v148, v149, v150, v151, v152, v153, v154] = args_gv
         v155 = builder0.genop2('int_gt', v141, v144)
         builder5 = builder0.jump_if_false(v134, [v149, v148, v141, v143, v145, v147, v151, v139, v152, v132, v154, v134, v136, v130, v140, v138, v142, v155, v144, v146, v150, v129, v137, v131, v153, v133, v135])
         args_gv = [v130, v131, v132, v133, v134, v135, v136, v137, v138, v139, v140, v141, v142, v143, v144, v145, v146, v147, v148, v155, v149, v150, v151, v152, v153, v154, v129]
-        label5 = builder0.enter_next_block([signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, bool_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind, signed_kind], args_gv)
+        label5 = builder0.enter_next_block(args_gv)
         [v156, v157, v158, v159, v160, v161, v162, v163, v164, v165, v166, v167, v168, v169, v170, v171, v172, v173, v174, v175, v176, v177, v178, v179, v180, v181, v182] = args_gv
         v183 = builder0.genop2('int_sub', v182, rgenop.genconst(1))
         v184 = builder0.genop1('int_is_true', v183)
@@ -1993,13 +2253,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fnptr(37)
         assert res == (42 << 1) | 0
         res = fnptr(sys.maxint-2)
-        assert (res & 1) == 1
-
-    def test_ovfcheck_adder_compile(self):
-        fn = self.compile(get_ovfcheck_adder_runner(self.T, self.RGenOp), [int, int])
-        res = fn(9080983, -9080941)
-        assert res == (42 << 1) | 0
-        res = fn(-sys.maxint, -10)
         assert (res & 1) == 1
 
     def test_ovfcheck1_direct(self):
@@ -2125,7 +2378,6 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         A = lltype.GcArray(lltype.Signed)
         varsizealloctoken = rgenop.varsizeAllocToken(A)
         arraytoken = rgenop.arrayToken(A)
-        signed_kind = rgenop.kindToken(lltype.Signed)
         # ------------------------------------------------------------
         builder0, gv_callable, [v0, v1, v2] = rgenop.newgraph(
             rgenop.sigToken(self.T.FUNC3), 'generated')
@@ -2144,14 +2396,14 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         builder3 = builder1.pause_writing([v7])
         builder3.start_writing()
         args_gv = [v7]
-        label0 = builder3.enter_next_block([signed_kind], args_gv)
+        label0 = builder3.enter_next_block(args_gv)
         [v8] = args_gv
         builder4 = builder3.pause_writing([v8])
         builder2.start_writing()
         builder2.finish_and_goto([rgenop.genconst(-1)], label0)
         builder4.start_writing()
         args_gv = [v8]
-        label1 = builder4.enter_next_block([signed_kind], args_gv)
+        label1 = builder4.enter_next_block(args_gv)
         [v9] = args_gv
         builder4.finish_and_return(rgenop.sigToken(self.T.FUNC3), v9)
         builder0.end()
@@ -2198,3 +2450,226 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         fnptr = self.cast(gv_fn, 1)
         result = fnptr(42)
         assert result == 47
+
+    def test_fieldaccess(self):
+        def f(x, y, z):
+            s = lltype.malloc(S.TO)
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+        T = lltype.GcStruct('T', ('x', lltype.Signed),
+                            ('y', lltype.Float),
+                            ('k', lltype.Char),
+                            ('z', lltype.Bool))
+        rgenop = self.RGenOpPacked()
+        ARGS = [lltype.Signed, lltype.Float, lltype.Signed]
+        FUNC = lltype.FuncType(ARGS, lltype.Float)
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x, gv_y, gv_z] = rgenop.newgraph(sigtoken,
+                                                             "fieldaccess")
+        builder.start_writing()
+        gv_s = builder.genop_malloc_fixedsize(rgenop.allocToken(T))
+        builder.genop_setfield(rgenop.fieldToken(T, 'x'), gv_s, gv_x)
+        builder.genop_setfield(rgenop.fieldToken(T, 'y'), gv_s, gv_y)
+        gv_z1 = builder.genop1('int_is_true', gv_z)
+        builder.genop_setfield(rgenop.fieldToken(T, 'z'), gv_s, gv_z1)
+        gv_z2 = builder.genop1('cast_int_to_char', gv_z)
+        builder.genop_setfield(rgenop.fieldToken(T, 'k'), gv_s, gv_z2)
+        gv_y1 = builder.genop_getfield(rgenop.fieldToken(T, 'y'), gv_s)
+        gv_z1 = builder.genop_getfield(rgenop.fieldToken(T, 'k'), gv_s)
+        gv_z1b = builder.genop1('cast_char_to_int', gv_z1)
+        gv_z2 = builder.genop1('cast_int_to_float', gv_z1b)
+        gv_res = builder.genop2('float_add', gv_y1, gv_z2)
+        builder.finish_and_return(sigtoken, gv_res)
+        builder.end()
+
+        fnptr = self.cast_whatever(gv_fn, ARGS, lltype.Float)
+        result = fnptr(1, 3.2, 3)
+        assert result == 3.2 + 3
+
+    def test_interior_access(self):
+        # for assembler backends, the 'interior' lloperations can be
+        # simply expressed as a sequence of genop_getsubstruct and
+        # genop_getarraysubstruct.  So we put magic in the llgraph
+        # backend to recognize and rebuild the expected 'interior'
+        # lloperation in the llgraphs.
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+        T = lltype.Struct('T', ('x', lltype.Signed))
+        A = lltype.Array(T)
+        S = lltype.GcStruct('S', ('a', A))
+        rgenop = self.RGenOpPacked()
+        sigtoken = rgenop.sigToken(self.T.FUNC)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, "interior_access")
+        builder.start_writing()
+        gv_s = builder.genop_malloc_varsize(rgenop.varsizeAllocToken(S),
+                                            rgenop.genconst(5))
+        # generate an expanded 'setinteriorfield'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_t1 = builder.genop_getarraysubstruct(rgenop.arrayToken(A),
+                                                gv_a1, rgenop.genconst(3))
+        builder.genop_setfield(rgenop.fieldToken(T, 'x'), gv_t1, gv_x)
+        # generate an expanded 'getinteriorfield'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_t1 = builder.genop_getarraysubstruct(rgenop.arrayToken(A),
+                                                gv_a1, rgenop.genconst(3))
+        gv_y = builder.genop_getfield(rgenop.fieldToken(T, 'x'), gv_t1)
+        # generate an expanded 'getinteriorarraysize'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_z = builder.genop_getarraysize(rgenop.arrayToken(A), gv_a1)
+        # return
+        gv_result = builder.genop2("int_add", gv_y, gv_z)
+        builder.finish_and_return(sigtoken, gv_result)
+        builder.end()
+
+        fnptr = self.cast(gv_fn, 1)
+        result = fnptr(42)
+        assert result == 47
+
+    def test_interior_access_float(self):
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+        T = lltype.Struct('T', ('x', lltype.Float))
+        A = lltype.Array(T)
+        S = lltype.GcStruct('S', ('a', A))
+        rgenop = self.RGenOpPacked()
+        FUNC = lltype.FuncType([lltype.Float], lltype.Float)
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken,
+                                                 "interior_access_float")
+        builder.start_writing()
+        gv_s = builder.genop_malloc_varsize(rgenop.varsizeAllocToken(S),
+                                            rgenop.genconst(5))
+        # generate an expanded 'setinteriorfield'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_t1 = builder.genop_getarraysubstruct(rgenop.arrayToken(A),
+                                                gv_a1, rgenop.genconst(3))
+        builder.genop_setfield(rgenop.fieldToken(T, 'x'), gv_t1, gv_x)
+        # generate an expanded 'getinteriorfield'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_t1 = builder.genop_getarraysubstruct(rgenop.arrayToken(A),
+                                                gv_a1, rgenop.genconst(3))
+        gv_y = builder.genop_getfield(rgenop.fieldToken(T, 'x'), gv_t1)
+        # generate an expanded 'getinteriorarraysize'
+        gv_a1 = builder.genop_getsubstruct(rgenop.fieldToken(S, 'a'), gv_s)
+        gv_z = builder.genop_getarraysize(rgenop.arrayToken(A), gv_a1)
+        # return
+        gv_z1 = builder.genop1('cast_int_to_float', gv_z)
+        gv_result = builder.genop2("float_add", gv_y, gv_z1)
+        builder.finish_and_return(sigtoken, gv_result)
+        builder.end()
+
+        fnptr = self.cast_whatever(gv_fn, [lltype.Float], lltype.Float)
+        result = fnptr(42.3)
+        assert result == 42.3 + 5
+
+    def test_void_return(self):
+        # XXX minimal test only
+        rgenop = self.RGenOp()
+        FUNCV = lltype.FuncType([lltype.Signed], lltype.Void)
+        sigtoken = rgenop.sigToken(FUNCV)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, "nothing")
+        builder.start_writing()
+        builder.finish_and_return(sigtoken, None)
+        builder.end()
+
+        fnptr = self.cast(gv_fn, 1, RESULT=lltype.Void)
+        fnptr(12)
+        # assert did not crash
+
+    def test_demo_f1_direct(self):
+        """This is similar to the sequence of calls that pypy-c-jit
+        does to its backend for the inner loop of the example below,
+        so generating good code for it would be nice:
+
+            def f1(n):
+                i = 0
+                x = 1
+                while i<n:
+                    j = 0
+                    while j<=i:
+                        j = j + 1
+                        x = x + (i&j)
+                    i = i + 1
+                return x
+
+        To see the code produced e.g. by the 386 backend, run:
+
+            PYPYJITLOG=log py.test ../i386/test/test_rgenop.py -k test_demo_f1
+            ../i386/viewcode.py log
+        """
+
+        if self.RGenOpPacked is None:
+            py.test.skip("requires RGenOpPacked")
+
+        def fallback_loop(args_gv, expected_case):
+            L0 = builder.enter_next_block(args_gv)
+            gv_switchvar = args_gv[-1]
+            flexswitch, default_builder = builder.flexswitch(gv_switchvar,
+                                                             args_gv)
+            default_builder.get_frame_info(args_gv)
+            gv_fbp = default_builder.rgenop.genconst(0x12345678)
+            gv_framebase = default_builder.genop_get_frame_base()
+            default_builder.genop_call(dummysigtoken,
+                                       gv_dummyfnptr,
+                                       [gv_fbp, gv_switchvar, gv_framebase])
+            gv_exc_type = default_builder.genop_getfield(exc_type_token,
+                                                         gv_exc_data)
+            gv_noexc = default_builder.genop1("ptr_iszero", gv_exc_type)
+            excpath_builder = default_builder.jump_if_false(gv_noexc, [])
+            default_builder.finish_and_goto(args_gv, L0)
+
+            excpath_builder.start_writing()
+            excpath_builder.finish_and_return(sigtoken, None)
+
+            return flexswitch.add_case(rgenop.genconst(expected_case))
+
+        rgenop = self.RGenOpPacked()
+        FUNC = lltype.FuncType([], lltype.Void)
+        sigtoken = rgenop.sigToken(FUNC)
+        dummysigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed,
+                                                         lltype.Bool,
+                                                         llmemory.Address],
+                                                        lltype.Void))
+        gv_dummyfnptr = rgenop.genconst(llmemory.NULL)
+        FOO = lltype.GcStruct('FOO')
+        EXCDATA = lltype.GcStruct('EXCDATA', ('exc_type', lltype.Ptr(FOO)))
+        exc_type_kind = rgenop.kindToken(llmemory.Address)
+        exc_type_token = rgenop.fieldToken(EXCDATA, 'exc_type')
+        gv_exc_data = rgenop.genconst(lltype.nullptr(EXCDATA))
+
+        builder, gv_fn, _ = rgenop.newgraph(sigtoken, "innerloop")
+        builder.start_writing()
+        gv_i = rgenop.genconst(50)
+        gv_j = rgenop.genconst(0)
+        gv_x = rgenop.genconst(1234)
+
+        args_gv = [gv_i, gv_j, gv_x]
+        L1 = builder.enter_next_block(args_gv)
+        [gv_i, gv_j, gv_x] = args_gv
+
+        gv_cond = builder.genop2("int_le", gv_j, gv_i)
+
+        args_gv = [gv_i, gv_j, gv_x, gv_cond]
+        builder = fallback_loop(args_gv, True)
+        [gv_i, gv_j, gv_x, gv_cond] = args_gv
+
+        gv_nj, gv_ovf = builder.genraisingop2("int_add_ovf", gv_j,
+                                              rgenop.genconst(1))
+
+        args_gv = [gv_i, gv_j, gv_x, gv_nj, gv_ovf]
+        builder = fallback_loop(args_gv, False)
+        [gv_i, _, gv_x, gv_j, gv_ovf] = args_gv
+
+        gv_ij = builder.genop2("int_and", gv_i, gv_j)
+        gv_nx, gv_ovf = builder.genraisingop2("int_add_ovf", gv_x, gv_ij)
+
+        args_gv = [gv_i, gv_j, gv_x, gv_nx, gv_ovf]
+        builder = fallback_loop(args_gv, False)
+        [gv_i, gv_j, _, gv_x, gv_ovf] = args_gv
+
+        builder.finish_and_goto([gv_i, gv_j, gv_x], L1)
+        builder.end()
+        builder.show_incremental_progress()
+
+        fnptr = self.cast(gv_fn, 0, RESULT=lltype.Void)
+        #res = fnptr() -- xxx fix me, cannot be run so far

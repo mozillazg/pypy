@@ -20,9 +20,8 @@ def rtype_is_None(robj1, rnone2, hop, pos=0):
     if robj1 == none_frozen_pbc_repr:
         return hop.inputconst(ootype.Bool, True)
     v1 = hop.inputarg(robj1, pos)
-    v2 = hop.genop('oononnull', [v1], resulttype=ootype.Bool)
-    v3 = hop.genop('bool_not', [v2], resulttype=ootype.Bool)
-    return v3
+    v2 = hop.genop('ooisnull', [v1], resulttype=ootype.Bool)
+    return v2
 
 
 class FunctionsPBCRepr(AbstractFunctionsPBCRepr):
@@ -175,7 +174,7 @@ class MultipleFrozenPBCRepr(AbstractMultipleFrozenPBCRepr):
     def __init__(self, rtyper, access_set):
         self.rtyper = rtyper
         self.access_set = access_set
-        self.lowleveltype = ootype.Instance('pbc', PBCROOT)
+        self.lowleveltype = ootype.Instance(self.guess_type_name(), PBCROOT)
         self.pbc_cache = {}
 
     def _setup_repr(self):

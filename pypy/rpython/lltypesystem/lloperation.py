@@ -44,7 +44,7 @@ class LLOp(object):
                 self.canraise += (StackException,)
 
         # The operation can be run directly with __call__
-        self.canrun = canrun or canfold
+        self.canrun = canrun or self.tryfold
 
         # The operation belongs to the ootypesystem
         self.oo = oo
@@ -55,7 +55,7 @@ class LLOp(object):
 
     def __call__(self, RESULTTYPE, *args):
         # llop is meant to be rtyped and not called directly, unless it is
-        # a canfold=True operation
+        # a canfold=True or tryfold=True operation
         fold = self.fold
         if getattr(fold, 'need_result_type', False):
             val = fold(RESULTTYPE, *args)
@@ -83,13 +83,6 @@ class LLOp(object):
         self.fold = op_impl
         return op_impl
     fold = roproperty(get_fold_impl)
-
-    def is_pure(self, *ARGTYPES):
-        return (self.canfold or                # canfold => pure operation
-                self is llop.debug_assert or   # debug_assert is pure enough
-                                               # reading from immutable
-                (self in (llop.getfield, llop.getarrayitem) and
-                 ARGTYPES[0].TO._hints.get('immutable')))
 
     def __repr__(self):
         return '<LLOp %s>' % (getattr(self, 'opname', '?'),)
@@ -129,7 +122,10 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         op = self.instance    # the LLOp object that was called
         args_v = [hop.inputarg(r, i+1) for i, r in enumerate(hop.args_r[1:])]
-        hop.exception_is_here()
+        if op.canraise:
+            hop.exception_is_here()
+        else:
+            hop.exception_cannot_occur()
         return hop.genop(op.opname, args_v, resulttype=hop.r_result.lowleveltype)
 
 
@@ -383,6 +379,7 @@ LL_OPERATIONS = {
     # __________ used by the JIT ________
 
     'call_boehm_gc_alloc':  LLOp(canraise=(MemoryError,)),
+    'jit_marker':           LLOp(),
 
     # __________ GC operations __________
 
@@ -456,7 +453,7 @@ LL_OPERATIONS = {
     'debug_print':          LLOp(canrun=True),
     'debug_pdb':            LLOp(),
     'debug_assert':         LLOp(tryfold=True),
-    'debug_fatalerror':     LLOp(),
+    'debug_fatalerror':     LLOp(canrun=True),
     'debug_llinterpcall':   LLOp(), # Python func call 'res=arg[0](*arg[1:])'
                                     # in backends, abort() or whatever is fine
 
@@ -464,16 +461,19 @@ LL_OPERATIONS = {
     'instrument_count':     LLOp(),
 
     # __________ ootype operations __________
-    'new':                  LLOp(oo=True, canraise=(Exception,)),
-    'runtimenew':           LLOp(oo=True, canraise=(Exception,)),
-    'oonewcustomdict':      LLOp(oo=True, canraise=(Exception,)),
+    'new':                  LLOp(oo=True, canraise=(MemoryError,)),
+    'runtimenew':           LLOp(oo=True, canraise=(MemoryError,)),
+    'oonewcustomdict':      LLOp(oo=True, canraise=(MemoryError,)),
     'oonewarray':           LLOp(oo=True, canraise=(Exception,)),
     'oosetfield':           LLOp(oo=True),
-    'oogetfield':           LLOp(oo=True, sideeffects=False),
+    'oogetfield':           LLOp(oo=True, sideeffects=False, canrun=True),
     'oosend':               LLOp(oo=True, canraise=(Exception,)),
     'ooupcast':             LLOp(oo=True, canfold=True),
     'oodowncast':           LLOp(oo=True, canfold=True),
+    'cast_to_object':       LLOp(oo=True, canfold=True),
+    'cast_from_object':     LLOp(oo=True, canfold=True),
     'oononnull':            LLOp(oo=True, canfold=True),
+    'ooisnull':             LLOp(oo=True, canfold=True),
     'oois':                 LLOp(oo=True, canfold=True),
     'instanceof':           LLOp(oo=True, canfold=True),
     'classof':              LLOp(oo=True, canfold=True),

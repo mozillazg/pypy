@@ -9,13 +9,13 @@ from pypy.lang.prolog.builtin.register import expose_builtin
 def impl_between(engine, lower, upper, varorint, continuation):
     if isinstance(varorint, term.Var):
         for i in range(lower, upper):
-            oldstate = engine.heap.branch()
+            oldstate = engine.branch()
             try:
-                varorint.unify(term.Number(i), engine.heap)
+                varorint.unify(term.Number(i), engine)
                 return continuation.call(engine, choice_point=True)
             except error.UnificationFailed:
-                engine.heap.revert(oldstate)
-        varorint.unify(term.Number(upper), engine.heap)
+                engine.revert(oldstate)
+        varorint.unify(term.Number(upper), engine)
         return continuation.call(engine, choice_point=False)
     else:
         integer = helper.unwrap_int(varorint)
@@ -26,8 +26,7 @@ expose_builtin(impl_between, "between", unwrap_spec=["int", "int", "obj"],
                handles_continuation=True)
 
 def impl_is(engine, var, num):
-    var.unify(num, engine.heap)
-impl_is._look_inside_me_ = True
+    var.unify(num, engine)
 expose_builtin(impl_is, "is", unwrap_spec=["raw", "arithmetic"])
 
 for ext, prolog, python in [("eq", "=:=", "=="),
@@ -57,6 +56,7 @@ def impl_arith_%s(engine, num1, num2):
     eq = n1 %s n2
     if not eq:
         raise error.UnificationFailed()""" % (ext, python, python)).compile()
-    expose_builtin(globals()["impl_arith_%s" % (ext, )], prolog,
+    func = globals()["impl_arith_%s" % (ext, )]
+    expose_builtin(func, prolog,
                    unwrap_spec=["arithmetic", "arithmetic"])
  

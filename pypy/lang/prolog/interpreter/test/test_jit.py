@@ -1,34 +1,42 @@
 import py
-from pypy.jit.timeshifter.test.test_portal import PortalTest, P_NOVIRTUAL
+from pypy.rlib.debug import ll_assert
+from pypy.jit.rainbow.test import test_hotpath
 from pypy.lang.prolog.interpreter import portal
 from pypy.lang.prolog.interpreter import engine, term
 from pypy.lang.prolog.interpreter.parsing import parse_query_term, get_engine
 
+py.test.skip("fix me")
 POLICY = portal.PyrologHintAnnotatorPolicy()
 
-py.test.skip()
-
-class TestPortal(PortalTest):
+class TestPortal(test_hotpath.HotPathTest):
     small = False
 
     def test_simple(self):
-        e = get_engine("""
-            f(x, y).
-            f(a(X), b(b(Y))) :- f(X, Y).
-        """)
-        X = e.heap.newvar()
-        Y = e.heap.newvar()
+        X = term.Var()
+        Y = term.Var()
         larger = term.Term(
-            "f", [term.Term("a", [X]), term.Term("b", [term.Term("b", [Y])])])
+            "h", [term.Number(100), X])
 
+        e = get_engine("""
+            f(X) :- h(X, _).
+            h(0, foo).
+            h(X, Y) :- Z is X - 1, h(Z, Y).
+        """)
+        signature2function = e.signature2function
+        parser = e.parser
+        operations = e.operations
         def main(n):
-            e.heap.reset()
+            # XXX workaround for problems with prebuilt virtualizables
+            e = engine.Engine()
+            e.signature2function = signature2function
+            e.parser = parser
+            e.operations = operations
             if n == 0:
-                e.call(term.Term("f", [X, Y]))
-                return isinstance(X.dereference(e.heap), term.Atom)
+                e.call(term.Term("h", [term.Number(2), Y]))
+                return isinstance(Y.dereference(e), term.Atom)
             if n == 1:
                 e.call(larger)
-                return isinstance(X.dereference(e.heap), term.Atom)
+                return isinstance(Y.dereference(e), term.Atom)
             else:
                 return False
 
@@ -38,16 +46,10 @@ class TestPortal(PortalTest):
         assert res == True
 
 
-        res = self.timeshift_from_portal(main, portal.PORTAL,
-                                         [1], policy=POLICY,
-                                         backendoptimize=True, 
-                                         inline=0.0)
+        res = self.run(main, [1], threshold=2, policy=POLICY)
         assert res == True
         
-        res = self.timeshift_from_portal(main, portal.PORTAL,
-                                         [0], policy=POLICY,
-                                         backendoptimize=True, 
-                                         inline=0.0)
+        res = self.run(main, [0], threshold=2, policy=POLICY)
         assert res == True
 
     def test_and(self):
@@ -59,13 +61,13 @@ class TestPortal(PortalTest):
             f(X) :- b(X), a(X).
             f(X) :- fail.
         """)
-        X = e.heap.newvar()
+        X = term.Var()
 
         def main(n):
-            e.heap.reset()
+            e.reset()
             if n == 0:
                 e.call(term.Term("h", [X]))
-                return isinstance(X.dereference(e.heap), term.Atom)
+                return isinstance(X.dereference(e), term.Atom)
             else:
                 return False
 
@@ -84,19 +86,19 @@ class TestPortal(PortalTest):
             append([X|Y], L, [X|Z]) :- append(Y, L, Z).
         """)
         t = parse_query_term("append([a, b, c], [d, f, g], X).")
-        X = e.heap.newvar()
+        X = term.Var()
 
         def main(n):
             if n == 0:
                 e.call(t)
-                return isinstance(X.dereference(e.heap), term.Term)
+                return isinstance(X.dereference(e), term.Term)
             else:
                 return False
 
         res = main(0)
         assert res == True
 
-        e.heap.reset()
+        e.reset()
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [0], policy=POLICY,
                                          backendoptimize=True, 
@@ -111,13 +113,13 @@ class TestPortal(PortalTest):
             f(X, b) :- g(X).
             g(b).
         """)
-        X = e.heap.newvar()
+        X = term.Var()
 
         def main(n):
-            e.heap.reset()
+            e.reset()
             if n == 0:
                 e.call(term.Term("h", [X]))
-                return isinstance(X.dereference(e.heap), term.Atom)
+                return isinstance(X.dereference(e), term.Atom)
             else:
                 return False
 
@@ -132,16 +134,10 @@ class TestPortal(PortalTest):
         assert res == True
 
     def test_loop(self):
-        e = get_engine("""
-            f(X) :- h(X, _).
-            f(50).
-            h(0, _).
-            h(X, Y) :- Y is X - 1, h(Y, _).
-        """)
         num = term.Number(50)
 
         def main(n):
-            e.heap.reset()
+            e.reset()
             if n == 0:
                 e.call(term.Term("f", [num]))
                 return True

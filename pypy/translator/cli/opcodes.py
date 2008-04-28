@@ -48,6 +48,7 @@ misc_ops = {
     'cli_setstaticfield':       [SetStaticField],
     'cli_fieldinfo_for_const':  [FieldInfoForConst],
     'oois':                     'ceq',
+    'ooisnull':                 [PushAllArgs, 'ldnull', 'ceq'],
     'oononnull':                [PushAllArgs, 'ldnull', 'ceq']+Not,
     'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
     'subclassof':               [PushAllArgs, 'call bool [pypylib]pypy.runtime.Utils::SubclassOf(class [mscorlib]System.Type, class[mscorlib]System.Type)'],

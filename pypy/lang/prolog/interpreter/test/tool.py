@@ -9,7 +9,7 @@ def assert_true(query, e=None):
     terms, vars = e.parse(query)
     term, = terms
     e.run(term)
-    return dict([(name, var.dereference(e.heap))
+    return dict([(name, var.dereference(e))
                      for name, var in vars.iteritems()])
 def assert_false(query, e=None):
     if e is None:
@@ -27,7 +27,7 @@ class CollectAllContinuation(Continuation):
         self.vars = vars
 
     def _call(self, engine):
-        self.heaps.append(dict([(name, var.dereference(engine.heap))
+        self.heaps.append(dict([(name, var.dereference(engine))
                                     for name, var in self.vars.iteritems()]))
         print "restarting computation"
         raise UnificationFailed

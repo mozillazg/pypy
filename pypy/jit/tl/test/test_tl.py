@@ -1,6 +1,6 @@
 import py
 import operator
-from pypy.jit.tl.opcode import *
+from pypy.jit.tl.tlopcode import *
 from pypy.jit.conftest import Benchmark
 
 from pypy.translator.c.test import test_boehm

@@ -78,7 +78,7 @@ class Var(PrologObject):
     __slots__ = ('binding', )
     cache = {}
 
-    def __init__(self, heap=None):
+    def __init__(self):
         self.binding = None
 
     @specialize.arg(3)
@@ -120,7 +120,7 @@ class Var(PrologObject):
         try:
             return memo[self]
         except KeyError:
-            newvar = memo[self] = heap.newvar()
+            newvar = memo[self] = Var()
             return newvar
 
     def copy_and_unify(self, other, heap, memo):
@@ -160,7 +160,7 @@ class Var(PrologObject):
         return self is other
 
     def eval_arithmetic(self, engine):
-        self = self.dereference(engine.heap)
+        self = self.dereference(engine)
         if isinstance(self, Var):
             error.throw_instantiation_error()
         return self.eval_arithmetic(engine)
@@ -318,6 +318,8 @@ class Float(NonVar):
     TAG = tag()
     STANDARD_ORDER = 2
     _immutable_ = True
+
+    floatval = 0.0
     def __init__(self, floatval):
         self.floatval = floatval
 
@@ -342,6 +344,7 @@ class Float(NonVar):
         m, e = math.frexp(self.floatval)
         m = intmask(int(m / 2 * 2 ** (32 - TAGBITS)))
         return intmask(m << TAGBITS | self.TAG)
+    get_unify_hash._look_inside_me_ = False
 
     def __str__(self):
         return repr(self.floatval)
@@ -386,9 +389,6 @@ class BlackBox(NonVar):
 
 
 # helper functions for various Term methods
-
-def _clone(obj, offset):
-    return obj.clone(offset)
 
 def _getvalue(obj, heap):
     return obj.getvalue(heap)
@@ -538,6 +538,7 @@ class Rule(object):
         memo = {}
         h2 = self.head
         hint(h2, concrete=True)
+        h2 = hint(h2, deepfreeze=True)
         if isinstance(h2, Term):
             assert isinstance(head, Term)
             i = 0
@@ -604,3 +605,4 @@ def cmp_standard_order(obj1, obj2, heap):
         elif isinstance(obj2, Float):
             return rcmp(obj1.floatval, obj2.floatval)
     assert 0
+cmp_standard_order._look_inside_me_ = False

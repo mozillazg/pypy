@@ -1,3 +1,4 @@
+from pypy.rlib.objectmodel import instantiate
 from pypy.annotation import policy
 from pypy.annotation.specialize import getuniquenondirectgraph
 from pypy.translator.translator import graphof
@@ -6,16 +7,26 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
     novirtualcontainer     = False
     oopspec                = False
     entrypoint_returns_red = True
+    hotpath                = False
 
     def __init__(self, novirtualcontainer     = None,
                        oopspec                = None,
-                       entrypoint_returns_red = None):
+                       entrypoint_returns_red = None,
+                       hotpath                = None):
         if novirtualcontainer is not None:
             self.novirtualcontainer = novirtualcontainer
         if oopspec is not None:
             self.oopspec = oopspec
         if entrypoint_returns_red is not None:
             self.entrypoint_returns_red = entrypoint_returns_red
+        if hotpath is not None:
+            self.hotpath = hotpath
+
+    def copy(self, **kwds):
+        new = instantiate(self.__class__)
+        new.__dict__.update(self.__dict__)
+        HintAnnotatorPolicy.__init__(new, **kwds)
+        return new
 
     def look_inside_graph(self, graph):
         return True
@@ -49,9 +60,7 @@ class ManualGraphPolicy(HintAnnotatorPolicy):
         self.translator = t
         self.bookkeeper = t.annotator.bookkeeper
         self.timeshift_graphs = {}
-        portal = getattr(self.PORTAL, 'im_func', self.PORTAL)
-        portal_graph = graphof(t, portal)
-        self.fill_timeshift_graphs(portal_graph)
+        self.fill_timeshift_graphs()
 
     def look_inside_graph(self, graph):
         if graph in self.timeshift_graphs:
@@ -75,7 +84,7 @@ class ManualGraphPolicy(HintAnnotatorPolicy):
     def look_inside_graph_of_module(self, graph, func, mod):
         return True
 
-    def fill_timeshift_graphs(self, portal_graph):
+    def fill_timeshift_graphs(self):
         # subclasses should have their own
         pass
 

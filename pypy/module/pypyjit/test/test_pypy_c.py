@@ -14,14 +14,16 @@ class PyPyCJITTests(object):
         # some support code...
         print >> f, py.code.Source("""
             import sys, pypyjit
-            pypyjit.enable(main.func_code)
+            pypyjit.enable()
+            pypyjit.setthreshold(3)
 
             def check(args, expected):
-                print >> sys.stderr, 'trying:', args
-                result = main(*args)
-                print >> sys.stderr, 'got:', repr(result)
-                assert result == expected
-                assert type(result) is type(expected)
+                for i in range(3):
+                    print >> sys.stderr, 'trying:', args
+                    result = main(*args)
+                    print >> sys.stderr, 'got:', repr(result)
+                    assert result == expected
+                    assert type(result) is type(expected)
         """)
         for testcase in testcases * 2:
             print >> f, "check(%r, %r)" % testcase

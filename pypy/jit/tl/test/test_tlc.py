@@ -1,5 +1,5 @@
 import py
-from pypy.jit.tl.opcode import compile
+from pypy.jit.tl.tlopcode import compile
 from pypy.jit.tl.test import test_tl
 
 

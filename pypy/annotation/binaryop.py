@@ -16,7 +16,7 @@ from pypy.annotation.model import SomeAddress, SomeTypedAddressAccess
 from pypy.annotation.model import SomeSingleFloat
 from pypy.annotation.model import unionof, UnionError, set, missing_operation
 from pypy.annotation.model import isdegenerated, TLS
-from pypy.annotation.model import read_can_only_throw
+from pypy.annotation.model import read_can_only_throw, HarmlesslyBlocked
 from pypy.annotation.model import add_knowntypedata, merge_knowntypedata
 from pypy.annotation.model import SomeGenericCallable
 from pypy.annotation.model import SomeExternalInstance, SomeUnicodeString
@@ -600,7 +600,10 @@ class __extend__(pairtype(SomeList, SomeInteger)):
 
     def getitem((lst1, int2)):
         getbookkeeper().count("list_getitem", int2)
-        return lst1.listdef.read_item()
+        s_item = lst1.listdef.read_item()
+        if isinstance(s_item, SomeImpossibleValue):
+            raise HarmlesslyBlocked("getitem on an empty list")
+        return s_item
     getitem.can_only_throw = []
 
     getitem_key = getitem

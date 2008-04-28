@@ -1,4 +1,5 @@
 import os, py
+py.test.skip("port me")
 from pypy.annotation import model as annmodel
 from pypy.jit.timeshifter.test import test_timeshift
 from pypy.jit.timeshifter.test.test_timeshift import Whatever

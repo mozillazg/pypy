@@ -6,7 +6,9 @@ from pypy.interpreter import gateway
 
 class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
-    
+
+    _immutable_ = True     # JIT hint
+
     def __init__(w_self, wrappeditems):
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
 

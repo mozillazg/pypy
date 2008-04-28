@@ -7,11 +7,11 @@ from pypy.lang.prolog.builtin.register import expose_builtin
 
 def impl_functor(engine, t, functor, arity):
     if helper.is_atomic(t):
-        functor.unify(t, engine.heap)
-        arity.unify(term.Number(0), engine.heap)
+        functor.unify(t, engine)
+        arity.unify(term.Number(0), engine)
     elif isinstance(t, term.Term):
-        functor.unify(term.Atom(t.name), engine.heap)
-        arity.unify(term.Number(len(t.args)), engine.heap)
+        functor.unify(term.Atom(t.name), engine)
+        arity.unify(term.Number(len(t.args)), engine)
     elif isinstance(t, term.Var):
         if isinstance(functor, term.Var):
             error.throw_instantiation_error()
@@ -21,12 +21,12 @@ def impl_functor(engine, t, functor, arity):
         else:
             functor = helper.ensure_atomic(functor)
             if a == 0:
-                t.unify(helper.ensure_atomic(functor), engine.heap)
+                t.unify(helper.ensure_atomic(functor), engine)
             else:
                 name = helper.unwrap_atom(functor)
                 t.unify(
                     term.Term(name, [term.Var() for i in range(a)]),
-                    engine.heap)
+                    engine)
 expose_builtin(impl_functor, "functor", unwrap_spec=["obj", "obj", "obj"])
 
 def impl_arg(engine, first, second, third, continuation):
@@ -39,13 +39,13 @@ def impl_arg(engine, first, second, third, continuation):
     if isinstance(first, term.Var):
         for i in range(len(second.args)):
             arg = second.args[i]
-            oldstate = engine.heap.branch()
+            oldstate = engine.branch()
             try:
-                third.unify(arg, engine.heap)
-                first.unify(term.Number(i + 1), engine.heap)
+                third.unify(arg, engine)
+                first.unify(term.Number(i + 1), engine)
                 return continuation.call(engine, choice_point=True)
             except error.UnificationFailed:
-                engine.heap.revert(oldstate)
+                engine.revert(oldstate)
         raise error.UnificationFailed()
     elif isinstance(first, term.Number):
         num = first.num
@@ -56,7 +56,7 @@ def impl_arg(engine, first, second, third, continuation):
         if num > len(second.args):
             raise error.UnificationFailed()
         arg = second.args[num - 1]
-        third.unify(arg, engine.heap)
+        third.unify(arg, engine)
     else:
         error.throw_type_error("integer", first)
     return continuation.call(engine, choice_point=False)
@@ -71,9 +71,9 @@ def impl_univ(engine, first, second):
             l = [first]
         u1 = helper.wrap_list(l)
         if not isinstance(second, term.Var):
-            u1.unify(second, engine.heap)
+            u1.unify(second, engine)
         else:
-            u1.unify(second, engine.heap)
+            u1.unify(second, engine)
     else:
         if isinstance(second, term.Var):
             error.throw_instantiation_error()
@@ -82,13 +82,15 @@ def impl_univ(engine, first, second):
             head = l[0]
             if not isinstance(head, term.Atom):
                 error.throw_type_error("atom", head)
-            term.Term(head.name, l[1:]).unify(first, engine.heap)
+            term.Term(head.name, l[1:]).unify(first, engine)
 expose_builtin(impl_univ, "=..", unwrap_spec=["obj", "obj"])
 
 def impl_copy_term(engine, interm, outterm):
     d = {}
-    copy = interm.copy(engine.heap, d)
-    outterm.unify(copy, engine.heap)
+    copy = interm.copy(engine, d)
+    outterm.unify(copy, engine)
+impl_copy_term._look_inside_me_ = False
 expose_builtin(impl_copy_term, "copy_term", unwrap_spec=["obj", "obj"])
+
 
 

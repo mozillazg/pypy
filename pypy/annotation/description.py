@@ -169,6 +169,7 @@ class NoStandardGraph(Exception):
 class FunctionDesc(Desc):
     knowntype = types.FunctionType
     overridden = False
+    enforceargs = None
     
     def __init__(self, bookkeeper, pyobj=None,
                  name=None, signature=None, defaults=None,
@@ -255,12 +256,13 @@ class FunctionDesc(Desc):
             tag = getattr(self.pyobj, '_annspecialcase_', None)
             policy = self.bookkeeper.annotator.policy
             self.specializer = policy.get_specializer(tag)
-        enforceargs = getattr(self.pyobj, '_annenforceargs_', None)
+        enforceargs = (self.enforceargs or
+                       getattr(self.pyobj, '_annenforceargs_', None))
         if enforceargs:
             if not callable(enforceargs):
                 from pypy.annotation.policy import Sig
                 enforceargs = Sig(*enforceargs)
-                self.pyobj._annenforceargs_ = enforceargs
+                self.enforceargs = enforceargs
             enforceargs(self, inputcells) # can modify inputcells in-place
         return self.specializer(self, inputcells)
 

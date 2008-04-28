@@ -241,6 +241,8 @@ def constant_diffuse(graph):
         vexit = block.exitswitch
         if isinstance(vexit, Variable):
             for link in block.exits:
+                if link.exitcase == "default":
+                    continue
                 if vexit in link.args:
                     remap = {vexit: Constant(link.llexitcase,
                                              vexit.concretetype)}

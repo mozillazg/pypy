@@ -59,7 +59,7 @@ def var_representation(var_to_pos, engine, write):
     f = TermFormatter(engine, quoted=True, max_depth=10)
     vars = var_to_pos.items()
     vars.sort()
-    heap = engine.heap
+    heap = engine
     for var, real_var in vars:
         if var.startswith("_"):
             continue

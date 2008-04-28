@@ -142,18 +142,25 @@ class TranslationContext(object):
         raise TypeError, "don't know about %r" % x
 
 
-    def view(self):
+    def view(self, graph=None):
         """Shows the control flow graph with annotations if computed.
         Requires 'dot' and pygame."""
         from pypy.translator.tool.graphpage import FlowGraphPage
-        FlowGraphPage(self).display()
+        if graph is None:
+            functions = None
+        else:
+            functions = [graph]
+        FlowGraphPage(self, functions).display()
 
-    def viewcg(self):
+    def viewcg(self, startgraph=None):
         """Shows the whole call graph and the class hierarchy, based on
         the computed annotations."""
-        from pypy.translator.tool.graphpage import TranslatorPage
-        TranslatorPage(self).display()
-
+        if startgraph is None:
+            from pypy.translator.tool.graphpage import TranslatorPage
+            TranslatorPage(self).display()
+        else:
+            from pypy.translator.tool.graphpage import LocalizedCallGraphPage
+            LocalizedCallGraphPage(self, [startgraph]).display()
 
 
 # _______________________________________________________________

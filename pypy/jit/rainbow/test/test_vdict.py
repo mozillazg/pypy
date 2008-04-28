@@ -1,12 +1,12 @@
+import py
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
-from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
+from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
 from pypy.rlib.jit import hint
 
-P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer = True,
-                                oopspec = True)
 
-
-class TestVDict(TimeshiftingTests):
+class VDictTest(InterpretationTest):
+    type_system = "lltype"
 
     def test_vdict(self):
         def ll_function():
@@ -14,7 +14,21 @@ class TestVDict(TimeshiftingTests):
             dic[12] = 34
             dic[13] = 35
             return dic[12]
-        res = self.timeshift(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
+        assert res == 34
+        self.check_insns({})
+
+    def test_merge(self):
+        def ll_function(flag):
+            dic = {}
+            if flag:
+                dic[12] = 34
+            else:
+                dic[12] = 35
+            dic[13] = 35
+            return dic[12]
+
+        res = self.interpret(ll_function, [True], [], policy=P_OOPSPEC)
         assert res == 34
         self.check_insns({})
 
@@ -25,7 +39,7 @@ class TestVDict(TimeshiftingTests):
             dic[12] = 34
             dic[13] = 35
             return dic[lst.pop()]
-        res = self.timeshift(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
         assert res == 34
         self.check_insns({})
 
@@ -38,7 +52,7 @@ class TestVDict(TimeshiftingTests):
             d2 = {}
             d2['foo'] = 'hello'
             return d1[l1.pop()] + len(d2[l2.pop()])
-        res = self.timeshift(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
         assert res == 39
         self.check_insns({})
 
@@ -57,6 +71,13 @@ class TestVDict(TimeshiftingTests):
             res = hint(res, variable=True)
             return res
         
-        res = self.timeshift(ll_function, [3, 2], [0, 1], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [3, 2], [0, 1], policy=P_OOPSPEC)
         assert res == 54
         self.check_insns({})
+
+
+class TestOOType(OOTypeMixin, VDictTest):
+    type_system = "ootype"
+
+class TestLLType(VDictTest):
+    type_system = "lltype"

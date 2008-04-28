@@ -423,15 +423,10 @@ try:
 except ImportError:
     pass
 else:
-    import types
-    for item in globals().values():
-        if isinstance(item, types.FunctionType):
-            pypyjit.enable(item.func_code)
-        elif isinstance(item, type):
-            for it in item.__dict__.values():
-                if isinstance(it, types.FunctionType):
-                    pypyjit.enable(it.func_code)
-    
+    if len(sys.argv) >= 3:
+        pypyjit.setthreshold(int(sys.argv[2]))
+    pypyjit.enable()
+
 if __name__ == '__main__':
     import sys
     if len(sys.argv) >= 2:

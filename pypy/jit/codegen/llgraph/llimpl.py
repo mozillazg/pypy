@@ -7,14 +7,14 @@ that can be used to produce any other kind of graph.
 from pypy.rpython.lltypesystem import lltype, llmemory, rtupletype as llrtupletype
 from pypy.rpython.ootypesystem import ootype, rtupletype as oortupletype
 from pypy.objspace.flow import model as flowmodel
-from pypy.translator.simplify import eliminate_empty_blocks
+from pypy.translator.simplify import eliminate_empty_blocks, get_funcobj
 from pypy.translator.unsimplify import varoftype
 from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.rclass import fishllattr
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.translator.simplify import get_funcobj
+from pypy.jit.rainbow.typesystem import fieldType
 
 def _from_opaque(opq):
     return opq._obj.externalobj
@@ -82,13 +82,19 @@ def newgraph(gv_FUNCTYPE, name):
     casting_link(graph.prereturnblock, [v1], graph.returnblock)
     substartblock = flowmodel.Block(erasedinputargs)
     casting_link(graph.startblock, inputargs, substartblock)
-    fptr = functionptr_general(FUNCTYPE, name,
-                               graph=graph)
+    if isinstance(FUNCTYPE, lltype.FuncType):
+        fptr = lltype.functionptr(FUNCTYPE, name,
+                                  graph=graph)
+    else:
+        assert isinstance(FUNCTYPE, ootype.StaticMethod)
+        fptr = ootype.static_meth(FUNCTYPE, name,
+                                  graph=graph)
     return genconst(fptr)
 
 def _getgraph(gv_func):
-     graph = get_funcobj(_from_opaque(gv_func).value).graph
-     return graph
+    fnptr = _from_opaque(gv_func).value
+    graph = get_funcobj(fnptr).graph
+    return graph
 
 def end(gv_func):
     graph = _getgraph(gv_func)
@@ -147,6 +153,12 @@ def cast(block, gv_TYPE, gv_var):
         if TYPE is llmemory.GCREF or v.concretetype is llmemory.GCREF:
             lltype.cast_opaque_ptr(TYPE, v.concretetype._defl()) # sanity check
             opname = 'cast_opaque_ptr'
+        elif isinstance(TYPE, ootype.Instance):
+            FROMTYPE = v.concretetype
+            if ootype.isSubclass(FROMTYPE, TYPE):
+                opname = 'ooupcast'
+            else:
+                opname = 'oodowncast'
         else:
             assert v.concretetype == lltype.erasedType(TYPE)
             opname = 'cast_pointer'
@@ -164,6 +176,14 @@ def erasedvar(v, block):
         v2 = flowmodel.Variable()
         v2.concretetype = T
         op = flowmodel.SpaceOperation("cast_pointer", [v], v2)
+        block.operations.append(op)
+        return v2
+    elif isinstance(T, ootype.Instance):
+        while T._superclass is not ootype.ROOT:
+            T = T._superclass
+        v2 = flowmodel.Variable()
+        v2.concretetype = T
+        op = flowmodel.SpaceOperation("ooupcast", [v], v2)
         block.operations.append(op)
         return v2
     return v
@@ -242,11 +262,19 @@ def _generalcast(T, value):
         return lltype.cast_pointer(T, value)
     elif T == llmemory.Address:
         return llmemory.cast_ptr_to_adr(value)
+    elif T is ootype.Object:
+        return ootype.cast_to_object(value)
+    elif isinstance(T, ootype.OOType) and ootype.typeOf(value) is ootype.Object:
+        return ootype.cast_from_object(T, value)
     elif isinstance(T, ootype.StaticMethod):
         fn = value._obj
         return ootype._static_meth(T, graph=fn.graph, _callable=fn._callable)
     else:
         T1 = lltype.typeOf(value)
+        if isinstance(T1, ootype.OOType) and T is ootype.Signed:
+            obj = ootype.cast_to_object(value)
+            return ootype.ooidentityhash(obj)
+        
         if T1 is llmemory.Address:
             value = llmemory.cast_adr_to_int(value)
         elif isinstance(T1, lltype.Ptr):
@@ -347,6 +375,21 @@ def gengetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname):
         gv_ptr = cast(block, gv_PTRTYPE, gv_ptr)
         vars_gv = [gv_ptr, gv_fieldname]
         return genop(block, "getfield", vars_gv, RESULTTYPE)
+
+def genoosetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname, gv_value):
+    v_obj = _from_opaque(gv_obj)
+    gv_obj = cast(block, gv_OBJTYPE, gv_obj)
+    vars_gv = [gv_obj, gv_fieldname, gv_value]
+    genop(block, "oosetfield", vars_gv, lltype.Void)
+
+def genoogetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname):
+    OBJTYPE = _from_opaque(gv_OBJTYPE).value
+    c_fieldname = _from_opaque(gv_fieldname)
+    RESULTTYPE = fieldType(OBJTYPE, c_fieldname.value)
+    v_obj = _from_opaque(gv_obj)
+    gv_obj = cast(block, gv_OBJTYPE, gv_obj)
+    vars_gv = [gv_obj, gv_fieldname]
+    return genop(block, "oogetfield", vars_gv, RESULTTYPE)
 
 def gensetarrayitem(block, gv_ptr, gv_index, gv_value):
     v_ptr = _from_opaque(gv_ptr)
@@ -607,11 +650,27 @@ def fixduplicatevars(graph):
             block.renamevariables(mapping)
             done[block] = True
 
+def _find_and_set_return_block(graph):
+    returnblocks = {}
+    for block in graph.iterblocks():
+        if block.exits == () and len(block.inputargs) == 1:
+            returnblocks[block] = None
+    if returnblocks:
+        assert len(returnblocks) == 1, "ambiguous return block"
+        graph.returnblock = iter(returnblocks).next()
+       
+
 def _buildgraph(graph):
     assert graph.startblock.operations[0].opname == 'debug_assert'
     del graph.startblock.operations[0]
     # rgenop makes graphs that use the same variable in several blocks,
     fixduplicatevars(graph)                             # fix this now
+    # through caching it is possible that parts of another graph are reused
+    # make a copy of the whole graph to no longer share data
+    newgraph = flowmodel.copygraph(graph)
+    graph.__dict__.update(newgraph.__dict__)
+    _find_and_set_return_block(graph)
+    
     flowmodel.checkgraph(graph)
     eliminate_empty_blocks(graph)
     # we cannot call join_blocks(graph) here!  It has a subtle problem:
@@ -643,6 +702,10 @@ def show_incremental_progress(gv_func):
     if conftest.option.view:
         eliminate_empty_blocks(graph)
         graph.show()
+
+
+def getkind(gv):
+    return constTYPE(_from_opaque(gv).concretetype)
 
 # ____________________________________________________________
 
@@ -752,6 +815,7 @@ setannotation(constTYPE,      s_ConstOrVar, specialize_as_constant=True)
 #setannotation(placeholder,    s_ConstOrVar, specialize_as_constant=True)
 
 setannotation(show_incremental_progress, None)
+setannotation(getkind, s_ConstOrVar)
 
 # read frame var support
 
@@ -766,6 +830,7 @@ setannotation(get_frame_info, annmodel.SomePtr(llmemory.GCREF))
 
 def read_frame_var(T, base, info, index):
     vars = info._obj.info.args
+    assert index >= 0
     v = vars[index]
     if isinstance(v, flowmodel.Constant):
         val = v.value
@@ -777,8 +842,16 @@ def read_frame_var(T, base, info, index):
 setannotation(read_frame_var, lambda s_T, s_base, s_info, s_index:
               annmodel.lltype_to_annotation(s_T.const))
 
+def genconst_from_frame_var(gv_TYPE, base, info, index):
+    TYPE = _from_opaque(gv_TYPE).value
+    llvalue = read_frame_var(TYPE, base, info, index)
+    return genconst(llvalue)
+
+setannotation(genconst_from_frame_var, s_ConstOrVar)
+
 def write_frame_var(base, info, index, value):
     vars = info._obj.info.args
+    assert index >= 0
     v = vars[index]
     assert isinstance(v, flowmodel.Variable)
     llframe = base.ptr

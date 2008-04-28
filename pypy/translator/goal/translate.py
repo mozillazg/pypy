@@ -20,7 +20,7 @@ GOALS= [
         ("prehannotatebackendopt", "backend optimize before hint-annotating",
          "--prehannotatebackendopt", ""),
         ("hintannotate", "hint-annotate", "--hintannotate", ""),
-        ("timeshift", "timeshift (jit generation)", "--timeshift", ""),
+        ("rainbow", "rainbow interpreter (jit generation)", "--rainbow", ""),
         ("backendopt", "do backend optimizations", "--backendopt", ""),
         ("source", "create source", "-s --source", ""),
         ("compile", "compile", "-c --compile", " (default goal)"),
@@ -261,7 +261,7 @@ def main():
         if translateconfig.goal_options.jit:
             if 'portal' not in targetspec_dic:
                raise Exception('target has no portal defined.') 
-            drv.set_extra_goals(['timeshift'])
+            drv.set_extra_goals(['rainbow'])
         log_config(config.translation, "translation configuration")
         pdb_plus_show.expose({'drv': drv, 'prof': prof})
 

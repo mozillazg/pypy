@@ -1,8 +1,10 @@
+import py
+
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.test.support import FakeJITState, FakeGenVar
 from pypy.jit.timeshifter.test.support import FakeGenConst
-from pypy.jit.timeshifter.test.support import fakehrtyper, signed_kind
+from pypy.jit.timeshifter.test.support import signed_kind
 from pypy.jit.timeshifter.test.support import vmalloc, makebox
 from pypy.jit.timeshifter.test.support import getfielddesc
 
@@ -60,7 +62,6 @@ class TestVirtualStruct:
         # check that frozenbox also matches newbox exactly
         assert self.match(frozenbox, newbox, [constbox23])
 
-
     def test_simple_merge_generalize(self):
         S = self.STRUCT
         constbox20 = makebox(20)
@@ -82,7 +83,7 @@ class TestVirtualStruct:
         forcedbox = constbox23.forcevar(jitstate, replace_memo, False)
         assert not forcedbox.is_constant()
         assert jitstate.curbuilder.ops == [
-            ('same_as', (signed_kind, constbox23.genvar), forcedbox.genvar)]
+            ('same_as', (constbox23.genvar, ), forcedbox.genvar)]
         assert replace_memo.boxes == {constbox23: forcedbox}
 
         # change constbox to forcedbox inside newbox
@@ -95,6 +96,27 @@ class TestVirtualStruct:
         assert self.match(newfrozenbox, oldbox, [constbox20])
         #       ^^^ the FrozenVar() in newfrozenbox corresponds to
         #           constbox20 in oldbox.
+
+
+    def test_merge_with_ptrvar(self):
+        DontMerge = rvalue.DontMerge
+        V0 = FakeGenVar()
+        ptrbox = rvalue.PtrRedBox(V0)
+        jitstate = FakeJITState()
+        S = self.STRUCT
+        constbox20 = makebox(20)
+        oldbox = vmalloc(S, constbox20)
+
+        # do a getfield to prevent a merge
+        box2 = oldbox.op_getfield(jitstate, self.fielddesc)
+        assert box2 is constbox20
+        frozenbox = oldbox.freeze(rvalue.freeze_memo())
+        # check that ptrbox does not match the frozen virtual struct ever
+        py.test.raises(DontMerge, self.match, frozenbox, ptrbox, [ptrbox])
+
+        # try it the other way round
+        frozenptrbox = ptrbox.freeze(rvalue.freeze_memo())
+        py.test.raises(DontMerge, self.match, frozenptrbox, oldbox, [oldbox])
 
 
     def test_nested_structure_no_vars(self):

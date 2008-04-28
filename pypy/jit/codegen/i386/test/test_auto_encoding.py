@@ -85,6 +85,9 @@ def pick1(memSIB, cache=[]):
 def modrm_tests():
     return i386.registers + [pick1(i386.memSIB) for i in range(COUNT2)]
 
+def modrm_noreg_tests():
+    return [pick1(i386.memSIB) for i in range(COUNT2)]
+
 def modrm64_tests():
     return [pick1(i386.memSIB64) for i in range(COUNT2)]
 
@@ -134,7 +137,8 @@ def run_test(instrname, instr, args_lists):
         all = instr.as_all_suffixes
         for m, extra in args:
             if m in (i386.MODRM, i386.MODRM8) or all:
-                suffix = suffixes[sizes[m]] + suffix
+                if not instrname == 'FNSTCW':
+                    suffix = suffixes[sizes[m]] + suffix
         following = ""
         if instr.indirect:
             suffix = ""
@@ -187,7 +191,10 @@ def run_test(instrname, instr, args_lists):
 def rec_test_all(instrname, modes, args=[]):
     if modes:
         m = modes[0]
-        lst = tests[m]()
+        if instrname.startswith('F') and m is i386.MODRM:
+            lst = modrm_noreg_tests()
+        else:
+            lst = tests[m]()
         random.shuffle(lst)
         result = []
         for extra in lst:

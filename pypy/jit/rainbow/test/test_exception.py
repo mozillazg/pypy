@@ -1,11 +1,13 @@
 import py
+from pypy.jit.rainbow.test.test_interpreter import InterpretationTest
+from pypy.jit.rainbow.test.test_interpreter import P_NOVIRTUAL
+from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
+from pypy.rlib.jit import hint
 from pypy.rpython.lltypesystem import lltype
-from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
-from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL
-from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
 
 
-class TestException(TimeshiftingTests):
+class TestException(InterpretationTest):
+    type_system = "lltype"
 
     def test_exception_check_melts_away(self):
         def ll_two(x):
@@ -15,7 +17,7 @@ class TestException(TimeshiftingTests):
         def ll_function(y):
             return ll_two(y) + 40
 
-        res = self.timeshift(ll_function, [3], [0], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [3], [0], policy=P_NOVIRTUAL)
         assert res == 42
         self.check_insns({})
 
@@ -32,17 +34,17 @@ class TestException(TimeshiftingTests):
             return res
 
         s.flag = 0
-        self.timeshift_raises(ValueError,
+        self.interpret_raises(ValueError,
                               ll_function, [0], [], policy=P_NOVIRTUAL)
         assert s.flag == 0
 
         s.flag = 0
-        self.timeshift_raises(ValueError,
+        self.interpret_raises(ValueError,
                               ll_function, [0], [0], policy=P_NOVIRTUAL)
         assert s.flag == 0
 
         s.flag = 0
-        res = self.timeshift(ll_function, [17], [0], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [17], [0], policy=P_NOVIRTUAL)
         assert res == 24
         if self.__class__ is TestException:   # no chance to work with genc
             assert s.flag == 1
@@ -59,18 +61,19 @@ class TestException(TimeshiftingTests):
             except ValueError:
                 return 42
 
-        res = self.timeshift(ll_function, [0], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [0], [], policy=P_NOVIRTUAL)
         assert res == 42
 
-        res = self.timeshift(ll_function, [0], [0], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [0], [0], policy=P_NOVIRTUAL)
         assert res == 42
 
-        res = self.timeshift(ll_function, [17], [0], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [17], [0], policy=P_NOVIRTUAL)
         assert res == 24
         self.check_insns({})
 
     def test_catch_from_outside(self):
         def ll_function(x):
+            hint(None, global_merge_point=True)
             lst = [5]
             if x:
                 lst.append(x)
@@ -80,17 +83,18 @@ class TestException(TimeshiftingTests):
             except IndexError:
                 return -11
 
-        res = self.timeshift(ll_function, [0], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [], policy=P_OOPSPEC)
         assert res == -11
 
-        res = self.timeshift(ll_function, [0], [0], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [0], policy=P_OOPSPEC)
         assert res == -11
 
-        res = self.timeshift(ll_function, [17], [0], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [17], [0], policy=P_OOPSPEC)
         assert res == 34
 
     def test_exception_from_virtual(self):
         def ll_function(n):
+            hint(None, global_merge_point=True)
             lst = []
             lst.append(5)
             try:
@@ -98,14 +102,14 @@ class TestException(TimeshiftingTests):
             except IndexError:
                 return -11
 
-        res = self.timeshift(ll_function, [2], [0], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [2], [0], policy=P_OOPSPEC)
         assert res == -11
 
-        res = self.timeshift(ll_function, [0], [0], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [0], policy=P_OOPSPEC)
         assert res == 5
 
         # the next case degenerates anyway
-        res = self.timeshift(ll_function, [2], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [2], [], policy=P_OOPSPEC)
         assert res == -11
 
     def test_exception_escapes(self):
@@ -114,13 +118,13 @@ class TestException(TimeshiftingTests):
                 raise ValueError
             return n * 3
 
-        res = self.timeshift(ll_function, [2], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [2], [], policy=P_OOPSPEC)
         assert res == 6
 
-        self.timeshift_raises(ValueError,
+        self.interpret_raises(ValueError,
                               ll_function, [-3], [], policy=P_OOPSPEC)
 
-        self.timeshift_raises(ValueError,
+        self.interpret_raises(ValueError,
                               ll_function, [-3], [0], policy=P_OOPSPEC)
 
     def test_raise_or_return_virtual(self):
@@ -135,7 +139,7 @@ class TestException(TimeshiftingTests):
             a = g(n)
             return a.n
 
-        res = self.timeshift(ll_function, [5], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [5], [], policy=P_NOVIRTUAL)
         assert res == 5
         self.check_insns(malloc=0)
 
@@ -148,6 +152,6 @@ class TestException(TimeshiftingTests):
             help(l, x)
             return len(l)+x
 
-        res = self.timeshift(ll_function, [5], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [5], [], policy=P_OOPSPEC)
         res == 6
         self.check_oops(newlist=0)

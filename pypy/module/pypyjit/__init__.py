@@ -5,9 +5,9 @@ class Module(MixedModule):
     }
 
     interpleveldefs = {
-        'enable': 'interp_jit.enable',
+        'set_param':    'interp_jit.set_param',
     }
 
     def setup_after_space_initialization(self):
-        # force the setup() to run early
+        # force the __extend__ hacks to occur early
         import pypy.module.pypyjit.interp_jit

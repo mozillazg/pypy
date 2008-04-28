@@ -1261,6 +1261,36 @@ class BaseTestRlist(BaseRtypingTest):
             return ''.join(l)
         py.test.raises(TyperError, self.interpret, f, [5])
 
+    def test_copy(self):
+        def f():
+            l1 = []
+            l2 = list(l1)
+            l2.append(54)
+            return l2.pop()
+        res = self.interpret(f, [])
+        assert res == 54
+
+    def test_copy_2(self):
+        f1 = Freezing(); f1.x = 50
+        f2 = Freezing(); f2.x = 8
+        def f():
+            l1 = [f1]
+            l2 = list(l1)
+            l2.append(f2)
+            return l2[0].x - l2[1].x
+        res = self.interpret(f, [])
+        assert res == 42
+
+    def test_catch_other_exc(self):
+        def f(x):
+            l1 = [x]
+            try:
+                return l1.pop(0)
+            except ValueError:
+                return 42
+        res = self.interpret(f, [5])
+        assert res == 5
+
 
 class TestLLtype(BaseTestRlist, LLRtypeMixin):
     rlist = ll_rlist

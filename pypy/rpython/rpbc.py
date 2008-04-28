@@ -467,6 +467,31 @@ class AbstractMultipleFrozenPBCRepr(AbstractMultipleUnrelatedFrozenPBCRepr):
                 self.fieldmap[attr] = mangled_name, r_value
         return fields 
 
+    def guess_type_name(self):
+        # try to find a name for the Struct, arbitrarily using the longest
+        # common prefix of the classes of the objects
+        names = []
+        if self.access_set is not None:
+            for desc in self.access_set.descs:
+                x = desc.pyobj
+                if x is not None:
+                    names.append(x.__class__.__name__)
+        if not names:
+            name = ''
+        else:
+            s1 = min(names)
+            s2 = max(names)
+            n = min(len(s1), len(s2))
+            name = s1[:n]
+            for i in xrange(n):
+                if s1[i] != s2[i]:
+                    name = s1[:i]
+                    break
+        if name:
+            return 'pbc_' + name
+        else:
+            return 'pbc'
+
     def convert_desc(self, frozendesc):
         if (self.access_set is not None and
             frozendesc not in self.access_set.descs):

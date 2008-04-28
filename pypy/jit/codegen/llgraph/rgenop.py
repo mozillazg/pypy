@@ -16,6 +16,9 @@ class LLVar(GenVar):
     def __repr__(self):
         return repr(RGenOp.reveal(self))
 
+    def getkind(self):
+        return LLConst(llimpl.getkind(self.v))
+
 
 class LLConst(GenConst):
     def __init__(self, v):
@@ -30,6 +33,9 @@ class LLConst(GenConst):
 
     def __repr__(self):
         return repr(RGenOp.reveal(self))
+
+    def getkind(self):
+        return LLConst(llimpl.getkind(self.v))
 
 
 _gv_TYPE_cache = {}
@@ -50,9 +56,10 @@ gv_flavor_gc = LLConst(llimpl.placeholder({'flavor': 'gc'}))
 gv_Address = gv_TYPE(llmemory.Address)
 
 class LLLabel(GenLabel):
-    def __init__(self, b, g):
+    def __init__(self, b, g, args_gv):
         self.b = b
         self.g = g
+        self.args_gv = args_gv
 
 class LLPlace:
     absorbed = False
@@ -139,10 +146,8 @@ class LLBuilder(GenBuilder):
                                     gv_Bool.v))
         return gv_res, gv_exc
 
-    def genop_call(self, (ARGS_gv, gv_RESULT, _), gv_callable, args_gv):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_call: bad currently_writing")
-        vars_gv = [gv_callable]
+    def _cast_args_gv(self, ARGS_gv, args_gv):
+        vars_gv = []
         j = 0
         for i in range(len(ARGS_gv)):
             if ARGS_gv[i] is gv_Void:
@@ -151,11 +156,26 @@ class LLBuilder(GenBuilder):
                 gv_arg = LLVar(llimpl.cast(self.b, ARGS_gv[i].v, args_gv[j].v))
                 j += 1
             vars_gv.append(gv_arg)
+        return vars_gv
+
+    def genop_call(self, (ARGS_gv, gv_RESULT, _), gv_callable, args_gv):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_call: bad currently_writing")
+        vars_gv = [gv_callable]
+        vars_gv += self._cast_args_gv(ARGS_gv, args_gv)
         if gv_callable.is_const:
             v = llimpl.genop(self.b, 'direct_call', vars_gv, gv_RESULT.v)
         else:
             vars_gv.append(gv_dummy_placeholder)
             v = llimpl.genop(self.b, 'indirect_call', vars_gv, gv_RESULT.v)
+        return LLVar(v)
+
+    def genop_oosend(self, (gv_methname, (ARGS_gv, gv_RESULT, _)), gv_self, args_gv):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_oosend: bad currently_writing")
+        vars_gv = [gv_methname, gv_self]
+        vars_gv += self._cast_args_gv(ARGS_gv, args_gv)
+        v = llimpl.genop(self.b, 'oosend', vars_gv, gv_RESULT.v)
         return LLVar(v)
 
     def genop_getfield(self, (gv_name, gv_PTRTYPE, gv_FIELDTYPE), gv_ptr):
@@ -178,7 +198,20 @@ class LLBuilder(GenBuilder):
         #           llimpl.cast(self.b, gv_FIELDTYPE.v, gv_value.v)]
         #return LLVar(llimpl.genop(self.b, 'setfield', vars_gv,
         #                          gv_Void.v))        
+
+    def genop_oogetfield(self, (gv_name, gv_OBJTYPE, gv_FIELDTYPE), gv_obj):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_oogetfield: bad currently_writing")
+        return LLVar(llimpl.genoogetfield(self.b, gv_obj.v,
+                                        gv_OBJTYPE.v, gv_name.v))
     
+    def genop_oosetfield(self, (gv_name, gv_OBJTYPE, gv_FIELDTYPE), gv_obj,
+                                                                  gv_value):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_setfield: bad currently_writing")
+        v_value = llimpl.cast(self.b, gv_FIELDTYPE.v, gv_value.v)
+        llimpl.genoosetfield(self.b, gv_obj.v, gv_OBJTYPE.v, gv_name.v, v_value)
+
     def genop_getsubstruct(self, (gv_name, gv_PTRTYPE, gv_FIELDTYPE), gv_ptr):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_getsubstruct: bad currently_writing")
@@ -233,39 +266,22 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, 'malloc_varsize', vars_gv,
                                   gv_PTRTYPE.v))
 
-    def genop_same_as(self, gv_TYPE, gv_value):
+    def genop_new(self, (gv_TYPE, gv_OBJTYPE)):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_new: bad currently_writing")
+        vars_gv = [gv_TYPE.v]
+        return LLVar(llimpl.genop(self.b, 'new', vars_gv,
+                                  gv_OBJTYPE.v))
+
+    def genop_same_as(self, gv_value):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_same_as: bad currently_writing")
-        gv_value = llimpl.cast(self.b, gv_TYPE.v, gv_value.v)
-        return LLVar(llimpl.genop(self.b, 'same_as', [gv_value], gv_TYPE.v))
+        return LLVar(llimpl.genop(self.b, 'same_as', [gv_value], gv_value.getkind().v))
 
-    def genop_ptr_iszero(self, gv_PTRTYPE, gv_ptr):
+    def genop_oononnull(self, gv_obj):
         ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_iszero: bad currently_writing")
-        gv_ptr = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr.v)
-        return LLVar(llimpl.genop(self.b, 'ptr_iszero', [gv_ptr], gv_Bool.v))
-
-    def genop_ptr_nonzero(self, gv_PTRTYPE, gv_ptr):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_nonzero: bad currently_writing")
-        gv_ptr = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr.v)
-        return LLVar(llimpl.genop(self.b, 'ptr_nonzero', [gv_ptr], gv_Bool.v))
-                                  
-    def genop_ptr_eq(self, gv_PTRTYPE, gv_ptr1, gv_ptr2):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_eq: bad currently_writing")
-        gv_ptr1 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr1.v)
-        gv_ptr2 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v)        
-        return LLVar(llimpl.genop(self.b, 'ptr_eq', [gv_ptr1, gv_ptr2],
-                                  gv_Bool.v))
-
-    def genop_ptr_ne(self, gv_PTRTYPE, gv_ptr1, gv_ptr2):
-        ll_assert(self.rgenop.currently_writing is self,
-                     "genop_ptr_ne: bad currently_writing")
-        gv_ptr1 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr1.v)
-        gv_ptr2 = llimpl.cast(self.b, gv_PTRTYPE.v, gv_ptr2.v)        
-        return LLVar(llimpl.genop(self.b, 'ptr_ne', [gv_ptr1, gv_ptr2],
-                                  gv_Bool.v))
+                     "genop_oononnull: bad currently_writing")
+        return LLVar(llimpl.genop(self.b, 'oononnull', [gv_obj], gv_Bool.v))
 
     def genop_cast_int_to_ptr(self, gv_PTRTYPE, gv_int):
         ll_assert(self.rgenop.currently_writing is self,
@@ -273,19 +289,20 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, 'cast_int_to_ptr', [gv_int],
                                   gv_PTRTYPE.v))
 
-    def _newblock(self, kinds):
+    def _newblock(self, args_gv):
         self.b = newb = llimpl.newblock()
-        return [LLVar(llimpl.geninputarg(newb, kind.v)) for kind in kinds]
+        return [LLVar(llimpl.geninputarg(newb, gv.getkind().v))
+                    for gv in args_gv]
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         ll_assert(self.rgenop.currently_writing is self,
                      "enter_next_block: bad currently_writing")
         lnk = llimpl.closeblock1(self.b)
-        newb_args_gv = self._newblock(kinds) 
+        newb_args_gv = self._newblock(args_gv) 
         llimpl.closelink(lnk, args_gv, self.b)
         for i in range(len(args_gv)):
             args_gv[i] = newb_args_gv[i]
-        return LLLabel(self.b, self.gv_f)
+        return LLLabel(self.b, self.gv_f, newb_args_gv)
 
     def finish_and_goto(self, args_gv, target):
         lnk = llimpl.closeblock1(self.b)
@@ -369,12 +386,13 @@ class LLBuilder(GenBuilder):
                      "alloc_frame_place: bad currently_writing")
         if gv_initial_value is None:
             gv_initial_value = self.rgenop.genzeroconst(gv_TYPE)
-        gv_initial_value = llimpl.cast(self.b, gv_TYPE.v, gv_initial_value.v)
+        gv_initial_value = LLVar(llimpl.cast(self.b, gv_TYPE.v,
+                                             gv_initial_value.v))
         v = LLVar(llimpl.genop(self.b, 'same_as', [gv_initial_value],
                                gv_TYPE.v))
         return LLPlace(v, llimpl.get_frame_info(self.b, [v]))
 
-    def genop_absorb_place(self, gv_TYPE, place):
+    def genop_absorb_place(self, place):
         ll_assert(self.rgenop.currently_writing is self,
                      "alloc_frame_place: bad currently_writing")
         ll_assert(not place.absorbed, "place already absorbed")
@@ -454,15 +472,23 @@ class RGenOp(AbstractRGenOp):
                 gv_TYPE(FUNCTYPE.RESULT),
                 gv_TYPE(FUNCTYPE))
 
+    @staticmethod
+    @specialize.memo()
+    def methToken(TYPE, methname):
+        _, meth = TYPE._lookup(methname)
+        METH = ootype.typeOf(meth)
+        gv_methname = LLConst(llimpl.constFieldName(methname))
+        return (gv_methname, RGenOp.sigToken(METH))
+
     constPrebuiltGlobal = genconst
 
     @staticmethod
     def genzeroconst(gv_TYPE):
         return LLConst(llimpl.genzeroconst(gv_TYPE.v))
 
-    def replay(self, label, kinds):
+    def replay(self, label):
         builder = LLBuilder(self, label.g, llimpl.nullblock)
-        args_gv = builder._newblock(kinds)
+        args_gv = builder._newblock(label.args_gv)
         ll_assert(self.currently_writing is None,
                      "replay: currently_writing")
         self.currently_writing = builder
@@ -485,6 +511,11 @@ class RGenOp(AbstractRGenOp):
     @specialize.arg(0)
     def read_frame_var(T, base, info, index):
         return llimpl.read_frame_var(T, base, info, index)
+
+    @staticmethod
+    def genconst_from_frame_var(gv_TYPE, base, info, index):
+        v = llimpl.genconst_from_frame_var(gv_TYPE.v, base, info, index)
+        return LLConst(v)
 
     @staticmethod
     @specialize.arg(0)
