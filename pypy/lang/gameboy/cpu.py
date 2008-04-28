@@ -362,13 +362,13 @@ class CPU(object):
         self.cycles -= 2
 
      # Fetching  1 cycle
-    def fetch(self):
+    def fetch(self, useCycles=True):
         self.cycles += 1
-        if (self.pc.get() <= 0x3FFF):
-            data =  self.rom[self.pc.get()]
+        if self.pc.get(useCycles) <= 0x3FFF:
+            data =  self.rom[self.pc.get(useCycles)]
         else:
-            data = self.memory.read(self.pc.get())
-        self.pc.inc() # 2 cycles
+            data = self.memory.read(self.pc.get(useCycles))
+        self.pc.inc(useCycles) # 2 cycles
         return data
     
     def fetchDoubleAddress(self):
@@ -464,7 +464,7 @@ class CPU(object):
         
     def carryFlagFinish(self, s, data):
         self.f.reset()
-        # set the hfalg if the 0x10 bit was affected
+        # set the hflag if the 0x10 bit was affected
         if ((s ^ self.a.get() ^ data) & 0x10) != 0:
             self.f.hFlag = True
         if s >= 0x100:
@@ -473,9 +473,13 @@ class CPU(object):
         self.a.set(s)  # 1 cycle
         
     # 1 cycle
-    def subtract(self, getter, setter=None):
+    def subtractA(self, getter, setter=None):
         self.compareA(getter, setter) # 1 cycle
         self.a.sub(getter(useCycles=False), False)
+
+    def fetchSubtractA(self):
+        data = self.fetch()
+        self.subtractA(lambda useCycles=False: data)
 
     # 1 cycle
     def compareA(self, getter, setter=None):
@@ -798,8 +802,8 @@ class CPU(object):
         self.call(self.fetchDoubleAddress())  # 4+2 cycles
 
      # CALL cc,nnnn, 3,6 cycles
-    def conditionalCall(self, getter):
-        if getter():
+    def conditionalCall(self, cc):
+        if cc:
             self.unconditionalCall() # 6 cycles
         else:
             self.pc.add(2) # 3 cycles
@@ -965,7 +969,7 @@ FIRST_ORDER_OP_CODES = [
     (0xCD, CPU.unconditionalCall),
     (0xC6, lambda s: CPU.addA(s, s.fetch)),
     (0xCE, lambda s: CPU.addWithCarry(s,  s.fetch)),
-    (0xD6, lambda s: CPU.subtract(s,  s.fetch)),
+    (0xD6, CPU.fetchSubtractA),
     (0xDE, lambda s: CPU.subtractWithCarry(s,  s.fetch)),
     (0xE6, lambda s: CPU.AND(s,  s.fetch)),
     (0xEE, lambda s: CPU.XOR(s,  s.fetch)),
@@ -987,7 +991,7 @@ REGISTER_GROUP_OP_CODES = [
     (0x06, 0x08, CPU.loadFetchRegister),
     (0x80, 0x01, CPU.addA),    
     (0x88, 0x01, CPU.addWithCarry),    
-    (0x90, 0x01, CPU.subtract),    
+    (0x90, 0x01, CPU.subtractA),    
     (0x98, 0x01, CPU.subtractWithCarry),    
     (0xA0, 0x01, CPU.AND),    
     (0xA8, 0x01, CPU.XOR),    

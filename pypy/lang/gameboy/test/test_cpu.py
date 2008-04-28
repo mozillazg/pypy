@@ -1377,18 +1377,53 @@ def test_0xFB():
     assert cpu.pc.get() == cpu.interrupt.vBlank.callCode
     assert cpu.ime == False
 
+def conditionalCallTest(cpu, opCode, flagSetter):
+    flagSetter(cpu, False)
+    cpu.pc.set(0)
+    f = cpu.f.get()
+    cycle_test(cpu, 0xC4, 3)
+    assert_default_registers(cpu, pc=2, f=f)
+    
+    cpu.reset()
+    fetchValue = 0x1234
+    flagSetter(cpu, True)
+    cpu.sp.set(fetchValue)
+    prepare_for_fetch(cpu, fetchValue)
+    f = cpu.f.get()
+    cycle_test(cpu, 0xC4, 6)
+    assert_default_registers(cpu, pc=fetchValue, sp=fetchValue-2, f=f)
+    
 # call_NZ_nnnn
 def test_0xC4():
-    pass
+    cpu = get_cpu()
+    conditionalCallTest(cpu, 0xC4, setFlag0xC4)
+    
+def setFlag0xC4(cpu, value):
+    cpu.f.zFlag = not value
+    
 # call_Z_nnnn
 def test_0xCC():
-    pass
+    cpu = get_cpu()
+    conditionalCallTest(cpu, 0xCC, setFlag0xC4)
+
+def setFlag0xCC(cpu, value):
+    cpu.f.cFlag = not value
+    
 # call_NC_nnnn
 def test_0xD4():
-    pass
+    cpu = get_cpu()
+    conditionalCallTest(cpu, 0xD4, setFlag0xC4)
+
+def setFlag0xD4(cpu, value):
+    cpu.f.cFlag = value
+    
 # call_C_nnnn
 def test_0xDC():
-    pass
+    cpu = get_cpu()
+    conditionalCallTest(cpu, 0xDC, setFlag0xC4)
+
+def setFlag0xDC(cpu, value):
+    cpu.f.zFlag = value
 
 # push_BC to push_AF
 def test_0xC5_to_0xF5():
@@ -1407,39 +1442,67 @@ def test_0xC5_to_0xF5():
 
 # call_nnnn
 def test_0xCD():
-    pass
+    cpu = get_cpu()
+    fetchValue = 0x1234
+    cpu.sp.set(fetchValue)
+    prepare_for_fetch(cpu, fetchValue)
+    cycle_test(cpu, 0xCD, 6)
+    assert_default_registers(cpu, pc=fetchValue, sp=fetchValue-2)
+
+def a_nn_test(opCode, cycles, opCaller):
+    # flags tested already
+    cpu = get_cpu()
+    value = 0x12
+    valueAdd = 0x12
+    cpu.a.set(value)
+    prepare_for_fetch(cpu, valueAdd,)
+    pc = cpu.pc.get()
+    
+    cycle_test(cpu, opCode, cycles)
+    assert_default_registers(cpu, a=opCaller(value,valueAdd, cpu), pc=pc+1, f=cpu.f.get())
+    return cpu
 
 # add_A_nn
 def test_0xC6():
-    pass
+    a_nn_test(0xC6, 2, lambda a, b, cpu: a+b)
 
 # adc_A_nn
 def test_0xCE():
-    pass
+    a_nn_test(0xCE, 2, lambda a, b, cpu: a+b)
 
 # sub_A_nn
 def test_0xD6():
-    pass
+    a_nn_test(0xD6, 2, lambda a, b, cpu: a-b)
 
 # sbc_A_nn
 def test_0xDE():
-    pass
+    a_nn_test(0xDE, 2, lambda a, b, cpu: a-b)
 
 # and_A_nn
 def test_0xE6():
-    pass
+    a_nn_test(0xE6, 2, lambda a, b, cpu: a&b)
 
 # xor_A_nn
 def test_0xEE():
-    pass
+    a_nn_test(0xEE, 2, lambda a, b, cpu: a^b)
 
 # or_A_nn
 def test_0xF6():
-    pass
+    a_nn_test(0xF6, 2, lambda a, b, cpu: a|b)
 
 # cp_A_nn
 def test_0xFE():
-    pass
+    # flags tested already
+    cpu = get_cpu()
+    value = 0x12
+    valueA = 0x12
+    cpu.a.set(valueA)
+    pc = cpu.pc.get()
+    
+    cycle_test(cpu, 0xFE, 2)
+    
+    assert_default_registers(cpu, a=valueA, pc=pc+1, f=cpu.f.get())
+    assert cpu.f.zFlag == True
 
 # rst(0x00) to rst(0x38)
 def test_0xC7_to_0xFF():
