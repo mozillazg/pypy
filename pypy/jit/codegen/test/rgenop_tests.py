@@ -22,6 +22,7 @@ class LLType(object):
     FUNC100 = lltype.FuncType([lltype.Signed]*100, lltype.Signed)
     FLOATFUNC = lltype.FuncType([lltype.Float], lltype.Float)
     FUNCMIX = lltype.FuncType([lltype.Signed, lltype.Float], lltype.Float)
+    FUNCV = lltype.FuncType([lltype.Signed], lltype.Void)
 
     @staticmethod
     def Ptr(T):
@@ -46,6 +47,7 @@ class OOType(object):
     FUNC100 = ootype.StaticMethod([lltype.Signed]*100, lltype.Signed)
     FLOATFUNC = ootype.StaticMethod([lltype.Float], lltype.Float)
     FUNCMIX = ootype.StaticMethod([lltype.Signed, lltype.Float], lltype.Float)
+    FUNCV = ootype.StaticMethod([lltype.Signed], lltype.Void)
 
     @staticmethod
     def Ptr(T):
@@ -1237,11 +1239,9 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         assert res == 42
 
 
-
-
     def test_cast_raising(self):
         rgenop = self.RGenOp()
-        FUNC = lltype.FuncType([lltype.Float], lltype.Signed)
+        FUNC = self.T.FLOATFUNC
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, 'cast_raising')
         builder.start_writing()
@@ -2565,8 +2565,7 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
     def test_void_return(self):
         # XXX minimal test only
         rgenop = self.RGenOp()
-        FUNCV = lltype.FuncType([lltype.Signed], lltype.Void)
-        sigtoken = rgenop.sigToken(FUNCV)
+        sigtoken = rgenop.sigToken(self.T.FUNCV)
         builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, "nothing")
         builder.start_writing()
         builder.finish_and_return(sigtoken, None)

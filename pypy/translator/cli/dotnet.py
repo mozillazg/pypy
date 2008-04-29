@@ -711,11 +711,14 @@ CLR = CliNamespace(None)
 CLR._buildtree()
 
 known_delegates = {
+    ootype.StaticMethod([ootype.Signed, ootype.Float], ootype.Float): CLR.pypy.test.DelegateType_double_int_double,
+    ootype.StaticMethod([ootype.Float], ootype.Float):         CLR.pypy.test.DelegateType_double__double_1,
+    ootype.StaticMethod([ootype.Signed], ootype.Void):         CLR.pypy.test.DelegateType_void_int_1,
     ootype.StaticMethod([ootype.Signed], ootype.Signed):       CLR.pypy.test.DelegateType_int__int_1,
     ootype.StaticMethod([ootype.Signed] * 2, ootype.Signed):   CLR.pypy.test.DelegateType_int__int_2,
     ootype.StaticMethod([ootype.Signed] * 3, ootype.Signed):   CLR.pypy.test.DelegateType_int__int_3,
     ootype.StaticMethod([ootype.Signed] * 5, ootype.Signed):   CLR.pypy.test.DelegateType_int__int_5,
-    ootype.StaticMethod([ootype.Signed] * 27, ootype.Signed):   CLR.pypy.test.DelegateType_int__int_27,
+    ootype.StaticMethod([ootype.Signed] * 27, ootype.Signed):  CLR.pypy.test.DelegateType_int__int_27,
     ootype.StaticMethod([ootype.Signed] * 100, ootype.Signed): CLR.pypy.test.DelegateType_int__int_100
     }
 
