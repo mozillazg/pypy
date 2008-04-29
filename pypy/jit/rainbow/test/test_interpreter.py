@@ -12,6 +12,7 @@ from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.annotation import model as annmodel
 from pypy.annotation.policy import AnnotatorPolicy
@@ -93,6 +94,8 @@ class InterpretationTest(object):
     # these staticmethods should go to TestLLType, they are here only
     # for compatibility with other tests that inherit from
     # InterpretationTest
+
+    to_rstr = staticmethod(LLSupport.to_rstr)
     
     @staticmethod
     def Ptr(T):
@@ -817,9 +820,9 @@ class SimpleTests(InterpretationTest):
         assert res.x == 123
 
     def test_plus_minus(self):
-        PROGRAMS = ["+-+"]
-        def ll_plus_minus(i, x, y):
-            s = PROGRAMS[i] # to prevent constant-folding
+        from pypy.rpython.annlowlevel import hlstr
+        def ll_plus_minus(llstr, x, y):
+            s = hlstr(llstr)
             acc = x
             n = len(s)
             pc = 0
@@ -832,9 +835,10 @@ class SimpleTests(InterpretationTest):
                     acc -= y
                 pc += 1
             return acc
-        res = self.interpret(ll_plus_minus, [0, 0, 2], [0])
-        assert res == ll_plus_minus(0, 0, 2)
-        self.check_insns({'int_add': 2, 'int_sub': 1, 'direct_call': 1})
+        ll_plus_minus.convert_arguments = [self.to_rstr, int, int]
+        res = self.interpret(ll_plus_minus, ["+-+", 0, 2], [0])
+        assert res == ll_plus_minus(self.to_rstr("+-+"), 0, 2)
+        self.check_insns({'int_add': 2, 'int_sub': 1})
 
     def test_red_virtual_container(self):
         # this checks that red boxes are able to be virtualized dynamically by
@@ -2225,6 +2229,8 @@ class TestLLType(SimpleTests):
 
 class OOTypeMixin(object):
     type_system = "ootype"
+
+    to_rstr = staticmethod(OOSupport.to_rstr)
 
     @staticmethod
     def Ptr(T):
