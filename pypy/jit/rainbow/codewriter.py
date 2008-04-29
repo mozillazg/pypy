@@ -1820,9 +1820,10 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             if methname in desc.methodcodes:
                 break # we already filled the codes for this type
             _, meth = T._lookup(methname)
-            tsgraph = graph2tsgraph[meth.graph]
-            jitcode = self.get_jitcode(tsgraph)
-            desc.methodcodes[methname] = jitcode
+            if not getattr(meth, 'abstract', False):
+                tsgraph = graph2tsgraph[meth.graph]
+                jitcode = self.get_jitcode(tsgraph)
+                desc.methodcodes[methname] = jitcode
 
 
 class GraphTransformer(object):
