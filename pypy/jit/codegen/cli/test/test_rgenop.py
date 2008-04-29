@@ -118,14 +118,24 @@ class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
     def test_read_frame_var_compile(self):
         py.test.skip('fixme: add support for frames')
 
+    def test_read_frame_float_var_compile(self):
+        py.test.skip('fixme: add support for frames')
+
     def test_write_frame_place_compile(self):
         py.test.skip('fixme: add support for frames')
 
     def test_read_frame_place_compile(self):
         py.test.skip('fixme: add support for frames')
+
+    def test_genconst_from_frame_var_compile(self):
+        py.test.skip('fixme: add support for frames')
         
+    def test_genconst_from_frame_float_var_compile(self):
+        py.test.skip('fixme: add support for frames')
+
     def test_ovfcheck_adder_compile(self):
         py.test.skip('fixme')
 
     def test_ovfcheck1_compile(self):
         py.test.skip('fixme')
+
