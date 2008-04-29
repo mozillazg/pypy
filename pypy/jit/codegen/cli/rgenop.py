@@ -255,7 +255,9 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def kindToken(T):
-        if T is ootype.Signed:
+        if T is ootype.Void:
+            return None
+        elif T is ootype.Signed:
             return cInt32
         elif T is ootype.Bool:
             return cBoolean
@@ -346,7 +348,7 @@ class Builder(GenBuilder):
         self.emit(op)
         return op.gv_res()
 
-    def genop_same_as(self, kindtoken, gv_x):
+    def genop_same_as(self, gv_x):
         op = ops.SameAs(self, gv_x)
         self.emit(op)
         return op.gv_res()
@@ -402,7 +404,7 @@ class Builder(GenBuilder):
         myfunc = self.meth.CreateDelegate(self.delegatetype, consts)
         self.gv_entrypoint.holder.SetFunc(myfunc)
 
-    def enter_next_block(self, kinds, args_gv):
+    def enter_next_block(self, args_gv):
         for i in range(len(args_gv)):
             op = ops.SameAs(self, args_gv[i])
             op.emit()

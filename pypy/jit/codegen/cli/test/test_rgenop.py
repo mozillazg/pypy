@@ -27,6 +27,12 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
     def test_cast_raising(self):
         py.test.skip('fixme')
 
+    def test_float_adder(self):
+        py.test.skip('fixme')
+
+    def test_float_loop_direct(self):
+        py.test.skip('fixme')
+
     def test_switch_direct(self):
         py.test.skip('no promotion/flexswitch for now please :-)')
 
@@ -37,6 +43,18 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
         py.test.skip('no promotion/flexswitch for now please :-)')
 
     def test_read_frame_var_direct(self):
+        py.test.skip('fixme: add support for frames')
+
+    def test_read_frame_var_float_direct(self):
+        py.test.skip('fixme: add support for frames')
+
+    def test_genconst_from_frame_var_direct(self):
+        py.test.skip('fixme: add support for frames')
+
+    def test_write_frame_place_float_direct(self):
+        py.test.skip('fixme: add support for frames')
+        
+    def test_read_float_frame_place_direct(self):
         py.test.skip('fixme: add support for frames')
 
     def test_write_frame_place_direct(self):

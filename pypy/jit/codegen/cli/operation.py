@@ -127,7 +127,8 @@ class Return(Operation):
         return None
 
     def emit(self):
-        self.gv_x.load(self.builder)
+        if self.gv_x is not None:
+            self.gv_x.load(self.builder)
         self.builder.il.Emit(OpCodes.Ret)
 
 class Call(Operation):
