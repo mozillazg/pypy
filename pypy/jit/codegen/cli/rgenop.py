@@ -18,6 +18,7 @@ DEBUG = False
 
 cInt32 = classof(System.Int32)
 cBoolean = classof(System.Boolean)
+cDouble = classof(System.Double)
 cObject = classof(System.Object)
 
 class SigToken:
@@ -105,6 +106,27 @@ class IntConst(GenConst):
     def __repr__(self):
         return "const=%s" % self.value
 
+
+class FloatConst(GenConst):
+
+    def __init__(self, value):
+        self.value = value
+
+    @specialize.arg(1)
+    def revealconst(self, T):
+        assert T is ootype.Float
+        if T is ootype.Float:
+            return self.value
+
+    def getCliType(self):
+        return typeof(System.Double)
+
+    def load(self, builder):
+        builder.il.Emit(OpCodes.Ldc_R8, self.value)
+
+    def __repr__(self):
+        return "const=%s" % self.value
+
 class BaseConst(GenConst):
 
     def _get_index(self, builder):
@@ -161,7 +183,8 @@ class FunctionConst(BaseConst):
 
     def getobj(self):
         # XXX: should the conversion be done automatically?
-        return ootype.ooupcast(OBJECT, self.holder)
+        #return ootype.ooupcast(OBJECT, self.holder)
+        return self.holder
 
     def load(self, builder):
         holdertype = box(self.holder).GetType()
@@ -197,6 +220,8 @@ class RCliGenOp(AbstractRGenOp):
             return IntConst(llvalue)
         elif T is ootype.Bool:
             return IntConst(int(llvalue))
+        elif T is ootype.Float:
+            return FloatConst(llvalue)
         elif T is llmemory.Address:
             assert llvalue is llmemory.NULL
             return zero_const
@@ -234,6 +259,8 @@ class RCliGenOp(AbstractRGenOp):
             return cInt32
         elif T is ootype.Bool:
             return cBoolean
+        elif T is ootype.Float:
+            return cDouble
         elif isinstance(T, ootype.Instance):
             return cObject # XXX?
         else:
