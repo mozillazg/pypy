@@ -14,6 +14,7 @@ option_to_typename = {
     "withstrjoin"    : ["strjoinobject.W_StringJoinObject"],
     "withmultidict"  : ["dictmultiobject.W_DictMultiObject",
                         "dictmultiobject.W_DictMultiIterObject"],
+    "withmultituple" : ["tuplemultiobject.W_TupleMultiObject"],
     "withmultilist"  : ["listmultiobject.W_ListMultiObject"],
     "withrope"       : ["ropeobject.W_RopeObject",
                         "ropeobject.W_RopeIterObject"],
@@ -64,6 +65,7 @@ class StdTypeModel:
         from pypy.objspace.std import setobject
         from pypy.objspace.std import smallintobject
         from pypy.objspace.std import tupleobject
+        from pypy.objspace.std import tuplemultiobject
         from pypy.objspace.std import listobject
         from pypy.objspace.std import dictobject
         from pypy.objspace.std import dictmultiobject
@@ -120,6 +122,7 @@ class StdTypeModel:
             dictobject.W_DictIterObject: True,
             listobject.W_ListObject: True,
             stringobject.W_StringObject: True,
+            tupleobject.W_TupleObject: True,
         }
         for option, value in config.objspace.std:
             if option.startswith("with") and option in option_to_typename:
@@ -138,6 +141,9 @@ class StdTypeModel:
             del self.typeorder[listobject.W_ListObject]
         if config.objspace.std.withrope:
             del self.typeorder[stringobject.W_StringObject]
+
+        if config.objspace.std.withmultituple:
+            del self.typeorder[tupleobject.W_TupleObject]
 
         #check if we missed implementations
         from pypy.objspace.std.objspace import _registered_implementations
