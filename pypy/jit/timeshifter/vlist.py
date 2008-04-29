@@ -136,9 +136,16 @@ class OOTypeListTypeDesc(AbstractListTypeDesc):
 
     def _setup(self, RGenOp, rtyper, LIST):
         self.alloctoken = RGenOp.allocToken(LIST)
-        self.tok_ll_resize = RGenOp.methToken(LIST, '_ll_resize')
-        self.tok_ll_setitem_fast = RGenOp.methToken(LIST,
-                                                    'll_setitem_fast')
+        self.tok_ll_resize = self._tok(RGenOp, LIST, '_ll_resize')
+        self.tok_ll_setitem_fast = self._tok(RGenOp, LIST,
+                                             'll_setitem_fast')
+
+    def _tok(self, RGenOp, LIST, name):
+        _, meth = LIST._lookup(name)
+        if meth is None:
+            return None
+        else:
+            return RGenOp.methToken(LIST, name)
 
     def _define_devirtualize(self):
         pass # XXX
