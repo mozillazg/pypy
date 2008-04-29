@@ -240,6 +240,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
             self.DictObjectCls = dictobject.W_DictObject
         assert self.DictObjectCls in self.model.typeorder
 
+        if self.config.objspace.std.withmultituple:
+            from pypy.objspace.std import tuplemultiobject
+            self.TupleObjectCls = tuplemultiobject.W_TupleMultiObject
+        else:
+            from pypy.objspace.std import tupleobject
+            self.TupleObjectCls = tupleobject.W_TupleObject
+
         if not self.config.objspace.std.withrope:
             from pypy.objspace.std import stringobject
             self.StringObjectCls = stringobject.W_StringObject
@@ -481,7 +488,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return r
         if isinstance(x, tuple):
             wrappeditems = [self.wrap(item) for item in list(x)]
-            return W_TupleObject(wrappeditems)
+            return self.newtuple(wrappeditems)
         if isinstance(x, list):
             wrappeditems = [self.wrap(item) for item in x]
             return self.newlist(wrappeditems)
@@ -564,8 +571,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return W_LongObject.fromint(self, val)
 
     def newtuple(self, list_w):
+        from pypy.objspace.std.tupletype import wraptuple
         assert isinstance(list_w, list)
-        return W_TupleObject(list_w)
+        return wraptuple(self, list_w)
 
     def newlist(self, list_w):
         if self.config.objspace.std.withmultilist:
@@ -630,8 +638,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
     allocate_instance._annspecialcase_ = "specialize:arg(1)"
 
     def unpacktuple(self, w_tuple, expected_length=-1):
-        assert isinstance(w_tuple, W_TupleObject)
-        t = w_tuple.wrappeditems
+        assert isinstance(w_tuple, self.TupleObjectCls)
+        t = w_tuple.getitems()
         if expected_length != -1 and expected_length != len(t):
             raise ValueError, "got a tuple of length %d instead of %d" % (
                 len(t), expected_length)
