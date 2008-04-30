@@ -315,6 +315,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 #                             ("objspace.std.withfastslice", True),
                              ("objspace.std.withprebuiltchar", True),
                              ("objspace.std.builtinshortcut", True),
+                             ("objspace.std.getattributeshortcut", True),
                              ("translation.list_comprehension_operations",True),
                              ],
                    cmdline="--allopts --faassen", negation=False),
