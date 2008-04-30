@@ -234,6 +234,8 @@ class StdTypeModel:
                 self.typeorder[type].append((type.typedef.any, None))
             self.typeorder[type].append((W_Root, None))
 
+        self._typeorder_with_empty_usersubcls = None
+
         # ____________________________________________________________
         # Prebuilt common integer values
 
@@ -248,6 +250,19 @@ class StdTypeModel:
 
         # ____________________________________________________________
 
+    def get_typeorder_with_empty_usersubcls(self):
+        if self._typeorder_with_empty_usersubcls is None:
+            from pypy.interpreter.typedef import enum_interplevel_subclasses
+            result = self.typeorder.copy()
+            for cls in self.typeorder:
+                if (hasattr(cls, 'typedef') and
+                    cls.typedef.acceptable_as_base_class):
+                    subclslist = enum_interplevel_subclasses(cls)
+                    for subcls in subclslist:
+                        if cls in subcls.__bases__:   # only direct subclasses
+                            result[subcls] = []
+            self._typeorder_with_empty_usersubcls = result
+        return self._typeorder_with_empty_usersubcls
 
 # ____________________________________________________________
 
