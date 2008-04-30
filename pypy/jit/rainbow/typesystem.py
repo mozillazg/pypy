@@ -1,3 +1,4 @@
+from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 
@@ -25,6 +26,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     name = 'lltype'
     ROOT_TYPE = llmemory.Address
+    NULL_OBJECT = base_ptr_lltype()._defl()
 
     def get_typeptr(self, obj):
         return obj.typeptr
@@ -53,6 +55,7 @@ class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
     ROOT_TYPE = ootype.Object
+    NULL_OBJECT = ootype.NULL
 
     def get_typeptr(self, obj):
         return obj.meta

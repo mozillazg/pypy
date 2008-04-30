@@ -15,8 +15,6 @@ FOLDABLE_GREEN_OPS['getfield'] = None
 FOLDABLE_GREEN_OPS['getarrayitem'] = None
 FOLDABLE_GREEN_OPS['getinteriorfield'] = None
 
-NULL_OBJECT = base_ptr_lltype()._defl()
-
 debug_view = lloperation.llop.debug_view
 debug_print = lloperation.llop.debug_print
 debug_pdb = lloperation.llop.debug_pdb
@@ -419,10 +417,11 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
         return exitgvar.revealconst(lltype.Bool)
     else:
         return split_nonconstantcase(jitstate, exitgvar, resumepoint,
-                                     switchredbox, False, list(greens_gv))
+                                     switchredbox, False, list(greens_gv),
+                                     jitstate.ts.NULL_OBJECT)
 
 def split_nonconstantcase(jitstate, exitgvar, resumepoint,
-                          condbox, reverse, greens_gv, ll_evalue=NULL_OBJECT):
+                          condbox, reverse, greens_gv, ll_evalue):
     resuming = jitstate.get_resuming()
     if resuming is not None and resuming.mergesleft == 0:
         node = resuming.path.pop()
