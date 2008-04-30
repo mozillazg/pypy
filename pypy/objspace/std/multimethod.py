@@ -8,7 +8,7 @@ from pypy.tool.sourcetools import compile2
 # test_multimethod.
 
 # These multimethods support delegation: for each class A we must
-# provide a "typeorder", which is list of pairs ((B, converter)) where B
+# provide a "typeorder", which is list of pairs (B, converter) where B
 # is a class and 'converter' is a function that can convert from an
 # instance of A to an instance of B.  If 'converter' is None it is
 # assumed that the instance needs no conversion.  The first entry in the
