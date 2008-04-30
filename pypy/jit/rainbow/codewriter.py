@@ -1700,7 +1700,6 @@ class OOTypeBytecodeWriter(BytecodeWriter):
     def serialize_op_new(self, op):
         TYPE = op.args[0].value
         if TYPE.oopspec_name is not None:
-            # XXX: works only for List
             oopspecdescindex = self.oopspecdesc_position('new', TYPE, False)
             oopspecdesc = self.oopspecdescs[oopspecdescindex]
             args, args_v = self.serialize_argtuple([], oopspecdesc.argtuple)
