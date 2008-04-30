@@ -1,4 +1,5 @@
 from pypy.interpreter.baseobjspace import ObjSpace
+from pypy.interpreter.error import OperationError
 from pypy.objspace.descroperation import DescrOperation
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.boolobject import W_BoolObject
