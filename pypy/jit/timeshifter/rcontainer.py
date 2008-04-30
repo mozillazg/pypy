@@ -1,8 +1,8 @@
 import operator
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.annlowlevel import cachedtype, cast_base_ptr_to_instance
-from pypy.rpython.annlowlevel import base_ptr_lltype, cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import cachedtype
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.timeshifter import rvalue, rvirtualizable
 from pypy.jit.rainbow.typesystem import deref, fieldType
