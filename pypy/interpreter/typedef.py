@@ -258,8 +258,7 @@ def _builduserclswithfeature(supercls, *features):
                 return self.w__dict__
             
             def setdict(self, space, w_dict):
-                check_new_dictionary(space, w_dict)
-                self.w__dict__ = w_dict
+                self.w__dict__ = check_new_dictionary(space, w_dict)
             
             def user_setup(self, space, w_subtype):
                 self.space = space
@@ -306,6 +305,7 @@ def check_new_dictionary(space, w_dict):
     if space.config.objspace.std.withmultidict:
         from pypy.objspace.std import dictmultiobject
         assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
+    return w_dict
 check_new_dictionary._dont_inline_ = True
 
 def call_user_destructor(space, w_self):
