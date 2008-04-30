@@ -245,6 +245,9 @@ class RoundedUpForAllocation(llmemory.AddressOffset):
     def __repr__(self):
         return '< RoundedUpForAllocation %r >' % (self.basesize,)
 
+    def known_nonneg(self):
+        return self.basesize.known_nonneg()
+
     def ref(self, ptr):
         return self.basesize.ref(ptr)
 

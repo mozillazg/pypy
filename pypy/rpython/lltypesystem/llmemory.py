@@ -22,6 +22,23 @@ class AddressOffset(Symbolic):
             return NotImplemented
         return CompositeOffset(self, other)
 
+    # special-casing: only for '>= 0' and '< 0' and only when the
+    # symbolic offset is known to be non-negative
+    def __ge__(self, other):
+        if self is other:
+            return True
+        elif (isinstance(other, (int, long)) and other == 0 and
+            self.known_nonneg()):
+            return True
+        else:
+            raise TypeError("Symbolics can not be compared!")
+
+    def __lt__(self, other):
+        return not self.__ge__(other)
+
+    def known_nonneg(self):
+        return False
+
     def _raw_malloc(self, rest, zero):
         raise NotImplementedError("_raw_malloc(%r, %r)" % (self, rest))
 
@@ -47,6 +64,9 @@ class ItemOffset(AddressOffset):
 
     def __neg__(self):
         return ItemOffset(self.TYPE, -self.repeat)
+
+    def known_nonneg(self):
+        return self.repeat >= 0
 
     def ref(self, firstitemptr):
         A = lltype.typeOf(firstitemptr).TO
@@ -138,6 +158,9 @@ class FieldOffset(AddressOffset):
     def __repr__(self):
         return "<FieldOffset %r %r>" % (self.TYPE, self.fldname)
 
+    def known_nonneg(self):
+        return True
+
     def ref(self, struct):
         if lltype.typeOf(struct).TO != self.TYPE:
             struct = lltype.cast_pointer(lltype.Ptr(self.TYPE), struct)
@@ -195,6 +218,12 @@ class CompositeOffset(AddressOffset):
         ofs.reverse()
         return CompositeOffset(*ofs)
 
+    def known_nonneg(self):
+        for item in self.offsets:
+            if not item.known_nonneg():
+                return False
+        return True
+
     def ref(self, ptr):
         for item in self.offsets:
             ptr = item.ref(ptr)
@@ -219,6 +248,9 @@ class ArrayItemsOffset(AddressOffset):
 
     def __repr__(self):
         return '< ArrayItemsOffset %r >' % (self.TYPE,)
+
+    def known_nonneg(self):
+        return True
 
     def ref(self, arrayptr):
         assert array_type_match(lltype.typeOf(arrayptr).TO, self.TYPE)
@@ -255,6 +287,9 @@ class ArrayLengthOffset(AddressOffset):
     def __repr__(self):
         return '< ArrayLengthOffset %r >' % (self.TYPE,)
 
+    def known_nonneg(self):
+        return True
+
     def ref(self, arrayptr):
         assert array_type_match(lltype.typeOf(arrayptr).TO, self.TYPE)
         return lltype._arraylenref._makeptr(arrayptr._obj, arrayptr._solid)
@@ -269,6 +304,9 @@ class GCHeaderOffset(AddressOffset):
 
     def __neg__(self):
         return GCHeaderAntiOffset(self.gcheaderbuilder)
+
+    def known_nonneg(self):
+        return True
 
     def ref(self, headerptr):
         gcptr = self.gcheaderbuilder.object_from_header(headerptr)

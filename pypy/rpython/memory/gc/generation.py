@@ -239,6 +239,8 @@ class GenerationGC(SemiSpaceGC):
     GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS = (GCFLAG_EXTERNAL | GCFLAG_FORWARDED |
                                         GCFLAG_NO_YOUNG_PTRS)
 
+    # ____________________________________________________________
+    # Support code for full collections
 
     def semispace_collect(self, size_changing=False):
         self.reset_young_gcflags() # we are doing a full collection anyway
@@ -249,13 +251,13 @@ class GenerationGC(SemiSpaceGC):
         SemiSpaceGC.semispace_collect(self, size_changing)
         if DEBUG_PRINT and not size_changing:
             llop.debug_print(lltype.Void, "percent survived", float(self.free - self.tospace) / self.space_size)
-            
 
-    def trace_and_copy(self, obj):
-        # during a full collect, all objects copied might come from the nursery and
-        # so must have this flag set:
-        self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
-        SemiSpaceGC.trace_and_copy(self, obj)
+    def make_a_copy(self, obj, objsize):
+        newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
+        # During a full collect, all copied objects might implicitly come
+        # from the nursery.  In case they do, we must add this flag:
+        self.header(newobj).tid |= GCFLAG_NO_YOUNG_PTRS
+        return newobj
         # history: this was missing and caused an object to become old but without the
         # flag set.  Such an object is bogus in the sense that the write_barrier doesn't
         # work on it.  So it can eventually contain a ptr to a young object but we didn't
@@ -264,11 +266,11 @@ class GenerationGC(SemiSpaceGC):
 
     def reset_young_gcflags(self):
         # This empties self.old_objects_pointing_to_young, and puts the
-        # GCFLAG_NO_YOUNG_PTRS back on all these objects.  Note that
-        # trace_and_copy() above would also put the GCFLAG_NO_YOUNG_PTRS
-        # back on the same objects (unless they die, and then it doesn't
-        # matter) -- except that trace_and_copy() doesn't see the prebuilt
-        # objects.
+        # GCFLAG_NO_YOUNG_PTRS back on all these objects.  We could put
+        # the flag back more lazily but we expect this list to be short
+        # anyway, and it's much saner to stick to the invariant:
+        # non-young objects all have GCFLAG_NO_YOUNG_PTRS set unless
+        # they are listed in old_objects_pointing_to_young.
         oldlist = self.old_objects_pointing_to_young
         while oldlist.non_empty():
             obj = oldlist.pop()
@@ -279,6 +281,9 @@ class GenerationGC(SemiSpaceGC):
         while self.young_objects_with_weakrefs.non_empty():
             obj = self.young_objects_with_weakrefs.pop()
             self.objects_with_weakrefs.append(obj)
+
+    # ____________________________________________________________
+    # Implementation of nursery-only collections
 
     def collect_nursery(self):
         if self.nursery_size > self.top_of_space - self.free:
@@ -324,6 +329,8 @@ class GenerationGC(SemiSpaceGC):
         while oldlist.non_empty():
             count += 1
             obj = oldlist.pop()
+            hdr = self.header(obj)
+            hdr.tid |= GCFLAG_NO_YOUNG_PTRS
             self.trace_and_drag_out_of_nursery(obj)
         if DEBUG_PRINT:
             llop.debug_print(lltype.Void, "collect_oldrefs_to_nursery", count)
@@ -354,7 +361,6 @@ class GenerationGC(SemiSpaceGC):
         """obj must not be in the nursery.  This copies all the
         young objects it references out of the nursery.
         """
-        self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
         self.trace(obj, self._trace_drag_out, None)
 
     def _trace_drag_out(self, pointer, ignored):
@@ -367,13 +373,13 @@ class GenerationGC(SemiSpaceGC):
         # weakref; otherwise invalidate the weakref
         while self.young_objects_with_weakrefs.non_empty():
             obj = self.young_objects_with_weakrefs.pop()
-            if not self.is_forwarded(obj):
+            if not self.surviving(obj):
                 continue # weakref itself dies
             obj = self.get_forwarding_address(obj)
             offset = self.weakpointer_offset(self.get_type_id(obj))
             pointing_to = (obj + offset).address[0]
             if self.is_in_nursery(pointing_to):
-                if self.is_forwarded(pointing_to):
+                if self.surviving(pointing_to):
                     (obj + offset).address[0] = self.get_forwarding_address(
                         pointing_to)
                 else:

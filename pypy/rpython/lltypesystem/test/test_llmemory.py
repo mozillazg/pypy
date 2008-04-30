@@ -590,3 +590,15 @@ def test_raw_memclear_on_empty_array():
     src = cast_ptr_to_adr(a) + itemoffsetof(A, 0)
     raw_memclear(src, sizeof(lltype.Signed) * 0)
     
+def test_nonneg():
+    S1 = lltype.GcStruct('S1', ('x', lltype.Float))
+    A1 = lltype.GcArray(lltype.Float)
+    assert sizeof(S1) >= 0
+    assert itemoffsetof(A1, 4) >= 0
+    assert not (sizeof(S1) < 0)
+    assert not (itemoffsetof(A1, 4) < 0)
+    py.test.raises(TypeError, "sizeof(S1) > 0")
+    py.test.raises(TypeError, "sizeof(S1) > 1")
+    py.test.raises(TypeError, "sizeof(S1) <= 0")
+    py.test.raises(TypeError, "sizeof(S1) <= 4")
+    py.test.raises(TypeError, "(-sizeof(S1)) >= 0")
