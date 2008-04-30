@@ -235,12 +235,7 @@ def _builduserclswithfeature(supercls, *features):
         parent_destructor = getattr(supercls, '__del__', None)
         class Proto(object):
             def __del__(self):
-                self.clear_all_weakrefs()
-                try:
-                    self.space.userdel(self)
-                except OperationError, e:
-                    e.write_unraisable(self.space, 'method __del__ of ', self)
-                    e.clear(self.space)   # break up reference cycles
+                call_user_destructor(self.space, self)
                 if parent_destructor is not None:
                     parent_destructor(self)
         add(Proto)
@@ -263,12 +258,7 @@ def _builduserclswithfeature(supercls, *features):
                 return self.w__dict__
             
             def setdict(self, space, w_dict):
-                if not space.is_true(space.isinstance(w_dict, space.w_dict)):
-                    raise OperationError(space.w_TypeError,
-                            space.wrap("setting dictionary to a non-dict"))
-                if space.config.objspace.std.withmultidict:
-                    from pypy.objspace.std import dictmultiobject
-                    assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
+                check_new_dictionary(space, w_dict)
                 self.w__dict__ = w_dict
             
             def user_setup(self, space, w_subtype):
@@ -306,6 +296,28 @@ def _builduserclswithfeature(supercls, *features):
     subcls = type(name, (supercls,), body)
     _allusersubcls_cache[subcls] = True
     return subcls
+
+# a couple of helpers for the Proto classes above, factored out to reduce
+# the translated code size
+def check_new_dictionary(space, w_dict):
+    if not space.is_true(space.isinstance(w_dict, space.w_dict)):
+        raise OperationError(space.w_TypeError,
+                space.wrap("setting dictionary to a non-dict"))
+    if space.config.objspace.std.withmultidict:
+        from pypy.objspace.std import dictmultiobject
+        assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
+check_new_dictionary._dont_inline_ = True
+
+def call_user_destructor(space, w_self):
+    w_self.clear_all_weakrefs()
+    try:
+        space.userdel(w_self)
+    except OperationError, e:
+        e.write_unraisable(space, 'method __del__ of ', w_self)
+        e.clear(space)   # break up reference cycles
+call_user_destructor._dont_inline_ = True
+
+# ____________________________________________________________
 
 def make_descr_typecheck_wrapper(func, extraargs=(), cls=None):
     if func is None:
