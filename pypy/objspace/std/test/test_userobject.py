@@ -1,6 +1,12 @@
 
 
 class AppTestUserObject:
+    OPTIONS = {}    # for test_builtinshortcut.py
+
+    def setup_class(cls):
+        from pypy import conftest
+        cls.space = conftest.gettestobjspace(**cls.OPTIONS)
+
     def test_emptyclass(self):
         class empty: pass
         inst = empty()
@@ -196,6 +202,7 @@ class AppTestUserObject:
 
 
 class AppTestWithMultiMethodVersion2(AppTestUserObject):
+    OPTIONS = {}    # for test_builtinshortcut.py
 
     def setup_class(cls):
         from pypy import conftest
@@ -203,7 +210,8 @@ class AppTestWithMultiMethodVersion2(AppTestUserObject):
 
         cls.prev_installer = multimethod.Installer
         multimethod.Installer = multimethod.InstallerVersion2
-        cls.space = conftest.maketestobjspace()
+        config = conftest.make_config(conftest.option, **cls.OPTIONS)
+        cls.space = conftest.maketestobjspace(config)
 
     def teardown_class(cls):
         from pypy.objspace.std import multimethod

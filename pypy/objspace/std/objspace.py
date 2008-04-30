@@ -277,12 +277,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     return func_with_new_name(boundmethod, 'boundmethod_'+name)
                 boundmethod = make_boundmethod()
                 setattr(self, name, boundmethod)  # store into 'space' instance
-            else:
-                # if config...:
+            elif self.config.objspace.std.builtinshortcut:
                 from pypy.objspace.std import builtinshortcut
                 builtinshortcut.install(self, mm)
 
-        if 1:  # if config...:
+        if self.config.objspace.std.builtinshortcut:
             from pypy.objspace.std import builtinshortcut
             builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
 
