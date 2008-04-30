@@ -1,27 +1,52 @@
 from pypy.interpreter.baseobjspace import ObjSpace
 from pypy.objspace.descroperation import DescrOperation
 from pypy.objspace.std.multimethod import FailedToImplement
+from pypy.objspace.std.boolobject import W_BoolObject
 from pypy.tool.sourcetools import func_with_new_name
 
+# ____________________________________________________________
+#
+#  The sole purpose of this file is performance.
+#  It speeds up the dispatch of operations between
+#  built-in objects.
+#
 
+# this is a selection... a few operations are missing because they are
+# thought to be very rare or most commonly used with non-builtin types
 METHODS_WITH_SHORTCUT = dict.fromkeys(
     ['add', 'sub', 'mul', 'truediv', 'floordiv', 'div',
-     'mod', 'lshift', 'rshift', 'and_', 'or_', 'xor',
-     'lt', 'le', 'eq', 'ne', 'gt', 'ge',
-     ])
-# XXX inplace_
-# XXX unary ops
+     'mod', 'lshift', 'rshift', 'and_', 'or_', 'xor', 'pow',
+     'lt', 'le', 'eq', 'ne', 'gt', 'ge', 'contains',
+     # unary
+     'len', 'nonzero', 'repr', 'str', 'hash',
+     'neg', 'invert', 'index', 'iter', 'next', 'buffer',
+     # in-place
+     'inplace_add', 'inplace_sub', 'inplace_mul', 'inplace_truediv',
+     'inplace_floordiv', 'inplace_div', 'inplace_mod', 'inplace_pow',
+     'inplace_lshift', 'inplace_rshift', 'inplace_and', 'inplace_or',
+     'inplace_xor',
+ ])
 
 
 def install(space, mm):
+    """Install a function <name>() on the space instance which invokes
+    a shortcut for built-in types.  Returns the shortcutting multimethod
+    object or None.
+    """
     name = mm.name
     if name not in METHODS_WITH_SHORTCUT:
-        return
-    print 'shortcut for:', name
+        return None
+
+    # can be called multiple times without re-installing
+    if name in space.__dict__:
+        mm1, shortcut_method = space.__dict__[name].builtinshortcut
+        assert mm1 is mm
+        return shortcut_method
+
+    print 'installing shortcut for:', name
     assert hasattr(DescrOperation, name)
 
     base_method = getattr(space.__class__, name)
-    assert name not in space.__dict__
 
     # Basic idea: we first try to dispatch the operation using purely
     # the multimethod.  If this is done naively, subclassing a built-in
@@ -36,11 +61,51 @@ def install(space, mm):
 
     def operate(*args_w):
         try:
-            w_result = shortcut_method(space, *args_w)
-            #print 'shortcut:', name, args_w
-            return w_result
+            return shortcut_method(space, *args_w)
         except FailedToImplement:
             pass
         return base_method(space, *args_w)
 
-    setattr(space, name, func_with_new_name(operate, name))
+    operate = func_with_new_name(operate, name)
+    operate.builtinshortcut = (mm, shortcut_method)
+    setattr(space, name, operate)
+    return shortcut_method
+
+
+def install_is_true(space, mm_nonzero, mm_len):
+    nonzero_shortcut = install(space, mm_nonzero)
+    len_shortcut = install(space, mm_len)
+    assert 'is_true' not in space.__dict__
+
+    def is_true(w_obj):
+        # a bit of duplication of the logic from DescrOperation.is_true...
+        # first try 'nonzero'
+        try:
+            w_res = nonzero_shortcut(space, w_obj)
+        except FailedToImplement:
+            pass
+        else:
+            # the __nonzero__ method of built-in objects should
+            # always directly return a Bool
+            assert isinstance(w_res, W_BoolObject)
+            return w_res.boolval
+
+        # then try 'len'
+        try:
+            w_res = len_shortcut(space, w_obj)
+        except FailedToImplement:
+            pass
+        else:
+            # the __len__ method of built-in objects typically
+            # returns an unwrappable integer
+            try:
+                return space.int_w(w_res) != 0
+            except OperationError:
+                # I think no OperationError other than w_OverflowError
+                # could occur here
+                w_obj = w_res
+
+        # general case fallback
+        return DescrOperation.is_true(space, w_obj)
+
+    space.is_true = is_true
