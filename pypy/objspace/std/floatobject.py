@@ -349,8 +349,13 @@ def divmod__Float_Float(space, w_float1, w_float2):
 def pow__Float_Float_ANY(space, w_float1, w_float2, thirdArg):
     # XXX it makes sense to do more here than in the backend
     # about sorting out errors!
+
+    # This raises FailedToImplement in cases like overflow where a
+    # (purely theoretical) big-precision float implementation would have
+    # a chance to give a result, and directly OperationError for errors
+    # that we want to force to be reported to the user.
     if not space.is_w(thirdArg, space.w_None):
-        raise FailedToImplement(space.w_TypeError, space.wrap(
+        raise OperationError(space.w_TypeError, space.wrap(
             "pow() 3rd argument not allowed unless all arguments are integers"))
     x = w_float1.floatval
     y = w_float2.floatval
@@ -359,13 +364,13 @@ def pow__Float_Float_ANY(space, w_float1, w_float2, thirdArg):
         z = 1.0
     elif x == 0.0:
         if y < 0.0:
-            raise FailedToImplement(space.w_ZeroDivisionError,
+            raise OperationError(space.w_ZeroDivisionError,
                                     space.wrap("0.0 cannot be raised to a negative power"))
         z = 0.0
     else:
         if x < 0.0:
             if math.floor(y) != y:
-                raise FailedToImplement(space.w_ValueError,
+                raise OperationError(space.w_ValueError,
                                         space.wrap("negative number "
                                                    "cannot be raised to a fractional power"))
             if x == -1.0:

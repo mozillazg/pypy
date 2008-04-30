@@ -253,7 +253,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # install all the MultiMethods into the space instance
         for name, mm in self.MM.__dict__.items():
-            if isinstance(mm, StdObjSpaceMultiMethod) and not hasattr(self, name):
+            if not isinstance(mm, StdObjSpaceMultiMethod):
+                continue
+            if not hasattr(self, name):
                 if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
                     func = mm.install_not_sliced(self.model.typeorder, baked_perform_call=True)
                 else:               
@@ -271,6 +273,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     return func_with_new_name(boundmethod, 'boundmethod_'+name)
                 boundmethod = make_boundmethod()
                 setattr(self, name, boundmethod)  # store into 'space' instance
+            elif self.config.objspace.std.builtinshortcut:
+                from pypy.objspace.std import builtinshortcut
+                builtinshortcut.install(self, mm)
+
+        if self.config.objspace.std.builtinshortcut:
+            from pypy.objspace.std import builtinshortcut
+            builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
 
         # hack to avoid imports in the time-critical functions below
         for cls in self.model.typeorder:
@@ -664,16 +673,56 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return w_one is w_two
 
     def is_true(self, w_obj):
-        # first a few shortcuts for performance
+        # a shortcut for performance
+        # NOTE! this method is typically overridden by builtinshortcut.py.
         if type(w_obj) is W_BoolObject:
             return w_obj.boolval
-        if w_obj is self.w_None:
-            return False
-        # then a shortcut for bootstrapping reasons
-        if type(w_obj) is self.DictObjectCls:
-            return w_obj.len() != 0
+        return DescrOperation.is_true(self, w_obj)
+
+    def getattr(self, w_obj, w_name):
+        if not self.config.objspace.std.getattributeshortcut:
+            return DescrOperation.getattr(self, w_obj, w_name)
+
+        # an optional shortcut for performance
+        from pypy.objspace.descroperation import raiseattrerror
+        from pypy.objspace.descroperation import object_getattribute
+        w_type = self.type(w_obj)
+        if not w_type.uses_object_getattribute:
+            # slow path: look for a custom __getattribute__ on the class
+            w_descr = w_type.lookup('__getattribute__')
+            # if it was not actually overriden in the class, we remember this
+            # fact for the next time.
+            if w_descr is object_getattribute(self):
+                w_type.uses_object_getattribute = True
+            return self._handle_getattribute(w_descr, w_obj, w_name)
+
+        # fast path: XXX this is duplicating most of the logic
+        # from the default __getattribute__ and the getattr() method...
+        name = self.str_w(w_name)
+        w_descr = w_type.lookup(name)
+        e = None
+        if w_descr is not None:
+            if not self.is_data_descr(w_descr):
+                w_value = w_obj.getdictvalue_attr_is_in_class(self, w_name)
+                if w_value is not None:
+                    return w_value
+            try:
+                return self.get(w_descr, w_obj)
+            except OperationError, e:
+                if not e.match(self, self.w_AttributeError):
+                    raise
         else:
-            return DescrOperation.is_true(self, w_obj)
+            w_value = w_obj.getdictvalue(self, w_name)
+            if w_value is not None:
+                return w_value
+
+        w_descr = self.lookup(w_obj, '__getattr__')
+        if w_descr is not None:
+            return self.get_and_call_function(w_descr, w_obj, w_name)
+        elif e is not None:
+            raise e
+        else:
+            raiseattrerror(self, w_obj, name)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)

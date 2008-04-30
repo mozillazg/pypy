@@ -50,6 +50,10 @@ class W_TypeObject(W_Object):
 
     lazyloaders = {} # can be overridden by specific instances
 
+    uses_object_getattribute = False
+    # ^^^ for config.objspace.std.getattributeshortcut
+    # (False is a conservative default, fixed during real usage)
+
     def __init__(w_self, space, name, bases_w, dict_w,
                  overridetypedef=None):
         w_self.space = space
@@ -221,6 +225,9 @@ class W_TypeObject(W_Object):
 
     def mutated(w_self):
         space = w_self.space
+        if space.config.objspace.std.getattributeshortcut:
+            w_self.uses_object_getattribute = False
+            # ^^^ conservative default, fixed during real usage
         if not space.config.objspace.std.withtypeversion:
             return
         # Invariant: version_tag is None if and only if

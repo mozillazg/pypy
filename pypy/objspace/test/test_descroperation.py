@@ -15,6 +15,11 @@ class Test_DescrOperation:
 
 
 class AppTest_Descroperation:
+    OPTIONS = {}
+
+    def setup_class(cls):
+        from pypy import conftest
+        cls.space = conftest.gettestobjspace(**cls.OPTIONS)
 
     def test_special_methods(self):
         class A(object):
@@ -312,3 +317,7 @@ class AppTest_Descroperation:
         a3 = A()
         a4 = A()
         assert (a1 < a3) == (a1 < a4) == (a2 < a3) == (a2 < a4)
+
+
+class AppTestWithBuiltinShortcut(AppTest_Descroperation):
+    OPTIONS = {'objspace.std.builtinshortcut': True}
