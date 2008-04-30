@@ -44,7 +44,7 @@ def install(space, mm):
         assert mm1 is mm
         return shortcut_method
 
-    print 'installing shortcut for:', name
+    #print 'installing shortcut for:', name
     assert hasattr(DescrOperation, name)
 
     base_method = getattr(space.__class__, name)
