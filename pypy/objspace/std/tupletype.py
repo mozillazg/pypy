@@ -3,9 +3,6 @@ from pypy.interpreter.gateway import NoneNotWrapped
 
 def wraptuple(space, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject
-    if space.config.objspace.std.withmultituple:
-        from pypy.objspace.std.tuplemultiobject import W_TupleMultiObject
-        return W_TupleMultiObject(list_w)
     return W_TupleObject(list_w)
 
 def descr__new__(space, w_tupletype, w_sequence=NoneNotWrapped):

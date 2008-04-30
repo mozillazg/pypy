@@ -240,12 +240,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             self.DictObjectCls = dictobject.W_DictObject
         assert self.DictObjectCls in self.model.typeorder
 
-        if self.config.objspace.std.withmultituple:
-            from pypy.objspace.std import tuplemultiobject
-            self.TupleObjectCls = tuplemultiobject.W_TupleMultiObject
-        else:
-            from pypy.objspace.std import tupleobject
-            self.TupleObjectCls = tupleobject.W_TupleObject
+        from pypy.objspace.std import tupleobject
+        self.TupleObjectCls = tupleobject.W_TupleObject
 
         if not self.config.objspace.std.withrope:
             from pypy.objspace.std import stringobject
