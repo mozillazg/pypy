@@ -273,6 +273,13 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, 'new', vars_gv,
                                   gv_OBJTYPE.v))
 
+    def genop_oonewarray(self, (gv_TYPE, gv_OBJTYPE), gv_length):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_oonewarray: bad currently_writing")
+        vars_gv = [gv_TYPE.v, gv_length.v]
+        return LLVar(llimpl.genop(self.b, 'oonewarray', vars_gv,
+                                  gv_OBJTYPE.v))
+
     def genop_same_as(self, gv_value):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_same_as: bad currently_writing")
