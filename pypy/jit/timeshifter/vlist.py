@@ -1,4 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.ootypesystem import ootype
 from pypy.jit.timeshifter.rcontainer import VirtualContainer, FrozenContainer
 from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue, rvirtualizable, oop
@@ -135,10 +136,22 @@ class OOTypeListTypeDesc(AbstractListTypeDesc):
     PtrRedBox = rvalue.InstanceRedBox
 
     def _setup(self, RGenOp, rtyper, LIST):
-        self.alloctoken = RGenOp.allocToken(LIST)
-        self.tok_ll_resize = self._tok(RGenOp, LIST, '_ll_resize')
         self.tok_ll_setitem_fast = self._tok(RGenOp, LIST,
                                              'll_setitem_fast')
+
+        alloctoken = RGenOp.allocToken(LIST)
+        tok_ll_resize = self._tok(RGenOp, LIST, '_ll_resize')
+        if isinstance(LIST, ootype.Array):
+            def gen_newlist_impl(builder, args_gv):
+                assert len(args_gv) == 1
+                gv_length = args_gv[0]
+                return builder.genop_oonewarray(alloctoken, gv_length)
+        else:
+            def gen_newlist_impl(builder, args_gv):
+                gv_lst = builder.genop_new(alloctoken)
+                builder.genop_oosend(tok_ll_resize, gv_lst, args_gv)
+                return gv_lst
+        self.gen_newlist_impl = gen_newlist_impl
 
     def _tok(self, RGenOp, LIST, name):
         _, meth = LIST._lookup(name)
@@ -151,9 +164,7 @@ class OOTypeListTypeDesc(AbstractListTypeDesc):
         pass # XXX
 
     def gen_newlist(self, builder, args_gv):
-        gv_lst = builder.genop_new(self.alloctoken)
-        builder.genop_oosend(self.tok_ll_resize, gv_lst, args_gv)
-        return gv_lst
+        return self.gen_newlist_impl(builder, args_gv)
 
     def gen_setitem_fast(self, builder, args_gv):
         gv_lst = args_gv.pop(0)

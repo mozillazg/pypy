@@ -88,10 +88,17 @@ class GenBuilder(object):
 ##     def genop_malloc_fixedsize(self, alloctoken):
 ##     def genop_malloc_varsize(self, varsizealloctoken, gv_size):
 ##     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-##     def genop_oosend(self, methtoken, gv_self, args_gv):
 ##     def genop_same_as(self, gv_x):
 ##     def genop_debug_pdb(self):    # may take an args_gv later
 ##     def genop_cast_int_to_ptr(self, kind, gv_int)
+
+##     # ootype-specific operations
+##     def genop_new(self, alloctoken):
+##     def genop_oonewarray(self, alloctoken, gv_length):
+##     def genop_oosend(self, methtoken, gv_self, args_gv): 
+##     def genop_oononnull(self, gv_obj):
+##     def genop_oogetfield(self, fieldtoken, gv_obj):
+##     def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
 
     # the other thing that happens for a given chunk is entering and
     # leaving basic blocks inside it.
