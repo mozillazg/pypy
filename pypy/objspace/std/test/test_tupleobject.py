@@ -318,8 +318,8 @@ class AppTestW_TupleObject:
         assert repr(()) == '()'
         assert repr((1,2,3)) == '(1, 2, 3)'
 
-class AppTestMultiTuple(AppTestW_TupleObject):
-    def setup_class(cls):
-        from pypy.conftest import gettestobjspace
-        cls.space = gettestobjspace(**{"objspace.std.withmultituple": True})
+##class AppTestMultiTuple(AppTestW_TupleObject):
+##    def setup_class(cls):
+##        from pypy.conftest import gettestobjspace
+##        cls.space = gettestobjspace(**{"objspace.std.withmultituple": True})
         

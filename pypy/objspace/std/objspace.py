@@ -257,7 +257,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # install all the MultiMethods into the space instance
         for name, mm in self.MM.__dict__.items():
-            if isinstance(mm, StdObjSpaceMultiMethod) and not hasattr(self, name):
+            if not isinstance(mm, StdObjSpaceMultiMethod):
+                continue
+            if not hasattr(self, name):
                 if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
                     func = mm.install_not_sliced(self.model.typeorder, baked_perform_call=True)
                 else:               
@@ -275,6 +277,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     return func_with_new_name(boundmethod, 'boundmethod_'+name)
                 boundmethod = make_boundmethod()
                 setattr(self, name, boundmethod)  # store into 'space' instance
+            else:
+                # if config...:
+                from pypy.objspace.std import builtinshortcut
+                builtinshortcut.install(self, mm)
 
         # hack to avoid imports in the time-critical functions below
         for cls in self.model.typeorder:
