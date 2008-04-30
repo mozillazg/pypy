@@ -318,18 +318,22 @@ class SemiSpaceGC(MovingGCBase):
             #llop.debug_print(lltype.Void, obj, "already copied to", self.get_forwarding_address(obj))
             return self.get_forwarding_address(obj)
         else:
-            newaddr = self.free
             objsize = self.get_size(obj)
-            totalsize = self.size_gc_header() + objsize
-            llarena.arena_reserve(newaddr, totalsize)
-            raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
-            self.free += totalsize
-            newobj = newaddr + self.size_gc_header()
+            newobj = self.make_a_copy(obj, objsize)
             #llop.debug_print(lltype.Void, obj, "copied to", newobj,
             #                 "tid", self.header(obj).tid,
             #                 "size", totalsize)
             self.set_forwarding_address(obj, newobj, objsize)
             return newobj
+
+    def make_a_copy(self, obj, objsize):
+        totalsize = self.size_gc_header() + objsize
+        newaddr = self.free
+        self.free += totalsize
+        llarena.arena_reserve(newaddr, totalsize)
+        raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
+        newobj = newaddr + self.size_gc_header()
+        return newobj
 
     def trace_and_copy(self, obj):
         self.trace(obj, self._trace_copy, None)
@@ -337,6 +341,14 @@ class SemiSpaceGC(MovingGCBase):
     def _trace_copy(self, pointer, ignored):
         if pointer.address[0] != NULL:
             pointer.address[0] = self.copy(pointer.address[0])
+
+    def surviving(self, obj):
+        # To use during a collection.  Check if the object is currently
+        # marked as surviving the collection.  This is equivalent to
+        # self.is_forwarded() for all objects except the nonmoving objects
+        # created by the HybridGC subclass.  In all cases, if an object
+        # survives, self.get_forwarding_address() returns its new address.
+        return self.is_forwarded(obj)
 
     def is_forwarded(self, obj):
         return self.header(obj).tid & GCFLAG_FORWARDED != 0
@@ -423,7 +435,7 @@ class SemiSpaceGC(MovingGCBase):
             x = self.objects_with_finalizers.popleft()
             ll_assert(self._finalization_state(x) != 1, 
                       "bad finalization state 1")
-            if self.is_forwarded(x):
+            if self.surviving(x):
                 new_with_finalizer.append(self.get_forwarding_address(x))
                 continue
             marked.append(x)
@@ -466,7 +478,7 @@ class SemiSpaceGC(MovingGCBase):
     _append_if_nonnull = staticmethod(_append_if_nonnull)
 
     def _finalization_state(self, obj):
-        if self.is_forwarded(obj):
+        if self.surviving(obj):
             newobj = self.get_forwarding_address(obj)
             hdr = self.header(newobj)
             if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
@@ -516,14 +528,14 @@ class SemiSpaceGC(MovingGCBase):
         new_with_weakref = self.AddressStack()
         while self.objects_with_weakrefs.non_empty():
             obj = self.objects_with_weakrefs.pop()
-            if not self.is_forwarded(obj):
+            if not self.surviving(obj):
                 continue # weakref itself dies
             obj = self.get_forwarding_address(obj)
             offset = self.weakpointer_offset(self.get_type_id(obj))
             pointing_to = (obj + offset).address[0]
             # XXX I think that pointing_to cannot be NULL here
             if pointing_to:
-                if self.is_forwarded(pointing_to):
+                if self.surviving(pointing_to):
                     (obj + offset).address[0] = self.get_forwarding_address(
                         pointing_to)
                     new_with_weakref.append(obj)
