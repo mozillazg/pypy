@@ -1702,7 +1702,8 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         if TYPE.oopspec_name is not None:
             oopspecdescindex = self.oopspecdesc_position('new', TYPE, False)
             oopspecdesc = self.oopspecdescs[oopspecdescindex]
-            args, args_v = self.serialize_argtuple([], oopspecdesc.argtuple)
+            opargs = op.args[1:] # it's != [] if TYPE is an Array
+            args, args_v = self.serialize_argtuple(opargs, oopspecdesc.argtuple)
             deepfrozen = False
             self.emit('red_oopspec_call_%s' % len(args))
             self.emit(oopspecdescindex)
@@ -1714,6 +1715,8 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         index = self.structtypedesc_position(op.args[0].value)
         self.emit("red_new", index)
         self.register_redvar(op.result)
+
+    serialize_op_oonewarray = serialize_op_new
 
     def serialize_op_oosend(self, op):
         assert not self.hannotator.policy.hotpath, 'TODO'

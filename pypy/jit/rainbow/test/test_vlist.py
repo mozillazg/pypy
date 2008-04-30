@@ -18,6 +18,18 @@ class VListTest(InterpretationTest):
         assert res == 12
         self.check_insns({})
 
+    def test_fixed_vlist(self):
+        def ll_function(flag):
+            lst = [0, 0, 0]
+            if flag:
+                lst[0] = 42
+            else:
+                lst[0] = 1
+            return lst[0]
+        res = self.interpret(ll_function, [True], [], policy=P_OOPSPEC)
+        assert res == 42
+        self.check_insns({})
+
     def test_enter_block(self):
         def ll_function(flag):
             lst = []
@@ -160,7 +172,6 @@ class VListTest(InterpretationTest):
         self.check_insns({})
 
     def test_bogus_index_while_compiling(self):
-        py.test.skip("implement me")
         class Y:
             pass
 

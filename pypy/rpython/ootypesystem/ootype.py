@@ -490,6 +490,7 @@ class List(BuiltinADTType):
     ITEMTYPE_T = object()
     oopspec_name = 'list'
     oopspec_new = 'new(0)'
+    oopspec_new_argnames = ()
 
     def __init__(self, ITEMTYPE=None):
         self.ITEM = ITEMTYPE
@@ -582,6 +583,9 @@ class Array(BuiltinADTType):
     
     SELFTYPE_T = object()
     ITEMTYPE_T = object()
+    oopspec_name = 'list'
+    oopspec_new = 'new(length)'
+    oopspec_new_argnames = ('length',)
 
     def __init__(self, ITEMTYPE=None):
         self.ITEM = ITEMTYPE
@@ -662,6 +666,7 @@ class Dict(BuiltinADTType):
     VALUETYPE_T = object()
     oopspec_name = 'dict'
     oopspec_new = 'new()'
+    oopspec_new_argnames = ()
 
     def __init__(self, KEYTYPE=None, VALUETYPE=None):
         self._KEYTYPE = KEYTYPE
