@@ -1,4 +1,4 @@
-import os
+import os, py
 from pypy.tool.udir import udir
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
