@@ -282,6 +282,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 from pypy.objspace.std import builtinshortcut
                 builtinshortcut.install(self, mm)
 
+        if 1:  # if config...:
+            from pypy.objspace.std import builtinshortcut
+            builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
+
         # hack to avoid imports in the time-critical functions below
         for cls in self.model.typeorder:
             globals()[cls.__name__] = cls
@@ -674,16 +678,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return w_one is w_two
 
     def is_true(self, w_obj):
-        # first a few shortcuts for performance
+        # a shortcut for performance
+        # NOTE! this method is typically overridden by builtinshortcut.py.
         if type(w_obj) is W_BoolObject:
             return w_obj.boolval
-        if w_obj is self.w_None:
-            return False
-        # then a shortcut for bootstrapping reasons
-        if type(w_obj) is self.DictObjectCls:
-            return w_obj.len() != 0
-        else:
-            return DescrOperation.is_true(self, w_obj)
+        return DescrOperation.is_true(self, w_obj)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)
