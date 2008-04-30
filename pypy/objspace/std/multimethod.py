@@ -1,6 +1,29 @@
 
 from pypy.tool.sourcetools import compile2
 
+# This provide two compatible implementations of "multimethods".  A
+# multimethod is a callable object which chooses and calls a real
+# function from a table of pre-registered functions.  The choice depends
+# on the '__class__' of all arguments.  For example usages see
+# test_multimethod.
+
+# These multimethods support delegation: for each class A we must
+# provide a "typeorder", which is list of pairs ((B, converter)) where B
+# is a class and 'converter' is a function that can convert from an
+# instance of A to an instance of B.  If 'converter' is None it is
+# assumed that the instance needs no conversion.  The first entry in the
+# typeorder of a class A must almost always be (A, None).
+
+# A slightly non-standard feature of PyPy's multimethods is the way in
+# which they interact with normal subclassing.  Basically, they don't.
+# Suppose that A is a parent class of B.  Then a function registered for
+# an argument class A only accepts an instance whose __class__ is A, not
+# B.  To make it accept an instance of B, the typeorder for B must
+# contain (A, None).  An exception to this strict rule is if C is
+# another subclass of A which is not mentioned at all in the typeorder;
+# in this case C is considered to be equivalent to A.
+
+
 class FailedToImplement(Exception):
     def __init__(self, w_type=None, w_value=None):
         self.w_type  = w_type
@@ -121,6 +144,7 @@ class InstallerVersion1:
         self.prefix = prefix
         self.prefix_memo[prefix] = 1
         self.list_of_typeorders = list_of_typeorders
+        self.check_typeorders()
         self.subtree_cache = {}
         self.to_install = []
         self.non_empty = self.build_tree([], multimethod.dispatch_tree)
@@ -135,6 +159,18 @@ class InstallerVersion1:
         self.perform_call = self.build_function(None, prefix+'_perform_call',
                                                 None, perform)
 
+    def check_typeorders(self):
+        # xxx we use a '__'-separated list of the '__name__' of the types
+        # in build_single_method(), so types with the same __name__ or
+        # with '__' in them would obscurely break this logic
+        for typeorder in self.list_of_typeorders:
+            for type in typeorder:
+                assert '__' not in type.__name__, (
+                    "avoid '__' in the name of %r" % (type,))
+            names = dict.fromkeys([type.__name__ for type in typeorder])
+            assert len(names) == len(typeorder), (
+                "duplicate type.__name__ in %r" % (typeorder,))
+
     def is_empty(self):
         return not self.non_empty
 
@@ -143,9 +179,31 @@ class InstallerVersion1:
         #print >> f, '_'*60
         #import pprint
         #pprint.pprint(self.list_of_typeorders, f)
+
+        def class_key(cls):
+            "Returns an object such that class_key(subcls) > class_key(cls)."
+            return len(cls.__mro__)
+
+        # Sort 'to_install' so that base classes come first, which is
+        # necessary for the 'parentfunc' logic in the loop below to work.
+        # Moreover, 'to_install' can contain two functions with the same
+        # name for the root class: the default fallback one and the real
+        # one.  So we have to sort the real one just after the default one
+        # so that the default one gets overridden.
+        def key(target, funcname, func, source, fallback):
+            if target is None:
+                return ()
+            return (class_key(target), not fallback)
+        self.to_install.sort(lambda a, b: cmp(key(*a), key(*b)))
+
         for target, funcname, func, source, fallback in self.to_install:
             if target is not None:
-                if hasattr(target, funcname) and fallback:
+                # If the parent class provides a method of the same
+                # name which is actually the same 'func', we don't need
+                # to install it again.  Useful with fallback functions.
+                parentfunc = getattr(target, funcname, None)
+                parentfunc = getattr(parentfunc, 'im_func', None)
+                if parentfunc is func:
                     continue
                 #print >> f, target.__name__, funcname
                 #if source:
@@ -194,13 +252,10 @@ class InstallerVersion1:
                     if func is not None:
                         things_to_call.append((conversion, func, None))
 
-        if things_to_call:
-            funcname = intern(funcname)
-            self.build_function(next_type, funcname, len(types_so_far),
-                                things_to_call)
-            return True
-        else:
-            return False
+        funcname = intern(funcname)
+        self.build_function(next_type, funcname, len(types_so_far),
+                            things_to_call)
+        return bool(things_to_call)
 
     def build_function(self, target, funcname, func_selfarg_index,
                        things_to_call):
@@ -244,7 +299,9 @@ class InstallerVersion1:
             miniglobals['raiseFailedToImplement'] = raiseFailedToImplement
             bodylines = ['return raiseFailedToImplement()']
             fallback = True
-
+            # NB. make sure that there is only one fallback function object,
+            # i.e. the key used in the mmfunccache below is always the same
+            # for all functions with the same name and an empty bodylines.
 
         # protect all lines apart from the last one by a try:except:
         for i in range(len(bodylines)-2, -1, -1):
@@ -291,10 +348,10 @@ class InstallerVersion1:
 
 class MMDispatcher(object):
     """NOT_RPYTHON
-    Explicit dispatcher class.  This is not used in normal execution, which
-    uses the complex Installer below to install single-dispatch methods to
-    achieve the same result.  The MMDispatcher is only used by
-    rpython.lltypesystem.rmultimethod.  It is also nice for documentation.
+    Explicit dispatcher class.  The __call__ and dispatch() methods
+    are only present for documentation purposes.  The InstallerVersion2
+    uses the expressions() method to precompute fast RPython-friendly
+    dispatch tables.
     """
     _revcache = None
 
@@ -323,6 +380,9 @@ class MMDispatcher(object):
                 return v.function(*[expr(w) for w in v.arguments])
             else:
                 return v
+        # XXX this is incomplete: for each type in argtypes but not
+        # in the typeorder, we should look for the first base class
+        # that is in the typeorder.
         e = None
         for v in self.expressions(argtypes, prefixargs, args, suffixargs):
             try:
