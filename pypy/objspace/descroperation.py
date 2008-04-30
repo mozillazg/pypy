@@ -129,7 +129,11 @@ class DescrOperation:
         return space.get_and_call_function(w_delete, w_descr, w_obj)
 
     def getattr(space, w_obj, w_name):
+        # may be overridden in StdObjSpace
         w_descr = space.lookup(w_obj, '__getattribute__')
+        return space._handle_getattribute(w_descr, w_obj, w_name)
+
+    def _handle_getattribute(space, w_descr, w_obj, w_name):
         try:
             if w_descr is None:   # obscure case
                 raise OperationError(space.w_AttributeError, space.w_None)
