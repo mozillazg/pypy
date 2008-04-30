@@ -15,6 +15,9 @@ from pypy.rpython.lltypesystem.lltype import \
      Bool, Void, GcArray, nullptr, pyobjectptr, cast_primitive, typeOf,\
      staticAdtMethod, GcForwardReference
 from pypy.rpython.rmodel import Repr
+from pypy.rpython.lltypesystem import llmemory
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.tool.sourcetools import func_with_new_name
 
 # ____________________________________________________________
 #
@@ -28,7 +31,7 @@ from pypy.rpython.rmodel import Repr
 STR = GcForwardReference()
 UNICODE = GcForwardReference()
 
-def new_malloc(TP):
+def new_malloc(TP, name):
     def mallocstr(length):
         ll_assert(length >= 0, "negative string length")
         r = malloc(TP, length)
@@ -36,10 +39,10 @@ def new_malloc(TP):
             r.hash = 0
         return r
     mallocstr._annspecialcase_ = 'specialize:semierased'
-    return mallocstr
+    return func_with_new_name(mallocstr, name)
 
-mallocstr = new_malloc(STR)
-mallocunicode = new_malloc(UNICODE)
+mallocstr = new_malloc(STR, 'mallocstr')
+mallocunicode = new_malloc(UNICODE, 'mallocunicode')
 
 def emptystrfun():
     return emptystr
@@ -47,14 +50,32 @@ def emptystrfun():
 def emptyunicodefun():
     return emptyunicode
 
+def _new_copy_contents_fun(TP, CHAR_TP, name):
+    def _str_ofs(item):
+        return (llmemory.offsetof(TP, 'chars') +
+                llmemory.itemoffsetof(TP.chars, 0) +
+                llmemory.sizeof(CHAR_TP) * item)
+    
+    def copy_string_contents(s1, s2, s1start, s2start, lgt):
+        src = llmemory.cast_ptr_to_adr(s1) + _str_ofs(s1start)
+        dest = llmemory.cast_ptr_to_adr(s2) + _str_ofs(s2start)
+        llmemory.raw_memcopy(src, dest, llmemory.sizeof(CHAR_TP) * lgt)
+    copy_string_contents._always_inline_ = True
+    return func_with_new_name(copy_string_contents, 'copy_%s_contents' % name)
+
+copy_string_contents = _new_copy_contents_fun(STR, Char, 'string')
+copy_unicode_contents = _new_copy_contents_fun(UNICODE, UniChar, 'unicode')
+
 STR.become(GcStruct('rpy_string', ('hash',  Signed),
                     ('chars', Array(Char, hints={'immutable': True})),
                     adtmeths={'malloc' : staticAdtMethod(mallocstr),
-                              'empty'  : staticAdtMethod(emptystrfun)}))
+                              'empty'  : staticAdtMethod(emptystrfun),
+                              'copy_contents' : staticAdtMethod(copy_string_contents)}))
 UNICODE.become(GcStruct('rpy_unicode', ('hash', Signed),
                         ('chars', Array(UniChar, hints={'immutable': True})),
                         adtmeths={'malloc' : staticAdtMethod(mallocunicode),
-                                  'empty'  : staticAdtMethod(emptyunicodefun)}
+                                  'empty'  : staticAdtMethod(emptyunicodefun),
+                                  'copy_contents' : staticAdtMethod(copy_unicode_contents)}
                         ))
 SIGNED_ARRAY = GcArray(Signed)
 CONST_STR_CACHE = WeakValueDictionary()
@@ -268,15 +289,8 @@ class LLHelpers(AbstractLLHelpers):
         len1 = len(s1.chars)
         len2 = len(s2.chars)
         newstr = s1.malloc(len1 + len2)
-        j = 0
-        while j < len1:
-            newstr.chars[j] = s1.chars[j]
-            j += 1
-        i = 0
-        while i < len2:
-            newstr.chars[j] = s2.chars[i]
-            i += 1
-            j += 1
+        s1.copy_contents(s1, newstr, 0, 0, len1)
+        s1.copy_contents(s2, newstr, 0, len1, len2)
         return newstr
 
     def ll_strip(s, ch, left, right):
@@ -293,15 +307,11 @@ class LLHelpers(AbstractLLHelpers):
                 rpos -= 1
         r_len = rpos - lpos + 1
         result = s.malloc(r_len)
-        i = 0
-        j = lpos
-        while i < r_len:
-            result.chars[i] = s.chars[j]
-            i += 1
-            j += 1
+        s.copy_contents(s, result, lpos, 0, r_len)
         return result
 
     def ll_upper(s):
+        # XXX WUAAAA! this is not true anymore for unicode
         s_chars = s.chars
         s_len = len(s_chars)
         if s_len == 0:
@@ -317,6 +327,7 @@ class LLHelpers(AbstractLLHelpers):
         return result
 
     def ll_lower(s):
+        # XXX WUAAAA! this is not true anymore for unicode
         s_chars = s.chars
         s_len = len(s_chars)
         if s_len == 0:
@@ -343,31 +354,15 @@ class LLHelpers(AbstractLLHelpers):
             itemslen += len(items[i].chars)
             i += 1
         result = s.malloc(itemslen + s_len * (num_items - 1))
-        res_chars = result.chars
-        res_index = 0
-        i = 0
-        item_chars = items[i].chars
-        item_len = len(item_chars)
-        j = 0
-        while j < item_len:
-            res_chars[res_index] = item_chars[j]
-            j += 1
-            res_index += 1
-        i += 1
+        res_index = len(items[0].chars)
+        s.copy_contents(items[0], result, 0, 0, res_index)
+        i = 1
         while i < num_items:
-            j = 0
-            while j < s_len:
-                res_chars[res_index] = s_chars[j]
-                j += 1
-                res_index += 1
-
-            item_chars = items[i].chars
-            item_len = len(item_chars)
-            j = 0
-            while j < item_len:
-                res_chars[res_index] = item_chars[j]
-                j += 1
-                res_index += 1
+            s.copy_contents(s, result, 0, res_index, s_len)
+            res_index += s_len
+            lgt = len(items[i].chars)
+            s.copy_contents(items[i], result, 0, res_index, lgt)
+            res_index += lgt
             i += 1
         return result
 
@@ -633,11 +628,7 @@ class LLHelpers(AbstractLLHelpers):
     def ll_stringslice_startonly(s1, start):
         len1 = len(s1.chars)
         newstr = s1.malloc(len1 - start)
-        j = 0
-        while start < len1:
-            newstr.chars[j] = s1.chars[start]
-            start += 1
-            j += 1
+        s1.copy_contents(s1, newstr, start, 0, len1 - start)
         return newstr
 
     def ll_stringslice(s1, slice):
@@ -648,20 +639,13 @@ class LLHelpers(AbstractLLHelpers):
                 return s1
             stop = len(s1.chars)
         newstr = s1.malloc(stop - start)
-        j = 0
-        while start < stop:
-            newstr.chars[j] = s1.chars[start]
-            start += 1
-            j += 1
+        s1.copy_contents(s1, newstr, start, 0, stop - start)
         return newstr
 
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
         newstr = s1.malloc(newlen)
-        j = 0
-        while j < newlen:
-            newstr.chars[j] = s1.chars[j]
-            j += 1
+        s1.copy_contents(s1, newstr, 0, 0, newlen)
         return newstr
 
     def ll_split_chr(LIST, s, c):
@@ -681,22 +665,12 @@ class LLHelpers(AbstractLLHelpers):
         while j < strlen:
             if chars[j] == c:
                 item = items[resindex] = s.malloc(j - i)
-                newchars = item.chars
-                k = i
-                while k < j:
-                    newchars[k - i] = chars[k]
-                    k += 1
+                item.copy_contents(s, item, i, 0, j - i)
                 resindex += 1
                 i = j + 1
             j += 1
         item = items[resindex] = s.malloc(j - i)
-        newchars = item.chars
-        k = i
-        while k < j:
-            newchars[k - i] = chars[k]
-            k += 1
-        resindex += 1
-
+        item.copy_contents(s, item, i, 0, j - i)
         return res
 
     def ll_replace_chr_chr(s, c1, c2):
