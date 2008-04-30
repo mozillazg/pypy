@@ -250,13 +250,20 @@ class NewOopSpecDesc(AbstractOopSpecDesc):
         self.typename = TYPE.oopspec_name
         self.method = 'oop_new%s' % self.typename
         self.is_method = False
-        opname, argtuple = parse_oopspec(TYPE.oopspec_new, [])
+        opname, argtuple = parse_oopspec(TYPE.oopspec_new,
+                                         TYPE.oopspec_new_argnames)
         assert opname == 'new'
         self.argtuple = argtuple
 
-        def allocate():
-            return ootype.new(TYPE)
-        self.fnptr = self.rtyper.annotate_helper_fn(allocate, [])
+        if isinstance(TYPE, ootype.Array):
+            def allocate(length):
+                return ootype.oonewarray(TYPE, length)
+            self.fnptr = self.rtyper.annotate_helper_fn(allocate,
+                                                        [ootype.Signed])
+        else:
+            def allocate():
+                return ootype.new(TYPE)
+            self.fnptr = self.rtyper.annotate_helper_fn(allocate, [])
 
 class NewOopSpecDesc_list(NewOopSpecDesc):
     pass
