@@ -1,13 +1,13 @@
 
-from pypy.rlib.streamio import fdopen_as_stream
+from pypy.rlib.streamio import open_file_as_stream
 
 def target(*args):
     return main, None
 
 def main(args):
-    search = args[0]
-    FD = 0
-    s = fdopen_as_stream(FD, 'r', 1024)
+    search = args[1]
+    fname = args[2]
+    s = open_file_as_stream(fname, 'r', 1024)
     while True:
         next_line = s.readline()
         if not next_line:
@@ -16,11 +16,16 @@ def main(args):
             print next_line
     return 0
 
-def cpy_main(s):
-    for x in sys.stdin.readlines():
+def cpy_main(args):
+    s = args[1]
+    f = open(args[2])
+    while True:
+        x = f.readline()
+        if not x:
+            break
         if s in x:
             print x
 
 if __name__ == '__main__':
     import sys
-    cpy_main(sys.argv[1])
+    main(sys.argv)
