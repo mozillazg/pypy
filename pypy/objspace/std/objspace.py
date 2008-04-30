@@ -722,7 +722,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         w_descr = self.lookup(w_obj, '__getattr__')
         if w_descr is not None:
-            return space.get_and_call_function(w_descr, w_obj, w_name)
+            return self.get_and_call_function(w_descr, w_obj, w_name)
         elif e is not None:
             raise e
         else:
