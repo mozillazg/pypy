@@ -284,6 +284,9 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("builtinshortcut",
                    "a shortcut for operations between built-in types",
                    default=False),
+        BoolOption("getattributeshortcut",
+                   "track types that override __getattribute__",
+                   default=False),
 
         BoolOption("oldstyle",
                    "specify whether the default metaclass should be classobj",

@@ -216,3 +216,8 @@ class AppTestWithMultiMethodVersion2(AppTestUserObject):
     def teardown_class(cls):
         from pypy.objspace.std import multimethod
         multimethod.Installer = cls.prev_installer
+
+
+class AppTestWithGetAttributeShortcut(AppTestUserObject):
+    OPTIONS = {"objspace.std.getattributeshortcut": True}
+
