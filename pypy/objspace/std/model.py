@@ -260,7 +260,9 @@ class StdTypeModel:
                     subclslist = enum_interplevel_subclasses(cls)
                     for subcls in subclslist:
                         if cls in subcls.__bases__:   # only direct subclasses
-                            result[subcls] = []
+                            result[subcls] = [(W_Root, None)]
+                            # W_Root="ANY" which always matches,
+                            # even user subclasses
             self._typeorder_with_empty_usersubcls = result
         return self._typeorder_with_empty_usersubcls
 
