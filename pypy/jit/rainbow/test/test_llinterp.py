@@ -6,8 +6,14 @@ if option.quicktest:
     py.test.skip("slow")
 
 
+class TestLLInterpretedOOType(test_portal.TestPortalOOType):
+    translate_support_code = True
 
-class TestLLInterpreted(test_portal.TestPortalLLType):
+    # for the individual tests see
+    # ====> test_portal.py
+
+
+class TestLLInterpretedLLType(test_portal.TestPortalLLType):
     translate_support_code = True
 
     # for the individual tests see
