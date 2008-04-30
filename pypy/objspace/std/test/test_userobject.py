@@ -1,6 +1,12 @@
 
 
 class AppTestUserObject:
+    OPTIONS = {}    # for test_builtinshortcut.py
+
+    def setup_class(cls):
+        from pypy import conftest
+        cls.space = conftest.gettestobjspace(**cls.OPTIONS)
+
     def test_emptyclass(self):
         class empty: pass
         inst = empty()
@@ -182,3 +188,36 @@ class AppTestUserObject:
         c.m = lambda: "instance"
         res = c.m()
         assert res == "instance"
+
+    def test_override_builtin_methods(self):
+        class myint(int):
+            def __add__(self, other):
+                return 'add'
+            def __rsub__(self, other):
+                return 'rsub'
+        assert myint(3) + 5 == 'add'
+        assert 5 + myint(3) == 8
+        assert myint(3) - 5 == -2
+        assert 5 - myint(3) == 'rsub'
+
+
+class AppTestWithMultiMethodVersion2(AppTestUserObject):
+    OPTIONS = {}    # for test_builtinshortcut.py
+
+    def setup_class(cls):
+        from pypy import conftest
+        from pypy.objspace.std import multimethod
+
+        cls.prev_installer = multimethod.Installer
+        multimethod.Installer = multimethod.InstallerVersion2
+        config = conftest.make_config(conftest.option, **cls.OPTIONS)
+        cls.space = conftest.maketestobjspace(config)
+
+    def teardown_class(cls):
+        from pypy.objspace.std import multimethod
+        multimethod.Installer = cls.prev_installer
+
+
+class AppTestWithGetAttributeShortcut(AppTestUserObject):
+    OPTIONS = {"objspace.std.getattributeshortcut": True}
+
