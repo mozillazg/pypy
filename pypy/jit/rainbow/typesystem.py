@@ -1,4 +1,6 @@
-from pypy.rpython.annlowlevel import base_ptr_lltype
+from pypy.rpython.annlowlevel import base_ptr_lltype, base_obj_ootype
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import cast_instance_to_base_obj
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 
@@ -27,6 +29,7 @@ class LLTypeHelper(TypeSystemHelper):
     name = 'lltype'
     ROOT_TYPE = llmemory.Address
     NULL_OBJECT = base_ptr_lltype()._defl()
+    cast_instance_to_base_ptr = staticmethod(cast_instance_to_base_ptr)
 
     def get_typeptr(self, obj):
         return obj.typeptr
@@ -55,7 +58,8 @@ class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
     ROOT_TYPE = ootype.Object
-    NULL_OBJECT = ootype.NULL
+    NULL_OBJECT = base_obj_ootype()._defl()
+    cast_instance_to_base_ptr = staticmethod(cast_instance_to_base_obj)
 
     def get_typeptr(self, obj):
         return obj.meta

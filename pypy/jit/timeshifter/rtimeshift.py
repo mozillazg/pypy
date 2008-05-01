@@ -777,10 +777,10 @@ def _cast_base_ptr_to_promotion_point(ptr):
     else:
         return ptr
 
-def _cast_promotion_point_to_base_ptr(instance):
+def _cast_promotion_point_to_base_ptr(jitstate, instance):
     assert isinstance(instance, PromotionPoint)
     if we_are_translated():
-        return cast_instance_to_base_ptr(instance)
+        return jitstate.ts.cast_instance_to_base_ptr(instance)
     else:
         return instance
 
@@ -846,7 +846,7 @@ def promote(jitstate, promotebox, promotiondesc):
             pm = PromotionPoint(flexswitch, incoming_gv,
                                 jitstate.promotion_path)
             #debug_print(lltype.Void, "PROMOTE")
-            ll_pm = _cast_promotion_point_to_base_ptr(pm)
+            ll_pm = _cast_promotion_point_to_base_ptr(jitstate, pm)
             gv_pm = default_builder.rgenop.genconst(ll_pm)
             gv_switchvar = promotebox.genvar
             exceptiondesc = promotiondesc.exceptiondesc
@@ -1282,7 +1282,7 @@ class JITState(object):
         setexcvaluebox(self, evaluebox)
 
     def residual_exception(self, e):
-        self.residual_ll_exception(cast_instance_to_base_ptr(e))
+        self.residual_ll_exception(self.ts.cast_instance_to_base_ptr(e))
 
     def get_resuming(self):
         if self.frame.dispatchqueue is None:
