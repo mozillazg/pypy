@@ -12,6 +12,14 @@ class TestLLInterpretedOOType(test_portal.TestPortalOOType):
     # for the individual tests see
     # ====> test_portal.py
 
+    def skip(self):
+        py.test.skip('in progress')
+        
+    test_dfa_compile = skip
+    test_dfa_compile2 = skip
+    test_dfa_compile3 = skip
+
+
 
 class TestLLInterpretedLLType(test_portal.TestPortalLLType):
     translate_support_code = True
