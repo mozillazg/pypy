@@ -15,6 +15,7 @@ class Timer(object):
         self.next_even = None
         self.timer = timer
         self.t0 = None
+        self.tk = None
 
     def start_event(self, event):
         now = self.timer()
@@ -31,6 +32,8 @@ class Timer(object):
         self.tk = now
 
     def ttime(self):
+        if self.tk is None:
+            return -1
         return self.tk - self.t0
 
     def pprint(self):
