@@ -595,6 +595,8 @@ def annotation_to_lltype(s_val, info=None):
         return s_val.ootype
     if isinstance(s_val, SomeOOStaticMeth):
         return s_val.method
+    if isinstance(s_val, SomeOOClass):
+        return s_val.ootype
     if isinstance(s_val, SomeInteriorPtr):
         p = s_val.ll_ptrtype
         if 0 in p.offsets:
@@ -633,6 +635,8 @@ def lltype_to_annotation(T):
             return SomeOOStaticMeth(T)
         elif T == ootype.Class:
             return SomeOOClass(ootype.ROOT)
+        elif T == ootype.Object:
+            return SomeOOObject()
         elif isinstance(T, ExternalType):
             return SomeExternalInstance(T._class_)
         elif isinstance(T, lltype.InteriorPtr):
