@@ -1882,6 +1882,20 @@ def ooweakref_create(obj):
     ref.ll_set(obj)
     return ref
 
+def build_unbound_method_wrapper(meth):
+    METH = typeOf(meth)
+    methname = meth._name
+    funcname = '%s_wrapper' % methname
+    nb_args = len(METH.ARGS)
+    arglist = ', '.join('a%d' % i for i in range(nb_args))
+    ns = {'methname': methname}
+    code = py.code.Source("""
+    def %s(self, %s):
+        m = getattr(self, methname)
+        return m(%s)
+    """ % (funcname, arglist, arglist))
+    exec code.compile() in ns
+    return ns[funcname]
 
 Object = Object()
 NULL = _object(None)

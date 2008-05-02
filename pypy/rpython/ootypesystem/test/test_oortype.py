@@ -337,3 +337,16 @@ def test_oodowncast():
         return oodowncast(A, c)
 
     py.test.raises(AnnotatorError, interpret, fn, [], type_system='ootype')
+
+def test_method_wrapper():
+    L = List(Signed)
+    _, meth = L._lookup('ll_getitem_fast')
+    wrapper = build_unbound_method_wrapper(meth)
+
+    def fn():
+        lst = L.ll_newlist(1)
+        lst.ll_setitem_fast(0, 42)
+        return wrapper(lst, 0)
+    
+    res = interpret(fn, [], type_system='ootype')
+    assert res == 42
