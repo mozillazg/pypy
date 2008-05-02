@@ -290,6 +290,11 @@ class LLBuilder(GenBuilder):
                      "genop_oononnull: bad currently_writing")
         return LLVar(llimpl.genop(self.b, 'oononnull', [gv_obj], gv_Bool.v))
 
+    def genop_ooisnull(self, gv_obj):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_ooisnull: bad currently_writing")
+        return LLVar(llimpl.genop(self.b, 'ooisnull', [gv_obj], gv_Bool.v))
+
     def genop_cast_int_to_ptr(self, gv_PTRTYPE, gv_int):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_cast_int_to_ptr: bad currently_writing")

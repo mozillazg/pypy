@@ -280,6 +280,9 @@ class SendOopSpecDesc(AbstractOopSpecDesc):
         self.ARGS = [METH.SELFTYPE] + list(METH.ARGS)
         self.RESULT = METH.RESULT
 
+        wrapper = ootype.build_unbound_method_wrapper(meth)
+        self.fnptr = self.rtyper.annotate_helper_fn(wrapper, self.ARGS)
+
         # we assume the number and position of the arguments are the
         # same as in the original oosend
         self.OOPARGTYPES = [self.SELFTYPE] + list(METH.ARGS)
@@ -289,7 +292,6 @@ class SendOopSpecDesc(AbstractOopSpecDesc):
         methname = methname.lstrip('ll_')
         self.method = 'oop_%s_method_%s' % (self.typename, methname)
         self.is_method = True
-        self.fnptr = meth
 
 
 class SendOopSpecDesc_list(SendOopSpecDesc):
