@@ -200,6 +200,13 @@ class AppTestUserObject:
         assert myint(3) - 5 == -2
         assert 5 - myint(3) == 'rsub'
 
+    def test_repr(self):
+        class Foo(object):
+            pass
+        Foo.__module__ = 'a.b.c'
+        s = repr(Foo())
+        assert s.startswith('<a.b.c.Foo object at ')
+
 
 class AppTestWithMultiMethodVersion2(AppTestUserObject):
     OPTIONS = {}    # for test_builtinshortcut.py
