@@ -80,7 +80,10 @@ class CartridgeManager(object):
     def getMemoryBankType(self):
         return self.rom[constants.CARTRIDGE_TYPE_ADDRESS] & 0xFF
     
-    def getRom(self):
+    def getMemoryBank(self):
+        return self.mbc
+
+    def getROM(self):
         return self.rom
         
     def getROMSize(self):
@@ -129,6 +132,8 @@ class CartridgeManager(object):
     def createBankController(self, type, rom, ram, clockDriver):
         return MEMORY_BANK_MAPPING[type](rom, ram, clockDriver)
 
+
+# ------------------------------------------------------------------------------
 
     
 class Cartridge(object):

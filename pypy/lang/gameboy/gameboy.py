@@ -1,7 +1,7 @@
 """
 PyBoy GameBoy (TM) Emulator
  
-Gameboy Scheduler and Memory Mapper
+GameBoy Scheduler and Memory Mapper
 
 """
 from pypy.lang.gameboy import constants
@@ -26,25 +26,26 @@ class GameBoy(object):
     def createDrivers(self):
         self.clock = Clock()
         self.joypadDriver = JoypadDriver()
-        self.videoDriver = VideoDriver()
-        self.soundDriver = SoundDriver()
+        self.videoDriver  = VideoDriver()
+        self.soundDriver  = SoundDriver()
         
     def createGamboyElements(self): 
-        self.ram = RAM()
+        self.ram    = RAM()
         self.cartridgeManager = CartridgeManager(self.clock)
         self.interrupt = Interrupt()
-        self.cpu = CPU(self.interrupt, self)
+        self.cpu    = CPU(self.interrupt, self)
         self.serial = Serial(self.interrupt)
-        self.timer = Timer(self.interrupt)
+        self.timer  = Timer(self.interrupt)
         self.joypad = Joypad(self.joypadDriver, self.interrupt)
-        self.video = Video(self.videoDriver, self.interrupt, self)
-        self.sound = Sound(self.soundDriver)  
+        self.video  = Video(self.videoDriver, self.interrupt, self)
+        self.sound  = Sound(self.soundDriver)  
 
     def getCartridgeManager(self):
         return self.cartridgeManager
     
     def loadCartridge(self, cartridge):
         self.cartridgeManager.load(cartridge)
+        self.cpu.setROM(self.cartridgeManager.getROM())
         
     def loadCartridgeFile(self, path):
         self.loadCartridge(Cartridge(path))
@@ -54,7 +55,6 @@ class GameBoy(object):
 
     def setFrameSkip(self, frameSkip):
         self.video.setFrameSkip(frameSkip)
-
 
     def save(self, cartridgeName):
         self.cartridge.save(cartridgeName)
@@ -75,16 +75,16 @@ class GameBoy(object):
         self.joypad.reset()
         self.video.reset()
         self.sound.reset()
-        self.cpu.setROM(self.cartridge.getROM())
+        self.cpu.setROM(self.cartridgeManager.getROM())
         self.drawLogo()
 
     def cycles(self):
-        return min( self.video.cycles(), self.serial.cycles(),
-                    self.timer.cycles(), self.sound.cycles(),
-                    self.joypad.cycles())
+        return min( self.video.getCycles(), self.serial.getCycles(),
+                    self.timer.getCycles(), self.sound.getCycles(),
+                    self.joypad.getCycles())
 
     def emulate(self, ticks):
-        while (ticks > 0):
+        while ticks > 0:
             count = self.cycles()
             self.cpu.emulate(count)
             self.serial.emulate(count)
@@ -95,38 +95,38 @@ class GameBoy(object):
             ticks -= count
 
     def write(self, address, data):
-        self.getreceiver(address).write(address, data)
+        self.getReceiver(address).write(address, data)
 
     def read(self, address):
-        self.getreceiver(address).read(address)
+        self.getReceiver(address).read(address)
 
-    def getreceiver(self, address):
+    def getReceiver(self, address):
         if 0x0000 <= address <= 0x7FFF:
-            return Gameboy.cartridge
+            return self.cartridgeManager.getMemoryBank()
         elif 0x8000 <= address <= 0x9FFF:
-            return Gameboy.video
+            return self.video
         elif 0xA000 <= address <= 0xBFFF:
-            return Gameboy.cartridge
+            return self.cartridgeManager.getMemoryBank()
         elif 0xC000 <= address <= 0xFDFF:
-            return Gameboy.ram
+            return self.ram
         elif 0xFE00 <= address <= 0xFEFF:
-            return Gameboy.video
+            return self.video
         elif 0xFF00 <= address <= 0xFF00:
-            return Gameboy.joypad
+            return self.joypad
         elif 0xFF01 <= address <= 0xFF02:
-            return Gameboy.serial
+            return self.serial
         elif 0xFF04 <= address <= 0xFF07:
-            return Gameboy.timer
+            return self.timer
         elif 0xFF0F <= address <= 0xFF0F:
-            return Gameboy.interrupt
+            return self.interrupt
         elif 0xFF10 <= address <= 0xFF3F:
-            return Gameboy.sound
+            return self.sound
         elif 0xFF40 <= address <= 0xFF4B:
-            return Gameboy.video
+            return self.video
         elif 0xFF80 <= address <= 0xFFFE:
-            return Gameboy.ram
+            return self.ram
         elif 0xFFFF <= address <= 0xFFFF:
-            return Gameboy.interrupt
+            return self.interrupt
 
     def drawLogo(self):
         for index in range(0, 48):
