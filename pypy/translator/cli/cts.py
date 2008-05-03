@@ -147,6 +147,7 @@ _lltype_to_cts = {
     ootype.Unicode: types.string,
     ootype.UnicodeBuilder: types.string_builder,
     ootype.WeakReference: types.weakref,
+    ootype.Object: types.object,
 
     # maps generic types to their ordinal
     ootype.List.SELFTYPE_T: types.list,

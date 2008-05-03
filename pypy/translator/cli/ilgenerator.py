@@ -418,6 +418,9 @@ class CLIBaseGenerator(Generator):
     def dup(self, TYPE):
         self.ilasm.opcode('dup')
 
+    def push_null(self, TYPE):
+        self.ilasm.opcode('ldnull')
+
     def oonewarray(self, TYPE, length):
         if TYPE.ITEM is ootype.Void:
             self.new(TYPE)
