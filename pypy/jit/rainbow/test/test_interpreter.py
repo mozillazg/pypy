@@ -233,6 +233,9 @@ class InterpretationTest(object):
             writer.interpreter.finish_jitstate(sigtoken)
         builder.end()
         generated = gv_generated.revealconst(self.Ptr(self.RESIDUAL_FUNCTYPE))
+        return self.run_generated(writer, generated, residualargs, **kwds)
+
+    def run_generated(self, writer, generated, residualargs, **kwds):
         graph = get_funcobj(generated).graph
         self.residual_graph = graph
         if conftest.option.view:
