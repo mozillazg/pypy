@@ -131,7 +131,9 @@ class CartridgeManager(object):
 
     
 class Cartridge(object):
-    
+    """
+        File mapping. Holds the file contents
+    """
     def __init__(self, file=None):
         self.reset()
         if file != None:
