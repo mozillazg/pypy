@@ -45,6 +45,9 @@ class GameBoy(object):
     
     def loadCartridge(self, cartridge):
         self.cartridgeManager.load(cartridge)
+        
+    def loadCartridgeFile(self, path):
+        self.loadCartridge(Cartridge(path))
 
     def getFrameSkip(self):
         return self.video.getFrameSkip()
@@ -52,8 +55,6 @@ class GameBoy(object):
     def setFrameSkip(self, frameSkip):
         self.video.setFrameSkip(frameSkip)
 
-    def load(self, cartridgeName):
-        self.cartridge.load(cartridgeName)
 
     def save(self, cartridgeName):
         self.cartridge.save(cartridgeName)
