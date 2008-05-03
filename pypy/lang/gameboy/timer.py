@@ -65,8 +65,8 @@ class Timer(object):
             self.timerClock =  self.timerCycles = constants.TIMER_CLOCK[data & 0x03]
         self.tac = data
 
-    def cycles(self):
-        if ((self.tac & 0x04) != 0 and self.timerCycles < self.dividerCycles):
+    def getCycles(self):
+        if (self.tac & 0x04) != 0 and self.timerCycles < self.dividerCycles:
                 return self.timerCycles
         return self.dividerCycles
 

@@ -18,7 +18,7 @@ class Joypad(object):
         self.buttonCode = 0xF
         self.cycles = constants.JOYPAD_CLOCK
 
-    def cycles(self):
+    def getCycles(self):
         return self.cycles
 
     def emulate(self, ticks):

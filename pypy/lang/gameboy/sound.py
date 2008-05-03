@@ -551,7 +551,7 @@ class Sound(object):
     def stop(self):
         self.driver.stop()
 
-    def cycles(self):
+    def getCycles(self):
         return self.cycles
 
     def emulate(self, ticks):

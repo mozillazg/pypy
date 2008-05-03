@@ -207,7 +207,8 @@ class CPU(object):
         self.a = Register(self, constants.RESET_A)
         self.f = FlagRegister(self)
         self.af = DoubleRegister(self, self.a, self.f)
-
+        
+        self.rom = []
         self.reset()
 
     def reset(self):
@@ -319,8 +320,8 @@ class CPU(object):
     def emulate(self, ticks):
         self.cycles += ticks
         self.handlePendingInterrupt()
-        while (self.cycles > 0):
-            self.execute()
+        while self.cycles > 0:
+            self.execute(self.fetch())
 
      # Interrupts
     def handlePendingInterrupt(self):
