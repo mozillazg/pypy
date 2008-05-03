@@ -82,6 +82,7 @@ namespace pypy.test
         }
     }
 
+    public delegate double DelegateType_int__0();
     public delegate double DelegateType_double__double_1(double a);
     public delegate double DelegateType_double_int_double(int a, double b);
     public delegate void DelegateType_void_int_1(int a);

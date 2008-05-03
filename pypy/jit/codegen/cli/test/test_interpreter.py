@@ -10,7 +10,7 @@ class TestRainbowCli(RainbowTest):
 
     def run_generated(self, writer, generated, residualargs, **kwds):
         if 'check_raises' not in kwds:
-            res = generated(*residualargs)
+            res = generated.DynamicInvoke(residualargs)
         else:
             assert False, 'TODO'
         return res
@@ -23,7 +23,6 @@ class TestRainbowCli(RainbowTest):
 
     test_simple_opt_const_propagation1 = skip
     test_simple_opt_const_propagation2 = skip
-    test_simple_fixed = skip
     test_red_switch = skip
     test_merge = skip
     test_loop_merging = skip
