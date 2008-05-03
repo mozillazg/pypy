@@ -85,7 +85,7 @@ class PortalTest(InterpretationTest):
 class BaseTestPortal(PortalTest):
     type_system = "lltype"
             
-    def test_simple(self):
+    def test_very_simple(self):
 
         def main(code, x):
             return evaluate(code, x)
