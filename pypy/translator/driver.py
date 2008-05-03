@@ -378,6 +378,14 @@ class TranslationDriver(SimpleTaskEngine):
         [RTYPE],
         "Backendopt before Hint-annotate")
 
+    def task_prehannotatebackendopt_ootype(self):
+        self.task_prehannotatebackendopt_lltype()
+    #
+    task_prehannotatebackendopt_ootype = taskdef(
+        task_prehannotatebackendopt_ootype,
+        [OOTYPE],
+        "Backendopt before Hint-annotate")
+
     def task_hintannotate_lltype(self):
         from pypy.jit.hintannotator.model import OriginFlags
         from pypy.jit.hintannotator.model import SomeLLAbstractConstant
@@ -416,30 +424,19 @@ class TranslationDriver(SimpleTaskEngine):
                                        ['prehannotatebackendopt_lltype'],
                                        "Hint-annotate")
 
-    def task_rainbow_lltype(self):
-        cpu = self.config.translation.jitbackend
-        if cpu is None:
-            from pypy.jit.codegen import detect_cpu
-            cpu = detect_cpu.autodetect()
-        if cpu == 'i386':
-            from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
-            RGenOp.MC_SIZE = 32 * 1024 * 1024
-        elif cpu == 'ia32':
-            from pypy.jit.codegen.ia32.rgenop import RI386GenOp as RGenOp
-            RGenOp.MC_SIZE = 32 * 1024 * 1024
-        elif cpu == 'ppc':
-            from pypy.jit.codegen.ppc.rgenop import RPPCGenOp as RGenOp
-            RGenOp.MC_SIZE = 32 * 1024 * 1024
-        else:
-            raise Exception('Unsuported cpu %r'%cpu)
+    def task_hintannotate_ootype(self):
+        self.task_hintannotate_lltype()
+    task_hintannotate_ootype = taskdef(task_hintannotate_ootype,
+                                       ['prehannotatebackendopt_ootype'],
+                                       "Hint-annotate")
 
+    def do_task_rainbow(self, RGenOp, BytecodeWriter):
         del self.hint_translator
         ha = self.hannotator
         t = self.translator
         rtyper = t.rtyper
         # make the bytecode and the rainbow interp
-        from pypy.jit.rainbow.codewriter import LLTypeBytecodeWriter
-        writer = LLTypeBytecodeWriter(t, ha, RGenOp, verbose=False)
+        writer = BytecodeWriter(t, ha, RGenOp, verbose=False)
         jitcode = writer.make_bytecode(self.portal_graph)
         if ha.policy.hotpath:
             from pypy.jit.rainbow.hotpath import HotRunnerDesc
@@ -459,9 +456,38 @@ class TranslationDriver(SimpleTaskEngine):
             rewriter.rewrite(origportalgraph=self.orig_portal_graph,
                              portalgraph=self.portal_graph,
                              view=False)
+
+    def task_rainbow_lltype(self):
+        from pypy.jit.rainbow.codewriter import LLTypeBytecodeWriter
+        cpu = self.config.translation.jitbackend
+        if cpu is None:
+            from pypy.jit.codegen import detect_cpu
+            cpu = detect_cpu.autodetect()
+        if cpu == 'i386':
+            from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
+            RGenOp.MC_SIZE = 32 * 1024 * 1024
+        elif cpu == 'ia32':
+            from pypy.jit.codegen.ia32.rgenop import RI386GenOp as RGenOp
+            RGenOp.MC_SIZE = 32 * 1024 * 1024
+        elif cpu == 'ppc':
+            from pypy.jit.codegen.ppc.rgenop import RPPCGenOp as RGenOp
+            RGenOp.MC_SIZE = 32 * 1024 * 1024
+        else:
+            raise Exception('Unsuported cpu %r'%cpu)
+        self.do_task_rainbow(RGenOp, LLTypeBytecodeWriter)
     #
     task_rainbow_lltype = taskdef(task_rainbow_lltype,
                              ["hintannotate_lltype"],
+                             "Create Rainbow-Interpreter")
+
+    def task_rainbow_ootype(self):
+        from pypy.jit.rainbow.codewriter import OOTypeBytecodeWriter
+        from pypy.jit.codegen.cli.rgenop import RCliGenOp as RGenOp
+        cpu = self.config.translation.jitbackend
+        assert cpu == 'cli'
+        self.do_task_rainbow(RGenOp, OOTypeBytecodeWriter)
+    task_rainbow_ootype = taskdef(task_rainbow_ootype,
+                             ["hintannotate_ootype"],
                              "Create Rainbow-Interpreter")
 
     def task_backendopt_lltype(self):
