@@ -1,9 +1,11 @@
 import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
+from pypy.rpython.memory.gc.semispace import DEBUG_PRINT
 from pypy.rpython.memory.gc.generation import GenerationGC, GCFLAG_FORWARDED
 from pypy.rpython.memory.gc.generation import GCFLAG_NO_YOUNG_PTRS
-from pypy.rpython.lltypesystem import llmemory, llarena
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
 
@@ -48,6 +50,8 @@ class HybridGC(GenerationGC):
         assert self.nonlarge_gcptrs_max <= self.lb_young_var_basesize
         assert self.nonlarge_max <= self.nonlarge_gcptrs_max
         self.large_objects_collect_trigger = self.space_size
+        if DEBUG_PRINT:
+            self._initial_trigger = self.large_objects_collect_trigger
         self.pending_external_object_list = self.AddressDeque()
 
     def setup(self):
@@ -153,6 +157,11 @@ class HybridGC(GenerationGC):
         # XXX more than the current self.space_size.
         self.large_objects_collect_trigger -= raw_malloc_usage(totalsize)
         if self.large_objects_collect_trigger < 0:
+            if DEBUG_PRINT:
+                llop.debug_print(lltype.Void, "allocated",
+                                 self._initial_trigger -
+                                     self.large_objects_collect_trigger,
+                                 "bytes, triggering full collection")
             self.semispace_collect()
         result = self.allocate_external_object(totalsize)
         if not result:
@@ -178,6 +187,9 @@ class HybridGC(GenerationGC):
         # this bit set.
         ll_assert(not self.pending_external_object_list.non_empty(),
                   "pending_external_object_list should be empty at start")
+        if DEBUG_PRINT:
+            self._nonmoving_copy_count = 0
+            self._nonmoving_copy_size = 0
 
     def surviving(self, obj):
         # To use during a collection.  The objects that survive are the
@@ -220,6 +232,9 @@ class HybridGC(GenerationGC):
         # NB. the object can have a finalizer or be a weakref, but
         # it's not an issue.
         totalsize = self.size_gc_header() + objsize
+        if DEBUG_PRINT:
+            self._nonmoving_copy_count += 1
+            self._nonmoving_copy_size += raw_malloc_usage(totalsize)
         newaddr = self.allocate_external_object(totalsize)
         if not newaddr:
             return llmemory.NULL   # can't raise MemoryError during a collect()
@@ -253,12 +268,18 @@ class HybridGC(GenerationGC):
         # free all mark-n-sweep-managed objects that have not been marked
         large_objects = self.large_objects_list
         remaining_large_objects = self.AddressDeque()
+        if DEBUG_PRINT: alive_count = alive_size = 0
+        if DEBUG_PRINT: dead_count = dead_size = 0
         while large_objects.non_empty():
             obj = large_objects.popleft()
             if self.header(obj).tid & GCFLAG_UNVISITED:
+                if DEBUG_PRINT:dead_count+=1
+                if DEBUG_PRINT:dead_size+=raw_malloc_usage(self.get_size(obj))
                 addr = obj - self.gcheaderbuilder.size_gc_header
                 llmemory.raw_free(addr)
             else:
+                if DEBUG_PRINT:alive_count+=1
+                if DEBUG_PRINT:alive_size+=raw_malloc_usage(self.get_size(obj))
                 self.header(obj).tid |= GCFLAG_UNVISITED
                 remaining_large_objects.append(obj)
         large_objects.delete()
@@ -266,3 +287,18 @@ class HybridGC(GenerationGC):
         # As we just collected, it's fine to raw_malloc'ate up to space_size
         # bytes again before we should force another collect.
         self.large_objects_collect_trigger = self.space_size
+
+        if DEBUG_PRINT:
+            self._initial_trigger = self.large_objects_collect_trigger
+            llop.debug_print(lltype.Void,
+                             "| [hybrid] made nonmoving:         ",
+                             self._nonmoving_copy_size, "bytes in",
+                             self._nonmoving_copy_count, "objs")
+            llop.debug_print(lltype.Void,
+                             "| [hybrid] nonmoving now alive:    ",
+                             alive_size, "bytes in",
+                             alive_count, "objs")
+            llop.debug_print(lltype.Void,
+                             "| [hybrid] nonmoving freed:        ",
+                             dead_size, "bytes in",
+                             dead_count, "objs")
