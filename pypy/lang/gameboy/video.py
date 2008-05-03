@@ -5,6 +5,7 @@
 
 from pypy.lang.gameboy import constants
 
+
 class Video(object):
     #frames = 0
     #frameSkip = 0
@@ -15,7 +16,7 @@ class Video(object):
     #palette = []#= new int[1024]
 
 
-    def __init__(self, videDriver, interrupt, memory):
+    def __init__(self, videoDriver, interrupt, memory):
         self.driver = videoDriver
         self.interrupt = interrupt
         self.memory = memory
@@ -147,7 +148,6 @@ class Video(object):
                 self.emulateOAM()
             else:
                 self.emulateTransfer()
-
 
     def getControl(self):
         return self.control
@@ -574,12 +574,12 @@ class Video(object):
 
 class VideoDriver(object):
     
-    def __init__(self, width, height):
-        self.width = width
-        self.height = height
+    def __init__(self):
+        self.width = constants.GAMEBOY_SCREEN_WIDTH
+        self.height = constants.GAMEBOY_SCREEN_HEIGHT
         self.clearPixels()
         
-    def clearPixels():
+    def clearPixels(self):
         self.pixels = [0] * self.width * self.height
             
     def getWidth(self):
@@ -593,5 +593,4 @@ class VideoDriver(object):
     
     def updateDisplay(self):
         self.resetPixels()
-    
         

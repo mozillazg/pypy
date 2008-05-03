@@ -5,32 +5,33 @@ Gameboy Scheduler and Memory Mapper
 
 """
 from pypy.lang.gameboy import constants
-from pyp.lang.gameboy.cpu import *
-from pyp.lang.gameboy.cartridge import *
-from pyp.lang.gameboy.joypad import *
-from pyp.lang.gameboy.ram import *
-from pyp.lang.gameboy.serial import *
-from pyp.lang.gameboy.sound import *
-from pyp.lang.gameboy.video import *
-from pyp.lang.gameboy.cartridge import *
+from pypy.lang.gameboy.cpu import *
+from pypy.lang.gameboy.cartridge import *
+from pypy.lang.gameboy.interrupt import *
+from pypy.lang.gameboy.joypad import *
+from pypy.lang.gameboy.ram import *
+from pypy.lang.gameboy.serial import *
+from pypy.lang.gameboy.sound import *
+from pypy.lang.gameboy.timer import *
+from pypy.lang.gameboy.video import *
+from pypy.lang.gameboy.cartridge import *
 
 
 class GameBoy(object):
 
     def __init__(self):
-        sel.createDriver()
-        self.createGamboyPieces()
+        self.createDrivers()
+        self.createGamboyElements()
 
     def createDrivers(self):
-        self.createDrivers()
         self.clock = Clock()
+        self.joypadDriver = JoypadDriver()
         self.videoDriver = VideoDriver()
         self.soundDriver = SoundDriver()
-        self.joypadDriver = JoypadDriver()
         
-    def createGameboyPieces(self): 
+    def createGamboyElements(self): 
         self.ram = RAM()
-        self.cartridge = Cartridge(storeDriver, self.clock)
+        self.cartridgeManager = CartridgeManager(self.clock)
         self.interrupt = Interrupt()
         self.cpu = CPU(self.interrupt, self)
         self.serial = Serial(self.interrupt)
@@ -39,8 +40,11 @@ class GameBoy(object):
         self.video = Video(self.videoDriver, self.interrupt, self)
         self.sound = Sound(self.soundDriver)  
 
-    def getCartridge(self):
-        return self.cartridge
+    def getCartridgeManager(self):
+        return self.cartridgeManager
+    
+    def loadCartridge(self, cartridge):
+        self.cartridgeManager.load(cartridge)
 
     def getFrameSkip(self):
         return self.video.getFrameSkip()
