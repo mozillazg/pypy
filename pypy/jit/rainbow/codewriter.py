@@ -368,17 +368,17 @@ class BytecodeWriter(object):
     def make_own_call_information(self, graph):
         ARGS = [v.concretetype for v in graph.getargs()]
         RESULT = graph.getreturnvar().concretetype
-        FUNCTYPE = lltype.FuncType(ARGS, RESULT)
+        FUNCTYPE = self.FuncType(ARGS, RESULT)
 
         colororder = make_colororder(graph, self.hannotator)
         owncalldesc = CallDesc(self.RGenOp, self.exceptiondesc,
-                               lltype.Ptr(FUNCTYPE), colororder)
+                               self.Ptr(FUNCTYPE), colororder)
         # detect the special ts_stub or ts_metacall graphs and replace
         # a real function pointer to them with a function pointer to
         # the graph they are stubs for
         if hasattr(graph, 'ts_stub_for'):
             graph = graph.ts_stub_for
-        ownfnptr = lltype.functionptr(FUNCTYPE, graph.name, graph=graph)
+        ownfnptr = self.functionptr(FUNCTYPE, graph.name, graph=graph)
         gv_ownfnptr = self.RGenOp.constPrebuiltGlobal(ownfnptr)
         return owncalldesc, gv_ownfnptr
 
@@ -1635,6 +1635,9 @@ class LLTypeBytecodeWriter(BytecodeWriter):
 
     ExceptionDesc = exception.LLTypeExceptionDesc
     StructTypeDesc = rcontainer.StructTypeDesc
+    FuncType = staticmethod(lltype.FuncType)
+    Ptr = staticmethod(lltype.Ptr)
+    functionptr = staticmethod(lltype.functionptr)
 
     def cast_fnptr_to_root(self, fnptr):
         return llmemory.cast_ptr_to_adr(fnptr)
@@ -1672,7 +1675,10 @@ class OOTypeBytecodeWriter(BytecodeWriter):
 
     ExceptionDesc = exception.OOTypeExceptionDesc
     StructTypeDesc = rcontainer.InstanceTypeDesc
-
+    FuncType = staticmethod(ootype.StaticMethod)
+    Ptr = staticmethod(lambda x: x)
+    functionptr = staticmethod(ootype.static_meth)        
+    
     def decompose_oosend(self, op):
         name = op.args[0].value
         opargs = op.args[1:]
