@@ -79,11 +79,11 @@ def test_cycles():
     timer = get_timer()
     value = 10
     timer.dividerCycles = value
-    assert timer.cycles() == timer.dividerCycles
+    assert timer.getCycles() == timer.dividerCycles
     timer.tac = 0x04
     timer.timerCycles = value-1
     timer.timerCycles = value
-    assert timer.cycles() == timer.timerCycles
+    assert timer.getCycles() == timer.timerCycles
     
 def test_emulateDivider_normal():
     timer = get_timer()
