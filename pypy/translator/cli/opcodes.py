@@ -36,6 +36,8 @@ misc_ops = {
     'oosend':                   [CallMethod],
     'ooupcast':                 DoNothing,
     'oodowncast':               [DownCast],
+    'cast_to_object':           DoNothing,
+    'cast_from_object':         [DownCast],
     'clibox':                   [Box],
     'cliunbox':                 [Unbox],
     'cli_newarray':             [NewArray],

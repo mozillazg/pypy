@@ -1,13 +1,11 @@
 from pypy.tool.pairtype import extendabletype
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst, CodeGenSwitch
 from pypy.jit.codegen.cli import operation as ops
 from pypy.jit.codegen.cli.dumpgenerator import DumpGenerator
 from pypy.translator.cli.dotnet import CLR, typeof, new_array, box, unbox, clidowncast, classof
-from pypy.translator.cli.dotnet import cast_record_to_object, cast_object_to_record
 System = CLR.System
 Utils = CLR.pypy.runtime.Utils
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
@@ -16,10 +14,13 @@ OpCodes = System.Reflection.Emit.OpCodes
 DUMP_IL = False
 DEBUG = False
 
+cVoid = ootype.nullruntimeclass
 cInt32 = classof(System.Int32)
 cBoolean = classof(System.Boolean)
 cDouble = classof(System.Double)
 cObject = classof(System.Object)
+cString = classof(System.String)
+cChar = classof(System.Char)
 
 class SigToken:
     def __init__(self, args, res, funcclass):
@@ -29,7 +30,10 @@ class SigToken:
 
 def class2type(cls):
     'Cast a PBC of type ootype.Class into a System.Type instance'
-    return clidowncast(box(cls), System.Type)
+    if cls is cVoid:
+        return None
+    else:
+        return clidowncast(box(cls), System.Type)
 
 class __extend__(GenVarOrConst):
     __metaclass__ = extendabletype
@@ -85,8 +89,9 @@ class GenLocalVar(GenVar):
 
 class IntConst(GenConst):
 
-    def __init__(self, value):
+    def __init__(self, value, clitype):
         self.value = value
+        self.clitype = clitype
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -94,17 +99,19 @@ class IntConst(GenConst):
             return self.value
         elif T is ootype.Bool:
             return bool(self.value)
+        elif T is ootype.Char:
+            return chr(self.value)
         else:
             assert False
 
     def getCliType(self):
-        return typeof(System.Int32)
+        return self.clitype
 
     def load(self, builder):
         builder.il.Emit(OpCodes.Ldc_I4, self.value)
 
     def __repr__(self):
-        return "const=%s" % self.value
+        return "int const=%s" % self.value
 
 
 class FloatConst(GenConst):
@@ -115,8 +122,7 @@ class FloatConst(GenConst):
     @specialize.arg(1)
     def revealconst(self, T):
         assert T is ootype.Float
-        if T is ootype.Float:
-            return self.value
+        return self.value
 
     def getCliType(self):
         return typeof(System.Double)
@@ -125,7 +131,7 @@ class FloatConst(GenConst):
         builder.il.Emit(OpCodes.Ldc_R8, self.value)
 
     def __repr__(self):
-        return "const=%s" % self.value
+        return "float const=%s" % self.value
 
 class BaseConst(GenConst):
 
@@ -165,13 +171,7 @@ class ObjectConst(BaseConst):
 
     @specialize.arg(1)
     def revealconst(self, T):
-        if T is llmemory.Address:
-            return unbox(self.obj, ootype.ROOT) # XXX
-        elif isinstance(T, ootype.Record):
-            return cast_object_to_record(T, self.obj)
-        else:
-            assert isinstance(T, ootype.OOType)
-            return unbox(self.obj, T)
+        return ootype.cast_from_object(T, self.obj)
 
 
 OBJECT = System.Object._INSTANCE
@@ -217,19 +217,15 @@ class RCliGenOp(AbstractRGenOp):
     def genconst(self, llvalue):
         T = ootype.typeOf(llvalue)
         if T is ootype.Signed:
-            return IntConst(llvalue)
+            return IntConst(llvalue, typeof(System.Int32))
         elif T is ootype.Bool:
-            return IntConst(int(llvalue))
+            return IntConst(int(llvalue), typeof(System.Boolean))
+        elif T is ootype.Char:
+            return IntConst(ord(llvalue), typeof(System.Char))
         elif T is ootype.Float:
             return FloatConst(llvalue)
-        elif T is llmemory.Address:
-            assert llvalue is llmemory.NULL
-            return zero_const
-        elif isinstance(T, ootype.Record):
-            obj = cast_record_to_object(llvalue)
-            return ObjectConst(obj)
         elif isinstance(T, ootype.OOType):
-            obj = box(llvalue)
+            obj = ootype.cast_to_object(llvalue)
             return ObjectConst(obj)
         else:
             assert False, "XXX not implemented"
@@ -237,7 +233,7 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     def genzeroconst(kind):
         if kind is cInt32:
-            return IntConst(0)
+            return IntConst(0, typeof(System.Int32))
         else:
             return zero_const # ???
 
@@ -245,8 +241,6 @@ class RCliGenOp(AbstractRGenOp):
     @specialize.memo()
     def sigToken(FUNCTYPE):
         """Return a token describing the signature of FUNCTYPE."""
-        # XXX: the right thing to do would be to have a way to
-        # represent typeof(t) as a pbc
         args = [RCliGenOp.kindToken(T) for T in FUNCTYPE.ARGS]
         res = RCliGenOp.kindToken(FUNCTYPE.RESULT)
         funcclass = classof(FUNCTYPE)
@@ -256,13 +250,17 @@ class RCliGenOp(AbstractRGenOp):
     @specialize.memo()
     def kindToken(T):
         if T is ootype.Void:
-            return None
+            return cVoid
         elif T is ootype.Signed:
             return cInt32
         elif T is ootype.Bool:
             return cBoolean
         elif T is ootype.Float:
             return cDouble
+        elif T is ootype.String:
+            return cString
+        elif T is ootype.Char:
+            return cChar
         elif isinstance(T, ootype.Instance):
             return cObject # XXX?
         else:
@@ -469,5 +467,4 @@ class BranchBuilder(Builder):
 
 global_rgenop = RCliGenOp()
 RCliGenOp.constPrebuiltGlobal = global_rgenop.genconst
-NULL = ootype.null(System.Object._INSTANCE)
-zero_const = ObjectConst(NULL)
+zero_const = ObjectConst(ootype.NULL)
