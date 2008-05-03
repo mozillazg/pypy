@@ -22,7 +22,7 @@ class I386PortalTestMixin(object):
 
         # ---------- run the stand-alone executable ----------
         cmdargs = ' '.join([str(arg) for arg in main_args])
-        output = self.cbuilder.cmdexec(cmdargs)
+        output = self.cmdexec(cmdargs)
         lines = output.split()
         lastline = lines[-1]
         assert not lastline.startswith('EXCEPTION:')
@@ -78,18 +78,25 @@ class I386PortalTestMixin(object):
             backendoptimize=backendoptimize)
 
         # ---------- generate a stand-alone executable ----------
-        t = self.rtyper.annotator.translator
-        t.config.translation.gc = 'boehm'
-        self.cbuilder = CStandaloneBuilder(t, ll_main, config=t.config)
-        self.cbuilder.generate_source()
-        exename = self.cbuilder.compile()
+        exename = self.compile(ll_main)
         print '-'*60
         print 'Generated executable for %s: %s' % (self.testname, exename)
         print '-'*60
 
-
     def check_insns(self, expected=None, **counts):
         "Cannot check instructions in the generated assembler."
+
+    def compile(self, ll_main):
+        t = self.rtyper.annotator.translator
+        t.config.translation.gc = 'boehm'
+        cbuilder = CStandaloneBuilder(t, ll_main, config=t.config)
+        cbuilder.generate_source()
+        exename = cbuilder.compile()
+        self.main_cbuilder= cbuilder
+        return exename
+
+    def cmdexec(self, args):
+        return self.main_cbuilder.cmdexec(args)
 
 
 class TestPortal(I386PortalTestMixin,

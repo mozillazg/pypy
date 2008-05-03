@@ -1,4 +1,5 @@
 import py
+py.test.skip('port me')
 from pypy.tool.udir import udir
 from pypy.translator.cli.entrypoint import StandaloneEntryPoint
 from pypy.translator.cli.gencli import GenCli
