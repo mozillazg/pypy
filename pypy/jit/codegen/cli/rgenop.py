@@ -89,9 +89,9 @@ class GenLocalVar(GenVar):
 
 class IntConst(GenConst):
 
-    def __init__(self, value, clitype):
+    def __init__(self, value, cliclass):
         self.value = value
-        self.clitype = clitype
+        self.cliclass = cliclass
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -105,7 +105,7 @@ class IntConst(GenConst):
             assert False
 
     def getCliType(self):
-        return self.clitype
+        return class2type(self.cliclass)
 
     def load(self, builder):
         builder.il.Emit(OpCodes.Ldc_I4, self.value)
@@ -217,11 +217,11 @@ class RCliGenOp(AbstractRGenOp):
     def genconst(self, llvalue):
         T = ootype.typeOf(llvalue)
         if T is ootype.Signed:
-            return IntConst(llvalue, typeof(System.Int32))
+            return IntConst(llvalue, cInt32)
         elif T is ootype.Bool:
-            return IntConst(int(llvalue), typeof(System.Boolean))
+            return IntConst(int(llvalue), cBoolean)
         elif T is ootype.Char:
-            return IntConst(ord(llvalue), typeof(System.Char))
+            return IntConst(ord(llvalue), cChar)
         elif T is ootype.Float:
             return FloatConst(llvalue)
         elif isinstance(T, ootype.OOType):
@@ -233,7 +233,7 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     def genzeroconst(kind):
         if kind is cInt32:
-            return IntConst(0, typeof(System.Int32))
+            return IntConst(0, cInt32)
         else:
             return zero_const # ???
 
