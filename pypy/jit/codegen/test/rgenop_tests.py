@@ -2087,10 +2087,8 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
 
         builder2.finish_and_goto([v33, v9, v10], label1)
 
-        print 'waatch!'
         builder8.start_writing()
         builder8.finish_and_goto([v10, v9, v9], label4)
-        print 'stop!'
 
         builder7.start_writing()
         builder7.finish_and_goto([v24, v4, v5], label0)
