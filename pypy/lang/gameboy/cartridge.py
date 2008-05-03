@@ -54,43 +54,43 @@ class CartridgeManager(object):
         self.checkROM()
         self.createRAM()
         self.loadBattery()
-        self.mbc = self.createBankController(self.getMemoryBankType(), rom, ram, clock)
+        self.mbc = self.createBankController(self.getMemoryBankType(), self.rom, self.ram, self.clock)
         
     def checkROM(self):
         if not self.verifyHeader():
             raise Exeption("Cartridge header is corrupted")
-        if romSize < self.getROMSize():
+        if self.cartridge.getSize() < self.getROMSize():
             raise Exeption("Cartridge is truncated")
         
     def createRAM(self):
         ramSize = self.getRAMSize()
-        if (getMemoryBankType() >= constants.TYPE_MBC2
-                and getMemoryBankType() <= constants.TYPE_MBC2_BATTERY):
+        if self.getMemoryBankType() >= constants.TYPE_MBC2 \
+                and self.getMemoryBankType() <= constants.TYPE_MBC2_BATTERY:
             ramSize = 512
         self.ram = [0xFF]*ramSize
         
     def loadBattery(self):
-        if self.store.hasBattery(cartridgeName):
-            self.store.readBattery(cartridgeName, self.ram)
+        if self.cartridge.hasBattery():
+            self.ram = self.cartridge.readBattery()
 
     def save(self, cartridgeName):
-        if self.hasBattery():
-            self.store.writeBattery(cartridgeName, self.ram)
+        if self.cartridge.hasBattery():
+            self.cartridge.writeBattery(self.ram)
             
     def getMemoryBankType(self):
-        return self.rom[constants.MEMORY_BANK_MAPPING] & 0xFF
+        return self.rom[constants.CARTRIDGE_TYPE_ADDRESS] & 0xFF
     
     def getRom(self):
         return self.rom
         
     def getROMSize(self):
-        romSize = self.rom[constants.CARTRIDGE_SIZE_ADDRESS] & 0xFF
+        romSize = self.rom[constants.CARTRIDGE_ROM_SIZE_ADDRESS] & 0xFF
         if romSize>=0x00 and romSize<=0x07:
             return 32768 << romSize
         return -1
         
     def getRAMSize(self):
-        return constants.RAM_SIZE_MAPPING[self.rom[constants.RAM_SIZE_ADDRESS]]
+        return constants.CARTRIDGE_RAM_SIZE_MAPPING[self.rom[constants.CARTRIDGE_RAM_SIZE_ADDRESS]]
     
     def getDestinationCode(self):
         return self.rom[constants.DESTINATION_CODE_ADDRESS] & 0xFF
@@ -99,13 +99,14 @@ class CartridgeManager(object):
         return self.rom[constants.LICENSEE_ADDRESS] & 0xFF
 
     def getROMVersion(self):
-        return self.rom[constants.ROM_VERSION_ADDRESS] & 0xFF
+        return self.rom[constants.CARTRIDGE_ROM_VERSION_ADDRESS] & 0xFF
     
     def getHeaderChecksum(self):
         return self.rom[constants.HEADER_CHECKSUM_ADDRESS] & 0xFF
     
     def getChecksum(self):
-        return ((rom[constants.CHECKSUM_A_ADDRESS] & 0xFF) << 8) + (rom[constants.CHECKSUM_B_ADDRESS] & 0xFF)
+        return ((self.rom[constants.CHECKSUM_A_ADDRESS] & 0xFF) << 8) \
+                + (self.rom[constants.CHECKSUM_B_ADDRESS] & 0xFF)
     
     def hasBattery(self):
         return hasCartridgeBattery(self.getMemoryBankType())
@@ -118,11 +119,11 @@ class CartridgeManager(object):
         return (checksum == self.getChecksum())
     
     def verifyHeader(self):
-        if self.rom.length < 0x0150:
-            return false
+        if len(self.rom) < 0x0150:
+            return False
         checksum = 0xE7
         for address in range(0x0134, 0x014C):
-            checksum = (checksum - (rom[address] & 0xFF)) & 0xFF
+            checksum = (checksum - (self.rom[address] & 0xFF)) & 0xFF
         return (checksum == self.getHeaderChecksum())
     
     def createBankController(self, type, rom, ram, clockDriver):
@@ -142,8 +143,7 @@ class Cartridge(object):
     def reset(self):
         self.cartridgeName =""
         self.cartridgeFilePath = ""
-        self.cartridgeFile = None
-        
+        self.cartridgeFile = None    
         self.batteryName =""
         self.batteryFilePath = ""
         self.batteryFile = None
@@ -191,6 +191,12 @@ class Cartridge(object):
     def removeBattery(self):
         if self.hasBattery():
             os.remove(self.batteryFilePath)
+            
+    def getSize(self):
+        return os.path.getsize(self.cartridgeFilePath)
+        
+    def getBatterySize(self):
+        return os.path.getsize(self.batteryFilePath)
         
      
 
@@ -221,15 +227,15 @@ class MBC(object):
     
     def setROM(self, buffer):
         banks = len(buffer) / constants.ROM_BANK_SIZE
-        if (banks < minRomBankSize or banks > maxRomBankSize):
+        if banks < self.minRomBankSize or banks > self.maxRomBankSize:
             raise Exception("Invalid constants.ROM size")
         self.rom = buffer
         self.romSize = constants.ROM_BANK_SIZE*banks - 1
 
 
-    def setRAM(buffer):
+    def setRAM(self, buffer):
         banks = len(buffer) / constants.RAM_BANK_SIZE
-        if (banks < minRamBankSize or banks > maxRamBankSize):
+        if banks < self.minRamBankSize or banks > self.maxRamBankSize:
             raise Exception("Invalid constants.RAM size")
         self.ram = buffer
         self.ramSize = constants.RAM_BANK_SIZE*banks - 1
@@ -238,14 +244,32 @@ class MBC(object):
     def read(self, address):    
         if address <= 0x3FFF: # 0000-3FFF
             return self.rom[address] & 0xFF
-        elif (address <= 0x7FFF):# 4000-7FFF
+        elif address <= 0x7FFF:# 4000-7FFF
             return self.rom[romBank + (address & 0x3FFF)] & 0xFF
-        elif (address >= 0xA000 and address <= 0xBFFF and self.ramEnable): # A000-BFFF
+        elif address >= 0xA000 and address <= 0xBFFF and self.ramEnable: # A000-BFFF
                 return self.ram[self.ramBank + (address & 0x1FFF)] & 0xFF
         return 0xFF
     
     def write(self, address, data):
         pass
+  
+
+#-------------------------------------------------------------------------------
+
+  
+class DefaultMBC(MBC):
+    
+    def __init__(self, rom, ram, clockDriver):
+        self.reset()
+        self.minRomBankSize = 0
+        self.maxRomBankSize = 0xFFFFFF
+        self.minRamBankSize = 0
+        self.maxRamBankSize = 0xFFFFFF
+        MBC.__init__(self, rom, ram, clockDriver)
+    
+
+#-------------------------------------------------------------------------------
+  
 
 class MBC1(MBC):
     """
@@ -263,42 +287,46 @@ class MBC1(MBC):
         self.maxRamBankSize = 4
         self.minRomBankSize = 2    
         self.maxRomBankSize = 128
-        super.__init__(rom, ram, clockDriver)
+        MBC.__init__(self, rom, ram, clockDriver)
         
     def reset(self):
-        super.reset()
+        MBC.reset(self)
         self.memoryModel = 0
 
     def write(self, address, data):
-        if (address <= 0x1FFF):  # 0000-1FFF
+        if address <= 0x1FFF:  # 0000-1FFF
             self.writeRAMEnable(address, data)
-        elif (address <= 0x3FFF): # 2000-3FFF
+        elif address <= 0x3FFF: # 2000-3FFF
             self.writeROMBank1(address, data)
-        elif (address <= 0x5FFF): # 4000-5FFF
+        elif address <= 0x5FFF: # 4000-5FFF
             self.writeROMBank2(address, data)
-        elif (address <= 0x7FFF): # 6000-7FFF
+        elif address <= 0x7FFF: # 6000-7FFF
             self.memoryModel = data & 0x01
-        elif (address >= 0xA000 and address <= 0xBFFF and self.ramEnable): # A000-BFFF
+        elif address >= 0xA000 and address <= 0xBFFF and self.ramEnable: # A000-BFFF
             self.ram[self.ramBank + (address & 0x1FFF)] = data
 
     def writeRAMEnable(self, address, data):
-        if (self.ramSize > 0):
+        if self.ramSize > 0:
             self.ramEnable = ((data & 0x0A) == 0x0A)
     
     def writeROMBank1(self, address, data):
-        if ((data & 0x1F) == 0):
+        if (data & 0x1F) == 0:
             data = 1
-        if (self.memoryModel == 0):
+        if self.memoryModel == 0:
             self.romBank = ((self.romBank & 0x180000) + ((data & 0x1F) << 14)) & self.romSize
         else:
             self.romBank = ((data & 0x1F) << 14) & self.romSize
         
     def writeROMBank2(self, address, data):
-        if (self.memoryModel == 0):
+        if self.memoryModel == 0:
             self.romBank = ((self.romBank & 0x07FFFF) + ((data & 0x03) << 19)) & self.romSize
         else:
             self.ramBank = ((data & 0x03) << 13) & self.ramSize
-        
+  
+
+#-------------------------------------------------------------------------------
+
+      
 class MBC2(MBC):
     """
     PyBoy GameBoy (TM) Emulator
@@ -318,7 +346,7 @@ class MBC2(MBC):
         self.maxRamBankSize = constants.RAM_BANK_SIZE
         self.minRomBankSize = 2    
         self.maxRomBankSize = 16
-        super.__init__(rom, ram, clockDriver)
+        MBC.__init__(self, rom, ram, clockDriver)
         
 
     def read(self, address):
@@ -328,11 +356,11 @@ class MBC2(MBC):
             return super.read(address)
 
     def write(self, address, data):
-        if (address <= 0x1FFF):  # 0000-1FFF
+        if address <= 0x1FFF:  # 0000-1FFF
             self.writeRAMEnable(address, data)
-        elif (address <= 0x3FFF): # 2000-3FFF
+        elif address <= 0x3FFF: # 2000-3FFF
             self.writeROMBank()
-        elif (address >= 0xA000 and address <= 0xA1FF): # A000-A1FF
+        elif address >= 0xA000 and address <= 0xA1FF: # A000-A1FF
             self.writeRAMEnable(address, data)
             
     def writeRAMEnable(self, address, data):
@@ -348,7 +376,11 @@ class MBC2(MBC):
         
     def writeRAM(self, address, data):
         if self.ramEnable:
-            self.ram[address & 0x01FF] = (byte) (data & 0x0F)
+            self.ram[address & 0x01FF] = data & 0x0F
+
+
+#-------------------------------------------------------------------------------
+
 
 class MBC3(MBC):
     """
@@ -360,7 +392,6 @@ class MBC3(MBC):
     4000-7FFF    ROM Bank 1-127 (16KB)
     A000-BFFF    RAM Bank 0-3 (8KB)
     """
-    
     def __init__(self, rom, ram, clock):
         self.reset()
         self.minRamBankSize = 0
@@ -371,12 +402,12 @@ class MBC3(MBC):
         self.clock = clock
         self.clockLDaysclockLControl = None
 
-        super.__init__(rom, ram, clockDriver)
+        MBC.__init__(self, rom, ram, clockDriver)
         self.reset()
 
 
-    def reset():
-        super.reset()
+    def reset(self):
+        MBC.reset(self)
         self.clockTime = self.clock.getTime()
         self.clockLatch = self.clockRegister = 0
         self.clockSeconds = self.clockMinutes = self.clockHours = self.clockDays = self.clockControl = 0
@@ -417,11 +448,11 @@ class MBC3(MBC):
             self.writeClockData(address, data)
     
     def writeRAMEnable(self, address, data):
-        if (self.ramSize > 0):
+        if self.ramSize > 0:
             self.ramEnable = ((data & 0x0A) == 0x0A)
              
     def writeROMBank(self, address, data):
-        if (data == 0):
+        if data == 0:
             data = 1
         self.romBank = ((data & 0x7F) << 14) & self.romSize
             
@@ -492,6 +523,10 @@ class MBC3(MBC):
                 self.clockControl |= 0x80
         self.clockTime = now
 
+
+#-------------------------------------------------------------------------------
+
+
 class MBC5(MBC):
     """
     PyBoy GameBoy (TM) Emulator
@@ -510,7 +545,7 @@ class MBC5(MBC):
         self.maxRomBankSize = 512
         
         self.rumble = rumble
-        super.__init__(rom, ram, clockDriver)
+        MBC.__init__(self, rom, ram, clockDriver)
 
 
     def write(self, address, data):
@@ -535,10 +570,20 @@ class MBC5(MBC):
         else:
             self.ramBank = ((data & 0x0F) << 13) & self.ramSize
 
+
+#-------------------------------------------------------------------------------
+
+
 class HuC1(MBC):
     def __init__(self, ram, rom, clockDriver):
         self.reset()
-        super.__init__(rom, ram, clockDriver)
+        MBC.__init__(self, rom, ram, clockDriver)
+
+
+
+#-------------------------------------------------------------------------------
+
+
 
 class HuC3(MBC):
     """
@@ -565,11 +610,11 @@ class HuC3(MBC):
         self.setRAM(ram)
         self.ramFlag = 0
         self.ramValue = 0
-        super.__init__(rom, ram, clockDriver)
+        MBC.__init__(self, rom, ram, clockDriver)
 
 
-    def reset():
-        super.reset()
+    def reset(self):
+        MBC.reset(self)
         self.ramFlag = 0
         self.ramValue = 0
         self.clockRegister = 0
@@ -668,7 +713,9 @@ class HuC3(MBC):
             self.clockRegister += (1 << 24) - (365 << 12)
         self.clockTime = now - elapsed
 
+
 # MEMORY BANK MAPPING ----------------------------------------------------------
+
 
 MEMORY_BANK_TYPE_RANGES = [
     (constants.TYPE_MBC1,             constants.TYPE_MBC1_RAM_BATTERY,        MBC1),
@@ -681,7 +728,7 @@ MEMORY_BANK_TYPE_RANGES = [
 
 
 def initialize_mapping_table():
-    result = [None] * 256
+    result = [DefaultMBC] * 256
     for entry in MEMORY_BANK_TYPE_RANGES:
         if len(entry) == 2:
             positions = [entry[0]]
