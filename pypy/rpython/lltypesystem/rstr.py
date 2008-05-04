@@ -238,6 +238,7 @@ class LLHelpers(AbstractLLHelpers):
             times = 0
         newstr = malloc(times)
         j = 0
+        # XXX we can use memset here, not sure how useful this is
         while j < times:
             newstr.chars[j] = ch
             j += 1
@@ -594,8 +595,10 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         if typeOf(items).TO.OF.TO == STR:
             malloc = mallocstr
+            copy_contents = copy_string_contents
         else:
             malloc = mallocunicode
+            copy_contents = copy_unicode_contents
         result = malloc(itemslen)
         res_chars = result.chars
         res_index = 0
@@ -603,15 +606,14 @@ class LLHelpers(AbstractLLHelpers):
         while i < num_items:
             item_chars = items[i].chars
             item_len = len(item_chars)
-            j = 0
-            while j < item_len:
-                res_chars[res_index] = item_chars[j]
-                j += 1
-                res_index += 1
+            copy_contents(result, items[i], res_index, 0, item_len)
+            res_index += item_len
             i += 1
         return result
 
     def ll_join_chars(length, chars):
+        # no need to optimize this, will be replaced by string builder
+        # at some point soon
         num_chars = length
         if typeOf(chars).TO.OF == Char:
             malloc = mallocstr
