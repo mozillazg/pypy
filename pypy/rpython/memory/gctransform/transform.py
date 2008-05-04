@@ -522,6 +522,38 @@ class GCTransformer(BaseGCTransformer):
 
     gct_malloc_nonmovable = gct_malloc
     gct_malloc_nonmovable_varsize = gct_malloc_varsize
+    
+    gct_malloc_resizable_buffer = gct_malloc_varsize
+
+    def gct_resize_buffer(self, hop):
+        op = hop.spaceop
+        meth = self.gct_fv_gc_malloc_varsize
+        flags = {'flavor':'gc'}
+        self.varsize_malloc_helper(hop, flags, meth, [])
+        # fish resvar
+        v_newbuf = hop.llops[-1].result
+        v_src = op.args[0]
+        TYPE = v_src.concretetype.TO
+        v_arr = hop.genop('getfield', [v_src, rmodel.inputconst(lltype.Void,
+                                                            TYPE._arrayfld)],
+                          resulttype=getattr(TYPE, TYPE._arrayfld))
+        v_lgt = hop.genop('getfield', [v_arr, rmodel.inputconst(lltype.Void,
+                                                             'length')],
+                          resulttype=lltype.Signed)
+        v_adrsrc = hop.genop('cast_ptr_to_adr', [v_src],
+                             resulttype=llmemory.Address)
+        v_adrnewbuf = hop.genop('cast_ptr_to_adr', [v_newbuf],
+                                resulttype=llmemory.Address)
+        ofs = (llmemory.offsetof(TYPE, TYPE._arrayfld) +
+               llmemory.itemoffsetof(getattr(TYPE, TYPE._arrayfld), 0))
+        v_ofs = rmodel.inputconst(lltype.Void, ofs)
+        v_adrsrc = hop.genop('adr_add', [v_adrsrc, v_ofs],
+                             resulttype=llmemory.Address)
+        v_adrnewbuf = hop.genop('adr_add', [v_adrnewbuf, v_ofs],
+                                resulttype=llmemory.Address)
+        vlist = [v_adrsrc, v_adrnewbuf, v_lgt]
+        hop.genop('raw_memcopy', vlist)
+        return v_newbuf
 
     def varsize_malloc_helper(self, hop, flags, meth, extraargs):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)
@@ -549,9 +581,7 @@ class GCTransformer(BaseGCTransformer):
         args = [hop] + extraargs + [flags, TYPE,
                 op.args[-1], c_const_size, c_item_size, c_offset_to_length]
         v_raw = meth(*args)
-
         hop.cast_result(v_raw)
-
 
     def gct_fv_raw_malloc_varsize(self, hop, flags, TYPE, v_length, c_const_size, c_item_size,
                                                                     c_offset_to_length):
