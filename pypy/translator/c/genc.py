@@ -875,9 +875,12 @@ lldebug:
 profile:
 \t$(MAKE) CFLAGS="-g -pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)" $(TARGET)
 
+# it seems that GNU Make < 3.81 has no function $(abspath)
+ABS_TARGET = $(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))
+
 profopt:
 \t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)
-\tcd $(PYPYDIR)/translator/goal && $(abspath $(TARGET)) $(PROFOPT)
+\tcd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)
 \t$(MAKE) clean_noprof
 \t$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)" $(TARGET)
 '''
