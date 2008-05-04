@@ -187,7 +187,11 @@ class CPU(object):
         self.ime = False
         self.halted = False
         self.cycles = 0
-        
+        self.iniRegisters()
+        self.rom = []
+        self.reset()
+
+    def iniRegisters(self):
         self.b = Register(self)
         self.c = Register(self)
         self.bc = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
@@ -208,8 +212,6 @@ class CPU(object):
         self.f = FlagRegister(self)
         self.af = DoubleRegister(self, self.a, self.f)
         
-        self.rom = []
-        self.reset()
 
     def reset(self):
         self.resetRegisters()
@@ -536,12 +538,10 @@ class CPU(object):
         setter(data) # 1 cycle
 
     def rotateLeftCircular(self, getter, setter):
-        print "rotateLeftCircular", setter, self.cycles
         # RLC 1 cycle
         data = getter()
         s = (data  << 1) + (data >> 7)
         self.flagsAndSetterFinish(s, setter, 0x80)
-        print self.cycles
         #self.cycles -= 1
 
     def rotateLeftCircularA(self):

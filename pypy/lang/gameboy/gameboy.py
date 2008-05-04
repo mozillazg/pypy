@@ -95,10 +95,16 @@ class GameBoy(object):
             ticks -= count
 
     def write(self, address, data):
-        self.getReceiver(address).write(address, data)
+        receiver = self.getReceiver(address)
+        if receiver==None:
+            raise Exception("invalid read address given")
+        receiver.write(address, data)
 
     def read(self, address):
-        self.getReceiver(address).read(address)
+        receiver = self.getReceiver(address)
+        if receiver==None:
+            raise Exception("invalid read address given")
+        return receiver.read(address)
 
     def getReceiver(self, address):
         if 0x0000 <= address <= 0x7FFF:

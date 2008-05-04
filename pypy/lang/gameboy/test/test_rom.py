@@ -38,16 +38,21 @@ def test_rom3():
     
     
 def test_rom4():
-    py.test.skip("problem with resetBit")
     gameBoy = GameBoy()
     gameBoy.loadCartridgeFile(ROM_PATH+"/rom4/rom4.gb")
     gameBoy.emulate(EMULATION_CYCLES)
+    
+    assert gameBoy.cpu.ime     == False
+    assert gameBoy.cpu.halted  == True
+    assert gameBoy.cpu.a.get() != 0xFF
     
     
 def test_rom5():
     gameBoy = GameBoy()
     gameBoy.loadCartridgeFile(ROM_PATH+"/rom5/rom5.gb")
     gameBoy.emulate(EMULATION_CYCLES)
+    # stop test
+    assert gameBoy.cpu.a.get() != 0xFF
     
     
 def test_rom6():
@@ -57,21 +62,18 @@ def test_rom6():
     
     
 def test_rom7():
-    py.test.skip("cpu bug in storeMemoryAtExpandedFetchAddressInA")
     gameBoy = GameBoy()
     gameBoy.loadCartridgeFile(ROM_PATH+"/rom7/rom7.gb")
     gameBoy.emulate(EMULATION_CYCLES)
     
     
 def test_rom8():
-    py.test.skip("cpu bug in storeMemoryAtExpandedFetchAddressInA")
     gameBoy = GameBoy()
     gameBoy.loadCartridgeFile(ROM_PATH+"/rom8/rom8.gb")
     gameBoy.emulate(EMULATION_CYCLES)
     
     
 def test_rom9():
-    py.test.skip("cpu bug in storeMemoryAtExpandedFetchAddressInA")
     gameBoy = GameBoy()
     gameBoy.loadCartridgeFile(ROM_PATH+"/rom9/rom9.gb")
     gameBoy.emulate(EMULATION_CYCLES)
