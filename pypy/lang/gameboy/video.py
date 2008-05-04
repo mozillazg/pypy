@@ -592,5 +592,5 @@ class VideoDriver(object):
         return self.pixels
     
     def updateDisplay(self):
-        self.resetPixels()
+        self.clearPixels()
         

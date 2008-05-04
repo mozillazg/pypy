@@ -23,18 +23,18 @@ class Joypad(object):
 
     def emulate(self, ticks):
         self.cycles -= ticks
-        if (self.cycles <= 0):
-            if (self.driver.isRaised()):
+        if self.cycles <= 0:
+            if self.driver.isRaised():
                 self.update()
             self.cycles = constants.JOYPAD_CLOCK
 
     def write(self, address, data):
-        if (address == constants.JOYP):
+        if address == constants.JOYP:
             self.joyp = (self.joyp & 0xC) + (data & 0x3)
             self.update()
 
     def read(self, address):
-        if (address == constants.JOYP):
+        if address == constants.JOYP:
             return (self.joyp << 4) + self.buttonCode
         return 0xFF
 

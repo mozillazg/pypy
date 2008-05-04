@@ -250,7 +250,8 @@ class MBC(object):
         if address <= 0x3FFF: # 0000-3FFF
             return self.rom[address] & 0xFF
         elif address <= 0x7FFF:# 4000-7FFF
-            return self.rom[romBank + (address & 0x3FFF)] & 0xFF
+            print address, self.romBank
+            return self.rom[self.romBank + (address & 0x3FFF)] & 0xFF
         elif address >= 0xA000 and address <= 0xBFFF and self.ramEnable: # A000-BFFF
                 return self.ram[self.ramBank + (address & 0x1FFF)] & 0xFF
         return 0xFF
