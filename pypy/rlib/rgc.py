@@ -249,6 +249,8 @@ class ResizableBufferOfShapeEntry(ExtRegistryEntry):
         assert s_T.is_constant()
         assert isinstance(s_init_size, annmodel.SomeInteger)
         T = s_T.const
+        assert isinstance(T, lltype.Struct)
+        assert isinstance(getattr(T, T._arrayfld), lltype.Primitive)
         return annmodel.SomePtr(lltype.Ptr(T))
 
     def specialize_call(self, hop):
