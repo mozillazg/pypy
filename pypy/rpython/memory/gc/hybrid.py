@@ -9,8 +9,22 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
 
+# The "age" of an object is the number of times it is copied between the
+# two semispaces.  When an object would reach MAX_SEMISPACE_AGE, it is
+# instead copied to a nonmoving location.  For example, a value of 4
+# ensures that an object is copied at most 5 times in total: from the
+# nursery to the semispace, then three times between the two spaces,
+# then one last time to a nonmoving location.
+MAX_SEMISPACE_AGE = 4
+
 GCFLAG_UNVISITED = GenerationGC.first_unused_gcflag << 0
-GCFLAG_AGING = GenerationGC.first_unused_gcflag << 1
+_gcflag_next_bit = GenerationGC.first_unused_gcflag << 1
+GCFLAG_AGE_ONE   = _gcflag_next_bit
+GCFLAG_AGE_MAX   = _gcflag_next_bit * (MAX_SEMISPACE_AGE-1)
+GCFLAG_AGE_MASK  = 0
+while GCFLAG_AGE_MASK < GCFLAG_AGE_MAX:
+    GCFLAG_AGE_MASK |= _gcflag_next_bit
+    _gcflag_next_bit <<= 1
 
 
 class HybridGC(GenerationGC):
@@ -18,7 +32,7 @@ class HybridGC(GenerationGC):
     except that objects above a certain size are handled separately:
     they are allocated via raw_malloc/raw_free in a mark-n-sweep fashion.
     """
-    first_unused_gcflag = GenerationGC.first_unused_gcflag << 2
+    first_unused_gcflag = _gcflag_next_bit
 
     # the following values override the default arguments of __init__ when
     # translating to a real backend.
@@ -211,17 +225,17 @@ class HybridGC(GenerationGC):
         # from the nursery.  If they do, we must add the GCFLAG_NO_YOUNG_PTRS.
         # If they don't, we count how many times they are copied and when
         # some threshold is reached we make the copy a non-movable "external"
-        # object.  For now we use a single flag GCFLAG_AGING, so threshold==2.
+        # object.  The threshold is MAX_SEMISPACE_AGE.
         tid = self.header(obj).tid
         if not (tid & GCFLAG_NO_YOUNG_PTRS):
             tid |= GCFLAG_NO_YOUNG_PTRS    # object comes from the nursery
-        elif not (tid & GCFLAG_AGING):
-            tid |= GCFLAG_AGING
+        elif (tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX:
+            tid += GCFLAG_AGE_ONE
         else:
             newobj = self.make_a_nonmoving_copy(obj, objsize)
             if newobj:
                 return newobj
-            tid &= ~GCFLAG_AGING
+            tid &= ~GCFLAG_AGE_MASK
         # skip GenerationGC.make_a_copy() as we already did the right
         # thing about GCFLAG_NO_YOUNG_PTRS
         newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
