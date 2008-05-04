@@ -37,12 +37,12 @@ def test_can_move():
     
     assert res == True
     
-def test_raw_array():
+def test_resizable_buffer():
     from pypy.rpython.lltypesystem.rstr import STR
     from pypy.rpython.annlowlevel import hlstr
     
     def f():
-        ptr = rgc.raw_buffer_of_shape(STR, 1)
+        ptr = rgc.resizable_buffer_of_shape(STR, 1)
         ptr.chars[0] = 'a'
         ptr = rgc.resize_buffer(ptr, 2)
         ptr.chars[1] = 'b'

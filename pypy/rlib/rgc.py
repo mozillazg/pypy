@@ -233,15 +233,15 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
 
-def raw_buffer_of_shape(T, init_size):
+def resizable_buffer_of_shape(T, init_size):
     """ Pre-allocates structure of type T (varsized) with possibility
     to reallocate it further by resize_buffer.
     """
     from pypy.rpython.lltypesystem import lltype
     return lltype.malloc(T, init_size)
 
-class RawBufferOfShapeEntry(ExtRegistryEntry):
-    _about_ = raw_buffer_of_shape
+class ResizableBufferOfShapeEntry(ExtRegistryEntry):
+    _about_ = resizable_buffer_of_shape
 
     def compute_result_annotation(self, s_T, s_init_size):
         from pypy.annotation import model as annmodel
@@ -260,7 +260,7 @@ class RawBufferOfShapeEntry(ExtRegistryEntry):
                          resulttype=hop.r_result.lowleveltype)
 
 def resize_buffer(ptr, new_size):
-    """ Resize raw buffer returned by raw_buffer_of_shape to new size
+    """ Resize raw buffer returned by resizable_buffer_of_shape to new size
     """
     from pypy.rpython.lltypesystem import lltype
     T = lltype.typeOf(ptr).TO
@@ -293,7 +293,7 @@ class ResizeBufferEntry(ExtRegistryEntry):
                          resulttype=hop.r_result.lowleveltype)
 
 def finish_building_buffer(ptr):
-    """ Finish building raw_buffer returned by raw_buffer_of_shape
+    """ Finish building resizable buffer returned by resizable_buffer_of_shape
     """
     return ptr
 
