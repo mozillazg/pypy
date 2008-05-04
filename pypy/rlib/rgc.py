@@ -257,7 +257,9 @@ class ResizableBufferOfShapeEntry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
+        flags = {'flavor': 'gc'}
         vlist = [hop.inputarg(lltype.Void, 0),
+                 hop.inputconst(lltype.Void, flags),
                  hop.inputarg(lltype.Signed, 1)]
         hop.exception_is_here()
         return hop.genop('malloc_resizable_buffer', vlist,
