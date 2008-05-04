@@ -52,6 +52,28 @@ class GCManagedHeap(object):
             gctypelayout.zero_gc_pointers(result)
         return result
 
+    def malloc_resizable_buffer(self, TYPE, n):
+        typeid = self.get_type_id(TYPE)
+        addr = self.gc.malloc(typeid, n)
+        result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
+        if not self.gc.malloc_zero_filled:
+            gctypelayout.zero_gc_pointers(result)
+        return result
+
+    def resize_buffer(self, obj, new_size):
+        T = lltype.typeOf(obj).TO
+        buf = self.malloc_resizable_buffer(T, new_size)
+        # copy contents
+        arrayfld = T._arrayfld
+        new_arr = getattr(buf, arrayfld)
+        old_arr = getattr(obj, arrayfld)
+        for i in range(len(old_arr)):
+            new_arr[i] = old_arr[i]
+        return buf
+
+    def finish_building_buffer(self, obj):
+        return obj
+
     def free(self, TYPE, flavor='gc'):
         assert flavor != 'gc'
         return lltype.free(TYPE, flavor=flavor)

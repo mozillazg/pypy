@@ -245,16 +245,19 @@ class RawBufferOfShapeEntry(ExtRegistryEntry):
 
     def compute_result_annotation(self, s_T, s_init_size):
         from pypy.annotation import model as annmodel
-        from pypy.rpython.lltypesystem import rffi
+        from pypy.rpython.lltypesystem import rffi, lltype
         assert s_T.is_constant()
         assert isinstance(s_init_size, annmodel.SomeInteger)
         T = s_T.const
-        return annmodel.SomePtr(T)
+        return annmodel.SomePtr(lltype.Ptr(T))
 
     def specialize_call(self, hop):
-        xxx
-        #T = hop.args_v[0].value
-        #hop.genop('malloc_raw_array',
+        from pypy.rpython.lltypesystem import lltype
+        vlist = [hop.inputarg(lltype.Void, 0),
+                 hop.inputarg(lltype.Signed, 1)]
+        hop.exception_is_here()
+        return hop.genop('malloc_resizable_buffer', vlist,
+                         resulttype=hop.r_result.lowleveltype)
 
 def resize_buffer(ptr, new_size):
     """ Resize raw buffer returned by raw_buffer_of_shape to new size
@@ -274,16 +277,22 @@ def resize_buffer(ptr, new_size):
 class ResizeBufferEntry(ExtRegistryEntry):
     _about_ = resize_buffer
 
-    def compute_result_annotation(self, s_arr, s_old_size, s_new_size):
+    def compute_result_annotation(self, s_ptr, s_new_size):
         from pypy.annotation import model as annmodel
         from pypy.rpython.lltypesystem import rffi
-        assert isinstance(s_arr, annmodel.SomePtr)
-        assert isinstance(s_old_size, annmodel.SomeInteger)
+        assert isinstance(s_ptr, annmodel.SomePtr)
         assert isinstance(s_new_size, annmodel.SomeInteger)
-        assert s_arr.ll_ptrtype is rffi.VOIDP
-        return s_arr
+        return s_ptr
 
-def finish_building_buffer(T, ptr):
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        vlist = [hop.inputarg(hop.args_r[0], 0),
+                 hop.inputarg(lltype.Signed, 1)]
+        hop.exception_is_here()
+        return hop.genop('resize_buffer', vlist,
+                         resulttype=hop.r_result.lowleveltype)
+
+def finish_building_buffer(ptr):
     """ Finish building raw_buffer returned by raw_buffer_of_shape
     """
     return ptr
@@ -291,11 +300,14 @@ def finish_building_buffer(T, ptr):
 class FinishBuildingBufferEntry(ExtRegistryEntry):
     _about_ = finish_building_buffer
 
-    def compute_result_annotation(self, s_T, s_arr, s_size):
-        from pypy.annotation.model import SomePtr, SomeInteger
-        from pypy.rpython.lltypesystem import lltype
-        assert s_T.is_constant()
-        T = s_T.const
+    def compute_result_annotation(self, s_arr):
+        from pypy.annotation.model import SomePtr, s_ImpossibleValue
         assert isinstance(s_arr, SomePtr)
-        assert isinstance(s_size, SomeInteger)
-        return SomePtr(lltype.Ptr(T))
+        return s_arr
+
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        vlist = [hop.inputarg(hop.args_r[0], 0)]
+        hop.exception_cannot_occur()
+        return hop.genop('finish_building_buffer', vlist,
+                         resulttype=hop.r_result.lowleveltype)
