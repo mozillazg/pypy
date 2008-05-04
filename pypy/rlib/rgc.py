@@ -234,9 +234,8 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
 
 def raw_buffer_of_shape(T, init_size):
-    """ Allocates a raw array of given shape. This array is suitable
-    for resizing by resize_raw_array or finalizing calling
-    cast_raw_array_to_shape
+    """ Pre-allocates structure of type T (varsized) with possibility
+    to reallocate it further by resize_buffer.
     """
     from pypy.rpython.lltypesystem import lltype
     return lltype.malloc(T, init_size)
@@ -258,9 +257,7 @@ class RawBufferOfShapeEntry(ExtRegistryEntry):
         #hop.genop('malloc_raw_array',
 
 def resize_buffer(ptr, new_size):
-    """ Resize raw array returned by raw_array_of_shape from old_size
-    to new_size. Returns pointer to new array (in case resizing copied
-    contents of old array to new place
+    """ Resize raw buffer returned by raw_buffer_of_shape to new size
     """
     from pypy.rpython.lltypesystem import lltype
     T = lltype.typeOf(ptr).TO
@@ -287,7 +284,7 @@ class ResizeBufferEntry(ExtRegistryEntry):
         return s_arr
 
 def finish_building_buffer(T, ptr):
-    """ Cast raw array returned by raw_array_of_shape to type T.
+    """ Finish building raw_buffer returned by raw_buffer_of_shape
     """
     return ptr
 
