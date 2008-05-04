@@ -46,6 +46,6 @@ def test_raw_array():
         ptr.chars[0] = 'a'
         ptr = rgc.resize_buffer(ptr, 2)
         ptr.chars[1] = 'b'
-        return hlstr(rgc.finish_building_buffer(STR, ptr))
+        return hlstr(rgc.finish_building_buffer(ptr))
 
     assert f() == 'ab'

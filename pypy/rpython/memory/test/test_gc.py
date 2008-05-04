@@ -429,6 +429,20 @@ class GCTest(object):
 
         assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
 
+    def test_raw_array(self):
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib import rgc
+
+        def f():
+            ptr = rgc.raw_buffer_of_shape(STR, 1)
+            ptr.chars[0] = 'a'
+            ptr = rgc.resize_buffer(ptr, 2)
+            ptr.chars[1] = 'b'
+            return len(hlstr(rgc.finish_building_buffer(ptr)))
+
+        assert self.interpret(f, []) == 2
+
 class TestMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.marksweep import MarkSweepGC as GCClass
 
