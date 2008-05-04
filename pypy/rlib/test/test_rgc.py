@@ -42,10 +42,10 @@ def test_raw_array():
     from pypy.rpython.annlowlevel import hlstr
     
     def f():
-        arr = rgc.raw_array_of_shape(STR, 1)
-        arr[0] = 'a'
-        arr = rgc.resize_raw_array(arr, 1, 2)
-        arr[1] = 'b'
-        return hlstr(rgc.cast_raw_array_to_shape(STR, arr, 2))
+        ptr = rgc.raw_buffer_of_shape(STR, 1)
+        ptr.chars[0] = 'a'
+        ptr = rgc.resize_buffer(ptr, 2)
+        ptr.chars[1] = 'b'
+        return hlstr(rgc.finish_building_buffer(STR, ptr))
 
     assert f() == 'ab'

@@ -233,47 +233,72 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
 
-def raw_array_of_shape(T, init_size):
+def raw_buffer_of_shape(T, init_size):
     """ Allocates a raw array of given shape. This array is suitable
     for resizing by resize_raw_array or finalizing calling
     cast_raw_array_to_shape
     """
     from pypy.rpython.lltypesystem import lltype
-    return lltype.malloc(lltype.Array(lltype.Char, hints={'nolength':True}),
-                         init_size, flavor='raw')
+    return lltype.malloc(T, init_size)
 
-class RawArrayOfShapeEntry(ExtRegistryEntry):
-    _about_ = raw_array_of_shape
+class RawBufferOfShapeEntry(ExtRegistryEntry):
+    _about_ = raw_buffer_of_shape
 
-def resize_raw_array(arr, old_size, new_size):
+    def compute_result_annotation(self, s_T, s_init_size):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython.lltypesystem import rffi
+        assert s_T.is_constant()
+        assert isinstance(s_init_size, annmodel.SomeInteger)
+        T = s_T.const
+        return annmodel.SomePtr(T)
+
+    def specialize_call(self, hop):
+        xxx
+        #T = hop.args_v[0].value
+        #hop.genop('malloc_raw_array',
+
+def resize_buffer(ptr, new_size):
     """ Resize raw array returned by raw_array_of_shape from old_size
     to new_size. Returns pointer to new array (in case resizing copied
     contents of old array to new place
     """
     from pypy.rpython.lltypesystem import lltype
+    T = lltype.typeOf(ptr).TO
+    arrayfld = T._arrayfld
+    arr = getattr(ptr, arrayfld)
+    old_size = len(arr)
     # we don't have any realloc on top of cpython
-    new_ar = lltype.malloc(lltype.Array(lltype.Char, hints={'nolength':True}),
-                           new_size, flavor='raw')
+    new_ptr = lltype.malloc(T, new_size)
+    new_ar = getattr(new_ptr, arrayfld)
     for i in range(old_size):
         new_ar[i] = arr[i]
-    lltype.free(arr, flavor='raw')
-    return new_ar
+    return new_ptr
 
-class ResizeRawArrayEntry(ExtRegistryEntry):
-    _about_ = resize_raw_array
+class ResizeBufferEntry(ExtRegistryEntry):
+    _about_ = resize_buffer
 
-def cast_raw_array_to_shape(T, arr, size):
+    def compute_result_annotation(self, s_arr, s_old_size, s_new_size):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython.lltypesystem import rffi
+        assert isinstance(s_arr, annmodel.SomePtr)
+        assert isinstance(s_old_size, annmodel.SomeInteger)
+        assert isinstance(s_new_size, annmodel.SomeInteger)
+        assert s_arr.ll_ptrtype is rffi.VOIDP
+        return s_arr
+
+def finish_building_buffer(T, ptr):
     """ Cast raw array returned by raw_array_of_shape to type T.
     """
-    from pypy.rpython.lltypesystem import lltype
-    res = lltype.malloc(T, size)
-    if isinstance(T, lltype.Array):
-        array_elem = res
-    elif isinstance(T, lltype.Struct):
-        array_elem = getattr(res, T._arrayfld)
-    else:
-        raise TypeError("Cannot cast %s" % T)
-    for num in range(size):
-        array_elem[num] = arr[num]
-    return res
+    return ptr
 
+class FinishBuildingBufferEntry(ExtRegistryEntry):
+    _about_ = finish_building_buffer
+
+    def compute_result_annotation(self, s_T, s_arr, s_size):
+        from pypy.annotation.model import SomePtr, SomeInteger
+        from pypy.rpython.lltypesystem import lltype
+        assert s_T.is_constant()
+        T = s_T.const
+        assert isinstance(s_arr, SomePtr)
+        assert isinstance(s_size, SomeInteger)
+        return SomePtr(lltype.Ptr(T))
