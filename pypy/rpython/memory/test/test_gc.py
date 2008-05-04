@@ -429,13 +429,13 @@ class GCTest(object):
 
         assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
 
-    def test_raw_array(self):
+    def test_resizable_buffer(self):
         from pypy.rpython.lltypesystem.rstr import STR
         from pypy.rpython.annlowlevel import hlstr
         from pypy.rlib import rgc
 
         def f():
-            ptr = rgc.raw_buffer_of_shape(STR, 1)
+            ptr = rgc.resizable_buffer_of_shape(STR, 1)
             ptr.chars[0] = 'a'
             ptr = rgc.resize_buffer(ptr, 2)
             ptr.chars[1] = 'b'
