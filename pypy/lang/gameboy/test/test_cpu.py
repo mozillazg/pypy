@@ -28,7 +28,7 @@ def get_cpu(new=False):
     TEST_CPU.reset()
     return TEST_CPU
 
-# ------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # TEST CPU
 
 
@@ -140,21 +140,27 @@ def fetch_execute_cycle_test(cpu, opCode, cycles=0):
     prepare_for_fetch(cpu, opCode)
     cycle_test(cpu, 0xCB, cycles)
     
-def cycle_test(cpu, opCode, cycles=0):
+def cycle_test(cpu, opCode, cycles=0, opCodeDisplay=None):
+    if opCodeDisplay==None:
+        opCodeDisplay = hex(opCode)
     startCycles = cpu.cycles
     try:
         cpu.execute(opCode)
     except Exception, inst:
-        assert False, "Opcode %s %s failed to execute: %s" % (hex(opCode), OP_CODES[opCode], inst)
+        assert False, "Opcode %s %s failed to execute: %s" % (opCodeDisplay, OP_CODES[opCode], inst)
     cpuUsedCycles = startCycles-cpu.cycles 
     assert cpuUsedCycles == cycles,\
         "Cycles for opCode %s [CPU.%s] should be %i not %i" %\
-         (hex(opCode).ljust(2),\
+         ((opCodeDisplay).ljust(2),\
           OP_CODES[opCode],\
           cycles, cpuUsedCycles)
       
       
-# TEST HELPERS ---------------------------------------
+def fetch_execute_cycle_test_second_order(cpu, opCode, cycles=0):
+    prepare_for_fetch(cpu, opCode)
+    cycle_test(cpu, 0xCB, cycles, "[0xCB -> "+hex(opCode)+"]")
+    
+# TEST HELPERS -----------------------------------------------------------------
 
 def test_create_group_op_codes():
     assert len(GROUPED_REGISTERS) == 8
@@ -268,7 +274,7 @@ def set_registers(registers, value):
         register.set(value);
         
         
-# test helper methods ---------------------------------------------------------
+# test helper methods ----------------------------------------------------------
 
 def test_prepare_for_pop():
     cpu = get_cpu()
@@ -284,7 +290,7 @@ def test_prepare_for_fetch():
     assert cpu.fetch() == value+1
     assert cpu.fetch() == value
     
-# ------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # opCode Testing
 
 #nop
@@ -1522,7 +1528,12 @@ def test_0xC7_to_0xFF():
 
 # switching to other opcode set
 def test_0xCB():
-    pass
+    cpu = get_cpu()
+    pc = cpu.pc.get()
+    prepare_for_fetch(cpu, 0x80)
+    cycle_test(cpu, 0xCB, 2)
+    assert_default_registers(cpu, pc=pc+1)
+    
 
 def test_rotateLeftCircular_flags():
     cpu = get_cpu()
@@ -1538,70 +1549,128 @@ def test_rotateLeftCircular_flags():
     assert_default_flags(cpu, zFlag=False, cFlag=True)
     assert_default_registers(cpu, a=0x80, f=None)
     
-# rlc_B to rlc_A
-def test_0x00_to_0x07_rotateLeftCircular():
+    
+# SECOND ORDER OPCODES ---------------------------------------------------------
+
+def second_order_test(opCode, createFunction):
     cpu = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    opCode = 0x00
-    value = 0x12
+    value = 0xF0
     for register in registers:
         cpu.reset()
         register.set(value)
         cycles = 2
         if register == cpu.hli:
             cycles = 4
-        fetch_execute_cycle_test(cpu, opCode, cycles)
-        rlc = ((value & 0x7F) << 1) + ((value & 0x80) >> 7)
-        assert register.get() ==  rlc
+        fetch_execute_cycle_test_second_order(cpu, opCode, cycles)
+        assert register.get() ==  createFunction(value)
         opCode += 0x01
         value += 1
 
+# rlc_B to rlc_A
+def test_0x00_to_0x07_rotateLeftCircular():
+    second_order_test(0x00, lambda value:((value & 0x7F) << 1) + ((value & 0x80) >> 7))
+
 # rrc_B to rrc_F
-def test_0x08_to_0x0F():
-    cpu = get_cpu()
-    opCode = 0x38
+def test_0x08_to_0x0F_rotateRightCircular():
+    second_order_test(0x08, lambda value:(value >> 1) + ((value & 0x01) << 7))
 
 # rl_B to rl_A
-def test_0x10_to_0x17():
-    cpu = get_cpu()
-    opCode = 0x38
+def test_0x10_to_0x17_shift_left():
+    second_order_test(0x10, lambda value: (value << 1) & 0xFF )
 
 # rr_B to rr_A
-def test_0x18_to_0x1F():
-    cpu = get_cpu()
-    opCode = 0x38
+def test_0x18_to_0x1F_shift_right():
+    second_order_test(0x18, lambda value: value >> 1)
 
 # sla_B to sla_A
-def test_0x20_to_0x27():
-    cpu = get_cpu()
-    opCode = 0x38
+def test_0x20_to_0x27_shift_left_arithmetic():
+    second_order_test(0x20, lambda value: (value << 1) & 0xFF)
 
 # sra_B to sra_A
-def test_0x28_to_0x2F():
-    cpu = get_cpu()
-    opCode = 0x38
+def test_0x28_to_0x2F_shift_right_arithmetic():
+    second_order_test(0x28, lambda value: (value >> 1) + (value & 0x80))
 
 # swap_B to swap_A
 def test_0x30_to_0x37():
-    cpu = get_cpu()
-    opCode = 0x38
+    second_order_test(0x30, lambda value: ((value << 4) + (value >> 4)) & 0xFF)
 
 # srl_B to srl_A
-def test_0x38_to_0x3F():
-    cpu = get_cpu()
-    opCode = 0x38
+def test_0x38_to_0x3F_shift_word_right_logical():
+    second_order_test(0x38, lambda value: value >> 1)
 
 # bit_B to bit_A
-def test_bit_opCodes():
+def test_testBit_opCodes():
+    cpu = get_cpu()
+    registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     opCode = 0x40
+    for register in registers:
+        registerOpCode = opCode
+        for i in range(8):
+            cycles = 2
+            if register == cpu.hli:
+                cycles = 3
+                
+            cpu.reset()
+            register.set(0)
+            fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
+            assert cpu.f.zFlag == True
+            
+            cpu.reset()
+            register.set((1<<i))
+            fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
+            assert cpu.f.zFlag == False
+            
+            registerOpCode += 0x08
+        opCode += 0x01
     
 # set_B to set_C
-def test_set_opCodes():
+def test_setBit_opCodes():
+    cpu = get_cpu()
+    registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
+    value = 0x12
     opCode = 0xC0
+    for register in registers:
+        registerOpCode = opCode
+        for i in range(8):
+            cycles = 2
+            if register == cpu.hli:
+                cycles = 4
+                
+            cpu.reset()
+            register.set(0)
+            fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
+            assert (register.get() & (1<<i)) >> i == 1
+            fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
+            assert (register.get() & (1<<i)) >> i == 1
+            registerOpCode += 0x08
+        opCode += 0x01
 
 # res_B to res_A
-def test_res_opCodes():
+def test_resetBit_opCodes():
+    cpu = get_cpu()
+    registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
+    value = 0x12
     opCode = 0x80
+    for register in registers:
+        registerOpCode = opCode
+        cycles = 2
+        if register == cpu.hli:
+            cycles = 4
+            
+        for i in range(8):
+            cpu.reset()
+            register.set(0)
+            fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
+            assert (register.get() & (1<<i)) == 0
+            register.set(0xFF)
+            fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
+            print register.get(), (register.get() & (1<<i)), hex(registerOpCode) ,i
+            print
+            assert (register.get() & (1<<i)) == 0
+                  
+            registerOpCode += 0x08
+        opCode += 1
     
 
 
