@@ -1524,7 +1524,6 @@ def test_0xC7_to_0xFF():
         assert cpu.pc.get() == rstValue
         opCode += 0x08
         rstValue += 0x08
-    pass
 
 # switching to other opcode set
 def test_0xCB():
