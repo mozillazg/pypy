@@ -114,9 +114,6 @@ class LLInterpRootWalker:
     def __init__(self, gcheap):
         self.gcheap = gcheap
 
-    def append_static_root(self, pointer):
-        self.gcheap.constantroots.append(pointer)
-
     def walk_roots(self, collect_stack_root,
                    collect_static_in_prebuilt_nongc,
                    collect_static_in_prebuilt_gc):

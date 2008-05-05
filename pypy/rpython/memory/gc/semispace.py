@@ -21,7 +21,7 @@ GCFLAG_FORWARDED = first_gcflag
 GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
-DEBUG_PRINT = False
+DEBUG_PRINT = True
 memoryError = MemoryError()
 
 class SemiSpaceGC(MovingGCBase):
@@ -205,6 +205,7 @@ class SemiSpaceGC(MovingGCBase):
         self.semispace_collect()
         # the indirection is required by the fact that collect() is referred
         # to by the gc transformer, and the default argument would crash
+        # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
         if DEBUG_PRINT:
