@@ -442,7 +442,7 @@ class FrameworkGCTransformer(GCTransformer):
         has_finalizer = bool(self.finalizer_funcptr_for_type(TYPE))
         c_has_finalizer = rmodel.inputconst(lltype.Bool, has_finalizer)
 
-        if not op.opname.endswith('_varsize'):
+        if not op.opname.endswith('_varsize') and not flags.get('varsize'):
             #malloc_ptr = self.malloc_fixedsize_ptr
             zero = flags.get('zero', False)
             if (self.malloc_fast_ptr is not None and
@@ -488,6 +488,9 @@ class FrameworkGCTransformer(GCTransformer):
                            [op.args[0]], resulttype=llmemory.Address)
         hop.genop("direct_call", [self.can_move_ptr, self.c_const_gc, v_addr],
                   resultvar=op.result)
+
+    def _can_realloc(self):
+        return self.gcdata.gc.can_realloc
 
     def gct_gc__disable_finalizers(self, hop):
         # cannot collect()
