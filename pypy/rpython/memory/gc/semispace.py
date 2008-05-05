@@ -21,7 +21,7 @@ GCFLAG_FORWARDED = first_gcflag
 GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
-DEBUG_PRINT = True
+DEBUG_PRINT = False
 memoryError = MemoryError()
 
 class SemiSpaceGC(MovingGCBase):
