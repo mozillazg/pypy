@@ -16,8 +16,12 @@ from pypy.rlib.nonconst import NonConstant
 # pointer to a young object.
 GCFLAG_NO_YOUNG_PTRS = SemiSpaceGC.first_unused_gcflag << 0
 
-# The following flag is set for static roots which are not on the list
-# of static roots yet, but will appear with write barrier
+# The following flag is set on some last-generation objects (== prebuilt
+# objects for GenerationGC, but see also HybridGC).  The flag is set
+# unless the object is already listed in 'last_generation_root_objects'.
+# When a pointer is written inside an object with GCFLAG_NO_HEAP_PTRS
+# set, the write_barrier clears the flag and adds the object to
+# 'last_generation_root_objects'.
 GCFLAG_NO_HEAP_PTRS = SemiSpaceGC.first_unused_gcflag << 1
 
 class GenerationGC(SemiSpaceGC):
@@ -70,6 +74,7 @@ class GenerationGC(SemiSpaceGC):
         self.lb_young_var_basesize = sz
 
     def setup(self):
+        self.last_generation_root_objects = self.AddressStack()
         SemiSpaceGC.setup(self)
         self.set_nursery_size(self.initial_nursery_size)
         # the GC is fully setup now.  The rest can make use of it.
@@ -281,6 +286,31 @@ class GenerationGC(SemiSpaceGC):
             obj = self.young_objects_with_weakrefs.pop()
             self.objects_with_weakrefs.append(obj)
 
+    def collect_roots(self):
+        self.root_walker.walk_roots(
+            SemiSpaceGC._collect_root,  # stack roots
+            SemiSpaceGC._collect_root,  # static in prebuilt non-gc structures
+            None)   # we don't need the static in prebuilt gc objects
+        self.collect_last_generation_roots()
+
+    def collect_last_generation_roots(self):
+        stack = self.last_generation_root_objects
+        self.last_generation_root_objects = self.AddressStack()
+        while stack.non_empty():
+            obj = stack.pop()
+            self.header(obj).tid |= GCFLAG_NO_HEAP_PTRS
+            # ^^^ the flag we just added will be removed immediately if
+            # the object still contains pointers to younger objects
+            self.trace(obj, self._trace_external_obj, obj)
+        stack.delete()
+
+    def _trace_external_obj(self, pointer, obj):
+        addr = pointer.address[0]
+        if addr != NULL:
+            newaddr = self.copy(addr)
+            pointer.address[0] = newaddr
+            self.write_into_last_generation_obj(obj, newaddr)
+
     # ____________________________________________________________
     # Implementation of nursery-only collections
 
@@ -390,24 +420,27 @@ class GenerationGC(SemiSpaceGC):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
 
-    def append_to_static_roots(self, pointer, arg):
-        self.root_walker.append_static_root(pointer)
-
-    def move_to_static_roots(self, addr_struct):
-        objhdr = self.header(addr_struct)
-        objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
-        self.trace(addr_struct, self.append_to_static_roots, None)
-
     def remember_young_pointer(self, addr_struct, addr):
         ll_assert(not self.is_in_nursery(addr_struct),
                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
-        oldhdr = self.header(addr_struct)
         if self.is_in_nursery(addr):
             self.old_objects_pointing_to_young.append(addr_struct)
-            oldhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
-        if oldhdr.tid & GCFLAG_NO_HEAP_PTRS:
-            self.move_to_static_roots(addr_struct)
+            self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
+        elif addr == NULL:
+            return
+        self.write_into_last_generation_obj(addr_struct, addr)
     remember_young_pointer._dont_inline_ = True
+
+    def write_into_last_generation_obj(self, addr_struct, addr):
+        objhdr = self.header(addr_struct)
+        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+            if not self.is_last_generation(addr):
+                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.last_generation_root_objects.append(addr_struct)
+
+    def is_last_generation(self, obj):
+        # overridden by HybridGC
+        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
 
 # ____________________________________________________________
 

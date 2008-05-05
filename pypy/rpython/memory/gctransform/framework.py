@@ -391,11 +391,8 @@ class FrameworkGCTransformer(GCTransformer):
             self.layoutbuilder.addresses_of_static_ptrs_in_nongc +
             self.layoutbuilder.addresses_of_static_ptrs)
         log.info("found %s static roots" % (len(addresses_of_static_ptrs), ))
-        additional_ptrs = self.layoutbuilder.additional_roots_sources
-        log.info("additional %d potential static roots" % additional_ptrs)
         ll_static_roots_inside = lltype.malloc(lltype.Array(llmemory.Address),
-                                               len(addresses_of_static_ptrs) +
-                                               additional_ptrs,
+                                               len(addresses_of_static_ptrs),
                                                immortal=True)
         for i in range(len(addresses_of_static_ptrs)):
             ll_static_roots_inside[i] = addresses_of_static_ptrs[i]
@@ -787,10 +784,6 @@ class BaseRootWalker:
 
     def setup_root_walker(self):
         pass
-
-    def append_static_root(self, adr):
-        self.gcdata.static_root_end.address[0] = adr
-        self.gcdata.static_root_end += sizeofaddr
 
     def walk_roots(self, collect_stack_root,
                    collect_static_in_prebuilt_nongc,
