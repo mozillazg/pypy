@@ -28,7 +28,8 @@ class Register(object):
 # ------------------------------------------------------------------------------
 
 class DoubleRegister(Register):
-    def __init__(self, cpu, hi=None, lo=None, resetValue=None):
+    
+    def __init__(self, cpu, hi=None, lo=None, resetValue=0):
         self.cpu = cpu
         if isinstance(hi, (Register)) :
             self.hi = hi
@@ -38,10 +39,7 @@ class DoubleRegister(Register):
             self.lo = Register(self.cpu)
         else:
             self.lo = lo
-        if (resetValue != None):
-            self.resetValue = resetValue
-        elif (hi!=None and lo==None and resetValue==None):
-            self.resetValue = hi
+        self.resetValue = resetValue
         
     def set(self, hi=0, lo=None, useCycles=True):
         if (lo is None):
@@ -205,8 +203,8 @@ class CPU(object):
         self.hl = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
         
         self.hli = ImmediatePseudoRegister(self, self.hl)
-        self.pc = DoubleRegister(self, constants.RESET_PC)
-        self.sp = DoubleRegister(self, constants.RESET_SP)
+        self.pc = DoubleRegister(self, resetValue=constants.RESET_PC)
+        self.sp = DoubleRegister(self, resetValue=constants.RESET_SP)
         
         self.a = Register(self, constants.RESET_A)
         self.f = FlagRegister(self)

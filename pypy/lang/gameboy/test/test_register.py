@@ -152,8 +152,9 @@ def test_double_register_methods():
 def test_double_register_reset():
     value = 0x1234;
     
-    register = DoubleRegister(get_cpu(), value)
+    register = DoubleRegister(get_cpu(), resetValue=value)
     register.set(value+1)
     assert register.get() == value+1;
     register.reset()
     assert register.get() == value
+    
