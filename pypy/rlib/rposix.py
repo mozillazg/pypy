@@ -1,3 +1,4 @@
+import os
 from pypy.rpython.lltypesystem.rffi import CConstant, CExternVariable, INT
 from pypy.rpython.lltypesystem import lltype, ll2ctypes
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -26,3 +27,11 @@ _get_errno, set_errno = CExternVariable(INT, 'errno', errno_eci,
 
 def get_errno():
     return intmask(_get_errno())
+
+def closerange(fd_low, fd_high):
+    # this behaves like os.closerange() from Python 2.6.
+    for fd in xrange(fd_low, fd_high):
+        try:
+            os.close(fd)
+        except OSError:
+            pass
