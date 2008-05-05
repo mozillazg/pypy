@@ -377,6 +377,23 @@ class AppTestPosix:
             assert os.WTERMSIG(status1) == self.SIGABRT
         pass # <- please, inspect.getsource(), don't crash
 
+    def test_closerange(self):
+        os = self.posix
+        if not hasattr(os, 'closerange'):
+            skip("missing os.closerange()")
+        fds = [os.open(self.path + str(i), os.O_CREAT|os.O_WRONLY, 0777)
+               for i in range(15)]
+        fds.sort()
+        start = fds.pop()
+        stop = start + 1
+        while len(fds) > 3 and fds[-1] == start - 1:
+            start = fds.pop()
+        os.closerange(start, stop)
+        for fd in fds:
+            os.close(fd)     # should not have been closed
+        for fd in range(start, stop):
+            raises(OSError, os.fstat, fd)   # should have been closed
+
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

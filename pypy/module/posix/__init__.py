@@ -27,6 +27,7 @@ corresponding Unix manual entries for more information on calls."""
     'isatty'    : 'interp_posix.isatty',
     'read'      : 'interp_posix.read',
     'close'     : 'interp_posix.close',
+    'closerange': 'interp_posix.closerange',
     'fstat'     : 'interp_posix.fstat',
     'stat'      : 'interp_posix.stat',
     'lstat'     : 'interp_posix.lstat',
