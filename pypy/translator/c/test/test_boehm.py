@@ -377,6 +377,21 @@ class TestUsingBoehm(AbstractGCTestClass):
         c_fn = self.getcompiled(fn, [])
         assert c_fn() == False
 
+    def test_resizable_buffer(self):
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib import rgc
+
+        def f():
+            ptr = rgc.resizable_buffer_of_shape(STR, 1)
+            ptr.chars[0] = 'a'
+            ptr = rgc.resize_buffer(ptr, 2)
+            ptr.chars[1] = 'b'
+            return hlstr(rgc.finish_building_buffer(ptr)) == "ab"
+
+        run = self.getcompiled(f)
+        assert run() == True
+
     # reusing some tests from pypy.rpython.memory.test.snippet
     large_tests_ok = True
 
