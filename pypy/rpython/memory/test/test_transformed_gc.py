@@ -855,9 +855,11 @@ class TestGenerationGC(GenericMovingGCTests):
 
         run, transformer = self.runner(f, nbargs=2, transformer=True)
         run([1, 4])
-        assert len(transformer.layoutbuilder.addresses_of_static_ptrs) == 0
-        assert transformer.layoutbuilder.additional_roots_sources >= 4
-        # NB. Remember that additional_roots_sources does not count
+        if not transformer.GCClass.prebuilt_gc_objects_are_static_roots:
+            assert len(transformer.layoutbuilder.addresses_of_static_ptrs) == 0
+        else:
+            assert len(transformer.layoutbuilder.addresses_of_static_ptrs) >= 4
+        # NB. Remember that the number above does not count
         # the number of prebuilt GC objects, but the number of locations
         # within prebuilt GC objects that are of type Ptr(Gc).
         # At the moment we get additional_roots_sources == 6:
