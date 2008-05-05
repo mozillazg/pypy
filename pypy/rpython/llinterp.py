@@ -697,7 +697,7 @@ class LLFrame(object):
         zero = flags.get('zero', False)
         return self.heap.malloc_nonmovable(obj, size, zero=zero)
 
-    def op_malloc_resizable_buffer(self, obj, size):
+    def op_malloc_resizable_buffer(self, obj, flags, size):
         return self.heap.malloc_resizable_buffer(obj, size)
 
     def op_resize_buffer(self, obj, new_size):

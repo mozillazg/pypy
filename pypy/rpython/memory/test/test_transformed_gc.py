@@ -493,7 +493,6 @@ class GenericGCTests(GCTest):
         assert run([]) == int(self.GC_CAN_MOVE)
 
     def test_resizable_buffer(self):
-        py.test.skip("Does not work")
         from pypy.rpython.lltypesystem.rstr import STR
         from pypy.rpython.annlowlevel import hlstr
         from pypy.rlib import rgc
