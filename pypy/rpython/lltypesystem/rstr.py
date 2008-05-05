@@ -16,7 +16,6 @@ from pypy.rpython.lltypesystem.lltype import \
      staticAdtMethod, GcForwardReference
 from pypy.rpython.rmodel import Repr
 from pypy.rpython.lltypesystem import llmemory
-from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.sourcetools import func_with_new_name
 
 # ____________________________________________________________
@@ -312,13 +311,13 @@ class LLHelpers(AbstractLLHelpers):
         return result
 
     def ll_upper(s):
-        # XXX WUAAAA! this is not true anymore for unicode
         s_chars = s.chars
         s_len = len(s_chars)
         if s_len == 0:
             return s.empty()
         i = 0
-        result = s.malloc(s_len)
+        result = mallocstr(s_len)
+        #        ^^^^^^^^^ specifically to explode on unicode
         while i < s_len:
             ch = s_chars[i]
             if 'a' <= ch <= 'z':
@@ -328,13 +327,13 @@ class LLHelpers(AbstractLLHelpers):
         return result
 
     def ll_lower(s):
-        # XXX WUAAAA! this is not true anymore for unicode
         s_chars = s.chars
         s_len = len(s_chars)
         if s_len == 0:
             return s.empty()
         i = 0
-        result = s.malloc(s_len)
+        result = mallocstr(s_len)
+        #        ^^^^^^^^^ specifically to explode on unicode
         while i < s_len:
             ch = s_chars[i]
             if 'A' <= ch <= 'Z':
@@ -606,7 +605,7 @@ class LLHelpers(AbstractLLHelpers):
         while i < num_items:
             item_chars = items[i].chars
             item_len = len(item_chars)
-            copy_contents(result, items[i], res_index, 0, item_len)
+            copy_contents(items[i], result, 0, res_index, item_len)
             res_index += item_len
             i += 1
         return result
