@@ -575,10 +575,16 @@ class SemiSpaceGC(MovingGCBase):
         """Check the invariants about 'obj' that should be true
         between collections."""
         tid = self.header(obj).tid
-        if not (tid & GCFLAG_EXTERNAL):
-            assert not (tid & GCFLAG_FORWARDED)
-        assert (self.tospace <= obj < self.free) == (not (tid&GCFLAG_EXTERNAL))
-        assert not (tid & GCFLAG_FINALIZATION_ORDERING)
+        if tid & GCFLAG_EXTERNAL:
+            ll_assert(tid & GCFLAG_FORWARDED, "bug: external+!forwarded")
+            ll_assert(not (self.tospace <= obj < self.free),
+                      "external flag but object inside the semispaces")
+        else:
+            ll_assert(not (tid & GCFLAG_FORWARDED), "bug: !external+forwarded")
+            ll_assert(self.tospace <= obj < self.free,
+                      "!external flag but object outside the semispaces")
+        ll_assert(not (tid & GCFLAG_FINALIZATION_ORDERING),
+                  "unexpected GCFLAG_FINALIZATION_ORDERING")
 
     STATISTICS_NUMBERS = 0
 

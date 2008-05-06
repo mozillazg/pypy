@@ -7,7 +7,12 @@ class GCBase(object):
     needs_write_barrier = False
     malloc_zero_filled = False
     prebuilt_gc_objects_are_static_roots = True
-    DEBUG = False      # set to True for test_gc.py
+
+    # The following flag enables costly consistency checks after each
+    # collection.  It is automatically set to True by test_gc.py.  The
+    # checking logic is translatable, so the flag can be set to True
+    # here before translation.
+    DEBUG = False
 
     def set_query_functions(self, is_varsize, has_gcptr_in_varsize,
                             is_gcarrayofgcptr,
@@ -151,37 +156,37 @@ class GCBase(object):
 
     def debug_check_consistency(self):
         """To use after a collection.  If self.DEBUG is set, this
-        enumerates all roots and trace all objects to check if we didn't
+        enumerates all roots and traces all objects to check if we didn't
         accidentally free a reachable object or forgot to update a pointer
         to an object that moved.
         """
         if self.DEBUG:
-            # this part is not rpython
-            seen = {}
-            pending = []
-
-            def record(obj):
-                hdrobj = self.header(obj)._obj
-                if hdrobj not in seen:
-                    seen[hdrobj] = True
-                    pending.append(obj)
-
-            def callback(self, root):
-                obj = root.address[0]
-                assert obj
-                record(obj)
-
-            def callback2(pointer, ignored):
-                obj = pointer.address[0]
-                if obj:
-                    record(obj)
-
-            self.root_walker._walk_prebuilt_gc(record)
-            self.root_walker.walk_roots(callback, callback, None)
-            while pending:
+            from pypy.rlib.objectmodel import we_are_translated
+            self._debug_seen = self.AddressStack()
+            self._debug_pending = self.AddressStack()
+            if not we_are_translated():
+                self.root_walker._walk_prebuilt_gc(self._debug_record)
+            callback = GCBase._debug_callback
+            self.root_walker.walk_roots(callback, callback, callback)
+            pending = self._debug_pending
+            while pending.non_empty():
                 obj = pending.pop()
                 self.debug_check_object(obj)
-                self.trace(obj, callback2, None)
+                self.trace(obj, self._debug_callback2, None)
+
+    def _debug_record(self, obj):
+        seen = self._debug_seen
+        if not seen.contains(obj):
+            seen.append(obj)
+            self._debug_pending.append(obj)
+    def _debug_callback(self, root):
+        obj = root.address[0]
+        ll_assert(bool(obj), "NULL address from walk_roots()")
+        self._debug_record(obj)
+    def _debug_callback2(self, pointer, ignored):
+        obj = pointer.address[0]
+        if obj:
+            self._debug_record(obj)
 
     def debug_check_object(self, obj):
         pass
