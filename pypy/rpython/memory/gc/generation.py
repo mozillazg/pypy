@@ -453,14 +453,14 @@ class GenerationGC(SemiSpaceGC):
                       "nursery object with GCFLAG_NO_YOUNG_PTRS")
             self.trace(obj, self._debug_no_nursery_pointer, None)
         elif not self.is_in_nursery(obj):
-            ll_assert(self.old_objects_pointing_to_young.contains(obj),
+            ll_assert(self._d_oopty.contains(obj),
                       "missing from old_objects_pointing_to_young")
         if tid & GCFLAG_NO_HEAP_PTRS:
             ll_assert(self.is_last_generation(obj),
                       "GCFLAG_NO_HEAP_PTRS on non-3rd-generation object")
             self.trace(obj, self._debug_no_gen1or2_pointer, None)
         elif self.is_last_generation(obj):
-            ll_assert(self.last_generation_root_objects.contains(obj),
+            ll_assert(self._d_lgro.contains(obj),
                       "missing from last_generation_root_objects")
 
     def _debug_no_nursery_pointer(self, root, ignored):
@@ -473,7 +473,11 @@ class GenerationGC(SemiSpaceGC):
 
     def debug_check_consistency(self):
         if self.DEBUG:
+            self._d_oopty = self.old_objects_pointing_to_young.stack2dict()
+            self._d_lgro = self.last_generation_root_objects.stack2dict()
             SemiSpaceGC.debug_check_consistency(self)
+            self._d_oopty.delete()
+            self._d_lgro.delete()
             self.old_objects_pointing_to_young.foreach(
                 self._debug_check_flag_1, None)
             self.last_generation_root_objects.foreach(

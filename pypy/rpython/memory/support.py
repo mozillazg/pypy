@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import free_non_gc_object, we_are_translated
+from pypy.rlib.rarithmetic import r_uint, LONG_BIT
 from pypy.rlib.debug import ll_assert
 
 DEFAULT_CHUNK_SIZE = 1019
@@ -124,19 +125,10 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 count = chunk_size
         foreach._annspecialcase_ = 'specialize:arg(1)'
 
-        def contains(self, addr):
-            """Check if 'addr' is in the list.  That's just a linear scan,
-            so it's slow!"""
-            chunk = self.chunk
-            count = self.used_in_last_chunk
-            while chunk:
-                while count > 0:
-                    count -= 1
-                    if chunk.items[count] == addr:
-                        return True
-                chunk = chunk.next
-                count = chunk_size
-            return False
+        def stack2dict(self):
+            result = AddressDict()
+            self.foreach(result.setitem, llmemory.NULL)
+            return result
 
     cache[chunk_size] = AddressStack
     return AddressStack
@@ -207,3 +199,152 @@ def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
 
     cache[chunk_size] = AddressDeque
     return AddressDeque
+
+
+def AddressDict():
+    if we_are_translated():
+        return LLAddressDict()
+    else:
+        return BasicAddressDict()
+
+class BasicAddressDict(object):
+    def __init__(self):
+        self.data = {}
+    def _key(self, addr):
+        return addr._fixup().ptr._obj
+    def delete(self):
+        pass
+    def contains(self, keyaddr):
+        return self._key(keyaddr) in self.data
+    def get(self, keyaddr, default=llmemory.NULL):
+        return self.data.get(self._key(keyaddr), default)
+    def setitem(self, keyaddr, valueaddr):
+        assert keyaddr
+        self.data[self._key(keyaddr)] = valueaddr
+    def add(self, keyaddr):
+        self.setitem(keyaddr, llmemory.NULL)
+
+# if diff_bit == -1, the node is a key/value pair (key=left/value=right)
+# if diff_bit >= 0, then the node is the root of a subtree where:
+#   * the keys have all exactly the same bits > diff_bit
+#   * the keys whose 'diff_bit' is 0 are in the 'left' subtree
+#   * the keys whose 'diff_bit' is 1 are in the 'right' subtree
+ADDRDICTNODE = lltype.Struct('AddrDictNode',
+                             ('diff_bit', lltype.Signed),
+                             ('left', llmemory.Address),
+                             ('right', llmemory.Address))
+
+class LLAddressDict(object):
+    _alloc_flavor_ = "raw"
+
+    def __init__(self):
+        self.root = lltype.malloc(ADDRDICTNODE, flavor='raw')
+        self.root.diff_bit = -1
+        self.root.left = llmemory.NULL
+
+    def delete(self):
+        node = self.root
+        parent = lltype.nullptr(ADDRDICTNODE)
+        while True:
+            if node.diff_bit >= 0:
+                next = _node_reveal(node.left)
+                node.left = _node_hide(parent)
+                parent = node
+                node = next
+            else:
+                lltype.free(node, flavor='raw')
+                if not parent:
+                    break
+                node = _node_reveal(parent.right)
+                grandparent = _node_reveal(parent.left)
+                lltype.free(parent, flavor='raw')
+                parent = grandparent
+        free_non_gc_object(self)
+
+    def contains(self, keyaddr):
+        if keyaddr:
+            node = self._lookup(keyaddr)
+            return keyaddr == node.left
+        else:
+            return False
+
+    def get(self, keyaddr, default=llmemory.NULL):
+        if keyaddr:
+            node = self._lookup(keyaddr)
+            if keyaddr == node.left:
+                return node.right
+        return default
+
+    def setitem(self, keyaddr, valueaddr):
+        ll_assert(bool(keyaddr), "cannot store NULL in an AddressDict")
+        node = self._lookup(keyaddr)
+        if node.left == llmemory.NULL or node.left == keyaddr:
+            node.left = keyaddr
+            node.right = valueaddr
+        else:
+            number1 = r_uint(llmemory.cast_adr_to_int(keyaddr))
+            number2 = r_uint(llmemory.cast_adr_to_int(node.left))
+            diff = number1 ^ number2
+            parentnode = self._lookup(keyaddr, difflimit = diff >> 1)
+            # all subnodes of parentnode have a key that is equal to
+            # 'keyaddr' for all bits in range(0, msb(diff)), and differs
+            # from 'keyaddr' exactly at bit msb(diff).
+            # At this point, parentnode.diff_bit < msb(diff).
+            nextbit = parentnode.diff_bit
+            copynode = lltype.malloc(ADDRDICTNODE, flavor='raw')
+            copynode.diff_bit = nextbit
+            copynode.left = parentnode.left
+            copynode.right = parentnode.right
+            bit = self._msb(diff, nextbit + 1)
+            newnode = lltype.malloc(ADDRDICTNODE, flavor='raw')
+            parentnode.diff_bit = bit
+            ll_assert(number1 & (r_uint(1) << bit) !=
+                      number2 & (r_uint(1) << bit), "setitem: bad 'bit'")
+            if number1 & (r_uint(1) << bit):
+                parentnode.left = _node_hide(copynode)
+                parentnode.right = _node_hide(newnode)
+            else:
+                parentnode.left = _node_hide(newnode)
+                parentnode.right = _node_hide(copynode)
+            newnode.diff_bit = -1
+            newnode.left = keyaddr
+            newnode.right = valueaddr
+        if not we_are_translated():
+            assert self.contains(keyaddr)
+
+    def add(self, keyaddr):
+        self.setitem(keyaddr, llmemory.NULL)
+
+    def _msb(self, value, lowerbound=0):
+        # Most Significant Bit: '(1<<result)' is the highest bit set in 'value'
+        ll_assert(value >= (r_uint(1) << lowerbound),
+                  "msb: bad value or lowerbound")
+        if value >= (r_uint(1) << (LONG_BIT-1)):
+            return LONG_BIT-1    # most significant possible bit
+        bit = lowerbound
+        while (value >> bit) > r_uint(1):
+            bit += 1
+        return bit
+
+    def _lookup(self, addr, difflimit=r_uint(0)):
+        # * with difflimit == 0, find and return the leaf node whose key is
+        #   equal to or closest from 'addr'.
+        # * with difflimit > 0, look for the node N closest to the root such
+        #   that all the keys of the subtree starting at node N are equal to
+        #   the given 'addr' at least for all bits > msb(difflimit).
+        number = r_uint(llmemory.cast_adr_to_int(addr))
+        node = self.root
+        while node.diff_bit >= 0:
+            mask = r_uint(1) << node.diff_bit
+            if mask <= difflimit:
+                return node
+            if number & mask:
+                node = _node_reveal(node.right)
+            else:
+                node = _node_reveal(node.left)
+        return node
+
+_node_hide = llmemory.cast_ptr_to_adr
+
+def _node_reveal(nodeaddr):
+    return llmemory.cast_adr_to_ptr(nodeaddr, lltype.Ptr(ADDRDICTNODE))

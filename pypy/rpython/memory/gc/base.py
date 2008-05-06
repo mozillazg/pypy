@@ -162,7 +162,8 @@ class GCBase(object):
         """
         if self.DEBUG:
             from pypy.rlib.objectmodel import we_are_translated
-            self._debug_seen = self.AddressStack()
+            from pypy.rpython.memory.support import AddressDict
+            self._debug_seen = AddressDict()
             self._debug_pending = self.AddressStack()
             if not we_are_translated():
                 self.root_walker._walk_prebuilt_gc(self._debug_record)
@@ -179,7 +180,7 @@ class GCBase(object):
     def _debug_record(self, obj):
         seen = self._debug_seen
         if not seen.contains(obj):
-            seen.append(obj)
+            seen.add(obj)
             self._debug_pending.append(obj)
     def _debug_callback(self, root):
         obj = root.address[0]
