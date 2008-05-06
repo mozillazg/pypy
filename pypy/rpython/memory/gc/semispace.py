@@ -202,13 +202,13 @@ class SemiSpaceGC(MovingGCBase):
         self.max_space_size = size
 
     def collect(self):
+        self.debug_check_consistency()
         self.semispace_collect()
         # the indirection is required by the fact that collect() is referred
         # to by the gc transformer, and the default argument would crash
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
-        self.debug_check_consistency()
         if DEBUG_PRINT:
             import time
             llop.debug_print(lltype.Void)
@@ -570,6 +570,15 @@ class SemiSpaceGC(MovingGCBase):
                 finalizer(obj)
         finally:
             self.finalizer_lock_count -= 1
+
+    def debug_check_object(self, obj):
+        """Check the invariants about 'obj' that should be true
+        between collections."""
+        tid = self.header(obj).tid
+        if not (tid & GCFLAG_EXTERNAL):
+            assert not (tid & GCFLAG_FORWARDED)
+        assert (self.tospace <= obj < self.free) == (not (tid&GCFLAG_EXTERNAL))
+        assert not (tid & GCFLAG_FINALIZATION_ORDERING)
 
     STATISTICS_NUMBERS = 0
 
