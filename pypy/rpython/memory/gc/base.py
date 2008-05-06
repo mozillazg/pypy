@@ -173,6 +173,8 @@ class GCBase(object):
                 obj = pending.pop()
                 self.debug_check_object(obj)
                 self.trace(obj, self._debug_callback2, None)
+            self._debug_seen.delete()
+            self._debug_pending.delete()
 
     def _debug_record(self, obj):
         seen = self._debug_seen
