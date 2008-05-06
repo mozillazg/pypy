@@ -208,6 +208,7 @@ class SemiSpaceGC(MovingGCBase):
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
+        self.debug_check_consistency()
         if DEBUG_PRINT:
             import time
             llop.debug_print(lltype.Void)
@@ -235,6 +236,7 @@ class SemiSpaceGC(MovingGCBase):
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
         self.finished_full_collect()
+        self.debug_check_consistency()
         self.notify_objects_just_moved()
         if not size_changing:
             llarena.arena_reset(fromspace, self.space_size, True)

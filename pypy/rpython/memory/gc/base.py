@@ -7,6 +7,7 @@ class GCBase(object):
     needs_write_barrier = False
     malloc_zero_filled = False
     prebuilt_gc_objects_are_static_roots = True
+    DEBUG = False      # set to True for test_gc.py
 
     def set_query_functions(self, is_varsize, has_gcptr_in_varsize,
                             is_gcarrayofgcptr,
@@ -147,6 +148,38 @@ class GCBase(object):
                 item += itemlength
                 length -= 1
     trace._annspecialcase_ = 'specialize:arg(2)'
+
+    def debug_check_consistency(self):
+        """To use around a collection.  If self.DEBUG is set, this
+        enumerates all roots and trace all objects to check if we didn't
+        accidentally free a reachable object or forgot to update a pointer
+        to an object that moved.
+        """
+        if self.DEBUG:
+            # this part is not rpython
+            seen = {}
+            pending = []
+
+            def record(obj):
+                hdrobj = self.header(obj)._obj
+                if hdrobj not in seen:
+                    seen[hdrobj] = True
+                    pending.append(obj)
+
+            def callback(self, root):
+                obj = root.address[0]
+                assert obj
+                record(obj)
+
+            def callback2(pointer, ignored):
+                obj = pointer.address[0]
+                if obj:
+                    record(obj)
+
+            self.root_walker.walk_roots(callback, callback, callback)
+            while pending:
+                obj = pending.pop()
+                self.trace(obj, callback2, None)
 
 
 class MovingGCBase(GCBase):
