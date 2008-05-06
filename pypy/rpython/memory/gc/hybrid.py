@@ -264,6 +264,12 @@ class HybridGC(GenerationGC):
         # At the start of a collection, the GCFLAG_UNVISITED bit is set
         # exactly on the objects in gen2_rawmalloced_objects.  Only
         # raw_malloc'ed objects can ever have this bit set.
+        if self.DEBUG:
+            def check_bit(obj, expected):
+                assert self.header(obj).tid & GCFLAG_UNVISITED == expected
+            self.gen2_rawmalloced_objects.foreach(check_bit, GCFLAG_UNVISITED)
+            self.gen3_rawmalloced_objects.foreach(check_bit, 0)
+
         self.count_semispaceonly_collects += 1
         if self.is_collecting_gen3():
             # set the GCFLAG_UNVISITED on all rawmalloced generation-3 objects

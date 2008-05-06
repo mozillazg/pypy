@@ -321,6 +321,7 @@ class GenerationGC(SemiSpaceGC):
             ll_assert(self.nursery_size <= self.top_of_space - self.free,
                          "obtain_free_space failed to do its job")
         if self.nursery:
+            self.debug_check_consistency()
             if DEBUG_PRINT:
                 llop.debug_print(lltype.Void, "minor collect")
             # a nursery-only collection
@@ -337,6 +338,7 @@ class GenerationGC(SemiSpaceGC):
             llarena.arena_reset(self.nursery, self.nursery_size, True)
             if DEBUG_PRINT:
                 llop.debug_print(lltype.Void, "percent survived:", float(scan - beginning) / self.nursery_size)
+            self.debug_check_consistency()
         else:
             # no nursery - this occurs after a full collect, triggered either
             # just above or by some previous non-nursery-based allocation.
