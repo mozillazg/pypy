@@ -24,11 +24,14 @@ class TestTranslation:
         drv.exe_name = None
         drv.proceed('compile')
 
-    def test_scheme(self):
-        self.translate('targetscheme')
+    #def test_scheme(self):
+    #    self.translate('targetscheme')
 
-    def test_js(self):
-        self.translate('targetjsstandalone')
+    #def test_js(self):
+    #    self.translate('targetjsstandalone')
 
-    def test_prolog(self):
-        self.translate('targetprologstandalone')
+    #def test_prolog(self):
+    #    self.translate('targetprologstandalone')
+
+    def test_gameboy(self):
+        self.translate('targetgameboytest')
