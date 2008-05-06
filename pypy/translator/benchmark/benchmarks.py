@@ -162,7 +162,7 @@ def run_gadfly(executable='/usr/local/bin/python'):
 def check_gadfly():
     return external_dependency('gadfly',
               'http://codespeak.net/svn/user/arigo/hack/pypy-hack/gadflyZip',
-              40406)
+              54470)
 
 def run_mako(executable='/usr/local/bin/python'):
     """ run some tests in the mako templating system """
