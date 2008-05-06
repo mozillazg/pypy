@@ -228,3 +228,13 @@ class TestExtra(BaseCTypesTestChecker):
     def test_from_param(self):
         # other working cases of from_param
         assert isinstance(c_void_p.from_param((c_int * 4)()), c_int*4)
+
+    def test_cast_none(self):
+        def check(P):
+            x = cast(None, P)
+            assert isinstance(x, P)
+            assert not x
+        check(c_void_p)
+        check(c_char_p)
+        check(POINTER(c_int))
+        check(POINTER(c_int * 10))
