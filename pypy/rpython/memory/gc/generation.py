@@ -449,41 +449,42 @@ class GenerationGC(SemiSpaceGC):
         SemiSpaceGC.debug_check_object(self, obj)
         tid = self.header(obj).tid
         if tid & GCFLAG_NO_YOUNG_PTRS:
-            def _no_nursery_pointer(root, ignored):
-                assert not self.is_in_nursery(root.address[0])
-            assert not self.is_in_nursery(obj)
-            self.trace(obj, _no_nursery_pointer, None)
+            ll_assert(not self.is_in_nursery(obj),
+                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
+            self.trace(obj, self._debug_no_nursery_pointer, None)
         elif not self.is_in_nursery(obj):
-            assert self.header(obj)._obj in self._d_oopty
+            ll_assert(self.old_objects_pointing_to_young.contains(obj),
+                      "missing from old_objects_pointing_to_young")
         if tid & GCFLAG_NO_HEAP_PTRS:
-            def _no_gen1or2_pointer(root, ignored):
-                target = root.address[0]
-                assert not target or self.is_last_generation(target)
-            assert self.is_last_generation(obj)
-            self.trace(obj, _no_gen1or2_pointer, None)
+            ll_assert(self.is_last_generation(obj),
+                      "GCFLAG_NO_HEAP_PTRS on non-3rd-generation object")
+            self.trace(obj, self._debug_no_gen1or2_pointer, None)
         elif self.is_last_generation(obj):
-            assert self.header(obj)._obj in self._d_lgro
+            ll_assert(self.last_generation_root_objects.contains(obj),
+                      "missing from last_generation_root_objects")
+
+    def _debug_no_nursery_pointer(self, root, ignored):
+        ll_assert(not self.is_in_nursery(root.address[0]),
+                  "GCFLAG_NO_YOUNG_PTRS but found a young pointer")
+    def _debug_no_gen1or2_pointer(self, root, ignored):
+        target = root.address[0]
+        ll_assert(not target or self.is_last_generation(target),
+                  "GCFLAG_NO_HEAP_PTRS but found a pointer to gen1or2")
 
     def debug_check_consistency(self):
         if self.DEBUG:
-            self._make_dict("old_objects_pointing_to_young", "_d_oopty")
-            self._make_dict("last_generation_root_objects", "_d_lgro")
             SemiSpaceGC.debug_check_consistency(self)
-            def check1(obj, ignored):
-                assert not (self.header(obj).tid & GCFLAG_NO_YOUNG_PTRS)
-            def check2(obj, ignored):
-                assert not (self.header(obj).tid & GCFLAG_NO_HEAP_PTRS)
-            self.old_objects_pointing_to_young.foreach(check1, None)
-            self.last_generation_root_objects.foreach(check2, None)
+            self.old_objects_pointing_to_young.foreach(
+                self._debug_check_flag_1, None)
+            self.last_generation_root_objects.foreach(
+                self._debug_check_flag_2, None)
 
-    def _make_dict(self, attr, shortattr):
-        result = {}
-        def _add_dict(obj, ignored):
-            hdrobj = self.header(obj)._obj
-            result[hdrobj] = True
-        lst = getattr(self, attr)
-        lst.foreach(_add_dict, None)
-        setattr(self, shortattr, result)
+    def _debug_check_flag_1(self, obj, ignored):
+        ll_assert(not (self.header(obj).tid & GCFLAG_NO_YOUNG_PTRS),
+                  "unexpected GCFLAG_NO_YOUNG_PTRS")
+    def _debug_check_flag_2(self, obj, ignored):
+        ll_assert(not (self.header(obj).tid & GCFLAG_NO_HEAP_PTRS),
+                  "unexpected GCFLAG_NO_HEAP_PTRS")
 
 # ____________________________________________________________
 

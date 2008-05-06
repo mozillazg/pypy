@@ -124,6 +124,20 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 count = chunk_size
         foreach._annspecialcase_ = 'specialize:arg(1)'
 
+        def contains(self, addr):
+            """Check if 'addr' is in the list.  That's just a linear scan,
+            so it's slow!"""
+            chunk = self.chunk
+            count = self.used_in_last_chunk
+            while chunk:
+                while count > 0:
+                    count -= 1
+                    if chunk.items[count] == addr:
+                        return True
+                chunk = chunk.next
+                count = chunk_size
+            return False
+
     cache[chunk_size] = AddressStack
     return AddressStack
 

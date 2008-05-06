@@ -470,21 +470,28 @@ class HybridGC(GenerationGC):
         GenerationGC.debug_check_object(self, obj)
         tid = self.header(obj).tid
         if tid & GCFLAG_UNVISITED:
-            assert self.header(obj)._obj in self._d_gen2ro
+            ll_assert(self.gen2_rawmalloced_objects.contains(obj),
+                      "GCFLAG_UNVISITED on non-gen2 object")
 
     def debug_check_consistency(self):
         if self.DEBUG:
-            self._make_dict("gen2_rawmalloced_objects", "_d_gen2ro")
             GenerationGC.debug_check_consistency(self)
-            def check_gen2(obj, ignored):
-                tid = self.header(obj).tid
-                assert tid & GCFLAG_EXTERNAL
-                assert tid & GCFLAG_UNVISITED
-                assert (tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX
-            def check_gen3(obj, ignored):
-                tid = self.header(obj).tid
-                assert tid & GCFLAG_EXTERNAL
-                assert not (tid & GCFLAG_UNVISITED)
-                assert (tid & GCFLAG_AGE_MASK) == GCFLAG_AGE_MAX
-            self.gen2_rawmalloced_objects.foreach(check_gen2, None)
-            self.gen3_rawmalloced_objects.foreach(check_gen3, None)
+            self.gen2_rawmalloced_objects.foreach(self._debug_check_gen2, None)
+            self.gen3_rawmalloced_objects.foreach(self._debug_check_gen3, None)
+
+    def _debug_check_gen2(self, obj, ignored):
+        tid = self.header(obj).tid
+        ll_assert(bool(tid & GCFLAG_EXTERNAL),
+                  "gen2: missing GCFLAG_EXTERNAL")
+        ll_assert(bool(tid & GCFLAG_UNVISITED),
+                  "gen2: missing GCFLAG_UNVISITED")
+        ll_assert((tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX,
+                  "gen2: age field too large")
+    def _debug_check_gen3(self, obj, ignored):
+        tid = self.header(obj).tid
+        ll_assert(bool(tid & GCFLAG_EXTERNAL),
+                  "gen3: missing GCFLAG_EXTERNAL")
+        ll_assert(not (tid & GCFLAG_UNVISITED),
+                  "gen3: unexpected GCFLAG_UNVISITED")
+        ll_assert((tid & GCFLAG_AGE_MASK) == GCFLAG_AGE_MAX,
+                  "gen3: wrong age field")

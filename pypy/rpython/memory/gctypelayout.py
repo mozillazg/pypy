@@ -291,10 +291,10 @@ class TypeLayoutBuilder(object):
         # they could be changed later to point to GC heap objects.
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            if not gc.prebuilt_gc_objects_are_static_roots:
-                return
-            else:
+            if gc.prebuilt_gc_objects_are_static_roots or gc.DEBUG:
                 appendto = self.addresses_of_static_ptrs
+            else:
+                return
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
         for a in gc_pointers_inside(value, adr, mutable_only=True):
