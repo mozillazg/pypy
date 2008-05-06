@@ -264,12 +264,6 @@ class HybridGC(GenerationGC):
         # At the start of a collection, the GCFLAG_UNVISITED bit is set
         # exactly on the objects in gen2_rawmalloced_objects.  Only
         # raw_malloc'ed objects can ever have this bit set.
-        if self.DEBUG:
-            def check_bit(obj, expected):
-                assert self.header(obj).tid & GCFLAG_UNVISITED == expected
-            self.gen2_rawmalloced_objects.foreach(check_bit, GCFLAG_UNVISITED)
-            self.gen3_rawmalloced_objects.foreach(check_bit, 0)
-
         self.count_semispaceonly_collects += 1
         if self.is_collecting_gen3():
             # set the GCFLAG_UNVISITED on all rawmalloced generation-3 objects
@@ -469,3 +463,28 @@ class HybridGC(GenerationGC):
                              "nonmoving freed:     ",
                              dead_size, "bytes in",
                              dead_count, "objs")
+
+    def debug_check_object(self, obj):
+        """Check the invariants about 'obj' that should be true
+        between collections."""
+        GenerationGC.debug_check_object(self, obj)
+        tid = self.header(obj).tid
+        if tid & GCFLAG_UNVISITED:
+            assert self.header(obj)._obj in self._d_gen2ro
+
+    def debug_check_consistency(self):
+        if self.DEBUG:
+            self._make_dict("gen2_rawmalloced_objects", "_d_gen2ro")
+            GenerationGC.debug_check_consistency(self)
+            def check_gen2(obj, ignored):
+                tid = self.header(obj).tid
+                assert tid & GCFLAG_EXTERNAL
+                assert tid & GCFLAG_UNVISITED
+                assert (tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX
+            def check_gen3(obj, ignored):
+                tid = self.header(obj).tid
+                assert tid & GCFLAG_EXTERNAL
+                assert not (tid & GCFLAG_UNVISITED)
+                assert (tid & GCFLAG_AGE_MASK) == GCFLAG_AGE_MAX
+            self.gen2_rawmalloced_objects.foreach(check_gen2, None)
+            self.gen3_rawmalloced_objects.foreach(check_gen3, None)

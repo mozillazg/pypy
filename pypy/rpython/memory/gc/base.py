@@ -150,7 +150,7 @@ class GCBase(object):
     trace._annspecialcase_ = 'specialize:arg(2)'
 
     def debug_check_consistency(self):
-        """To use around a collection.  If self.DEBUG is set, this
+        """To use after a collection.  If self.DEBUG is set, this
         enumerates all roots and trace all objects to check if we didn't
         accidentally free a reachable object or forgot to update a pointer
         to an object that moved.
@@ -176,10 +176,15 @@ class GCBase(object):
                 if obj:
                     record(obj)
 
-            self.root_walker.walk_roots(callback, callback, callback)
+            self.root_walker._walk_prebuilt_gc(record)
+            self.root_walker.walk_roots(callback, callback, None)
             while pending:
                 obj = pending.pop()
+                self.debug_check_object(obj)
                 self.trace(obj, callback2, None)
+
+    def debug_check_object(self, obj):
+        pass
 
 
 class MovingGCBase(GCBase):

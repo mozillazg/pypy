@@ -25,8 +25,9 @@ class GCManagedHeap(object):
             TYPE = lltype.typeOf(obj)
             layoutbuilder.consider_constant(TYPE, obj, self.gc)
 
-        self.constantroots = list(layoutbuilder.addresses_of_static_ptrs)
+        self.constantroots = layoutbuilder.addresses_of_static_ptrs
         self.constantrootsnongc = layoutbuilder.addresses_of_static_ptrs_in_nongc
+        self._all_prebuilt_gc = layoutbuilder.all_prebuilt_gc
 
     # ____________________________________________________________
     #
@@ -132,6 +133,10 @@ class LLInterpRootWalker:
             for addrofaddr in gcheap.llinterp.find_roots():
                 if addrofaddr.address[0]:
                     collect_stack_root(gc, addrofaddr)
+
+    def _walk_prebuilt_gc(self, collect):    # debugging only!  not RPython
+        for obj in self.gcheap._all_prebuilt_gc:
+            collect(llmemory.cast_ptr_to_adr(obj._as_ptr()))
 
 
 class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
