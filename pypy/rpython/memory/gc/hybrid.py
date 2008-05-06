@@ -470,12 +470,14 @@ class HybridGC(GenerationGC):
         GenerationGC.debug_check_object(self, obj)
         tid = self.header(obj).tid
         if tid & GCFLAG_UNVISITED:
-            ll_assert(self.gen2_rawmalloced_objects.contains(obj),
+            ll_assert(self._d_gen2ro.contains(obj),
                       "GCFLAG_UNVISITED on non-gen2 object")
 
     def debug_check_consistency(self):
         if self.DEBUG:
+            self._d_gen2ro = self.gen2_rawmalloced_objects.stack2dict()
             GenerationGC.debug_check_consistency(self)
+            self._d_gen2ro.delete()
             self.gen2_rawmalloced_objects.foreach(self._debug_check_gen2, None)
             self.gen3_rawmalloced_objects.foreach(self._debug_check_gen3, None)
 
