@@ -919,3 +919,25 @@ class TestHybridGC(TestGenerationGC):
                          'nursery_size': 128,
                          'large_object': 32}
             root_stack_depth = 200
+
+    def test_ref_from_rawmalloced_to_regular(self):
+        import gc
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        A = lltype.GcStruct('A', ('p', lltype.Ptr(S)),
+                                 ('a', lltype.Array(lltype.Char)))
+        def setup(j):
+            p = lltype.malloc(S)
+            p.x = j*2
+            lst = lltype.malloc(A, j)
+            # the following line generates a write_barrier call at the moment,
+            # which is important because the 'lst' can be allocated directly
+            # in generation 2.  This can only occur with varsized mallocs.
+            lst.p = p
+            return lst
+        def f(i, j):
+            lst = setup(j)
+            gc.collect()
+            return lst.p.x
+        run = self.runner(f, nbargs=2)
+        res = run([100, 100])
+        assert res == 200
