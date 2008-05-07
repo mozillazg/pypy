@@ -21,12 +21,27 @@ METHODS_WITH_SHORTCUT = dict.fromkeys(
      # unary
      'len', 'nonzero', 'repr', 'str', 'hash',
      'neg', 'invert', 'index', 'iter', 'next', 'buffer',
+     'getitem', 'setitem', 'int',
      # in-place
      'inplace_add', 'inplace_sub', 'inplace_mul', 'inplace_truediv',
      'inplace_floordiv', 'inplace_div', 'inplace_mod', 'inplace_pow',
      'inplace_lshift', 'inplace_rshift', 'inplace_and', 'inplace_or',
      'inplace_xor',
  ])
+
+KNOWN_MISSING = ['getattr',   # mostly non-builtins or optimized by CALL_METHOD
+                 'setattr', 'delattr', 'userdel',  # mostly for non-builtins
+                 'get', 'set', 'delete',   # uncommon (except on functions)
+                 'delitem', 'abs', 'hex', 'oct',  # rare stuff?
+                 'pos', 'divmod', 'cmp',          # rare stuff?
+                 'float', 'long', 'coerce',       # rare stuff?
+                 ]
+
+for _name, _, _, _specialmethods in ObjSpace.MethodTable:
+    if _specialmethods:
+        assert _name in METHODS_WITH_SHORTCUT or _name in KNOWN_MISSING, (
+            "operation %r should be in METHODS_WITH_SHORTCUT or KNOWN_MISSING"
+            % (_name,))
 
 
 def install(space, mm):
