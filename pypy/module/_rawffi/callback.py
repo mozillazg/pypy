@@ -53,12 +53,12 @@ class W_CallbackPtr(W_DataInstance):
                                            callback, number)
         self.ll_buffer = rffi.cast(rffi.VOIDP, self.ll_callback.ll_closure)
         if tracker.DO_TRACING:
-            addr = rffi.cast(rffi.INT, self.ll_callback.ll_closure)
+            addr = rffi.cast(lltype.Signed, self.ll_callback.ll_closure)
             tracker.trace_allocation(addr, self)
 
     def free(self):
         if tracker.DO_TRACING:
-            addr = rffi.cast(rffi.INT, self.ll_callback.ll_closure)
+            addr = rffi.cast(lltype.Signed, self.ll_callback.ll_closure)
             tracker.trace_free(addr)
         del self.global_counter.CallbackPtr_by_number[self.number]
     free.unwrap_spec = ['self']

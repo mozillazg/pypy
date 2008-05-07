@@ -227,7 +227,7 @@ class W_DataInstance(Wrappable):
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw',
                                            zero=True)
             if tracker.DO_TRACING:
-                ll_buf = rffi.cast(rffi.INT, self.ll_buffer)
+                ll_buf = rffi.cast(lltype.Signed, self.ll_buffer)
                 tracker.trace_allocation(ll_buf, self)
 
     def getbuffer(space, self):
@@ -249,7 +249,7 @@ class W_DataInstance(Wrappable):
 
     def _free(self):
         if tracker.DO_TRACING:
-            ll_buf = rffi.cast(rffi.INT, self.ll_buffer)
+            ll_buf = rffi.cast(lltype.Signed, self.ll_buffer)
             tracker.trace_free(ll_buf)
         lltype.free(self.ll_buffer, flavor='raw')
         self.ll_buffer = lltype.nullptr(rffi.VOIDP.TO)
@@ -355,7 +355,7 @@ class W_FuncPtr(Wrappable):
         if tracker.DO_TRACING:
             # XXX this is needed, because functions tend to live forever
             #     hence our testing is not performing that well
-            del tracker.alloced[rffi.cast(rffi.INT, array.ll_buffer)]
+            del tracker.alloced[rffi.cast(lltype.Signed, array.ll_buffer)]
         return space.wrap(array)
     byptr.unwrap_spec = ['self', ObjSpace]
 
