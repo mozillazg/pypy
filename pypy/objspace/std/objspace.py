@@ -15,8 +15,7 @@ from pypy.objspace.std.model import W_ANY, StdObjSpaceMultiMethod, StdTypeModel
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.descroperation import DescrOperation
 from pypy.objspace.std import stdtypedef
-from pypy.rlib.rarithmetic import base_int, r_int, r_uint, \
-     r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint, we_are_jitted
 from pypy.rlib.unroll import unrolling_iterable
@@ -477,8 +476,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             w_result = x.__spacebind__(self)
             #print 'wrapping', x, '->', w_result
             return w_result
-        if isinstance(x, r_int) or isinstance(x, r_uint) or \
-           isinstance(x, r_longlong) or isinstance(x, r_ulonglong):
+        if isinstance(x, base_int):
             return W_LongObject.fromrarith_int(x)
 
         # _____ below here is where the annotator should not get _____
@@ -500,7 +498,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # The following cases are even stranger.
         # Really really only for tests.
-        if isinstance(x, long):
+        if type(x) is long:
             return W_LongObject.fromlong(x)
         if isinstance(x, slice):
             return W_SliceObject(self.wrap(x.start),
