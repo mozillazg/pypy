@@ -607,8 +607,14 @@ class FuncEntry(object):
             checklines.append(self.body)
             body = '\n    '.join(checklines)
         source = 'def %s(%s):\n    %s\n' % (name, ', '.join(fnargs), body)
+        self.debug_dump(source)
+        exec compile2(source) in self.miniglobals
+        self._function = self.miniglobals[name]
+        return self._function
 
+    def debug_dump(self, source):
         if 0:    # for debugging the generated mm sources
+            name = self.get_function_name()
             f = open('/tmp/mm-source/%s' % name, 'a')
             for possiblename in self.possiblenames:
                 print >> f, '#',
@@ -618,10 +624,6 @@ class FuncEntry(object):
             print >> f
             print >> f, source
             f.close()
-
-        exec compile2(source) in self.miniglobals
-        self._function = self.miniglobals[name]
-        return self._function
 
     def register_valid_types(self, types):
         node = self.typetree
@@ -829,6 +831,7 @@ class InstallerVersion2(object):
         else:
             assert entry.body.startswith('return ')
             expr = entry.body[len('return '):]
+            entry.debug_dump(entry.body)
             return self.fnargs, expr, entry.miniglobals, entry.fallback
 
     def build_funcentry(self, funcnameparts, calllist, **extranames):
