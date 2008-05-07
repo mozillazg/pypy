@@ -33,7 +33,7 @@ OK = rffi.CConstant('OK', INT)
 
 def curses_setupterm(term, fd):
     intp = lltype.malloc(INTP.TO, 1, flavor='raw')
-    err = c_setupterm(term, fd, intp)
+    err = rffi.cast(lltype.Signed, c_setupterm(term, fd, intp))
     try:
         if err == ERR:
             if intp[0] == 0:
