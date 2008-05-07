@@ -337,7 +337,7 @@ class GenerationGC(SemiSpaceGC):
             llarena.arena_reset(self.nursery, self.nursery_size, True)
             if DEBUG_PRINT:
                 llop.debug_print(lltype.Void, "percent survived:", float(scan - beginning) / self.nursery_size)
-            #self.debug_check_consistency()
+            self.debug_check_consistency()
         else:
             # no nursery - this occurs after a full collect, triggered either
             # just above or by some previous non-nursery-based allocation.
