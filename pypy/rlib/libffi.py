@@ -217,7 +217,7 @@ CALLBACK_TP = lltype.Ptr(lltype.FuncType([rffi.VOIDPP, rffi.VOIDP, USERDATA_P],
                                          lltype.Void))
 USERDATA_P.TO.become(lltype.Struct('userdata',
                                    ('callback', CALLBACK_TP),
-                                   ('addarg', rffi.INT),
+                                   ('addarg', lltype.Signed),
                                    hints={'callback':True}))
 
 
