@@ -142,4 +142,9 @@ def main(depths=range(kMinTreeDepth, kMaxTreeDepth+1, 2)):
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    if len(sys.argv) > 1:
+        depths = [int(s) for s in sys.argv[1:]]
+        main(depths)
+    else:
+        main()
