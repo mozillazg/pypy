@@ -2,6 +2,7 @@ from pypy.lang.gameboy import constants
 
 
 class Register(object):
+    
     def __init__(self, cpu, value=0):
         self.resetValue = self.value = value
         self.cpu = cpu
@@ -31,11 +32,11 @@ class DoubleRegister(object):
     
     def __init__(self, cpu, hi=None, lo=None, resetValue=0):
         self.cpu = cpu
-        if isinstance(hi, (Register)) :
-            self.hi = hi
-        else:
+        if hi == None :
             self.hi = Register(self.cpu)
-        if lo==None:
+        else:
+            self.hi = hi
+        if lo == None:
             self.lo = Register(self.cpu)
         else:
             self.lo = lo
@@ -87,6 +88,7 @@ class DoubleRegister(object):
 # ------------------------------------------------------------------------------
 
 class ImmediatePseudoRegister(object):
+    
         def __init__(self, cpu, hl):
             self.cpu = cpu
             self.hl = hl
@@ -182,24 +184,24 @@ class CPU(object):
         self.reset()
 
     def iniRegisters(self):
-        self.b = Register(self)
-        self.c = Register(self)
+        self.b  = Register(self)
+        self.c  = Register(self)
         self.bc = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
         
-        self.d = Register(self)
-        self.e = Register(self)
+        self.d  = Register(self)
+        self.e  = Register(self)
         self.de = DoubleRegister(self, self.d, self.e, constants.RESET_DE)
 
-        self.h = Register(self)
-        self.l = Register(self)
+        self.h  = Register(self)
+        self.l  = Register(self)
         self.hl = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
         
         self.hli = ImmediatePseudoRegister(self, self.hl)
-        self.pc = DoubleRegister(self, resetValue=constants.RESET_PC)
-        self.sp = DoubleRegister(self, resetValue=constants.RESET_SP)
+        self.pc  = DoubleRegister(self, resetValue=constants.RESET_PC)
+        self.sp  = DoubleRegister(self, resetValue=constants.RESET_SP)
         
-        self.a = Register(self, constants.RESET_A)
-        self.f = FlagRegister(self)
+        self.a  = Register(self, constants.RESET_A)
+        self.f  = FlagRegister(self)
         self.af = DoubleRegister(self, self.a, self.f)
         
 
@@ -207,9 +209,9 @@ class CPU(object):
         self.resetRegisters()
         self.f.reset()
         self.f.zFlag = True
-        self.ime = False
-        self.halted = False
-        self.cycles = 0
+        self.ime     = False
+        self.halted  = False
+        self.cycles  = 0
         
     def resetRegisters(self):
         self.a.reset()

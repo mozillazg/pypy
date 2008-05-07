@@ -4,16 +4,16 @@ PyBoy GameBoy (TM) Emulator
 GameBoy Scheduler and Memory Mapper
 
 """
-from pypy.lang.gameboy import constants
-from pypy.lang.gameboy.cpu import *
+from pypy.lang.gameboy           import constants
+from pypy.lang.gameboy.cpu       import *
 from pypy.lang.gameboy.cartridge import *
 from pypy.lang.gameboy.interrupt import *
-from pypy.lang.gameboy.joypad import *
-from pypy.lang.gameboy.ram import *
-from pypy.lang.gameboy.serial import *
-from pypy.lang.gameboy.sound import *
-from pypy.lang.gameboy.timer import *
-from pypy.lang.gameboy.video import *
+from pypy.lang.gameboy.joypad    import *
+from pypy.lang.gameboy.ram       import *
+from pypy.lang.gameboy.serial    import *
+from pypy.lang.gameboy.sound     import *
+from pypy.lang.gameboy.timer     import *
+from pypy.lang.gameboy.video     import *
 from pypy.lang.gameboy.cartridge import *
 
 
