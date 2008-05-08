@@ -317,6 +317,8 @@ class SemiSpaceGC(MovingGCBase):
         root.address[0] = self.copy(root.address[0])
 
     def copy(self, obj):
+        if self.DEBUG:
+            self.debug_check_can_copy(obj)
         if self.is_forwarded(obj):
             #llop.debug_print(lltype.Void, obj, "already copied to", self.get_forwarding_address(obj))
             return self.get_forwarding_address(obj)
@@ -585,6 +587,10 @@ class SemiSpaceGC(MovingGCBase):
                       "!external flag but object outside the semispaces")
         ll_assert(not (tid & GCFLAG_FINALIZATION_ORDERING),
                   "unexpected GCFLAG_FINALIZATION_ORDERING")
+
+    def debug_check_can_copy(self, obj):
+        ll_assert(not (self.tospace <= obj < self.free),
+                  "copy() on already-copied object")
 
     STATISTICS_NUMBERS = 0
 

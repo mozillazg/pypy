@@ -88,6 +88,8 @@ class HybridGC(GenerationGC):
     def __init__(self, *args, **kwds):
         large_object = kwds.pop('large_object', 24)
         large_object_gcptrs = kwds.pop('large_object_gcptrs', 32)
+        self.generation3_collect_threshold = kwds.pop(
+            'generation3_collect_threshold', GENERATION3_COLLECT_THRESHOLD)
         GenerationGC.__init__(self, *args, **kwds)
 
         # Objects whose total size is at least 'large_object' bytes are
@@ -250,12 +252,12 @@ class HybridGC(GenerationGC):
     # external objects of 3rd generation.
 
     def collect(self):
-        self.count_semispaceonly_collects = GENERATION3_COLLECT_THRESHOLD
+        self.count_semispaceonly_collects = self.generation3_collect_threshold
         GenerationGC.collect(self)
 
     def is_collecting_gen3(self):
         count = self.count_semispaceonly_collects
-        return count >= GENERATION3_COLLECT_THRESHOLD
+        return count >= self.generation3_collect_threshold
 
     # ___________________________________________________________________
     # the following methods are hook into SemiSpaceGC.semispace_collect()
@@ -338,12 +340,12 @@ class HybridGC(GenerationGC):
         # NB. the object can have a finalizer or be a weakref, but
         # it's not an issue.
         totalsize = self.size_gc_header() + objsize
-        if DEBUG_PRINT:
-            self._nonmoving_copy_count += 1
-            self._nonmoving_copy_size += raw_malloc_usage(totalsize)
         newaddr = self.allocate_external_object(totalsize)
         if not newaddr:
             return llmemory.NULL   # can't raise MemoryError during a collect()
+        if DEBUG_PRINT:
+            self._nonmoving_copy_count += 1
+            self._nonmoving_copy_size += raw_malloc_usage(totalsize)
 
         llmemory.raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
         newobj = newaddr + self.size_gc_header()
