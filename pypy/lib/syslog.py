@@ -8,8 +8,7 @@ syslog facility.
 from ctypes_support import standard_c_lib as libc
 from ctypes import c_int, c_char_p
 from ctypes_configure.configure import (configure,
-    ExternalCompilationInfo, ConstantInteger, DefinedConstantInteger,
-    SimpleType)
+    ExternalCompilationInfo, ConstantInteger, DefinedConstantInteger)
 
 _CONSTANTS = (
     'LOG_EMERG',
