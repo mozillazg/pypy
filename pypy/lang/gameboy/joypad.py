@@ -18,13 +18,13 @@ class Joypad(object):
         self.buttonCode = 0xF
         self.cycles = constants.JOYPAD_CLOCK
 
-    def getCycles(self):
+    def get_cycles(self):
         return self.cycles
 
     def emulate(self, ticks):
         self.cycles -= ticks
         if self.cycles <= 0:
-            if self.driver.isRaised():
+            if self.driver.is_raised():
                 self.update()
             self.cycles = constants.JOYPAD_CLOCK
 
@@ -41,14 +41,13 @@ class Joypad(object):
     def update(self):
         oldButtons = self.buttonCode
         if self.joyp == 0x1:
-            self.buttonCode = self.driver.getButtonCode()
+            self.buttonCode = self.driver.get_button_code()
         elif self.joyp == 0x2:
-            self.buttonCode = self.driver.getDirectionCode()
+            self.buttonCode = self.driver.get_direction_code()
         else:
             self.buttonCode  = 0xF
-
         if oldButtons != self.buttonCode:
-            self.interrupt.raiseInterrupt(constants.JOYPAD)
+            self.interrupt.raise_interrupt(constants.JOYPAD)
 
 
 # ------------------------------------------------------------------------------
@@ -60,10 +59,10 @@ class JoypadDriver(object):
     """
     def __init__(self):
         self.raised = False
-        self.createButtons()
+        self.create_buttons()
         self.reset()
         
-    def createButtons(self):
+    def create_buttons(self):
         self.up = Button(constants.BUTTON_UP)
         self.right = Button(constants.BUTTON_RIGHT)
         self.down = Button(constants.BUTTON_DOWN)
@@ -72,92 +71,92 @@ class JoypadDriver(object):
         self.select = Button(constants.BUTTON_SELECT)
         self.a = Button(constants.BUTTON_A)
         self.b = Button(constants.BUTTON_B)
-        self.addOppositeButtons()
-        self.createButtonGroups()
+        self.add_opposite_buttons()
+        self.create_button_groups()
         
-    def addOppositeButtons(self):
+    def add_opposite_buttons(self):
         self.up.oppositeButton = self.down
         self.down.oppositeButton = self.up
         self.left.oppositeButton = self.right
         self.right.oppositeButton = self.left
         
-    def createButtonGroups(self):
+    def create_button_groups(self):
         self.directions = [self.up, self.right, self.down, self.left]
         self.buttons = [self.start, self.select, self.a, self.b]
         
-    def getButtons(self):
+    def get_buttons(self):
         return self.buttons
     
-    def getDirections(self):
+    def get_directions(self):
         return self.directions
     
-    def getButtonCode(self):
+    def get_button_code(self):
         code = 0
         for button in self.buttons:
-            code |= button.getCode()
+            code |= button.get_code()
         return code
         
-    def getDirectionCode(self):
+    def get_direction_code(self):
         code = 0
         for button in self.directions:
-            code |= button.getCode()
+            code |= button.get_code()
         return code
     
-    def isRaised(self):
+    def is_raised(self):
         raised = self.raised
         self.raised = False
         return raised
     
     def reset(self):
         self.raised = False
-        self.releaseAllButtons()
+        self.release_all_buttons()
 
-    def releaseAllButtons(self):
-        self.releaseButtons()
-        self.releaseDirections()
+    def release_all_buttons(self):
+        self.release_buttons()
+        self.release_directions()
         
-    def releaseButtons(self):
+    def release_buttons(self):
         self.up.release()
         self.right.release()
         self.down.release()
         self.left.release()
         
-    def releaseDirections(self):
+    def release_directions(self):
         self.start.release()
         self.select.release()
         self.a.release()
         self.b.release()
         
-    def buttonUp(self, pressed=True):
-        self.up.toggleButton(pressed)
+    def button_up(self, pressed=True):
+        self.up.toggle_button(pressed)
         self.raised = True
     
-    def buttonRight(self, pressed=True):
-        self.right.toggleButton(pressed)
+    def button_right(self, pressed=True):
+        self.right.toggle_button(pressed)
         self.raised = True
     
-    def buttonDown(self, pressed=True):
-        self.down.toggleButton(pressed)
+    def button_down(self, pressed=True):
+        self.down.toggle_button(pressed)
         self.raised = True
     
-    def buttonLeft(self, pressed=True):
-        self.left.toggleButton(pressed)
+    def button_left(self, pressed=True):
+        self.left.toggle_button(pressed)
         self.raised = True
     
-    def buttonStart(self, pressed=True):
-        self.start.toggleButton(pressed)
+    def button_start(self, pressed=True):
+        self.start.toggle_button(pressed)
         self.raised = True
     
-    def buttonSelect(self, pressed=True):
-        self.select.toggleButton(pressed)
+    def button_select(self, pressed=True):
+        self.select.toggle_button(pressed)
         self.raised = True
     
-    def buttonA(self, pressed=True):
-        self.a.toggleButton(pressed)
+    def button_a(self, pressed=True):
+        self.a.toggle_button(pressed)
         self.raised = True
     
-    def buttonB(self, pressed=True):
-        self.b.toggleButton(pressed)
+    def button_b(self, pressed=True):
+        self.b.toggle_button(pressed)
         self.raised = True
     
   
@@ -171,13 +170,13 @@ class Button(object):
         self.oppositeButton = oppositeButton
         self.pressed = False
         
-    def getCode(self):
+    def get_code(self):
         if self.pressed:
             return self.codeValue
         else:
             return 0
         
-    def toggleButton(self, pressed=True):
+    def toggle_button(self, pressed=True):
         if pressed:
             self.press()
         else:
@@ -191,5 +190,5 @@ class Button(object):
             self.oppositeButton.release()
         self.pressed = True
         
-    def isPressed(self):
+    def is_pressed(self):
         return self.pressed

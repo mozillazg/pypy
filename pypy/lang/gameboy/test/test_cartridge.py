@@ -64,7 +64,7 @@ def rest_cartridge_load():
     
     assert cartridge.batteryName == romFile+constants.BATTERY_FILE_EXTENSION
     assert cartridge.batteryFilePath ==  romFilePath+constants.BATTERY_FILE_EXTENSION
-    assert cartridge.hasBattery() == False
+    assert cartridge.has_battery() == False
     assert cartridge.batteryFile == None
     
     
@@ -75,7 +75,7 @@ def test_cartridge_hasBattery():
     romFilePath = ROM_PATH+"/rom1/"+romName
     
     cartridge.load(romFilePath)
-    assert cartridge.hasBattery() == False
+    assert cartridge.has_battery() == False
     
     
 def test_cartridge_read():
@@ -92,17 +92,17 @@ def test_cartridge_remove_write_read_Battery():
     romFilePath = ROM_PATH + "/rom1/"+romName
     
     cartridge.load(romFilePath)
-    cartridge.removeBattery()
-    assert cartridge.hasBattery() == False
+    cartridge.remove_battery()
+    assert cartridge.has_battery() == False
     
-    cartridge.writeBattery(MAPPED_CONTENT)
-    assert cartridge.hasBattery() == True
+    cartridge.write_battery(MAPPED_CONTENT)
+    assert cartridge.has_battery() == True
     print cartridge.batteryFile
     assert cartridge.batteryFile.read() == CONTENT
-    assert cartridge.readBattery() == MAPPED_CONTENT
+    assert cartridge.read_battery() == MAPPED_CONTENT
     
-    cartridge.removeBattery()
-    assert cartridge.hasBattery() == False
+    cartridge.remove_battery()
+    assert cartridge.has_battery() == False
     
     
     

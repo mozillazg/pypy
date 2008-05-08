@@ -48,7 +48,7 @@ def test_ini():
     button = Button(value)
     assert button.oppositeButton == None
     assert button.codeValue == value
-    assert button.isPressed() == False
+    assert button.is_pressed() == False
     
     button2 = Button(value, button)
     assert button2.oppositeButton == button
@@ -56,36 +56,36 @@ def test_ini():
     
 def test_getCode():
     button = get_button()
-    assert button.getCode() == 0
+    assert button.get_code() == 0
     button.press()
-    assert button.getCode() == button.codeValue
+    assert button.get_code() == button.codeValue
     
 def test_press_release():
     button = get_button()
     button2 = get_button()
     button.oppositeButton = button2;
     button2.press()
-    assert button2.isPressed() == True
+    assert button2.is_pressed() == True
     button.press()
-    assert button.isPressed() == True
-    assert button2.isPressed() == False
+    assert button.is_pressed() == True
+    assert button2.is_pressed() == False
     button.release()
-    assert button.isPressed() == False
-    assert button2.isPressed() == False
+    assert button.is_pressed() == False
+    assert button2.is_pressed() == False
 
 # TEST JOYPAD DRIVER -----------------------------------------------------------
 
 def test_ini():
     driver = get_driver()
     assert driver.raised == False
-    assert driver.getButtonCode() == 0
-    assert driver.getDirectionCode() == 0
+    assert driver.get_button_code() == 0
+    assert driver.get_direction_code() == 0
     
 def test_isRaised():
     driver = get_driver()
     driver.raised = True
     assert driver.raised == True
-    assert driver.isRaised() == True
+    assert driver.is_raised() == True
     assert driver.raised == False
     
 def test_button_code_values():
@@ -102,10 +102,10 @@ def test_button_code_values():
     
 def test_toggle_opposite_directions():
     driver = get_driver()
-    directions = [(driver.buttonUp, driver.up, driver.down),
-                 (driver.buttonDown, driver.down, driver.up),
-                 (driver.buttonLeft, driver.left, driver.right),
-                 (driver.buttonRight, driver.right, driver.left)]
+    directions = [(driver.button_up, driver.up, driver.down),
+                 (driver.button_down, driver.down, driver.up),
+                 (driver.button_left, driver.left, driver.right),
+                 (driver.button_right, driver.right, driver.left)]
     for dir in directions:
         toggleFunction = dir[0]
         button = dir[1]
@@ -114,70 +114,70 @@ def test_toggle_opposite_directions():
         
         oppositeButton.press()
         assert driver.raised == False
-        assert button.isPressed() == False
-        assert oppositeButton.isPressed() == True
-        assert driver.getDirectionCode() == oppositeButton.codeValue
-        assert driver.getButtonCode() == 0
+        assert button.is_pressed() == False
+        assert oppositeButton.is_pressed() == True
+        assert driver.get_direction_code() == oppositeButton.codeValue
+        assert driver.get_button_code() == 0
         
         toggleFunction()
         assert driver.raised == True
-        assert button.isPressed() == True
-        assert oppositeButton.isPressed() == False
-        assert driver.getDirectionCode() == button.codeValue
-        assert driver.getButtonCode() == 0
+        assert button.is_pressed() == True
+        assert oppositeButton.is_pressed() == False
+        assert driver.get_direction_code() == button.codeValue
+        assert driver.get_button_code() == 0
         
         toggleFunction(False)
-        assert button.isPressed() == False
-        assert oppositeButton.isPressed() == False
-        assert driver.getDirectionCode() == 0
-        assert driver.getButtonCode() == 0
+        assert button.is_pressed() == False
+        assert oppositeButton.is_pressed() == False
+        assert driver.get_direction_code() == 0
+        assert driver.get_button_code() == 0
     
     
 def test_toggle_buttons():
     driver = get_driver()
-    buttons = [(driver.buttonSelect, driver.select),
-                 (driver.buttonStart, driver.start),
-                 (driver.buttonA, driver.a),
-                 (driver.buttonB, driver.b)]
+    buttons = [(driver.button_select, driver.select),
+                 (driver.button_start, driver.start),
+                 (driver.button_a, driver.a),
+                 (driver.button_b, driver.b)]
     for button in buttons:
         toggleFunction = button[0]
         button = button[1]
         driver.reset()
         
-        assert button.isPressed() == False
-        assert driver.getButtonCode() == 0
-        assert driver.getDirectionCode() == 0
+        assert button.is_pressed() == False
+        assert driver.get_button_code() == 0
+        assert driver.get_direction_code() == 0
         
         toggleFunction()
         assert driver.raised == True
-        assert button.isPressed() == True
-        assert driver.getButtonCode() == button.codeValue
-        assert driver.getDirectionCode() == 0
+        assert button.is_pressed() == True
+        assert driver.get_button_code() == button.codeValue
+        assert driver.get_direction_code() == 0
         
         toggleFunction(False)
-        assert button.isPressed() == False
-        assert driver.getButtonCode() == 0
-        assert driver.getDirectionCode() == 0
+        assert button.is_pressed() == False
+        assert driver.get_button_code() == 0
+        assert driver.get_direction_code() == 0
         
         
 def test_toggle_multiple_buttons():
     driver = get_driver()
-    buttons = [(driver.buttonSelect, driver.select),
-                 (driver.buttonStart, driver.start),
-                 (driver.buttonA, driver.a),
-                 (driver.buttonB, driver.b)]
-    toggle_multiple_test(driver, driver.getButtonCode, buttons)
+    buttons = [(driver.button_select, driver.select),
+                 (driver.button_start, driver.start),
+                 (driver.button_a, driver.a),
+                 (driver.button_b, driver.b)]
+    toggle_multiple_test(driver, driver.get_button_code, buttons)
     
 def test_toggle_mutliple_directions():
     """ 
     only testing non-opposite buttons, since they would exclude each other
     """
     driver = get_driver()
-    directions = [(driver.buttonUp, driver.up),
-                 #(driver.buttonDown, driver.down),
-                 #(driver.buttonLeft, driver.left),
-                 (driver.buttonRight, driver.right)]
-    toggle_multiple_test(driver, driver.getDirectionCode, directions)
+    directions = [(driver.button_up, driver.up),
+                 #(driver.button_down, driver.down),
+                 #(driver.button_left, driver.left),
+                 (driver.button_right, driver.right)]
+    toggle_multiple_test(driver, driver.get_direction_code, directions)
     
 def toggle_multiple_test(driver, codeGetter, buttons):
     size = len(buttons)
@@ -190,7 +190,7 @@ def toggle_multiple_test(driver, codeGetter, buttons):
                 code |= buttons[j][1].codeValue
             else:
                 buttons[j][0](False)
-            assert buttons[j][1].isPressed() == toggled[j]
+            assert buttons[j][1].is_pressed() == toggled[j]
         assert codeGetter() == code
                 
 
@@ -246,10 +246,10 @@ def test_read_write():
     
 def test_update():
     joypad = get_joypad()
-    joypad.driver.buttonSelect()
-    assert joypad.driver.getButtonCode() == constants.BUTTON_SELECT
-    joypad.driver.buttonUp()
-    assert joypad.driver.getDirectionCode() == constants.BUTTON_UP
+    joypad.driver.button_select()
+    assert joypad.driver.get_button_code() == constants.BUTTON_SELECT
+    joypad.driver.button_up()
+    assert joypad.driver.get_direction_code() == constants.BUTTON_UP
     assert joypad.buttonCode == 0xF
     joypad.joyp = 0x1
     joypad.update()

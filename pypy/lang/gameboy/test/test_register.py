@@ -19,7 +19,7 @@ TEST_CPU = None
 def get_cpu(new=False):
     if new:
         cpu = CPU(Interrupt(), Memory())
-        cpu.setROM([0]*0xFFFF);
+        cpu.set_rom([0]*0xFFFF);
         return cpu
     global TEST_CPU
     if TEST_CPU == None:
@@ -65,8 +65,8 @@ def test_double_register_constructor():
     cpu = get_cpu()
     register = DoubleRegister(cpu)
     assert register.get() == 0
-    assert register.getHi() == 0
-    assert register.getLo() == 0
+    assert register.get_hi() == 0
+    assert register.get_lo() == 0
     value = 0x1234
     reg1 = Register(cpu)
     reg1.set(0x12)
@@ -75,8 +75,8 @@ def test_double_register_constructor():
     register = DoubleRegister(cpu, reg1, reg2)
     assert register.hi == reg1
     assert register.lo == reg2
-    assert register.getHi() == reg1.get()
-    assert register.getLo() == reg2.get()
+    assert register.get_hi() == reg1.get()
+    assert register.get_lo() == reg2.get()
     
 def test_double_register():
     register = DoubleRegister(get_cpu())
@@ -102,23 +102,23 @@ def test_double_register_hilo():
     oldCycles = register.cpu.cycles
     register.set(valueHi, valueLo)
     assert oldCycles-register.cpu.cycles == 2
-    assert register.getHi() == valueHi
-    assert register.getLo() == valueLo
+    assert register.get_hi() == valueHi
+    assert register.get_lo() == valueLo
     assert register.get() == value
     
     valueHi = 0x56
     oldCycles = register.cpu.cycles
-    register.setHi(valueHi)
+    register.set_hi(valueHi)
     assert oldCycles-register.cpu.cycles == 1
-    assert register.getHi() == valueHi
-    assert register.getLo() == valueLo
+    assert register.get_hi() == valueHi
+    assert register.get_lo() == valueLo
     
     valueLo = 0x78
     oldCycles = register.cpu.cycles
-    register.setLo(valueLo)
+    register.set_lo(valueLo)
     assert oldCycles-register.cpu.cycles == 1
-    assert register.getHi() == valueHi
-    assert register.getLo() == valueLo
+    assert register.get_hi() == valueHi
+    assert register.get_lo() == valueLo
     
     
 def test_double_register_methods():
