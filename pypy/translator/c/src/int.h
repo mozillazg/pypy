@@ -241,7 +241,7 @@
 
 /* prototypes */
 
-op_int_mul_ovf(long a, long b, long *longprod);
+int op_int_mul_ovf(long a, long b, long *longprod);
 
 /* implementations */
 
