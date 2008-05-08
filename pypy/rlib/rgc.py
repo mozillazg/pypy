@@ -265,14 +265,13 @@ class ResizableBufferOfShapeEntry(ExtRegistryEntry):
         return hop.genop('malloc_resizable_buffer', vlist,
                          resulttype=hop.r_result.lowleveltype)
 
-def resize_buffer(ptr, new_size):
+def resize_buffer(ptr, old_size, new_size):
     """ Resize raw buffer returned by resizable_buffer_of_shape to new size
     """
     from pypy.rpython.lltypesystem import lltype
     T = lltype.typeOf(ptr).TO
     arrayfld = T._arrayfld
     arr = getattr(ptr, arrayfld)
-    old_size = len(arr)
     # we don't have any realloc on top of cpython
     new_ptr = lltype.malloc(T, new_size)
     new_ar = getattr(new_ptr, arrayfld)
@@ -283,22 +282,24 @@ def resize_buffer(ptr, new_size):
 class ResizeBufferEntry(ExtRegistryEntry):
     _about_ = resize_buffer
 
-    def compute_result_annotation(self, s_ptr, s_new_size):
+    def compute_result_annotation(self, s_ptr, s_old_size, s_new_size):
         from pypy.annotation import model as annmodel
         from pypy.rpython.lltypesystem import rffi
         assert isinstance(s_ptr, annmodel.SomePtr)
         assert isinstance(s_new_size, annmodel.SomeInteger)
+        assert isinstance(s_old_size, annmodel.SomeInteger)
         return s_ptr
 
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
         vlist = [hop.inputarg(hop.args_r[0], 0),
-                 hop.inputarg(lltype.Signed, 1)]
+                 hop.inputarg(lltype.Signed, 1),
+                 hop.inputarg(lltype.Signed, 2)]
         hop.exception_is_here()
         return hop.genop('resize_buffer', vlist,
                          resulttype=hop.r_result.lowleveltype)
 
-def finish_building_buffer(ptr):
+def finish_building_buffer(ptr, final_size):
     """ Finish building resizable buffer returned by resizable_buffer_of_shape
     """
     return ptr
@@ -306,14 +307,17 @@ def finish_building_buffer(ptr):
 class FinishBuildingBufferEntry(ExtRegistryEntry):
     _about_ = finish_building_buffer
 
-    def compute_result_annotation(self, s_arr):
-        from pypy.annotation.model import SomePtr, s_ImpossibleValue
+    def compute_result_annotation(self, s_arr, s_final_size):
+        from pypy.annotation.model import SomePtr, s_ImpossibleValue,\
+             SomeInteger
         assert isinstance(s_arr, SomePtr)
+        assert isinstance(s_final_size, SomeInteger)
         return s_arr
 
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
-        vlist = [hop.inputarg(hop.args_r[0], 0)]
+        vlist = [hop.inputarg(hop.args_r[0], 0),
+                 hop.inputarg(hop.args_r[1], 1)]
         hop.exception_cannot_occur()
         return hop.genop('finish_building_buffer', vlist,
                          resulttype=hop.r_result.lowleveltype)
