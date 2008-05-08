@@ -383,11 +383,11 @@ class TestUsingBoehm(AbstractGCTestClass):
         from pypy.rlib import rgc
 
         def f():
-            ptr = rgc.resizable_buffer_of_shape(STR, 1)
+            ptr = rgc.resizable_buffer_of_shape(STR, 2)
             ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 2)
+            ptr = rgc.resize_buffer(ptr, 1, 2)
             ptr.chars[1] = 'b'
-            return hlstr(rgc.finish_building_buffer(ptr)) == "ab"
+            return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
 
         run = self.getcompiled(f)
         assert run() == True

@@ -437,9 +437,9 @@ class GCTest(object):
         def f():
             ptr = rgc.resizable_buffer_of_shape(STR, 1)
             ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 2)
+            ptr = rgc.resize_buffer(ptr, 1, 2)
             ptr.chars[1] = 'b'
-            return len(hlstr(rgc.finish_building_buffer(ptr)))
+            return len(hlstr(rgc.finish_building_buffer(ptr, 2)))
 
         assert self.interpret(f, []) == 2
 

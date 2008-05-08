@@ -700,11 +700,11 @@ class LLFrame(object):
     def op_malloc_resizable_buffer(self, obj, flags, size):
         return self.heap.malloc_resizable_buffer(obj, size)
 
-    def op_resize_buffer(self, obj, new_size):
-        return self.heap.resize_buffer(obj, new_size)
+    def op_resize_buffer(self, obj, old_size, new_size):
+        return self.heap.resize_buffer(obj, old_size, new_size)
 
-    def op_finish_building_buffer(self, obj):
-        return self.heap.finish_building_buffer(obj)
+    def op_finish_building_buffer(self, obj, size):
+        return self.heap.finish_building_buffer(obj, size)
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
