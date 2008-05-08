@@ -1514,7 +1514,9 @@ class _subarray(_parentable):     # only for direct_fieldptr()
         self._setparentstructure(parent, baseoffset_or_fieldname)
 
     def __repr__(self):
-        
+        parent = self._wrparent()
+        if parent is None:
+            return '<_subarray at %s in already freed>' % (self._parent_index,)
         return '<_subarray at %r in %r>' % (self._parent_index,
                                             self._parentstructure(check=False))
 
