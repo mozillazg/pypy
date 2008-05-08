@@ -50,10 +50,16 @@ interpreter implemented in Python.  PyPy passes around `98% of
 CPythons core language regression tests`_.  Because this invocation of
 PyPy still runs on top of CPython, it runs around 2000 times slower
 than the original CPython.
+Many extension modules are not enabled by default; to use them you need
+to pass ``--withmod-NAME`` arguments (for example, ``--withmod-_rawffi``
+is required to import our version of ctypes).
 
-However, since the 0.7.0 release it is possible to use PyPy to `translate
+This is probably not something you want to play with for too long,
+though, as it is really slow.
+Since the 0.7.0 release it is possible to use PyPy to `translate
 itself to lower level languages`_ after which it runs standalone, is not
-dependant on CPython anymore and becomes faster.
+dependant on CPython anymore and becomes faster (within the same speed
+magnitude as CPython itself).
 
 If you are using the precompiled Windows executables, please look
 at the included ``README.txt`` on how to start already translated
