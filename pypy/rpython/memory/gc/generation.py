@@ -287,11 +287,22 @@ class GenerationGC(SemiSpaceGC):
             self.objects_with_weakrefs.append(obj)
 
     def collect_roots(self):
+        """GenerationGC: collects all roots.
+           HybridGC: collects all roots, excluding the generation 3 ones.
+        """
+        # Warning!  References from static (and possibly gen3) objects
+        # are found by collect_last_generation_roots(), which must be
+        # called *first*!  If it is called after walk_roots(), then the
+        # HybridGC explodes if one of the _collect_root causes an object
+        # to be added to self.last_generation_root_objects.  Indeed, in
+        # this case, the newly added object is traced twice: once by
+        # collect_last_generation_roots() and once because it was added
+        # in self.rawmalloced_objects_to_trace.
+        self.collect_last_generation_roots()
         self.root_walker.walk_roots(
             SemiSpaceGC._collect_root,  # stack roots
             SemiSpaceGC._collect_root,  # static in prebuilt non-gc structures
             None)   # we don't need the static in prebuilt gc objects
-        self.collect_last_generation_roots()
 
     def collect_last_generation_roots(self):
         stack = self.last_generation_root_objects
@@ -337,7 +348,7 @@ class GenerationGC(SemiSpaceGC):
             llarena.arena_reset(self.nursery, self.nursery_size, True)
             if DEBUG_PRINT:
                 llop.debug_print(lltype.Void, "percent survived:", float(scan - beginning) / self.nursery_size)
-            self.debug_check_consistency()
+            #self.debug_check_consistency()   # -- quite expensive
         else:
             # no nursery - this occurs after a full collect, triggered either
             # just above or by some previous non-nursery-based allocation.
@@ -489,6 +500,12 @@ class GenerationGC(SemiSpaceGC):
     def _debug_check_flag_2(self, obj, ignored):
         ll_assert(not (self.header(obj).tid & GCFLAG_NO_HEAP_PTRS),
                   "unexpected GCFLAG_NO_HEAP_PTRS")
+
+    def debug_check_can_copy(self, obj):
+        if self.is_in_nursery(obj):
+            pass    # it's ok to copy an object out of the nursery
+        else:
+            SemiSpaceGC.debug_check_can_copy(self, obj)
 
 # ____________________________________________________________
 
