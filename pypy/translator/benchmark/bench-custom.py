@@ -76,6 +76,7 @@ def main(options, args):
             for row in benchmark_result.txt_summary(['exe'] + exe_stats,
                                                     **kwds):
                 print row
+            print
 
 if __name__ == '__main__':
     from optparse import OptionParser
