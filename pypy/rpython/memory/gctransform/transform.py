@@ -598,7 +598,9 @@ class GCTransformer(BaseGCTransformer):
 
     def gct_finish_building_buffer(self, hop):
         op = hop.spaceop
-        return hop.genop('same_as', op.args, resultvar=op.result)
+        if self._can_realloc():
+            return self._gct_resize_buffer_realloc(hop)
+        return hop.genop('same_as', [op.args[0]], resultvar=op.result)
 
     def varsize_malloc_helper(self, hop, flags, meth, extraargs):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)

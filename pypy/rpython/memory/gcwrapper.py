@@ -60,18 +60,18 @@ class GCManagedHeap(object):
             gctypelayout.zero_gc_pointers(result)
         return result
 
-    def resize_buffer(self, obj, new_size):
+    def resize_buffer(self, obj, old_size, new_size):
         T = lltype.typeOf(obj).TO
         buf = self.malloc_resizable_buffer(T, new_size)
         # copy contents
         arrayfld = T._arrayfld
         new_arr = getattr(buf, arrayfld)
         old_arr = getattr(obj, arrayfld)
-        for i in range(len(old_arr)):
+        for i in range(old_size):
             new_arr[i] = old_arr[i]
         return buf
 
-    def finish_building_buffer(self, obj):
+    def finish_building_buffer(self, obj, size):
         return obj
 
     def free(self, TYPE, flavor='gc'):
