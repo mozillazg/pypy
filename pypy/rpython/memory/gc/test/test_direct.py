@@ -4,6 +4,8 @@ methods directly.  The tests need to maintain by hand what the GC should
 see as the list of roots (stack and prebuilt objects).
 """
 
+# XXX VERY INCOMPLETE, low coverage
+
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.memory.gctypelayout import TypeLayoutBuilder
@@ -12,7 +14,9 @@ ADDR_ARRAY = lltype.Array(llmemory.Address)
 S = lltype.GcForwardReference()
 S.become(lltype.GcStruct('S',
                          ('x', lltype.Signed),
+                         ('prev', lltype.Ptr(S)),
                          ('next', lltype.Ptr(S))))
+RAW = lltype.Struct('RAW', ('p', lltype.Ptr(S)), ('q', lltype.Ptr(S)))
 
 
 class DirectRootWalker(object):
@@ -108,6 +112,67 @@ class DirectGCTest(object):
         assert k.x == 42
         assert k.next.x == 43
         assert k.next.next.x == 44
+
+    def test_prebuilt_nongc(self):
+        raw = lltype.malloc(RAW, immortal=True)
+        self.consider_constant(raw)
+        raw.p = self.malloc(S)
+        raw.p.x = 43
+        raw.q = self.malloc(S)
+        raw.q.x = 44
+        self.gc.collect()
+        assert raw.p.x == 43
+        assert raw.q.x == 44
+
+    def test_many_objects(self):
+
+        def alloc2(i):
+            a1 = self.malloc(S)
+            a1.x = i
+            self.stackroots.append(a1)
+            a2 = self.malloc(S)
+            a1 = self.stackroots.pop()
+            a2.x = i + 1000
+            return a1, a2
+
+        def growloop(loop, a1, a2):
+            self.write(a1, 'prev', loop.prev)
+            self.write(a1.prev, 'next', a1)
+            self.write(a1, 'next', loop)
+            self.write(loop, 'prev', a1)
+            self.write(a2, 'prev', loop)
+            self.write(a2, 'next', loop.next)
+            self.write(a2.next, 'prev', a2)
+            self.write(loop, 'next', a2)
+
+        def newloop():
+            p = self.malloc(S)
+            p.next = p          # initializing stores, no write barrier
+            p.prev = p
+            return p
+
+        # a loop attached to a stack root
+        self.stackroots.append(newloop())
+
+        # another loop attached to a prebuilt gc node
+        k = lltype.malloc(S, immortal=True)
+        k.next = k
+        k.prev = k
+        self.consider_constant(k)
+
+        # a third loop attached to a prebuilt nongc
+        raw = lltype.malloc(RAW, immortal=True)
+        self.consider_constant(raw)
+        raw.p = newloop()
+
+        # run!
+        for i in range(100):
+            a1, a2 = alloc2(i)
+            growloop(self.stackroots[0], a1, a2)
+            a1, a2 = alloc2(i)
+            growloop(k, a1, a2)
+            a1, a2 = alloc2(i)
+            growloop(raw.p, a1, a2)
 
 
 class TestSemiSpaceGC(DirectGCTest):
