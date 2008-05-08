@@ -16,13 +16,14 @@ from pypy.lang.gameboy.sound  import SoundDriver
 class GameBoyImplementation(GameBoy):
     
     def __init__(self):
-        self.iniWindow()
+        self.create_window()
         GameBoy.__init__(self)
         
-    def iniWindow(self):
+    def create_window(self):
         self.win = window.Window()
+        self.win.set_caption("PyBoy a GameBoy (TM)")
         
-    def createDrivers(self):
+    def create_drivers(self):
         self.clock = Clock()
         self.joypadDriver = JoypadDriverImplementation(self.win)
         self.videoDriver  = VideoDriverImplementation(self.win)
@@ -35,11 +36,11 @@ class JoypadDriverImplementation(object):
     
     def __ini__(self, win):
         JoypadDriver.__ini__(self)
-        self.crateButtonKeyCodes()
+        self.create_button_key_codes()
         self.win = win
-        self.createListeners()
+        self.create_listeners()
         
-    def crateButtonKeyCodes(self):
+    def create_button_key_codes(self):
         self.buttonKeyCodes = {key.UP    : (self.buttonUp),
                               key.RIGHT : (self.buttonRight), 
                               key.DOWN  : (self.buttonDown), 
@@ -49,21 +50,21 @@ class JoypadDriverImplementation(object):
                               key.A     : (self.buttonA), 
                               key.B     : (self.ButtonB)}
         
-    def createListeners(self):
+    def create_listeners(self):
         self.win.on_key_press = self.on_key_press
         self.win.on_key_release = self.on_key_press
         
     def on_key_press(symbol, modifiers): 
-        pressButtonFunction = self.getButton(symbol, modifiers)
+        pressButtonFunction = self.get_button_handler(symbol, modifiers)
         if pressButtonFunction != None:
             pressButtonFunction(True)
     
     def on_key_release(symbol, modifiers): 
-        pressButtonFunction = self.getButton(symbol, modifiers)
+        pressButtonFunction = self.get_button_handler(symbol, modifiers)
         if pressButtonFunction != None:
             pressButtonFunction(False)
             
-    def getButton(self, symbol, modifiers):
+    def get_button_handler(self, symbol, modifiers):
         if symbol in self.buttonKeyCodes:
             if len(self.buttonKeyCodes[symbol]) == 1 or\
                     self.buttonKeyCodes[symbol][1] ==  modifiers:
@@ -77,14 +78,15 @@ class SoundDriverImplementation(SoundDriver):
     
     def __init__(self):
         SoundDriver.__init__(self)
-        self.createSoundDriver()
+        self.create_sound_driver()
         self.enabled = True
         self.sampleRate = 44100
         self.channelCount = 2
         self.bitsPerSample = 8
 
-    def createSoundDriver(self):
-        
+    def create_sound_driver(self):
+        pass
+    
     def start(self):
         pass
         
@@ -103,21 +105,22 @@ class VideoDriverImplementation(VideoDriver):
         VideoDriver.__init__(self)
         self.win = win
         self.win.on_resize = self.on_resize
-        self.setWindowSize()
-        self.createImageBuffer()
+        self.set_window_size()
+        self.create_image_buffer()
 
-    def createImageBuffer(self):
+    def create_image_buffer(self):
         self.buffers = image.get_buffer_manager()
         self.imageBuffer = self.buffers.get_color_buffer()
         
     def on_resize(self, width, height):
         pass
     
-    def setWindowSize(self):
+    def set_window_size(self):
         self.win.setSize(self.width, self.height)
         
-    def updateDisplay(self):
-        self.clearPixels()
+    def update_display(self):
+        self.imageBuffer.blit(0, 0)
+        self.win.flip()
         
         
 # ==============================================================================

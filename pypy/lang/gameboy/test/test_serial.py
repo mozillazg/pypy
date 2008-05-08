@@ -18,11 +18,11 @@ def test_reset():
     assert serial.sc == 0
     
     
-def test_setSerialControl():
+def test_set_serial_control():
     serial = get_serial()
     value = 0x12
-    serial.setSerialControl(value)
-    assert serial.getSerialControl() == value
+    serial.set_serial_control(value)
+    assert serial.get_serial_control() == value
     assert serial.cycles == constants.SERIAL_IDLE_CLOCK + constants.SERIAL_CLOCK
     
     
@@ -43,7 +43,7 @@ def test_emulate():
     assert cycles-serial.cycles == 2
     assert serial.sb == 0
     assert serial.sc == 0x81
-    assert serial.interrupt.serial.isPending() == False
+    assert serial.interrupt.serial.is_pending() == False
     
     serial.reset()
     serial.sc = 0x81
@@ -52,7 +52,7 @@ def test_emulate():
     assert serial.sb == 0xFF
     assert serial.sc == 0x81 & 0x7F
     assert serial.cycles == constants.SERIAL_IDLE_CLOCK
-    assert serial.interrupt.serial.isPending() == True
+    assert serial.interrupt.serial.is_pending() == True
     
     
 def test_read_write():
@@ -68,3 +68,4 @@ def test_read_write():
     assert serial.sc == value
     
     assert serial.read(0) == 0xFF
+    

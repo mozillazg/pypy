@@ -20,7 +20,7 @@ TEST_CPU = None
 def get_cpu(new=False):
     if new:
         cpu = CPU(Interrupt(), Memory())
-        cpu.setROM([0]*0xFFFF);
+        cpu.set_rom([0]*0xFFFF);
         return cpu
     global TEST_CPU
     if TEST_CPU == None:
@@ -91,20 +91,20 @@ def test_read_write():
     assert cpu.read(address) == value
     
 
-def test_relativeConditionalJump():
+def test_relative_conditional_jump():
     cpu = get_cpu()
     pc = cpu.pc.get()
     value = 0x12
     cpu.rom[constants.RESET_PC] = value
     # test jr_nn
     startCycles = cpu.cycles
-    cpu.relativeConditionalJump(True)
+    cpu.relative_conditional_jump(True)
     assert startCycles-cpu.cycles == 3
     assert_registers(cpu, pc=pc+value+1)
     # test pc.inc
     startCycles = cpu.cycles
     pc = cpu.pc.get()
-    cpu.relativeConditionalJump(False)
+    cpu.relative_conditional_jump(False)
     assert startCycles-cpu.cycles == 2
     assert cpu.pc.get() == pc+1
     
@@ -112,28 +112,28 @@ def test_relativeConditionalJump():
 def test_flags():
     cpu = get_cpu()
     cpu.f.set(constants.Z_FLAG)
-    assert cpu.isZ() == True
-    assert cpu.isNotZ() == False
+    assert cpu.is_z() == True
+    assert cpu.is_not_z() == False
     cpu.f.set(~constants.Z_FLAG)
-    assert cpu.isZ() == False
-    assert cpu.isNotZ() == True
+    assert cpu.is_z() == False
+    assert cpu.is_not_z() == True
     
     cpu.f.set(constants.C_FLAG)
-    assert cpu.isC() == True
-    assert cpu.isNotC() == False
+    assert cpu.is_c() == True
+    assert cpu.is_not_c() == False
     cpu.f.set(~constants.C_FLAG)
-    assert cpu.isC() == False
-    assert cpu.isNotC() == True
+    assert cpu.is_c() == False
+    assert cpu.is_not_c() == True
  
 def test_flags_memory_access(): 
     cpu = get_cpu()
     cpu.f.set(constants.Z_FLAG)
-    assert cpu.isZ() == True
+    assert cpu.is_z() == True
     prepare_for_fetch(cpu, 0x1234, 0x1234)
     cpu.memory.write(0x1234, 0x12)
-    assert cpu.isZ() == True
+    assert cpu.is_z() == True
     cpu.rom[0x1234] = 0x12
-    assert cpu.isZ() == True
+    assert cpu.is_z() == True
    
 
 def fetch_execute_cycle_test(cpu, opCode, cycles=0):
@@ -183,8 +183,8 @@ def test_create_group_op_codes():
 def test_create_register_op_codes():
     start = 0x09
     step = 0x10
-    func = CPU.addHL
-    registers = [CPU.getBC]*128
+    func = CPU.add_hl
+    registers = [CPU.get_bc]*128
     table = [(start, step, func, registers)]
     list = create_register_op_codes(table)
     opCode = start
@@ -308,8 +308,8 @@ def test_0x08():
     cpu.sp.set(0x1234)
     cycle_test(cpu, 0x08, 5)
     assert_default_registers(cpu, pc=startPC+2, sp=0x1234)
-    assert cpu.memory.read(0xCDEF) == cpu.sp.getLo()
-    assert cpu.memory.read(0xCDEF+1) == cpu.sp.getHi()
+    assert cpu.memory.read(0xCDEF) == cpu.sp.get_lo()
+    assert cpu.memory.read(0xCDEF+1) == cpu.sp.get_hi()
     
 # stop
 def test_0x10():
@@ -358,8 +358,8 @@ def test_0x01_0x11_0x21_0x31():
     for index in range(0, len(registers)):
         prepare_for_fetch(cpu, value, value+1)
         cycle_test(cpu, opCode, 3)
-        assert registers[index].getLo() == value+1
-        assert registers[index].getHi() == value
+        assert registers[index].get_lo() == value+1
+        assert registers[index].get_hi() == value
         value += 3
         opCode += 0x10
         
@@ -774,13 +774,13 @@ def test_add_flags():
     
     cpu.a.set(0)
     cpu.b.set(0)
-    cpu.addA(cpu.b.get, cpu.b.set)
+    cpu.add_a(cpu.b.get, cpu.b.set)
     assert_default_flags(cpu, zFlag=True, hFlag=False)
     
     cpu.reset()
     cpu.a.set(0x0F)
     cpu.b.set(0x01)
-    cpu.addA(cpu.b.get, cpu.b.set)
+    cpu.add_a(cpu.b.get, cpu.b.set)
     assert_default_flags(cpu, zFlag=False, hFlag=True)
     
     
@@ -815,7 +815,7 @@ def test_adc_flags():
     cpu.reset()
     a.set(0)
     b.set(0)
-    cpu.addWithCarry(b.get, b.set)
+    cpu.add_with_carry(b.get, b.set)
     assert_default_registers(cpu, a=0, f=None)
     assert_default_flags(cpu, zFlag=True, cFlag=False, hFlag=False)
     
@@ -823,14 +823,14 @@ def test_adc_flags():
     a.set(0)
     b.set(0)
     cpu.f.cFlag = True
-    cpu.addWithCarry(b.get, b.set)
+    cpu.add_with_carry(b.get, b.set)
     assert_default_registers(cpu, a=1, f=None)
     assert_default_flags(cpu, zFlag=False, cFlag=False, hFlag=False)
     
     cpu.reset()
     a.set(0xF0)
     b.set(0xFF)
-    cpu.addWithCarry(b.get, b.set)
+    cpu.add_with_carry(b.get, b.set)
     # overflow for a
     assert_default_registers(cpu, a=0xEF, bc=None, f=None)
     assert_default_flags(cpu, zFlag=False, cFlag=True, hFlag=False)
@@ -838,7 +838,7 @@ def test_adc_flags():
     cpu.reset()
     a.set(0x0F)
     b.set(0x01)
-    cpu.addWithCarry(b.get, b.set)
+    cpu.add_with_carry(b.get, b.set)
     assert_default_registers(cpu, a=0x10, f=None, bc=None)
     assert_default_flags(cpu, zFlag=False, cFlag=False, hFlag=True)
     
@@ -901,7 +901,7 @@ def test_sbc_flags():
     cpu.reset()
     a.set(value)
     b.set(value)
-    cpu.subtractWithCarry(b.get, b.set)
+    cpu.subtract_with_carry(b.get, b.set)
     assert_default_registers(cpu, a=0, bc=None, f=None)
     assert_default_flags(cpu, zFlag=True, cFlag=False, hFlag=False, nFlag=True)
     
@@ -909,14 +909,14 @@ def test_sbc_flags():
     a.set(value)
     b.set(value-1)
     cpu.f.cFlag = True
-    cpu.subtractWithCarry(b.get, b.set)
+    cpu.subtract_with_carry(b.get, b.set)
     assert_default_registers(cpu, a=0, bc=None, f=None)
     assert_default_flags(cpu, zFlag=True, cFlag=False, hFlag=False, nFlag=True)
     
     cpu.reset()
     a.set(0x20)
     b.set(0x01)
-    cpu.subtractWithCarry(b.get, b.set)
+    cpu.subtract_with_carry(b.get, b.set)
     # overflow for a
     assert_default_registers(cpu, a=0x1F, bc=None, f=None)
     assert_default_flags(cpu, zFlag=False, cFlag=False, hFlag=True, nFlag=True)
@@ -1080,19 +1080,19 @@ def test_cp_flags():
     value = 0x12
     cpu.a.set(value)
     cpu.b.set(value)
-    cpu.compareA(cpu.b.get, cpu.b.set)
+    cpu.compare_a(cpu.b.get, cpu.b.set)
     assert_default_flags(cpu, zFlag=True, nFlag=True)
     
     cpu.reset()
     cpu.a.set(value)
     cpu.b.set(0)
-    cpu.compareA(cpu.b.get, cpu.b.set)
+    cpu.compare_a(cpu.b.get, cpu.b.set)
     assert_default_flags(cpu, zFlag=False, nFlag=True)
     
     cpu.reset()
     cpu.a.set(0xF0)
     cpu.b.set(0x01)
-    cpu.compareA(cpu.b.get, cpu.b.set)
+    cpu.compare_a(cpu.b.get, cpu.b.set)
     assert_default_flags(cpu, zFlag=False, hFlag=True, nFlag=True)
     
                          
@@ -1250,16 +1250,16 @@ def test_handleInterrupt():
     cpu = get_cpu()
     cpu.halted = True
     cpu.cycles = 0xFF
-    cpu.handlePendingInterrupt()
+    cpu.handle_pending_interrupt()
     assert cpu.cycles == 0
     
     cpu.reset()
     cpu.halted = True
-    cpu.interrupt.setInterruptEnable()
-    cpu.interrupt.vBlank.setPending()
-    assert cpu.interrupt.isPending() == True
+    cpu.interrupt.set_interrupt_enable()
+    cpu.interrupt.vBlank.set_pending()
+    assert cpu.interrupt.is_pending() == True
     cpu.cycles = 4
-    cpu.handlePendingInterrupt()
+    cpu.handle_pending_interrupt()
     assert cpu.cycles == 0
     assert cpu.halted == False
     
@@ -1269,12 +1269,12 @@ def test_handleInterrupt():
     cpu.pc.set(0x1234)
     cpu.sp.set(0x02)
     sp = cpu.sp.get()
-    cpu.interrupt.setInterruptEnable()
-    cpu.interrupt.vBlank.setPending()
-    cpu.interrupt.lcd.setPending()
-    assert cpu.interrupt.isPending() == True
+    cpu.interrupt.set_interrupt_enable()
+    cpu.interrupt.vBlank.set_pending()
+    cpu.interrupt.lcd.set_pending()
+    assert cpu.interrupt.is_pending() == True
     cpu.cycles = 0
-    cpu.handlePendingInterrupt()
+    cpu.handle_pending_interrupt()
     assert cpu.cycles == 0
     assert cpu.halted == False 
     assert_default_registers(cpu, pc=cpu.interrupt.vBlank.callCode, sp=sp-2)
@@ -1371,15 +1371,15 @@ def test_0xFB():
     cpu.ime = True
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
-    cpu.interrupt.vBlank.setPending()
-    cpu.interrupt.serial.setPending()
-    cpu.interrupt.setInterruptEnable(True)
-    assert cpu.interrupt.isPending() == True
+    cpu.interrupt.vBlank.set_pending()
+    cpu.interrupt.serial.set_pending()
+    cpu.interrupt.set_interrupt_enable(True)
+    assert cpu.interrupt.is_pending() == True
     assert cpu.halted == False
     assert cpu.ime == True  
     cycle_test(cpu, 0xFB, 1+1)
-    assert cpu.interrupt.isPending() == False
-    assert cpu.interrupt.vBlank.isPending() == False
+    assert cpu.interrupt.is_pending() == False
+    assert cpu.interrupt.vBlank.is_pending() == False
     assert cpu.pc.get() == cpu.interrupt.vBlank.callCode
     assert cpu.ime == False
 
@@ -1538,13 +1538,13 @@ def test_rotateLeftCircular_flags():
     cpu = get_cpu()
     a = cpu.a
     a.set(0x01)
-    cpu.rotateLeftA()
+    cpu.rotate_left_a()
     assert_default_flags(cpu, zFlag=False, cFlag=False)
     assert_default_registers(cpu, a=0x02, f=None)
     
     cpu.reset()
     a.set(0x40)
-    cpu.rotateLeftA()
+    cpu.rotate_left_a()
     assert_default_flags(cpu, zFlag=False, cFlag=True)
     assert_default_registers(cpu, a=0x80, f=None)
     

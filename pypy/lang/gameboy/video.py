@@ -15,17 +15,16 @@ class Video(object):
     #objects = []#= new int[OBJECTS_PER_LINE]
     #palette = []#= new int[1024]
 
-
     def __init__(self, videoDriver, interrupt, memory):
         self.driver = videoDriver
         self.interrupt = interrupt
         self.memory = memory
         self.reset()
 
-    def getFrameSkip(self):
+    def get_frame_skip(self):
         return self.frameSkip
 
-    def setFrameSkip(self, frameSkip):
+    def set_frame_skip(self, frameSkip):
         self.frameSkip = frameSkip
 
     def reset(self):
@@ -61,213 +60,217 @@ class Video(object):
     def write(self, address, data):
         # assert data >= 0x00 and data <= 0xFF
         if address == constants.LCDC :
-            self.setControl(data)
+            self.set_control(data)
         elif address == constants.STAT:
-            self.setStatus(data)
+            self.set_status(data)
         elif address == constants.SCY:
-            self.setScrollY(data)
+            self.set_scroll_y(data)
         elif address == constants.SCX:
-            self.setScrollX(data)
+            self.set_scroll_x(data)
         elif address == constants.LY:
             # Read OnlineY
             pass
         elif address == constants.LYC:
-            self.setLYCompare(data)
+            self.set_ly_compare(data)
         elif address == constants.DMA:
-            self.setDMA(data)
+            self.set_dma(data)
         elif address == constants.BGP:
-            self.setBackgroundPalette(data)
+            self.set_background_palette(data)
         elif address == constants.OBP0:
-            self.setObjectPalette0(data)
+            self.set_object_palette_0(data)
         elif address == constants.OBP1:
-            self.setObjectPalette1(data)
+            self.set_object_palette_1(data)
         elif address == constants.WY:
-            self.setWindowY(data)
+            self.set_window_y(data)
         elif address == constants.WX:
-            self.setWindowX(data)
+            self.set_window_x(data)
         else:
-            self.writeOAM(address, data)
+            self.write_oam(address, data)
 
-    def writeOAM(self, address, data):
-        if (address >= constants.OAM_ADDR and address < constants.OAM_ADDR + constants.OAM_SIZE):
+    def write_oam(self, address, data):
+        if address >= constants.OAM_ADDR and \
+           address < constants.OAM_ADDR + constants.OAM_SIZE:
             self.oam[address - constants.OAM_ADDR] = data & 0xFF
-        elif (address >= constants.VRAM_ADDR and address < constants.VRAM_ADDR + constants.VRAM_SIZE):
-            self.vram[address - constants.VRAM_ADDR] = data & 0xFF
+        elif address >= constants.VRAM_ADDR and \
+             address < constants.VRAM_ADDR + constants.VRAM_SIZE:
+              self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
         if address == constants.LCDC:
-            return self.getControl()
+            return self.get_control()
         elif address == constants.STAT:
-            return self.getStatus()
+            return self.get_status()
         elif address == constants.SCY:
-            return self.getScrollY()
+            return self.get_scroll_y()
         elif address == constants.SCX:
-            return self.getScrollX()
+            return self.get_scroll_x()
         elif address == constants.LY:
-            return self.getLineY()
+            return self.get_line_y()
         elif address == constants.LYC:
-            return self.getLineYCompare()
+            return self.get_line_y_compare()
         elif address == constants.DMA:
-            return self.getDMA()
+            return self.get_dma()
         elif address == constants.BGP:
-            return self.getBackgroundPalette()
+            return self.get_background_palette()
         elif address == constants.OBP0:
-            return self.getObjectPalette0()
+            return self.get_object_palette_0()
         elif address == constants.OBP1:
-            return self.getObjectPalette1()
+            return self.get_object_palette_1()
         elif address == constants.WY:
-            return self.getWindowY()
+            return self.get_window_y()
         elif address == constants.WX:
-            return self.getWindowX()
+            return self.get_window_x()
         else:
-            return self.readOAM(address)
+            return self.read_oam(address)
         
-        
-    def readOAM(self, address):
-        if (address >= constants.OAM_ADDR and address < constants.OAM_ADDR + constants.OAM_SIZE):
-            return self.oam[address - constants.OAM_ADDR]
-        elif (address >= constants.VRAM_ADDR and address < constants.VRAM_ADDR + constants.VRAM_SIZE):
-            return self.vram[address - constants.VRAM_ADDR]
+    def read_oam(self, address):
+        if (address >= constants.OAM_ADDR and \
+            address < constants.OAM_ADDR + constants.OAM_SIZE):
+             return self.oam[address - constants.OAM_ADDR]
+        elif (address >= constants.VRAM_ADDR and \
+            address < constants.VRAM_ADDR + constants.VRAM_SIZE):
+             return self.vram[address - constants.VRAM_ADDR]
         return 0xFF
 
-    def getCycles(self):
+    def get_cycles(self):
         return self.cycles
 
     def emulate(self, ticks):
         if (self.control & 0x80) != 0:
             self.cycles -= ticks
-            self.consumeCycles()
+            self.consume_cycles()
             
-    def consumeCycles(self):
-        while (self.cycles <= 0):
+    def consume_cycles(self):
+        while self.cycles <= 0:
             if self.stat == 0:
-                self.emulateHBlank()
+                self.emulate_hblank()
             elif self.stat == 1:
-                self.emulateVBlank()
+                self.emulate_vblank()
             elif self.stat == 2:
-                self.emulateOAM()
+                self.emulate_oam()
             else:
-                self.emulateTransfer()
+                self.emulate_transfer()
 
-    def getControl(self):
+    def get_control(self):
         return self.control
 
-    def setControl(self, data):
+    def set_control(self, data):
         if (self.control & 0x80) != (data & 0x80):
-            self.resetControl(data)
+            self.reset_control(data)
         # don't draw window if it was not enabled and not being drawn before
-        if ((self.control & 0x20) == 0 and (data & 0x20) != 0 and self.wlineY == 0 and self.lineY > self.windowY):
-            self.wlineY = 144
+        if (self.control & 0x20) == 0 and (data & 0x20) != 0 and \
+           self.wlineY == 0 and self.lineY > self.windowY:
+             self.wlineY = 144
         self.control = data
 
-    def resetControl(self, data):
-            # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
-            if (data & 0x80) != 0:
-                self.stat = (self.stat & 0xFC) | 0x02
-                self.cycles = constants.MODE_2_TICKS
-                self.lineY = 0
-                self.display = False
-            else:
-                self.stat = (self.stat & 0xFC) | 0x00
-                self.cycles = constants.MODE_1_TICKS
-                self.lineY = 0
-                self.clearFrame()
+    def reset_control(self, data):
+        # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
+        if (data & 0x80) != 0:
+            self.stat = (self.stat & 0xFC) | 0x02
+            self.cycles = constants.MODE_2_TICKS
+            self.lineY = 0
+            self.display = False
+        else:
+            self.stat = (self.stat & 0xFC) | 0x00
+            self.cycles = constants.MODE_1_TICKS
+            self.lineY = 0
+            self.clear_frame()
                 
-    def getStatus(self):
+    def get_status(self):
         return 0x80 | self.stat
 
-    def setStatus(self, data):
+    def set_status(self, data):
         self.stat = (self.stat & 0x87) | (data & 0x78)
         # Gameboy Bug
-        if ((self.control & 0x80) != 0 and (self.stat & 0x03) == 0x01 and (self.stat & 0x44) != 0x44):
-            self.interrupt.raiseInterrupt(constants.LCD)
+        if (self.control & 0x80) != 0 and (self.stat & 0x03) == 0x01 and \
+           (self.stat & 0x44) != 0x44:
+             self.interrupt.raise_interrupt(constants.LCD)
 
-    def getScrollY(self):
+    def get_scroll_y(self):
         return self.scrollY
                 
-    def setScrollY(self, data):
+    def set_scroll_y(self, data):
         self.scrollY = data
         
-    def getScrollX(self):
+    def get_scroll_x(self):
         return self.scrollX
 
-    def setScrollX(self, data):
+    def set_scroll_x(self, data):
         self.scrollX = data
         
-    def getLineY(self):
+    def get_line_y(self):
         return self.lineY
 
-    def getLineYCompare(self):
+    def get_line_y_compare(self):
         return self.lineYCompare
 
-    def setLYCompare(self, data):
+    def set_ly_compare(self, data):
         self.lineYCompare = data
         if (self.control & 0x80) == 0:
             return
-        if (self.lineY == self.lineYCompare):
+        if self.lineY == self.lineYCompare:
             # NOTE: raise interrupt once per line
             if (self.stat & 0x04) == 0:
                 # constants.LYC=LY interrupt
                 self.stat |= 0x04
 #                if (self.stat & 0x40) != 0:
-                self.interrupt.raiseInterrupt(constants.LCD)
+                self.interrupt.raise_interrupt(constants.LCD)
         else:
             self.stat &= 0xFB
                 
-    def getDMA(self):
+    def get_dma(self):
         return self.dma
 
-    def setDMA(self, data):
+    def set_dma(self, data):
         self.dma = data
         for index in range(0, constants.OAM_SIZE):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
 
-
-    def getBackgroundPalette(self):
+    def get_background_palette(self):
         return self.backgroundPalette
 
-    def setBackgroundPalette(self, data):
-        if (self.backgroundPalette != data):
+    def set_background_palette(self, data):
+        if self.backgroundPalette != data:
             self.backgroundPalette = data
             self.dirty = True
 
-    def getObjectPalette0(self):
+    def get_object_palette_0(self):
         return self.objectPalette0
 
-    def setObjectPalette0(self, data):
-        if (self.objectPalette0 != data):
+    def set_object_palette_0(self, data):
+        if self.objectPalette0 != data:
             self.objectPalette0 = data
             self.dirty = True
 
-    def getObjectPalette1(self):
+    def get_object_palette_1(self):
         return self.objectPalette1
 
-    def setObjectPalette1(self, data):
-        if (self.objectPalette1 != data):
+    def set_object_palette_1(self, data):
+        if self.objectPalette1 != data:
             self.objectPalette1 = data
             self.dirty = True
 
-    def getWindowY(self):
+    def get_window_y(self):
         return self.windowY
 
-    def setWindowY(self, data):
+    def set_window_y(self, data):
         self.windowY = data
         
-    def getWindowX(self):
+    def get_window_x(self):
         return self.windowX
 
-    def setWindowX(self, data):
+    def set_window_x(self, data):
         self.windowX = data
 
-    def emulateOAM(self):
+    def emulate_oam(self):
         self.stat = (self.stat & 0xFC) | 0x03
         self.cycles += constants.MODE_3_BEGIN_TICKS
         self.transfer = True
 
-    def emulateTransfer(self):
+    def emulate_transfer(self):
         if self.transfer:
-            if (self.display):
-                self.drawLine()
+            if self.display:
+                self.draw_line()
             self.stat = (self.stat & 0xFC) | 0x03
             self.cycles += constants.MODE_3_END_TICKS
             self.transfer = False
@@ -275,34 +278,34 @@ class Video(object):
             self.stat = (self.stat & 0xFC)
             self.cycles += constants.MODE_0_TICKS
             # H-Blank interrupt
-            if ((self.stat & 0x08) != 0 and (self.stat & 0x44) != 0x44):
-                self.interrupt.raiseInterrupt(constants.LCD)
+            if (self.stat & 0x08) != 0 and (self.stat & 0x44) != 0x44:
+                self.interrupt.raise_interrupt(constants.LCD)
 
-    def emulateHBlank(self):
+    def emulate_hblank(self):
         self.lineY+=1
-        self.emulateHBlankLineYCompare()
+        self.emulate_hblank_line_y_compare()
         if self.lineY < 144:
-            self.emulateHBlankPart1()
+            self.emulate_hblank_part_1()
         else:
-            self.emulateHBlankPart2()
+            self.emulate_hblank_part_2()
             
-    def emulateHBlankLineYCompare(self):
+    def emulate_hblank_line_y_compare(self):
         if self.lineY == self.lineYCompare:
             # constants.LYC=LY interrupt
             self.stat |= 0x04
             if (self.stat & 0x40) != 0:
-                self.interrupt.raiseInterrupt(constants.LCD)
+                self.interrupt.raise_interrupt(constants.LCD)
         else:
             self.stat &= 0xFB
             
-    def emulateHBlankPart1(self):
+    def emulate_hblank_part_1(self):
         self.stat = (self.stat & 0xFC) | 0x02
         self.cycles += constants.MODE_2_TICKS
         # constants.OAM interrupt
-        if ((self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44):
-            self.interrupt.raiseInterrupt(constants.LCD)
+        if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
+            self.interrupt.raise_interrupt(constants.LCD)
         
-    def emulateHBlankPart2(self):
+    def emulate_hblank_part_2(self):
         if self.display:
             self.drawFrame()
         self.frames += 1
@@ -316,37 +319,36 @@ class Video(object):
         self.cycles += constants.MODE_1_BEGIN_TICKS
         self.vblank = True
         
-        
-    def emulateVBlank(self):
+    def emulate_vblank(self):
         if self.vblank:
-            self.emulateVBlankVBlank()
+            self.emulate_vblank_vblank()
         elif self.lineY == 0:
-            self.emulateVBlankFirstYLine()
+            self.emulate_vblank_first_y_line()
         else:
-            self.emulateVBlankOther()
+            self.emulate_vblank_other()
 
-    def emulateVBlankVBlank(self):
+    def emulate_vblank_vblank(self):
         self.vblank = False
         self.stat = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
         # V-Blank interrupt
-        if ((self.stat & 0x10) != 0):
-            self.interrupt.raiseInterrupt(constants.LCD)
+        if (self.stat & 0x10) != 0:
+            self.interrupt.raise_interrupt(constants.LCD)
         # V-Blank interrupt
-        self.interrupt.raiseInterrupt(constants.VBLANK)
+        self.interrupt.raise_interrupt(constants.VBLANK)
         
-    def emulateVBlankFirstYLine(self):
+    def emulate_vblank_first_y_line(self):
         self.stat = (self.stat & 0xFC) | 0x02
         self.cycles += constants.MODE_2_TICKS
         # constants.OAM interrupt
-        if ((self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44):
-            self.interrupt.raiseInterrupt(constants.LCD)
+        if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
+            self.interrupt.raise_interrupt(constants.LCD)
             
-    def emulateVBlankOther(self):
-        if (self.lineY < 153):
+    def emulate_vblank_other(self):
+        if self.lineY < 153:
             self.lineY+=1
             self.stat = (self.stat & 0xFC) | 0x01
-            if (self.lineY == 153):
+            if self.lineY == 153:
                 self.cycles += constants.MODE_1_END_TICKS
             else:
                 self.cycles += constants.MODE_1_TICKS
@@ -354,37 +356,37 @@ class Video(object):
             self.lineY = self.wlineY = 0
             self.stat = (self.stat & 0xFC) | 0x01
             self.cycles += constants.MODE_1_TICKS - constants.MODE_1_END_TICKS
-        if (self.lineY == self.lineYCompare):
+        if self.lineY == self.lineYCompare:
             # constants.LYC=LY interrupt
             self.stat |= 0x04
-            if ((self.stat & 0x40) != 0):
-                self.interrupt.raiseInterrupt(constants.LCD)
+            if (self.stat & 0x40) != 0:
+                self.interrupt.raise_interrupt(constants.LCD)
         else:
             self.stat &= 0xFB
     
-    def drawFrame(self):
-        self.driver.updateDisplay()
+    def draw_frame(self):
+        self.driver.update_display()
 
-    def clearFrame(self):
-        self.clearPixels()
-        self.driver.updateDisplay()
+    def clear_frame(self):
+        self.clear_pixels()
+        self.driver.update_display()
 
-    def drawLine(self):
+    def draw_line(self):
         if (self.control & 0x01) != 0:
-            self.drawBackground()
+            self.draw_background()
         else:
-            self.drawCleanBackground()
+            self.draw_clean_background()
         if (self.control & 0x20) != 0:
-            self.drawWindow()
+            self.draw_window()
         if (self.control & 0x02) != 0:
-            self.drawObjects()
-        self.drawPixels()
+            self.draw_objects()
+        self.draw_pixels()
 
-    def drawCleanBackground(self):
+    def draw_clean_background(self):
         for x in range(0, 8+160+8):
             self.line[x] = 0x00
 
-    def drawBackground(self):
+    def draw_background(self):
         y = (self.scrollY + self.lineY) & 0xFF
         x = self.scrollX & 0xFF
         tileMap = constants.VRAM_MAP_A
@@ -395,10 +397,11 @@ class Video(object):
             tileData = constants.VRAM_DATA_A
         tileMap  += ((y >> 3) << 5) + (x >> 3)
         tileData += (y & 7) << 1
-        self.drawTiles(8 - (x & 7), tileMap, tileData)
+        self.draw_tiles(8 - (x & 7), tileMap, tileData)
 
-    def drawWindow(self):
-        if (self.lineY < self.windowY or self.windowX >= 167 or self.wlineY >= 144):
+    def draw_window(self):
+        if self.lineY < self.windowY or self.windowX >= 167 or \
+           self.wlineY >= 144:
             return
         tileMap = constants.VRAM_MAP_A
         if (self.control & 0x40) != 0:
@@ -408,11 +411,11 @@ class Video(object):
             tileData = constants.VRAM_DATA_A
         tileMap += (self.wlineY >> 3) << 5
         tileData += (self.wlineY & 7) << 1
-        self.drawTiles(self.windowX + 1, tileMap, tileData)
+        self.draw_tiles(self.windowX + 1, tileMap, tileData)
         self.wlineY+=1
 
-    def drawObjects(self):
-        count = self.scanObjects()
+    def draw_objects(self):
+        count = self.scan_objects()
         lastx = 176
         for index in range(176, count):
             data = self.objects[index]
@@ -420,12 +423,12 @@ class Video(object):
             flags = (data >> 12) & 0xFF
             address = data & 0xFFF
             if (x + 8 <= lastx):
-                self.drawObjectTile(x, address, flags)
+                self.draw_object_tile(x, address, flags)
             else:
-                self.drawOverlappedObjectTile(x, address, flags)
+                self.draw_overlapped_object_tile(x, address, flags)
             lastx = x
 
-    def scanObjects(self):
+    def scan_objects(self):
         count = 0
         # search active objects
         for offset in range(0, 4*40, 4):
@@ -453,42 +456,44 @@ class Video(object):
                 # Y flip
                 if ((flags & 0x40) != 0):
                     y = 7 - y
-            self.objects[count] = (x << 24) + (count << 20) + (flags << 12) + ((tile << 4) + (y << 1))
+            self.objects[count] = (x << 24) + (count << 20) + (flags << 12) + \
+                                  (tile << 4) + (y << 1)
             count += 1
             if count >= constants.OBJECTS_PER_LINE:
                 break
-        self.sortScanObject(count)
+        self.sort_scan_object(count)
         return count
 
-    def sortScanObject(self, count):
+    def sort_scan_object(self, count):
         # sort objects from lower to higher priority
         for index in range(0, count):
             rightmost = index
             for number in range(index+1, count):
-                if (self.objects[number] >> 20) > (self.objects[rightmost] >> 20):
+                if (self.objects[number] >> 20) > \
+                   (self.objects[rightmost] >> 20):
                     rightmost = number
             if rightmost != index:
                 data = self.objects[index]
                 self.objects[index] = self.objects[rightmost]
                 self.objects[rightmost] = data
 
-    def drawTiles(self, x, tileMap, tileData):
+    def draw_tiles(self, x, tileMap, tileData):
         while (x < 168):
             if (self.control & 0x10) != 0:
                 tile = self.vram[tileMap] & 0xFF
             else:
                 tile = (self.vram[tileMap] ^ 0x80) & 0xFF
-            self.drawTile(x, tileData + (tile << 4))
+            self.draw_tile(x, tileData + (tile << 4))
             tileMap = (tileMap & 0x1FE0) + ((tileMap + 1) & 0x001F)
             x += 8
             
-    def getPattern(self, address):
+    def get_pattern(self, address):
         pattern = self.vram[address]      & 0xFF
         pattern +=(self.vram[address + 1] & 0xFF) << 8
         return pattern
 
-    def drawObject(self, setter):
-        pattern = self.getPattern(address)
+    def draw_object(self, setter):
+        pattern = self.get_pattern(address)
         self.mask = 0
         # priority
         if (flags & 0x80) != 0:
@@ -497,11 +502,11 @@ class Video(object):
         if (flags & 0x10) != 0:
             self.mask |= 0x0004
         if (flags & 0x20) != 0:
-            self.drawObjectNormal(x, pattern, mask, setter)
+            self.draw_object_normal(x, pattern, mask, setter)
         else:
-            self.drawObjectFlipped(x, pattern, mask, setter)
+            self.draw_object_flipped(x, pattern, mask, setter)
             
-    def drawObjectNormal(self, x, pattern, mask, setter):
+    def draw_object_normal(self, x, pattern, mask, setter):
         for i in range(0, 7):
             color = pattern >> (6-i)
             if (color & 0x0202) != 0:
@@ -510,7 +515,7 @@ class Video(object):
         if (color & 0x0202) != 0:
             setter(self, x+7, color,  mask)
         
-    def drawObjectFlipped(self, x, pattern, mask, setter):
+    def draw_object_flipped(self, x, pattern, mask, setter):
         color = pattern << 1
         if (color & 0x0202) != 0:
             setter(self, x, color | mask)
@@ -519,56 +524,61 @@ class Video(object):
             if (color & 0x0202) != 0:
                 setter(self, x + i + 1, color | mask)
             
-    def drawTile(self, x, address):
-        pattern =  self.getPattern(address)
+    def draw_tile(self, x, address):
+        pattern =  self.get_pattern(address)
         for i in range(0, 8):
             self.line[x + i] = (pattern >> (7-i)) & 0x0101
 
-    def drawObjectTile(self, x, address, flags):
-        pattern = self.getPattern(address)
-        self.drawObject(self.setTileLine)
+    def draw_object_tile(self, x, address, flags):
+        pattern = self.get_pattern(address)
+        self.draw_object(self.setTileLine)
         
-    def setTileLine(self, pos, color, mask):
+    def set_tile_line(self, pos, color, mask):
         self.line[pos] |= color | mask
 
-    def drawOverlappedObjectTile(self, x, address, flags):
-        self.drawObject(self.setOverlappedObjectLine)
+    def draw_overlapped_object_tile(self, x, address, flags):
+        self.draw_object(self.setOverlappedObjectLine)
         
-    def setOverlappedObjectLine(self, pos, color, mask):
+    def set_overlapped_object_line(self, pos, color, mask):
         self.line[pos] = (self.line[pos] & 0x0101) | color | mask
-            
 
-    def drawPixels(self):
-        self.updatePalette()
-        pixels = self.driver.getPixels()
-        offset = self.lineY * self.driver.getWidth()
+    def draw_pixels(self):
+        self.update_palette()
+        pixels = self.driver.get_pixels()
+        offset = self.lineY * self.driver.get_width()
         for x in range(8, 168, 4):
             for i in range(0,4):
                 pattern = self.line[x + i]
                 pixels[offset + i] = self.palette[pattern]
             offset += 4
 
-    def clearPixels(self):
-        self.driver.clearPixels()
+    def clear_pixels(self):
+        self.driver.clear_pixels()
 
-    def updatePalette(self):
+    def update_palette(self):
         if not self.dirty:
             return
-        # bit 4/0 = constants.BG color, bit 5/1 = constants.OBJ color, bit 2 = constants.OBJ palette, bit
-        # 3 = constants.OBJ priority
+        # bit 4/0 = constants.BG color, 
+        # bit 5/1 = constants.OBJ color, 
+        # bit 2 = constants.OBJ palette, 
+        # bit 3 = constants.OBJ priority
         for pattern in range(0, 64):
             #color
-            if ((pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and (pattern & 0x11) != 0)):
+            if (pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and \
+               (pattern & 0x11) != 0):
                 # constants.OBJ behind constants.BG color 1-3
-                color = (self.backgroundPalette >> ((((pattern >> 3) & 0x02) + (pattern & 0x01)) << 1)) & 0x03
+                color = (self.backgroundPalette >> ((((pattern >> 3) & 0x02) +\
+                        (pattern & 0x01)) << 1)) & 0x03
              # constants.OBJ above constants.BG
             elif ((pattern & 0x04) == 0):
-                color = (self.objectPalette0 >> ((((pattern >> 4) & 0x02) + ((pattern >> 1) & 0x01)) << 1)) & 0x03
+                color = (self.objectPalette0 >> ((((pattern >> 4) & 0x02) + \
+                        ((pattern >> 1) & 0x01)) << 1)) & 0x03
             else:
-                color = (self.objectPalette1 >> ((((pattern >> 4) & 0x02) + ((pattern >> 1) & 0x01)) << 1)) & 0x03
-            self.palette[((pattern & 0x30) << 4) + (pattern & 0x0F)] = constants.COLOR_MAP[color]
+                color = (self.objectPalette1 >> ((((pattern >> 4) & 0x02) +\
+                        ((pattern >> 1) & 0x01)) << 1)) & 0x03
+            index= ((pattern & 0x30) << 4) + (pattern & 0x0F)
+            self.palette[index] = constants.COLOR_MAP[color]
         self.dirty = False
-
 
 # ------------------------------------------------------------------------------
 
@@ -577,20 +587,20 @@ class VideoDriver(object):
     def __init__(self):
         self.width = constants.GAMEBOY_SCREEN_WIDTH
         self.height = constants.GAMEBOY_SCREEN_HEIGHT
-        self.clearPixels()
+        self.clear_pixels()
         
-    def clearPixels(self):
+    def clear_pixels(self):
         self.pixels = [0] * self.width * self.height
             
-    def getWidth(self):
+    def get_width(self):
         return self.width
     
-    def getHeight(self):
+    def get_height(self):
         return selg.height
     
-    def getPixels(self):
+    def get_pixels(self):
         return self.pixels
     
-    def updateDisplay(self):
-        self.clearPixels()
+    def update_display(self):
+        self.clear_pixels()
         

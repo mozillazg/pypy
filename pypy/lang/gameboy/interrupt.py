@@ -10,13 +10,13 @@ class InterruptFlag(object):
         self.reset()
         
     def reset(self):
-        self._isPending = self._reset
+        self.isPending = self._reset
         
-    def isPending(self):
-        return self._isPending
+    def is_pending(self):
+        return self.isPending
     
-    def setPending(self, _isPending=True):
-        self._isPending = _isPending
+    def set_pending(self, isPending=True):
+        self.isPending = isPending
     
 
 class Interrupt(object):
@@ -27,26 +27,26 @@ class Interrupt(object):
     """
     
     def __init__(self):
-        self.createInterruptFlags()
-        self.createFlagList()
-        self.createFlagMaskMapping()
+        self.create_interrupt_flags()
+        self.createvflag_list()
+        self.create_flag_mask_mapping()
         self.reset()
         
-    def createInterruptFlags(self):
+    def create_interrupt_flags(self):
         self.vBlank = InterruptFlag(True, constants.VBLANK, 0x40)
         self.lcd = InterruptFlag(False, constants.LCD, 0x48)
         self.timer = InterruptFlag(False, constants.TIMER, 0x50)
         self.serial = InterruptFlag(False, constants.SERIAL, 0x58)
         self.joypad = InterruptFlag(False, constants.JOYPAD, 0x60)
         
-    def createFlagList(self):
+    def createvflag_list(self):
         self.interruptFlags = [
             self.vBlank, self.lcd, 
             self.timer, self.serial,
             self.joypad
         ]
 
-    def createFlagMaskMapping(self):
+    def create_flag_mask_mapping(self):
         self.maskMapping = {}
         for flag in self.interruptFlags:
             self.maskMapping[flag.mask] = flag
@@ -56,51 +56,51 @@ class Interrupt(object):
         for flag in self.interruptFlags:
             flag.reset()
 
-    def isPending(self, mask=None):
+    def is_pending(self, mask=None):
         if not self.enable:
             return False
         if mask==None:
-            return self.vBlank.isPending()
-        elif self.vBlank.isPending():
-            return self.maskMapping[mask].isPending()
+            return self.vBlank.is_pending()
+        elif self.vBlank.is_pending():
+            return self.maskMapping[mask].is_pending()
         else:
             return False
 
-    def raiseInterrupt(self, mask):
-        self.maskMapping[mask].setPending(True)
+    def raise_interrupt(self, mask):
+        self.maskMapping[mask].set_pending(True)
 
     def lower(self, mask):
-        self.maskMapping[mask].setPending(False)
+        self.maskMapping[mask].set_pending(False)
 
     def write(self, address, data):
         if  address == constants.IE:
-            self.setInterruptEnable(data)
+            self.set_interrupt_enable(data)
         elif address == constants.IF:
-            self.setInterruptFlag(data)
+            self.set_fnterrupt_flag(data)
 
     def read(self, address):
         if  address == constants.IE:
-            return self.getInterruptEnable()
+            return self.get_interrupt_enable()
         elif address == constants.IF:
-            return self.getInterruptFlag()
+            return self.get_interrupt_flag()
         return 0xFF
 
-    def getInterruptEnable(self):
+    def get_interrupt_enable(self):
         return int(self.enable)
 
-    def setInterruptEnable(self, isEnabled=True):
+    def set_interrupt_enable(self, isEnabled=True):
         self.enable = bool(isEnabled)
         
-    def getInterruptFlag(self):
+    def get_interrupt_flag(self):
         flag = 0x00
         for interruptFlag in self.interruptFlags:
-            if interruptFlag.isPending():
+            if interruptFlag.is_pending():
                 flag |= interruptFlag.mask
         return 0xE0 | flag
 
-    def setInterruptFlag(self, data):
+    def set_fnterrupt_flag(self, data):
         for flag in self.interruptFlags:
             if (data & flag.mask) != 0:
-                flag.setPending(True)
+                flag.set_pending(True)
             else:
-                flag.setPending(False)
+                flag.set_pending(False)

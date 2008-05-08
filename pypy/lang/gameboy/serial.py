@@ -1,3 +1,4 @@
+
 from pypy.lang.gameboy import constants
 
 class Serial(object):
@@ -15,7 +16,7 @@ class Serial(object):
         self.sb = 0x00
         self.sc = 0x00
 
-    def getCycles(self):
+    def get_cycles(self):
         return self.cycles
 
     def emulate(self, ticks):
@@ -26,32 +27,32 @@ class Serial(object):
             self.sb = 0xFF
             self.sc &= 0x7F
             self.cycles = constants.SERIAL_IDLE_CLOCK
-            self.interrupt.raiseInterrupt(constants.SERIAL)
+            self.interrupt.raise_interrupt(constants.SERIAL)
 
-    def setSerialData(self, data):
+    def set_serial_data(self, data):
         self.sb = data
 
-    def setSerialControl(self, data):
+    def set_serial_control(self, data):
         self.sc = data
         # HACK: delay the serial interrupt (Shin Nihon Pro Wrestling)
         self.cycles = constants.SERIAL_IDLE_CLOCK + constants.SERIAL_CLOCK
 
-    def getSerialData(self):
+    def get_serial_data(self):
         return self.sb
 
-    def getSerialControl(self):
+    def get_serial_control(self):
         return self.sc
 
     def write(self, address, data):
         if address == constants.SB:
-            self.setSerialData(data)
+            self.set_serial_data(data)
         elif address == constants.SC:
-            self.setSerialControl(data)
+            self.set_serial_control(data)
             
     def read(self, address):
         if address == constants.SB:
-            return self.getSerialData()
+            return self.get_serial_data()
         elif address == constants.SC:
-            return self.getSerialControl()
+            return self.get_serial_control()
         else:
             return 0xFF
