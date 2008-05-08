@@ -8,7 +8,6 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, GetSetProperty
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.pyparser.syntaxtree import TokenNode, SyntaxNode, AbstractSyntaxVisitor
-from pypy.interpreter.pyparser.pythonparse import make_pyparser
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser import grammar, symbol, pytoken
 from pypy.interpreter.argument import Arguments
@@ -150,8 +149,17 @@ STType.typedef = TypeDef("parser.st",
     totuple = interp2app(STType.descr_totuple),
 )
 
+def get_ast_compiler(space):
+    from pypy.interpreter.pycompiler import PythonAstCompiler
+    compiler = space.createcompiler()
+    if not isinstance(compiler, PythonAstCompiler):
+        raise OperationError(space.w_RuntimeError,
+                             space.wrap("not implemented in a PyPy with "
+                                        "a non-AST compiler"))
+    return compiler
+
 def parse_python_source(space, source, mode):
-    parser = make_pyparser(space.config.objspace.pyversion)
+    parser = get_ast_compiler(space).get_parser()
     builder = grammar.BaseGrammarBuilder(debug=False, parser=parser)
     builder.space = space
     try:
@@ -205,8 +213,8 @@ def sequence2st(space, w_sequence):
 
 
 def source2ast(space, source):
-    from pypy.interpreter.pyparser.pythonutil import source2ast
-    return space.wrap(source2ast(source, 'exec', space=space))    
+    compiler = get_ast_compiler(space)
+    return space.wrap(compiler.source2ast(source, 'exec'))
 source2ast.unwrap_spec = [ObjSpace, str]
 
 

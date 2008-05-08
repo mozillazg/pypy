@@ -285,6 +285,17 @@ class PythonAstCompiler(PyCodeCompiler):
         assert isinstance(c, PyCode)
         return c
 
+    # interface for pypy.module.recparser
+    def get_parser(self):
+        return self.parser
+
+    def source2ast(self, source, mode='exec'):
+        from pypy.interpreter.pyparser.astbuilder import AstBuilder
+        builder = AstBuilder(self.parser, self.grammar_version,
+                             space=self.space)
+        self.parser.parse_source(source, mode, builder)
+        return builder.rule_stack[-1]
+
 
 def install_compiler_hook(space, w_callable):
 #       if not space.get( w_callable ):
