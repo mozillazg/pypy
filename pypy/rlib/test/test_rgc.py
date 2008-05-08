@@ -44,8 +44,8 @@ def test_resizable_buffer():
     def f():
         ptr = rgc.resizable_buffer_of_shape(STR, 1)
         ptr.chars[0] = 'a'
-        ptr = rgc.resize_buffer(ptr, 2)
+        ptr = rgc.resize_buffer(ptr, 1, 2)
         ptr.chars[1] = 'b'
-        return hlstr(rgc.finish_building_buffer(ptr))
+        return hlstr(rgc.finish_building_buffer(ptr, 2))
 
     assert f() == 'ab'
