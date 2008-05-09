@@ -2,6 +2,8 @@
 """
 Support for POSIX locales.
 """
+raise ImportError("_locale.py is still incomplete")
+
 from ctypes import (Structure, POINTER, create_string_buffer,
     c_ubyte, c_int, c_char_p, c_wchar_p)
 from ctypes_support import standard_c_lib as libc
