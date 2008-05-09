@@ -13,25 +13,25 @@ class RAM(object):
 
     def reset(self):
         # Work RAM
-        self.wram =  [0x00]*8192
+        self.w_ram =  [0x00]*8192
         # High RAM
-        self.hram =  [0x00]*128
+        self.h_ram =  [0x00]*128
 
     def write(self, address, data):
         if (address >= 0xC000 and address <= 0xFDFF):
             # C000-DFFF Work RAM (8KB)
             # E000-FDFF Echo RAM
-            self.wram[address & 0x1FFF] = data
+            self.w_ram[address & 0x1FFF] = data
         elif (address >= 0xFF80 and address <= 0xFFFE):
             # FF80-FFFE High RAM
-            self.hram[address & 0x7F] = data
+            self.h_ram[address & 0x7F] = data
 
     def read(self, address):
         if (address >= 0xC000 and address <= 0xFDFF):
             # C000-DFFF Work RAM
             # E000-FDFF Echo RAM
-            return self.wram[address & 0x1FFF] & 0xFF
+            return self.w_ram[address & 0x1FFF] & 0xFF
         elif (address >= 0xFF80 and address <= 0xFFFE):
             # FF80-FFFE High RAM
-            return self.hram[address & 0x7F] & 0xFF
+            return self.h_ram[address & 0x7F] & 0xFF
         return 0xFF

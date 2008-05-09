@@ -3,20 +3,20 @@ from pypy.lang.gameboy import constants
 
 class InterruptFlag(object):
     
-    def __init__(self, _reset, mask, callCode):
+    def __init__(self, _reset, mask, call_code):
         self._reset = _reset
         self.mask = mask
-        self.callCode = callCode
+        self.call_code = call_code
         self.reset()
         
     def reset(self):
-        self.isPending = self._reset
+        self._is_pending = self._reset
         
     def is_pending(self):
-        return self.isPending
+        return self._is_pending
     
-    def set_pending(self, isPending=True):
-        self.isPending = isPending
+    def set_pending(self, _is_pending=True):
+        self._is_pending = _is_pending
     
 
 class Interrupt(object):
@@ -28,49 +28,49 @@ class Interrupt(object):
     
     def __init__(self):
         self.create_interrupt_flags()
-        self.createvflag_list()
+        self.create_flag_list()
         self.create_flag_mask_mapping()
         self.reset()
         
     def create_interrupt_flags(self):
-        self.vBlank = InterruptFlag(True, constants.VBLANK, 0x40)
+        self.v_blank = InterruptFlag(True, constants.VBLANK, 0x40)
         self.lcd = InterruptFlag(False, constants.LCD, 0x48)
         self.timer = InterruptFlag(False, constants.TIMER, 0x50)
         self.serial = InterruptFlag(False, constants.SERIAL, 0x58)
         self.joypad = InterruptFlag(False, constants.JOYPAD, 0x60)
         
-    def createvflag_list(self):
-        self.interruptFlags = [
-            self.vBlank, self.lcd, 
+    def create_flag_list(self):
+        self.interrupt_flags = [
+            self.v_blank, self.lcd, 
             self.timer, self.serial,
             self.joypad
         ]
 
     def create_flag_mask_mapping(self):
-        self.maskMapping = {}
-        for flag in self.interruptFlags:
-            self.maskMapping[flag.mask] = flag
+        self.mask_mapping = {}
+        for flag in self.interrupt_flags:
+            self.mask_mapping[flag.mask] = flag
         
     def reset(self):
         self.enable = False
-        for flag in self.interruptFlags:
+        for flag in self.interrupt_flags:
             flag.reset()
 
     def is_pending(self, mask=None):
         if not self.enable:
             return False
         if mask==None:
-            return self.vBlank.is_pending()
-        elif self.vBlank.is_pending():
-            return self.maskMapping[mask].is_pending()
+            return self.v_blank.is_pending()
+        elif self.v_blank.is_pending():
+            return self.mask_mapping[mask].is_pending()
         else:
             return False
 
     def raise_interrupt(self, mask):
-        self.maskMapping[mask].set_pending(True)
+        self.mask_mapping[mask].set_pending(True)
 
     def lower(self, mask):
-        self.maskMapping[mask].set_pending(False)
+        self.mask_mapping[mask].set_pending(False)
 
     def write(self, address, data):
         if  address == constants.IE:
@@ -93,13 +93,13 @@ class Interrupt(object):
         
     def get_interrupt_flag(self):
         flag = 0x00
-        for interruptFlag in self.interruptFlags:
-            if interruptFlag.is_pending():
-                flag |= interruptFlag.mask
+        for interrupt_flag in self.interrupt_flags:
+            if interrupt_flag.is_pending():
+                flag |= interrupt_flag.mask
         return 0xE0 | flag
 
     def set_fnterrupt_flag(self, data):
-        for flag in self.interruptFlags:
+        for flag in self.interrupt_flags:
             if (data & flag.mask) != 0:
                 flag.set_pending(True)
             else:

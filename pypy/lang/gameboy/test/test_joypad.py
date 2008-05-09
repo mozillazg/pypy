@@ -46,24 +46,24 @@ def number_to_bool_bin(number, size=None):
 def test_ini():
     value = 0xf
     button = Button(value)
-    assert button.oppositeButton == None
-    assert button.codeValue == value
+    assert button.opposite_button == None
+    assert button.code_value == value
     assert button.is_pressed() == False
     
     button2 = Button(value, button)
-    assert button2.oppositeButton == button
-    assert button2.codeValue == value
+    assert button2.opposite_button == button
+    assert button2.code_value == value
     
 def test_getCode():
     button = get_button()
     assert button.get_code() == 0
     button.press()
-    assert button.get_code() == button.codeValue
+    assert button.get_code() == button.code_value
     
 def test_press_release():
     button = get_button()
     button2 = get_button()
-    button.oppositeButton = button2;
+    button.opposite_button = button2;
     button2.press()
     assert button2.is_pressed() == True
     button.press()
@@ -90,14 +90,14 @@ def test_isRaised():
     
 def test_button_code_values():
     driver = get_driver()
-    assert driver.up.codeValue == constants.BUTTON_UP 
-    assert driver.right.codeValue == constants.BUTTON_RIGHT   
-    assert driver.down.codeValue == constants.BUTTON_DOWN
-    assert driver.left.codeValue == constants.BUTTON_LEFT
-    assert driver.select.codeValue == constants.BUTTON_SELECT
-    assert driver.start.codeValue == constants.BUTTON_START
-    assert driver.a.codeValue == constants.BUTTON_A
-    assert driver.b.codeValue == constants.BUTTON_B
+    assert driver.up.code_value == constants.BUTTON_UP 
+    assert driver.right.code_value == constants.BUTTON_RIGHT   
+    assert driver.down.code_value == constants.BUTTON_DOWN
+    assert driver.left.code_value == constants.BUTTON_LEFT
+    assert driver.select.code_value == constants.BUTTON_SELECT
+    assert driver.start.code_value == constants.BUTTON_START
+    assert driver.a.code_value == constants.BUTTON_A
+    assert driver.b.code_value == constants.BUTTON_B
     
     
 def test_toggle_opposite_directions():
@@ -109,26 +109,26 @@ def test_toggle_opposite_directions():
     for dir in directions:
         toggleFunction = dir[0]
         button = dir[1]
-        oppositeButton = dir[2]
+        opposite_button = dir[2]
         driver.reset()
         
-        oppositeButton.press()
+        opposite_button.press()
         assert driver.raised == False
         assert button.is_pressed() == False
-        assert oppositeButton.is_pressed() == True
-        assert driver.get_direction_code() == oppositeButton.codeValue
+        assert opposite_button.is_pressed() == True
+        assert driver.get_direction_code() == opposite_button.code_value
         assert driver.get_button_code() == 0
         
         toggleFunction()
         assert driver.raised == True
         assert button.is_pressed() == True
-        assert oppositeButton.is_pressed() == False
-        assert driver.get_direction_code() == button.codeValue
+        assert opposite_button.is_pressed() == False
+        assert driver.get_direction_code() == button.code_value
         assert driver.get_button_code() == 0
         
         toggleFunction(False)
         assert button.is_pressed() == False
-        assert oppositeButton.is_pressed() == False
+        assert opposite_button.is_pressed() == False
         assert driver.get_direction_code() == 0
         assert driver.get_button_code() == 0
     
@@ -151,7 +151,7 @@ def test_toggle_buttons():
         toggleFunction()
         assert driver.raised == True
         assert button.is_pressed() == True
-        assert driver.get_button_code() == button.codeValue
+        assert driver.get_button_code() == button.code_value
         assert driver.get_direction_code() == 0
         
         toggleFunction(False)
@@ -187,7 +187,7 @@ def toggle_multiple_test(driver, codeGetter, buttons):
         for j in range(0, size):
             if toggled[j]:
                 buttons[j][0]()
-                code |= buttons[j][1].codeValue
+                code |= buttons[j][1].code_value
             else:
                 buttons[j][0](False)
             assert buttons[j][1].is_pressed() == toggled[j]
@@ -221,14 +221,14 @@ def test_emulate_zero_ticks_update():
     joypad = get_joypad() 
     value = 0x1
     joypad.joyp = value
-    joypad.driver.buttonCode = 0x4
+    joypad.driver.button_code = 0x4
     joypad.driver.raised = True
     joypad.cycles = 2
     ticks = 2
     joypad.emulate(ticks)
     assert joypad.cycles == constants.JOYPAD_CLOCK
     assert joypad.joyp == value
-    assert joypad.buttonCode == 0
+    assert joypad.button_code == 0
     
 def test_read_write():
     joypad = get_joypad()
@@ -250,18 +250,18 @@ def test_update():
     assert joypad.driver.get_button_code() == constants.BUTTON_SELECT
     joypad.driver.button_up()
     assert joypad.driver.get_direction_code() == constants.BUTTON_UP
-    assert joypad.buttonCode == 0xF
+    assert joypad.button_code == 0xF
     joypad.joyp = 0x1
     joypad.update()
-    assert joypad.buttonCode == (constants.BUTTON_SELECT | constants.BUTTON_UP)
+    assert joypad.button_code == (constants.BUTTON_SELECT | constants.BUTTON_UP)
     
     joypad.joyp = 0x2
     joypad.update()
-    assert joypad.buttonCode == (constants.BUTTON_SELECT | constants.BUTTON_UP)
+    assert joypad.button_code == (constants.BUTTON_SELECT | constants.BUTTON_UP)
     
     joypad.joyp = 0x3
     joypad.update()
-    assert joypad.buttonCode == 0xF
+    assert joypad.button_code == 0xF
     
     
     
