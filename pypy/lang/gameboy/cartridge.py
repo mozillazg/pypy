@@ -157,7 +157,7 @@ class Cartridge(object):
         
     def load(self, cartridgeFilePath):
         self.cartridgeFilePath = str(cartridgeFilePath)
-        self.cartridgeName = os.path.basename(self.cartridgeFilePath)
+        # self.cartridgeName = os.path.basename(self.cartridgeFilePath)
         self.cartridgeFile = open(self.cartridgeFilePath)
         self._load_battery(self.cartridgeFilePath)
         

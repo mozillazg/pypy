@@ -6,7 +6,7 @@ from pypy.lang.gameboy.cartridge import *
 from pypy.lang.gameboy.gameboy import *
 
 
-ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"lang/gameboy/rom"
+ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
 EMULATION_CYCLES = 64
 
 
@@ -23,12 +23,19 @@ EMULATION_CYCLES = 64
 
 
 def entry_point(argv):
+    #if len(argv) > 1:
+    #    filename = argv[1]
+    #else:
+    #    print "usage:", argv[0], "<image name>"
+    #    return -1
     gameBoy = GameBoy()
-    gameBoy.loadCartridgeFile(ROM_PATH+"/rom4/rom4.gb")
+    gameBoy.load_cartridge_file(ROM_PATH+"/rom4/rom4.gb")#filename)
     gameBoy.emulate(EMULATION_CYCLES)
-
 
 # _____ Define and setup target ___
 
 def target(*args):
     return entry_point, None
+
+def test_target():
+    entry_point(["boe", ROM_PATH+"/rom4/rom4.gb"])
