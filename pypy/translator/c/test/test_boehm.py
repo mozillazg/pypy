@@ -385,7 +385,7 @@ class TestUsingBoehm(AbstractGCTestClass):
         def f():
             ptr = rgc.resizable_buffer_of_shape(STR, 2)
             ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 1, 2)
+            ptr = rgc.resize_buffer(ptr, 1, 200)
             ptr.chars[1] = 'b'
             return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
 
