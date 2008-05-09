@@ -574,10 +574,9 @@ class GCTransformer(BaseGCTransformer):
         # fish resvar
         v_newbuf = hop.llops[-1].result
         v_src = op.args[0]
+        v_lgt = op.args[1]
         TYPE = v_src.concretetype.TO
         c_fldname = rmodel.inputconst(lltype.Void, TYPE._arrayfld)
-        v_lgt = hop.genop('getinteriorarraysize', [v_src, c_fldname],
-                          resulttype=lltype.Signed)
         v_adrsrc = hop.genop('cast_ptr_to_adr', [v_src],
                              resulttype=llmemory.Address)
         v_adrnewbuf = hop.genop('cast_ptr_to_adr', [v_newbuf],
@@ -600,7 +599,8 @@ class GCTransformer(BaseGCTransformer):
         op = hop.spaceop
         if self._can_realloc():
             return self._gct_resize_buffer_realloc(hop)
-        return hop.genop('same_as', [op.args[0]], resultvar=op.result)
+        else:
+            return self._gct_resize_buffer_no_realloc(hop)
 
     def varsize_malloc_helper(self, hop, flags, meth, extraargs):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)
