@@ -183,7 +183,16 @@ class BaseGrammarBuilder(AbstractBuilder):
 class GrammarElement(Wrappable):
     """Base parser class"""
 
+    _trace = False
+    first_set = None
+    emptytoken_in_first_set = False
+    _match_cache = None
+    args = []
+
     symbols = {} # dirty trick to provide a symbols mapping while printing (and not putting it in every object)
+
+    _attrs_ = ['parser', 'codename', 'args',
+               'first_set', 'emptytoken_in_first_set', '_match_cache']
 
     def __init__(self, parser, codename):
         # the rule name
@@ -191,10 +200,6 @@ class GrammarElement(Wrappable):
         self.parser = parser
         # integer mapping to either a token value or rule symbol value
         self.codename = codename 
-        self.args = []
-        self.first_set = {}
-        self.emptytoken_in_first_set = False
-        self._trace = False
 
     def is_root(self):
         """This is a root node of the grammar, that is one that will
@@ -256,7 +261,7 @@ class GrammarElement(Wrappable):
         prefix = '%s%s' % (' ' * level, prefix)
         print prefix, " RULE =", self
         print prefix, " TOKEN =", token
-        print prefix, " FIRST SET =", self.first_set
+        print prefix, " FIRST SET =", getattr(self, 'first_set', 'none')
 
     def _match(self, source, builder, level=0):
         """Try to match a grammar rule
@@ -313,8 +318,15 @@ class GrammarElement(Wrappable):
         """returns the list of possible next tokens
         *must* be implemented in subclasses
         """
-        # XXX: first_set could probably be implemented with sets
-        return []
+        pass
+
+    def get_first_set(self):
+        if self.first_set is None:
+            self.initialize_first_set()
+        return self.first_set
+
+    def initialize_first_set(self):
+        self.first_set = {}
 
     def optimize_first_set(self):
         """Precompute a data structure that optimizes match_first_set().
@@ -353,9 +365,8 @@ class GrammarElement(Wrappable):
           - other.codename == tk.codename
           - other.value == tk.value or tk.value is None
         """
-        try:
-            cachelist = self._match_cache
-        except AttributeError:
+        cachelist = self._match_cache
+        if cachelist is None:
             return True        # not computed yet
         cache = cachelist[other.isKeyword]
         values = cache.get(other.codename, GrammarElement._EMPTY_VALUES_SET)
@@ -440,7 +451,7 @@ class Alternative(GrammarElement):
         """
         # do this to avoid problems on indirect recursive rules
         for rule in self.args:
-            for t in rule.first_set:
+            for t in rule.get_first_set():
                 self.first_set[t] = None
 
     def reorder_rule(self):
@@ -538,7 +549,7 @@ class Sequence(GrammarElement):
             LAH(S) = LAH(A)
         """
         for rule in self.args:
-            if not rule.first_set:
+            if not rule.get_first_set():
                 break
             if self.parser.EmptyToken in self.first_set:
                 del self.first_set[self.parser.EmptyToken]
@@ -573,6 +584,9 @@ class KleeneStar(GrammarElement):
             raise ValueError("KleeneStar needs max==-1 or max>1")
         self.max = _max
         self.star = "x"
+
+    def initialize_first_set(self):
+        GrammarElement.initialize_first_set(self)
         if self.min == 0:
             self.first_set[self.parser.EmptyToken] = None
 
@@ -635,7 +649,7 @@ class KleeneStar(GrammarElement):
             LAH(S) = LAH(A)
         """
         rule = self.args[0]
-        self.first_set = rule.first_set.copy()
+        self.first_set = rule.get_first_set().copy()
         if self.min == 0:
             self.first_set[self.parser.EmptyToken] = None
 
@@ -657,9 +671,13 @@ class KleeneStar(GrammarElement):
 class Token(GrammarElement):
     """Represents a Token in a grammar rule (a lexer token)"""
     isKeyword = True
+    _attrs_ = ['isKeyword', 'value']
+
     def __init__(self, parser, codename, value=None):
         GrammarElement.__init__(self, parser, codename)
         self.value = value
+
+    def initialize_first_set(self):
         self.first_set = {self: None}
 
     def match(self, source, builder, level=0):
@@ -813,6 +831,8 @@ class Parser(object):
         full first sets.
         """
         rules = self.all_rules
+        for r in rules:
+            r.initialize_first_set()
         changed = True
         while changed:
             # loop while one first set is changed
