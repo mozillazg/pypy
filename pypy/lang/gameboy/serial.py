@@ -1,5 +1,6 @@
 
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.interrupt import *
 
 class Serial(object):
     """
@@ -8,6 +9,7 @@ class Serial(object):
      """
 
     def __init__(self, interrupt):
+        assert isinstance(interrupt, Interrupt)
         self.interrupt = interrupt
         self.reset()
 
