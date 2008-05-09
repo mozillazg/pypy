@@ -60,12 +60,18 @@ class TestLLAddressDict:
         d2.delete()
         assert lldict.alloc_count == 0
 
-    def test_clear(self):
+    def test_foreach_clear(self):
         d = lldict.newdict()
         d.setitem(intaddr(41), intaddr(42))
-        d.clear()
+        result = []
+        d.foreach_clear(lambda key, value, arg: result.append((key,value,arg)),
+                        "hello world")
         assert d.length() == 0
         assert not d.contains(intaddr(41))
+        assert len(result) == 1
+        assert result[0][0].intval == 41
+        assert result[0][1].intval == 42
+        assert result[0][2] == "hello world"
         d.delete()
         assert lldict.alloc_count == 0
 
