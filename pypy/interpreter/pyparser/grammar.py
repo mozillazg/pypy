@@ -370,8 +370,13 @@ class GrammarElement(Wrappable):
             return True        # not computed yet
         cache = cachelist[other.isKeyword]
         values = cache.get(other.codename, GrammarElement._EMPTY_VALUES_SET)
-        return (values is None or       # 'None' means 'matches anything'
-                other.value in values)  # otherwise, ok only if in the set
+        if values is None:
+            return True          # 'None' means 'matches anything'
+        elif other.value is None:
+            return False         # because tk.value != None (for all tk)
+        else:
+            return other.value in values  # otherwise, ok only if in the set
+            # XXX "None in dict" crashes after translation - needs to be fixed
 
     def reorder_rule(self):
         """Called after the computation of first set to allow rules to be
