@@ -468,16 +468,16 @@ class GenerationGC(SemiSpaceGC):
             return SemiSpaceGC._compute_id(self, obj)
 
     def update_young_objects_with_id(self):
-        # 'foreach_clear' iterates over the items in the dict and clears
-        # it in the same pass.  It does not shrink the dictionary, which
-        # is appropriate for our use case: the dict will tend to be large
-        # enough for the maximum number of objects with id that exist in
-        # the nursery, and stay at that size for the rest of the execution.
-        self.young_objects_with_id.foreach_clear(self._update_object_id,
-                                                 self.objects_with_id)
+        self.young_objects_with_id.foreach(self._update_object_id,
+                                           self.objects_with_id)
+        self.young_objects_with_id.clear()
+        # NB. the clear() also makes the dictionary shrink back to its
+        # minimal size, which is actually a good idea: a large, mostly-empty
+        # table is bad for the next call to 'foreach'.
 
     def ids_grow_older(self):
-        self.young_objects_with_id.foreach_clear(self._id_grow_older, None)
+        self.young_objects_with_id.foreach(self._id_grow_older, None)
+        self.young_objects_with_id.clear()
 
     def _id_grow_older(self, obj, id, ignored):
         self.objects_with_id.setitem(obj, id)
