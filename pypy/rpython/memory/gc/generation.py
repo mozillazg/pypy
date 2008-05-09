@@ -62,7 +62,6 @@ class GenerationGC(SemiSpaceGC):
         # it lists exactly the old and static objects whose
         # GCFLAG_NO_YOUNG_PTRS bit is not set.
         self.young_objects_with_weakrefs = self.AddressStack()
-        self.young_objects_with_id = self.AddressDict()
         self.reset_nursery()
 
         # compute the constant lower bounds for the attributes
@@ -76,6 +75,7 @@ class GenerationGC(SemiSpaceGC):
 
     def setup(self):
         self.last_generation_root_objects = self.AddressStack()
+        self.young_objects_with_id = self.AddressDict()
         SemiSpaceGC.setup(self)
         self.set_nursery_size(self.initial_nursery_size)
         # the GC is fully setup now.  The rest can make use of it.
