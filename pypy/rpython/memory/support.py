@@ -257,8 +257,7 @@ class BasicAddressDict(object):
     def add(self, keyaddr):
         self.setitem(keyaddr, llmemory.NULL)
 
-    def foreach_clear(self, callback, arg):
-        self.foreach(callback, arg)
+    def clear(self):
         self.data.clear()
 
     def foreach(self, callback, arg):
