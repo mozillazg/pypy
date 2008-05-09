@@ -62,6 +62,7 @@ class GenerationGC(SemiSpaceGC):
         # it lists exactly the old and static objects whose
         # GCFLAG_NO_YOUNG_PTRS bit is not set.
         self.young_objects_with_weakrefs = self.AddressStack()
+        self.young_objects_with_id = self.AddressDict()
         self.reset_nursery()
 
         # compute the constant lower bounds for the attributes
@@ -249,6 +250,7 @@ class GenerationGC(SemiSpaceGC):
     def semispace_collect(self, size_changing=False):
         self.reset_young_gcflags() # we are doing a full collection anyway
         self.weakrefs_grow_older()
+        self.ids_grow_older()
         self.reset_nursery()
         if DEBUG_PRINT:
             llop.debug_print(lltype.Void, "major collect, size changing", size_changing)
@@ -343,7 +345,8 @@ class GenerationGC(SemiSpaceGC):
             # GCFLAG_NO_YOUNG_PTRS set again by trace_and_drag_out_of_nursery
             if self.young_objects_with_weakrefs.non_empty():
                 self.invalidate_young_weakrefs()
-            self.notify_objects_just_moved()
+            if self.young_objects_with_id.length() > 0:
+                self.update_young_objects_with_id()
             # mark the nursery as free and fill it with zeroes again
             llarena.arena_reset(self.nursery, self.nursery_size, True)
             if DEBUG_PRINT:
@@ -453,6 +456,28 @@ class GenerationGC(SemiSpaceGC):
     def is_last_generation(self, obj):
         # overridden by HybridGC
         return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
+
+    def _compute_id(self, obj):
+        if self.is_in_nursery(obj):
+            result = self.young_objects_with_id.get(obj)
+            if not result:
+                result = self._next_id()
+                self.young_objects_with_id.setitem(obj, result)
+            return result
+        else:
+            return SemiSpaceGC._compute_id(self, obj)
+
+    def update_young_objects_with_id(self):
+        self.young_objects_with_id.foreach(self._update_object_id,
+                                           self.objects_with_id)
+        self.young_objects_with_id.clear()
+
+    def ids_grow_older(self):
+        self.young_objects_with_id.foreach(self._id_grow_older, None)
+        self.young_objects_with_id.clear()
+
+    def _id_grow_older(self, obj, id, ignored):
+        self.objects_with_id.setitem(obj, id)
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true

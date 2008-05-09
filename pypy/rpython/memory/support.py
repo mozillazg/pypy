@@ -228,6 +228,9 @@ class BasicAddressDict(object):
     def _key(self, addr):
         return addr._fixup().ptr._obj
 
+    def _wrapkey(self, obj):
+        return llmemory.cast_ptr_to_adr(obj._as_ptr())
+
     def delete(self):
         pass
 
@@ -244,14 +247,23 @@ class BasicAddressDict(object):
         assert keyaddr
         self.data[self._key(keyaddr)] = valueaddr
 
+    def insertclean(self, keyaddr, valueaddr):
+        assert keyaddr
+        key = self._key(keyaddr)
+        assert key not in self.data
+        self.data[key] = valueaddr
+
     def add(self, keyaddr):
         self.setitem(keyaddr, llmemory.NULL)
+
+    def clear(self):
+        self.data.clear()
 
     def foreach(self, callback, arg):
         """Invoke 'callback(key, value, arg)' for all items in the dict.
         Typically, 'callback' is a bound method and 'arg' can be None."""
         for key, value in self.data.iteritems():
-            callback(key, value, arg)
+            callback(self._wrapkey(key), value, arg)
 
 
 def copy_and_update(dict, surviving, updated_address):

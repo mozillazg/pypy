@@ -466,6 +466,22 @@ class HybridGC(GenerationGC):
                              dead_size, "bytes in",
                              dead_count, "objs")
 
+    def _compute_id_for_external(self, obj):
+        # the base classes make the assumption that all external objects
+        # have an id equal to their address.  This is wrong if the object
+        # is a generation 3 rawmalloced object that initially lived in
+        # the semispaces.
+        if self.is_last_generation(obj):
+            # in this case, we still need to check if the object had its
+            # id taken before.  If not, we can use its address as its id.
+            return self.objects_with_id.get(obj, obj)
+        else:
+            # a generation 2 external object was never non-external in
+            # the past, so it cannot be listed in self.objects_with_id.
+            return obj
+        # XXX a possible optimization would be to use three dicts, one
+        # for each generation, instead of mixing gen2 and gen3 objects.
+
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true
         between collections."""
