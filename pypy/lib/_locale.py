@@ -414,8 +414,10 @@ __all__ = (
     'Error',
     'setlocale', 'localeconv', 'strxfrm', 'strcoll',
     'gettext', 'dgettext', 'dcgettext', 'textdomain',
-    'bindtextdomain', 'bind_textdomain_codeset',
+    'bindtextdomain',
 )
+if _bind_textdomain_codeset:
+    __all__ += ('bind_textdomain_codeset',)
 if HAS_LANGINFO:
     __all__ += ('nl_langinfo',)
 
