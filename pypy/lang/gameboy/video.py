@@ -16,6 +16,7 @@ class Video(object):
     #palette = []#= new int[1024]
 
     def __init__(self, video_driver, interrupt, memory):
+        assert isinstance(video_driver, VideoDriver)
         self.driver = video_driver
         self.interrupt = interrupt
         self.memory = memory

@@ -1,11 +1,14 @@
+#!/usr/bin/env python 
 
 import pyglet
 pyglet.options['audio'] = ('openal', 'silent')
         
 from pyglet        import window
-from pyglet.window import key
 from pyglet        import media
+from pyglet        import image
+from pyglet.window import key
 
+from pypy.lang.gameboy.gameboy import *
 from pypy.lang.gameboy.joypad import JoypadDriver
 from pypy.lang.gameboy.video  import VideoDriver
 from pypy.lang.gameboy.sound  import SoundDriver
@@ -18,6 +21,7 @@ class GameBoyImplementation(GameBoy):
     def __init__(self):
         self.create_window()
         GameBoy.__init__(self)
+        self.mainLoop()
         
     def create_window(self):
         self.win = window.Window()
@@ -27,28 +31,57 @@ class GameBoyImplementation(GameBoy):
         self.clock = Clock()
         self.joypad_driver = JoypadDriverImplementation(self.win)
         self.video_driver  = VideoDriverImplementation(self.win)
-        self.sound_driver  = SoundDriverImplementation(self.win)
+        self.sound_driver  = SoundDriverImplementation()
         
+    def mainLoop(self):
+        while not self.win.has_exit: 
+           pass
+        
+# VIDEO DRIVER -----------------------------------------------------------------
 
+class VideoDriverImplementation(VideoDriver):
+    
+    def __init__(self, win):
+        VideoDriver.__init__(self)
+        self.win = win
+        self.win.on_resize = self.on_resize
+        self.set_window_size()
+        self.create_image_buffer()
+
+    def create_image_buffer(self):
+        self.buffers = image.get_buffer_manager()
+        self.image_buffer = self.buffers.get_color_buffer()
+        
+    def on_resize(self, width, height):
+        pass
+    
+    def set_window_size(self):
+        self.win.set_size(self.width, self.height)
+        
+    def update_display(self):
+        self.image_buffer.blit(0, 0)
+        self.win.flip()
+        
+        
 # JOYPAD DRIVER ----------------------------------------------------------------
 
-class JoypadDriverImplementation(object):
+class JoypadDriverImplementation(JoypadDriver):
     
-    def __ini__(self, win):
-        JoypadDriver.__ini__(self)
+    def __init__(self, win):
+        JoypadDriver.__init__(self)
         self.create_button_key_codes()
         self.win = win
         self.create_listeners()
         
     def create_button_key_codes(self):
-        self.buttonKeyCodes = {key.UP    : (self.buttonUp),
-                              key.RIGHT : (self.buttonRight), 
-                              key.DOWN  : (self.buttonDown), 
-                              key.LEFT  : (self.buttonLeft), 
-                              key.ENTER : (self.buttonStart),
-                              key.SPACE : (self.buttonSelect),
-                              key.A     : (self.buttonA), 
-                              key.B     : (self.ButtonB)}
+        self.button_key_codes = {key.UP : (self.button_up),
+                              key.RIGHT : (self.button_right), 
+                              key.DOWN  : (self.button_down), 
+                              key.LEFT  : (self.button_left), 
+                              key.ENTER : (self.button_start),
+                              key.SPACE : (self.button_select),
+                              key.A     : (self.button_a), 
+                              key.B     : (self.button_b)}
         
     def create_listeners(self):
         self.win.on_key_press = self.on_key_press
@@ -65,10 +98,10 @@ class JoypadDriverImplementation(object):
             pressButtonFunction(False)
             
     def get_button_handler(self, symbol, modifiers):
-        if symbol in self.buttonKeyCodes:
-            if len(self.buttonKeyCodes[symbol]) == 1 or\
-                    self.buttonKeyCodes[symbol][1] ==  modifiers:
-                return self.buttonKeyCodes[symbol][0]
+        if symbol in self.button_key_codes:
+            if len(self.button_key_codes[symbol]) == 1 or\
+                    self.button_key_codes[symbol][1] ==  modifiers:
+                return self.button_key_codes[symbol][0]
         return None
         
         
@@ -97,34 +130,18 @@ class SoundDriverImplementation(SoundDriver):
         pass
     
     
-# VIDEO DRIVER -----------------------------------------------------------------
-
-class VideoDriverImplementation(VideoDriver):
-    
-    def __init__(self, win):
-        VideoDriver.__init__(self)
-        self.win = win
-        self.win.on_resize = self.on_resize
-        self.set_window_size()
-        self.create_image_buffer()
-
-    def create_image_buffer(self):
-        self.buffers = image.get_buffer_manager()
-        self.image_buffer = self.buffers.get_color_buffer()
-        
-    def on_resize(self, width, height):
-        pass
-    
-    def set_window_size(self):
-        self.win.setSize(self.width, self.height)
-        
-    def update_display(self):
-        self.image_buffer.blit(0, 0)
-        self.win.flip()
-        
-        
 # ==============================================================================
 
 if __name__ == '__main__':
-    print "starting gameboy"
+    entry_point()
+
+
+
+def entry_point(args):
     gameboy = GameBoyImplementation()
+
+
+# _____ Define and setup target ___
+
+def target(*args):
+    return entry_point, None

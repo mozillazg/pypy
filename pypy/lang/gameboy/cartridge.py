@@ -2,6 +2,8 @@
 # ___________________________________________________________________________
 
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.timer import *
+
 import os
 
 def has_cartridge_battery(self, cartridge_type):    
@@ -31,8 +33,9 @@ class InvalidMemoryBankTypeError(Exception):
 
 class CartridgeManager(object):
     
-    def __init__(self, clock_driver):
-        self.clock = clock_driver
+    def __init__(self, clock):
+        assert isinstance(clock, Clock)
+        self.clock = clock
         self.cartridge = None
         
     def reset(self):
