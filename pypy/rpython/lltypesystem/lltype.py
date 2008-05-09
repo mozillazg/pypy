@@ -905,6 +905,8 @@ def normalizeptr(p):
         return p      # primitive
     if not p:
         return None   # null pointer
+    if type(p._obj0) is int:
+        return p      # a pointer obtained by cast_int_to_ptr
     container = p._obj._normalizedcontainer()
     if container is not p._obj:
         p = _ptr(Ptr(typeOf(container)), container, p._solid)
@@ -985,7 +987,7 @@ class _abstract_ptr(object):
     _obj = property(_getobj)
 
     def _was_freed(self):
-        return (self._obj0 is not None and
+        return (type(self._obj0) not in (type(None), int) and
                 self._getobj(check=False)._was_freed())
 
     def __getattr__(self, field_name): # ! can only return basic or ptr !
