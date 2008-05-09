@@ -69,6 +69,19 @@ def dict_foreach(d, callback, arg):
         i -= 1
 dict_foreach._annspecialcase_ = 'specialize:arg(1)'
 
+def dict_foreach_clear(d, callback, arg):
+    entries = d.entries
+    i = len(entries) - 1
+    while i >= 0:
+        if dict_entry_valid(entries, i):
+            key = entries[i].key
+            entries[i].key = llmemory.NULL
+            callback(key, entries[i].value, arg)
+        i -= 1
+    d.num_items = 0
+    d.num_pristine_entries = len(entries)
+dict_foreach_clear._annspecialcase_ = 'specialize:arg(1)'
+
 ENTRY = lltype.Struct('ENTRY', ('key', llmemory.Address),
                                ('value', llmemory.Address))
 ENTRIES = lltype.Array(ENTRY,
@@ -91,8 +104,8 @@ DICT = lltype.Struct('DICT', ('entries', lltype.Ptr(ENTRIES)),
                          'get': dict_get,
                          'add': dict_add,
                          'insertclean': dict_insertclean,
-                         'clear': rdict.ll_clear,
                          'foreach': dict_foreach,
+                         'foreach_clear': dict_foreach_clear,
                          'keyhash': dict_keyhash,
                          'keyeq': None,
                      })
