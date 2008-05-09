@@ -35,6 +35,8 @@ class DoubleRegister(object):
     
     def __init__(self, cpu, hi, lo, reset_value=0):
         assert isinstance(cpu, CPU)
+        assert isinstance(lo, Register)
+        assert isinstance(hi, Register)
         self.cpu = cpu
         self.hi = hi
         self.lo = lo
@@ -104,7 +106,7 @@ class ImmediatePseudoRegister(object):
     
 # ------------------------------------------------------------------------------
   
-class FlagRegister(object):
+class FlagRegister(Register):
     
     def __init__(self, cpu):
         assert isinstance(cpu, CPU)
