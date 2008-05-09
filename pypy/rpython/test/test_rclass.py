@@ -412,7 +412,21 @@ class BaseTestRclass(BaseRtypingTest):
         # relevant on top of the ootypesystem though.
         assert res.item2 == hash(c)
         assert res.item3 == hash(d)
-        
+
+    def test_circular_hash_initialization(self):
+        class B:
+            pass
+        class C(B):
+            pass
+        c1 = C()
+        c1.somedict = {c1: True, C(): False}
+        def f():
+            B().somedict = {}      # force the attribute up
+            c1.somedict[c1] = 123
+            return len(c1.somedict)
+        res = self.interpret(f, [])
+        assert res == 2
+
     def test_type(self):
         class A:
             pass
