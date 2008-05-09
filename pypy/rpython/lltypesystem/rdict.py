@@ -597,7 +597,7 @@ def ll_newdict_size(DICT, length_estimate):
     d = lltype.malloc(DICT)
     d.entries = lltype.malloc(DICT.entries.TO, n, zero=True)
     d.num_items = 0
-    d.num_pristine_entries = DICT_INITSIZE
+    d.num_pristine_entries = n
     return d
 ll_newdict_size.oopspec = 'newdict()'
 
