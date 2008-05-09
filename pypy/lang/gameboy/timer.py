@@ -15,9 +15,9 @@ class Timer(object):
 
     def reset(self):
         self.div = 0
-        self.dividerCycles = constants.DIV_CLOCK
+        self.divider_cycles = constants.DIV_CLOCK
         self.tima = self.tma = self.tac = 0x00
-        self.timerCycles = self.timerClock = constants.TIMER_CLOCK[0]
+        self.timer_cycles = self.timer_clock = constants.TIMER_CLOCK[0]
 
     def write(self,  address, data):
         if address==constants.DIV:
@@ -63,41 +63,40 @@ class Timer(object):
 
     def set_timer_control(self,  data):
         if ((self.tac & 0x03) != (data & 0x03)):
-            self.timerClock =  self.timerCycles = constants.TIMER_CLOCK[data & 0x03]
+            self.timer_clock =  self.timer_cycles = constants.TIMER_CLOCK[data & 0x03]
         self.tac = data
 
     def get_cycles(self):
-        if (self.tac & 0x04) != 0 and self.timerCycles < self.dividerCycles:
-                return self.timerCycles
-        return self.dividerCycles
+        if (self.tac & 0x04) != 0 and self.timer_cycles < self.divider_cycles:
+                return self.timer_cycles
+        return self.divider_cycles
 
     def emulate(self,  ticks):
         self.emulate_divider(ticks)
         self.emulate_timer(ticks)
 
     def emulate_divider(self,  ticks):
-        self.dividerCycles -= ticks
-        if self.dividerCycles > 0:
+        self.divider_cycles -= ticks
+        if self.divider_cycles > 0:
             return
-        count = int(ceil(-1.0*self.dividerCycles / constants.DIV_CLOCK))
+        count = int(ceil(-1.0*self.divider_cycles / constants.DIV_CLOCK))
         self.div = (self.div + count) & 0xFF
-        self.dividerCycles += constants.DIV_CLOCK*count
+        self.divider_cycles += constants.DIV_CLOCK*count
             
     def emulate_timer(self,  ticks):
         if (self.tac & 0x04) == 0:
             return
-        self.timerCycles -= ticks
-        if self.timerCycles > 0:
+        self.timer_cycles -= ticks
+        if self.timer_cycles > 0:
             return
-        count = int(ceil(-1.0*self.timerCycles / self.timerClock))
-        self.tima_tero_pass_check(count)
+        count = int(ceil(-1.0*self.timer_cycles / self.timer_clock))
+        self.tima_zero_pass_check(count)
         self.tima = (self.tima + count) & 0xFF
-        self.timerCycles += self.timerClock * count
+        self.timer_cycles += self.timer_clock * count
 
-    def tima_tero_pass_check(self, count):
+    def tima_zero_pass_check(self, count):
         if (self.tima < 0) and (self.tima + count >= 0):
             self.tima = self.tma - count
-            print "raising"
             self.interrupt.raise_interrupt(constants.TIMER)
             print self.interrupt.timer.is_pending(), self.interrupt.is_pending(constants.TIMER)
         

@@ -25,27 +25,27 @@ class GameBoy(object):
 
     def create_drivers(self):
         self.clock = Clock()
-        self.joypadDriver = JoypadDriver()
-        self.videoDriver  = VideoDriver()
-        self.soundDriver  = SoundDriver()
+        self.joypad_driver = JoypadDriver()
+        self.video_driver  = VideoDriver()
+        self.sound_driver  = SoundDriver()
         
     def create_gamboy_elements(self): 
         self.ram    = RAM()
-        self.cartridgeManager = CartridgeManager(self.clock)
+        self.cartridge_manager = CartridgeManager(self.clock)
         self.interrupt = Interrupt()
         self.cpu    = CPU(self.interrupt, self)
         self.serial = Serial(self.interrupt)
         self.timer  = Timer(self.interrupt)
-        self.joypad = Joypad(self.joypadDriver, self.interrupt)
-        self.video  = Video(self.videoDriver, self.interrupt, self)
-        self.sound  = Sound(self.soundDriver)  
+        self.joypad = Joypad(self.joypad_driver, self.interrupt)
+        self.video  = Video(self.video_driver, self.interrupt, self)
+        self.sound  = Sound(self.sound_driver)  
 
     def get_cartridge_manager(self):
-        return self.cartridgeManager
+        return self.cartridge_manager
     
     def load_cartridge(self, cartridge):
-        self.cartridgeManager.load(cartridge)
-        self.cpu.set_rom(self.cartridgeManager.get_rom())
+        self.cartridge_manager.load(cartridge)
+        self.cpu.set_rom(self.cartridge_manager.get_rom())
         
     def load_cartridge_file(self, path):
         self.load_cartridge(Cartridge(path))
@@ -75,7 +75,7 @@ class GameBoy(object):
         self.joypad.reset()
         self.video.reset()
         self.sound.reset()
-        self.cpu.set_rom(self.cartridgeManager.get_rom())
+        self.cpu.set_rom(self.cartridge_manager.get_rom())
         self.drawLogo()
 
     def get_cycles(self):
@@ -108,11 +108,11 @@ class GameBoy(object):
 
     def get_receiver(self, address):
         if 0x0000 <= address <= 0x7FFF:
-            return self.cartridgeManager.get_memory_bank()
+            return self.cartridge_manager.get_memory_bank()
         elif 0x8000 <= address <= 0x9FFF:
             return self.video
         elif 0xA000 <= address <= 0xBFFF:
-            return self.cartridgeManager.get_memory_bank()
+            return self.cartridge_manager.get_memory_bank()
         elif 0xC000 <= address <= 0xFDFF:
             return self.ram
         elif 0xFE00 <= address <= 0xFEFF:

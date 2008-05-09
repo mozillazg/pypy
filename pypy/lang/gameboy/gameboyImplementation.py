@@ -25,9 +25,9 @@ class GameBoyImplementation(GameBoy):
         
     def create_drivers(self):
         self.clock = Clock()
-        self.joypadDriver = JoypadDriverImplementation(self.win)
-        self.videoDriver  = VideoDriverImplementation(self.win)
-        self.soundDriver  = SoundDriverImplementation(self.win)
+        self.joypad_driver = JoypadDriverImplementation(self.win)
+        self.video_driver  = VideoDriverImplementation(self.win)
+        self.sound_driver  = SoundDriverImplementation(self.win)
         
 
 # JOYPAD DRIVER ----------------------------------------------------------------
@@ -110,7 +110,7 @@ class VideoDriverImplementation(VideoDriver):
 
     def create_image_buffer(self):
         self.buffers = image.get_buffer_manager()
-        self.imageBuffer = self.buffers.get_color_buffer()
+        self.image_buffer = self.buffers.get_color_buffer()
         
     def on_resize(self, width, height):
         pass
@@ -119,7 +119,7 @@ class VideoDriverImplementation(VideoDriver):
         self.win.setSize(self.width, self.height)
         
     def update_display(self):
-        self.imageBuffer.blit(0, 0)
+        self.image_buffer.blit(0, 0)
         self.win.flip()
         
         

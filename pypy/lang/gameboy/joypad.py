@@ -8,14 +8,14 @@ class Joypad(object):
     Joypad Input
     """
 
-    def __init__(self, joypadDriver, interrupt):
-        self.driver = joypadDriver
+    def __init__(self, joypad_driver, interrupt):
+        self.driver = joypad_driver
         self.interrupt = interrupt
         self.reset()
 
     def reset(self):
         self.joyp = 0xF
-        self.buttonCode = 0xF
+        self.button_code = 0xF
         self.cycles = constants.JOYPAD_CLOCK
 
     def get_cycles(self):
@@ -35,18 +35,18 @@ class Joypad(object):
 
     def read(self, address):
         if address == constants.JOYP:
-            return (self.joyp << 4) + self.buttonCode
+            return (self.joyp << 4) + self.button_code
         return 0xFF
 
     def update(self):
-        oldButtons = self.buttonCode
+        oldButtons = self.button_code
         if self.joyp == 0x1:
-            self.buttonCode = self.driver.get_button_code()
+            self.button_code = self.driver.get_button_code()
         elif self.joyp == 0x2:
-            self.buttonCode = self.driver.get_direction_code()
+            self.button_code = self.driver.get_direction_code()
         else:
-            self.buttonCode  = 0xF
-        if oldButtons != self.buttonCode:
+            self.button_code  = 0xF
+        if oldButtons != self.button_code:
             self.interrupt.raise_interrupt(constants.JOYPAD)
 
 
@@ -75,10 +75,10 @@ class JoypadDriver(object):
         self.create_button_groups()
         
     def add_opposite_buttons(self):
-        self.up.oppositeButton = self.down
-        self.down.oppositeButton = self.up
-        self.left.oppositeButton = self.right
-        self.right.oppositeButton = self.left
+        self.up.opposite_button = self.down
+        self.down.opposite_button = self.up
+        self.left.opposite_button = self.right
+        self.right.opposite_button = self.left
         
     def create_button_groups(self):
         self.directions = [self.up, self.right, self.down, self.left]
@@ -165,14 +165,14 @@ class JoypadDriver(object):
     
 class Button(object):
     
-    def __init__(self, codeValue, oppositeButton=None):
-        self.codeValue = codeValue
-        self.oppositeButton = oppositeButton
+    def __init__(self, code_value, opposite_button=None):
+        self.code_value = code_value
+        self.opposite_button = opposite_button
         self.pressed = False
         
     def get_code(self):
         if self.pressed:
-            return self.codeValue
+            return self.code_value
         else:
             return 0
         
@@ -186,8 +186,8 @@ class Button(object):
         self.pressed = False
         
     def press(self):
-        if self.oppositeButton is not None:
-            self.oppositeButton.release()
+        if self.opposite_button is not None:
+            self.opposite_button.release()
         self.pressed = True
         
     def is_pressed(self):
