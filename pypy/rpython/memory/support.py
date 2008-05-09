@@ -111,6 +111,14 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 cur = next
             free_non_gc_object(self)
 
+        def length(self):
+            chunk = self.chunk
+            count = self.used_in_last_chunk
+            while chunk:
+                chunk = chunk.next
+                count += chunk_size
+            return count
+
         def foreach(self, callback, arg):
             """Invoke 'callback(address, arg)' for all addresses in the stack.
             Typically, 'callback' is a bound method and 'arg' can be None.
@@ -126,7 +134,7 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
         foreach._annspecialcase_ = 'specialize:arg(1)'
 
         def stack2dict(self):
-            result = AddressDict()
+            result = AddressDict(self.length())
             self.foreach(_add_in_dict, result)
             return result
 
@@ -205,26 +213,66 @@ def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
 
 # ____________________________________________________________
 
-def AddressDict():
+def AddressDict(length_estimate=0):
     if we_are_translated():
         from pypy.rpython.memory import lldict
-        return lldict.newdict()
+        return lldict.newdict(length_estimate)
     else:
         return BasicAddressDict()
 
 class BasicAddressDict(object):
+
     def __init__(self):
         self.data = {}
+
     def _key(self, addr):
         return addr._fixup().ptr._obj
+
     def delete(self):
         pass
+
+    def length(self):
+        return len(self.data)
+
     def contains(self, keyaddr):
         return self._key(keyaddr) in self.data
+
     def get(self, keyaddr, default=llmemory.NULL):
         return self.data.get(self._key(keyaddr), default)
+
     def setitem(self, keyaddr, valueaddr):
         assert keyaddr
         self.data[self._key(keyaddr)] = valueaddr
+
     def add(self, keyaddr):
         self.setitem(keyaddr, llmemory.NULL)
+
+    def foreach(self, callback, arg):
+        """Invoke 'callback(key, value, arg)' for all items in the dict.
+        Typically, 'callback' is a bound method and 'arg' can be None."""
+        for key, value in self.data.iteritems():
+            callback(key, value, arg)
+
+
+def copy_and_update(dict, surviving, updated_address):
+    """Make a copy of 'dict' in which the keys are updated as follows:
+       * if surviving(key) returns False, the item is removed
+       * otherwise, updated_address(key) is inserted in the copy.
+    """
+    newdict = AddressDict
+    if not we_are_translated():
+        # when not translated, return a dict of the same kind as 'dict'
+        if not isinstance(dict, BasicAddressDict):
+            from pypy.rpython.memory.lldict import newdict
+    result = newdict(dict.length())
+    dict.foreach(_get_updater(surviving, updated_address), result)
+    return result
+copy_and_update._annspecialcase_ = 'specialize:arg(1,2)'
+
+def _get_updater(surviving, updated_address):
+    def callback(key, value, arg):
+        if surviving(key):
+            newkey = updated_address(key)
+            arg.setitem(newkey, value)
+    return callback
+_get_updater._annspecialcase_ = 'specialize:memo'

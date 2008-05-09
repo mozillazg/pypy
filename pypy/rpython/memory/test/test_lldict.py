@@ -1,6 +1,6 @@
 import random, sys
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.memory import lldict
+from pypy.rpython.memory import support, lldict
 
 
 class TestLLAddressDict:
@@ -20,7 +20,44 @@ class TestLLAddressDict:
         assert d.get(intaddr(42)) == llmemory.NULL
         assert d.get(intaddr(43)) == intaddr(44)
         assert d.get(intaddr(44)) == llmemory.NULL
+        assert d.length() == 2
         d.delete()
+        assert lldict.alloc_count == 0
+
+    def test_foreach(self):
+        d = lldict.newdict()
+        for i in range(30):
+            d.setitem(intaddr(0x100 * i), intaddr(i))
+        result = []
+        d.foreach(lambda key, value, arg: result.append((key, value, arg)),
+                  "hello world")
+        assert len(result) == 30
+        seen = {}
+        for key, value, arg in result:
+            assert key.intval == 0x100 * value.intval
+            assert arg == "hello world"
+            seen[key.intval] = True
+        assert len(seen) == 30
+        d.delete()
+        assert lldict.alloc_count == 0
+
+    def test_copy_and_update(self):
+        d = lldict.newdict()
+        d.setitem(intaddr(41), intaddr(44))
+        d.setitem(intaddr(42), intaddr(45))
+        d.setitem(intaddr(43), intaddr(46))
+        def surviving(key):
+            return key.intval != 41
+        def updated_address(key):
+            return intaddr({42: 42, 43: 99}[key.intval])
+        d2 = support.copy_and_update(d, surviving, updated_address)
+        d.delete()
+        assert d2.length() == 2
+        assert d2.get(intaddr(41)) == llmemory.NULL
+        assert d2.get(intaddr(42)) == intaddr(45)
+        assert d2.get(intaddr(43)) == llmemory.NULL
+        assert d2.get(intaddr(99)) == intaddr(46)
+        d2.delete()
         assert lldict.alloc_count == 0
 
     def test_random(self):

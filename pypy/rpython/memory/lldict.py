@@ -13,8 +13,8 @@ def count_alloc(delta):
     alloc_count += delta
 
 
-def newdict():
-    return rdict.ll_newdict(DICT)
+def newdict(length_estimate=0):
+    return rdict.ll_newdict_size(DICT, length_estimate)
 
 def dict_allocate():
     if not we_are_translated(): count_alloc(+1)
@@ -57,6 +57,15 @@ def dict_get(d, key, default=llmemory.NULL):
 def dict_add(d, key):
     rdict.ll_dict_setitem(d, key, llmemory.NULL)
 
+def dict_foreach(d, callback, arg):
+    entries = d.entries
+    i = len(entries) - 1
+    while i >= 0:
+        if dict_entry_valid(entries, i):
+            callback(entries[i].key, entries[i].value, arg)
+        i -= 1
+dict_foreach._annspecialcase_ = 'specialize:arg(1)'
+
 ENTRY = lltype.Struct('ENTRY', ('key', llmemory.Address),
                                ('value', llmemory.Address))
 ENTRIES = lltype.Array(ENTRY,
@@ -73,10 +82,12 @@ DICT = lltype.Struct('DICT', ('entries', lltype.Ptr(ENTRIES)),
                      adtmeths = {
                          'allocate': dict_allocate,
                          'delete': dict_delete,
+                         'length': rdict.ll_dict_len,
                          'contains': rdict.ll_contains,
                          'setitem': rdict.ll_dict_setitem,
                          'get': dict_get,
                          'add': dict_add,
+                         'foreach': dict_foreach,
                          'keyhash': dict_keyhash,
                          'keyeq': None,
                      })
