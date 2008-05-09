@@ -226,6 +226,7 @@ class BasicAddressDict(object):
         self.data = {}
 
     def _key(self, addr):
+        "NOT_RPYTHON: prebuilt AddressDicts are not supported"
         return addr._fixup().ptr._obj
 
     def _wrapkey(self, obj):
