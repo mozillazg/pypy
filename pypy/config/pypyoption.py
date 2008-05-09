@@ -34,7 +34,7 @@ if sys.platform == "win32":
     del working_modules["crypt"]
     del working_modules["termios"]
     del working_modules["_rawffi"]
-
+    del working_modules["_minimal_curses"]
 
 module_dependencies = {}
 module_suggests = {    # the reason you want _rawffi is for ctypes, which
