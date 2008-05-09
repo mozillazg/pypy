@@ -1,2 +1,2 @@
-rpython/test/test_rbuiltin.py
+rpython/memory/test/test_tranformed_gc.py -k test_llinterp_tuple
 
