@@ -63,7 +63,7 @@ def test_reset():
 
 def test_double_register_constructor():
     cpu = get_cpu()
-    register = DoubleRegister(cpu)
+    register = DoubleRegister(cpu, Register(cpu), Register(cpu))
     assert register.get() == 0
     assert register.get_hi() == 0
     assert register.get_lo() == 0
@@ -79,7 +79,8 @@ def test_double_register_constructor():
     assert register.get_lo() == reg2.get()
     
 def test_double_register():
-    register = DoubleRegister(get_cpu())
+    cpu = get_cpu()
+    register = DoubleRegister(cpu, Register(cpu), Register(cpu))
     value = 0x1234
     oldCycles = register.cpu.cycles
     register.set(value)
@@ -87,7 +88,8 @@ def test_double_register():
     assert register.get() == value
     
 def test_double_register_bounds():
-    register = DoubleRegister(get_cpu())
+    cpu = get_cpu()
+    register = DoubleRegister(cpu, Register(cpu), Register(cpu))
     value = 0xFFFF1234
     register.set(value)
     assert register.get() == 0x1234
@@ -95,7 +97,8 @@ def test_double_register_bounds():
     assert register.get() == 0
     
 def test_double_register_hilo():
-    register = DoubleRegister(get_cpu())
+    cpu = get_cpu()
+    register = DoubleRegister(cpu, Register(cpu), Register(cpu))
     value = 0x1234
     valueHi = 0x12
     valueLo = 0x34
@@ -123,7 +126,8 @@ def test_double_register_hilo():
     
 def test_double_register_methods():
     value = 0x1234
-    register = DoubleRegister(get_cpu())
+    cpu = get_cpu()
+    register = DoubleRegister(cpu, Register(cpu), Register(cpu))
     register.set(value)
     
     oldCycles = register.cpu.cycles
@@ -151,8 +155,8 @@ def test_double_register_methods():
        
 def test_double_register_reset():
     value = 0x1234;
-    
-    register = DoubleRegister(get_cpu(), reset_value=value)
+    cpu = get_cpu()
+    register = DoubleRegister(cpu, Register(cpu), Register(cpu), reset_value=value)
     register.set(value+1)
     assert register.get() == value+1;
     register.reset()

@@ -166,7 +166,7 @@ class JoypadDriver(object):
 class Button(object):
     
     def __init__(self, code_value, opposite_button=None):
-        self.code_value = code_value
+        self.code_value = int(code_value)
         self.opposite_button = opposite_button
         self.pressed = False
         

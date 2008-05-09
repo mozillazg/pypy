@@ -529,7 +529,7 @@ class Sound(object):
                 self.frequency_table[period] = skip
 
     def reset(self):
-        self.cycles = constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK
+        self.cycles = int(constants.GAMEBOY_CLOCK / constants.SOUND_CLOCK)
         self.frames = 0
         self.channel1.reset()
         self.channel2.reset()

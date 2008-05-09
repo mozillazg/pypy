@@ -9,6 +9,10 @@ from pypy.lang.gameboy import constants
 class RAM(object):
 
     def __init__(self):
+        # Work RAM
+        self.w_ram =  [0x00]*8192
+        # High RAM
+        self.h_ram =  [0x00]*128
         self.reset()
 
     def reset(self):

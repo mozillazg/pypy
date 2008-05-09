@@ -1,9 +1,12 @@
-from pypy.lang.gameboy import constants
 
+from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.ram import *
+from pypy.lang.gameboy.interrupt import *
 
 class Register(object):
     
     def __init__(self, cpu, value=0):
+        assert isinstance(cpu, CPU)
         self.reset_value = self.value = value
         self.cpu = cpu
         if value != 0:
@@ -30,16 +33,11 @@ class Register(object):
 
 class DoubleRegister(object):
     
-    def __init__(self, cpu, hi=None, lo=None, reset_value=0):
+    def __init__(self, cpu, hi, lo, reset_value=0):
+        assert isinstance(cpu, CPU)
         self.cpu = cpu
-        if hi == None :
-            self.hi = Register(self.cpu)
-        else:
-            self.hi = hi
-        if lo == None:
-            self.lo = Register(self.cpu)
-        else:
-            self.lo = lo
+        self.hi = hi
+        self.lo = lo
         self.reset_value = reset_value
         
     def set(self, hi=0, lo=None, use_cycles=True):
@@ -90,6 +88,7 @@ class DoubleRegister(object):
 class ImmediatePseudoRegister(object):
     
         def __init__(self, cpu, hl):
+            assert isinstance(cpu, CPU)
             self.cpu = cpu
             self.hl = hl
             
@@ -108,6 +107,7 @@ class ImmediatePseudoRegister(object):
 class FlagRegister(object):
     
     def __init__(self, cpu):
+        assert isinstance(cpu, CPU)
         self.cpu = cpu
         self.reset()
          
@@ -174,6 +174,7 @@ class CPU(object):
     Central Unit ProcessOR (Sharp LR35902 CPU)
     """
     def __init__(self, interrupt, memory):
+        assert isinstance(interrupt, Interrupt)
         self.interrupt = interrupt
         self.memory = memory
         self.ime = False
@@ -197,8 +198,8 @@ class CPU(object):
         self.hl = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
         
         self.hli = ImmediatePseudoRegister(self, self.hl)
-        self.pc  = DoubleRegister(self, reset_value=constants.RESET_PC)
-        self.sp  = DoubleRegister(self, reset_value=constants.RESET_SP)
+        self.pc  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_PC)
+        self.sp  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_SP)
         
         self.a  = Register(self, constants.RESET_A)
         self.f  = FlagRegister(self)
@@ -344,7 +345,7 @@ class CPU(object):
     def read(self, hi, lo=None):
         # memory Access, 1 cycle
         address = hi
-        if lo != None:
+        if lo is not None:
             address = (hi << 8) + lo
         self.cycles -= 1
         return self.memory.read(address)
@@ -391,7 +392,7 @@ class CPU(object):
     
     def pop_double_register(self, getter, register=None):
         # 3 cycles
-        if register == None:
+        if register is None:
             register = getter
             getter = CPU.pop
         b = getter(self) # 1 cycle
@@ -887,7 +888,7 @@ def create_group_op_codes(table):
     return opCodes
 
 def group_lambda(function, registerGetter, value=None):
-    if value == None:
+    if value is None:
         return lambda s: function(s, registerGetter(s).get, registerGetter(s).set)
     else:
         return  lambda s: function(s, registerGetter(s).get, registerGetter(s).set, value)
