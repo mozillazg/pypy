@@ -42,9 +42,9 @@ class TestLLAddressDict:
         assert lldict.alloc_count == 0
 
     def test_copy_and_update(self):
-        d = lldict.newdict()
+        d = lldict.newdict(3)
         d.setitem(intaddr(41), intaddr(44))
-        d.setitem(intaddr(42), intaddr(45))
+        d.insertclean(intaddr(42), intaddr(45))
         d.setitem(intaddr(43), intaddr(46))
         def surviving(key):
             return key.intval != 41
@@ -58,6 +58,15 @@ class TestLLAddressDict:
         assert d2.get(intaddr(43)) == llmemory.NULL
         assert d2.get(intaddr(99)) == intaddr(46)
         d2.delete()
+        assert lldict.alloc_count == 0
+
+    def test_clear(self):
+        d = lldict.newdict()
+        d.setitem(intaddr(41), intaddr(42))
+        d.clear()
+        assert d.length() == 0
+        assert not d.contains(intaddr(41))
+        d.delete()
         assert lldict.alloc_count == 0
 
     def test_random(self):

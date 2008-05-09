@@ -238,6 +238,32 @@ class DirectGCTest(object):
         self.gc.collect()
         verify()
 
+    def test_id(self):
+        ids = {}
+        def allocate_bunch(count=50):
+            base = len(self.stackroots)
+            for i in range(count):
+                p = self.malloc(S)
+                self.stackroots.append(p)
+            for i in range(count):
+                j = base + (i*1291) % count
+                pid = self.gc.id(self.stackroots[j])
+                assert isinstance(pid, int)
+                ids[j] = pid
+        def verify():
+            for j, expected in ids.items():
+                assert self.gc.id(self.stackroots[j]) == expected
+        allocate_bunch(5)
+        verify()
+        allocate_bunch(75)
+        verify()
+        allocate_bunch(5)
+        verify()
+        self.gc.collect()
+        verify()
+        self.gc.collect()
+        verify()
+
 
 class TestSemiSpaceGC(DirectGCTest):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass

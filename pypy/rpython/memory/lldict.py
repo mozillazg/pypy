@@ -57,6 +57,9 @@ def dict_get(d, key, default=llmemory.NULL):
 def dict_add(d, key):
     rdict.ll_dict_setitem(d, key, llmemory.NULL)
 
+def dict_insertclean(d, key, value):
+    rdict.ll_dict_insertclean(d, key, value, _hash(key))
+
 def dict_foreach(d, callback, arg):
     entries = d.entries
     i = len(entries) - 1
@@ -87,6 +90,8 @@ DICT = lltype.Struct('DICT', ('entries', lltype.Ptr(ENTRIES)),
                          'setitem': rdict.ll_dict_setitem,
                          'get': dict_get,
                          'add': dict_add,
+                         'insertclean': dict_insertclean,
+                         'clear': rdict.ll_clear,
                          'foreach': dict_foreach,
                          'keyhash': dict_keyhash,
                          'keyeq': None,
