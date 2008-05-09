@@ -601,7 +601,7 @@ def ll_newdict_size(DICT, length_estimate):
     d = DICT.allocate()
     d.entries = DICT.entries.TO.allocate(n)
     d.num_items = 0
-    d.num_pristine_entries = DICT_INITSIZE
+    d.num_pristine_entries = n
     return d
 ll_newdict_size.oopspec = 'newdict()'
 
