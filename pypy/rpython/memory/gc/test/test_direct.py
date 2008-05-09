@@ -17,6 +17,8 @@ S.become(lltype.GcStruct('S',
                          ('prev', lltype.Ptr(S)),
                          ('next', lltype.Ptr(S))))
 RAW = lltype.Struct('RAW', ('p', lltype.Ptr(S)), ('q', lltype.Ptr(S)))
+VAR = lltype.GcArray(lltype.Ptr(S))
+VARNODE = lltype.GcStruct('VARNODE', ('a', lltype.Ptr(VAR)))
 
 
 class DirectRootWalker(object):
@@ -82,8 +84,16 @@ class DirectGCTest(object):
             self.gc.write_barrier(oldaddr, newaddr, addr_struct)
         setattr(p, fieldname, newvalue)
 
-    def malloc(self, TYPE):
-        addr = self.gc.malloc(self.get_type_id(TYPE))
+    def writearray(self, p, index, newvalue):
+        if self.gc.needs_write_barrier:
+            oldaddr = llmemory.cast_ptr_to_adr(p[index])
+            newaddr = llmemory.cast_ptr_to_adr(newvalue)
+            addr_struct = llmemory.cast_ptr_to_adr(p)
+            self.gc.write_barrier(oldaddr, newaddr, addr_struct)
+        p[index] = newvalue
+
+    def malloc(self, TYPE, n=None):
+        addr = self.gc.malloc(self.get_type_id(TYPE), n)
         return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
 
     def test_simple(self):
@@ -174,6 +184,60 @@ class DirectGCTest(object):
             a1, a2 = alloc2(i)
             growloop(raw.p, a1, a2)
 
+    def test_varsized_from_stack(self):
+        expected = {}
+        def verify():
+            for (index, index2), value in expected.items():
+                assert self.stackroots[index][index2].x == value
+        x = 0
+        for i in range(40):
+            self.stackroots.append(self.malloc(VAR, i))
+            for j in range(5):
+                p = self.malloc(S)
+                p.x = x
+                index = x % len(self.stackroots)
+                if index > 0:
+                    index2 = (x / len(self.stackroots)) % index
+                    a = self.stackroots[index]
+                    assert len(a) == index
+                    self.writearray(a, index2, p)
+                    expected[index, index2] = x
+                x += 1291
+        verify()
+        self.gc.collect()
+        verify()
+        self.gc.collect()
+        verify()
+
+    def test_varsized_from_prebuilt_gc(self):
+        expected = {}
+        def verify():
+            for (index, index2), value in expected.items():
+                assert prebuilt[index].a[index2].x == value
+        x = 0
+        prebuilt = [lltype.malloc(VARNODE, immortal=True, zero=True)
+                    for i in range(40)]
+        for node in prebuilt:
+            self.consider_constant(node)
+        for i in range(len(prebuilt)):
+            self.write(prebuilt[i], 'a', self.malloc(VAR, i))
+            for j in range(20):
+                p = self.malloc(S)
+                p.x = x
+                index = x % (i+1)
+                if index > 0:
+                    index2 = (x / (i+1)) % index
+                    a = prebuilt[index].a
+                    assert len(a) == index
+                    self.writearray(a, index2, p)
+                    expected[index, index2] = x
+                x += 1291
+        verify()
+        self.gc.collect()
+        verify()
+        self.gc.collect()
+        verify()
+
 
 class TestSemiSpaceGC(DirectGCTest):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
@@ -183,3 +247,11 @@ class TestGenerationGC(TestSemiSpaceGC):
 
 class TestHybridGC(TestGenerationGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
+
+    GC_PARAMS = {'space_size': 192,
+                 'min_nursery_size': 48,
+                 'nursery_size': 48,
+                 'large_object': 12,
+                 'large_object_gcptrs': 12,
+                 'generation3_collect_threshold': 5,
+                 }
