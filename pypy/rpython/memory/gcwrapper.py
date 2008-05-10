@@ -10,6 +10,7 @@ class GCManagedHeap(object):
     def __init__(self, llinterp, flowgraphs, gc_class, GC_PARAMS={}):
         self.gc = gc_class(chunk_size = 10, **GC_PARAMS)
         self.gc.set_root_walker(LLInterpRootWalker(self))
+        self.gc.DEBUG = True
         self.llinterp = llinterp
         self.prepare_graphs(flowgraphs)
         self.gc.setup()
@@ -24,8 +25,9 @@ class GCManagedHeap(object):
             TYPE = lltype.typeOf(obj)
             layoutbuilder.consider_constant(TYPE, obj, self.gc)
 
-        self.constantroots = list(layoutbuilder.addresses_of_static_ptrs)
+        self.constantroots = layoutbuilder.addresses_of_static_ptrs
         self.constantrootsnongc = layoutbuilder.addresses_of_static_ptrs_in_nongc
+        self._all_prebuilt_gc = layoutbuilder.all_prebuilt_gc
 
     # ____________________________________________________________
     #
@@ -114,9 +116,6 @@ class LLInterpRootWalker:
     def __init__(self, gcheap):
         self.gcheap = gcheap
 
-    def append_static_root(self, pointer):
-        self.gcheap.constantroots.append(pointer)
-
     def walk_roots(self, collect_stack_root,
                    collect_static_in_prebuilt_nongc,
                    collect_static_in_prebuilt_gc):
@@ -134,6 +133,10 @@ class LLInterpRootWalker:
             for addrofaddr in gcheap.llinterp.find_roots():
                 if addrofaddr.address[0]:
                     collect_stack_root(gc, addrofaddr)
+
+    def _walk_prebuilt_gc(self, collect):    # debugging only!  not RPython
+        for obj in self.gcheap._all_prebuilt_gc:
+            collect(llmemory.cast_ptr_to_adr(obj._as_ptr()))
 
 
 class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):

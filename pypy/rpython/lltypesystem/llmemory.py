@@ -582,8 +582,10 @@ def cast_adr_to_ptr(adr, EXPECTED_TYPE):
 def cast_adr_to_int(adr):
     return adr._cast_to_int()
 
+_NONGCREF = lltype.Ptr(lltype.OpaqueType('NONGCREF'))
 def cast_int_to_adr(int):
-    raise NotImplementedError("cast_int_to_adr")
+    ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
+    return cast_ptr_to_adr(ptr)
 
 # ____________________________________________________________
 # Weakrefs.

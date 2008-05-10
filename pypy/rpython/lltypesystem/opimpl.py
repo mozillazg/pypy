@@ -383,7 +383,8 @@ def op_getarrayitem(p, index):
 
 def op_debug_print(*args):
     for arg in args:
-        print arg
+        print arg,
+    print
 
 # ____________________________________________________________
 
