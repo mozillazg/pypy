@@ -589,4 +589,13 @@ def test_raw_memclear_on_empty_array():
     a = lltype.malloc(A, flavor='raw')
     src = cast_ptr_to_adr(a) + itemoffsetof(A, 0)
     raw_memclear(src, sizeof(lltype.Signed) * 0)
-    
+
+def test_addr_keeps_object_alive():
+    A = lltype.Array(Address)
+    ptr = lltype.malloc(A, 10, immortal=True)
+    adr = cast_ptr_to_adr(ptr) + ArrayItemsOffset(A)
+    del ptr
+    import gc; gc.collect(); gc.collect()
+    # the following line crashes if the array is dead
+    ptr1 = cast_adr_to_ptr(adr, lltype.Ptr(lltype.FixedSizeArray(Address, 1)))
+    ptr1[0] = NULL
