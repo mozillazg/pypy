@@ -13,6 +13,20 @@ class SomeStringBuilder(SomeObject):
         assert isinstance(s_str, (SomeString, SomeChar))
         return s_None
 
+    def method_append_slice(self, s_str, s_start, s_end):
+        assert isinstance(s_str, SomeString)
+        assert isinstance(s_start, SomeInteger)
+        assert isinstance(s_end, SomeInteger)
+        assert s_start.nonneg
+        assert s_end.nonneg
+        return s_None
+
+    def method_append_multiple_char(self, s_char, s_times):
+        assert isinstance(s_char, SomeChar)
+        assert isinstance(s_times, SomeInteger)
+        assert s_times.nonneg
+        return s_None
+
     def method_build(self):
         return SomeString()
     
@@ -25,6 +39,20 @@ class SomeUnicodeBuilder(SomeObject):
     
     def method_append(self, s_str):
         assert isinstance(s_str, (SomeUnicodeCodePoint, SomeUnicodeString))
+        return s_None
+
+    def method_append_slice(self, s_str, s_start, s_end):
+        assert isinstance(s_str, SomeUnicodeString)
+        assert isinstance(s_start, SomeInteger)
+        assert isinstance(s_end, SomeInteger)
+        assert s_start.nonneg
+        assert s_end.nonneg
+        return s_None
+
+    def method_append_multiple_char(self, s_char, s_times):
+        assert isinstance(s_char, SomeUnicodeCodePoint)
+        assert isinstance(s_times, SomeInteger)
+        assert s_times.nonneg
         return s_None
 
     def method_build(self):
@@ -47,6 +75,14 @@ class AbstractStringBuilderRepr(Repr):
         if isinstance(hop.args_s[1], (SomeChar, SomeUnicodeCodePoint)):
             return hop.gendirectcall(self.ll_append_char, *vlist)
         return hop.gendirectcall(self.ll_append, *vlist)
+
+    def rtype_method_append_slice(self, hop):
+        vlist = hop.inputargs(*hop.args_r)
+        return hop.gendirectcall(self.ll_append_slice, *vlist)
+
+    def rtype_method_append_multiple_char(self, hop):
+        vlist = hop.inputargs(*hop.args_r)
+        return hop.gendirectcall(self.ll_append_multiple_char, *vlist)
 
     def rtype_method_build(self, hop):
         vlist = hop.inputargs(*hop.args_r)
