@@ -1512,6 +1512,11 @@ class _subarray(_parentable):     # only for direct_fieldptr()
     def __init__(self, TYPE, parent, baseoffset_or_fieldname):
         _parentable.__init__(self, TYPE)
         self._setparentstructure(parent, baseoffset_or_fieldname)
+        # Keep the parent array alive, we share the same allocation.
+        # Don't do it if we are inside a GC object, though -- it's someone
+        # else's job to keep the GC object alive
+        if typeOf(top_container(parent))._gckind == 'raw':
+            self._keepparent = parent
 
     def __repr__(self):
         parent = self._wrparent()
