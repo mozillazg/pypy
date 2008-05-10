@@ -1,5 +1,6 @@
 
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.interrupt import *
 
 class Joypad(object):
     """
@@ -9,6 +10,8 @@ class Joypad(object):
     """
 
     def __init__(self, joypad_driver, interrupt):
+        assert isinstance(joypad_driver, JoypadDriver)
+        assert isinstance(interrupt, Interrupt )
         self.driver = joypad_driver
         self.interrupt = interrupt
         self.reset()
