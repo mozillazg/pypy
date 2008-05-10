@@ -56,6 +56,9 @@ def _new_copy_contents_fun(TP, CHAR_TP, name):
                 llmemory.sizeof(CHAR_TP) * item)
     
     def copy_string_contents(s1, s2, s1start, s2start, lgt):
+        assert s1start >= 0
+        assert s2start >= 0
+        assert lgt >= 0
         src = llmemory.cast_ptr_to_adr(s1) + _str_ofs(s1start)
         dest = llmemory.cast_ptr_to_adr(s2) + _str_ofs(s2start)
         llmemory.raw_memcopy(src, dest, llmemory.sizeof(CHAR_TP) * lgt)
@@ -629,7 +632,10 @@ class LLHelpers(AbstractLLHelpers):
     def ll_stringslice_startonly(s1, start):
         len1 = len(s1.chars)
         newstr = s1.malloc(len1 - start)
-        s1.copy_contents(s1, newstr, start, 0, len1 - start)
+        lgt = len1 - start
+        assert lgt >= 0
+        assert start >= 0
+        s1.copy_contents(s1, newstr, start, 0, lgt)
         return newstr
 
     def ll_stringslice(s1, slice):
@@ -640,7 +646,10 @@ class LLHelpers(AbstractLLHelpers):
                 return s1
             stop = len(s1.chars)
         newstr = s1.malloc(stop - start)
-        s1.copy_contents(s1, newstr, start, 0, stop - start)
+        assert start >= 0
+        lgt = stop - start
+        assert lgt >= 0
+        s1.copy_contents(s1, newstr, start, 0, lgt)
         return newstr
 
     def ll_stringslice_minusone(s1):
