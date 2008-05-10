@@ -8,9 +8,11 @@ class BaseTestStringBuilder(BaseRtypingTest):
             s = StringBuilder()
             s.append("a")
             s.append("abc")
+            s.append_slice("abc", 1, 2)
+            s.append_multiple_char('d', 4)
             return s.build()
         res = self.ll_to_string(self.interpret(func, []))
-        assert res == "aabc"
+        assert res == "aabcbdddd"
 
     def test_overallocation(self):
         def func():
@@ -28,9 +30,11 @@ class BaseTestStringBuilder(BaseRtypingTest):
             s.append(u'a')
             s.append(u'abc')
             s.append(u'abcdef')
+            s.append_slice(u'abc', 1, 2)
+            s.append_multiple_char(u'u', 4)
             return s.build()
         res = self.ll_to_unicode(self.interpret(func, []))
-        assert res == 'aabcabcdef'
+        assert res == 'aabcabcdefbuuuu'
         assert isinstance(res, unicode)
 
 

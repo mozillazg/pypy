@@ -16,6 +16,17 @@ class BaseBuilderRepr(AbstractStringBuilderRepr):
         builder.ll_append(string)
 
     @staticmethod
+    def ll_append_slice(builder, string, start, end):
+        # XXX not sure how to optimize it
+        for i in range(start, end):
+            builder.ll_append_char(string.ll_stritem_nonneg(i))
+
+    @staticmethod
+    def ll_append_multiple_char(builder, char, times):
+        for i in range(times):
+            builder.ll_append_char(char)
+
+    @staticmethod
     def ll_build(builder):
         return builder.ll_build()
 
