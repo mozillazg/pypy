@@ -1,7 +1,7 @@
 
 from pypy.rpython.rbuilder import AbstractStringBuilderRepr
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rpython.lltypesystem.rstr import STR, UNICODE
 from pypy.rpython.annlowlevel import llstr
 from pypy.rlib import rgc
 
@@ -10,20 +10,22 @@ STRINGBUILDER = lltype.GcStruct('stringbuilder',
                               ('used', lltype.Signed),
                               ('buf', lltype.Ptr(STR)))
 
-class StringBuilderRepr(AbstractStringBuilderRepr):
-    lowleveltype = lltype.Ptr(STRINGBUILDER)
+UNICODEBUILDER = lltype.GcStruct('unicodebuilder',
+                                 ('allocated', lltype.Signed),
+                                 ('used', lltype.Signed),
+                                 ('buf', lltype.Ptr(UNICODE)))
 
-    @staticmethod
-    def ll_new(init_size):
-        ll_builder = lltype.malloc(STRINGBUILDER)
+class BaseStringBuilderRepr(AbstractStringBuilderRepr):
+    @classmethod
+    def ll_new(cls, init_size):
+        ll_builder = lltype.malloc(cls.lowleveltype.TO)
         ll_builder.allocated = init_size
         ll_builder.used = 0
-        ll_builder.buf = rgc.resizable_buffer_of_shape(STR, init_size)
+        ll_builder.buf = rgc.resizable_buffer_of_shape(cls.basetp, init_size)
         return ll_builder
 
     @staticmethod
-    def ll_append(ll_builder, str):
-        ll_str = llstr(str)
+    def ll_append(ll_builder, ll_str):
         used = ll_builder.used
         lgt = len(ll_str.chars)
         allocated = ll_builder.allocated
@@ -53,4 +55,13 @@ class StringBuilderRepr(AbstractStringBuilderRepr):
         final_size = ll_builder.used
         return rgc.finish_building_buffer(ll_builder.buf, final_size)
 
+class StringBuilderRepr(BaseStringBuilderRepr):
+    lowleveltype = lltype.Ptr(STRINGBUILDER)
+    basetp = STR
+
+class UnicodeBuilderRepr(BaseStringBuilderRepr):
+    lowleveltype = lltype.Ptr(UNICODEBUILDER)
+    basetp = UNICODE
+
+unicodebuilder_repr = UnicodeBuilderRepr()
 stringbuilder_repr = StringBuilderRepr()
