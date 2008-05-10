@@ -613,29 +613,29 @@ class BufferingInputStream(Stream):
             more[-1] = data[:cutoff]
         return "".join(more)
 
-    def _read_next_bunch(self):
-        self.lines = self.buf.split("\n")
-        self.buf = self.lines.pop()
-        self.lines.reverse()
-
-    # slightly more optimized version, because of indirection actually slower
+    # read_next_bunch is generally this, version below is slightly faster
     #def _read_next_bunch(self):
-    #    numlines = self.buf.count("\n")
-    #    self.lines = [None] * numlines
-    #    last = -1
-    #    num = numlines - 1
-    #    while True:
-    #        start = last + 1
-    #        assert start >= 0
-    #        next = self.buf.find("\n", start)
-    #        if next == -1:
-    #            if last != -1:
-    #                self.buf = self.buf[start:]
-    #            break
-    #        assert next >= 0
-    #        self.lines[num] = self.buf[start:next]
-    #        last = next
-    #        num -= 1
+    #    self.lines = self.buf.split("\n")
+    #    self.buf = self.lines.pop()
+    #    self.lines.reverse()
+
+    def _read_next_bunch(self):
+        numlines = self.buf.count("\n")
+        self.lines = [None] * numlines
+        last = -1
+        num = numlines - 1
+        while True:
+            start = last + 1
+            assert start >= 0
+            next = self.buf.find("\n", start)
+            if next == -1:
+                if last != -1:
+                    self.buf = self.buf[start:]
+                break
+            assert next >= 0
+            self.lines[num] = self.buf[start:next]
+            last = next
+            num -= 1
 
     def readline(self):
         if self.lines:
