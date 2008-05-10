@@ -7,15 +7,20 @@ from pypy.rpython.annlowlevel import llhelper
 
 INIT_SIZE = 100 # XXX tweak
 
-class StringBuilder(object):
+class AbstractStringBuilder(object):
     def __init__(self, init_size=INIT_SIZE):
         self.l = []
 
     def append(self, s):
         self.l.append(s)
 
+class StringBuilder(AbstractStringBuilder):
     def build(self):
         return "".join(self.l)
+
+class UnicodeBuilder(AbstractStringBuilder):
+    def build(self):
+        return u''.join(self.l)
 
 class StringBuilderEntry(ExtRegistryEntry):
     _about_ = StringBuilder
@@ -31,3 +36,6 @@ class StringBuilderEntry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         return hop.r_result.rtyper_new(hop)
+
+class UnicodeBuilderEntry(ExtRegistryEntry):
+    pass
