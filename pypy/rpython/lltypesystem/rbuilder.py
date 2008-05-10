@@ -7,13 +7,17 @@ from pypy.rlib import rgc
 from pypy.rpython.lltypesystem.lltype import staticAdtMethod
 from pypy.tool.sourcetools import func_with_new_name
 
-def stringbuilder_grow(ll_builder, needed):
-    # XXX tweak overallocation scheme
-    new_allocated = ll_builder.allocated + needed + 100
-    ll_builder.buf = rgc.resize_buffer(ll_builder.buf, ll_builder.used,
-                                       new_allocated)
-    ll_builder.allocated = new_allocated
-stringbuilder_grow._annspecialcase_ = 'specialize:argtype(0)'
+def new_grow_func(name):
+    def stringbuilder_grow(ll_builder, needed):
+        # XXX tweak overallocation scheme
+        new_allocated = ll_builder.allocated + needed + 100
+        ll_builder.buf = rgc.resize_buffer(ll_builder.buf, ll_builder.used,
+                                           new_allocated)
+        ll_builder.allocated = new_allocated
+    return func_with_new_name(stringbuilder_grow, name)
+
+stringbuilder_grow = new_grow_func('stringbuilder_grow')
+unicodebuilder_grow = new_grow_func('unicodebuilder_grow')
 
 STRINGBUILDER = lltype.GcStruct('stringbuilder',
                               ('allocated', lltype.Signed),
@@ -25,7 +29,7 @@ UNICODEBUILDER = lltype.GcStruct('unicodebuilder',
                                  ('allocated', lltype.Signed),
                                  ('used', lltype.Signed),
                                  ('buf', lltype.Ptr(UNICODE)),
-                                 adtmeths={'grow':staticAdtMethod(stringbuilder_grow)})
+                                 adtmeths={'grow':staticAdtMethod(unicodebuilder_grow)})
 
 class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @classmethod
