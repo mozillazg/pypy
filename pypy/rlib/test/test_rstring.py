@@ -7,12 +7,14 @@ def test_string_builder():
     s.append("abc")
     s.append("a")
     s.append_slice("abc", 1, 2)
-    assert s.build() == "aabcab"
+    s.append_multiple_char('d', 4)
+    assert s.build() == "aabcabdddd"
 
 def test_unicode_builder():
     s = UnicodeBuilder()
     s.append(u'a')
     s.append(u'abc')
     s.append_slice(u'abcdef', 1, 2)
-    assert s.build() == 'aabcb'
+    s.append_multiple_char('d', 4)
+    assert s.build() == 'aabcbdddd'
     assert isinstance(s.build(), unicode)
