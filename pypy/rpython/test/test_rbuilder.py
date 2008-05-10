@@ -1,6 +1,6 @@
 
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
-from pypy.rlib.rstring import StringBuilder
+from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 
 class BaseTestStringBuilder(BaseRtypingTest):
     def test_simple(self):
@@ -21,6 +21,18 @@ class BaseTestStringBuilder(BaseRtypingTest):
             return s.build()
         res = self.ll_to_string(self.interpret(func, []))
         assert res == "abcddefgrty"
+
+    def test_unicode(self):
+        def func():
+            s = UnicodeBuilder()
+            s.append(u'a')
+            s.append(u'abc')
+            s.append(u'abcdef')
+            return s.build()
+        res = self.ll_to_unicode(self.interpret(func, []))
+        assert res == 'aabcabcdef'
+        assert isinstance(res, unicode)
+
 
 class TestLLtype(BaseTestStringBuilder, LLRtypeMixin):
     pass

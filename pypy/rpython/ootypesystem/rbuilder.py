@@ -2,12 +2,10 @@
 from pypy.rpython.rbuilder import AbstractStringBuilderRepr
 from pypy.rpython.ootypesystem import ootype
 
-class StringBuilderRepr(AbstractStringBuilderRepr):
-    lowleveltype = ootype.StringBuilder
-
-    @staticmethod
-    def ll_new(init_size):
-        return ootype.new(ootype.StringBuilder)
+class BaseBuilderRepr(AbstractStringBuilderRepr):
+    @classmethod
+    def ll_new(cls, init_size):
+        return ootype.new(cls.lowleveltype)
 
     @staticmethod
     def ll_append_char(builder, char):
@@ -21,4 +19,11 @@ class StringBuilderRepr(AbstractStringBuilderRepr):
     def ll_build(builder):
         return builder.ll_build()
 
+class StringBuilderRepr(BaseBuilderRepr):
+    lowleveltype = ootype.StringBuilder
+
+class UnicodeBuilderRepr(BaseBuilderRepr):
+    lowleveltype = ootype.UnicodeBuilder
+
 stringbuilder_repr = StringBuilderRepr()
+unicodebuilder_repr = UnicodeBuilderRepr()
