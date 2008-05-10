@@ -655,6 +655,7 @@ class LLHelpers(AbstractLLHelpers):
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
         newstr = s1.malloc(newlen)
+        assert newlen >= 0
         s1.copy_contents(s1, newstr, 0, 0, newlen)
         return newstr
 
