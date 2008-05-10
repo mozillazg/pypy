@@ -6,27 +6,32 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import lltype
 
 class SomeStringBuilder(SomeObject):
-    def __init__(self, init_size, use_unicode=False):
+    def __init__(self, init_size):
         self.init_size = init_size
-        self.use_unicode = use_unicode
 
     def method_append(self, s_str):
-        if self.use_unicode:
-            assert isinstance(s_str, (SomeUnicodeCodePoint, SomeUnicodeString))
-        else:
-            assert isinstance(s_str, (SomeString, SomeChar))
+        assert isinstance(s_str, (SomeString, SomeChar))
         return s_None
 
     def method_build(self):
-        if self.use_unicode:
-            return SomeUnicodeString()
-        else:
-            return SomeString()
+        return SomeString()
     
     def rtyper_makerepr(self, rtyper):
-        if self.use_unicode:
-            return rtyper.type_system.rbuilder.unicodebuilder_repr
         return rtyper.type_system.rbuilder.stringbuilder_repr
+
+class SomeUnicodeBuilder(SomeObject):
+    def __init__(self, init_size):
+        self.init_size = init_size
+    
+    def method_append(self, s_str):
+        assert isinstance(s_str, (SomeUnicodeCodePoint, SomeUnicodeString))
+        return s_None
+
+    def method_build(self):
+        return SomeUnicodeString()
+    
+    def rtyper_makerepr(self, rtyper):
+        return rtyper.type_system.rbuilder.unicodebuilder_repr
 
 class AbstractStringBuilderRepr(Repr):
     def rtyper_new(self, hop):
