@@ -17,6 +17,9 @@ class AbstractStringBuilder(object):
     def append_slice(self, s, start, end):
         self.l.append(s[start:end])
 
+    def append_multiple_char(self, c, times):
+        self.l.append(c * times)
+
 class StringBuilder(AbstractStringBuilder):
     def build(self):
         return "".join(self.l)
