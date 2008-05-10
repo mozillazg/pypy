@@ -173,6 +173,7 @@ class Channel2(Channel):
 
     def __init__(self, sample_rate, frequency_table):
         Channel.__init__(self, sample_rate, frequency_table)
+        assert isinstance(sample_rate, int)
         self.audio_2_index = 0
         self.audio_2_length = 0
         self.audio_volume = 0

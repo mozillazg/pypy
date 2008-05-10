@@ -74,7 +74,7 @@ class CartridgeManager(object):
         if self.cartridge.has_battery():
             self.ram = self.cartridge.read_battery()
 
-    def save(self, cartridgeName):
+    def save(self, cartridge_name):
         if self.cartridge.has_battery():
             self.cartridge.write_battery(self.ram)
             
@@ -147,62 +147,63 @@ class Cartridge(object):
             self.load(file)
         
     def reset(self):
-        self.cartridgeName =""
-        self.cartridgeFilePath = ""
-        self.cartridgeFile = None    
-        self.batteryName =""
-        self.batteryFilePath = ""
-        self.batteryFile = None
+        self.cartridge_name = None
+        self.cartridge_file_path = None
+        self.cartridge_file = None    
+        self.battery_name = None
+        self.battery_file_path = None
+        self.battery_file = None
         
         
-    def load(self, cartridgeFilePath):
-        self.cartridgeFilePath = str(cartridgeFilePath)
-        # self.cartridgeName = os.path.basename(self.cartridgeFilePath)
-        self.cartridgeFile = open(self.cartridgeFilePath)
-        self._load_battery(self.cartridgeFilePath)
+    def load(self, cartridge_file_path):
+        cartridge_file_path = str(cartridge_file_path)
+        self.cartridge_file_path = cartridge_file_path
+        self.cartridge_name = os.path.basename(self.cartridge_file_path)
+        self.cartridge_file = open(cartridge_file_path)
+        self._load_battery(cartridge_file_path)
         
         
-    def _load_battery(self, cartridgeFilePath):
-        self.batteryFilePath = self._create_battery_file_path(cartridgeFilePath)
-        self.batteryName = os.path.basename(self.batteryFilePath)
+    def _load_battery(self, cartridge_file_path):
+        self.battery_file_path = self._create_battery_file_path(cartridge_file_path)
+        self.battery_name = os.path.basename(self.battery_file_path)
         if self.has_battery():
-            self.batteryFile = open(self.batteryFilePath)
+            self.battery_file = open(self.battery_file_path)
     
-    def _create_battery_file_path(self, cartridgeFilePath):
-        if cartridgeFilePath.endswith(constants.CARTRIDGE_FILE_EXTENSION):
-            return cartridgeFilePath.replace(constants.CARTRIDGE_FILE_EXTENSION,
+    def _create_battery_file_path(self, cartridge_file_path):
+        if cartridge_file_path.endswith(constants.CARTRIDGE_FILE_EXTENSION):
+            return cartridge_file_path.replace(constants.CARTRIDGE_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION)
-        elif cartridgeFilePath.endswith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
-            return cartridgeFilePath.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
+        elif cartridge_file_path.endswith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
+            return cartridge_file_path.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION)
         else:
-            return cartridgeFilePath + constants.BATTERY_FILE_EXTENSION
+            return cartridge_file_path + constants.BATTERY_FILE_EXTENSION
     
     def has_battery(self):
-        return os.path.exists(self.batteryFilePath)
+        return os.path.exists(self.battery_file_path)
     
     def read(self):
-        self.cartridgeFile.seek(0)
-        return map(map_to_byte, self.cartridgeFile.read())
+        self.cartridge_file.seek(0)
+        return map(map_to_byte, self.cartridge_file.read())
     
     def read_battery(self):
-        self.batteryFile.seek(0)
-        return  map(map_to_byte, self.batteryFile.read())
+        self.battery_file.seek(0)
+        return  map(map_to_byte, self.battery_file.read())
     
     def write_battery(self, ram):
-        self.batteryFile = open(self.batteryFilePath, "w")
-        self.batteryFile.write(("").join(map(chr, ram)))
-        self.batteryFile = open(self.batteryFilePath, "r+")
+        self.battery_file = open(self.battery_file_path, "w")
+        self.battery_file.write(("").join(map(chr, ram)))
+        self.battery_file = open(self.battery_file_path, "r+")
         
     def remove_battery(self):
         if self.has_battery():
-            os.remove(self.batteryFilePath)
+            os.remove(self.battery_file_path)
             
     def get_size(self):
-        return os.path.getsize(self.cartridgeFilePath)
+        return os.path.getsize(self.cartridge_file_path)
         
     def get_battery_size(self):
-        return os.path.getsize(self.batteryFilePath)
+        return os.path.getsize(self.battery_file_path)
         
      
 
