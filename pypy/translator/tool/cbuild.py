@@ -81,7 +81,16 @@ class ExternalCompilationInfo(object):
         return "<ExternalCompilationInfo (%s)>" % ", ".join(info)
 
     def merge(self, *others):
-        others = list(others)
+        def unique_elements(l):
+            seen = set()
+            new_objs = []
+            for obj in l:
+                if obj not in seen:
+                    new_objs.append(obj)
+                    seen.add(obj)
+            return new_objs
+        others = unique_elements(list(others))
+
         attrs = {}
         for name in self._ATTRIBUTES:
             if name not in self._AVOID_DUPLICATES:
