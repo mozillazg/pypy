@@ -251,6 +251,14 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                     from distutils.dist import Distribution
                     from distutils.extension import Extension
                     from distutils.ccompiler import get_default_compiler
+                    from distutils.command.build_ext import build_ext
+
+                    class build_ext_no_additional_symbol(build_ext):
+                        def get_export_symbols(self, ext):
+                            """ work around a 'feature' of distutils that forces every
+                                module to have a certain symbol on win """
+                            return ext.export_symbols
+
                     saved_environ = os.environ.items()
                     try:
                         # distutils.core.setup() is really meant for end-user
@@ -285,9 +293,18 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                                     libraries=list(libraries),)
                                 ],
                             'script_name': 'setup.py',
-                            'script_args': ['-q', 'build_ext', '--inplace', '--force'],
+                            'script_args': ['-q', 'build_ext'], # don't remove 'build_ext' here
                             }
                         dist = Distribution(attrs)
+                        # patch our own command obj into distutils
+                        # because it does not have a facility to accept
+                        # custom objects
+                        cmdobj = build_ext_no_additional_symbol(dist)
+                        cmdobj.inplace = True
+                        cmdobj.force = True
+                        dist.command_obj["build_ext"] = cmdobj
+                        dist.have_run["build_ext"] = 0
+
                         if not dist.parse_command_line():
                             raise ValueError, "distutils cmdline parse error"
                         dist.run_commands()
