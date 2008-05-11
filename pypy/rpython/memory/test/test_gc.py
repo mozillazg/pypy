@@ -525,7 +525,8 @@ class TestHybridGC(TestGenerationalGC):
 
 class TestHybridGCSmallHeap(GCTest):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
-    GC_CAN_MOVE = True
+    GC_CAN_MOVE = False # with this size of heap, stuff gets allocated
+                        # in 3rd gen.
     GC_CANNOT_MALLOC_NONMOVABLE = False
     GC_PARAMS = {'space_size': 192,
                  'min_nursery_size': 48,
