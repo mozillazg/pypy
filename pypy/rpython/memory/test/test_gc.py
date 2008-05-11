@@ -522,6 +522,7 @@ class TestHybridGC(TestGenerationalGC):
 
 class TestHybridGCSmallHeap(GCTest):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
+    GC_CAN_MOVE = True
     GC_PARAMS = {'space_size': 192,
                  'min_nursery_size': 48,
                  'nursery_size': 48,
