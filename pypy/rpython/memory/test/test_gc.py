@@ -21,6 +21,7 @@ def stdout_ignore_ll_functions(msg):
 
 class GCTest(object):
     GC_PARAMS = {}
+    GC_CAN_MOVE = False
 
     def setup_class(cls):
         cls._saved_logstate = py.log._getstate()
@@ -388,32 +389,72 @@ class GCTest(object):
         res = self.interpret(f, [])
         assert res == 42
 
+    def test_can_move(self):
+        TP = lltype.GcArray(lltype.Float)
+        def func():
+            from pypy.rlib import rgc
+            return rgc.can_move(lltype.malloc(TP, 1))
+        assert self.interpret(func, []) == self.GC_CAN_MOVE
+
+    
+    def test_malloc_nonmovable(self):
+        TP = lltype.GcArray(lltype.Char)
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP, 3)
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
+
+    def test_malloc_nonmovable_fixsize(self):
+        S = lltype.GcStruct('S', ('x', lltype.Float))
+        TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP)
+                rgc.collect()
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
+
+    def test_resizable_buffer(self):
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib import rgc
+
+        def f():
+            ptr = rgc.resizable_buffer_of_shape(STR, 1)
+            ptr.chars[0] = 'a'
+            ptr = rgc.resize_buffer(ptr, 1, 2)
+            ptr.chars[1] = 'b'
+            return len(hlstr(rgc.finish_building_buffer(ptr, 2)))
+
+        assert self.interpret(f, []) == 2
 
 class TestMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.marksweep import MarkSweepGC as GCClass
 
 class TestSemiSpaceGC(GCTest, snippet.SemiSpaceGCTests):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
+    GC_CAN_MOVE = True
 
 class TestGrowingSemiSpaceGC(TestSemiSpaceGC):
     GC_PARAMS = {'space_size': 64}
 
 class TestGenerationalGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.generation import GenerationGC as GCClass
-
-    def test_coalloc(self):
-        def malloc_a_lot():
-            i = 0
-            while i < 10:
-                i += 1
-                a = [1] * 10
-                j = 0
-                while j < 30:
-                    j += 1
-                    a.append(j)
-            return 0
-        res = self.interpret(malloc_a_lot, [], backendopt=True, coalloc=True)
-        assert res == 0
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass

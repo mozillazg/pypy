@@ -673,13 +673,6 @@ class LLFrame(object):
             self.llinterpreter.remember_malloc(ptr, self)
         return ptr
 
-    def op_coalloc(self, obj, coallocator, flags):
-        flavor = flags['flavor']
-        assert flavor == "gc"
-        zero = flags.get('zero', False)
-        ptr = self.heap.coalloc(obj, coallocator, zero=zero)
-        return ptr
-
     def op_malloc_varsize(self, obj, flags, size):
         flavor = flags['flavor']
         zero = flags.get('zero', False)
@@ -691,14 +684,27 @@ class LLFrame(object):
             return ptr
         except MemoryError:
             self.make_llexception()
-
-    def op_coalloc_varsize(self, obj, coallocator, flags, size):
+            
+    def op_malloc_nonmovable(self, obj, flags):
         flavor = flags['flavor']
+        assert flavor == 'gc'
         zero = flags.get('zero', False)
-        assert flavor == "gc"
+        return self.heap.malloc_nonmovable(obj, zero=zero)
+        
+    def op_malloc_nonmovable_varsize(self, obj, flags, size):
+        flavor = flags['flavor']
+        assert flavor == 'gc'
         zero = flags.get('zero', False)
-        ptr = self.heap.coalloc(obj, coallocator, size, zero=zero)
-        return ptr
+        return self.heap.malloc_nonmovable(obj, size, zero=zero)
+
+    def op_malloc_resizable_buffer(self, obj, flags, size):
+        return self.heap.malloc_resizable_buffer(obj, size)
+
+    def op_resize_buffer(self, obj, old_size, new_size):
+        return self.heap.resize_buffer(obj, old_size, new_size)
+
+    def op_finish_building_buffer(self, obj, size):
+        return self.heap.finish_building_buffer(obj, size)
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
@@ -715,6 +721,11 @@ class LLFrame(object):
         assert not isinstance(getattr(lltype.typeOf(obj).TO, field),
                               lltype.ContainerType)
         return getattr(obj, field)
+
+    def op_force_cast(self, RESTYPE, obj):
+        from pypy.rpython.lltypesystem import ll2ctypes
+        return ll2ctypes.force_cast(RESTYPE, obj)
+    op_force_cast.need_result_type = True
 
     def op_cast_int_to_ptr(self, RESTYPE, int1):
         return lltype.cast_int_to_ptr(RESTYPE, int1)
@@ -758,6 +769,9 @@ class LLFrame(object):
 
     def op_gc__enable_finalizers(self):
         self.heap.enable_finalizers()
+
+    def op_gc_can_move(self, addr):
+        return self.heap.can_move(addr)
 
     def op_gc_free(self, addr):
         # what can you do?

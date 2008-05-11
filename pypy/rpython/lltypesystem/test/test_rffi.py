@@ -6,9 +6,11 @@ from pypy.rlib.rposix import get_errno, set_errno
 from pypy.translator.c.test.test_genc import compile as compile_c
 from pypy.translator.llvm.test.runtest import compile_function as compile_llvm
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
+from pypy.rpython.lltypesystem.rstr import STR
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret, MallocMismatch
+from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.translator.backendopt.all import backend_optimizations
@@ -429,6 +431,50 @@ class BaseTestRffi:
         unregister_keepalive(pos, TP)
         assert res == 8
 
+    def test_nonmoving(self):
+        d = 'non-moving data stuff'
+        def f():
+            raw_buf, gc_buf = alloc_buffer(len(d))
+            try:
+                for i in range(len(d)):
+                    raw_buf[i] = d[i]
+                return str_from_buffer(raw_buf, gc_buf, len(d), len(d)-1)
+            finally:
+                keep_buffer_alive_until_here(raw_buf, gc_buf)
+        fn = self.compile(f, [], gcpolicy='ref')
+        assert fn() == d[:-1]
+    
+
+    def test_nonmovingbuffer(self):
+        d = 'some cool data that should not move'
+        def f():
+            buf = get_nonmovingbuffer(d)
+            try:
+                counter = 0
+                for i in range(len(d)):
+                    if buf[i] == d[i]:
+                        counter += 1
+                return counter
+            finally:
+                free_nonmovingbuffer(d, buf)
+        fn = self.compile(f, [], gcpolicy='ref')
+        assert fn() == len(d)
+
+    def test_nonmovingbuffer_semispace(self):
+        d = 'some cool data that should not move'
+        def f():
+            buf = get_nonmovingbuffer(d)
+            try:
+                counter = 0
+                for i in range(len(d)):
+                    if buf[i] == d[i]:
+                        counter += 1
+                return counter
+            finally:
+                free_nonmovingbuffer(d, buf)
+        fn = self.compile(f, [], gcpolicy='semispace')
+        assert fn(expected_extra_mallocs=9) == len(d)
+
 class TestRffiInternals:
     def test_struct_create(self):
         X = CStruct('xx', ('one', INT))
@@ -481,8 +527,7 @@ class TestRffiInternals:
         graph = graphof(a.translator, f)
         s = summary(graph)
         # there should be not too many operations here by now
-        expected = {'cast_int_to_uint': 1, 'direct_call': 1,
-                    'cast_primitive': 2, 'cast_int_to_float': 1}
+        expected = {'force_cast': 3, 'cast_int_to_float': 1, 'direct_call': 1}
         for k, v in expected.items():
             assert s[k] == v
     
@@ -634,7 +679,6 @@ def test_ptradd():
 def test_ptradd_interpret():
     interpret(test_ptradd, [])
 
-
 class TestCRffi(BaseTestRffi):
     def compile(self, func, args, **kwds):
         return compile_c(func, args, **kwds)
@@ -649,6 +693,14 @@ class TestLLVMRffi(BaseTestRffi):
             kwds['optimize'] = kwds['backendopt']
             del kwds['backendopt']
         return compile_llvm(func, args, **kwds)
+
+    def test_nonmovingbuffer(self):
+        py.test.skip("Somewhat buggy...")
+
+    test_nonmoving = test_nonmovingbuffer
+
+    def test_nonmovingbuffer_semispace(self):
+        py.test.skip("LLVM backend error - unsupported operator")
 
     def test_hashdefine(self):
         py.test.skip("Macros cannot be called as llexternals by design, rffi does not have any special support for them")

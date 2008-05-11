@@ -602,3 +602,13 @@ def test_nonneg():
     py.test.raises(TypeError, "sizeof(S1) <= 0")
     py.test.raises(TypeError, "sizeof(S1) <= 4")
     py.test.raises(TypeError, "(-sizeof(S1)) >= 0")
+
+def test_addr_keeps_object_alive():
+    A = lltype.Array(Address)
+    ptr = lltype.malloc(A, 10, immortal=True)
+    adr = cast_ptr_to_adr(ptr) + ArrayItemsOffset(A)
+    del ptr
+    import gc; gc.collect(); gc.collect()
+    # the following line crashes if the array is dead
+    ptr1 = cast_adr_to_ptr(adr, lltype.Ptr(lltype.FixedSizeArray(Address, 1)))
+    ptr1[0] = NULL
