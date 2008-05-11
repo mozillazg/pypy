@@ -695,10 +695,20 @@ def raw_malloc(size):
 
 def raw_realloc(adr, size):
     new_area = size._raw_malloc([], zero=False)
-    old_len = len(adr.ptr)
-    new_len = len(new_area.ptr)
+    ptr = adr.ptr
+    if isinstance(lltype.typeOf(ptr).TO, lltype.Array):
+        from_arr = adr.ptr
+        to_arr = new_area.ptr
+    elif isinstance(lltype.typeOf(ptr).TO, lltype.Struct):
+        arrayfld = lltype.typeOf(ptr).TO._arrayfld
+        from_arr = getattr(ptr, arrayfld)
+        to_arr = getattr(new_area.ptr, arrayfld)
+    else:
+        raise TypeError("%s seems to be not var-sized" % (lltype.typeOf(ptr),))
+    old_len = len(from_arr)
+    new_len = len(to_arr)
     for i in range(min(old_len, new_len)):
-        new_area.ptr[i] = adr.ptr[i]
+        to_arr[i] = from_arr[i]
     return new_area
 
 def raw_free(adr):

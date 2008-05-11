@@ -624,4 +624,16 @@ def test_realloc():
     assert len(ptr2) == 5
     assert ptr2[3] == 3.0
     assert ptr2[1] == 1.0
-    
+
+def test_realloc_struct():
+    S = lltype.Struct('x', ('one', lltype.Signed),
+                      ('a', lltype.Array(lltype.Float)))
+    adr = raw_malloc(sizeof(S, 5))
+    ptr = cast_adr_to_ptr(adr, lltype.Ptr(S))
+    for i in range(5):
+        ptr.a[i] = float(i)
+    adr2 = raw_realloc(adr, sizeof(S, 10))
+    ptr2 = cast_adr_to_ptr(adr2, lltype.Ptr(S))
+    assert len(ptr2.a) == 10
+    assert ptr2.a[3] == 3.0
+    assert ptr2.a[0] == 0.0
