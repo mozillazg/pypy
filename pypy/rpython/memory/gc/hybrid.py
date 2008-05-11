@@ -209,8 +209,8 @@ class HybridGC(GenerationGC):
         return llmemory.cast_ptr_to_adr(gcref)
 
     def can_move(self, ptr):
-        tid = self.get_type_id(llmemory.cast_ptr_to_adr(ptr))
-        return tid & GCFLAG_AGE_MASK == GCFLAG_AGE_MAX
+        tid = self.header(llmemory.cast_ptr_to_adr(ptr)).tid
+        return not (tid & GCFLAG_EXTERNAL)
 
     def malloc_varsize_collecting_nursery(self, totalsize):
         result = self.collect_nursery()
