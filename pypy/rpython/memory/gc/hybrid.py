@@ -321,6 +321,12 @@ class HybridGC(GenerationGC):
         # some threshold is reached we make the copy a non-movable "external"
         # object.  The threshold is MAX_SEMISPACE_AGE.
         tid = self.header(obj).tid
+        # XXX the following logic is not doing exactly what is explained
+        # above: any object without GCFLAG_NO_YOUNG_PTRS has its age not
+        # incremented.  This is accidental: it means that objects that
+        # are very often modified to point to young objects don't reach
+        # the 3rd generation.  For now I'll leave it this way because
+        # I'm not sure that it's a bad thing.
         if not (tid & GCFLAG_NO_YOUNG_PTRS):
             tid |= GCFLAG_NO_YOUNG_PTRS    # object comes from the nursery
         elif (tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX:
