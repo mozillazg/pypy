@@ -74,6 +74,20 @@ class TestEci:
         assert e.includes == ('x.h', 'y.h', 'z.h')
         assert e.post_include_lines == ('p1', 'p2', 'p3')
 
+    def test_merge2(self):
+        e1 = ExternalCompilationInfo(
+            pre_include_lines  = ['1'],
+        )
+        e2 = ExternalCompilationInfo(
+            pre_include_lines  = ['2'],
+        )
+        e3 = ExternalCompilationInfo(
+            pre_include_lines  = ['3'],
+        )
+        e = e1.merge(e2)
+        e = e.merge(e3, e3)
+        assert e.pre_include_lines == ('1', '2', '3')
+
     def test_convert_sources_to_c_files(self):
         eci = ExternalCompilationInfo(
             separate_module_sources = ['xxx'],
