@@ -693,6 +693,14 @@ def raw_malloc(size):
         raise NotImplementedError(size)
     return size._raw_malloc([], zero=False)
 
+def raw_realloc(adr, size):
+    new_area = size._raw_malloc([], zero=False)
+    old_len = len(adr.ptr)
+    new_len = len(new_area.ptr)
+    for i in range(min(old_len, new_len)):
+        new_area.ptr[i] = adr.ptr[i]
+    return new_area
+
 def raw_free(adr):
     # try to free the whole object if 'adr' is the address of the header
     from pypy.rpython.memory.gcheader import GCHeaderBuilder

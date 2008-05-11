@@ -612,3 +612,16 @@ def test_addr_keeps_object_alive():
     # the following line crashes if the array is dead
     ptr1 = cast_adr_to_ptr(adr, lltype.Ptr(lltype.FixedSizeArray(Address, 1)))
     ptr1[0] = NULL
+
+def test_realloc():
+    A = lltype.Array(lltype.Float)
+    adr = raw_malloc(sizeof(A, 10))
+    ptr = cast_adr_to_ptr(adr, lltype.Ptr(A))
+    for i in range(10):
+        ptr[i] = float(i)
+    adr2 = raw_realloc(adr, sizeof(A, 5))
+    ptr2 = cast_adr_to_ptr(adr2, lltype.Ptr(A))
+    assert len(ptr2) == 5
+    assert ptr2[3] == 3.0
+    assert ptr2[1] == 1.0
+    
