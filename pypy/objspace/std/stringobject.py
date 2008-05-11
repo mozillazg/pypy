@@ -861,7 +861,7 @@ def getnewargs__String(space, w_str):
 def repr__String(space, w_str):
     s = w_str._value
 
-    buf = StringBuilder(len(s) * 4 + 2)
+    buf = StringBuilder(len(s) + 10)
 
     quote = "'"
     if quote in s and '"' not in s:
@@ -907,7 +907,7 @@ def repr__String(space, w_str):
 
     buf.append(quote)
 
-    return space.wrap(buf.build()) # buffer was overallocated, so slice
+    return space.wrap(buf.build())
 
    
 def str_translate__String_ANY_ANY(space, w_string, w_table, w_deletechars=''):
