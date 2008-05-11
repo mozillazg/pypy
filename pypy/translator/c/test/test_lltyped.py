@@ -304,6 +304,23 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         res = fn(100)
         assert res == 100 + len(list(names))
 
+    def test_force_cast(self):
+        from pypy.rpython.annlowlevel import llstr
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.lltypesystem import rffi, llmemory, lltype
+        P = lltype.Ptr(lltype.FixedSizeArray(lltype.Char, 1))
+        
+        def f():
+            a = llstr("xyz")
+            b = (llmemory.cast_ptr_to_adr(a) + llmemory.offsetof(STR, 'chars')
+                 + llmemory.itemoffsetof(STR.chars, 0))
+            buf = rffi.cast(rffi.VOIDP, b)
+            return buf[2]
+        
+        fn = self.getcompiled(f, [])
+        res = fn()
+        assert res == 'z'
+
     def test_array_nolength(self):
         A = Array(Signed, hints={'nolength': True})
         a1 = malloc(A, 3, immortal=True)

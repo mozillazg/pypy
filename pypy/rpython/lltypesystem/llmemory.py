@@ -256,6 +256,7 @@ class ArrayItemsOffset(AddressOffset):
         assert array_type_match(lltype.typeOf(arrayptr).TO, self.TYPE)
         if isinstance(self.TYPE.OF, lltype.ContainerType):
             # XXX this doesn't support empty arrays
+            # XXX it's also missing 'solid' support, probably
             o = arrayptr._obj.getitem(0)
             return o._as_ptr()
         else:

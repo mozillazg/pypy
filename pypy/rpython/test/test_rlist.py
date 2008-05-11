@@ -730,6 +730,12 @@ class BaseTestRlist(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == fn()
 
+        def fn():
+            return str([1.25])
+
+        res = self.interpret(fn, [])
+        assert eval(self.ll_to_string(res)) == [1.25]
+
     def test_list_or_None(self):
         empty_list = []
         nonempty_list = [1, 2]

@@ -44,20 +44,41 @@ class GCManagedHeap(object):
         else:
             return lltype.malloc(TYPE, n, flavor=flavor, zero=zero)
 
+    def malloc_nonmovable(self, TYPE, n=None, zero=False):
+        typeid = self.get_type_id(TYPE)
+        if self.gc.moving_gc:
+            return lltype.nullptr(TYPE)
+        addr = self.gc.malloc(typeid, n, zero=zero)
+        result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
+        if not self.gc.malloc_zero_filled:
+            gctypelayout.zero_gc_pointers(result)
+        return result
+
+    def malloc_resizable_buffer(self, TYPE, n):
+        typeid = self.get_type_id(TYPE)
+        addr = self.gc.malloc(typeid, n)
+        result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
+        if not self.gc.malloc_zero_filled:
+            gctypelayout.zero_gc_pointers(result)
+        return result
+
+    def resize_buffer(self, obj, old_size, new_size):
+        T = lltype.typeOf(obj).TO
+        buf = self.malloc_resizable_buffer(T, new_size)
+        # copy contents
+        arrayfld = T._arrayfld
+        new_arr = getattr(buf, arrayfld)
+        old_arr = getattr(obj, arrayfld)
+        for i in range(old_size):
+            new_arr[i] = old_arr[i]
+        return buf
+
+    def finish_building_buffer(self, obj, size):
+        return obj
+
     def free(self, TYPE, flavor='gc'):
         assert flavor != 'gc'
         return lltype.free(TYPE, flavor=flavor)
-
-    def coalloc(self, TYPE, coallocator, size=None, zero=False):
-        if hasattr(self.gc, "coalloc_fixedsize_clear"):
-            typeid = self.get_type_id(TYPE)
-            addr = self.gc.malloc(typeid, size, zero=zero,
-                                  coallocator=coallocator)
-            result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
-            if not self.gc.malloc_zero_filled:
-                gctypelayout.zero_gc_pointers(result)
-            return result
-        return self.malloc(TYPE, size, 'gc', zero)
 
     def setfield(self, obj, fieldname, fieldvalue):
         STRUCT = lltype.typeOf(obj).TO
@@ -88,6 +109,9 @@ class GCManagedHeap(object):
 
     def enable_finalizers(self):
         self.gc.enable_finalizers()
+
+    def can_move(self, addr):
+        return self.gc.can_move(addr)
 
     def weakref_create_getlazy(self, objgetter):
         # we have to be lazy in reading the llinterp variable containing

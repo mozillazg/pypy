@@ -6,11 +6,12 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
 from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
-from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
+from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED, force_cast
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
+from pypy.rpython.test.test_llinterp import interpret
 
 class TestLL2Ctypes(object):
 
@@ -108,6 +109,19 @@ class TestLL2Ctypes(object):
         assert ac.contents.items[3] == 789
         lltype.free(a, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
+
+    def test_array_inside_struct(self):
+        # like rstr.STR, but not Gc
+        STR = lltype.Struct('STR', ('x', lltype.Signed), ('y', lltype.Array(lltype.Char)))
+        a = lltype.malloc(STR, 3, flavor='raw')
+        a.y[0] = 'x'
+        a.y[1] = 'y'
+        a.y[2] = 'z'
+        ac = lltype2ctypes(a)
+        assert ac.contents.y.length == 3
+        assert ac.contents.y.items[2] == ord('z')
+        lltype.free(a, flavor='raw')
+        assert not ALLOCATED
 
     def test_array_nolength(self):
         A = lltype.Array(lltype.Signed, hints={'nolength': True})
@@ -357,6 +371,20 @@ class TestLL2Ctypes(object):
         lltype.free(a, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
+    def test_adr_cast(self):
+        from pypy.rpython.annlowlevel import llstr
+        from pypy.rpython.lltypesystem.rstr import STR
+        P = lltype.Ptr(lltype.FixedSizeArray(lltype.Char, 1))
+        def f():
+            a = llstr("xyz")
+            b = (llmemory.cast_ptr_to_adr(a) + llmemory.offsetof(STR, 'chars')
+                 + llmemory.itemoffsetof(STR.chars, 0))
+            buf = rffi.cast(rffi.VOIDP, b)
+            return buf[2]
+        assert f() == 'z'
+        res = interpret(f, [])
+        assert res == 'z'
+    
     def test_funcptr1(self):
         def dummy(n):
             return n+1
@@ -789,3 +817,13 @@ class TestLL2Ctypes(object):
         c1 = lltype2ctypes(a1)
         c2 = lltype2ctypes(a2)
         assert type(c1) is type(c2)
+
+    def test_varsized_struct(self): 
+        STR = lltype.Struct('rpy_string', ('hash',  lltype.Signed),
+                            ('chars', lltype.Array(lltype.Char, hints={'immutable': True})))
+        s = lltype.malloc(STR, 3, flavor='raw')
+        one = force_cast(rffi.VOIDP, s)
+        # sanity check
+        #assert lltype2ctypes(one).contents.items._length_ > 0
+        two = force_cast(lltype.Ptr(STR), one)
+        assert s == two

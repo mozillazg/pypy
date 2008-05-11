@@ -154,9 +154,11 @@ def crc32(string, start=CRC32_DEFAULT_START):
     Compute the CRC32 checksum of the string, possibly with the given
     start value, and return it as a unsigned 32 bit integer.
     """
-    bytes = rffi.str2charp(string)
-    checksum = _crc32(start, rffi.cast(Bytefp, bytes), len(string))
-    rffi.free_charp(bytes)
+    bytes = rffi.get_nonmovingbuffer(string)
+    try:
+        checksum = _crc32(start, rffi.cast(Bytefp, bytes), len(string))
+    finally:
+        rffi.free_nonmovingbuffer(string, bytes)
     return checksum
 
 
@@ -167,9 +169,11 @@ def adler32(string, start=ADLER32_DEFAULT_START):
     Compute the Adler-32 checksum of the string, possibly with the given
     start value, and return it as a unsigned 32 bit integer.
     """
-    bytes = rffi.str2charp(string)
-    checksum = _adler32(start, rffi.cast(Bytefp, bytes), len(string))
-    rffi.free_charp(bytes)
+    bytes = rffi.get_nonmovingbuffer(string)
+    try:
+        checksum = _adler32(start, rffi.cast(Bytefp, bytes), len(string))
+    finally:
+        rffi.free_nonmovingbuffer(string, bytes)
     return checksum
 
 # ____________________________________________________________
