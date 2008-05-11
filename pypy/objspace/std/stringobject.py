@@ -10,6 +10,7 @@ from pypy.objspace.std import slicetype
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.rlib.rstring import StringBuilder
 
 from pypy.objspace.std.stringtype import sliced, joined, wrapstr, wrapchar, \
      stringendswith, stringstartswith, joined2
@@ -860,17 +861,17 @@ def getnewargs__String(space, w_str):
 def repr__String(space, w_str):
     s = w_str._value
 
-    i = 0
-    buf = [' '] * (len(s) * 4 + 2) # safely overallocate
+    buf = StringBuilder(len(s) * 4 + 2)
 
     quote = "'"
     if quote in s and '"' not in s:
         quote = '"'
 
-    buf[i] = quote
+    buf.append(quote)
+    startslice = 0
 
-    for c in s:
-        i += 1
+    for i in range(len(s)):
+        c = s[i]
         use_bs_char = False # character quoted by backspace
 
         if c == '\\' or c == quote:
@@ -887,25 +888,26 @@ def repr__String(space, w_str):
             use_bs_char = True
         elif not '\x20' <= c < '\x7f':
             n = ord(c)
-            buf[i] = '\\'
-            i += 1
-            buf[i] = 'x'
-            i += 1
-            buf[i] = "0123456789abcdef"[n>>4]
-            i += 1
-            buf[i] = "0123456789abcdef"[n&0xF]
-        else:
-            buf[i] = c
+            if i != startslice:
+                buf.append_slice(s, startslice, i)
+            startslice = i + 1
+            buf.append('\\x')
+            buf.append("0123456789abcdef"[n>>4])
+            buf.append("0123456789abcdef"[n&0xF])
 
         if use_bs_char:
-            buf[i] = '\\'
-            i += 1
-            buf[i] = bs_char
+            if i != startslice:
+                buf.append_slice(s, startslice, i)
+            startslice = i + 1
+            buf.append('\\')
+            buf.append(bs_char)
 
-    i += 1
-    buf[i] = quote
+    if len(s) != startslice:
+        buf.append_slice(s, startslice, len(s))
 
-    return space.wrap("".join(buf[:i+1])) # buffer was overallocated, so slice
+    buf.append(quote)
+
+    return space.wrap(buf.build()) # buffer was overallocated, so slice
 
    
 def str_translate__String_ANY_ANY(space, w_string, w_table, w_deletechars=''):
