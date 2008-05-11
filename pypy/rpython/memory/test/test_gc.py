@@ -22,6 +22,7 @@ def stdout_ignore_ll_functions(msg):
 class GCTest(object):
     GC_PARAMS = {}
     GC_CAN_MOVE = False
+    GC_CANNOT_MALLOC_NONMOVABLE = False
 
     def setup_class(cls):
         cls._saved_logstate = py.log._getstate()
@@ -400,17 +401,14 @@ class GCTest(object):
     def test_malloc_nonmovable(self):
         TP = lltype.GcArray(lltype.Char)
         def func():
-            try:
-                from pypy.rlib import rgc
-                a = rgc.malloc_nonmovable(TP, 3)
-                if a:
-                    assert not rgc.can_move(a)
-                    return 0
-                return 1
-            except Exception, e:
-                return 2
+            from pypy.rlib import rgc
+            a = rgc.malloc_nonmovable(TP, 3)
+            if a:
+                assert not rgc.can_move(a)
+                return 0
+            return 1
 
-        assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
+        assert self.interpret(func, []) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
 
     def test_malloc_nonmovable_fixsize(self):
         S = lltype.GcStruct('S', ('x', lltype.Float))
@@ -427,7 +425,7 @@ class GCTest(object):
             except Exception, e:
                 return 2
 
-        assert self.interpret(func, []) == int(self.GC_CAN_MOVE)
+        assert self.interpret(func, []) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
 
     def test_resizable_buffer(self):
         from pypy.rpython.lltypesystem.rstr import STR
@@ -449,6 +447,7 @@ class TestMarkSweepGC(GCTest):
 class TestSemiSpaceGC(GCTest, snippet.SemiSpaceGCTests):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
     GC_CAN_MOVE = True
+    GC_CANNOT_MALLOC_NONMOVABLE = True
 
 class TestGrowingSemiSpaceGC(TestSemiSpaceGC):
     GC_PARAMS = {'space_size': 64}
@@ -458,6 +457,7 @@ class TestGenerationalGC(TestSemiSpaceGC):
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
+    GC_CANNOT_MALLOC_NONMOVABLE = False
 
     def test_ref_from_rawmalloced_to_regular(self):
         import gc
@@ -520,9 +520,13 @@ class TestHybridGC(TestGenerationalGC):
         res = self.interpret(f, [15])
         assert res == 16
 
+    def test_malloc_nonmovable_fixsize(self):
+        py.test.skip("Not supported")
+
 class TestHybridGCSmallHeap(GCTest):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
     GC_CAN_MOVE = True
+    GC_CANNOT_MALLOC_NONMOVABLE = False
     GC_PARAMS = {'space_size': 192,
                  'min_nursery_size': 48,
                  'nursery_size': 48,
@@ -563,3 +567,6 @@ class TestHybridGCSmallHeap(GCTest):
                     return i
         res = self.interpret(f, [200])
         assert res == 401
+
+    def test_malloc_nonmovable_fixsize(self):
+        py.test.skip("Not supported")
