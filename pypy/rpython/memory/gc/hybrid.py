@@ -208,8 +208,8 @@ class HybridGC(GenerationGC):
             raise NotImplementedError("Not supported")
         return llmemory.cast_ptr_to_adr(gcref)
 
-    def can_move(self, ptr):
-        tid = self.header(llmemory.cast_ptr_to_adr(ptr)).tid
+    def can_move(self, addr):
+        tid = self.header(addr).tid
         return not (tid & GCFLAG_EXTERNAL)
 
     def malloc_varsize_collecting_nursery(self, totalsize):
