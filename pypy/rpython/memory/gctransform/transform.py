@@ -542,15 +542,16 @@ class GCTransformer(BaseGCTransformer):
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
     def gct_resize_buffer(self, hop):
+        op = hop.spaceop
         if self._can_realloc():
-            self._gct_resize_buffer_realloc(hop)
+            self._gct_resize_buffer_realloc(hop, op.args[2])
         else:
-            self._gct_resize_buffer_no_realloc(hop)
+            self._gct_resize_buffer_no_realloc(hop, op.args[1])
 
     def _can_realloc(self):
         return False
 
-    def _gct_resize_buffer_realloc(self, hop):
+    def _gct_resize_buffer_realloc(self, hop, v_newsize):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)
         op = hop.spaceop
         flags = {'flavor':'gc', 'varsize': True}
@@ -562,11 +563,12 @@ class GCTransformer(BaseGCTransformer):
         c_item_size = intconst(llmemory.sizeof(ARRAY.OF))
 
         c_lengthofs = intconst(offset_to_length)
-        v_raw = self.perform_realloc(hop, c_const_size, c_item_size,
-                                     c_lengthofs)
+        v_ptr = op.args[0]
+        v_raw = self.perform_realloc(hop, v_ptr, v_newsize, c_const_size,
+                                     c_item_size, c_lengthofs)
         hop.cast_result(v_raw)
 
-    def _gct_resize_buffer_no_realloc(self, hop):
+    def _gct_resize_buffer_no_realloc(self, hop, v_lgt):
         op = hop.spaceop
         meth = self.gct_fv_gc_malloc_varsize
         flags = {'flavor':'gc', 'varsize': True}
@@ -574,7 +576,6 @@ class GCTransformer(BaseGCTransformer):
         # fish resvar
         v_newbuf = hop.llops[-1].result
         v_src = op.args[0]
-        v_lgt = op.args[1]
         TYPE = v_src.concretetype.TO
         c_fldname = rmodel.inputconst(lltype.Void, TYPE._arrayfld)
         v_adrsrc = hop.genop('cast_ptr_to_adr', [v_src],
@@ -598,9 +599,9 @@ class GCTransformer(BaseGCTransformer):
     def gct_finish_building_buffer(self, hop):
         op = hop.spaceop
         if self._can_realloc():
-            return self._gct_resize_buffer_realloc(hop)
+            return self._gct_resize_buffer_realloc(hop, op.args[1])
         else:
-            return self._gct_resize_buffer_no_realloc(hop)
+            return self._gct_resize_buffer_no_realloc(hop, op.args[1])
 
     def varsize_malloc_helper(self, hop, flags, meth, extraargs):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)

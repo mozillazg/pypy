@@ -502,10 +502,10 @@ class GenericGCTests(GCTest):
             ptr.chars[0] = 'a'
             ptr = rgc.resize_buffer(ptr, 1, 200)
             ptr.chars[1] = 'b'
-            return len(hlstr(rgc.finish_building_buffer(ptr, 2)))
+            return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
 
         run = self.runner(f)
-        assert run([]) == 2
+        assert run([]) == 1
 
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
