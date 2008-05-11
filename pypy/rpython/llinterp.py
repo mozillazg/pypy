@@ -860,7 +860,7 @@ class LLFrame(object):
 
     def op_raw_realloc(self, ptr, size):
         assert lltype.typeOf(size) == lltype.Signed
-        return llmemory.raw_realloc(ptr, size)
+        return llmemory.raw_realloc(llmemory.cast_ptr_to_adr(ptr), size)
 
     op_boehm_malloc = op_boehm_malloc_atomic = op_raw_malloc
 
