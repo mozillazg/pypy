@@ -273,6 +273,17 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.malloc_varsize_clear_fast_ptr = None
 
+        if getattr(GCClass, 'malloc_varsize_nonmovable', False):
+            malloc_nonmovable = func_with_new_name(
+                GCClass.malloc_varsize_nonmovable.im_func,
+                "malloc_varsize_nonmovable")
+            self.malloc_varsize_nonmovable_ptr = getfn(
+                malloc_nonmovable,
+                [s_gc, annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomeInteger(nonneg=True)], s_gcref)
+        else:
+            self.malloc_varsize_nonmovable_ptr = None
+
         if GCClass.moving_gc:
             self.id_ptr = getfn(GCClass.id.im_func,
                                 [s_gc, s_gcref], annmodel.SomeInteger(),
@@ -456,14 +467,22 @@ class FrameworkGCTransformer(GCTransformer):
             v_length = op.args[-1]
             c_ofstolength = rmodel.inputconst(lltype.Signed, info.ofstolength)
             c_varitemsize = rmodel.inputconst(lltype.Signed, info.varitemsize)
-            if (self.malloc_varsize_clear_fast_ptr is not None and
-                c_can_collect.value and not c_has_finalizer.value):
-                malloc_ptr = self.malloc_varsize_clear_fast_ptr
+            if flags.get('nonmovable') and self.malloc_varsize_nonmovable_ptr:
+                # we don't have tests for such cases, let's fail
+                # explicitely
+                assert c_can_collect.value
+                assert not c_has_finalizer.value
+                malloc_ptr = self.malloc_varsize_nonmovable_ptr
+                args = [self.c_const_gc, c_type_id, v_length]
             else:
-                malloc_ptr = self.malloc_varsize_clear_ptr
-            args = [self.c_const_gc, c_type_id, v_length, c_size,
-                    c_varitemsize, c_ofstolength, c_can_collect,
-                    c_has_finalizer]
+                if (self.malloc_varsize_clear_fast_ptr is not None and
+                    c_can_collect.value and not c_has_finalizer.value):
+                    malloc_ptr = self.malloc_varsize_clear_fast_ptr
+                else:
+                    malloc_ptr = self.malloc_varsize_clear_ptr
+                args = [self.c_const_gc, c_type_id, v_length, c_size,
+                        c_varitemsize, c_ofstolength, c_can_collect,
+                        c_has_finalizer]
         livevars = self.push_roots(hop)
         v_result = hop.genop("direct_call", [malloc_ptr] + args,
                              resulttype=llmemory.GCREF)
@@ -593,19 +612,17 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_malloc_nonmovable_varsize(self, hop):
         TYPE = hop.spaceop.result.concretetype
-        if self.gcdata.gc.moving_gc:
-            # first approximation
-            c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
-            return hop.cast_result(c)
-        return self.gct_malloc_varsize(hop)
+        if self.gcdata.gc.can_malloc_nonmovable():
+            return self.gct_malloc_varsize(hop, {'nonmovable':True})
+        c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
+        return hop.cast_result(c)
 
     def gct_malloc_nonmovable(self, hop):
         TYPE = hop.spaceop.result.concretetype
-        if self.gcdata.gc.moving_gc:
-            # first approximation
-            c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
-            return hop.cast_result(c)
-        return self.gct_malloc(hop)
+        if self.gcdata.gc.can_malloc_nonmovable():
+            return self.gct_malloc(hop, {'nonmovable':True})
+        c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
+        return hop.cast_result(c)
 
     def transform_generic_set(self, hop):
         from pypy.objspace.flow.model import Constant

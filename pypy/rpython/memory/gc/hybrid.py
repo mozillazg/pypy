@@ -200,6 +200,9 @@ class HybridGC(GenerationGC):
     malloc_varsize_slowpath._dont_inline_ = True
     malloc_varsize_slowpath._annspecialcase_ = 'specialize:arg(3)'
 
+    def malloc_varsize_nonmovable(self, typeid, length):
+        return self.malloc_varsize_slowpath(typeid, length, True)
+
     def malloc_nonmovable(self, typeid, length, zero):
         # helper for testing, same as GCBase.malloc
         if self.is_varsize(typeid):
