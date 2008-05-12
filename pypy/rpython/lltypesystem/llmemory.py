@@ -757,9 +757,11 @@ def _reccopy(source, dest):
     T = lltype.typeOf(source).TO
     assert T == lltype.typeOf(dest).TO
     if isinstance(T, (lltype.Array, lltype.FixedSizeArray)):
-        assert source._obj.getlength() <= dest._obj.getlength()
+        sourcelgt = source._obj.getlength()
+        destlgt = dest._obj.getlength()
+        lgt = min(sourcelgt, destlgt)
         ITEMTYPE = T.OF
-        for i in range(source._obj.getlength()):
+        for i in range(lgt):
             if isinstance(ITEMTYPE, lltype.ContainerType):
                 subsrc = source._obj.getitem(i)._as_ptr()
                 subdst = dest._obj.getitem(i)._as_ptr()
