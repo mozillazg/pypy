@@ -284,6 +284,14 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.malloc_varsize_nonmovable_ptr = None
 
+        if getattr(GCClass, 'realloc', False):
+            self.realloc_ptr = getfn(
+                GCClass.realloc.im_func,
+                [s_gc, s_gcref] +
+                [annmodel.SomeInteger(nonneg=True)] * 4 +
+                [annmodel.SomeBool()],
+                s_gcref)
+
         if GCClass.moving_gc:
             self.id_ptr = getfn(GCClass.id.im_func,
                                 [s_gc, s_gcref], annmodel.SomeInteger(),
@@ -507,6 +515,16 @@ class FrameworkGCTransformer(GCTransformer):
 
     def _can_realloc(self):
         return self.gcdata.gc.can_realloc
+
+    def perform_realloc(self, hop, v_ptr, v_newsize, c_const_size,
+                        c_itemsize, c_lengthofs, c_grow):
+        vlist = [self.realloc_ptr, self.c_const_gc, v_ptr, v_newsize,
+                 c_const_size, c_itemsize, c_lengthofs, c_grow]
+        livevars = self.push_roots(hop)
+        v_result = hop.genop('direct_call', vlist,
+                             resulttype=llmemory.GCREF)
+        self.pop_roots(hop, livevars)
+        return v_result
 
     def gct_gc__disable_finalizers(self, hop):
         # cannot collect()

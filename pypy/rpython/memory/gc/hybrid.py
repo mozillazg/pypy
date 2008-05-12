@@ -10,6 +10,7 @@ from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rpython.lltypesystem import rffi
 
 #   _______in the semispaces_________      ______external (non-moving)_____
 #  /                                 \    /                                \
@@ -68,7 +69,6 @@ while GCFLAG_AGE_MASK < GCFLAG_AGE_MAX:
 # number of calls to semispace_collect():
 GENERATION3_COLLECT_THRESHOLD = 20
 
-
 class HybridGC(GenerationGC):
     """A two-generations semi-space GC like the GenerationGC,
     except that objects above a certain size are handled separately:
@@ -76,6 +76,7 @@ class HybridGC(GenerationGC):
     """
     first_unused_gcflag = _gcflag_next_bit
     prebuilt_gc_objects_are_static_roots = True
+    can_realloc = True
 
     # the following values override the default arguments of __init__ when
     # translating to a real backend.
@@ -210,6 +211,29 @@ class HybridGC(GenerationGC):
         else:
             raise NotImplementedError("Not supported")
         return llmemory.cast_ptr_to_adr(gcref)
+
+    def realloc(self, ptr, newsize, const_size, itemsize, lengthofs, grow):
+        size_gc_header = self.size_gc_header()
+        addr = llmemory.cast_ptr_to_adr(ptr)
+        tid = self.get_type_id(addr)
+        tot_size = size_gc_header + const_size + newsize * itemsize
+        oldsize = (addr + lengthofs).signed[0]
+        old_tot_size = size_gc_header + const_size + oldsize * itemsize
+        source_addr = addr - size_gc_header
+        if grow:
+            result = llop.raw_realloc_grow(llmemory.Address, source_addr,
+                                           old_tot_size, tot_size)
+        else:
+            result = llop.raw_realloc_shrink(llmemory.Address, source_addr,
+                                             old_tot_size, tot_size)
+        if not result:
+            raise MemoryError()
+        if result != addr:
+            flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
+            self.gen2_rawmalloced_objects.append(result)
+            self.init_gc_object(result, tid, flags)
+        (result + size_gc_header + lengthofs).signed[0] = newsize
+        return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
 
     def can_move(self, addr):
         tid = self.header(addr).tid
