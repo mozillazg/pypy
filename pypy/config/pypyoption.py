@@ -39,8 +39,6 @@ if sys.platform == "win32":
     del working_modules["zlib"] # MLS - Added 5/11/08 - broken
     del working_modules["_rawffi"]
     del working_modules["termios"]# UNIX Only
-    del working_modules["md5"]# UNKNOWN State - needs validating
-    del working_modules["sha"]# UNKNOWN State - needs validating
     del working_modules["bz2"]# UNKNOWN State - needs validating
     del working_modules["_minimal_curses"] #UNIX Only
 
