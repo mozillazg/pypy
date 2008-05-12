@@ -693,22 +693,14 @@ def raw_malloc(size):
         raise NotImplementedError(size)
     return size._raw_malloc([], zero=False)
 
-def raw_realloc(adr, size):
+def raw_realloc_grow(addr, old_size, size):
     new_area = size._raw_malloc([], zero=False)
-    ptr = adr.ptr
-    if isinstance(lltype.typeOf(ptr).TO, lltype.Array):
-        from_arr = adr.ptr
-        to_arr = new_area.ptr
-    elif isinstance(lltype.typeOf(ptr).TO, lltype.Struct):
-        arrayfld = lltype.typeOf(ptr).TO._arrayfld
-        from_arr = getattr(ptr, arrayfld)
-        to_arr = getattr(new_area.ptr, arrayfld)
-    else:
-        raise TypeError("%s seems to be not var-sized" % (lltype.typeOf(ptr),))
-    old_len = len(from_arr)
-    new_len = len(to_arr)
-    for i in range(min(old_len, new_len)):
-        to_arr[i] = from_arr[i]
+    raw_memcopy(addr, new_area, old_size)
+    return new_area
+
+def raw_realloc_shrink(addr, old_size, size):
+    new_area = size._raw_malloc([], zero=False)
+    raw_memcopy(addr, new_area, size)
     return new_area
 
 def raw_free(adr):
@@ -765,7 +757,7 @@ def _reccopy(source, dest):
     T = lltype.typeOf(source).TO
     assert T == lltype.typeOf(dest).TO
     if isinstance(T, (lltype.Array, lltype.FixedSizeArray)):
-        assert source._obj.getlength() == dest._obj.getlength()
+        assert source._obj.getlength() <= dest._obj.getlength()
         ITEMTYPE = T.OF
         for i in range(source._obj.getlength()):
             if isinstance(ITEMTYPE, lltype.ContainerType):
