@@ -64,7 +64,7 @@ class BoehmGCTransformer(GCTransformer):
         return True
 
     def perform_realloc(self, hop, v_ptr, v_newlgt, c_const_size, c_item_size,
-                        c_lengthofs):
+                        c_lengthofs, c_grow):
         args = [self.realloc_ptr, v_ptr, v_newlgt, c_const_size,
                 c_item_size, c_lengthofs]
         return hop.genop('direct_call', args, resulttype=llmemory.Address)
