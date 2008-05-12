@@ -770,7 +770,8 @@ class LLFrame(object):
     def op_gc__enable_finalizers(self):
         self.heap.enable_finalizers()
 
-    def op_gc_can_move(self, addr):
+    def op_gc_can_move(self, ptr):
+        addr = llmemory.cast_ptr_to_adr(ptr)
         return self.heap.can_move(addr)
 
     def op_gc_free(self, addr):
