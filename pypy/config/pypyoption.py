@@ -44,7 +44,6 @@ if sys.platform == "win32":
     del working_modules["select"] # MLS - Added 5/11/08 - broken
     # modules with unknown windows support
     # XXX what exactly is broken here? are the libs installed on the buildbots?
-    del working_modules["zlib"] # MLS - Added 5/11/08 - broken
  
 
 
