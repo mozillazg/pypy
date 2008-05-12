@@ -30,17 +30,22 @@ working_modules.update(dict.fromkeys(
 ))
 
 if sys.platform == "win32":
-    del working_modules["_socket"] # MLS - Added 5/11/08 - broken
-    del working_modules["mmap"]    # MLS - Added 5/11/08 - broken
-    del working_modules["fcntl"]   # UNIX only
-    del working_modules["select"] # MLS - Added 5/11/08 - broken
-    del working_modules["crypt"] # broken
-    del working_modules["signal"] # UNIX Only
-    del working_modules["zlib"] # MLS - Added 5/11/08 - broken
+    # unix only modules
+    del working_modules["crypt"]
+    del working_modules["fcntl"]
+    del working_modules["termios"]
+    del working_modules["_minimal_curses"]
+    # modules currently missing explicit windows support
+    del working_modules["signal"]
     del working_modules["_rawffi"]
-    del working_modules["termios"]# UNIX Only
-    del working_modules["bz2"]# UNKNOWN State - needs validating
-    del working_modules["_minimal_curses"] #UNIX Only
+    # modules with broken windows support
+    del working_modules["mmap"]    # MLS - Added 5/11/08 - broken
+    del working_modules["_socket"] # MLS - Added 5/11/08 - broken
+    del working_modules["select"] # MLS - Added 5/11/08 - broken
+    # modules with unknown windows support
+    # XXX what exactly is broken here? are the libs installed on the buildbots?
+    del working_modules["zlib"] # MLS - Added 5/11/08 - broken
+    del working_modules["bz2"]  # UNKNOWN State - needs validating
 
 
 
