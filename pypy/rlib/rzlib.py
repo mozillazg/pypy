@@ -4,7 +4,11 @@ from pypy.rpython.tool import rffi_platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 includes = ['zlib.h']
-libraries = ['z']
+if sys.platform == "win32":
+    libraries = ['zlib']
+else:
+    libraries = ['z']
+
 
 constantnames = '''
     Z_OK  Z_STREAM_ERROR  Z_BUF_ERROR  Z_MEM_ERROR  Z_STREAM_END
