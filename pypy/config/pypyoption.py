@@ -45,8 +45,7 @@ if sys.platform == "win32":
     # modules with unknown windows support
     # XXX what exactly is broken here? are the libs installed on the buildbots?
     del working_modules["zlib"] # MLS - Added 5/11/08 - broken
-    del working_modules["bz2"]  # UNKNOWN State - needs validating
-
+ 
 
 
 module_dependencies = {}
