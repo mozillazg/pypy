@@ -284,6 +284,8 @@ from pypy.translator.c.test.test_boehm import AbstractGCTestClass
 class TestUsingFramework(AbstractGCTestClass):
     gcpolicy = "marksweep"
     should_be_moving = False
+    GC_CAN_MOVE = False
+    GC_CANNOT_MALLOC_NONMOVABLE = False
 
     # interface for snippet.py
     large_tests_ok = True
@@ -882,11 +884,54 @@ class TestUsingFramework(AbstractGCTestClass):
 
         c_fn = self.getcompiled(f)
         assert c_fn() == 1
+    
+    def test_can_move(self):
+        from pypy.rlib import rgc
+        class A:
+            pass
+        def fn():
+            return rgc.can_move(A())
 
+        c_fn = self.getcompiled(fn, [])
+        assert c_fn() == self.GC_CAN_MOVE
+
+    def test_malloc_nonmovable(self):
+        TP = lltype.GcArray(lltype.Char)
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP, 3)
+                rgc.collect()
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        run = self.getcompiled(func)
+        assert run() == self.GC_CANNOT_MALLOC_NONMOVABLE
+
+    def test_resizable_buffer(self):
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib import rgc
+
+        def f():
+            ptr = rgc.resizable_buffer_of_shape(STR, 2)
+            ptr.chars[0] = 'a'
+            ptr = rgc.resize_buffer(ptr, 1, 200)
+            ptr.chars[1] = 'b'
+            return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
+
+        run = self.getcompiled(f)
+        assert run() == True
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
     gcpolicy = "semispace"
     should_be_moving = True
+    GC_CAN_MOVE = True
+    GC_CANNOT_MALLOC_NONMOVABLE = True
 
     def test_many_ids(self):
         from pypy.rlib.objectmodel import compute_unique_id
@@ -946,6 +991,10 @@ class TestGenerationalGC(TestSemiSpaceGC):
 class TestHybridGC(TestGenerationalGC):
     gcpolicy = "hybrid"
     should_be_moving = True
+    GC_CANNOT_MALLOC_NONMOVABLE = False
+
+    def test_resizable_buffer(self):
+        py.test.skip("segfaults")
 
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
