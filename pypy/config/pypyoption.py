@@ -23,20 +23,26 @@ default_modules.update(dict.fromkeys(
 
 working_modules = default_modules.copy()
 working_modules.update(dict.fromkeys(
-    ["_socket", "unicodedata", "mmap", "fcntl", "rctime", "select",
+    ["_socket", "unicodedata", "mmap", "fcntl",
+      "rctime" , "select",
      "crypt", "signal", "dyngram", "_rawffi", "termios", "zlib",
-     "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
-    ]
+     "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO"]
 ))
 
 if sys.platform == "win32":
-    del working_modules["fcntl"]
-    del working_modules["crypt"]
-    del working_modules["termios"]
+    del working_modules["_socket"] # MLS - Added 5/11/08 - broken
+    del working_modules["mmap"]    # MLS - Added 5/11/08 - broken
+    del working_modules["fcntl"]   # UNIX only
+    del working_modules["select"] # MLS - Added 5/11/08 - broken
+    del working_modules["crypt"] # broken
+    del working_modules["signal"] # UNIX Only
+    del working_modules["zlib"] # MLS - Added 5/11/08 - broken
     del working_modules["_rawffi"]
-    del working_modules["_minimal_curses"]
-    del working_modules["signal"]
-    del working_modules["select"]
+    del working_modules["termios"]# UNIX Only
+    del working_modules["md5"]# UNKNOWN State - needs validating
+    del working_modules["sha"]# UNKNOWN State - needs validating
+    del working_modules["bz2"]# UNKNOWN State - needs validating
+    del working_modules["_minimal_curses"] #UNIX Only
 
 
 
