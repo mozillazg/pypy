@@ -993,8 +993,5 @@ class TestHybridGC(TestGenerationalGC):
     should_be_moving = True
     GC_CANNOT_MALLOC_NONMOVABLE = False
 
-    def test_resizable_buffer(self):
-        py.test.skip("segfaults")
-
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
