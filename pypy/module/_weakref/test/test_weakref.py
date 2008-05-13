@@ -359,3 +359,28 @@ class AppTestProxy(object):
                 pass
             return A
         raises(TypeError, tryit)
+
+    def test_repr(self):
+        import _weakref, gc
+        for kind in ('ref', 'proxy'):
+            def foobaz(): pass
+            w = getattr(_weakref, kind)(foobaz)
+            s = repr(w)
+            print s
+            if kind == 'ref':
+                assert s.startswith('<weakref at ')
+            else:
+                assert (s.startswith('<weakproxy at ') or
+                        s.startswith('<weakcallableproxy at '))
+            assert "function" in s
+            del foobaz
+            try:
+                for i in range(10):
+                    if w() is None:
+                        break
+                    gc.collect()
+            except ReferenceError:
+                pass
+            s = repr(w)
+            print s
+            assert "dead" in s
