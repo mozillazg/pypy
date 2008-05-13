@@ -324,7 +324,7 @@ def setcopyright():
     __builtin__.license = _Printer(
         "license",
         "See http://codespeak.net/svn/pypy/dist/LICENSE")
-
+    __builtin__.copyright = _Printer('copyright', sys.copyright)
 
 class _Helper(object):
     """Define the built-in 'help'.
