@@ -42,3 +42,10 @@ def callstats():
     """Not implemented."""
     return None
 
+copyright_str = """
+Copyright 2003-2008 PyPy development team.
+All rights reserved.
+For further information see http://www.codespeak.net/pypy.
+Some materials may have a different copyright.
+In these cases, this is explicitly noted in the source code file.
+"""

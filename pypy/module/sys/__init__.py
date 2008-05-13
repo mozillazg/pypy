@@ -50,7 +50,6 @@ class Module(MixedModule):
         'call_tracing'          : 'vm.call_tracing',
         
         'executable'            : 'space.wrap("py.py")', 
-        'copyright'             : 'space.wrap("MIT-License")', 
         'api_version'           : 'version.get_api_version(space)',
         'version_info'          : 'version.get_version_info(space)',
         'version'               : 'version.get_version(space)',
@@ -79,6 +78,7 @@ class Module(MixedModule):
         'exitfunc'              : 'app.exitfunc',
         'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
+        'copyright'             : 'app.copyright_str', 
     }
 
     def setbuiltinmodule(self, w_module, name): 
