@@ -76,7 +76,7 @@ class W_Root(object):
                 return default
             raise
 
-    def getrepr(self, space, info):
+    def getrepr(self, space, info, moreinfo=''):
         # XXX slowish
         w_id = space.id(self)
         w_4 = space.wrap(4)
@@ -93,7 +93,8 @@ class W_Root(object):
             if i == 0:
                 break
             w_id = space.rshift(w_id, w_4)
-        return space.wrap("<%s at 0x%s>" % (info, ''.join(addrstring)))
+        return space.wrap("<%s at 0x%s%s>" % (info, ''.join(addrstring),
+                                              moreinfo))
 
     def getslotvalue(self, index):
         raise NotImplementedError
