@@ -12,6 +12,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.test import snippet
 from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 from pypy import conftest
 from pypy.tool.udir import udir
 
@@ -983,6 +984,30 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
         c_fn = self.getcompiled(fn)
         res = c_fn()
         assert res == 2
+        
+    def test_string_builder(self):
+        def fn():
+            s = StringBuilder()
+            s.append("a")
+            s.append("abc")
+            s.append_slice("abc", 1, 2)
+            s.append_multiple_char('d', 4)
+            return s.build()
+        c_fn = self.getcompiled(fn)
+        res = c_fn()
+        assert res == "aabcbdddd"
+    
+    def test_string_builder_over_allocation(self):
+        def fn():
+            s = StringBuilder(1024)
+            s.append("abcd")
+            s.append("defg")
+            s.append("rty")
+            s.append_multiple_char('y', 1000)
+            return s.build()
+        c_fn = self.getcompiled(fn)
+        res = c_fn()
+        assert res[1000] == 'y'
 
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
