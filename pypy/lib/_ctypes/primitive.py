@@ -1,4 +1,5 @@
 import _rawffi
+import weakref
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
@@ -33,6 +34,20 @@ TP_TO_DEFAULT = {
 }
  
 DEFAULT_VALUE = object()
+
+class GlobalPyobjContainer(object):
+    def __init__(self):
+        self.objs = []
+
+    def add(self, obj):
+        num = len(self.objs)
+        self.objs.append(weakref.ref(obj))
+        return num
+
+    def get(self, num):
+        return self.objs[num]()
+
+pyobj_container = GlobalPyobjContainer()
 
 def generic_xxx_p_from_param(self, value):
     from _ctypes import Array, _Pointer
@@ -180,6 +195,14 @@ class SimpleType(_CDataMeta):
                     self._buffer[0] = val
             def _getvalue(self):
                 return self._buffer[0]
+            result.value = property(_getvalue, _setvalue)
+
+        elif tp == 'O':
+            def _setvalue(self, val):
+                num = pyobj_container.add(val)
+                self._buffer[0] = num
+            def _getvalue(self):
+                return pyobj_container.get(self._buffer[0])
             result.value = property(_getvalue, _setvalue)
 
         return result
