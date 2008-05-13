@@ -10,6 +10,7 @@ from pypy.rpython.memory.gc.marksweep import X_CLONE, X_POOL, X_POOL_PTR
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.rlib.debug import ll_assert
 from pypy import conftest
+from pypy.rlib.rstring import StringBuilder
 
 INT_SIZE = struct.calcsize("i")   # only for estimates
 
@@ -506,6 +507,22 @@ class GenericGCTests(GCTest):
 
         run = self.runner(f)
         assert run([]) == 1
+
+    def test_string_builder_over_allocation(self):
+        import gc
+        py.test.skip("Problematic test")
+        def fn():
+            s = StringBuilder(4)
+            s.append("abcd")
+            s.append("defg")
+            s.append("rty")
+            s.append_multiple_char('y', 1000)
+            gc.collect()
+            s.append_multiple_char('y', 1000)
+            return s.build()[1000]
+        fn = self.runner(fn)
+        res = fn([])
+        assert res == 'y'
 
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
