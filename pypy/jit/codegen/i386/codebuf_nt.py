@@ -1,15 +1,15 @@
-from pypy.rpython.tool import rffi_pltform
+from pypy.rpython.tool import rffi_platform
 from pypy.rpython.tool.rffi_platform import ConstantInteger
 from pypy.rpython.tool.rffi_platform import SimpleType
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import rffi, lltype
 
-raise ImportError
+eci = ExternalCompilationInfo(
+    includes = ["windows.h"]
+    )
 
 class CConfig:
-    _compilation_info_ = ExternalCompilationInfo(
-        includes = "windows.h"
-        )
+    _compilation_info_ = eci
 
     SIZE_T                 = SimpleType('SIZE_T', rffi.LONG)
     DWORD                  = SimpleType('DWORD', rffi.LONG)
@@ -19,33 +19,32 @@ class CConfig:
     MEM_RELEASE            = ConstantInteger('MEM_RELEASE')
     PAGE_EXECUTE_READWRITE = ConstantInteger('PAGE_EXECUTE_READWRITE')
 
-globals().update(ctypes_platform.configure(CConfig))
+globals().update(rffi_platform.configure(CConfig))
 
-# cannot use c_void_p as return value of functions :-(
+def external(name, args, result):
+    return rffi.llexternal(name, args, result, compilation_info=eci,
+                           calling_conv='win')
 
-# XXX how to get kernel32?
-VirtualAlloc = ctypes.windll.kernel32.VirtualAlloc
-VirtualAlloc.argtypes = [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD]
-VirtualAlloc.restype = rffi.VOIDP
+DWORDP = rffi.CArrayPtr(DWORD)
+PTR = rffi.VOIDP
 
-DWORD_P = rffi.CArrayPtr(DWORD)
-VirtualProtect = ctypes.windll.kernel32.VirtualProtect
-VirtualProtect.argtypes = [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD_P]
-VirtualProtect.restype = BOOL
-
-VirtualFree = ctypes.windll.kernel32.VirtualFree
-VirtualFree.argtypes = [rffi.VOIDP, rffi.SIZE_T, DWORD]
-VirtualFree.restype = BOOL
+# kernel32 is already part of the ExternalCompilationInfo
+VirtualAlloc = external('VirtualAlloc',
+                        [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD], rffi.VOIDP)
+VirtualProtect = external('VirtualProtect',
+                          [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORDP], BOOL)
+VirtualFree = external('VirtualFree',
+                       [rffi.VOIDP, rffi.SIZE_T, DWORD], BOOL)
 
 # ____________________________________________________________
 
 def alloc(map_size):
-    null = lltype.nullptr(rffi.VOIDP)
+    null = lltype.nullptr(rffi.VOIDP.TO)
     res = VirtualAlloc(null, map_size, MEM_COMMIT|MEM_RESERVE,
                        PAGE_EXECUTE_READWRITE)
     if not res:
         raise MemoryError
-    arg = lltype.malloc(DWORD_P, 1, zero=True, flavor='raw')
+    arg = lltype.malloc(DWORDP.TO, 1, zero=True, flavor='raw')
     VirtualProtect(res, map_size, PAGE_EXECUTE_READWRITE, arg)
     lltype.free(arg, flavor='raw')
     # ignore errors, just try
