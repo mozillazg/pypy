@@ -57,13 +57,17 @@ def dict_reversed__ANY(space, w_dict):
 # gateway is imported in the stdtypedef module
 app = gateway.applevel('''
 
+    # in the following functions we use dict.__setitem__ instead of
+    # d[k]=...  because when a subclass of dict override __setitem__,
+    # CPython does not call it when doing builtin operations.
+
     def update1(d, o):
         if hasattr(o, 'keys'):
             for k in o.keys():
-                d[k] = o[k]
+                dict.__setitem__(d, k, o[k])
         else:
             for k,v in o:
-                d[k] = v
+                dict.__setitem__(d, k, v)
 
     def update(d, *args, **kwargs):
         len_args = len(args)
@@ -93,7 +97,7 @@ app = gateway.applevel('''
         if k in d:
             return d[k]
         else:
-            d[k] = v
+            dict.__setitem__(d, k, v)
             return v
 
     def pop(d, k, defaults):     # XXX defaults is actually *defaults
