@@ -320,6 +320,9 @@ class AppTest_Descroperation:
 
     def test_setattrweakref(self):
         skip("fails, works in cpython")
+        # The issue is that in CPython, none of the built-in types have
+        # a __weakref__ descriptor, even if their instances are weakrefable.
+        # Should we emulate this?
         class P(object):
             pass
 
