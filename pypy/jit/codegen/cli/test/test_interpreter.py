@@ -37,19 +37,23 @@ class TestRainbowCli(RainbowTest):
     def test_simple_opt_const_propagation1(self):
         py.test.skip('mono crash')
 
+    def test_red_propagate(self):
+        py.test.skip('mono crash')
+
     def skip(self):
         py.test.skip('in progress')
 
+    # delegate type not supported during testing
     test_simple_struct = skip
     test_complex_struct = skip
+    test_degenerate_with_voids = skip
+    test_green_with_side_effects = skip
+
+    # tests still bound to lltype
     test_simple_array = skip
     test_arraysize = skip
-    test_degenerate_with_voids = skip
-    test_red_virtual_container = skip
     test_setarrayitem = skip
-    test_red_propagate = skip
-    test_merge_structures = skip
-    test_green_with_side_effects = skip
+    
     test_compile_time_const_tuple = skip
     test_green_deepfrozen_oosend = skip
     test_direct_oosend_with_green_self = skip
