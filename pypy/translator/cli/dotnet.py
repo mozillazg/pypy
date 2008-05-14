@@ -508,11 +508,23 @@ class Entry(ExtRegistryEntry):
         return hop.genop('same_as', [v_obj], hop.r_result.lowleveltype)
 
 def new_array(type, length):
-    return [None] * length
+    # PythonNet doesn't provide a straightforward way to create arrays,
+    # let's use reflection instead
+
+    # hack to produce the array type name from the member type name
+    typename = type._INSTANCE._assembly_qualified_name
+    parts = typename.split(',')
+    parts[0] = parts[0] + '[]'
+    typename = ','.join(parts)
+    t = PythonNet.System.Type.GetType(typename)
+    ctor = t.GetConstructors()[0]
+    return ctor.Invoke([length])
 
 def init_array(type, *args):
-    # PythonNet doesn't provide a straightforward way to create arrays... fake it with a list
-    return list(args)
+    array = new_array(type, len(args))
+    for i, arg in enumerate(args):
+        array[i] = arg
+    return array
 
 class Entry(ExtRegistryEntry):
     _about_ = new_array
