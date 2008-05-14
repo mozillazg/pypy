@@ -1,5 +1,6 @@
 
 import py
+import sys
 from pypy.rpython.lltypesystem.rffi import *
 from pypy.rpython.lltypesystem.rffi import _keeper_for_type # crap
 from pypy.rlib.rposix import get_errno, set_errno
@@ -347,7 +348,8 @@ class BaseTestRffi:
 
         eci = ExternalCompilationInfo(includes=['callback.h'],
                                       include_dirs=[str(udir)],
-                                      separate_module_sources=[c_source])
+                                      separate_module_sources=[c_source],
+                                      export_symbols=['eating_callback'])
 
         args = [INT, CCallback([INT], INT)]
         eating_callback = llexternal('eating_callback', args, INT,
@@ -530,6 +532,8 @@ class TestRffiInternals:
         assert interpret(f, [], backendopt=True) == 43    
     
     def test_around_extcall(self):
+        if sys.platform == "win32":
+            py.test.skip('No pipes on windows')
         import os
         from pypy.annotation import model as annmodel
         from pypy.rlib.objectmodel import invoke_around_extcall

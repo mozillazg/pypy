@@ -181,7 +181,10 @@ class ModuleWithCleanup(object):
 
     def __del__(self):
         import sys
-        from _ctypes import dlclose
+        if sys.platform == "win32":
+            from _ctypes import FreeLibrary as dlclose
+        else:
+            from _ctypes import dlclose
         # XXX fish fish fish
         mod = self.__dict__['mod']
         dlclose(mod._lib._handle)
@@ -204,9 +207,15 @@ class CExtModuleBuilder(CBuilder):
     def compile(self):
         assert self.c_source_filename 
         assert not self._compiled
+        export_symbols = [self.db.get(self.getentrypointptr()),
+                          'RPython_StartupCode',
+                          ]
+        if self.config.translation.countmallocs:
+            export_symbols.append('malloc_counters')
         compile_c_module([self.c_source_filename] + self.extrafiles,
                          self.c_source_filename.purebasename, self.eci,
-                         tmpdir=self.c_source_filename.dirpath())
+                         tmpdir=self.c_source_filename.dirpath(),
+                         export_symbols=export_symbols)
         self._compiled = True
 
     def _make_wrapper_module(self):
@@ -219,7 +228,7 @@ class CExtModuleBuilder(CBuilder):
         CODE = """
 import ctypes
 
-_lib = ctypes.PyDLL("%(so_name)s")
+_lib = ctypes.PyDLL(r"%(so_name)s")
 
 _entry_point = getattr(_lib, "%(c_entrypoint_name)s")
 _entry_point.restype = ctypes.py_object

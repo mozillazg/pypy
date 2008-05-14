@@ -267,8 +267,11 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_frexp(self):
-        eci = ExternalCompilationInfo(includes=['math.h'],
-                                      libraries=['m'])
+        if sys.platform != 'win32':
+            eci = ExternalCompilationInfo(includes=['math.h'],
+                                          libraries=['m'])
+        else:
+            eci = ExternalCompilationInfo(includes=['math.h'])
         A = lltype.FixedSizeArray(rffi.INT, 1)
         frexp = rffi.llexternal('frexp', [rffi.DOUBLE, lltype.Ptr(A)],
                                 rffi.DOUBLE, compilation_info=eci)
@@ -299,6 +302,8 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_opaque_obj(self):
+        if sys.platform == 'win32':
+            py.test.skip("No gettimeofday on win32")
         eci = ExternalCompilationInfo(
             includes = ['sys/time.h', 'time.h']
         )
@@ -683,6 +688,8 @@ class TestLL2Ctypes(object):
         assert abs(float(b[2]) - 2.2) < 1E-6
 
     def test_different_signatures(self):
+        if sys.platform=='win32':
+            py.test.skip("No fcntl on win32")
         fcntl_int = rffi.llexternal('fcntl', [rffi.INT, rffi.INT, rffi.INT],
                                     rffi.INT)
         fcntl_str = rffi.llexternal('fcntl', [rffi.INT, rffi.INT, rffi.CCHARP],
@@ -693,7 +700,8 @@ class TestLL2Ctypes(object):
 
     def test_llexternal_source(self):
         eci = ExternalCompilationInfo(
-            separate_module_sources = ["int fn() { return 42; }"]
+            separate_module_sources = ["int fn() { return 42; }"],
+            export_symbols = ['fn'],
         )
         fn = rffi.llexternal('fn', [], rffi.INT, compilation_info=eci)
         res = fn()
@@ -745,7 +753,8 @@ class TestLL2Ctypes(object):
         }
         """)
 
-        eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+        eci = ExternalCompilationInfo(separate_module_sources=[c_source],
+                                      export_symbols=['eating_callback'])
 
         args = [rffi.INT, rffi.CCallback([rffi.INT], rffi.INT)]
         eating_callback = rffi.llexternal('eating_callback', args, rffi.INT,
