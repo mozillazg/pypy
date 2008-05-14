@@ -56,6 +56,9 @@ class ExternalCompilationInfo(object):
         separate_module_files: list of .c file names that are compiled
         separately and linked later on.  (If an .h file is needed for
         other .c files to access this, it can be put in includes.)
+
+        export_symbols: list of names that should be exported by the final
+        binary.
         """
         for name in self._ATTRIBUTES:
             value = locals()[name]
@@ -198,8 +201,7 @@ def ensure_correct_math():
         opt += '/Op'
     gcv['OPT'] = opt
 
-def compile_c_module(cfiles, modbasename, eci, tmpdir=None,
-                     export_symbols=None):
+def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
     #try:
     #    from distutils.log import set_threshold
     #    set_threshold(10000)
@@ -223,10 +225,7 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None,
                os.path.exists(s + 'lib'):
                 library_dirs.append(s + 'lib')
 
-    if export_symbols is None:
-        export_symbols = list(eci.export_symbols)
-    else:
-        export_symbols = list(eci.export_symbols) + export_symbols
+    export_symbols = list(eci.export_symbols)
 
     num = 0
     modname = modbasename
