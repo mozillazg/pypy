@@ -70,11 +70,8 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
         py.test.skip('fixme: add support for frames')
 
     def test_from_random_direct(self):
-        py.test.skip('mono crashes')
-        
-    def test_from_random_3_direct(self):
-        py.test.skip('infinite loop')
-        
+        py.test.skip('mono crash')
+
     def test_from_random_5_direct(self):
         py.test.skip('mono crash')
 

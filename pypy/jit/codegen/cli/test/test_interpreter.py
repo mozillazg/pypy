@@ -1,9 +1,11 @@
 import py
 from pypy.jit.codegen.cli.rgenop import RCliGenOp
+from pypy.jit.codegen.dump.rgenop import RDumpGenOp
 from pypy.jit.rainbow.test.test_interpreter import TestOOType as RainbowTest
 
 class TestRainbowCli(RainbowTest):
     RGenOp = RCliGenOp
+    RGenOp = RDumpGenOp
 
     # for the individual tests see
     # ====> ../../../rainbow/test/test_interpreter.py
@@ -23,7 +25,7 @@ class TestRainbowCli(RainbowTest):
 
     test_simple_opt_const_propagation1 = skip
     test_simple_opt_const_propagation2 = skip
-    test_red_switch = skip
+    #test_red_switch = skip
     test_merge = skip
     test_loop_merging = skip
     test_loop_merging2 = skip
