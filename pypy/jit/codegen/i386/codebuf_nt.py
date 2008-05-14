@@ -2,7 +2,7 @@ from pypy.rpython.tool import rffi_pltform
 from pypy.rpython.tool.rffi_platform import ConstantInteger
 from pypy.rpython.tool.rffi_platform import SimpleType
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rpython.lltypesystem import rffi
+from pypy.rpython.lltypesystem import rffi, lltype
 
 raise ImportError
 
@@ -45,9 +45,9 @@ def alloc(map_size):
                        PAGE_EXECUTE_READWRITE)
     if not res:
         raise MemoryError
-    XXX # rewrite
-    old = DWORD()
-    VirtualProtect(res, map_size, PAGE_EXECUTE_READWRITE, ctypes.byref(old))
+    arg = lltype.malloc(DWORD_P, 1, zero=True, flavor='raw')
+    VirtualProtect(res, map_size, PAGE_EXECUTE_READWRITE, arg)
+    lltype.free(arg, flavor='raw')
     # ignore errors, just try
     return res
 
