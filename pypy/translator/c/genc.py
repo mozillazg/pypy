@@ -212,10 +212,11 @@ class CExtModuleBuilder(CBuilder):
                           ]
         if self.config.translation.countmallocs:
             export_symbols.append('malloc_counters')
+        extsymeci = ExternalCompilationInfo(export_symbols=export_symbols)
+        self.eci = self.eci.merge(extsymeci)
         compile_c_module([self.c_source_filename] + self.extrafiles,
                          self.c_source_filename.purebasename, self.eci,
-                         tmpdir=self.c_source_filename.dirpath(),
-                         export_symbols=export_symbols)
+                         tmpdir=self.c_source_filename.dirpath())
         self._compiled = True
 
     def _make_wrapper_module(self):
