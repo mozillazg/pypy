@@ -12,7 +12,6 @@ DelegateHolder = CLR.pypy.runtime.DelegateHolder
 OpCodes = System.Reflection.Emit.OpCodes
 
 DUMP_IL = False
-DEBUG = False
 
 cVoid = ootype.nullruntimeclass
 cInt32 = classof(System.Int32)
@@ -57,18 +56,18 @@ class GenArgVar(GenVar):
 
     def load(self, builder):
         if self.index == 0:
-            builder.il.Emit(OpCodes.Ldarg_0)
+            builder.parent.il.Emit(OpCodes.Ldarg_0)
         elif self.index == 1:
-            builder.il.Emit(OpCodes.Ldarg_1)
+            builder.parent.il.Emit(OpCodes.Ldarg_1)
         elif self.index == 2:
-            builder.il.Emit(OpCodes.Ldarg_2)
+            builder.parent.il.Emit(OpCodes.Ldarg_2)
         elif self.index == 3:
-            builder.il.Emit(OpCodes.Ldarg_3)
+            builder.parent.il.Emit(OpCodes.Ldarg_3)
         else:
-            builder.il.Emit(OpCodes.Ldarg, self.index)
+            builder.parent.il.Emit(OpCodes.Ldarg, self.index)
 
     def store(self, builder):
-        builder.il.Emit(OpCodes.Starg, self.index)
+        builder.parent.il.Emit(OpCodes.Starg, self.index)
 
     def __repr__(self):
         return "GenArgVar(%d)" % self.index
@@ -81,10 +80,10 @@ class GenLocalVar(GenVar):
         return self.v.get_LocalType()
 
     def load(self, builder):
-        builder.il.Emit(OpCodes.Ldloc, self.v)
+        builder.parent.il.Emit(OpCodes.Ldloc, self.v)
 
     def store(self, builder):
-        builder.il.Emit(OpCodes.Stloc, self.v)
+        builder.parent.il.Emit(OpCodes.Stloc, self.v)
 
 
 class IntConst(GenConst):
@@ -108,7 +107,7 @@ class IntConst(GenConst):
         return class2type(self.cliclass)
 
     def load(self, builder):
-        builder.il.Emit(OpCodes.Ldc_I4, self.value)
+        builder.parent.il.Emit(OpCodes.Ldc_I4, self.value)
 
     def __repr__(self):
         return "int const=%s" % self.value
@@ -128,7 +127,7 @@ class FloatConst(GenConst):
         return typeof(System.Double)
 
     def load(self, builder):
-        builder.il.Emit(OpCodes.Ldc_R8, self.value)
+        builder.parent.il.Emit(OpCodes.Ldc_R8, self.value)
 
     def __repr__(self):
         return "float const=%s" % self.value
@@ -145,10 +144,10 @@ class BaseConst(GenConst):
         return index
 
     def _load_from_array(self, builder, index, clitype):
-        builder.il.Emit(OpCodes.Ldarg_0)
-        builder.il.Emit(OpCodes.Ldc_I4, index)
-        builder.il.Emit(OpCodes.Ldelem_Ref)
-        builder.il.Emit(OpCodes.Castclass, clitype)
+        builder.parent.il.Emit(OpCodes.Ldarg_0)
+        builder.parent.il.Emit(OpCodes.Ldc_I4, index)
+        builder.parent.il.Emit(OpCodes.Ldelem_Ref)
+        builder.parent.il.Emit(OpCodes.Castclass, clitype)
 
     def getobj(self):
         raise NotImplementedError
@@ -162,6 +161,7 @@ class ObjectConst(BaseConst):
         return self.obj
 
     def load(self, builder):
+        import pdb;pdb.set_trace()
         index = self._get_index(builder)
         if self.obj is None:
             t = typeof(System.Object)
@@ -171,6 +171,10 @@ class ObjectConst(BaseConst):
 
     @specialize.arg(1)
     def revealconst(self, T):
+        if T is ootype.Signed:
+            return 12345
+        elif T is ootype.Unsigned:
+            return 12346
         return ootype.cast_from_object(T, self.obj)
 
 
@@ -192,8 +196,8 @@ class FunctionConst(BaseConst):
         delegatetype = self.delegatetype
         index = self._get_index(builder)
         self._load_from_array(builder, index, holdertype)
-        builder.il.Emit(OpCodes.Ldfld, funcfield)
-        builder.il.Emit(OpCodes.Castclass, delegatetype)
+        builder.parent.il.Emit(OpCodes.Ldfld, funcfield)
+        builder.parent.il.Emit(OpCodes.Castclass, delegatetype)
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -282,11 +286,11 @@ class RCliGenOp(AbstractRGenOp):
         for i in range(len(argsclass)):
             args[i+1] = class2type(argsclass[i])
         res = class2type(sigtoken.res)
-        builder = Builder(self, name, res, args, sigtoken)
+        builder = GraphBuilder(self, name, res, args, sigtoken)
         return builder, builder.gv_entrypoint, builder.inputargs_gv[:]
 
 
-class Builder(GenBuilder):
+class GraphBuilder(GenBuilder):
 
     def __init__(self, rgenop, name, res, args, sigtoken):
         self.rgenop = rgenop
@@ -300,99 +304,66 @@ class Builder(GenBuilder):
             self.inputargs_gv.append(GenArgVar(i, args[i]))
         self.delegatetype = class2type(sigtoken.funcclass)
         self.gv_entrypoint = FunctionConst(self.delegatetype)
-        self.isOpen = False
-        self.operations = []
-        self.branches = []
-        self.returnblocks = []
         self.genconsts = {}
+        self.branches = [BranchBuilder(self, self.il.DefineLabel())]
+        restype = class2type(sigtoken.res)
+        if restype is not None:
+            self.retvar = self.il.DeclareLocal(restype)
+        else:
+            self.retvar = None
+        self.retlabel = self.il.DefineLabel()
+
+    def appendbranch(self, branchbuilder):
+        self.branches.append(branchbuilder)
+
+    def start_writing(self):
+        self.branches[0].start_writing()
+
+    def pause_writing(self, args_gv):
+        return self.branches[0].pause_writing(args_gv)
+ 
+    def finish_and_return(self, sigtoken, gv_returnvar):
+        return self.branches[0].finish_and_return(sigtoken,
+                                                  gv_returnvar)
+
+    def finish_and_goto(self, outputargs_gv, target):
+        return self.branches[0].finish_and_goto(outputargs_gv, target)
+
+    def enter_next_block(self, args_gv):
+        return self.branches[0].enter_next_block(args_gv)
+
+    def jump_if_false(self, gv_condition, args_for_jump_gv):
+        return self.branches[0].jump_if_false(gv_condition,
+                                              args_for_jump_gv)
+
+    def jump_if_true(self, gv_condition, args_for_jump_gv):
+        return self.branches[0].jump_if_true(gv_condition,
+                                             args_for_jump_gv)
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
-        opcls = ops.getopclass1(opname)
-        op = opcls(self, gv_arg)
-        self.emit(op)
-        gv_res = op.gv_res()
-        if DEBUG:
-            self.il.EmitWriteLine(opname)
-            self.writeline_gv(gv_arg)
-            self.writeline_gv(gv_res)
-            self.il.EmitWriteLine('')
-        return gv_res
+        return self.branches[0].genop1(opname, gv_arg)
     
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
-        opcls = ops.getopclass2(opname)
-        op = opcls(self, gv_arg1, gv_arg2)
-        self.emit(op)
-        gv_res = op.gv_res()
-        if DEBUG:
-            self.il.EmitWriteLine(opname)
-            self.writeline_gv(gv_arg1)
-            self.writeline_gv(gv_arg2)
-            self.writeline_gv(gv_res)
-            self.il.EmitWriteLine('')
-        return gv_res
-
-    def writeline_gv(self, gv):
-        if isinstance(gv, GenLocalVar):
-            self.il.EmitWriteLine(gv.v)
-        elif isinstance(gv, IntConst):
-            self.il.EmitWriteLine('%s' % gv.value)
-        else:
-            assert False
+        return self.branches[0].genop2(opname, gv_arg1, gv_arg2)
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-        op = ops.Call(self, sigtoken, gv_fnptr, args_gv)
-        self.emit(op)
-        return op.gv_res()
+        return self.branches[0].genop_call(sigtoken, gv_fnptr, args_gv)
 
     def genop_same_as(self, gv_x):
-        op = ops.SameAs(self, gv_x)
-        self.emit(op)
-        return op.gv_res()
-
-    def genop_getfield(self, fieldtoken, gv_ptr):
-        pass
-
-    def genop_setfield(self, fieldtoken, gv_ptr, gv_value):
-        pass
-
-    def emit(self, op):
-        op.emit()
-
-    def appendbranch(self, branch):
-        self.branches.append(branch)
-
-    def appendreturn(self, retlabel, gv_returnvar):
-        self.returnblocks.append((retlabel, gv_returnvar))
-
-    def start_writing(self):
-        self.isOpen = True
-
-    def finish_and_return(self, sigtoken, gv_returnvar):
-        retlabel = self.il.DefineLabel()
-        op = ops.Branch(self, None, OpCodes.Br, retlabel)
-        self.emit(op)
-        self.appendreturn(retlabel, gv_returnvar)
-        self.isOpen = False
-
-    def finish_and_goto(self, outputargs_gv, target):
-        inputargs_gv = target.inputargs_gv
-        assert len(inputargs_gv) == len(outputargs_gv)
-        op = ops.FollowLink(self, outputargs_gv, inputargs_gv, target.label)
-        self.emit(op)
-        self.isOpen = False
+        return self.branches[0].genop_same_as(gv_x)
 
     def end(self):
         # render all the pending branches
-        for branch in self.branches:
-            branch.replayops()
+        for branchbuilder in self.branches:
+            branchbuilder.replayops()
 
-        # render the return blocks for last, else the verifier could complain
-        for retlabel, gv_returnvar in self.returnblocks:
-            self.il.MarkLabel(retlabel)
-            op = ops.Return(self, gv_returnvar)
-            self.emit(op)
+        # render the return block for last, else the verifier could complain        
+        self.il.MarkLabel(self.retlabel)
+        if self.retvar:
+            self.il.Emit(OpCodes.Ldloc, self.retvar)
+        self.il.Emit(OpCodes.Ret)
 
         # initialize the array of genconsts
         consts = new_array(System.Object, len(self.genconsts))
@@ -402,21 +373,79 @@ class Builder(GenBuilder):
         myfunc = self.meth.CreateDelegate(self.delegatetype, consts)
         self.gv_entrypoint.holder.SetFunc(myfunc)
 
+
+class BranchBuilder(GenBuilder):
+
+    def __init__(self, parent, label):
+        self.parent = parent
+        self.label = label
+        self.operations = []
+        self.is_open = False
+        self.genconsts = parent.genconsts
+
+    def start_writing(self):
+        self.is_open = True
+
+    def finish_and_return(self, sigtoken, gv_returnvar):
+        op = ops.Return(self, gv_returnvar)
+        self.appendop(op)
+        self.is_open = False
+
+    def finish_and_goto(self, outputargs_gv, target):
+        inputargs_gv = target.inputargs_gv
+        assert len(inputargs_gv) == len(outputargs_gv)
+        op = ops.FollowLink(self, outputargs_gv, inputargs_gv,
+                            target.label)
+        self.appendop(op)
+        self.is_open = False
+
+    @specialize.arg(1)
+    def genop1(self, opname, gv_arg):
+        opcls = ops.getopclass1(opname)
+        op = opcls(self, gv_arg)
+        self.appendop(op)
+        gv_res = op.gv_res()
+        return gv_res
+    
+    @specialize.arg(1)
+    def genop2(self, opname, gv_arg1, gv_arg2):
+        opcls = ops.getopclass2(opname)
+        op = opcls(self, gv_arg1, gv_arg2)
+        self.appendop(op)
+        gv_res = op.gv_res()
+        return gv_res
+
+    def genop_call(self, sigtoken, gv_fnptr, args_gv):
+        op = ops.Call(self, sigtoken, gv_fnptr, args_gv)
+        self.appendop(op)
+        return op.gv_res()
+
+    def genop_same_as(self, gv_x):
+        op = ops.SameAs(self, gv_x)
+        self.appendop(op)
+        return op.gv_res()
+
+##    def genop_getfield(self, fieldtoken, gv_ptr):
+##        pass
+
+##    def genop_setfield(self, fieldtoken, gv_ptr, gv_value):
+##        pass
+
     def enter_next_block(self, args_gv):
         for i in range(len(args_gv)):
             op = ops.SameAs(self, args_gv[i])
-            op.emit()
+            self.appendop(op)
             args_gv[i] = op.gv_res()
-        label = self.il.DefineLabel()
-        self.emit(ops.MarkLabel(self, label))
+        label = self.parent.il.DefineLabel()
+        self.appendop(ops.MarkLabel(self, label))
         return Label(label, args_gv)
 
     def _jump_if(self, gv_condition, opcode):
-        label = self.il.DefineLabel()
+        label = self.parent.il.DefineLabel()
         op = ops.Branch(self, gv_condition, opcode, label)
-        self.emit(op)
-        branch = BranchBuilder(self, label)
-        self.appendbranch(branch)
+        self.appendop(op)
+        branch = BranchBuilder(self.parent, label)
+        self.parent.appendbranch(branch)
         return branch
 
     def jump_if_false(self, gv_condition, args_for_jump_gv):
@@ -425,43 +454,16 @@ class Builder(GenBuilder):
     def jump_if_true(self, gv_condition, args_for_jump_gv):
         return self._jump_if(gv_condition, OpCodes.Brtrue)
 
-class BranchBuilder(Builder):
-
-    def __init__(self, parent, label):
-        self.parent = parent
-        self.label = label
-        self.il = parent.il
-        self.operations = []
-        self.isOpen = False
-        self.genconsts = parent.genconsts
-
-    def start_writing(self):
-        self.isOpen = True
-
-    @specialize.arg(1)
-    def genop2(self, opname, gv_arg1, gv_arg2):
-        # XXX: this only serves to mask a bug in gencli which I don't
-        # feel like fixing now. Try to uncomment this and run
-        # test_goto_compile to see why it fails
-        return Builder.genop2(self, opname, gv_arg1, gv_arg2)
-
-    def emit(self, op):
+    def appendop(self, op):
         self.operations.append(op)
-
-    def appendbranch(self, branch):
-        self.parent.appendbranch(branch)
-
-    def appendreturn(self, retlabel, gv_returnvar):
-        self.parent.appendreturn(retlabel, gv_returnvar)
 
     def end(self):
         self.parent.end()
 
     def replayops(self):
-        assert not self.isOpen
-        assert not self.parent.isOpen
+        assert not self.is_open
         il = self.parent.il
-        il.MarkLabel(self.label)        
+        il.MarkLabel(self.label)
         for op in self.operations:
             op.emit()
 

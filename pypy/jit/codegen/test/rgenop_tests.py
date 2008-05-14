@@ -2670,3 +2670,34 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
 
         fnptr = self.cast(gv_fn, 0, RESULT=lltype.Void)
         #res = fnptr() -- xxx fix me, cannot be run so far
+
+    def test_red_switch(self):
+        """
+        This code is derived from the one produced by the dump backend
+        when running rainbow.test_interpreter.test_red_switch.
+        """
+        rgenop = self.RGenOp()
+        sigtoken = rgenop.sigToken(self.T.FUNC2)
+
+        builder0, gv_callable, [arg1, arg2] = rgenop.newgraph(sigtoken,
+                                                          'generated')
+        builder0.start_writing()
+        var0 = builder0.genop1('int_is_true', arg1)
+        builder1 = builder0.jump_if_false(var0, [arg1, arg2, var0])
+        builder1.start_writing()
+        args_gv = [arg2]
+        label0 = builder1.enter_next_block(args_gv)
+        [v3] = args_gv
+        builder0.start_writing()
+        builder0.finish_and_goto([arg1], label0)
+        builder1.start_writing()
+        args_gv = [v3]
+        label1 = builder1.enter_next_block(args_gv)
+        [v4] = args_gv
+        builder1.finish_and_return(sigtoken, v4)
+        builder0.end()
+
+        fnptr = self.cast(gv_callable, 2)
+        result = fnptr(1, 2)
+        assert result == 1
+

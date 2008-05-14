@@ -8,7 +8,7 @@ class DumpGenerator:
     def _fmt(self, arg):
         from System.Reflection import Emit, FieldInfo
         if isinstance(arg, Emit.LocalBuilder):
-            return 'v%d' % arg.LocalIndex
+            return 'var%d' % arg.LocalIndex
         elif isinstance(arg, Emit.Label):
             return 'label%d' % self.labels[arg]
         elif isinstance(arg, FieldInfo):
