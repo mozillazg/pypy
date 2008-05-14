@@ -5,41 +5,41 @@ from pypy.jit.rainbow.test.test_interpreter import TestOOType as RainbowTest
 
 class TestRainbowCli(RainbowTest):
     RGenOp = RCliGenOp
-    RGenOp = RDumpGenOp
 
     # for the individual tests see
     # ====> ../../../rainbow/test/test_interpreter.py
 
+    def _invoke(self, generated, residualargs):
+        
+        # mono sucks; if we call the generated function directly,
+        # sometimes the result is wrong (e.g. test_simple_fixed
+        # fails).  If we call it by DynamicInvoke, the result is
+        # usually correct but from time to time it randomly explodes
+        # with a TargetParameterCountException.
+
+        # Workaround: first, try to run it by DynamicInvoke; if it
+        # fails, run it directly/
+        from pypy.translator.cli.dotnet import PythonNet
+        try:
+            return generated.DynamicInvoke(residualargs)
+        except PythonNet.System.Reflection.TargetParameterCountException:
+            return generated(*residualargs)
+    
     def run_generated(self, writer, generated, residualargs, **kwds):
         if 'check_raises' not in kwds:
-            res = generated.DynamicInvoke(residualargs)
+            return self._invoke(generated, residualargs)
         else:
             assert False, 'TODO'
-        return res
 
     def check_insns(self, expected=None, **counts):
         "Cannot check instructions in the generated assembler."
 
+    def test_simple_opt_const_propagation1(self):
+        py.test.skip('mono crash')
+
     def skip(self):
         py.test.skip('in progress')
 
-    test_simple_opt_const_propagation1 = skip
-    test_simple_opt_const_propagation2 = skip
-    #test_red_switch = skip
-    test_merge = skip
-    test_loop_merging = skip
-    test_loop_merging2 = skip
-    test_two_loops_merging = skip
-    test_green_across_split = skip
-    test_merge_const_before_return = skip
-    test_merge_3_redconsts_before_return = skip
-    test_merge_const_at_return = skip
-    test_call_4 = skip
-    test_call_5 = skip
-    test_call_6 = skip
-    test_green_call = skip
-    test_green_call_void_return = skip
-    test_split_on_green_return = skip
     test_simple_struct = skip
     test_complex_struct = skip
     test_simple_array = skip
