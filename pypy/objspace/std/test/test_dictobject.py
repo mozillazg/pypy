@@ -355,6 +355,25 @@ class AppTest_DictObject:
         assert repr(D()) == 'hi'
         assert str(D()) == 'hi'
 
+    def test_overridden_setitem(self):
+        class D(dict):
+            def __setitem__(self, key, value):
+                dict.__setitem__(self, key, 42)
+        d = D([('x', 'foo')], y = 'bar')
+        assert d['x'] == 'foo'
+        assert d['y'] == 'bar'
+        d.setdefault('z', 'baz')
+        assert d['z'] == 'baz'
+        d.update({'w': 'foobar'})
+        assert d['w'] == 'foobar'
+        d = d.copy()
+        assert d['x'] == 'foo'
+
+        d3 = D.fromkeys(['x', 'y'], 'foo')
+        assert d3['x'] == 42
+        assert d3['y'] == 42
+
+
 # the minimal 'space' needed to use a W_DictObject
 class FakeSpace:
     def hash_w(self, obj):
