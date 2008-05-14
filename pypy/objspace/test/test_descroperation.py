@@ -318,6 +318,13 @@ class AppTest_Descroperation:
         a4 = A()
         assert (a1 < a3) == (a1 < a4) == (a2 < a3) == (a2 < a4)
 
+    def test_setattrweakref(self):
+        skip("fails, works in cpython")
+        class P(object):
+            pass
+
+        setattr(P, "__weakref__", 0)
+
 
 class AppTestWithBuiltinShortcut(AppTest_Descroperation):
     OPTIONS = {'objspace.std.builtinshortcut': True}
