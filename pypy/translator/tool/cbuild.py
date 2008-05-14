@@ -16,7 +16,8 @@ class ExternalCompilationInfo(object):
 
     _ATTRIBUTES = ['pre_include_lines', 'includes', 'include_dirs',
                    'post_include_lines', 'libraries', 'library_dirs',
-                   'separate_module_sources', 'separate_module_files']
+                   'separate_module_sources', 'separate_module_files',
+                   'export_symbols']
     _AVOID_DUPLICATES = ['separate_module_files', 'libraries', 'includes',
                          'include_dirs', 'library_dirs', 'separate_module_sources']
 
@@ -28,7 +29,8 @@ class ExternalCompilationInfo(object):
                  libraries               = [],
                  library_dirs            = [],
                  separate_module_sources = [],
-                 separate_module_files   = []):
+                 separate_module_files   = [],
+                 export_symbols          = []):
         """
         pre_include_lines: list of lines that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -196,7 +198,8 @@ def ensure_correct_math():
         opt += '/Op'
     gcv['OPT'] = opt
 
-def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
+def compile_c_module(cfiles, modbasename, eci, tmpdir=None,
+                     export_symbols=None):
     #try:
     #    from distutils.log import set_threshold
     #    set_threshold(10000)
@@ -219,6 +222,11 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
             if s + 'lib' not in library_dirs and \
                os.path.exists(s + 'lib'):
                 library_dirs.append(s + 'lib')
+
+    if export_symbols is None:
+        export_symbols = list(eci.export_symbols)
+    else:
+        export_symbols = list(eci.export_symbols) + export_symbols
 
     num = 0
     modname = modbasename
@@ -253,11 +261,17 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                     from distutils.ccompiler import get_default_compiler
                     from distutils.command.build_ext import build_ext
 
-                    class build_ext_no_additional_symbol(build_ext):
+                    class build_shared_library(build_ext):
+                        """ We build shared libraries, not python modules.
+                            On windows, avoid to export the initXXX function,
+                            and don't use a .pyd extension. """
                         def get_export_symbols(self, ext):
-                            """ work around a 'feature' of distutils that forces every
-                                module to have a certain symbol on win """
                             return ext.export_symbols
+                        def get_ext_filename (self, ext_name):
+                            if sys.platform == 'win32':
+                                return ext_name + ".dll"
+                            else:
+                                return ext_name + ".so"
 
                     saved_environ = os.environ.items()
                     try:
@@ -290,7 +304,9 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                                     include_dirs=include_dirs,
                                     library_dirs=library_dirs,
                                     extra_compile_args=extra_compile_args,
-                                    libraries=list(libraries),)
+                                    libraries=list(libraries),
+                                    export_symbols=export_symbols,
+                                          )
                                 ],
                             'script_name': 'setup.py',
                             'script_args': ['-q', 'build_ext'], # don't remove 'build_ext' here
@@ -299,9 +315,11 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                         # patch our own command obj into distutils
                         # because it does not have a facility to accept
                         # custom objects
-                        cmdobj = build_ext_no_additional_symbol(dist)
+                        cmdobj = build_shared_library(dist)
                         cmdobj.inplace = True
                         cmdobj.force = True
+                        if sys.platform == 'win32' and sys.executable.endswith('_d.exe'):
+                            cmdobj.debug = True
                         dist.command_obj["build_ext"] = cmdobj
                         dist.have_run["build_ext"] = 0
 

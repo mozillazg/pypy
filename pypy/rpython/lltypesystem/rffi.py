@@ -406,6 +406,7 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     new_eci = eci.merge(ExternalCompilationInfo(
         separate_module_sources = sources,
         post_include_lines = [getter_prototype, setter_prototype],
+        export_symbols = [getter_name, setter_name],
     ))
 
     getter = llexternal(getter_name, [], TYPE, compilation_info=new_eci,
