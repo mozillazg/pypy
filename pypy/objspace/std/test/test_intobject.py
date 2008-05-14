@@ -414,6 +414,12 @@ class AppTestInt:
     def test_getnewargs(self):
         assert  0 .__getnewargs__() == (0,)
 
+    def test_cmp(self):
+        skip("Fails with an AttributeError, works in cpython")
+        assert 1 .__cmp__
+        assert int .__cmp__
+
+
 class AppTestIntOptimizedAdd(AppTestInt):
     def setup_class(cls):
         from pypy.conftest import gettestobjspace
