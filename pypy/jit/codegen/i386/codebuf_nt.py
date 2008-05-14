@@ -1,11 +1,7 @@
 import ctypes
-import pypy.rpython.rctypes.implementation
-from pypy.rpython.rctypes.tool import ctypes_platform
-from pypy.rpython.rctypes.tool.ctypes_platform import ConstantInteger
-from pypy.rpython.rctypes.tool.ctypes_platform import SimpleType
-
-
-raise NotImplementedError("this needs to be ported from rctypes to rffi")
+from pypy.rpython.tool import rffi_platform
+from pypy.rpython.tool.rffi_platform import ConstantInteger
+from pypy.rpython.tool.rffi_platform import SimpleType
 
 
 class CConfig:
@@ -19,7 +15,7 @@ class CConfig:
     MEM_RELEASE            = ConstantInteger('MEM_RELEASE')
     PAGE_EXECUTE_READWRITE = ConstantInteger('PAGE_EXECUTE_READWRITE')
 
-globals().update(ctypes_platform.configure(CConfig))
+globals().update(rffi_platform.configure(CConfig))
 
 # cannot use c_void_p as return value of functions :-(
 PTR = ctypes.POINTER(ctypes.c_char)
