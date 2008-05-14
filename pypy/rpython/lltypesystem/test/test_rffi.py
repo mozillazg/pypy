@@ -464,6 +464,18 @@ class TestRffiInternals:
         res = interpret(f, [])
         assert res == 123
     
+    def test_make_annotation(self):
+        X = CStruct('xx', ('one', INT))
+        def f():
+            p = make(X)
+            try:
+                q = make(X)
+                lltype.free(q, flavor='raw')
+            finally:
+                lltype.free(p, flavor='raw')
+            return 3
+        assert interpret(f, []) == 3
+    
     def test_implicit_cast(self):
         z = llexternal('z', [USHORT, ULONG, USHORT, DOUBLE], USHORT)
     

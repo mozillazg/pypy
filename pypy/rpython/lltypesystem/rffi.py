@@ -597,9 +597,9 @@ class MakeEntry(ExtRegistryEntry):
         vlist = [hop.inputarg(lltype.Void, arg=0)]
         flags = {'flavor':'raw'}
         vlist.append(hop.inputconst(lltype.Void, flags))
-        v_ptr = hop.genop('malloc', vlist, resulttype=hop.r_result.lowleveltype)
         hop.has_implicit_exception(MemoryError)   # record that we know about it
         hop.exception_is_here()
+        v_ptr = hop.genop('malloc', vlist, resulttype=hop.r_result.lowleveltype)
         for name, i in fields.items():
             name = name[2:]
             v_arg = hop.inputarg(hop.args_r[i], arg=i)
