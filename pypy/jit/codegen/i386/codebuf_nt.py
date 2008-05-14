@@ -1,19 +1,19 @@
-import ctypes
-import pypy.rpython.rctypes.implementation
-from pypy.rpython.rctypes.tool import ctypes_platform
-from pypy.rpython.rctypes.tool.ctypes_platform import ConstantInteger
-from pypy.rpython.rctypes.tool.ctypes_platform import SimpleType
+from pypy.rpython.tool import rffi_pltform
+from pypy.rpython.tool.rffi_platform import ConstantInteger
+from pypy.rpython.tool.rffi_platform import SimpleType
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.rpython.lltypesystem import rffi
 
-
-raise NotImplementedError("this needs to be ported from rctypes to rffi")
-
+raise ImportError
 
 class CConfig:
-    _header_ = '#include <Windows.h>'
+    _compilation_info_ = ExternalCompilationInfo(
+        includes = "windows.h"
+        )
 
-    SIZE_T                 = SimpleType('SIZE_T', ctypes.c_long)
-    DWORD                  = SimpleType('DWORD', ctypes.c_long)
-    BOOL                   = SimpleType('BOOL', ctypes.c_int)
+    SIZE_T                 = SimpleType('SIZE_T', rffi.LONG)
+    DWORD                  = SimpleType('DWORD', rffi.LONG)
+    BOOL                   = SimpleType('BOOL', rffi.INT)
     MEM_COMMIT             = ConstantInteger('MEM_COMMIT')
     MEM_RESERVE            = ConstantInteger('MEM_RESERVE')
     MEM_RELEASE            = ConstantInteger('MEM_RELEASE')
@@ -22,27 +22,30 @@ class CConfig:
 globals().update(ctypes_platform.configure(CConfig))
 
 # cannot use c_void_p as return value of functions :-(
-PTR = ctypes.POINTER(ctypes.c_char)
 
+# XXX how to get kernel32?
 VirtualAlloc = ctypes.windll.kernel32.VirtualAlloc
-VirtualAlloc.argtypes = [PTR, SIZE_T, DWORD, DWORD]
-VirtualAlloc.restype = PTR
+VirtualAlloc.argtypes = [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD]
+VirtualAlloc.restype = rffi.VOIDP
 
+DWORD_P = rffi.CArrayPtr(DWORD)
 VirtualProtect = ctypes.windll.kernel32.VirtualProtect
-VirtualProtect.argtypes = [PTR, SIZE_T, DWORD, ctypes.POINTER(DWORD)]
+VirtualProtect.argtypes = [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD_P]
 VirtualProtect.restype = BOOL
 
 VirtualFree = ctypes.windll.kernel32.VirtualFree
-VirtualFree.argtypes = [PTR, SIZE_T, DWORD]
+VirtualFree.argtypes = [rffi.VOIDP, rffi.SIZE_T, DWORD]
 VirtualFree.restype = BOOL
 
 # ____________________________________________________________
 
 def alloc(map_size):
-    res = VirtualAlloc(PTR(), map_size, MEM_COMMIT|MEM_RESERVE,
+    null = lltype.nullptr(rffi.VOIDP)
+    res = VirtualAlloc(null, map_size, MEM_COMMIT|MEM_RESERVE,
                        PAGE_EXECUTE_READWRITE)
     if not res:
         raise MemoryError
+    XXX # rewrite
     old = DWORD()
     VirtualProtect(res, map_size, PAGE_EXECUTE_READWRITE, ctypes.byref(old))
     # ignore errors, just try
