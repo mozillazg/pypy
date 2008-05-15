@@ -791,7 +791,7 @@ class RSocket(object):
 
     def gettimeout(self):
         """Return the timeout of the socket. A timeout < 0 means that
-        timeouts are dissabled in the socket."""
+        timeouts are disabled in the socket."""
         return self.timeout
     
     def listen(self, backlog):
