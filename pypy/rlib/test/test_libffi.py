@@ -13,7 +13,8 @@ import py
 import time
 
 def setup_module(mod):
-    if not sys.platform.startswith(('linux', 'win32')):
+    if not (sys.platform.startswith('linux') or
+            sys.platform == 'win32'):
         py.test.skip("Fragile tests, linux & win32 only by now")
     for name in type_names:
         # XXX force this to be seen by ll2ctypes
