@@ -317,7 +317,8 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                         cmdobj = build_shared_library(dist)
                         cmdobj.inplace = True
                         cmdobj.force = True
-                        if sys.platform == 'win32' and sys.executable.endswith('_d.exe'):
+                        if (sys.platform == 'win32'
+                            and sys.executable.lower().endswith('_d.exe')):
                             cmdobj.debug = True
                         dist.command_obj["build_ext"] = cmdobj
                         dist.have_run["build_ext"] = 0
@@ -479,8 +480,10 @@ class CCompiler:
                         linker_exe linker_so'''.split():
                 compiler.executables[c][0] = self.compiler_exe
         compiler.spawn = log_spawned_cmd(compiler.spawn)
+        self.eci = self.eci.convert_sources_to_files()
+        filenames = self.cfilenames + list(self.eci.separate_module_files)
         objects = []
-        for cfile in self.cfilenames: 
+        for cfile in filenames:
             cfile = py.path.local(cfile)
             old = cfile.dirpath().chdir() 
             try: 
