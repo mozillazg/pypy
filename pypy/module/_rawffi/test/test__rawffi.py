@@ -449,6 +449,7 @@ class AppTestFfi:
         arg1.free()
     
     def test_callback(self):
+        skip("FIXME: compare actually receives a pair of int**")
         import _rawffi
         import struct
         libc = _rawffi.CDLL(self.libc_name)
@@ -457,9 +458,13 @@ class AppTestFfi:
             ll_to_sort[i] = 4-i
         qsort = libc.ptr('qsort', ['P', 'i', 'i', 'P'], None)
         resarray = _rawffi.Array('i')(1)
+        bogus_args = False
         def compare(a, b):
             a1 = _rawffi.Array('i').fromaddress(a, 1)
             a2 = _rawffi.Array('i').fromaddress(b, 1)
+            if a1[0] not in [1,2,3,4] or a2[0] not in [1,2,3,4]:
+                print "comparing", a1[0], "with", a2[0]
+                bogus_args = True
             if a1[0] > a2[0]:
                 res = -1
             res = 1
@@ -474,6 +479,7 @@ class AppTestFfi:
         qsort(a1, a2, a3, a4)
         res = [ll_to_sort[i] for i in range(len(ll_to_sort))]
         assert res == [1,2,3,4]
+        assert not bogus_args
         a1.free()
         a2.free()
         a3.free()
