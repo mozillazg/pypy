@@ -50,6 +50,7 @@ class CartridgeManager(object):
         self.mbc.write(address, data)
     
     def load(self, cartridge):
+        assert isinstance(cartridge, Cartridge)
         self.cartridge = cartridge
         self.rom  = self.cartridge.read()
         self.check_rom()
@@ -147,7 +148,7 @@ class Cartridge(object):
             self.load(file)
         
     def reset(self):
-        self.cartridge_name = None
+        #self.cartridge_name = None
         self.cartridge_file_path = None
         self.cartridge_file = None    
         self.battery_name = None
@@ -155,21 +156,21 @@ class Cartridge(object):
         self.battery_file = None
         
         
-    def load(self, cartridge_file_path):
-        cartridge_file_path = str(cartridge_file_path)
-        self.cartridge_file_path = cartridge_file_path
-        self.cartridge_name = os.path.basename(self.cartridge_file_path)
-        self.cartridge_file = open(cartridge_file_path)
-        self._load_battery(cartridge_file_path)
+    def load(self, cartridge_path):
+        cartridge_path = str(cartridge_path)
+        self.cartridge_file_path = cartridge_path
+        #self.cartridge_name = os.path.basename(self.cartridge_file_path)
+        self.cartridge_file = file(cartridge_path, "r")
+        self.load_battery(cartridge_path)
         
-        
-    def _load_battery(self, cartridge_file_path):
-        self.battery_file_path = self._create_battery_file_path(cartridge_file_path)
+        cartridge_path
+    def load_battery(self, cartridge_file_path):
+        self.battery_file_path = self.create_battery_file_path(cartridge_path)
         self.battery_name = os.path.basename(self.battery_file_path)
         if self.has_battery():
             self.battery_file = open(self.battery_file_path)
     
-    def _create_battery_file_path(self, cartridge_file_path):
+    def create_battery_file_path(self, cartridge_file_path):
         if cartridge_file_path.endswith(constants.CARTRIDGE_FILE_EXTENSION):
             return cartridge_file_path.replace(constants.CARTRIDGE_FILE_EXTENSION,
                     constants.BATTERY_FILE_EXTENSION)

@@ -478,7 +478,7 @@ class Video(object):
                 self.objects[rightmost] = data
 
     def draw_tiles(self, x, tileMap, tileData):
-        while (x < 168):
+        while x < 168:
             if (self.control & 0x10) != 0:
                 tile = self.vram[tileMap] & 0xFF
             else:
@@ -489,7 +489,7 @@ class Video(object):
             
     def get_pattern(self, address):
         pattern = self.vram[address]      & 0xFF
-        pattern +=(self.vram[address + 1] & 0xFF) << 8
+        pattern += (self.vram[address + 1] & 0xFF) << 8
         return pattern
 
     def draw_object(self, setter):
@@ -585,8 +585,8 @@ class Video(object):
 class VideoDriver(object):
     
     def __init__(self):
-        self.width = constants.GAMEBOY_SCREEN_WIDTH
-        self.height = constants.GAMEBOY_SCREEN_HEIGHT
+        self.width = int(constants.GAMEBOY_SCREEN_WIDTH)
+        self.height = int(constants.GAMEBOY_SCREEN_HEIGHT)
         self.clear_pixels()
         
     def clear_pixels(self):
