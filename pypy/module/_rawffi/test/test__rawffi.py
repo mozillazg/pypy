@@ -9,8 +9,8 @@ from pypy.module._rawffi.tracker import Tracker
 import os, sys, py
 
 def setup_module(mod):
-    if sys.platform != 'linux2':
-        py.test.skip("Linux only tests by now")
+    if sys.platform not in ('linux2', 'win32'):
+        py.test.skip("Linux & win32 only tests by now")
 
 class AppTestFfi:
     def prepare_c_example():
@@ -145,23 +145,44 @@ class AppTestFfi:
         }
         
         '''))
-        return compile_c_module([c_file], 'x', ExternalCompilationInfo())
+        symbols = """get_char char_check get_raw_pointer
+                     add_shorts
+                     inner_struct_elem create_double_struct free_double_struct
+                     get_array_elem get_array_elem_s
+                     nothing
+                     some_huge_value some_huge_uvalue pass_ll
+                     runcallback
+                     allocate_array
+                     static_int static_double
+                     sum_x_y
+                     give perturb
+                  """.split()
+        eci = ExternalCompilationInfo(export_symbols=symbols)
+        return compile_c_module([c_file], 'x', eci)
     prepare_c_example = staticmethod(prepare_c_example)
     
     def setup_class(cls):
         space = gettestobjspace(usemodules=('_rawffi','struct'))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.prepare_c_example())
+        if sys.platform == 'win32':
+            cls.w_iswin32 = space.wrap(True)
+            cls.w_libc_name = space.wrap('msvcrt')
+            cls.w_libm_name = space.wrap('msvcrt')
+        else:
+            cls.w_iswin32 = space.wrap(False)
+            cls.w_libc_name = space.wrap('libc.so.6')
+            cls.w_libm_name = space.wrap('libm.so')
         cls.w_sizes_and_alignments = space.wrap(dict(
             [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 
     def test_libload(self):
         import _rawffi
-        _rawffi.CDLL('libc.so.6')
+        _rawffi.CDLL(self.libc_name)
 
     def test_getattr(self):
         import _rawffi
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL(self.libc_name)
         func = libc.ptr('rand', [], 'i')
         assert libc.ptr('rand', [], 'i') is func # caching
         assert libc.ptr('rand', [], 'l') is not func
@@ -256,7 +277,7 @@ class AppTestFfi:
 
     def test_pow(self):
         import _rawffi
-        libm = _rawffi.CDLL('libm.so')
+        libm = _rawffi.CDLL(self.libm_name)
         pow = libm.ptr('pow', ['d', 'd'], 'd')
         A = _rawffi.Array('d')
         arg1 = A(1)
@@ -271,7 +292,7 @@ class AppTestFfi:
 
     def test_time(self):
         import _rawffi
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL(self.libc_name)
         time = libc.ptr('time', ['z'], 'l')  # 'z' instead of 'P' just for test
         arg = _rawffi.Array('P')(1)
         arg[0] = 0
@@ -280,10 +301,12 @@ class AppTestFfi:
         arg.free()
 
     def test_gettimeofday(self):
+        if self.iswin32:
+            skip("No gettimeofday on win32")
         import _rawffi
         struct_type = _rawffi.Structure([('tv_sec', 'l'), ('tv_usec', 'l')])
         structure = struct_type()
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL(self.libc_name)
         gettimeofday = libc.ptr('gettimeofday', ['P', 'P'], 'i')
 
         arg1 = structure.byptr()
@@ -318,7 +341,7 @@ class AppTestFfi:
                                 ("tm_wday", 'i'),
                                 ("tm_yday", 'i'),
                                 ("tm_isdst", 'i')])
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL(self.libc_name)
         gmtime = libc.ptr('gmtime', ['P'], 'P')
 
         arg = x.byptr()
@@ -428,7 +451,7 @@ class AppTestFfi:
     def test_callback(self):
         import _rawffi
         import struct
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL(self.libc_name)
         ll_to_sort = _rawffi.Array('i')(4)
         for i in range(4):
             ll_to_sort[i] = 4-i
