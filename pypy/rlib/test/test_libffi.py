@@ -13,8 +13,8 @@ import py
 import time
 
 def setup_module(mod):
-    if not sys.platform.startswith('linux'):
-        py.test.skip("Fragile tests, linux only by now")
+    if not sys.platform.startswith(('linux', 'win32')):
+        py.test.skip("Fragile tests, linux & win32 only by now")
     for name in type_names:
         # XXX force this to be seen by ll2ctypes
         # so that ALLOCATED.clear() clears it
@@ -27,10 +27,22 @@ class TestDLOperations:
 
     def test_dlopen(self):
         py.test.raises(OSError, "dlopen(rffi.str2charp('xxxxxxxxxxxx'))")
-        assert dlopen(rffi.str2charp('/lib/libc.so.6'))
+        if sys.platform == 'win32':
+            assert dlopen(rffi.str2charp('kernel32.dll'))
+        else:
+            assert dlopen(rffi.str2charp('/lib/libc.so.6'))
         
     def get_libc(self):
-        return CDLL('/lib/libc.so.6')
+        if sys.platform == 'win32':
+            return CDLL('msvcrt.dll')
+        else:
+            return CDLL('/lib/libc.so.6')
+    
+    def get_libm(self):
+        if sys.platform == 'win32':
+            return CDLL('msvcrt.dll')
+        else:
+            return CDLL('libm.so')
     
     def test_library_open(self):
         lib = self.get_libc()
@@ -61,7 +73,7 @@ class TestDLOperations:
         assert not ALLOCATED
 
     def test_call_args(self):
-        libm = CDLL('libm.so')
+        libm = self.get_libm()
         pow = libm.getpointer('pow', [ffi_type_double, ffi_type_double],
                               ffi_type_double)
         pow.push_arg(2.0)
@@ -77,7 +89,7 @@ class TestDLOperations:
         assert not ALLOCATED
 
     def test_wrong_args(self):
-        libc = CDLL('libc.so.6')
+        libc = self.get_libc()
         # XXX assume time_t is long
         ulong = cast_type_to_ffitype(rffi.ULONG)
         ctime = libc.getpointer('time', [ffi_type_pointer], ulong)
@@ -93,7 +105,7 @@ class TestDLOperations:
         # allocation check makes no sense, since we've got GcStructs around
 
     def test_call_time(self):
-        libc = CDLL('libc.so.6')
+        libc = self.get_libc()
         # XXX assume time_t is long
         ulong = cast_type_to_ffitype(rffi.ULONG)
         ctime = libc.getpointer('time', [ffi_type_pointer], ulong)
@@ -144,7 +156,7 @@ class TestDLOperations:
         
     def test_callback(self):
         slong = cast_type_to_ffitype(rffi.LONG)
-        libc = CDLL('libc.so.6')
+        libc = self.get_libc()
         qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
                                           slong, ffi_type_pointer],
                                 ffi_type_void)
@@ -186,7 +198,7 @@ class TestDLOperations:
         # with pointer casts
 
         def f(x, y):
-            libm = CDLL('libm.so')
+            libm = self.get_libm()
             c_pow = libm.getpointer('pow', [ffi_type_double, ffi_type_double], ffi_type_double)
             c_pow.push_arg(x)
             c_pow.push_arg(y)
@@ -198,7 +210,7 @@ class TestDLOperations:
         assert res == 16.0
 
     def test_rawfuncptr(self):
-        libm = CDLL('libm.so')
+        libm = self.get_libm()
         pow = libm.getrawpointer('pow', [ffi_type_double, ffi_type_double],
                                  ffi_type_double)
         buffer = lltype.malloc(rffi.DOUBLEP.TO, 3, flavor='raw')
@@ -245,7 +257,8 @@ class TestDLOperations:
         }
         
         '''))
-        lib_name = compile_c_module([c_file], 'x', ExternalCompilationInfo())
+        eci = ExternalCompilationInfo(export_symbols=['sum_x_y'])
+        lib_name = compile_c_module([c_file], 'x', eci)
 
         lib = CDLL(lib_name)
 
@@ -300,7 +313,8 @@ class TestDLOperations:
         }
         
         '''))
-        lib_name = compile_c_module([c_file], 'x', ExternalCompilationInfo())
+        eci = ExternalCompilationInfo(export_symbols=['give', 'perturb'])
+        lib_name = compile_c_module([c_file], 'x', eci)
 
         lib = CDLL(lib_name)
 
