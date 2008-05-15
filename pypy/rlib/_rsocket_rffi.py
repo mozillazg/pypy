@@ -54,7 +54,8 @@ constants = {}
 
 eci = ExternalCompilationInfo(
     pre_include_lines = (HEADER + COND_HEADER).split("\n"),
-    includes = includes
+    includes = includes,
+    libraries = libraries,
 )
 
 class CConfig:
