@@ -14,7 +14,7 @@ class Serial(object):
         self.reset()
 
     def reset(self):
-        self.cycles = constants.SERIAL_CLOCK
+        self.cycles = int(constants.SERIAL_CLOCK)
         self.sb = 0x00
         self.sc = 0x00
 

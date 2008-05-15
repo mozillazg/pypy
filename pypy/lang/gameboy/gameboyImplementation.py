@@ -1,17 +1,17 @@
 #!/usr/bin/env python 
-
+import time
 import pyglet
 pyglet.options['audio'] = ('openal', 'silent')
         
-from pyglet        import window
-from pyglet        import media
-from pyglet        import image
+from pyglet import window
+from pyglet import media
+from pyglet import image
 from pyglet.window import key
 
 from pypy.lang.gameboy.gameboy import *
 from pypy.lang.gameboy.joypad import JoypadDriver
-from pypy.lang.gameboy.video  import VideoDriver
-from pypy.lang.gameboy.sound  import SoundDriver
+from pypy.lang.gameboy.video import VideoDriver
+from pypy.lang.gameboy.sound import SoundDriver
 
 
 # GAMEBOY ----------------------------------------------------------------------
@@ -35,7 +35,9 @@ class GameBoyImplementation(GameBoy):
         
     def mainLoop(self):
         while not self.win.has_exit: 
-           pass
+            print "i"
+            self.emulate(5)
+            time.sleep(0.01)
         
 # VIDEO DRIVER -----------------------------------------------------------------
 
@@ -51,6 +53,9 @@ class VideoDriverImplementation(VideoDriver):
     def create_image_buffer(self):
         self.buffers = image.get_buffer_manager()
         self.image_buffer = self.buffers.get_color_buffer()
+        self.buffer_image_data = self.image_buffer.image_data
+        self.buffer_image_data.format = "RGB"
+        self.pixel_buffer = self.buffer_image_data.data
         
     def on_resize(self, width, height):
         pass
@@ -59,8 +64,14 @@ class VideoDriverImplementation(VideoDriver):
         self.win.set_size(self.width, self.height)
         
     def update_display(self):
+        self.buffer_image_data.data = map(self.pixel_to_byte, self.pixel_buffer)
         self.image_buffer.blit(0, 0)
         self.win.flip()
+        
+    def pixel_to_byte(self, int_number):
+        return struct.pack("B", (int_number) & 0xFF, 
+                                (int_number >> 8) & 0xFF, 
+                                (int_number >> 16) & 0xFF)
         
         
 # JOYPAD DRIVER ----------------------------------------------------------------
@@ -87,12 +98,12 @@ class JoypadDriverImplementation(JoypadDriver):
         self.win.on_key_press = self.on_key_press
         self.win.on_key_release = self.on_key_press
         
-    def on_key_press(symbol, modifiers): 
+    def on_key_press(self, symbol, modifiers): 
         pressButtonFunction = self.get_button_handler(symbol, modifiers)
         if pressButtonFunction != None:
             pressButtonFunction(True)
     
-    def on_key_release(symbol, modifiers): 
+    def on_key_release(self, symbol, modifiers): 
         pressButtonFunction = self.get_button_handler(symbol, modifiers)
         if pressButtonFunction != None:
             pressButtonFunction(False)
@@ -132,12 +143,7 @@ class SoundDriverImplementation(SoundDriver):
     
 # ==============================================================================
 
-if __name__ == '__main__':
-    entry_point()
-
-
-
-def entry_point(args):
+def entry_point(args=None):
     gameboy = GameBoyImplementation()
 
 
@@ -145,3 +151,6 @@ def entry_point(args):
 
 def target(*args):
     return entry_point, None
+
+if __name__ == '__main__':
+    entry_point()
