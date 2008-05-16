@@ -14,6 +14,9 @@ import os
 
 _MS_WINDOWS = os.name == "nt"
 
+if _MS_WINDOWS:
+    from pypy.rlib import rwin32
+
 if not _MS_WINDOWS:
     includes = ['dlfcn.h', 'ffi.h']
     include_dirs = []
@@ -74,10 +77,6 @@ class CConfig:
                                                  ('elements', FFI_TYPE_PP)])
 
     ffi_closure = rffi_platform.Struct('ffi_closure', [])
-
-    if _MS_WINDOWS:
-        DWORD = rffi_platform.SimpleType("DWORD", rffi.UINT)
-        BOOL = rffi_platform.SimpleType("BOOL", rffi.LONG)
 
 def add_simple_type(type_name):
     for name in ['size', 'alignment', 'type']:
@@ -198,31 +197,29 @@ if not _MS_WINDOWS:
         return res
 
 if _MS_WINDOWS:
-    LoadLibrary = winexternal('LoadLibraryA', [rffi.CCHARP], rffi.VOIDP)
-    GetProcAddress = winexternal('GetProcAddress', [rffi.VOIDP, rffi.CCHARP], rffi.VOIDP)
-    FreeLibrary = winexternal('FreeLibrary', [rffi.VOIDP], cConfig.BOOL)
-    GetLastError = winexternal('GetLastError', [], cConfig.DWORD)
-    
     def dlopen(name):
-        res = LoadLibrary(name)
+        res = rwin32.LoadLibrary(name)
         if not res:
             # XXX format error message
-            raise WindowsError(2, GetLastError())
+            raise WindowsError(2, rwin32.GetLastError())
         return res
 
     def dlclose(handle):
-        res = FreeLibrary(handle)
+        res = rwin32.FreeLibrary(handle)
         if res:
             return -1
         else:
             return 0
 
     def dlsym(handle, name):
-        res = GetProcAddress(handle, name)
+        res = rwin32.GetProcAddress(handle, name)
         if not res:
             raise KeyError(name)
         # XXX rffi.cast here...
         return res
+
+    FormatError = rwin32.FormatError
+    LoadLibrary = rwin32.LoadLibrary
 
 FFI_OK = cConfig.FFI_OK
 FFI_BAD_TYPEDEF = cConfig.FFI_BAD_TYPEDEF
@@ -323,8 +320,9 @@ class ClosureHeap(object):
 
 closureHeap = ClosureHeap()
 
-FUNCFLAG_STDCALL = 0
-FUNCFLAG_CDECL =   1  # for WINAPI calls
+FUNCFLAG_STDCALL   = 0
+FUNCFLAG_CDECL     = 1  # for WINAPI calls
+FUNCFLAG_PYTHONAPI = 4
 
 class AbstractFuncPtr(object):
     ll_cif = lltype.nullptr(FFI_CIFP.TO)
