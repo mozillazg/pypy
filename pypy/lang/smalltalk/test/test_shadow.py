@@ -137,7 +137,7 @@ def test_context():
 def test_methodcontext():
     w_m = method()
                               # Point over 2 literals of size 4
-    w_object = methodcontext(pc=9,method=w_m)
+    w_object = methodcontext(pc=13,method=w_m)
     s_object = w_object.as_methodcontext_get_shadow()
     assert s_object.getbytecode() == 97
     assert s_object.getbytecode() == 98
