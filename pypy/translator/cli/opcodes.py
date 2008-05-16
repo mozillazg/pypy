@@ -48,7 +48,6 @@ misc_ops = {
     'cli_eventhandler':         [EventHandler],
     'cli_getstaticfield':       [GetStaticField],
     'cli_setstaticfield':       [SetStaticField],
-    'cli_fieldinfo_for_const':  [FieldInfoForConst],
     'oois':                     'ceq',
     'ooisnull':                 [PushAllArgs, 'ldnull', 'ceq'],
     'oononnull':                [PushAllArgs, 'ldnull', 'ceq']+Not,

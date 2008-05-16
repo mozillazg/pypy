@@ -8,7 +8,7 @@ from pypy.translator.cli.test.runtest import CliTest
 from pypy.translator.cli.dotnet import SomeCliClass, SomeCliStaticMethod,\
      NativeInstance, CLR, box, unbox, OverloadingResolver, NativeException,\
      native_exc, new_array, init_array, typeof, eventhandler, clidowncast,\
-     fieldinfo_for_const, classof, cast_record_to_object, cast_object_to_record
+     classof
 
 System = CLR.System
 ArrayList = CLR.System.Collections.ArrayList
@@ -577,36 +577,6 @@ class TestDotnetRtyping(CliTest):
             return f
         self.interpret(fn, [])
 
-    def test_fieldinfo_for_const(self):
-        A = ootype.Instance('A', ootype.ROOT, {'xx': ootype.Signed})
-        const = ootype.new(A)
-        const.xx = 42
-        def fn():
-            fieldinfo = fieldinfo_for_const(const)
-            obj = fieldinfo.GetValue(None)
-            # get the 'xx' field by using reflection
-            t = obj.GetType()
-            x_info = t.GetField('xx')
-            x_value = x_info.GetValue(obj)
-            return unbox(x_value, ootype.Signed)
-        res = self.interpret(fn, [])
-        assert res == 42
-
-    def test_fieldinfo_for_const_pbc(self):
-        A = ootype.Instance('A', ootype.ROOT, {'xx': ootype.Signed})
-        const = ootype.new(A)
-        fieldinfo = fieldinfo_for_const(const)
-        def fn():
-            const.xx = 42
-            obj = fieldinfo.GetValue(None)
-            # get the 'xx' field by using reflection
-            t = obj.GetType()
-            x_info = t.GetField('xx')
-            x_value = x_info.GetValue(obj)
-            return unbox(x_value, ootype.Signed)
-        res = self.interpret(fn, [])
-        assert res == 42
-
     def test_classof(self):
         int32_class = classof(System.Int32)
         def fn():
@@ -643,37 +613,6 @@ class TestDotnetRtyping(CliTest):
             return clidowncast(box(x), System.Type).get_Name()
         res = self.interpret(fn, [True])
         assert res == 'Int32'
-
-    def test_cast_record(self):
-        T = ootype.Record({'x': ootype.Signed})
-        record = ootype.new(T)
-        def fn(flag):
-            if flag:
-                obj = cast_record_to_object(record)
-            else:
-                obj = System.Object()
-            record2 = cast_object_to_record(T, obj)
-            return record is record2
-        res = self.interpret(fn, [True])
-        assert res
-
-    def test_cast_record_pbc(self):
-        T = ootype.Record({'x': ootype.Signed})
-        record = ootype.new(T)
-        record.x = 42
-        obj = cast_record_to_object(record)
-        def fn():
-            record2 = cast_object_to_record(T, obj)
-            return record is record2
-        res = self.interpret(fn, [])
-        assert res
-
-    def test_cast_record_mix_object(self):
-        T = ootype.Record({'x': ootype.Signed})
-        NULL = ootype.null(System.Object._INSTANCE)
-        record = cast_record_to_object(ootype.new(T))
-        assert record != NULL
-        assert NULL != record
         
 
 class TestPythonnet(TestDotnetRtyping):
@@ -703,9 +642,3 @@ class TestPythonnet(TestDotnetRtyping):
             return t.get_Name()
         res = self.interpret(fn, [])
         assert res == 'DelegateType_int__int_2'
-
-    def test_fieldinfo_for_const(self):
-        pass # it makes sense only during translation
-
-    def test_fieldinfo_for_const_pbc(self):
-        pass # it makes sense only during translation

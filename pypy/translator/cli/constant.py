@@ -90,12 +90,7 @@ class CLIBaseConstGenerator(BaseConstantGenerator):
         return BaseConstantGenerator._get_key_for_const(self, value)
 
     def _create_complex_const(self, value):
-        from pypy.translator.cli.dotnet import _fieldinfo
-
-        if isinstance(value, _fieldinfo):
-            uniq = self.db.unique()
-            return CLIFieldInfoConst(self.db, value.llvalue, uniq)
-        elif isinstance(value, ootype._view) and isinstance(value._inst, ootype._record):
+        if isinstance(value, ootype._view) and isinstance(value._inst, ootype._record):
             self.db.cts.lltype_to_cts(value._inst._TYPE) # record the type of the record
             return self.record_const(value._inst)
         else:
@@ -446,26 +441,3 @@ class CLIWeakRefConst(CLIBaseConstMixin, WeakRefConst):
             gen.ilasm.call_method('void %s::ll_set(object)' % self.get_type(), True)
             return True
     
-
-class CLIFieldInfoConst(AbstractConst):
-    def __init__(self, db, llvalue, count):
-        AbstractConst.__init__(self, db, llvalue, count)
-        self.name = 'FieldInfo__%d' % count
-    
-    def create_pointer(self, generator):
-        constgen = generator.db.constant_generator
-        const = constgen.record_const(self.value)
-        generator.ilasm.opcode('ldtoken', CONST_CLASS)
-        generator.ilasm.call('class [mscorlib]System.Type class [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)')
-        generator.ilasm.opcode('ldstr', '"%s"' % const.name)
-        generator.ilasm.call_method('class [mscorlib]System.Reflection.FieldInfo class [mscorlib]System.Type::GetField(string)', virtual=True)
-
-    def get_type(self):
-        from pypy.translator.cli.cts import CliClassType
-        return CliClassType('mscorlib', 'System.Reflection.FieldInfo')
-
-    def initialize_data(self, constgen, gen):
-        pass
-
-    def record_dependencies(self):
-        self.db.constant_generator.record_const(self.value)
