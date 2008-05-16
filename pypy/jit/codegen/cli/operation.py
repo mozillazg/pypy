@@ -17,7 +17,7 @@ class Operation:
         if self._gv_res is None:
             restype = self.restype()
             if restype is not None:
-                loc = self.builder.parent.il.DeclareLocal(restype)
+                loc = self.builder.graphbuilder.il.DeclareLocal(restype)
                 self._gv_res = GenLocalVar(loc)
         return self._gv_res
 
@@ -41,7 +41,7 @@ class UnaryOp(Operation):
 
     def emit(self):
         self.pushAllArgs()
-        self.builder.parent.il.Emit(self.getOpCode())
+        self.builder.graphbuilder.il.Emit(self.getOpCode())
         self.storeResult()
 
     def getOpCode(self):
@@ -59,7 +59,7 @@ class BinaryOp(Operation):
 
     def emit(self):
         self.pushAllArgs()
-        self.builder.parent.il.Emit(self.getOpCode())
+        self.builder.graphbuilder.il.Emit(self.getOpCode())
         self.storeResult()
 
     def getOpCode(self):
@@ -82,7 +82,7 @@ class MarkLabel(Operation):
         return None
 
     def emit(self):
-        self.builder.parent.il.MarkLabel(self.label)
+        self.builder.graphbuilder.il.MarkLabel(self.label)
         
 class FollowLink(Operation):
     
@@ -99,7 +99,7 @@ class FollowLink(Operation):
         for i in range(len(self.outputargs_gv)):
             self.outputargs_gv[i].load(self.builder)
             self.inputargs_gv[i].store(self.builder)
-        self.builder.parent.il.Emit(OpCodes.Br, self.label)
+        self.builder.graphbuilder.il.Emit(OpCodes.Br, self.label)
 
 
 class Branch(Operation):
@@ -116,7 +116,7 @@ class Branch(Operation):
     def emit(self):
         if self.gv_cond is not None:
             self.gv_cond.load(self.builder)
-        self.builder.parent.il.Emit(self.opcode, self.label)
+        self.builder.graphbuilder.il.Emit(self.opcode, self.label)
 
 class Return(Operation):
 
@@ -128,12 +128,12 @@ class Return(Operation):
         return None
 
     def emit(self):
-        retvar = self.builder.parent.retvar
-        retlabel = self.builder.parent.retlabel
+        retvar = self.builder.graphbuilder.retvar
+        retlabel = self.builder.graphbuilder.retlabel
         if self.gv_x is not None:
             self.gv_x.load(self.builder)
-            self.builder.parent.il.Emit(OpCodes.Stloc, retvar)
-        self.builder.parent.il.Emit(OpCodes.Br, retlabel)
+            self.builder.graphbuilder.il.Emit(OpCodes.Stloc, retvar)
+        self.builder.graphbuilder.il.Emit(OpCodes.Br, retlabel)
 
 class Call(Operation):
 
@@ -153,10 +153,10 @@ class Call(Operation):
         delegate_type = class2type(self.sigtoken.funcclass)
         meth_invoke = delegate_type.GetMethod('Invoke')
         self.gv_fnptr.load(self.builder)
-        self.builder.parent.il.Emit(OpCodes.Castclass, delegate_type)
+        self.builder.graphbuilder.il.Emit(OpCodes.Castclass, delegate_type)
         for gv_arg in self.args_gv:
             gv_arg.load(self.builder)
-        self.builder.parent.il.EmitCall(OpCodes.Callvirt, meth_invoke, None)
+        self.builder.graphbuilder.il.EmitCall(OpCodes.Callvirt, meth_invoke, None)
         self.storeResult()
 
 
@@ -230,7 +230,7 @@ def renderCustomOp(opname, baseclass, steps, out):
             if 'call' in step:
                 return # XXX, fix this
             attrname = opcode2attrname(step)
-            body.append('self.builder.parent.il.Emit(OpCodes.%s)' % attrname)
+            body.append('self.builder.graphbuilder.il.Emit(OpCodes.%s)' % attrname)
         elif isinstance(step, cli_opcodes.MapException):
             return # XXX, TODO
         else:
