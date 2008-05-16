@@ -5,7 +5,7 @@
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -346,7 +346,7 @@ class AbstractFuncPtr(object):
         if _MS_WINDOWS:
             # This little trick works correctly with MSVC.
             # It returns small structures in registers
-            if restype.c_type == FFI_TYPE_STRUCT:
+            if r_uint(restype.c_type) == FFI_TYPE_STRUCT:
                 if restype.c_size <= 4:
                     restype = ffi_type_sint32
                 elif restype.c_size <= 8:
