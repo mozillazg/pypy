@@ -42,7 +42,7 @@ def rtype_runtimenew(hop):
                      resulttype = hop.r_result.lowleveltype)
 
 def rtype_ooidentityhash(hop):
-    assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
+    assert isinstance(hop.args_s[0], (annmodel.SomeOOInstance, annmodel.SomeOOObject))
     vlist = hop.inputargs(hop.args_r[0])
     return hop.genop('ooidentityhash', vlist,
                      resulttype = ootype.Signed)

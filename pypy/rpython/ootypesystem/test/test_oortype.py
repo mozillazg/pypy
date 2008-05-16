@@ -350,3 +350,16 @@ def test_method_wrapper():
     
     res = interpret(fn, [], type_system='ootype')
     assert res == 42
+
+def test_ooidentityhash():
+    L = List(Signed)
+
+    def fn():
+        lst1 = new(L)
+        lst2 = new(L)
+        obj1 = cast_to_object(lst1)
+        obj2 = cast_to_object(lst2)
+        return ooidentityhash(obj1) == ooidentityhash(obj2)
+
+    res = interpret(fn, [], type_system='ootype')
+    assert not res
