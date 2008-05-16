@@ -13,7 +13,7 @@ from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.rpython.annlowlevel import llhelper
-import os
+import os, sys
 
 class UnhandledRPythonException(Exception):
     pass
@@ -399,7 +399,8 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     c_setter = "void %(setter_name)s (%(c_type)s v) { %(name)s = v; }" % locals()
 
     lines = ["#include <%s>" % i for i in eci.includes]
-    lines.append('extern %s %s;' % (c_type, name))
+    if sys.platform != 'win32':
+        lines.append('extern %s %s;' % (c_type, name))
     lines.append(c_getter)
     lines.append(c_setter)
     sources = ('\n'.join(lines),)
