@@ -54,7 +54,6 @@ class TestRainbowCli(RainbowTest):
     test_arraysize = skip
     test_setarrayitem = skip
     
-    test_compile_time_const_tuple = skip
     test_green_deepfrozen_oosend = skip
     test_direct_oosend_with_green_self = skip
     test_residual_red_call = skip

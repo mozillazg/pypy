@@ -56,18 +56,18 @@ class GenArgVar(GenVar):
 
     def load(self, builder):
         if self.index == 0:
-            builder.parent.il.Emit(OpCodes.Ldarg_0)
+            builder.graphbuilder.il.Emit(OpCodes.Ldarg_0)
         elif self.index == 1:
-            builder.parent.il.Emit(OpCodes.Ldarg_1)
+            builder.graphbuilder.il.Emit(OpCodes.Ldarg_1)
         elif self.index == 2:
-            builder.parent.il.Emit(OpCodes.Ldarg_2)
+            builder.graphbuilder.il.Emit(OpCodes.Ldarg_2)
         elif self.index == 3:
-            builder.parent.il.Emit(OpCodes.Ldarg_3)
+            builder.graphbuilder.il.Emit(OpCodes.Ldarg_3)
         else:
-            builder.parent.il.Emit(OpCodes.Ldarg, self.index)
+            builder.graphbuilder.il.Emit(OpCodes.Ldarg, self.index)
 
     def store(self, builder):
-        builder.parent.il.Emit(OpCodes.Starg, self.index)
+        builder.graphbuilder.il.Emit(OpCodes.Starg, self.index)
 
     def __repr__(self):
         return "GenArgVar(%d)" % self.index
@@ -80,10 +80,10 @@ class GenLocalVar(GenVar):
         return self.v.get_LocalType()
 
     def load(self, builder):
-        builder.parent.il.Emit(OpCodes.Ldloc, self.v)
+        builder.graphbuilder.il.Emit(OpCodes.Ldloc, self.v)
 
     def store(self, builder):
-        builder.parent.il.Emit(OpCodes.Stloc, self.v)
+        builder.graphbuilder.il.Emit(OpCodes.Stloc, self.v)
 
 
 class IntConst(GenConst):
@@ -107,7 +107,7 @@ class IntConst(GenConst):
         return class2type(self.cliclass)
 
     def load(self, builder):
-        builder.parent.il.Emit(OpCodes.Ldc_I4, self.value)
+        builder.graphbuilder.il.Emit(OpCodes.Ldc_I4, self.value)
 
     def __repr__(self):
         return "int const=%s" % self.value
@@ -127,7 +127,7 @@ class FloatConst(GenConst):
         return typeof(System.Double)
 
     def load(self, builder):
-        builder.parent.il.Emit(OpCodes.Ldc_R8, self.value)
+        builder.graphbuilder.il.Emit(OpCodes.Ldc_R8, self.value)
 
     def __repr__(self):
         return "float const=%s" % self.value
@@ -144,10 +144,10 @@ class BaseConst(GenConst):
         return index
 
     def _load_from_array(self, builder, index, clitype):
-        builder.parent.il.Emit(OpCodes.Ldarg_0)
-        builder.parent.il.Emit(OpCodes.Ldc_I4, index)
-        builder.parent.il.Emit(OpCodes.Ldelem_Ref)
-        builder.parent.il.Emit(OpCodes.Castclass, clitype)
+        builder.graphbuilder.il.Emit(OpCodes.Ldarg_0)
+        builder.graphbuilder.il.Emit(OpCodes.Ldc_I4, index)
+        builder.graphbuilder.il.Emit(OpCodes.Ldelem_Ref)
+        builder.graphbuilder.il.Emit(OpCodes.Castclass, clitype)
 
     def getobj(self):
         raise NotImplementedError
@@ -196,8 +196,8 @@ class FunctionConst(BaseConst):
         delegatetype = self.delegatetype
         index = self._get_index(builder)
         self._load_from_array(builder, index, holdertype)
-        builder.parent.il.Emit(OpCodes.Ldfld, funcfield)
-        builder.parent.il.Emit(OpCodes.Castclass, delegatetype)
+        builder.graphbuilder.il.Emit(OpCodes.Ldfld, funcfield)
+        builder.graphbuilder.il.Emit(OpCodes.Castclass, delegatetype)
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -252,6 +252,11 @@ class RCliGenOp(AbstractRGenOp):
 
     @staticmethod
     @specialize.memo()
+    def methToken(TYPE, methname):
+        return methname #XXX
+
+    @staticmethod
+    @specialize.memo()
     def kindToken(T):
         if T is ootype.Void:
             return cVoid
@@ -265,7 +270,10 @@ class RCliGenOp(AbstractRGenOp):
             return cString
         elif T is ootype.Char:
             return cChar
-        elif isinstance(T, ootype.Instance):
+        elif isinstance(T, (ootype.Instance,
+                            ootype.Record,
+                            ootype.Dict,
+                            ootype.List)):
             return cObject # XXX?
         else:
             assert False
@@ -275,6 +283,11 @@ class RCliGenOp(AbstractRGenOp):
     def fieldToken(T, name):
         _, FIELD = T._lookup_field(name)
         return name #, RCliGenOp.kindToken(FIELD)
+
+    @staticmethod
+    @specialize.memo()
+    def allocToken(T):
+        return RCliGenOp.kindToken(T)
 
     def check_no_open_mc(self):
         pass
@@ -376,12 +389,13 @@ class GraphBuilder(GenBuilder):
 
 class BranchBuilder(GenBuilder):
 
-    def __init__(self, parent, label):
-        self.parent = parent
+    def __init__(self, graphbuilder, label):
+        self.graphbuilder = graphbuilder
+        self.rgenop = graphbuilder.rgenop
         self.label = label
         self.operations = []
         self.is_open = False
-        self.genconsts = parent.genconsts
+        self.genconsts = graphbuilder.genconsts
 
     def start_writing(self):
         self.is_open = True
@@ -436,16 +450,16 @@ class BranchBuilder(GenBuilder):
             op = ops.SameAs(self, args_gv[i])
             self.appendop(op)
             args_gv[i] = op.gv_res()
-        label = self.parent.il.DefineLabel()
+        label = self.graphbuilder.il.DefineLabel()
         self.appendop(ops.MarkLabel(self, label))
         return Label(label, args_gv)
 
     def _jump_if(self, gv_condition, opcode):
-        label = self.parent.il.DefineLabel()
+        label = self.graphbuilder.il.DefineLabel()
         op = ops.Branch(self, gv_condition, opcode, label)
         self.appendop(op)
-        branch = BranchBuilder(self.parent, label)
-        self.parent.appendbranch(branch)
+        branch = BranchBuilder(self.graphbuilder, label)
+        self.graphbuilder.appendbranch(branch)
         return branch
 
     def jump_if_false(self, gv_condition, args_for_jump_gv):
@@ -458,11 +472,11 @@ class BranchBuilder(GenBuilder):
         self.operations.append(op)
 
     def end(self):
-        self.parent.end()
+        self.graphbuilder.end()
 
     def replayops(self):
         assert not self.is_open
-        il = self.parent.il
+        il = self.graphbuilder.il
         il.MarkLabel(self.label)
         for op in self.operations:
             op.emit()

@@ -848,6 +848,8 @@ class _object(object):
     def _cast_to(self, EXPECTED_TYPE):
         if self.obj is None:
             return null(EXPECTED_TYPE)
+        elif EXPECTED_TYPE is Object:
+            return self
         elif isinstance(EXPECTED_TYPE, Instance):
             return oodowncast(EXPECTED_TYPE, self.obj)
         elif isinstance(EXPECTED_TYPE, SpecializableType):
