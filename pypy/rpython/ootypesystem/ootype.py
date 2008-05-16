@@ -989,8 +989,8 @@ class _view(object):
 
     def __init__(self, INSTANCE, inst):
         self.__dict__['_TYPE'] = INSTANCE
-        assert isinstance(inst, (_instance, _record))
-        assert isinstance(inst._TYPE, Record) or isSubclass(inst._TYPE, INSTANCE)
+        assert isinstance(inst, _instance)
+        assert isSubclass(inst._TYPE, INSTANCE)
         self.__dict__['_inst'] = inst
 
     def __repr__(self):

@@ -8,7 +8,7 @@ from pypy.translator.cli.test.runtest import CliTest
 from pypy.translator.cli.dotnet import SomeCliClass, SomeCliStaticMethod,\
      NativeInstance, CLR, box, unbox, OverloadingResolver, NativeException,\
      native_exc, new_array, init_array, typeof, eventhandler, clidowncast,\
-     classof
+     classof, cast_to_native_object, cast_from_native_object
 
 System = CLR.System
 ArrayList = CLR.System.Collections.ArrayList
@@ -613,7 +613,21 @@ class TestDotnetRtyping(CliTest):
             return clidowncast(box(x), System.Type).get_Name()
         res = self.interpret(fn, [True])
         assert res == 'Int32'
-        
+
+    def test_cast_native_object(self):
+        A = ootype.Instance("A", ootype.ROOT, {})
+        def fn():
+            a = ootype.new(A)
+            ahash = ootype.ooidentityhash(a)
+            obj = ootype.cast_to_object(a)
+            native = cast_to_native_object(obj)
+            name = native.GetType().get_Name()
+            obj2 = cast_from_native_object(native)
+            a2 = ootype.cast_from_object(A, obj2)
+            a2hash = ootype.ooidentityhash(a2)
+            return name, ahash == a2hash
+        res = self.ll_to_tuple(self.interpret(fn, []))
+        assert res == ('A', True)
 
 class TestPythonnet(TestDotnetRtyping):
     # don't interpreter functions but execute them directly through pythonnet
@@ -642,3 +656,6 @@ class TestPythonnet(TestDotnetRtyping):
             return t.get_Name()
         res = self.interpret(fn, [])
         assert res == 'DelegateType_int__int_2'
+
+    def test_cast_native_object(self):
+        pass # it works only when translated

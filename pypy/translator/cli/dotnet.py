@@ -648,6 +648,40 @@ class Entry(ExtRegistryEntry):
         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result.lowleveltype)
 
 
+def cast_to_native_object(obj):
+    raise TypeError, "cast_to_native_object is meant to be rtyped and not called direclty"
+
+def cast_from_native_object(obj):
+    raise TypeError, "cast_from_native_object is meant to be rtyped and not called direclty"
+
+class Entry(ExtRegistryEntry):
+    _about_ = cast_to_native_object
+
+    def compute_result_annotation(self, s_value):
+        assert isinstance(s_value, annmodel.SomeOOObject)
+        assert s_value.ootype is ootype.Object
+        return SomeOOInstance(CLR.System.Object._INSTANCE)
+
+    def specialize_call(self, hop):
+        assert isinstance(hop.args_s[0], annmodel.SomeOOObject)
+        v_obj, = hop.inputargs(*hop.args_r)
+        hop.exception_cannot_occur()
+        return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
+
+class Entry(ExtRegistryEntry):
+    _about_ = cast_from_native_object
+
+    def compute_result_annotation(self, s_value):
+        assert isinstance(s_value, annmodel.SomeOOInstance)
+        assert s_value.ootype is CLR.System.Object._INSTANCE
+        return annmodel.SomeOOObject()
+
+    def specialize_call(self, hop):
+        v_obj = hop.inputarg(hop.args_r[0], arg=0)
+        return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
+
+
+
 from pypy.translator.cli.query import CliNamespace
 CLR = CliNamespace(None)
 CLR._buildtree()
