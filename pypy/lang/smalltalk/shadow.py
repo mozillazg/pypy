@@ -188,9 +188,9 @@ class ClassShadow(AbstractShadow):
         else:
             raise NotImplementedError(self.instance_kind)
         # XXX Used for non-PyPy way of doing become.
-        #if store:
-        #    from pypy.lang.smalltalk import objtable
-        #    objtable.objects.extend([w_new])
+        if store:
+            from pypy.lang.smalltalk import objtable
+            objtable.objects.extend([w_new])
         return w_new
 
     # _______________________________________________________________
@@ -242,8 +242,8 @@ class ClassShadow(AbstractShadow):
             try:
                 w_method = look_in_shadow.methoddict[selector]
                 # We locally cache the method we found.
-                if look_in_shadow is not self:
-                    self.methoddict[selector] = w_method
+                #if look_in_shadow is not self:
+                #    self.methoddict[selector] = w_method
                 return w_method
             except KeyError, e:
                 look_in_shadow = look_in_shadow.s_superclass
@@ -329,7 +329,7 @@ class LinkedListShadow(AbstractShadow):
 class SemaphoreShadow(LinkedListShadow):
     """A shadow for Smalltalk objects that are semaphores
     """
-    def __init__(self, w_self, invalid):
+    def __init__(self, w_self, invalid=False):
         LinkedListShadow.__init__(self, w_self, invalid)
 
     def put_to_sleep(self, s_process):
@@ -450,20 +450,29 @@ class ContextPartShadow(AbstractShadow):
     def update_shadow(self):
         AbstractShadow.update_shadow(self)
         self._stack = [self.w_self()._vars[i]
-                        for i in range(self.stackstart() + 1,
-                                       self.stackpointer() + 1)]
-        self._pc = utility.unwrap_int(self.w_self()._vars[constants.CTXPART_PC_INDEX])
-        self._pc -= 1 + self.w_method().getliteralsize()
+                        for i in range(self.stackstart(),
+                                       self.stackpointer())]
+        self.init_pc()
         # Using a shadow most likely results in an invalid state for w_self
         self.invalidate_w_self()
+
+    def init_pc(self):
+        self._pc = utility.unwrap_int(self.w_self()._vars[constants.CTXPART_PC_INDEX])
+        self._pc -= self.w_method().bytecodeoffset()
+        self._pc -= 1
+
+    def save_back_pc(self):
+        pc = self._pc
+        pc += 1
+        pc += self.w_method().bytecodeoffset()
+        self.w_self()._vars[constants.CTXPART_PC_INDEX] = utility.wrap_int(pc)
 
     def update_w_self(self):
         AbstractShadow.update_w_self(self)
         for i in range(len(self._stack)):
-            self.w_self()._vars[self.stackstart() + 1 + i] = self._stack[i]
-        self.store_stackpointer(len(self._stack) + self.stackstart())
-        self.w_self()._vars[constants.CTXPART_PC_INDEX] = utility.wrap_int(self._pc + 1 +
-                                                                           self.w_method().getliteralsize())
+            self.w_self()._vars[self.stackstart() + i] = self._stack[i]
+        self.store_stackpointer(len(self._stack))
+        self.save_back_pc()
 
     def __init__(self, w_self, invalid):
         AbstractShadow.__init__(self, w_self, invalid)
@@ -475,6 +484,9 @@ class ContextPartShadow(AbstractShadow):
         raise NotImplementedError()
     
     def stackstart(self):
+        raise NotImplementedError()
+
+    def stackpointer_offset(self):
         raise NotImplementedError()
 
     def w_receiver(self):
@@ -504,7 +516,11 @@ class ContextPartShadow(AbstractShadow):
         self._pc = newpc
 
     def stackpointer(self):
-        return utility.unwrap_int(self.w_self()._vars[constants.CTXPART_STACKP_INDEX])
+        return (utility.unwrap_int(self.w_self()._vars[constants.CTXPART_STACKP_INDEX]) +
+                self.stackpointer_offset())
+
+    def stackpointer_offset(self):
+        raise NotImplementedError()
 
     def store_stackpointer(self, pointer):
         self.w_self()._vars[constants.CTXPART_STACKP_INDEX] = utility.wrap_int(pointer)
@@ -630,10 +646,12 @@ class BlockContextShadow(ContextPartShadow):
 
     def reset_stack(self):
         self._stack = []
-        
+
     def stackstart(self):
-        return (constants.BLKCTX_TEMP_FRAME_START +
-                self.expected_argument_count())
+        return constants.BLKCTX_STACK_START
+
+    def stackpointer_offset(self):
+        return constants.BLKCTX_STACK_START
 
 class MethodContextShadow(ContextPartShadow):
     def __init__(self, w_self, invalid):
@@ -661,11 +679,11 @@ class MethodContextShadow(ContextPartShadow):
     def store_w_receiver(self, w_receiver):
         self.w_self()._vars[constants.MTHDCTX_RECEIVER] = w_receiver
 
-    def gettemp(self, index):
-        return self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index]
+    def gettemp(self, index0):
+        return self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index0]
 
-    def settemp(self, index, w_value):
-        self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index] = w_value
+    def settemp(self, index0, w_value):
+        self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index0] = w_value
 
     def w_home(self):
         return self.w_self()
@@ -673,8 +691,14 @@ class MethodContextShadow(ContextPartShadow):
     def s_home(self):
         return self
 
+    def store_stackpointer(self, pointer):
+        ContextPartShadow.store_stackpointer(self,
+                                             pointer+self.w_method().tempframesize())
+
+    def stackpointer_offset(self):
+        return constants.MTHDCTX_TEMP_FRAME_START
+
     def stackstart(self):
         w_method = self.w_method()
         return (constants.MTHDCTX_TEMP_FRAME_START +
-                w_method.argsize +
-                w_method.tempsize)
+                w_method.tempframesize())

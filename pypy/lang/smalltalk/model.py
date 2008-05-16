@@ -310,9 +310,9 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import MethodContextShadow
         return self.as_special_get_shadow(MethodContextShadow, invalid)
 
-    def as_context_get_shadow(self):
+    def as_context_get_shadow(self, invalid=True):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
-        return self.as_special_get_shadow(ContextPartShadow)
+        return self.as_special_get_shadow(ContextPartShadow, invalid)
 
     def as_methoddict_get_shadow(self):
         from pypy.lang.smalltalk.shadow import MethodDictionaryShadow
@@ -458,9 +458,12 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def __str__(self):
         from pypy.lang.smalltalk.interpreter import BYTECODE_TABLE
-        return ("\n\nBytecode:\n---------------------\n" +
-                "\n".join([BYTECODE_TABLE[ord(i)].__name__ + " " + str(ord(i)) for i in self.bytes]) +
-                "\n---------------------\n")
+        j = 1
+        retval = "\n\nBytecode:\n---------------------\n"
+        for i in self.bytes:
+            retval += str(j) + ": " + BYTECODE_TABLE[ord(i)].__name__ + " " + str(ord(i)) + "\n"
+            j += 1
+        return retval + "\n---------------------\n"
 
     def invariant(self):
         return (W_Object.invariant(self) and
@@ -480,6 +483,9 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def getliteralsize(self):
         return self.literalsize * constants.BYTES_PER_WORD
+
+    def bytecodeoffset(self):
+        return self.getliteralsize() + self.headersize()
 
     def headersize(self):
         return constants.BYTES_PER_WORD
@@ -509,6 +515,9 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         self.primitive = primitive
         self.w_compiledin = None
         self.islarge = islarge
+
+    def tempframesize(self):
+        return self.argsize + self.tempsize
 
     def literalat0(self, index0):
         if index0 == 0:

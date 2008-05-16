@@ -502,9 +502,11 @@ INC_GC = 131
 
 @expose_primitive(BECOME, unwrap_spec=[object, object])
 def func(interp, w_rcvr, w_new):
-#    for w_object in objtable.objects:
-#        w_object.become(w_rcvr, w_new)
-    raise PrimitiveNotYetWrittenError
+# Non-PyPy way of doing become
+    for w_object in objtable.objects:
+        w_object.become(w_rcvr, w_new)
+    return w_rcvr
+    #raise PrimitiveNotYetWrittenError
 
 def fake_bytes_left():
     return utility.wrap_int(2**20) # XXX we don't know how to do this :-(

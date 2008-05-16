@@ -1,6 +1,6 @@
 import py
 from pypy.lang.smalltalk.shadow import Invalidateable
-from pypy.lang.smalltalk.shadow import ContextPartShadow
+from pypy.lang.smalltalk.shadow import ContextPartShadow, MethodContextShadow, BlockContextShadow
 from pypy.lang.smalltalk import model, constants, primitives
 from pypy.lang.smalltalk import objtable
 from pypy.lang.smalltalk.shadow import ContextPartShadow
@@ -38,6 +38,10 @@ class Interpreter(Invalidateable):
         return self._w_active_context
 
     def store_w_active_context(self, w_context):
+        # We can only interpret contexts of which we know the type already
+        s_ctx = w_context.as_context_get_shadow()
+        assert (isinstance(s_ctx, MethodContextShadow) or 
+                isinstance(s_ctx, BlockContextShadow))
         if self._s_active_context is not None:
             self._s_active_context.unnotify(self)
             self._s_active_context = None
@@ -69,6 +73,7 @@ class Interpreter(Invalidateable):
         # translating the interpreter
         if not objectmodel.we_are_translated():
             bytecodeimpl = BYTECODE_TABLE[next]
+
             if self.should_trace():
                 if self._w_last_active_context != self.w_active_context():
                     cnt = 0
@@ -76,7 +81,9 @@ class Interpreter(Invalidateable):
                     # AK make method
                     while p is not objtable.w_nil:
                         cnt += 1
-                        p = p.as_context_get_shadow().w_sender()
+                                                  # Do not update the context
+                                                  # for this action.
+                        p = p.as_context_get_shadow(False).w_sender()
                     self._last_indent = "  " * cnt
                     self._w_last_active_context = self.w_active_context()
 
@@ -87,7 +94,9 @@ class Interpreter(Invalidateable):
                     self._last_indent,
                     self.s_active_context().pc(),
                     next, bytecodeimpl.__name__,)
+
             bytecodeimpl(self.s_active_context(), self)
+
         else:
             # this is a performance optimization: when translating the
             # interpreter, the bytecode dispatching is not implemented as a
