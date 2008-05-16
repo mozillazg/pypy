@@ -1,4 +1,5 @@
 from pypy.tool.pairtype import extendabletype
+from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
@@ -172,9 +173,9 @@ class ObjectConst(BaseConst):
     @specialize.arg(1)
     def revealconst(self, T):
         if T is ootype.Signed:
-            return 12345
+            return ootype.ooidentityhash(self.obj)
         elif T is ootype.Unsigned:
-            return 12346
+            return intmask(ootype.ooidentityhash(self.obj))
         return ootype.cast_from_object(T, self.obj)
 
 
