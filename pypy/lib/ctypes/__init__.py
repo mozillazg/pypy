@@ -106,7 +106,6 @@ def CFUNCTYPE(restype, *argtypes):
         return CFunctionType
 
 if _os.name in ("nt", "ce"):
-    from _ctypes import LoadLibrary as _dlopen
     from _ctypes import FUNCFLAG_STDCALL as _FUNCFLAG_STDCALL
     if _os.name == "ce":
         # 'ce' doesn't have the stdcall calling convention
@@ -127,9 +126,7 @@ if _os.name in ("nt", "ce"):
     if WINFUNCTYPE.__doc__:
         WINFUNCTYPE.__doc__ = CFUNCTYPE.__doc__.replace("CFUNCTYPE", "WINFUNCTYPE")
 
-elif _os.name == "posix":
-    from _ctypes import dlopen as _dlopen
-
+from _ctypes import dlopen as _dlopen
 from _ctypes import sizeof, byref, addressof, alignment, resize
 from _ctypes import _SimpleCData
 

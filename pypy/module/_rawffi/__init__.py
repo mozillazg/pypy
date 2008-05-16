@@ -30,3 +30,24 @@ class Module(MixedModule):
     appleveldefs = {
         'SegfaultException'  : 'error.SegfaultException',
     }
+
+    def buildloaders(cls):
+        from pypy.module._rawffi import interp_rawffi
+
+        if hasattr(interp_rawffi, 'FormatError'):
+            Module.interpleveldefs['FormatError'] = 'interp_rawffi.FormatError'
+        if hasattr(interp_rawffi, 'check_HRESULT'):
+            Module.interpleveldefs['check_HRESULT'] = 'interp_rawffi.check_HRESULT'
+
+        from pypy.rlib import libffi
+        for name in ['FUNCFLAG_STDCALL', 'FUNCFLAG_CDECL', 'FUNCFLAG_PYTHONAPI',
+                     ]:
+            if hasattr(libffi, name):
+                Module.interpleveldefs[name] = "space.wrap(%r)" % getattr(libffi, name)
+
+        # Name of C runtime library
+        from pypy.rpython.lltypesystem.ll2ctypes import get_libc_name
+        Module.interpleveldefs['libc_name'] = "space.wrap(%r)" % get_libc_name()
+                
+        super(Module, cls).buildloaders()
+    buildloaders = classmethod(buildloaders)
