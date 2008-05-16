@@ -48,22 +48,26 @@ class TestRainbowCli(RainbowTest):
     test_complex_struct = skip
     test_degenerate_with_voids = skip
     test_green_with_side_effects = skip
+    test_direct_oosend_with_green_self = skip
+    test_simple_red_meth_vars_around = skip
 
     # tests still bound to lltype
     test_simple_array = skip
     test_arraysize = skip
     test_setarrayitem = skip
-    
-    test_green_deepfrozen_oosend = skip
-    test_direct_oosend_with_green_self = skip
+
+    # these tests use oogetfield, which can't be supported without
+    # translation
+    test_simple_meth = skip
+
+    # these tests involve promotion
     test_residual_red_call = skip
     test_residual_red_call_with_exc = skip
-    test_simple_meth = skip
-    test_simple_red_meth = skip
-    test_simple_red_meth_vars_around = skip
     test_simple_indirect_call = skip
     test_normalize_indirect_call = skip
     test_normalize_indirect_call_more = skip
+
+
     test_green_char_at_merge = skip
     test_self_referential_structures = skip
     test_known_nonzero = skip
