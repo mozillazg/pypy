@@ -317,7 +317,8 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                         cmdobj = build_shared_library(dist)
                         cmdobj.inplace = True
                         cmdobj.force = True
-                        if sys.platform == 'win32' and sys.executable.endswith('_d.exe'):
+                        if (sys.platform == 'win32'
+                            and sys.executable.lower().endswith('_d.exe')):
                             cmdobj.debug = True
                         dist.command_obj["build_ext"] = cmdobj
                         dist.have_run["build_ext"] = 0

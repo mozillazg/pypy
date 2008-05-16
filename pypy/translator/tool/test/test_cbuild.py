@@ -45,9 +45,12 @@ class TestEci:
         {
             printf("%f\\n", pow(2.0, 2.0));
         }''')
-        eci = ExternalCompilationInfo(
-            libraries = ['m'],
-        )
+        if sys.platform != 'win32':
+            eci = ExternalCompilationInfo(
+                libraries = ['m'],
+                )
+        else:
+            eci = ExternalCompilationInfo()
         output = build_executable([c_file], eci)
         p = Popen(output, stdout=PIPE, stderr=STDOUT)
         p.wait()
@@ -109,7 +112,8 @@ class TestEci:
             int get()
             {
                 return 42;
-            }''']
+            }'''],
+            export_symbols = ['get']
         )
         neweci = eci.compile_shared_lib()
         assert len(neweci.libraries) == 1
