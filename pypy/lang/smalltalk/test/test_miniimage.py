@@ -227,18 +227,13 @@ def test_map_mirrors_to_classtable():
     assert w_false is objtable.w_false
     
 def test_runimage():
-    #py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
+    py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
     from pypy.lang.smalltalk.shadow import SemaphoreShadow
     s_semaphore = SemaphoreShadow(None)
     s_scheduler = s_semaphore.s_scheduler()
     s_ap = s_scheduler.s_active_process()
     s_ctx = s_ap.w_suspended_context().as_methodcontext_get_shadow()
     s_ap.store_w_suspended_context(objtable.w_nil)
-
-    print "BOE"
-    print [x for x in enumerate(s_ctx.w_self()._vars)]
-    print s_ctx.stackstart()
-    print s_ctx.stackpointer()
 
     # XXX Important
     # Push return value of snapshot primitive
