@@ -25,6 +25,7 @@ class CConfig:
     if WIN32:
         DWORD = rffi_platform.SimpleType("DWORD", rffi.UINT)
         BOOL = rffi_platform.SimpleType("BOOL", rffi.LONG)
+        HRESULT = rffi_platform.SimpleType("HRESULT", rffi.LONG)
 
         HANDLE = rffi_platform.SimpleType("HANDLE", rffi.VOIDP)
         HLOCAL = rffi_platform.SimpleType("HLOCAL", rffi.VOIDP)
@@ -79,3 +80,7 @@ if WIN32:
         result = ''.join([buf[0][i] for i in range(msglen)])
         LocalFree(buf[0])
         return result
+
+    def FAILED(hr):
+        return rffi.cast(HRESULT, hr) < 0
+    
