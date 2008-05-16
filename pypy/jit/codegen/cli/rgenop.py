@@ -7,6 +7,7 @@ from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst, CodeGenSwitc
 from pypy.jit.codegen.cli import operation as ops
 from pypy.jit.codegen.cli.dumpgenerator import DumpGenerator
 from pypy.translator.cli.dotnet import CLR, typeof, new_array, box, unbox, clidowncast, classof
+from pypy.translator.cli import dotnet
 System = CLR.System
 Utils = CLR.pypy.runtime.Utils
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
@@ -158,6 +159,12 @@ class ObjectConst(BaseConst):
     def __init__(self, obj):
         self.obj = obj
 
+    def getCliType(self):
+        if self.obj == ootype.NULL:
+            return cObject
+        cliobj = dotnet.cast_to_native_object(self.obj)
+        return cliobj.GetType()
+
     def getobj(self):
         return self.obj
 
@@ -271,10 +278,7 @@ class RCliGenOp(AbstractRGenOp):
             return cString
         elif T is ootype.Char:
             return cChar
-        elif isinstance(T, (ootype.Instance,
-                            ootype.Record,
-                            ootype.Dict,
-                            ootype.List)):
+        elif isinstance(T, ootype.OOType):
             return cObject # XXX?
         else:
             assert False
@@ -368,6 +372,9 @@ class GraphBuilder(GenBuilder):
     def genop_same_as(self, gv_x):
         return self.branches[0].genop_same_as(gv_x)
 
+    def genop_oogetfield(self, fieldtoken, gv_obj):
+        return self.branches[0].genop_oogetfield(fieldtoken, gv_obj)
+
     def end(self):
         # render all the pending branches
         for branchbuilder in self.branches:
@@ -440,10 +447,12 @@ class BranchBuilder(GenBuilder):
         self.appendop(op)
         return op.gv_res()
 
-##    def genop_getfield(self, fieldtoken, gv_ptr):
-##        pass
+    def genop_oogetfield(self, fieldtoken, gv_obj):
+        op = ops.GetField(self, gv_obj, fieldtoken)
+        self.appendop(op)
+        return op.gv_res()
 
-##    def genop_setfield(self, fieldtoken, gv_ptr, gv_value):
+##    def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
 ##        pass
 
     def enter_next_block(self, args_gv):

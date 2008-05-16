@@ -165,7 +165,16 @@ class GetField(Operation):
     def __init__(self, builder, gv_obj, fieldname):
         self.builder = builder
         self.gv_obj = gv_obj
-        self.fieldname = fieldname
+        clitype = gv_obj.getCliType()
+        self.fieldinfo = clitype.GetField(fieldname)
+
+    def restype(self):
+        return self.fieldinfo.FieldType
+
+    def emit(self):
+        self.gv_obj.load(self.builder)
+        self.builder.graphbuilder.il.Emit(OpCodes.Ldfld, self.fieldinfo)
+        self.storeResult()
 
 
 def opcode2attrname(opcode):
