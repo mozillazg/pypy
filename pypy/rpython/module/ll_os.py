@@ -613,9 +613,16 @@ class RegisterOs(BaseLazyRegistering):
                                     [rffi.CCHARP, rffi.INT],
                                     rffi.INT)
 
-        def access_llimpl(path, mode):
-            error = rffi.cast(lltype.Signed, os_access(path, mode))
-            return error == 0
+        if sys.platform.startswith('win'):
+            # All files are executable on Windows
+            def access_llimpl(path, mode):
+                mode = mode & ~os.X_OK
+                error = rffi.cast(lltype.Signed, os_access(path, mode))
+                return error == 0
+        else:
+            def access_llimpl(path, mode):
+                error = rffi.cast(lltype.Signed, os_access(path, mode))
+                return error == 0
 
         def os_access_oofakeimpl(path, mode):
             return os.access(OOSupport.from_rstr(path), mode)
