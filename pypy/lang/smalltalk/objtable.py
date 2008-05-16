@@ -33,7 +33,7 @@ w_nil.w_class = classtable.classtable['w_UndefinedObject']
 
 objtable = {}
 # XXX Used for non-PyPy way of doing become.
-#objects = []
+objects = []
 
 for name in constants.objects_in_special_object_table:
     name = "w_" + name

@@ -88,11 +88,10 @@ def method(tempsize=3,argsize=2, bytes="abcde"):
 
 def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
                   method=method()):
-    stackstart = 6+method.argsize+method.tempsize # (len notation, not idx notation)
-    w_object = model.W_PointersObject(classtable.w_MethodContext, stackstart+stacksize)
+    w_object = model.W_PointersObject(classtable.w_MethodContext, constants.MTHDCTX_TEMP_FRAME_START+method.tempframesize()+stacksize)
     w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
     w_object.store(constants.CTXPART_PC_INDEX, utility.wrap_int(pc))
-    w_object.store(constants.CTXPART_STACKP_INDEX, utility.wrap_int(stackstart+stackpointer))
+    w_object.store(constants.CTXPART_STACKP_INDEX, utility.wrap_int(method.tempframesize()+stackpointer))
     w_object.store(constants.MTHDCTX_METHOD, method)
     # XXX
     w_object.store(constants.MTHDCTX_RECEIVER_MAP, '???')
@@ -119,12 +118,12 @@ def test_context():
     assert s_object2.gettemp(0) == 'a'
     assert s_object.w_method() == w_m
     idx = s_object.stackstart()
-    w_object.store(idx + 1, 'f')
-    w_object.store(idx + 2, 'g')
-    w_object.store(idx + 3, 'h')
+    w_object.store(idx, 'f')
+    w_object.store(idx + 1, 'g')
+    w_object.store(idx + 2, 'h')
     s_object.update_shadow()
-    assert s_object.top() == 'h'
     assert s_object.stack() == ['f', 'g', 'h' ]
+    assert s_object.top() == 'h'
     s_object.push('i')
     assert s_object.top() == 'i'
     assert s_object.peek(1) == 'h'

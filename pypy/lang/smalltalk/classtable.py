@@ -129,6 +129,6 @@ define_cls("w_Process", "w_Link")
 define_cls("w_LinkedList", "w_SequenceableCollection")
 define_cls("w_Semaphore", "w_LinkedList")
 define_cls("w_BlockContext", "w_ContextPart",
-           instvarsize=constants.BLKCTX_TEMP_FRAME_START)
+           instvarsize=constants.BLKCTX_STACK_START)
 
 copy_in_globals_classes_known_to_the_vm()

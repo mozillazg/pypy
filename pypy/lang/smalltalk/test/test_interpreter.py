@@ -799,3 +799,12 @@ def test_bc_objectAtAndAtPut():
         [[classtable.w_CompiledMethod, primitives.OBJECT_AT, 1, "objectAt:"],
          [classtable.w_CompiledMethod, primitives.OBJECT_AT_PUT, 2, "objectAt:put:"]],
         test)
+
+def test_runwithtrace():
+    # We run random tests with the bc_trace option turned on explicitely
+    from pypy.lang.smalltalk.conftest import option
+    bc_trace = option.bc_trace
+    option.bc_trace = True
+    test_storeAndPopReceiverVariableBytecode()
+    test_bc_objectAtAndAtPut()
+    option.bc_trace = bc_trace
