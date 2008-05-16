@@ -551,7 +551,7 @@ def runtimenew(c):
         return SomeOOInstance(c.ootype)
 
 def ooidentityhash(i):
-    assert isinstance(i, SomeOOInstance)
+    assert isinstance(i, (SomeOOInstance, SomeOOObject))
     return SomeInteger()
 
 def ooupcast(I, i):
