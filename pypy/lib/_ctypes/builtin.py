@@ -5,8 +5,8 @@ class ConvMode:
     encoding = 'ascii'
     errors = 'strict'
 
-_memmove_addr = ('memmove', 'libc.so.6')
-_memset_addr = ('memset', 'libc.so.6')
+_memmove_addr = ('memmove', _rawffi.libc_name)
+_memset_addr = ('memset', _rawffi.libc_name)
 
 def _string_at_addr(addr, lgt):
     # address here can be almost anything
