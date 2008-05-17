@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.rlib.rsdl.constants import _constants
 import sys
 
 if sys.platform == 'darwin':
@@ -33,10 +34,6 @@ class CConfig:
     Uint16 = platform.SimpleType('Uint16', rffi.INT)
     Uint32 = platform.SimpleType('Uint32', rffi.INT)
 
-    BYTEORDER = platform.ConstantInteger('SDL_BYTEORDER')
-    BIG_ENDIAN = platform.ConstantInteger('SDL_BIG_ENDIAN')
-    INIT_VIDEO = platform.ConstantInteger('SDL_INIT_VIDEO')
-
     Rect = platform.Struct('SDL_Rect', [('x', rffi.INT),
                                         ('y', rffi.INT),
                                         ('w', rffi.INT),
@@ -48,6 +45,10 @@ class CConfig:
                                               ('pixels', rffi.UCHARP)])
     PixelFormat = platform.Struct('SDL_PixelFormat',
                                   [('BytesPerPixel', rffi.INT)])
+
+for _prefix, _list in _constants.items():
+    for _name in _list:
+        setattr(CConfig, _name, platform.ConstantInteger(_prefix+_name))
 
 globals().update(platform.configure(CConfig))
 
