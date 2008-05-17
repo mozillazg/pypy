@@ -175,6 +175,29 @@ def test_nested_structs():
     assert isinstance(c_y, lltype.Struct)
     assert c_y.c_x is c_x
 
+def test_nested_structs_in_the_opposite_order():
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo(
+            post_include_lines="""
+            struct y {
+            int foo;
+            unsigned long bar;
+            };
+            struct x {
+            char c;
+            struct y y;
+            };
+            """.split("\n"))
+        y = rffi_platform.Struct("struct y", [("bar", rffi.SHORT)])
+        x = rffi_platform.Struct("struct x", [("y", y)])
+
+    res = rffi_platform.configure(CConfig)
+    c_x = res["x"]
+    c_y = res["y"]
+    assert isinstance(c_x, lltype.Struct)
+    assert isinstance(c_y, lltype.Struct)
+    assert c_x.c_y is c_y
+
 def test_array():
     dirent = rffi_platform.getstruct("struct dirent",
                                        """
