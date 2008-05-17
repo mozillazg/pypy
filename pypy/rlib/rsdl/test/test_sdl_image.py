@@ -23,7 +23,7 @@ def test_image_pixels():
             rgb = lltype.malloc(rffi.CArray(RSDL.Uint8), 3, flavor='raw')
             try:
                 for y in range(23):
-                    for x in range(17):
+                    for x in range(y % 13, 17, 13):
                         color = RSDL.getpixel(image, x, y)
                         RSDL.GetRGB(color,
                                     image.c_format,
@@ -39,13 +39,12 @@ def test_image_pixels():
         finally:
             RSDL.UnlockSurface(image)
         RSDL.FreeSurface(image)
-        for y in range(23):
-            for x in range(17):
-                f = (x*17 + y*23) / float(17*17+23*23)
-                expected_r = int(255.0 * (1.0-f))
-                expected_g = 0
-                expected_b = int(255.0 * f)
-                r, g, b = result[x, y]
-                assert abs(r-expected_r) < 10
-                assert abs(g-expected_g) < 10
-                assert abs(b-expected_b) < 10
+        for x, y in result:
+            f = (x*17 + y*23) / float(17*17+23*23)
+            expected_r = int(255.0 * (1.0-f))
+            expected_g = 0
+            expected_b = int(255.0 * f)
+            r, g, b = result[x, y]
+            assert abs(r-expected_r) < 10
+            assert abs(g-expected_g) < 10
+            assert abs(b-expected_b) < 10
