@@ -385,7 +385,7 @@ class MBC2(MBC):
             return 0xFF
         else:
             return MBC.read(self, address)
-
+        
     def write(self, address, data):
         if address <= 0x1FFF:  # 0000-1FFF
             self.write_ram_enable(address, data)
@@ -662,8 +662,10 @@ class HuC3(MBC):
             elif self.ram_flag == 0x0A or self.ram_flag == 0x00:
                 if self.ramSize > 0:
                     return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
+                else:
+                    raise Exception("Invalid Ram Size %i" % self.ramSize)
         else:
-            MBC.read(self, address)
+            return MBC.read(self, address)
     
     def write(self, address, data):
         if address <= 0x1FFF: # 0000-1FFF
