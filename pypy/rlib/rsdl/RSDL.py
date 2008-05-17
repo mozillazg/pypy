@@ -1,11 +1,23 @@
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+import sys
 
-eci = ExternalCompilationInfo(
-    includes=['SDL.h'],
+if sys.platform == 'darwin':
+    eci = ExternalCompilationInfo(
+        includes = ['SDL.h'],
+        include_dirs = ['/Library/Frameworks/SDL.framework/Versions/A/Headers'],
+        link_extra = [
+            '/Users/karl/ctypes-test/SDLMain.m',
+            '-I', '/Library/Frameworks/SDL.framework/Versions/A/Headers',
+        ],
+        frameworks = ['SDL', 'Cocoa']
     )
-eci = eci.merge(ExternalCompilationInfo.from_config_tool('sdl-config'))
+else:
+    eci = ExternalCompilationInfo(
+        includes=['SDL.h'],
+        )
+    eci = eci.merge(ExternalCompilationInfo.from_config_tool('sdl-config'))
 
 def external(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci)
@@ -37,8 +49,13 @@ RectPtr.TO.become(Rect)
 SurfacePtr.TO.become(Surface)
 PixelFormatPtr.TO.become(PixelFormat)
 
+def Init(flags):
+    if sys.platform == 'darwin':
+        from AppKit import NSApplication
+        NSApplication.sharedApplication()
+    return _Init(flags)
 
-Init = external('SDL_Init', [Uint32], rffi.INT)
+_Init = external('SDL_Init', [Uint32], rffi.INT)
 Quit = external('SDL_Quit', [], lltype.Void)
 SetVideoMode = external('SDL_SetVideoMode', [rffi.INT, rffi.INT,
                                              rffi.INT, Uint32],
