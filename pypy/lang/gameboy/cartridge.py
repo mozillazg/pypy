@@ -384,13 +384,13 @@ class MBC2(MBC):
         if address > 0xA1FF:
             return 0xFF
         else:
-            return MBC.read(sef, address)
+            return MBC.read(self, address)
 
     def write(self, address, data):
         if address <= 0x1FFF:  # 0000-1FFF
             self.write_ram_enable(address, data)
         elif address <= 0x3FFF: # 2000-3FFF
-            self.write_rom_bank()
+            self.write_rom_bank(address, data)
         elif address >= 0xA000 and address <= 0xA1FF: # A000-A1FF
             self.write_ram(address, data)
             
@@ -398,7 +398,7 @@ class MBC2(MBC):
         if (address & 0x0100) == 0:
             self.ramEnable = ((data & 0x0A) == 0x0A)
             
-    def write_rom_bank(self, address):
+    def write_rom_bank(self, address, data):
         if (address & 0x0100) == 0:
             return
         if (data & 0x0F) == 0:
@@ -452,7 +452,7 @@ class MBC3(MBC):
             else:
                 return self.read_clock_data(address)
         else:
-            return super.read(address)
+            return MBC.read(self, address)
         
     def read_clock_data(self, address):
         if self.clock_register == 0x08:
@@ -581,7 +581,7 @@ class MBC5(MBC):
 
 
     def write(self, address, data):
-        if address <= write_ram_enable:  # 0000-1FFF
+        if address <= self.write_ram_enable:  # 0000-1FFF
             self.writeRAMEnable(address, data)
         elif address <= 0x2FFF:  # 2000-2FFF
             self.rom_bank = ((self.rom_bank & (0x01 << 22)) + ((data & 0xFF) << 14)) & self.romSize
@@ -663,7 +663,7 @@ class HuC3(MBC):
                 if self.ramSize > 0:
                     return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
         else:
-            super.read(address)
+            MBC.read(self, address)
     
     def write(self, address, data):
         if address <= 0x1FFF: # 0000-1FFF
