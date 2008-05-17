@@ -79,7 +79,12 @@ class ExternalCompilationInfo(object):
             if arg.startswith('-I'):
                 include_dirs.append(arg[2:])
             elif arg.startswith('-D'):
-                pre_include_lines.append('#define %s 1' % (arg[2:],))
+                macro = arg[2:]
+                if '=' in macro:
+                    macro, value = macro.split('=')
+                else:
+                    value = '1'
+                pre_include_lines.append('#define %s %s' % (macro, value))
             elif arg.startswith('-L') or arg.startswith('-l'):
                 raise ValueError('linker flag found in compiler options: %r'
                                  % (arg,))
