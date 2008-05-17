@@ -4,7 +4,7 @@ This is a rewrite of the CPython source: Modules/getaddrinfo.c
 """
 from pypy.rlib import _rsocket_rffi as _c
 from pypy.rlib.rsocket import RSocketError, GAIError
-from pypy.rpython.lltypesystem import lltype, rffi, ll_str
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import r_uint
 
 NI_NOFQDN = 0x00000001
@@ -24,7 +24,7 @@ def _getservicename(sin_port, flags):
     if sp:
         serv = rffi.charp2str(sp.c_s_name)
     else:
-        serv = ll_str.ll_int2dec(r_uint(_c.ntohs(sin_port)))
+        serv = "%d" % r_uint(_c.ntohs(sin_port))
 
     return serv
     
