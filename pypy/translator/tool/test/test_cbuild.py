@@ -126,19 +126,24 @@ class TestEci:
         assert not neweci.separate_module_files
 
     def test_from_compiler_flags(self):
-        flags = ('-I/some/include/path -L/some/lib/path '
-                 '-I/other/include/path -L/other/lib/path '
-                 '-lmylib1 -lmylib2 '
-                 '-DMACRO1 -D_MACRO2')
+        flags = ('-I/some/include/path -I/other/include/path '
+                 '-DMACRO1 -D_MACRO2 -?1 -!2')
         eci = ExternalCompilationInfo.from_compiler_flags(flags)
         assert eci.pre_include_lines == ('#define MACRO1 1',
                                          '#define _MACRO2 1')
         assert eci.includes == ()
         assert eci.include_dirs == ('/some/include/path',
                                     '/other/include/path')
+        assert eci.compile_extra == ('-?1', '-!2')
+
+    def test_from_linker_flags(self):
+        flags = ('-L/some/lib/path -L/other/lib/path '
+                 '-lmylib1 -lmylib2 -?1 -!2')
+        eci = ExternalCompilationInfo.from_linker_flags(flags)
         assert eci.libraries == ('mylib1', 'mylib2')
         assert eci.library_dirs == ('/some/lib/path',
                                     '/other/lib/path')
+        assert eci.link_extra == ('-?1', '-!2')
 
     def test_from_config_tool(self):
         sdlconfig = py.path.local.sysfind('sdl-config')

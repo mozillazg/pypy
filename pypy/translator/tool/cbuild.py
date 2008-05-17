@@ -74,22 +74,43 @@ class ExternalCompilationInfo(object):
         format."""
         pre_include_lines = []
         include_dirs = []
-        libraries = []
-        library_dirs = []
+        compile_extra = []
         for arg in flags.split():
             if arg.startswith('-I'):
                 include_dirs.append(arg[2:])
-            elif arg.startswith('-L'):
+            elif arg.startswith('-D'):
+                pre_include_lines.append('#define %s 1' % (arg[2:],))
+            elif arg.startswith('-L') or arg.startswith('-l'):
+                raise ValueError('linker flag found in compiler options: %r'
+                                 % (arg,))
+            else:
+                compile_extra.append(arg)
+        return cls(pre_include_lines=pre_include_lines,
+                   include_dirs=include_dirs,
+                   compile_extra=compile_extra)
+    from_compiler_flags = classmethod(from_compiler_flags)
+
+    def from_linker_flags(cls, flags):
+        """Returns a new ExternalCompilationInfo instance by parsing
+        the string 'flags', which is in the typical Unix linker flags
+        format."""
+        libraries = []
+        library_dirs = []
+        link_extra = []
+        for arg in flags.split():
+            if arg.startswith('-L'):
                 library_dirs.append(arg[2:])
             elif arg.startswith('-l'):
                 libraries.append(arg[2:])
-            elif arg.startswith('-D'):
-                pre_include_lines.append('#define %s 1' % (arg[2:],))
-        return cls(pre_include_lines=pre_include_lines,
-                   include_dirs=include_dirs,
-                   libraries=libraries,
-                   library_dirs=library_dirs)
-    from_compiler_flags = classmethod(from_compiler_flags)
+            elif arg.startswith('-I') or arg.startswith('-D'):
+                raise ValueError('compiler flag found in linker options: %r'
+                                 % (arg,))
+            else:
+                link_extra.append(arg)
+        return cls(libraries=libraries,
+                   library_dirs=library_dirs,
+                   link_extra=link_extra)
+    from_linker_flags = classmethod(from_linker_flags)
 
     def from_config_tool(cls, execonfigtool):
         """Returns a new ExternalCompilationInfo instance by executing
@@ -100,8 +121,10 @@ class ExternalCompilationInfo(object):
             # we raise ImportError to be nice to the pypy.config.pypyoption
             # logic of skipping modules depending on non-installed libs
         cflags = py.process.cmdexec([str(path), '--cflags'])
+        eci1 = cls.from_compiler_flags(cflags)
         libs = py.process.cmdexec([str(path), '--libs'])
-        return cls.from_compiler_flags(cflags + ' ' + libs)
+        eci2 = cls.from_linker_flags(libs)
+        return eci1.merge(eci2)
     from_config_tool = classmethod(from_config_tool)
 
     def _value(self):
