@@ -384,7 +384,7 @@ class MBC2(MBC):
         if address > 0xA1FF:
             return 0xFF
         else:
-            return super.read(address)
+            return MBC.read(sef, address)
 
     def write(self, address, data):
         if address <= 0x1FFF:  # 0000-1FFF
