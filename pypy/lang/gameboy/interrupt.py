@@ -74,12 +74,14 @@ class Interrupt(iMemory):
         self.mask_mapping[mask].set_pending(False)
 
     def write(self, address, data):
+        address = int(address)
         if  address == constants.IE:
             self.set_interrupt_enable(data)
         elif address == constants.IF:
             self.set_fnterrupt_flag(data)
 
     def read(self, address):
+        address = int(address)
         if  address == constants.IE:
             return self.get_interrupt_enable()
         elif address == constants.IF:

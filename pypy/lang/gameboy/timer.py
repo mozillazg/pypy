@@ -19,29 +19,34 @@ class Timer(iMemory):
         self.reset()
 
     def reset(self):
-        self.div = 0
+        self.div            = 0
         self.divider_cycles = constants.DIV_CLOCK
-        self.tima = self.tma = self.tac = 0x00
-        self.timer_cycles = self.timer_clock = constants.TIMER_CLOCK[0]
+        self.tima           = 0
+        self.tma            = 0
+        self.tac            = 0x00
+        self.timer_cycles   = constants.TIMER_CLOCK[0]
+        self.timer_clock    = constants.TIMER_CLOCK[0]
 
     def write(self,  address, data):
-        if address==constants.DIV:
+        address = int(address)
+        if address == constants.DIV:
             self.set_divider(data)
-        elif address==constants.TIMA:
+        elif address == constants.TIMA:
             self.set_timer_counter(data)
-        elif address==constants.TMA:
+        elif address == constants.TMA:
             self.set_timer_modulo(data)
-        elif address==constants.TAC:
+        elif address == constants.TAC:
             self.set_timer_control(data)
     
     def read(self,  address):
-        if address==constants.DIV:
+        address = int(address)
+        if address == constants.DIV:
             return self.get_divider()
-        elif address==constants.TIMA:
+        elif address == constants.TIMA:
             return self.get_timer_counter()
-        elif address==constants.TMA:
+        elif address == constants.TMA:
             return self.get_timer_modulo()
-        elif address==constants.TAC:
+        elif address == constants.TAC:
             return self.get_timer_control()
         return 0xFF
 
@@ -67,7 +72,7 @@ class Timer(iMemory):
         return 0xF8 | self.tac
 
     def set_timer_control(self,  data):
-        if ((self.tac & 0x03) != (data & 0x03)):
+        if (self.tac & 0x03) != (data & 0x03):
             self.timer_clock =  self.timer_cycles = constants.TIMER_CLOCK[data & 0x03]
         self.tac = data
 
@@ -77,10 +82,12 @@ class Timer(iMemory):
         return self.divider_cycles
 
     def emulate(self,  ticks):
+        ticks = int(ticks)
         self.emulate_divider(ticks)
         self.emulate_timer(ticks)
 
     def emulate_divider(self,  ticks):
+        ticks = int(ticks)
         self.divider_cycles -= ticks
         if self.divider_cycles > 0:
             return
@@ -89,6 +96,7 @@ class Timer(iMemory):
         self.divider_cycles += constants.DIV_CLOCK*count
             
     def emulate_timer(self,  ticks):
+        ticks = int(ticks)
         if (self.tac & 0x04) == 0:
             return
         self.timer_cycles -= ticks

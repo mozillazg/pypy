@@ -23,6 +23,7 @@ class Serial(iMemory):
         return self.cycles
 
     def emulate(self, ticks):
+        ticks = int(ticks)
         if (self.sc & 0x81) != 0x81:
             return
         self.cycles -= ticks
@@ -47,12 +48,14 @@ class Serial(iMemory):
         return self.sc
 
     def write(self, address, data):
+        address = int(address)
         if address == constants.SB:
             self.set_serial_data(data)
         elif address == constants.SC:
             self.set_serial_control(data)
             
     def read(self, address):
+        address = int(address)
         if address == constants.SB:
             return self.get_serial_data()
         elif address == constants.SC:
