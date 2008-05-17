@@ -124,3 +124,27 @@ class TestEci:
         assert ctypes.CDLL(neweci.libraries[0]).get() == 42
         assert not neweci.separate_module_sources
         assert not neweci.separate_module_files
+
+    def test_from_compiler_flags(self):
+        flags = ('-I/some/include/path -L/some/lib/path '
+                 '-I/other/include/path -L/other/lib/path '
+                 '-lmylib1 -lmylib2 '
+                 '-DMACRO1 -D_MACRO2')
+        eci = ExternalCompilationInfo.from_compiler_flags(flags)
+        assert eci.pre_include_lines == ('#define MACRO1',
+                                         '#define _MACRO2')
+        assert eci.includes == ()
+        assert eci.include_dirs == ('/some/include/path',
+                                    '/other/include/path')
+        assert eci.libraries == ('mylib1', 'mylib2')
+        assert eci.library_dirs == ('/some/lib/path',
+                                    '/other/lib/path')
+
+    def test_from_config_tool(self):
+        sdlconfig = py.path.local.sysfind('sdl-config')
+        if not sdlconfig:
+            py.test.skip("sdl-config not installed")
+        eci = ExternalCompilationInfo.from_config_tool(sdlconfig)
+        assert 'SDL' in eci.libraries
+        eci2 = ExternalCompilationInfo.from_config_tool(str(sdlconfig))
+        assert eci2 == eci

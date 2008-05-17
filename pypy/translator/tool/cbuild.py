@@ -65,6 +65,38 @@ class ExternalCompilationInfo(object):
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
 
+    def from_compiler_flags(cls, flags):
+        """Returns a new ExternalCompilationInfo instance by parsing
+        the string 'flags', which is in the typical Unix compiler flags
+        format."""
+        pre_include_lines = []
+        include_dirs = []
+        libraries = []
+        library_dirs = []
+        for arg in flags.split():
+            if arg.startswith('-I'):
+                include_dirs.append(arg[2:])
+            elif arg.startswith('-L'):
+                library_dirs.append(arg[2:])
+            elif arg.startswith('-l'):
+                libraries.append(arg[2:])
+            elif arg.startswith('-D'):
+                pre_include_lines.append('#define ' + arg[2:])
+        return cls(pre_include_lines=pre_include_lines,
+                   include_dirs=include_dirs,
+                   libraries=libraries,
+                   library_dirs=library_dirs)
+    from_compiler_flags = classmethod(from_compiler_flags)
+
+    def from_config_tool(cls, execonfigtool):
+        """Returns a new ExternalCompilationInfo instance by executing
+        the 'execonfigtool' with --cflags and --libs arguments."""
+        execonfigtool = str(execonfigtool)
+        cflags = py.process.cmdexec([execonfigtool, '--cflags'])
+        libs = py.process.cmdexec([execonfigtool, '--libs'])
+        return cls.from_compiler_flags(cflags + ' ' + libs)
+    from_config_tool = classmethod(from_config_tool)
+
     def _value(self):
         return tuple([getattr(self, x) for x in self._ATTRIBUTES])
 
