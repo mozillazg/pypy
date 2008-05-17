@@ -81,7 +81,7 @@ class ExternalCompilationInfo(object):
             elif arg.startswith('-l'):
                 libraries.append(arg[2:])
             elif arg.startswith('-D'):
-                pre_include_lines.append('#define ' + arg[2:])
+                pre_include_lines.append('#define %s 1' % (arg[2:],))
         return cls(pre_include_lines=pre_include_lines,
                    include_dirs=include_dirs,
                    libraries=libraries,
