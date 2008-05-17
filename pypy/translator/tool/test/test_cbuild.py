@@ -131,8 +131,8 @@ class TestEci:
                  '-lmylib1 -lmylib2 '
                  '-DMACRO1 -D_MACRO2')
         eci = ExternalCompilationInfo.from_compiler_flags(flags)
-        assert eci.pre_include_lines == ('#define MACRO1',
-                                         '#define _MACRO2')
+        assert eci.pre_include_lines == ('#define MACRO1 1',
+                                         '#define _MACRO2 1')
         assert eci.includes == ()
         assert eci.include_dirs == ('/some/include/path',
                                     '/other/include/path')
