@@ -127,10 +127,10 @@ class TestEci:
 
     def test_from_compiler_flags(self):
         flags = ('-I/some/include/path -I/other/include/path '
-                 '-DMACRO1 -D_MACRO2 -?1 -!2')
+                 '-DMACRO1 -D_MACRO2=baz -?1 -!2')
         eci = ExternalCompilationInfo.from_compiler_flags(flags)
         assert eci.pre_include_lines == ('#define MACRO1 1',
-                                         '#define _MACRO2 1')
+                                         '#define _MACRO2 baz')
         assert eci.includes == ()
         assert eci.include_dirs == ('/some/include/path',
                                     '/other/include/path')
