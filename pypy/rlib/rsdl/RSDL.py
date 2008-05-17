@@ -70,6 +70,8 @@ Quit = external('SDL_Quit', [], lltype.Void)
 SetVideoMode = external('SDL_SetVideoMode', [rffi.INT, rffi.INT,
                                              rffi.INT, Uint32],
                         SurfacePtr)
+WM_SetCaption = external('SDL_WM_SetCaption', [rffi.CCHARP, rffi.CCHARP],
+                         lltype.Void)
 Flip = external('SDL_Flip', [SurfacePtr], rffi.INT)
 CreateRGBSurface = external('SDL_CreateRGBSurface', [Uint32, rffi.INT,
                                                      rffi.INT, rffi.INT,
