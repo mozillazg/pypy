@@ -728,10 +728,10 @@ def func(interp, w_rcvr, sel, w_args):
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):
     #if w_rcvr.getclass() != classtable.classtable['w_Semaphore']:
-    #    raise PrimitiveFailedError()
-    assert isinstance(w_rcvr, model.W_PointersObject)
-    w_rcvr.as_semaphore_get_shadow().synchronous_signal(interp)
-    return w_rcvr
+        raise PrimitiveFailedError()
+    #assert isinstance(w_rcvr, model.W_PointersObject)
+    #w_rcvr.as_semaphore_get_shadow().synchronous_signal(interp)
+    #return w_rcvr
     
 @expose_primitive(PRIMITIVE_WAIT, unwrap_spec=[object])
 def func(interp, w_rcvr):

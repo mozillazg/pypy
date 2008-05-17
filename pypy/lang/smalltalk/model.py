@@ -278,26 +278,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import ClassShadow
         return self.as_special_get_shadow(ClassShadow)
 
-    def as_link_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import LinkShadow
-        return self.as_special_get_shadow(LinkShadow)
-    
-    def as_semaphore_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import SemaphoreShadow
-        return self.as_special_get_shadow(SemaphoreShadow)
-
-    def as_linkedlist_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import LinkedListShadow
-        return self.as_special_get_shadow(LinkedListShadow)
-
-    def as_process_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import ProcessShadow
-        return self.as_special_get_shadow(ProcessShadow)
-
-    def as_scheduler_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import SchedulerShadow
-        return self.as_special_get_shadow(SchedulerShadow)
-
     def as_blockcontext_get_shadow(self, invalid=True):
         from pypy.lang.smalltalk.shadow import BlockContextShadow
         return self.as_special_get_shadow(BlockContextShadow, invalid)
