@@ -84,7 +84,7 @@ MapRGB = external('SDL_MapRGB', [PixelFormatPtr, Uint8, Uint8, Uint8], Uint32)
 GetRGB = external('SDL_GetRGB', [Uint32, PixelFormatPtr,
                                  Uint8P, Uint8P, Uint8P], lltype.Void)
 FillRect = external('SDL_FillRect', [SurfacePtr, RectPtr, Uint32], rffi.INT)
-
+BlitSurface = external('SDL_UpperBlit', [SurfacePtr, RectPtr, SurfacePtr, RectPtr], rffi.INT)
 
 def getpixel(image, x, y):
     """Return the pixel value at (x, y)
