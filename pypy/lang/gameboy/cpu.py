@@ -117,6 +117,13 @@ class FlagRegister(Register):
         assert isinstance(cpu, CPU)
         self.cpu = cpu
         self.reset()
+        #added for rpython type inference
+        self.z_flag = False
+        self.n_flag = False
+        self.h_flag = False
+        self.c_flag = False
+        self.p_flag = False
+        self.s_flag = False
          
     def reset(self, keep_z=False, keep_n=False, keep_h=False, keep_c=False,\
                 keep_p=False, keep_s=False):
@@ -318,6 +325,7 @@ class CPU(object):
         self.rom = banks       
             
     def emulate(self, ticks):
+        ticks = int(ticks)
         self.cycles += ticks
         self.handle_pending_interrupt()
         while self.cycles > 0:

@@ -29,35 +29,37 @@ class Video(iMemory):
         self.frame_skip = frame_skip
 
     def reset(self):
-        self.cycles = constants.MODE_2_TICKS
-        self.control = 0x91
-        self.stat = 2
-        self.line_y = 0
+        self.cycles     = constants.MODE_2_TICKS
+        self.control    = 0x91
+        self.stat       = 2
+        self.line_y     = 0
         self.line_y_compare = 0
-        self.dma = 0xFF
-        self.scroll_y = 0
-        self.scroll_x = 0
-        self.window_y = self.wline_y = 0
-        self.window_x = 0
+        self.dma        = 0xFF
+        self.scroll_y   = 0
+        self.scroll_x   = 0
+        self.window_y   = self.wline_y = 0
+        self.window_x   = 0
         self.background_palette = 0xFC
-        self.object_palette_0 = self.object_palette_1 = 0xFF
+        self.object_palette_0   = 0xFF 
+        self.object_palette_1   = 0xFF
 
-        self.transfer = True
-        self.display = True
-        self.vblank = True
-        self.dirty = True
+        self.transfer   = True
+        self.display    = True
+        self.vblank     = True
+        self.dirty      = True
 
-        self.vram = [0]*constants.VRAM_SIZE
-        self.oam = [0]*constants.OAM_SIZE
+        self.vram       = [0]*constants.VRAM_SIZE
+        self.oam        = [0]*constants.OAM_SIZE
         
-        self.line = [0]* (8+160+8)
-        self.objects = [0] * constants.OBJECTS_PER_LINE
-        self.palette = [0] * 1024
+        self.line       = [0]* (8+160+8)
+        self.objects    = [0] * constants.OBJECTS_PER_LINE
+        self.palette    = [0] * 1024
         
-        self.frames = 0
+        self.frames     = 0
         self.frame_skip = 0
 
     def write(self, address, data):
+        address = int(address)
         # assert data >= 0x00 and data <= 0xFF
         if address == constants.LCDC :
             self.set_control(data)
@@ -96,6 +98,7 @@ class Video(iMemory):
               self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
+        address = int(address)
         if address == constants.LCDC:
             return self.get_control()
         elif address == constants.STAT:
@@ -136,6 +139,7 @@ class Video(iMemory):
         return self.cycles
 
     def emulate(self, ticks):
+        ticks = int(ticks)
         if (self.control & 0x80) != 0:
             self.cycles -= ticks
             self.consume_cycles()
@@ -307,7 +311,7 @@ class Video(iMemory):
         
     def emulate_hblank_part_2(self):
         if self.display:
-            self.drawFrame()
+            self.draw_frame()
         self.frames += 1
         if self.frames >= self.frame_skip:
             self.display = True
