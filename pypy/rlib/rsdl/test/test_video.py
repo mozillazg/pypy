@@ -43,6 +43,10 @@ class TestVideo:
             RSDL.Flip(self.screen)
             self.check("Screen filled with %s" % colorname)
 
+    def test_caption(self):
+        RSDL.WM_SetCaption("Hello World!", "Hello World!")
+        self.check('The window caption is "Hello World!"')
+
     def test_blit_rect(self):
         surface = RSDL.CreateRGBSurface(0, 150, 50, 32,
                                         r_uint(0x000000FF),
