@@ -9,10 +9,10 @@ from pypy.rlib.libffi import *
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.unroll import unrolling_iterable
 
-try:
+_MS_WINDOWS = os.name == "nt"
+
+if _MS_WINDOWS:
     from pypy.rlib import rwin32
-except:
-    rwin32 = None
 
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.rarithmetic import intmask, r_uint, r_singlefloat
@@ -458,12 +458,13 @@ def charp2rawstring(space, address, maxlength=-1):
     return space.wrap(s)
 charp2rawstring.unwrap_spec = [ObjSpace, r_uint, int]
 
-def FormatError(space, code):
-    return space.wrap(rwin32.FormatError(code))
-FormatError.unwrap_spec = [ObjSpace, int]
+if _MS_WINDOWS:
+    def FormatError(space, code):
+        return space.wrap(rwin32.FormatError(code))
+    FormatError.unwrap_spec = [ObjSpace, int]
 
-def check_HRESULT(space, hresult):
-    if rwin32.FAILED(hresult):
-        raise OperationError(space.w_WindowsError, space.wrap(hresult))
-    return space.wrap(hresult)
-check_HRESULT.unwrap_spec = [ObjSpace, int]
+    def check_HRESULT(space, hresult):
+        if rwin32.FAILED(hresult):
+            raise OperationError(space.w_WindowsError, space.wrap(hresult))
+        return space.wrap(hresult)
+    check_HRESULT.unwrap_spec = [ObjSpace, int]
