@@ -4,6 +4,12 @@ from pypy.rlib.rarithmetic import r_uint
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy import conftest
 
+#
+#  This test file is skipped unless run with "py.test --view".
+#  If it is run as "py.test --view -s", then it interactively asks
+#  for confirmation that the window looks as expected.
+#
+
 
 class TestVideo:
 
