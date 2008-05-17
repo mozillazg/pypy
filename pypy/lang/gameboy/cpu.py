@@ -3,7 +3,12 @@ from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import *
 from pypy.lang.gameboy.interrupt import *
 
-class Register(object):
+
+class iRegister(object):
+    def get(self, use_cycles=True):
+        return 0xFF
+
+class Register(iRegister):
     
     def __init__(self, cpu, value=0):
         assert isinstance(cpu, CPU)
@@ -31,7 +36,7 @@ class Register(object):
     
 #------------------------------------------------------------------------------
 
-class DoubleRegister(object):
+class DoubleRegister(iRegister):
     
     def __init__(self, cpu, hi, lo, reset_value=0):
         assert isinstance(cpu, CPU)
@@ -42,8 +47,8 @@ class DoubleRegister(object):
         self.lo = lo
         self.reset_value = reset_value
         
-    def set(self, hi=0, lo=None, use_cycles=True):
-        if lo is None:
+    def set(self, hi=0, lo=-1, use_cycles=True):
+        if lo < 0:
             self.set_hi(hi >> 8, use_cycles)
             self.set_lo(hi & 0xFF, use_cycles)
             if use_cycles:
@@ -51,7 +56,7 @@ class DoubleRegister(object):
         else:
             self.set_hi(hi, use_cycles)
             self.set_lo(lo, use_cycles) 
-    
+            
     def reset(self):
         self.set(self.reset_value, use_cycles=False)
             
@@ -87,7 +92,7 @@ class DoubleRegister(object):
     
 # ------------------------------------------------------------------------------
 
-class ImmediatePseudoRegister(object):
+class ImmediatePseudoRegister(iRegister):
     
         def __init__(self, cpu, hl):
             assert isinstance(cpu, CPU)
