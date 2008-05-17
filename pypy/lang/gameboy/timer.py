@@ -102,7 +102,7 @@ class Timer(iMemory):
         if (self.tima < 0) and (self.tima + count >= 0):
             self.tima = self.tma - count
             self.interrupt.raise_interrupt(constants.TIMER)
-            print self.interrupt.timer.is_pending(), self.interrupt.is_pending(constants.TIMER)
+            #print self.interrupt.timer.is_pending(), self.interrupt.is_pending(constants.TIMER)
         
 # CLOCK DRIVER -----------------------------------------------------------------
 
