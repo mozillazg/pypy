@@ -18,8 +18,13 @@ class CConfig:
 
     INIT_VIDEO = platform.ConstantInteger('SDL_INIT_VIDEO')
 
+    Surface = platform.Struct('SDL_Surface', [])
+
 globals().update(platform.configure(CConfig))
 
 
 Init = external('SDL_Init', [Uint32], rffi.INT)
 Quit = external('SDL_Quit', [], lltype.Void)
+SetVideoMode = external('SDL_SetVideoMode', [rffi.INT, rffi.INT,
+                                             rffi.INT, Uint32],
+                        lltype.Ptr(Surface))
