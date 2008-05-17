@@ -100,6 +100,7 @@ class ConfigResult:
         name = self.entries[entry]
         info = self.info[name]
         self.result[entry] = entry.build_result(info, self)
+        return self.result[entry]
 
     def get_result(self):
         return dict([(name, self.result[entry])
