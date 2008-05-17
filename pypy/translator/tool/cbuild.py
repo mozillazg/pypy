@@ -91,9 +91,13 @@ class ExternalCompilationInfo(object):
     def from_config_tool(cls, execonfigtool):
         """Returns a new ExternalCompilationInfo instance by executing
         the 'execonfigtool' with --cflags and --libs arguments."""
-        execonfigtool = str(execonfigtool)
-        cflags = py.process.cmdexec([execonfigtool, '--cflags'])
-        libs = py.process.cmdexec([execonfigtool, '--libs'])
+        path = py.path.local.sysfind(execonfigtool)
+        if not path:
+            raise ImportError("cannot find %r" % (execonfigtool,))
+            # we raise ImportError to be nice to the pypy.config.pypyoption
+            # logic of skipping modules depending on non-installed libs
+        cflags = py.process.cmdexec([str(path), '--cflags'])
+        libs = py.process.cmdexec([str(path), '--libs'])
         return cls.from_compiler_flags(cflags + ' ' + libs)
     from_config_tool = classmethod(from_config_tool)
 
