@@ -238,9 +238,16 @@ class Cartridge(object):
 
 class MBC(iMemory):
     
-    def __init__(self, rom, ram, clock_driver):
+    def __init__(self, rom, ram, clock_driver,
+                    min_rom_bank_size=0, max_rom_bank_size=0,
+                    min_ram_bank_size=0, max_ram_bank_size=0):
+        self.min_rom_bank_size = min_rom_bank_size
+        self.max_rom_bank_size = max_rom_bank_size
+        self.min_ram_bank_size = min_ram_bank_size
+        self.max_ram_bank_size = max_ram_bank_size
         self.set_rom(rom)
         self.set_ram(ram)
+        self.reset()
 
     def reset(self):
         self.rom_bank = constants.ROM_BANK_SIZE
@@ -250,10 +257,6 @@ class MBC(iMemory):
         self.ram = []
         self.romSize = 0
         self.ramSize = 0
-        self.min_rom_bank_size = 0
-        self.max_rom_bank_size = 0
-        self.min_ram_bank_size = 0
-        self.max_ram_bank_size = 0
     
     def set_rom(self, buffer):
         banks = len(buffer) / constants.ROM_BANK_SIZE
@@ -275,11 +278,10 @@ class MBC(iMemory):
         if address <= 0x3FFF: # 0000-3FFF
             return self.rom[address] & 0xFF
         elif address <= 0x7FFF:# 4000-7FFF
-            print address, self.rom_bank
             return self.rom[self.rom_bank + (address & 0x3FFF)] & 0xFF
         elif address >= 0xA000 and address <= 0xBFFF and self.ramEnable: # A000-BFFF
-                return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
-        return 0xFF
+            return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
+        raise Exception("Invalid address")
     
     def write(self, address, data):
         pass
@@ -291,12 +293,11 @@ class MBC(iMemory):
 class DefaultMBC(MBC):
     
     def __init__(self, rom, ram, clock_driver):
-        self.reset()
-        self.min_rom_bank_size = 0
-        self.max_rom_bank_size = 0xFFFFFF
-        self.min_ram_bank_size = 0
-        self.max_ram_bank_size = 0xFFFFFF
-        MBC.__init__(self, rom, ram, clock_driver)
+        MBC.__init__(self, rom, ram, clock_driver, 
+                        min_rom_bank_size=0,
+                        max_rom_bank_size=0xFFFFFF,
+                        min_ram_bank_size=0,
+                        max_ram_bank_size=0xFFFFFF)
     
 
 #-------------------------------------------------------------------------------
@@ -313,12 +314,11 @@ class MBC1(MBC):
     A000-BFFF    RAM Bank 0-3 (8KB)
      """
     def __init__(self, rom, ram, clock_driver):
-        self.reset()
-        self.min_ram_bank_size = 0
-        self.max_ram_bank_size = 4
-        self.min_rom_bank_size = 2    
-        self.max_rom_bank_size = 128
-        MBC.__init__(self, rom, ram, clock_driver)
+        MBC.__init__(self, rom, ram, clock_driver, 
+                        min_ram_bank_size=0,
+                        max_ram_bank_size=4,
+                        min_rom_bank_size=2,    
+                        max_rom_bank_size=128)
         
     def reset(self):
         MBC.reset(self)
@@ -372,12 +372,11 @@ class MBC2(MBC):
     RAM_BANK_SIZE = 512
 
     def __init__(self, rom, ram, clock_driver):
-        self.reset()
-        self.min_ram_bank_size = constants.RAM_BANK_SIZE
-        self.max_ram_bank_size = constants.RAM_BANK_SIZE
-        self.min_rom_bank_size = 2    
-        self.max_rom_bank_size = 16
-        MBC.__init__(self, rom, ram, clock_driver)
+        MBC.__init__(self, rom, ram, clock_driver,
+                    min_ram_bank_size=constants.RAM_BANK_SIZE,
+                    max_ram_bank_size=constants.RAM_BANK_SIZE,
+                    min_rom_bank_size=2,   
+                    max_rom_bank_size=16)
         
 
     def read(self, address):
@@ -424,30 +423,34 @@ class MBC3(MBC):
     A000-BFFF    RAM Bank 0-3 (8KB)
     """
     def __init__(self, rom, ram, clock_driver):
-        self.reset()
-        self.min_ram_bank_size = 0
-        self.max_ram_bank_size = 4
-        self.min_rom_bank_size = 2    
-        self.max_rom_bank_size = 128
-        
-        self.clock = clock_driver
-        self.clockLDaysclockLControl = None
-
-        MBC.__init__(self, rom, ram, clock_driver)
-        self.reset()
+        MBC.__init__(self, rom, ram, clock_driver,
+                    min_ram_bank_size=0,
+                    max_ram_bank_size=4,
+                    min_rom_bank_size=2,  
+                    max_rom_bank_size=128)
 
 
     def reset(self):
         MBC.reset(self)
-        self.clock_time = self.clock.get_time()
-        self.clockLatch = self.clock_register = 0
-        self.clockSeconds = self.clockMinutes = self.clockHours = self.clockDays = self.clockControl = 0
-        self.clockLSeconds = self.clockLMinutes = self.clockLHours = self.clockLDays = self.clockLControl = 0
+        self.clockLDaysclockLControl = None
+        self.clock_time     = self.clock.get_time()
+        self.clockLatch     = 0
+        self.clock_register = 0
+        self.clockSeconds   = 0
+        self.clockMinutes   = 0
+        self.clockHours     = 0
+        self.clockDays      = 0
+        self.clockControl   = 0
+        self.clockLSeconds  = 0
+        self.clockLMinutes  = 0
+        self.clockLHours    = 0
+        self.clockLDays     = 0
+        self.clockLControl  = 0
 
 
     def read(self, address):
-        if (address >= 0xA000 and address <= 0xBFFF):  # A000-BFFF
-            if (self.ram_bank >= 0):
+        if address >= 0xA000 and address <= 0xBFFF:  # A000-BFFF
+            if self.ram_bank >= 0:
                 return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
             else:
                 return self.read_clock_data(address)
@@ -465,6 +468,7 @@ class MBC3(MBC):
             return self.clockLDays
         if self.clock_register == 0x0C:
             return self.clockLControl
+        raise Exception("invalid clockregister %i" % self.clock_register)
     
     def write(self, address, data):
         if address <= 0x1FFF: # 0000-1FFF
@@ -569,16 +573,16 @@ class MBC5(MBC):
     A000-BFFF    RAM Bank 0-15 (8KB)
     """
     def __init__(self, rom, ram, clock_driver):
-        
-        self.reset()
-        self.min_ram_bank_size = 0
-        self.max_ram_bank_size = 16
-        self.min_rom_bank_size = 2    
-        self.max_rom_bank_size = 512
-        
-        self.rumble = rumble = True
-        MBC.__init__(self, rom, ram, clock_driver)
+        MBC.__init__(self, rom, ram, clock_driver, 
+                        min_ram_bank_size=0,
+                        max_ram_bank_size=16,
+                        min_rom_bank_size=2,    
+                        max_rom_bank_size=512)
 
+    def reset(self):
+        MBC.reset(self)
+        self.rumble = True
+        
 
     def write(self, address, data):
         if address <= self.write_ram_enable:  # 0000-1FFF
@@ -628,20 +632,11 @@ class HuC3(MBC):
     A000-BFFF    RAM Bank 0-15 (8KB)
     """
     def __init__(self, rom, ram, clock_driver):
-        self.reset()
-        self.min_ram_bank_size = 0
-        self.max_ram_bank_size = 4
-        self.min_rom_bank_size = 2    
-        self.max_rom_bank_size = 128
-        self.clock = clock_driver
-        self.clock_register = 0
-        self.clock_shift = 0
-        self.clock_time = 0
-        self.set_rom(rom)
-        self.set_ram(ram)
-        self.ram_flag = 0
-        self.ram_value = 0
-        MBC.__init__(self, rom, ram, clock_driver)
+        MBC.__init__(self, rom, ram, clock_driver, 
+                        min_ram_bank_size=0,
+                        max_ram_bank_size=4,
+                        min_rom_bank_size=2,    
+                        max_rom_bank_size=128)
 
 
     def reset(self):
@@ -662,8 +657,7 @@ class HuC3(MBC):
             elif self.ram_flag == 0x0A or self.ram_flag == 0x00:
                 if self.ramSize > 0:
                     return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
-                else:
-                    raise Exception("Invalid Ram Size %i" % self.ramSize)
+            raise Exception("Huc3 read error")
         else:
             return MBC.read(self, address)
     

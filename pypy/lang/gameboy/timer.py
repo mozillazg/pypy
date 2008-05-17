@@ -8,6 +8,7 @@ from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import *
 from math import ceil
 from pypy.lang.gameboy.ram import iMemory
+import time
 
 
 class Timer(iMemory):
@@ -112,5 +113,5 @@ class Clock(object):
         pass
     
     def get_time(self):
-        return System.currentTimeMillis() / 1000
+        return time.time()
         
