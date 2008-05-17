@@ -7,8 +7,10 @@ Timer and Divider
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import *
 from math import ceil
+from pypy.lang.gameboy.ram import iMemory
 
-class Timer(object):
+
+class Timer(iMemory):
 
     def __init__(self, interrupt):
         assert isinstance(interrupt, Interrupt)

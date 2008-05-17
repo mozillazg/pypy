@@ -5,6 +5,8 @@ from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.timer import *
 from pypy.rlib.streamio import open_file_as_stream
 
+from pypy.lang.gameboy.ram import iMemory
+
 import os
 
 def has_cartridge_battery(self, cartridge_type):    
@@ -27,11 +29,18 @@ def create_bank_controller(self, cartridge_type, rom, ram, clock):
 class InvalidMemoryBankTypeError(Exception):
     pass
 
+def map_to_byte( string):
+    mapped = [0]*len(string)
+    for i in range(len(string)):
+        mapped[i]  = ord(string[i]) & 0xFF
+    return mapped
 
-
-def map_to_byte(value):
-    return ord(value) & 0xFF
-
+def map_to_string(int_array):
+    mapped = [0]*len(int_array)
+    for i in range(len(int_array)):
+        mapped[i]  = chr(int_array[i])
+    return ("").join(mapped)
+        
 # ==============================================================================
 # CARTRIDGE
 
@@ -60,13 +69,14 @@ class CartridgeManager(object):
         self.check_rom()
         self.create_ram()
         self.load_battery()
-        self.mbc = self.create_bank_controller(self.get_memory_bank_type(), self.rom, self.ram, self.clock)
+        self.mbc = self.create_bank_controller(self.get_memory_bank_type(), \
+                                               self.rom, self.ram, self.clock)
         
     def check_rom(self):
         if not self.verify_header():
-            raise Exeption("Cartridge header is corrupted")
+            raise Exception("Cartridge header is corrupted")
         if self.cartridge.get_size() < self.get_rom_size():
-            raise Exeption("Cartridge is truncated")
+            raise Exception("Cartridge is truncated")
         
     def create_ram(self):
         ramSize = self.get_ram_size()
@@ -152,32 +162,31 @@ class Cartridge(object):
             self.load(file)
         
     def reset(self):
-        self.cartridge_name = None
-        self.cartridge_file_path = None
-        self.cartridge_stream = None   
-        self.cartridge_file_contents = None 
-        self.battery_name = None
-        self.battery_file_path = None
+        self.cartridge_name = ""
+        self.cartridge_file_path = ""
+        self.cartridge_stream = None
+        self.cartridge_file_contents = None
+        self.battery_name = ""
+        self.battery_file_path = ""
         self.battery_stream = None
         self.battery_file_contents = None
         
         
     def load(self, cartridge_path):
+        if cartridge_path is None:
+            raise Exception("cartridge_path cannot be None!")
         cartridge_path = str(cartridge_path)
         self.cartridge_file_path = cartridge_path
-        self.cartridge_name = os.path.basename(self.cartridge_file_path)
-        #FIXED open_file_as_stream
         self.cartridge_stream = open_file_as_stream(cartridge_path)
-        self.cartridge_file_contents = map(map_to_byte, \
-                                           self.cartridge_stream.readall())
+        self.cartridge_file_contents = map_to_byte( \
+                                                self.cartridge_stream.readall())
         self.load_battery(cartridge_path)
         
     def load_battery(self, cartridge_file_path):
         self.battery_file_path = self.create_battery_file_path(cartridge_file_path)
-        self.battery_name = os.path.basename(self.battery_file_path)
         if self.has_battery():
             self.battery_stream = open_file_as_stream(self.battery_file_path)
-            self.battery_file_contents = map(map_to_byte, \
+            self.battery_file_contents = map_to_byte( \
                                              self.battery_stream.readall())
     
     def create_battery_file_path(self, cartridge_file_path):
@@ -194,6 +203,8 @@ class Cartridge(object):
             return cartridge_file_path + constants.BATTERY_FILE_EXTENSION
     
     def has_battery(self):
+        if self.battery_file_path is None:
+            return False
         return os.path.exists(self.battery_file_path)
     
     def read(self):
@@ -204,24 +215,28 @@ class Cartridge(object):
     
     def write_battery(self, ram):
         output_stream = open_file_as_stream(self.battery_file_path, "w")
-        output_stream.write(("").join(map(chr, ram)))
+        output_stream.write(map_to_string(ram))
         output_stream.flush()
         self.battery_file_contents = ram
         
     def remove_battery(self):
-        if self.has_battery():
+        if self.has_battery() and self.battery_file_path is not None:
             os.remove(self.battery_file_path)
             
     def get_size(self):
+        if self.cartridge_file_path is None:
+            return -1
         return os.path.getsize(self.cartridge_file_path)
         
     def get_battery_size(self):
+        if self.battery_file_path is None:
+            return -1
         return os.path.getsize(self.battery_file_path)
         
 # ==============================================================================
 # CARTRIDGE TYPES
 
-class MBC(object):
+class MBC(iMemory):
     
     def __init__(self, rom, ram, clock_driver):
         self.set_rom(rom)
@@ -408,14 +423,14 @@ class MBC3(MBC):
     4000-7FFF    ROM Bank 1-127 (16KB)
     A000-BFFF    RAM Bank 0-3 (8KB)
     """
-    def __init__(self, rom, ram, clock):
+    def __init__(self, rom, ram, clock_driver):
         self.reset()
         self.min_ram_bank_size = 0
         self.max_ram_bank_size = 4
         self.min_rom_bank_size = 2    
         self.max_rom_bank_size = 128
         
-        self.clock = clock
+        self.clock = clock_driver
         self.clockLDaysclockLControl = None
 
         MBC.__init__(self, rom, ram, clock_driver)
@@ -553,14 +568,15 @@ class MBC5(MBC):
     4000-7FFF    ROM Bank 1-511 (16KB)
     A000-BFFF    RAM Bank 0-15 (8KB)
     """
-    def __init__(self, rom, ram, clock_driver, rumble):
+    def __init__(self, rom, ram, clock_driver):
+        
         self.reset()
         self.min_ram_bank_size = 0
         self.max_ram_bank_size = 16
         self.min_rom_bank_size = 2    
         self.max_rom_bank_size = 512
         
-        self.rumble = rumble
+        self.rumble = rumble = True
         MBC.__init__(self, rom, ram, clock_driver)
 
 
@@ -611,13 +627,13 @@ class HuC3(MBC):
     4000-7FFF    ROM Bank 1-127 (16KB)
     A000-BFFF    RAM Bank 0-15 (8KB)
     """
-    def __init__(self, rom, ram, clock):
+    def __init__(self, rom, ram, clock_driver):
         self.reset()
         self.min_ram_bank_size = 0
         self.max_ram_bank_size = 4
         self.min_rom_bank_size = 2    
         self.max_rom_bank_size = 128
-        self.clock = clock
+        self.clock = clock_driver
         self.clock_register = 0
         self.clock_shift = 0
         self.clock_time = 0

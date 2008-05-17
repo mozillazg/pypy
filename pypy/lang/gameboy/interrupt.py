@@ -1,4 +1,5 @@
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.ram import iMemory
 
 
 class InterruptFlag(object):
@@ -19,7 +20,7 @@ class InterruptFlag(object):
         self._is_pending = _is_pending
     
 
-class Interrupt(object):
+class Interrupt(iMemory):
     """
     PyBoy GameBoy (TM) Emulator
     
