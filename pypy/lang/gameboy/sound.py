@@ -5,7 +5,8 @@ Audio Processor Unit (Sharp LR35902 APU)
 """
 
 from pypy.lang.gameboy import constants
-    
+from pypy.lang.gameboy.ram import iMemory
+
 class Channel(object):
 
     audio_index = 0
@@ -495,7 +496,7 @@ class NoiseGenerator(Channel):
 # ------------------------------------------------------------------------------
 
         
-class Sound(object):
+class Sound(iMemory):
 
     def __init__(self, sound_driver):
         self.buffer  = [0] * 512

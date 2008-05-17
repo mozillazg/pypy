@@ -44,11 +44,11 @@ class File(object):
 def test_cartridge_init(): 
     cartridge = get_cartridge()
     
-    assert cartridge.cartridge_name is None
+    assert cartridge.cartridge_name is ""
     assert cartridge.cartridge_stream is None
     assert cartridge.cartridge_file_contents is None
     
-    assert cartridge.battery_name is None
+    assert cartridge.battery_name is ""
     assert cartridge.battery_stream is None
     assert cartridge.battery_file_contents is None
     

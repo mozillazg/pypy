@@ -4,9 +4,9 @@
 """
 
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.ram import iMemory
 
-
-class Video(object):
+class Video(iMemory):
     #frames = 0
     #frame_skip = 0
 

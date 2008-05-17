@@ -6,7 +6,15 @@ Work and High RAM
 
 from pypy.lang.gameboy import constants
 
-class RAM(object):
+
+class iMemory(object):
+     def write(self, address, data):
+         pass
+     
+     def read(self, address):
+         return 0xFF
+
+class RAM(iMemory):
 
     def __init__(self):
         # Work RAM

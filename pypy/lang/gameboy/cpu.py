@@ -373,7 +373,7 @@ class CPU(object):
         return (hi << 8) + lo
         
     def fetch_double_register(self, register):
-        self.pop_double_register(CPU.fetch, register)
+        self.double_register_inverse_call(CPU.fetch, register)
 
     def push(self, data, use_cycles=True):
         # Stack, 2 cycles
@@ -392,11 +392,11 @@ class CPU(object):
         self.cycles += 1
         return data
     
-    def pop_double_register(self, getter, register=None):
+    def pop_double_register(self, register):
         # 3 cycles
-        if register is None:
-            register = getter
-            getter = CPU.pop
+        self.double_register_inverse_call(CPU.pop, register)
+        
+    def double_register_inverse_call(self, getter, register):
         b = getter(self) # 1 cycle
         a = getter(self) # 1 cycle
         register.set(a, b) # 2 cycles
@@ -471,16 +471,18 @@ class CPU(object):
         
     def subtract_a(self, getter, setter=None):
         # 1 cycle
-        self.compare_a(getter, setter) # 1 cycle
+        self.compare_a(getter) # 1 cycle
         self.a.sub(getter(use_cycles=False), False)
 
     def fetch_subtract_a(self):
         data = self.fetch()
-        self.subtract_a(lambda use_cycles=False: data)
+        # 1 cycle
+        self.compare_a(lambda use_cycles=False: data) # 1 cycle
+        self.a.sub(data, False)
 
     def compare_a(self, getter, setter=None):
         # 1 cycle
-        s = (self.a.get() - getter()) & 0xFF
+        s = int(self.a.get() - getter()) & 0xFF
         self.f.reset()
         self.f.n_flag = True
         self.f.z_flag_compare(s)
@@ -1021,12 +1023,12 @@ REGISTER_SET_B = [CPU.get_bc, CPU.get_de, CPU.get_hl, CPU.get_af]
 FLAG_REGISTER_SET = [CPU.is_not_z, CPU.is_z, CPU.is_not_c, CPU.is_c]
 REGISTER_OP_CODES = [ 
     (0x01, 0x10, CPU.fetch_double_register,     REGISTER_SET_A),
-    (0x09, 0x10, CPU.add_hl,                   REGISTER_SET_A),
+    (0x09, 0x10, CPU.add_hl,                    REGISTER_SET_A),
     (0x03, 0x10, CPU.inc_double_register,       REGISTER_SET_A),
     (0x0B, 0x10, CPU.dec_double_register,       REGISTER_SET_A),
-    (0xC0, 0x08, CPU.conditional_return,       FLAG_REGISTER_SET),
-    (0xC2, 0x08, CPU.conditional_jump,         FLAG_REGISTER_SET),
-    (0xC4, 0x08, CPU.conditional_call,         FLAG_REGISTER_SET),
+    (0xC0, 0x08, CPU.conditional_return,        FLAG_REGISTER_SET),
+    (0xC2, 0x08, CPU.conditional_jump,          FLAG_REGISTER_SET),
+    (0xC4, 0x08, CPU.conditional_call,          FLAG_REGISTER_SET),
     (0x20, 0x08, CPU.relative_conditional_jump, FLAG_REGISTER_SET),
     (0xC1, 0x10, CPU.pop_double_register,       REGISTER_SET_B),
     (0xC5, 0x10, CPU.push_double_register,      REGISTER_SET_B)
