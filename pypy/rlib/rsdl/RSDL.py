@@ -8,7 +8,7 @@ if sys.platform == 'darwin':
         includes = ['SDL.h'],
         include_dirs = ['/Library/Frameworks/SDL.framework/Versions/A/Headers'],
         link_extra = [
-            '/Users/karl/ctypes-test/SDLMain.m',
+            'macosx-sdl-main/SDLMain.m',
             '-I', '/Library/Frameworks/SDL.framework/Versions/A/Headers',
         ],
         frameworks = ['SDL', 'Cocoa']
