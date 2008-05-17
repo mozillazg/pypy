@@ -18,7 +18,23 @@ class Wrapper(object):
         except IndexError:
             # XXX nicer errormessage
             raise
+
+def make_getter(index0):
+    def getter(self):
+        return self.read(index0)
+    return getter
+
+def make_setter(index0):
+    def setter(self, w_new):
+        return self.write(index0, w_new)
+    return setter
+
+def make_getter_setter(index0):
+    return make_getter(index0), make_setter(index0)
     
+class LinkWrapper(Wrapper):
+    next_link, store_next_link = make_getter_setter(0)
+
 
 '''class LinkedListShadow(AbstractShadow):
     def __init__(self, w_self, invalid):
@@ -118,39 +134,6 @@ class SemaphoreShadow(LinkedListShadow):
             self.w_self()._vars[constants.EXCESS_SIGNALS_INDEX] = w_value
         else:
             self.resume(self.remove_first_link_of_list(), interp)
-
-class LinkShadow(AbstractShadow):
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
-
-    def next(self):
-        return self.w_self()._vars[constants.NEXT_LINK_INDEX]
-
-    def store_next(self, w_object):
-        self.w_self()._vars[constants.NEXT_LINK_INDEX] = w_object
-
-class ProcessShadow(LinkShadow):
-    """A shadow for Smalltalk objects that are processes
-    """
-    def __init__(self, w_self, invalid):
-        LinkShadow.__init__(self, w_self, invalid)
-
-    def priority(self):
-        return utility.unwrap_int(self.w_self()._vars[constants.PROCESS_PRIORITY_INDEX])
-
-    def my_list(self):
-        return self.w_self()._vars[constants.PROCESS_MY_LIST_INDEX]
-
-    def store_my_list(self, w_object):
-        self.w_self()._vars[constants.PROCESS_MY_LIST_INDEX] = w_object
-
-    def w_suspended_context(self):
-        # XXX Can currently only restart context if it is a method context...
-        # XXX Depends on typechecking ...
-        return self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX]
-
-    def store_w_suspended_context(self, w_object):
-        self.w_self()._vars[constants.PROCESS_SUSPENDED_CONTEXT_INDEX] = w_object
 
 class AssociationShadow(AbstractShadow):
     def __init__(self, w_self, invalid):

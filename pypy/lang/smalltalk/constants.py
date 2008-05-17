@@ -15,9 +15,6 @@ CLASS_METHODDICT_INDEX = 1
 CLASS_FORMAT_INDEX = 2
 CLASS_NAME_INDEX = 6                # in the mini.image, at least
 
-# Link
-NEXT_LINK_INDEX = 0                 
-
 # Process < Link
 PROCESS_SUSPENDED_CONTEXT_INDEX = 1 
 PROCESS_PRIORITY_INDEX = 2          
