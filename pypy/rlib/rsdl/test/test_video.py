@@ -20,9 +20,10 @@ class TestVideo:
         assert RSDL.Init(RSDL.INIT_VIDEO) >= 0
         self.screen = RSDL.SetVideoMode(640, 480, 32, 0)
         assert self.screen
+        self.is_interactive = sys.stdout.isatty()
 
     def check(self, msg):
-        if sys.stdout.isatty():
+        if self.is_interactive:
             print
             answer = raw_input('Interactive test: %s - ok? [Y] ' % msg)
             if answer and not answer.upper().startswith('Y'):
@@ -46,6 +47,34 @@ class TestVideo:
     def test_caption(self):
         RSDL.WM_SetCaption("Hello World!", "Hello World!")
         self.check('The window caption is "Hello World!"')
+
+    def test_keypresses(self):
+        if not self.is_interactive:
+            py.test.skip("interactive test only")
+        RSDL.EnableUNICODE(1)
+        print
+        print "Keys pressed in the Pygame window should be printed below."
+        print "Use Escape to quit."
+        while True:
+            event = lltype.malloc(RSDL.Event, flavor='raw')
+            try:
+                ok = RSDL.WaitEvent(event)
+                assert rffi.cast(lltype.Signed, ok) == 1
+                c_type = rffi.getintfield(event, 'c_type')
+                if c_type == RSDL.KEYDOWN:
+                    p = rffi.cast(RSDL.KeyboardEventPtr, event)
+                    if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
+                        print 'Escape key'
+                        break
+                    char = rffi.getintfield(p.c_keysym, 'c_unicode')
+                    if char != 0:
+                        print 'Key:', unichr(char).encode('utf-8')
+                    else:
+                        print 'Some special key'
+                else:
+                    print '(event of type %d)' % c_type
+            finally:
+                lltype.free(event, flavor='raw')
 
     def test_blit_rect(self):
         surface = RSDL.CreateRGBSurface(0, 150, 50, 32,

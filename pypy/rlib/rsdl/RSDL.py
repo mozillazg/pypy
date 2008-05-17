@@ -26,6 +26,8 @@ def external(name, args, result):
 RectPtr        = lltype.Ptr(lltype.ForwardReference())
 SurfacePtr     = lltype.Ptr(lltype.ForwardReference())
 PixelFormatPtr = lltype.Ptr(lltype.ForwardReference())
+EventPtr       = lltype.Ptr(lltype.ForwardReference())
+KeyboardEventPtr = lltype.Ptr(lltype.ForwardReference())
 
 class CConfig:
     _compilation_info_ = eci
@@ -46,6 +48,16 @@ class CConfig:
     PixelFormat = platform.Struct('SDL_PixelFormat',
                                   [('BytesPerPixel', rffi.INT)])
 
+    Event = platform.Struct('SDL_Event', [('type', rffi.INT)])
+    keysym = platform.Struct('SDL_keysym', [('scancode', rffi.INT),
+                                            ('sym', rffi.INT),
+                                            ('mod', rffi.INT),
+                                            ('unicode', rffi.INT)])
+    KeyboardEvent = platform.Struct('SDL_KeyboardEvent',
+                                    [('type', rffi.INT),
+                                     ('state', rffi.INT),
+                                     ('keysym', keysym)])
+
 for _prefix, _list in _constants.items():
     for _name in _list:
         setattr(CConfig, _name, platform.ConstantInteger(_prefix+_name))
@@ -55,6 +67,8 @@ globals().update(platform.configure(CConfig))
 RectPtr.TO.become(Rect)
 SurfacePtr.TO.become(Surface)
 PixelFormatPtr.TO.become(PixelFormat)
+EventPtr.TO.become(Event)
+KeyboardEventPtr.TO.become(KeyboardEvent)
 
 Uint8P = lltype.Ptr(lltype.Array(Uint8, hints={'nolength': True}))
 Uint16P = lltype.Ptr(lltype.Array(Uint16, hints={'nolength': True}))
@@ -73,6 +87,8 @@ SetVideoMode = external('SDL_SetVideoMode', [rffi.INT, rffi.INT,
                         SurfacePtr)
 WM_SetCaption = external('SDL_WM_SetCaption', [rffi.CCHARP, rffi.CCHARP],
                          lltype.Void)
+EnableUNICODE = external('SDL_EnableUNICODE', [rffi.INT], rffi.INT)
+WaitEvent = external('SDL_WaitEvent', [EventPtr], rffi.INT)
 Flip = external('SDL_Flip', [SurfacePtr], rffi.INT)
 CreateRGBSurface = external('SDL_CreateRGBSurface', [Uint32, rffi.INT,
                                                      rffi.INT, rffi.INT,
