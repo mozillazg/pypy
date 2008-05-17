@@ -10,7 +10,7 @@ def mapToByte(value):
 
 ROM_PATH = str(py.magic.autopath().dirpath().dirpath())+"/rom"
 CONTENT = "abcdefghijklmnopqrstuvwxyz1234567890"
-MAPPED_CONTENT = map(mapToByte, CONTENT)
+MAPPED_CONTENT = map(map_to_byte, CONTENT)
 
 # ------------------------------------------------------------------------------
 
@@ -43,13 +43,13 @@ class File(object):
 def test_cartridge_init(): 
     cartridge = get_cartridge()
     
-    #assert cartridge.cartridge_name is None
-    assert cartridge.cartridge_file_path is None
-    assert cartridge.cartridge_file is None
+    assert cartridge.cartridge_name is None
+    assert cartridge.cartridge_stream is None
+    assert cartridge.cartridge_file_contents is None
     
     assert cartridge.battery_name is None
-    assert cartridge.battery_file_path is None
-    assert cartridge.battery_file is None
+    assert cartridge.battery_stream is None
+    assert cartridge.battery_file_contents is None
     
 
 def rest_cartridge_load():
@@ -60,12 +60,10 @@ def rest_cartridge_load():
     cartridge.load(romFilePath)
     #assert cartridge.cartridge_name == romName
     assert cartridge.cartridge_file_path == romFilePath
-    assert cartridge.cartridge_file is not None
     
     assert cartridge.battery_name == romFile+constants.BATTERY_FILE_EXTENSION
     assert cartridge.battery_file_path ==  romFilePath+constants.BATTERY_FILE_EXTENSION
     assert cartridge.has_battery() == False
-    assert cartridge.battery_file is None
     
     
 def test_cartridge_hasBattery():
@@ -80,9 +78,7 @@ def test_cartridge_hasBattery():
     
 def test_cartridge_read():
     cartridge = get_cartridge()
-    cartridge.cartridge_file = File(CONTENT)
-    
-    assert cartridge.read() == MAPPED_CONTENT
+    assert cartridge.read() == None
     
     
 def test_cartridge_remove_write_read_Battery():
@@ -97,8 +93,6 @@ def test_cartridge_remove_write_read_Battery():
     
     cartridge.write_battery(MAPPED_CONTENT)
     assert cartridge.has_battery() == True
-    print cartridge.battery_file
-    assert cartridge.battery_file.read() == CONTENT
     assert cartridge.read_battery() == MAPPED_CONTENT
     
     cartridge.remove_battery()

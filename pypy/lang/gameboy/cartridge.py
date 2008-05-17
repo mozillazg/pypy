@@ -3,6 +3,7 @@
 
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.timer import *
+from pypy.rlib.streamio import open_file_as_stream
 
 import os
 
@@ -27,6 +28,9 @@ class InvalidMemoryBankTypeError(Exception):
     pass
 
 
+
+def map_to_byte(value):
+    return ord(value) & 0xFF
 
 # ==============================================================================
 # CARTRIDGE
@@ -148,35 +152,44 @@ class Cartridge(object):
             self.load(file)
         
     def reset(self):
-        #self.cartridge_name = None
+        self.cartridge_name = None
         self.cartridge_file_path = None
-        self.cartridge_file = None    
+        self.cartridge_stream = None   
+        self.cartridge_file_contents = None 
         self.battery_name = None
         self.battery_file_path = None
-        self.battery_file = None
+        self.battery_stream = None
+        self.battery_file_contents = None
         
         
     def load(self, cartridge_path):
         cartridge_path = str(cartridge_path)
         self.cartridge_file_path = cartridge_path
-        #self.cartridge_name = os.path.basename(self.cartridge_file_path)
-        self.cartridge_file = file(cartridge_path, "r")
+        self.cartridge_name = os.path.basename(self.cartridge_file_path)
+        #FIXED open_file_as_stream
+        self.cartridge_stream = open_file_as_stream(cartridge_path)
+        self.cartridge_file_contents = map(map_to_byte, \
+                                           self.cartridge_stream.readall())
         self.load_battery(cartridge_path)
         
-        cartridge_path
     def load_battery(self, cartridge_file_path):
-        self.battery_file_path = self.create_battery_file_path(cartridge_path)
+        self.battery_file_path = self.create_battery_file_path(cartridge_file_path)
         self.battery_name = os.path.basename(self.battery_file_path)
         if self.has_battery():
-            self.battery_file = open(self.battery_file_path)
+            self.battery_stream = open_file_as_stream(self.battery_file_path)
+            self.battery_file_contents = map(map_to_byte, \
+                                             self.battery_stream.readall())
     
     def create_battery_file_path(self, cartridge_file_path):
         if cartridge_file_path.endswith(constants.CARTRIDGE_FILE_EXTENSION):
-            return cartridge_file_path.replace(constants.CARTRIDGE_FILE_EXTENSION,
-                    constants.BATTERY_FILE_EXTENSION)
-        elif cartridge_file_path.endswith(constants.CARTRIDGE_COLOR_FILE_EXTENSION):
-            return cartridge_file_path.replace(constants.CARTRIDGE_COLOR_FILE_EXTENSION,
-                    constants.BATTERY_FILE_EXTENSION)
+            return cartridge_file_path.replace( \
+                                        constants.CARTRIDGE_FILE_EXTENSION,
+                                        constants.BATTERY_FILE_EXTENSION)
+        elif cartridge_file_path.endswith(\
+                                constants.CARTRIDGE_COLOR_FILE_EXTENSION):
+            return cartridge_file_path.replace( \
+                                    constants.CARTRIDGE_COLOR_FILE_EXTENSION,
+                                    constants.BATTERY_FILE_EXTENSION)
         else:
             return cartridge_file_path + constants.BATTERY_FILE_EXTENSION
     
@@ -184,17 +197,16 @@ class Cartridge(object):
         return os.path.exists(self.battery_file_path)
     
     def read(self):
-        self.cartridge_file.seek(0)
-        return map(map_to_byte, self.cartridge_file.read())
+        return self.cartridge_file_contents
     
     def read_battery(self):
-        self.battery_file.seek(0)
-        return  map(map_to_byte, self.battery_file.read())
+        return  self.battery_file_contents
     
     def write_battery(self, ram):
-        self.battery_file = open(self.battery_file_path, "w")
-        self.battery_file.write(("").join(map(chr, ram)))
-        self.battery_file = open(self.battery_file_path, "r+")
+        output_stream = open_file_as_stream(self.battery_file_path, "w")
+        output_stream.write(("").join(map(chr, ram)))
+        output_stream.flush()
+        self.battery_file_contents = ram
         
     def remove_battery(self):
         if self.has_battery():
@@ -206,11 +218,6 @@ class Cartridge(object):
     def get_battery_size(self):
         return os.path.getsize(self.battery_file_path)
         
-     
-
-def map_to_byte(value):
-    return ord(value) & 0xFF
-   
 # ==============================================================================
 # CARTRIDGE TYPES
 
