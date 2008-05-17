@@ -6,6 +6,7 @@ from pypy.lang.smalltalk import objtable
 from pypy.lang.smalltalk.shadow import ContextPartShadow
 from pypy.lang.smalltalk.conftest import option
 from pypy.rlib import objectmodel, unroll
+from pypy.lang.smalltalk import wrapper
 
 
 class MissingBytecode(Exception):
@@ -138,9 +139,8 @@ class __extend__(ContextPartShadow):
         # named var (the value).
         index = self.currentBytecode & 31
         w_association = self.w_method().getliteral(index)
-        assert isinstance(w_association, model.W_PointersObject)
-        s_association = w_association.as_association_get_shadow()
-        self.push(s_association.value())
+        association = wrapper.AssociationWrapper(w_association)
+        self.push(association.value())
 
     def storeAndPopReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 7
@@ -281,9 +281,8 @@ class __extend__(ContextPartShadow):
             self.push(self.w_method().getliteral(variableIndex))
         elif variableType == 3:
             w_association = self.w_method().getliteral(variableIndex)
-            assert isinstance(w_association, model.W_PointersObject)
-            s_association = w_association.as_association_get_shadow()
-            self.push(s_association.value())
+            association = wrapper.AssociationWrapper(w_association)
+            self.push(association.value())
         else:
             assert 0
         
@@ -297,9 +296,8 @@ class __extend__(ContextPartShadow):
             raise IllegalStoreError
         elif variableType == 3:
             w_association = self.w_method().getliteral(variableIndex)
-            assert isinstance(w_association, model.W_PointersObject)
-            s_association = w_association.as_association_get_shadow()
-            s_association.store_value(self.top())
+            association = wrapper.AssociationWrapper(w_association)
+            association.store_value(self.top())
 
     def extendedStoreAndPopBytecode(self, interp):
         self.extendedStoreBytecode(interp)
@@ -335,18 +333,16 @@ class __extend__(ContextPartShadow):
         elif opType == 4:
             # pushLiteralVariable
             w_association = self.w_method().getliteral(third)
-            assert isinstance(w_association, model.W_PointersObject)
-            s_association = w_association.as_association_get_shadow()
-            self.push(s_association.value())
+            association = wrapper.AssociationWrapper(w_association)
+            self.push(association.value())
         elif opType == 5:
             self.w_receiver().store(third, self.top())
         elif opType == 6:
             self.w_receiver().store(third, self.pop())
         elif opType == 7:
             w_association = self.w_method().getliteral(third)
-            assert isinstance(w_association, model.W_PointersObject)
-            s_association = w_association.as_association_get_shadow()
-            s_association.store_value(self.top())
+            association = wrapper.AssociationWrapper(w_association)
+            association.store_value(self.top())
 
     def singleExtendedSuperBytecode(self, interp):
         selector, argcount = self.getExtendedSelectorArgcount()

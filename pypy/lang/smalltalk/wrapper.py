@@ -67,10 +67,35 @@ class LinkedListWrapper(Wrapper):
             self.store_first_link(w_next)
         LinkWrapper(w_first).store_next_link(objtable.w_nil)
         return w_first
+
+class AssociationWrapper(Wrapper):
+    key = make_getter(0)
+    value, store_value = make_getter_setter(1)
+
 '''
-class SemaphoreShadow(LinkedListShadow):
-    """A shadow for Smalltalk objects that are semaphores
-    """
+class SchedulerShadow(AbstractShadow):
+    def __init__(self, w_self, invalid):
+        AbstractShadow.__init__(self, w_self, invalid)
+
+    def s_active_process(self):
+        w_v = self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX]
+        assert isinstance(w_v, model.W_PointersObject)
+        return w_v.as_process_get_shadow()
+
+    def store_w_active_process(self, w_object):
+        self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX] = w_object
+    
+    def process_lists(self):
+        w_v = self.w_self()._vars[constants.SCHEDULER_PROCESS_LISTS_INDEX]
+        assert isinstance(w_v, model.W_PointersObject)
+        return w_v
+
+
+
+class SemaphoreWrapper(LinkedListWrapper):
+
+    excess_signals, store_excess_signals = make_getter_setter(0)
+
     def __init__(self, w_self, invalid=False):
         LinkedListShadow.__init__(self, w_self, invalid)
 
@@ -103,53 +128,24 @@ class SemaphoreShadow(LinkedListShadow):
         return w_scheduler.as_scheduler_get_shadow()
 
     def resume(self, w_process, interp):
-        s_process = w_process.as_process_get_shadow()
-        s_scheduler = self.s_scheduler()
-        s_active_process = s_scheduler.s_active_process()
-        active_priority = s_active_process.priority()
-        new_priority = s_process.priority()
+        process = ProcessWrapper(w_process)
+        scheduler = self.scheduler()
+        active_process = scheduler.s_active_process()
+        active_priority = active_process.priority()
+        new_priority = process.priority()
         if new_priority > active_priority:
-            self.put_to_sleep(s_active_process)
-            self.transfer_to(s_process, interp)
+            self.put_to_sleep(active_process)
+            self.transfer_to(process, interp)
         else:
-            self.put_to_sleep(s_process)
+            self.put_to_sleep(process)
 
     def synchronous_signal(self, interp):
         if self.is_empty_list():
-            w_value = self.w_self()._vars[constants.EXCESS_SIGNALS_INDEX]
+            w_value = self.excess_signals()
             w_value = utility.wrap_int(utility.unwrap_int(w_value) + 1)
-            self.w_self()._vars[constants.EXCESS_SIGNALS_INDEX] = w_value
+            self.store_excess_signals(w_value)
         else:
             self.resume(self.remove_first_link_of_list(), interp)
 
-class AssociationShadow(AbstractShadow):
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
-
-    def key(self):
-        return self.w_self()._vars[constants.ASSOCIATION_KEY_INDEX]
-
-    def value(self):
-        return self.w_self()._vars[constants.ASSOCIATION_VALUE_INDEX]
-
-    def store_value(self, w_value):
-        self.w_self()._vars[constants.ASSOCIATION_VALUE_INDEX] = w_value
-
-class SchedulerShadow(AbstractShadow):
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
-
-    def s_active_process(self):
-        w_v = self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX]
-        assert isinstance(w_v, model.W_PointersObject)
-        return w_v.as_process_get_shadow()
-
-    def store_w_active_process(self, w_object):
-        self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX] = w_object
-    
-    def process_lists(self):
-        w_v = self.w_self()._vars[constants.SCHEDULER_PROCESS_LISTS_INDEX]
-        assert isinstance(w_v, model.W_PointersObject)
-        return w_v
-
 '''
+

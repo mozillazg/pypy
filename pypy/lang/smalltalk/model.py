@@ -298,10 +298,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import SchedulerShadow
         return self.as_special_get_shadow(SchedulerShadow)
 
-    def as_association_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import AssociationShadow
-        return self.as_special_get_shadow(AssociationShadow)
-
     def as_blockcontext_get_shadow(self, invalid=True):
         from pypy.lang.smalltalk.shadow import BlockContextShadow
         return self.as_special_get_shadow(BlockContextShadow, invalid)
@@ -426,15 +422,15 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def compiledin(self):  
         if self.w_compiledin is None:
+            from pypy.lang.smalltalk import wrapper
             # (Blue book, p 607) All CompiledMethods that contain
             # extended-super bytecodes have the clain which they are found as
             # their last literal variable.   
             # Last of the literals is an association with compiledin
             # as a class
             w_association = self.literals[-1]
-            assert isinstance(w_association, W_PointersObject)
-            s_association = w_association.as_association_get_shadow()
-            self.w_compiledin = s_association.value()
+            association = wrapper.AssociationWrapper(w_association)
+            self.w_compiledin = association.value()
         return self.w_compiledin
 
     def getclass(self):
