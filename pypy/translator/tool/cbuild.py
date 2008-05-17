@@ -17,7 +17,7 @@ class ExternalCompilationInfo(object):
     _ATTRIBUTES = ['pre_include_lines', 'includes', 'include_dirs',
                    'post_include_lines', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files',
-                   'export_symbols']
+                   'export_symbols', 'compile_extra', 'link_extra', 'frameworks']
     _AVOID_DUPLICATES = ['separate_module_files', 'libraries', 'includes',
                          'include_dirs', 'library_dirs', 'separate_module_sources']
 
@@ -30,7 +30,10 @@ class ExternalCompilationInfo(object):
                  library_dirs            = [],
                  separate_module_sources = [],
                  separate_module_files   = [],
-                 export_symbols          = []):
+                 export_symbols          = [],
+                 compile_extra           = [],
+                 link_extra              = [],
+                 frameworks              = []):
         """
         pre_include_lines: list of lines that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -439,11 +442,12 @@ class CCompiler:
                  compiler_exe=None, profbased=None):
         self.cfilenames = cfilenames
         ext = ''
-        self.compile_extra = []
-        self.link_extra = []
         self.libraries = list(eci.libraries)
         self.include_dirs = list(eci.include_dirs)
         self.library_dirs = list(eci.library_dirs)
+        self.compile_extra = list(eci.compile_extra)
+        self.link_extra = list(eci.link_extra) 
+        self.frameworks = list(eci.frameworks)
         self.compiler_exe = compiler_exe
         self.profbased = profbased
         if not sys.platform in ('win32', 'darwin'): # xxx
@@ -465,6 +469,8 @@ class CCompiler:
                    os.path.exists(s + 'lib'):
                     self.library_dirs.append(s + 'lib')
             self.compile_extra += ['-O3', '-fomit-frame-pointer']
+            for framework in self.frameworks:
+                self.link_extra += ['-framework', framework]
 
         if outputfilename is None:
             self.outputfilename = py.path.local(cfilenames[0]).new(ext=ext)
@@ -530,6 +536,7 @@ class CCompiler:
                 objects.append(str(cobjfile))
             finally: 
                 old.chdir() 
+
         compiler.link_executable(objects, str(self.outputfilename),
                                  libraries=self.eci.libraries,
                                  extra_preargs=self.link_extra,
