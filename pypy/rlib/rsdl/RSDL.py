@@ -3,10 +3,9 @@ from pypy.rpython.tool import rffi_platform as platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 eci = ExternalCompilationInfo(
-    includes = ['SDL.h'],
-    include_dirs = ['/usr/include/SDL'],
-    libraries = ['SDL'],
-)
+    includes=['SDL.h'],
+    )
+eci = eci.merge(ExternalCompilationInfo.from_config_tool('sdl-config'))
 
 def external(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci)
