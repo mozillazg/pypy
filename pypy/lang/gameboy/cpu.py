@@ -477,12 +477,15 @@ class CPU(object):
     def fetch_subtract_a(self):
         data = self.fetch()
         # 1 cycle
-        self.compare_a(lambda use_cycles=False: data) # 1 cycle
+        self.compare_a_simple(data) # 1 cycle
         self.a.sub(data, False)
 
     def compare_a(self, getter, setter=None):
         # 1 cycle
-        s = int(self.a.get() - getter()) & 0xFF
+        self.compare_a_simple(int(self.a.get() - getter()))
+        
+    def compare_a_simple(self, s):
+        s = s & 0xFF
         self.f.reset()
         self.f.n_flag = True
         self.f.z_flag_compare(s)
