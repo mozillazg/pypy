@@ -811,9 +811,8 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
         assert destrb is not None
         assert destra is not None
 
-    def test_cast_object(self):
+    def test_cast_object_instance(self):
         A = ootype.Instance("Foo", ootype.ROOT)
-        B = ootype.Record({'x': ootype.Signed}) 
 
         def fn_instance():
             a = ootype.new(A)
@@ -824,6 +823,9 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
             assert a is a3
         self.interpret(fn_instance, [])
 
+    def test_cast_object_record(self):
+        B = ootype.Record({'x': ootype.Signed}) 
+
         def fn_record():
             b = ootype.new(B)
             b.x = 42
@@ -832,7 +834,11 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
             assert b2.x == 42
             assert b is b2
         self.interpret(fn_record, [])
-       
+
+    def test_cast_object_null(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+        B = ootype.Record({'x': ootype.Signed}) 
+
         def fn_null():
             a = ootype.null(A)
             b = ootype.null(B)
@@ -843,6 +849,8 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
             assert ootype.cast_from_object(B, obj2) == b
         self.interpret(fn_null, [])
 
+    def test_cast_object_is_true(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
         def fn_is_true(flag):
             if flag:
                 a = ootype.new(A)
@@ -852,3 +860,15 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
             return bool(obj)
         assert self.interpret(fn_is_true, [True]) is True
         assert self.interpret(fn_is_true, [False]) is False
+
+    def test_cast_object_mix_null(self):
+        A = ootype.Instance("Foo", ootype.ROOT)
+        def fn_mix_null(flag):
+            a = ootype.new(A)
+            obj = ootype.cast_to_object(a)
+            if flag:
+                return obj
+            else:
+                return ootype.NULL
+        res = self.interpret(fn_mix_null, [False])
+        assert res is ootype.NULL
