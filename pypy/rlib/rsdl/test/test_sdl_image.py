@@ -1,6 +1,6 @@
 import py, os
 import autopath
-from pypy.rlib.rsdl import RSDL, RIMG
+from pypy.rlib.rsdl import RSDL, RIMG, RSDL_helper
 from pypy.rpython.lltypesystem import lltype, rffi
 
 
@@ -24,7 +24,7 @@ def test_image_pixels():
             try:
                 for y in range(23):
                     for x in range(y % 13, 17, 13):
-                        color = RSDL.getpixel(image, x, y)
+                        color = RSDL_helper.get_pixel(image, x, y)
                         RSDL.GetRGB(color,
                                     image.c_format,
                                     rffi.ptradd(rgb, 0),
