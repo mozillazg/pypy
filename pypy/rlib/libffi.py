@@ -47,9 +47,6 @@ else:
                                  ],
         export_symbols = ['ffi_call', 'ffi_prep_cif', 'ffi_prep_closure'],
         )
-    
-if not rffi_platform.check_eci(eci):
-    raise ImportError("cannot find an installed 'libffi' library")
 
 FFI_TYPE_P = lltype.Ptr(lltype.ForwardReference())
 FFI_TYPE_PP = rffi.CArrayPtr(FFI_TYPE_P)
