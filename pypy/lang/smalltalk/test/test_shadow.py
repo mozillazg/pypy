@@ -69,15 +69,6 @@ def test_methoddict():
     classshadow = w_class.as_class_get_shadow()
     assert classshadow.methoddict == methods
 
-def link(w_next='foo'):
-    w_object = model.W_PointersObject(None, 1)
-    w_object.store(constants.NEXT_LINK_INDEX, w_next)
-    return w_object
-
-def test_link():
-    w_object = link()
-    assert w_object.as_link_get_shadow().next() == 'foo'
-
 def method(tempsize=3,argsize=2, bytes="abcde"):
     w_m = model.W_CompiledMethod()
     w_m.bytes = bytes
@@ -186,49 +177,21 @@ def test_scheduler():
     assert s_object.s_active_process() != w_process.as_process_get_shadow()
     assert s_object.s_active_process() == w_process2.as_process_get_shadow()
 
-def test_linkedlist():
-    w_object = model.W_PointersObject(None,2)
-    w_last = link(objtable.w_nil)
-    w_lb1 = link(w_last)
-    w_lb2 = link(w_lb1)
-    w_lb3 = link(w_lb2)
-    w_lb4 = link(w_lb3)
-    w_first = link(w_lb4)
-    w_object.store(constants.FIRST_LINK_INDEX, w_first)
-    w_object.store(constants.LAST_LINK_INDEX, w_last)
-    s_object = w_object.as_linkedlist_get_shadow()
-    assert w_first == s_object.w_firstlink()
-    assert w_last == s_object.w_lastlink()
-    assert s_object.remove_first_link_of_list() == w_first
-    assert s_object.remove_first_link_of_list() == w_lb4
-    assert s_object.remove_first_link_of_list() == w_lb3
-    assert not s_object.is_empty_list()
-    assert s_object.remove_first_link_of_list() == w_lb2
-    assert s_object.remove_first_link_of_list() == w_lb1
-    assert s_object.remove_first_link_of_list() == w_last
-    assert s_object.is_empty_list()
-    s_object.add_last_link(w_first)
-    assert s_object.w_firstlink() == w_first
-    assert s_object.w_lastlink() == w_first
-    s_object.add_last_link(w_last)
-    assert s_object.w_firstlink() == w_first
-    assert s_object.w_lastlink() == w_last
-
-def test_shadowchanges():
-    w_object = model.W_PointersObject(None, 2)
-    w_o1 = link('a')
-    w_o2 = link('b')
-    w_object.store(0, w_o1)
-    w_object.store(1, w_o2)
-    s_object = w_object.as_linkedlist_get_shadow()
-    assert s_object.w_firstlink() == w_o1
-    assert s_object.w_lastlink() == w_o2
-    assert w_object._shadow == s_object
-    s_object2 = w_object.as_association_get_shadow()
-    assert s_object2.key() == w_o1
-    assert s_object2.value() == w_o2
-    assert w_object._shadow == s_object2
-    s_object.sync_shadow()
-    assert s_object.w_firstlink() == w_o1
-    assert s_object.w_lastlink() == w_o2
-    assert w_object._shadow == s_object
+#def test_shadowchanges():
+#    w_object = model.W_PointersObject(None, 2)
+#    w_o1 = link('a')
+#    w_o2 = link('b')
+#    w_object.store(0, w_o1)
+#    w_object.store(1, w_o2)
+#    s_object = w_object.as_linkedlist_get_shadow()
+#    assert s_object.w_firstlink() == w_o1
+#    assert s_object.w_lastlink() == w_o2
+#    assert w_object._shadow == s_object
+#    s_object2 = w_object.as_association_get_shadow()
+#    assert s_object2.key() == w_o1
+#    assert s_object2.value() == w_o2
+#    assert w_object._shadow == s_object2
+#    s_object.sync_shadow()
+#    assert s_object.w_firstlink() == w_o1
+#    assert s_object.w_lastlink() == w_o2
+#    assert w_object._shadow == s_object
