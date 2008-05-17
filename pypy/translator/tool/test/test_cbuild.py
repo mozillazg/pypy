@@ -144,7 +144,10 @@ class TestEci:
         sdlconfig = py.path.local.sysfind('sdl-config')
         if not sdlconfig:
             py.test.skip("sdl-config not installed")
-        eci = ExternalCompilationInfo.from_config_tool(sdlconfig)
+        eci = ExternalCompilationInfo.from_config_tool('sdl-config')
         assert 'SDL' in eci.libraries
-        eci2 = ExternalCompilationInfo.from_config_tool(str(sdlconfig))
-        assert eci2 == eci
+
+    def test_from_missing_config_tool(self):
+        py.test.raises(ImportError,
+                       ExternalCompilationInfo.from_config_tool,
+                       'dxowqbncpqympqhe-config')
