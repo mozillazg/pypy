@@ -10,7 +10,8 @@ def mapToByte(value):
 
 ROM_PATH = str(py.magic.autopath().dirpath().dirpath())+"/rom"
 CONTENT = "abcdefghijklmnopqrstuvwxyz1234567890"
-MAPPED_CONTENT = map(map_to_byte, CONTENT)
+
+MAPPED_CONTENT = map_to_byte(CONTENT)
 
 # ------------------------------------------------------------------------------
 
