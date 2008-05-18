@@ -2242,7 +2242,7 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         if self.T.__name__ == 'LLType':
             assert gv.revealconst(llmemory.Address) == llmemory.NULL
         else:
-            assert gv.revealconst(ootype.ROOT) == ootype.null(ootype.ROOT)
+            assert gv.revealconst(ootype.Object) == ootype.null(ootype.Object)
 
     def test_ovfcheck_adder_direct(self):
         rgenop = self.RGenOp()

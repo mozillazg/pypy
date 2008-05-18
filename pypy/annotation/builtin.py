@@ -575,7 +575,7 @@ def cast_to_object(obj):
 def cast_from_object(T, obj):
     TYPE = T.const
     if TYPE is ootype.Object:
-        return T
+        return SomeOOObject()
     elif isinstance(TYPE, ootype.Instance):
         return SomeOOInstance(TYPE)
     elif isinstance(TYPE, ootype.Record):
