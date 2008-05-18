@@ -67,7 +67,7 @@ def test_methoddict():
                'bar': model.W_CompiledMethod(0)}
     w_class = build_smalltalk_class("Demo", 0x90, methods=methods)
     classshadow = w_class.as_class_get_shadow()
-    assert classshadow.methoddict == methods
+    assert classshadow.s_methoddict().methoddict == methods
 
 def method(tempsize=3,argsize=2, bytes="abcde"):
     w_m = model.W_CompiledMethod()

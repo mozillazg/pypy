@@ -727,24 +727,36 @@ def func(interp, w_rcvr, sel, w_args):
 
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):
-    #if w_rcvr.getclass() != classtable.classtable['w_Semaphore']:
+    # XXX we might want to disable this check
+    if w_rcvr.getclass() is not classtable.classtable['w_Semaphore']:
         raise PrimitiveFailedError()
-    #assert isinstance(w_rcvr, model.W_PointersObject)
-    #w_rcvr.as_semaphore_get_shadow().synchronous_signal(interp)
-    #return w_rcvr
+    wrapper.SemaphoreWrapper(w_rcvr).signal(interp)
+    return w_rcvr
     
 @expose_primitive(PRIMITIVE_WAIT, unwrap_spec=[object])
 def func(interp, w_rcvr):
-    raise PrimitiveNotYetWrittenError()
+    # XXX we might want to disable this check
+    if w_rcvr.getclass() is not classtable.classtable['w_Semaphore']:
+        raise PrimitiveFailedError()
+    wrapper.SemaphoreWrapper(w_rcvr).wait(interp)
+    return w_rcvr
     
 @expose_primitive(PRIMITIVE_RESUME, unwrap_spec=[object])
 def func(interp, w_rcvr,):
-    raise PrimitiveNotYetWrittenError()
-
+    # XXX we might want to disable this check
+    if w_rcvr.getclass() is not classtable.classtable['w_Process']:
+        raise PrimitiveFailedError()
+    wrapper.ProcessWrapper(w_rcvr).resume(interp)
+    return w_rcvr
+ 
 @expose_primitive(PRIMITIVE_SUSPEND, unwrap_spec=[object])
 def func(interp, w_rcvr):
-    raise PrimitiveNotYetWrittenError()
-
+    # XXX we might want to disable this check
+    if w_rcvr.getclass() is not classtable.classtable['w_Process']:
+        raise PrimitiveFailedError()
+    wrapper.ProcessWrapper(w_rcvr).suspend(interp)
+    return w_rcvr
+ 
 @expose_primitive(PRIMITIVE_FLUSH_CACHE, unwrap_spec=[object])
 def func(interp, w_rcvr):
     # XXX we currently don't care about bad flushes :) XXX

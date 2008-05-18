@@ -36,13 +36,15 @@ def run_with_faked_methods(methods, func):
         prim_meth.argsize = argsize
         s_class.installmethod(methname, prim_meth)
         
+        assert objtable.w_nil._shadow is None
     try:
         func()
     finally:
         # Uninstall those methods:
+        assert objtable.w_nil._shadow is None
         for (w_class, _, _, methname) in methods:
             s_class = w_class.as_class_get_shadow()
-            del s_class.methoddict[methname]
+            del s_class.s_methoddict().methoddict[methname]
 
 def fakesymbol(s, _cache={}):
     try:
@@ -402,7 +404,7 @@ def sendBytecodesTest(w_class, w_object, bytecodes):
         assert interp.s_active_context().w_sender() == callerContext
         assert interp.s_active_context().stack() == []
         assert interp.w_active_context().as_methodcontext_get_shadow().w_receiver() == w_object
-        assert interp.w_active_context().as_methodcontext_get_shadow().w_method() == shadow.methoddict["foo"]
+        assert interp.w_active_context().as_methodcontext_get_shadow().w_method() == shadow.s_methoddict().methoddict["foo"]
         assert callerContext.as_context_get_shadow().stack() == []
         interp.step()
         interp.step()
@@ -553,7 +555,7 @@ def test_callPrimitiveAndPush_fallback():
     interp.s_active_context().push(w_object)
     interp.s_active_context().push(interp.ONE)
     interp.step()
-    assert interp.w_active_context().as_methodcontext_get_shadow().w_method() == shadow.methoddict["+"]
+    assert interp.w_active_context().as_methodcontext_get_shadow().w_method() == shadow.s_methoddict().methoddict["+"]
     assert interp.s_active_context().w_receiver() is w_object
     assert interp.w_active_context().as_methodcontext_get_shadow().gettemp(0) == interp.ONE
     assert interp.s_active_context().stack() == []
@@ -608,7 +610,7 @@ def test_singleExtendedSuperBytecode(bytecode=singleExtendedSuperBytecode + chr(
         assert interp.s_active_context().w_sender() == callerContext
         assert interp.s_active_context().stack() == []
         assert interp.w_active_context().as_methodcontext_get_shadow().w_receiver() == w_object
-        meth = w_specificclass.as_class_get_shadow().methoddict["foo"]
+        meth = w_specificclass.as_class_get_shadow().s_methoddict().methoddict["foo"]
         assert interp.w_active_context().as_methodcontext_get_shadow().w_method() == meth
         assert callerContext.as_context_get_shadow().stack() == []
 

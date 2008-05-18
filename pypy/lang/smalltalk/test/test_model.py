@@ -56,12 +56,14 @@ def test_word_object():
 def test_method_lookup():
     w_class = mockclass(0)
     shadow = w_class.as_class_get_shadow()
-    shadow.methoddict["foo"] = 1
-    shadow.methoddict["bar"] = 2
+    shadow.installmethod("foo", 1)
+    shadow.installmethod("bar", 2)
     w_subclass = mockclass(0, w_superclass=w_class)
     subshadow = w_subclass.as_class_get_shadow()
     assert subshadow.s_superclass is shadow
-    subshadow.methoddict["foo"] = 3
+    subshadow.installmethod("foo", 3)
+    shadow.initialize_methoddict()
+    subshadow.initialize_methoddict()
     assert shadow.lookup("foo") == 1
     assert shadow.lookup("bar") == 2
     py.test.raises(MethodNotFound, shadow.lookup, "zork")
@@ -76,6 +78,7 @@ def test_w_compiledin():
     supershadow = w_super.as_class_get_shadow()
     supershadow.installmethod("foo", model.W_CompiledMethod(0))
     classshadow = w_class.as_class_get_shadow()
+    classshadow.initialize_methoddict()
     assert classshadow.lookup("foo").w_compiledin is w_super
 
 def test_compiledmethod_setchar():
