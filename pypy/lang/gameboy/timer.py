@@ -121,5 +121,5 @@ class Clock(object):
         pass
     
     def get_time(self):
-        return time.time()
+        return int(time.time()*1000)
         

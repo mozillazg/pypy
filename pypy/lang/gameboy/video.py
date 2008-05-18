@@ -540,7 +540,7 @@ class Video(iMemory):
         self.line[pos] |= color | mask
 
     def draw_overlapped_object_tile(self, x, address, flags):
-        self.draw_object(self.setOverlappedObjectLine, x, address, flags)
+        self.draw_object(self.set_overlapped_object_line, x, address, flags)
         
     def set_overlapped_object_line(self, pos, color, mask):
         self.line[pos] = (self.line[pos] & 0x0101) | color | mask

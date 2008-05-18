@@ -128,7 +128,7 @@ class CartridgeManager(object):
                 + (self.rom[constants.CHECKSUM_B_ADDRESS] & 0xFF)
     
     def has_battery(self):
-        return has_cartridge_battery(self.getMemoryBankType())
+        return has_cartridge_battery(self.get_memory_bank_type())
     
     def verify(self):
         checksum = 0
@@ -323,7 +323,7 @@ class MBC1(MBC):
         
     def reset(self):
         MBC.reset(self)
-        self.memoryModel = 0
+        self.memory_model = 0
 
     def write(self, address, data):
         if address <= 0x1FFF:  # 0000-1FFF
@@ -333,7 +333,7 @@ class MBC1(MBC):
         elif address <= 0x5FFF: # 4000-5FFF
             self.write_rom_bank_2(address, data)
         elif address <= 0x7FFF: # 6000-7FFF
-            self.memoryModel = data & 0x01
+            self.memory_model = data & 0x01
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
             self.ram[self.ram_bank + (address & 0x1FFF)] = data
 
@@ -344,13 +344,13 @@ class MBC1(MBC):
     def write_rom_bank_1(self, address, data):
         if (data & 0x1F) == 0:
             data = 1
-        if self.memoryModel == 0:
+        if self.memory_model == 0:
             self.rom_bank = ((self.rom_bank & 0x180000) + ((data & 0x1F) << 14)) & self.rom_size
         else:
             self.rom_bank = ((data & 0x1F) << 14) & self.rom_size
         
     def write_rom_bank_2(self, address, data):
-        if self.memoryModel == 0:
+        if self.memory_model == 0:
             self.rom_bank = ((self.rom_bank & 0x07FFFF) + ((data & 0x03) << 19)) & self.rom_size
         else:
             self.ram_bank = ((data & 0x03) << 13) & self.ram_size

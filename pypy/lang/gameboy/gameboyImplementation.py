@@ -38,6 +38,7 @@ class GameBoyImplementation(GameBoy):
             print "i"
             self.emulate(5)
             time.sleep(0.01)
+        return 0
         
 # VIDEO DRIVER -----------------------------------------------------------------
 
@@ -145,6 +146,7 @@ class SoundDriverImplementation(SoundDriver):
 
 def entry_point(args=None):
     gameboy = GameBoyImplementation()
+    # add return statement...
 
 
 # _____ Define and setup target ___

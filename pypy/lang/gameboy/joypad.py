@@ -70,21 +70,21 @@ class JoypadDriver(object):
         self.reset()
         
     def create_buttons(self):
-        self.up = Button(constants.BUTTON_UP)
-        self.right = Button(constants.BUTTON_RIGHT)
-        self.down = Button(constants.BUTTON_DOWN)
-        self.left = Button(constants.BUTTON_LEFT)
-        self.start = Button(constants.BUTTON_START)
+        self.up     = Button(constants.BUTTON_UP)
+        self.right  = Button(constants.BUTTON_RIGHT)
+        self.down   = Button(constants.BUTTON_DOWN)
+        self.left   = Button(constants.BUTTON_LEFT)
+        self.start  = Button(constants.BUTTON_START)
         self.select = Button(constants.BUTTON_SELECT)
-        self.a = Button(constants.BUTTON_A)
-        self.b = Button(constants.BUTTON_B)
+        self.a      = Button(constants.BUTTON_A)
+        self.b      = Button(constants.BUTTON_B)
         self.add_opposite_buttons()
         self.create_button_groups()
         
     def add_opposite_buttons(self):
-        self.up.opposite_button = self.down
-        self.down.opposite_button = self.up
-        self.left.opposite_button = self.right
+        self.up.opposite_button    = self.down
+        self.down.opposite_button  = self.up
+        self.left.opposite_button  = self.right
         self.right.opposite_button = self.left
         
     def create_button_groups(self):

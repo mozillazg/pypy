@@ -103,7 +103,7 @@ def test_double_register_hilo():
     valueHi = 0x12
     valueLo = 0x34
     oldCycles = register.cpu.cycles
-    register.set(valueHi, valueLo)
+    register.set_hi_lo(valueHi, valueLo)
     assert oldCycles-register.cpu.cycles == 2
     assert register.get_hi() == valueHi
     assert register.get_lo() == valueLo

@@ -77,7 +77,7 @@ class GameBoy(object):
         self.video.reset()
         self.sound.reset()
         self.cpu.set_rom(self.cartridge_manager.get_rom())
-        self.drawLogo()
+        self.draw_logo()
 
     def get_cycles(self):
         return min( self.video.get_cycles(), self.serial.get_cycles(),
@@ -94,6 +94,7 @@ class GameBoy(object):
             self.sound.emulate(count)
             self.joypad.emulate(count)
             ticks -= count
+        return 0
 
     def write(self, address, data):
         receiver = self.get_receiver(address)
