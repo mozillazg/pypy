@@ -77,9 +77,13 @@ class ProcessWrapper(LinkWrapper):
         return self.w_self is scheduler().active_process()
 
     def suspend(self, interp):
-        assert self.is_active_process()
-        assert self.my_list() is objtable.w_nil
-        ProcessWrapper(scheduler().highest_priority_process()).activate(interp)
+        if self.is_active_process():
+            assert self.my_list() is objtable.w_nil
+            ProcessWrapper(scheduler().highest_priority_process()).activate(interp)
+        else:
+            process_list = ProcessListWrapper(self.my_list())
+            process_list.remove(self.w_self)
+            self.store_my_list(objtable.w_nil)
 
 class LinkedListWrapper(Wrapper):
     first_link, store_first_link = make_getter_setter(0)
@@ -108,6 +112,25 @@ class LinkedListWrapper(Wrapper):
             self.store_first_link(w_next)
         LinkWrapper(w_first).store_next_link(objtable.w_nil)
         return w_first
+
+    def remove(self, w_link):
+        if self.first_link() is w_link:
+            self.remove_first_link_of_list()
+            return
+        else:
+            current = LinkWrapper(self.first_link())
+            w_next = current.next_link()
+            while w_next is not objtable.w_nil:
+                if w_next is w_link:
+                    LinkWrapper(w_link).store_next_link(objtable.w_nil)
+                    w_tail = LinkWrapper(w_next).next_link()
+                    current.store_next_link(w_tail)
+                    if w_tail is objtable.w_nil:
+                        self.store_last_link(current.w_self)
+                    return
+                current = LinkWrapper(w_next)
+                w_next = current.next_link()
+        raise WrapperException("Could not find link")
 
 class ProcessListWrapper(LinkedListWrapper):
     def add_process(self, w_process):
