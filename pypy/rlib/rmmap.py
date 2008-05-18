@@ -47,8 +47,6 @@ class CConfig:
         PLONG = rffi_platform.SimpleType("PLONG", rffi.LONGP)
         LPVOID = rffi_platform.SimpleType("LPVOID", rffi.INTP)
         LPCVOID = rffi_platform.SimpleType("LPCVOID", rffi.VOIDP)
-        HANDLE = rffi_platform.SimpleType("HANDLE", rffi.VOIDP)
-        LPHANDLE = rffi_platform.SimpleType("LPHANDLE", rffi.CCHARPP)
         LPCTSTR = rffi_platform.SimpleType("LPCTSTR", rffi.CCHARP)
         LPDWORD = rffi_platform.SimpleType("LPDWORD", rffi.INTP)
         LPSECURITY_ATTRIBUTES = rffi_platform.SimpleType("LPSECURITY_ATTRIBUTES", rffi.CCHARP)
@@ -81,6 +79,9 @@ elif _MS_WINDOWS:
                       'DUPLICATE_SAME_ACCESS']
     for name in constant_names:
         setattr(CConfig, name, rffi_platform.ConstantInteger(name))
+
+    HANDLE = rffi.ULONG
+    LPHANDLE = rffi.CArrayPtr(HANDLE)
 
 # export the constants inside and outside. see __init__.py
 cConfig = rffi_platform.configure(CConfig)
