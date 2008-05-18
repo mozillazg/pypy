@@ -282,7 +282,7 @@ class MBC(iMemory):
             return self.rom[self.rom_bank + (address & 0x3FFF)] & 0xFF
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
             return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
-        raise Exception("Invalid address")
+        raise Exception("MBC: Invalid address, out of range")
     
     def write(self, address, data):
         pass

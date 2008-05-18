@@ -11,7 +11,12 @@ def test_ram_read_write():
     address = 0x00
     value = 0x12
     ram.write(address, value)
-    assert ram.read(address) == 0xFF
+    try:
+        ram.read(address)
+        py.test.fail()
+    except Exception:
+        pass
+        
     assert value not in ram.w_ram
     assert value not in ram.h_ram
     
@@ -46,6 +51,10 @@ def test_ram_read_write():
     address += 1
     value += 1
     ram.write(address, value)
-    assert ram.read(address) == 0xFF
+    try:
+        ram.read(address)
+        py.test.fail()
+    except Exception:
+        pass
     assert value not in  ram.h_ram
     assert value not in  ram.w_ram

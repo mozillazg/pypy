@@ -492,19 +492,19 @@ class Video(iMemory):
             x += 8
             
     def get_pattern(self, address):
-        pattern = self.vram[address]      & 0xFF
+        pattern  = self.vram[address]      & 0xFF
         pattern += (self.vram[address + 1] & 0xFF) << 8
         return pattern
 
-    def draw_object(self, setter):
+    def draw_object(self, setter, x, address, flags):
         pattern = self.get_pattern(address)
-        self.mask = 0
+        mask = 0
         # priority
         if (flags & 0x80) != 0:
-            self.mask |= 0x0008
+            mask |= 0x0008
         # palette
         if (flags & 0x10) != 0:
-            self.mask |= 0x0004
+            mask |= 0x0004
         if (flags & 0x20) != 0:
             self.draw_object_normal(x, pattern, mask, setter)
         else:
@@ -514,19 +514,19 @@ class Video(iMemory):
         for i in range(0, 7):
             color = pattern >> (6-i)
             if (color & 0x0202) != 0:
-                setter(self, x+1, color, mask)
+                setter(x+1, color, mask)
         color = pattern << 1
         if (color & 0x0202) != 0:
-            setter(self, x+7, color,  mask)
+            setter(x+7, color, mask)
         
     def draw_object_flipped(self, x, pattern, mask, setter):
         color = pattern << 1
         if (color & 0x0202) != 0:
-            setter(self, x, color | mask)
+            setter(x, color, mask)
         for i in range(0, 7):
             color = pattern >> i
             if (color & 0x0202) != 0:
-                setter(self, x + i + 1, color | mask)
+                setter(x + i + 1, color, mask)
             
     def draw_tile(self, x, address):
         pattern =  self.get_pattern(address)
@@ -534,14 +534,13 @@ class Video(iMemory):
             self.line[x + i] = (pattern >> (7-i)) & 0x0101
 
     def draw_object_tile(self, x, address, flags):
-        pattern = self.get_pattern(address)
-        self.draw_object(self.setTileLine)
+        self.draw_object(self.set_tile_line, x, address, flags)
         
     def set_tile_line(self, pos, color, mask):
         self.line[pos] |= color | mask
 
     def draw_overlapped_object_tile(self, x, address, flags):
-        self.draw_object(self.setOverlappedObjectLine)
+        self.draw_object(self.setOverlappedObjectLine, x, address, flags)
         
     def set_overlapped_object_line(self, pos, color, mask):
         self.line[pos] = (self.line[pos] & 0x0101) | color | mask
