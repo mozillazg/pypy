@@ -812,7 +812,8 @@ class _object(object):
 
     def __init__(self, obj):
         self._TYPE = Object
-        self.obj = obj or None  # null obj ==> None
+        assert obj is None or obj, 'Cannot create _object of a null value, use make_object() instead'
+        self.obj = obj
 
     def __nonzero__(self):
         return self.obj is not None
@@ -868,7 +869,7 @@ class _class(object):
         self._INSTANCE = INSTANCE
 
     def _cast_to_object(self):
-        return _object(self)
+        return make_object(self)
 
 nullruntimeclass = _class(None)
 
@@ -940,7 +941,7 @@ class _instance(object):
             return 0   # for all null instances
 
     def _cast_to_object(self):
-        return _object(ooupcast(ROOT, self))
+        return make_object(ooupcast(ROOT, self))
 
 
 def _null_mixin(klass):
@@ -1055,7 +1056,7 @@ class _view(object):
         return self._inst._identityhash()
 
     def _cast_to_object(self):
-        return _object(ooupcast(ROOT, self))
+        return make_object(ooupcast(ROOT, self))
 
 if STATICNESS:
     instance_impl = _view
@@ -1081,6 +1082,12 @@ def make_null_instance(INSTANCE):
     if STATICNESS:
         inst = _view(INSTANCE, inst)
     return inst
+
+def make_object(llvalue):
+    if llvalue:
+        return _object(llvalue)
+    else:
+        return NULL
 
 class _callable(object):
 
@@ -1120,7 +1127,7 @@ class _callable(object):
        return hash(frozendict(self.__dict__))
 
    def _cast_to_object(self):
-       return _object(self)
+       return make_object(self)
 
 
 class _static_meth(_callable):
@@ -1164,7 +1171,7 @@ class _bound_meth(object):
         return callb(self.inst, *checked_args)
 
     def _cast_to_object(self):
-        return _object(self)
+        return make_object(self)
 
 
 class _meth(_callable):
@@ -1294,7 +1301,7 @@ class _builtin_type(object):
         return object.__getattribute__(self, name)
 
     def _cast_to_object(self):
-        return _object(self)
+        return make_object(self)
 
 class _string(_builtin_type):
 
@@ -1709,7 +1716,7 @@ class _record(object):
         return not (self == other)
 
     def _cast_to_object(self):
-        return _object(self)
+        return make_object(self)
 
 class _null_record(_null_mixin(_record), _record):
 
