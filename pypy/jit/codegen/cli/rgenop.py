@@ -1,6 +1,7 @@
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst, CodeGenSwitch
@@ -96,14 +97,9 @@ class IntConst(GenConst):
 
     @specialize.arg(1)
     def revealconst(self, T):
-        if T is ootype.Signed:
-            return self.value
-        elif T is ootype.Bool:
-            return bool(self.value)
-        elif T is ootype.Char:
-            return chr(self.value)
-        else:
-            assert False
+        if T is ootype.Object:
+            return ootype.NULL # XXX?
+        return lltype.cast_primitive(T, self.value)
 
     def getCliType(self):
         return class2type(self.cliclass)
@@ -122,8 +118,9 @@ class FloatConst(GenConst):
 
     @specialize.arg(1)
     def revealconst(self, T):
-        assert T is ootype.Float
-        return self.value
+        if T is ootype.Object:
+            return ootype.NULL # XXX?
+        return lltype.cast_primitive(T, self.value)
 
     def getCliType(self):
         return typeof(System.Double)
@@ -161,7 +158,7 @@ class ObjectConst(BaseConst):
 
     def getCliType(self):
         if self.obj == ootype.NULL:
-            return cObject
+            return class2type(cObject)
         cliobj = dotnet.cast_to_native_object(self.obj)
         return cliobj.GetType()
 
@@ -169,21 +166,22 @@ class ObjectConst(BaseConst):
         return self.obj
 
     def load(self, builder):
-        import pdb;pdb.set_trace()
-        index = self._get_index(builder)
-        if self.obj is None:
-            t = typeof(System.Object)
-        else:
-            t = self.obj.GetType()
-        self._load_from_array(builder, index, t)
+        assert False, 'XXX'
+##        import pdb;pdb.set_trace()
+##        index = self._get_index(builder)
+##        if self.obj is None:
+##            t = typeof(System.Object)
+##        else:
+##            t = self.obj.GetType()
+##        self._load_from_array(builder, index, t)
 
     @specialize.arg(1)
     def revealconst(self, T):
-        if T is ootype.Signed:
-            return ootype.ooidentityhash(self.obj)
-        elif T is ootype.Unsigned:
-            return intmask(ootype.ooidentityhash(self.obj))
-        return ootype.cast_from_object(T, self.obj)
+        if isinstance(T, ootype.OOType):
+            return ootype.cast_from_object(T, self.obj)
+        else:
+            h = ootype.ooidentityhash(self.obj)
+            return lltype.cast_primitive(T, h)
 
 
 OBJECT = System.Object._INSTANCE
