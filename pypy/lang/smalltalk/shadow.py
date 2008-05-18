@@ -86,7 +86,7 @@ class ClassShadow(AbstractShadow):
 
     def invalidate_shadow(self):
         AbstractShadow.invalidate_shadow(self)
-        self.methoddict = {}
+        self.w_methoddict = None
         self.s_superclass = None     # the ClassShadow of the super class
         self.name = None
 
@@ -154,11 +154,8 @@ class ClassShadow(AbstractShadow):
         if isinstance(w_name, model.W_BytesObject):
             self.name = w_name.as_string()
         # read the methoddict
-        w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
-        assert isinstance(w_methoddict, model.W_PointersObject)
-        s_methoddict = w_methoddict.as_methoddict_get_shadow()
-        self.methoddict = s_methoddict.methoddict
-        s_methoddict.notifyinvalid(self)
+        self.w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
+        assert isinstance(self.w_methoddict, model.W_PointersObject)
 
         # for the rest, we need to reset invalid to False already so
         # that cycles in the superclass and/or metaclass chains don't
@@ -240,7 +237,7 @@ class ClassShadow(AbstractShadow):
         look_in_shadow = self
         while look_in_shadow is not None:
             try:
-                w_method = look_in_shadow.methoddict[selector]
+                w_method = look_in_shadow.s_methoddict().methoddict[selector]
                 # We locally cache the method we found.
                 #if look_in_shadow is not self:
                 #    self.methoddict[selector] = w_method
@@ -249,18 +246,29 @@ class ClassShadow(AbstractShadow):
                 look_in_shadow = look_in_shadow.s_superclass
         raise MethodNotFound(self, selector)
 
+    def s_methoddict(self):
+        return self.w_methoddict.as_methoddict_get_shadow()
+
+    def initialize_methoddict(self):
+        "NOT_RPYTHON"     # this is only for testing.
+        if self.w_methoddict is None:
+            self.w_methoddict = model.W_PointersObject(None, 2)
+            self.w_methoddict._vars[1] = model.W_PointersObject(None, 0)
+            self.s_methoddict().invalid = False
+
     def installmethod(self, selector, method):
         "NOT_RPYTHON"     # this is only for testing.
-        assert isinstance(method, model.W_CompiledMethod)
-        self.methoddict[selector] = method
-        method.w_compiledin = self.w_self()
+        self.initialize_methoddict()
+        self.s_methoddict().methoddict[selector] = method
+        if isinstance(method, model.W_CompiledMethod):
+            method.w_compiledin = self.w_self()
 
 class MethodDictionaryShadow(AbstractShadow):
     def __init__(self, w_self, invalid):
         AbstractShadow.__init__(self, w_self, invalid)
 
     def invalidate_shadow(self):
-        self.methoddict = {}
+        self.methoddict = None
 
     def update_shadow(self):
         from pypy.lang.smalltalk import objtable
@@ -269,6 +277,7 @@ class MethodDictionaryShadow(AbstractShadow):
         s_values = w_values.get_shadow()
         s_values.notifyinvalid(self)
         size = self.w_self().size() - constants.METHODDICT_NAMES_INDEX
+        self.methoddict = {}
         for i in range(size):
             w_selector = self.w_self()._vars[constants.METHODDICT_NAMES_INDEX+i]
             if w_selector is not objtable.w_nil:
