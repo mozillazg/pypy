@@ -285,4 +285,8 @@ def perform(w_receiver, selector, *arguments_w):
             #print interp.s_active_context.stack
         except interpreter.ReturnFromTopLevel, e:
             return e.object
-        
+
+#def test_eval():
+#    w_smalltalk = objtable.objtable["w_smalltalkdict"]
+#    w_utilities_class = perform(w_smalltalk, "classNamed:", w("Utilities"))
+#    perform(w_utilities_class, "eval:", w("Transcript show: 1+2"))

@@ -8,6 +8,7 @@ from pypy.lang.smalltalk import constants
 from pypy.lang.smalltalk.error import PrimitiveFailedError, \
     PrimitiveNotYetWrittenError
 from pypy.rlib import rarithmetic, unroll
+from pypy.lang.smalltalk import wrapper
 
 
 def assert_bounds(n0, minimum, maximum):
