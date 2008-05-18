@@ -49,10 +49,9 @@ def test_simple():
     serv.close()
 
 def test_translate():
-    from pypy.translator.interactive import Translation
+    from pypy.translator.c.test.test_genc import compile
 
     def func():
         poll({})
 
-    t = Translation(func)
-    fc = t.compile_c([])
+    compile(func, [])
