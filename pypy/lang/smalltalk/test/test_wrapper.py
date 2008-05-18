@@ -120,6 +120,20 @@ class TestScheduler(object):
         assert process_list.first_link() is process_list.last_link()
         assert process_list.first_link() is process.w_self
 
+    def old_new_process_consistency(self, process, old_process, interp,
+                                    old_active_context, new_active_context):
+        scheduler = wrapper.scheduler()
+        assert old_process.suspended_context() is old_active_context
+        priority_list = scheduler.get_process_list(old_process.priority())
+        assert priority_list.first_link() is old_process.w_self
+        assert interp.w_active_context() is new_active_context
+        assert scheduler.active_process() is process.w_self
+        priority_list = wrapper.scheduler().get_process_list(process.priority())
+        assert priority_list.first_link() is priority_list.last_link()
+        # activate does not remove the process from the process_list.
+        # The caller of activate is responsible
+        assert priority_list.first_link() is process.w_self
+
     def test_activate(self):
         interp = interpreter.Interpreter()
         scheduler = wrapper.scheduler()
@@ -129,18 +143,10 @@ class TestScheduler(object):
         scheduler.store_active_process(old_process.w_self)
         interp.store_w_active_context(objtable.w_true)
         process.activate(interp)
-        
-        assert old_process.suspended_context() is objtable.w_true
-        priority_list = wrapper.scheduler().get_process_list(old_process.priority())
-        assert priority_list.first_link() is old_process.w_self
-        assert interp.w_active_context() is objtable.w_false
-        assert scheduler.active_process() is process.w_self
-        priority_list = wrapper.scheduler().get_process_list(process.priority())
-        assert priority_list.first_link() is priority_list.last_link()
-        # activate does not remove the process from the process_list.
-        # The caller of activate is responsible
-        assert priority_list.first_link() is process.w_self
 
+        self.old_new_process_consistency(process, old_process, interp,
+                                         objtable.w_true, objtable.w_false)
+       
     def test_resume(self):
         interp = interpreter.Interpreter()
         scheduler = wrapper.scheduler()
@@ -151,30 +157,12 @@ class TestScheduler(object):
         interp.store_w_active_context(objtable.w_true)
 
         process.resume(interp)
-
-        assert old_process.suspended_context() is objtable.w_true
-        priority_list = wrapper.scheduler().get_process_list(old_process.priority())
-        assert priority_list.first_link() is old_process.w_self
-        assert interp.w_active_context() is objtable.w_false
-        assert scheduler.active_process() is process.w_self
-        priority_list = wrapper.scheduler().get_process_list(process.priority())
-        assert priority_list.first_link() is priority_list.last_link()
-        # activate does not remove the process from the process_list.
-        # The caller of activate is responsible
-        assert priority_list.first_link() is process.w_self
+        self.old_new_process_consistency(process, old_process, interp,
+                                         objtable.w_true, objtable.w_false)
 
         # Does not reactivate old_process because lower priority
         old_process.resume(interp)
-
-        assert old_process.suspended_context() is objtable.w_true
-        priority_list = wrapper.scheduler().get_process_list(old_process.priority())
-        assert priority_list.first_link() is old_process.w_self
-        assert interp.w_active_context() is objtable.w_false
-        assert scheduler.active_process() is process.w_self
-        priority_list = wrapper.scheduler().get_process_list(process.priority())
-        assert priority_list.first_link() is priority_list.last_link()
-        # activate does not remove the process from the process_list.
-        # The caller of activate is responsible
-        assert priority_list.first_link() is process.w_self
+        self.old_new_process_consistency(process, old_process, interp,
+                                         objtable.w_true, objtable.w_false)
 
 
