@@ -38,8 +38,11 @@ class LinkWrapper(Wrapper):
 
 class ProcessWrapper(LinkWrapper):
     suspended_context, store_suspended_context = make_getter_setter(1)
-    priority = make_getter(2)
     my_list, store_my_list = make_getter_setter(3)
+
+    def priority(self):
+        w_priority = self.read(2)
+        return utility.unwrap_int(w_priority)
 
     def put_to_sleep(self):
         sched = scheduler()
@@ -52,7 +55,9 @@ class ProcessWrapper(LinkWrapper):
         sched = scheduler()
         w_old_process = sched.active_process()
         sched.store_active_process(self.w_self)
-        ProcessWrapper(w_old_process).store_suspended_context(interp.w_active_context())
+        old_process = ProcessWrapper(w_old_process)
+        old_process.store_suspended_context(interp.w_active_context())
+        old_process.put_to_sleep()
         interp.store_w_active_context(self.suspended_context())
         self.store_suspended_context(objtable.w_nil)
 
@@ -62,10 +67,9 @@ class ProcessWrapper(LinkWrapper):
         active_priority = active_process.priority()
         priority = self.priority()
         if priority > active_priority:
-            active_process.put_to_sleep()
             self.activate(interp)
         else:
-            self.put_to_sleep(process)
+            self.put_to_sleep()
 
 
 class LinkedListWrapper(Wrapper):
@@ -109,8 +113,7 @@ class SchedulerWrapper(Wrapper):
     priority_list = make_getter(0)
     active_process, store_active_process = make_getter_setter(1)
     
-    def get_process_list(self, w_priority):
-        priority = utility.unwrap_int(w_priority)
+    def get_process_list(self, priority):
         lists = self.priority_list()
         return ProcessListWrapper(Wrapper(lists).read(priority))
 
