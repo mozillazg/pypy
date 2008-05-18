@@ -1,4 +1,5 @@
 from pypy.lang.smalltalk import model
+from pypy.lang.smalltalk import utility
 
 class Wrapper(object):
     def __init__(self, w_self):
@@ -40,6 +41,33 @@ class ProcessWrapper(LinkWrapper):
     priority = make_getter(2)
     my_list, store_my_list = make_getter_setter(3)
 
+    def put_to_sleep(self):
+        sched = scheduler()
+        priority = self.priority()
+        process_list = sched.get_process_list(priority)
+        process_list.add_process(self.w_self)
+
+    def activate(self, interp):
+        from pypy.lang.smalltalk import objtable
+        sched = scheduler()
+        w_old_process = sched.active_process()
+        sched.store_active_process(self.w_self)
+        ProcessWrapper(w_old_process).store_suspended_context(interp.w_active_context())
+        interp.store_w_active_context(self.suspended_context())
+        self.store_suspended_context(objtable.w_nil)
+
+    def resume(self, interp):
+        sched = scheduler()
+        active_process = ProcessWrapper(sched.active_process())
+        active_priority = active_process.priority()
+        priority = self.priority()
+        if priority > active_priority:
+            active_process.put_to_sleep()
+            self.activate(interp)
+        else:
+            self.put_to_sleep(process)
+
+
 class LinkedListWrapper(Wrapper):
     first_link, store_first_link = make_getter_setter(0)
     last_link, store_last_link = make_getter_setter(1)
@@ -68,78 +96,37 @@ class LinkedListWrapper(Wrapper):
         LinkWrapper(w_first).store_next_link(objtable.w_nil)
         return w_first
 
+class ProcessListWrapper(LinkedListWrapper):
+    def add_process(self, w_process):
+        self.add_last_link(w_process)
+        ProcessWrapper(w_process).store_my_list(self.w_self)
+
 class AssociationWrapper(Wrapper):
     key = make_getter(0)
     value, store_value = make_getter_setter(1)
 
-'''
-class SchedulerShadow(AbstractShadow):
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
-
-    def s_active_process(self):
-        w_v = self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX]
-        assert isinstance(w_v, model.W_PointersObject)
-        return w_v.as_process_get_shadow()
-
-    def store_w_active_process(self, w_object):
-        self.w_self()._vars[constants.SCHEDULER_ACTIVE_PROCESS_INDEX] = w_object
+class SchedulerWrapper(Wrapper):
+    priority_list = make_getter(0)
+    active_process, store_active_process = make_getter_setter(1)
     
-    def process_lists(self):
-        w_v = self.w_self()._vars[constants.SCHEDULER_PROCESS_LISTS_INDEX]
-        assert isinstance(w_v, model.W_PointersObject)
-        return w_v
+    def get_process_list(self, w_priority):
+        priority = utility.unwrap_int(w_priority)
+        lists = self.priority_list()
+        return ProcessListWrapper(Wrapper(lists).read(priority))
 
-
+def scheduler():
+    from pypy.lang.smalltalk import objtable
+    w_association = objtable.objtable["w_schedulerassociationpointer"]
+    assert w_association is not None
+    w_scheduler = AssociationWrapper(w_association).value()
+    assert isinstance(w_scheduler, model.W_PointersObject)
+    return SchedulerWrapper(w_scheduler)
 
 class SemaphoreWrapper(LinkedListWrapper):
 
     excess_signals, store_excess_signals = make_getter_setter(0)
 
-    def __init__(self, w_self, invalid=False):
-        LinkedListShadow.__init__(self, w_self, invalid)
-
-    def put_to_sleep(self, s_process):
-        priority = s_process.priority()
-        s_scheduler = self.s_scheduler()
-        w_process_lists = s_scheduler.process_lists()
-        w_process_list = w_process_lists._vars[priority]
-        assert isinstance(w_process_list, model.W_PointersObject)
-        w_process_list.as_linkedlist_get_shadow().add_last_link(s_process.w_self())
-        s_process.store_my_list(w_process_list)
-        
-    def transfer_to(self, s_process, interp):
-        from pypy.lang.smalltalk import objtable
-        s_scheduler = self.s_scheduler()
-        s_old_process = s_scheduler.s_active_process()
-        s_scheduler.store_w_active_process(s_process.w_self())
-        s_old_process.store_w_suspended_context(interp.s_active_context().w_self())
-        interp.store_w_active_context(s_process.w_suspended_context())
-        s_process.store_w_suspended_context(objtable.w_nil)
-        #reclaimableContextCount := 0
-
-    def s_scheduler(self):
-        from pypy.lang.smalltalk import objtable
-        w_association = objtable.objtable["w_schedulerassociationpointer"]
-        assert w_association is not None
-        assert isinstance(w_association, model.W_PointersObject)
-        w_scheduler = w_association.as_association_get_shadow().value()
-        assert isinstance(w_scheduler, model.W_PointersObject)
-        return w_scheduler.as_scheduler_get_shadow()
-
-    def resume(self, w_process, interp):
-        process = ProcessWrapper(w_process)
-        scheduler = self.scheduler()
-        active_process = scheduler.s_active_process()
-        active_priority = active_process.priority()
-        new_priority = process.priority()
-        if new_priority > active_priority:
-            self.put_to_sleep(active_process)
-            self.transfer_to(process, interp)
-        else:
-            self.put_to_sleep(process)
-
-    def synchronous_signal(self, interp):
+    def signal(self, interp):
         if self.is_empty_list():
             w_value = self.excess_signals()
             w_value = utility.wrap_int(utility.unwrap_int(w_value) + 1)
@@ -147,5 +134,11 @@ class SemaphoreWrapper(LinkedListWrapper):
         else:
             self.resume(self.remove_first_link_of_list(), interp)
 
-'''
-
+    def wait(self, w_process, interp):
+        excess = utility.unwrap_int(self.excess_signals())
+        if excess > 0:
+            w_excess = utility.wrap_int(excess - 1)
+            self.store_excess_signals(w_excess)
+        else:
+            self.add_last_link(w_process)
+            ProcessWrapper(w_process).put_to_sleep()
