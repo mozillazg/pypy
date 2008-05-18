@@ -47,15 +47,15 @@ class DoubleRegister(iRegister):
         self.lo = lo
         self.reset_value = reset_value
         
-    def set(self, hi=0, lo=-1, use_cycles=True):
-        if lo < 0:
-            self.set_hi(hi >> 8, use_cycles)
-            self.set_lo(hi & 0xFF, use_cycles)
-            if use_cycles:
-                self.cpu.cycles += 1
-        else:
-            self.set_hi(hi, use_cycles)
-            self.set_lo(lo, use_cycles) 
+    def set(self, value, use_cycles=True):
+        self.set_hi(value >> 8, use_cycles)
+        self.set_lo(value & 0xFF, use_cycles)
+        if use_cycles:
+            self.cpu.cycles += 1
+    
+    def set_hi_lo(self, hi, lo, use_cycles=True):
+        self.set_hi(hi, use_cycles)
+        self.set_lo(lo, use_cycles)
             
     def reset(self):
         self.set(self.reset_value, use_cycles=False)
@@ -125,7 +125,10 @@ class FlagRegister(Register):
         self.p_flag = False
         self.s_flag = False
          
-    def reset(self, keep_z=False, keep_n=False, keep_h=False, keep_c=False,\
+    def reset(self):
+        self.partial_reset()
+        
+    def partial_reset(self, keep_z=False, keep_n=False, keep_h=False, keep_c=False,\
                 keep_p=False, keep_s=False):
         if not keep_z:
             self.z_flag = False
@@ -190,12 +193,12 @@ class CPU(object):
     def __init__(self, interrupt, memory):
         assert isinstance(interrupt, Interrupt)
         self.interrupt = interrupt
-        self.memory = memory
-        self.ime = False
-        self.halted = False
-        self.cycles = 0
+        self.memory    = memory
+        self.ime       = False
+        self.halted    = False
+        self.cycles    = 0
         self.ini_registers()
-        self.rom = []
+        self.rom       = []
         self.reset()
 
     def ini_registers(self):
@@ -398,7 +401,7 @@ class CPU(object):
         self.push(register.get_hi(), use_cycles) # 2 cycles
         self.push(register.get_lo(), use_cycles) # 2 cycles
 
-    def pop(self):
+    def pop(self, use_cycles=True):
         # 1 cycle
         data = self.memory.read(self.sp.get())
         self.sp.inc() # 2 cycles
@@ -412,7 +415,7 @@ class CPU(object):
     def double_register_inverse_call(self, getter, register):
         b = getter(self) # 1 cycle
         a = getter(self) # 1 cycle
-        register.set(a, b) # 2 cycles
+        register.set_hi_lo(a, b) # 2 cycles
         self.cycles += 1
         
     def call(self, address, use_cycles=True):
@@ -428,14 +431,14 @@ class CPU(object):
         setter(getter()) # 1 cycle
         
     def load_fetch_register(self, register):
-        self.ld(self.fetch, register.set)
+        self.ld(CPUFetchCaller(self).get, RegisterSetCaller(register).set)
         
     def store_hl_in_pc(self):
         # LD PC,HL, 1 cycle
-        self.ld(self.hl.get, self.pc.set)
+        self.ld(DoubleRegisterGetCaller(self.hl).get, DoubleRegisterSetCaller(self.pc).set)
         
     def fetch_load(self, getter, setter):
-        self.ld(self.fetch, setter)
+        self.ld(CPUFetchCaller(self).get, setter)
 
     def add_a(self, getter, setter=None):
         # ALU, 1 cycle
@@ -449,9 +452,9 @@ class CPU(object):
         # 2 cycles
         a=1
         added = (self.hl.get() + register.get()) & 0xFFFF # 1 cycle
-        self.f.reset(keep_z=True)
+        self.f.partial_reset(keep_z=True)
         self.f.h_flag_compare((added >> 8), self.hl.get())
-        self.f.c_flag_compare(added, self.hl.get())
+        self.f.c_flag_compare(added,        self.hl.get())
         self.hl.set(added)
         self.cycles -= 1
         
@@ -534,16 +537,16 @@ class CPU(object):
     def inc(self, getter, setter):
         # 1 cycle
         data = (getter() + 1) & 0xFF
-        self.decInc_flagFinish(data, setter, 0x00)
+        self.dec_inc_flag_finish(data, setter, 0x00)
         
     def dec(self, getter, setter):
         # 1 cycle
         data = (getter() - 1) & 0xFF
-        self.decInc_flagFinish(data, setter, 0x0F)
+        self.dec_inc_flag_finish(data, setter, 0x0F)
         self.f.n_flag = True
      
-    def decInc_flagFinish(self, data, setter, compare):
-        self.f.reset(keep_c=True)
+    def dec_inc_flag_finish(self, data, setter, compare):
+        self.f.partial_reset(keep_c=True)
         self.f.z_flag_compare(data)
         if (data & 0x0F) == compare:
             self.f.h_flag = True
@@ -579,7 +582,8 @@ class CPU(object):
    
     def rotate_right_circular_a(self):
         # RRCA 1 cycle
-        self.rotate_right_circular(self.a.get, self.a.set)
+        self.rotate_right_circular(RegisterGetCaller(self.a).get, \
+                                   RegisterSetCaller(self.a).set)
 
     def rotate_right(self, getter, setter):
         # 1 cycle
@@ -590,7 +594,8 @@ class CPU(object):
 
     def rotate_right_a(self):
         # RRA 1 cycle
-        self.rotate_right(self.a.get, self.a.set)
+        self.rotate_right(RegisterGetCaller(self.a).get, \
+                          RegisterSetCaller(self.a).set)
 
     def shift_left_arithmetic(self, getter, setter):
         # 2 cycles
@@ -624,7 +629,7 @@ class CPU(object):
 
     def test_bit(self, getter, setter, n):
         # 2 cycles
-        self.f.reset(keep_c=True)
+        self.f.partial_reset(keep_c=True)
         self.f.h_flag = True
         self.f.z_flag = False
         if (getter() & (1 << n)) == 0:
@@ -663,7 +668,7 @@ class CPU(object):
     def load_mem_sp(self):
         # LD (nnnn),SP  5 cycles
         address = self.fetch_double_address() # 2 cycles
-        self.write(address, self.sp.get_lo())  # 2 cycles
+        self.write(address,       self.sp.get_lo())  # 2 cycles
         self.write((address + 1), self.sp.get_hi()) # 2 cycles
         self.cycles += 1
 
@@ -739,7 +744,7 @@ class CPU(object):
             self.a.set((self.a.get() + delta) & 0xFF) # 1 cycle
         else:
             self.a.set((self.a.get() - delta) & 0xFF) # 1 cycle
-        self.f.reset(keep_n=True)
+        self.f.partial_reset(keep_n=True)
         if delta >= 0x60:
             self.f.c_flag = True
         self.f.z_flag_compare(self.a.get())
@@ -781,11 +786,11 @@ class CPU(object):
 
     def complement_carry_flag(self):
         # CCF/SCF
-        self.f.reset(keep_z=True, keep_c=True)
+        self.f.partial_reset(keep_z=True, keep_c=True)
         self.f.c_flag = not self.f.c_flag
 
     def set_carry_flag(self):
-        self.f.reset(keep_z=True)
+        self.f.partial_reset(keep_z=True)
         self.f.c_flag = True
 
     def nop(self):
@@ -831,7 +836,7 @@ class CPU(object):
         # RET 4 cycles
         lo = self.pop() # 1 cycle
         hi = self.pop() # 1 cycle
-        self.pc.set(hi, lo) # 2 cycles
+        self.pc.set_hi_lo(hi, lo) # 2 cycles
 
     def conditional_return(self, cc):
         # RET cc 2,5 cycles
@@ -877,10 +882,72 @@ class CPU(object):
         self.fetch()
 
 # ------------------------------------------------------------------------------
+
+class CallWrapper(object):   
+    
+    def get(self, use_cycles=True):
+        return 0
+    
+    def set(self, value, use_cycles=True):
+        pass
+        
+class RegisterGetCaller(CallWrapper): 
+    def __init__(self, register):
+        self.register = register
+        
+    def get(self,  use_cycles=True):
+        return self.register.get(use_cycles)
+
+
+class DoubleRegisterGetCaller(RegisterGetCaller):
+    def __init__(self, register):
+        self.register = register
+        
+    def get(self,  use_cycles=True):
+        return self.register.get(use_cycles)
+    
+        
+class RegisterSetCaller(CallWrapper): 
+    def __init__(self, register):
+        self.register = register
+        
+    def set(self, value, use_cycles=True):
+        return self.register.set(value, use_cycles)
+   
+class DoubleRegisterSetCaller(CallWrapper): 
+    def __init__(self, register):
+        self.register = register
+        
+    def set(self, value, use_cycles=True):
+        return self.register.set(value, use_cycles) 
+    
+class CPUPopCaller(CallWrapper):
+    def __init__(self, cpu):
+        self.cpu = cpu
+        
+    def get(self,  use_cycles=True):
+        return self.cpu.pop(use_cycles)
+    
+    
+class CPUFetchCaller(CallWrapper):
+    def __init__(self, cpu):
+        self.cpu = cpu
+        
+    def get(self,  use_cycles=True):
+        return self.cpu.fetch(use_cycles)
+
+# ------------------------------------------------------------------------------
 # OPCODE LOOKUP TABLE GENERATION -----------------------------------------------
 
 
-GROUPED_REGISTERS = (CPU.get_b, CPU.get_c, CPU.get_d, CPU.get_e, CPU.get_h, CPU.get_l, CPU.get_hli, CPU.get_a)
+GROUPED_REGISTERS = [CPU.get_b, 
+                     CPU.get_c, 
+                     CPU.get_d, 
+                     CPU.get_e,
+                     CPU.get_h,
+                     CPU.get_l, 
+                     CPU.get_hli, 
+                     CPU.get_a]
 
 def create_group_op_codes(table):
     opCodes =[]
@@ -907,11 +974,13 @@ def create_group_op_codes(table):
                 opCode += step
     return opCodes
 
-def group_lambda(function, registerGetter, value=None):
+def group_lambda(function, register_getter, value=None):
     if value is None:
-        return lambda s: function(s, registerGetter(s).get, registerGetter(s).set)
+        return lambda s: function(s, RegisterGetCaller(register_getter(s)).get, \
+                                     RegisterSetCaller(register_getter(s)).set)
     else:
-        return  lambda s: function(s, registerGetter(s).get, registerGetter(s).set, value)
+        return  lambda s: function(s, RegisterGetCaller(register_getter(s)).get, \
+                                      RegisterSetCaller(register_getter(s)).set, value)
 
 
 def create_load_group_op_codes():
@@ -924,8 +993,9 @@ def create_load_group_op_codes():
             opCode += 1
     return opCodes
             
-def load_group_lambda(storeRegister, loadRegister):
-        return lambda s: CPU.ld(s, loadRegister(s).get, storeRegister(s).set)
+def load_group_lambda(store_register, load_register):
+        return lambda s: CPU.ld(s, RegisterGetCaller(load_register(s)).get, \
+                                   RegisterSetCaller(store_register(s)).set)
     
     
 def create_register_op_codes(table):
@@ -1000,14 +1070,14 @@ FIRST_ORDER_OP_CODES = [
     (0xF8, CPU.store_fetch_added_sp_in_hl),
     (0xCB, CPU.fetch_execute),
     (0xCD, CPU.unconditional_call),
-    (0xC6, lambda s: CPU.add_a(s, s.fetch)),
-    (0xCE, lambda s: CPU.add_with_carry(s,  s.fetch)),
+    (0xC6, lambda s: CPU.add_a(s,               CPUFetchCaller(s).get)),
+    (0xCE, lambda s: CPU.add_with_carry(s,      CPUFetchCaller(s).get)),
     (0xD6, CPU.fetch_subtract_a),
-    (0xDE, lambda s: CPU.subtract_with_carry(s,  s.fetch)),
-    (0xE6, lambda s: CPU.AND(s,  s.fetch)),
-    (0xEE, lambda s: CPU.XOR(s,  s.fetch)),
-    (0xF6, lambda s: CPU.OR(s,   s.fetch)),
-    (0xFE, lambda s: CPU.compare_a(s,  s.fetch)),
+    (0xDE, lambda s: CPU.subtract_with_carry(s, CPUFetchCaller(s).get)),
+    (0xE6, lambda s: CPU.AND(s,                 CPUFetchCaller(s).get)),
+    (0xEE, lambda s: CPU.XOR(s,                 CPUFetchCaller(s).get)),
+    (0xF6, lambda s: CPU.OR(s,                  CPUFetchCaller(s).get)),
+    (0xFE, lambda s: CPU.compare_a(s,           CPUFetchCaller(s).get)),
     (0xC7, lambda s: CPU.restart(s, 0x00)),
     (0xCF, lambda s: CPU.restart(s, 0x08)),
     (0xD7, lambda s: CPU.restart(s, 0x10)),
@@ -1015,7 +1085,7 @@ FIRST_ORDER_OP_CODES = [
     (0xE7, lambda s: CPU.restart(s, 0x20)),
     (0xEF, lambda s: CPU.restart(s, 0x28)),
     (0xF7, lambda s: CPU.restart(s, 0x30)),
-    (0xFF, lambda s: CPU.restart(s, 0x38)),
+    (0xFF, lambda s: CPU.restart(s, 0x38))
 ]
 
 REGISTER_GROUP_OP_CODES = [
@@ -1034,9 +1104,21 @@ REGISTER_GROUP_OP_CODES = [
 ]    
         
 
-REGISTER_SET_A = [CPU.get_bc, CPU.get_de, CPU.get_hl, CPU.get_sp]
-REGISTER_SET_B = [CPU.get_bc, CPU.get_de, CPU.get_hl, CPU.get_af]
-FLAG_REGISTER_SET = [CPU.is_not_z, CPU.is_z, CPU.is_not_c, CPU.is_c]
+REGISTER_SET_A =    [CPU.get_bc, 
+                     CPU.get_de, 
+                     CPU.get_hl, 
+                     CPU.get_sp]
+
+REGISTER_SET_B =    [CPU.get_bc, 
+                     CPU.get_de, 
+                     CPU.get_hl, 
+                     CPU.get_af]
+
+FLAG_REGISTER_SET = [CPU.is_not_z, 
+                     CPU.is_z, 
+                     CPU.is_not_c, 
+                     CPU.is_c]
+
 REGISTER_OP_CODES = [ 
     (0x01, 0x10, CPU.fetch_double_register,     REGISTER_SET_A),
     (0x09, 0x10, CPU.add_hl,                    REGISTER_SET_A),

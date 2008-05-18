@@ -35,10 +35,10 @@ class Interrupt(iMemory):
         
     def create_interrupt_flags(self):
         self.v_blank = InterruptFlag(True, constants.VBLANK, 0x40)
-        self.lcd = InterruptFlag(False, constants.LCD, 0x48)
-        self.timer = InterruptFlag(False, constants.TIMER, 0x50)
-        self.serial = InterruptFlag(False, constants.SERIAL, 0x58)
-        self.joypad = InterruptFlag(False, constants.JOYPAD, 0x60)
+        self.lcd     = InterruptFlag(False, constants.LCD, 0x48)
+        self.timer   = InterruptFlag(False, constants.TIMER, 0x50)
+        self.serial  = InterruptFlag(False, constants.SERIAL, 0x58)
+        self.joypad  = InterruptFlag(False, constants.JOYPAD, 0x60)
         
     def create_flag_list(self):
         self.interrupt_flags = [
