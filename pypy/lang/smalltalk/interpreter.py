@@ -40,9 +40,9 @@ class Interpreter(Invalidateable):
 
     def store_w_active_context(self, w_context):
         # We can only interpret contexts of which we know the type already
-        s_ctx = w_context.as_context_get_shadow()
-        assert (isinstance(s_ctx, MethodContextShadow) or 
-                isinstance(s_ctx, BlockContextShadow))
+        #s_ctx = w_context.as_context_get_shadow()
+        #assert (isinstance(s_ctx, MethodContextShadow) or 
+        #        isinstance(s_ctx, BlockContextShadow))
         if self._s_active_context is not None:
             self._s_active_context.unnotify(self)
             self._s_active_context = None
