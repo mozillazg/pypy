@@ -56,6 +56,7 @@ class ProcessWrapper(LinkWrapper):
         sched.store_active_process(self.w_self)
         interp.store_w_active_context(self.suspended_context())
         self.store_suspended_context(objtable.w_nil)
+        self.store_my_list(objtable.w_nil)
 
     def deactivate(self, interp):
         self.put_to_sleep()
