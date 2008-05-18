@@ -1,13 +1,6 @@
 #!/usr/bin/env python 
 import time
-import pyglet
-pyglet.options['audio'] = ('openal', 'silent')
         
-from pyglet import window
-from pyglet import media
-from pyglet import image
-from pyglet.window import key
-
 from pypy.lang.gameboy.gameboy import *
 from pypy.lang.gameboy.joypad import JoypadDriver
 from pypy.lang.gameboy.video import VideoDriver
@@ -21,11 +14,13 @@ class GameBoyImplementation(GameBoy):
     def __init__(self):
         self.create_window()
         GameBoy.__init__(self)
-        self.mainLoop()
+        #self.mainLoop()
         
     def create_window(self):
-        self.win = window.Window()
-        self.win.set_caption("PyBoy a GameBoy (TM)")
+        self.win = None
+        #self.win = window.Window()
+        #self.win.set_caption("PyBoy a GameBoy (TM)")
+        pass
         
     def create_drivers(self):
         self.clock = Clock()
@@ -46,28 +41,31 @@ class VideoDriverImplementation(VideoDriver):
     
     def __init__(self, win):
         VideoDriver.__init__(self)
-        self.win = win
-        self.win.on_resize = self.on_resize
-        self.set_window_size()
-        self.create_image_buffer()
+        #self.win = win
+        #self.win.on_resize = self.on_resize
+        #self.set_window_size()
+        #self.create_image_buffer()
 
     def create_image_buffer(self):
-        self.buffers = image.get_buffer_manager()
-        self.image_buffer = self.buffers.get_color_buffer()
-        self.buffer_image_data = self.image_buffer.image_data
-        self.buffer_image_data.format = "RGB"
-        self.pixel_buffer = self.buffer_image_data.data
-        
+        #self.buffers = image.get_buffer_manager()
+        #self.image_buffer = self.buffers.get_color_buffer()
+        #self.buffer_image_data = self.image_buffer.image_data
+        #self.buffer_image_data.format = "RGB"
+        #self.pixel_buffer = self.buffer_image_data.data
+        pass
+    
     def on_resize(self, width, height):
         pass
     
     def set_window_size(self):
-        self.win.set_size(self.width, self.height)
+        #self.win.set_size(self.width, self.height)
+        pass
         
     def update_display(self):
-        self.buffer_image_data.data = map(self.pixel_to_byte, self.pixel_buffer)
-        self.image_buffer.blit(0, 0)
-        self.win.flip()
+        #self.buffer_image_data.data = map(self.pixel_to_byte, self.pixel_buffer)
+        #self.image_buffer.blit(0, 0)
+        #self.win.flip()
+        pass
         
     def pixel_to_byte(self, int_number):
         return struct.pack("B", (int_number) & 0xFF, 
@@ -81,9 +79,9 @@ class JoypadDriverImplementation(JoypadDriver):
     
     def __init__(self, win):
         JoypadDriver.__init__(self)
-        self.create_button_key_codes()
+        #self.create_button_key_codes()
         self.win = win
-        self.create_listeners()
+        #self.create_listeners()
         
     def create_button_key_codes(self):
         self.button_key_codes = {key.UP : (self.button_up),
@@ -147,6 +145,7 @@ class SoundDriverImplementation(SoundDriver):
 def entry_point(args=None):
     gameboy = GameBoyImplementation()
     # add return statement...
+    return 0
 
 
 # _____ Define and setup target ___

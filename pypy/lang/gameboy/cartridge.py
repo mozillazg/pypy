@@ -52,6 +52,7 @@ class CartridgeManager(object):
         assert isinstance(clock, Clock)
         self.clock = clock
         self.cartridge = None
+        self.mbc = None
         
     def reset(self):
         if not self.has_battery():
