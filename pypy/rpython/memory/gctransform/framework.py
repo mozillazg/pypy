@@ -284,6 +284,17 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.malloc_varsize_nonmovable_ptr = None
 
+        if getattr(GCClass, 'malloc_varsize_resizable', False):
+            malloc_resizable = func_with_new_name(
+                GCClass.malloc_varsize_resizable.im_func,
+                "malloc_varsize_resizable")
+            self.malloc_varsize_resizable_ptr = getfn(
+                malloc_resizable,
+                [s_gc, annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomeInteger(nonneg=True)], s_gcref)
+        else:
+            self.malloc_varsize_resizable_ptr = None
+
         if getattr(GCClass, 'realloc', False):
             self.realloc_ptr = getfn(
                 GCClass.realloc.im_func,
@@ -475,7 +486,12 @@ class FrameworkGCTransformer(GCTransformer):
             v_length = op.args[-1]
             c_ofstolength = rmodel.inputconst(lltype.Signed, info.ofstolength)
             c_varitemsize = rmodel.inputconst(lltype.Signed, info.varitemsize)
-            if flags.get('nonmovable') and self.malloc_varsize_nonmovable_ptr:
+            if flags.get('resizable') and self.malloc_varsize_resizable_ptr:
+                assert c_can_collect.value
+                assert not c_has_finalizer.value
+                malloc_ptr = self.malloc_varsize_resizable_ptr
+                args = [self.c_const_gc, c_type_id, v_length]                
+            elif flags.get('nonmovable') and self.malloc_varsize_nonmovable_ptr:
                 # we don't have tests for such cases, let's fail
                 # explicitely
                 assert c_can_collect.value

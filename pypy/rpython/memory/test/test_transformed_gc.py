@@ -510,7 +510,6 @@ class GenericGCTests(GCTest):
 
     def test_string_builder_over_allocation(self):
         import gc
-        py.test.skip("Problematic test")
         def fn():
             s = StringBuilder(4)
             s.append("abcd")
@@ -519,7 +518,9 @@ class GenericGCTests(GCTest):
             s.append_multiple_char('y', 1000)
             gc.collect()
             s.append_multiple_char('y', 1000)
-            return s.build()[1000]
+            res = s.build()[1000]
+            gc.collect()
+            return res
         fn = self.runner(fn)
         res = fn([])
         assert res == 'y'

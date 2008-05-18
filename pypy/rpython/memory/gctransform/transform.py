@@ -540,6 +540,7 @@ class GCTransformer(BaseGCTransformer):
         flags = hop.spaceop.args[1].value
         flags['varsize'] = True
         flags['nonmovable'] = True
+        flags['resizable'] = True
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
