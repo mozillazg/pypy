@@ -210,3 +210,25 @@ class TestScheduler(object):
         assert wrapper.scheduler().active_process() is process.w_self
 
         py.test.raises(FatalError, semaphore.wait, interp)
+
+    def test_semaphore_wait_signal(self):
+        semaphore = new_semaphore()
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
+
+        semaphore.wait(interp)
+        assert wrapper.scheduler().active_process() is process.w_self
+        semaphore.signal(interp)
+        assert wrapper.scheduler().active_process() is process.w_self
+        process_list = wrapper.scheduler().get_process_list(old_process.priority())
+        assert process_list.remove_first_link_of_list() is old_process.w_self
+
+        process.write(2, utility.wrap_int(1))        
+        old_process.resume(interp)
+        assert wrapper.scheduler().active_process() is old_process.w_self        
+        semaphore.wait(interp)
+        assert wrapper.scheduler().active_process() is process.w_self
+        semaphore.signal(interp)
+        assert wrapper.scheduler().active_process() is old_process.w_self        
+
+        process_list = wrapper.scheduler().get_process_list(process.priority())
+        assert process_list.first_link() is process.w_self
