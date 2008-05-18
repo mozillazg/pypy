@@ -6,6 +6,29 @@
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import iMemory
 
+
+
+class VideoCallWraper(object):
+    def call(self, pos, color, mask):
+        pass
+    
+
+class set_overlapped_object_line_call_wrapper(VideoCallWraper):
+    def __init__(self, video):
+        self.video = video
+    
+    def call(self, pos, color, mask):
+        self.video. set_overlapped_object_line(pos, color, mask)
+
+
+class set_tile_line_call_wrapper(VideoCallWraper):
+    def __init__(self, video):
+        self.video = video
+    
+    def call(self, pos, color, mask):
+        self.video.set_tile_line(pos, color, mask)
+    
+
 class Video(iMemory):
     #frames = 0
     #frame_skip = 0
@@ -496,7 +519,7 @@ class Video(iMemory):
         pattern += (self.vram[address + 1] & 0xFF) << 8
         return pattern
 
-    def draw_object(self, setter, x, address, flags):
+    def draw_object(self, caller, x, address, flags):
         pattern = self.get_pattern(address)
         mask = 0
         # priority
@@ -506,27 +529,27 @@ class Video(iMemory):
         if (flags & 0x10) != 0:
             mask |= 0x0004
         if (flags & 0x20) != 0:
-            self.draw_object_normal(x, pattern, mask, setter)
+            self.draw_object_normal(x, pattern, mask, caller)
         else:
-            self.draw_object_flipped(x, pattern, mask, setter)
+            self.draw_object_flipped(x, pattern, mask, caller)
             
-    def draw_object_normal(self, x, pattern, mask, setter):
+    def draw_object_normal(self, x, pattern, mask, caller):
         for i in range(0, 7):
             color = pattern >> (6-i)
             if (color & 0x0202) != 0:
-                setter(x+1, color, mask)
+                caller(x+1, color, mask)
         color = pattern << 1
         if (color & 0x0202) != 0:
-            setter(x+7, color, mask)
+            caller(x+7, color, mask)
         
-    def draw_object_flipped(self, x, pattern, mask, setter):
+    def draw_object_flipped(self, x, pattern, mask, caller):
         color = pattern << 1
         if (color & 0x0202) != 0:
-            setter(x, color, mask)
+            caller(x, color, mask)
         for i in range(0, 7):
             color = pattern >> i
             if (color & 0x0202) != 0:
-                setter(x + i + 1, color, mask)
+                caller(x + i + 1, color, mask)
             
     def draw_tile(self, x, address):
         pattern =  self.get_pattern(address)
@@ -534,13 +557,15 @@ class Video(iMemory):
             self.line[x + i] = (pattern >> (7-i)) & 0x0101
 
     def draw_object_tile(self, x, address, flags):
-        self.draw_object(self.set_tile_line, x, address, flags)
+        self.draw_object(set_tile_line_call_wrapper(self).call, x, address, \
+                         flags)
         
     def set_tile_line(self, pos, color, mask):
         self.line[pos] |= color | mask
 
     def draw_overlapped_object_tile(self, x, address, flags):
-        self.draw_object(self.set_overlapped_object_line, x, address, flags)
+        self.draw_object(set_overlapped_object_line_call_wrapper(self).call, \
+                         x, address, flags)
         
     def set_overlapped_object_line(self, pos, color, mask):
         self.line[pos] = (self.line[pos] & 0x0101) | color | mask

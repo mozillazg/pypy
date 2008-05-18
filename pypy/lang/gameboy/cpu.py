@@ -92,7 +92,7 @@ class DoubleRegister(iRegister):
     
 # ------------------------------------------------------------------------------
 
-class ImmediatePseudoRegister(iRegister):
+class ImmediatePseudoRegister(Register):
     
         def __init__(self, cpu, hl):
             assert isinstance(cpu, CPU)
@@ -389,7 +389,7 @@ class CPU(object):
         return (hi << 8) + lo
         
     def fetch_double_register(self, register):
-        self.double_register_inverse_call(CPU.fetch, register)
+        self.double_register_inverse_call(CPUFetchCaller(self).get, register)
 
     def push(self, data, use_cycles=True):
         # Stack, 2 cycles
@@ -410,11 +410,11 @@ class CPU(object):
     
     def pop_double_register(self, register):
         # 3 cycles
-        self.double_register_inverse_call(CPU.pop, register)
+        self.double_register_inverse_call(CPUPopCaller(self).get, register)
         
     def double_register_inverse_call(self, getter, register):
-        b = getter(self) # 1 cycle
-        a = getter(self) # 1 cycle
+        b = getter() # 1 cycle
+        a = getter() # 1 cycle
         register.set_hi_lo(a, b) # 2 cycles
         self.cycles += 1
         
@@ -435,7 +435,8 @@ class CPU(object):
         
     def store_hl_in_pc(self):
         # LD PC,HL, 1 cycle
-        self.ld(DoubleRegisterGetCaller(self.hl).get, DoubleRegisterSetCaller(self.pc).set)
+        self.ld(DoubleRegisterGetCaller(self.hl).get, \
+                DoubleRegisterSetCaller(self.pc).set)
         
     def fetch_load(self, getter, setter):
         self.ld(CPUFetchCaller(self).get, setter)
@@ -561,7 +562,8 @@ class CPU(object):
 
     def rotate_left_circular_a(self):
         # RLCA rotate_left_circular_a 1 cycle
-        self.rotate_left_circular(self.a.get, self.a.set)
+        self.rotate_left_circular(RegisterGetCaller(self.a).get, \
+                                  RegisterSetCaller(self.a).set)
 
     def rotate_left(self, getter, setter):
         # 1 cycle
@@ -572,7 +574,8 @@ class CPU(object):
 
     def rotate_left_a(self):
         # RLA  1 cycle
-        self.rotate_left(self.a.get, self.a.set)
+        self.rotate_left(RegisterGetCaller(self.a).get, \
+                         RegisterSetCaller(self.a).set)
         
     def rotate_right_circular(self, getter, setter):
         data = getter()
@@ -914,12 +917,14 @@ class RegisterSetCaller(CallWrapper):
     def set(self, value, use_cycles=True):
         return self.register.set(value, use_cycles)
    
+   
 class DoubleRegisterSetCaller(CallWrapper): 
     def __init__(self, register):
         self.register = register
         
     def set(self, value, use_cycles=True):
         return self.register.set(value, use_cycles) 
+    
     
 class CPUPopCaller(CallWrapper):
     def __init__(self, cpu):
@@ -977,12 +982,11 @@ def create_group_op_codes(table):
 def group_lambda(function, register_getter, value=None):
     if value is None:
         return lambda s: function(s, RegisterGetCaller(register_getter(s)).get, \
-                                     RegisterSetCaller(register_getter(s)).set)
+                               RegisterSetCaller(register_getter(s)).set)
     else:
-        return  lambda s: function(s, RegisterGetCaller(register_getter(s)).get, \
-                                      RegisterSetCaller(register_getter(s)).set, value)
-
-
+        return lambda s: function(s, RegisterGetCaller(register_getter(s)).get, \
+                               RegisterSetCaller(register_getter(s)).set, value)
+    
 def create_load_group_op_codes():
     opCodes = []
     opCode  = 0x40
