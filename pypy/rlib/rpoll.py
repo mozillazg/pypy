@@ -8,6 +8,7 @@ function that directly takes a dictionary as argument.
 import os
 from pypy.rlib import _rsocket_rffi as _c
 from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 # ____________________________________________________________
 # events
@@ -121,7 +122,7 @@ if hasattr(_c, 'WSAEventSelect'):
             if ret == _c.WSA_WAIT_TIMEOUT:
                 return []
 
-            if ret == _c.WSA_WAIT_FAILED:
+            if ret == r_uint(_c.WSA_WAIT_FAILED):
                 raise PollError(_c.geterrno())
 
             retval = []
