@@ -373,7 +373,7 @@ class TestMMap:
         f.close()
 
     def test_translated(self):
-        from pypy.translator.interactive import Translation
+        from pypy.translator.c.test.test_genc import compile
 
         def func(no):
             m = mmap.mmap(no, 1)
@@ -381,6 +381,4 @@ class TestMMap:
             m.close()
             return r
 
-        t = Translation(func)
-        fc = t.compile_c([int])
-
+        compile(func, [int])
