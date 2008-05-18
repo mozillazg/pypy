@@ -191,6 +191,7 @@ class BaseConstantGenerator(object):
 
         if isinstance(value, ootype._object) and value: # leave ootype.NULL as is
             value = value.obj
+            self.db.cts.lltype_to_cts(value._TYPE) # record const
 
         # Determine if the static type differs from the dynamic type.
         if isinstance(value, ootype._view):
