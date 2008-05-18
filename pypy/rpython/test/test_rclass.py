@@ -870,5 +870,21 @@ class TestOOtype(BaseTestRclass, OORtypeMixin):
                 return obj
             else:
                 return ootype.NULL
-        res = self.interpret(fn_mix_null, [False])
-        assert res is ootype.NULL
+        res = self.interpret(fn_mix_null, [True])
+        assert res
+
+    def test_cast_object_pbc(self):
+        A = ootype.Instance("Foo", ootype.ROOT, {"x": ootype.Signed})
+        a1 = ootype.new(A)
+        a1.x = 42
+        obj1 = ootype.cast_to_object(a1)
+        def fn(flag):
+            if flag:
+                obj = obj1
+            else:
+                obj = ootype.NULL
+            a = ootype.cast_from_object(A, obj)
+            return a.x
+        res = self.interpret(fn, [True], backendopt=False)
+        assert res == 42
+

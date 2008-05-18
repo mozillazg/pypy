@@ -188,7 +188,10 @@ class BaseConstantGenerator(object):
 
         """ A helper method which creates a Constant wrapper object for
         the given value.  Uses the types defined in the sub-class. """
-        
+
+        if isinstance(value, ootype._object) and value: # leave ootype.NULL as is
+            value = value.obj
+
         # Determine if the static type differs from the dynamic type.
         if isinstance(value, ootype._view):
             static_type = value._TYPE
