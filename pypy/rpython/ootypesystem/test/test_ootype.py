@@ -574,7 +574,8 @@ def test_cast_object_null():
     b = null(B)
     obj1 = cast_to_object(a)
     obj2 = cast_to_object(b)
-    assert obj1 == obj2
+    assert obj1 is obj2
+    assert obj1 is NULL
     assert cast_from_object(A, obj1) == a
     assert cast_from_object(B, obj2) == b
 
