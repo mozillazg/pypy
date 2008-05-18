@@ -3,6 +3,7 @@ from pypy.lang.smalltalk import wrapper
 from pypy.lang.smalltalk import model
 from pypy.lang.smalltalk import objtable, utility
 from pypy.lang.smalltalk import interpreter
+from pypy.lang.smalltalk.error import WrapperException, FatalError
 
 def test_simpleread():
     w_o = model.W_PointersObject(None, 2)
@@ -11,8 +12,8 @@ def test_simpleread():
     assert w.read(0) == "hello"
     w.write(1, "b")
     assert w.read(1) == "b"
-    py.test.raises(IndexError, "w.read(2)")
-    py.test.raises(IndexError, "w.write(2, \"test\")")
+    py.test.raises(WrapperException, "w.read(2)")
+    py.test.raises(WrapperException, "w.write(2, \"test\")")
 
 def test_accessor_generators():
     w_o = model.W_PointersObject(None, 1)
@@ -102,7 +103,11 @@ def new_scheduler(w_process=objtable.w_nil, prioritydict=None):
     scheduler.write(0, priority_list.w_self)
     return scheduler
 
-
+def new_semaphore(excess_signals=0):
+    w_semaphore = model.W_PointersObject(None, 3)
+    semaphore = wrapper.SemaphoreWrapper(w_semaphore)
+    semaphore.store_excess_signals(utility.wrap_int(excess_signals))
+    return semaphore
 
 class TestScheduler(object):
     def setup_method(self, meth):
@@ -120,12 +125,9 @@ class TestScheduler(object):
         assert process_list.first_link() is process_list.last_link()
         assert process_list.first_link() is process.w_self
 
-    def old_new_process_consistency(self, process, old_process, interp,
+    def new_process_consistency(self, process, old_process, interp,
                                     old_active_context, new_active_context):
         scheduler = wrapper.scheduler()
-        assert old_process.suspended_context() is old_active_context
-        priority_list = scheduler.get_process_list(old_process.priority())
-        assert priority_list.first_link() is old_process.w_self
         assert interp.w_active_context() is new_active_context
         assert scheduler.active_process() is process.w_self
         priority_list = wrapper.scheduler().get_process_list(process.priority())
@@ -134,35 +136,64 @@ class TestScheduler(object):
         # The caller of activate is responsible
         assert priority_list.first_link() is process.w_self
 
-    def test_activate(self):
+    def old_process_consistency(self, old_process, old_process_context):
+        assert old_process.suspended_context() is old_process_context
+        priority_list = wrapper.scheduler().get_process_list(old_process.priority())
+        assert priority_list.first_link() is old_process.w_self
+
+    def make_processes(self, sleepingpriority, runningpriority,
+                             sleepingcontext, runningcontext):
         interp = interpreter.Interpreter()
         scheduler = wrapper.scheduler()
-        process = new_process(priority=2, w_suspended_context=objtable.w_false)
-        process.put_to_sleep()
-        old_process = new_process(priority=3)
-        scheduler.store_active_process(old_process.w_self)
-        interp.store_w_active_context(objtable.w_true)
-        process.activate(interp)
+        sleeping = new_process(priority=sleepingpriority,
+                               w_suspended_context=sleepingcontext)
+        sleeping.put_to_sleep()
+        running = new_process(priority=runningpriority)
+        scheduler.store_active_process(running.w_self)
+        interp.store_w_active_context(runningcontext)
 
-        self.old_new_process_consistency(process, old_process, interp,
+        return interp, sleeping, running
+
+
+    def test_activate(self):
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
+        process.activate(interp)
+        self.new_process_consistency(process, old_process, interp,
                                          objtable.w_true, objtable.w_false)
        
     def test_resume(self):
-        interp = interpreter.Interpreter()
-        scheduler = wrapper.scheduler()
-        process = new_process(priority=4, w_suspended_context=objtable.w_false)
-        process.put_to_sleep()
-        old_process = new_process(priority=2)
-        scheduler.store_active_process(old_process.w_self)
-        interp.store_w_active_context(objtable.w_true)
-
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
         process.resume(interp)
-        self.old_new_process_consistency(process, old_process, interp,
+        self.new_process_consistency(process, old_process, interp,
                                          objtable.w_true, objtable.w_false)
+        self.old_process_consistency(old_process, objtable.w_true)
 
         # Does not reactivate old_process because lower priority
         old_process.resume(interp)
-        self.old_new_process_consistency(process, old_process, interp,
+        self.new_process_consistency(process, old_process, interp,
                                          objtable.w_true, objtable.w_false)
+        self.old_process_consistency(old_process, objtable.w_true)
 
+    def test_semaphore_excess_signal(self):
+        semaphore = new_semaphore()
+        
+        semaphore.signal(None)
+        assert utility.unwrap_int(semaphore.excess_signals()) == 1
 
+    def test_highest_priority(self):
+        py.test.raises(FatalError, wrapper.scheduler().highest_priority_process)
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
+        process.put_to_sleep()
+        old_process.put_to_sleep()
+        highest = wrapper.scheduler().highest_priority_process()
+        assert highest is process.w_self
+        highest = wrapper.scheduler().highest_priority_process()
+        assert highest is old_process.w_self
+        py.test.raises(FatalError, wrapper.scheduler().highest_priority_process)
+
+    def test_semaphore_wait(self):
+        semaphore = new_semaphore()
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
+        semaphore.wait(interp)
+        assert semaphore.first_link() is old_process.w_self
+        assert wrapper.scheduler().active_process() is process.w_self

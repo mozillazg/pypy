@@ -1,24 +1,24 @@
 from pypy.lang.smalltalk import model
-from pypy.lang.smalltalk import utility
+from pypy.lang.smalltalk import utility, objtable
+from pypy.lang.smalltalk.error import FatalError, WrapperException
 
 class Wrapper(object):
     def __init__(self, w_self):
-        assert isinstance(w_self, model.W_PointersObject)
+        if not isinstance(w_self, model.W_PointersObject):
+            raise WrapperException("Unexpected instance given to wrapper")
         self.w_self = w_self
 
     def read(self, index0):
         try:
             return self.w_self._vars[index0]
         except IndexError:
-            # XXX nicer errormessage
-            raise
+            raise WrapperException("Unexpected instance layout. Too small")
 
     def write(self, index0, w_new):
         try:
             self.w_self._vars[index0] = w_new
         except IndexError:
-            # XXX nicer errormessage
-            raise
+            raise WrapperException("Unexpected instance layout. Too small")
 
 def make_getter(index0):
     def getter(self):
@@ -53,13 +53,13 @@ class ProcessWrapper(LinkWrapper):
     def activate(self, interp):
         from pypy.lang.smalltalk import objtable
         sched = scheduler()
-        w_old_process = sched.active_process()
         sched.store_active_process(self.w_self)
-        old_process = ProcessWrapper(w_old_process)
-        old_process.store_suspended_context(interp.w_active_context())
-        old_process.put_to_sleep()
         interp.store_w_active_context(self.suspended_context())
         self.store_suspended_context(objtable.w_nil)
+
+    def deactivate(self, interp):
+        self.put_to_sleep()
+        self.store_suspended_context(interp.w_active_context())
 
     def resume(self, interp):
         sched = scheduler()
@@ -67,10 +67,18 @@ class ProcessWrapper(LinkWrapper):
         active_priority = active_process.priority()
         priority = self.priority()
         if priority > active_priority:
+            active_process.deactivate(interp)
             self.activate(interp)
         else:
             self.put_to_sleep()
 
+    def is_active_process(self):
+        return self.w_self is scheduler().active_process()
+
+    def suspend(self, interp):
+        assert self.is_active_process()
+        assert self.my_list() is objtable.w_nil
+        ProcessWrapper(scheduler().highest_priority_process()).activate(interp)
 
 class LinkedListWrapper(Wrapper):
     first_link, store_first_link = make_getter_setter(0)
@@ -117,6 +125,18 @@ class SchedulerWrapper(Wrapper):
         lists = self.priority_list()
         return ProcessListWrapper(Wrapper(lists).read(priority))
 
+    def highest_priority_process(self):
+        w_lists = self.priority_list()
+        # Asserts as W_PointersObject
+        lists = Wrapper(w_lists)
+        
+        for i in range(len(w_lists._vars) -1, -1, -1):
+            process_list = ProcessListWrapper(lists.read(i))
+            if not process_list.is_empty_list():
+                return process_list.remove_first_link_of_list()
+
+        raise FatalError("Scheduler could not find a runnable process")
+
 def scheduler():
     from pypy.lang.smalltalk import objtable
     w_association = objtable.objtable["w_schedulerassociationpointer"]
@@ -127,7 +147,7 @@ def scheduler():
 
 class SemaphoreWrapper(LinkedListWrapper):
 
-    excess_signals, store_excess_signals = make_getter_setter(0)
+    excess_signals, store_excess_signals = make_getter_setter(2)
 
     def signal(self, interp):
         if self.is_empty_list():
@@ -135,13 +155,14 @@ class SemaphoreWrapper(LinkedListWrapper):
             w_value = utility.wrap_int(utility.unwrap_int(w_value) + 1)
             self.store_excess_signals(w_value)
         else:
-            self.resume(self.remove_first_link_of_list(), interp)
+            self.remove_first_link_of_list().resume(interp)
 
-    def wait(self, w_process, interp):
+    def wait(self, interp):
         excess = utility.unwrap_int(self.excess_signals())
+        w_process = scheduler().active_process()
         if excess > 0:
             w_excess = utility.wrap_int(excess - 1)
             self.store_excess_signals(w_excess)
         else:
             self.add_last_link(w_process)
-            ProcessWrapper(w_process).put_to_sleep()
+            ProcessWrapper(w_process).suspend(interp)
