@@ -56,6 +56,7 @@ if os.name == "posix":
 
 module_import_dependencies = {
     # no _rawffi if importing pypy.rlib.libffi raises ImportError
+    # or CompilationError
     "_rawffi": ["pypy.rlib.libffi"],
     }
 
@@ -63,16 +64,17 @@ def get_module_validator(modname):
     if modname in module_import_dependencies:
         modlist = module_import_dependencies[modname]
         def validator(config):
+            from pypy.rpython.tool.rffi_platform import CompilationError
             try:
                 for name in modlist:
                     __import__(name)
-            except ImportError, e:
-                err = "%s: %s" % (e.__class__.__name__, e)
+            except (ImportError, CompilationError), e:
+                errcls = e.__class__.__name__
                 config.add_warning(
                     "The module %r is disabled\n" % (modname,) +
-                    "because importing %s raised\n" % (name,) +
-                    err)
-                raise ConfigError("--withmod-%s: %s" % (modname, err))
+                    "because importing %s raised %s\n" % (name, errcls) +
+                    str(e))
+                raise ConfigError("--withmod-%s: %s" % (modname, errcls))
         return validator
     else:
         return None
