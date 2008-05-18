@@ -241,6 +241,7 @@ class HybridGC(GenerationGC):
             self.gen_resizable_objects.append(result + size_gc_header)
         else:
             self.gen2_rawmalloced_objects.append(result + size_gc_header)
+            self._check_rawsize_alloced(tot_size)
         (result + size_gc_header + lengthofs).signed[0] = newsize
         return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
 
@@ -266,14 +267,7 @@ class HybridGC(GenerationGC):
             totalsize)
         return result
 
-    def malloc_varsize_marknsweep(self, totalsize, resizable=False):
-        # In order to free the large objects from time to time, we
-        # arbitrarily force a full collect() if none occurs when we have
-        # allocated 'self.space_size' bytes of large objects.
-        # XXX we should probably track the total raw_malloc'ed size
-        # XXX and adjust sizes based on it; otherwise we risk doing
-        # XXX many many collections if the program allocates a lot
-        # XXX more than the current self.space_size.
+    def _check_rawsize_alloced(self, totalsize):
         self.large_objects_collect_trigger -= raw_malloc_usage(totalsize)
         if self.large_objects_collect_trigger < 0:
             if DEBUG_PRINT:
@@ -282,6 +276,16 @@ class HybridGC(GenerationGC):
                                      self.large_objects_collect_trigger,
                                  "bytes, triggering full collection")
             self.semispace_collect()
+
+    def malloc_varsize_marknsweep(self, totalsize, resizable=False):
+        # In order to free the large objects from time to time, we
+        # arbitrarily force a full collect() if none occurs when we have
+        # allocated 'self.space_size' bytes of large objects.
+        # XXX we should probably track the total raw_malloc'ed size
+        # XXX and adjust sizes based on it; otherwise we risk doing
+        # XXX many many collections if the program allocates a lot
+        # XXX more than the current self.space_size.
+        self._check_rawsize_alloced(totalsize)
         result = self.allocate_external_object(totalsize)
         if not result:
             raise MemoryError()
