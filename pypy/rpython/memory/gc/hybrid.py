@@ -30,6 +30,7 @@ from pypy.rpython.lltypesystem import rffi
 # Object lists:
 #   * gen2_rawmalloced_objects
 #   * gen3_rawmalloced_objects
+#   * gen_resizable_objects
 #   * old_objects_pointing_to_young: gen2or3 objs that point to gen1 objs
 #   * last_generation_root_objects: gen3 objs that point to gen1or2 objs
 #
@@ -46,6 +47,8 @@ from pypy.rpython.lltypesystem import rffi
 # A malloc_varsize() of large objects returns objects that are external
 # but initially of generation 2.  Old objects from the semispaces are
 # moved to external objects directly as generation 3.
+
+# gen_resizable objects is for objects that are resizable
 
 # The "age" of an object is the number of times it survived a full
 # collections, without counting the step that moved it out of the nursery.
@@ -118,6 +121,7 @@ class HybridGC(GenerationGC):
     def setup(self):
         self.gen2_rawmalloced_objects = self.AddressStack()
         self.gen3_rawmalloced_objects = self.AddressStack()
+        self.gen_resizable_objects = self.AddressStack()
         GenerationGC.setup(self)
 
     def set_max_heap_size(self, size):
@@ -170,7 +174,8 @@ class HybridGC(GenerationGC):
                                                 llmemory.GCREF)
         return self.malloc_varsize_slowpath(typeid, length)
 
-    def malloc_varsize_slowpath(self, typeid, length, force_old=False):
+    def malloc_varsize_slowpath(self, typeid, length, force_old=False,
+                                resizable=False):
         # For objects that are too large, or when the nursery is exhausted.
         # In order to keep malloc_varsize_clear() as compact as possible,
         # we recompute what we need in this slow path instead of passing
@@ -189,7 +194,7 @@ class HybridGC(GenerationGC):
         else:
             nonlarge_max = self.nonlarge_max
         if force_old or raw_malloc_usage(totalsize) > nonlarge_max:
-            result = self.malloc_varsize_marknsweep(totalsize)
+            result = self.malloc_varsize_marknsweep(totalsize, resizable)
             flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
         else:
             result = self.malloc_varsize_collecting_nursery(totalsize)
@@ -199,10 +204,13 @@ class HybridGC(GenerationGC):
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     malloc_varsize_slowpath._dont_inline_ = True
-    malloc_varsize_slowpath._annspecialcase_ = 'specialize:arg(3)'
+    malloc_varsize_slowpath._annspecialcase_ = 'specialize:arg(3, 4)'
 
     def malloc_varsize_nonmovable(self, typeid, length):
         return self.malloc_varsize_slowpath(typeid, length, True)
+
+    def malloc_varsize_resizable(self, typeid, length):
+        return self.malloc_varsize_slowpath(typeid, length, True, True)
 
     def malloc_nonmovable(self, typeid, length, zero):
         # helper for testing, same as GCBase.malloc
@@ -220,6 +228,7 @@ class HybridGC(GenerationGC):
         oldsize = (addr + lengthofs).signed[0]
         old_tot_size = size_gc_header + const_size + oldsize * itemsize
         source_addr = addr - size_gc_header
+        self._remove_addr_from_resizable_objects(addr)
         if grow:
             result = llop.raw_realloc_grow(llmemory.Address, source_addr,
                                            old_tot_size, tot_size)
@@ -228,12 +237,21 @@ class HybridGC(GenerationGC):
                                              old_tot_size, tot_size)
         if not result:
             raise MemoryError()
-        if result != addr:
-            flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
-            self.gen2_rawmalloced_objects.append(result)
-            self.init_gc_object(result, tid, flags)
+        if grow:
+            self.gen_resizable_objects.append(result + size_gc_header)
+        else:
+            self.gen2_rawmalloced_objects.append(result + size_gc_header)
         (result + size_gc_header + lengthofs).signed[0] = newsize
         return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
+
+    def _remove_addr_from_resizable_objects(self, addr):
+        objects = self.gen_resizable_objects
+        newstack = self.AddressStack()
+        while objects.non_empty():
+            obj = objects.pop()
+            if obj != addr:
+                newstack.append(obj)
+        self.gen_resizable_objects = newstack
 
     def can_move(self, addr):
         tid = self.header(addr).tid
@@ -248,7 +266,7 @@ class HybridGC(GenerationGC):
             totalsize)
         return result
 
-    def malloc_varsize_marknsweep(self, totalsize):
+    def malloc_varsize_marknsweep(self, totalsize, resizable=False):
         # In order to free the large objects from time to time, we
         # arbitrarily force a full collect() if none occurs when we have
         # allocated 'self.space_size' bytes of large objects.
@@ -271,8 +289,12 @@ class HybridGC(GenerationGC):
         # need to follow suit.
         llmemory.raw_memclear(result, totalsize)
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        self.gen2_rawmalloced_objects.append(result + size_gc_header)
+        if resizable:
+            self.gen_resizable_objects.append(result + size_gc_header)
+        else:
+            self.gen2_rawmalloced_objects.append(result + size_gc_header)
         return result
+    malloc_varsize_marknsweep._annspecialcase_ = 'specialize:arg(2)'
 
     def allocate_external_object(self, totalsize):
         # XXX maybe we should use arena_malloc() above a certain size?
