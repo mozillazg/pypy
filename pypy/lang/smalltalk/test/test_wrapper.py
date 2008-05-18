@@ -55,6 +55,13 @@ def test_linked_list():
     linkedlist.add_last_link(w_last)
     assert linkedlist.first_link() is w_first
     assert linkedlist.last_link() is w_last
+    py.test.raises(WrapperException, linkedlist.remove, objtable.w_nil)
+    linkedlist.remove(w_first)
+    assert linkedlist.first_link() is w_last
+    linkedlist.store_first_link(w_first)
+    wrapper.LinkWrapper(w_first).store_next_link(w_last)
+    linkedlist.remove(w_last)
+    assert linkedlist.last_link() is w_first
 
 def new_process(w_next=objtable.w_nil,
                 w_my_list=objtable.w_nil,
@@ -109,6 +116,7 @@ def new_semaphore(excess_signals=0):
     semaphore.store_excess_signals(utility.wrap_int(excess_signals))
     return semaphore
 
+        
 class TestScheduler(object):
     def setup_method(self, meth):
         self.old_scheduler = wrapper.scheduler
@@ -118,12 +126,29 @@ class TestScheduler(object):
     def teardown_method(self, meth):
         wrapper.scheduler = self.old_scheduler
 
-    def test_suspend(self):
+    def test_put_to_sleep(self):
         process = new_process(priority=2)
         process.put_to_sleep()
         process_list = wrapper.scheduler().get_process_list(2)
         assert process_list.first_link() is process_list.last_link()
         assert process_list.first_link() is process.w_self
+
+    def test_suspend_asleep(self):
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
+        process.suspend(interp)
+        process_list = wrapper.scheduler().get_process_list(process.priority())
+        assert process_list.first_link() is process_list.last_link()
+        assert process_list.first_link() is objtable.w_nil
+        assert process.my_list() is objtable.w_nil
+
+    def test_suspend_active(self):
+        interp, process, old_process = self.make_processes(4, 2, objtable.w_false, objtable.w_true)
+        old_process.suspend(interp)
+        process_list = wrapper.scheduler().get_process_list(old_process.priority())
+        assert process_list.first_link() is process_list.last_link()
+        assert process_list.first_link() is objtable.w_nil
+        assert old_process.my_list() is objtable.w_nil
+        assert wrapper.scheduler().active_process() is process.w_self
 
     def new_process_consistency(self, process, old_process, interp,
                                     old_active_context, new_active_context):
