@@ -156,7 +156,7 @@ class SemaphoreWrapper(LinkedListWrapper):
             w_value = utility.wrap_int(utility.unwrap_int(w_value) + 1)
             self.store_excess_signals(w_value)
         else:
-            self.remove_first_link_of_list().resume(interp)
+            ProcessWrapper(self.remove_first_link_of_list()).resume(interp)
 
     def wait(self, interp):
         excess = utility.unwrap_int(self.excess_signals())
