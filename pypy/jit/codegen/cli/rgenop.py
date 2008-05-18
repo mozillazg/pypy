@@ -208,7 +208,11 @@ class FunctionConst(BaseConst):
     @specialize.arg(1)
     def revealconst(self, T):
         assert isinstance(T, ootype.OOType)
-        return unbox(self.holder.GetFunc(), T)
+        if isinstance(T, ootype.StaticMethod):
+            return unbox(self.holder.GetFunc(), T)
+        else:
+            assert T is ootype.Object
+            return ootype.cast_to_object(self.holder.GetFunc())
 
 class Label(GenLabel):
     def __init__(self, label, inputargs_gv):
@@ -373,6 +377,9 @@ class GraphBuilder(GenBuilder):
     def genop_oogetfield(self, fieldtoken, gv_obj):
         return self.branches[0].genop_oogetfield(fieldtoken, gv_obj)
 
+    def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
+        return self.branches[0].genop_oosetfield(fieldtoken, gv_obj, gv_value)
+
     def end(self):
         # render all the pending branches
         for branchbuilder in self.branches:
@@ -450,8 +457,9 @@ class BranchBuilder(GenBuilder):
         self.appendop(op)
         return op.gv_res()
 
-##    def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
-##        pass
+    def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
+        op = ops.SetField(self, gv_obj, gv_value, fieldtoken)
+        self.appendop(op)
 
     def enter_next_block(self, args_gv):
         for i in range(len(args_gv)):

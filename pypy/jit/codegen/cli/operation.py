@@ -177,6 +177,23 @@ class GetField(Operation):
         self.storeResult()
 
 
+class SetField(Operation):
+
+    def __init__(self, builder, gv_obj, gv_value, fieldname):
+        self.builder = builder
+        self.gv_obj = gv_obj
+        self.gv_value = gv_value
+        clitype = gv_obj.getCliType()
+        self.fieldinfo = clitype.GetField(fieldname)
+
+    def restype(self):
+        return None
+
+    def emit(self):
+        self.gv_obj.load(self.builder)
+        self.gv_value.load(self.builder)
+        self.builder.graphbuilder.il.Emit(OpCodes.Stfld, self.fieldinfo)
+
 def opcode2attrname(opcode):
     if opcode == 'ldc.r8 0':
         return 'Ldc_R8, 0' # XXX this is a hack

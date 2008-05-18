@@ -72,6 +72,7 @@ misc_ops = {
     'gc__disable_finalizers':    Ignore,
     'resume_point':             Ignore,
     'debug_assert':             Ignore,
+    'debug_print':              Ignore,
     'keepalive':                Ignore,
     'is_early_constant':        [PushPrimitive(ootype.Bool, False)],
     }
