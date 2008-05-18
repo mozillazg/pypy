@@ -22,7 +22,7 @@ EMULATION_CYCLES = 64
 #sys.setrecursionlimit(100000)
 
 
-def entry_point(argv):
+def entry_point(argv=None):
     if len(argv) > 1:
         filename = argv[1]
     else:
@@ -30,7 +30,8 @@ def entry_point(argv):
     gameBoy = GameBoy()
     #gameBoy.load_cartridge_file(ROM_PATH+"/rom4/rom4.gb")#filename)
     gameBoy.load_cartridge_file(str(filename))
-    gameBoy.emulate(EMULATION_CYCLES)
+    return gameBoy.emulate(EMULATION_CYCLES)
+    
 
 # _____ Define and setup target ___
 

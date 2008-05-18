@@ -80,8 +80,8 @@ class GameBoy(object):
         self.draw_logo()
 
     def get_cycles(self):
-        return min( self.video.get_cycles(), self.serial.get_cycles(),
-                    self.timer.get_cycles(), self.sound.get_cycles(),
+        return min(min(min(min( self.video.get_cycles(), self.serial.get_cycles()),
+                    self.timer.get_cycles()), self.sound.get_cycles()),
                     self.joypad.get_cycles())
 
     def emulate(self, ticks):
@@ -98,13 +98,13 @@ class GameBoy(object):
 
     def write(self, address, data):
         receiver = self.get_receiver(address)
-        if receiver==None:
+        if receiver is None:
             raise Exception("invalid read address given")
         receiver.write(address, data)
 
     def read(self, address):
         receiver = self.get_receiver(address)
-        if receiver==None:
+        if receiver is None:
             raise Exception("invalid read address given")
         return receiver.read(address)
 

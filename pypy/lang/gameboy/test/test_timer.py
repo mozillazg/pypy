@@ -12,7 +12,7 @@ def get_timer():
 
 
 def test_reset(timer=None):
-    if timer == None:
+    if timer is None:
         timer = get_timer()
     assert timer.div == 0
     assert timer.divider_cycles == constants.DIV_CLOCK

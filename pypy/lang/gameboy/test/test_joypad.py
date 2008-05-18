@@ -31,7 +31,7 @@ def test_number_to_bool_bin():
         assert number == i
     
 def number_to_bool_bin(number, size=None):
-    if size == None:
+    if size is None:
         if number == 0:
             return []
         size = int(math.ceil(math.log(number, 2)))+1
@@ -46,7 +46,7 @@ def number_to_bool_bin(number, size=None):
 def test_ini():
     value = 0xf
     button = Button(value)
-    assert button.opposite_button == None
+    assert button.opposite_button is None
     assert button.code_value == value
     assert button.is_pressed() == False
     
@@ -198,7 +198,7 @@ def toggle_multiple_test(driver, codeGetter, buttons):
 # TEST JOYPAD ------------------------------------------------------------------
 
 def test_reset(joypad=None):
-    if joypad == None:
+    if joypad is None:
         joypad = get_joypad()
     assert joypad.joyp == 0xF
     assert joypad.cycles == constants.JOYPAD_CLOCK

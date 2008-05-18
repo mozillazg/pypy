@@ -15,6 +15,7 @@ from pypy.objspace.std.stringtype import sliced, joined, wrapstr, wrapchar, \
      stringendswith, stringstartswith, joined2
 
 from pypy.objspace.std.formatting import mod_format
+from pypy.rlib.rstr import str_replace
 
 class W_StringObject(W_Object):
     from pypy.objspace.std.stringtype import str_typedef as typedef
@@ -474,32 +475,8 @@ def str_replace__String_String_String_ANY(space, w_self, w_sub, w_by, w_maxsplit
     sub = w_sub._value
     by = w_by._value
     maxsplit = space.int_w(w_maxsplit)
-    if maxsplit == 0:
-        return space.wrap(input)
-
     #print "from replace, input: %s, sub: %s, by: %s" % (input, sub, by)
-
-    if not sub:
-        upper = len(input)
-        if maxsplit > 0 and maxsplit < upper + 2:
-            upper = maxsplit - 1
-            assert upper >= 0
-        substrings = [""]
-        for i in range(upper):
-            c = input[i]
-            substrings.append(c)
-        substrings.append(input[upper:])
-        return space.wrap(by.join(substrings))
-    startidx = 0
-    substrings = []
-    foundidx = input.find(sub, startidx)
-    while foundidx >= 0 and maxsplit != 0:
-        substrings.append(input[startidx:foundidx])
-        startidx = foundidx + len(sub)        
-        foundidx = input.find(sub, startidx)
-        maxsplit = maxsplit - 1
-    substrings.append(input[startidx:])
-    return space.wrap(by.join(substrings))
+    return space.wrap(str_replace(input, sub, by, maxsplit))
 
 def _strip(space, w_self, w_chars, left, right):
     "internal function called by str_xstrip methods"

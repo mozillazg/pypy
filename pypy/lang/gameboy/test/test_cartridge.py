@@ -79,7 +79,7 @@ def test_cartridge_hasBattery():
     
 def test_cartridge_read():
     cartridge = get_cartridge()
-    assert cartridge.read() == None
+    assert cartridge.read() is None
     
     
 def test_cartridge_remove_write_read_Battery():

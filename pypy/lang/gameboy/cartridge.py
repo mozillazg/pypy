@@ -7,6 +7,8 @@ from pypy.rlib.streamio import open_file_as_stream
 
 from pypy.lang.gameboy.ram import iMemory
 
+from pypy.rlib.rstr import str_replace
+
 import os
 
 def has_cartridge_battery(self, cartridge_type):    
@@ -158,7 +160,7 @@ class Cartridge(object):
     """
     def __init__(self, file=None):
         self.reset()
-        if file != None:
+        if file is not None:
             self.load(file)
         
     def reset(self):
@@ -191,12 +193,12 @@ class Cartridge(object):
     
     def create_battery_file_path(self, cartridge_file_path):
         if cartridge_file_path.endswith(constants.CARTRIDGE_FILE_EXTENSION):
-            return cartridge_file_path.replace( \
+            return str_replace(cartridge_file_path,
                                         constants.CARTRIDGE_FILE_EXTENSION,
                                         constants.BATTERY_FILE_EXTENSION)
-        elif cartridge_file_path.endswith(\
+        elif cartridge_file_path.endswith(
                                 constants.CARTRIDGE_COLOR_FILE_EXTENSION):
-            return cartridge_file_path.replace( \
+            return str_replace(cartridge_file_path,
                                     constants.CARTRIDGE_COLOR_FILE_EXTENSION,
                                     constants.BATTERY_FILE_EXTENSION)
         else:
@@ -469,7 +471,7 @@ class MBC3(MBC):
             return self.clockLDays
         if self.clock_register == 0x0C:
             return self.clockLControl
-        raise Exception("invalid clockregister %i" % self.clock_register)
+        raise Exception("MBC*.read_clock_data invalid address %i")
     
     def write(self, address, data):
         if address <= 0x1FFF: # 0000-1FFF
@@ -586,12 +588,15 @@ class MBC5(MBC):
         
 
     def write(self, address, data):
-        if address <= self.write_ram_enable:  # 0000-1FFF
+        address = int(address)
+        if address <= self.ram_enable:  # 0000-1FFF
             self.write_ram_enable(address, data)
         elif address <= 0x2FFF:  # 2000-2FFF
-            self.rom_bank = ((self.rom_bank & (0x01 << 22)) + ((data & 0xFF) << 14)) & self.rom_size
+            self.rom_bank = ((self.rom_bank & (0x01 << 22)) + \
+                             ((data & 0xFF) << 14)) & self.rom_size
         elif address <= 0x3FFF: # 3000-3FFF
-            self.rom_bank = ((self.rom_bank & (0xFF << 14)) + ((data & 0x01) << 22)) & self.rom_size
+            self.rom_bank = ((self.rom_bank & (0xFF << 14)) + \
+                             ((data & 0x01) << 22)) & self.rom_size
         elif address <= 0x4FFF:  # 4000-4FFF
             self.write_ram_bank(address, data)
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable:  # A000-BFFF
