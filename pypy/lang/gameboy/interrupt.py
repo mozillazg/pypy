@@ -60,7 +60,7 @@ class Interrupt(iMemory):
     def is_pending(self, mask=None):
         if not self.enable:
             return False
-        if mask==None:
+        if mask is None:
             return self.v_blank.is_pending()
         elif self.v_blank.is_pending():
             return self.mask_mapping[mask].is_pending()

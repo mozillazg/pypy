@@ -101,12 +101,12 @@ class JoypadDriverImplementation(JoypadDriver):
         
     def on_key_press(self, symbol, modifiers): 
         pressButtonFunction = self.get_button_handler(symbol, modifiers)
-        if pressButtonFunction != None:
+        if pressButtonFunction is not None:
             pressButtonFunction(True)
     
     def on_key_release(self, symbol, modifiers): 
         pressButtonFunction = self.get_button_handler(symbol, modifiers)
-        if pressButtonFunction != None:
+        if pressButtonFunction is not None:
             pressButtonFunction(False)
             
     def get_button_handler(self, symbol, modifiers):

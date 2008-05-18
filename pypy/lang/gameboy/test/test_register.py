@@ -22,7 +22,7 @@ def get_cpu(new=False):
         cpu.set_rom([0]*0xFFFF);
         return cpu
     global TEST_CPU
-    if TEST_CPU == None:
+    if TEST_CPU is None:
         TEST_CPU = get_cpu(True)
     TEST_CPU.reset()
     return TEST_CPU
