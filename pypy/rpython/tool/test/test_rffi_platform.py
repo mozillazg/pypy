@@ -218,11 +218,12 @@ def test_has():
     # has() should also not crash if it is given an invalid #include
     assert not rffi_platform.has("x", "#include <some/path/which/cannot/exist>")
 
-def test_check_eci():
+def test_verify_eci():
     eci = ExternalCompilationInfo()
-    assert rffi_platform.check_eci(eci)
+    rffi_platform.verify_eci(eci)
     eci = ExternalCompilationInfo(libraries=['some_name_that_doesnt_exist_'])
-    assert not rffi_platform.check_eci(eci)
+    py.test.raises(rffi_platform.CompilationError,
+                   rffi_platform.verify_eci, eci)
 
 def test_sizeof():
     assert rffi_platform.sizeof("char", ExternalCompilationInfo()) == 1

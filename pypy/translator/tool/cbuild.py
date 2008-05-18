@@ -463,7 +463,10 @@ class ProfOpt(object):
         finally:
             compiler.compile_extra.pop()
             compiler.link_extra.pop()
-            
+
+class CompilationError(Exception):
+    pass
+
 class CCompiler:
 
     def __init__(self, cfilenames, eci, outputfilename=None,
@@ -507,6 +510,7 @@ class CCompiler:
         self.eci = eci
 
     def build(self, noerr=False):
+        import distutils.errors
         basename = self.outputfilename.new(ext='')
         data = ''
         try:
@@ -537,6 +541,13 @@ class CCompiler:
                     fdump = basename.new(ext='errors').open("w")
                     fdump.write(data)
                     fdump.close()
+        except (distutils.errors.CompileError,
+                distutils.errors.LinkError), e:
+            data = data.rstrip()
+            if data:
+                data += '\n'
+            data += str(e)
+            raise CompilationError(data)
         except:
             if not noerr:
                 print >>sys.stderr, data
@@ -577,7 +588,6 @@ def build_executable(*args, **kwds):
     return str(compiler.outputfilename)
 
 def check_boehm_presence():
-    import distutils.errors
     from pypy.tool.udir import udir
     try:
         cfile = udir.join('check_boehm.c')
@@ -596,14 +606,12 @@ int main() {
         else:
             eci = ExternalCompilationInfo(libraries=['gc'])
         build_executable([cfname], eci, noerr=True)
-    except (distutils.errors.CompileError,
-            distutils.errors.LinkError):
+    except CompilationError:
         return False
     else:
         return True
 
 def check_under_under_thread():
-    import distutils.errors
     from pypy.tool.udir import udir
     cfile = py.path.local(autopath.this_dir).join('__thread_test.c')
     fsource = cfile.open('r')
@@ -617,8 +625,7 @@ def check_under_under_thread():
        exe = build_executable([str(cfile)], ExternalCompilationInfo(),
                               noerr=True)
        py.process.cmdexec(exe)
-    except (distutils.errors.CompileError,
-            distutils.errors.LinkError,
+    except (CompilationError,
             py.error.Error):
         return False
     else:
