@@ -495,15 +495,15 @@ def test_inc():
     a = cpu.a
     a.set(0xFF)
     cpu.f.c_flag = True
-    cpu.inc(a.get, a.set)
+    cpu.inc(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=True, h_flag=True, c_flag=True)
     
     a.set(0x01)
-    cpu.inc(a.get, a.set)
+    cpu.inc(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=False, h_flag=False, c_flag=True)
     
     a.set(0x0F)
-    cpu.inc(a.get, a.set)
+    cpu.inc(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=False, h_flag=True, c_flag=True)
 
 # inc_B C D E H L  A
@@ -541,11 +541,11 @@ def test_dec():
     a = cpu.a
     a.set(1)
     cpu.f.c_flag = True
-    cpu.dec(a.get, a.set)
+    cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=True, h_flag=False, n_flag=True, c_flag=True)
     
     a.set(0x0F+1)
-    cpu.dec(a.get, a.set)
+    cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True, c_flag=True)
     
 
@@ -774,13 +774,13 @@ def test_add_flags():
     
     cpu.a.set(0)
     cpu.b.set(0)
-    cpu.add_a(cpu.b.get, cpu.b.set)
+    cpu.add_a(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=True, h_flag=False)
     
     cpu.reset()
     cpu.a.set(0x0F)
     cpu.b.set(0x01)
-    cpu.add_a(cpu.b.get, cpu.b.set)
+    cpu.add_a(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False, h_flag=True)
     
     
@@ -815,7 +815,7 @@ def test_adc_flags():
     cpu.reset()
     a.set(0)
     b.set(0)
-    cpu.add_with_carry(b.get, b.set)
+    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
     assert_default_registers(cpu, a=0, f=None)
     assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False)
     
@@ -823,14 +823,14 @@ def test_adc_flags():
     a.set(0)
     b.set(0)
     cpu.f.c_flag = True
-    cpu.add_with_carry(b.get, b.set)
+    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
     assert_default_registers(cpu, a=1, f=None)
     assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=False)
     
     cpu.reset()
     a.set(0xF0)
     b.set(0xFF)
-    cpu.add_with_carry(b.get, b.set)
+    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
     # overflow for a
     assert_default_registers(cpu, a=0xEF, bc=None, f=None)
     assert_default_flags(cpu, z_flag=False, c_flag=True, h_flag=False)
@@ -838,7 +838,7 @@ def test_adc_flags():
     cpu.reset()
     a.set(0x0F)
     b.set(0x01)
-    cpu.add_with_carry(b.get, b.set)
+    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
     assert_default_registers(cpu, a=0x10, f=None, bc=None)
     assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=True)
     
@@ -901,7 +901,7 @@ def test_sbc_flags():
     cpu.reset()
     a.set(value)
     b.set(value)
-    cpu.subtract_with_carry(b.get, b.set)
+    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
     assert_default_registers(cpu, a=0, bc=None, f=None)
     assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False, n_flag=True)
     
@@ -909,14 +909,14 @@ def test_sbc_flags():
     a.set(value)
     b.set(value-1)
     cpu.f.c_flag = True
-    cpu.subtract_with_carry(b.get, b.set)
+    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
     assert_default_registers(cpu, a=0, bc=None, f=None)
     assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False, n_flag=True)
     
     cpu.reset()
     a.set(0x20)
     b.set(0x01)
-    cpu.subtract_with_carry(b.get, b.set)
+    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
     # overflow for a
     assert_default_registers(cpu, a=0x1F, bc=None, f=None)
     assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=True, n_flag=True)
@@ -959,13 +959,13 @@ def test_and_flags():
     value = 0x12
     cpu.a.set(value)
     cpu.b.set(value)
-    cpu.AND(cpu.b.get, cpu.b.set)
+    cpu.AND(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False)
     
     cpu.reset()
     cpu.a.set(value)
     cpu.b.set(0)
-    cpu.AND(cpu.b.get, cpu.b.set)
+    cpu.AND(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=True)
     
 # and_A_B to and_A_A
@@ -1000,13 +1000,13 @@ def test_xor_flags():
     value = 0x12
     cpu.a.set(value)
     cpu.b.set(value)
-    cpu.XOR(cpu.b.get, cpu.b.set)
+    cpu.XOR(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=True)
     
     cpu.reset()
     cpu.a.set(value)
     cpu.b.set(value+1)
-    cpu.XOR(cpu.b.get, cpu.b.set)
+    cpu.XOR(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False)
     
 # xor_A_B to xor_A_A
@@ -1040,13 +1040,13 @@ def test_or_flags():
     value = 0x12
     cpu.a.set(value)
     cpu.b.set(value)
-    cpu.OR(cpu.b.get, cpu.b.set)
+    cpu.OR(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False)
     
     cpu.reset()
     cpu.a.set(0)
     cpu.b.set(0)
-    cpu.OR(cpu.b.get, cpu.b.set)
+    cpu.OR(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=True)
     
 # or_A_B to or_A_A
@@ -1080,19 +1080,19 @@ def test_cp_flags():
     value = 0x12
     cpu.a.set(value)
     cpu.b.set(value)
-    cpu.compare_a(cpu.b.get, cpu.b.set)
+    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=True, n_flag=True)
     
     cpu.reset()
     cpu.a.set(value)
     cpu.b.set(0)
-    cpu.compare_a(cpu.b.get, cpu.b.set)
+    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False, n_flag=True)
     
     cpu.reset()
     cpu.a.set(0xF0)
     cpu.b.set(0x01)
-    cpu.compare_a(cpu.b.get, cpu.b.set)
+    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True)
     
                          

@@ -537,19 +537,19 @@ class Video(iMemory):
         for i in range(0, 7):
             color = pattern >> (6-i)
             if (color & 0x0202) != 0:
-                caller(x+1, color, mask)
+                caller.call(x+1, color, mask)
         color = pattern << 1
         if (color & 0x0202) != 0:
-            caller(x+7, color, mask)
+            caller.call(x+7, color, mask)
         
     def draw_object_flipped(self, x, pattern, mask, caller):
         color = pattern << 1
         if (color & 0x0202) != 0:
-            caller(x, color, mask)
+            caller.call(x, color, mask)
         for i in range(0, 7):
             color = pattern >> i
             if (color & 0x0202) != 0:
-                caller(x + i + 1, color, mask)
+                caller.call(x + i + 1, color, mask)
             
     def draw_tile(self, x, address):
         pattern =  self.get_pattern(address)
@@ -557,14 +557,14 @@ class Video(iMemory):
             self.line[x + i] = (pattern >> (7-i)) & 0x0101
 
     def draw_object_tile(self, x, address, flags):
-        self.draw_object(set_tile_line_call_wrapper(self).call, x, address, \
+        self.draw_object(set_tile_line_call_wrapper(self), x, address, \
                          flags)
         
     def set_tile_line(self, pos, color, mask):
         self.line[pos] |= color | mask
 
     def draw_overlapped_object_tile(self, x, address, flags):
-        self.draw_object(set_overlapped_object_line_call_wrapper(self).call, \
+        self.draw_object(set_overlapped_object_line_call_wrapper(self), \
                          x, address, flags)
         
     def set_overlapped_object_line(self, pos, color, mask):
