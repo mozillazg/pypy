@@ -347,7 +347,7 @@ class ContextPartShadow(AbstractShadow):
     def s_sender(self):
         from pypy.lang.smalltalk import objtable
         w_sender = self.w_sender()
-        if w_sender == objtable.w_nil:
+        if w_sender.is_same_object(objtable.w_nil):
             return None
         else:
             return w_sender.as_context_get_shadow()
