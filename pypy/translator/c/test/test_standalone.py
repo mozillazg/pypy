@@ -55,8 +55,6 @@ def test_print():
     # gives the strings unquoted in the list
 
 def test_counters():
-    if sys.platform == 'win32':
-        py.test.skip("instrument counters support is unix only for now")
     from pypy.rpython.lltypesystem import lltype
     from pypy.rpython.lltypesystem.lloperation import llop
     def entry_point(argv):
@@ -139,8 +137,6 @@ def test_frexp():
     assert map(float, data.split()) == [0.0, 0.0]
 
 def test_profopt():
-    if sys.platform == 'win32':
-        py.test.skip("instrumentation support is unix only for now")
     def add(a,b):
         return a + b - b + b - b + b - b + b - b + b - b + b - b + b
     def entry_point(argv):
