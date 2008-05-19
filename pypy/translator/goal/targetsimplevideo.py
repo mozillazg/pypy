@@ -9,6 +9,7 @@ def entry_point(argv=None):
     RSDL.Init(RSDL.INIT_VIDEO) >= 0
     screen = RSDL.SetVideoMode(WIDTH, HEIGHT, 32, 0)
     event = lltype.malloc(RSDL.Event, flavor='raw')
+    paintpattern = 0
     try:
         while True:
             ok = RSDL.WaitEvent(event)
@@ -19,9 +20,12 @@ def entry_point(argv=None):
                 if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
                     print 'Escape key'
                     break
-            update_screen(screen)
+            paintpattern += 1
+            update_screen(screen, paintpattern)
     finally:
         lltype.free(event, flavor='raw')
+
+    return 0
         
 # -----------------------------------------------------------------------------
 
@@ -67,17 +71,16 @@ def stripes_m(screen, cola, colb):
 
 # -----------------------------------------------------------------------------
 
-pattern = (chess, white, black, stripes_v, stripes_m)
-current_pattern_id = 0
-def update_screen(screen):
-    fmt = self.screen.c_format
+pattern = [chess, white, black, stripes_v, stripes_m]
+pl = len(pattern)
+def update_screen(screen, paintpattern):
+    fmt = screen.c_format
     white = RSDL.MapRGB(fmt, 255, 255, 255)
     black = RSDL.MapRGB(fmt, 0, 0, 0)
-    RSDL.LockSurface(self.screen)
-    pattern[current_pattern_id % len(pattern)](screen, black, white)
-    RSDL.UnlockSurface(self.screen)
-    RSDL.Flip(self.screen)
-    current_pattern_id += 1
+    RSDL.LockSurface(screen)
+    pattern[paintpattern % pl](screen, black, white)
+    RSDL.UnlockSurface(screen)
+    RSDL.Flip(screen)
     
     
 # -----------------------------------------------------------------------------
