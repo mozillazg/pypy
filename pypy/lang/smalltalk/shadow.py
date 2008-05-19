@@ -152,6 +152,7 @@ class ClassShadow(AbstractShadow):
 
     def guess_class_name(self):
         w_self = self.w_self()
+        w_name = None
 
         # read the name
         if w_self.size() > constants.CLASS_NAME_INDEX:

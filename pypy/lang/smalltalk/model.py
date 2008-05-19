@@ -302,6 +302,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         if not isinstance(w_other, W_PointersObject):
             return False
         self._vars, w_other._vars = w_other._vars, self._vars
+        self._shadow, w_other._shadow = w_other._shadow, self._shadow
         return W_AbstractObjectWithClassReference.become(self, w_other)
         
 
