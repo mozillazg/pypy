@@ -3,7 +3,13 @@
 
 #ifndef __PYPY_THREAD_H
 #define __PYPY_THREAD_H
-#include "Python.h"
+#include <assert.h>
+
+#ifdef _WIN32
+#include "thread_nt.h"
+#else
+
+#include <unistd.h>
 
 #ifndef _POSIX_THREADS
 /* This means pthreads are not implemented in libc headers, hence the macro
@@ -18,9 +24,7 @@
 #include "thread_pthread.h"
 #endif
 
-#ifdef NT_THREADS
-#include "thread_nt.h"
-#endif
+#endif /* !_WIN32 */
 
 #ifdef USE___THREAD
 
