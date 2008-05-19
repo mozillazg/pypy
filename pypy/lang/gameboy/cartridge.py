@@ -7,7 +7,7 @@ from pypy.rlib.streamio import open_file_as_stream
 
 from pypy.lang.gameboy.ram import iMemory
 
-from pypy.rlib.rstr import str_replace
+#from pypy.rlib.rstr import str_replace
 
 import os
 
