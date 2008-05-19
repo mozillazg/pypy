@@ -87,7 +87,7 @@ class W_Object(object):
         """Return internal representation of Squeak class."""
         return self.getclass().as_class_get_shadow()
 
-    def equals(self, other):
+    def is_same_object(self, other):
         """Compare object identity"""
         return self is other
 
@@ -118,7 +118,7 @@ class W_SmallInteger(W_Object):
     def __repr__(self):
         return "W_SmallInteger(%d)" % self.value
 
-    def equals(self, other):
+    def is_same_object(self, other):
         # TODO what is correct terminology to say that identity is by value?
         if not isinstance(other, W_SmallInteger):
             return False
@@ -143,7 +143,7 @@ class W_Float(W_Object):
     def __repr__(self):
         return "W_Float(%f)" % self.value
 
-    def equals(self, other):
+    def is_same_object(self, other):
         if not isinstance(other, W_Float):
             return False
         # TODO is that correct in Squeak?
@@ -345,7 +345,7 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
                 return False
         return True
 
-    def equals(self, other):
+    def is_same_object(self, other):
         if not isinstance(other, W_BytesObject):
             return False
         return self.bytes == other.bytes

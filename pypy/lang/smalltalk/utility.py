@@ -13,11 +13,11 @@ def unwrap_int(w_value):
 def unwrap_char(w_char):
     from pypy.lang.smalltalk import classtable, objtable, constants
     w_class = w_char.getclass()
-    if w_class is not classtable.w_Character:
+    if not w_class.is_same_object(classtable.w_Character):
         raise UnwrappingError("expected character, got %s" % (w_class, ))
     w_ord = w_char.fetch(constants.CHARACTER_VALUE_INDEX)
     w_class = w_ord.getclass()
-    if w_class is not classtable.w_SmallInteger:
+    if not w_class.is_same_object(classtable.w_SmallInteger):
         raise UnwrappingError("expected smallint from character, got %s" % (w_class, ))
 
     assert isinstance(w_ord, model.W_SmallInteger)

@@ -74,7 +74,7 @@ class ProcessWrapper(LinkWrapper):
             self.put_to_sleep()
 
     def is_active_process(self):
-        return self.w_self is scheduler().active_process()
+        return self.w_self.is_same_object(scheduler().active_process())
 
     def suspend(self, interp):
         if self.is_active_process():
@@ -104,7 +104,7 @@ class LinkedListWrapper(Wrapper):
         from pypy.lang.smalltalk import objtable
         w_first = self.first_link()
         w_last = self.last_link()
-        if w_first is w_last:
+        if w_first.is_same_object(w_last):
             self.store_first_link(objtable.w_nil)
             self.store_last_link(objtable.w_nil)
         else:
@@ -120,12 +120,12 @@ class LinkedListWrapper(Wrapper):
         else:
             current = LinkWrapper(self.first_link())
             w_next = current.next_link()
-            while w_next is not objtable.w_nil:
-                if w_next is w_link:
+            while not w_next.is_same_object(objtable.w_nil):
+                if w_next.is_same_object(w_link):
                     LinkWrapper(w_link).store_next_link(objtable.w_nil)
                     w_tail = LinkWrapper(w_next).next_link()
                     current.store_next_link(w_tail)
-                    if w_tail is objtable.w_nil:
+                    if w_tail.is_same_object(objtable.w_nil):
                         self.store_last_link(current.w_self)
                     return
                 current = LinkWrapper(w_next)

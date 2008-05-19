@@ -143,7 +143,7 @@ class ClassShadow(AbstractShadow):
         assert isinstance(self.w_methoddict, model.W_PointersObject)
 
         w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
-        if w_superclass is objtable.w_nil:
+        if w_superclass.is_same_object(objtable.w_nil):
             self.w_superclass = None
         else:
             self.w_superclass = w_superclass
@@ -279,7 +279,7 @@ class MethodDictionaryShadow(AbstractShadow):
         self.methoddict = {}
         for i in range(size):
             w_selector = self.w_self()._vars[constants.METHODDICT_NAMES_INDEX+i]
-            if w_selector is not objtable.w_nil:
+            if not w_selector.is_same_object(objtable.w_nil):
                 if not isinstance(w_selector, model.W_BytesObject):
                     raise ClassShadowError("bogus selector in method dict")
                 selector = w_selector.as_string()
