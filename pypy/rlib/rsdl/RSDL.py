@@ -201,3 +201,11 @@ SetAlpha         = external('SDL_SetAlpha',
 ShowCursor       = external('SDL_ShowCursor',
                             [rffi.INT],
                             rffi.INT)
+
+Delay            = external('SDL_Delay',
+                            [Uint32],
+                            lltype.Void)
+
+UpdateRect       = external('SDL_UpdateRect',
+                            [SurfacePtr, rffi.INT, rffi.INT, rffi.INT],
+                            lltype.Void)

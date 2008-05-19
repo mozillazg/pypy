@@ -1,6 +1,6 @@
 
 import py, sys
-from pypy.rlib.rsdl import RSDL
+from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy import conftest
@@ -159,6 +159,26 @@ class TestVideo:
         RSDL.ShowCursor(RSDL.ENABLE)
         self.check("Is the cursor shown? ")
         
+    def test_bit_pattern(self):
+        HEIGHT = WIDTH = 10
+        fmt = self.screen.c_format
+        white = RSDL.MapRGB(fmt, 255, 255, 255)
+        black = RSDL.MapRGB(fmt, 0, 0, 0)
+        RSDL.LockSurface(self.screen)
+        for i in xrange(WIDTH):
+            for j in xrange(HEIGHT):
+                k = j*WIDTH + i
+                if k % 2:
+                    c = white
+                else:
+                    c = black
+                    
+                RSDL_helper.set_pixel(self.screen, i, j, c)
+#
+        RSDL.UnlockSurface(self.screen)
+        RSDL.Flip(self.screen)
+        self.check("Upper left corner 10x10 field with vertical black/white stripes")
+
     def test_blit_rect(self):
         surface = RSDL.CreateRGBSurface(0, 150, 50, 32,
                                         r_uint(0x000000FF),
@@ -187,6 +207,7 @@ class TestVideo:
             RSDL.Flip(self.screen)
         finally:
             lltype.free(dstrect, flavor='raw')
+            lltype.free(paintrect, flavor='raw')
         RSDL.FreeSurface(surface)
         self.check("Half Red/Orange rectangle(150px * 50px) at the top left, 10 pixels from the border")
 
