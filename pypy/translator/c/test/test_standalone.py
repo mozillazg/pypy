@@ -4,9 +4,10 @@ import sys, os
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.translator.translator import TranslationContext
 from pypy.translator.backendopt import all
-from pypy.translator.c.genc import CStandaloneBuilder
+from pypy.translator.c.genc import CStandaloneBuilder, ExternalCompilationInfo
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.tool.udir import udir
+from pypy.tool.autopath import pypydir
 
 
 def test_hello_world():
@@ -190,3 +191,42 @@ def test_standalone_large_files():
     cbuilder.compile()
     data = cbuilder.cmdexec('hi there')
     assert data.strip() == "OK"
+
+def test_separate_files():
+    # One file in translator/c/src
+    fname = py.path.local(pypydir).join(
+        'translator', 'c', 'src', 'll_strtod.h')
+    
+    # One file in (another) subdir of the temp directory
+    dirname = udir.join("test_dir").ensure(dir=1)
+    fname2 = dirname.join("test_genc.c")
+    fname2.write("""
+    void f() {
+        LL_strtod_formatd("%5f", 12.3);
+    }""")
+
+    files = [fname, fname2]
+
+    def entry_point(argv):
+        return 0
+
+    t = TranslationContext()
+    t.buildannotator().build_types(entry_point, [s_list_of_strings])
+    t.buildrtyper().specialize()
+
+    cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+    cbuilder.eci = cbuilder.eci.merge(
+        ExternalCompilationInfo(separate_module_files=files))
+    cbuilder.generate_source()
+
+    makefile = udir.join(cbuilder.modulename, 'Makefile').read()
+
+    # generated files are compiled in the same directory
+    assert "  ../test_dir/test_genc.c" in makefile
+    assert "  ../test_dir/test_genc.o" in makefile
+
+    # but files from pypy source dir must be copied
+    assert "translator/c/src" not in makefile
+    assert "  ll_strtod.h" in makefile
+    assert "  ll_strtod.o" in makefile
+
