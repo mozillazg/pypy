@@ -128,41 +128,41 @@ def test_compiledmethod_atput0():
     assert utility.unwrap_int(w_method.at0(13)) == ord('b')
     assert utility.unwrap_int(w_method.at0(14)) == ord('c')
 
-def test_equals(w_o1=model.W_PointersObject(None,0), w_o2=None):
+def test_is_same_object(w_o1=model.W_PointersObject(None,0), w_o2=None):
     if w_o2 is None:
         w_o2 = w_o1
-    assert w_o1.equals(w_o2)
-    assert w_o2.equals(w_o1)
+    assert w_o1.is_same_object(w_o2)
+    assert w_o2.is_same_object(w_o1)
     
-def test_not_equals(w_o1=model.W_PointersObject(None,0),w_o2=model.W_PointersObject(None,0)):
-    assert not w_o1.equals(w_o2)
-    assert not w_o2.equals(w_o1)
+def test_not_is_same_object(w_o1=model.W_PointersObject(None,0),w_o2=model.W_PointersObject(None,0)):
+    assert not w_o1.is_same_object(w_o2)
+    assert not w_o2.is_same_object(w_o1)
     w_o2 = model.W_SmallInteger(2)
-    assert not w_o1.equals(w_o2)
-    assert not w_o2.equals(w_o1)
+    assert not w_o1.is_same_object(w_o2)
+    assert not w_o2.is_same_object(w_o1)
     w_o2 = model.W_Float(5.5)
-    assert not w_o1.equals(w_o2)
-    assert not w_o2.equals(w_o1)
+    assert not w_o1.is_same_object(w_o2)
+    assert not w_o2.is_same_object(w_o1)
 
-def test_intfloat_equals():
-    test_equals(model.W_SmallInteger(1), model.W_SmallInteger(1))
-    test_equals(model.W_SmallInteger(100), model.W_SmallInteger(100))
-    test_equals(model.W_Float(1.100), model.W_Float(1.100))
+def test_intfloat_is_same_object():
+    test_is_same_object(model.W_SmallInteger(1), model.W_SmallInteger(1))
+    test_is_same_object(model.W_SmallInteger(100), model.W_SmallInteger(100))
+    test_is_same_object(model.W_Float(1.100), model.W_Float(1.100))
 
-def test_intfloat_notequals():
-    test_not_equals(model.W_SmallInteger(1), model.W_Float(1))
-    test_not_equals(model.W_Float(100), model.W_SmallInteger(100))
-    test_not_equals(model.W_Float(1.100), model.W_Float(1.200))
-    test_not_equals(model.W_SmallInteger(101), model.W_SmallInteger(100))
+def test_intfloat_notis_same_object():
+    test_not_is_same_object(model.W_SmallInteger(1), model.W_Float(1))
+    test_not_is_same_object(model.W_Float(100), model.W_SmallInteger(100))
+    test_not_is_same_object(model.W_Float(1.100), model.W_Float(1.200))
+    test_not_is_same_object(model.W_SmallInteger(101), model.W_SmallInteger(100))
 
-def test_charequals():
-    test_equals(utility.wrap_char('a'), utility.wrap_char('a'))
-    test_equals(utility.wrap_char('d'), utility.wrap_char('d'))
+def test_charis_same_object():
+    test_is_same_object(utility.wrap_char('a'), utility.wrap_char('a'))
+    test_is_same_object(utility.wrap_char('d'), utility.wrap_char('d'))
 
-def test_not_charequals():
-    test_not_equals(utility.wrap_char('a'), utility.wrap_char('d'))
-    test_not_equals(utility.wrap_char('d'), utility.wrap_int(3))
-    test_not_equals(utility.wrap_char('d'), utility.wrap_float(3.0))
+def test_not_charis_same_object():
+    test_not_is_same_object(utility.wrap_char('a'), utility.wrap_char('d'))
+    test_not_is_same_object(utility.wrap_char('d'), utility.wrap_int(3))
+    test_not_is_same_object(utility.wrap_char('d'), utility.wrap_float(3.0))
 
 def test_become_pointers():
     w_clsa = mockclass(3)

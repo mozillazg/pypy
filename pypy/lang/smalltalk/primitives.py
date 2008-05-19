@@ -449,7 +449,7 @@ CHANGE_CLASS = 115      # Blue Book: primitiveOopsLeft
 
 @expose_primitive(EQUIVALENT, unwrap_spec=[object, object])
 def func(interp, w_arg, w_rcvr):
-    return utility.wrap_bool(w_arg.equals(w_rcvr))
+    return utility.wrap_bool(w_arg.is_same_object(w_rcvr))
 
 @expose_primitive(CLASS, unwrap_spec=[object])
 def func(interp, w_obj):
