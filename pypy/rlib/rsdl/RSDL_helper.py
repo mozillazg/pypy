@@ -74,23 +74,22 @@ def set_pixel(image, x, y, pixel):
     # Here p is the address to the pixel we want to retrieve
     p = rffi.ptradd(image.c_pixels, y * pitch + x * bpp)
     if bpp == 1:
-        p[0] = pixel
+        p[0] = rffi.cast(rffi.UCHAR,pixel)
     elif bpp == 2:
         p = rffi.cast(RSDL.Uint16P, p)
-        p[0] = pixel
+        p[0] = rffi.cast(RSDL.Uint16,pixel) 
     elif bpp == 3:
-        p = rffi.cast(lltype.Signed, p)
         if RSDL.BYTEORDER == RSDL.BIG_ENDIAN:
-            p[0] = (pixel >> 16) & 0xFF
-            p[1] = (pixel >> 8 ) & 0xFF
-            p[2] = pixel & 0xFF
+            p[0] = rffi.cast(rffi.UCHAR,(pixel >> 16) & 0xFF)
+            p[1] = rffi.cast(rffi.UCHAR,(pixel >> 8 ) & 0xFF)
+            p[2] = rffi.cast(rffi.UCHAR,pixel & 0xFF)
         else:
-            p[0] = pixel & 0xFF
-            p[1] = (pixel >> 8 ) & 0xFF
-            p[2] = (pixel >> 16) & 0xFF
+            p[0] = rffi.cast(rffi.UCHAR,pixel & 0xFF)
+            p[1] = rffi.cast(rffi.UCHAR,(pixel >> 8 ) & 0xFF)
+            p[2] = rffi.cast(rffi.UCHAR,(pixel >> 16) & 0xFF)
     elif bpp == 4:
         p = rffi.cast(RSDL.Uint32P, p)
-        p[0] = pixel
+        p[0] = rffi.cast(RSDL.Uint32, pixel)
     else:
         raise ValueError("bad BytesPerPixel")
 
