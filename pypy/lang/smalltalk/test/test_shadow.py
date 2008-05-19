@@ -49,7 +49,7 @@ def basicshape(name, format, kind, varsized, instsize):
     assert classshadow.isvariable() == varsized
     assert classshadow.instsize() == instsize
     assert classshadow.name == name
-    assert classshadow.s_superclass is w_Object.as_class_get_shadow()
+    assert classshadow.s_superclass() is w_Object.as_class_get_shadow()
 
 def test_basic_shape():
     yield basicshape, "Empty",        0x02,    shadow.POINTERS, False, 0

@@ -197,7 +197,7 @@ class __extend__(ContextPartShadow):
         assert isinstance(w_compiledin, model.W_PointersObject)
         s_compiledin = w_compiledin.as_class_get_shadow()
         self._sendSelector(selector, argcount, interp, self.w_receiver(),
-                           s_compiledin.s_superclass)
+                           s_compiledin.s_superclass())
 
     def _sendSelector(self, selector, argcount, interp,
                       receiver, receiverclassshadow):

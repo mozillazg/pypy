@@ -60,7 +60,7 @@ def test_method_lookup():
     shadow.installmethod("bar", 2)
     w_subclass = mockclass(0, w_superclass=w_class)
     subshadow = w_subclass.as_class_get_shadow()
-    assert subshadow.s_superclass is shadow
+    assert subshadow.s_superclass() is shadow
     subshadow.installmethod("foo", 3)
     shadow.initialize_methoddict()
     subshadow.initialize_methoddict()
