@@ -8,7 +8,7 @@ from pypy.lang.smalltalk import model
 def wrap_char_table():
     global w_charactertable
     def bld_char(i):
-        w_cinst = classtable.w_Character.as_class_get_shadow().new(store=False)
+        w_cinst = classtable.w_Character.as_class_get_shadow().new()
         w_cinst.store(constants.CHARACTER_VALUE_INDEX,
                       model.W_SmallInteger(i))
         return w_cinst
@@ -18,8 +18,8 @@ def wrap_char_table():
 
 wrap_char_table()
 
-w_true  = classtable.classtable['w_True'].as_class_get_shadow().new(store=False)
-w_false = classtable.classtable['w_False'].as_class_get_shadow().new(store=False)
+w_true  = classtable.classtable['w_True'].as_class_get_shadow().new()
+w_false = classtable.classtable['w_False'].as_class_get_shadow().new()
 w_minus_one = model.W_SmallInteger(-1)
 w_zero = model.W_SmallInteger(0)
 w_one = model.W_SmallInteger(1)
@@ -32,8 +32,6 @@ w_nil = model.w_nil
 w_nil.w_class = classtable.classtable['w_UndefinedObject']
 
 objtable = {}
-# XXX Used for non-PyPy way of doing become.
-objects = []
 
 for name in constants.objects_in_special_object_table:
     name = "w_" + name

@@ -135,40 +135,44 @@ class ClassShadow(AbstractShadow):
             self.instance_kind = COMPILED_METHOD
         else:
             raise ClassShadowError("unknown format %d" % (format,))
-        # read the name
-        if w_self.size() > constants.CLASS_NAME_INDEX:
-            w_name = w_self._vars[constants.CLASS_NAME_INDEX]
-        else:
-            w_name = None
 
-        # Some heuristic to find the classname
-        # Only used for debugging
-        # XXX This is highly experimental XXX
-        # if the name-pos of class is not bytesobject,
-        # we are probably holding a metaclass instead of a class.
-        # metaclasses hold a pointer to the real class in the last
-        # slot. This is pos 6 in mini.image and higher in squeak3.9
-        if w_name is None:
-            w_realclass = w_self._vars[w_self.size() - 1]
-            assert isinstance(w_realclass, model.W_PointersObject)
-            if w_realclass.size() > constants.CLASS_NAME_INDEX:
-                w_name = w_realclass._vars[constants.CLASS_NAME_INDEX]
-        if isinstance(w_name, model.W_BytesObject):
-            self.name = w_name.as_string()
+        self.guess_class_name()
+
         # read the methoddict
         self.w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
         assert isinstance(self.w_methoddict, model.W_PointersObject)
+
         w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
         if w_superclass is objtable.w_nil:
             self.w_superclass = None
         else:
             self.w_superclass = w_superclass
+
         AbstractShadow.update_shadow(self)
 
-    # XXX check better way to store objects
-    # XXX storing is necessary for "become" which loops over all pointers
-    # XXX and replaces old pointers with new pointers
-    def new(self, extrasize=0, store=True):
+    def guess_class_name(self):
+        w_self = self.w_self()
+
+        # read the name
+        if w_self.size() > constants.CLASS_NAME_INDEX:
+            w_name = w_self._vars[constants.CLASS_NAME_INDEX]
+        else:
+            # Some heuristic to find the classname
+            # Only used for debugging
+            # XXX This is highly experimental XXX
+            # if the name-pos of class is not bytesobject,
+            # we are probably holding a metaclass instead of a class.
+            # metaclasses hold a pointer to the real class in the last
+            # slot. This is pos 6 in mini.image and higher in squeak3.9
+            w_realclass = w_self._vars[w_self.size() - 1]
+            assert isinstance(w_realclass, model.W_PointersObject)
+            if w_realclass.size() > constants.CLASS_NAME_INDEX:
+                w_name = w_realclass._vars[constants.CLASS_NAME_INDEX]
+
+        if isinstance(w_name, model.W_BytesObject):
+            self.name = w_name.as_string()
+
+    def new(self, extrasize=0):
         from pypy.lang.smalltalk import classtable
         w_cls = self.w_self()
         if self.instance_kind == POINTERS:
@@ -181,10 +185,6 @@ class ClassShadow(AbstractShadow):
             w_new = model.W_CompiledMethod(extrasize)
         else:
             raise NotImplementedError(self.instance_kind)
-        # XXX Used for non-PyPy way of doing become.
-        if store:
-            from pypy.lang.smalltalk import objtable
-            objtable.objects.extend([w_new])
         return w_new
 
     def s_methoddict(self):

@@ -89,12 +89,12 @@ class W_Object(object):
 
     def equals(self, other):
         """Compare object identity"""
-        return self == other
+        return self is other
 
-    def become(self, w_old, w_new):
-        """Exchange object identity."""
-        # TODO use PyPy's become 
-        pass
+    def become(self, other):
+        """Become swaps two objects.
+           False means swapping failed"""
+        return False
 
 class W_SmallInteger(W_Object):
     """Boxed integer value"""
@@ -167,6 +167,10 @@ class W_AbstractObjectWithIdentityHash(W_Object):
     def invariant(self):
         return isinstance(self.hash, int)
 
+    def become(self, w_other):
+        self.hash, w_other.hash = w_other.hash, self.hash
+        return True
+
 class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
     """Objects with arbitrary class (ie not CompiledMethod, SmallInteger or
     Float)."""
@@ -193,12 +197,12 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return (W_AbstractObjectWithIdentityHash.invariant(self) and
                 isinstance(self.w_class, W_PointersObject))
 
-    def become(self, w_old, w_new):
-        # TODO to be eventually replaced by PyPy's become
-        if self.w_class == w_old:
-            self.w_class = w_new
-        elif self.w_class == w_new:
-            self.w_class = w_old
+    def become(self, w_other):
+        if not isinstance(w_other, W_AbstractObjectWithClassReference):
+            return False
+        self.w_class, w_other.w_class = w_other.w_class, self.w_class
+        return W_AbstractObjectWithIdentityHash.become(self, w_other)
+        
 
 class W_PointersObject(W_AbstractObjectWithClassReference):
     """Common object."""
@@ -294,14 +298,12 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import MethodDictionaryShadow
         return self.as_special_get_shadow(MethodDictionaryShadow)
 
-    def become(self, w_old, w_new):
-        W_AbstractObjectWithClassReference.become(self, w_old, w_new)
-        for i in range(len(self._vars)):
-            w_test = self.fetch(i)
-            if w_test == w_old:
-                self.store(i, w_new)
-            elif w_test == w_new:
-                self.store(i, w_old)
+    def become(self, w_other):
+        if not isinstance(w_other, W_PointersObject):
+            return False
+        self._vars, w_other._vars = w_other._vars, self._vars
+        return W_AbstractObjectWithClassReference.become(self, w_other)
+        
 
 class W_BytesObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
