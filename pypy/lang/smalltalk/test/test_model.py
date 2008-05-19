@@ -163,3 +163,27 @@ def test_not_charequals():
     test_not_equals(utility.wrap_char('a'), utility.wrap_char('d'))
     test_not_equals(utility.wrap_char('d'), utility.wrap_int(3))
     test_not_equals(utility.wrap_char('d'), utility.wrap_float(3.0))
+
+def test_become_pointers():
+    w_clsa = mockclass(3)
+    w_a = w_clsa.as_class_get_shadow().new()
+
+    w_clsb = mockclass(4)
+    w_b = w_clsb.as_class_get_shadow().new()
+    
+    hasha = w_a.gethash()
+    hashb = w_b.gethash()
+
+    w_a.store(0, w_b)
+    w_b.store(1, w_a)
+    
+    res = w_a.become(w_b)
+    assert res
+    assert w_a.gethash() == hashb
+    assert w_b.gethash() == hasha
+
+    assert w_a.getclass() is w_clsb
+    assert w_b.getclass() is w_clsa
+
+    assert w_b.fetch(0) is w_b
+    assert w_a.fetch(1) is w_a
