@@ -128,7 +128,6 @@ objects_in_special_object_table = {
     "false": SO_FALSE,
     "charactertable": SO_CHARACTER_TABLE_ARRAY,
     "schedulerassociationpointer" : SO_SCHEDULERASSOCIATIONPOINTER,
-    "compactclasses" : SO_COMPACT_CLASSES_ARRAY,
     "smalltalkdict" : SO_SMALLTALK,
 }
 

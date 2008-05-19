@@ -393,45 +393,6 @@ def test_seconds_clock():
     now = int(time.time())
     assert (prim(primitives.SECONDS_CLOCK, [42]).value - now) <= 2
 
-def test_become():
-    py.test.skip("implement me!")
-    """
-    testBecome
-      | p1 p2 a |
-      p1 := 1@2.
-      p2 := #(3 4 5).
-      a := p1 -> p2.
-      XXX ? self assert: 1@2 = a key.
-      XXX ? self assert: #(3 4 5) = a value.
-      XXX ? self assert: p1 -> p2 = a.
-      self assert: p1 == a key.
-      self assert: p2 == a value.
-      p1 become: p2.
-      XXX ? self assert: 1@2 = a value.
-      XXX ? self assert: #(3 4 5) = a key.
-      XXX ? self assert: p1 -> p2 = a.
-      self assert: p1 == a key.
-      self assert: p2 == a value.
-  
-      self should: [1 become: 2] raise: Error.
-    """
-    # XXX Test deviates from original spec
-    w_p1 = model.W_PointersObject(None, 2)
-    w_p2 = model.W_PointersObject(None, 3)
-    w_a = model.W_PointersObject(classtable.w_Array, 2)
-    w_a.atput0(0,w_p1)
-    w_a.atput0(1,w_p2)
-    objtable.objects += [w_p1]
-    objtable.objects += [w_p2]
-    objtable.objects += [w_a]
-    s_a = w_a.as_association_get_shadow()
-    assert s_a.key() == w_p1
-    assert s_a.value() == w_p2
-    prim(primitives.BECOME, [w_p1, w_p2])
-    s_a = w_a.as_association_get_shadow()
-    assert s_a.key() == w_p2
-    assert s_a.value() == w_p1
-    
 def test_load_inst_var():
     " try to test the LoadInstVar primitives a little "
     w_v = prim(primitives.INST_VAR_AT_0, ["q"])

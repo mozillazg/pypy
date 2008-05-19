@@ -31,11 +31,19 @@ w_two = model.W_SmallInteger(2)
 w_nil = model.w_nil
 w_nil.w_class = classtable.classtable['w_UndefinedObject']
 
-objtable = {}
+# We use indirection because translated globals are assumed to be constant
+class ObjectTableHolder(object):
+    pass
+
+object_table_holder = ObjectTableHolder()
+object_table_holder.objtable = {}
+
+def get_objtable():
+    return object_table_holder.objtable
 
 for name in constants.objects_in_special_object_table:
     name = "w_" + name
     try:
-        objtable[name] = globals()[name]
+        get_objtable()[name] = globals()[name]
     except KeyError, e:
-        objtable[name] = None
+        get_objtable()[name] = None

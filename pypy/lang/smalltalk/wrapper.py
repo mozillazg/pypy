@@ -163,7 +163,7 @@ class SchedulerWrapper(Wrapper):
 
 def scheduler():
     from pypy.lang.smalltalk import objtable
-    w_association = objtable.objtable["w_schedulerassociationpointer"]
+    w_association = objtable.get_objtable()["w_schedulerassociationpointer"]
     assert w_association is not None
     w_scheduler = AssociationWrapper(w_association).value()
     assert isinstance(w_scheduler, model.W_PointersObject)
