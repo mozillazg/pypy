@@ -48,6 +48,10 @@ _constants = {
         "MOUSEMOTION",
         "MOUSEBUTTONDOWN",
         "MOUSEBUTTONUP",
+        "BUTTON_LEFT",
+        "BUTTON_LEFT", 
+        "BUTTON_MIDDLE", 
+        "BUTTON_RIGHT",
         "JOYAXISMOTION",
         "JOYBALLMOTION",
         "JOYHATMOTION",
@@ -69,6 +73,9 @@ _constants = {
         "HAT_LEFTDOWN",
         "HAT_LEFT",
         "HAT_LEFTUP",
+        
+        "DISABLE",
+        "ENABLE",
 
         # the following ones are not exposed in Pygame
         "INIT_VIDEO",
