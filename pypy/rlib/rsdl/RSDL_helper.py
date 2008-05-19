@@ -64,3 +64,34 @@ def get_pixel(image, x, y):
         return p[0]
     else:
         raise ValueError("bad BytesPerPixel")
+
+def set_pixel(image, x, y, pixel):
+    """Return the pixel value at (x, y)
+    NOTE: The surface must be locked before calling this!
+    """
+    bpp = rffi.getintfield(image.c_format, 'c_BytesPerPixel')
+    pitch = rffi.getintfield(image, 'c_pitch')
+    # Here p is the address to the pixel we want to retrieve
+    p = rffi.ptradd(image.c_pixels, y * pitch + x * bpp)
+    if bpp == 1:
+        p[0] = pixel
+    elif bpp == 2:
+        p = rffi.cast(RSDL.Uint16P, p)
+        p[0] = pixel
+    elif bpp == 3:
+        p = rffi.cast(lltype.Signed, p)
+        if RSDL.BYTEORDER == RSDL.BIG_ENDIAN:
+            p[0] = (pixel >> 16) & 0xFF
+            p[1] = (pixel >> 8 ) & 0xFF
+            p[2] = pixel & 0xFF
+        else:
+            p[0] = pixel & 0xFF
+            p[1] = (pixel >> 8 ) & 0xFF
+            p[2] = (pixel >> 16) & 0xFF
+    elif bpp == 4:
+        p = rffi.cast(RSDL.Uint32P, p)
+        p[0] = pixel
+    else:
+        raise ValueError("bad BytesPerPixel")
+
+
