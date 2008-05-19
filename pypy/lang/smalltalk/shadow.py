@@ -87,7 +87,7 @@ class ClassShadow(AbstractShadow):
     def invalidate_shadow(self):
         AbstractShadow.invalidate_shadow(self)
         self.w_methoddict = None
-        self.s_superclass = None     # the ClassShadow of the super class
+        self.w_superclass = None
         self.name = None
 
     def getname(self):
@@ -141,6 +141,8 @@ class ClassShadow(AbstractShadow):
         else:
             w_name = None
 
+        # Some heuristic to find the classname
+        # Only used for debugging
         # XXX This is highly experimental XXX
         # if the name-pos of class is not bytesobject,
         # we are probably holding a metaclass instead of a class.
@@ -156,16 +158,11 @@ class ClassShadow(AbstractShadow):
         # read the methoddict
         self.w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
         assert isinstance(self.w_methoddict, model.W_PointersObject)
-
-        # for the rest, we need to reset invalid to False already so
-        # that cycles in the superclass and/or metaclass chains don't
-        # cause infinite recursion
-        # read s_superclass
         w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
-        if w_superclass is not objtable.w_nil:
-            assert isinstance(w_superclass, model.W_PointersObject)
-            self.s_superclass = w_superclass.as_class_get_shadow()
-            self.s_superclass.notifyinvalid(self)
+        if w_superclass is objtable.w_nil:
+            self.w_superclass = None
+        else:
+            self.w_superclass = w_superclass
         AbstractShadow.update_shadow(self)
 
     # XXX check better way to store objects
@@ -189,6 +186,14 @@ class ClassShadow(AbstractShadow):
             from pypy.lang.smalltalk import objtable
             objtable.objects.extend([w_new])
         return w_new
+
+    def s_methoddict(self):
+        return self.w_methoddict.as_methoddict_get_shadow()
+
+    def s_superclass(self):
+        if self.w_superclass is None:
+            return None
+        return self.w_superclass.as_class_get_shadow()
 
     # _______________________________________________________________
     # Methods for querying the format word, taken from the blue book:
@@ -223,7 +228,7 @@ class ClassShadow(AbstractShadow):
         while classshadow is not None:
             if classshadow is s_superclass:
                 return True
-            classshadow = classshadow.s_superclass
+            classshadow = classshadow.s_superclass()
         else:
             return False
 
@@ -238,16 +243,10 @@ class ClassShadow(AbstractShadow):
         while look_in_shadow is not None:
             try:
                 w_method = look_in_shadow.s_methoddict().methoddict[selector]
-                # We locally cache the method we found.
-                #if look_in_shadow is not self:
-                #    self.methoddict[selector] = w_method
                 return w_method
             except KeyError, e:
-                look_in_shadow = look_in_shadow.s_superclass
+                look_in_shadow = look_in_shadow.s_superclass()
         raise MethodNotFound(self, selector)
-
-    def s_methoddict(self):
-        return self.w_methoddict.as_methoddict_get_shadow()
 
     def initialize_methoddict(self):
         "NOT_RPYTHON"     # this is only for testing.

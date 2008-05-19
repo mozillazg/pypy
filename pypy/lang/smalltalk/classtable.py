@@ -9,7 +9,7 @@ def bootstrap_class(instsize, w_superclass=None, w_metaclass=None,
     s = shadow.ClassShadow(w_class, True)
     s.methoddict = {}
     if w_superclass is not None:
-        s.s_superclass = w_superclass.as_class_get_shadow()
+        s.w_superclass = w_superclass
     s.name = name
     s.instance_size = instsize
     s.instance_kind = format
@@ -65,8 +65,8 @@ def create_classtable():
         define_core_cls(cls_nm, classtable[super_cls_nm], w_metacls)
     w_Class = classtable["w_Class"]
     w_Metaclass = classtable["w_Metaclass"]
-    w_ProtoObjectClass.as_class_get_shadow().s_superclass = \
-        w_Class.as_class_get_shadow()
+    w_ProtoObjectClass.as_class_get_shadow().w_superclass = \
+        w_Class
     # at this point, all classes that still lack a w_class are themselves
     # metaclasses
     for nm, w_cls_obj in classtable.items():
