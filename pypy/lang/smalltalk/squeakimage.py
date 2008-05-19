@@ -124,7 +124,7 @@ class ImageReader(object):
             chunk.g_object.init_w_object()
 
     def assign_prebuilt_constants(self):
-        from pypy.lang.smalltalk import classtable, constants, objtable
+        from pypy.lang.smalltalk import classtable, constants
         # assign w_objects for objects that are already in classtable
         for name, so_index in constants.classes_in_special_object_table.items():
             # w_object = getattr(classtable, "w_" + name)
@@ -133,7 +133,7 @@ class ImageReader(object):
         # assign w_objects for objects that are already in objtable
         for name, so_index in constants.objects_in_special_object_table.items():
             # w_object = getattr(objtable, "w_" + name)
-            w_object = objtable.objtable["w_" + name]
+            w_object = objtable.get_objtable()["w_" + name]
             self.special_object(so_index).w_object = w_object
 
     def special_object(self, index):
@@ -204,7 +204,7 @@ class SqueakImage(object):
 
         from pypy.lang.smalltalk import objtable
         for name, idx in constants.objects_in_special_object_table.items():
-            objtable.objtable["w_" + name] = self.special_objects[idx]
+            objtable.get_objtable()["w_" + name] = self.special_objects[idx]
 
     def special(self, index):
         return self.special_objects[index]
