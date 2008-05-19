@@ -537,9 +537,7 @@ void dump(char* key, int value) {
 """
 
 def run_example_code(filepath, eci):
-    eci = eci.convert_sources_to_files()
-    files = [filepath] + list(eci.separate_module_files)
-    output = build_executable_cache(files, eci)
+    output = build_executable_cache([filepath], eci)
     section = None
     for line in output.splitlines():
         line = line.strip()
