@@ -23,11 +23,20 @@ class CConfig:
     _compilation_info_ = eci
 
     if WIN32:
+        DWORD_PTR = rffi_platform.SimpleType("DWORD_PTR", rffi.LONG)
+        WORD = rffi_platform.SimpleType("WORD", rffi.UINT)
         DWORD = rffi_platform.SimpleType("DWORD", rffi.UINT)
         BOOL = rffi_platform.SimpleType("BOOL", rffi.LONG)
-        HRESULT = rffi_platform.SimpleType("HRESULT", rffi.LONG)
+        INT = rffi_platform.SimpleType("INT", rffi.INT)
+        LONG = rffi_platform.SimpleType("LONG", rffi.LONG)
+        PLONG = rffi_platform.SimpleType("PLONG", rffi.LONGP)
+        LPVOID = rffi_platform.SimpleType("LPVOID", rffi.INTP)
+        LPCVOID = rffi_platform.SimpleType("LPCVOID", rffi.VOIDP)
+        LPCTSTR = rffi_platform.SimpleType("LPCTSTR", rffi.CCHARP)
+        LPDWORD = rffi_platform.SimpleType("LPDWORD", rffi.INTP)
+        SIZE_T = rffi_platform.SimpleType("SIZE_T", rffi.SIZE_T)
 
-        HANDLE = rffi_platform.SimpleType("HANDLE", rffi.VOIDP)
+        HRESULT = rffi_platform.SimpleType("HRESULT", rffi.LONG)
         HLOCAL = rffi_platform.SimpleType("HLOCAL", rffi.VOIDP)
 
         DEFAULT_LANGUAGE = rffi_platform.ConstantInteger(
@@ -45,6 +54,9 @@ def winexternal(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci, calling_conv='win')
 
 if WIN32:
+    HANDLE = rffi.ULONG
+    LPHANDLE = rffi.CArrayPtr(HANDLE)
+
     GetLastError = winexternal('GetLastError', [], DWORD)
 
     LoadLibrary = winexternal('LoadLibraryA', [rffi.CCHARP], rffi.VOIDP)
