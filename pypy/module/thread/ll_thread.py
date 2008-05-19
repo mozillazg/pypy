@@ -17,21 +17,9 @@ python_inc = sysconfig.get_python_inc()
 
 error = thread.error
 
-_MS_WINDOWS = os.name == "nt"
-
-if not _MS_WINDOWS:
-    includes = ['unistd.h']
-else:
-    includes = []
-    
 eci = ExternalCompilationInfo(
-    includes = includes + ['src/thread.h'],
-    separate_module_sources=[
-    '''
-    #include <Python.h>
-    #include <src/exception.h>
-    #include <src/thread.h>
-    '''],
+    includes = ['src/thread.h'],
+    separate_module_sources = [''],
     include_dirs = [str(py.path.local(autopath.pypydir).join('translator', 'c')),
                     python_inc],
     export_symbols = ['RPyThreadGetIdent', 'RPyThreadLockInit',
