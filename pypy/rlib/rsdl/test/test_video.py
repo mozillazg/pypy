@@ -1,3 +1,4 @@
+
 import py, sys
 from pypy.rlib.rsdl import RSDL
 from pypy.rlib.rarithmetic import r_uint
@@ -54,28 +55,110 @@ class TestVideo:
         RSDL.EnableUNICODE(1)
         print
         print "Keys pressed in the Pygame window should be printed below."
-        print "Use Escape to quit."
-        while True:
-            event = lltype.malloc(RSDL.Event, flavor='raw')
-            try:
+        print "    Use Escape to quit."
+        event = lltype.malloc(RSDL.Event, flavor='raw')
+        try:
+            while True:
+                    ok = RSDL.WaitEvent(event)
+                    assert rffi.cast(lltype.Signed, ok) == 1
+                    c_type = rffi.getintfield(event, 'c_type')
+                    if c_type == RSDL.KEYDOWN:
+                        p = rffi.cast(RSDL.KeyboardEventPtr, event)
+                        if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
+                            print 'Escape key'
+                            break
+                        char = rffi.getintfield(p.c_keysym, 'c_unicode')
+                        if char != 0:
+                            print 'Key:', unichr(char).encode('utf-8')
+                        else:
+                            print 'Some special key'
+                    else:
+                        print '(event of type %d)' % c_type
+        finally:
+            lltype.free(event, flavor='raw')
+                
+                
+    def test_mousemove(self):
+        if not self.is_interactive:
+            py.test.skip("interactive test only")
+        print
+        print "Move the Mouse up and down:"
+        print "    Use Escape to quit."
+        event = lltype.malloc(RSDL.Event, flavor="raw")
+        directions = [False]*4
+        try:
+            while True:
                 ok = RSDL.WaitEvent(event)
                 assert rffi.cast(lltype.Signed, ok) == 1
-                c_type = rffi.getintfield(event, 'c_type')
-                if c_type == RSDL.KEYDOWN:
+                c_type = rffi.getintfield(event, "c_type")
+                if c_type == RSDL.MOUSEMOTION:
+                    m = rffi.cast(RSDL.MouseMotionEventPtr, event)
+                    assert rffi.getintfield(m, "c_x") >= 0
+                    assert rffi.getintfield(m, "c_y") >= 0
+                    print rffi.getintfield(m, "c_xrel")
+                    directions[0] |= rffi.getintfield(m, "c_xrel")>0
+                    directions[1] |= rffi.getintfield(m, "c_xrel")<0
+                    directions[2] |= rffi.getintfield(m, "c_yrel")>0
+                    directions[3] |= rffi.getintfield(m, "c_yrel")<0
+                    if False not in directions:
+                        break
+                elif c_type == RSDL.KEYUP:
                     p = rffi.cast(RSDL.KeyboardEventPtr, event)
                     if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
-                        print 'Escape key'
-                        break
-                    char = rffi.getintfield(p.c_keysym, 'c_unicode')
-                    if char != 0:
-                        print 'Key:', unichr(char).encode('utf-8')
-                    else:
-                        print 'Some special key'
-                else:
-                    print '(event of type %d)' % c_type
-            finally:
-                lltype.free(event, flavor='raw')
+                        print "    test manually aborted"
+                        py.test.fail(" mousemovement test aborted")
+                        break  
+        finally:
+            lltype.free(event, flavor='raw')
+                
+        
 
+
+    def test_mousebutton(self):
+        if not self.is_interactive:
+            py.test.skip("interactive test only")
+        print
+        print "Press the given MouseButtons:"
+        print "        Use Escape to quit."
+        
+        event_tests = [("left button",   RSDL.BUTTON_LEFT),
+                       ("middle button", RSDL.BUTTON_MIDDLE),
+                       ("right button",  RSDL.BUTTON_RIGHT)]
+        test_success = []
+        event = lltype.malloc(RSDL.Event, flavor='raw')
+        try:
+            for button_test in event_tests:
+                print "    press %s:" % button_test[0]
+                while True:
+                    ok = RSDL.WaitEvent(event)
+                    assert rffi.cast(lltype.Signed, ok) == 1
+                    c_type = rffi.getintfield(event, 'c_type')
+                    if c_type == RSDL.MOUSEBUTTONDOWN:
+                        pass
+                    elif c_type == RSDL.MOUSEBUTTONUP:
+                        b = rffi.cast(RSDL.MouseButtonEventPtr, event)
+                        if rffi.getintfield(b, 'c_button') == button_test[1]:
+                            test_success.append(True)
+                            break
+                    elif c_type == RSDL.KEYUP:
+                        p = rffi.cast(RSDL.KeyboardEventPtr, event)
+                        if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
+                            test_success.append(False) 
+                            print "        manually aborted"
+                            break
+                        #break
+            if False in test_success:
+                py.test.fail("")
+        finally:
+            lltype.free(event, flavor='raw')
+                
+        
+    def test_show_hide_cursor(self):
+        RSDL.ShowCursor(RSDL.DISABLE)
+        self.check("Is the cursor hidden? ")
+        RSDL.ShowCursor(RSDL.ENABLE)
+        self.check("Is the cursor shown? ")
+        
     def test_blit_rect(self):
         surface = RSDL.CreateRGBSurface(0, 150, 50, 32,
                                         r_uint(0x000000FF),
@@ -85,6 +168,15 @@ class TestVideo:
         fmt = surface.c_format
         color = RSDL.MapRGB(fmt, 255, 0, 0)
         RSDL.FillRect(surface, lltype.nullptr(RSDL.Rect), color)
+        
+        paintrect = lltype.malloc(RSDL.Rect, flavor='raw')
+        rffi.setintfield(paintrect, 'c_x',  75)
+        rffi.setintfield(paintrect, 'c_y',  0)
+        rffi.setintfield(paintrect, 'c_w', 150)
+        rffi.setintfield(paintrect, 'c_h',  50)
+        color = RSDL.MapRGB(fmt, 255, 128, 0)
+        RSDL.FillRect(surface, paintrect, color)
+        
         dstrect = lltype.malloc(RSDL.Rect, flavor='raw')
         try:
             rffi.setintfield(dstrect, 'c_x',  10)
@@ -96,7 +188,7 @@ class TestVideo:
         finally:
             lltype.free(dstrect, flavor='raw')
         RSDL.FreeSurface(surface)
-        self.check("Red rectangle(150px * 50px) at the top left, 10 pixels from the border")
+        self.check("Half Red/Orange rectangle(150px * 50px) at the top left, 10 pixels from the border")
 
     def teardown_method(self, meth):
         RSDL.Quit()
