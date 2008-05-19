@@ -187,3 +187,13 @@ def test_become_pointers():
 
     assert w_b.fetch(0) is w_b
     assert w_a.fetch(1) is w_a
+
+def test_become_with_shadow():
+    w_clsa = mockclass(3)
+    s_clsa = w_clsa.as_class_get_shadow()
+    w_clsb = mockclass(4)
+    s_clsb = w_clsb.as_class_get_shadow()
+    res = w_clsa.become(w_clsb)
+    assert res
+    assert w_clsa.as_class_get_shadow() is s_clsb
+    assert w_clsb.as_class_get_shadow() is s_clsa
