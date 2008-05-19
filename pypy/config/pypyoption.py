@@ -37,8 +37,6 @@ if sys.platform == "win32":
     del working_modules["_minimal_curses"]
     # modules currently missing explicit windows support
     del working_modules["signal"]
-    del working_modules["_rawffi"]
-
 
 
 module_dependencies = {}
