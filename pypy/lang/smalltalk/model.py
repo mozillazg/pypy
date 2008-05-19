@@ -224,13 +224,18 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     def fetch(self, n0):
         if self._shadow is not None:
-            self._shadow.sync_w_self()
+            return self._shadow.fetch(n0)
+        return self._fetch(n0)
+
+    def _fetch(self, n0):
         return self._vars[n0]
         
     def store(self, n0, w_value):    
         if self._shadow is not None:
-            self._shadow.sync_w_self()
-            self._shadow.invalidate_shadow()
+            return self._shadow.store(n0, w_value)
+        return self._store(n0, w_value)
+
+    def _store(self, n0, w_value):
         self._vars[n0] = w_value
 
     # def fetchvarpointer(self, idx):
@@ -557,7 +562,6 @@ def W_BlockContext(w_home, w_sender, argcnt, initialip):
     s_result.store_w_home(w_home)
     s_result._stack = []
     s_result._pc = initialip
-    s_result.invalidate_w_self()
     return w_result
 
 def W_MethodContext(w_method, w_receiver,
@@ -578,7 +582,6 @@ def W_MethodContext(w_method, w_receiver,
     for i in range(len(arguments)):
         s_result.settemp(i, arguments[i])
     s_result._stack = []
-    s_result.invalidate_w_self()
     return w_result
 
 # Use black magic to create w_nil without running the constructor,
