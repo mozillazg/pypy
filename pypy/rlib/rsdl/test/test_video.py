@@ -111,10 +111,8 @@ class TestVideo:
         finally:
             lltype.free(event, flavor='raw')
                 
-        
 
-
-    def test_mousebutton(self):
+    def test_mousebutton_wheel(self):
         if not self.is_interactive:
             py.test.skip("interactive test only")
         print
@@ -123,7 +121,9 @@ class TestVideo:
         
         event_tests = [("left button",   RSDL.BUTTON_LEFT),
                        ("middle button", RSDL.BUTTON_MIDDLE),
-                       ("right button",  RSDL.BUTTON_RIGHT)]
+                       ("right button",  RSDL.BUTTON_RIGHT),
+                       ("scroll up",     RSDL.BUTTON_WHEELUP),
+                       ("scroll down",   RSDL.BUTTON_WHEELDOWN)]
         test_success = []
         event = lltype.malloc(RSDL.Event, flavor='raw')
         try:
@@ -152,7 +152,45 @@ class TestVideo:
         finally:
             lltype.free(event, flavor='raw')
                 
+    def test_mousewheel(self):
+        if not self.is_interactive:
+            py.test.skip("interactive test only")
+        print
+        print "Press the given MouseButtons:"
+        print "        Use Escape to quit."
         
+        event_tests = [("scroll up",     RSDL.BUTTON_WHEELUP),
+                       ("scroll down",   RSDL.BUTTON_WHEELDOWN)]
+        test_success = []
+        event = lltype.malloc(RSDL.Event, flavor='raw')
+        try:
+            for button_test in event_tests:
+                print "    press %s:" % button_test[0]
+                while True:
+                    ok = RSDL.WaitEvent(event)
+                    assert rffi.cast(lltype.Signed, ok) == 1
+                    c_type = rffi.getintfield(event, 'c_type')
+                    if c_type == RSDL.MOUSEBUTTONDOWN:
+                        b = rffi.cast(RSDL.MouseButtonEventPtr, event)
+                        print "down", rffi.getintfield(b, "c_x"), \
+                                      rffi.getintfield(b, "c_y")
+                    elif c_type == RSDL.MOUSEBUTTONUP:
+                        b = rffi.cast(RSDL.MouseButtonEventPtr, event)
+                        print "up", rffi.getintfield(b, "c_x"), \
+                                    rffi.getintfield(b, "c_y")
+                    elif c_type == RSDL.KEYUP:
+                        p = rffi.cast(RSDL.KeyboardEventPtr, event)
+                        if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
+                            test_success.append(False) 
+                            print "        manually aborted"
+                            break
+                        #break
+            if False in test_success:
+                py.test.fail("")
+        finally:
+            lltype.free(event, flavor='raw')
+            
+            
     def test_show_hide_cursor(self):
         RSDL.ShowCursor(RSDL.DISABLE)
         self.check("Is the cursor hidden? ")
@@ -174,7 +212,6 @@ class TestVideo:
                     c = black
                     
                 RSDL_helper.set_pixel(self.screen, i, j, c)
-#
         RSDL.UnlockSurface(self.screen)
         RSDL.Flip(self.screen)
         self.check("Upper left corner 10x10 field with vertical black/white stripes")
