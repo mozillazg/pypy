@@ -865,12 +865,14 @@ Cell.typedef = TypeDef("cell",
 Ellipsis.typedef = TypeDef("Ellipsis",
     __repr__   = interp2app(Ellipsis.descr__repr__),
 )
+Ellipsis.acceptable_as_base_class = False
 
 NotImplemented.typedef = TypeDef("NotImplemented",
     __repr__   = interp2app(NotImplemented.descr__repr__),
 )
 
 SuspendedUnroller.typedef = TypeDef("SuspendedUnroller")
+SuspendedUnroller.acceptable_as_base_class = False
 
 
 interptypes = [ val.typedef for name,val in globals().items() if hasattr(val,'__bases__') and hasattr(val,'typedef')  ]
