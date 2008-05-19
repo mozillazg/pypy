@@ -2,54 +2,33 @@ import weakref
 from pypy.lang.smalltalk import model, constants, utility, error
 from pypy.tool.pairtype import extendabletype
 
-class Invalidateable(object):
-    def invalidate_shadow(self):
-        pass
-
-class AbstractShadow(Invalidateable):
+class AbstractShadow(object):
     """A shadow is an optional extra bit of information that
     can be attached at run-time to any Smalltalk object.
     """
-    
-    def __init__(self, w_self, invalid):
+    def __init__(self, w_self):
         self._w_self = w_self
-        self._notifyinvalid = []
-        self.invalid = invalid
-        self.w_invalid = False
-        if invalid:
-            self.invalidate_shadow()
-
-    def notifyinvalid(self, other):
-        self._notifyinvalid += [other]
-
-    def unnotify(self, other):
-        if other in self._notifyinvalid:
-            self._notifyinvalid.remove(other)
-
+    def fetch(self, n0):
+        return self.w_self()._fetch(n0)
+    def store(self, n0, w_value):
+        return self.w_self()._store(n0, w_value)
+    def w_self(self):
+        return self._w_self
     def getname(self):
         return repr(self)
+    def detach_shadow(self):
+        pass
+   
+class AbstractCachingShadow(AbstractShadow):
+    def __init__(self, w_self):
+        AbstractShadow.__init__(self, w_self)
+        self.update_shadow()
 
     def invalidate_shadow(self):
-        """XXX This should get called whenever the base Smalltalk
+        """This should get called whenever the base Smalltalk
         object changes."""
         if not self.invalid:
             self.invalid = True
-            for listener in self._notifyinvalid:
-                listener.invalidate_shadow()
-            self._notifyinvalid = []
-
-    def invalidate_w_self(self):
-        """XXX This should get called whenever the shadow
-        object changes.
-        (current shortcut, whenever the shadow is used)"""
-        self.w_invalid = True
-
-    def w_self(self):
-        return self._w_self
-
-    def sync_w_self(self):
-        if self.w_invalid:
-            self.update_w_self()
 
     def sync_shadow(self):
         if self.invalid:
@@ -58,9 +37,14 @@ class AbstractShadow(Invalidateable):
     def update_shadow(self):
         self.w_self().setshadow(self)
         self.invalid = False
+        self.sync_cache()
 
-    def update_w_self(self):
-        self.w_invalid = False
+    def sync_cache(self):
+        raise NotImplementedError()
+
+    def store(self, n0, w_value):
+        self.invalidate_shadow()
+        AbstractShadow.store(self, n0, w_value)
 
 # ____________________________________________________________ 
 
@@ -77,13 +61,10 @@ class MethodNotFound(error.SmalltalkException):
 class ClassShadowError(error.SmalltalkException):
     pass
 
-class ClassShadow(AbstractShadow):
+class ClassShadow(AbstractCachingShadow):
     """A shadow for Smalltalk objects that are classes
     (i.e. used as the class of another Smalltalk object).
     """
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
-
     def invalidate_shadow(self):
         AbstractShadow.invalidate_shadow(self)
         self.w_methoddict = None
@@ -93,7 +74,7 @@ class ClassShadow(AbstractShadow):
     def getname(self):
         return "%s class" % (self.name or '?',)
 
-    def update_shadow(self):
+    def sync_cache(self):
         from pypy.lang.smalltalk import objtable
 
         "Update the ClassShadow with data from the w_self class."
@@ -263,14 +244,13 @@ class ClassShadow(AbstractShadow):
         if isinstance(method, model.W_CompiledMethod):
             method.w_compiledin = self.w_self()
 
-class MethodDictionaryShadow(AbstractShadow):
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
+class MethodDictionaryShadow(AbstractCachingShadow):
 
     def invalidate_shadow(self):
+        AbstractCachingShadow.invalidate_shadow(self)
         self.methoddict = None
 
-    def update_shadow(self):
+    def sync_cache(self):
         from pypy.lang.smalltalk import objtable
         w_values = self.w_self()._vars[constants.METHODDICT_VALUES_INDEX]
         assert isinstance(w_values, model.W_PointersObject)
@@ -290,39 +270,68 @@ class MethodDictionaryShadow(AbstractShadow):
                                            "CompiledMethods only for now")
                 self.methoddict[selector] = w_compiledmethod
 
-class ContextPartShadow(AbstractShadow):
+
+class AbstractRedirectingShadow(AbstractShadow):
+    def __init__(self, w_self):
+        AbstractShadow.__init__(self, w_self)
+        self._w_self_size = len(self.w_self()._vars)
+    def fetch(self, n0):
+        raise NotImplementedError()
+    def store(self, n0, w_value):
+        raise NotImplementedError()
+
+class ContextPartShadow(AbstractRedirectingShadow):
 
     __metaclass__ = extendabletype
 
-    def update_shadow(self):
-        AbstractShadow.update_shadow(self)
-        self._stack = [self.w_self()._vars[i]
-                        for i in range(self.stackstart(),
-                                       self.stackpointer())]
-        self.init_pc()
-        # Using a shadow most likely results in an invalid state for w_self
-        self.invalidate_w_self()
+    def fetch(self, n0):
+        if n0 == constants.CTXPART_SENDER_INDEX:
+            return self.w_sender()
+        if n0 == constants.CTXPART_PC_INDEX:
+            return self.wrap_pc()
+        if n0 == constants.CTXPART_STACKP_INDEX:
+            return utility.wrap_int(self.stackpointer())
+        if self.stackstart() <= n0 < self.stackpointer():
+            return self._stack[n0-self.stackstart()]
+        if self.stackpointer() <= n0 < self.stackend():
+            return objtable.w_nil
+        else:
+            # XXX later should store tail out of known context part as well
+            raise error.WrapperException("Index in context out of bounds")
 
-    def init_pc(self):
-        self._pc = utility.unwrap_int(self.w_self()._vars[constants.CTXPART_PC_INDEX])
+    def store(self, n0, w_value):
+        if n0 == constants.CTXPART_SENDER_INDEX:
+            return self.store_w_sender(w_value)
+        if n0 == constants.CTXPART_PC_INDEX:
+            return self.store_unwrap_pc(w_value)
+        if n0 == constants.CTXPART_STACKP_INDEX:
+            return self.store_stackpointer(utility.unwrap_int(w_value))
+        if self.stackstart() <= n0 < self.stackpointer():
+            return self._stack[n0-self.stackstart()] = w_value
+        if self.stackpointer() <= n0 < self.stackend():
+            raise error.WrapperException(
+                "Trying to store within stack range, after actual stack")
+        else:
+            # XXX later should store tail out of known context part as well
+            raise error.WrapperException("Index in context out of bounds")
+
+    def update_shadow(self):
+        # XXX We need the method before reading pc
+        #     and stack (islarge -> stack + args + locals size)
+        AbstractShadow.update_shadow(self)
+        for i in range(self._w_self_size):
+            self.store(i, self.w_self()._fetch(i))
+
+    def store_unwrap_pc(self, w_pc):
+        self._pc = utility.unwrap_int(w_pc)
         self._pc -= self.w_method().bytecodeoffset()
         self._pc -= 1
 
-    def save_back_pc(self):
+    def wrap_pc(self):
         pc = self._pc
         pc += 1
         pc += self.w_method().bytecodeoffset()
-        self.w_self()._vars[constants.CTXPART_PC_INDEX] = utility.wrap_int(pc)
-
-    def update_w_self(self):
-        AbstractShadow.update_w_self(self)
-        for i in range(len(self._stack)):
-            self.w_self()._vars[self.stackstart() + i] = self._stack[i]
-        self.store_stackpointer(len(self._stack))
-        self.save_back_pc()
-
-    def __init__(self, w_self, invalid):
-        AbstractShadow.__init__(self, w_self, invalid)
+        return utility.wrap_int(pc)
 
     def w_home(self):
         raise NotImplementedError()
@@ -440,9 +449,9 @@ class ContextPartShadow(AbstractShadow):
 
 class BlockContextShadow(ContextPartShadow):
 
-    def __init__(self, w_self, invalid):
+    def __init__(self, w_self):
         self._s_home = None
-        ContextPartShadow.__init__(self, w_self, invalid)
+        ContextPartShadow.__init__(self, w_self)
 
     def invalidate_shadow(self):
         if self._s_home is not None:

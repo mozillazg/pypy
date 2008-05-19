@@ -1,5 +1,4 @@
 import py
-from pypy.lang.smalltalk.shadow import Invalidateable
 from pypy.lang.smalltalk.shadow import ContextPartShadow, MethodContextShadow, BlockContextShadow
 from pypy.lang.smalltalk import model, constants, primitives
 from pypy.lang.smalltalk import objtable
@@ -18,7 +17,7 @@ class MissingBytecode(Exception):
 class IllegalStoreError(Exception):
     """Illegal Store."""
 
-class Interpreter(Invalidateable):
+class Interpreter(object):
 
     TRUE = objtable.w_true
     FALSE = objtable.w_false
@@ -32,31 +31,17 @@ class Interpreter(Invalidateable):
     
     def __init__(self):
         self._w_active_context = None
-        self._s_active_context = None
         self.cnt = 0
 
     def w_active_context(self):
         return self._w_active_context
 
     def store_w_active_context(self, w_context):
-        # We can only interpret contexts of which we know the type already
-        #s_ctx = w_context.as_context_get_shadow()
-        #assert (isinstance(s_ctx, MethodContextShadow) or 
-        #        isinstance(s_ctx, BlockContextShadow))
-        if self._s_active_context is not None:
-            self._s_active_context.unnotify(self)
-            self._s_active_context = None
         assert isinstance(w_context, model.W_PointersObject)
         self._w_active_context = w_context
 
-    def invalidate(self):
-        self._s_active_context = None
-
     def s_active_context(self):
-        if self._s_active_context is None:
-            self._s_active_context = self.w_active_context().as_context_get_shadow()
-            self._s_active_context.notifyinvalid(self)
-        return self._s_active_context
+        return self.w_active_context().as_context_get_shadow()
 
     def interpret(self):
         try:
