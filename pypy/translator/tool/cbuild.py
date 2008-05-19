@@ -587,7 +587,7 @@ def build_executable(*args, **kwds):
     compiler.build(noerr=noerr)
     return str(compiler.outputfilename)
 
-def check_boehm_presence():
+def check_boehm_presence(noerr=True):
     from pypy.tool.udir import udir
     try:
         cfile = udir.join('check_boehm.c')
@@ -605,9 +605,12 @@ int main() {
             eci = ExternalCompilationInfo(libraries=['gc_pypy'])
         else:
             eci = ExternalCompilationInfo(libraries=['gc'])
-        build_executable([cfname], eci, noerr=True)
+        build_executable([cfname], eci, noerr=noerr)
     except CompilationError:
-        return False
+        if noerr:
+            return False
+        else:
+            raise
     else:
         return True
 
