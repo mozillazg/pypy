@@ -318,7 +318,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         if GCClass.needs_write_barrier:
             self.write_barrier_ptr = getfn(GCClass.write_barrier.im_func,
-                                           [s_gc, annmodel.SomeAddress(),
+                                           [s_gc,
                                             annmodel.SomeAddress(),
                                             annmodel.SomeAddress()],
                                            annmodel.s_None,
@@ -536,6 +536,7 @@ class FrameworkGCTransformer(GCTransformer):
                         c_itemsize, c_lengthofs, c_grow):
         vlist = [self.realloc_ptr, self.c_const_gc, v_ptr, v_newsize,
                  c_const_size, c_itemsize, c_lengthofs, c_grow]
+        # XXX don't really need push_roots in all cases
         livevars = self.push_roots(hop)
         v_result = hop.genop('direct_call', vlist,
                              resulttype=llmemory.GCREF)
@@ -672,18 +673,12 @@ class FrameworkGCTransformer(GCTransformer):
             and v_struct.concretetype.TO._gckind == "gc"
             and hop.spaceop not in self.initializing_stores):
             self.write_barrier_calls += 1
-            v_oldvalue = hop.genop('g' + opname[1:],
-                                   hop.inputargs()[:-1],
-                                   resulttype=v_newvalue.concretetype)
-            v_oldvalue = hop.genop("cast_ptr_to_adr", [v_oldvalue],
-                                   resulttype = llmemory.Address)
             v_newvalue = hop.genop("cast_ptr_to_adr", [v_newvalue],
                                    resulttype = llmemory.Address)
             v_structaddr = hop.genop("cast_ptr_to_adr", [v_struct],
                                      resulttype = llmemory.Address)
             hop.genop("direct_call", [self.write_barrier_ptr,
                                       self.c_const_gc,
-                                      v_oldvalue,
                                       v_newvalue,
                                       v_structaddr])
         hop.rename('bare_' + opname)
