@@ -199,7 +199,7 @@ class Cartridge(object):
                                         constants.BATTERY_FILE_EXTENSION)
         elif cartridge_file_path.endswith(
                                 constants.CARTRIDGE_COLOR_FILE_EXTENSION):
-            return cartridge_file_pat.replace(
+            return cartridge_file_path.replace(
                                     constants.CARTRIDGE_COLOR_FILE_EXTENSION,
                                     constants.BATTERY_FILE_EXTENSION)
         else:
