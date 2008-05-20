@@ -252,6 +252,7 @@ class HybridGC(GenerationGC):
             obj = objects.pop()
             if obj != addr:
                 newstack.append(obj)
+        objects.delete()
         self.gen_resizable_objects = newstack
 
     def can_move(self, addr):
