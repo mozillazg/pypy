@@ -12,6 +12,8 @@ class AbstractShadow(object):
         return self.w_self()._fetch(n0)
     def store(self, n0, w_value):
         return self.w_self()._store(n0, w_value)
+    def size(self):
+        return self.w_self()._size()
     def w_self(self):
         return self._w_self
     def getname(self):
@@ -81,7 +83,7 @@ class ClassShadow(AbstractCachingShadow):
         w_self = self.w_self()
         # read and painfully decode the format
         classformat = utility.unwrap_int(
-            w_self._vars[constants.CLASS_FORMAT_INDEX])
+            w_self._fetch(constants.CLASS_FORMAT_INDEX))
         # The classformat in Squeak, as an integer value, is:
         #    <2 bits=instSize//64><5 bits=cClass><4 bits=instSpec>
         #                                    <6 bits=instSize\\64><1 bit=0>
@@ -118,10 +120,10 @@ class ClassShadow(AbstractCachingShadow):
         self.guess_class_name()
 
         # read the methoddict
-        self.w_methoddict = w_self._vars[constants.CLASS_METHODDICT_INDEX]
+        self.w_methoddict = w_self._fetch(constants.CLASS_METHODDICT_INDEX)
         assert isinstance(self.w_methoddict, model.W_PointersObject)
 
-        w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
+        w_superclass = w_self._fetch(constants.CLASS_SUPERCLASS_INDEX)
         if w_superclass.is_same_object(w_nil):
             self.w_superclass = None
         else:
@@ -133,7 +135,7 @@ class ClassShadow(AbstractCachingShadow):
 
         # read the name
         if w_self.size() > constants.CLASS_NAME_INDEX:
-            w_name = w_self._vars[constants.CLASS_NAME_INDEX]
+            w_name = w_self._fetch(constants.CLASS_NAME_INDEX)
         else:
             # Some heuristic to find the classname
             # Only used for debugging
@@ -142,10 +144,10 @@ class ClassShadow(AbstractCachingShadow):
             # we are probably holding a metaclass instead of a class.
             # metaclasses hold a pointer to the real class in the last
             # slot. This is pos 6 in mini.image and higher in squeak3.9
-            w_realclass = w_self._vars[w_self.size() - 1]
+            w_realclass = w_self._fetch(w_self.size() - 1)
             assert isinstance(w_realclass, model.W_PointersObject)
             if w_realclass.size() > constants.CLASS_NAME_INDEX:
-                w_name = w_realclass._vars[constants.CLASS_NAME_INDEX]
+                w_name = w_realclass.__fetch(onstants.CLASS_NAME_INDEX)
 
         if isinstance(w_name, model.W_BytesObject):
             self.name = w_name.as_string()
@@ -230,7 +232,7 @@ class ClassShadow(AbstractCachingShadow):
         "NOT_RPYTHON"     # this is only for testing.
         if self.w_methoddict is None:
             self.w_methoddict = model.W_PointersObject(None, 2)
-            self.w_methoddict._vars[1] = model.W_PointersObject(None, 0)
+            self.w_methoddict._store(1, model.W_PointersObject(None, 0))
             self.s_methoddict().invalid = False
 
     def installmethod(self, selector, method):
@@ -248,7 +250,7 @@ class MethodDictionaryShadow(AbstractCachingShadow):
 
     def sync_cache(self):
         from pypy.lang.smalltalk import objtable
-        w_values = self.w_self()._vars[constants.METHODDICT_VALUES_INDEX]
+        w_values = self.w_self()._fetch(constants.METHODDICT_VALUES_INDEX)
         assert isinstance(w_values, model.W_PointersObject)
         s_values = w_values.get_shadow()
         # XXX Should add!
@@ -256,12 +258,12 @@ class MethodDictionaryShadow(AbstractCachingShadow):
         size = self.w_self().size() - constants.METHODDICT_NAMES_INDEX
         self.methoddict = {}
         for i in range(size):
-            w_selector = self.w_self()._vars[constants.METHODDICT_NAMES_INDEX+i]
+            w_selector = self.w_self()._fetch(constants.METHODDICT_NAMES_INDEX+i)
             if not w_selector.is_same_object(objtable.w_nil):
                 if not isinstance(w_selector, model.W_BytesObject):
                     raise ClassShadowError("bogus selector in method dict")
                 selector = w_selector.as_string()
-                w_compiledmethod = w_values._vars[i]
+                w_compiledmethod = w_values._fetch(i)
                 if not isinstance(w_compiledmethod, model.W_CompiledMethod):
                     raise ClassShadowError("the methoddict must contain "
                                            "CompiledMethods only for now")
@@ -271,11 +273,13 @@ class MethodDictionaryShadow(AbstractCachingShadow):
 class AbstractRedirectingShadow(AbstractShadow):
     def __init__(self, w_self):
         AbstractShadow.__init__(self, w_self)
-        self._w_self_size = len(self.w_self()._vars)
+        self._w_self_size = self.w_self().size()
     def fetch(self, n0):
         raise NotImplementedError()
     def store(self, n0, w_value):
         raise NotImplementedError()
+    def size(self):
+        return self._w_self_size
 
     def attach_shadow(self):
         AbstractShadow.attach_shadow(self)
