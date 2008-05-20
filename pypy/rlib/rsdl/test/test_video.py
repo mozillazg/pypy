@@ -97,6 +97,10 @@ class TestVideo:
                     c_type = rffi.getintfield(event, 'c_type')
                     if c_type == RSDL.KEYDOWN:
                         sys.stderr.write('.')
+                        p = rffi.cast(RSDL.KeyboardEventPtr, event)
+                        if rffi.getintfield(p.c_keysym, 'c_sym') == RSDL.K_ESCAPE:
+                            print 'Escape key'
+                            break
                         timeout = time.time() + 3
                 else:
                     if time.time() > timeout:
