@@ -5,13 +5,27 @@ from pypy.rpython.lltypesystem.rstr import STR, UNICODE, char_repr,\
      string_repr, unichar_repr, unicode_repr
 from pypy.rpython.annlowlevel import llstr
 from pypy.rlib import rgc
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem.lltype import staticAdtMethod
 from pypy.tool.sourcetools import func_with_new_name
 
+GROW_FAST_UNTIL = 100*1024*1024      # 100 MB
+
 def new_grow_func(name):
     def stringbuilder_grow(ll_builder, needed):
-        # XXX tweak overallocation scheme
-        new_allocated = ll_builder.allocated + needed + 100
+        allocated = ll_builder.allocated
+        if allocated < GROW_FAST_UNTIL:
+            new_allocated = allocated << 1
+        else:
+            extra_size = allocated >> 2
+            try:
+                new_allocated = ovfcheck(allocated + extra_size)
+            except OverflowError:
+                raise MemoryError
+        try:
+            new_allocated = ovfcheck(new_allocated + needed)
+        except OverflowError:
+            raise MemoryError
         ll_builder.buf = rgc.resize_buffer(ll_builder.buf, ll_builder.used,
                                            new_allocated)
         ll_builder.allocated = new_allocated
