@@ -125,10 +125,15 @@ class W_SmallInteger(W_Object):
         return self.value == other.value
 
     def __eq__(self, other):
+        if not isinstance(other, W_SmallInteger):
+            return False
         return self.value == other.value
 
     def __ne__(self, other):
         return not self == other
+
+    def __hash__(self):
+        return self.value
 
 
 class W_Float(W_Object):
@@ -157,10 +162,15 @@ class W_Float(W_Object):
         return self.value == other.value
 
     def __eq__(self, other):
+        if not isinstance(other, W_Float):
+            return False
         return self.value == other.value
 
     def __ne__(self, other):
         return not self == other
+
+    def __hash__(self):
+        return hash(self.value)
 
 class W_AbstractObjectWithIdentityHash(W_Object):
     """Object with explicit hash (ie all except small
