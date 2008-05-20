@@ -637,7 +637,7 @@ def func(interp, w_context, argcnt):
     # The block bytecodes are stored inline: so we skip past the
     # byteodes to invoke this primitive to find them (hence +2)
     initialip = frame.pc() + 2
-    w_new_context = model.W_BlockContext(
+    w_new_context = shadow.BlockContextShadow.make_context(
         w_method_context, objtable.w_nil, argcnt, initialip)
     return w_new_context
 

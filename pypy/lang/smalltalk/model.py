@@ -442,9 +442,9 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         return w_literal.as_string()    # XXX performance issue here
 
     def create_frame(self, receiver, arguments, sender = None):
-        from pypy.lang.smalltalk import objtable
+        from pypy.lang.smalltalk import objtable, shadow
         assert len(arguments) == self.argsize
-        w_new = W_MethodContext(self, receiver, arguments, sender)
+        w_new = shadow.MethodContextShadow.make_context(self, receiver, arguments, sender)
         return w_new
 
     def __str__(self):
@@ -556,45 +556,6 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         assert index0 >= 0
         self.bytes = (self.bytes[:index0] + character +
                       self.bytes[index0 + 1:])
-
-def W_BlockContext(w_home, w_sender, argcnt, initialip):
-    from pypy.lang.smalltalk.classtable import w_BlockContext
-    from pypy.lang.smalltalk import shadow
-    # create and attach a shadow manually, to not have to carefully put things
-    # into the right places in the W_PointersObject
-    # XXX could hack some more to never have to create the _vars of w_result
-    w_result = W_PointersObject(w_BlockContext, w_home.size())
-    s_result = shadow.BlockContextShadow(w_result)
-    w_result._shadow = s_result
-    s_result.store_expected_argument_count(argcnt)
-    s_result.store_initialip(initialip)
-    s_result.store_w_home(w_home)
-    s_result.store_pc(initialip)
-    return w_result
-
-def W_MethodContext(w_method, w_receiver,
-                    arguments, w_sender=None):
-    from pypy.lang.smalltalk.classtable import w_MethodContext
-    from pypy.lang.smalltalk import objtable, shadow
-    # From blue book: normal mc have place for 12 temps+maxstack
-    # mc for methods with islarge flag turned on 32
-    size = 12 + w_method.islarge * 20 + w_method.argsize
-    w_result = w_MethodContext.as_class_get_shadow().new(size)
-    assert isinstance(w_result, W_PointersObject)
-    # create and attach a shadow manually, to not have to carefully put things
-    # into the right places in the W_PointersObject
-    # XXX could hack some more to never have to create the _vars of w_result
-    s_result = shadow.MethodContextShadow(w_result)
-    w_result._shadow = s_result
-    s_result.store_w_method(w_method)
-    if w_sender:
-        s_result.store_w_sender(w_sender)
-    s_result.store_w_receiver(w_receiver)
-    s_result.store_pc(0)
-    s_result._temps = [objtable.w_nil] * w_method.tempframesize()
-    for i in range(len(arguments)):
-        s_result.settemp(i, arguments[i])
-    return w_result
 
 # Use black magic to create w_nil without running the constructor,
 # thus allowing it to be used even in the constructor of its own
