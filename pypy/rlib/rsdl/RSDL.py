@@ -68,7 +68,12 @@ class CConfig:
                                      ('pixels', rffi.UCHARP)])
     
     PixelFormat      = platform.Struct('SDL_PixelFormat',
-                                    [('BytesPerPixel', rffi.INT)])
+                                    [('BitsPerPixel', rffi.INT),
+                                     ('BytesPerPixel', rffi.INT),
+                                     ('Rmask', rffi.INT),
+                                     ('Gmask', rffi.INT),
+                                     ('Bmask', rffi.INT),
+                                     ('Amask', rffi.INT)])
 
     Event            = platform.Struct('SDL_Event',
                                     [('type', rffi.INT)])
@@ -155,6 +160,10 @@ EnableUNICODE    = external('SDL_EnableUNICODE',
                              rffi.INT)
 
 WaitEvent        = external('SDL_WaitEvent', 
+                             [EventPtr], 
+                             rffi.INT)
+
+PollEvent        = external('SDL_PollEvent',
                              [EventPtr], 
                              rffi.INT)
 
