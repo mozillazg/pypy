@@ -479,8 +479,20 @@ class ContextPartShadow(AbstractRedirectingShadow):
 
 class BlockContextShadow(ContextPartShadow):
 
-    def __init__(self, w_self):
-        ContextPartShadow.__init__(self, w_self)
+    @staticmethod
+    def make_context(w_home, w_sender, argcnt, initialip):
+        from pypy.lang.smalltalk.classtable import w_BlockContext
+        # create and attach a shadow manually, to not have to carefully put things
+        # into the right places in the W_PointersObject
+        # XXX could hack some more to never have to create the _vars of w_result
+        w_result = model.W_PointersObject(w_BlockContext, w_home.size())
+        s_result = BlockContextShadow(w_result)
+        w_result._shadow = s_result
+        s_result.store_expected_argument_count(argcnt)
+        s_result.store_initialip(initialip)
+        s_result.store_w_home(w_home)
+        s_result.store_pc(initialip)
+        return w_result
 
     def fetch(self, n0):
         if n0 == constants.BLKCTX_HOME_INDEX:
@@ -557,6 +569,31 @@ class MethodContextShadow(ContextPartShadow):
         self.w_receiver_map = objtable.w_nil
         self._w_receiver = None
         ContextPartShadow.__init__(self, w_self)
+
+    @staticmethod
+    def make_context(w_method, w_receiver,
+                     arguments, w_sender=None):
+        from pypy.lang.smalltalk.classtable import w_MethodContext
+        from pypy.lang.smalltalk import objtable
+        # From blue book: normal mc have place for 12 temps+maxstack
+        # mc for methods with islarge flag turned on 32
+        size = 12 + w_method.islarge * 20 + w_method.argsize
+        w_result = w_MethodContext.as_class_get_shadow().new(size)
+        assert isinstance(w_result, model.W_PointersObject)
+        # create and attach a shadow manually, to not have to carefully put things
+        # into the right places in the W_PointersObject
+        # XXX could hack some more to never have to create the _vars of w_result
+        s_result = MethodContextShadow(w_result)
+        w_result._shadow = s_result
+        s_result.store_w_method(w_method)
+        if w_sender:
+            s_result.store_w_sender(w_sender)
+        s_result.store_w_receiver(w_receiver)
+        s_result.store_pc(0)
+        s_result._temps = [objtable.w_nil] * w_method.tempframesize()
+        for i in range(len(arguments)):
+            s_result.settemp(i, arguments[i])
+        return w_result
 
     def fetch(self, n0):
         if n0 == constants.MTHDCTX_METHOD:
