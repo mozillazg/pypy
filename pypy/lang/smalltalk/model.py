@@ -306,7 +306,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         if shadow is None:
             shadow = self.attach_shadow_of_class(TheClass)
         elif not isinstance(shadow, TheClass):
-            shadow.sync_w_self()
+            # TODO Add test for this
             shadow.invalidate_shadow()
             shadow = self.attach_shadow_of_class(TheClass)
         shadow.sync_shadow()
@@ -335,7 +335,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
             if ContextPartShadow.is_block_context(self):
                 return self.as_blockcontext_get_shadow()
             return self.as_methodcontext_get_shadow()
-        self.as_special_get_shadow(ContextPartShadow)
+        return self.as_special_get_shadow(ContextPartShadow)
 
     def as_methoddict_get_shadow(self):
         from pypy.lang.smalltalk.shadow import MethodDictionaryShadow

@@ -23,6 +23,10 @@ class AbstractShadow(object):
     def sync_shadow(self): pass
    
 class AbstractCachingShadow(AbstractShadow):
+    def __init__(self, w_self):
+        AbstractShadow.__init__(self, w_self)
+        self.invalid = True
+        self.invalidate_shadow()
     def invalidate_shadow(self):
         """This should get called whenever the base Smalltalk
         object changes."""
@@ -71,7 +75,7 @@ class ClassShadow(AbstractCachingShadow):
         AbstractCachingShadow.invalidate_shadow(self)
         self.w_methoddict = None
         self.w_superclass = None
-        self.name = None
+        self.name = ""
 
     def getname(self):
         return "%s class" % (self.name or '?',)
