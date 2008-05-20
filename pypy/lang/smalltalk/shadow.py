@@ -347,7 +347,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         # tempframe start
         # Stackpointer from smalltalk world == stacksize in python world
         self.store_stackpointer(utility.unwrap_int(w_sp1) -
-                                self.w_method().tempframesize())
+                                self.tempframesize())
 
     # TODO test
     def store_stackpointer(self, size):
@@ -359,8 +359,8 @@ class ContextPartShadow(AbstractRedirectingShadow):
             self._stack.extend(add)
 
     def wrap_stackpointer(self):
-        return utility.wrap_int(len(self._stack) +
-                                self.w_method().tempframesize())
+        return utility.wrap_int(len(self._stack) + 
+                                self.tempframesize())
 
     # TODO test
     def external_stackpointer(self):
@@ -482,6 +482,10 @@ class ContextPartShadow(AbstractRedirectingShadow):
         del self._stack[start:]
         return res
 
+    def stackend(self):
+        # XXX this is incorrect when there is subclassing
+        return self._w_self_size
+
 class BlockContextShadow(ContextPartShadow):
 
     @staticmethod
@@ -513,18 +517,18 @@ class BlockContextShadow(ContextPartShadow):
         if n0 == constants.BLKCTX_HOME_INDEX:
             return self.store_w_home(w_value)
         if n0 == constants.BLKCTX_INITIAL_IP_INDEX:
-            return self.uwrap_store_initialip(w_value)
+            return self.unwrap_store_initialip(w_value)
         if n0 == constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX:
             return self.unwrap_store_eargc(w_value)
         else:
-            return ContextPartShadow.fetch(self, n0)
+            return ContextPartShadow.store(self, n0, w_value)
 
     def attach_shadow(self):
         # Make sure the home context is updated first
         self.copy_from_w_self(constants.BLKCTX_HOME_INDEX)
         ContextPartShadow.attach_shadow(self)
 
-    def store_unwrap_initialip(self, w_value):
+    def unwrap_store_initialip(self, w_value):
         initialip = utility.unwrap_int(w_value)
         initialip -= 1 + self.w_method().getliteralsize()
         self.store_initialip(initialip)
@@ -567,6 +571,10 @@ class BlockContextShadow(ContextPartShadow):
 
     def stackpointer_offset(self):
         return constants.BLKCTX_STACK_START
+
+    def tempframesize(self):
+        # A blockcontext doesn't have any temps
+        return 0
 
 class MethodContextShadow(ContextPartShadow):
     def __init__(self, w_self):
@@ -637,6 +645,9 @@ class MethodContextShadow(ContextPartShadow):
         self._temps = [objtable.w_nil] * self.w_method().tempframesize()
         ContextPartShadow.attach_shadow(self)
 
+    def tempframesize(self):
+        return self.w_method().tempframesize()
+
     def w_method(self):
         return self._w_method
 
@@ -668,7 +679,3 @@ class MethodContextShadow(ContextPartShadow):
     def stackstart(self):
         return (constants.MTHDCTX_TEMP_FRAME_START +
                 self.w_method().tempframesize())
-
-    def stackend(self):
-        # XXX this is incorrect when there is subclassing
-        return self._w_self_size
