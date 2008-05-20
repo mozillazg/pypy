@@ -1,7 +1,8 @@
 
 from pypy.rpython.rbuilder import AbstractStringBuilderRepr
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.lltypesystem.rstr import STR, UNICODE
+from pypy.rpython.lltypesystem.rstr import STR, UNICODE, char_repr,\
+     string_repr, unichar_repr, unicode_repr
 from pypy.rpython.annlowlevel import llstr
 from pypy.rlib import rgc
 from pypy.rpython.lltypesystem.lltype import staticAdtMethod
@@ -85,10 +86,14 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 class StringBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(STRINGBUILDER)
     basetp = STR
+    string_repr = string_repr
+    char_repr = char_repr
 
 class UnicodeBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(UNICODEBUILDER)
     basetp = UNICODE
+    string_repr = unicode_repr
+    char_repr = unichar_repr
 
 unicodebuilder_repr = UnicodeBuilderRepr()
 stringbuilder_repr = StringBuilderRepr()

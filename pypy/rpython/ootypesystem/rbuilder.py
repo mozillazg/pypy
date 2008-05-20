@@ -1,6 +1,8 @@
 
 from pypy.rpython.rbuilder import AbstractStringBuilderRepr
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.ootypesystem.rstr import string_repr, char_repr,\
+     unicode_repr, unichar_repr
 
 class BaseBuilderRepr(AbstractStringBuilderRepr):
     @classmethod
@@ -32,9 +34,13 @@ class BaseBuilderRepr(AbstractStringBuilderRepr):
 
 class StringBuilderRepr(BaseBuilderRepr):
     lowleveltype = ootype.StringBuilder
+    string_repr = string_repr
+    char_repr = char_repr
 
 class UnicodeBuilderRepr(BaseBuilderRepr):
     lowleveltype = ootype.UnicodeBuilder
+    string_repr = unicode_repr
+    char_repr = unichar_repr
 
 stringbuilder_repr = StringBuilderRepr()
 unicodebuilder_repr = UnicodeBuilderRepr()
