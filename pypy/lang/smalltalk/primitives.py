@@ -505,7 +505,7 @@ INC_GC = 131
 def func(interp, w_rcvr, w_new):
     if w_rcvr.become(w_new):
         return w_rcvr
-    raise PrimitiveNotYetWrittenError
+    raise PrimitiveFailedError
 
 def fake_bytes_left():
     return utility.wrap_int(2**20) # XXX we don't know how to do this :-(
