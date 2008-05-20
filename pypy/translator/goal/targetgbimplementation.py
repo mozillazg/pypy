@@ -1,7 +1,6 @@
 import os
 import py
-from pypy.lang.gameboy import constants
-from pypy.lang.gameboy.gameboy import GameBoy
+from pypy.lang.gameboy.gameboyImplementation import GameBoyImplementation
 
 
 ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
@@ -25,10 +24,10 @@ def entry_point(argv=None):
         filename = argv[1]
     else:
         filename = ROM_PATH+"/rom9/rom9.gb"
-    gameBoy = GameBoy()
+    gameBoy = GameBoyImplementation()
     #gameBoy.load_cartridge_file(ROM_PATH+"/rom4/rom4.gb")#filename)
-    gameBoy.load_cartridge_file(str(filename))
     gameBoy.emulate(EMULATION_CYCLES)
+#    #gameBoy.load_cartridge_file(str(filename))
     
     return 0
     

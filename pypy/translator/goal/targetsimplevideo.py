@@ -2,8 +2,8 @@ from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import rffi, lltype
 import py
 
-WIDTH = 200
-HEIGHT = 200
+WIDTH = 20
+HEIGHT = 20
 
 def entry_point(argv=None):
     RSDL.Init(RSDL.INIT_VIDEO) >= 0
@@ -81,6 +81,7 @@ def update_screen(screen, paintpattern):
     pattern[paintpattern % pl](screen, black, white)
     RSDL.UnlockSurface(screen)
     RSDL.Flip(screen)
+    RSDL.Delay(1000)
     
     
 # -----------------------------------------------------------------------------
@@ -88,6 +89,8 @@ def update_screen(screen, paintpattern):
 def target(*args):
     return entry_point, None
 
+def test_target():
+    entry_point()
 
 if __name__ == '__main__':
     entry_point()
