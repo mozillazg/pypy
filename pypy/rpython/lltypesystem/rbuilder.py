@@ -32,9 +32,13 @@ UNICODEBUILDER = lltype.GcStruct('unicodebuilder',
                                  ('buf', lltype.Ptr(UNICODE)),
                                  adtmeths={'grow':staticAdtMethod(unicodebuilder_grow)})
 
+MAX = 16*1024*1024
+
 class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @classmethod
     def ll_new(cls, init_size):
+        if init_size < 0 or init_size > MAX:
+            init_size = MAX
         ll_builder = lltype.malloc(cls.lowleveltype.TO)
         ll_builder.allocated = init_size
         ll_builder.used = 0
