@@ -322,7 +322,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                              ("objspace.std.withmethodcache", True),
 #                             ("objspace.std.withfastslice", True),
                              ("objspace.std.withprebuiltchar", True),
-#                             ("objspace.std.builtinshortcut", True),
+                             ("objspace.std.builtinshortcut", True),
                              ("objspace.std.optimized_list_getitem", True),
                              ("objspace.std.getattributeshortcut", True),
                              ("translation.list_comprehension_operations",True),

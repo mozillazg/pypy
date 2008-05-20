@@ -524,13 +524,29 @@ class MRDTable(object):
         for t1, num in self.typenum.items():
             setattr(t1, self.attrname, num)
         self.indexarray = CompressedArray(0)
-        self.strict_subclasses = {}
-        for cls1 in list_of_types:
-            lst = []
-            for cls2 in list_of_types:
-                if cls1 is not cls2 and issubclass(cls2, cls1):
-                    lst.append(cls2)
-            self.strict_subclasses[cls1] = lst
+
+    def get_typenum(self, cls):
+        return self.typenum[cls]
+
+    def is_anti_range(self, typenums):
+        # NB. typenums should be sorted.  Returns (a, b) if typenums contains
+        # at least half of all typenums and its complement is range(a, b).
+        # Returns (None, None) otherwise.  Returns (0, 0) if typenums contains
+        # everything.
+        n = len(self.list_of_types)
+        if len(typenums) <= n // 2:
+            return (None, None)
+        typenums = dict.fromkeys(typenums)
+        complement = [typenum for typenum in range(n)
+                              if typenum not in typenums]
+        if not complement:
+            return (0, 0)
+        a = min(complement)
+        b = max(complement) + 1
+        if complement == range(a, b):
+            return (a, b)
+        else:
+            return (None, None)
 
     def normalize_length(self, next_array):
         # make sure that the indexarray is not smaller than any funcarray
@@ -600,7 +616,7 @@ class FuncEntry(object):
             return self._function
         name = self.get_function_name()
         self.compress_typechecks(mrdtable)
-        checklines = self.generate_typechecks(fnargs[nbargs_before:])
+        checklines = self.generate_typechecks(mrdtable, fnargs[nbargs_before:])
         if not checklines:
             body = self.body
         else:
@@ -649,59 +665,114 @@ class FuncEntry(object):
                     fulls += 1
             if fulls == types_total:
                 return 1
-
-            # a word about subclasses: we are using isinstance() to do
-            # the checks in generate_typechecks(), which is a
-            # compromize.  In theory we should check the type ids
-            # instead.  But using isinstance() is better because the
-            # annotator can deduce information from that.  It is still
-            # correct to use isinstance() instead of type ids in
-            # "reasonable" cases, though -- where "reasonable" means
-            # that classes always have a delegate to their superclasses,
-            # e.g. W_IntObject delegates to W_Root.  If this is true
-            # then both kind of checks are good enough to spot
-            # mismatches caused by the compression table.
-
-            # Based on this reasoning, we can compress the typechecks a
-            # bit more - if we accept W_Root, for example, then we
-            # don't have to specifically accept W_IntObject too.
-            for cls, subnode in node.items():
-                for cls2 in mrdtable.strict_subclasses[cls]:
-                    if cls2 in node and node[cls2] == subnode:
-                        del node[cls2]
-
             return 0
 
         types_total = len(mrdtable.list_of_types)
         if full(self.typetree):
             self.typetree = True
 
-    def generate_typechecks(self, args):
+    def generate_typechecks(self, mrdtable, args):
+        attrname = mrdtable.attrname
+        possibletypes = [{} for _ in args]
+        any_type_is_ok = [False for _ in args]
+
         def generate(node, level=0):
+            # this generates type-checking code like the following:
+            #
+            #     _argtypenum = arg1.__typenum
+            #     if _argtypenum == 5:
+            #         ...
+            #     elif _argtypenum == 6 or _argtypenum == 8:
+            #         ...
+            #     else:
+            #         _failedtoimplement = True
+            #
+            # or, in the common particular case of an "anti-range", we optimize it to:
+            #
+            #     _argtypenum = arg1.__typenum
+            #     if _argtypenum < 5 or _argtypenum >= 10:
+            #         ...
+            #     else:
+            #         _failedtoimplement = True
+            #
+            result = []
             indent = '    '*level
             if node is True:
+                for i in range(level, len(args)):
+                    any_type_is_ok[i] = True
                 result.append('%s_failedtoimplement = False' % (indent,))
-                return
+                return result
             if not node:
                 result.append('%s_failedtoimplement = True' % (indent,))
-                return
-            keyword = 'if'
+                return result
+            result.append('%s_argtypenum = %s.%s' % (indent, args[level],
+                                                     attrname))
+            cases = {}
             for key, subnode in node.items():
-                typename = invent_name(self.miniglobals, key)
-                result.append('%s%s isinstance(%s, %s):' % (indent, keyword,
-                                                            args[level],
-                                                            typename))
-                generate(subnode, level+1)
+                possibletypes[level][key] = True
+                casebody = tuple(generate(subnode, level+1))
+                typenum = mrdtable.get_typenum(key)
+                cases.setdefault(casebody, []).append(typenum)
+            for casebody, typenums in cases.items():
+                typenums.sort()
+            cases = [(typenums, casebody)
+                     for (casebody, typenums) in cases.items()]
+            cases.sort()
+            if len(cases) == 1:
+                typenums, casebody = cases[0]
+                a, b = mrdtable.is_anti_range(typenums)
+            else:
+                a, b = None, None
+            keyword = 'if'
+            for typenums, casebody in cases:
+                if a is not None:
+                    if b - a == 1:
+                        condition = '_argtypenum != %d' % a
+                    elif b == a:
+                        condition = 'True'
+                    else:
+                        condition = '_argtypenum < %d or _argtypenum >= %d' % (
+                            a, b)
+                else:
+                    conditions = ['_argtypenum == %d' % typenum
+                                  for typenum in typenums]
+                    condition = ' or '.join(conditions)
+                result.append('%s%s %s:' % (indent, keyword, condition))
+                result.extend(casebody)
                 keyword = 'elif'
             result.append('%selse:' % (indent,))
             result.append('%s    _failedtoimplement = True' % (indent,))
+            return result
 
         result = []
         if self.typetree is not True:
-            generate(self.typetree)
+            result.extend(generate(self.typetree))
             result.append('if _failedtoimplement:')
             result.append('    raise FailedToImplement')
+            for level in range(len(args)):
+                if not any_type_is_ok[level]:
+                    cls = commonbase(possibletypes[level].keys())
+                    clsname = invent_name(self.miniglobals, cls)
+                    result.append('assert isinstance(%s, %s)' % (args[level],
+                                                                 clsname))
         return result
+
+
+def commonbase(classlist):
+    def baseclasses(cls):
+        result = set([cls])
+        for base in cls.__bases__:
+            if '_mixin_' not in base.__dict__:
+                result |= baseclasses(base)
+        return result
+    
+    bag = baseclasses(classlist[0])
+    for cls in classlist[1:]:
+        bag &= baseclasses(cls)
+    _, candidate = max([(len(cls.__mro__), cls) for cls in bag])
+    for cls in bag:
+        assert issubclass(candidate, cls)
+    return candidate
 
 
 class InstallerVersion2(object):
@@ -730,7 +801,9 @@ class InstallerVersion2(object):
                 assert t1 in base_typeorder
 
         lst = list(base_typeorder)
-        lst.sort()
+        def clskey(cls):
+            return cls.__mro__[::-1]
+        lst.sort(lambda cls1, cls2: cmp(clskey(cls1), clskey(cls2)))
         key = tuple(lst)
         try:
             self.mrdtable = self.mrdtables[key]
