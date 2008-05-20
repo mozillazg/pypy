@@ -69,7 +69,7 @@ class Interpreter(object):
                         cnt += 1
                                                   # Do not update the context
                                                   # for this action.
-                        p = p.as_context_get_shadow(False).w_sender()
+                        p = p.as_context_get_shadow().w_sender()
                     self._last_indent = "  " * cnt
                     self._w_last_active_context = self.w_active_context()
 

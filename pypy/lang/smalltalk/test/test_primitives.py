@@ -12,9 +12,12 @@ mockclass = classtable.bootstrap_class
 class MockFrame(model.W_PointersObject):
     def __init__(self, stack):
         self._vars = [None] * 6 + stack
-        s_self = self.as_blockcontext_get_shadow(False)
+        s_self = self.as_blockcontext_get_shadow()
         s_self._stack = stack
         s_self.store_expected_argument_count(0)
+    def as_blockcontext_get_shadow(self):
+        self._shadow = shadow.BlockContextShadow(self)
+        return self._shadow
 
 def wrap(x):
     if isinstance(x, int): return utility.wrap_int(x)

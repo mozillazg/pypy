@@ -16,8 +16,9 @@ class AbstractShadow(object):
         return self._w_self
     def getname(self):
         return repr(self)
-    def detach_shadow(self):
-        pass
+    def attach_shadow(self): pass
+    def detach_shadow(self): pass
+    def sync_shadow(self): pass
    
 class AbstractCachingShadow(AbstractShadow):
     def __init__(self, w_self):
@@ -35,7 +36,7 @@ class AbstractCachingShadow(AbstractShadow):
             self.update_shadow()
 
     def update_shadow(self):
-        self.w_self().setshadow(self)
+        self.w_self().store_shadow(self)
         self.invalid = False
         self.sync_cache()
 
@@ -66,7 +67,7 @@ class ClassShadow(AbstractCachingShadow):
     (i.e. used as the class of another Smalltalk object).
     """
     def invalidate_shadow(self):
-        AbstractShadow.invalidate_shadow(self)
+        AbstractCachingShadow.invalidate_shadow(self)
         self.w_methoddict = None
         self.w_superclass = None
         self.name = None
@@ -75,10 +76,8 @@ class ClassShadow(AbstractCachingShadow):
         return "%s class" % (self.name or '?',)
 
     def sync_cache(self):
-        from pypy.lang.smalltalk import objtable
-
+        from pypy.lang.smalltalk.objtable import w_nil
         "Update the ClassShadow with data from the w_self class."
-        AbstractShadow.update_shadow(self)
 
         w_self = self.w_self()
         # read and painfully decode the format
@@ -124,12 +123,10 @@ class ClassShadow(AbstractCachingShadow):
         assert isinstance(self.w_methoddict, model.W_PointersObject)
 
         w_superclass = w_self._vars[constants.CLASS_SUPERCLASS_INDEX]
-        if w_superclass.is_same_object(objtable.w_nil):
+        if w_superclass.is_same_object(w_nil):
             self.w_superclass = None
         else:
             self.w_superclass = w_superclass
-
-        AbstractShadow.update_shadow(self)
 
     def guess_class_name(self):
         w_self = self.w_self()
@@ -255,7 +252,8 @@ class MethodDictionaryShadow(AbstractCachingShadow):
         w_values = self.w_self()._vars[constants.METHODDICT_VALUES_INDEX]
         assert isinstance(w_values, model.W_PointersObject)
         s_values = w_values.get_shadow()
-        s_values.notifyinvalid(self)
+        # XXX Should add!
+        # s_values.notifyinvalid(self)
         size = self.w_self().size() - constants.METHODDICT_NAMES_INDEX
         self.methoddict = {}
         for i in range(size):
@@ -280,64 +278,94 @@ class AbstractRedirectingShadow(AbstractShadow):
     def store(self, n0, w_value):
         raise NotImplementedError()
 
+    def attach_shadow(self):
+        AbstractShadow.attach_shadow(self)
+        for i in range(self._w_self_size):
+            self.copy_from_w_self(i)
+
+    def detach_shadow(self):
+        self.w_self()._vars = [objtable.w_nil] * self._w_self_size
+        for i in range(self._w_self_size):
+            self.copy_to_w_self(i)
+        self.invalidate_shadow()
+
+    def copy_from_w_self(self, n0):
+        self.store(n0, self.w_self()._fetch(n0))
+    def copy_to_w_self(self, n0):
+        self.w_self()._store(n0, self.fetch(n0))
+ 
 class ContextPartShadow(AbstractRedirectingShadow):
 
     __metaclass__ = extendabletype
 
+    def __init__(self, w_self):
+        from pypy.lang.smalltalk import objtable
+        self._w_sender = objtable.w_nil
+        self._stack = []
+        AbstractRedirectingShadow.__init__(self, w_self)
+
+    # TODO test
     def fetch(self, n0):
         if n0 == constants.CTXPART_SENDER_INDEX:
             return self.w_sender()
         if n0 == constants.CTXPART_PC_INDEX:
             return self.wrap_pc()
         if n0 == constants.CTXPART_STACKP_INDEX:
-            return utility.wrap_int(self.stackpointer())
+            return self.wrap_stackpointer()
         if self.stackstart() <= n0 < self.stackpointer():
             return self._stack[n0-self.stackstart()]
         if self.stackpointer() <= n0 < self.stackend():
+            from pypy.lang.smalltalk import objtable
             return objtable.w_nil
         else:
             # XXX later should store tail out of known context part as well
             raise error.WrapperException("Index in context out of bounds")
 
+    # TODO test
     def store(self, n0, w_value):
         if n0 == constants.CTXPART_SENDER_INDEX:
             return self.store_w_sender(w_value)
         if n0 == constants.CTXPART_PC_INDEX:
             return self.store_unwrap_pc(w_value)
         if n0 == constants.CTXPART_STACKP_INDEX:
-            return self.store_stackpointer(utility.unwrap_int(w_value))
+            return self.unwrap_store_stackpointer(w_value)
         if self.stackstart() <= n0 < self.stackpointer():
-            return self._stack[n0-self.stackstart()] = w_value
+            self._stack[n0 - self.stackstart()] = w_value
+            return
         if self.stackpointer() <= n0 < self.stackend():
-            raise error.WrapperException(
-                "Trying to store within stack range, after actual stack")
+            return
         else:
             # XXX later should store tail out of known context part as well
             raise error.WrapperException("Index in context out of bounds")
 
-    def update_shadow(self):
-        # XXX We need the method before reading pc
-        #     and stack (islarge -> stack + args + locals size)
-        AbstractShadow.update_shadow(self)
-        for i in range(self._w_self_size):
-            self.store(i, self.w_self()._fetch(i))
+    def unwrap_store_stackpointer(self, w_sp1):
+        # the stackpointer in the W_PointersObject starts counting at the
+        # tempframe start
+        # Stackpointer from smalltalk world == stacksize in python world
+        self.store_stackpointer(utility.unwrap_int(w_sp1) -
+                                self.w_method().tempframesize())
 
-    def store_unwrap_pc(self, w_pc):
-        self._pc = utility.unwrap_int(w_pc)
-        self._pc -= self.w_method().bytecodeoffset()
-        self._pc -= 1
+    # TODO test
+    def store_stackpointer(self, size):
+        from pypy.lang.smalltalk import objtable
+        if size < len(self._stack):
+            self._stack = self._stack[:size]
+        else:
+            add = [objtable.w_nil] * (size - len(self._stack))
+            self._stack.extend(add)
 
-    def wrap_pc(self):
-        pc = self._pc
-        pc += 1
-        pc += self.w_method().bytecodeoffset()
-        return utility.wrap_int(pc)
+    def wrap_stackpointer(self):
+        return utility.wrap_int(self.stackpointer() + 1)
+
+    # TODO test
+    def stackpointer(self):
+        return self.stackstart() + len(self._stack)
 
     def w_home(self):
         raise NotImplementedError()
 
     def s_home(self):
-        raise NotImplementedError()
+        return self.w_home().as_methodcontext_get_shadow()
     
     def stackstart(self):
         raise NotImplementedError()
@@ -349,10 +377,12 @@ class ContextPartShadow(AbstractRedirectingShadow):
         " Return self of the method, or the method that contains the block "
         return self.s_home().w_receiver()
 
+    def store_w_sender(self, w_sender):
+        assert isinstance(w_sender, model.W_PointersObject)
+        self._w_sender = w_sender
+
     def w_sender(self):
-        w_v = self.w_self()._vars[constants.CTXPART_SENDER_INDEX]
-        assert isinstance(w_v, model.W_PointersObject)
-        return w_v
+        return self._w_sender
 
     def s_sender(self):
         from pypy.lang.smalltalk import objtable
@@ -362,8 +392,19 @@ class ContextPartShadow(AbstractRedirectingShadow):
         else:
             return w_sender.as_context_get_shadow()
 
-    def store_w_sender(self, w_sender):
-        self.w_self()._vars[constants.CTXPART_SENDER_INDEX] = w_sender
+    # TODO test
+    def store_unwrap_pc(self, w_pc):
+        pc = utility.unwrap_int(w_pc)
+        pc -= self.w_method().bytecodeoffset()
+        pc -= 1
+        self.store_pc(pc)
+
+    # TODO test
+    def wrap_pc(self):
+        pc = self.pc()
+        pc += 1
+        pc += self.w_method().bytecodeoffset()
+        return utility.wrap_int(pc)
 
     def pc(self):
         return self._pc
@@ -371,15 +412,8 @@ class ContextPartShadow(AbstractRedirectingShadow):
     def store_pc(self, newpc):
         self._pc = newpc
 
-    def stackpointer(self):
-        return (utility.unwrap_int(self.w_self()._vars[constants.CTXPART_STACKP_INDEX]) +
-                self.stackpointer_offset())
-
     def stackpointer_offset(self):
         raise NotImplementedError()
-
-    def store_stackpointer(self, pointer):
-        self.w_self()._vars[constants.CTXPART_STACKP_INDEX] = utility.wrap_int(pointer)
 
     # ______________________________________________________________________
     # Method that contains the bytecode for this method/block context
@@ -412,17 +446,13 @@ class ContextPartShadow(AbstractRedirectingShadow):
     # ______________________________________________________________________
     # Stack Manipulation
     def pop(self):
-        w_v = self._stack[-1]
-        self._stack = self._stack[:-1]
-        return w_v
+        return self._stack.pop()
 
     def push(self, w_v):
-        self._stack += [w_v]
+        self._stack.append(w_v)
 
     def push_all(self, lst):
-        #for x in lst:
-        #    self.push(x)
-        self._stack += lst
+        self._stack.extend(lst)
 
     def top(self):
         return self.peek(0)
@@ -450,27 +480,48 @@ class ContextPartShadow(AbstractRedirectingShadow):
 class BlockContextShadow(ContextPartShadow):
 
     def __init__(self, w_self):
-        self._s_home = None
         ContextPartShadow.__init__(self, w_self)
 
-    def invalidate_shadow(self):
-        if self._s_home is not None:
-            self._s_home.unnotify(self)
-            self._s_home = None
-        AbstractShadow.invalidate_shadow(self)
+    def fetch(self, n0):
+        if n0 == constants.BLKCTX_HOME_INDEX:
+            return self.w_home()
+        if n0 == constants.BLKCTX_INITIAL_IP_INDEX:
+            return self.wrap_initialip()
+        if n0 == constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX:
+            return self.wrap_eargc()
+        else:
+            return ContextPartShadow.fetch(self, n0)
 
-    def update_shadow(self):
-        self.store_w_home(self.w_self()._vars[constants.BLKCTX_HOME_INDEX])
-        self._initialip = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX])
-        self._initialip -= 1 + self.w_method().getliteralsize()
-        self._eargc = utility.unwrap_int(self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX])
+    def store(self, n0, w_value):
+        if n0 == constants.BLKCTX_HOME_INDEX:
+            return self.store_w_home(w_value)
+        if n0 == constants.BLKCTX_INITIAL_IP_INDEX:
+            return self.uwrap_store_initialip(w_value)
+        if n0 == constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX:
+            return self.unwrap_store_eargc(w_value)
+        else:
+            return ContextPartShadow.fetch(self, n0)
+
+    def attach_shadow(self):
+        # Make sure the home context is updated first
+        self.copy_from_w_self(constants.BLKCTX_HOME_INDEX)
         ContextPartShadow.update_shadow(self)
 
-    def update_w_self(self):
-        ContextPartShadow.update_w_self(self)
-        self.w_self()._vars[constants.BLKCTX_INITIAL_IP_INDEX] = utility.wrap_int(self._initialip + 1 + self.w_method().getliteralsize())
-        self.w_self()._vars[constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX] = utility.wrap_int(self._eargc)
-        self.w_self()._vars[constants.BLKCTX_HOME_INDEX] = self._w_home
+    def store_unwrap_initialip(self, w_value):
+        initialip = utility.unwrap_int(w_value)
+        initialip -= 1 + self.w_method().getliteralsize()
+        self.store_initialip(initialip)
+
+    def wrap_initialip(self):
+        initialip = self.initialip()
+        initialip += 1 + self.w_method().getliteralsize()
+        return utility.wrap_int(initialip)
+
+    def unwrap_store_eargc(self, w_value):
+        self.store_expected_argument_count(utility.unwrap_int(w_value))
+    
+    def wrap_eargc(self):
+        return utility.wrap_int(self.expected_argument_count())
 
     def expected_argument_count(self):
         return self._eargc
@@ -485,20 +536,11 @@ class BlockContextShadow(ContextPartShadow):
         self._initialip = initialip
         
     def store_w_home(self, w_home):
-        if self._s_home is not None:
-            self._s_home.unnotify(self)
-            self._s_home = None
         assert isinstance(w_home, model.W_PointersObject)
         self._w_home = w_home
 
     def w_home(self):
         return self._w_home
-
-    def s_home(self):
-        if self._s_home is None:
-            self._s_home = self._w_home.as_methodcontext_get_shadow()
-            self._s_home.notifyinvalid(self)
-        return self._s_home
 
     def reset_stack(self):
         self._stack = []
@@ -510,17 +552,48 @@ class BlockContextShadow(ContextPartShadow):
         return constants.BLKCTX_STACK_START
 
 class MethodContextShadow(ContextPartShadow):
-    def __init__(self, w_self, invalid):
-        ContextPartShadow.__init__(self, w_self, invalid)
+    def __init__(self, w_self):
+        from pypy.lang.smalltalk import objtable
+        self.w_receiver_map = objtable.w_nil
+        self._w_receiver = None
+        ContextPartShadow.__init__(self, w_self)
 
-    def update_shadow(self):
+    def fetch(self, n0):
+        if n0 == constants.MTHDCTX_METHOD:
+            return self.w_method()
+        if n0 == constants.MTHDCTX_RECEIVER_MAP:
+            return self.w_receiver_map
+        if n0 == constants.MTHDCTX_RECEIVER:
+            return self.w_receiver()
+        if (0 <= n0-constants.MTHDCTX_TEMP_FRAME_START <
+                 self.w_method().tempframesize()):
+            return self.gettemp(n0-constants.MTHDCTX_TEMP_FRAME_START)
+        else:
+            return ContextPartShadow.fetch(self, n0)
+
+    def store(self, n0, w_value):
+        if n0 == constants.MTHDCTX_METHOD:
+            return self.store_w_method(w_value)
+        if n0 == constants.MTHDCTX_RECEIVER_MAP:
+            self.w_receiver_map = w_value
+            return
+        if n0 == constants.MTHDCTX_RECEIVER:
+            self.store_w_receiver(w_value)
+            return
+        if (0 <= n0-constants.MTHDCTX_TEMP_FRAME_START <
+                 self.w_method().tempframesize()):
+            return self.settemp(n0-constants.MTHDCTX_TEMP_FRAME_START,
+                                w_value)
+        else:
+            return ContextPartShadow.store(self, n0, w_value)
+    
+    def attach_shadow(self):
+        from pypy.lang.smalltalk import objtable
         # Make sure the method is updated first
-        self.store_w_method(self.w_self()._vars[constants.MTHDCTX_METHOD])
-        ContextPartShadow.update_shadow(self)
-
-    def update_w_self(self):
-        ContextPartShadow.update_w_self(self)
-        self.w_self()._vars[constants.MTHDCTX_METHOD] = self._w_method
+        self.copy_from_w_self(constants.MTHDCTX_METHOD)
+        # And that there is space for the temps
+        self._temps = [objtable.w_nil] * self.w_method().tempframesize()
+        ContextPartShadow.attach_shadow(self)
 
     def w_method(self):
         return self._w_method
@@ -530,16 +603,16 @@ class MethodContextShadow(ContextPartShadow):
         self._w_method = w_method
 
     def w_receiver(self):
-        return self.w_self()._vars[constants.MTHDCTX_RECEIVER]
+        return self._w_receiver
 
     def store_w_receiver(self, w_receiver):
-        self.w_self()._vars[constants.MTHDCTX_RECEIVER] = w_receiver
+        self._w_receiver = w_receiver
 
     def gettemp(self, index0):
-        return self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index0]
+        return self._temps[index0]
 
     def settemp(self, index0, w_value):
-        self.w_self()._vars[constants.MTHDCTX_TEMP_FRAME_START + index0] = w_value
+        self._temps[index0] = w_value
 
     def w_home(self):
         return self.w_self()
@@ -547,14 +620,13 @@ class MethodContextShadow(ContextPartShadow):
     def s_home(self):
         return self
 
-    def store_stackpointer(self, pointer):
-        ContextPartShadow.store_stackpointer(self,
-                                             pointer+self.w_method().tempframesize())
-
     def stackpointer_offset(self):
         return constants.MTHDCTX_TEMP_FRAME_START
 
     def stackstart(self):
-        w_method = self.w_method()
         return (constants.MTHDCTX_TEMP_FRAME_START +
-                w_method.tempframesize())
+                self.w_method().tempframesize())
+
+    def stackend(self):
+        # XXX this is incorrect when there is subclassing
+        return self._w_self_size

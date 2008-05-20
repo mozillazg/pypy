@@ -1,21 +1,23 @@
 from pypy.lang.smalltalk import shadow, constants
 from pypy.lang.smalltalk import constants
+from pypy.rlib.objectmodel import instantiate
 
 def bootstrap_class(instsize, w_superclass=None, w_metaclass=None,
                     name='?', format=shadow.POINTERS, varsized=False):
     from pypy.lang.smalltalk import model
     w_class = model.W_PointersObject(w_metaclass, 0)
                                              # a dummy placeholder for testing
-    s = shadow.ClassShadow(w_class, True)
-    s.methoddict = {}
-    if w_superclass is not None:
-        s.w_superclass = w_superclass
+    # XXX
+    s = instantiate(shadow.ClassShadow)
+    s._w_self = w_class
+    s.w_superclass = w_superclass
     s.name = name
     s.instance_size = instsize
     s.instance_kind = format
+    s.w_methoddict = None
     s.instance_varsized = varsized or format != shadow.POINTERS
     s.invalid = False
-    w_class._shadow = s
+    w_class.store_shadow(s)
     return w_class
 
 # ___________________________________________________________________________
@@ -65,8 +67,11 @@ def create_classtable():
         define_core_cls(cls_nm, classtable[super_cls_nm], w_metacls)
     w_Class = classtable["w_Class"]
     w_Metaclass = classtable["w_Metaclass"]
-    w_ProtoObjectClass.as_class_get_shadow().w_superclass = \
-        w_Class
+    # XXX
+    proto_shadow = instantiate(shadow.ClassShadow)
+    proto_shadow.invalid = False
+    proto_shadow.w_superclass = w_Class
+    w_ProtoObjectClass.store_shadow(proto_shadow)
     # at this point, all classes that still lack a w_class are themselves
     # metaclasses
     for nm, w_cls_obj in classtable.items():
