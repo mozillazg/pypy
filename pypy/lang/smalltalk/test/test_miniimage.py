@@ -12,11 +12,12 @@ from pypy.lang.smalltalk import shadow
 from pypy.lang.smalltalk import utility
 # lazy initialization of test data, ie ImageReader and Float class
 
-def setup_module(module):
+def setup_module(module, filename='mini.image'):
+    # XXX XXX find a way to get rid of global state
     global mini_image
     global reader
     global image
-    mini_image = py.magic.autopath().dirpath().dirpath().join('mini.image')
+    mini_image = py.magic.autopath().dirpath().dirpath().join(filename)
     reader = open_miniimage()
     reader.initialize()
     image = squeakimage.SqueakImage()
@@ -228,18 +229,10 @@ def test_map_mirrors_to_classtable():
     
 def test_runimage():
     py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
-    from pypy.lang.smalltalk.shadow import SemaphoreShadow
-    s_semaphore = SemaphoreShadow(None)
-    s_scheduler = s_semaphore.s_scheduler()
-    s_ap = s_scheduler.s_active_process()
-    s_ctx = s_ap.w_suspended_context().as_methodcontext_get_shadow()
-    s_ap.store_w_suspended_context(objtable.w_nil)
-
-    # XXX Important
-    # Push return value of snapshot primitive
-    # The interpreter must resume at the very moment the snapshot primitive
-    # returns.
-    s_ctx._stack = [objtable.w_true]
+    from pypy.lang.smalltalk import wrapper
+    ap = wrapper.ProcessWraper(wrapper.scheduler().active_process())
+    s_ctx = ap.suspended_context().as_methodcontext_get_shadow()
+    ap.store_suspended_context(objtable.w_nil)
 
     interp = interpreter.Interpreter()
     interp.store_w_active_context(s_ctx.w_self())
@@ -285,3 +278,29 @@ def perform(w_receiver, selector, *arguments_w):
             #print interp.s_active_context.stack
         except interpreter.ReturnFromTopLevel, e:
             return e.object
+
+def test_step_forged_image():
+    from pypy.lang.smalltalk import wrapper
+    ap = wrapper.ProcessWrapper(wrapper.scheduler().active_process())
+    s_ctx = ap.suspended_context().as_context_get_shadow()
+    assert isinstance(s_ctx, shadow.BlockContextShadow)
+    assert s_ctx.top().is_same_object(objtable.w_true)
+
+def test_step_forged_image():
+    setup_module(None, filename='running-something-mini.image')
+    from pypy.lang.smalltalk import wrapper
+    ap = wrapper.ProcessWrapper(wrapper.scheduler().active_process())
+    s_ctx = ap.suspended_context().as_context_get_shadow()
+    ap.store_suspended_context(objtable.w_nil)
+
+    interp = interpreter.Interpreter()
+    interp.store_w_active_context(s_ctx.w_self())
+    assert isinstance(s_ctx, shadow.MethodContextShadow)
+    assert interp.s_active_context().top().is_same_object(objtable.w_true)
+    interp.step()
+    interp.step() 
+    assert interp.s_active_context().top().value == 1
+    interp.step() 
+    assert interp.s_active_context().top().value == 2
+    interp.step() 
+    assert interp.s_active_context().top().value == 3

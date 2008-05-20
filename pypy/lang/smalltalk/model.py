@@ -319,8 +319,11 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def as_context_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
         # XXX TODO should figure out itself if its method or block context
-        assert self._shadow is not None
-        return self.as_special_get_shadow(ContextPartShadow)
+        if self._shadow is None:
+            if ContextPartShadow.is_block_context(self):
+                return self.as_blockcontext_get_shadow()
+            return self.as_methodcontext_get_shadow()
+        return self._shadow
 
     def as_methoddict_get_shadow(self):
         from pypy.lang.smalltalk.shadow import MethodDictionaryShadow

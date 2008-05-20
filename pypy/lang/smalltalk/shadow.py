@@ -308,7 +308,12 @@ class ContextPartShadow(AbstractRedirectingShadow):
         self._stack = []
         AbstractRedirectingShadow.__init__(self, w_self)
 
-    # TODO test
+    @staticmethod
+    def is_block_context(w_pointers):
+        from pypy.lang.smalltalk.classtable import w_SmallInteger
+        method_or_argc = w_pointers.fetch(constants.MTHDCTX_METHOD)
+        return method_or_argc.getclass().is_same_object(w_SmallInteger)
+
     def fetch(self, n0):
         if n0 == constants.CTXPART_SENDER_INDEX:
             return self.w_sender()
@@ -325,7 +330,6 @@ class ContextPartShadow(AbstractRedirectingShadow):
             # XXX later should store tail out of known context part as well
             raise error.WrapperException("Index in context out of bounds")
 
-    # TODO test
     def store(self, n0, w_value):
         if n0 == constants.CTXPART_SENDER_INDEX:
             return self.store_w_sender(w_value)
@@ -349,7 +353,6 @@ class ContextPartShadow(AbstractRedirectingShadow):
         self.store_stackpointer(utility.unwrap_int(w_sp1) -
                                 self.tempframesize())
 
-    # TODO test
     def store_stackpointer(self, size):
         from pypy.lang.smalltalk import objtable
         if size < len(self._stack):
@@ -362,7 +365,6 @@ class ContextPartShadow(AbstractRedirectingShadow):
         return utility.wrap_int(len(self._stack) + 
                                 self.tempframesize())
 
-    # TODO test
     def external_stackpointer(self):
         return len(self._stack) + self.stackstart()
 
@@ -397,14 +399,12 @@ class ContextPartShadow(AbstractRedirectingShadow):
         else:
             return w_sender.as_context_get_shadow()
 
-    # TODO test
     def store_unwrap_pc(self, w_pc):
         pc = utility.unwrap_int(w_pc)
         pc -= self.w_method().bytecodeoffset()
         pc -= 1
         self.store_pc(pc)
 
-    # TODO test
     def wrap_pc(self):
         pc = self.pc()
         pc += 1
