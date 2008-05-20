@@ -91,6 +91,18 @@ def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
     w_object.store(constants.MTHDCTX_TEMP_FRAME_START, 'el')
     return w_object
 
+def blockcontext(w_sender=objtable.w_nil, pc=1, stackpointer=1, stacksize=5,
+                  home=methodcontext()):
+    w_object = model.W_PointersObject(classtable.w_MethodContext, constants.MTHDCTX_TEMP_FRAME_START+stacksize)
+    w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
+    w_object.store(constants.CTXPART_PC_INDEX, utility.wrap_int(pc))
+    w_object.store(constants.CTXPART_STACKP_INDEX, utility.wrap_int(stackpointer))
+    w_object.store(constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX, utility.wrap_int(54))
+    w_object.store(constants.BLKCTX_INITIAL_IP_INDEX, utility.wrap_int(17))
+    w_object.store(constants.BLKCTX_HOME_INDEX, home)
+    w_object.store(constants.BLKCTX_STACK_START, 'el')
+    return w_object
+
 def test_context():
     w_m = method()
     w_object = methodcontext(stackpointer=3, method=w_m)
@@ -135,11 +147,20 @@ def test_methodcontext():
     assert s_object.getbytecode() == 101
     assert s_object.s_home() == s_object
 
-def test_swap_shadows():
+def test_attach_detach_mc():
     w_m = method()
     w_object = methodcontext(pc=13, method=w_m)
     old_vars = w_object._vars
     s_object = w_object.as_methodcontext_get_shadow()
+    assert w_object._vars is None
+    s_object.detach_shadow()
+    assert w_object._vars == old_vars
+    assert w_object._vars is not old_vars
+
+def test_attach_detach_bc():
+    w_object = blockcontext(pc=13)
+    old_vars = w_object._vars
+    s_object = w_object.as_blockcontext_get_shadow()
     assert w_object._vars is None
     s_object.detach_shadow()
     assert w_object._vars == old_vars
