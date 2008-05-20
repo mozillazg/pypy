@@ -37,15 +37,31 @@ if not _MS_WINDOWS:
 else:
     libffidir = py.path.local(pypydir).join('translator', 'c', 'src', 'libffi_msvc')
     eci = ExternalCompilationInfo(
+        pre_include_lines = ['#define _WIN32_WINNT 0x501'],
         includes = ['ffi.h', 'windows.h'],
         libraries = ['kernel32'],
         include_dirs = [libffidir],
+        separate_module_sources = ['''
+        #include <stdio.h>
+
+        /* Get the module where the "fopen" function resides in */
+        HANDLE get_libc_handle() {
+            MEMORY_BASIC_INFORMATION  mi;
+            memset(&mi, 0, sizeof(mi));
+
+            if( !VirtualQueryEx(GetCurrentProcess(), &fopen, &mi, sizeof(mi)) )
+                return 0;
+
+            return (HMODULE)mi.AllocationBase;
+        }
+        '''],
         separate_module_files = [libffidir.join('ffi.c'),
                                  libffidir.join('prep_cif.c'),
                                  libffidir.join('win32.c'),
                                  libffidir.join('pypy_ffi.c'),
                                  ],
-        export_symbols = ['ffi_call', 'ffi_prep_cif', 'ffi_prep_closure'],
+        export_symbols = ['ffi_call', 'ffi_prep_cif', 'ffi_prep_closure',
+                          'get_libc_handle'],
         )
 
 FFI_TYPE_P = lltype.Ptr(lltype.ForwardReference())
@@ -193,6 +209,9 @@ if not _MS_WINDOWS:
         # XXX rffi.cast here...
         return res
 
+    def get_libc_name():
+        return 'libc.so.6'
+
 if _MS_WINDOWS:
     def dlopen(name):
         res = rwin32.LoadLibrary(name)
@@ -217,6 +236,12 @@ if _MS_WINDOWS:
 
     FormatError = rwin32.FormatError
     LoadLibrary = rwin32.LoadLibrary
+
+    get_libc_handle = external('get_libc_handle', [], rwin32.HANDLE)
+
+    def get_libc_name():
+        return rwin32.GetModuleFileName(get_libc_handle())
+        
 
 FFI_OK = cConfig.FFI_OK
 FFI_BAD_TYPEDEF = cConfig.FFI_BAD_TYPEDEF
@@ -518,3 +543,4 @@ class CDLL:
 
     def getaddressindll(self, name):
         return dlsym(self.lib, name)
+
