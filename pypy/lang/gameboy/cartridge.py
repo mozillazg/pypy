@@ -149,6 +149,7 @@ class CartridgeManager(object):
         return (checksum == self.get_header_checksum())
     
     def create_bank_controller(self, type, rom, ram, clock_driver):
+        print "create_bank_controller: ", type
         return MEMORY_BANK_MAPPING[type](rom, ram, clock_driver)
 
 
@@ -252,28 +253,28 @@ class MBC(iMemory):
         self.set_ram(ram)
 
     def reset(self):
-        self.rom_bank = constants.ROM_BANK_SIZE
-        self.ram_bank = 0
+        self.rom_bank   = constants.ROM_BANK_SIZE
+        self.ram_bank   = 0
         self.ram_enable = False
-        self.rom = []
-        self.ram = []
-        self.rom_size = 0
-        self.ram_size = 0
+        self.rom        = []
+        self.ram        = []
+        self.rom_size   = 0
+        self.ram_size   = 0
     
     def set_rom(self, buffer):
-        banks = len(buffer) / constants.ROM_BANK_SIZE
+        banks = int(len(buffer) / constants.ROM_BANK_SIZE)
         if banks < self.min_rom_bank_size or banks > self.max_rom_bank_size:
-            raise Exception("Invalid constants.ROM size")
+            raise Exception("Invalid ROM size %s" % hex(len(buffer)))
         self.rom = buffer
-        self.rom_size = constants.ROM_BANK_SIZE*banks - 1
+        self.rom_size = constants.ROM_BANK_SIZE * banks - 1
 
 
     def set_ram(self, buffer):
-        banks = len(buffer) / constants.RAM_BANK_SIZE
+        banks = int(len(buffer) / constants.RAM_BANK_SIZE)
         if banks < self.min_ram_bank_size or banks > self.max_ram_bank_size:
-            raise Exception("Invalid constants.RAM size")
+            raise Exception("Invalid RAM size %s" % hex(len(buffer)))
         self.ram = buffer
-        self.ram_size = constants.RAM_BANK_SIZE*banks - 1
+        self.ram_size = constants.RAM_BANK_SIZE * banks - 1
         
         
     def read(self, address):    
@@ -286,7 +287,7 @@ class MBC(iMemory):
         raise Exception("MBC: Invalid address, out of range")
     
     def write(self, address, data):
-        pass
+        raise Exception("MBC: Invalid write access")
   
 
 #-------------------------------------------------------------------------------
@@ -337,10 +338,13 @@ class MBC1(MBC):
             self.memory_model = data & 0x01
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
             self.ram[self.ram_bank + (address & 0x1FFF)] = data
+        else:
+            raise Exception("Invalid memory Access")
 
     def write_ram_enable(self, address, data):
         if self.ram_size > 0:
             self.ram_enable = ((data & 0x0A) == 0x0A)
+        print "write_ram_enable: ", hex(self.ram_enable)
     
     def write_rom_bank_1(self, address, data):
         if (data & 0x1F) == 0:

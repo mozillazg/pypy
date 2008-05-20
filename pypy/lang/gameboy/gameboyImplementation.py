@@ -1,5 +1,4 @@
 #!/usr/bin/env python 
-import time
         
 from pypy.lang.gameboy.gameboy import GameBoy
 from pypy.lang.gameboy.joypad import JoypadDriver
@@ -9,7 +8,7 @@ from pypy.lang.gameboy.timer import Clock
 from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import specialize
-
+import py
 
 # GAMEBOY ----------------------------------------------------------------------
 
@@ -18,7 +17,6 @@ class GameBoyImplementation(GameBoy):
     def __init__(self):
         GameBoy.__init__(self)
         self.init_sdl()
-        self.mainLoop()
         
     def init_sdl(self):
         assert RSDL.Init(RSDL.INIT_VIDEO) >= 0
@@ -38,8 +36,8 @@ class GameBoyImplementation(GameBoy):
                     if self.check_for_escape():
                         break
                     self.joypad_driver.update(self.event) 
-                #self.emulate(5)
-                #time.sleep(0.01)
+                self.emulate(10)
+                RSDL.Delay(10)
         finally:
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
@@ -117,10 +115,12 @@ class JoypadDriverImplementation(JoypadDriver):
         p = rffi.cast(RSDL.KeyboardEventPtr, event)
         self.last_key = rffi.getintfield(p.c_keysym, 'c_sym')
         
-    def on_key_down(self): 
+    def on_key_down(self):
+        print "press"
         self.toggleButton(self.get_button_handler(self.last_key), True)
     
     def on_key_up(self): 
+        print "release"
         self.toggleButton(self.get_button_handler(self.last_key), False)
     
     def toggleButton(self, pressButtonFunction, enabled):
@@ -128,22 +128,29 @@ class JoypadDriverImplementation(JoypadDriver):
             pressButtonFunction(self, enabled)
     
     def get_button_handler(self, key):
-        print "get_button_handler: ", key
         if key == RSDL.K_UP:
+            print "    up"
             return JoypadDriver.button_up
         elif key == RSDL.K_RIGHT: 
+            print "    right"
             return JoypadDriver.button_right
         elif key == RSDL.K_DOWN:
+            print "    down"
             return JoypadDriver.button_down
         elif key == RSDL.K_LEFT:
+            print "    left"
             return JoypadDriver.button_left
         elif key == RSDL.K_RETURN:
+            print "    start"
             return JoypadDriver.button_start
         elif key == RSDL.K_SPACE:
+            print "    select"
             return JoypadDriver.button_select
         elif key == RSDL.K_a:
+            print "    A"
             return JoypadDriver.button_a
         elif key == RSDL.K_b:
+            print "    B"
             return JoypadDriver.button_b
         return None
         
@@ -175,11 +182,20 @@ class SoundDriverImplementation(SoundDriver):
     
 # ==============================================================================
 
-def entry_point(args=None):
+ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
+import pdb
+
+def entry_point(argv=None):
+    print "startin gameboy emulation"
     gameboy = GameBoyImplementation()
-    if args is None:
-        gameboy.load()
-    # add return statement...
+    if argv is not None and len(argv) > 1:
+        filename = argv[1]
+    else:
+        #filename = gameboy.load()
+        filename = ROM_PATH+"/rom9/rom9.gb"
+    print "loading rom: ", str(filename)
+    gameboy.load_cartridge_file(str(filename))
+    pdb.runcall(gameboy.mainLoop)
     return 0
 
 
@@ -188,5 +204,9 @@ def entry_point(args=None):
 def target(*args):
     return entry_point, None
 
-if __name__ == '__main__':
+def test_target():
     entry_point()
+    
+
+    
+    

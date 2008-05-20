@@ -355,9 +355,13 @@ class CPU(object):
 
     def fetch_execute(self):
         # Execution
-        FETCH_EXECUTE_OP_CODES[self.fetch()](self)
+        opCode = self.fetch()
+        print "    fetch exe:", hex(opCode)
+        FETCH_EXECUTE_OP_CODES[opCode](self)
         
     def execute(self, opCode):
+        print "-"*60
+        print "exe: ", hex(opCode), "|", hex(self.pc.get()), hex(self.sp.get())
         OP_CODES[opCode](self)
         
     def read(self, hi, lo=None):
@@ -369,6 +373,7 @@ class CPU(object):
         return self.memory.read(address)
 
     def write(self, address, data):
+        print "    write: ", "a:", hex(address), "v:", hex(data)
         # 2 cycles
         self.memory.write(address, data)
         self.cycles -= 2
@@ -381,6 +386,7 @@ class CPU(object):
         else:
             data = self.memory.read(self.pc.get(use_cycles))
         self.pc.inc(use_cycles) # 2 cycles
+        print "    fetch: ", data
         return data
     
     def fetch_double_address(self):
