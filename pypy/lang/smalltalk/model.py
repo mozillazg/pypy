@@ -181,6 +181,8 @@ class W_AbstractObjectWithIdentityHash(W_Object):
         return isinstance(self.hash, int)
 
     def become(self, w_other):
+        if not isinstance(w_other, W_AbstractObjectWithIdentityHash):
+            return False
         self.hash, w_other.hash = w_other.hash, self.hash
         return True
 
