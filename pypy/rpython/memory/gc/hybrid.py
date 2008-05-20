@@ -234,7 +234,7 @@ class HybridGC(GenerationGC):
         oldlength = (addr + lengthofs).signed[0]
         old_tot_size = size_gc_header + fixedsize + oldlength * itemsize
         source_addr = addr - size_gc_header
-        self._remove_addr_from_resizable_objects(addr)
+        self.gen2_resizable_objects.remove(addr)
         if grow:
             result = llop.raw_realloc_grow(llmemory.Address, source_addr,
                                            old_tot_size, tot_size)
@@ -253,16 +253,6 @@ class HybridGC(GenerationGC):
                                     can_collect = not grow)
         (result + size_gc_header + lengthofs).signed[0] = newlength
         return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
-
-    def _remove_addr_from_resizable_objects(self, addr):
-        objects = self.gen2_resizable_objects
-        newstack = self.AddressStack()
-        while objects.non_empty():
-            obj = objects.pop()
-            if obj != addr:
-                newstack.append(obj)
-        objects.delete()
-        self.gen2_resizable_objects = newstack
 
     def can_move(self, addr):
         tid = self.header(addr).tid
