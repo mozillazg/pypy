@@ -326,7 +326,7 @@ LL_OPERATIONS = {
     'malloc_nonmovable':    LLOp(canraise=(MemoryError,), canunwindgc=True),
     'malloc_nonmovable_varsize':LLOp(canraise=(MemoryError,),canunwindgc=True),
     'malloc_resizable_buffer': LLOp(canraise=(MemoryError,),canunwindgc=True),
-    'resize_buffer':        LLOp(canraise=(MemoryError,)),
+    'resize_buffer':        LLOp(canraise=(MemoryError,), canunwindgc=True),
     'finish_building_buffer' : LLOp(canraise=(MemoryError,), canunwindgc=True),
     'zero_gc_pointers_inside': LLOp(),
     'free':                 LLOp(),

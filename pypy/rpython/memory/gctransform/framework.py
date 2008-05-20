@@ -507,7 +507,8 @@ class FrameworkGCTransformer(GCTransformer):
                 args = [self.c_const_gc, c_type_id, v_length, c_size,
                         c_varitemsize, c_ofstolength, c_can_collect,
                         c_has_finalizer]
-        livevars = self.push_roots(hop)
+        keep_current_args = flags.get('keep_current_args', False)
+        livevars = self.push_roots(hop, keep_current_args=keep_current_args)
         v_result = hop.genop("direct_call", [malloc_ptr] + args,
                              resulttype=llmemory.GCREF)
         self.pop_roots(hop, livevars)
@@ -536,10 +537,7 @@ class FrameworkGCTransformer(GCTransformer):
                         c_itemsize, c_lengthofs, c_grow):
         vlist = [self.realloc_ptr, self.c_const_gc, v_ptr, v_newsize,
                  c_const_size, c_itemsize, c_lengthofs, c_grow]
-        if c_grow.value:
-            livevars = []    # collection not possible if grow=True
-        else:
-            livevars = self.push_roots(hop)
+        livevars = self.push_roots(hop)
         v_result = hop.genop('direct_call', vlist,
                              resulttype=llmemory.GCREF)
         self.pop_roots(hop, livevars)

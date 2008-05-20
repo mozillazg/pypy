@@ -579,7 +579,7 @@ class GCTransformer(BaseGCTransformer):
     def _gct_resize_buffer_no_realloc(self, hop, v_lgt):
         op = hop.spaceop
         meth = self.gct_fv_gc_malloc_varsize
-        flags = {'flavor':'gc', 'varsize': True}
+        flags = {'flavor':'gc', 'varsize': True, 'keep_current_args': True}
         self.varsize_malloc_helper(hop, flags, meth, [])
         # fish resvar
         v_newbuf = hop.llops[-1].result
