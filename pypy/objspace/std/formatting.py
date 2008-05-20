@@ -256,10 +256,11 @@ def make_formatter_subclass(do_unicode):
             return result
 
         def format(self):
+            lgt = len(self.fmt) + 4 * len(self.values_w) + 10
             if do_unicode:
-                result = UnicodeBuilder()
+                result = UnicodeBuilder(lgt)
             else:
-                result = StringBuilder()
+                result = StringBuilder(lgt)
             self.result = result
             while True:
                 # fast path: consume as many characters as possible
