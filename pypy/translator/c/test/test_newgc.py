@@ -1007,7 +1007,9 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTests):
             s.append_multiple_char('y', 1000)
             gc.collect()
             s.append_multiple_char('y', 1000)
-            return s.build()
+            res = s.build()
+            gc.collect()
+            return res
         c_fn = self.getcompiled(fn)
         res = c_fn()
         assert res[1000] == 'y'
@@ -1020,9 +1022,6 @@ class TestHybridGC(TestGenerationalGC):
     gcpolicy = "hybrid"
     should_be_moving = True
     GC_CANNOT_MALLOC_NONMOVABLE = False
-
-    def test_string_builder_over_allocation(self):
-        py.test.skip("Segfaulting")
 
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
