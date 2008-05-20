@@ -134,11 +134,6 @@ Uint32P = lltype.Ptr(lltype.Array(Uint32, hints={'nolength': True}))
 _Init            = external('SDL_Init', 
                              [Uint32], 
                              rffi.INT)
-#static void CustomApplicationMain (int argc, char **argv)
-
-CustomApplicationMain = external('CustomApplicationMain',
-                                 [rffi.INT, rffi.CCHARP],
-                                  lltype.Void)
                                   
 Mac_Init        = external('SDL_Init', 
                              [Uint32], 
