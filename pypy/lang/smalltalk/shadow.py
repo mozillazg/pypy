@@ -288,10 +288,10 @@ class AbstractRedirectingShadow(AbstractShadow):
         self.w_self()._vars = None
 
     def detach_shadow(self):
+        from pypy.lang.smalltalk import objtable
         self.w_self()._vars = [objtable.w_nil] * self._w_self_size
         for i in range(self._w_self_size):
             self.copy_to_w_self(i)
-        self.invalidate_shadow()
 
     def copy_from_w_self(self, n0):
         self.store(n0, self.w_self()._fetch(n0))
@@ -316,9 +316,9 @@ class ContextPartShadow(AbstractRedirectingShadow):
             return self.wrap_pc()
         if n0 == constants.CTXPART_STACKP_INDEX:
             return self.wrap_stackpointer()
-        if self.stackstart() <= n0 < self.stackpointer():
+        if self.stackstart() <= n0 < self.external_stackpointer():
             return self._stack[n0-self.stackstart()]
-        if self.stackpointer() <= n0 < self.stackend():
+        if self.external_stackpointer() <= n0 < self.stackend():
             from pypy.lang.smalltalk import objtable
             return objtable.w_nil
         else:
@@ -333,10 +333,10 @@ class ContextPartShadow(AbstractRedirectingShadow):
             return self.store_unwrap_pc(w_value)
         if n0 == constants.CTXPART_STACKP_INDEX:
             return self.unwrap_store_stackpointer(w_value)
-        if self.stackstart() <= n0 < self.stackpointer():
+        if self.stackstart() <= n0 < self.external_stackpointer():
             self._stack[n0 - self.stackstart()] = w_value
             return
-        if self.stackpointer() <= n0 < self.stackend():
+        if self.external_stackpointer() <= n0 < self.stackend():
             return
         else:
             # XXX later should store tail out of known context part as well
@@ -359,11 +359,12 @@ class ContextPartShadow(AbstractRedirectingShadow):
             self._stack.extend(add)
 
     def wrap_stackpointer(self):
-        return utility.wrap_int(self.stackpointer() + 1)
+        return utility.wrap_int(len(self._stack) +
+                                self.w_method().tempframesize())
 
     # TODO test
-    def stackpointer(self):
-        return self.stackstart() + len(self._stack)
+    def external_stackpointer(self):
+        return len(self._stack) + self.stackstart()
 
     def w_home(self):
         raise NotImplementedError()

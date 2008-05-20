@@ -121,7 +121,7 @@ def test_context():
     assert s_object.pop() == 'i'
     assert s_object.pop_and_return_n(2) == ['g', 'h']
     assert s_object.pop() == 'f'
-    assert s_object.stackpointer() == s_object.stackstart()
+    assert s_object.external_stackpointer() == s_object.stackstart()
 
 def test_methodcontext():
     w_m = method()
@@ -135,4 +135,12 @@ def test_methodcontext():
     assert s_object.getbytecode() == 101
     assert s_object.s_home() == s_object
 
-
+def test_swap_shadows():
+    w_m = method()
+    w_object = methodcontext(pc=13, method=w_m)
+    old_vars = w_object._vars
+    s_object = w_object.as_methodcontext_get_shadow()
+    assert w_object._vars is None
+    s_object.detach_shadow()
+    assert w_object._vars == old_vars
+    assert w_object._vars is not old_vars
