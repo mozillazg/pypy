@@ -254,6 +254,11 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return self.varsize()
 
     def size(self):
+        if self._shadow is not None:
+            return self._shadow.size()
+        return self._size()
+
+    def _size(self):
         return len(self._vars)
 
     def invariant(self):

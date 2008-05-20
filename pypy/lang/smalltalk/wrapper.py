@@ -10,13 +10,13 @@ class Wrapper(object):
 
     def read(self, index0):
         try:
-            return self.w_self._vars[index0]
+            return self.w_self.fetch(index0)
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
     def write(self, index0, w_new):
         try:
-            self.w_self._vars[index0] = w_new
+            self.w_self.store(index0, w_new)
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
@@ -154,7 +154,7 @@ class SchedulerWrapper(Wrapper):
         # Asserts as W_PointersObject
         lists = Wrapper(w_lists)
         
-        for i in range(len(w_lists._vars) -1, -1, -1):
+        for i in range(w_lists.size() - 1, -1, -1):
             process_list = ProcessListWrapper(lists.read(i))
             if not process_list.is_empty_list():
                 return process_list.remove_first_link_of_list()
