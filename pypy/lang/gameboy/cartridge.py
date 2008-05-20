@@ -194,14 +194,12 @@ class Cartridge(object):
     
     def create_battery_file_path(self, cartridge_file_path):
         if cartridge_file_path.endswith(constants.CARTRIDGE_FILE_EXTENSION):
-            return cartridge_file_path.replace(
-                                        constants.CARTRIDGE_FILE_EXTENSION,
-                                        constants.BATTERY_FILE_EXTENSION)
+            return cartridge_file_path[-len(constants.CARTRIDGE_FILE_EXTENSION)] \
+                                    +constants.BATTERY_FILE_EXTENSION
         elif cartridge_file_path.endswith(
                                 constants.CARTRIDGE_COLOR_FILE_EXTENSION):
-            return cartridge_file_path.replace(
-                                    constants.CARTRIDGE_COLOR_FILE_EXTENSION,
-                                    constants.BATTERY_FILE_EXTENSION)
+            return cartridge_file_path[-len(constants.CARTRIDGE_COLOR_FILE_EXTENSION)] \
+                                    +constants.BATTERY_FILE_EXTENSION
         else:
             return cartridge_file_path + constants.BATTERY_FILE_EXTENSION
     

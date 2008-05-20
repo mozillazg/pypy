@@ -198,7 +198,7 @@ class CPU(object):
         self.halted    = False
         self.cycles    = 0
         self.ini_registers()
-        self.rom       = []
+        self.rom       = [0]
         self.reset()
 
     def ini_registers(self):
