@@ -81,7 +81,7 @@ def update_screen(screen, paintpattern):
     pattern[paintpattern % pl](screen, black, white)
     RSDL.UnlockSurface(screen)
     RSDL.Flip(screen)
-    RSDL.Delay(1000)
+    RSDL.Delay(10  )
     
     
 # -----------------------------------------------------------------------------
