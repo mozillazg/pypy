@@ -124,6 +124,13 @@ class W_SmallInteger(W_Object):
             return False
         return self.value == other.value
 
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return not self == other
+
+
 class W_Float(W_Object):
     """Boxed float value."""
     def __init__(self, value):
@@ -148,6 +155,12 @@ class W_Float(W_Object):
             return False
         # TODO is that correct in Squeak?
         return self.value == other.value
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __ne__(self, other):
+        return not self == other
 
 class W_AbstractObjectWithIdentityHash(W_Object):
     """Object with explicit hash (ie all except small
@@ -265,8 +278,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self._vars, list))
 
-    # XXX XXX
-    # Find better way of overloading shadows...
     def store_shadow(self, shadow):
         self._shadow = shadow
 
