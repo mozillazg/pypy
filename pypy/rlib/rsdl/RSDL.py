@@ -43,6 +43,7 @@ EventPtr            = lltype.Ptr(lltype.ForwardReference())
 KeyboardEventPtr    = lltype.Ptr(lltype.ForwardReference())
 MouseButtonEventPtr = lltype.Ptr(lltype.ForwardReference())
 MouseMotionEventPtr = lltype.Ptr(lltype.ForwardReference())
+KeyPtr              = lltype.Ptr(lltype.ForwardReference())
 
 # ------------------------------------------------------------------------------
 
@@ -224,6 +225,10 @@ Delay            = external('SDL_Delay',
 UpdateRect       = external('SDL_UpdateRect',
                             [SurfacePtr, rffi.INT, rffi.INT, rffi.INT],
                             lltype.Void)
+
+GetKeyName       = external('SDL_GetKeyName',
+                            [rffi.INT], 
+                            rffi.CCHARP)
 
 # ------------------------------------------------------------------------------
 
