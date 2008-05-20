@@ -12,10 +12,10 @@ def entry_point(argv=None):
         filename = argv[1]
     else:
         filename = ROM_PATH+"/rom9/rom9.gb"
-    print "using file: ", str(filename)
+    print "loading rom: ", str(filename)
     gameBoy = GameBoyImplementation()
-    gameBoy.load_cartridge_file(ROM_PATH+"/rom4/rom4.gb")
-    gameBoy.emulate(EMULATION_CYCLES)
+    gameBoy.load_cartridge_file(str(filename))
+    gameBoy.mainLoop()
     return 0
     
 
