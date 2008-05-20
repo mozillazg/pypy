@@ -4,9 +4,13 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.rstr import string_repr, char_repr,\
      unicode_repr, unichar_repr
 
+MAX = 16*1024*1024
+
 class BaseBuilderRepr(AbstractStringBuilderRepr):
     @classmethod
     def ll_new(cls, init_size):
+        if init_size < 0 or init_size > MAX:
+            init_size = MAX
         return ootype.new(cls.lowleveltype)
 
     @staticmethod
