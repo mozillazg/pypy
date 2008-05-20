@@ -210,7 +210,6 @@ class TestVideo:
                     c = white
                 else:
                     c = black
-                    
                 RSDL_helper.set_pixel(self.screen, i, j, c)
         RSDL.UnlockSurface(self.screen)
         RSDL.Flip(self.screen)

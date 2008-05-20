@@ -122,9 +122,9 @@ Uint32P = lltype.Ptr(lltype.Array(Uint32, hints={'nolength': True}))
 # ------------------------------------------------------------------------------
 
 def Init(flags):
-#    if sys.platform == 'darwin':
-#        from AppKit import NSApplication
-#        NSApplication.sharedApplication()
+    if sys.platform == 'darwin':
+        from AppKit import NSApplication
+        NSApplication.sharedApplication()
     return _Init(flags)
 
 # ------------------------------------------------------------------------------
