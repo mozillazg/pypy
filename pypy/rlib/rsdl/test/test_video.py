@@ -84,7 +84,7 @@ class TestVideo:
         RSDL.EnableUNICODE(1)
         print
         print "Keys pressed in the Pygame window give a dot."
-        print "    Use Escape or wait 3 seconds to quit."
+        print "    Wait 3 seconds to quit."
         timeout = time.time() + 3
         event = lltype.malloc(RSDL.Event, flavor='raw')
         try:
@@ -148,7 +148,7 @@ class TestVideo:
             py.test.skip("interactive test only")
         print
         print "Press the given MouseButtons:"
-        print "        Use Escape to quit."
+        print "        Use Escape to pass tests."
         
         event_tests = [("left button",   RSDL.BUTTON_LEFT),
                        ("middle button", RSDL.BUTTON_MIDDLE),

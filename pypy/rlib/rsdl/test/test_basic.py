@@ -20,3 +20,11 @@ def test_surface_basic():
     assert rffi.getintfield(surface, 'c_h') == 50
     RSDL.FreeSurface(surface)
     RSDL.Quit()
+    
+    
+def test_get_keyname():
+    assert RSDL.Init(RSDL.INIT_VIDEO) >= 0
+    assert RSDL.GetKeyName(RSDL.K_PLUS)[0] == '+'
+    assert RSDL.GetKeyName(RSDL.K_RIGHTPAREN)[0] == ')'
+    assert RSDL.GetKeyName(RSDL.K_z)[0] == 'z'
+    
