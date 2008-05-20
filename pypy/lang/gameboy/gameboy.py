@@ -93,6 +93,8 @@ class GameBoy(object):
             self.video.emulate(count)
             self.sound.emulate(count)
             self.joypad.emulate(count)
+            if count == 0:
+                break
             ticks -= count
         return 0
 
@@ -108,32 +110,48 @@ class GameBoy(object):
             raise Exception("invalid read address given")
         return receiver.read(address)
 
+    def print_receiver_msg(self, address, name):
+            print "    mem.receiver ", hex(address), name
+            
     def get_receiver(self, address):
         if 0x0000 <= address <= 0x7FFF:
+            self.print_receiver_msg(address, "memoryBank")
             return self.cartridge_manager.get_memory_bank()
         elif 0x8000 <= address <= 0x9FFF:
+            self.print_receiver_msg(address, "video")
             return self.video
         elif 0xA000 <= address <= 0xBFFF:
+            self.print_receiver_msg(address, "memoryBank")
             return self.cartridge_manager.get_memory_bank()
         elif 0xC000 <= address <= 0xFDFF:
+            self.print_receiver_msg(address, "ram")
             return self.ram
         elif 0xFE00 <= address <= 0xFEFF:
+            self.print_receiver_msg(address, "video")
             return self.video
         elif 0xFF00 <= address <= 0xFF00:
+            self.print_receiver_msg(address, "joypad")
             return self.joypad
         elif 0xFF01 <= address <= 0xFF02:
+            self.print_receiver_msg(address, "serial")
             return self.serial
         elif 0xFF04 <= address <= 0xFF07:
+            self.print_receiver_msg(address, "timer")
             return self.timer
         elif 0xFF0F <= address <= 0xFF0F:
+            self.print_receiver_msg(address, "interrupt")
             return self.interrupt
         elif 0xFF10 <= address <= 0xFF3F:
+            self.print_receiver_msg(address, "sound")
             return self.sound
         elif 0xFF40 <= address <= 0xFF4B:
+            self.print_receiver_msg(address, "video")
             return self.video
         elif 0xFF80 <= address <= 0xFFFE:
+            self.print_receiver_msg(address, "ram")
             return self.ram
         elif 0xFFFF <= address <= 0xFFFF:
+            self.print_receiver_msg(address, "interrupt")
             return self.interrupt
 
     def draw_logo(self):
