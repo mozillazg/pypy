@@ -326,6 +326,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                              ("objspace.std.optimized_list_getitem", True),
                              ("objspace.std.getattributeshortcut", True),
                              ("translation.list_comprehension_operations",True),
+                             ("translation.backendopt.remove_asserts",True),
                              ],
                    cmdline="--allopts --faassen", negation=False),
 
