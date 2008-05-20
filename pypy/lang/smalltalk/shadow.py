@@ -147,7 +147,8 @@ class ClassShadow(AbstractCachingShadow):
             w_realclass = w_self._fetch(w_self.size() - 1)
             assert isinstance(w_realclass, model.W_PointersObject)
             if w_realclass.size() > constants.CLASS_NAME_INDEX:
-                w_name = w_realclass.__fetch(onstants.CLASS_NAME_INDEX)
+                # TODO ADD TEST WHICH GOES OVER THIS PART
+                w_name = w_realclass._fetch(constants.CLASS_NAME_INDEX)
 
         if isinstance(w_name, model.W_BytesObject):
             self.name = w_name.as_string()
@@ -356,6 +357,8 @@ class ContextPartShadow(AbstractRedirectingShadow):
     def store_stackpointer(self, size):
         from pypy.lang.smalltalk import objtable
         if size < len(self._stack):
+            # TODO Warn back to user
+            assert size >= 0
             self._stack = self._stack[:size]
         else:
             add = [objtable.w_nil] * (size - len(self._stack))
