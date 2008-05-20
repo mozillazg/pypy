@@ -96,6 +96,7 @@ def test_context():
     w_object = methodcontext(stackpointer=3, method=w_m)
     w_object2 = methodcontext(w_sender=w_object)
     s_object = w_object.as_methodcontext_get_shadow()
+    assert len(s_object.stack()) == 3
     s_object2 = w_object2.as_methodcontext_get_shadow()
     assert w_object2.fetch(constants.CTXPART_SENDER_INDEX) == w_object
     assert s_object.w_self() == w_object
@@ -112,7 +113,6 @@ def test_context():
     w_object.store(idx, 'f')
     w_object.store(idx + 1, 'g')
     w_object.store(idx + 2, 'h')
-    s_object.update_shadow()
     assert s_object.stack() == ['f', 'g', 'h' ]
     assert s_object.top() == 'h'
     s_object.push('i')
@@ -121,8 +121,6 @@ def test_context():
     assert s_object.pop() == 'i'
     assert s_object.pop_and_return_n(2) == ['g', 'h']
     assert s_object.pop() == 'f'
-    s_object.update_w_self()
-    s_object.update_shadow()
     assert s_object.stackpointer() == s_object.stackstart()
 
 def test_methodcontext():

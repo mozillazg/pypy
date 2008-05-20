@@ -262,20 +262,25 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     # XXX XXX
     # Find better way of overloading shadows...
-    def setshadow(self, shadow):
+    def store_shadow(self, shadow):
         self._shadow = shadow
 
     @objectmodel.specialize.arg(1)
-    def as_special_get_shadow(self, TheClass, invalid=True):
+    def attach_shadow_of_class(self, TheClass):
+        shadow = TheClass(self)
+        self._shadow = shadow
+        shadow.attach_shadow()
+        return shadow
+
+    @objectmodel.specialize.arg(1)
+    def as_special_get_shadow(self, TheClass):
         shadow = self._shadow
         if shadow is None:
-            shadow = TheClass(self, invalid)
-            self._shadow = shadow
+            shadow = self.attach_shadow_of_class(TheClass)
         elif not isinstance(shadow, TheClass):
             shadow.sync_w_self()
             shadow.invalidate_shadow()
-            shadow = TheClass(self, invalid)
-            self._shadow = shadow
+            shadow = self.attach_shadow_of_class(TheClass)
         shadow.sync_shadow()
         return shadow
 
@@ -287,19 +292,19 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import ClassShadow
         return self.as_special_get_shadow(ClassShadow)
 
-    def as_blockcontext_get_shadow(self, invalid=True):
+    def as_blockcontext_get_shadow(self):
         from pypy.lang.smalltalk.shadow import BlockContextShadow
-        return self.as_special_get_shadow(BlockContextShadow, invalid)
+        return self.as_special_get_shadow(BlockContextShadow)
 
-    def as_methodcontext_get_shadow(self, invalid=True):
+    def as_methodcontext_get_shadow(self):
         from pypy.lang.smalltalk.shadow import MethodContextShadow
-        return self.as_special_get_shadow(MethodContextShadow, invalid)
+        return self.as_special_get_shadow(MethodContextShadow)
 
-    def as_context_get_shadow(self, invalid=True):
+    def as_context_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
         # XXX TODO should figure out itself if its method or block context
         assert self._shadow is not None
-        return self.as_special_get_shadow(ContextPartShadow, invalid)
+        return self.as_special_get_shadow(ContextPartShadow)
 
     def as_methoddict_get_shadow(self):
         from pypy.lang.smalltalk.shadow import MethodDictionaryShadow
@@ -554,34 +559,41 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
 def W_BlockContext(w_home, w_sender, argcnt, initialip):
     from pypy.lang.smalltalk.classtable import w_BlockContext
+    from pypy.lang.smalltalk import shadow
+    # create and attach a shadow manually, to not have to carefully put things
+    # into the right places in the W_PointersObject
+    # XXX could hack some more to never have to create the _vars of w_result
     w_result = W_PointersObject(w_BlockContext, w_home.size())
-    # Only home-brewed shadows are not invalid from start.
-    s_result = w_result.as_blockcontext_get_shadow(invalid=False)
+    s_result = shadow.BlockContextShadow(w_result)
+    w_result._shadow = s_result
     s_result.store_expected_argument_count(argcnt)
     s_result.store_initialip(initialip)
     s_result.store_w_home(w_home)
-    s_result._stack = []
-    s_result._pc = initialip
+    s_result.store_pc(initialip)
     return w_result
 
 def W_MethodContext(w_method, w_receiver,
                     arguments, w_sender=None):
     from pypy.lang.smalltalk.classtable import w_MethodContext
+    from pypy.lang.smalltalk import objtable, shadow
     # From blue book: normal mc have place for 12 temps+maxstack
     # mc for methods with islarge flag turned on 32
     size = 12 + w_method.islarge * 20 + w_method.argsize
     w_result = w_MethodContext.as_class_get_shadow().new(size)
     assert isinstance(w_result, W_PointersObject)
-    # Only home-brewed shadows are not invalid from start.
-    s_result = w_result.as_methodcontext_get_shadow(invalid=False)
+    # create and attach a shadow manually, to not have to carefully put things
+    # into the right places in the W_PointersObject
+    # XXX could hack some more to never have to create the _vars of w_result
+    s_result = shadow.MethodContextShadow(w_result)
+    w_result._shadow = s_result
     s_result.store_w_method(w_method)
     if w_sender:
         s_result.store_w_sender(w_sender)
     s_result.store_w_receiver(w_receiver)
     s_result.store_pc(0)
+    s_result._temps = [objtable.w_nil] * w_method.tempframesize()
     for i in range(len(arguments)):
         s_result.settemp(i, arguments[i])
-    s_result._stack = []
     return w_result
 
 # Use black magic to create w_nil without running the constructor,

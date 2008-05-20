@@ -67,7 +67,6 @@ def test_method_lookup():
     assert shadow.lookup("foo") == 1
     assert shadow.lookup("bar") == 2
     py.test.raises(MethodNotFound, shadow.lookup, "zork")
-    print subshadow.methoddict
     assert subshadow.lookup("foo") == 3
     assert subshadow.lookup("bar") == 2
     py.test.raises(MethodNotFound, subshadow.lookup, "zork")

@@ -5,6 +5,7 @@ from pypy.lang.smalltalk import model
 # ___________________________________________________________________________
 # Global Data
 
+
 def wrap_char_table():
     global w_charactertable
     def bld_char(i):
@@ -18,18 +19,19 @@ def wrap_char_table():
 
 wrap_char_table()
 
-w_true  = classtable.classtable['w_True'].as_class_get_shadow().new()
-w_false = classtable.classtable['w_False'].as_class_get_shadow().new()
-w_minus_one = model.W_SmallInteger(-1)
-w_zero = model.W_SmallInteger(0)
-w_one = model.W_SmallInteger(1)
-w_two = model.W_SmallInteger(2)
 
 # Very special nil hack: in order to allow W_PointersObject's to
 # initialize their fields to nil, we have to create it in the model
 # package, and then patch up its fields here:
 w_nil = model.w_nil
 w_nil.w_class = classtable.classtable['w_UndefinedObject']
+
+w_true  = classtable.classtable['w_True'].as_class_get_shadow().new()
+w_false = classtable.classtable['w_False'].as_class_get_shadow().new()
+w_minus_one = model.W_SmallInteger(-1)
+w_zero = model.W_SmallInteger(0)
+w_one = model.W_SmallInteger(1)
+w_two = model.W_SmallInteger(2)
 
 # We use indirection because translated globals are assumed to be constant
 class ObjectTableHolder(object):
