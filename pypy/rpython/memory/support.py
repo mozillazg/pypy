@@ -138,6 +138,22 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
             self.foreach(_add_in_dict, result)
             return result
 
+        def remove(self, addr):
+            """Remove 'addr' from the stack.  The addr *must* be in the list,
+            and preferrably near the top.
+            """
+            got = self.pop()
+            chunk = self.chunk
+            count = self.used_in_last_chunk
+            while got != addr:
+                count -= 1
+                if count < 0:
+                    chunk = chunk.next
+                    count = chunk_size - 1
+                next = chunk.items[count]
+                chunk.items[count] = got
+                got = next
+
     cache[chunk_size] = AddressStack
     return AddressStack
 
