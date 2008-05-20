@@ -76,8 +76,35 @@ class TestVideo:
                         print '(event of type %d)' % c_type
         finally:
             lltype.free(event, flavor='raw')
-                
-                
+
+    def test_poll(self):
+        if not self.is_interactive:
+            py.test.skip("interactive test only")
+        import time, sys
+        RSDL.EnableUNICODE(1)
+        print
+        print "Keys pressed in the Pygame window give a dot."
+        print "    Use Escape or wait 3 seconds to quit."
+        timeout = time.time() + 3
+        event = lltype.malloc(RSDL.Event, flavor='raw')
+        try:
+            while True:
+                # busy polling
+                ok = RSDL.PollEvent(event)
+                ok = rffi.cast(lltype.Signed, ok)
+                assert ok >= 0
+                if ok > 0:
+                    c_type = rffi.getintfield(event, 'c_type')
+                    if c_type == RSDL.KEYDOWN:
+                        sys.stderr.write('.')
+                        timeout = time.time() + 3
+                else:
+                    if time.time() > timeout:
+                        break
+                time.sleep(0.05)
+        finally:
+            lltype.free(event, flavor='raw')
+
     def test_mousemove(self):
         if not self.is_interactive:
             py.test.skip("interactive test only")
@@ -187,16 +214,12 @@ class TestVideo:
         color = RSDL.MapRGB(fmt, 255, 0, 0)
         RSDL.FillRect(surface, lltype.nullptr(RSDL.Rect), color)
         
-        paintrect = lltype.malloc(RSDL.Rect, flavor='raw')
-        rffi.setintfield(paintrect, 'c_x',  75)
-        rffi.setintfield(paintrect, 'c_y',  0)
-        rffi.setintfield(paintrect, 'c_w', 150)
-        rffi.setintfield(paintrect, 'c_h',  50)
-        color = RSDL.MapRGB(fmt, 255, 128, 0)
-        RSDL.FillRect(surface, paintrect, color)
-        
+        paintrect = RSDL_helper.mallocrect(75, 0, 150, 50)
         dstrect = lltype.malloc(RSDL.Rect, flavor='raw')
         try:
+            color = RSDL.MapRGB(fmt, 255, 128, 0)
+            RSDL.FillRect(surface, paintrect, color)
+
             rffi.setintfield(dstrect, 'c_x',  10)
             rffi.setintfield(dstrect, 'c_y',  10)
             rffi.setintfield(dstrect, 'c_w', 150)

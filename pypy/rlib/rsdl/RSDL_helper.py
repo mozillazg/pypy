@@ -93,4 +93,10 @@ def set_pixel(image, x, y, pixel):
     else:
         raise ValueError("bad BytesPerPixel")
 
-
+def mallocrect(x, y, w, h):
+    p = lltype.malloc(RSDL.Rect, flavor='raw')
+    rffi.setintfield(p, 'c_x', x)
+    rffi.setintfield(p, 'c_y', y)
+    rffi.setintfield(p, 'c_w', w)
+    rffi.setintfield(p, 'c_h', h)
+    return p
