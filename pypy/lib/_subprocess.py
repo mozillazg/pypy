@@ -85,31 +85,26 @@ def CreateProcess(name, command_line, process_attr, thread_attr,
                     ('dwYCountChars', _ctypes.c_int),
                     ("dwFillAttribute", _ctypes.c_int),
                     ("dwFlags", _ctypes.c_int),
-                    ("wShowWindow", _ctypes.c_int),
-                    ("cbReserved2", _ctypes.c_int),
+                    ("wShowWindow", _ctypes.c_short),
+                    ("cbReserved2", _ctypes.c_short),
                     ("lpReserved2", _ctypes.c_void_p),
                     ("hStdInput", _ctypes.c_int),
                     ("hStdOutput", _ctypes.c_int),
                     ("hStdError", _ctypes.c_int)
                     ]
-                    
+
     class PROCESS_INFORMATION(_ctypes.Structure):
         _fields_ = [("hProcess", _ctypes.c_int),
                     ("hThread", _ctypes.c_int),
                     ("dwProcessID", _ctypes.c_int),
                     ("dwThreadID", _ctypes.c_int)]
-
-        def __init__(self):
-            Structure.__init__(self)
-
-            self.cb = sizeof(self)
                 
     si = STARTUPINFO()
     si.dwFlags = startup_info.dwFlags
     si.wShowWindow = getattr(startup_info, 'wShowWindow', 0)
     if startup_info.hStdInput:
         si.hStdInput = startup_info.hStdInput.handle
-    if startup_info.hStdInput:
+    if startup_info.hStdOutput:
         si.hStdOutput = startup_info.hStdOutput.handle
     if startup_info.hStdError:
         si.hStdError = startup_info.hStdError.handle
