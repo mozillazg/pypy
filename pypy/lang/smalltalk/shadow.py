@@ -21,15 +21,14 @@ class AbstractShadow(object):
     def sync_shadow(self): pass
    
 class AbstractCachingShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
-        self.update_shadow()
-
     def invalidate_shadow(self):
         """This should get called whenever the base Smalltalk
         object changes."""
         if not self.invalid:
             self.invalid = True
+
+    def attach_shadow(self):
+        self.update_shadow()
 
     def sync_shadow(self):
         if self.invalid:
@@ -282,6 +281,7 @@ class AbstractRedirectingShadow(AbstractShadow):
         AbstractShadow.attach_shadow(self)
         for i in range(self._w_self_size):
             self.copy_from_w_self(i)
+        self.w_self()._vars = None
 
     def detach_shadow(self):
         self.w_self()._vars = [objtable.w_nil] * self._w_self_size
@@ -487,7 +487,7 @@ class BlockContextShadow(ContextPartShadow):
         # XXX could hack some more to never have to create the _vars of w_result
         w_result = model.W_PointersObject(w_BlockContext, w_home.size())
         s_result = BlockContextShadow(w_result)
-        w_result._shadow = s_result
+        w_result.store_shadow(s_result)
         s_result.store_expected_argument_count(argcnt)
         s_result.store_initialip(initialip)
         s_result.store_w_home(w_home)
@@ -517,7 +517,7 @@ class BlockContextShadow(ContextPartShadow):
     def attach_shadow(self):
         # Make sure the home context is updated first
         self.copy_from_w_self(constants.BLKCTX_HOME_INDEX)
-        ContextPartShadow.update_shadow(self)
+        ContextPartShadow.attach_shadow(self)
 
     def store_unwrap_initialip(self, w_value):
         initialip = utility.unwrap_int(w_value)
@@ -584,7 +584,7 @@ class MethodContextShadow(ContextPartShadow):
         # into the right places in the W_PointersObject
         # XXX could hack some more to never have to create the _vars of w_result
         s_result = MethodContextShadow(w_result)
-        w_result._shadow = s_result
+        w_result.store_shadow(s_result)
         s_result.store_w_method(w_method)
         if w_sender:
             s_result.store_w_sender(w_sender)
