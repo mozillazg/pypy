@@ -2,14 +2,23 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.rsdl.constants import _constants
+from pypy.rlib.objectmodel import we_are_translated
+import py
 import sys
 
 if sys.platform == 'darwin':
     eci = ExternalCompilationInfo(
-        includes = ['SDL.h'],
-        include_dirs = ['/Library/Frameworks/SDL.framework/Versions/A/Headers'],
+        includes = ['SDL.h', 
+                    #'Init.h',
+                    #'SDLMain.m'
+                    #'SDLMain.h'*/
+                    ],
+        include_dirs = ['/Library/Frameworks/SDL.framework/Versions/A/Headers',
+                        #str(py.magic.autopath().dirpath().join('macosx-sdl-main'))
+                        ],
         link_extra = [
-            'macosx-sdl-main/SDLMain.m',
+            str(py.magic.autopath().dirpath().join('macosx-sdl-main/SDLMain.m')),
+            #'macosx-sdl-main/SDLMain.m',
             '-I', '/Library/Frameworks/SDL.framework/Versions/A/Headers',
         ],
         frameworks = ['SDL', 'Cocoa']
@@ -119,17 +128,19 @@ Uint16P = lltype.Ptr(lltype.Array(Uint16, hints={'nolength': True}))
 Sint16P = lltype.Ptr(lltype.Array(Sint16, hints={'nolength': True}))
 Uint32P = lltype.Ptr(lltype.Array(Uint32, hints={'nolength': True}))
 
-# ------------------------------------------------------------------------------
-
-def Init(flags):
-    if sys.platform == 'darwin':
-        from AppKit import NSApplication
-        NSApplication.sharedApplication()
-    return _Init(flags)
 
 # ------------------------------------------------------------------------------
 
 _Init            = external('SDL_Init', 
+                             [Uint32], 
+                             rffi.INT)
+#static void CustomApplicationMain (int argc, char **argv)
+
+CustomApplicationMain = external('CustomApplicationMain',
+                                 [rffi.INT, rffi.CCHARP],
+                                  lltype.Void)
+                                  
+Mac_Init        = external('SDL_Init', 
                              [Uint32], 
                              rffi.INT)
 
@@ -209,3 +220,20 @@ Delay            = external('SDL_Delay',
 UpdateRect       = external('SDL_UpdateRect',
                             [SurfacePtr, rffi.INT, rffi.INT, rffi.INT],
                             lltype.Void)
+
+# ------------------------------------------------------------------------------
+
+
+if sys.platform == 'darwin':
+    def Init(flags):
+        if not we_are_translated():
+            from AppKit import NSApplication
+            NSApplication.sharedApplication()
+        #CustomApplicationMain(0, " ")
+        return _Init(flags)
+        #Mac_Init()
+else:
+    Init = _Init
+    
+    
+    
