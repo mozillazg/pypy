@@ -536,8 +536,10 @@ class FrameworkGCTransformer(GCTransformer):
                         c_itemsize, c_lengthofs, c_grow):
         vlist = [self.realloc_ptr, self.c_const_gc, v_ptr, v_newsize,
                  c_const_size, c_itemsize, c_lengthofs, c_grow]
-        # XXX don't really need push_roots in all cases
-        livevars = self.push_roots(hop)
+        if c_grow.value:
+            livevars = []    # collection not possible if grow=True
+        else:
+            livevars = self.push_roots(hop)
         v_result = hop.genop('direct_call', vlist,
                              resulttype=llmemory.GCREF)
         self.pop_roots(hop, livevars)
