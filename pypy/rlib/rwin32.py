@@ -56,6 +56,7 @@ def winexternal(name, args, result):
 if WIN32:
     HANDLE = rffi.ULONG
     LPHANDLE = rffi.CArrayPtr(HANDLE)
+    HMODULE = HANDLE
 
     GetLastError = winexternal('GetLastError', [], DWORD)
 
@@ -95,4 +96,16 @@ if WIN32:
 
     def FAILED(hr):
         return rffi.cast(HRESULT, hr) < 0
-    
+
+    _GetModuleFileName = winexternal('GetModuleFileNameA',
+                                     [HMODULE, rffi.CCHARP, DWORD],
+                                     DWORD)
+
+    def GetModuleFileName(module):
+        size = 255 # MAX_PATH
+        buf = lltype.malloc(rffi.CCHARP.TO, size, flavor='raw')
+        res = _GetModuleFileName(module, buf, size)
+        if not res:
+            return ''
+        else:
+            return ''.join([buf[i] for i in range(res)])
