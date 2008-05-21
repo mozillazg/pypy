@@ -291,24 +291,38 @@ def entry_point(executable, argv, nanos):
         if hasattr(signal, 'SIGXFSZ'):
             signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
 
-    def is_interactive():
-        return go_interactive or os.getenv('PYTHONINSPECT')
+    def inspect_requested():
+        # We get an interactive prompt in one of the following two cases:
+        #
+        #     * go_interactive=True, either from the "-i" option or
+        #       from the fact that we printed the banner;
+        # or
+        #     * PYTHONINSPECT is set and stdin is a tty.
+        #
+        return (go_interactive or
+                (os.getenv('PYTHONINSPECT') and sys.stdin.isatty()))
 
     success = True
 
     try:
         if run_command:
+            # handle the "-c" command
             cmd = sys.argv.pop(1)
             def run_it():
                 exec cmd in mainmodule.__dict__
             success = run_toplevel(run_it)
         elif run_module:
+            # handle the "-m" command
             def run_it():
                 import runpy
                 runpy.run_module(sys.argv[0], None, '__main__', True)
             success = run_toplevel(run_it)
         elif run_stdin:
-            if is_interactive() or sys.stdin.isatty():
+            # handle the case where no command/filename/module is specified
+            # on the command-line.
+            if go_interactive or sys.stdin.isatty():
+                # If stdin is a tty or if "-i" is specified, we print
+                # a banner and run $PYTHONSTARTUP.
                 print_banner()
                 python_startup = os.getenv('PYTHONSTARTUP')
                 if python_startup:
@@ -323,20 +337,25 @@ def entry_point(executable, argv, nanos):
                                                         'exec')
                             exec co_python_startup in mainmodule.__dict__
                         run_toplevel(run_it)
+                # Then we need a prompt.
                 go_interactive = True
             else:
+                # If not interactive, just read and execute stdin normally.
                 def run_it():
                     co_stdin = compile(sys.stdin.read(), '<stdin>', 'exec')
                     exec co_stdin in mainmodule.__dict__
                 mainmodule.__file__ = '<stdin>'
                 success = run_toplevel(run_it)
         else:
+            # handle the common case where a filename is specified
+            # on the command-line.
             mainmodule.__file__ = sys.argv[0]
             scriptdir = resolvedirof(sys.argv[0])
             sys.path.insert(0, scriptdir)
             success = run_toplevel(execfile, sys.argv[0], mainmodule.__dict__)
-            
-        if is_interactive():
+
+        # start a prompt if requested
+        if inspect_requested():
             from _pypy_interact import interactive_console
             success = run_toplevel(interactive_console, mainmodule)
     except SystemExit, e:
