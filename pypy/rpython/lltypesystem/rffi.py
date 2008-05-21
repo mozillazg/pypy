@@ -456,6 +456,7 @@ def str2charp(s):
         array[i] = s[i]
     array[len(s)] = '\x00'
     return array
+str2charp._annenforceargs_ = [str]
 
 def free_charp(cp):
     lltype.free(cp, flavor='raw')

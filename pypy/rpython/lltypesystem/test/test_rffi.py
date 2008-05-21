@@ -674,3 +674,19 @@ class TestLLVMRffi(BaseTestRffi):
 
     def test_hashdefine(self):
         py.test.skip("Macros cannot be called as llexternals by design, rffi does not have any special support for them")
+
+
+def test_enforced_args():
+    from pypy.annotation.model import s_None
+    from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+    from pypy.translator.interactive import Translation
+    def f1():
+        str2charp("hello")
+    def f2():
+        str2charp("world")
+    t = Translation(f1, [])
+    t.rtype()
+    mixann = MixLevelHelperAnnotator(t.context.rtyper)
+    mixann.getgraph(f2, [], s_None)
+    mixann.finish()
+
