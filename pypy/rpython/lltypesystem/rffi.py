@@ -2,17 +2,23 @@ import py
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
+from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof, raw_memcopy
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
-from pypy.rlib import rarithmetic
+from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
-from pypy.rpython.annlowlevel import llhelper
+from pypy.rpython.annlowlevel import llhelper, llstr, hlstr
+from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import llmemory
 import os, sys
 
 class UnhandledRPythonException(Exception):
@@ -470,6 +476,95 @@ def charp2str(cp):
         l.append(cp[i])
         i += 1
     return "".join(l)
+    
+# str -> char*
+def get_nonmovingbuffer(data):
+    """
+    Either returns a non-moving copy or performs neccessary pointer arithmetic
+    to return a pointer to the characters of a string if the string is already
+    nonmovable.
+    Must be followed by a free_nonmovingbuffer call.
+    """
+    if rgc.can_move(data):
+        count = len(data)
+        buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
+        for i in range(count):
+            buf[i] = data[i]
+        return buf
+    else:
+        data_start = cast_ptr_to_adr(llstr(data)) + \
+            offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+        return cast(CCHARP, data_start)
+
+# (str, char*) -> None
+def free_nonmovingbuffer(data, buf):
+    """
+    Either free a non-moving buffer or keep the original storage alive.
+    """
+    if rgc.can_move(data):
+        lltype.free(buf, flavor='raw')
+    else:
+        keepalive_until_here(data)
+
+# int -> (char*, str)
+def alloc_buffer(count):
+    """
+    Returns a (raw_buffer, gc_buffer) pair, allocated with count bytes.
+    The raw_buffer can be safely passed to a native function which expects it
+    to not move. Call str_from_buffer with the returned values to get a safe
+    high-level string. When the garbage collector cooperates, this allows for
+    the process to be performed without an extra copy.
+    Make sure to call keep_buffer_alive_until_here on the returned values.
+    """
+    str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+    gc_buf = rgc.malloc_nonmovable(STR, count)
+    if gc_buf:
+        realbuf = cast_ptr_to_adr(gc_buf) + str_chars_offset
+        raw_buf = cast(CCHARP, realbuf)
+        return raw_buf, gc_buf
+    else:
+        raw_buf = lltype.malloc(CCHARP.TO, count, flavor='raw')
+        return raw_buf, lltype.nullptr(STR)
+alloc_buffer._always_inline_ = True     # to get rid of the returned tuple obj
+
+# (char*, str, int, int) -> None
+def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
+    """
+    Converts from a pair returned by alloc_buffer to a high-level string.
+    The returned string will be truncated to needed_size.
+    """
+    assert allocated_size >= needed_size
+    
+    if gc_buf and (allocated_size == needed_size):
+        return hlstr(gc_buf)
+    
+    new_buf = lltype.malloc(STR, needed_size)
+    try:
+        str_chars_offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
+        if gc_buf:
+            src = cast_ptr_to_adr(gc_buf) + str_chars_offset
+        else:
+            src = cast_ptr_to_adr(raw_buf)
+        dest = cast_ptr_to_adr(new_buf) + str_chars_offset
+        ## FIXME: This is bad, because dest could potentially move
+        ## if there are threads involved.
+        raw_memcopy(src, dest,
+                    llmemory.sizeof(lltype.Char) * needed_size)
+        return hlstr(new_buf)
+    finally:
+        keepalive_until_here(new_buf)
+
+# (char*, str) -> None
+def keep_buffer_alive_until_here(raw_buf, gc_buf):
+    """
+    Keeps buffers alive or frees temporary buffers created by alloc_buffer.
+    This must be called after a call to alloc_buffer, usually in a try/finally
+    block.
+    """
+    if gc_buf:
+        keepalive_until_here(gc_buf)
+    elif raw_buf:
+        lltype.free(raw_buf, flavor='raw')
 
 # char* -> str, with an upper bound on the length in case there is no \x00
 def charp2strn(cp, maxlen):

@@ -7,6 +7,7 @@ class GCBase(object):
     needs_write_barrier = False
     malloc_zero_filled = False
     prebuilt_gc_objects_are_static_roots = True
+    can_realloc = False
 
     # The following flag enables costly consistency checks after each
     # collection.  It is automatically set to True by test_gc.py.  The
@@ -50,16 +51,13 @@ class GCBase(object):
     def size_gc_header(self, typeid=0):
         return self.gcheaderbuilder.size_gc_header
 
-    def malloc(self, typeid, length=0, zero=False, coallocator=None):
+    def malloc(self, typeid, length=0, zero=False):
         """For testing.  The interface used by the gctransformer is
         the four malloc_[fixed,var]size[_clear]() functions.
-        And (if they exist) to the coalloc_[fixed,var]size_clear functions
         """
         # Rules about fallbacks in case of missing malloc methods:
         #  * malloc_fixedsize_clear() and malloc_varsize_clear() are mandatory
         #  * malloc_fixedsize() and malloc_varsize() fallback to the above
-        #  * coalloc_fixedsize_clear() and coalloc_varsize_clear() are optional
-        # There is no non-clear version of coalloc for now.
         # XXX: as of r49360, gctransformer.framework never inserts calls
         # to malloc_varsize(), but always uses malloc_varsize_clear()
 
@@ -71,38 +69,27 @@ class GCBase(object):
             assert not contains_weakptr
             itemsize = self.varsize_item_sizes(typeid)
             offset_to_length = self.varsize_offset_to_length(typeid)
-            if (coallocator is not None and
-                hasattr(self, "coalloc_varsize_clear")):
-                assert not needs_finalizer
-                coallocator = llmemory.cast_ptr_to_adr(coallocator)
-                ref = self.coalloc_varsize_clear(coallocator, typeid,
-                                                 length, size,
-                                                 itemsize, offset_to_length)
+            if zero or not hasattr(self, 'malloc_varsize'):
+                malloc_varsize = self.malloc_varsize_clear
             else:
-                if zero or not hasattr(self, 'malloc_varsize'):
-                    malloc_varsize = self.malloc_varsize_clear
-                else:
-                    malloc_varsize = self.malloc_varsize
-                ref = malloc_varsize(typeid, length, size, itemsize,
-                                     offset_to_length, True, needs_finalizer)
+                malloc_varsize = self.malloc_varsize
+            ref = malloc_varsize(typeid, length, size, itemsize,
+                                 offset_to_length, True, needs_finalizer)
         else:
-            if (coallocator is not None and
-                hasattr(self, "coalloc_fixedsize_clear")):
-                assert not needs_finalizer
-                coallocator = llmemory.cast_ptr_to_adr(coallocator)
-                ref = self.coalloc_fixedsize_clear(coallocator, typeid, size)
+            if zero or not hasattr(self, 'malloc_fixedsize'):
+                malloc_fixedsize = self.malloc_fixedsize_clear
             else:
-                if zero or not hasattr(self, 'malloc_fixedsize'):
-                    malloc_fixedsize = self.malloc_fixedsize_clear
-                else:
-                    malloc_fixedsize = self.malloc_fixedsize
-                ref = malloc_fixedsize(typeid, size, True, needs_finalizer,
-                                       contains_weakptr)
+                malloc_fixedsize = self.malloc_fixedsize
+            ref = malloc_fixedsize(typeid, size, True, needs_finalizer,
+                                   contains_weakptr)
         # lots of cast and reverse-cast around...
         return llmemory.cast_ptr_to_adr(ref)
 
     def id(self, ptr):
         return lltype.cast_ptr_to_int(ptr)
+
+    def can_move(self, addr):
+        return False
 
     def set_max_heap_size(self, size):
         pass
@@ -198,6 +185,8 @@ class GCBase(object):
 class MovingGCBase(GCBase):
     moving_gc = True
 
+    def can_move(self, addr):
+        return True
 
 def choose_gc_from_config(config):
     """Return a (GCClass, GC_PARAMS) from the given config object.

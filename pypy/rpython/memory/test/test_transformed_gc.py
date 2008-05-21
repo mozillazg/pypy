@@ -36,6 +36,7 @@ def rtype(func, inputtypes, specialize=True, gcname='ref', stacklessgc=False,
 class GCTest(object):
     gcpolicy = None
     stacklessgc = False
+    GC_CAN_MOVE = False
 
     def runner(self, f, nbargs=0, statistics=False, transformer=False,
                **extraconfigopts):
@@ -446,8 +447,68 @@ class GenericGCTests(GCTest):
         res = run([])
         assert res == 0
 
+    def test_can_move(self):
+        TP = lltype.GcArray(lltype.Float)
+        def func():
+            from pypy.rlib import rgc
+            return rgc.can_move(lltype.malloc(TP, 1))
+        run = self.runner(func)
+        res = run([])
+        assert res == self.GC_CAN_MOVE
+
+    def test_malloc_nonmovable(self):
+        TP = lltype.GcArray(lltype.Char)
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP, 3)
+                rgc.collect()
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        run = self.runner(func)
+        assert int(self.GC_CAN_MOVE) == run([])
+
+    def test_malloc_nonmovable_fixsize(self):
+        S = lltype.GcStruct('S', ('x', lltype.Float))
+        TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
+        def func():
+            try:
+                from pypy.rlib import rgc
+                a = rgc.malloc_nonmovable(TP)
+                rgc.collect()
+                if a:
+                    assert not rgc.can_move(a)
+                    return 0
+                return 1
+            except Exception, e:
+                return 2
+
+        run = self.runner(func)
+        assert run([]) == int(self.GC_CAN_MOVE)
+
+    def test_resizable_buffer(self):
+        from pypy.rpython.lltypesystem.rstr import STR
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib import rgc
+
+        def f():
+            ptr = rgc.resizable_buffer_of_shape(STR, 2)
+            ptr.chars[0] = 'a'
+            ptr = rgc.resize_buffer(ptr, 1, 200)
+            ptr.chars[1] = 'b'
+            return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
+
+        run = self.runner(f)
+        assert run([]) == 1
 
 class GenericMovingGCTests(GenericGCTests):
+    GC_CAN_MOVE = True
+
     def test_many_ids(self):
         py.test.skip("fails for bad reasons in lltype.py :-(")
         class A(object):
@@ -475,7 +536,6 @@ class GenericMovingGCTests(GenericGCTests):
             lltype.free(idarray, flavor='raw')
         run = self.runner(f)
         run([])
-
 
 class TestMarkSweepGC(GenericGCTests):
     gcname = "marksweep"
@@ -698,21 +758,6 @@ class TestMarkSweepGC(GenericGCTests):
         run = self.runner(func, nbargs=2)
         res = run([3, 0])
         assert res == 1
-
-    def test_coalloc(self):
-        def malloc_a_lot():
-            i = 0
-            while i < 10:
-                i += 1
-                a = [1] * 10
-                j = 0
-                while j < 30:
-                    j += 1
-                    a.append(j)
-            return 0
-        run, statistics = self.runner(malloc_a_lot, statistics=True,
-                                      backendopt=True, coalloc=True)
-        run([])
 
 
 class TestPrintingGC(GenericGCTests):
