@@ -44,6 +44,7 @@ KeyboardEventPtr    = lltype.Ptr(lltype.ForwardReference())
 MouseButtonEventPtr = lltype.Ptr(lltype.ForwardReference())
 MouseMotionEventPtr = lltype.Ptr(lltype.ForwardReference())
 KeyPtr              = lltype.Ptr(lltype.ForwardReference())
+RWopsPtr            = lltype.Ptr(lltype.ForwardReference())
 
 # ------------------------------------------------------------------------------
 
@@ -105,6 +106,7 @@ class CConfig:
                                      ('xrel', rffi.INT),
                                      ('yrel', rffi.INT)])
     
+    RWops = platform.Struct('SDL_RWops', [])
 
 # ------------------------------------------------------------------------------
 
@@ -125,6 +127,7 @@ EventPtr.TO.become(Event)
 KeyboardEventPtr.TO.become(KeyboardEvent)
 MouseButtonEventPtr.TO.become(MouseButtonEvent)
 MouseMotionEventPtr.TO.become(MouseMotionEvent)
+RWopsPtr.TO.become(RWops)
 
 # ------------------------------------------------------------------------------
 
@@ -237,6 +240,10 @@ GetKeyName       = external('SDL_GetKeyName',
 GetError         = external('SDL_GetError',
                             [],
                             rffi.CCHARP)
+
+RWFromFile       = external('SDL_RWFromFile',
+                            [rffi.CCHARP, rffi.CCHARP],
+                            RWopsPtr)
 
 # ------------------------------------------------------------------------------
 
