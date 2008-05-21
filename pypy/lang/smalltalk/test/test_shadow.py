@@ -165,3 +165,17 @@ def test_attach_detach_bc():
     s_object.detach_shadow()
     assert w_object._vars == old_vars
     assert w_object._vars is not old_vars
+
+def test_replace_to_bc():
+    w_object = blockcontext(pc=13)
+    old_vars = w_object._vars
+    s_object = w_object.as_blockcontext_get_shadow()
+    s_object.detach_shadow()
+    s_classshadow = shadow.ClassShadow(w_object)
+    w_object._shadow = s_classshadow
+    s_classshadow.invalid = False
+    s_newobject = w_object.as_blockcontext_get_shadow()
+    assert s_classshadow.invalid
+    assert ([s_newobject.fetch(i) for i in range(s_newobject.size())] ==
+            [s_object.fetch(i) for i in range(s_newobject.size())])
+    assert w_object._shadow is s_newobject

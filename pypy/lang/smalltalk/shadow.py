@@ -27,6 +27,10 @@ class AbstractCachingShadow(AbstractShadow):
         AbstractShadow.__init__(self, w_self)
         self.invalid = True
         self.invalidate_shadow()
+
+    def detach_shadow(self):
+        self.invalidate_shadow()
+
     def invalidate_shadow(self):
         """This should get called whenever the base Smalltalk
         object changes."""
