@@ -214,6 +214,10 @@ SetAlpha         = external('SDL_SetAlpha',
                              [SurfacePtr, Uint32, Uint8], 
                              rffi.INT)
 
+SetColorKey      = external('SDL_SetColorKey',
+                            [SurfacePtr, Uint32, Uint32],
+                            rffi.INT)
+
 ShowCursor       = external('SDL_ShowCursor',
                             [rffi.INT],
                             rffi.INT)
