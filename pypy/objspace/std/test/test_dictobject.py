@@ -362,10 +362,16 @@ class AppTest_DictObject:
         d = D([('x', 'foo')], y = 'bar')
         assert d['x'] == 'foo'
         assert d['y'] == 'bar'
+
         d.setdefault('z', 'baz')
         assert d['z'] == 'baz'
+
+        d['foo'] = 'bar'
+        assert d['foo'] == 42
+
         d.update({'w': 'foobar'})
         assert d['w'] == 'foobar'
+
         d = d.copy()
         assert d['x'] == 'foo'
 
@@ -373,6 +379,25 @@ class AppTest_DictObject:
         assert d3['x'] == 42
         assert d3['y'] == 42
 
+    def test_overridden_setitem_customkey(self):        
+        class D(dict):
+            def __setitem__(self, key, value):
+                dict.__setitem__(self, key, 42)
+        class Foo(object):
+            pass
+
+        d = D()
+        key = Foo()
+        d[key] = 'bar'
+        assert d[key] == 42
+
+    def test_repr_with_overriden_items(self):
+        class D(dict):
+            def items(self):
+                return []
+
+        d = D([("foo", "foobar")])
+        assert repr(d) == "{'foo': 'foobar'}"
 
 # the minimal 'space' needed to use a W_DictObject
 class FakeSpace:
