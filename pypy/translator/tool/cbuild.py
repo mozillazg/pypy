@@ -62,6 +62,17 @@ class ExternalCompilationInfo(object):
 
         export_symbols: list of names that should be exported by the final
         binary.
+
+        compile_extra: list of parameters which will be directly passed to
+        the compiler
+
+        compile_extra: list of parameters which will be directly passed to
+        the linker
+
+        frameworks: list of Mac OS X frameworks which should passed to the
+        linker. Use this instead of the 'libraries' parameter if you want to
+        link to a framework bundle. Not suitable for unix-like .dylib
+        installations.
         """
         for name in self._ATTRIBUTES:
             value = locals()[name]
