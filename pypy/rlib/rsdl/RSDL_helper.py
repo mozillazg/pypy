@@ -100,3 +100,9 @@ def mallocrect(x, y, w, h):
     rffi.setintfield(p, 'c_w', w)
     rffi.setintfield(p, 'c_h', h)
     return p
+
+def blit_complete_surface(src, dst, x, y):
+    dstrect = mallocrect(x, y, rffi.getintfield(src, 'c_w'), rffi.getintfield(src, 'c_w'))
+    RSDL.BlitSurface(src, lltype.nullptr(RSDL.Rect), dst, dstrect)
+    lltype.free(dstrect, flavor='raw')
+
