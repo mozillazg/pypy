@@ -47,24 +47,15 @@ class chain:
         return self
     
     def next(self):
-        try:
-            next_elt = self._cur_iterable_iter.next()
-        except StopIteration:
-            # The current list's iterator is exhausted, switch to next one
-            self._cur_iterable_iter = iter(self._iterables_iter.next())
+        while True:
             try:
-                next_elt = self._cur_iterable_iter.next()
+                return self._cur_iterable_iter.next()
+            except StopIteration:
+                self._cur_iterable_iter = self._iterables_iter.next()
             except AttributeError:
                 # CPython raises a TypeError when next() is not defined
                 raise TypeError('%s has no next() method' % \
                                 (self._cur_iterable_iter))
-        except AttributeError:
-            # CPython raises a TypeError when next() is not defined
-            raise TypeError('%s has no next() method' % \
-                            (self._cur_iterable_iter))
-            
-        return next_elt
-            
 
 class count:
     """Make an iterator that returns consecutive integers starting
