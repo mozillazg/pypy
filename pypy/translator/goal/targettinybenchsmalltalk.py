@@ -30,10 +30,8 @@ def tinyBenchmarks():
 
     assert w_method
     w_frame = w_method.create_frame(w_object, [])
-    interp.w_active_context = w_frame
+    interp.store_w_active_context(w_frame)
 
-    print w_method
-    print "Going to execute %d toplevel bytecodes" % (len(w_method.bytes),)
     counter = 0
 
     from pypy.lang.smalltalk.interpreter import BYTECODE_TABLE
