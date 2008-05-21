@@ -128,13 +128,15 @@ class ClassShadow(AbstractCachingShadow):
         self.guess_class_name()
 
         # read the methoddict
-        self.w_methoddict = w_self._fetch(constants.CLASS_METHODDICT_INDEX)
-        assert isinstance(self.w_methoddict, model.W_PointersObject)
+        w_methoddict = w_self._fetch(constants.CLASS_METHODDICT_INDEX)
+        assert isinstance(w_methoddict, model.W_PointersObject)
+        self.w_methoddict = w_methoddict
 
         w_superclass = w_self._fetch(constants.CLASS_SUPERCLASS_INDEX)
         if w_superclass.is_same_object(w_nil):
             self.w_superclass = None
         else:
+            assert isinstance(w_superclass, model.W_PointersObject)
             self.w_superclass = w_superclass
 
     def guess_class_name(self):
@@ -315,6 +317,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         from pypy.lang.smalltalk import objtable
         self._w_sender = objtable.w_nil
         self._stack = []
+        self.currentBytecode = None
         AbstractRedirectingShadow.__init__(self, w_self)
 
     @staticmethod
@@ -496,6 +499,9 @@ class ContextPartShadow(AbstractRedirectingShadow):
     def stackend(self):
         # XXX this is incorrect when there is subclassing
         return self._w_self_size
+
+    def tempframesize(self):
+        raise NotImplementedError()
 
 class BlockContextShadow(ContextPartShadow):
 
