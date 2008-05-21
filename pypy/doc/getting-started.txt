@@ -568,69 +568,54 @@ Windows, see the `windows document`_)
 
 .. _`windows document`: windows.html
 
-Not for the faint of heart nor the owner of a very old machine: you can
+You can
 translate the PyPy's whole of Python interpreter to low level C code. This is
 the largest and
-ultimate example of source that our translation toolchain can process::
+ultimate example of source that our translation toolchain can process.
+If you don't need threads, the most standard variant nowadays is::
 
     cd pypy/translator/goal
-    python translate.py --run targetpypystandalone.py
+    python translate.py --gc=hybrid targetpypystandalone.py --allworkingmodules --faassen
 
-By default the translation process will try to use the
-`Boehm-Demers-Weiser garbage collector`_ for the translated interpreter.  Use
-``--gc=generation`` to use our own exact generational implementation which
-is now faster and doesn't have external dependencies.  Otherwise, be
-sure to install Boehm before starting the translation (e.g. by running
-``apt-get install libgc-dev`` on Debian or Ubuntu).
+This whole process will take some time and quite a lot of memory (around
+1GB).  It creates an executable ``pypy-c`` in the current directory.
+The ``--gc=hybrid`` option means that the ``pypy-c`` will use our own
+exact generational garbage collector implementation, whose performance
+is rather good nowadays.  The ``--faassen`` option enables all the
+worthwhile performance optimizations, but slows down the translation
+itself.  On Linux 32-bit Intel machines you can also add
+``--gcrootfinder=asmgcc`` after ``--gc=hybrid`` for extra speed (and
+extra translation time).
 
-This whole process will take some time and quite a lot of memory (although it
-might just work on a machine with 512MB of RAM). If the translation is
-finished running and after you closed the graph you will be greeted
-(because of ``--run`` option) by the friendly prompt of a PyPy
-executable that is not running on top of CPython any more::
+At the moment, threads only work with the `Boehm-Demers-Weiser garbage
+collector`_.  So to enable them, you need instead::
 
-    [translation:info] created: ./pypy-c
-    [translation:info] Running compiled c source...
-    debug: entry point starting
-    debug:  argv -> ./pypy-c
-    debug: importing code
-    debug: calling code.interact()
-    Python 2.4.1 (pypy 0.7.1 build 18929) on linux2
-    Type "help", "copyright", "credits" or "license" for more information.
-    (InteractiveConsole)
-    >>>> 1 + 1
-    2
-    >>>> 
+    cd pypy/translator/goal
+    python translate.py --thread targetpypystandalone.py --allworkingmodules --faassen
 
-With the default options, you can find the produced executable under the
+Be sure to install Boehm before starting the translation (e.g. by running
+``apt-get install libgc-dev`` on Debian or Ubuntu).  Translating with Boehm
+is a bit faster and less memory-hungry than translating with our own GCs.
+
+In any case, as described above, you can find the produced executable under the
 name ``pypy-c``.  Type ``pypy-c --help`` to see the options it supports --
 mainly the same basic options as CPython.  In addition, ``pypy-c --info``
 prints the translation options that where used to produce this particular
-executable.  This executable contains a lot of things that are hard-coded
-for your particular system, so it's not really meant to
-be installed or redistributed at the moment.
+executable.  This executable can be moved around or copied on other machines;
+see Installation_ below.
 
-If you exit the interpreter you get a pygame window with all the flow graphs
-plus a pdb prompt. Moving around in the resulting flow graph is difficult
-because of the sheer size of the result. For this reason, the debugger prompt
-you get at the end has been enhanced with commands to facilitate locating
-functions and classes. Type ``help graphs`` for a list of the new commands.
-Help is also available on each of these new commands.
-
-The ``translate.py`` script itself takes a number of options controlling
+The ``translate.py`` script takes a very large number of options controlling
 what to translate and how.  See ``translate.py -h``. Some of the more
 interesting options are:
-
-   * ``--text``: don't show the flow graph after the translation is
-     done. This is useful if you don't have pygame installed.
 
    * ``--stackless``: this produces a pypy-c that includes features
      inspired by `Stackless Python <http://www.stackless.com>`__.
 
-   * ``--gc=boehm|ref|marknsweep|semispace|generation``: choose between using
+   * ``--gc=boehm|ref|marknsweep|semispace|generation|hybrid``:
+     choose between using
      the `Boehm-Demers-Weiser garbage collector`_, our reference
      counting implementation or three of own collector implementations
-     (as we have seen Boehm's collector is the default).
+     (Boehm's collector is the default).
 
 Find a more detailed description of the various options in our `configuration
 sections`_.
@@ -738,6 +723,34 @@ At the moment the only way to load a .NET class is to explicitly use
 ``clr.load_cli_class``; in the future they will be automatically
 loaded when accessing .NET namespaces as they were Python modules, as
 IronPython does.
+
+Installation
+++++++++++++
+
+A prebuilt ``pypy-c`` can be installed in a standard location like
+``/usr/local/bin``, although some details of this process are still in
+flux.  It can also be copied to other machines as long as their system
+is "similar enough": some details of the system on which the translation
+occurred might be hard-coded in the executable.
+
+For installation purposes, note that the executable needs to be able to
+find its version of the Python standard library in the following three
+directories: ``lib-python/2.4.1``, ``lib-python/modified-2.4.1`` and
+``pypy/lib``.  They are located by "looking around" starting from the
+directory in which the executable resides.  The current logic is to try
+to find a ``PREFIX`` from which the directories
+``PREFIX/lib-python/2.4.1`` and ``PREFIX/lib-python/modified.2.4.1`` and
+``PREFIX/pypy/lib`` can all be found.  The prefixes that are tried are::
+
+    .
+    ./share/pypy-1.0
+    ..
+    ../share/pypy-1.0
+    ../..
+    ../../share/pypy-1.0
+    ../../..
+    etc.
+
 
 .. _`start reading sources`: 
 
