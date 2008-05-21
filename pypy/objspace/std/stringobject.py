@@ -861,7 +861,7 @@ def getnewargs__String(space, w_str):
 def repr__String(space, w_str):
     s = w_str._value
 
-    buf = StringBuilder(len(s) + 10)
+    buf = StringBuilder(50)
 
     quote = "'"
     if quote in s and '"' not in s:
