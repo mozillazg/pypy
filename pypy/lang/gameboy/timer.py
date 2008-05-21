@@ -23,9 +23,10 @@ class Timer(iMemory):
         self.divider_cycles = constants.DIV_CLOCK
         self.tima           = 0
         self.tma            = 0
-        self.tac            = 0x00
+        self.tac            = 0
         self.timer_cycles   = constants.TIMER_CLOCK[0]
         self.timer_clock    = constants.TIMER_CLOCK[0]
+        print constants.TIMER_CLOCK
 
     def write(self,  address, data):
         address = int(address)
@@ -73,7 +74,8 @@ class Timer(iMemory):
 
     def set_timer_control(self,  data):
         if (self.tac & 0x03) != (data & 0x03):
-            self.timer_clock =  self.timer_cycles = constants.TIMER_CLOCK[data & 0x03]
+            self.timer_clock  = constants.TIMER_CLOCK[data & 0x03]
+            self.timer_cycles = constants.TIMER_CLOCK[data & 0x03]
         self.tac = data
 
     def get_cycles(self):
@@ -82,37 +84,29 @@ class Timer(iMemory):
         return self.divider_cycles
 
     def emulate(self,  ticks):
-        ticks = int(ticks)
         self.emulate_divider(ticks)
         self.emulate_timer(ticks)
 
     def emulate_divider(self,  ticks):
-        ticks = int(ticks)
         self.divider_cycles -= ticks
         if self.divider_cycles > 0:
             return
-        count = int(ceil(-1.0*self.divider_cycles / constants.DIV_CLOCK))
-        self.div = (self.div + count) & 0xFF
-        self.divider_cycles += constants.DIV_CLOCK*count
+        while self.divider_cycles <= 0:
+            self.div = (self.div + 1) & 0xFF;
+            self.divider_cycles += constants.DIV_CLOCK;
+        print self.divider_cycles
             
     def emulate_timer(self,  ticks):
-        ticks = int(ticks)
         if (self.tac & 0x04) == 0:
             return
         self.timer_cycles -= ticks
-        if self.timer_cycles > 0:
-            return
-        count = int(ceil(-1.0*self.timer_cycles / self.timer_clock))
-        self.tima_zero_pass_check(count)
-        self.tima = (self.tima + count) & 0xFF
-        self.timer_cycles += self.timer_clock * count
+        while self.timer_cycles <= 0:
+            self.tima = (self.tima + 1) & 0xFF
+            self.timer_cycles += self.timer_clock
+            if self.tima == 0x00:
+                self.tima = self.tma
+                self.interrupt.raise_interrupt(constants.TIMER)
 
-    def tima_zero_pass_check(self, count):
-        if (self.tima < 0) and (self.tima + count >= 0):
-            self.tima = self.tma - count
-            self.interrupt.raise_interrupt(constants.TIMER)
-            #print self.interrupt.timer.is_pending(), self.interrupt.is_pending(constants.TIMER)
-        
 # CLOCK DRIVER -----------------------------------------------------------------
 
 class Clock(object):

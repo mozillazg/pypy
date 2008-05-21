@@ -24,7 +24,7 @@ class GameBoy(object):
         self.create_gamboy_elements()
 
     def create_drivers(self):
-        self.clock = Clock()
+        self.clock         = Clock()
         self.joypad_driver = JoypadDriver()
         self.video_driver  = VideoDriver()
         self.sound_driver  = SoundDriver()
@@ -87,16 +87,27 @@ class GameBoy(object):
     def emulate(self, ticks):
         while ticks > 0:
             count = self.get_cycles()
+            #print "emulating", ticks, "cycles, available", count
             self.cpu.emulate(count)
             self.serial.emulate(count)
             self.timer.emulate(count)
             self.video.emulate(count)
             self.sound.emulate(count)
             self.joypad.emulate(count)
+            #self.print_cycles()
             if count == 0:
-                break
+                self.print_cycles()
+                return 0
             ticks -= count
         return 0
+    
+    def print_cycles(self):
+        for element in [(" video:", self.video), 
+                        ("serial:", self.serial),
+                        (" timer:", self.timer), 
+                        (" sound:", self.sound), 
+                        ("joypad:", self.joypad)]:
+            print "        ", element[0], element[1].get_cycles()
 
     def write(self, address, data):
         receiver = self.get_receiver(address)
@@ -111,7 +122,7 @@ class GameBoy(object):
         return receiver.read(address)
 
     def print_receiver_msg(self, address, name):
-            print "    mem.receiver ", hex(address), name
+            print "    recei: ", hex(address), name
             
     def get_receiver(self, address):
         if 0x0000 <= address <= 0x7FFF:

@@ -89,17 +89,101 @@ def test_mbc_read_write_test(mbc=None):
         pass
     mbc.ram_enable = True
     assert mbc.read(0xA000) == value
+
+# -----------------------------------------------------------------------------
+
+def get_default_mbc():
+    return DefaultMBC([0]*0xFFFF, [0]*0xFFFF, get_clock_driver()) 
+
+def test_default_mbc_read():
+    py.test.skip("not yet implemented")
+    mbc = get_default_mbc()
+
+def test_default_mbc_write():
+    py.test.skip("not yet implemented")
+    mbc = get_default_mbc()
     
-    
+# -----------------------------------------------------------------------------
+
+def get_mbc1():
+    return MBC1([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
 
 def test_mbc1_write():  
     py.test.skip("buggy implementation of MBC1++")
-    mbc1 = MBC1([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
+    mbc1 = get_mbc1()
     test_mbc_read_write_test(mbc1)
+    
+def test_mbc1_read():
+    py.test.skip("not yet implemented")
+    mbc1 = get_mbc1()
+    # the same as in mbc
+    pass
 
-    
+# -----------------------------------------------------------------------------
+
+def get_mbc2():
+    return MBC2([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
+
+def test_mbc2_read_write():
+    py.test.skip("not yet implemented")
+    mbc2 = get_mbc2()
     
 
+def test_mbc2_write():
+    py.test.skip("not yet implemented")
+    mbc2 = get_mbc2()
     
+# -----------------------------------------------------------------------------
+
+def get_mbc3():
+    return MBC3([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
+
+def test_mbc3_read():
+    py.test.skip("not yet implemented")
+    mbc3 = get_mbc3()
+
+def test_mbc3_write():
+    py.test.skip("not yet implemented")
+    mbc3 = get_mbc3()
     
+# -----------------------------------------------------------------------------
+
+def get_mbc5():
+    return MBC5([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
     
+def test_mbc5_read():
+    py.test.skip("not yet implemented")
+    mbc5 = get_mbc5()
+
+def test_mbc5_write():
+    py.test.skip("not yet implemented")
+    mbc5 = get_mbc5()
+
+# -----------------------------------------------------------------------------
+
+def get_huc1():
+    return HuC1([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
+    
+def test_huc1_read():
+    py.test.skip("not yet implemented")
+    huc1 = get_huc1()
+
+def test_huc1_write():
+    py.test.skip("not yet implemented")
+    huc1 = get_huc1()    
+
+# -----------------------------------------------------------------------------
+
+def get_huc3():
+    return HuC3([0]*0x5FFF,[0]*0xBFFF, get_clock_driver())
+
+def test_huc3_read():
+    py.test.skip("not yet implemented")
+    huc3 = get_huc3()
+
+def test_huc3_write():
+    py.test.skip("not yet implemented")
+    huc3 = get_huc3()
+
+# -----------------------------------------------------------------------------
+

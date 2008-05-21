@@ -166,7 +166,9 @@ class FlagRegister(Register):
              self.reset()
         if isinstance(a, (Register)):
             a = a.get()
+        print " "*8, a, "z_flag_compare", self.z_flag
         self.z_flag = ((a & 0xFF) == 0)
+        print self.z_flag
             
     def c_flag_add(self, s, compare_and=0x01, reset=False):
         if reset:
@@ -183,6 +185,9 @@ class FlagRegister(Register):
             self.c_flag = True
         
 # # ------------------------------------------------------------------------------
+
+
+DEBUG_INSTRUCTION_COUNTER = 1
 
 class CPU(object):
     """
@@ -230,6 +235,7 @@ class CPU(object):
         self.ime     = False
         self.halted  = False
         self.cycles  = 0
+        self.instruction_counter = 0
         
     def reset_registers(self):
         self.a.reset()
@@ -239,7 +245,9 @@ class CPU(object):
         self.hl.reset()
         self.sp.reset()
         self.pc.reset()
-        
+    
+    # ---------------------------------------------------------------
+
     def get_af(self):
         return self.af
         
@@ -326,7 +334,9 @@ class CPU(object):
 
     def set_rom(self, banks):
         self.rom = banks       
-            
+    
+    # ---------------------------------------------------------------
+    
     def emulate(self, ticks):
         ticks = int(ticks)
         self.cycles += ticks
@@ -356,13 +366,32 @@ class CPU(object):
     def fetch_execute(self):
         # Execution
         opCode = self.fetch()
-        print "    fetch exe:", hex(opCode)
+        print "    fetch exe:", hex(opCode), "  "
+        #, FETCH_EXECUTE_OP_CODES[opCode].__name__
         FETCH_EXECUTE_OP_CODES[opCode](self)
         
+        
     def execute(self, opCode):
-        print "-"*60
-        print "exe: ", hex(opCode), "|", hex(self.pc.get()), hex(self.sp.get())
+        self.instruction_counter += 1
+        print self.instruction_counter, "-"*60
+        print "exe: ", hex(opCode),  "   "
+        #, OP_CODES[opCode].__name__
+        print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
+        self.print_registers()
         OP_CODES[opCode](self)
+        
+    def print_registers(self):
+        print "    a: "+hex(self.a.get())
+        str = "    af: "+hex(self.af.get())
+        str += " bc: "+hex(self.bc.get())
+        str += " de: "+hex(self.de.get())
+        str += " hl: "+hex(self.hl.get())
+        print str
+        
+    # -------------------------------------------------------------------
+        
+    def debug(self):
+        print "0xDD called"
         
     def read(self, hi, lo=None):
         # memory Access, 1 cycle
@@ -979,11 +1008,13 @@ def create_group_op_codes(table):
 
 def group_lambda(function, register_getter, value=None):
     if value is None:
-        return lambda s: function(s, RegisterCallWrapper(register_getter(s)), \
+        def f(s): function(s, RegisterCallWrapper(register_getter(s)), \
                                RegisterCallWrapper(register_getter(s)))
     else:
-        return lambda s: function(s, RegisterCallWrapper(register_getter(s)), \
+        def f(s): function(s, RegisterCallWrapper(register_getter(s)), \
                                RegisterCallWrapper(register_getter(s)), value)
+    f.__name__ += function.__name__
+    return f
     
 def create_load_group_op_codes():
     opCodes = []
@@ -996,9 +1027,10 @@ def create_load_group_op_codes():
     return opCodes
             
 def load_group_lambda(store_register, load_register):
-        return lambda s: CPU.ld(s, RegisterCallWrapper(load_register(s)), \
+        def f(s): CPU.ld(s, RegisterCallWrapper(load_register(s)), \
                                    RegisterCallWrapper(store_register(s)))
-    
+        f.__name__ += "ld"
+        return f
     
 def create_register_op_codes(table):
     opCodes = []
@@ -1064,6 +1096,7 @@ FIRST_ORDER_OP_CODES = [
     (0xC3, CPU.unconditional_jump),
     (0xC9, CPU.ret),
     (0xD9, CPU.return_form_interrupt),
+    (0xDD, CPU.debug),
     (0xE9, CPU.store_hl_in_pc),
     (0xF9, CPU.store_hl_in_sp),
     (0xE0, CPU.write_a_at_expanded_fetch_address),

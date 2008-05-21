@@ -66,7 +66,7 @@ def test_set_timer_control():
     assert timer.timer_clock == 0
     assert timer.timer_clock == 0
     
-def test_read_write_Divider():
+def test_read_write_divider():
     timer = get_timer()
     value = 0x12
     timer.div = value
@@ -85,13 +85,13 @@ def test_cycles():
     timer.timer_cycles = value
     assert timer.get_cycles() == timer.timer_cycles
     
-def test_emulateDivider_normal():
+def test_emulate_divider_normal():
     timer = get_timer()
     value = 2
     timer.timer_cycles = 0
     timer.emulate_timer(value)
     
-def test_test_emulateDivider_zero():
+def test_test_emulate_divider_zero():
     timer = get_timer()
     value = 2
     timer.timer_cycles = value

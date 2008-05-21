@@ -193,12 +193,12 @@ class Video(iMemory):
     def reset_control(self, data):
         # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
         if (data & 0x80) != 0:
-            self.stat = (self.stat & 0xFC) | 0x02
-            self.cycles = constants.MODE_2_TICKS
-            self.line_y = 0
+            self.stat    = (self.stat & 0xFC) | 0x02
+            self.cycles  = constants.MODE_2_TICKS
+            self.line_y  = 0
             self.display = False
         else:
-            self.stat = (self.stat & 0xFC) | 0x00
+            self.stat   = (self.stat & 0xFC) | 0x00
             self.cycles = constants.MODE_1_TICKS
             self.line_y = 0
             self.clear_frame()
