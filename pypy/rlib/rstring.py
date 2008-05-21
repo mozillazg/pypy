@@ -1,30 +1,52 @@
 
+""" String builder interface
+"""
+
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.annotation import model as annmodel
+from pypy.rpython.annlowlevel import llhelper
 
-def builder(initial_space=20):
-    return []
+INIT_SIZE = 100 # XXX tweak
 
-class SomeStringBuilder(annmodel.SomeObject):
-    def __init__(self, initial_space=0):
-        self.initial_space = initial_space
+class AbstractStringBuilder(object):
+    def __init__(self, init_size=INIT_SIZE):
+        self.l = []
 
-    def method_append(self, s_item):
-        if not isinstance(s_item, annmodel.SomeString):
-            raise TypeError("Can only append strings or characters to string builder")
-        return annmodel.SomeImpossibleValue()
+    def append(self, s):
+        self.l.append(s)
 
-    def method_build(self):
-        return annmodel.SomeString()
+    def append_slice(self, s, start, end):
+        self.l.append(s[start:end])
 
-class StringBuilderEntry(ExtRegistryEntry):
-    _about_ = builder
+    def append_multiple_char(self, c, times):
+        self.l.append(c * times)
 
-    def compute_result_annotation(self, s_initial_space=None):
-        if s_initial_space is None:
-            initial_space = 0
+class StringBuilder(AbstractStringBuilder):
+    def build(self):
+        return "".join(self.l)
+
+class UnicodeBuilder(AbstractStringBuilder):
+    def build(self):
+        return u''.join(self.l)
+
+class BaseEntry(object):
+    def compute_result_annotation(self, s_init_size=None):
+        from pypy.rpython.rbuilder import SomeStringBuilder, SomeUnicodeBuilder
+        if s_init_size is not None:
+            assert s_init_size.is_constant()
+            init_size = s_init_size.const
         else:
-            assert s_initial_space.is_constant()
-            initial_space = s_initial_space.const
-            assert isinstance(initial_space, int)
-        return SomeStringBuilder(initial_space)
+            init_size = INIT_SIZE
+        if self.use_unicode:
+            return SomeUnicodeBuilder(init_size)
+        return SomeStringBuilder(init_size)
+    
+    def specialize_call(self, hop):
+        return hop.r_result.rtyper_new(hop)
+
+class StringBuilderEntry(BaseEntry, ExtRegistryEntry):
+    _about_ = StringBuilder
+    use_unicode = False
+
+class UnicodeBuilderEntry(BaseEntry, ExtRegistryEntry):
+    _about_ = UnicodeBuilder
+    use_unicode = True
