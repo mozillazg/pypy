@@ -11,10 +11,10 @@ What is PyPy ?
 ==============
 
 PyPy is an implementation of the Python_ programming language written in
-Python itself, flexible and easy to experiment with.  Our long-term goals are
-to target a large variety of platforms, small and large, by providing a
+Python itself, flexible and easy to experiment with.
+We target a large variety of platforms, small and large, by providing a
 compiler toolsuite that can produce custom Python versions.  Platform, memory
-and threading models are to become aspects of the translation process - as
+and threading models are aspects of the translation process - as
 opposed to encoding low level details into the language implementation itself.
 Eventually, dynamic optimization techniques - implemented as another
 translation aspect - should become robust against language changes. `more...`_
@@ -29,6 +29,9 @@ Just the facts
 
 Downloading & running the PyPy 1.0 release 
 --------------------------------------------
+
+*Note: the 1.0 release is out of date.  We strongly recommend that you
+use the latest stable version* (which you can `get via Subversion`_).
 
 Download one of the following release files: 
 
@@ -74,6 +77,7 @@ pick one with the matching features compiled in.
 .. _`pypy-1.0.0-win32.zip`: http://codespeak.net/download/pypy/pypy-1.0.0-win32.zip
 
 .. _`latest stable version via subversion`:   
+.. _`get via Subversion`:
 
 Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
@@ -150,11 +154,14 @@ more detailed information on specific features of the tracker.
 Interesting Starting Points in PyPy 
 ===================================
 
-The following assumes that you have successfully downloaded and extracted the
-PyPy release or have checked out PyPy using svn. It assumes that you are in
-the top level directory of the PyPy source tree, e.g. pypy-x.x (if you
-got a release) or pypy-dist (if you checked out the most recent version using
-subversion).
+*The following assumes that you have successfully checked out PyPy using
+svn.  Some of the following examples don't work in the release 1.0.*
+
+To get started with PyPy, you can either play with `the py.py
+interpreter`_ and the `special PyPy features`_, or directly proceed to
+`translating the PyPy Python interpreter`_.  This allows you to try out
+real Python applications in a fast version of PyPy, compiled via C,
+LLVM, .NET or Java, with or without special features included.
 
 Main entry point  
 ------------------------------------------
@@ -182,7 +189,7 @@ in pystones::
 The parameter is the number of loops to run through the test. The
 default is 50000, which is far too many to run in a non-translated
 PyPy version (i.e. when PyPy's interpreter itself is being interpreted 
-by CPython). 
+by CPython).
 
 py.py options
 +++++++++++++
@@ -364,12 +371,9 @@ should):
 
   * Download and install Pygame_.
 
-  * Download and install `Dot Graphviz`_.
-
-or:
-
-  * Have an internet connection. The flowgraph viewer connects to
-    codespeak.net and lets it convert the flowgraph by a graphviz server.
+  * Download and install `Dot Graphviz`_ (optional if you have an internet
+    connection: the flowgraph viewer then connects to
+    codespeak.net and lets it convert the flowgraph by a graphviz server).
 
 To start the interactive translator shell do::
 
