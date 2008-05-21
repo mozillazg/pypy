@@ -7,7 +7,7 @@ GAMEBOY_CLOCK = 1 << 20
 
 REGISTERED_BITMAP = [ 0x3C, 0x42, 0xB9, 0xA5, 0xB9, 0xA5, 0x42, 0x3C ]
 
-GAMEBOY_SCREEN_WIDTH = 160
+GAMEBOY_SCREEN_WIDTH  = 160
 GAMEBOY_SCREEN_HEIGHT = 144
 #___________________________________________________________________________
 # CATRIGE TYPES
@@ -16,40 +16,40 @@ GAMEBOY_SCREEN_HEIGHT = 144
 
 TYPE_ROM_ONLY = 0x00
 
-TYPE_MBC1 = 0x01
-TYPE_MBC1_RAM = 0x02
+TYPE_MBC1             = 0x01
+TYPE_MBC1_RAM         = 0x02
 TYPE_MBC1_RAM_BATTERY = 0x03
 
-TYPE_MBC2 = 0x05
+TYPE_MBC2         = 0x05
 TYPE_MBC2_BATTERY = 0x06
 
-TYPE_MBC3_RTC_BATTERY = 0x0F
+TYPE_MBC3_RTC_BATTERY     = 0x0F
 TYPE_MBC3_RTC_RAM_BATTERY = 0x10
-TYPE_MBC3 = 0x11
-TYPE_MBC3_RAM = 0x12
-TYPE_MBC3_RAM_BATTERY = 0x13
+TYPE_MBC3                 = 0x11
+TYPE_MBC3_RAM             = 0x12
+TYPE_MBC3_RAM_BATTERY     = 0x13
 
-TYPE_MBC5 = 0x19
-TYPE_MBC5_RAM = 0x1A
+TYPE_MBC5             = 0x19
+TYPE_MBC5_RAM         = 0x1A
 TYPE_MBC5_RAM_BATTERY = 0x1B
 
-TYPE_MBC5_RUMBLE = 0x1C
-TYPE_MBC5_RUMBLE_RAM = 0x1D
+TYPE_MBC5_RUMBLE             = 0x1C
+TYPE_MBC5_RUMBLE_RAM          = 0x1D
 TYPE_MBC5_RUMBLE_RAM_BATTERY = 0x1E
 
-TYPE_HUC3_RTC_RAM = 0xFE
+TYPE_HUC3_RTC_RAM     = 0xFE
 TYPE_HUC1_RAM_BATTERY = 0xFF
 
-CARTRIDGE_TYPE_ADDRESS = 0x0147
+CARTRIDGE_TYPE_ADDRESS     = 0x0147
 CARTRIDGE_ROM_SIZE_ADDRESS = 0x0148
 CARTRIDGE_RAM_SIZE_ADDRESS = 0x0149
 CARTRIDGE_RAM_SIZE_MAPPING = {0x00:0, 0x01:8192, 0x02:8192, 0x03:32768}
-DESTINATION_CODE_ADDRESS = 0x014A
-LICENSEE_ADDRESS = 0x014B
-ROM_VERSION_ADDRESS = 0x014C
-HEADER_CHECKSUM_ADDRESS = 0x014D
-CHECKSUM_A_ADDRESS = 0x014E
-CHECKSUM_B_ADDRESS = 0x014F
+DESTINATION_CODE_ADDRESS   = 0x014A
+LICENSEE_ADDRESS           = 0x014B
+ROM_VERSION_ADDRESS        = 0x014C
+HEADER_CHECKSUM_ADDRESS    = 0x014D
+CHECKSUM_A_ADDRESS         = 0x014E
+CHECKSUM_B_ADDRESS         = 0x014F
 
  #ROM Bank Size (16KB)
 ROM_BANK_SIZE = 0x4000
@@ -57,11 +57,9 @@ ROM_BANK_SIZE = 0x4000
 # constants.RAM Bank Size (8KB)
 RAM_BANK_SIZE = 0x2000
 
-
-
-CARTRIDGE_FILE_EXTENSION = ".gb"
+CARTRIDGE_FILE_EXTENSION       = ".gb"
 CARTRIDGE_COLOR_FILE_EXTENSION = ".gbc"
-BATTERY_FILE_EXTENSION = ".sav"
+BATTERY_FILE_EXTENSION         = ".sav"
     
 # ___________________________________________________________________________
 # CPU FLAGS
@@ -72,8 +70,8 @@ N_FLAG = 0x40
 H_FLAG = 0x20
 C_FLAG = 0x10
 
-RESET_A = 0x01 
-RESET_F = 0x80 
+RESET_A  = 0x01 
+RESET_F  = 0x80 
 RESET_BC = 0x0013
 RESET_DE = 0x00D8
 RESET_HL = 0x014D
@@ -91,8 +89,8 @@ IF = 0xFF0F # Interrupt Flag
 
 # Interrupt Flags
 VBLANK = 0x01 # V-Blank Interrupt (INT 40h)
-LCD = 0x02 # LCD STAT Interrupt (INT 48h)
-TIMER = 0x04 # Timer Interrupt (INT 50h)
+LCD    = 0x02 # LCD STAT Interrupt (INT 48h)
+TIMER  = 0x04 # Timer Interrupt (INT 50h)
 SERIAL = 0x08 # Serial Interrupt (INT 58h)
 JOYPAD = 0x10 # Joypad Interrupt (INT 60h)
 
@@ -104,16 +102,16 @@ JOYPAD = 0x10 # Joypad Interrupt (INT 60h)
 # LCD Register Addresses
 LCDC = 0xFF40 # LCD Control */
 STAT = 0xFF41 # LCD Status */
-SCY = 0xFF42 # BG Scroll Y (0-255) */
-SCX = 0xFF43 # BG Scroll X (0-255) */
-LY = 0xFF44 # LCDC Y-Coordinate (0-153) */
-LYC = 0xFF45 # LY Compare */
-DMA = 0xFF46 # OAM DMA Transfer */
-BGP = 0xFF47 # BG Palette Data */
+SCY  = 0xFF42 # BG Scroll Y (0-255) */
+SCX  = 0xFF43 # BG Scroll X (0-255) */
+LY   = 0xFF44 # LCDC Y-Coordinate (0-153) */
+LYC  = 0xFF45 # LY Compare */
+DMA  = 0xFF46 # OAM DMA Transfer */
+BGP  = 0xFF47 # BG Palette Data */
 OBP0 = 0xFF48 # Object Palette 0 Data */
 OBP1 = 0xFF49 # Object Palette 1 Data */
-WY = 0xFF4A # Window Y Position (0-143) */
-WX = 0xFF4B # Window X Position (0-166) */
+WY   = 0xFF4A # Window Y Position (0-143) */
+WX   = 0xFF4B # Window X Position (0-166) */
  
 # OAM Register Addresses
 OAM_ADDR = 0xFE00 # OAM Object Attribute Map (FE00..FE9F) */
@@ -132,14 +130,14 @@ VRAM_MAP_B = 0x1C00 # 1KB BG Tile Map 1 (9C00..9FFF) */
 
 
 #LCD Mode Durations
-MODE_0_TICKS = 50 # H-Blank */
-MODE_1_TICKS = 114 # V-Blank */
-MODE_2_TICKS = 20 # OAM#/
+MODE_0_TICKS       = 50 # H-Blank */
+MODE_1_TICKS       = 114 # V-Blank */
+MODE_2_TICKS       = 20 # OAM#/
 MODE_3_BEGIN_TICKS = 12 # Display */
-MODE_3_END_TICKS = 32 # Display */
+MODE_3_END_TICKS   = 32 # Display */
  
 MODE_1_BEGIN_TICKS = 8 # V-Blank Line 144 */
-MODE_1_END_TICKS = 1 # V-Blank Line 153 */
+MODE_1_END_TICKS   = 1 # V-Blank Line 153 */
  
 # Objects per Line
 OBJECTS_PER_LINE = 10
@@ -165,15 +163,15 @@ JOYP = 0xFF00
 JOYPAD_CLOCK = GAMEBOY_CLOCK >> 6
 
 
-BUTTON_DOWN = 0x08
-BUTTON_UP = 0x04
-BUTTON_LEFT = 0x02
-BUTTON_RIGHT = 0x01
+BUTTON_DOWN   = 0x08
+BUTTON_UP     = 0x04
+BUTTON_LEFT   = 0x02
+BUTTON_RIGHT  = 0x01
  
-BUTTON_START = 0x08
+BUTTON_START  = 0x08
 BUTTON_SELECT = 0x04
-BUTTON_B = 0x02
-BUTTON_A = 0x01
+BUTTON_B      = 0x02
+BUTTON_A      = 0x01
 
 
 
@@ -250,7 +248,7 @@ TIMER_CLOCK = [
 ]
  
 # Timer Register Addresses
-DIV = 0xFF04 # Divider Register
+DIV  = 0xFF04 # Divider Register
 TIMA = 0xFF05 # Timer Counter
-TMA = 0xFF06 # Timer Modulo
-TAC = 0xFF07 # Timer Control
+TMA  = 0xFF06 # Timer Modulo
+TAC  = 0xFF07 # Timer Control
