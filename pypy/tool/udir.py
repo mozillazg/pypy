@@ -24,4 +24,4 @@ if not basename:
     except:
         basename = '-'
 
-udir = local.make_numbered_dir(prefix='usession' + basename, keep=300)
+udir = local.make_numbered_dir(prefix='usession' + basename, keep=3)
