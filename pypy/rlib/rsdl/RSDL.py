@@ -234,6 +234,10 @@ GetKeyName       = external('SDL_GetKeyName',
                             [rffi.INT], 
                             rffi.CCHARP)
 
+GetError         = external('SDL_GetError',
+                            [],
+                            rffi.CCHARP)
+
 # ------------------------------------------------------------------------------
 
 
