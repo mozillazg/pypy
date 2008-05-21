@@ -324,19 +324,25 @@ class GenericObject(object):
 
     def fillin_pointersobject(self, w_pointersobject):
         assert self.pointers is not None
-        w_pointersobject._vars = [g_object.w_object for g_object in self.pointers]
-        w_pointersobject.w_class = self.g_class.w_object
-        w_pointersobject.hash = self.chunk.hash12
         if w_pointersobject._shadow is not None:
-            w_pointersobject._shadow.invalidate_shadow()
+            w_pointersobject._shadow.detach_shadow()
+        w_pointersobject._vars = [g_object.w_object for g_object in self.pointers]
+        w_class = self.g_class.w_object
+        assert isinstance(w_class, model.W_PointersObject)
+        w_pointersobject.w_class = w_class
+        w_pointersobject.hash = self.chunk.hash12
 
     def fillin_wordsobject(self, w_wordsobject):
         w_wordsobject.words = self.chunk.data
-        w_wordsobject.w_class = self.g_class.w_object
+        w_class = self.g_class.w_object
+        assert isinstance(w_class, model.W_PointersObject)
+        w_wordsobject.w_class = w_class
         w_wordsobject.hash = self.chunk.hash12 # XXX check this
 
     def fillin_bytesobject(self, w_bytesobject):
-        w_bytesobject.w_class = self.g_class.w_object
+        w_class = self.g_class.w_object
+        assert isinstance(w_class, model.W_PointersObject)
+        w_bytesobject.w_class = w_class
         w_bytesobject.bytes = self.get_bytes()
         w_bytesobject.hash = self.chunk.hash12 # XXX check this
     def get_bytes(self):

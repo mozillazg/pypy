@@ -181,6 +181,9 @@ class W_AbstractObjectWithIdentityHash(W_Object):
 
     hash = UNASSIGNED_HASH # default value
 
+    def setchar(self, n0, character):
+        raise NotImplementedError()
+
     def gethash(self):
         if self.hash == self.UNASSIGNED_HASH:
             self.hash = hash = intmask(self.hash_generator.genrand32()) // 2

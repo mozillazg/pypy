@@ -326,6 +326,9 @@ def func(interp, w_obj, n0):
 def func(interp, w_obj, n0, w_val):
     val = utility.unwrap_char(w_val)
     n0 = assert_valid_index(n0, w_obj)
+    if not (isinstance(w_obj, model.W_CompiledMethod) or
+            isinstance(w_obj, model.W_BytesObject)):
+        raise PrimitiveFailedError()
     w_obj.setchar(n0, val)
     return w_val
 
