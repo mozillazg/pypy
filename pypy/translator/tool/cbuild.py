@@ -66,7 +66,7 @@ class ExternalCompilationInfo(object):
         compile_extra: list of parameters which will be directly passed to
         the compiler
 
-        compile_extra: list of parameters which will be directly passed to
+        link_extra: list of parameters which will be directly passed to
         the linker
 
         frameworks: list of Mac OS X frameworks which should passed to the
