@@ -17,7 +17,7 @@ def new_interpreter(bytes):
 def build():
     bytecode = ''.join(map(chr, [ 16, 119, 178, 154, 118, 164, 11, 112, 16, 118, 177, 224, 112, 16, 119, 177, 224, 176, 124 ]))
     shadow = mockclass(0).as_class_get_shadow()
-    method = model.W_CompiledMethod(1, bytecode, 1)
+    method = model.W_CompiledMethod(1, bytecode)
     method.literals = fakeliterals("fib:")
     shadow.installmethod("fib:", method)
     w_object = shadow.new()
