@@ -317,7 +317,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         from pypy.lang.smalltalk import objtable
         self._w_sender = objtable.w_nil
         self._stack = []
-        self.currentBytecode = None
+        self.currentBytecode = -1
         AbstractRedirectingShadow.__init__(self, w_self)
 
     @staticmethod
