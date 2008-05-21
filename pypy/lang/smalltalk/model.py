@@ -306,8 +306,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         if shadow is None:
             shadow = self.attach_shadow_of_class(TheClass)
         elif not isinstance(shadow, TheClass):
-            # TODO Add test for this
-            shadow.invalidate_shadow()
+            shadow.detach_shadow()
             shadow = self.attach_shadow_of_class(TheClass)
         shadow.sync_shadow()
         return shadow
