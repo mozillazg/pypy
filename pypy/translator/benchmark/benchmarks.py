@@ -76,7 +76,7 @@ def run_richards(executable='/usr/local/bin/python', n=5):
 def run_translate(executable='/usr/local/bin/python'):
     translate = py.magic.autopath().dirpath().dirpath().join('goal').join('translate.py')
     target = py.magic.autopath().dirpath().dirpath().join('goal').join('targetrpystonedalone.py')
-    argstr = '%s %s --text --batch --backendopt --no-compile %s > /dev/null 2> /dev/null'
+    argstr = '%s %s --batch --backendopt --no-compile %s > /dev/null 2> /dev/null'
     T = time.time()
     status = os.system(argstr%(executable, translate, target))
     r = time.time() - T
