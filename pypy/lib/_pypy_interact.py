@@ -5,6 +5,11 @@ import sys
 
 def interactive_console(mainmodule=None):
     try:
+        import _pypy_irc_topic
+        print "``%s''" % (_pypy_irc_topic.some_topic(),)
+    except ImportError:
+        pass
+    try:
         from pyrepl.simple_interact import run_multiline_interactive_console
     except ImportError:
         run_simple_interactive_console(mainmodule)
