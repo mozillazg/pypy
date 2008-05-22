@@ -79,10 +79,10 @@ def method(tempsize=3,argsize=2, bytes="abcde"):
 
 def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
                   method=method()):
-    w_object = model.W_PointersObject(classtable.w_MethodContext, constants.MTHDCTX_TEMP_FRAME_START+method.tempframesize()+stacksize)
+    w_object = model.W_PointersObject(classtable.w_MethodContext, constants.MTHDCTX_TEMP_FRAME_START+method.tempsize+stacksize)
     w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
     w_object.store(constants.CTXPART_PC_INDEX, utility.wrap_int(pc))
-    w_object.store(constants.CTXPART_STACKP_INDEX, utility.wrap_int(method.tempframesize()+stackpointer))
+    w_object.store(constants.CTXPART_STACKP_INDEX, utility.wrap_int(method.tempsize+stackpointer))
     w_object.store(constants.MTHDCTX_METHOD, method)
     # XXX
     w_object.store(constants.MTHDCTX_RECEIVER_MAP, '???')

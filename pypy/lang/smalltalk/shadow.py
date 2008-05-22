@@ -365,7 +365,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         # tempframe start
         # Stackpointer from smalltalk world == stacksize in python world
         self.store_stackpointer(utility.unwrap_int(w_sp1) -
-                                self.tempframesize())
+                                self.tempsize())
 
     def store_stackpointer(self, size):
         from pypy.lang.smalltalk import objtable
@@ -379,7 +379,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
 
     def wrap_stackpointer(self):
         return utility.wrap_int(len(self._stack) + 
-                                self.tempframesize())
+                                self.tempsize())
 
     def external_stackpointer(self):
         return len(self._stack) + self.stackstart()
@@ -502,7 +502,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         # XXX this is incorrect when there is subclassing
         return self._w_self_size
 
-    def tempframesize(self):
+    def tempsize(self):
         raise NotImplementedError()
 
 class BlockContextShadow(ContextPartShadow):
@@ -592,7 +592,7 @@ class BlockContextShadow(ContextPartShadow):
     def stackpointer_offset(self):
         return constants.BLKCTX_STACK_START
 
-    def tempframesize(self):
+    def tempsize(self):
         # A blockcontext doesn't have any temps
         return 0
 
@@ -623,7 +623,7 @@ class MethodContextShadow(ContextPartShadow):
             s_result.store_w_sender(w_sender)
         s_result.store_w_receiver(w_receiver)
         s_result.store_pc(0)
-        s_result._temps = [objtable.w_nil] * w_method.tempframesize()
+        s_result._temps = [objtable.w_nil] * w_method.tempsize
         for i in range(len(arguments)):
             s_result.settemp(i, arguments[i])
         return w_result
@@ -636,7 +636,7 @@ class MethodContextShadow(ContextPartShadow):
         if n0 == constants.MTHDCTX_RECEIVER:
             return self.w_receiver()
         if (0 <= n0-constants.MTHDCTX_TEMP_FRAME_START <
-                 self.w_method().tempframesize()):
+                 self.tempsize()):
             return self.gettemp(n0-constants.MTHDCTX_TEMP_FRAME_START)
         else:
             return ContextPartShadow.fetch(self, n0)
@@ -651,7 +651,7 @@ class MethodContextShadow(ContextPartShadow):
             self.store_w_receiver(w_value)
             return
         if (0 <= n0-constants.MTHDCTX_TEMP_FRAME_START <
-                 self.w_method().tempframesize()):
+                 self.tempsize()):
             return self.settemp(n0-constants.MTHDCTX_TEMP_FRAME_START,
                                 w_value)
         else:
@@ -662,11 +662,11 @@ class MethodContextShadow(ContextPartShadow):
         # Make sure the method is updated first
         self.copy_from_w_self(constants.MTHDCTX_METHOD)
         # And that there is space for the temps
-        self._temps = [objtable.w_nil] * self.w_method().tempframesize()
+        self._temps = [objtable.w_nil] * self.tempsize()
         ContextPartShadow.attach_shadow(self)
 
-    def tempframesize(self):
-        return self.w_method().tempframesize()
+    def tempsize(self):
+        return self.w_method().tempsize
 
     def w_method(self):
         return self._w_method
@@ -698,7 +698,7 @@ class MethodContextShadow(ContextPartShadow):
 
     def stackstart(self):
         return (constants.MTHDCTX_TEMP_FRAME_START +
-                self.w_method().tempframesize())
+                self.tempsize())
 
     def myblocksize(self):
-        return self.size() - self.tempframesize()
+        return self.size() - self.tempsize()

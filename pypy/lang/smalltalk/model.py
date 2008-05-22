@@ -536,12 +536,10 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         self.header = header
         self.argsize = numargs
         self.tempsize = tempsize
+        assert self.tempsize >= self.argsize
         self.primitive = primitive
         self.w_compiledin = None
         self.islarge = islarge
-
-    def tempframesize(self):
-        return self.argsize + self.tempsize
 
     def literalat0(self, index0):
         if index0 == 0:
