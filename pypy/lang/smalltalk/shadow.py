@@ -416,6 +416,9 @@ class ContextPartShadow(AbstractRedirectingShadow):
             return w_sender.as_context_get_shadow()
 
     def store_unwrap_pc(self, w_pc):
+        from pypy.lang.smalltalk import objtable
+        if w_pc.is_same_object(objtable.w_nil):
+            return
         pc = utility.unwrap_int(w_pc)
         pc -= self.w_method().bytecodeoffset()
         pc -= 1
