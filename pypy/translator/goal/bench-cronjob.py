@@ -187,6 +187,7 @@ def main(backends=[]):
             c--gc=marksweep--_faassen
             c--gc=semispace--_faassen
             c--gc=generation--_faassen
+            c--gc=hybrid--_faassen
             c--_objspace-std-withrope
             cli--_faassen
             jvm--_faassen
