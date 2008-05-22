@@ -513,7 +513,8 @@ class BlockContextShadow(ContextPartShadow):
         # create and attach a shadow manually, to not have to carefully put things
         # into the right places in the W_PointersObject
         # XXX could hack some more to never have to create the _vars of w_result
-        w_result = model.W_PointersObject(w_BlockContext, w_home.size())
+        contextsize = w_home.as_methodcontext_get_shadow().myblocksize()
+        w_result = model.W_PointersObject(w_BlockContext, contextsize)
         s_result = BlockContextShadow(w_result)
         w_result.store_shadow(s_result)
         s_result.store_expected_argument_count(argcnt)
@@ -698,3 +699,6 @@ class MethodContextShadow(ContextPartShadow):
     def stackstart(self):
         return (constants.MTHDCTX_TEMP_FRAME_START +
                 self.w_method().tempframesize())
+
+    def myblocksize(self):
+        return self.size() - self.tempframesize()
