@@ -17,4 +17,10 @@ def test_nanos():
     w_dict = space.newdict()
     space.exec_(open(filename).read(), w_dict, w_dict)
     entry_point = create_entry_point(space, w_dict)
+
+    # check that 'os' is not in sys.modules
+    assert not space.is_true(
+        space.call_method(space.sys.get('modules'),
+                          '__contains__', space.wrap('os')))
+    
     entry_point(['', '-c', 'print 42'])
