@@ -37,12 +37,6 @@ if sys.platform == "win32":
     del working_modules["_minimal_curses"]
     # modules currently missing explicit windows support
     del working_modules["signal"]
-    del working_modules["_rawffi"]
-    # modules with broken windows support
-    del working_modules["mmap"]    # MLS - Added 5/11/08 - broken
-    del working_modules["_socket"] # MLS - Added 5/11/08 - broken
-    del working_modules["select"] # MLS - Added 5/11/08 - broken
-
 
 
 module_dependencies = {}

@@ -25,6 +25,7 @@ class Module(MixedModule):
         'charp2rawstring'    : 'interp_rawffi.charp2rawstring',
         'CallbackPtr'        : 'callback.W_CallbackPtr',
         '_num_of_allocated_objects' : 'tracker.num_of_allocated_objects',
+        'get_libc'           : 'interp_rawffi.get_libc',
     }
 
     appleveldefs = {
@@ -44,10 +45,6 @@ class Module(MixedModule):
                      ]:
             if hasattr(libffi, name):
                 Module.interpleveldefs[name] = "space.wrap(%r)" % getattr(libffi, name)
-
-        # Name of C runtime library
-        from pypy.rpython.lltypesystem.ll2ctypes import get_libc_name
-        Module.interpleveldefs['libc_name'] = "space.wrap(%r)" % get_libc_name()
                 
         super(Module, cls).buildloaders()
     buildloaders = classmethod(buildloaders)

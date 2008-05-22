@@ -47,3 +47,11 @@ def test_simple():
     cli.close()
     servconn.close()
     serv.close()
+
+def test_translate():
+    from pypy.translator.c.test.test_genc import compile
+
+    def func():
+        poll({})
+
+    compile(func, [])

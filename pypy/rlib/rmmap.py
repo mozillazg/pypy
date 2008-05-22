@@ -38,21 +38,7 @@ class CConfig:
     size_t = rffi_platform.SimpleType("size_t", rffi.LONG)
     off_t = rffi_platform.SimpleType("off_t", rffi.LONG)
     if _MS_WINDOWS:
-        DWORD_PTR = rffi_platform.SimpleType("DWORD_PTR", rffi.LONG)
-        WORD = rffi_platform.SimpleType("WORD", rffi.UINT)
-        DWORD = rffi_platform.SimpleType("DWORD", rffi.ULONG)
-        BOOL = rffi_platform.SimpleType("BOOL", rffi.LONG)
-        INT = rffi_platform.SimpleType("INT", rffi.INT)
-        LONG = rffi_platform.SimpleType("LONG", rffi.LONG)
-        PLONG = rffi_platform.SimpleType("PLONG", rffi.LONGP)
-        LPVOID = rffi_platform.SimpleType("LPVOID", rffi.INTP)
-        LPCVOID = rffi_platform.SimpleType("LPCVOID", rffi.VOIDP)
-        HANDLE = rffi_platform.SimpleType("HANDLE", rffi.VOIDP)
-        LPHANDLE = rffi_platform.SimpleType("LPHANDLE", rffi.CCHARPP)
-        LPCTSTR = rffi_platform.SimpleType("LPCTSTR", rffi.CCHARP)
-        LPDWORD = rffi_platform.SimpleType("LPDWORD", rffi.INTP)
         LPSECURITY_ATTRIBUTES = rffi_platform.SimpleType("LPSECURITY_ATTRIBUTES", rffi.CCHARP)
-        SIZE_T = rffi_platform.SimpleType("SIZE_T", rffi.SIZE_T)
 
 constants = {}
 if _POSIX:
@@ -81,6 +67,11 @@ elif _MS_WINDOWS:
                       'DUPLICATE_SAME_ACCESS']
     for name in constant_names:
         setattr(CConfig, name, rffi_platform.ConstantInteger(name))
+
+    from pypy.rlib.rwin32 import HANDLE, LPHANDLE
+    from pypy.rlib.rwin32 import DWORD, WORD, DWORD_PTR, LPDWORD
+    from pypy.rlib.rwin32 import BOOL, LPVOID, LPCVOID, LPCTSTR, SIZE_T
+    from pypy.rlib.rwin32 import INT, LONG, PLONG
 
 # export the constants inside and outside. see __init__.py
 cConfig = rffi_platform.configure(CConfig)

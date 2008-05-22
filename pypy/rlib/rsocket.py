@@ -153,8 +153,7 @@ def makeipaddr(name, result=None):
                            flags=AI_PASSIVE,
                            address_to_fill=result)
         if len(info) > 1:
-            raise RSocketError("wildcard resolved to "
-                               "multiple addresses")
+            raise RSocketError("wildcard resolved to multiple addresses")
         return info[0][4]
 
     # IPv4 also supports the special name "<broadcast>".
