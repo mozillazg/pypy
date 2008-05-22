@@ -29,17 +29,25 @@ from pypy.interpreter.gateway import applevel, ObjSpace, W_Root, interp2app
 import os
 
 app_os_path = applevel(r'''
-    # NOT_RPYTHON
     from os.path import dirname, join, abspath, isfile, islink
 ''', filename=__file__)
 
 app_os = applevel(r'''
     # NOT_RPYTHON
+    import sys
+    sysmodules = sys.modules.keys()
+
     from os import sep, pathsep, getenv, name, fdopen
     try:
         from os import readlink
     except ImportError:
         pass
+
+    # restore the previous list of loaded modules
+    for name in sys.modules.keys():
+        if name not in sysmodules:
+            del sys.modules[name]
+    del sys
 ''', filename=__file__)
 
 def getenv(space, w_name):
