@@ -423,6 +423,7 @@ def test_fibWithArgument():
     method.literalsize = 1
     method.bytes = bytecode
     method.argsize = 1
+    method.tempsize = 1
     method.literals = fakeliterals("fib:")
     shadow.installmethod("fib:", method)
     w_object = shadow.new()
@@ -548,6 +549,7 @@ def test_callPrimitiveAndPush_fallback():
     shadow = mockclass(0).as_class_get_shadow()
     w_method = model.W_CompiledMethod(0)
     w_method.argsize = 1
+    w_method.tempsize = 1
     w_method.literalsize = 1
     shadow.installmethod("+", w_method) 
     

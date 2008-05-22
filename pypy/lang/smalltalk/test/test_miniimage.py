@@ -283,10 +283,10 @@ def test_step_forged_image():
     from pypy.lang.smalltalk import wrapper
     ap = wrapper.ProcessWrapper(wrapper.scheduler().active_process())
     s_ctx = ap.suspended_context().as_context_get_shadow()
-    assert isinstance(s_ctx, shadow.BlockContextShadow)
+    assert isinstance(s_ctx, shadow.MethodContextShadow)
     assert s_ctx.top().is_same_object(objtable.w_true)
 
-def test_step_forged_image():
+def test_step_run_something():
     setup_module(None, filename='running-something-mini.image')
     from pypy.lang.smalltalk import wrapper
     ap = wrapper.ProcessWrapper(wrapper.scheduler().active_process())
