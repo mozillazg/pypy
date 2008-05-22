@@ -360,3 +360,11 @@ class TestDLOperations:
         del lib
 
         assert not ALLOCATED
+
+class TestWin32Handles:
+    def test_get_libc_handle(self):
+        handle = get_libc_handle()
+        print get_libc_name()
+        print hex(handle)
+        assert handle != 0
+        assert handle % 0x1000 == 0

@@ -304,8 +304,18 @@ class CStandaloneBuilder(CBuilder):
             if profopt is not None and not self.config.translation.noprofopt:
                 profbased = (ProfOpt, profopt)
 
+        # Copy extrafiles to target directory, if needed
+        extrafiles = []
+        for fn in self.extrafiles:
+            fn = py.path.local(fn)
+            if not fn.relto(udir):
+                newname = self.targetdir.join(fn.basename)
+                fn.copy(newname)
+                fn = newname
+            extrafiles.append(fn)
+
         return CCompiler(
-            [self.c_source_filename] + self.extrafiles,
+            [self.c_source_filename] + extrafiles,
             self.eci, compiler_exe = cc, profbased = profbased)
 
     def compile(self):
@@ -366,6 +376,8 @@ class CStandaloneBuilder(CBuilder):
             else:
                 assert fn.dirpath().dirpath() == udir
                 name = '../' + fn.relto(udir)
+                
+            name = name.replace("\\", "/")
             cfiles.append(name)
             if self.config.translation.gcrootfinder == "asmgcc":
                 ofiles.append(name[:-2] + '.s')

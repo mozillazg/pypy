@@ -19,11 +19,6 @@
  * Thread support.
  */
 
-/*
- * Return the thread Id instead of an handle. The Id is said to uniquely
-   identify the thread in the system
- */
-#define RPyThreadGetIdent GetCurrentThreadId
 #define RPyOpaque_INITEXPR_ThreadLock  { 0, 0, NULL }
 
 typedef struct {
@@ -53,6 +48,15 @@ void RPyThreadReleaseLock(struct RPyOpaque_ThreadLock *lock);
 /* implementations */
 
 #ifndef PYPY_NOT_MAIN_FILE
+
+/*
+ * Return the thread Id instead of an handle. The Id is said to uniquely
+   identify the thread in the system
+ */
+int RPyThreadGetIdent()
+{
+  return GetCurrentThreadId();
+}
 
 static int
 bootstrap(void *call)
@@ -201,7 +205,10 @@ BOOL LeaveNonRecursiveMutex(PNRMUTEX mutex)
 
 /************************************************************/
 
-#define RPyThreadLockInit(lock)  InitializeNonRecursiveMutex(lock)
+int RPyThreadLockInit(struct RPyOpaque_ThreadLock * lock)
+{
+  return InitializeNonRecursiveMutex(lock);
+}
 
 void RPyOpaqueDealloc_ThreadLock(struct RPyOpaque_ThreadLock *lock)
 {

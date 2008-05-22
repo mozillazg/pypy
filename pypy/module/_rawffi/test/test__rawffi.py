@@ -180,9 +180,13 @@ class AppTestFfi:
         import _rawffi
         _rawffi.CDLL(self.libc_name)
 
+    def test_libc_load(self):
+        import _rawffi
+        _rawffi.get_libc()
+
     def test_getattr(self):
         import _rawffi
-        libc = _rawffi.CDLL(self.libc_name)
+        libc = _rawffi.get_libc()
         func = libc.ptr('rand', [], 'i')
         assert libc.ptr('rand', [], 'i') is func # caching
         assert libc.ptr('rand', [], 'l') is not func
@@ -292,7 +296,7 @@ class AppTestFfi:
 
     def test_time(self):
         import _rawffi
-        libc = _rawffi.CDLL(self.libc_name)
+        libc = _rawffi.get_libc()
         time = libc.ptr('time', ['z'], 'l')  # 'z' instead of 'P' just for test
         arg = _rawffi.Array('P')(1)
         arg[0] = 0
@@ -306,7 +310,7 @@ class AppTestFfi:
         import _rawffi
         struct_type = _rawffi.Structure([('tv_sec', 'l'), ('tv_usec', 'l')])
         structure = struct_type()
-        libc = _rawffi.CDLL(self.libc_name)
+        libc = _rawffi.get_libc()
         gettimeofday = libc.ptr('gettimeofday', ['P', 'P'], 'i')
 
         arg1 = structure.byptr()
@@ -341,7 +345,7 @@ class AppTestFfi:
                                 ("tm_wday", 'i'),
                                 ("tm_yday", 'i'),
                                 ("tm_isdst", 'i')])
-        libc = _rawffi.CDLL(self.libc_name)
+        libc = _rawffi.get_libc()
         gmtime = libc.ptr('gmtime', ['P'], 'P')
 
         arg = x.byptr()
@@ -452,7 +456,7 @@ class AppTestFfi:
         skip("FIXME: compare actually receives a pair of int**")
         import _rawffi
         import struct
-        libc = _rawffi.CDLL(self.libc_name)
+        libc = _rawffi.get_libc()
         ll_to_sort = _rawffi.Array('i')(4)
         for i in range(4):
             ll_to_sort[i] = 4-i

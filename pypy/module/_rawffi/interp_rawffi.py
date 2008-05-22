@@ -468,3 +468,9 @@ if _MS_WINDOWS:
             raise OperationError(space.w_WindowsError, space.wrap(hresult))
         return space.wrap(hresult)
     check_HRESULT.unwrap_spec = [ObjSpace, int]
+
+def get_libc(space):
+    try:
+        return space.wrap(W_CDLL(space, get_libc_name()))
+    except OSError, e:
+        raise wrap_oserror(space, e)

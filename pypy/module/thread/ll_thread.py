@@ -6,7 +6,7 @@ from pypy.rpython.extfunc import genericcallable
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import llmemory
-import thread, py
+import thread, py, os
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem.lltype import typeOf
@@ -18,14 +18,13 @@ python_inc = sysconfig.get_python_inc()
 error = thread.error
 
 eci = ExternalCompilationInfo(
-    includes = ['unistd.h', 'src/thread.h'],
-    separate_module_sources=['''
-    #include <Python.h>
-    #include <src/exception.h>
-    #include <src/thread.h>
-    '''],
+    includes = ['src/thread.h'],
+    separate_module_sources = [''],
     include_dirs = [str(py.path.local(autopath.pypydir).join('translator', 'c')),
-                    python_inc]
+                    python_inc],
+    export_symbols = ['RPyThreadGetIdent', 'RPyThreadLockInit',
+                      'RPyThreadAcquireLock', 'RPyThreadReleaseLock',
+                      'RPyThreadFusedReleaseAcquireLock',]
 )
 
 def llexternal(name, args, result, **kwds):

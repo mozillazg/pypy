@@ -19,13 +19,14 @@ def compile_func(fn, inputtypes, t=None, gcpolicy="ref"):
     from pypy.config.pypyoption import get_pypy_config
     config = get_pypy_config(translating=True)
     config.translation.gc = gcpolicy
+    config.translation.countmallocs = True
     if t is None:
         t = TranslationContext(config=config)
     if inputtypes is not None:
         t.buildannotator().build_types(fn, inputtypes)
         t.buildrtyper().specialize()
     builder = genc.CExtModuleBuilder(t, fn, config=config)
-    builder.generate_source(defines={'COUNT_OP_MALLOCS': 1})
+    builder.generate_source()
     builder.compile()
     if conftest.option.view:
         t.view()
@@ -838,10 +839,12 @@ class TestUsingFramework(AbstractGCTestClass):
     def test_callback_with_collect(self):
         from pypy.rlib.libffi import ffi_type_pointer, cast_type_to_ffitype,\
              CDLL, ffi_type_void, CallbackFuncPtr, ffi_type_sint
-        from pypy.rpython.lltypesystem import rffi
+        from pypy.rpython.lltypesystem import rffi, ll2ctypes
         from pypy.rlib import rgc
         import gc
         slong = cast_type_to_ffitype(rffi.LONG)
+
+        libc_name = ll2ctypes.get_libc_name()
 
         def callback(ll_args, ll_res, stuff):
             gc.collect()
@@ -856,7 +859,7 @@ class TestUsingFramework(AbstractGCTestClass):
                 res[0] = -1
 
         def f():
-            libc = CDLL('libc.so.6')
+            libc = CDLL(libc_name)
             qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
                                               slong, ffi_type_pointer],
                                 ffi_type_void)
