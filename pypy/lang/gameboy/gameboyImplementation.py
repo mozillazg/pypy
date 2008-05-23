@@ -72,19 +72,19 @@ class VideoDriverImplementation(VideoDriver):
         self.screen = RSDL.SetVideoMode(self.width, self.height, 32, 0)
         
     def update_display(self):
-        RSDL.LockSurface(self.screen)
+        print "    update_display"
+        #RSDL.LockSurface(self.screen)
         self.draw_pixels()
-        RSDL.UnlockSurface(self.screen)
-        RSDL.Flip(self.screen)
-        pass
+        #RSDL.UnlockSurface(self.screen)
+        #RSDL.Flip(self.screen)
             
     def draw_pixels(self):
         print  "-"*60
-        for x in range(self.width):
+        for y in range(self.height):
             str = ""
-            for y in range(self.height):
+            for x in range(self.width):
                 str += self.pixel_map(x, y) 
-                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
+                RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
             print str;
         
         print  "-"*60
@@ -94,8 +94,8 @@ class VideoDriverImplementation(VideoDriver):
         b = px & 0xFF
         g = (px>>8) & 0xFF
         r = (px>>16) & 0xFF
-        brightness = 4*r+b+g / 0xFFFFFF
-        return [".", "+", "O", "#"][brightness]
+        brightness = 4 * (r+b+g) / (0xFF*3)
+        return [".", "+", "O", "#", ""][brightness]
         
     def get_pixel_color(self, x, y):
         return self.pixels[x+self.width*y]
@@ -201,16 +201,16 @@ ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy
 import pdb
 
 def entry_point(argv=None):
-    print "startin gameboy emulation"
-    gameboy = GameBoyImplementation()
-    if argv is not None and len(argv) > 1:
-        filename = argv[1]
+    if argv is not None and len(argv) > 0:
+        filename = argv[0]
     else:
-        #filename = gameboy.load()
-        filename = ROM_PATH+"/rom9/rom9.gb"
+        pos = str(8)
+        filename = ROM_PATH+"/rom"+pos+"/rom"+pos+".gb"
     print "loading rom: ", str(filename)
-    gameboy.load_cartridge_file(str(filename))
-    pdb.runcall(gameboy.mainLoop)
+    gameBoy = GameBoyImplementation()
+    gameBoy.load_cartridge_file(str(filename))
+    gameBoy.mainLoop()
+    #pdb.runcall(gameBoy.mainLoop)
     return 0
 
 
@@ -223,5 +223,3 @@ def test_target():
     entry_point()
     
 
-    
-    

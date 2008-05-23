@@ -44,12 +44,12 @@ class GameBoy(object):
     def get_cartridge_manager(self):
         return self.cartridge_manager
     
-    def load_cartridge(self, cartridge):
-        self.cartridge_manager.load(cartridge)
+    def load_cartridge(self, cartridge, verify=True):
+        self.cartridge_manager.load(cartridge, verify)
         self.cpu.set_rom(self.cartridge_manager.get_rom())
         
-    def load_cartridge_file(self, path):
-        self.load_cartridge(Cartridge(path))
+    def load_cartridge_file(self, path, verify=True):
+        self.load_cartridge(CartridgeFile(path), verify)
 
     def get_frame_skip(self):
         return self.video.get_frame_skip()
@@ -101,13 +101,23 @@ class GameBoy(object):
             ticks -= count
         return 0
     
+    def emulate_step(self):
+        self.cpu.emulate_step()
+        self.serial.emulate(1)
+        self.timer.emulate(1)
+        self.video.emulate(1)
+        self.sound.emulate(1)
+        self.joypad.emulate(1)
+    
     def print_cycles(self):
-        for element in [(" video:", self.video), 
-                        ("serial:", self.serial),
-                        (" timer:", self.timer), 
-                        (" sound:", self.sound), 
-                        ("joypad:", self.joypad)]:
-            print "        ", element[0], element[1].get_cycles()
+        return
+        #for element in [(" video:", self.video), 
+        #                ("serial:", self.serial),
+        #                (" timer:", self.timer), 
+        #                (" sound:", self.sound), 
+        #                ("joypad:", self.joypad)]:
+        #    #print "        ", element[0], element[1].get_cycles()
+        #    pass
 
     def write(self, address, data):
         receiver = self.get_receiver(address)
@@ -122,7 +132,8 @@ class GameBoy(object):
         return receiver.read(address)
 
     def print_receiver_msg(self, address, name):
-            print "    recei: ", hex(address), name
+            #print "    recei: ", hex(address), name
+            pass
             
     def get_receiver(self, address):
         if 0x0000 <= address <= 0x7FFF:
