@@ -129,6 +129,7 @@ del T
 
 WEAKREF = types.weakref.classname()
 PYPY_DICT_OF_VOID = '[pypylib]pypy.runtime.DictOfVoid`2<%s, int32>'
+PYPY_DICT_OF_VOID_KEY = '[pypylib]pypy.runtime.DictOfVoidKey`2<int32, %s>'
 
 
 _lltype_to_cts = {
@@ -277,6 +278,9 @@ class CTS(object):
                 else:
                     # XXX
                     return CliClassType(None, PYPY_DICT_OF_VOID % key_type)
+            elif key_type == types.void:
+                assert value_type != types.void
+                return CliClassType(None, PYPY_DICT_OF_VOID_KEY % value_type)
             return types.dict.specialize(key_type, value_type)
         elif isinstance(t, ootype.DictItemsIterator):
             key_type = self.lltype_to_cts(t._KEYTYPE)

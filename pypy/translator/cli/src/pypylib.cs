@@ -593,6 +593,43 @@ namespace pypy.runtime
         }
     }
 
+    // it assumes TKey is a placeholder, it's not really used
+    public class DictOfVoidKey<TKey, TValue>
+    {
+        private int length = 0;
+        private TValue elem = default(TValue);
+
+        public DictOfVoidKey() {}
+
+        public int ll_length() { return this.length; }
+        public TValue ll_get() { return this.elem; }
+        
+        public void ll_set(TValue value) { 
+            this.length = 1;
+            this.elem = value;
+        }
+
+        public bool ll_remove() {
+            if (this.length > 0) {
+                this.length = 0;
+                return true;
+            }
+            return false;
+        }
+
+        public bool ll_contains() { return (this.length > 0); }
+        public void ll_contains_get() { }
+        public void ll_clear() { this.length = 0; }
+
+        public DictItemsIterator<TKey, TValue> ll_get_items_iterator()
+        {
+            List<KeyValuePair<TKey, TValue>> foo = new List<KeyValuePair<TKey, TValue>>();
+            if (length == 1)
+                foo.Add(new KeyValuePair<TKey, TValue>(default(TKey), this.elem));
+            return new DictItemsIterator<TKey, TValue>(foo.GetEnumerator());
+        }
+    }
+
     public class DictVoidVoid
     {
         private int length = 0;

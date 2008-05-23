@@ -709,8 +709,7 @@ class DictConst(AbstractConst):
 
         gen.add_comment('Initializing dictionary constant')
 
-        if KEYTYPE is ootype.Void:
-            assert VALUETYPE is ootype.Void
+        if KEYTYPE is ootype.Void and VALUETYPE is ootype.Void:
             return
 
         for key, value in self.value._dict.iteritems():
