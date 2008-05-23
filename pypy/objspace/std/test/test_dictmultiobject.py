@@ -31,8 +31,6 @@ class AppTest_DictMultiObject(test_dictobject.AppTest_DictObject):
     def test_emptydict_unhashable(self):
         raises(TypeError, "{}[['x']]")
 
-    def test_repr_with_overriden_items(self):
-        skip("XXX broken!!!")
 
 class TestW_DictSharing(test_dictobject.TestW_DictObject):
     def setup_class(cls):
@@ -60,8 +58,6 @@ class AppTest_DictSharing(test_dictobject.AppTest_DictObject):
         a.__dict__.items() == [("abc", 12)]
 
 
-    def test_repr_with_overriden_items(self):
-        skip("XXX broken!!!")
 
 class TestW_DictSmall(test_dictobject.TestW_DictObject):
     def setup_class(cls):
@@ -71,8 +67,6 @@ class AppTest_DictSmall(test_dictobject.AppTest_DictObject):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsmalldicts": True})
 
-    def test_repr_with_overriden_items(self):
-        skip("XXX broken!!!")
 
 class C: pass
 
