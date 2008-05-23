@@ -316,10 +316,22 @@ class W_Call(W_NewBuiltin):
 
 class W_ValueToString(W_NewBuiltin):
     "this is the toString function for objects with Value"
+    mytype = ''
     def Call(self, ctx, args=[], this=None):
-        if this.Value.type() != 'number':
+        if this.Value.type() != self.mytype:
             raise JsTypeError('Wrong type')
         return W_String(this.Value.ToString(ctx))
+
+
+class W_NumberValueToString(W_ValueToString):
+    mytype = 'number'
+
+class W_BooleanValueToString(W_ValueToString):
+    mytype = 'boolean'
+
+class W_StringValueToString(W_ValueToString):
+    mytype = 'string'
+
 
 def get_value_of(type, ctx):
     class W_ValueValueOf(W_NewBuiltin):
@@ -457,7 +469,7 @@ class Interpreter(object):
         put_values(w_BoolPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_BoolPrototype,
-            'toString': W_ValueToString(ctx),
+            'toString': W_BooleanValueToString(ctx),
             'valueOf': get_value_of('Boolean', ctx)
         })
 
@@ -475,7 +487,7 @@ class Interpreter(object):
         put_values(w_NumPrototype, {
             'constructor': w_Number,
             '__proto__': w_empty_fun,
-            'toString': W_ValueToString(ctx),
+            'toString': W_NumberValueToString(ctx),
             'valueOf': get_value_of('Number', ctx),
         })
 
@@ -509,7 +521,7 @@ class Interpreter(object):
         put_values(w_StrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_StrPrototype,
-            'toString': W_ValueToString(ctx),
+            'toString': W_StringValueToString(ctx),
             'valueOf': get_value_of('String', ctx),
             'charAt': W_CharAt(ctx),
             'concat': W_Concat(ctx),
