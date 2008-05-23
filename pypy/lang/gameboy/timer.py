@@ -26,7 +26,6 @@ class Timer(iMemory):
         self.tac            = 0
         self.timer_cycles   = constants.TIMER_CLOCK[0]
         self.timer_clock    = constants.TIMER_CLOCK[0]
-        print constants.TIMER_CLOCK
 
     def write(self,  address, data):
         address = int(address)
@@ -94,7 +93,6 @@ class Timer(iMemory):
         while self.divider_cycles <= 0:
             self.div = (self.div + 1) & 0xFF;
             self.divider_cycles += constants.DIV_CLOCK;
-        print self.divider_cycles
             
     def emulate_timer(self,  ticks):
         if (self.tac & 0x04) == 0:

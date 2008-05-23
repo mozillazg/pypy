@@ -29,11 +29,18 @@ class Register(iRegister):
         return self.value
     
     def add(self, value, use_cycles=True):
+        value = self.process_2_complement(value)
         self.set(self.get(use_cycles)+value, use_cycles)
         
     def sub(self, value, use_cycles=True):
         self.set(self.get(use_cycles)-value, use_cycles)
     
+    def process_2_complement(self, value):
+        # check if the left most bit is set
+        if (value >> 7) == 1:
+            return -(~value) & 0xFF-1
+        else :
+            return value
 #------------------------------------------------------------------------------
 
 class DoubleRegister(iRegister):
@@ -48,6 +55,7 @@ class DoubleRegister(iRegister):
         self.reset_value = reset_value
         
     def set(self, value, use_cycles=True):
+        value  = value & 0xFFFF
         self.set_hi(value >> 8, use_cycles)
         self.set_lo(value & 0xFF, use_cycles)
         if use_cycles:
@@ -85,10 +93,20 @@ class DoubleRegister(iRegister):
         if use_cycles:
             self.cpu.cycles -= 1
         
-    def add(self, n=2, use_cycles=True):
-        self.set(self.get(use_cycles) + n, use_cycles=use_cycles)
+    def add(self, value, use_cycles=True):
+        value = self.process_2_complement(value)
+        self.set(self.get(use_cycles) + value, use_cycles=use_cycles)
         if use_cycles:
             self.cpu.cycles -= 2
+            
+    def process_2_complement(self, value):
+        if value > 0xFF:
+            return value
+        # check if the left most bit is set
+        elif (value >> 7) == 1:
+            return -((~value) & 0xFF)-1
+        else :
+            return value
     
 # ------------------------------------------------------------------------------
 
@@ -166,23 +184,18 @@ class FlagRegister(Register):
              self.reset()
         if isinstance(a, (Register)):
             a = a.get()
-        print " "*8, a, "z_flag_compare", self.z_flag
         self.z_flag = ((a & 0xFF) == 0)
-        print self.z_flag
             
     def c_flag_add(self, s, compare_and=0x01, reset=False):
         if reset:
              self.reset()
-        if (s & compare_and) != 0:
-            self.c_flag = True
+        self.c_flag = ((s & compare_and) != 0)
 
     def h_flag_compare(self, a, b):
-        if (a & 0x0F) < (b & 0x0F):
-            self.h_flag = True
+        self.h_flag = ((a & 0x0F) < (b & 0x0F))
             
-    def c_flag_compare(self,  a, b):
-        if a < b:
-            self.c_flag = True
+    def c_flag_compare(self, a, b):
+        self.c_flag = (a < b)
         
 # # ------------------------------------------------------------------------------
 
@@ -236,6 +249,8 @@ class CPU(object):
         self.halted  = False
         self.cycles  = 0
         self.instruction_counter = 0
+        self.last_op_code = -1
+        self.last_fetch_execute_op_code = -1
         
     def reset_registers(self):
         self.a.reset()
@@ -338,11 +353,15 @@ class CPU(object):
     # ---------------------------------------------------------------
     
     def emulate(self, ticks):
-        ticks = int(ticks)
         self.cycles += ticks
         self.handle_pending_interrupt()
         while self.cycles > 0:
             self.execute(self.fetch())
+            
+    def emulate_step(self):
+        self.handle_pending_interrupt()
+        self.execute(self.fetch())
+        
 
     def handle_pending_interrupt(self):
         # Interrupts
@@ -366,18 +385,19 @@ class CPU(object):
     def fetch_execute(self):
         # Execution
         opCode = self.fetch()
-        print "    fetch exe:", hex(opCode), "  "
+        #print "    fetch exe:", hex(opCode), "  "
         #, FETCH_EXECUTE_OP_CODES[opCode].__name__
+        self.last_fetch_execute_op_code = opCode
         FETCH_EXECUTE_OP_CODES[opCode](self)
         
         
     def execute(self, opCode):
         self.instruction_counter += 1
-        print self.instruction_counter, "-"*60
-        print "exe: ", hex(opCode),  "   "
-        #, OP_CODES[opCode].__name__
-        print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
-        self.print_registers()
+        #print self.instruction_counter, "-"*60
+        #print "exe: ", hex(opCode),  "   ", OP_CODES[opCode].__name__
+        #print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
+        #self.print_registers()
+        self.last_op_code = opCode
         OP_CODES[opCode](self)
         
     def print_registers(self):
@@ -402,7 +422,7 @@ class CPU(object):
         return self.memory.read(address)
 
     def write(self, address, data):
-        print "    write: ", "a:", hex(address), "v:", hex(data)
+        # print "    write: ", "a:", hex(address), "v:", hex(data)
         # 2 cycles
         self.memory.write(address, data)
         self.cycles -= 2
@@ -415,7 +435,7 @@ class CPU(object):
         else:
             data = self.memory.read(self.pc.get(use_cycles))
         self.pc.inc(use_cycles) # 2 cycles
-        print "    fetch: ", data
+       # print "    fetch: ", data
         return data
     
     def fetch_double_address(self):
@@ -565,25 +585,32 @@ class CPU(object):
         self.f.z_flag_compare(self.a.get(), reset=True)
 
     def inc_double_register(self, doubleRegister):
-        doubleRegister.inc()
+        self.inc(doubleRegister.get, doubleRegister.set)
         
     def dec_double_register(self, doubleRegister):
-        doubleRegister.dec()
+        self.dec(doubleRegister.get, doubleRegister.set)
         
     def inc(self, getCaller, setCaller):
-        # 1 cycle
-        data = (getCaller.get() + 1) & 0xFF
-        self.dec_inc_flag_finish(data, setCaller, 0x00)
+        if getCaller.register == self.a:
+            self.add_a(NumberCallWrapper(1))
+        else:
+            # 1 cycle
+            data = (getCaller.get() + 1) & 0xFF
+            self.dec_inc_flag_finish(data, setCaller, 0x00)
         
     def dec(self, getCaller, setCaller):
-        # 1 cycle
-        data = (getCaller.get() - 1) & 0xFF
-        self.dec_inc_flag_finish(data, setCaller, 0x0F)
-        self.f.n_flag = True
+        if setCaller.register == self.a:
+            self.subtract_a(NumberCallWrapper(1))
+        else:
+            # 1 cycle
+            data = (getCaller.get() - 1) & 0xFF
+            self.dec_inc_flag_finish(data, setCaller, 0x0F)
+            self.f.n_flag = True
      
     def dec_inc_flag_finish(self, data, setCaller, compare):
         self.f.partial_reset(keep_c=True)
         self.f.z_flag_compare(data)
+        self.f.c_flag_compare(data, self.a.get())
         if (data & 0x0F) == compare:
             self.f.h_flag = True
         setCaller.set(data) # 1 cycle
@@ -849,6 +876,7 @@ class CPU(object):
 
     def relative_unconditional_jump(self):
         # JR +nn, 3 cycles
+        #pc = pc & 0xFF00 + ((pc & 0x00FF) + add) & 0xFF
         self.pc.add(self.fetch()) # 3 + 1 cycles
         self.cycles += 1
 
@@ -926,6 +954,18 @@ class CallWrapper(object):
     def get(self, use_cycles=True):
         raise Exception("called CalLWrapper.get")
         return 0
+    
+    def set(self, value, use_cycles=True):
+        raise Exception("called CalLWrapper.set")
+        pass
+    
+class NumberCallWrapper(CallWrapper):
+    
+    def __init__(self, number):
+        self.number = number
+    
+    def get(self, use_cycles=True):
+        return self.number
     
     def set(self, value, use_cycles=True):
         raise Exception("called CalLWrapper.set")

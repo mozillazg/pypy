@@ -65,11 +65,12 @@ class CartridgeManager(object):
     def write(self, address, data):
         self.mbc.write(address, data)
     
-    def load(self, cartridge):
-        assert isinstance(cartridge, Cartridge)
+    def load(self, cartridge, verify=True):
+        assert isinstance(cartridge, CartridgeFile)
         self.cartridge = cartridge
         self.rom  = self.cartridge.read()
-        self.check_rom()
+        if verify:
+            self.check_rom()
         self.create_ram()
         self.load_battery()
         self.mbc = self.create_bank_controller(self.get_memory_bank_type(), \
@@ -149,14 +150,13 @@ class CartridgeManager(object):
         return (checksum == self.get_header_checksum())
     
     def create_bank_controller(self, type, rom, ram, clock_driver):
-        print "create_bank_controller: ", type
         return MEMORY_BANK_MAPPING[type](rom, ram, clock_driver)
 
 
 # ------------------------------------------------------------------------------
 
     
-class Cartridge(object):
+class CartridgeFile(object):
     """
         File mapping. Holds the file contents
     """
@@ -305,6 +305,9 @@ class DefaultMBC(MBC):
                         max_rom_bank_size=0xFFFFFF,
                         min_ram_bank_size=0,
                         max_ram_bank_size=0xFFFFFF)
+        
+    def write(self, address, data):
+        self.ram[address] = data
     
 
 #-------------------------------------------------------------------------------
@@ -348,7 +351,6 @@ class MBC1(MBC):
     def write_ram_enable(self, address, data):
         if self.ram_size > 0:
             self.ram_enable = ((data & 0x0A) == 0x0A)
-        print "write_ram_enable: ", hex(self.ram_enable)
     
     def write_rom_bank_1(self, address, data):
         if (data & 0x1F) == 0:

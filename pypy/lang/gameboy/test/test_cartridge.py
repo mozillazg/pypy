@@ -19,7 +19,7 @@ def get_cartridge_managers():
     pass
 
 def get_cartridge():
-    ctrg = Cartridge()
+    ctrg = CartridgeFile()
     return ctrg
 
 class File(object):
