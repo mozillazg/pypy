@@ -650,3 +650,10 @@ class TestLowLevelType(test_typed.CompilationTestCase):
             fn = self.getcompiled(llf)
             fn()
 
+    def test_cast_to_void_array(self):
+        from pypy.rpython.lltypesystem import rffi
+        def llf():
+            TYPE = Ptr(rffi.CArray(Void))
+            y = rffi.cast(TYPE, 0)
+        fn = self.getcompiled(llf)
+        fn()
