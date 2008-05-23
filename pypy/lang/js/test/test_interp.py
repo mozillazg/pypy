@@ -404,7 +404,7 @@ def test_math_stuff():
     print(null);
     print(-z);
     """, ['10', '2', 'false', '3', 'NaN', 'Infinity', '-Infinity',
-    '3', '', '-2'])
+    '3', 'null', '-2'])
     
 def test_globalproperties():
     assertp( """
