@@ -2,8 +2,8 @@ from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import rffi, lltype
 import py
 
-WIDTH = 20
-HEIGHT = 20
+WIDTH = 1000
+HEIGHT = 1000
 
 def entry_point(argv=None):
     RSDL.Init(RSDL.INIT_VIDEO) >= 0
