@@ -25,11 +25,10 @@ ENUMERATE_EXTS = unrolling_iterable(
      (False, False, '.py')])
 
 class W_ZipImporter(Wrappable):
-    def __init__(self, space, name, w_dir, w_zipfile, prefix):
+    def __init__(self, space, name, w_dir, prefix):
         self.space = space
         self.name = name
         self.w_dir = w_dir
-        self.w_zipfile = w_zipfile
         self.prefix = prefix
 
     def getprefix(space, self):
@@ -240,7 +239,7 @@ def descr_new_zipimporter(space, w_type, name):
     except OperationError, e: # we catch everything as this function
         raise OperationError(space.w_ImportError, space.wrap(
             "%s seems not to be a zipfile" % (filename,)))
-    w_result = space.wrap(W_ZipImporter(space, name, w_dir, w_zipfile, prefix))
+    w_result = space.wrap(W_ZipImporter(space, name, w_dir, prefix))
     space.setitem(w_zip_cache, space.wrap(name), w_result)
     return w_result
     
