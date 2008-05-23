@@ -1,6 +1,6 @@
 import py
 from pypy.lang.js.interpreter import *
-from pypy.lang.js.jsobj import W_Array
+from pypy.lang.js.jsobj import W_Array, W_String
 from pypy.rlib.parsing.parsing import ParseError
 from py.__.test.outcome import Failed, ExceptionFailure
 import pypy.lang.js as js
@@ -11,6 +11,12 @@ interpreter.TEST = True
 
 rootdir = py.magic.autopath().dirpath()
 exclusionlist = ['shell.js', 'browser.js']
+
+def overriden_evaljs(ctx, args, this):
+    try:
+        return evaljs(ctx, args, this)
+    except JsBaseExcept:
+        return W_String("error")
 
 class JSDirectory(py.test.collect.Directory):
 
@@ -27,8 +33,6 @@ class JSDirectory(py.test.collect.Directory):
         if p.check(file=1):
             return JSTestFile(p, parent=self)
 
-
-
 class JSTestFile(py.test.collect.Module):
     def init_interp(cls):
         if hasattr(cls, 'interp'):
@@ -42,6 +46,9 @@ class JSTestFile(py.test.collect.Module):
         cls.interp.run(cls.shellfile)
         cls.testcases = cls.interp.global_context.resolve_identifier('testcases')
         cls.tc = cls.interp.global_context.resolve_identifier('tc')
+        # override eval
+        cls.interp.global_context.put('eval', W_Builtin(overriden_evaljs))
+        
     init_interp = classmethod(init_interp)
     
     def __init__(self, fspath, parent=None):

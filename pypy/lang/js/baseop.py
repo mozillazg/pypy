@@ -144,7 +144,8 @@ def AbstractEC(ctx, x, y):
             return x.ToString(ctx) == y.ToString(ctx)
         elif type1 == "boolean":
             return x.ToBoolean() == x.ToBoolean()
-        return x == y
+        # XXX rethink it here
+        return x.ToString(ctx) == y.ToString(ctx)
     else:
         #step 14
         if (type1 == "undefined" and type2 == "null") or \

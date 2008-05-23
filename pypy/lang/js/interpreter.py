@@ -81,7 +81,7 @@ class W_NumberObject(W_NativeObject):
 
 class W_StringObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
-        if len(args) >= 1 and not isnull_or_undefined(args[0]):
+        if len(args) >= 1:
             return W_String(args[0].ToString(ctx))
         else:
             return W_String('')
@@ -97,7 +97,7 @@ class W_ArrayObject(W_NativeObject):
         proto = ctx.get_global().Get('Array').Get('prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         for i in range(len(args)):
-            array.Put(str(i), args[0])
+            array.Put(str(i), args[i])
         return array
 
     def Construct(self, ctx, args=[]):
@@ -317,13 +317,19 @@ class W_Call(W_NewBuiltin):
 class W_ValueToString(W_NewBuiltin):
     "this is the toString function for objects with Value"
     def Call(self, ctx, args=[], this=None):
+        if this.Value.type() != 'number':
+            raise JsTypeError('Wrong type')
         return W_String(this.Value.ToString(ctx))
-    
-class W_ValueValueOf(W_NewBuiltin):
-    "this is the valueOf function for objects with Value"
-    def Call(self, ctx, args=[], this=None):
-        return this.Value
 
+def get_value_of(type, ctx):
+    class W_ValueValueOf(W_NewBuiltin):
+        "this is the valueOf function for objects with Value"
+        def Call(self, ctx, args=[], this=None):
+            if type != this.Class:
+                raise JsTypeError('%s.prototype.valueOf called with incompatible type' % self.type())
+            return this.Value
+    return W_ValueValueOf(ctx)
+        
 class W_CharAt(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
@@ -452,7 +458,7 @@ class Interpreter(object):
             'constructor': w_FncPrototype,
             '__proto__': w_BoolPrototype,
             'toString': W_ValueToString(ctx),
-            'valueOf': W_ValueValueOf(ctx),
+            'valueOf': get_value_of('Boolean', ctx)
         })
 
         w_Boolean.Put('prototype', w_BoolPrototype)
@@ -462,18 +468,22 @@ class Interpreter(object):
         #Number
         w_Number = W_NumberObject('Number', w_FncPrototype)
 
+        w_empty_fun = w_Function.Call(ctx, args=[W_String('')])
+
         w_NumPrototype = create_object(ctx, 'Object', Value=W_FloatNumber(0.0))
         w_NumPrototype.Class = 'Number'
         put_values(w_NumPrototype, {
-            'constructor': w_FncPrototype,
-            '__proto__': w_NumPrototype,
+            'constructor': w_Number,
+            '__proto__': w_empty_fun,
             'toString': W_ValueToString(ctx),
-            'valueOf': W_ValueValueOf(ctx),
+            'valueOf': get_value_of('Number', ctx),
         })
 
         put_values(w_Number, {
             'constructor': w_FncPrototype,
             'prototype': w_NumPrototype,
+            '__proto__': w_empty_fun,
+            'length'   : W_IntNumber(1),
         })
         w_Number.propdict['prototype'].ro = True
         w_Number.Put('MAX_VALUE', W_FloatNumber(1.7976931348623157e308),
@@ -500,7 +510,7 @@ class Interpreter(object):
             'constructor': w_FncPrototype,
             '__proto__': w_StrPrototype,
             'toString': W_ValueToString(ctx),
-            'valueOf': W_ValueValueOf(ctx),
+            'valueOf': get_value_of('String', ctx),
             'charAt': W_CharAt(ctx),
             'concat': W_Concat(ctx),
             'indexOf': W_IndexOf(ctx),

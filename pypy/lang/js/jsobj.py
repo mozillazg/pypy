@@ -59,7 +59,7 @@ class W_Root(object):
     
     def Put(self, P, V, dd=False,
             ro=False, de=False, it=False):
-        raise NotImplementedError
+        pass
     
     def PutValue(self, w, ctx):
         pass
@@ -98,6 +98,9 @@ class W_Null(W_Root):
 
     def ToBoolean(self):
         return False
+
+    def ToString(self, ctx):
+        return "null"
 
     def type(self):
         return 'null'
@@ -261,7 +264,7 @@ class W_NewBuiltin(W_PrimitiveObject):
         raise NotImplementedError
 
     def type(self):
-        return 'builtin'
+        return self.Class
 
 class W_Builtin(W_PrimitiveObject):
     def __init__(self, builtin=None, ctx=None, Prototype=None, Class='function',
@@ -611,37 +614,6 @@ def empty_context():
                             variable = obj,
                             jsproperty = Property('', w_Undefined))
     return ctx
-
-# class W_Reference(W_Root):
-#     """Reference Type"""
-#     def __init__(self, property_name, base=None):
-#         self.base = base
-#         self.property_name = property_name
-
-#     def check_empty(self):
-#         if self.base is None:
-#             exception = "ReferenceError: %s is not defined"%(self.property_name,)
-#             raise ThrowException(W_String(exception))        
-
-#     #def GetValue(self):
-#     #    self.check_empty()
-#     #    return self.base.Get(self.property_name)
-
-#     #def PutValue(self, w, ctx):
-#     #    base = self.base
-#     #    if base is None:
-#     #        base = ctx.scope[-1]
-#     #    base.Put(self.property_name, w)
-#     #    return w
-
-#     #def GetBase(self):
-#     #    return self.base
-
-#     #def GetPropertyName(self):
-#     #    return self.property_name
-
-#     def __str__(self):
-#         return "<" + str(self.base) + " -> " + str(self.property_name) + ">"
 
 class W_Iterator(W_Root):
     def __init__(self, elements_w):
