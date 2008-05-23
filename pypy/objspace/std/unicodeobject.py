@@ -944,8 +944,7 @@ def mod__Unicode_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=True)
 
 def buffer__Unicode(space, w_unicode):
-    # xxx this is a slightly strange thing...
-    from pypy.module.struct.unichar import pack_unichar
+    from pypy.rlib.rstruct.unichar import pack_unichar
     charlist = []
     for unich in w_unicode._value:
         pack_unichar(unich, charlist)
