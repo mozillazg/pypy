@@ -3,11 +3,11 @@ from pypy.interpreter.error import OperationError
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import ovfcheck
 
-from pypy.module.struct.error import StructError
-from pypy.module.struct.standardfmttable import standard_fmttable
-from pypy.module.struct.standardfmttable import PACK_ACCEPTS_BROKEN_INPUT
-from pypy.module.struct.nativefmttable import native_fmttable
-from pypy.module.struct.nativefmttable import native_is_bigendian
+from pypy.rlib.rstruct.error import StructError
+from pypy.rlib.rstruct.standardfmttable import standard_fmttable
+from pypy.rlib.rstruct.standardfmttable import PACK_ACCEPTS_BROKEN_INPUT
+from pypy.rlib.rstruct.nativefmttable import native_fmttable
+from pypy.rlib.rstruct.nativefmttable import native_is_bigendian
 
 
 class FormatIterator(object):
