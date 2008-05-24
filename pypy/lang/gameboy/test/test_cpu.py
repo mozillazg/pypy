@@ -350,7 +350,7 @@ def test_0x20_0x28_0x30():
         opCode += 0x08
         
 # ld_BC_nnnn to ld_SP_nnnn
-def test_0x01_0x11_0x21_0x31():
+def test_0x01_0x11_0x21_0x31_load_register_nnnn():
     cpu = get_cpu()
     registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
     value = 0x12
@@ -544,9 +544,20 @@ def test_dec():
     cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=True, h_flag=False, n_flag=True, c_flag=True)
     
+    a.set(1)
+    cpu.f.c_flag = False
+    cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
+    assert_default_flags(cpu, z_flag=True, h_flag=False, n_flag=True, c_flag=False)
+    
     a.set(0x0F+1)
+    cpu.f.c_flag = True
     cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
     assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True, c_flag=True)
+    
+    a.set(0x0F+1)
+    cpu.f.c_flag = False
+    cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
+    assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True, c_flag=False)
     
 
 # dec_B C D E H L  A
@@ -1090,14 +1101,14 @@ def test_cp_flags():
     assert_default_flags(cpu, z_flag=False, n_flag=True)
     
     cpu.reset()
-    cpu.a.set(0xF0)
+    cpu.a.set(0xF0) 
     cpu.b.set(0x01)
     cpu.compare_a(RegisterCallWrapper(cpu.b), None)
     assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True)
     
                          
 # cp_A_B to cp_A_A
-def test_0xB8_to_0xBF():
+def test_0xB8_to_0xBF_compare_a():
     cpu = get_cpu()
     opCode = 0xB8
     value = 0x12
@@ -1113,13 +1124,13 @@ def test_0xB8_to_0xBF():
         cycle_test(cpu, opCode, numCycles)
         if register == cpu.a:
             valueA = value
-        assert cpu.f.get() & constants.N_FLAG != 0
+        assert cpu.f.n_flag == True
         if valueA == value:
-            assert cpu.f.get() & constants.Z_FLAG != 0
+            assert cpu.f.z_flag == True
         if value < 0:
-            assert cpu.f.get() & constants.C_FLAG != 0
+            assert cpu.f.c_flag == True
         if ((valueA-value) & 0x0F) > (valueA & 0x0F):
-            assert cpu.f.get() & constants.H_FLAG != 0
+            assert cpu.f.h_flag == True
         value += 1
         opCode += 0x01
 
@@ -1534,10 +1545,11 @@ def test_0xCB():
     assert_default_registers(cpu, pc=pc+1)
     
 
-def test_rotateLeftCircular_flags():
+def test_rotateLeft_flags():
     cpu = get_cpu()
     a = cpu.a
     a.set(0x01)
+    assert_default_flags(cpu)
     cpu.rotate_left_a()
     assert_default_flags(cpu, z_flag=False, c_flag=False)
     assert_default_registers(cpu, a=0x02, f=None)

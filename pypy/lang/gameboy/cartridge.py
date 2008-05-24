@@ -265,7 +265,7 @@ class MBC(iMemory):
         banks = int(len(buffer) / constants.ROM_BANK_SIZE)
         if banks < self.min_rom_bank_size or banks > self.max_rom_bank_size:
             raise Exception("Invalid ROM size %s, should be in [%s %s]" % \
-                            (hex(len(buffer)), hex(self.min_rom_bank_size), \
+                            (hex(banks), hex(self.min_rom_bank_size), \
                              hex(self.max_rom_bank_size)))
         self.rom = buffer
         self.rom_size = constants.ROM_BANK_SIZE * banks - 1
@@ -275,7 +275,7 @@ class MBC(iMemory):
         banks = int(len(buffer) / constants.RAM_BANK_SIZE)
         if banks < self.min_ram_bank_size or banks > self.max_ram_bank_size:
             raise Exception("Invalid RAM size %s, should be in [%s %s]" % \
-                            (hex(len(buffer)), hex(self.min_ram_bank_size), \
+                            (hex(banks), hex(self.min_ram_bank_size), \
                              hex(self.max_ram_bank_size)))
         self.ram = buffer
         self.ram_size = constants.RAM_BANK_SIZE * banks - 1
@@ -385,8 +385,8 @@ class MBC2(MBC):
 
     def __init__(self, rom, ram, clock_driver):
         MBC.__init__(self, rom, ram, clock_driver,
-                    min_ram_bank_size=constants.RAM_BANK_SIZE,
-                    max_ram_bank_size=constants.RAM_BANK_SIZE,
+                    min_ram_bank_size=1,
+                    max_ram_bank_size=1,
                     min_rom_bank_size=2,   
                     max_rom_bank_size=16)
         

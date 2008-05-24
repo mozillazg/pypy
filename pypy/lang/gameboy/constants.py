@@ -51,7 +51,7 @@ HEADER_CHECKSUM_ADDRESS    = 0x014D
 CHECKSUM_A_ADDRESS         = 0x014E
 CHECKSUM_B_ADDRESS         = 0x014F
 
- #ROM Bank Size (16KB)
+# ROM Bank Size (16KB)
 ROM_BANK_SIZE = 0x4000
 
 # constants.RAM Bank Size (8KB)
