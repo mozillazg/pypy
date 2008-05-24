@@ -73,10 +73,10 @@ class VideoDriverImplementation(VideoDriver):
         
     def update_display(self):
         print "    update_display"
-        #RSDL.LockSurface(self.screen)
+        RSDL.LockSurface(self.screen)
         self.draw_pixels()
-        #RSDL.UnlockSurface(self.screen)
-        #RSDL.Flip(self.screen)
+        RSDL.UnlockSurface(self.screen)
+        RSDL.Flip(self.screen)
             
     def draw_pixels(self):
         print  "-"*60

@@ -186,16 +186,20 @@ class FlagRegister(Register):
             a = a.get()
         self.z_flag = ((a & 0xFF) == 0)
             
-    def c_flag_add(self, s, compare_and=0x01, reset=False):
+    def c_flag_compare(self, value, compare_and=0x01, reset=False):
         if reset:
              self.reset()
-        self.c_flag = ((s & compare_and) != 0)
+        print hex(value), hex(compare_and), (value & compare_and) != 0
+        self.c_flag = ((value & compare_and) != 0)
 
-    def h_flag_compare(self, a, b):
-        self.h_flag = ((a & 0x0F) < (b & 0x0F))
+    def h_flag_compare(self, value, a, inverted=False):
+        if inverted:
+            self.h_flag = ((value & 0x0F) < (a & 0x0F))
+        else:
+            self.h_flag = ((value & 0x0F) > (a & 0x0F))
             
-    def c_flag_compare(self, a, b):
-        self.c_flag = (a < b)
+    #def c_flag_compare(self, a, b):
+    #    self.c_flag = (a < b)
         
 # # ------------------------------------------------------------------------------
 
@@ -385,18 +389,17 @@ class CPU(object):
     def fetch_execute(self):
         # Execution
         opCode = self.fetch()
-        #print "    fetch exe:", hex(opCode), "  "
-        #, FETCH_EXECUTE_OP_CODES[opCode].__name__
+        print "    fetch exe:", hex(opCode), "  ", FETCH_EXECUTE_OP_CODES[opCode].__name__
         self.last_fetch_execute_op_code = opCode
         FETCH_EXECUTE_OP_CODES[opCode](self)
         
         
     def execute(self, opCode):
         self.instruction_counter += 1
-        #print self.instruction_counter, "-"*60
-        #print "exe: ", hex(opCode),  "   ", OP_CODES[opCode].__name__
-        #print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
-        #self.print_registers()
+        print self.instruction_counter, "-"*60
+        print "exe: ", hex(opCode),  "   ", OP_CODES[opCode].__name__
+        print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
+        self.print_registers()
         self.last_op_code = opCode
         OP_CODES[opCode](self)
         
@@ -499,9 +502,10 @@ class CPU(object):
     def add_a(self, getCaller, setCaller=None):
         # ALU, 1 cycle
         added = (self.a.get() + getCaller.get()) & 0xFF
-        self.f.z_flag_compare(added, reset=True)
-        self.f.h_flag_compare(added, self.a.get())
-        self.f.c_flag_compare(added, self.a.get())
+        self.f.reset()
+        self.f.z_flag_compare(added)
+        self.f.h_flag_compare(added, self.a.get(), inverted=True)
+        self.f.c_flag = (added < self.a.get())
         self.a.set(added) # 1 cycle
         
     def add_hl(self, register):
@@ -554,7 +558,7 @@ class CPU(object):
 
     def compare_a(self, getCaller, setCaller=None):
         # 1 cycle
-        self.compare_a_simple(int(self.a.get() - getCaller.get()))
+        self.compare_a_simple(self.a.get() - getCaller.get())
         
     def compare_a_simple(self, s):
         s = s & 0xFF
@@ -567,7 +571,8 @@ class CPU(object):
     def hc_flag_finish(self, data):
         if data > self.a.get():
             self.f.c_flag = True
-        self.f.h_flag_compare(self.a.get(), data)
+        #self.f.c_flag_compare(data, self.a.get())
+        self.f.h_flag_compare(data, self.a.get())
         
     def AND(self, getCaller, setCaller=None):
         # 1 cycle
@@ -591,28 +596,20 @@ class CPU(object):
         self.dec(doubleRegister.get, doubleRegister.set)
         
     def inc(self, getCaller, setCaller):
-        if getCaller.register == self.a:
-            self.add_a(NumberCallWrapper(1))
-        else:
-            # 1 cycle
-            data = (getCaller.get() + 1) & 0xFF
-            self.dec_inc_flag_finish(data, setCaller, 0x00)
+        # 1 cycle
+        data = (getCaller.get() + 1) & 0xFF
+        self.dec_inc_flag_finish(data, setCaller, 0x00)
         
     def dec(self, getCaller, setCaller):
-        if setCaller.register == self.a:
-            self.subtract_a(NumberCallWrapper(1))
-        else:
-            # 1 cycle
-            data = (getCaller.get() - 1) & 0xFF
-            self.dec_inc_flag_finish(data, setCaller, 0x0F)
-            self.f.n_flag = True
+        # 1 cycle
+        data = (getCaller.get() - 1) & 0xFF
+        self.dec_inc_flag_finish(data, setCaller, 0x0F)
+        self.f.n_flag = True
      
     def dec_inc_flag_finish(self, data, setCaller, compare):
         self.f.partial_reset(keep_c=True)
         self.f.z_flag_compare(data)
-        self.f.c_flag_compare(data, self.a.get())
-        if (data & 0x0F) == compare:
-            self.f.h_flag = True
+        self.f.h_flag = ((data & 0x0F) == compare)
         setCaller.set(data) # 1 cycle
 
     def rotate_left_circular(self, getCaller, setCaller):
@@ -681,8 +678,9 @@ class CPU(object):
     def flags_and_setter_finish(self, s, setCaller, compare_and=0x01):
         # 2 cycles
         s &= 0xFF
-        self.f.z_flag_compare(s,  reset=True)
-        self.f.c_flag_add(s, compare_and)
+        self.f.reset()
+        self.f.z_flag_compare(s)
+        self.f.c_flag_compare(s, compare_and)
         setCaller.set(s) # 1 cycle
 
     def swap(self, getCaller, setCaller):
