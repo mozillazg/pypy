@@ -403,11 +403,11 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
         
     def at0(self, index0):
         from pypy.lang.smalltalk import utility
-        return self.getword(index0)
+        return utility.wrap_int(self.getword(index0))
        
     def atput0(self, index0, w_value):
         from pypy.lang.smalltalk import utility
-        self.setword(index0, w_value)
+        self.setword(index0, utility.unwrap_int(w_value))
 
     def getword(self, n):
         return self.words[n]

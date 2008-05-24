@@ -196,12 +196,3 @@ def test_become_with_shadow():
     assert res
     assert w_clsa.as_class_get_shadow() is s_clsb
     assert w_clsb.as_class_get_shadow() is s_clsa
-
-def test_wordsobject_at0_atput0():
-    w_words = model.W_WordsObject(None, 3)
-    w_words.atput0(0, 'a')
-    w_words.atput0(1, 'b')
-    w_words.atput0(2, 'c')
-    assert w_words.at0(0) == 'a'
-    assert w_words.at0(1) == 'b'
-    assert w_words.at0(2) == 'c'
