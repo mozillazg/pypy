@@ -33,21 +33,11 @@ app_os_path = applevel(r'''
 ''', filename=__file__)
 
 app_os = applevel(r'''
-    # NOT_RPYTHON
-    import sys
-    sysmodules = sys.modules.keys()
-
     from os import sep, pathsep, getenv, name, fdopen
     try:
         from os import readlink
     except ImportError:
         pass
-
-    # restore the previous list of loaded modules
-    for name in sys.modules.keys():
-        if name not in sysmodules:
-            del sys.modules[name]
-    del sys
 ''', filename=__file__)
 
 def getenv(space, w_name):

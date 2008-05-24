@@ -22,5 +22,9 @@ def test_nanos():
     assert not space.is_true(
         space.call_method(space.sys.get('modules'),
                           '__contains__', space.wrap('os')))
-    
+    # But that 'sys' is still present
+    assert space.is_true(
+        space.call_method(space.sys.get('modules'),
+                          '__contains__', space.wrap('sys')))
+
     entry_point(['', '-c', 'print 42'])
