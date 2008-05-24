@@ -3,6 +3,7 @@ from pypy.lang.gameboy.cartridge import *
 from pypy.lang.gameboy.timer import Clock
 from pypy.lang.gameboy import constants
 import py
+import pdb
 
 def get_clock_driver():
     return Clock()
@@ -25,7 +26,7 @@ def fail_ini_test(caller, ram_size, rom_size):
  
  
  
-def read_write_test(mbc, lower, upper):
+def basic_read_write_test(mbc, lower, upper):
     write_bounds_test(mbc, lower, upper)
     read_bounds_test(mbc, lower, upper)
     
@@ -52,15 +53,25 @@ def read_bounds_test(mbc, lower, upper):
         py.test.fail("lower bound check failed")
     except:
         pass
-    for address in range(lower, upper):
-       assert mbc.read(address) != None
+    for address in range(lower, upper, 1):
+        assert mbc.read(address) != None
     try:
         mbc.read(upper+1)
         py.test.fail("lower upper check failed")
     except:
         pass
     
+def write_ram_enable_test(mbc):
+    value = 0
+    for address in range(0x1FFF+1):
+        mbc.write(address, 0x0A)
+        assert mbc.ram_enable == True
+        mbc.write(address, 0x00)
+        assert mbc.ram_enable == False
+    
+
 # -----------------------------------------------------------------------------
+
 def test_mbc_init():
     try:
         MBC(get_ram(), get_rom(), get_clock_driver())
@@ -112,7 +123,7 @@ def test_mbc_read_write():
     except:
         pass
  
-def test_mbc_read_write_test(mbc=None):  
+def test_mbc_basic_read_write_test(mbc=None):  
     if mbc==None:
         mbc = MBC([0]*0xFFFF,[0]*0xFFFF, get_clock_driver(),1, 0xFFFF, 2, 0xFFFF)
 
@@ -155,7 +166,7 @@ def test_default_mbc_write():
 def get_mbc1(rom_size=128, ram_size=4):
     return MBC1(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
-def test_mbc1_create():
+def test_mbc1():
     mbc1 = get_mbc1()
     assert mbc1.rom_bank == constants.ROM_BANK_SIZE
     assert mbc1.memory_model == 0
@@ -166,42 +177,60 @@ def test_mbc1_create():
     fail_ini_test(get_mbc1, 1, 4)
     fail_ini_test(get_mbc1, 129, 4)
     
-def test_mbc1_read_write():
-    mbc = get_mbc1()
-    read_write_test(mbc, 0, 0x7FFF)
-    value = 0
-    for address in range(0x1FFF+1):
-        mbc.write(address, 0x0A)
-        assert mbc.ram_enable == True
-        mbc.write(address, 0x00)
-        assert mbc.ram_enable == False
+    basic_read_write_test(mbc1, 0, 0x7FFF)
     
-    import pdb
+def test_mbc1_write_ram_enable():
+    write_ram_enable_test(get_mbc1())
+        
+def test_mbc_write_rom_bank_test1():
+    mbc= get_mbc1()
     value = 1   
-    for address in range(0x2000, 0x3FFF):
+    for address in range(0x2000, 0x3FFF+1):
         mbc.memory_model = 0
         rom_bank = mbc.rom_bank
-        #pdb.runcall(mbc.write, address, value)
         mbc.write(address, value)
         assert mbc.rom_bank == ((rom_bank & 0x180000) + \
                                 ((value & 0x1F) << 14)) & mbc.rom_size
         mbc.memory_model = 10
         mbc.write(address, value)
         assert mbc.rom_bank == ((value & 0x1F) << 14) & mbc.rom_size
-        value = (value+1) % (0x1F-1) +1 
+        value = (value+1) % (0x1F-1) +1
         
+def test_mbc1_write_rom_bank_test2():
+    mbc = get_mbc1()        
+    value = 1   
+    for address in range(0x4000, 0x5FFF+1):
+        mbc.memory_model = 0
+        rom_bank = mbc.rom_bank
+        mbc.write(address, value)
+        assert mbc.rom_bank == ((mbc.rom_bank & 0x07FFFF) + \
+                                ((value & 0x03) << 19))  & mbc.rom_size;
+        mbc.memory_model = 10
+        mbc.write(address, value)
+        assert mbc.ram_bank == ((value & 0x03) << 13) & mbc.ram_size
+        value += 1
+        value %= 0xFF 
         
+def test_mbc1_read_memory_model():
+    mbc = get_mbc1()       
+    value = 1   
+    for address in range(0x6000, 0x7FFF+1):
+        mbc.write(address, value)
+        assert mbc.memory_model == (value & 0x01)
+        value += 1
+        value %= 0xFF
         
-def test_mbc1_write():  
-    py.test.skip("buggy implementation of MBC1++")
-    mbc1 = get_mbc1()
-    test_mbc_read_write_test(mbc1)
-    
-def test_mbc1_read():
-    py.test.skip("not yet implemented")
-    mbc1 = get_mbc1()
-    # the same as in mbc
-    pass
+def test_mbc1_read_write_ram():
+    mbc = get_mbc1()        
+    value = 1
+    mbc.ram_enable = True
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.write(address, value)
+        #pdb.runcall(mbc.write, address, value)
+        assert mbc.ram[mbc.ram_bank + (address & 0x1FFF)] == value
+        assert mbc.read(address) == value;
+        value += 1
+        value %= 0xFF 
 
 # -----------------------------------------------------------------------------
 
@@ -209,41 +238,160 @@ def get_mbc2(rom_size=16, ram_size=1):
     return MBC2(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
 def test_mbc2_create():
-    get_mbc2()
-    fail_ini_test(get_mbc2, 2, 0)
-    fail_ini_test(get_mbc2, 2, 2)
-    fail_ini_test(get_mbc2, 1, 1)
-    fail_ini_test(get_mbc2, 17, 1)
-    
-    
-def test_mbc2_read_write():
-    py.test.skip("not yet implemented")
     mbc2 = get_mbc2()
+    fail_ini_test(mbc2, 2, 0)
+    fail_ini_test(mbc2, 2, 2)
+    fail_ini_test(mbc2, 1, 1)
+    fail_ini_test(mbc2, 17, 1)
+    # only to the upper border of mbc
+    basic_read_write_test(mbc2, 0, 0x7FFF)
     
-
-def test_mbc2_write():
-    py.test.skip("not yet implemented")
-    mbc2 = get_mbc2()
+    
+def test_mbc2_write_ram_enable():
+    mbc = get_mbc2()
+    value = 0
+    for address in range(0x1FFF+1):
+        mbc.ram_enable = -1
+        mbc.write(address, 0x0A)
+        if (address & 0x0100) == 0: 
+            assert mbc.ram_enable == True
+            mbc.write(address, 0x00)
+            assert mbc.ram_enable == False
+        else:
+            assert mbc.ram_enable == -1
+        
+def test_mbc2_write_rom_bank_test1():
+    mbc = get_mbc2()
+    value = 1   
+    for address in range(0x2000, 0x3FFF+1):
+        mbc.rom_bank = -1
+        mbc.write(address, value)
+        if (address & 0x0100) != 0:
+            assert mbc.rom_bank == ((value & 0x0F) << 14) & mbc.rom_size
+        else:
+            assert mbc.rom_bank == -1
+        value = (value + 1) % (0x0F-1) + 1 
+        
+def test_mbc2_read_write_ram():
+    mbc = get_mbc2()        
+    value = 1
+    mbc.ram_enable = True
+    for address in range(0xA000, 0xA1FF+1):
+        mbc.write(address, value)
+        assert mbc.ram[(address & 0x01FF)] == value & 0x0F
+        assert mbc.read(address) == value;
+        value += 1
+        value %= 0x0F 
     
 # -----------------------------------------------------------------------------
-
+    
 def get_mbc3(rom_size=128, ram_size=4):
     return MBC3(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
 def test_mbc3_create():
-    get_mbc3()
-    fail_ini_test(get_mbc3, 128, -1)
-    fail_ini_test(get_mbc3, 128, 5)
-    fail_ini_test(get_mbc3, 1, 4)
-    fail_ini_test(get_mbc3, 129, 4)
+    mbc3 = get_mbc3()
+    fail_ini_test(mbc3, 128, -1)
+    fail_ini_test(mbc3, 128, 5)
+    fail_ini_test(mbc3, 1, 4)
+    fail_ini_test(mbc3, 129, 4)
+    basic_read_write_test(mbc3, 0, 0x7FFF)
     
-def test_mbc3_read():
-    py.test.skip("not yet implemented")
-    mbc3 = get_mbc3()
+def test_mbc3_write_ram_enable():
+    write_ram_enable_test(get_mbc3())
+        
+def test_mbc3_write_rom_bank():
+    mbc= get_mbc3()
+    value = 1   
+    for address in range(0x2000, 0x3FFF+1):
+        mbc.memory_model = 0
+        rom_bank = mbc.rom_bank
+        mbc.write(address, value)
+        if value == 0:
+            assert mbc.rom_bank == ((1 & 0x7F) << 14) & mbc.rom_size
+        else:
+            assert mbc.rom_bank == ((value & 0x7F) << 14) & mbc.rom_size
+        value += 1
+        value %= 0xFF
+        
+def test_mbc3_write_ram_bank():
+    mbc = get_mbc3()        
+    value = 1   
+    for address in range(0x4000, 0x5FFF+1):
+        mbc.memory_model = 0
+        mbc.write(address, value)
+        if value >= 0 and value <= 0x03:
+            assert mbc.ram_bank == (value << 13) & mbc.ram_size
+        else:
+           assert mbc.ram_bank == -1;
+           assert mbc.clock_register == value
+        value += 1
+        value %= 0xFF 
+        
+def test_mbc3_write_clock_latch():
+    mbc = get_mbc3()       
+    value = 1   
+    for address in range(0x6000, 0x7FFF+1):
+        mbc.write(address, value)
+        if value == 0 or value == 1:    
+            assert mbc.clock_latch == value
+        if value == 1:
+            # clock update check...
+            pass
+        value += 1
+        value %= 0xFF
+        
+def test_mbc3_read_write_ram():
+    mbc = get_mbc3()        
+    value = 1
+    mbc.ram_enable = True
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.write(address, value)
+        #pdb.runcall(mbc.write, address, value)
+        assert mbc.ram[mbc.ram_bank + (address & 0x1FFF)] == value
+        assert mbc.read(address) == value;
+        value += 1
+        value %= 0xFF
+        
+def test_mbc3_read_write_clock():
+    mbc = get_mbc3()        
+    value = 1
+    mbc.ram_enable = True
+    mbc.ram_bank = -1
+    old_clock_value = -2
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.clock_register = 0x08
+        mbc.write(address, value)
+        assert mbc.clock_seconds == value
+        
+        mbc.clock_register = 0x09
+        mbc.write(address, value)
+        assert mbc.clock_minutes == value
+        
+        mbc.clock_register = 0x0A
+        mbc.write(address, value)
+        assert mbc.clock_hours == value
+        
+        mbc.clock_register = 0x0B
+        mbc.write(address, value)
+        assert mbc.clock_days == value
+        
+        mbc.clock_register = 0x0C
+        clock_control = mbc.clock_control
+        mbc.write(address, value)
+        assert mbc.clock_control == ((clock_control & 0x80) | value)
+        
+        value += 1
+        value %= 0xFF
 
-def test_mbc3_write():
+def test_mbc3_update_clock():
     py.test.skip("not yet implemented")
-    mbc3 = get_mbc3()
+    mbc = get_mbc3()
+    
+    
+def test_mbc3_latch_clock():
+    py.test.skip("not yet implemented")
+    mbc = get_mbc3()
+    
     
 # -----------------------------------------------------------------------------
 

@@ -286,9 +286,12 @@ class MBC(iMemory):
             return self.rom[address] & 0xFF
         elif address <= 0x7FFF:# 4000-7FFF
             return self.rom[self.rom_bank + (address & 0x3FFF)] & 0xFF
-        elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
-            return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
-        raise Exception("MBC: Invalid address, out of range")
+        elif address >= 0xA000 and address <= 0xBFFF: # A000-BFFF
+            if self.ram_enable:
+                return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
+            else:
+                raise Exception("RAM is not Enabled")
+        raise Exception("MBC: Invalid address, out of range: %s" % hex(address))
     
     def write(self, address, data):
         raise Exception("MBC: Invalid write access")
@@ -346,7 +349,7 @@ class MBC1(MBC):
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
             self.ram[self.ram_bank + (address & 0x1FFF)] = data
         else:
-            raise Exception("Invalid memory Access")
+            raise Exception("Invalid memory Access address: %s" % hex(address))
 
     def write_ram_enable(self, address, data):
         if self.ram_size > 0:
@@ -390,10 +393,17 @@ class MBC2(MBC):
                     min_rom_bank_size=2,   
                     max_rom_bank_size=16)
         
-
+    
     def read(self, address):
         if address > 0xA1FF:
-            return 0xFF
+            raise Exception("MBC2 out of Bounds: %s" % hex(address))
+        elif address >= 0xA000:
+            return self.ram[address & 0x01FF]
+        elif address >= 0xA000 and address <= 0xA1FF: # A000-BFFF
+            if self.ram_enable:
+                return self.ram[self.ram_bank + (address & 0x1FFF)] & 0xFF
+            else:
+                raise Exception("RAM is not Enabled")
         else:
             return MBC.read(self, address)
         
@@ -444,20 +454,20 @@ class MBC3(MBC):
 
     def reset(self):
         MBC.reset(self)
-        self.clockLDaysclockLControl = None
+        self.clock_latched_daysclock_latched_control = None
         self.clock_time     = self.clock.get_time()
         self.clock_latch     = 0
         self.clock_register = 0
-        self.clockSeconds   = 0
-        self.clockMinutes   = 0
-        self.clockHours     = 0
-        self.clockDays      = 0
-        self.clockControl   = 0
-        self.clockLSeconds  = 0
-        self.clockLMinutes  = 0
-        self.clockLHours    = 0
-        self.clockLDays     = 0
-        self.clockLControl  = 0
+        self.clock_seconds   = 0
+        self.clock_minutes   = 0
+        self.clock_hours     = 0
+        self.clock_days      = 0
+        self.clock_control   = 0
+        self.clock_latched_seconds  = 0
+        self.clock_latched_minutes  = 0
+        self.clock_latched_hours    = 0
+        self.clock_latched_days     = 0
+        self.clock_latched_control  = 0
 
 
     def read(self, address):
@@ -471,15 +481,15 @@ class MBC3(MBC):
         
     def read_clock_data(self, address):
         if self.clock_register == 0x08:
-            return self.clockLSeconds
+            return self.clock_latched_seconds
         if self.clock_register == 0x09:
-            return self.clockLMinutes
+            return self.clock_latched_minutes
         if self.clock_register == 0x0A:
-            return self.clockLHours
+            return self.clock_latched_hours
         if self.clock_register == 0x0B:
-            return self.clockLDays
+            return self.clock_latched_days
         if self.clock_register == 0x0C:
-            return self.clockLControl
+            return self.clock_latched_control
         raise Exception("MBC*.read_clock_data invalid address %i")
     
     def write(self, address, data):
@@ -522,52 +532,52 @@ class MBC3(MBC):
         else:
             self.update_clock()
             if self.clock_register == 0x08:
-                self.clockSeconds = data
+                self.clock_seconds = data
             if self.clock_register == 0x09:
-                self.clockMinutes = data
+                self.clock_minutes = data
             if self.clock_register == 0x0A:
-                self.clockHours = data
+                self.clock_hours = data
             if self.clock_register == 0x0B:
-                self.clockDays = data
+                self.clock_days = data
             if self.clock_register == 0x0C:
-                self.clockControl = (self.clockControl & 0x80) | data
+                self.clock_control = (self.clock_control & 0x80) | data
         
 
     def latch_clock(self):
         self.update_clock()
-        self.clockLSeconds = self.clockSeconds
-        self.clockLMinutes = self.clockMinutes
-        self.clockLHours   = self.clockHours
-        self.clockLDays    = self.clockDays & 0xFF
-        self.clockLControl = (self.clockControl & 0xFE) | ((self.clockDays >> 8) & 0x01)
+        self.clock_latched_seconds = self.clock_seconds
+        self.clock_latched_minutes = self.clock_minutes
+        self.clock_latched_hours   = self.clock_hours
+        self.clock_latched_days    = self.clock_days & 0xFF
+        self.clock_latched_control = (self.clock_control & 0xFE) | ((self.clock_days >> 8) & 0x01)
 
 
     def update_clock(self):
         now = self.clock.get_time()
-        if (self.clockControl & 0x40) == 0:
+        if (self.clock_control & 0x40) == 0:
             elapsed = now - self.clock_time
             while elapsed >= 246060:
                 elapsed -= 246060
-                self.clockDays+=1
+                self.clock_days+=1
             while elapsed >= 6060:
                 elapsed -= 6060
-                self.clockHours+=1
+                self.clock_hours+=1
             while elapsed >= 60:
                 elapsed -= 60
-                self.clockMinutes+=1
-            self.clockSeconds += elapsed
-            while self.clockSeconds >= 60:
-                self.clockSeconds -= 60
-                self.clockMinutes+=1
-            while self.clockMinutes >= 60:
-                self.clockMinutes -= 60
-                self.clockHours+=1
-            while self.clockHours >= 24:
-                self.clockHours -= 24
-                self.clockDays+=1
-            while self.clockDays >= 512:
-                self.clockDays -= 512
-                self.clockControl |= 0x80
+                self.clock_minutes+=1
+            self.clock_seconds += elapsed
+            while self.clock_seconds >= 60:
+                self.clock_seconds -= 60
+                self.clock_minutes+=1
+            while self.clock_minutes >= 60:
+                self.clock_minutes -= 60
+                self.clock_hours+=1
+            while self.clock_hours >= 24:
+                self.clock_hours -= 24
+                self.clock_days+=1
+            while self.clock_days >= 512:
+                self.clock_days -= 512
+                self.clock_control |= 0x80
         self.clock_time = now
 
 
