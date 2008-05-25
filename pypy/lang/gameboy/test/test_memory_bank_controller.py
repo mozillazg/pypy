@@ -64,7 +64,7 @@ def read_bounds_test(mbc, lower, upper):
 def write_ram_enable_test(mbc):
     value = 0
     for address in range(0x1FFF+1):
-        mbc.write(address, 0x0A)
+        mbc.write(address, 0xFF)
         assert mbc.ram_enable == True
         mbc.write(address, 0x00)
         assert mbc.ram_enable == False
@@ -94,8 +94,7 @@ def test_mbc_init():
         pass
 
 def test_mbc():
-    py.test.skip()
-    mbc = MBC(get_ram(), get_rom(), get_clock_driver(),1, 0xF3, 2, 0xF1)
+    mbc = MBC(get_rom(2), get_ram(2), get_clock_driver(),1, 0xF3, 2, 0xF1)
     assert mbc.min_rom_bank_size == 1
     assert mbc.max_rom_bank_size == 0xF3
     assert mbc.min_ram_bank_size == 2
@@ -103,10 +102,10 @@ def test_mbc():
     assert mbc.rom_bank == constants.ROM_BANK_SIZE
     assert mbc.ram_bank == 0
     assert mbc.ram_enable == False
-    assert mbc.rom_size == ROM_SIZE * constants.ROM_BANK_SIZE - 1
-    assert mbc.ram_size == RAM_SIZE * constants.ROM_BANK_SIZE - 1
-    assert len(mbc.rom) == ROM_SIZE
-    assert len(mbc.ram) == RAM_SIZE
+    assert mbc.rom_size == 2*constants.ROM_BANK_SIZE - 1
+    assert mbc.ram_size == 2*constants.RAM_BANK_SIZE - 1 
+    assert len(mbc.rom) == constants.ROM_BANK_SIZE * 2
+    assert len(mbc.ram) == constants.RAM_BANK_SIZE * 2
     
 
 def test_mbc_read_write():
@@ -166,24 +165,28 @@ def test_default_mbc_write():
 def get_mbc1(rom_size=128, ram_size=4):
     return MBC1(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
-def test_mbc1():
-    mbc1 = get_mbc1()
-    assert mbc1.rom_bank == constants.ROM_BANK_SIZE
-    assert mbc1.memory_model == 0
-    assert mbc1.ram_enable == False
-    assert mbc1.ram_bank == 0
-    fail_ini_test(get_mbc1, 128, 5)
-    fail_ini_test(get_mbc1, 128, -1)
-    fail_ini_test(get_mbc1, 1, 4)
-    fail_ini_test(get_mbc1, 129, 4)
+def test_mbc1(mbc=None):
+    if mbc is None:
+        mbc = get_mbc1()
+    assert mbc.rom_bank == constants.ROM_BANK_SIZE
+    assert mbc.memory_model == 0
+    assert mbc.ram_enable == False
+    assert mbc.ram_bank == 0
+    fail_ini_test(mbc, 128, 5)
+    fail_ini_test(mbc, 128, -1)
+    fail_ini_test(mbc, 1, 4)
+    fail_ini_test(mbc, 129, 4)
     
-    basic_read_write_test(mbc1, 0, 0x7FFF)
+    basic_read_write_test(mbc, 0, 0x7FFF)
     
-def test_mbc1_write_ram_enable():
-    write_ram_enable_test(get_mbc1())
+def test_mbc1_write_ram_enable(mbc=None):
+    if mbc is None:
+        mbc = get_mbc1()
+    write_ram_enable_test(mbc)
         
-def test_mbc_write_rom_bank_test1():
-    mbc= get_mbc1()
+def test_mbc1_write_rom_bank_test1(mbc=None):
+    if mbc is None:
+        mbc = get_mbc1()
     value = 1   
     for address in range(0x2000, 0x3FFF+1):
         mbc.memory_model = 0
@@ -196,8 +199,9 @@ def test_mbc_write_rom_bank_test1():
         assert mbc.rom_bank == ((value & 0x1F) << 14) & mbc.rom_size
         value = (value+1) % (0x1F-1) +1
         
-def test_mbc1_write_rom_bank_test2():
-    mbc = get_mbc1()        
+def test_mbc1_write_rom_bank_test2(mbc=None):
+    if mbc is None:
+        mbc = get_mbc1()
     value = 1   
     for address in range(0x4000, 0x5FFF+1):
         mbc.memory_model = 0
@@ -211,8 +215,9 @@ def test_mbc1_write_rom_bank_test2():
         value += 1
         value %= 0xFF 
         
-def test_mbc1_read_memory_model():
-    mbc = get_mbc1()       
+def test_mbc1_read_memory_model(mbc=None):
+    if mbc is None:
+        mbc = get_mbc1()
     value = 1   
     for address in range(0x6000, 0x7FFF+1):
         mbc.write(address, value)
@@ -220,8 +225,9 @@ def test_mbc1_read_memory_model():
         value += 1
         value %= 0xFF
         
-def test_mbc1_read_write_ram():
-    mbc = get_mbc1()        
+def test_mbc1_read_write_ram(mbc=None):
+    if mbc is None:
+        mbc = get_mbc1()
     value = 1
     mbc.ram_enable = True
     for address in range(0xA000, 0xBFFF+1):
@@ -238,13 +244,13 @@ def get_mbc2(rom_size=16, ram_size=1):
     return MBC2(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
 def test_mbc2_create():
-    mbc2 = get_mbc2()
-    fail_ini_test(mbc2, 2, 0)
-    fail_ini_test(mbc2, 2, 2)
-    fail_ini_test(mbc2, 1, 1)
-    fail_ini_test(mbc2, 17, 1)
+    mbc = get_mbc2()
+    fail_ini_test(mbc, 2, 0)
+    fail_ini_test(mbc, 2, 2)
+    fail_ini_test(mbc, 1, 1)
+    fail_ini_test(mbc, 17, 1)
     # only to the upper border of mbc
-    basic_read_write_test(mbc2, 0, 0x7FFF)
+    basic_read_write_test(mbc, 0, 0x7FFF)
     
     
 def test_mbc2_write_ram_enable():
@@ -289,12 +295,12 @@ def get_mbc3(rom_size=128, ram_size=4):
     return MBC3(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
 def test_mbc3_create():
-    mbc3 = get_mbc3()
-    fail_ini_test(mbc3, 128, -1)
-    fail_ini_test(mbc3, 128, 5)
-    fail_ini_test(mbc3, 1, 4)
-    fail_ini_test(mbc3, 129, 4)
-    basic_read_write_test(mbc3, 0, 0x7FFF)
+    mbc = get_mbc3()
+    fail_ini_test(mbc, 128, -1)
+    fail_ini_test(mbc, 128, 5)
+    fail_ini_test(mbc, 1, 4)
+    fail_ini_test(mbc, 129, 4)
+    basic_read_write_test(mbc, 0, 0x7FFF)
     
 def test_mbc3_write_ram_enable():
     write_ram_enable_test(get_mbc3())
@@ -399,19 +405,57 @@ def get_mbc5(rom_size=512, ram_size=16):
     return MBC5(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
 def test_mbc5_create():
-    get_mbc5()
-    fail_ini_test(get_mbc5, 512, -1)
-    fail_ini_test(get_mbc5, 512, 17)
-    fail_ini_test(get_mbc5, 1, 16)
-    fail_ini_test(get_mbc5, 513, 16)
+    mbc = get_mbc5()
+    fail_ini_test(mbc, 512, -1)
+    fail_ini_test(mbc, 512, 17)
+    fail_ini_test(mbc, 1, 16)
+    fail_ini_test(mbc, 513, 16)
     
-def test_mbc5_read():
-    py.test.skip("not yet implemented")
-    mbc5 = get_mbc5()
-
-def test_mbc5_write():
-    py.test.skip("not yet implemented")
-    mbc5 = get_mbc5()
+def test_mbc5_write_ram_enable():
+    write_ram_enable_test(get_mbc5())
+        
+def test_mbc5_write_rom_bank_test1():
+    mbc= get_mbc5()
+    value = 1   
+    for address in range(0x2000, 0x2FFF+1):
+        rom_bank = mbc.rom_bank
+        mbc.write(address, value)
+        assert mbc.rom_bank == ((rom_bank & (0x01 << 22)) + \
+                                ((value & 0xFF) << 14)) & mbc.rom_size
+        value = (value+1) % (0x1F-1) +1
+        
+def test_mbc5_write_rom_bank_test2():
+    mbc = get_mbc5()        
+    value = 1   
+    for address in range(0x3000, 0x3FFF+1):
+        rom_bank = mbc.rom_bank
+        mbc.write(address, value)
+        assert mbc.rom_bank == ((rom_bank & (0xFF << 14)) + \
+                                ((value & 0x01) << 22)) & mbc.rom_size
+        value = (value+1) % (0x1F-1) +1
+        
+def test_mbc5_write_ram_bank():
+    mbc = get_mbc5()        
+    value = 1   
+    for address in range(0x4000, 0x4FFF+1):
+        mbc.rumble = True
+        mbc.write(address, value)
+        assert mbc.ram_bank == ((value & 0x07) << 13) & mbc.ram_size
+        mbc.rumble = False
+        mbc.write(address, value)
+        assert mbc.ram_bank == ((value & 0x0F) << 13) & mbc.ram_size
+        value = (value+1) % (0x1F-1) +1
+        
+def test_mbc5_read_write_ram():
+    mbc = get_mbc5()        
+    value = 1
+    mbc.ram_enable = True
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.write(address, value)
+        assert mbc.ram[mbc.ram_bank + (address & 0x1FFF)] == value
+        assert mbc.read(address) == value;
+        value += 1
+        value %= 0xFF 
 
 # -----------------------------------------------------------------------------
 
@@ -419,19 +463,22 @@ def get_huc1(rom_size=128, ram_size=4):
     return HuC1(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
 def test_huc1_create():
-    get_huc1()
-    fail_ini_test(get_huc1, 128, 5)
-    fail_ini_test(get_huc1, 128, -1)
-    fail_ini_test(get_huc1, 1, 4)
-    fail_ini_test(get_huc1, 129, 4)
+    test_mbc1_create(get_huc1())
     
-def test_huc1_read():
-    py.test.skip("not yet implemented")
-    huc1 = get_huc1()
-
-def test_huc1_write():
-    py.test.skip("not yet implemented")
-    huc1 = get_huc1()    
+def test_huc1_write_ram_enable():
+    test_mbc1_write_ram_enable(get_huc1())
+        
+def test_huc1_write_rom_bank_test1():
+    test_mbc1_write_rom_bank_test1(get_huc1())
+        
+def test_huc1_write_rom_bank_test2():
+    test_mbc1_write_rom_bank_test2(get_huc1())
+        
+def test_huc1_read_memory_model():
+    test_mbc1_read_memory_model(get_huc1())       
+        
+def test_huc1_read_write_ram():
+    test_mbc1_read_write_ram(get_huc1())    
 
 # -----------------------------------------------------------------------------
 

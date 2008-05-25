@@ -53,15 +53,20 @@ class Video(iMemory):
 
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
+        # used for enabled or disablind window or background
         self.control    = 0x91
         self.stat       = 2
         self.line_y     = 0
         self.line_y_compare = 0
         self.dma        = 0xFF
-        self.scroll_y   = 0
+        # SCROLLX and SCROLLY hold the coordinates of background to
+        # be displayed in the left upper corner of the screen.
         self.scroll_x   = 0
-        self.window_y   = self.wline_y = 0
+        self.scroll_y   = 0
+        # window position
         self.window_x   = 0
+        self.window_y   = 0
+        self.wline_y = 0
         self.background_palette = 0xFC
         self.object_palette_0   = 0xFF 
         self.object_palette_1   = 0xFF
