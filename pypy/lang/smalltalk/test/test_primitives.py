@@ -5,7 +5,7 @@ from pypy.lang.smalltalk import model, shadow, interpreter
 from pypy.lang.smalltalk import constants
 from pypy.rlib.rarithmetic import INFINITY, NAN, isinf, isnan
 from pypy.lang.smalltalk import primitives
-from pypy.lang.smalltalk import space as objspace
+from pypy.lang.smalltalk import objspace
 
 mockclass = objspace.bootstrap_class
 

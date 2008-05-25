@@ -1,6 +1,6 @@
 import random
 from pypy.lang.smalltalk import model, shadow, constants
-from pypy.lang.smalltalk import space as objspace
+from pypy.lang.smalltalk import objspace
 
 space = objspace.ObjSpace()
 

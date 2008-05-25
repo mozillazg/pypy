@@ -7,7 +7,7 @@ from pypy.lang.smalltalk import model
 from pypy.lang.smalltalk import constants
 from pypy.lang.smalltalk import interpreter
 from pypy.lang.smalltalk import shadow
-from pypy.lang.smalltalk import space as objspace
+from pypy.lang.smalltalk import objspace
 # lazy initialization of test data, ie ImageReader and Float class
 
 def setup_module(module, filename='mini.image'):

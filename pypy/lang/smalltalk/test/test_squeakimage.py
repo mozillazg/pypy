@@ -1,7 +1,7 @@
 import py
 from pypy.lang.smalltalk import squeakimage
 from pypy.lang.smalltalk.squeakimage import chrs2int
-from pypy.lang.smalltalk import space as objspace
+from pypy.lang.smalltalk import objspace
 
 space = objspace.ObjSpace()
 

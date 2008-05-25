@@ -1,6 +1,6 @@
 import py
 from pypy.lang.smalltalk import model, interpreter, primitives, shadow
-from pypy.lang.smalltalk import space as objspace
+from pypy.lang.smalltalk import objspace
 
 mockclass = objspace.bootstrap_class
 
