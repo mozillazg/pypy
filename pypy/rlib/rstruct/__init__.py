@@ -1,4 +1,8 @@
 
+""" WARNING! this module is incomplete and may have rough edges. Use only
+if necessary
+"""
+
 import py
 from struct import pack, unpack
 from pypy.rlib.rstruct.formatiterator import FormatIterator
