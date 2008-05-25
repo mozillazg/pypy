@@ -353,7 +353,7 @@ def test_bytecodePrimNew():
         interp.step)
     w_fakeinst = interp.s_active_context().pop()
     assert interp.s_active_context().stack() == []
-    assert w_fakeinst.getclass() == w_fakeclass
+    assert w_fakeinst.getclass().is_same_object(w_fakeclass)
     assert w_fakeinst.size() == 1
     
 def test_bytecodePrimNewWithArg():
@@ -368,7 +368,7 @@ def test_bytecodePrimNewWithArg():
         interp.step)
     w_fakeinst = interp.s_active_context().pop()
     assert interp.s_active_context().stack() == []
-    assert w_fakeinst.getclass() == w_fakeclass
+    assert w_fakeinst.getclass().is_same_object(w_fakeclass)
     assert w_fakeinst.size() == 3
  
 def test_bytecodePrimSize():
