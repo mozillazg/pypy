@@ -120,7 +120,7 @@ class ObjSpace(object):
     def make_bootstrap_objects(self):
         def bld_char(i):
             w_cinst = self.w_Character.as_class_get_shadow(self).new()
-            w_cinst.store(constants.CHARACTER_VALUE_INDEX,
+            w_cinst.store(self, constants.CHARACTER_VALUE_INDEX,
                           model.W_SmallInteger(i))
             return w_cinst
         w_charactertable = model.W_PointersObject(
@@ -171,7 +171,7 @@ class ObjSpace(object):
         return w_inst
 
     def wrap_char(self, c):
-        return self.w_charactertable.fetch(ord(c))
+        return self.w_charactertable.fetch(self, ord(c))
 
     def wrap_bool(self, b):
         if b:
@@ -200,7 +200,7 @@ class ObjSpace(object):
         w_class = w_char.getclass(self)
         if not w_class.is_same_object(self.w_Character):
             raise UnwrappingError("expected character, got %s" % (w_class, ))
-        w_ord = w_char.fetch(constants.CHARACTER_VALUE_INDEX)
+        w_ord = w_char.fetch(self, constants.CHARACTER_VALUE_INDEX)
         w_class = w_ord.getclass(self)
         if not w_class.is_same_object(self.w_SmallInteger):
             raise UnwrappingError("expected smallint from character, got %s" % (w_class, ))

@@ -27,10 +27,10 @@ def test_new_namedvars():
     w_myinstance = w_mycls.as_class_get_shadow(space).new()
     assert isinstance(w_myinstance, model.W_PointersObject)
     assert w_myinstance.getclass(space).is_same_object(w_mycls)
-    assert w_myinstance.fetch(0) is space.w_nil
-    py.test.raises(IndexError, lambda: w_myinstance.fetch(3))
-    w_myinstance.store(1, w_myinstance)
-    assert w_myinstance.fetch(1) is w_myinstance
+    assert w_myinstance.fetch(space, 0) is space.w_nil
+    py.test.raises(IndexError, lambda: w_myinstance.fetch(space, 3))
+    w_myinstance.store(space, 1, w_myinstance)
+    assert w_myinstance.fetch(space, 1) is w_myinstance
 
 def test_bytes_object():
     w_class = mockclass(space, 0, format=shadow.BYTES)
@@ -176,8 +176,8 @@ def test_become_pointers():
     hasha = w_a.gethash()
     hashb = w_b.gethash()
 
-    w_a.store(0, w_b)
-    w_b.store(1, w_a)
+    w_a.store(space, 0, w_b)
+    w_b.store(space, 1, w_a)
     
     res = w_a.become(w_b)
     assert res
@@ -187,8 +187,8 @@ def test_become_pointers():
     assert w_a.getclass(space).is_same_object(w_clsb)
     assert w_b.getclass(space).is_same_object(w_clsa)
 
-    assert w_b.fetch(0) is w_b
-    assert w_a.fetch(1) is w_a
+    assert w_b.fetch(space, 0) is w_b
+    assert w_a.fetch(space, 1) is w_a
 
 def test_become_with_shadow():
     w_clsa = mockclass(space, 3)

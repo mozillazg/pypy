@@ -69,13 +69,13 @@ class W_Object(object):
         otherwise patches bytecode (ie byte code indexing starts at literalsize)."""
         raise NotImplementedError()
 
-    def fetch(self, n0):
+    def fetch(self, space, n0):
         """Access fixed-size part, maybe also variable-sized part (we have to
         consult the Blue Book)."""
         # TODO check the Blue Book
         raise NotImplementedError()
         
-    def store(self, n0, w_value):    
+    def store(self, space, n0, w_value):    
         """Access fixed-size part, maybe also variable-sized part (we have to
         consult the Blue Book)."""
         raise NotImplementedError()
@@ -245,13 +245,13 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     def at0(self, space, index0):
         # To test, at0 = in varsize part
-        return self.fetch(index0+self.instsize(space))
+        return self.fetch(space, index0+self.instsize(space))
 
     def atput0(self, space, index0, w_value):
         # To test, at0 = in varsize part
-        self.store(index0+self.instsize(space), w_value)
+        self.store(space, index0 + self.instsize(space), w_value)
 
-    def fetch(self, n0):
+    def fetch(self, space, n0):
         if self._shadow is not None:
             return self._shadow.fetch(n0)
         return self._fetch(n0)
@@ -259,7 +259,7 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def _fetch(self, n0):
         return self._vars[n0]
         
-    def store(self, n0, w_value):    
+    def store(self, space, n0, w_value):    
         if self._shadow is not None:
             return self._shadow.store(n0, w_value)
         return self._store(n0, w_value)
@@ -267,11 +267,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def _store(self, n0, w_value):
         self._vars[n0] = w_value
 
-    # def fetchvarpointer(self, idx):
-    #    return self._vars[idx+self.instsize()]
-
-    # def storevarpointer(self, idx, value):
-    #    self._vars[idx+self.instsize()] = value
 
     def varsize(self, space):
         return self.size() - self.instsize(space)
@@ -552,8 +547,8 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         else:
             self.literals[index0-1] = w_value
 
-    def store(self, index0, w_v):
-        self.atput0(index0, w_v)
+    def store(self, space, index0, w_v):
+        self.atput0(space, index0, w_v)
 
     def at0(self, space, index0):
         if index0 <= self.getliteralsize():

@@ -14,18 +14,18 @@ def build_methoddict(methods):
     w_methoddict = w_MethodDict.as_class_get_shadow(space).new(size)
     w_array = w_Array.as_class_get_shadow(space).new(size)
     for i in range(size):
-        w_array.store(i, space.w_nil)
-        w_methoddict.store(constants.METHODDICT_NAMES_INDEX+i, space.w_nil)
+        w_array.store(space, i, space.w_nil)
+        w_methoddict.store(space, constants.METHODDICT_NAMES_INDEX+i, space.w_nil)
     w_tally = space.wrap_int(len(methods))
-    w_methoddict.store(constants.METHODDICT_TALLY_INDEX, w_tally)
-    w_methoddict.store(constants.METHODDICT_VALUES_INDEX, w_array)
+    w_methoddict.store(space, constants.METHODDICT_TALLY_INDEX, w_tally)
+    w_methoddict.store(space, constants.METHODDICT_VALUES_INDEX, w_array)
     positions = range(size)
     random.shuffle(positions)
     for selector, w_compiledmethod in methods.items():
         pos = positions.pop()
         w_selector = space.wrap_string(selector)
-        w_methoddict.store(constants.METHODDICT_NAMES_INDEX+pos, w_selector)
-        w_array.store(pos, w_compiledmethod)
+        w_methoddict.store(space, constants.METHODDICT_NAMES_INDEX+pos, w_selector)
+        w_array.store(space, pos, w_compiledmethod)
     return w_methoddict
 
 def build_smalltalk_class(name, format, w_superclass=w_Object,
@@ -37,11 +37,11 @@ def build_smalltalk_class(name, format, w_superclass=w_Object,
     w_methoddict = build_methoddict(methods)
     size = constants.CLASS_NAME_INDEX + 1
     w_class = model.W_PointersObject(w_classofclass, size)
-    w_class.store(constants.CLASS_SUPERCLASS_INDEX, w_superclass)
-    w_class.store(constants.CLASS_METHODDICT_INDEX, w_methoddict)
-    w_class.store(constants.CLASS_FORMAT_INDEX, space.wrap_int(format))
+    w_class.store(space, constants.CLASS_SUPERCLASS_INDEX, w_superclass)
+    w_class.store(space, constants.CLASS_METHODDICT_INDEX, w_methoddict)
+    w_class.store(space, constants.CLASS_FORMAT_INDEX, space.wrap_int(format))
     if name is not None:
-        w_class.store(constants.CLASS_NAME_INDEX, space.wrap_string(name))
+        w_class.store(space, constants.CLASS_NAME_INDEX, space.wrap_string(name))
     return w_class
 
 def basicshape(name, format, kind, varsized, instsize):
@@ -82,27 +82,27 @@ def method(tempsize=3,argsize=2, bytes="abcde"):
 def methodcontext(w_sender=space.w_nil, pc=1, stackpointer=0, stacksize=5,
                   method=method()):
     w_object = model.W_PointersObject(space.w_MethodContext, constants.MTHDCTX_TEMP_FRAME_START+method.tempsize+stacksize)
-    w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
-    w_object.store(constants.CTXPART_PC_INDEX, space.wrap_int(pc))
-    w_object.store(constants.CTXPART_STACKP_INDEX, space.wrap_int(method.tempsize+stackpointer))
-    w_object.store(constants.MTHDCTX_METHOD, method)
+    w_object.store(space, constants.CTXPART_SENDER_INDEX, w_sender)
+    w_object.store(space, constants.CTXPART_PC_INDEX, space.wrap_int(pc))
+    w_object.store(space, constants.CTXPART_STACKP_INDEX, space.wrap_int(method.tempsize+stackpointer))
+    w_object.store(space, constants.MTHDCTX_METHOD, method)
     # XXX
-    w_object.store(constants.MTHDCTX_RECEIVER_MAP, '???')
-    w_object.store(constants.MTHDCTX_RECEIVER, 'receiver')
+    w_object.store(space, constants.MTHDCTX_RECEIVER_MAP, '???')
+    w_object.store(space, constants.MTHDCTX_RECEIVER, 'receiver')
 
-    w_object.store(constants.MTHDCTX_TEMP_FRAME_START, 'el')
+    w_object.store(space, constants.MTHDCTX_TEMP_FRAME_START, 'el')
     return w_object
 
 def blockcontext(w_sender=space.w_nil, pc=1, stackpointer=1, stacksize=5,
                   home=methodcontext()):
     w_object = model.W_PointersObject(space.w_MethodContext, constants.MTHDCTX_TEMP_FRAME_START+stacksize)
-    w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
-    w_object.store(constants.CTXPART_PC_INDEX, space.wrap_int(pc))
-    w_object.store(constants.CTXPART_STACKP_INDEX, space.wrap_int(stackpointer))
-    w_object.store(constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX, space.wrap_int(54))
-    w_object.store(constants.BLKCTX_INITIAL_IP_INDEX, space.wrap_int(17))
-    w_object.store(constants.BLKCTX_HOME_INDEX, home)
-    w_object.store(constants.BLKCTX_STACK_START, 'el')
+    w_object.store(space, constants.CTXPART_SENDER_INDEX, w_sender)
+    w_object.store(space, constants.CTXPART_PC_INDEX, space.wrap_int(pc))
+    w_object.store(space, constants.CTXPART_STACKP_INDEX, space.wrap_int(stackpointer))
+    w_object.store(space, constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX, space.wrap_int(54))
+    w_object.store(space, constants.BLKCTX_INITIAL_IP_INDEX, space.wrap_int(17))
+    w_object.store(space, constants.BLKCTX_HOME_INDEX, home)
+    w_object.store(space, constants.BLKCTX_STACK_START, 'el')
     return w_object
 
 def test_context():
@@ -112,7 +112,7 @@ def test_context():
     s_object = w_object.as_methodcontext_get_shadow(space)
     assert len(s_object.stack()) == 3
     s_object2 = w_object2.as_methodcontext_get_shadow(space)
-    assert w_object2.fetch(constants.CTXPART_SENDER_INDEX) == w_object
+    assert w_object2.fetch(space, constants.CTXPART_SENDER_INDEX) == w_object
     assert s_object.w_self() == w_object
     assert s_object2.w_self() == w_object2
     assert s_object.s_sender() == None
@@ -124,9 +124,9 @@ def test_context():
     assert s_object2.gettemp(0) == 'a'
     assert s_object.w_method() == w_m
     idx = s_object.stackstart()
-    w_object.store(idx, 'f')
-    w_object.store(idx + 1, 'g')
-    w_object.store(idx + 2, 'h')
+    w_object.store(space, idx, 'f')
+    w_object.store(space, idx + 1, 'g')
+    w_object.store(space, idx + 2, 'h')
     assert s_object.stack() == ['f', 'g', 'h' ]
     assert s_object.top() == 'h'
     s_object.push('i')

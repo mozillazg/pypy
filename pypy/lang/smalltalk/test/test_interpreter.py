@@ -128,9 +128,9 @@ def test_pushReceiverVariableBytecode(bytecode = (pushReceiverVariableBytecode(0
                                                   pushReceiverVariableBytecode(1) +
                                                   pushReceiverVariableBytecode(2))):
     w_demo = mockclass(space, 3).as_class_get_shadow(space).new()
-    w_demo.store(0, "egg")
-    w_demo.store(1, "bar")
-    w_demo.store(2, "baz")
+    w_demo.store(space, 0, "egg")
+    w_demo.store(space, 1, "bar")
+    w_demo.store(space, 2, "baz")
     interp = new_interpreter(bytecode, receiver = w_demo)
     interp.step()
     interp.step()
@@ -161,8 +161,8 @@ def test_pushLiteralConstantBytecode(bytecode=pushLiteralConstantBytecode(0) +
 
 def test_pushLiteralVariableBytecode(bytecode=pushLiteralVariableBytecode(0)):
     w_association = mockclass(space, 2).as_class_get_shadow(space).new()
-    w_association.store(0, "mykey")
-    w_association.store(1, "myvalue")
+    w_association.store(space, 0, "mykey")
+    w_association.store(space, 1, "myvalue")
     interp = new_interpreter(bytecode)
     interp.w_active_context().as_methodcontext_get_shadow(space).w_method().literals = fakeliterals(space, w_association)
     interp.step()
@@ -184,9 +184,9 @@ def test_storeAndPopReceiverVariableBytecode(bytecode=storeAndPopReceiverVariabl
 
         for test_index in range(8):
             if test_index == index:
-                assert w_object.fetch(test_index).is_same_object(space.w_true)
+                assert w_object.fetch(space, test_index).is_same_object(space.w_true)
             else:
-                assert w_object.fetch(test_index) is space.w_nil
+                assert w_object.fetch(space, test_index) is space.w_nil
 
 def test_storeAndPopTemporaryVariableBytecode(bytecode=storeAndPopTemporaryVariableBytecode):
     for index in range(8):
@@ -526,13 +526,13 @@ def test_extendedPushBytecode():
 
 def storeAssociation(bytecode):
     w_association = mockclass(space, 2).as_class_get_shadow(space).new()
-    w_association.store(0, "mykey")
-    w_association.store(1, "myvalue")
+    w_association.store(space, 0, "mykey")
+    w_association.store(space, 1, "myvalue")
     interp = new_interpreter(pushConstantOneBytecode + bytecode)
     interp.w_active_context().as_methodcontext_get_shadow(space).w_method().literals = fakeliterals(space, w_association)
     interp.step()
     interp.step()
-    assert w_association.fetch(1).is_same_object(space.w_one)
+    assert w_association.fetch(space, 1).is_same_object(space.w_one)
 
 def test_extendedStoreAndPopBytecode():
     test_storeAndPopReceiverVariableBytecode(lambda index: extendedStoreAndPopBytecode + chr((0<<6) + index))
@@ -754,8 +754,8 @@ def test_bc_primBytecodeAt_with_instvars():
     #   ^ self at: 1
     w_fakeclass = mockclass(space, 1, name='fakeclass', varsized=True)
     w_fakeinst = w_fakeclass.as_class_get_shadow(space).new(1)
-    w_fakeinst.store(0, space.wrap_char("a")) # static slot 0: instance variable
-    w_fakeinst.store(1, space.wrap_char("b")) # varying slot 1
+    w_fakeinst.store(space, 0, space.wrap_char("a")) # static slot 0: instance variable
+    w_fakeinst.store(space, 1, space.wrap_char("b")) # varying slot 1
     def test():
         assert space.unwrap_char(interpret_bc(
             [112, 118, 192, 124],
@@ -769,15 +769,15 @@ def test_bc_primBytecodeAtPut_with_instvars():
     #   ^ self at: 1 put: #b
     w_fakeclass = mockclass(space, 1, name='fakeclass', varsized=True)
     w_fakeinst = w_fakeclass.as_class_get_shadow(space).new(1)
-    w_fakeinst.store(0, space.wrap_char("a")) # static slot 0: instance variable
-    w_fakeinst.store(1, space.wrap_char("a")) # varying slot 1
+    w_fakeinst.store(space, 0, space.wrap_char("a")) # static slot 0: instance variable
+    w_fakeinst.store(space, 1, space.wrap_char("a")) # varying slot 1
     def test():
         assert space.unwrap_char(interpret_bc(
             [0x70, 0x76, 0x20, 0xc1, 0x7c],
             fakeliterals(space, space.wrap_char("b")),
             receiver=w_fakeinst)) == "b"
-        assert space.unwrap_char(w_fakeinst.fetch(0)) == "a"
-        assert space.unwrap_char(w_fakeinst.fetch(1)) == "b"
+        assert space.unwrap_char(w_fakeinst.fetch(space, 0)) == "a"
+        assert space.unwrap_char(w_fakeinst.fetch(space, 1)) == "b"
     run_with_faked_methods(
         [[w_fakeclass, primitives.AT_PUT, 2, "at:put:"]],
         test)

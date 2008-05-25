@@ -184,7 +184,7 @@ def test_float_truncate():
 
 def test_at():
     w_obj = mockclass(space, 0, varsized=True).as_class_get_shadow(space).new(1)
-    w_obj.store(0, "foo")
+    w_obj.store(space, 0, "foo")
     assert prim(primitives.AT, [w_obj, 1]) == "foo"
 
 def test_invalid_at():

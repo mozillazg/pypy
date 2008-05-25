@@ -70,7 +70,7 @@ def test_float_class_size():
 
 def test_float_class_name():
     w_float_class = get_float_class()
-    w_float_class_name = w_float_class.fetch(6)
+    w_float_class_name = w_float_class.fetch(space, 6)
     assert isinstance(w_float_class_name, model.W_BytesObject)
     assert w_float_class_name.bytes == list("Float")
     
@@ -98,9 +98,9 @@ def test_nil_true_false():
 def test_scheduler():
     image = get_image()
     w = image.special(constants.SO_SCHEDULERASSOCIATIONPOINTER)
-    w0 = w.fetch(0)
+    w0 = w.fetch(space, 0)
     assert str(w0) == "Processor" 
-    w0 = w.fetch(1)
+    w0 = w.fetch(space, 1)
     w0.shadow_of_my_class(space)
     assert str(w0) == "a ProcessorScheduler" 
    
