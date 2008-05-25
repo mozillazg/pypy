@@ -33,7 +33,7 @@ class W_Root(object):
     #    return self
 
     def ToBoolean(self):
-        return False
+        raise NotImplementedError()
 
     def ToPrimitive(self, ctx, hint=""):
         return self
@@ -86,7 +86,7 @@ class W_Undefined(W_Root):
     def ToBoolean(self):
         return False
     
-    def ToString(self, ctx = None):
+    def ToString(self, ctx):
         return "undefined"
     
     def type(self):
@@ -188,7 +188,7 @@ class W_PrimitiveObject(W_Root):
             P.value = V
         except KeyError:
             self.propdict[P] = Property(P, V,
-                                        dd = dd, ro = ro, it = it)
+                                        dd = dd, ro = ro, de = de, it = it)
     
     def HasProperty(self, P):
         if P in self.propdict: return True
@@ -222,6 +222,9 @@ class W_PrimitiveObject(W_Root):
             return self.internal_def_value(ctx, "valueOf", "toString")
     
     ToPrimitive = DefaultValue
+
+    def ToBoolean(self):
+        return True
 
     def ToString(self, ctx):
         try:
@@ -390,7 +393,10 @@ class W_String(W_Primitive):
         return self.strval
     
     def ToBoolean(self):
-        return bool(self.strval)
+        if len(self.strval) == 0:
+            return False
+        else:
+            return True
 
     def type(self):
         return 'string'
@@ -426,6 +432,7 @@ class W_IntNumber(W_BaseNumber):
         self.intval = intmask(intval)
 
     def ToString(self, ctx=None):
+        # XXX incomplete, this doesn't follow the 9.8.1 recommendation
         return str(self.intval)
 
     def ToBoolean(self):
@@ -454,6 +461,7 @@ class W_FloatNumber(W_BaseNumber):
         self.floatval = floatval
     
     def ToString(self, ctx = None):
+        # XXX incomplete, this doesn't follow the 9.8.1 recommendation
         if isnan(self.floatval):
             return 'NaN'
         if isinf(self.floatval):
@@ -477,7 +485,7 @@ class W_FloatNumber(W_BaseNumber):
     def ToInt32(self):
         if isnan(self.floatval) or isinf(self.floatval):
             return 0           
-        return int(self.floatval)
+        return intmask(self.floatval)
     
     def ToUInt32(self):
         if isnan(self.floatval) or isinf(self.floatval):

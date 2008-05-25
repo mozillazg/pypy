@@ -1,5 +1,8 @@
 All benchmarks are from The Computer Language Benchmarks Game, licensed under the revised BSD License
 
+Maybe we should also take a look at those benchmarks:
+ http://trac.webkit.org/projects/webkit/wiki/JavaScript%20and%20DOM%20Benchmarks
+
 Parameters for the benchmarks:
 
 ackermann 9,10,11
