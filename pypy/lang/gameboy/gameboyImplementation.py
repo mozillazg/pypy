@@ -84,7 +84,8 @@ class VideoDriverImplementation(VideoDriver):
             str = ""
             for x in range(self.width):
                 if y%2 == 0:
-                    str += self.pixel_map(x, y)*2
+                    s = self.pixel_map(x, y)
+                    str += s+s
                 #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
             print str;
         
@@ -96,7 +97,7 @@ class VideoDriverImplementation(VideoDriver):
         g = (px>>8) & 0xFF
         r = (px>>16) & 0xFF
         brightness = 4 * (r+b+g) / (0xFF*3)
-        return [".", "+", "O", "#", ""][brightness]
+        return [" ", ".", "+", "#", ""][brightness]
         
     def get_pixel_color(self, x, y):
         return self.pixels[x+self.width*y]
