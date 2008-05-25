@@ -486,7 +486,9 @@ class BuiltinCode(eval.Code):
             raise OperationError(space.w_KeyboardInterrupt,
                                  space.w_None) 
         except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None) 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
         except RuntimeError, e: 
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e)))
@@ -510,7 +512,9 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None) 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
         except RuntimeError, e: 
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e))) 
@@ -537,7 +541,9 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
             except KeyboardInterrupt: 
                 raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
             except MemoryError: 
-                raise OperationError(space.w_MemoryError, space.w_None) 
+                raise OperationError(space.w_MemoryError, space.w_None)
+            except NotImplementedError, e:
+                raise
             except RuntimeError, e: 
                 raise OperationError(space.w_RuntimeError, 
                                      space.wrap("internal error: " + str(e))) 
@@ -574,7 +580,9 @@ class BuiltinCode1(BuiltinCode):
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None) 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
         except RuntimeError, e: 
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e)))
@@ -595,7 +603,9 @@ class BuiltinCode2(BuiltinCode):
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None) 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
         except RuntimeError, e: 
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e))) 
@@ -616,7 +626,9 @@ class BuiltinCode3(BuiltinCode):
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None) 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
         except RuntimeError, e: 
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e)))
@@ -637,7 +649,9 @@ class BuiltinCode4(BuiltinCode):
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None) 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
         except RuntimeError, e: 
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e)))
