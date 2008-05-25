@@ -203,7 +203,6 @@ def descr_new_zipimporter(space, w_type, name):
             raise
         # XXX think about what to do here
         space.setitem(w_zip_cache, space.wrap(name), space.w_None)
-    print name
     ok = False
     parts = name.split(os.path.sep)
     filename = "" # make annotator happy
