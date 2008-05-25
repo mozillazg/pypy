@@ -87,7 +87,7 @@ class W_StringObject(W_NativeObject):
             return W_String('')
 
     def Construct(self, ctx, args=[]):
-        if len(args) >= 1 and not isnull_or_undefined(args[0]):
+        if len(args) >= 1:
             Value = W_String(args[0].ToString(ctx))
             return create_object(ctx, 'String', Value = Value)
         return create_object(ctx, 'String', Value = W_String(''))
@@ -461,19 +461,20 @@ class Interpreter(object):
         })
         
         w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
-        w_Boolean.Put('constructor', w_FncPrototype)
+        w_Boolean.Put('constructor', w_FncPrototype, dd=True, ro=True, de=True)
+        w_Boolean.Put('length', W_IntNumber(1), dd=True, ro=True, de=True)
         
         w_BoolPrototype = create_object(ctx, 'Object', Value=W_Boolean(False))
         w_BoolPrototype.Class = 'Boolean'
         
         put_values(w_BoolPrototype, {
             'constructor': w_FncPrototype,
-            '__proto__': w_BoolPrototype,
+            '__proto__': w_ObjPrototype,
             'toString': W_BooleanValueToString(ctx),
-            'valueOf': get_value_of('Boolean', ctx)
+            'valueOf': get_value_of('Boolean', ctx),
         })
 
-        w_Boolean.Put('prototype', w_BoolPrototype)
+        w_Boolean.Put('prototype', w_BoolPrototype, dd=True, ro=True, de=True)
 
         w_Global.Put('Boolean', w_Boolean)
 

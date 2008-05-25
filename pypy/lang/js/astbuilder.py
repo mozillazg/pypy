@@ -1,3 +1,4 @@
+from pypy.rlib.rarithmetic import intmask, ovfcheck
 from pypy.rlib.parsing.tree import RPythonVisitor, Symbol, Nonterminal
 from pypy.lang.js import operations
 from pypy.rlib.parsing.parsing import ParseError
@@ -86,10 +87,10 @@ class ASTBuilder(RPythonVisitor):
     def visit_DECIMALLITERAL(self, node):
         pos = self.get_pos(node)
         try:
-            int(node.additional_info)
-        except ValueError:
+            ovfcheck(int(node.additional_info))
+        except (ValueError, OverflowError):
             return operations.FloatNumber(pos, float(node.additional_info))
-        return operations.IntNumber(pos, int(node.additional_info))
+        return operations.IntNumber(pos, intmask(node.additional_info))
     
     def visit_HEXINTEGERLITERAL(self, node):
         pos = self.get_pos(node)
