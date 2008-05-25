@@ -243,7 +243,7 @@ class MBC(iMemory):
     def __init__(self, rom, ram, clock_driver,
                     min_rom_bank_size=0, max_rom_bank_size=0,
                     min_ram_bank_size=0, max_ram_bank_size=0):
-        self.clock = clock_driver
+        self.clock             = clock_driver
         self.min_rom_bank_size = min_rom_bank_size
         self.max_rom_bank_size = max_rom_bank_size
         self.min_ram_bank_size = min_ram_bank_size
@@ -295,6 +295,10 @@ class MBC(iMemory):
     
     def write(self, address, data):
         raise Exception("MBC: Invalid write access")
+    
+    def write_ram_enable(self, address, data):
+        if self.ram_size > 0:
+            self.ram_enable = ((data & 0x0A) == 0x0A)
   
 
 #-------------------------------------------------------------------------------
@@ -351,10 +355,6 @@ class MBC1(MBC):
         else:
             raise Exception("Invalid memory Access address: %s" % hex(address))
 
-    def write_ram_enable(self, address, data):
-        if self.ram_size > 0:
-            self.ram_enable = ((data & 0x0A) == 0x0A)
-    
     def write_rom_bank_1(self, address, data):
         if (data & 0x1F) == 0:
             data = 1
@@ -415,10 +415,6 @@ class MBC2(MBC):
         elif address >= 0xA000 and address <= 0xA1FF: # A000-A1FF
             self.write_ram(address, data)
             
-    def write_ram_enable(self, address, data):
-        if (address & 0x0100) == 0:
-            self.ram_enable = ((data & 0x0A) == 0x0A)
-            
     def write_rom_bank(self, address, data):
         if (address & 0x0100) == 0:
             return
@@ -429,7 +425,10 @@ class MBC2(MBC):
     def write_ram(self, address, data):
         if self.ram_enable:
             self.ram[address & 0x01FF] = data & 0x0F
-
+            
+    def write_ram_enable(self, address, data):
+        if (address & 0x0100) == 0:
+            self.ram_enable = ((data & 0x0A) == 0x0A)
 
 #-------------------------------------------------------------------------------
 
@@ -455,14 +454,14 @@ class MBC3(MBC):
     def reset(self):
         MBC.reset(self)
         self.clock_latched_daysclock_latched_control = None
-        self.clock_time     = self.clock.get_time()
-        self.clock_latch     = 0
-        self.clock_register = 0
-        self.clock_seconds   = 0
-        self.clock_minutes   = 0
-        self.clock_hours     = 0
-        self.clock_days      = 0
-        self.clock_control   = 0
+        self.clock_time             = self.clock.get_time()
+        self.clock_latch            = 0
+        self.clock_register         = 0
+        self.clock_seconds          = 0
+        self.clock_minutes          = 0
+        self.clock_hours            = 0
+        self.clock_days             = 0
+        self.clock_control          = 0
         self.clock_latched_seconds  = 0
         self.clock_latched_minutes  = 0
         self.clock_latched_hours    = 0
@@ -504,10 +503,6 @@ class MBC3(MBC):
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
             self.write_clock_data(address, data)
     
-    def write_ram_enable(self, address, data):
-        if self.ram_size > 0:
-            self.ram_enable = ((data & 0x0A) == 0x0A)
-             
     def write_rom_bank(self, address, data):
         if data == 0:
             data = 1
@@ -608,7 +603,7 @@ class MBC5(MBC):
 
     def write(self, address, data):
         address = int(address)
-        if address <= self.ram_enable:  # 0000-1FFF
+        if address <= 0x1FFF:  # 0000-1FFF
             self.write_ram_enable(address, data)
         elif address <= 0x2FFF:  # 2000-2FFF
             self.rom_bank = ((self.rom_bank & (0x01 << 22)) + \
@@ -621,10 +616,6 @@ class MBC5(MBC):
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable:  # A000-BFFF
             self.ram[self.ram_bank + (address & 0x1FFF)] = data
 
-    def write_ram_enable(self, address, data):
-        if self.ram_size > 0:
-            self.ram_enable = ((data & 0x0A) == 0x0A)
-            
     def write_ram_bank(self, address, data):
         if self.rumble:
             self.ram_bank = ((data & 0x07) << 13) & self.ram_size
@@ -635,10 +626,9 @@ class MBC5(MBC):
 #-------------------------------------------------------------------------------
 
 
-class HuC1(MBC):
-    def __init__(self, ram, rom, clock_driver):
-        self.reset()
-        MBC.__init__(self, rom, ram, clock_driver)
+class HuC1(MBC1):
+    def __init__(self, rom, ram, clock_driver):
+        MBC1.__init__(self, rom, ram, clock_driver)
 
 
 
@@ -666,11 +656,11 @@ class HuC3(MBC):
 
     def reset(self):
         MBC.reset(self)
-        self.ram_flag = 0
-        self.ram_value = 0
+        self.ram_flag       = 0
+        self.ram_value      = 0
         self.clock_register = 0
-        self.clock_shift = 0
-        self.clock_time = self.clock.get_time()
+        self.clock_shift    = 0
+        self.clock_time     = self.clock.get_time()
 
 
     def read(self, address):
