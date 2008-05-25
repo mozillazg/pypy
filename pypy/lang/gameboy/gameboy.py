@@ -96,7 +96,7 @@ class GameBoy(object):
             self.joypad.emulate(count)
             #self.print_cycles()
             if count == 0:
-                self.print_cycles()
+                #self.print_cycles()
                 return 0
             ticks -= count
         return 0
