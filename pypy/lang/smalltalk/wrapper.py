@@ -10,13 +10,13 @@ class Wrapper(object):
 
     def read(self, index0):
         try:
-            return self.w_self.fetch(index0)
+            return self.w_self.fetch(self.space, index0)
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
     def write(self, index0, w_new):
         try:
-            self.w_self.store(index0, w_new)
+            self.w_self.store(self.space, index0, w_new)
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 

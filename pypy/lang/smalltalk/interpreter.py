@@ -100,7 +100,7 @@ class __extend__(ContextPartShadow):
     # push bytecodes
     def pushReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 15
-        self.push(self.w_receiver().fetch(index))
+        self.push(self.w_receiver().fetch(self.space, index))
 
     def pushTemporaryVariableBytecode(self, interp):
         index = self.currentBytecode & 15
@@ -121,7 +121,7 @@ class __extend__(ContextPartShadow):
 
     def storeAndPopReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 7
-        self.w_receiver().store(index, self.pop())
+        self.w_receiver().store(self.space, index, self.pop())
 
     def storeAndPopTemporaryVariableBytecode(self, interp):
         index = self.currentBytecode & 7
@@ -252,7 +252,7 @@ class __extend__(ContextPartShadow):
     def extendedPushBytecode(self, interp):
         variableType, variableIndex = self.extendedVariableTypeAndIndex()
         if variableType == 0:
-            self.push(self.w_receiver().fetch(variableIndex))
+            self.push(self.w_receiver().fetch(self.space, variableIndex))
         elif variableType == 1:
             self.push(self.gettemp(variableIndex))
         elif variableType == 2:
@@ -267,7 +267,7 @@ class __extend__(ContextPartShadow):
     def extendedStoreBytecode(self, interp):
         variableType, variableIndex = self.extendedVariableTypeAndIndex()
         if variableType == 0:
-            self.w_receiver().store(variableIndex, self.top())
+            self.w_receiver().store(self.space, variableIndex, self.top())
         elif variableType == 1:
             self.settemp(variableIndex, self.top())
         elif variableType == 2:
@@ -304,7 +304,7 @@ class __extend__(ContextPartShadow):
                                     second & 31, interp)
         elif opType == 2:
             # pushReceiver
-            self.push(self.w_receiver().fetch(third))
+            self.push(self.w_receiver().fetch(self.space, third))
         elif opType == 3:
             # pushLiteralConstant
             self.push(self.w_method().getliteral(third))
@@ -314,9 +314,9 @@ class __extend__(ContextPartShadow):
             association = wrapper.AssociationWrapper(self.space, w_association)
             self.push(association.value())
         elif opType == 5:
-            self.w_receiver().store(third, self.top())
+            self.w_receiver().store(self.space, third, self.top())
         elif opType == 6:
-            self.w_receiver().store(third, self.pop())
+            self.w_receiver().store(self.space, third, self.pop())
         elif opType == 7:
             w_association = self.w_method().getliteral(third)
             association = wrapper.AssociationWrapper(self.space, w_association)

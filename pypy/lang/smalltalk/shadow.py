@@ -320,7 +320,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
 
     @staticmethod
     def is_block_context(w_pointers, space):
-        method_or_argc = w_pointers.fetch(constants.MTHDCTX_METHOD)
+        method_or_argc = w_pointers.fetch(space, constants.MTHDCTX_METHOD)
         return method_or_argc.getclass(space).is_same_object(
             space.w_SmallInteger)
 

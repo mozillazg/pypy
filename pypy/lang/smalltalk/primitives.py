@@ -395,7 +395,7 @@ def func(interp, w_rcvr, n0):
     # only pointers have non-0 size
     # XXX Now MethodContext is still own format, leave
     #assert isinstance(w_rcvr, model.W_PointersObject)
-    return w_rcvr.fetch(n0)
+    return w_rcvr.fetch(interp.space, n0)
 
 @expose_primitive(INST_VAR_AT_PUT, unwrap_spec=[object, index1_0, object])
 def func(interp, w_rcvr, n0, w_value):
@@ -404,7 +404,7 @@ def func(interp, w_rcvr, n0, w_value):
     assert_bounds(n0, 0, s_class.instsize())
     # XXX Now MethodContext is still own format, leave
     #assert isinstance(w_rcvr, model.W_PointersObject)
-    w_rcvr.store(n0, w_value)
+    w_rcvr.store(interp.space, n0, w_value)
     return w_value
 
 @expose_primitive(AS_OOP, unwrap_spec=[object])
@@ -724,7 +724,7 @@ def func(interp, w_rcvr, sel, w_args):
     assert w_method
 
     w_frame = w_method.create_frame(interp.space, w_rcvr,
-        [w_args.fetch(i) for i in range(w_args.size())])
+        [w_args.fetch(interp.space, i) for i in range(w_args.size())])
 
     w_frame.as_context_get_shadow(interp.space).store_w_sender(interp.w_active_context())
     interp.store_w_active_context(w_frame)
@@ -785,7 +785,7 @@ for i in range(264, 520):
     def make_prim(i):
         @expose_primitive(i, unwrap_spec=[object])
         def func(interp, w_object):
-            return w_object.fetch(i - 264)
+            return w_object.fetch(interp.space, i - 264)
     globals()["INST_VAR_AT_%d" % (i-264)] = i
     make_prim(i)
     
