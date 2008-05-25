@@ -83,8 +83,9 @@ class VideoDriverImplementation(VideoDriver):
         for y in range(self.height):
             str = ""
             for x in range(self.width):
-                str += self.pixel_map(x, y) 
-                RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
+                if y%2 == 0:
+                    str += self.pixel_map(x, y)*2
+                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
             print str;
         
         print  "-"*60

@@ -183,7 +183,7 @@ class FlagRegister(Register):
     def c_flag_compare(self, value, compare_and=0x01, reset=False):
         if reset:
              self.reset()
-        print hex(value), hex(compare_and), (value & compare_and) != 0
+        #print hex(value), hex(compare_and), (value & compare_and) != 0
         self.c_flag = ((value & compare_and) != 0)
 
     def h_flag_compare(self, value, a, inverted=False):
@@ -383,7 +383,7 @@ class CPU(object):
     def fetch_execute(self):
         # Execution
         opCode = self.fetch()
-        print "    fetch exe:", hex(opCode), "  "
+        #print "    fetch exe:", hex(opCode), "  "
         #, FETCH_EXECUTE_OP_CODES[opCode].__name__
         self.last_fetch_execute_op_code = opCode
         FETCH_EXECUTE_OP_CODES[opCode](self)
@@ -391,11 +391,11 @@ class CPU(object):
         
     def execute(self, opCode):
         self.instruction_counter += 1
-        print self.instruction_counter, "-"*60
-        print "exe: ", hex(opCode),  "   "
+        #print self.instruction_counter, "-"*60
+        #print "exe: ", hex(opCode),  "   "
         #, OP_CODES[opCode].__name__
-        print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
-        self.print_registers()
+        #print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
+        #self.print_registers()
         self.last_op_code = opCode
         OP_CODES[opCode](self)
         
