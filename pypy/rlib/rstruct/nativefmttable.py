@@ -9,6 +9,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.rlib.objectmodel import specialize
 
 native_is_bigendian = struct.pack("=i", 1) == struct.pack(">i", 1)
 
@@ -31,6 +32,7 @@ def pack_double(fmtiter):
     for i in range(sizeof_double):
         fmtiter.result.append(p[i])
 
+@specialize.argtype(0)
 def unpack_double(fmtiter):
     input = fmtiter.read(sizeof_double)
     p = rffi.cast(rffi.CCHARP, double_buf)
@@ -47,6 +49,7 @@ def pack_float(fmtiter):
     for i in range(sizeof_float):
         fmtiter.result.append(p[i])
 
+@specialize.argtype(0)
 def unpack_float(fmtiter):
     input = fmtiter.read(sizeof_float)
     p = rffi.cast(rffi.CCHARP, float_buf)
@@ -139,6 +142,7 @@ def pack_unichar(fmtiter):
     c = unistr[0]   # string->char conversion for the annotator
     unichar.pack_unichar(c, fmtiter.result)
 
+@specialize.argtype(0)
 def unpack_unichar(fmtiter):
     data = fmtiter.read(unichar.UNICODE_SIZE)
     fmtiter.appendobj(unichar.unpack_unichar(data))

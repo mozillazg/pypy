@@ -19,6 +19,9 @@ class MasterReader(object):
         self.inputpos = end
         return s
 
+    def align(self, mask):
+        self.inputpos = (self.inputpos + mask) & ~mask
+
 class AbstractReader(object):
     pass
 
@@ -43,13 +46,14 @@ class FrozenUnpackIterator(FormatIterator):
     
     def operate(self, fmtdesc, repetitions):
         if fmtdesc.needcount:
-            self.formats.append((fmtdesc, repetitions))
+            self.formats.append((fmtdesc, repetitions, None))
         else:
             for i in range(repetitions):
-                self.formats.append((fmtdesc, 1))
+                self.formats.append((fmtdesc, 1, None))
 
     def align(self, mask):
-        pass # XXX
+        fmt, rep, _ = self.formats.pop()
+        self.formats.append((fmt, rep, mask))
 
     def _create_unpacking_func(self):
         rg = range(len(self.formats))
@@ -57,9 +61,11 @@ class FrozenUnpackIterator(FormatIterator):
         miniglobals = {}
         miniglobals.update(globals())
         for i in rg:
-            fmtdesc, rep = self.formats[i]
+            fmtdesc, rep, mask = self.formats[i]
             miniglobals['unpacker%d' % i] = fmtdesc.unpack
-            if rep == 1:
+            if mask is not None:
+                perform_lst.append('master_reader.align(%d)' % mask)
+            if not fmtdesc.needcount:
                 perform_lst.append('unpacker%d(reader%d)' % (i, i))
             else:
                 perform_lst.append('unpacker%d(reader%d, %d)' % (i, i, rep))
