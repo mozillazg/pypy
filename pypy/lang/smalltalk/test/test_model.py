@@ -16,14 +16,14 @@ def test_new():
     w_mycls = mockclass(0)
     w_myinstance = w_mycls.as_class_get_shadow().new()
     assert isinstance(w_myinstance, model.W_PointersObject)
-    assert w_myinstance.getclass() is w_mycls
+    assert w_myinstance.getclass().is_same_object(w_mycls)
     assert w_myinstance.shadow_of_my_class() is w_mycls.as_class_get_shadow()
 
 def test_new_namedvars():
     w_mycls = mockclass(3)
     w_myinstance = w_mycls.as_class_get_shadow().new()
     assert isinstance(w_myinstance, model.W_PointersObject)
-    assert w_myinstance.getclass() is w_mycls
+    assert w_myinstance.getclass().is_same_object(w_mycls)
     assert w_myinstance.fetch(0) is objtable.w_nil
     py.test.raises(IndexError, lambda: w_myinstance.fetch(3))
     w_myinstance.store(1, w_myinstance)
@@ -32,7 +32,7 @@ def test_new_namedvars():
 def test_bytes_object():
     w_class = mockclass(0, format=shadow.BYTES)
     w_bytes = w_class.as_class_get_shadow().new(20)
-    assert w_bytes.getclass() is w_class
+    assert w_bytes.getclass().is_same_object(w_class)
     assert w_bytes.size() == 20
     assert w_class.as_class_get_shadow().instsize() == 0
     assert w_bytes.getchar(3) == "\x00"
@@ -44,7 +44,7 @@ def test_bytes_object():
 def test_word_object():
     w_class = mockclass(0, format=shadow.WORDS)
     w_bytes = w_class.as_class_get_shadow().new(20)
-    assert w_bytes.getclass() is w_class
+    assert w_bytes.getclass().is_same_object(w_class)
     assert w_bytes.size() == 20
     assert w_class.as_class_get_shadow().instsize() == 0
     assert w_bytes.getword(3) == 0
@@ -181,8 +181,8 @@ def test_become_pointers():
     assert w_a.gethash() == hashb
     assert w_b.gethash() == hasha
 
-    assert w_a.getclass() is w_clsb
-    assert w_b.getclass() is w_clsa
+    assert w_a.getclass().is_same_object(w_clsb)
+    assert w_b.getclass().is_same_object(w_clsa)
 
     assert w_b.fetch(0) is w_b
     assert w_a.fetch(1) is w_a

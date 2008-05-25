@@ -246,14 +246,14 @@ def test_string_at_put():
 def test_new():
     w_Object = classtable.classtable['w_Object']
     w_res = prim(primitives.NEW, [w_Object])
-    assert w_res.getclass() is w_Object
+    assert w_res.getclass().is_same_object(w_Object)
     
 def test_invalid_new():
     prim_fails(primitives.NEW, [classtable.w_String])
 
 def test_new_with_arg():
     w_res = prim(primitives.NEW_WITH_ARG, [classtable.w_String, 20])
-    assert w_res.getclass() == classtable.w_String
+    assert w_res.getclass().is_same_object(classtable.w_String)
     assert w_res.size() == 20    
 
 def test_invalid_new_with_arg():
