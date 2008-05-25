@@ -9,6 +9,7 @@ from pypy.interpreter.eval import Code
 from pypy.interpreter.module import Module
 from pypy.module.__builtin__ import importing
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.rzipfile import RZipFile, BadZipfile
 import os
 import stat
 
@@ -25,10 +26,10 @@ ENUMERATE_EXTS = unrolling_iterable(
      (False, False, '.py')])
 
 class W_ZipImporter(Wrappable):
-    def __init__(self, space, name, w_dir, prefix):
+    def __init__(self, space, name, dir, prefix):
         self.space = space
         self.name = name
-        self.w_dir = w_dir
+        self.dir = dir
         self.prefix = prefix
 
     def getprefix(space, self):
@@ -48,10 +49,9 @@ class W_ZipImporter(Wrappable):
     def check_newer_pyfile(self, space, filename, timestamp):
         w = space.wrap
         try:
-            w_info = space.call_function(space.getattr(self.w_dir,
-                                         w('getinfo')), w(filename))
-            w_all = space.getattr(w_info, w('date_time'))
-        except OperationError, e:
+            info = self.dir.getinfo(filename)
+            t = info.date_time
+        except (BadZipfile, KeyError):
             # in either case, this is a fallback
             return False
         else:
@@ -59,8 +59,9 @@ class W_ZipImporter(Wrappable):
                                      w('mktime'))
             # XXX this is incredible fishing around module limitations
             #     in order to compare timestamps of .py and .pyc files
-            all = space.unpackiterable(w_all)
-            all += [w(0), w(1), w(-1)]
+            # we need time.mktime support on rpython level
+            all = [w(t[0]), w(t[1]), w(t[2]), w(t[3]), w(t[4]),
+                   w(t[5]), w(0), w(1), w(-1)]
             mtime = int(space.float_w(space.call_function(w_mktime, space.newtuple(all))))
             return mtime > timestamp
 
@@ -87,12 +88,10 @@ class W_ZipImporter(Wrappable):
             filename = filename.replace(os.path.sep, ZIPSEP)
         w = space.wrap
         try:
-            return space.call(space.getattr(self.w_dir, w('getinfo')),
-                              space.newlist([w(filename)]))
-        except OperationError, e:
-            if not e.match(space, space.w_KeyError):
-                # should never happen
-                raise e
+            self.dir.getinfo(filename)
+            return True
+        except KeyError:
+            return False
 
     def find_module(self, space, fullname, w_path=None):
         filename = self.mangle(fullname)
@@ -144,10 +143,9 @@ class W_ZipImporter(Wrappable):
             filename = filename.replace(os.path.sep, ZIPSEP)
         w = space.wrap
         try:
-            return space.call_function(space.getattr(self.w_dir, w('read')),
-                                       w(filename))
-        except OperationError, e:
-            raise OperationError(space.w_IOError, e.w_value)
+            return w(self.dir.read(filename))
+        except (KeyError, OSError):
+            raise OperationError(space.w_IOError, space.wrap("Error reading file"))
     get_data.unwrap_spec = ['self', ObjSpace, str]
 
     def get_code(self, space, fullname):
@@ -188,8 +186,7 @@ class W_ZipImporter(Wrappable):
 
     def getarchive(space, self):
         space = self.space
-        return space.getattr(self.w_dir, space.wrap('filename'))
-
+        return space.wrap(self.dir.filename)
 
 def descr_new_zipimporter(space, w_type, name):
     w_zip_cache = space.getattr(space.getbuiltinmodule('zipimport'),
@@ -204,7 +201,9 @@ def descr_new_zipimporter(space, w_type, name):
     except OperationError, o:
         if not o.match(space, space.w_KeyError):
             raise
+        # XXX think about what to do here
         space.setitem(w_zip_cache, space.wrap(name), space.w_None)
+    print name
     ok = False
     parts = name.split(os.path.sep)
     filename = "" # make annotator happy
@@ -227,19 +226,12 @@ def descr_new_zipimporter(space, w_type, name):
     stop = len(filename)-len(last_elem)
     assert stop > 0
     prefix = filename[:stop]
-    w_import = space.builtin.get('__import__')
-    w_zipfile = space.call(w_import, space.newlist([
-        space.wrap('zipfile'),
-        space.newdict(),
-        space.newdict(),
-        space.newlist([])]))
-    w_ZipFile = space.getattr(w_zipfile, space.wrap('ZipFile'))
     try:
-        w_dir = space.call(w_ZipFile, space.newlist([space.wrap(filename)]))
-    except OperationError, e: # we catch everything as this function
+        dir = RZipFile(filename, 'r')
+    except (BadZipfile, OSError):
         raise OperationError(space.w_ImportError, space.wrap(
             "%s seems not to be a zipfile" % (filename,)))
-    w_result = space.wrap(W_ZipImporter(space, name, w_dir, prefix))
+    w_result = space.wrap(W_ZipImporter(space, name, dir, prefix))
     space.setitem(w_zip_cache, space.wrap(name), w_result)
     return w_result
     
@@ -257,3 +249,4 @@ W_ZipImporter.typedef = TypeDef(
     archive     = GetSetProperty(W_ZipImporter.getarchive),
     prefix      = GetSetProperty(W_ZipImporter.getprefix),
 )
+    
