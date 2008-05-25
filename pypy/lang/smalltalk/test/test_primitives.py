@@ -1,13 +1,15 @@
 import py
 import math
 from pypy.lang.smalltalk.primitives import prim_table, PrimitiveFailedError
-from pypy.lang.smalltalk import model, shadow
-from pypy.lang.smalltalk import interpreter, utility
-from pypy.lang.smalltalk import classtable, objtable, constants
+from pypy.lang.smalltalk import model, shadow, interpreter
+from pypy.lang.smalltalk import constants
 from pypy.rlib.rarithmetic import INFINITY, NAN, isinf, isnan
 from pypy.lang.smalltalk import primitives
+from pypy.lang.smalltalk import space as objspace
 
-mockclass = classtable.bootstrap_class
+mockclass = objspace.bootstrap_class
+
+space = objspace.ObjSpace()
 
 class MockFrame(model.W_PointersObject):
     def __init__(self, stack):
@@ -16,21 +18,21 @@ class MockFrame(model.W_PointersObject):
         s_self._stack = stack
         s_self.store_expected_argument_count(0)
     def as_blockcontext_get_shadow(self):
-        self._shadow = shadow.BlockContextShadow(self)
+        self._shadow = shadow.BlockContextShadow(space, self)
         return self._shadow
 
 def wrap(x):
-    if isinstance(x, int): return utility.wrap_int(x)
-    if isinstance(x, float): return utility.wrap_float(x)
+    if isinstance(x, int): return space.wrap_int(x)
+    if isinstance(x, float): return space.wrap_float(x)
     if isinstance(x, model.W_Object): return x
-    if isinstance(x, str) and len(x) == 1: return utility.wrap_char(x)
-    if isinstance(x, str): return utility.wrap_string(x)
+    if isinstance(x, str) and len(x) == 1: return space.wrap_char(x)
+    if isinstance(x, str): return space.wrap_string(x)
     raise NotImplementedError
     
 def mock(stack):
     mapped_stack = [wrap(x) for x in stack]
     frame = MockFrame(mapped_stack)
-    interp = interpreter.Interpreter()
+    interp = interpreter.Interpreter(space)
     interp.store_w_active_context(frame)
     return (interp, len(stack))
 
@@ -181,16 +183,16 @@ def test_float_truncate():
     assert prim(primitives.FLOAT_TRUNCATED, [4.6]).value == 4
 
 def test_at():
-    w_obj = mockclass(0, varsized=True).as_class_get_shadow().new(1)
+    w_obj = mockclass(space, 0, varsized=True).as_class_get_shadow(space).new(1)
     w_obj.store(0, "foo")
     assert prim(primitives.AT, [w_obj, 1]) == "foo"
 
 def test_invalid_at():
-    w_obj = mockclass(0).as_class_get_shadow().new()
+    w_obj = mockclass(space, 0).as_class_get_shadow(space).new()
     prim_fails(primitives.AT, [w_obj, 1])
 
 def test_at_put():
-    w_obj = mockclass(0, varsized=1).as_class_get_shadow().new(1)
+    w_obj = mockclass(space, 0, varsized=1).as_class_get_shadow(space).new(1)
     assert prim(primitives.AT_PUT, [w_obj, 1, 22]).value == 22
     assert prim(primitives.AT, [w_obj, 1]).value == 22
     
@@ -203,13 +205,13 @@ def test_at_and_at_put_bytes():
     assert prim(primitives.AT, [w_str, 3]).value == ord('c')
 
 def test_invalid_at_put():
-    w_obj = mockclass(0).as_class_get_shadow().new()
+    w_obj = mockclass(space, 0).as_class_get_shadow(space).new()
     prim_fails(primitives.AT_PUT, [w_obj, 1, 22])
     
 def test_size():
-    w_obj = mockclass(0, varsized=True).as_class_get_shadow().new(0)
+    w_obj = mockclass(space, 0, varsized=True).as_class_get_shadow(space).new(0)
     assert prim(primitives.SIZE, [w_obj]).value == 0
-    w_obj = mockclass(3, varsized=True).as_class_get_shadow().new(5)
+    w_obj = mockclass(space, 3, varsized=True).as_class_get_shadow(space).new(5)
     assert prim(primitives.SIZE, [w_obj]).value == 5
 
 def test_size_of_compiled_method():
@@ -233,7 +235,7 @@ def test_invalid_object_at():
     prim_fails(primitives.OBJECT_AT, ["q", constants.CHARACTER_VALUE_INDEX+2])
     
 def test_invalid_object_at_put():
-    w_obj = mockclass(1).as_class_get_shadow().new()
+    w_obj = mockclass(space, 1).as_class_get_shadow(space).new()
     prim_fails(primitives.OBJECT_AT_PUT, [w_obj, 2, 42])
     
 def test_string_at_put():
@@ -244,20 +246,20 @@ def test_string_at_put():
         assert prim(primitives.STRING_AT, [test_str, i]) == wrap(exp[i-1])
 
 def test_new():
-    w_Object = classtable.classtable['w_Object']
+    w_Object = space.classtable['w_Object']
     w_res = prim(primitives.NEW, [w_Object])
-    assert w_res.getclass().is_same_object(w_Object)
+    assert w_res.getclass(space).is_same_object(w_Object)
     
 def test_invalid_new():
-    prim_fails(primitives.NEW, [classtable.w_String])
+    prim_fails(primitives.NEW, [space.w_String])
 
 def test_new_with_arg():
-    w_res = prim(primitives.NEW_WITH_ARG, [classtable.w_String, 20])
-    assert w_res.getclass().is_same_object(classtable.w_String)
+    w_res = prim(primitives.NEW_WITH_ARG, [space.w_String, 20])
+    assert w_res.getclass(space).is_same_object(space.w_String)
     assert w_res.size() == 20    
 
 def test_invalid_new_with_arg():
-    w_Object = classtable.classtable['w_Object']
+    w_Object = space.classtable['w_Object']
     prim_fails(primitives.NEW_WITH_ARG, [w_Object, 20])
     
 def test_inst_var_at():
@@ -272,10 +274,10 @@ def test_inst_var_at_invalid():
 
 def test_inst_var_at_put():
     # n.b.: 1-based indexing!
-    w_q = classtable.w_Character.as_class_get_shadow().new()
+    w_q = space.w_Character.as_class_get_shadow(space).new()
     vidx = constants.CHARACTER_VALUE_INDEX+1
     ordq = ord("q")
-    assert prim(primitives.INST_VAR_AT, [w_q, vidx]) == objtable.w_nil
+    assert prim(primitives.INST_VAR_AT, [w_q, vidx]) == space.w_nil
     assert prim(primitives.INST_VAR_AT_PUT, [w_q, vidx, ordq]).value == ordq
     assert prim(primitives.INST_VAR_AT, [w_q, vidx]).value == ordq
 
@@ -285,12 +287,12 @@ def test_inst_var_at_put_invalid():
                ["q", constants.CHARACTER_VALUE_INDEX+2, "t"])
     
 def test_class():
-    assert prim(primitives.CLASS, ["string"]) == classtable.w_String
-    assert prim(primitives.CLASS, [1]) == classtable.w_SmallInteger
+    assert prim(primitives.CLASS, ["string"]).is_same_object(space.w_String)
+    assert prim(primitives.CLASS, [1]).is_same_object(space.w_SmallInteger)
 
 def test_as_oop():
     py.test.skip("not yet clear what AS_OOP returns: hash or header?")
-    w_obj = mockclass(0).as_class_get_shadow().new()
+    w_obj = mockclass(space, 0).as_class_get_shadow(space).new()
     w_obj.w_hash = wrap(22)
     assert prim(primitives.AS_OOP, [w_obj]).value == 22
 
@@ -299,33 +301,33 @@ def test_as_oop_not_applicable_to_int():
 
 def test_const_primitives():
     for (code, const) in [
-        (primitives.PUSH_TRUE, objtable.w_true),
-        (primitives.PUSH_FALSE, objtable.w_false),
-        (primitives.PUSH_NIL, objtable.w_nil),
-        (primitives.PUSH_MINUS_ONE, objtable.w_minus_one),
-        (primitives.PUSH_ZERO, objtable.w_zero),
-        (primitives.PUSH_ONE, objtable.w_one),
-        (primitives.PUSH_TWO, objtable.w_two),
+        (primitives.PUSH_TRUE, space.w_true),
+        (primitives.PUSH_FALSE, space.w_false),
+        (primitives.PUSH_NIL, space.w_nil),
+        (primitives.PUSH_MINUS_ONE, space.w_minus_one),
+        (primitives.PUSH_ZERO, space.w_zero),
+        (primitives.PUSH_ONE, space.w_one),
+        (primitives.PUSH_TWO, space.w_two),
         ]:
-        assert prim(code, [objtable.w_nil]) is const
-    assert prim(primitives.PUSH_SELF, [objtable.w_nil]) is objtable.w_nil
+        assert prim(code, [space.w_nil]).is_same_object(const)
+    assert prim(primitives.PUSH_SELF, [space.w_nil]).is_same_object(space.w_nil)
     assert prim(primitives.PUSH_SELF, ["a"]) is wrap("a")
 
 def test_boolean():
-    assert prim(primitives.LESSTHAN, [1,2]) == objtable.w_true
-    assert prim(primitives.GREATERTHAN, [3,4]) == objtable.w_false
-    assert prim(primitives.LESSOREQUAL, [1,2]) == objtable.w_true
-    assert prim(primitives.GREATEROREQUAL, [3,4]) == objtable.w_false
-    assert prim(primitives.EQUAL, [2,2]) == objtable.w_true
-    assert prim(primitives.NOTEQUAL, [2,2]) == objtable.w_false
+    assert prim(primitives.LESSTHAN, [1,2]).is_same_object(space.w_true)
+    assert prim(primitives.GREATERTHAN, [3,4]).is_same_object(space.w_false)
+    assert prim(primitives.LESSOREQUAL, [1,2]).is_same_object(space.w_true)
+    assert prim(primitives.GREATEROREQUAL, [3,4]).is_same_object(space.w_false)
+    assert prim(primitives.EQUAL, [2,2]).is_same_object(space.w_true)
+    assert prim(primitives.NOTEQUAL, [2,2]).is_same_object(space.w_false)
 
 def test_float_boolean():
-    assert prim(primitives.FLOAT_LESSTHAN, [1.0,2.0]) == objtable.w_true
-    assert prim(primitives.FLOAT_GREATERTHAN, [3.0,4.0]) == objtable.w_false
-    assert prim(primitives.FLOAT_LESSOREQUAL, [1.3,2.6]) == objtable.w_true
-    assert prim(primitives.FLOAT_GREATEROREQUAL, [3.5,4.9]) == objtable.w_false
-    assert prim(primitives.FLOAT_EQUAL, [2.2,2.2]) == objtable.w_true
-    assert prim(primitives.FLOAT_NOTEQUAL, [2.2,2.2]) == objtable.w_false
+    assert prim(primitives.FLOAT_LESSTHAN, [1.0,2.0]).is_same_object(space.w_true)
+    assert prim(primitives.FLOAT_GREATERTHAN, [3.0,4.0]).is_same_object(space.w_false)
+    assert prim(primitives.FLOAT_LESSOREQUAL, [1.3,2.6]).is_same_object(space.w_true)
+    assert prim(primitives.FLOAT_GREATEROREQUAL, [3.5,4.9]).is_same_object(space.w_false)
+    assert prim(primitives.FLOAT_EQUAL, [2.2,2.2]).is_same_object(space.w_true)
+    assert prim(primitives.FLOAT_NOTEQUAL, [2.2,2.2]).is_same_object(space.w_false)
     
 def test_block_copy_and_value():
     # see test_interpreter for tests of these opcodes
@@ -404,11 +406,11 @@ def test_load_inst_var():
 def test_new_method():
     bytecode = ''.join(map(chr, [ 16, 119, 178, 154, 118, 164, 11, 112, 16, 118, 177, 224, 112, 16, 119, 177, 224, 176, 124 ]))
 
-    shadow = mockclass(0).as_class_get_shadow()
-    w_method = prim(primitives.NEW_METHOD, [classtable.w_CompiledMethod, len(bytecode), 1025])
-    assert w_method.literalat0(0).value == 1025
+    shadow = mockclass(space, 0).as_class_get_shadow(space)
+    w_method = prim(primitives.NEW_METHOD, [space.w_CompiledMethod, len(bytecode), 1025])
+    assert w_method.literalat0(space, 0).value == 1025
     assert w_method.literalsize == 2
-    assert w_method.literalat0(1) is objtable.w_nil
+    assert w_method.literalat0(space, 1).is_same_object(space.w_nil)
     assert w_method.bytes == "\x00" * len(bytecode)
 
 

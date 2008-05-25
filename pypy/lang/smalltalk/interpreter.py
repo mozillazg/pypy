@@ -1,7 +1,6 @@
 import py
 from pypy.lang.smalltalk.shadow import ContextPartShadow, MethodContextShadow, BlockContextShadow
 from pypy.lang.smalltalk import model, constants, primitives
-from pypy.lang.smalltalk import objtable
 from pypy.lang.smalltalk.shadow import ContextPartShadow
 from pypy.lang.smalltalk.conftest import option
 from pypy.rlib import objectmodel, unroll
@@ -19,18 +18,11 @@ class IllegalStoreError(Exception):
 
 class Interpreter(object):
 
-    TRUE = objtable.w_true
-    FALSE = objtable.w_false
-    NIL = objtable.w_nil
-    MINUS_ONE = objtable.w_minus_one
-    ZERO = objtable.w_zero
-    ONE = objtable.w_one
-    TWO = objtable.w_two
-
     _w_last_active_context = None
     
-    def __init__(self):
+    def __init__(self, space):
         self._w_active_context = None
+        self.space = space
         self.cnt = 0
 
     def w_active_context(self):
@@ -41,7 +33,7 @@ class Interpreter(object):
         self._w_active_context = w_context
 
     def s_active_context(self):
-        return self.w_active_context().as_context_get_shadow()
+        return self.w_active_context().as_context_get_shadow(self.space)
 
     def interpret(self):
         try:
@@ -65,11 +57,11 @@ class Interpreter(object):
                     cnt = 0
                     p = self.w_active_context()
                     # AK make method
-                    while p is not objtable.w_nil:
+                    while p is not self.space.w_nil:
                         cnt += 1
                                                   # Do not update the context
                                                   # for this action.
-                        p = p.as_context_get_shadow().w_sender()
+                        p = p.as_context_get_shadow(self.space).w_sender()
                     self._last_indent = "  " * cnt
                     self._w_last_active_context = self.w_active_context()
 
@@ -124,7 +116,7 @@ class __extend__(ContextPartShadow):
         # named var (the value).
         index = self.currentBytecode & 31
         w_association = self.w_method().getliteral(index)
-        association = wrapper.AssociationWrapper(w_association)
+        association = wrapper.AssociationWrapper(self.space, w_association)
         self.push(association.value())
 
     def storeAndPopReceiverVariableBytecode(self, interp):
@@ -140,25 +132,25 @@ class __extend__(ContextPartShadow):
         self.push(self.w_receiver())
 
     def pushConstantTrueBytecode(self, interp):
-        self.push(interp.TRUE)
+        self.push(interp.space.w_true)
 
     def pushConstantFalseBytecode(self, interp):
-        self.push(interp.FALSE)
+        self.push(interp.space.w_false)
 
     def pushConstantNilBytecode(self, interp):
-        self.push(interp.NIL)
+        self.push(interp.space.w_nil)
 
     def pushConstantMinusOneBytecode(self, interp):
-        self.push(interp.MINUS_ONE)
+        self.push(interp.space.w_minus_one)
 
     def pushConstantZeroBytecode(self, interp):
-        self.push(interp.ZERO)
+        self.push(interp.space.w_zero)
 
     def pushConstantOneBytecode(self, interp):
-        self.push(interp.ONE)
+        self.push(interp.space.w_one)
 
     def pushConstantTwoBytecode(self, interp):
-        self.push(interp.TWO)
+        self.push(interp.space.w_two)
 
     def pushActiveContextBytecode(self, interp):
         self.push(self.w_self())
@@ -175,12 +167,12 @@ class __extend__(ContextPartShadow):
     def _sendSelfSelector(self, selector, argcount, interp):
         receiver = self.peek(argcount)
         self._sendSelector(selector, argcount, interp,
-                           receiver, receiver.shadow_of_my_class())             
+                           receiver, receiver.shadow_of_my_class(self.space))
 
     def _sendSuperSelector(self, selector, argcount, interp):
         w_compiledin = self.w_method().compiledin()
         assert isinstance(w_compiledin, model.W_PointersObject)
-        s_compiledin = w_compiledin.as_class_get_shadow()
+        s_compiledin = w_compiledin.as_class_get_shadow(self.space)
         self._sendSelector(selector, argcount, interp, self.w_receiver(),
                            s_compiledin.s_superclass())
 
@@ -219,28 +211,29 @@ class __extend__(ContextPartShadow):
                         print "PRIMITIVE FAILED: %d %s" % (method.primitive, selector,)
                     pass # ignore this error and fall back to the Smalltalk version
         arguments = self.pop_and_return_n(argcount)
-        interp.store_w_active_context(method.create_frame(receiver, arguments,
-                                                          self.w_self()))
+        frame = method.create_frame(self.space, receiver, arguments,
+                                    self.w_self())
+        interp.store_w_active_context(frame)
         self.pop()
 
     def _return(self, object, interp, w_return_to):
         # for tests, when returning from the top-level context
-        if w_return_to is objtable.w_nil:
+        if w_return_to is self.space.w_nil:
             raise ReturnFromTopLevel(object)
-        w_return_to.as_context_get_shadow().push(object)
+        w_return_to.as_context_get_shadow(self.space).push(object)
         interp.store_w_active_context(w_return_to)
 
     def returnReceiver(self, interp):
         self._return(self.w_receiver(), interp, self.s_home().w_sender())
 
     def returnTrue(self, interp):
-        self._return(interp.TRUE, interp, self.s_home().w_sender())
+        self._return(interp.space.w_true, interp, self.s_home().w_sender())
 
     def returnFalse(self, interp):
-        self._return(interp.FALSE, interp, self.s_home().w_sender())
+        self._return(interp.space.w_false, interp, self.s_home().w_sender())
 
     def returnNil(self, interp):
-        self._return(interp.NIL, interp, self.s_home().w_sender())
+        self._return(interp.space.w_nil, interp, self.s_home().w_sender())
 
     def returnTopFromMethod(self, interp):
         self._return(self.top(), interp, self.s_home().w_sender())
@@ -266,7 +259,7 @@ class __extend__(ContextPartShadow):
             self.push(self.w_method().getliteral(variableIndex))
         elif variableType == 3:
             w_association = self.w_method().getliteral(variableIndex)
-            association = wrapper.AssociationWrapper(w_association)
+            association = wrapper.AssociationWrapper(self.space, w_association)
             self.push(association.value())
         else:
             assert 0
@@ -281,7 +274,7 @@ class __extend__(ContextPartShadow):
             raise IllegalStoreError
         elif variableType == 3:
             w_association = self.w_method().getliteral(variableIndex)
-            association = wrapper.AssociationWrapper(w_association)
+            association = wrapper.AssociationWrapper(self.space, w_association)
             association.store_value(self.top())
 
     def extendedStoreAndPopBytecode(self, interp):
@@ -318,7 +311,7 @@ class __extend__(ContextPartShadow):
         elif opType == 4:
             # pushLiteralVariable
             w_association = self.w_method().getliteral(third)
-            association = wrapper.AssociationWrapper(w_association)
+            association = wrapper.AssociationWrapper(self.space, w_association)
             self.push(association.value())
         elif opType == 5:
             self.w_receiver().store(third, self.top())
@@ -326,7 +319,7 @@ class __extend__(ContextPartShadow):
             self.w_receiver().store(third, self.pop())
         elif opType == 7:
             w_association = self.w_method().getliteral(third)
-            association = wrapper.AssociationWrapper(w_association)
+            association = wrapper.AssociationWrapper(self.space, w_association)
             association.store_value(self.top())
 
     def singleExtendedSuperBytecode(self, interp):
@@ -360,7 +353,7 @@ class __extend__(ContextPartShadow):
         self.jump(self.shortJumpPosition())
 
     def shortConditionalJump(self, interp):
-        self.jumpConditional(interp.FALSE,self.shortJumpPosition())
+        self.jumpConditional(interp.space.w_false, self.shortJumpPosition())
 
     def longUnconditionalJump(self, interp):
         self.jump((((self.currentBytecode & 7) - 4) << 8) + self.getbytecode())
@@ -369,10 +362,10 @@ class __extend__(ContextPartShadow):
         return ((self.currentBytecode & 3) << 8) + self.getbytecode()
 
     def longJumpIfTrue(self, interp):
-        self.jumpConditional(interp.TRUE,self.longJumpPosition())
+        self.jumpConditional(interp.space.w_true, self.longJumpPosition())
 
     def longJumpIfFalse(self, interp):
-        self.jumpConditional(interp.FALSE,self.longJumpPosition())
+        self.jumpConditional(interp.space.w_false, self.longJumpPosition())
 
     # RPython trick: specialize the following function on its second argument
     # this makes sure that the primitive call is a direct one
