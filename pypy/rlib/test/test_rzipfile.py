@@ -12,7 +12,7 @@ class BaseTestRZipFile(BaseRtypingTest):
         tmpdir = udir.ensure('zipimport_%s' % cls.__name__, dir=1)
         zipname = str(tmpdir.join("somezip.zip"))
         cls.zipname = zipname
-        zipfile = ZipFile(zipname, "w")
+        zipfile = ZipFile(zipname, "w", compression=cls.compression)
         cls.year = time.localtime(time.time())[0]
         zipfile.writestr("one", "stuff")
         zipfile.writestr("dir" + os.path.sep + "two", "otherstuff")
@@ -33,3 +33,6 @@ class BaseTestRZipFile(BaseRtypingTest):
 
 class TestRZipFile(BaseTestRZipFile, LLRtypeMixin):
     compression = ZIP_STORED
+
+class TestRZipFileCompressed(BaseTestRZipFile, LLRtypeMixin):
+    compression = ZIP_DEFLATED
