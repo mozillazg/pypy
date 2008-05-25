@@ -91,10 +91,9 @@ class JSTestItem(py.test.collect.Item):
         r3 = ctx.resolve_identifier('run_test')
         w_test_number = W_IntNumber(self.number)
         result = r3.Call(ctx=ctx, args=[w_test_number]).ToString()
+        __tracebackhide__ = True
         if result != "passed":
             raise Failed(msg=result)
-        elif result == -1:
-            py.test.skip()
 
     _handling_traceback = False
     def _getpathlineno(self):

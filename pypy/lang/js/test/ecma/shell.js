@@ -77,7 +77,7 @@ function TestCase( n, d, e, a ) {
   this.actual      = a;
   this.passed      = true;
   this.reason      = "";
-  print (n, d, e, a);
+  // print (n, d, e, a);
   this.bugnumber   = BUGNUMBER;
 
   this.passed = getTestCaseResult( this.expect, this.actual );
@@ -198,7 +198,7 @@ function getTestCaseResult( expect, actual ) {
 function run_test(tc) {
     // try {
         getTestCaseResult(testcases[tc].expect, testcases[tc].actual);
-        testcases[tc].reason += ( testcases[tc].passed ) ? "passed" : "wrong value expected: "
+        testcases[tc].reason += ( testcases[tc].passed ) ? "passed" : testcases[tc].description + " wrong value expected: "
                                 +testcases[tc].expect+" but got: "+ testcases[tc].actual;
         return testcases[tc].reason;
     // }
@@ -219,7 +219,7 @@ function writeFormattedResult( expect, actual, string, passed ) {
 }
 
 function writeHeaderToLog( string ) {
-  print( string );
+  // print( string );
 }
 /* end of print functions */
 
