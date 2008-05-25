@@ -131,17 +131,11 @@ class ImmediatePseudoRegister(Register):
   
 class FlagRegister(Register):
     
-    def __init__(self, cpu):
+    def __init__(self, cpu, reset_value):
         assert isinstance(cpu, CPU)
         self.cpu = cpu
+        self.reset_value = reset_value
         self.reset()
-        #added for rpython type inference
-        self.z_flag = False
-        self.n_flag = False
-        self.h_flag = False
-        self.c_flag = False
-        self.p_flag = False
-        self.s_flag = False
          
     def reset(self):
         self.partial_reset()
@@ -241,7 +235,7 @@ class CPU(object):
         self.sp  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_SP)
         
         self.a  = Register(self, constants.RESET_A)
-        self.f  = FlagRegister(self)
+        self.f  = FlagRegister(self, constants.RESET_F)
         self.af = DoubleRegister(self, self.a, self.f)
         
 
@@ -834,7 +828,7 @@ class CPU(object):
 
     def get_fetchadded_sp(self):
         # 1 cycle
-        offset = self.fetch() # 1 cycle
+        offset = self.process_2_complement(self.fetch()) # 1 cycle
         s = (self.sp.get() + offset) & 0xFFFF
         self.f.reset()
         if (offset >= 0):
@@ -848,7 +842,14 @@ class CPU(object):
             if (s & 0x0F00) > (self.sp.get() & 0x0F00):
                 self.f.h_flag = True
         return s
-
+    
+    def process_2_complement(self, value):
+        # check if the left most bit is set
+        if (value >> 7) == 1:
+            return -((~value) & 0xFF)-1
+        else :
+            return value
+        
     def complement_carry_flag(self):
         # CCF/SCF
         self.f.partial_reset(keep_z=True, keep_c=True)
@@ -877,7 +878,7 @@ class CPU(object):
     def relative_unconditional_jump(self):
         # JR +nn, 3 cycles
         #pc = pc & 0xFF00 + ((pc & 0x00FF) + add) & 0xFF
-        self.pc.add(self.fetch()) # 3 + 1 cycles
+        self.pc.add(self.process_2_complement(self.fetch())) # 3 + 1 cycles
         self.cycles += 1
 
     def relative_conditional_jump(self, cc):

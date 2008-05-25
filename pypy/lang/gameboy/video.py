@@ -8,6 +8,7 @@ from pypy.lang.gameboy.ram import iMemory
 
 
 
+# -----------------------------------------------------------------------------
 class VideoCallWraper(object):
     def call(self, pos, color, mask):
         pass
@@ -28,6 +29,40 @@ class set_tile_line_call_wrapper(VideoCallWraper):
     def call(self, pos, color, mask):
         self.video.set_tile_line(pos, color, mask)
     
+
+# -----------------------------------------------------------------------------
+
+def VideoStatus(object):
+    def __init__(self, video):
+        self.video = video
+        self.reset()
+        
+    def reset(self):
+        self.mode               = False
+        self.lyc_ly_coincidence = False
+        self.h_blank_interrupt  = False
+        self.oam_interrupt      = False
+        self.h_blank_interrupt  = False
+        self.v_blank_interrupt  = False
+        #Coincidence Flag  (0:LYC<>LY, 1:LYC=LY)
+        self.coincidence_flag   = False
+        
+    def read(self):
+        value = 0
+        value += int(self.lyc_ly_coincidence) << 7 
+        value += int(self.h_blank_interrupt)  << 6 
+        value += int(self.oam_interrupt)      << 5
+        value += int(self.h_blank_interrupt)  << 4
+        value += int(self.v_blank_interrupt)  << 3
+        value += int(self.coincidence_flag)   << 2
+        value += self.mode & 0x03
+        return value
+        
+    def write(self, value):
+        pass
+        
+
+# -----------------------------------------------------------------------------
 
 class Video(iMemory):
     #frames = 0
@@ -54,6 +89,14 @@ class Video(iMemory):
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
         # used for enabled or disablind window or background
+        # Bit 7 - LCD Display Enable             (0=Off, 1=On)
+        # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
+        # Bit 5 - Window Display Enable          (0=Off, 1=On)
+        # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
+        # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
+        # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
+        # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
+        # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
         self.control    = 0x91
         self.stat       = 2
         self.line_y     = 0
@@ -77,6 +120,7 @@ class Video(iMemory):
         self.dirty      = True
 
         self.vram       = [0]*constants.VRAM_SIZE
+        # Object Attribute Memor
         self.oam        = [0]*constants.OAM_SIZE
         
         self.line       = [0]* (8+160+8)
@@ -174,11 +218,12 @@ class Video(iMemory):
             
     def consume_cycles(self):
         while self.cycles <= 0:
-            if self.stat == 0:
+            mode = self.stat & 0x03
+            if mode == 0:
                 self.emulate_hblank()
-            elif self.stat == 1:
+            elif mode == 1:
                 self.emulate_vblank()
-            elif self.stat == 2:
+            elif mode == 2:
                 self.emulate_oam()
             else:
                 self.emulate_transfer()
