@@ -4,6 +4,8 @@ import sys
 from AppKit import NSApplication
 NSApplication.sharedApplication()
 
+ROM_PATH = str(py.magic.autopath().dirpath())+"/rom"
+
 filename = ""
 if len(sys.argv) > 1:
     print sys.argv
