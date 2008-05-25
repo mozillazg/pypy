@@ -6,7 +6,7 @@ import struct
 class BaseTestRStruct(BaseRtypingTest):
     def test_unpack(self):
         def fn():
-            return runpack('ll', '\x03\x00\x00\x00\x05\x00\x00\x00')[0]
+            return runpack('sll', 'a\x00\x00\x00\x03\x00\x00\x00\x04\x00\x00\x00')[1]
         assert fn() == 3
         assert self.interpret(fn, []) == 3
 

@@ -10,6 +10,7 @@ from pypy.rlib.rstruct.error import StructError
 from pypy.rlib.rstruct import ieee
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+from pypy.rlib.objectmodel import specialize
 
 # In the CPython struct module, pack() unconsistently accepts inputs
 # that are out-of-range or floats instead of ints.  Should we emulate
@@ -131,15 +132,19 @@ def make_int_packer(size, signed, cpython_checks_range, _memo={}):
 
 # ____________________________________________________________
 
+@specialize.argtype(0)
 def unpack_pad(fmtiter, count):
     fmtiter.read(count)
 
+@specialize.argtype(0)
 def unpack_char(fmtiter):
     fmtiter.appendobj(fmtiter.read(1))
 
+@specialize.argtype(0)
 def unpack_string(fmtiter, count):
     fmtiter.appendobj(fmtiter.read(count))
 
+@specialize.argtype(0)
 def unpack_pascal(fmtiter, count):
     if count == 0:
         raise StructError("bad '0p' in struct format")
@@ -150,9 +155,10 @@ def unpack_pascal(fmtiter, count):
     fmtiter.appendobj(data[1:end])
 
 def make_float_unpacker(size):
-    return lambda fmtiter: fmtiter.appendobj(ieee.unpack_float(
+    return specialize.argtype(0)(
+        lambda fmtiter: fmtiter.appendobj(ieee.unpack_float(
         fmtiter.read(size),
-        fmtiter.bigendian))
+        fmtiter.bigendian)))
 
 # ____________________________________________________________
 
@@ -175,6 +181,7 @@ def make_int_unpacker(size, signed, _memo={}):
             inttype = r_ulonglong
     unroll_range_size = unrolling_iterable(range(size))
 
+    @specialize.argtype(0)
     def unpack_int(fmtiter):
         intvalue = inttype(0)
         s = fmtiter.read(size)
