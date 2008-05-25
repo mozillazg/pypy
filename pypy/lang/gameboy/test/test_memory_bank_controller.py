@@ -165,7 +165,7 @@ def test_default_mbc_write():
 def get_mbc1(rom_size=128, ram_size=4):
     return MBC1(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
-def test_mbc1(mbc=None):
+def test_mbc1_create(mbc=None):
     if mbc is None:
         mbc = get_mbc1()
     assert mbc.rom_bank == constants.ROM_BANK_SIZE
@@ -393,7 +393,6 @@ def test_mbc3_update_clock():
     py.test.skip("not yet implemented")
     mbc = get_mbc3()
     
-    
 def test_mbc3_latch_clock():
     py.test.skip("not yet implemented")
     mbc = get_mbc3()
@@ -485,20 +484,115 @@ def test_huc1_read_write_ram():
 def get_huc3(rom_size=128, ram_size=4):
     return HuC3(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
 
-def test_huc1_create():
-    get_huc3()
-    fail_ini_test(get_huc3, 128, 5)
-    fail_ini_test(get_huc3, 128, -1)
-    fail_ini_test(get_huc3, 1, 4)
-    fail_ini_test(get_huc3, 129, 4)
+def test_huc3_create():
+    mbc = get_huc3()
+    fail_ini_test(mbc, 128, 5)
+    fail_ini_test(mbc, 128, -1)
+    fail_ini_test(mbc, 1, 4)
+    fail_ini_test(mbc, 129, 4)
 
-def test_huc3_read():
+def test_huc3_write_ram_flag():
+    mbc= get_huc3()
+    value = 1   
+    for address in range(0x0000, 0x1FFF+1):
+        mbc.write(address, value)
+        assert mbc.ram_flag == value
+        value = +1
+        value %= 0xFF
+        
+def test_huc3_write_rom_bank():
+    mbc= get_huc3()
+    value = 1   
+    for address in range(0x2000, 0x3FFF+1):
+        mbc.write(address, value)
+        if (value & 0x7F) == 0:
+            assert mbc.rom_bank == ((1 & 0x7F) << 14) & mbc.rom_size
+        else:
+            assert mbc.rom_bank == ((value & 0x7F) << 14) & mbc.rom_size
+        value = +1
+        value %= 0xFF
+        
+def test_huc3_write_ram_bank():
+    mbc = get_huc3()        
+    value = 1   
+    for address in range(0x4000, 0x5FFF+1):
+        mbc.write(address, value)
+        assert mbc.ram_bank == ((value & 0x0F) << 13) & mbc.rom_size
+        value = +1
+        value %= 0xFF
+        
+def test_huc3_write_ram():
+    mbc = get_huc3()        
+    value = 1
+    mbc.ram_flag = 0x0A
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.write(address, value)
+        assert mbc.ram[mbc.ram_bank + (address & 0x1FFF)] == value
+        value = +1
+        value %= 0xFF
+        
+def test_huc3_write_ram_value():
+    mbc = get_huc3()        
+    mbc.ram_flag = 0x0B
+    for address in range(0xA000, 0xBFFF+1):
+        clock_shift = mbc.clock_shift
+        mbc.write(address, 0x10)
+        if clock_shift <= 24:
+            assert mbc.ram_value == (mbc.clock_register >> clock_shift) & 0x0F
+            assert mbc.clock_shift == clock_shift+4
+        else:
+            assert mbc.clock_shift == clock_shift
+            mbc.clock_shift = 0
+            
+def test_huc3_write_reset_ram_value():
+    mbc = get_huc3()       
+    value = 1  
+    mbc.ram_flag = 0x0B
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.ram_value == value
+        mbc.write(address, 0x60)
+        assert mbc.ram_value == 0x01
+        value = +1
+        value %= 0xFF
+        
+def test_huc3_write_clock_register():
+    mbc = get_huc3()        
+    value = 1
+    mbc.ram_flag = 0x0B
+    for address in range(0xA000, 0xBFFF+1):
+        clock_shift = mbc.clock_shift
+        clock_register = mbc.clock_register
+        mbc.write(address, 0x30+value)
+        if clock_shift <= 24:
+            assert mbc.clock_register == (clock_register & \
+                                           ~(0x0F << clock_shift)) | \
+                                         (value << clock_shift)
+            assert mbc.clock_shift == clock_shift+4
+        else:
+            assert mbc.clock_shift == clock_shift
+            mbc.clock_shift = 0
+        value = +1
+        value %= 0xF
+            
+def test_huc3_write_update_clock():
+    mbc = get_huc3()       
+    value = 1  
+    mbc.ram_flag = 0x0B
+    for address in range(0xA000, 0xBFFF+1):
+        mbc.ram_value == value
+        mbc.clock_shift = 1
+        mbc.write(address, 0x40+value)
+        if value==0x00 or value==0x03 or value==0x07:
+            assert mbc.clock_shift == 0
+        else:
+            assert mbc.clock_shift == 1
+        value = +1
+        value %= 0xF
+        
+def test_huc3_update_clock():
     py.test.skip("not yet implemented")
-    huc3 = get_huc3()
-
-def test_huc3_write():
-    py.test.skip("not yet implemented")
-    huc3 = get_huc3()
+    mbc = get_huc3()
+    pass
 
 # -----------------------------------------------------------------------------
 
