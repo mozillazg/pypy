@@ -1,14 +1,11 @@
 # encoding: utf-8
 from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
-     ovfcheck_float_to_int
+     ovfcheck_float_to_int, NAN
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
      RangeError, ReturnException
 
 class SeePage(NotImplementedError):
     pass
-
-Infinity = 1e300 * 1e300
-NaN = Infinity/Infinity
 
 class Property(object):
     def __init__(self, name, value, dd=False, 
@@ -81,7 +78,7 @@ class W_Undefined(W_Root):
         return "w_undefined"
     
     def ToNumber(self, ctx):
-        return NaN
+        return NAN
 
     def ToBoolean(self):
         return False
@@ -410,7 +407,7 @@ class W_String(W_Primitive):
         try:
             return float(self.strval)
         except ValueError:
-            return NaN
+            return NAN
 
 class W_BaseNumber(W_Primitive):
     """ Base class for numbers, both known to be floats
