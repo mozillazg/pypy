@@ -4,13 +4,13 @@ from pypy.lang.js.jsparser import parse, ParseError
 from pypy.lang.js.astbuilder import ASTBuilder
 from pypy.lang.js.jsobj import global_context, W_Object,\
      w_Undefined, W_NewBuiltin, W_IntNumber, w_Null, create_object, W_Boolean,\
-     W_FloatNumber, NaN, Infinity, W_String, W_Builtin, W_Array, w_Null,\
+     W_FloatNumber, W_String, W_Builtin, W_Array, w_Null,\
      isnull_or_undefined, W_PrimitiveObject, W_ListObject
 from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
 from pypy.lang.js.jscode import JsCode
-from pypy.rlib.rarithmetic import NAN, INFINITY, isnan
+from pypy.rlib.rarithmetic import NAN, INFINITY, isnan, isinf
 
 ASTBUILDER = ASTBuilder()
 
@@ -124,7 +124,7 @@ def evaljs(ctx, args, this):
 
 def parseIntjs(ctx, args, this):
     if len(args) < 1:
-        return W_FloatNumber(NaN)
+        return W_FloatNumber(NAN)
     s = args[0].ToString(ctx).strip(" ")
     if len(args) > 1:
         radix = args[1].ToInt32()
@@ -134,21 +134,21 @@ def parseIntjs(ctx, args, this):
         radix = 16
         s = s[2:]
     if s == '' or radix < 2 or radix > 36:
-        return W_FloatNumber(NaN)
+        return W_FloatNumber(NAN)
     try:
         n = int(s, radix)
     except ValueError:
-        return W_FloatNumber(NaN)
+        return W_FloatNumber(NAN)
     return W_IntNumber(n)
 
 def parseFloatjs(ctx, args, this):
     if len(args) < 1:
-        return W_FloatNumber(NaN)
+        return W_FloatNumber(NAN)
     s = args[0].ToString(ctx).strip(" ")
     try:
         n = float(s)
     except ValueError:
-        n = NaN
+        n = NAN
     return W_FloatNumber(n)
     
 
@@ -165,32 +165,10 @@ def isfinitejs(ctx, args, this):
     if len(args) < 1:
         return W_Boolean(True)
     n = args[0].ToNumber(ctx)
-    if n == Infinity or n == -Infinity or n == NaN:
+    if  isinf(n) or isnan(n):
         return W_Boolean(False)
     else:
         return W_Boolean(True)
-
-def booleanjs(ctx, args, this):
-    if len(args) > 0:
-        return W_Boolean(args[0].ToBoolean())
-    return W_Boolean(False)
-
-def stringjs(ctx, args, this):
-    if len(args) > 0:
-        return W_String(args[0].ToString(ctx))
-    return W_String('')
-
-def arrayjs(ctx, args, this):
-    arr = W_Array()
-    for i in range(len(args)):
-        arr.Put(str(i), args[i])
-    return arr
-
-
-def numberjs(ctx, args, this):
-    if len(args) > 0:
-        return W_FloatNumber(args[0].ToNumber(ctx))
-    return W_IntNumber(0)
         
 def absjs(ctx, args, this):
     val = args[0]
@@ -502,11 +480,11 @@ class Interpreter(object):
         w_Number.Put('MAX_VALUE', W_FloatNumber(1.7976931348623157e308),
                      ro=True, dd=True)
         w_Number.Put('MIN_VALUE', W_FloatNumber(0), ro=True, dd=True)
-        w_Number.Put('NaN', W_FloatNumber(NaN), ro=True, dd=True)
+        w_Number.Put('NaN', W_FloatNumber(NAN), ro=True, dd=True)
         # ^^^ this is exactly in test case suite
-        w_Number.Put('POSITIVE_INFINITY', W_FloatNumber(Infinity),
+        w_Number.Put('POSITIVE_INFINITY', W_FloatNumber(INFINITY),
                      ro=True, dd=True)
-        w_Number.Put('NEGATIVE_INFINITY', W_FloatNumber(-Infinity),
+        w_Number.Put('NEGATIVE_INFINITY', W_FloatNumber(-INFINITY),
                      ro=True, dd=True)
         
 
@@ -566,14 +544,14 @@ class Interpreter(object):
         w_Date = W_DateFake(ctx, Class='Date')
         w_Global.Put('Date', w_Date)
         
-        w_Global.Put('NaN', W_FloatNumber(NaN))
-        w_Global.Put('Infinity', W_FloatNumber(Infinity))
+        w_Global.Put('NaN', W_FloatNumber(NAN))
+        w_Global.Put('Infinity', W_FloatNumber(INFINITY))
         w_Global.Put('undefined', w_Undefined)
         w_Global.Put('eval', W_Builtin(evaljs))
         w_Global.Put('parseInt', W_Builtin(parseIntjs))
         w_Global.Put('parseFloat', W_Builtin(parseFloatjs))
         w_Global.Put('isNaN', W_Builtin(isnanjs))
-        w_Global.Put('isFinite', W_Builtin(isnanjs))            
+        w_Global.Put('isFinite', W_Builtin(isfinitejs))            
 
         w_Global.Put('print', W_Builtin(printjs))
         w_Global.Put('this', w_Global)
