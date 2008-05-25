@@ -33,17 +33,17 @@ class W_Object(object):
         space, as memory representation varies depending on PyPy translation."""
         return 0
 
-    def varsize(self):
+    def varsize(self, space):
         """Return bytesize of variable-sized part.
 
         Variable sized objects are those created with #new:."""
-        return self.size()
+        return self.size(space)
 
-    def primsize(self):
+    def primsize(self, space):
         # TODO remove this method
         return self.size()
 
-    def getclass(self):
+    def getclass(self, space):
         """Return Squeak class."""
         raise NotImplementedError()
 
@@ -51,7 +51,7 @@ class W_Object(object):
         """Return 31-bit hash value."""
         raise NotImplementedError()
 
-    def at0(self, index0):
+    def at0(self, space, index0):
         """Access variable-sized part, as by Object>>at:.
 
         Return value depends on layout of instance. Byte objects return bytes,
@@ -60,7 +60,7 @@ class W_Object(object):
         otherwise returns byte (ie byte code indexing starts at literalsize)."""
         raise NotImplementedError()
 
-    def atput0(self, index0, w_value):
+    def atput0(self, space, index0, w_value):
         """Access variable-sized part, as by Object>>at:put:.
 
         Semantics depend on layout of instance. Byte objects set bytes,
@@ -83,9 +83,9 @@ class W_Object(object):
     def invariant(self):
         return True
 
-    def shadow_of_my_class(self):
+    def shadow_of_my_class(self, space):
         """Return internal representation of Squeak class."""
-        return self.getclass().as_class_get_shadow()
+        return self.getclass(space).as_class_get_shadow(space)
 
     def is_same_object(self, other):
         """Compare object identity"""
@@ -104,10 +104,9 @@ class W_SmallInteger(W_Object):
     def __init__(self, value):
         self.value = value
 
-    def getclass(self):
+    def getclass(self, space):
         """Return SmallInteger from special objects array."""
-        from pypy.lang.smalltalk.classtable import w_SmallInteger
-        return w_SmallInteger
+        return space.w_SmallInteger
 
     def gethash(self):
         return self.value
@@ -141,10 +140,9 @@ class W_Float(W_Object):
     def __init__(self, value):
         self.value = value
 
-    def getclass(self):
+    def getclass(self, space):
         """Return Float from special objects array."""
-        from pypy.lang.smalltalk.classtable import w_Float
-        return w_Float
+        return space.w_Float
 
     def gethash(self):
         return 41    # XXX check this
@@ -208,7 +206,7 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
             assert isinstance(w_class, W_PointersObject)
         self.w_class = w_class
 
-    def getclass(self):
+    def getclass(self, space):
         assert self.w_class is not None
         return self.w_class
 
@@ -219,7 +217,10 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         if isinstance(self, W_PointersObject) and self._shadow is not None:
             return self._shadow.getname()
         else:
-            return "a %s" % (self.shadow_of_my_class().name or '?',)
+            name = None
+            if self.w_class._shadow is not None:
+                name = self.w_class._shadow.name
+            return "a %s" % (name or '?',)
 
     def invariant(self):
         return (W_AbstractObjectWithIdentityHash.invariant(self) and
@@ -242,13 +243,13 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
         self._vars = [w_nil] * size
 
-    def at0(self, index0):
+    def at0(self, space, index0):
         # To test, at0 = in varsize part
-        return self.fetch(index0+self.instsize())
+        return self.fetch(index0+self.instsize(space))
 
-    def atput0(self, index0, w_value):
+    def atput0(self, space, index0, w_value):
         # To test, at0 = in varsize part
-        self.store(index0+self.instsize(), w_value)
+        self.store(index0+self.instsize(space), w_value)
 
     def fetch(self, n0):
         if self._shadow is not None:
@@ -272,14 +273,14 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     # def storevarpointer(self, idx, value):
     #    self._vars[idx+self.instsize()] = value
 
-    def varsize(self):
-        return self.size() - self.instsize()
+    def varsize(self, space):
+        return self.size() - self.instsize(space)
 
-    def instsize(self):
-        return self.shadow_of_my_class().instsize()
+    def instsize(self, space):
+        return self.shadow_of_my_class(space).instsize()
 
-    def primsize(self):
-        return self.varsize()
+    def primsize(self, space):
+        return self.varsize(space)
 
     def size(self):
         if self._shadow is not None:
@@ -296,52 +297,52 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def store_shadow(self, shadow):
         self._shadow = shadow
 
-    @objectmodel.specialize.arg(1)
-    def attach_shadow_of_class(self, TheClass):
-        shadow = TheClass(self)
+    @objectmodel.specialize.arg(2)
+    def attach_shadow_of_class(self, space, TheClass):
+        shadow = TheClass(space, self)
         self._shadow = shadow
         shadow.attach_shadow()
         return shadow
 
-    @objectmodel.specialize.arg(1)
-    def as_special_get_shadow(self, TheClass):
+    @objectmodel.specialize.arg(2)
+    def as_special_get_shadow(self, space, TheClass):
         shadow = self._shadow
         if shadow is None:
-            shadow = self.attach_shadow_of_class(TheClass)
+            shadow = self.attach_shadow_of_class(space, TheClass)
         elif not isinstance(shadow, TheClass):
             shadow.detach_shadow()
-            shadow = self.attach_shadow_of_class(TheClass)
+            shadow = self.attach_shadow_of_class(space, TheClass)
         shadow.sync_shadow()
         return shadow
 
-    def get_shadow(self):
+    def get_shadow(self, space):
         from pypy.lang.smalltalk.shadow import AbstractShadow
-        return self.as_special_get_shadow(AbstractShadow)
+        return self.as_special_get_shadow(space, AbstractShadow)
 
-    def as_class_get_shadow(self):
+    def as_class_get_shadow(self, space):
         from pypy.lang.smalltalk.shadow import ClassShadow
-        return self.as_special_get_shadow(ClassShadow)
+        return self.as_special_get_shadow(space, ClassShadow)
 
-    def as_blockcontext_get_shadow(self):
+    def as_blockcontext_get_shadow(self, space):
         from pypy.lang.smalltalk.shadow import BlockContextShadow
-        return self.as_special_get_shadow(BlockContextShadow)
+        return self.as_special_get_shadow(space, BlockContextShadow)
 
-    def as_methodcontext_get_shadow(self):
+    def as_methodcontext_get_shadow(self, space):
         from pypy.lang.smalltalk.shadow import MethodContextShadow
-        return self.as_special_get_shadow(MethodContextShadow)
+        return self.as_special_get_shadow(space, MethodContextShadow)
 
-    def as_context_get_shadow(self):
+    def as_context_get_shadow(self, space):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
         # XXX TODO should figure out itself if its method or block context
         if self._shadow is None:
-            if ContextPartShadow.is_block_context(self):
-                return self.as_blockcontext_get_shadow()
-            return self.as_methodcontext_get_shadow()
-        return self.as_special_get_shadow(ContextPartShadow)
+            if ContextPartShadow.is_block_context(self, space):
+                return self.as_blockcontext_get_shadow(space)
+            return self.as_methodcontext_get_shadow(space)
+        return self.as_special_get_shadow(space, ContextPartShadow)
 
-    def as_methoddict_get_shadow(self):
+    def as_methoddict_get_shadow(self, space):
         from pypy.lang.smalltalk.shadow import MethodDictionaryShadow
-        return self.as_special_get_shadow(MethodDictionaryShadow)
+        return self.as_special_get_shadow(space, MethodDictionaryShadow)
 
     def become(self, w_other):
         if not isinstance(w_other, W_PointersObject):
@@ -356,13 +357,11 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
         self.bytes = ['\x00'] * size
 
-    def at0(self, index0):
-        from pypy.lang.smalltalk import utility
-        return utility.wrap_int(ord(self.getchar(index0)))
+    def at0(self, space, index0):
+        return space.wrap_int(ord(self.getchar(index0)))
        
-    def atput0(self, index0, w_value):
-        from pypy.lang.smalltalk import utility
-        self.setchar(index0, chr(utility.unwrap_int(w_value)))
+    def atput0(self, space, index0, w_value):
+        self.setchar(index0, chr(space.unwrap_int(w_value)))
 
     def getchar(self, n0):
         return self.bytes[n0]
@@ -401,13 +400,11 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
         self.words = [0] * size
         
-    def at0(self, index0):
-        from pypy.lang.smalltalk import utility
-        return utility.wrap_int(self.getword(index0))
+    def at0(self, space, index0):
+        return space.wrap_int(self.getword(index0))
        
-    def atput0(self, index0, w_value):
-        from pypy.lang.smalltalk import utility
-        self.setword(index0, utility.unwrap_int(w_value))
+    def atput0(self, space, index0, w_value):
+        self.setword(index0, space.unwrap_int(w_value))
 
     def getword(self, n):
         return self.words[n]
@@ -457,13 +454,13 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
             # Last of the literals is an association with compiledin
             # as a class
             w_association = self.literals[-1]
-            association = wrapper.AssociationWrapper(w_association)
+            # XXX XXX XXX where to get a space from here
+            association = wrapper.AssociationWrapper(None, w_association)
             self.w_compiledin = association.value()
         return self.w_compiledin
 
-    def getclass(self):
-        from pypy.lang.smalltalk.classtable import w_CompiledMethod
-        return w_CompiledMethod
+    def getclass(self, space):
+        return space.w_CompiledMethod
 
     def getliteral(self, index):
                                     # We changed this part
@@ -474,10 +471,11 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         assert isinstance(w_literal, W_BytesObject)
         return w_literal.as_string()    # XXX performance issue here
 
-    def create_frame(self, receiver, arguments, sender = None):
-        from pypy.lang.smalltalk import objtable, shadow
+    def create_frame(self, space, receiver, arguments, sender = None):
+        from pypy.lang.smalltalk import shadow
         assert len(arguments) == self.argsize
-        w_new = shadow.MethodContextShadow.make_context(self, receiver, arguments, sender)
+        w_new = shadow.MethodContextShadow.make_context(
+                space, self, receiver, arguments, sender)
         return w_new
 
     def __str__(self):
@@ -541,17 +539,15 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         self.w_compiledin = None
         self.islarge = islarge
 
-    def literalat0(self, index0):
+    def literalat0(self, space, index0):
         if index0 == 0:
-            from pypy.lang.smalltalk import utility
-            return utility.wrap_int(self.getheader())
+            return space.wrap_int(self.getheader())
         else:
             return self.literals[index0-1]
 
-    def literalatput0(self, index0, w_value):
+    def literalatput0(self, space, index0, w_value):
         if index0 == 0:
-            from pypy.lang.smalltalk import utility
-            header = utility.unwrap_int(w_value)
+            header = space.unwrap_int(w_value)
             self.setheader(header)
         else:
             self.literals[index0-1] = w_value
@@ -559,10 +555,9 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
     def store(self, index0, w_v):
         self.atput0(index0, w_v)
 
-    def at0(self, index0):
-        from pypy.lang.smalltalk import utility
+    def at0(self, space, index0):
         if index0 <= self.getliteralsize():
-            return self.literalat0(index0/constants.BYTES_PER_WORD)
+            return self.literalat0(space, index0 / constants.BYTES_PER_WORD)
         else:
             # From blue book:
             # The literal count indicates the size of the
@@ -571,17 +566,16 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
             # CompiledMethod's bytecodes start. 
             index0 = index0 - self.getliteralsize() - self.headersize()
             assert index0 < len(self.bytes)
-            return utility.wrap_int(ord(self.bytes[index0]))
+            return space.wrap_int(ord(self.bytes[index0]))
         
-    def atput0(self, index0, w_value):
-        from pypy.lang.smalltalk import utility
+    def atput0(self, space, index0, w_value):
         if index0 <= self.getliteralsize():
-            self.literalatput0(index0/constants.BYTES_PER_WORD, w_value)
+            self.literalatput0(space, index0 / constants.BYTES_PER_WORD, w_value)
         else:
             # XXX use to-be-written unwrap_char
             index0 = index0 - self.getliteralsize() - self.headersize()
             assert index0 < len(self.bytes)
-            self.setchar(index0, chr(utility.unwrap_int(w_value)))
+            self.setchar(index0, chr(space.unwrap_int(w_value)))
 
     def setchar(self, index0, character):
         assert index0 >= 0
@@ -590,6 +584,7 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
 # Use black magic to create w_nil without running the constructor,
 # thus allowing it to be used even in the constructor of its own
-# class.  Note that we patch its class in objtable.
+# class.  Note that we patch its class in the space
+# YYY there should be no global w_nil
 w_nil = instantiate(W_PointersObject)
 w_nil._vars = []

@@ -1,12 +1,13 @@
 import weakref
-from pypy.lang.smalltalk import model, constants, utility, error
+from pypy.lang.smalltalk import model, constants, error
 from pypy.tool.pairtype import extendabletype
 
 class AbstractShadow(object):
     """A shadow is an optional extra bit of information that
     can be attached at run-time to any Smalltalk object.
     """
-    def __init__(self, w_self):
+    def __init__(self, space, w_self):
+        self.space = space
         self._w_self = w_self
     def fetch(self, n0):
         return self.w_self()._fetch(n0)
@@ -23,8 +24,8 @@ class AbstractShadow(object):
     def sync_shadow(self): pass
    
 class AbstractCachingShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, space, w_self):
+        AbstractShadow.__init__(self, space, w_self)
         self.invalid = True
         self.invalidate_shadow()
 
@@ -75,9 +76,9 @@ class ClassShadow(AbstractCachingShadow):
     """A shadow for Smalltalk objects that are classes
     (i.e. used as the class of another Smalltalk object).
     """
-    def __init__(self, w_self):
+    def __init__(self, space, w_self):
         self.name = ""
-        AbstractCachingShadow.__init__(self, w_self)
+        AbstractCachingShadow.__init__(self, space, w_self)
     def invalidate_shadow(self):
         AbstractCachingShadow.invalidate_shadow(self)
         self.w_methoddict = None
@@ -87,12 +88,11 @@ class ClassShadow(AbstractCachingShadow):
         return "%s class" % (self.name or '?',)
 
     def sync_cache(self):
-        from pypy.lang.smalltalk.objtable import w_nil
         "Update the ClassShadow with data from the w_self class."
 
         w_self = self.w_self()
         # read and painfully decode the format
-        classformat = utility.unwrap_int(
+        classformat = self.space.unwrap_int(
             w_self._fetch(constants.CLASS_FORMAT_INDEX))
         # The classformat in Squeak, as an integer value, is:
         #    <2 bits=instSize//64><5 bits=cClass><4 bits=instSpec>
@@ -135,7 +135,7 @@ class ClassShadow(AbstractCachingShadow):
         self.w_methoddict = w_methoddict
 
         w_superclass = w_self._fetch(constants.CLASS_SUPERCLASS_INDEX)
-        if w_superclass.is_same_object(w_nil):
+        if w_superclass.is_same_object(self.space.w_nil):
             self.w_superclass = None
         else:
             assert isinstance(w_superclass, model.W_PointersObject)
@@ -166,7 +166,6 @@ class ClassShadow(AbstractCachingShadow):
             self.name = w_name.as_string()
 
     def new(self, extrasize=0):
-        from pypy.lang.smalltalk import classtable
         w_cls = self.w_self()
         if self.instance_kind == POINTERS:
             w_new = model.W_PointersObject(w_cls, self.instance_size+extrasize)
@@ -181,12 +180,12 @@ class ClassShadow(AbstractCachingShadow):
         return w_new
 
     def s_methoddict(self):
-        return self.w_methoddict.as_methoddict_get_shadow()
+        return self.w_methoddict.as_methoddict_get_shadow(self.space)
 
     def s_superclass(self):
         if self.w_superclass is None:
             return None
-        return self.w_superclass.as_class_get_shadow()
+        return self.w_superclass.as_class_get_shadow(self.space)
 
     # _______________________________________________________________
     # Methods for querying the format word, taken from the blue book:
@@ -262,17 +261,16 @@ class MethodDictionaryShadow(AbstractCachingShadow):
         self.methoddict = None
 
     def sync_cache(self):
-        from pypy.lang.smalltalk import objtable
         w_values = self.w_self()._fetch(constants.METHODDICT_VALUES_INDEX)
         assert isinstance(w_values, model.W_PointersObject)
-        s_values = w_values.get_shadow()
+        s_values = w_values.get_shadow(self.space)
         # XXX Should add!
         # s_values.notifyinvalid(self)
         size = self.w_self().size() - constants.METHODDICT_NAMES_INDEX
         self.methoddict = {}
         for i in range(size):
             w_selector = self.w_self()._fetch(constants.METHODDICT_NAMES_INDEX+i)
-            if not w_selector.is_same_object(objtable.w_nil):
+            if not w_selector.is_same_object(self.space.w_nil):
                 if not isinstance(w_selector, model.W_BytesObject):
                     raise ClassShadowError("bogus selector in method dict")
                 selector = w_selector.as_string()
@@ -284,8 +282,8 @@ class MethodDictionaryShadow(AbstractCachingShadow):
 
 
 class AbstractRedirectingShadow(AbstractShadow):
-    def __init__(self, w_self):
-        AbstractShadow.__init__(self, w_self)
+    def __init__(self, space, w_self):
+        AbstractShadow.__init__(self, space, w_self)
         self._w_self_size = self.w_self().size()
     def fetch(self, n0):
         raise NotImplementedError()
@@ -301,8 +299,7 @@ class AbstractRedirectingShadow(AbstractShadow):
         self.w_self()._vars = None
 
     def detach_shadow(self):
-        from pypy.lang.smalltalk import objtable
-        self.w_self()._vars = [objtable.w_nil] * self._w_self_size
+        self.w_self()._vars = [self.space.w_nil] * self._w_self_size
         for i in range(self._w_self_size):
             self.copy_to_w_self(i)
 
@@ -315,18 +312,17 @@ class ContextPartShadow(AbstractRedirectingShadow):
 
     __metaclass__ = extendabletype
 
-    def __init__(self, w_self):
-        from pypy.lang.smalltalk import objtable
-        self._w_sender = objtable.w_nil
+    def __init__(self, space, w_self):
+        self._w_sender = space.w_nil
         self._stack = []
         self.currentBytecode = -1
-        AbstractRedirectingShadow.__init__(self, w_self)
+        AbstractRedirectingShadow.__init__(self, space, w_self)
 
     @staticmethod
-    def is_block_context(w_pointers):
-        from pypy.lang.smalltalk.classtable import w_SmallInteger
+    def is_block_context(w_pointers, space):
         method_or_argc = w_pointers.fetch(constants.MTHDCTX_METHOD)
-        return method_or_argc.getclass().is_same_object(w_SmallInteger)
+        return method_or_argc.getclass(space).is_same_object(
+            space.w_SmallInteger)
 
     def fetch(self, n0):
         if n0 == constants.CTXPART_SENDER_INDEX:
@@ -338,8 +334,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         if self.stackstart() <= n0 < self.external_stackpointer():
             return self._stack[n0-self.stackstart()]
         if self.external_stackpointer() <= n0 < self.stackend():
-            from pypy.lang.smalltalk import objtable
-            return objtable.w_nil
+            return self.space.w_nil
         else:
             # XXX later should store tail out of known context part as well
             raise error.WrapperException("Index in context out of bounds")
@@ -364,21 +359,20 @@ class ContextPartShadow(AbstractRedirectingShadow):
         # the stackpointer in the W_PointersObject starts counting at the
         # tempframe start
         # Stackpointer from smalltalk world == stacksize in python world
-        self.store_stackpointer(utility.unwrap_int(w_sp1) -
+        self.store_stackpointer(self.space.unwrap_int(w_sp1) -
                                 self.tempsize())
 
     def store_stackpointer(self, size):
-        from pypy.lang.smalltalk import objtable
         if size < len(self._stack):
             # TODO Warn back to user
             assert size >= 0
             self._stack = self._stack[:size]
         else:
-            add = [objtable.w_nil] * (size - len(self._stack))
+            add = [self.space.w_nil] * (size - len(self._stack))
             self._stack.extend(add)
 
     def wrap_stackpointer(self):
-        return utility.wrap_int(len(self._stack) + 
+        return self.space.wrap_int(len(self._stack) + 
                                 self.tempsize())
 
     def external_stackpointer(self):
@@ -388,7 +382,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         raise NotImplementedError()
 
     def s_home(self):
-        return self.w_home().as_methodcontext_get_shadow()
+        return self.w_home().as_methodcontext_get_shadow(self.space)
     
     def stackstart(self):
         raise NotImplementedError()
@@ -408,18 +402,16 @@ class ContextPartShadow(AbstractRedirectingShadow):
         return self._w_sender
 
     def s_sender(self):
-        from pypy.lang.smalltalk import objtable
         w_sender = self.w_sender()
-        if w_sender.is_same_object(objtable.w_nil):
+        if w_sender.is_same_object(self.space.w_nil):
             return None
         else:
-            return w_sender.as_context_get_shadow()
+            return w_sender.as_context_get_shadow(self.space)
 
     def store_unwrap_pc(self, w_pc):
-        from pypy.lang.smalltalk import objtable
-        if w_pc.is_same_object(objtable.w_nil):
+        if w_pc.is_same_object(self.space.w_nil):
             return
-        pc = utility.unwrap_int(w_pc)
+        pc = self.space.unwrap_int(w_pc)
         pc -= self.w_method().bytecodeoffset()
         pc -= 1
         self.store_pc(pc)
@@ -428,7 +420,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         pc = self.pc()
         pc += 1
         pc += self.w_method().bytecodeoffset()
-        return utility.wrap_int(pc)
+        return self.space.wrap_int(pc)
 
     def pc(self):
         return self._pc
@@ -511,14 +503,13 @@ class ContextPartShadow(AbstractRedirectingShadow):
 class BlockContextShadow(ContextPartShadow):
 
     @staticmethod
-    def make_context(w_home, w_sender, argcnt, initialip):
-        from pypy.lang.smalltalk.classtable import w_BlockContext
+    def make_context(space, w_home, w_sender, argcnt, initialip):
         # create and attach a shadow manually, to not have to carefully put things
         # into the right places in the W_PointersObject
         # XXX could hack some more to never have to create the _vars of w_result
-        contextsize = w_home.as_methodcontext_get_shadow().myblocksize()
-        w_result = model.W_PointersObject(w_BlockContext, contextsize)
-        s_result = BlockContextShadow(w_result)
+        contextsize = w_home.as_methodcontext_get_shadow(space).myblocksize()
+        w_result = model.W_PointersObject(space.w_BlockContext, contextsize)
+        s_result = BlockContextShadow(space, w_result)
         w_result.store_shadow(s_result)
         s_result.store_expected_argument_count(argcnt)
         s_result.store_initialip(initialip)
@@ -552,20 +543,20 @@ class BlockContextShadow(ContextPartShadow):
         ContextPartShadow.attach_shadow(self)
 
     def unwrap_store_initialip(self, w_value):
-        initialip = utility.unwrap_int(w_value)
+        initialip = self.space.unwrap_int(w_value)
         initialip -= 1 + self.w_method().getliteralsize()
         self.store_initialip(initialip)
 
     def wrap_initialip(self):
         initialip = self.initialip()
         initialip += 1 + self.w_method().getliteralsize()
-        return utility.wrap_int(initialip)
+        return self.space.wrap_int(initialip)
 
     def unwrap_store_eargc(self, w_value):
-        self.store_expected_argument_count(utility.unwrap_int(w_value))
+        self.store_expected_argument_count(self.space.unwrap_int(w_value))
     
     def wrap_eargc(self):
-        return utility.wrap_int(self.expected_argument_count())
+        return self.space.wrap_int(self.expected_argument_count())
 
     def expected_argument_count(self):
         return self._eargc
@@ -600,33 +591,30 @@ class BlockContextShadow(ContextPartShadow):
         return 0
 
 class MethodContextShadow(ContextPartShadow):
-    def __init__(self, w_self):
-        from pypy.lang.smalltalk import objtable
-        self.w_receiver_map = objtable.w_nil
+    def __init__(self, space, w_self):
+        self.w_receiver_map = space.w_nil
         self._w_receiver = None
-        ContextPartShadow.__init__(self, w_self)
+        ContextPartShadow.__init__(self, space, w_self)
 
     @staticmethod
-    def make_context(w_method, w_receiver,
+    def make_context(space, w_method, w_receiver,
                      arguments, w_sender=None):
-        from pypy.lang.smalltalk.classtable import w_MethodContext
-        from pypy.lang.smalltalk import objtable
         # From blue book: normal mc have place for 12 temps+maxstack
         # mc for methods with islarge flag turned on 32
         size = 12 + w_method.islarge * 20 + w_method.argsize
-        w_result = w_MethodContext.as_class_get_shadow().new(size)
+        w_result = space.w_MethodContext.as_class_get_shadow(space).new(size)
         assert isinstance(w_result, model.W_PointersObject)
         # create and attach a shadow manually, to not have to carefully put things
         # into the right places in the W_PointersObject
         # XXX could hack some more to never have to create the _vars of w_result
-        s_result = MethodContextShadow(w_result)
+        s_result = MethodContextShadow(space, w_result)
         w_result.store_shadow(s_result)
         s_result.store_w_method(w_method)
         if w_sender:
             s_result.store_w_sender(w_sender)
         s_result.store_w_receiver(w_receiver)
         s_result.store_pc(0)
-        s_result._temps = [objtable.w_nil] * w_method.tempsize
+        s_result._temps = [space.w_nil] * w_method.tempsize
         for i in range(len(arguments)):
             s_result.settemp(i, arguments[i])
         return w_result
@@ -661,11 +649,10 @@ class MethodContextShadow(ContextPartShadow):
             return ContextPartShadow.store(self, n0, w_value)
     
     def attach_shadow(self):
-        from pypy.lang.smalltalk import objtable
         # Make sure the method is updated first
         self.copy_from_w_self(constants.MTHDCTX_METHOD)
         # And that there is space for the temps
-        self._temps = [objtable.w_nil] * self.tempsize()
+        self._temps = [self.space.w_nil] * self.tempsize()
         ContextPartShadow.attach_shadow(self)
 
     def tempsize(self):

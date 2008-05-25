@@ -1,7 +1,11 @@
 import py
-from pypy.lang.smalltalk import model, shadow, objtable
+from pypy.lang.smalltalk import model, shadow
 from pypy.lang.smalltalk.shadow import MethodNotFound
-from pypy.lang.smalltalk import classtable, utility
+from pypy.lang.smalltalk import space as objspace
+
+mockclass = objspace.bootstrap_class
+
+space = objspace.ObjSpace()
 
 def joinbits(values, lengths):
     result = 0
@@ -10,31 +14,30 @@ def joinbits(values, lengths):
         result += each
     return result   
 
-mockclass = classtable.bootstrap_class
 
 def test_new():
-    w_mycls = mockclass(0)
-    w_myinstance = w_mycls.as_class_get_shadow().new()
+    w_mycls = mockclass(space, 0)
+    w_myinstance = w_mycls.as_class_get_shadow(space).new()
     assert isinstance(w_myinstance, model.W_PointersObject)
-    assert w_myinstance.getclass().is_same_object(w_mycls)
-    assert w_myinstance.shadow_of_my_class() is w_mycls.as_class_get_shadow()
+    assert w_myinstance.getclass(space).is_same_object(w_mycls)
+    assert w_myinstance.shadow_of_my_class(space) is w_mycls.as_class_get_shadow(space)
 
 def test_new_namedvars():
-    w_mycls = mockclass(3)
-    w_myinstance = w_mycls.as_class_get_shadow().new()
+    w_mycls = mockclass(space, 3)
+    w_myinstance = w_mycls.as_class_get_shadow(space).new()
     assert isinstance(w_myinstance, model.W_PointersObject)
-    assert w_myinstance.getclass().is_same_object(w_mycls)
-    assert w_myinstance.fetch(0) is objtable.w_nil
+    assert w_myinstance.getclass(space).is_same_object(w_mycls)
+    assert w_myinstance.fetch(0) is space.w_nil
     py.test.raises(IndexError, lambda: w_myinstance.fetch(3))
     w_myinstance.store(1, w_myinstance)
     assert w_myinstance.fetch(1) is w_myinstance
 
 def test_bytes_object():
-    w_class = mockclass(0, format=shadow.BYTES)
-    w_bytes = w_class.as_class_get_shadow().new(20)
-    assert w_bytes.getclass().is_same_object(w_class)
+    w_class = mockclass(space, 0, format=shadow.BYTES)
+    w_bytes = w_class.as_class_get_shadow(space).new(20)
+    assert w_bytes.getclass(space).is_same_object(w_class)
     assert w_bytes.size() == 20
-    assert w_class.as_class_get_shadow().instsize() == 0
+    assert w_class.as_class_get_shadow(space).instsize() == 0
     assert w_bytes.getchar(3) == "\x00"
     w_bytes.setchar(3, "\xAA")
     assert w_bytes.getchar(3) == "\xAA"
@@ -42,11 +45,11 @@ def test_bytes_object():
     py.test.raises(IndexError, lambda: w_bytes.getchar(20))
 
 def test_word_object():
-    w_class = mockclass(0, format=shadow.WORDS)
-    w_bytes = w_class.as_class_get_shadow().new(20)
-    assert w_bytes.getclass().is_same_object(w_class)
+    w_class = mockclass(space, 0, format=shadow.WORDS)
+    w_bytes = w_class.as_class_get_shadow(space).new(20)
+    assert w_bytes.getclass(space).is_same_object(w_class)
     assert w_bytes.size() == 20
-    assert w_class.as_class_get_shadow().instsize() == 0
+    assert w_class.as_class_get_shadow(space).instsize() == 0
     assert w_bytes.getword(3) == 0
     w_bytes.setword(3, 42)  
     assert w_bytes.getword(3) == 42
@@ -54,12 +57,12 @@ def test_word_object():
     py.test.raises(IndexError, lambda: w_bytes.getword(20))
 
 def test_method_lookup():
-    w_class = mockclass(0)
-    shadow = w_class.as_class_get_shadow()
+    w_class = mockclass(space, 0)
+    shadow = w_class.as_class_get_shadow(space)
     shadow.installmethod("foo", 1)
     shadow.installmethod("bar", 2)
-    w_subclass = mockclass(0, w_superclass=w_class)
-    subshadow = w_subclass.as_class_get_shadow()
+    w_subclass = mockclass(space, 0, w_superclass=w_class)
+    subshadow = w_subclass.as_class_get_shadow(space)
     assert subshadow.s_superclass() is shadow
     subshadow.installmethod("foo", 3)
     shadow.initialize_methoddict()
@@ -72,11 +75,11 @@ def test_method_lookup():
     py.test.raises(MethodNotFound, subshadow.lookup, "zork")
 
 def test_w_compiledin():
-    w_super = mockclass(0)
-    w_class = mockclass(0, w_superclass=w_super)
-    supershadow = w_super.as_class_get_shadow()
+    w_super = mockclass(space, 0)
+    w_class = mockclass(space, 0, w_superclass=w_super)
+    supershadow = w_super.as_class_get_shadow(space)
     supershadow.installmethod("foo", model.W_CompiledMethod(0))
-    classshadow = w_class.as_class_get_shadow()
+    classshadow = w_class.as_class_get_shadow(space)
     classshadow.initialize_methoddict()
     assert classshadow.lookup("foo").w_compiledin is w_super
 
@@ -88,8 +91,8 @@ def test_compiledmethod_setchar():
 def test_hashes():
     w_five = model.W_SmallInteger(5)
     assert w_five.gethash() == 5
-    w_class = mockclass(0)
-    w_inst = w_class.as_class_get_shadow().new()
+    w_class = mockclass(space, 0)
+    w_inst = w_class.as_class_get_shadow(space).new()
     assert w_inst.hash == w_inst.UNASSIGNED_HASH
     h1 = w_inst.gethash()
     h2 = w_inst.gethash()
@@ -102,30 +105,30 @@ def test_compiledmethod_at0():
     w_method.header = 100
     w_method.literals = [ 'lit1', 'lit2' ]
     w_method.literalsize = 2
-    assert utility.unwrap_int(w_method.at0(0)) == 100
-    assert w_method.at0(4) == 'lit1'
-    assert w_method.at0(8) == 'lit2'
-    assert utility.unwrap_int(w_method.at0(12)) == ord('a')
-    assert utility.unwrap_int(w_method.at0(13)) == ord('b')
-    assert utility.unwrap_int(w_method.at0(14)) == ord('c')
+    assert space.unwrap_int(w_method.at0(space, 0)) == 100
+    assert w_method.at0(space, 4) == 'lit1'
+    assert w_method.at0(space, 8) == 'lit2'
+    assert space.unwrap_int(w_method.at0(space, 12)) == ord('a')
+    assert space.unwrap_int(w_method.at0(space, 13)) == ord('b')
+    assert space.unwrap_int(w_method.at0(space, 14)) == ord('c')
 
 def test_compiledmethod_atput0():
     w_method = model.W_CompiledMethod(3)
     newheader = joinbits([0,2,0,0,0,0],[9,8,1,6,4,1])
     assert w_method.getliteralsize() == 0
-    w_method.atput0(0, utility.wrap_int(newheader))
+    w_method.atput0(space, 0, space.wrap_int(newheader))
     assert w_method.getliteralsize() == 8 # 2 from new header * BYTES_PER_WORD (= 4)
-    w_method.atput0(4, 'lit1')
-    w_method.atput0(8, 'lit2')
-    w_method.atput0(12, utility.wrap_int(ord('a')))
-    w_method.atput0(13, utility.wrap_int(ord('b')))
-    w_method.atput0(14, utility.wrap_int(ord('c')))
-    assert utility.unwrap_int(w_method.at0(0)) == newheader
-    assert w_method.at0(4) == 'lit1'
-    assert w_method.at0(8) == 'lit2'
-    assert utility.unwrap_int(w_method.at0(12)) == ord('a')
-    assert utility.unwrap_int(w_method.at0(13)) == ord('b')
-    assert utility.unwrap_int(w_method.at0(14)) == ord('c')
+    w_method.atput0(space, 4, 'lit1')
+    w_method.atput0(space, 8, 'lit2')
+    w_method.atput0(space, 12, space.wrap_int(ord('a')))
+    w_method.atput0(space, 13, space.wrap_int(ord('b')))
+    w_method.atput0(space, 14, space.wrap_int(ord('c')))
+    assert space.unwrap_int(w_method.at0(space, 0)) == newheader
+    assert w_method.at0(space, 4) == 'lit1'
+    assert w_method.at0(space, 8) == 'lit2'
+    assert space.unwrap_int(w_method.at0(space, 12)) == ord('a')
+    assert space.unwrap_int(w_method.at0(space, 13)) == ord('b')
+    assert space.unwrap_int(w_method.at0(space, 14)) == ord('c')
 
 def test_is_same_object(w_o1=model.W_PointersObject(None,0), w_o2=None):
     if w_o2 is None:
@@ -155,20 +158,20 @@ def test_intfloat_notis_same_object():
     test_not_is_same_object(model.W_SmallInteger(101), model.W_SmallInteger(100))
 
 def test_charis_same_object():
-    test_is_same_object(utility.wrap_char('a'), utility.wrap_char('a'))
-    test_is_same_object(utility.wrap_char('d'), utility.wrap_char('d'))
+    test_is_same_object(space.wrap_char('a'), space.wrap_char('a'))
+    test_is_same_object(space.wrap_char('d'), space.wrap_char('d'))
 
 def test_not_charis_same_object():
-    test_not_is_same_object(utility.wrap_char('a'), utility.wrap_char('d'))
-    test_not_is_same_object(utility.wrap_char('d'), utility.wrap_int(3))
-    test_not_is_same_object(utility.wrap_char('d'), utility.wrap_float(3.0))
+    test_not_is_same_object(space.wrap_char('a'), space.wrap_char('d'))
+    test_not_is_same_object(space.wrap_char('d'), space.wrap_int(3))
+    test_not_is_same_object(space.wrap_char('d'), space.wrap_float(3.0))
 
 def test_become_pointers():
-    w_clsa = mockclass(3)
-    w_a = w_clsa.as_class_get_shadow().new()
+    w_clsa = mockclass(space, 3)
+    w_a = w_clsa.as_class_get_shadow(space).new()
 
-    w_clsb = mockclass(4)
-    w_b = w_clsb.as_class_get_shadow().new()
+    w_clsb = mockclass(space, 4)
+    w_b = w_clsb.as_class_get_shadow(space).new()
     
     hasha = w_a.gethash()
     hashb = w_b.gethash()
@@ -181,18 +184,18 @@ def test_become_pointers():
     assert w_a.gethash() == hashb
     assert w_b.gethash() == hasha
 
-    assert w_a.getclass().is_same_object(w_clsb)
-    assert w_b.getclass().is_same_object(w_clsa)
+    assert w_a.getclass(space).is_same_object(w_clsb)
+    assert w_b.getclass(space).is_same_object(w_clsa)
 
     assert w_b.fetch(0) is w_b
     assert w_a.fetch(1) is w_a
 
 def test_become_with_shadow():
-    w_clsa = mockclass(3)
-    s_clsa = w_clsa.as_class_get_shadow()
-    w_clsb = mockclass(4)
-    s_clsb = w_clsb.as_class_get_shadow()
+    w_clsa = mockclass(space, 3)
+    s_clsa = w_clsa.as_class_get_shadow(space)
+    w_clsb = mockclass(space, 4)
+    s_clsb = w_clsb.as_class_get_shadow(space)
     res = w_clsa.become(w_clsb)
     assert res
-    assert w_clsa.as_class_get_shadow() is s_clsb
-    assert w_clsb.as_class_get_shadow() is s_clsa
+    assert w_clsa.as_class_get_shadow(space) is s_clsb
+    assert w_clsb.as_class_get_shadow(space) is s_clsa

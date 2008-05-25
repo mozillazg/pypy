@@ -6,25 +6,21 @@ from pypy.lang.smalltalk import squeakimage
 from pypy.lang.smalltalk import model
 from pypy.lang.smalltalk import constants
 from pypy.lang.smalltalk import interpreter
-from pypy.lang.smalltalk import objtable
-from pypy.lang.smalltalk import classtable
 from pypy.lang.smalltalk import shadow
-from pypy.lang.smalltalk import utility
+from pypy.lang.smalltalk import space as objspace
 # lazy initialization of test data, ie ImageReader and Float class
 
 def setup_module(module, filename='mini.image'):
-    # XXX XXX find a way to get rid of global state
-    global mini_image
-    global reader
-    global image
-    mini_image = py.magic.autopath().dirpath().dirpath().join(filename)
-    reader = open_miniimage()
+    space = objspace.ObjSpace()
+    module.mini_image = py.magic.autopath().dirpath().dirpath().join(filename)
+    module.reader = open_miniimage(space)
     reader.initialize()
-    image = squeakimage.SqueakImage()
-    image.from_reader(get_reader())
+    module.image = squeakimage.SqueakImage()
+    module.image.from_reader(space, get_reader())
+    module.space = space
     
-def open_miniimage():
-    return squeakimage.ImageReader(squeakimage.Stream(mini_image.open()))
+def open_miniimage(space):
+    return squeakimage.ImageReader(space, squeakimage.Stream(mini_image.open()))
 
 def get_reader():
     return reader
@@ -42,27 +38,19 @@ def test_miniimageexists():
     assert mini_image.check(dir=False)
 
 def test_read_header():
-    reader = open_miniimage()
+    reader = open_miniimage(space)
     reader.read_header()
     assert reader.endofmemory == 0x93174
     assert reader.oldbaseaddress == 0x6649000
     assert reader.specialobjectspointer == 0x6668380
 
 def test_read_all_header(): 
-    reader = open_miniimage()
+    reader = open_miniimage(space)
     reader.read_header()
     next = reader.stream.peek()
     assert next != 0 #expects object header, which must not be 0x00000000 
       
       
-      
-def test_number_of_objects():
-    py.test.skip("we don't store globally available objects other than the special objects array")
-    image = get_image()
-    objects = objtable.objects
-    assert len(objects) > 0
-    assert 15000 < len(objects) < 16000 
-    
 def test_all_pointers_are_valid():
     reader = get_reader()
     for each in reader.chunks.itervalues():
@@ -76,12 +64,6 @@ def test_there_are_31_compact_classes():
     reader = get_reader()
     assert len(reader.compactclasses) == 31
     
-def test_invariant():
-    py.test.skip("we don't store globally available objects other than the special objects array")
-    image = get_image()
-    for each in objtable.objects:
-        each.invariant()
-    
 def test_float_class_size():
     w_float_class = get_float_class()
     assert w_float_class.size() == 9
@@ -94,18 +76,23 @@ def test_float_class_name():
     
 def test_str_w_object():
     w_float_class = get_float_class()
-    w_float_class.as_class_get_shadow()
+    w_float_class.as_class_get_shadow(space)
     assert str(w_float_class) == "Float class"
-    assert str(w_float_class.getclass()) == "a Metaclass" #yes, with article
-    assert str(w_float_class.getclass().getclass()) == "Metaclass class"
+    w_float_class.shadow_of_my_class(space)
+    #assert str(w_float_class.getclass(space)) == "a Metaclass" #yes, with article
+    w_float_class.getclass(space).shadow_of_my_class(space)
+    #assert str(w_float_class.getclass(space).getclass(space)) == "Metaclass class"
 
 def test_nil_true_false():
     image = get_image()
     w = image.special(constants.SO_NIL)
+    w.shadow_of_my_class(space)
     assert str(w) == "a UndefinedObject" #yes, with article
     w = image.special(constants.SO_FALSE)
+    w.shadow_of_my_class(space)
     assert str(w) == "a False" #yes, with article
     w = image.special(constants.SO_TRUE)
+    w.shadow_of_my_class(space)
     assert str(w) == "a True" #yes, with article
     
 def test_scheduler():
@@ -114,6 +101,7 @@ def test_scheduler():
     w0 = w.fetch(0)
     assert str(w0) == "Processor" 
     w0 = w.fetch(1)
+    w0.shadow_of_my_class(space)
     assert str(w0) == "a ProcessorScheduler" 
    
 def test_special_classes0():
@@ -150,20 +138,20 @@ def test_special_classes0():
 def test_name_of_shadow_of_specials():
     image = get_image()
     w_doesnot = image.special(constants.SO_DOES_NOT_UNDERSTAND)
-    assert repr(w_doesnot.shadow_of_my_class()) == "<ClassShadow Symbol>"
-    assert repr(objtable.w_nil.shadow_of_my_class()) == "<ClassShadow UndefinedObject>"
-    assert repr(objtable.w_minus_one.shadow_of_my_class()) == "<ClassShadow SmallInteger>"
-    assert repr(objtable.w_zero.shadow_of_my_class()) == "<ClassShadow SmallInteger>"
-    assert repr(objtable.w_one.shadow_of_my_class()) == "<ClassShadow SmallInteger>"
-    assert repr(objtable.w_two.shadow_of_my_class()) == "<ClassShadow SmallInteger>"
-    assert repr(objtable.w_true.shadow_of_my_class()) == "<ClassShadow True>"
-    assert repr(objtable.w_false.shadow_of_my_class()) == "<ClassShadow False>"
+    assert repr(w_doesnot.shadow_of_my_class(space)) == "<ClassShadow Symbol>"
+    assert repr(space.w_nil.shadow_of_my_class(space)) == "<ClassShadow UndefinedObject>"
+    assert repr(space.w_minus_one.shadow_of_my_class(space)) == "<ClassShadow SmallInteger>"
+    assert repr(space.w_zero.shadow_of_my_class(space)) == "<ClassShadow SmallInteger>"
+    assert repr(space.w_one.shadow_of_my_class(space)) == "<ClassShadow SmallInteger>"
+    assert repr(space.w_two.shadow_of_my_class(space)) == "<ClassShadow SmallInteger>"
+    assert repr(space.w_true.shadow_of_my_class(space)) == "<ClassShadow True>"
+    assert repr(space.w_false.shadow_of_my_class(space)) == "<ClassShadow False>"
 
 def test_special_classes0():
     image = get_image()
     w = image.special(constants.SO_DOES_NOT_UNDERSTAND)
     assert str(w) == "doesNotUnderstand:"
-    assert str(w.getclass()) == "Symbol class" # for some strange reason not a symbol
+    assert str(w.getclass(space)) == "Symbol class" # for some strange reason not a symbol
     
     
     """SO_DOES_NOT_UNDERSTAND = 20
@@ -194,17 +182,17 @@ def test_special_classes0():
 
 def test_lookup_abs_in_integer(int=10):
     image = get_image()
-    interp = interpreter.Interpreter()
+    interp = interpreter.Interpreter(space)
 
     w_object = model.W_SmallInteger(int)
 
     # Should get this from w_object
     w_smallint_class = image.special(constants.SO_SMALLINTEGER_CLASS)
-    s_class = w_object.shadow_of_my_class()
+    s_class = w_object.shadow_of_my_class(space)
     w_method = s_class.lookup("abs")
 
     assert w_method
-    w_frame = w_method.create_frame(w_object, [])
+    w_frame = w_method.create_frame(space, w_object, [])
     interp.store_w_active_context(w_frame)
 
     while True:
@@ -219,58 +207,58 @@ def test_lookup_neg_abs_in_integer():
 
 def test_map_mirrors_to_classtable():
     w_compiledmethod_class = image.special(constants.SO_COMPILEDMETHOD_CLASS)
-    assert w_compiledmethod_class is classtable.w_CompiledMethod
+    assert w_compiledmethod_class.is_same_object(space.w_CompiledMethod)
     w_nil = image.special(constants.SO_NIL)
-    assert w_nil is objtable.w_nil
+    assert w_nil.is_same_object(space.w_nil)
     w_true = image.special(constants.SO_TRUE)
-    assert w_true is objtable.w_true
+    assert w_true.is_same_object(space.w_true)
     w_false = image.special(constants.SO_FALSE)
-    assert w_false is objtable.w_false
+    assert w_false.is_same_object(space.w_false)
     
 def test_runimage():
     py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
     from pypy.lang.smalltalk import wrapper
     ap = wrapper.ProcessWraper(wrapper.scheduler().active_process())
     s_ctx = ap.suspended_context().as_methodcontext_get_shadow()
-    ap.store_suspended_context(objtable.w_nil)
+    ap.store_suspended_context(space.w_nil)
 
     interp = interpreter.Interpreter()
     interp.store_w_active_context(s_ctx.w_self())
     interp.interpret()
     
 def test_compile_method():
-    #py.test.skip("fails again because of the removed become. should work with new pypy become")
     sourcecode = """fib 
                         ^self < 2 
                             ifTrue: [ 1 ] 
                             ifFalse: [ (self - 1) fib + (self - 2) fib ]"""
-    perform(w(10).getclass(), "compile:classified:notifying:", w(sourcecode), w('pypy'), w(None))
+    perform(w(10).getclass(space), "compile:classified:notifying:", w(sourcecode), w('pypy'), w(None))
     assert perform(w(10), "fib").is_same_object(w(89))
 
 def w(any): 
+    # XXX could put this on the space?
     if any is None:
-        return objtable.w_nil
+        return space.w_nil
     if isinstance(any, str):
         # assume never have strings of length 1
         if len(any) == 1: 
-            return utility.wrap_chr(any)
+            return space.wrap_chr(any)
         else:
-            return utility.wrap_string(any)
+            return space.wrap_string(any)
     if isinstance(any, int):    
-        return utility.wrap_int(any)
+        return space.wrap_int(any)
     if isinstance(any, bool):
-        return utility.wrap_bool(any)
+        return space.wrap_bool(any)
     if isinstance(any, float):
-        return utility.wrap_float(any)
+        return space.wrap_float(any)
     else:
         raise Exception    
         
 def perform(w_receiver, selector, *arguments_w):
-    interp = interpreter.Interpreter()
-    s_class = w_receiver.shadow_of_my_class()
+    interp = interpreter.Interpreter(space)
+    s_class = w_receiver.shadow_of_my_class(space)
     w_method = s_class.lookup(selector)
     assert w_method
-    w_frame = w_method.create_frame(w_receiver, list(arguments_w))
+    w_frame = w_method.create_frame(space, w_receiver, list(arguments_w))
     interp.store_w_active_context(w_frame)
     while True:
         try:
@@ -281,22 +269,23 @@ def perform(w_receiver, selector, *arguments_w):
 
 def test_step_forged_image():
     from pypy.lang.smalltalk import wrapper
-    ap = wrapper.ProcessWrapper(wrapper.scheduler().active_process())
-    s_ctx = ap.suspended_context().as_context_get_shadow()
+    ap = wrapper.ProcessWrapper(space, wrapper.scheduler(space).active_process())
+    s_ctx = ap.suspended_context().as_context_get_shadow(space)
     assert isinstance(s_ctx, shadow.MethodContextShadow)
-    assert s_ctx.top().is_same_object(objtable.w_true)
+    assert s_ctx.top().is_same_object(space.w_true)
 
 def test_step_run_something():
-    setup_module(None, filename='running-something-mini.image')
+    from pypy.lang.smalltalk.test import test_miniimage
+    setup_module(test_miniimage, filename='running-something-mini.image')
     from pypy.lang.smalltalk import wrapper
-    ap = wrapper.ProcessWrapper(wrapper.scheduler().active_process())
-    s_ctx = ap.suspended_context().as_context_get_shadow()
-    ap.store_suspended_context(objtable.w_nil)
+    ap = wrapper.ProcessWrapper(space, wrapper.scheduler(space).active_process())
+    s_ctx = ap.suspended_context().as_context_get_shadow(space)
+    ap.store_suspended_context(space.w_nil)
 
-    interp = interpreter.Interpreter()
+    interp = interpreter.Interpreter(space)
     interp.store_w_active_context(s_ctx.w_self())
     assert isinstance(s_ctx, shadow.MethodContextShadow)
-    assert interp.s_active_context().top().is_same_object(objtable.w_true)
+    assert interp.s_active_context().top().is_same_object(space.w_true)
     interp.step()
     interp.step() 
     assert interp.s_active_context().top().value == 1
