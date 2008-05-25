@@ -20,9 +20,6 @@ def crc32(s, crc=0):
 
         result = crc ^ 0xffffffffL
     
-    if result > 2**31:
-        result = ((result + 2**31) % r_uint(2**32)) - 2**31
-
     return result
 
 # parts copied from zipfile library implementation
@@ -146,6 +143,7 @@ class RZipFile(object):
         if mode != 'r':
             raise TypeError("Read only support by now")
         self.compression = compression
+        self.filename = zipname
         self.mode = mode
         self.filelist = []
         self.NameToInfo = {}
@@ -223,14 +221,15 @@ class RZipFile(object):
         if zinfo.compress_type == ZIP_STORED:
             pass
         elif zinfo.compress_type == ZIP_DEFLATED:
-            raise NotImplementedError
-            # zlib compress/decompress code by Jeremy Hylton of CNRI
-            dc = zlib.decompressobj(-15)
-            bytes = dc.decompress(bytes)
-            # need to feed in unused pad byte so that zlib won't choke
-            ex = dc.decompress('Z') + dc.flush()
-            if ex:
-                bytes = bytes + ex
+            stream = rzlib.inflateInit(wbits=-15)
+            try:
+                bytes, _, _ = rzlib.decompress(stream, bytes)
+                # need to feed in unused pad byte so that zlib won't choke
+                ex, _, _ = rzlib.decompress(stream, 'Z')
+                if ex:
+                    bytes = bytes + ex
+            finally:
+                rzlib.inflateEnd(stream)
         else:
             raise BadZipfile, \
                   "Unsupported compression method %d for file %s" % \
