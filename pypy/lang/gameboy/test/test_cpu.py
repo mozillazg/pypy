@@ -31,6 +31,15 @@ def get_cpu(new=False):
 # ------------------------------------------------------------------------------
 # TEST CPU
 
+def test_reset():
+    cpu = get_cpu()
+    assert cpu.a.get() == 0x01
+    #assert cpu.f.get() == 0xB0
+    assert cpu.b.get() == 0x00
+    assert cpu.c.get() == 0x13
+    assert cpu.de.get() == 0x00D8
+    assert cpu.hl.get() == 0x014D
+    #assert cpu.sp.get() == 0xFFE
 
 def test_getters():
     cpu = get_cpu()
