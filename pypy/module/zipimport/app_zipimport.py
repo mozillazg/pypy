@@ -1,5 +1,5 @@
 
-class ZipImportError(Exception):
+class ZipImportError(ImportError):
     pass
 
 _zip_directory_cache = {}
