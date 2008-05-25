@@ -3,7 +3,7 @@ from pypy.lang.smalltalk import wrapper
 from pypy.lang.smalltalk import model
 from pypy.lang.smalltalk import interpreter
 from pypy.lang.smalltalk.error import WrapperException, FatalError
-from pypy.lang.smalltalk import space as objspace
+from pypy.lang.smalltalk import objspace
 
 space = objspace.ObjSpace()
 
