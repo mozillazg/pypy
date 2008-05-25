@@ -76,6 +76,7 @@ class ClassShadow(AbstractCachingShadow):
     """A shadow for Smalltalk objects that are classes
     (i.e. used as the class of another Smalltalk object).
     """
+    name = None
     def __init__(self, space, w_self):
         self.name = ""
         AbstractCachingShadow.__init__(self, space, w_self)
