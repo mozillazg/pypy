@@ -501,7 +501,10 @@ class MBC3(MBC):
         elif address <= 0x7FFF: # 6000-7FFF
             self.write_clock_latch(address, data)
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable: # A000-BFFF
-            self.write_clock_data(address, data)
+            if self.ram_bank >= 0:
+                self.ram[self.ram_bank + (address & 0x1FFF)] = data
+            else:
+                self.write_clock_data(address, data)
     
     def write_rom_bank(self, address, data):
         if data == 0:
@@ -522,22 +525,18 @@ class MBC3(MBC):
             self.clock_latch = data
             
     def write_clock_data(self, address, data):
-        if self.ram_bank >= 0:
-            self.ram[self.ram_bank + (address & 0x1FFF)] = data
-        else:
-            self.update_clock()
-            if self.clock_register == 0x08:
-                self.clock_seconds = data
-            if self.clock_register == 0x09:
-                self.clock_minutes = data
-            if self.clock_register == 0x0A:
-                self.clock_hours = data
-            if self.clock_register == 0x0B:
-                self.clock_days = data
-            if self.clock_register == 0x0C:
-                self.clock_control = (self.clock_control & 0x80) | data
+        self.update_clock()
+        if self.clock_register == 0x08:
+            self.clock_seconds = data
+        if self.clock_register == 0x09:
+            self.clock_minutes = data
+        if self.clock_register == 0x0A:
+            self.clock_hours = data
+        if self.clock_register == 0x0B:
+            self.clock_days = data
+        if self.clock_register == 0x0C:
+            self.clock_control = (self.clock_control & 0x80) | data
         
-
     def latch_clock(self):
         self.update_clock()
         self.clock_latched_seconds = self.clock_seconds
@@ -545,7 +544,6 @@ class MBC3(MBC):
         self.clock_latched_hours   = self.clock_hours
         self.clock_latched_days    = self.clock_days & 0xFF
         self.clock_latched_control = (self.clock_control & 0xFE) | ((self.clock_days >> 8) & 0x01)
-
 
     def update_clock(self):
         now = self.clock.get_time()
@@ -600,7 +598,6 @@ class MBC5(MBC):
         MBC.reset(self)
         self.rumble = True
         
-
     def write(self, address, data):
         address = int(address)
         if address <= 0x1FFF:  # 0000-1FFF

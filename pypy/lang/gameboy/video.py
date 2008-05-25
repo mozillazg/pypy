@@ -156,10 +156,10 @@ class Video(iMemory):
         
     def read_oam(self, address):
         if (address >= constants.OAM_ADDR and \
-            address < constants.OAM_ADDR + constants.OAM_SIZE):
+           address < constants.OAM_ADDR + constants.OAM_SIZE):
              return self.oam[address - constants.OAM_ADDR]
         elif (address >= constants.VRAM_ADDR and \
-            address < constants.VRAM_ADDR + constants.VRAM_SIZE):
+           address < constants.VRAM_ADDR + constants.VRAM_SIZE):
              return self.vram[address - constants.VRAM_ADDR]
         return 0xFF
 
@@ -562,8 +562,7 @@ class Video(iMemory):
             self.line[x + i] = (pattern >> (7-i)) & 0x0101
 
     def draw_object_tile(self, x, address, flags):
-        self.draw_object(set_tile_line_call_wrapper(self), x, address, \
-                         flags)
+        self.draw_object(set_tile_line_call_wrapper(self), x, address, flags)
         
     def set_tile_line(self, pos, color, mask):
         self.line[pos] |= color | mask
