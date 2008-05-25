@@ -3,22 +3,20 @@ import py
 from pypy.lang.smalltalk import squeakimage 
 from pypy.lang.smalltalk import constants 
 from pypy.lang.smalltalk import model 
-from pypy.lang.smalltalk import objtable
-from pypy.lang.smalltalk import classtable
 from pypy.lang.smalltalk import interpreter 
 import sys
 
 mini_image = py.magic.autopath().dirpath().dirpath().join('mini.image')
 
-def get_miniimage():
-    return squeakimage.ImageReader(squeakimage.Stream(mini_image.open()))
+def get_miniimage(space):
+    return squeakimage.ImageReader(space, squeakimage.Stream(mini_image.open()))
 
-def create_squeakimage():
-    example = get_miniimage()
+def create_squeakimage(space):
+    example = get_miniimage(space)
     example.initialize()
     
     image = squeakimage.SqueakImage()
-    image.from_reader(example)
+    image.from_reader(space, example)
     return image
 
 def printStringsInImage():
