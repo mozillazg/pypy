@@ -384,3 +384,12 @@ class AppTestProxy(object):
             s = repr(w)
             print s
             assert "dead" in s
+
+    def test_eq(self):
+        import _weakref
+        class A(object):
+            pass
+
+        a = A()
+        assert not(_weakref.ref(a) == a)
+        assert _weakref.ref(a) != a
