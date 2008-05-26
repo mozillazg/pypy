@@ -602,6 +602,26 @@ class BaseTestPortal(PortalTest):
         assert res == ll_function()
         self.check_insns({})
 
+    def test_force_fixed_vlist(self):
+        def a(flag):
+            lst = [0, 0, 0]
+            if flag:
+                lst[0] = 20
+            return lst[0]
+
+        def b(flag):
+            lst = [0]
+            if flag:
+                lst.append(22)
+            return lst[-1]
+        
+        def ll_function():
+            from pypy.rlib.nonconst import NonConstant
+            flag = NonConstant(True)
+            return a(flag) + b(flag)
+        res = self.timeshift_from_portal(ll_function, ll_function, [])
+        assert res == 42
+        self.check_insns({})
 
 
 class TestPortalOOType(BaseTestPortal):
