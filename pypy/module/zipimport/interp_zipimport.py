@@ -254,7 +254,7 @@ class W_ZipImporter(Wrappable):
                     w_code = space.builtin.call('compile', w_source,
                                                 w(filename + ext), w('exec'))
                     return w_code
-        raise OperationError(space.self.w_ZipImportError, space.wrap(
+        raise OperationError(self.w_ZipImportError, space.wrap(
             "Cannot find source or code for %s in %s" % (filename, self.name)))
     get_code.unwrap_spec = ['self', ObjSpace, str]
 
