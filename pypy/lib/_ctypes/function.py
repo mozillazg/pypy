@@ -1,6 +1,8 @@
 
 from _ctypes.basics import _CData, _CDataMeta, ArgumentError, keepalive_key
 import _rawffi
+import sys
+import traceback
 
 # XXX this file needs huge refactoring I fear
 
@@ -98,7 +100,13 @@ class CFuncPtr(_CData):
     
     def __call__(self, *args):
         if self.callable is not None:
-            res = self.callable(*args)
+            try:
+                res = self.callable(*args)
+            except:
+                exc_info = sys.exc_info()
+                traceback.print_tb(exc_info[2], file=sys.stderr)
+                print >>sys.stderr, "%s: %s" % (exc_info[0].__name__, exc_info[1])
+                return 0
             if self._restype_ is not None:
                 return res
             return
