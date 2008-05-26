@@ -505,7 +505,9 @@ class TranslationDriver(SimpleTaskEngine):
         backend_optimizations(self.translator)
     #
     task_backendopt_ootype = taskdef(task_backendopt_ootype, 
-                                        [OOTYPE], "ootype back-end optimisations")
+                                     [OOTYPE,
+                                      '??rainbow_ootype'],
+                                     "ootype back-end optimisations")
     OOBACKENDOPT = 'backendopt_ootype'
 
 
