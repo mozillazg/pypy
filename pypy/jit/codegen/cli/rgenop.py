@@ -261,6 +261,15 @@ class RCliGenOp(AbstractRGenOp):
         return SigToken(args, res, funcclass)
 
     @staticmethod
+    def erasedType(T):
+        if isinstance(T, lltype.Primitive):
+            return lltype.Signed
+        elif isinstance(T, ootype.OOType):
+            return ootype.Object
+        else:
+            assert 0, "XXX not implemented"
+
+    @staticmethod
     @specialize.memo()
     def methToken(TYPE, methname):
         return methname #XXX
