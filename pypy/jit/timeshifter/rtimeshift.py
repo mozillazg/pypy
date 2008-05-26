@@ -6,7 +6,7 @@ from pypy.jit.timeshifter import rvalue, rcontainer, rvirtualizable, booleffect
 from pypy.jit.timeshifter.greenkey import newgreendict, empty_key
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
+from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype, base_obj_ootype
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llhelper
 
@@ -680,7 +680,6 @@ class ResumingInfo(object):
         else:
             self.mergesleft = parent_mergesleft
 
-
 class PromotionPoint(object):
     def __init__(self, flexswitch, incoming_gv, promotion_path):
         assert promotion_path is not None
@@ -688,9 +687,15 @@ class PromotionPoint(object):
         self.incoming_gv = incoming_gv
         self.promotion_path = promotion_path
 
+class PromotionPointLLType(PromotionPoint):
+
     # hack for testing: make the llinterpreter believe this is a Ptr to base
     # instance
     _TYPE = base_ptr_lltype()
+
+class PromotionPointOOType(PromotionPoint):
+    _TYPE = base_obj_ootype()
+
 
 class AbstractPromotionPath(object):
     cut_limit = False
@@ -813,7 +818,7 @@ class PromotionDesc:
         ll_continue_compilation._debugexc = True
 
         ts = interpreter.ts
-        FUNCTYPE, FUNCPTRTYPE = ts.get_FuncType([base_ptr_lltype(), ERASED], lltype.Void)
+        FUNCTYPE, FUNCPTRTYPE = ts.get_FuncType([ts.BASE_OBJ_TYPE, ERASED], lltype.Void)
         self.FUNCPTRTYPE = FUNCPTRTYPE
         self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
 
@@ -843,8 +848,8 @@ def promote(jitstate, promotebox, promotiondesc):
         if resuming is None:
             jitstate.curbuilder = default_builder
             # default case of the switch:
-            pm = PromotionPoint(flexswitch, incoming_gv,
-                                jitstate.promotion_path)
+            pm = jitstate.ts.PromotionPoint(flexswitch, incoming_gv,
+                                            jitstate.promotion_path)
             #debug_print(lltype.Void, "PROMOTE")
             ll_pm = _cast_promotion_point_to_base_ptr(jitstate, pm)
             gv_pm = default_builder.rgenop.genconst(ll_pm)

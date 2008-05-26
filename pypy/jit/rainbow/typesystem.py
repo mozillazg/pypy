@@ -28,6 +28,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     name = 'lltype'
     ROOT_TYPE = llmemory.Address
+    BASE_OBJ_TYPE = base_ptr_lltype()
     NULL_OBJECT = base_ptr_lltype()._defl()
     cast_instance_to_base_ptr = staticmethod(cast_instance_to_base_ptr)
 
@@ -54,10 +55,15 @@ class LLTypeHelper(TypeSystemHelper):
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
         return FUNCTYPE, FUNCPTRTYPE
 
+    def PromotionPoint(self, flexswitch, incoming_gv, promotion_path):
+        from pypy.jit.timeshifter.rtimeshift import PromotionPointLLType
+        return PromotionPointLLType(flexswitch, incoming_gv, promotion_path)
+
 class OOTypeHelper(TypeSystemHelper):
 
     name = 'ootype'
     ROOT_TYPE = ootype.Object
+    BASE_OBJ_TYPE = base_obj_ootype()
     NULL_OBJECT = base_obj_ootype()._defl()
     cast_instance_to_base_ptr = staticmethod(cast_instance_to_base_obj)
 
@@ -83,6 +89,10 @@ class OOTypeHelper(TypeSystemHelper):
     def get_FuncType(self, ARGS, RESULT):
         FUNCTYPE = ootype.StaticMethod(ARGS, RESULT)
         return FUNCTYPE, FUNCTYPE
+
+    def PromotionPoint(self, flexswitch, incoming_gv, promotion_path):
+        from pypy.jit.timeshifter.rtimeshift import PromotionPointOOType
+        return PromotionPointOOType(flexswitch, incoming_gv, promotion_path)
 
 
 llhelper = LLTypeHelper()
