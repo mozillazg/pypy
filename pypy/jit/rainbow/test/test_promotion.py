@@ -4,11 +4,11 @@ from pypy.jit.rainbow.test.test_interpreter import InterpretationTest
 from pypy.jit.rainbow.test.test_interpreter import StopAtXPolicy
 from pypy.jit.rainbow.test.test_interpreter import P_NOVIRTUAL
 from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
 from pypy.rlib.jit import hint
 from pypy.rpython.module.support import LLSupport
 
-class TestPromotion(InterpretationTest):
-    type_system = "lltype"
+class BaseTestPromotion(InterpretationTest):
     small = True
 
     def test_simple_promotion(self):
@@ -461,3 +461,22 @@ class TestPromotion(InterpretationTest):
         res = self.interpret(ll_function, [4, 7], [], policy=P_NOVIRTUAL)
         assert res == 11
         self.check_insns(int_add=0)
+
+class TestLLType(BaseTestPromotion):
+    type_system = "lltype"
+
+class TestOOType(OOTypeMixin, BaseTestPromotion):
+    type_system = "ootype"
+
+    def skip(self):
+        py.test.skip('in progress')
+
+    test_promote_after_call = skip
+    test_promote_after_yellow_call = skip
+    test_merge_then_promote = skip
+    test_vstruct_unfreeze = skip
+    test_more_promotes = skip
+    test_remembers_across_mp = skip
+    test_virtual_list_copy = skip
+    test_raise_result_mixup = skip
+    test_raise_result_mixup_some_more = skip
