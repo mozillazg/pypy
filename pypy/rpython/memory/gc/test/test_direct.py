@@ -78,18 +78,16 @@ class DirectGCTest(object):
 
     def write(self, p, fieldname, newvalue):
         if self.gc.needs_write_barrier:
-            oldaddr = llmemory.cast_ptr_to_adr(getattr(p, fieldname))
             newaddr = llmemory.cast_ptr_to_adr(newvalue)
             addr_struct = llmemory.cast_ptr_to_adr(p)
-            self.gc.write_barrier(oldaddr, newaddr, addr_struct)
+            self.gc.write_barrier(newaddr, addr_struct)
         setattr(p, fieldname, newvalue)
 
     def writearray(self, p, index, newvalue):
         if self.gc.needs_write_barrier:
-            oldaddr = llmemory.cast_ptr_to_adr(p[index])
             newaddr = llmemory.cast_ptr_to_adr(newvalue)
             addr_struct = llmemory.cast_ptr_to_adr(p)
-            self.gc.write_barrier(oldaddr, newaddr, addr_struct)
+            self.gc.write_barrier(newaddr, addr_struct)
         p[index] = newvalue
 
     def malloc(self, TYPE, n=None):

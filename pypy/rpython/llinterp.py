@@ -770,7 +770,8 @@ class LLFrame(object):
     def op_gc__enable_finalizers(self):
         self.heap.enable_finalizers()
 
-    def op_gc_can_move(self, addr):
+    def op_gc_can_move(self, ptr):
+        addr = llmemory.cast_ptr_to_adr(ptr)
         return self.heap.can_move(addr)
 
     def op_gc_free(self, addr):
@@ -857,6 +858,14 @@ class LLFrame(object):
     def op_raw_malloc(self, size):
         assert lltype.typeOf(size) == lltype.Signed
         return llmemory.raw_malloc(size)
+
+    def op_raw_realloc_grow(self, addr, old_size, size):
+        assert lltype.typeOf(size) == lltype.Signed
+        return llmemory.raw_realloc_grow(addr, old_size, size)
+
+    def op_raw_realloc_shrink(self, addr, old_size, size):
+        assert lltype.typeOf(size) == lltype.Signed
+        return llmemory.raw_realloc_shrink(addr, old_size, size)
 
     op_boehm_malloc = op_boehm_malloc_atomic = op_raw_malloc
 

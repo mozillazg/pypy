@@ -9,6 +9,9 @@ class GCBase(object):
     prebuilt_gc_objects_are_static_roots = True
     can_realloc = False
 
+    def can_malloc_nonmovable(self):
+        return not self.moving_gc
+
     # The following flag enables costly consistency checks after each
     # collection.  It is automatically set to True by test_gc.py.  The
     # checking logic is translatable, so the flag can be set to True
@@ -39,7 +42,7 @@ class GCBase(object):
     def set_root_walker(self, root_walker):
         self.root_walker = root_walker
 
-    def write_barrier(self, oldvalue, newvalue, addr_struct):
+    def write_barrier(self, newvalue, addr_struct):
         pass
 
     def setup(self):
@@ -84,6 +87,9 @@ class GCBase(object):
                                    contains_weakptr)
         # lots of cast and reverse-cast around...
         return llmemory.cast_ptr_to_adr(ref)
+
+    def malloc_nonmovable(self, typeid, length=0, zero=False):
+        return self.malloc(typeid, length, zero)
 
     def id(self, ptr):
         return lltype.cast_ptr_to_int(ptr)

@@ -1,16 +1,31 @@
 
 from pypy.rpython.rbuilder import AbstractStringBuilderRepr
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.lltypesystem.rstr import STR, UNICODE
+from pypy.rpython.lltypesystem.rstr import STR, UNICODE, char_repr,\
+     string_repr, unichar_repr, unicode_repr
 from pypy.rpython.annlowlevel import llstr
 from pypy.rlib import rgc
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem.lltype import staticAdtMethod
 from pypy.tool.sourcetools import func_with_new_name
 
+GROW_FAST_UNTIL = 100*1024*1024      # 100 MB
+
 def new_grow_func(name):
     def stringbuilder_grow(ll_builder, needed):
-        # XXX tweak overallocation scheme
-        new_allocated = ll_builder.allocated + needed + 100
+        allocated = ll_builder.allocated
+        if allocated < GROW_FAST_UNTIL:
+            new_allocated = allocated << 1
+        else:
+            extra_size = allocated >> 2
+            try:
+                new_allocated = ovfcheck(allocated + extra_size)
+            except OverflowError:
+                raise MemoryError
+        try:
+            new_allocated = ovfcheck(new_allocated + needed)
+        except OverflowError:
+            raise MemoryError
         ll_builder.buf = rgc.resize_buffer(ll_builder.buf, ll_builder.used,
                                            new_allocated)
         ll_builder.allocated = new_allocated
@@ -31,9 +46,13 @@ UNICODEBUILDER = lltype.GcStruct('unicodebuilder',
                                  ('buf', lltype.Ptr(UNICODE)),
                                  adtmeths={'grow':staticAdtMethod(unicodebuilder_grow)})
 
+MAX = 16*1024*1024
+
 class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @classmethod
     def ll_new(cls, init_size):
+        if init_size < 0 or init_size > MAX:
+            init_size = MAX
         ll_builder = lltype.malloc(cls.lowleveltype.TO)
         ll_builder.allocated = init_size
         ll_builder.used = 0
@@ -85,10 +104,14 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 class StringBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(STRINGBUILDER)
     basetp = STR
+    string_repr = string_repr
+    char_repr = char_repr
 
 class UnicodeBuilderRepr(BaseStringBuilderRepr):
     lowleveltype = lltype.Ptr(UNICODEBUILDER)
     basetp = UNICODE
+    string_repr = unicode_repr
+    char_repr = unichar_repr
 
 unicodebuilder_repr = UnicodeBuilderRepr()
 stringbuilder_repr = StringBuilderRepr()
