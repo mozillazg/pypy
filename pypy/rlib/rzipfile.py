@@ -182,6 +182,8 @@ class RZipFile(object):
             (x.create_version, x.create_system, x.extract_version, x.reserved,
                 x.flag_bits, x.compress_type, t, d,
                 x.CRC, x.compress_size, x.file_size) = centdir[1:12]
+            x.dostime = t
+            x.dosdate = d
             x.volume, x.internal_attr, x.external_attr = centdir[15:18]
             # Convert date/time code to (year, month, day, hour, min, sec)
             x.date_time = ( (d>>9)+1980, (d>>5)&0xF, d&0x1F,
