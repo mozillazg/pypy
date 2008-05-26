@@ -151,13 +151,9 @@ def descr__new__weakref(space, w_subtype, w_obj, w_callable=None):
     return lifeline.get_or_make_weakref(space, w_subtype, w_obj, w_callable)
 
 def descr__eq__(space, ref1, w_ref2):
-    try:
-        ref2 = space.interp_w(W_Weakref, w_ref2)
-    except OperationError, o:
-        # should never happen, but be sure
-        if not o.match(space, space.w_TypeError):
-            raise
-        return space.wrap(False)
+    if not isinstance(w_ref2, W_Weakref):
+        return space.w_NotImplemented
+    ref2 = w_ref2
     w_obj1 = ref1.dereference()
     w_obj2 = ref2.dereference()
     if (w_obj1 is None or

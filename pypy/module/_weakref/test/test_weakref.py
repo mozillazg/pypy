@@ -393,3 +393,11 @@ class AppTestProxy(object):
         a = A()
         assert not(_weakref.ref(a) == a)
         assert _weakref.ref(a) != a
+
+        class A(object):
+            def __eq__(self, other):
+                return True
+
+        a = A()
+        assert _weakref.ref(a) == a
+    
