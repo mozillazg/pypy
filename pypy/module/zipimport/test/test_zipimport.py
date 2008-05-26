@@ -203,7 +203,7 @@ class AppTestZipimport:
         self.writefile(self, "yy.py", "3")
         self.writefile(self, 'uu.pyc', self.test_pyc)
         z = zipimport.zipimporter(self.zipfile)
-        assert z.get_data("xxx") == data
+        assert z.get_data(self.zipfile + os.sep + "xxx") == data
         assert z.is_package("xx")
         assert not z.is_package("yy")
         assert z.get_source("yy") == '3'
