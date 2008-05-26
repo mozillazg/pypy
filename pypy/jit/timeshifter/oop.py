@@ -243,10 +243,7 @@ class CallOopSpecDesc_dict(CallOopSpecDesc):
 class NewOopSpecDesc(AbstractOopSpecDesc):
     def _setup_oopdesc(self, RGenOp, TYPE):
         self.SELFTYPE = TYPE
-        self.ARGS = []
         self.RESULT = TYPE
-        self.OOPARGTYPES = []
-        self.residualargsources = []
         self.typename = TYPE.oopspec_name
         self.method = 'oop_new%s' % self.typename
         self.is_method = False
@@ -258,9 +255,15 @@ class NewOopSpecDesc(AbstractOopSpecDesc):
         if isinstance(TYPE, ootype.Array):
             def allocate(length):
                 return ootype.oonewarray(TYPE, length)
+            self.ARGS = [ootype.Signed]
+            self.OOPARGTYPES = [ootype.Signed]
+            self.residualargsources = [0]
             self.fnptr = self.rtyper.annotate_helper_fn(allocate,
                                                         [ootype.Signed])
         else:
+            self.ARGS = []
+            self.OOPARGTYPES = []
+            self.residualargsources = []
             def allocate():
                 return ootype.new(TYPE)
             self.fnptr = self.rtyper.annotate_helper_fn(allocate, [])
