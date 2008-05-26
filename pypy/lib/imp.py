@@ -21,7 +21,8 @@ import sys, os
 
 def get_magic():
     """Return the magic number for .pyc or .pyo files."""
-    return 'm\xf2\r\n'     # XXX hard-coded: the magic of Python 2.4.1
+    import struct
+    return struct.pack('L', sys._magic())
 
 def get_suffixes():
     """Return a list of (suffix, mode, type) tuples describing the files

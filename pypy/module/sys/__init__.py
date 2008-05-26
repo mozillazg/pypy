@@ -67,7 +67,9 @@ class Module(MixedModule):
         #'subversion'           : added in Python 2.5
         
         'getdefaultencoding'    : 'interp_encoding.getdefaultencoding', 
-        'setdefaultencoding'    : 'interp_encoding.setdefaultencoding', 
+        'setdefaultencoding'    : 'interp_encoding.setdefaultencoding',
+        # XXX hack
+        '_magic'                : 'version._magic',
 }
     appleveldefs = {
         #'displayhook'           : 'app.displayhook', 
