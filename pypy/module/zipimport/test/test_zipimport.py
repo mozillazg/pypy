@@ -135,6 +135,7 @@ class AppTestZipimport:
     def test_pyc(self):
         import sys, os
         self.writefile(self, "uuu.pyc", self.test_pyc)
+        self.writefile(self, "uuu.py", "def f(x): return x")
         mod = __import__('uuu', globals(), locals(), [])
         expected = {
             '__doc__' : None,

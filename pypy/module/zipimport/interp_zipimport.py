@@ -131,8 +131,7 @@ class W_ZipImporter(Wrappable):
     def getprefix(space, self):
         return space.wrap(self.prefix)
 
-    def import_py_file(self, space, modname, filename, w_buf, pkgpath):
-        buf = space.str_w(w_buf)
+    def import_py_file(self, space, modname, filename, buf, pkgpath):
         w = space.wrap
         w_mod = w(Module(space, w(modname)))
         real_name = self.name + os.path.sep + filename
@@ -142,14 +141,14 @@ class W_ZipImporter(Wrappable):
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         return result
 
-    def check_newer_pyfile(self, space, filename, timestamp):
+    def _parse_mtime(self, space, filename):
         w = space.wrap
         try:
             info = self.dir.getinfo(filename)
             t = info.date_time
         except (BadZipfile, KeyError):
             # in either case, this is a fallback
-            return False
+            return 0
         else:
             w_mktime = space.getattr(space.getbuiltinmodule('time'),
                                      w('mktime'))
@@ -159,15 +158,27 @@ class W_ZipImporter(Wrappable):
             all = [w(t[0]), w(t[1]), w(t[2]), w(t[3]), w(t[4]),
                    w(t[5]), w(0), w(1), w(-1)]
             mtime = int(space.float_w(space.call_function(w_mktime, space.newtuple(all))))
-            return mtime > timestamp
+            return mtime
 
-    def import_pyc_file(self, space, modname, filename, w_buf, pkgpath):
+    def check_newer_pyfile(self, space, filename, timestamp):
+        mtime = self._parse_mtime(space, filename)
+        if mtime == 0:
+            return False
+        return mtime > timestamp
+
+    def check_compatible_mtime(self, space, filename, timestamp):
+        mtime = self._parse_mtime(space, filename)
+        if mtime == 0 or mtime != (timestamp & (~1)):
+            return False
+        return True
+
+    def import_pyc_file(self, space, modname, filename, buf, pkgpath):
         w = space.wrap
-        buf = space.str_w(w_buf)
         magic = importing._get_long(buf[:4])
         timestamp = importing._get_long(buf[4:8])
-        if self.check_newer_pyfile(space, filename[:-1], timestamp):
-            return self.import_py_file(space, modname, filename[:-1], w_buf,
+        if (self.check_newer_pyfile(space, filename[:-1], timestamp) or
+            not self.check_compatible_mtime(space, filename, timestamp)):
+            return self.import_py_file(space, modname, filename[:-1], buf,
                                        pkgpath)
         buf = buf[8:] # XXX ugly copy, should use sequential read instead
         w_mod = w(Module(space, w(modname)))
@@ -209,22 +220,26 @@ class W_ZipImporter(Wrappable):
         filename = self.mangle(fullname)
         last_exc = None
         for compiled, is_package, ext in ENUMERATE_EXTS:
+            fname = filename + ext
             try:
-                fname = filename + ext
-                w_buf = self.get_data(space, fname)
+                buf = self.dir.read(fname)
+            except (KeyError, OSError):
+                pass
+            else:
                 if is_package:
                     pkgpath = self.name
                 else:
                     pkgpath = None
-                if compiled:
-                    return self.import_pyc_file(space, fullname, fname,
-                                                  w_buf, pkgpath)
-                else:
-                    return self.import_py_file(space, fullname, fname,
-                                               w_buf, pkgpath)
-            except OperationError, e:
-                last_exc = e
-                w_mods = space.sys.get('modules')
+                try:
+                    if compiled:
+                        return self.import_pyc_file(space, fullname, fname,
+                                                    buf, pkgpath)
+                    else:
+                        return self.import_py_file(space, fullname, fname,
+                                                   buf, pkgpath)
+                except OperationError, e:
+                    last_exc = e
+                    w_mods = space.sys.get('modules')
                 space.call_method(w_mods, 'pop', w(fullname), space.w_None)
         if last_exc:
             raise OperationError(self.w_ZipImportError, last_exc.w_value)
