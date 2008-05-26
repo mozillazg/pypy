@@ -81,9 +81,9 @@ class AppTestZipimport:
         space.appexec([space.wrap(self)], """(self):
         self.write_files = []
         """)
-        space.setattr(space.getbuiltinmodule('zipimport'),
-                      space.wrap('_zip_directory_cache'),
-                      space.newdict({}))
+        w_cache = space.getattr(space.getbuiltinmodule('zipimport'),
+                                space.wrap('_zip_directory_cache'))
+        space.call_function(space.getattr(w_cache, space.wrap('clear')))
 
     def teardown_method(self, meth):
         space = self.space
@@ -228,7 +228,7 @@ class AppTestZipimport:
         # directly. -exarkun
         archive = importer.archive
         allbutlast = self.zipfile.split(os.path.sep)[:-1]
-        prefix = os.path.sep.join(allbutlast + [''])
+        prefix = 'directory'
         assert archive == self.zipfile
         assert importer.prefix == prefix
 
