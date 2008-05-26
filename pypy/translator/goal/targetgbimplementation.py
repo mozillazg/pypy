@@ -8,8 +8,8 @@ ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy
 
 
 def entry_point(argv=None):
-    if argv is not None and len(argv) > 0:
-        filename = argv[0]
+    if argv is not None and len(argv) > 1:
+        filename = argv[1]
     else:
         pos = str(9)
         filename = ROM_PATH+"/rom"+pos+"/rom"+pos+".gb"
