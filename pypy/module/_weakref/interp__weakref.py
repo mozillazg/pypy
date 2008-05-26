@@ -150,7 +150,14 @@ def descr__new__weakref(space, w_subtype, w_obj, w_callable=None):
         w_obj.setweakref(space, lifeline)
     return lifeline.get_or_make_weakref(space, w_subtype, w_obj, w_callable)
 
-def descr__eq__(space, ref1, ref2):
+def descr__eq__(space, ref1, w_ref2):
+    try:
+        ref2 = space.interp_w(W_Weakref, w_ref2)
+    except OperationError, o:
+        # should never happen, but be sure
+        if not o.match(space, space.w_TypeError):
+            raise
+        return space.wrap(False)
     w_obj1 = ref1.dereference()
     w_obj2 = ref2.dereference()
     if (w_obj1 is None or
@@ -158,8 +165,8 @@ def descr__eq__(space, ref1, ref2):
         return space.is_(ref1, ref2)
     return space.eq(w_obj1, w_obj2)
 
-def descr__ne__(space, ref1, ref2):
-    return space.not_(space.eq(ref1, ref2))
+def descr__ne__(space, ref1, w_ref2):
+    return space.not_(space.eq(ref1, w_ref2))
 
 def descr__repr__(space, ref):
     w_obj = ref.dereference()
@@ -182,9 +189,9 @@ which is called with the weak reference as an argument when 'obj'
 is about to be finalized.""",
     __new__ = interp2app(descr__new__weakref),
     __eq__ = interp2app(descr__eq__,
-                        unwrap_spec=[ObjSpace, W_Weakref, W_Weakref]),
+                        unwrap_spec=[ObjSpace, W_Weakref, W_Root]),
     __ne__ = interp2app(descr__ne__,
-                        unwrap_spec=[ObjSpace, W_Weakref, W_Weakref]),
+                        unwrap_spec=[ObjSpace, W_Weakref, W_Root]),
     __hash__ = interp2app(W_Weakref.descr_hash, unwrap_spec=['self']),
     __repr__ = reprdescr,
     __call__ = interp2app(W_Weakref.descr_call, unwrap_spec=['self'])
