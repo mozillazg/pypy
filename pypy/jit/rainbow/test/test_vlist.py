@@ -1,4 +1,5 @@
 import py
+from pypy.rpython.test.tool import LLRtypeMixin, OORtypeMixin
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
 from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
@@ -7,7 +8,6 @@ from pypy.rlib.jit import hint
 
 
 class VListTest(InterpretationTest):
-    type_system = "lltype"
 
     def test_vlist(self):
         def ll_function():
@@ -87,6 +87,20 @@ class VListTest(InterpretationTest):
         assert res == 12
         res = self.interpret(ll_function, [0], [], policy=P_OOPSPEC)
         assert res == 0
+
+    force_fixed_insns = None
+    def test_force_fixed(self):
+        def ll_function(flag):
+            lst = [0, 0, 0]
+            if flag:
+                lst[0] = 42
+            else:
+                lst[0] = 1
+            return lst
+        res = self.interpret(ll_function, [True], [], policy=P_OOPSPEC)
+        res = self.ll_to_list(res)
+        assert res == [42, 0, 0]
+        self.check_insns(self.force_fixed_insns)
 
     def test_oop_vlist(self):
         def ll_function():
@@ -201,8 +215,10 @@ class VListTest(InterpretationTest):
         assert res == -7
 
 
-class TestOOType(OOTypeMixin, VListTest):
+class TestOOType(OOTypeMixin, OORtypeMixin, VListTest):
     type_system = "ootype"
+    force_fixed_insns = {'oonewarray': 1, 'oosend': 3}
 
-class TestLLType(VListTest):
+class TestLLType(LLRtypeMixin, VListTest):
     type_system = "lltype"
+    force_fixed_insns = {'direct_call': 4}
