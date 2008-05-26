@@ -9,7 +9,7 @@ from pypy.annotation.model import SomeUnicodeCodePoint, SomeAddress
 from pypy.annotation.model import SomeFloat, unionof, SomeUnicodeString
 from pypy.annotation.model import SomePBC, SomeInstance, SomeDict, SomeList
 from pypy.annotation.model import SomeWeakRef
-from pypy.annotation.model import SomeOOObject
+from pypy.annotation.model import SomeOOObject, SomeOOStaticMeth
 from pypy.annotation.model import annotation_to_lltype, lltype_to_annotation, ll_to_annotation
 from pypy.annotation.model import add_knowntypedata
 from pypy.annotation.model import s_ImpossibleValue
@@ -576,12 +576,12 @@ def cast_from_object(T, obj):
     TYPE = T.const
     if TYPE is ootype.Object:
         return SomeOOObject()
-    elif isinstance(TYPE, ootype.Instance):
-        return SomeOOInstance(TYPE)
-    elif isinstance(TYPE, ootype.Record):
-        return SomeOOInstance(TYPE) # XXX: SomeOORecord?
+    elif TYPE is ootype.Class:
+        return SomeOOClass(T)
     elif isinstance(TYPE, ootype.StaticMethod):
         return SomeOOStaticMeth(TYPE)
+    elif isinstance(TYPE, ootype.OOType):
+        return SomeOOInstance(TYPE)
     else:
         raise AnnotatorError, 'Cannot cast Object to %s' % TYPE
 

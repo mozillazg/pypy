@@ -99,6 +99,8 @@ class IntConst(GenConst):
     def revealconst(self, T):
         if T is ootype.Object:
             return ootype.NULL # XXX?
+        elif isinstance(T, ootype.OOType):
+            return ootype.null(T) # XXX
         return lltype.cast_primitive(T, self.value)
 
     def getCliType(self):
@@ -388,6 +390,15 @@ class GraphBuilder(GenBuilder):
 
     def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
         return self.branches[0].genop_oosetfield(fieldtoken, gv_obj, gv_value)
+
+    def genop_oonewarray(self, alloctoken, gv_length):
+        raise NotImplementedError
+        
+    def genop_oononnull(self, gv_obj):
+        raise NotImplementedError
+    
+    def genop_ooisnull(self, gv_obj):
+        raise NotImplementedError
 
     def end(self):
         # render all the pending branches
