@@ -131,6 +131,15 @@ class W_ZipImporter(Wrappable):
     def getprefix(space, self):
         return space.wrap(self.prefix)
 
+    def _find_relative_path(self, filename):
+        if filename.startswith(self.dir.filename):
+            filename = filename[len(self.dir.filename):]
+        if filename.startswith(os.sep):
+            filename = filename[1:]
+        if ZIPSEP != os.path.sep:
+            filename = filename.replace(os.path.sep, ZIPSEP)
+        return filename
+
     def import_py_file(self, space, modname, filename, buf, pkgpath):
         w = space.wrap
         w_mod = w(Module(space, w(modname)))
@@ -248,8 +257,7 @@ class W_ZipImporter(Wrappable):
     load_module.unwrap_spec = ['self', ObjSpace, str]
 
     def get_data(self, space, filename):
-        if ZIPSEP != os.path.sep:
-            filename = filename.replace(os.path.sep, ZIPSEP)
+        filename = self._find_relative_path(filename)
         w = space.wrap
         try:
             return w(self.dir.read(filename))
