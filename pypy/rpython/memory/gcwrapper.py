@@ -46,9 +46,9 @@ class GCManagedHeap(object):
 
     def malloc_nonmovable(self, TYPE, n=None, zero=False):
         typeid = self.get_type_id(TYPE)
-        if self.gc.moving_gc:
+        if not self.gc.can_malloc_nonmovable():
             return lltype.nullptr(TYPE)
-        addr = self.gc.malloc(typeid, n, zero=zero)
+        addr = self.gc.malloc_nonmovable(typeid, n, zero=zero)
         result = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
         if not self.gc.malloc_zero_filled:
             gctypelayout.zero_gc_pointers(result)
@@ -95,9 +95,7 @@ class GCManagedHeap(object):
     def setinterior(self, toplevelcontainer, inneraddr, INNERTYPE, newvalue):
         if (lltype.typeOf(toplevelcontainer).TO._gckind == 'gc' and
             isinstance(INNERTYPE, lltype.Ptr) and INNERTYPE.TO._gckind == 'gc'):
-            oldvalue = inneraddr.address[0]
-            self.gc.write_barrier(oldvalue,
-                                  llmemory.cast_ptr_to_adr(newvalue),
+            self.gc.write_barrier(llmemory.cast_ptr_to_adr(newvalue),
                                   llmemory.cast_ptr_to_adr(toplevelcontainer))
         llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue)
 

@@ -3,7 +3,10 @@
 """
 
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.rpython.annlowlevel import llhelper
+from pypy.annotation.model import SomeObject, SomeString, s_None,\
+     SomeChar, SomeInteger, SomeUnicodeCodePoint, SomeUnicodeString
+
+# -------------- public API ---------------------------------
 
 INIT_SIZE = 100 # XXX tweak
 
@@ -28,17 +31,67 @@ class UnicodeBuilder(AbstractStringBuilder):
     def build(self):
         return u''.join(self.l)
 
+# ------------------------------------------------------------
+# ----------------- implementation details -------------------
+# ------------------------------------------------------------
+
+class SomeStringBuilder(SomeObject):
+    def method_append(self, s_str):
+        assert isinstance(s_str, (SomeString, SomeChar))
+        return s_None
+
+    def method_append_slice(self, s_str, s_start, s_end):
+        assert isinstance(s_str, SomeString)
+        assert isinstance(s_start, SomeInteger)
+        assert isinstance(s_end, SomeInteger)
+        assert s_start.nonneg
+        assert s_end.nonneg
+        return s_None
+
+    def method_append_multiple_char(self, s_char, s_times):
+        assert isinstance(s_char, SomeChar)
+        assert isinstance(s_times, SomeInteger)
+        assert s_times.nonneg
+        return s_None
+
+    def method_build(self):
+        return SomeString()
+    
+    def rtyper_makerepr(self, rtyper):
+        return rtyper.type_system.rbuilder.stringbuilder_repr
+
+class SomeUnicodeBuilder(SomeObject):
+    def method_append(self, s_str):
+        assert isinstance(s_str, (SomeUnicodeCodePoint, SomeUnicodeString))
+        return s_None
+
+    def method_append_slice(self, s_str, s_start, s_end):
+        assert isinstance(s_str, SomeUnicodeString)
+        assert isinstance(s_start, SomeInteger)
+        assert isinstance(s_end, SomeInteger)
+        assert s_start.nonneg
+        assert s_end.nonneg
+        return s_None
+
+    def method_append_multiple_char(self, s_char, s_times):
+        assert isinstance(s_char, SomeUnicodeCodePoint)
+        assert isinstance(s_times, SomeInteger)
+        assert s_times.nonneg
+        return s_None
+
+    def method_build(self):
+        return SomeUnicodeString()
+    
+    def rtyper_makerepr(self, rtyper):
+        return rtyper.type_system.rbuilder.unicodebuilder_repr
+
 class BaseEntry(object):
     def compute_result_annotation(self, s_init_size=None):
-        from pypy.rpython.rbuilder import SomeStringBuilder, SomeUnicodeBuilder
         if s_init_size is not None:
-            assert s_init_size.is_constant()
-            init_size = s_init_size.const
-        else:
-            init_size = INIT_SIZE
+            assert isinstance(s_init_size, SomeInteger)
         if self.use_unicode:
-            return SomeUnicodeBuilder(init_size)
-        return SomeStringBuilder(init_size)
+            return SomeUnicodeBuilder()
+        return SomeStringBuilder()
     
     def specialize_call(self, hop):
         return hop.r_result.rtyper_new(hop)

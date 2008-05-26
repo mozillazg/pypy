@@ -495,7 +495,7 @@ class GCTransformer(BaseGCTransformer):
             self.stack_malloc_fixedsize_ptr = self.inittime_helper(
                 ll_stack_malloc_fixedsize, [lltype.Signed], llmemory.Address)
 
-    def gct_malloc(self, hop):
+    def gct_malloc(self, hop, add_flags=None):
         TYPE = hop.spaceop.result.concretetype.TO
         assert not TYPE._is_varsize()
         flags = hop.spaceop.args[1].value
@@ -520,21 +520,27 @@ class GCTransformer(BaseGCTransformer):
             hop.genop("raw_memclear", [v_raw, c_size])
         return v_raw        
 
-    def gct_malloc_varsize(self, hop):
-
+    def gct_malloc_varsize(self, hop, add_flags=None):
         flags = hop.spaceop.args[1].value
+        if add_flags:
+            flags.update(add_flags)
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
         assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
-    gct_malloc_nonmovable = gct_malloc
-    gct_malloc_nonmovable_varsize = gct_malloc_varsize
+    def gct_malloc_nonmovable(self, *args, **kwds):
+        return self.gct_malloc(*args, **kwds)
+
+    def gct_malloc_nonmovable_varsize(self, *args, **kwds):
+        return self.gct_malloc_varsize(*args, **kwds)
 
     def gct_malloc_resizable_buffer(self, hop):
         flags = hop.spaceop.args[1].value
         flags['varsize'] = True
+        flags['nonmovable'] = True
+        flags['resizable'] = True
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
@@ -544,14 +550,14 @@ class GCTransformer(BaseGCTransformer):
     def gct_resize_buffer(self, hop):
         op = hop.spaceop
         if self._can_realloc():
-            self._gct_resize_buffer_realloc(hop, op.args[2])
+            self._gct_resize_buffer_realloc(hop, op.args[2], True)
         else:
             self._gct_resize_buffer_no_realloc(hop, op.args[1])
 
     def _can_realloc(self):
         return False
 
-    def _gct_resize_buffer_realloc(self, hop, v_newsize):
+    def _gct_resize_buffer_realloc(self, hop, v_newsize, grow=True):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)
         op = hop.spaceop
         flags = {'flavor':'gc', 'varsize': True}
@@ -564,14 +570,16 @@ class GCTransformer(BaseGCTransformer):
 
         c_lengthofs = intconst(offset_to_length)
         v_ptr = op.args[0]
+        v_ptr = gen_cast(hop.llops, llmemory.GCREF, v_ptr)
+        c_grow = rmodel.inputconst(lltype.Bool, grow)
         v_raw = self.perform_realloc(hop, v_ptr, v_newsize, c_const_size,
-                                     c_item_size, c_lengthofs)
+                                     c_item_size, c_lengthofs, c_grow)
         hop.cast_result(v_raw)
 
     def _gct_resize_buffer_no_realloc(self, hop, v_lgt):
         op = hop.spaceop
         meth = self.gct_fv_gc_malloc_varsize
-        flags = {'flavor':'gc', 'varsize': True}
+        flags = {'flavor':'gc', 'varsize': True, 'keep_current_args': True}
         self.varsize_malloc_helper(hop, flags, meth, [])
         # fish resvar
         v_newbuf = hop.llops[-1].result
@@ -599,7 +607,7 @@ class GCTransformer(BaseGCTransformer):
     def gct_finish_building_buffer(self, hop):
         op = hop.spaceop
         if self._can_realloc():
-            return self._gct_resize_buffer_realloc(hop, op.args[1])
+            return self._gct_resize_buffer_realloc(hop, op.args[1], False)
         else:
             return self._gct_resize_buffer_no_realloc(hop, op.args[1])
 

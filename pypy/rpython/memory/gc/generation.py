@@ -407,7 +407,7 @@ class GenerationGC(SemiSpaceGC):
                     continue    # no need to remember this weakref any longer
             self.objects_with_weakrefs.append(obj)
 
-    def write_barrier(self, oldvalue, newvalue, addr_struct):
+    def write_barrier(self, newvalue, addr_struct):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
 

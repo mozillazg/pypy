@@ -10,6 +10,7 @@ from pypy.rpython.memory.gc.marksweep import X_CLONE, X_POOL, X_POOL_PTR
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.rlib.debug import ll_assert
 from pypy import conftest
+from pypy.rlib.rstring import StringBuilder
 
 INT_SIZE = struct.calcsize("i")   # only for estimates
 
@@ -37,6 +38,7 @@ class GCTest(object):
     gcpolicy = None
     stacklessgc = False
     GC_CAN_MOVE = False
+    GC_CANNOT_MALLOC_NONMOVABLE = False
 
     def runner(self, f, nbargs=0, statistics=False, transformer=False,
                **extraconfigopts):
@@ -459,19 +461,19 @@ class GenericGCTests(GCTest):
     def test_malloc_nonmovable(self):
         TP = lltype.GcArray(lltype.Char)
         def func():
-            try:
-                from pypy.rlib import rgc
-                a = rgc.malloc_nonmovable(TP, 3)
-                rgc.collect()
-                if a:
-                    assert not rgc.can_move(a)
-                    return 0
-                return 1
-            except Exception, e:
-                return 2
+            #try:
+            from pypy.rlib import rgc
+            a = rgc.malloc_nonmovable(TP, 3)
+            rgc.collect()
+            if a:
+                assert not rgc.can_move(a)
+                return 0
+            return 1
+            #except Exception, e:
+            #    return 2
 
         run = self.runner(func)
-        assert int(self.GC_CAN_MOVE) == run([])
+        assert int(self.GC_CANNOT_MALLOC_NONMOVABLE) == run([])
 
     def test_malloc_nonmovable_fixsize(self):
         S = lltype.GcStruct('S', ('x', lltype.Float))
@@ -489,7 +491,7 @@ class GenericGCTests(GCTest):
                 return 2
 
         run = self.runner(func)
-        assert run([]) == int(self.GC_CAN_MOVE)
+        assert run([]) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
 
     def test_resizable_buffer(self):
         from pypy.rpython.lltypesystem.rstr import STR
@@ -506,8 +508,26 @@ class GenericGCTests(GCTest):
         run = self.runner(f)
         assert run([]) == 1
 
+    def test_string_builder_over_allocation(self):
+        import gc
+        def fn():
+            s = StringBuilder(4)
+            s.append("abcd")
+            s.append("defg")
+            s.append("rty")
+            s.append_multiple_char('y', 1000)
+            gc.collect()
+            s.append_multiple_char('y', 1000)
+            res = s.build()[1000]
+            gc.collect()
+            return res
+        fn = self.runner(fn)
+        res = fn([])
+        assert res == 'y'
+
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
+    GC_CANNOT_MALLOC_NONMOVABLE = True
 
     def test_many_ids(self):
         py.test.skip("fails for bad reasons in lltype.py :-(")
@@ -956,6 +976,7 @@ class TestGenerationalNoFullCollectGC(GCTest):
 
 class TestHybridGC(TestGenerationGC):
     gcname = "hybrid"
+    GC_CANNOT_MALLOC_NONMOVABLE = False
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
@@ -986,3 +1007,6 @@ class TestHybridGC(TestGenerationGC):
         run = self.runner(f, nbargs=2)
         res = run([100, 100])
         assert res == 200
+
+    def test_malloc_nonmovable_fixsize(self):
+        py.test.skip("not supported")

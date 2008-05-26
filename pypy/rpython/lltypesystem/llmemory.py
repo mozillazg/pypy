@@ -693,6 +693,18 @@ def raw_malloc(size):
         raise NotImplementedError(size)
     return size._raw_malloc([], zero=False)
 
+def raw_realloc_grow(addr, old_size, size):
+    new_area = size._raw_malloc([], zero=False)
+    raw_memcopy(addr, new_area, old_size)
+    raw_free(addr)
+    return new_area
+
+def raw_realloc_shrink(addr, old_size, size):
+    new_area = size._raw_malloc([], zero=False)
+    raw_memcopy(addr, new_area, size)
+    raw_free(addr)
+    return new_area
+
 def raw_free(adr):
     # try to free the whole object if 'adr' is the address of the header
     from pypy.rpython.memory.gcheader import GCHeaderBuilder
@@ -747,9 +759,11 @@ def _reccopy(source, dest):
     T = lltype.typeOf(source).TO
     assert T == lltype.typeOf(dest).TO
     if isinstance(T, (lltype.Array, lltype.FixedSizeArray)):
-        assert source._obj.getlength() == dest._obj.getlength()
+        sourcelgt = source._obj.getlength()
+        destlgt = dest._obj.getlength()
+        lgt = min(sourcelgt, destlgt)
         ITEMTYPE = T.OF
-        for i in range(source._obj.getlength()):
+        for i in range(lgt):
             if isinstance(ITEMTYPE, lltype.ContainerType):
                 subsrc = source._obj.getitem(i)._as_ptr()
                 subdst = dest._obj.getitem(i)._as_ptr()

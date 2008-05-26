@@ -10,6 +10,7 @@ from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rpython.lltypesystem import rffi
 
 #   _______in the semispaces_________      ______external (non-moving)_____
 #  /                                 \    /                                \
@@ -29,6 +30,7 @@ from pypy.rlib.rarithmetic import ovfcheck
 # Object lists:
 #   * gen2_rawmalloced_objects
 #   * gen3_rawmalloced_objects
+#   * gen2_resizable_objects
 #   * old_objects_pointing_to_young: gen2or3 objs that point to gen1 objs
 #   * last_generation_root_objects: gen3 objs that point to gen1or2 objs
 #
@@ -41,10 +43,14 @@ from pypy.rlib.rarithmetic import ovfcheck
 # Some invariants:
 #   * gen3 are either GCFLAG_NO_HEAP_PTRS or in 'last_generation_root_objects'
 #   * between collections, GCFLAG_UNVISITED set exactly for gen2_rawmalloced
+#   * objects in gen2_resizable_objects are part of the generation 2 but never
+#     explicitly listed in gen2_rawmalloced_objects.
 #
 # A malloc_varsize() of large objects returns objects that are external
 # but initially of generation 2.  Old objects from the semispaces are
 # moved to external objects directly as generation 3.
+
+# gen2_resizable_objects is for objects that are resizable
 
 # The "age" of an object is the number of times it survived a full
 # collections, without counting the step that moved it out of the nursery.
@@ -68,7 +74,6 @@ while GCFLAG_AGE_MASK < GCFLAG_AGE_MAX:
 # number of calls to semispace_collect():
 GENERATION3_COLLECT_THRESHOLD = 20
 
-
 class HybridGC(GenerationGC):
     """A two-generations semi-space GC like the GenerationGC,
     except that objects above a certain size are handled separately:
@@ -76,6 +81,7 @@ class HybridGC(GenerationGC):
     """
     first_unused_gcflag = _gcflag_next_bit
     prebuilt_gc_objects_are_static_roots = True
+    can_realloc = True
 
     # the following values override the default arguments of __init__ when
     # translating to a real backend.
@@ -117,6 +123,7 @@ class HybridGC(GenerationGC):
     def setup(self):
         self.gen2_rawmalloced_objects = self.AddressStack()
         self.gen3_rawmalloced_objects = self.AddressStack()
+        self.gen2_resizable_objects = self.AddressStack()
         GenerationGC.setup(self)
 
     def set_max_heap_size(self, size):
@@ -169,7 +176,8 @@ class HybridGC(GenerationGC):
                                                 llmemory.GCREF)
         return self.malloc_varsize_slowpath(typeid, length)
 
-    def malloc_varsize_slowpath(self, typeid, length):
+    def malloc_varsize_slowpath(self, typeid, length, force_nonmovable=False,
+                                resizable=False):
         # For objects that are too large, or when the nursery is exhausted.
         # In order to keep malloc_varsize_clear() as compact as possible,
         # we recompute what we need in this slow path instead of passing
@@ -187,8 +195,8 @@ class HybridGC(GenerationGC):
             nonlarge_max = self.nonlarge_gcptrs_max
         else:
             nonlarge_max = self.nonlarge_max
-        if raw_malloc_usage(totalsize) > nonlarge_max:
-            result = self.malloc_varsize_marknsweep(totalsize)
+        if force_nonmovable or raw_malloc_usage(totalsize) > nonlarge_max:
+            result = self.malloc_varsize_marknsweep(totalsize, resizable)
             flags = self.GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS | GCFLAG_UNVISITED
         else:
             result = self.malloc_varsize_collecting_nursery(totalsize)
@@ -199,6 +207,57 @@ class HybridGC(GenerationGC):
 
     malloc_varsize_slowpath._dont_inline_ = True
 
+    def malloc_varsize_nonmovable(self, typeid, length):
+        return self.malloc_varsize_slowpath(typeid, length, True)
+
+    def malloc_varsize_resizable(self, typeid, length):
+        return self.malloc_varsize_slowpath(typeid, length, True, True)
+
+    def malloc_nonmovable(self, typeid, length, zero):
+        # helper for testing, same as GCBase.malloc
+        if self.is_varsize(typeid):
+            gcref = self.malloc_varsize_slowpath(typeid, length, True)
+        else:
+            raise NotImplementedError("Not supported")
+        return llmemory.cast_ptr_to_adr(gcref)
+
+    def realloc(self, ptr, newlength, fixedsize, itemsize, lengthofs, grow):
+        size_gc_header = self.size_gc_header()
+        addr = llmemory.cast_ptr_to_adr(ptr)
+        tid = self.get_type_id(addr)
+        nonvarsize = size_gc_header + fixedsize
+        try:
+            varsize = ovfcheck(itemsize * newlength)
+            tot_size = ovfcheck(nonvarsize + varsize)
+        except OverflowError:
+            raise MemoryError()
+        oldlength = (addr + lengthofs).signed[0]
+        old_tot_size = size_gc_header + fixedsize + oldlength * itemsize
+        source_addr = addr - size_gc_header
+        self.gen2_resizable_objects.remove(addr)
+        if grow:
+            result = llop.raw_realloc_grow(llmemory.Address, source_addr,
+                                           old_tot_size, tot_size)
+        else:
+            result = llop.raw_realloc_shrink(llmemory.Address, source_addr,
+                                             old_tot_size, tot_size)
+        if not result:
+            self.gen2_resizable_objects.append(addr)
+            raise MemoryError()
+        if grow:
+            self.gen2_resizable_objects.append(result + size_gc_header)
+        else:
+            self.gen2_rawmalloced_objects.append(result + size_gc_header)
+        self._check_rawsize_alloced(raw_malloc_usage(tot_size) -
+                                    raw_malloc_usage(old_tot_size),
+                                    can_collect = not grow)
+        (result + size_gc_header + lengthofs).signed[0] = newlength
+        return llmemory.cast_adr_to_ptr(result + size_gc_header, llmemory.GCREF)
+
+    def can_move(self, addr):
+        tid = self.header(addr).tid
+        return not (tid & GCFLAG_EXTERNAL)
+
     def malloc_varsize_collecting_nursery(self, totalsize):
         result = self.collect_nursery()
         ll_assert(raw_malloc_usage(totalsize) <= self.nursery_top - result,
@@ -208,7 +267,17 @@ class HybridGC(GenerationGC):
             totalsize)
         return result
 
-    def malloc_varsize_marknsweep(self, totalsize):
+    def _check_rawsize_alloced(self, size_estimate, can_collect=True):
+        self.large_objects_collect_trigger -= size_estimate
+        if can_collect and self.large_objects_collect_trigger < 0:
+            if DEBUG_PRINT:
+                llop.debug_print(lltype.Void, "allocated",
+                                 self._initial_trigger -
+                                     self.large_objects_collect_trigger,
+                                 "bytes, triggering full collection")
+            self.semispace_collect()
+
+    def malloc_varsize_marknsweep(self, totalsize, resizable=False):
         # In order to free the large objects from time to time, we
         # arbitrarily force a full collect() if none occurs when we have
         # allocated 'self.space_size' bytes of large objects.
@@ -216,14 +285,7 @@ class HybridGC(GenerationGC):
         # XXX and adjust sizes based on it; otherwise we risk doing
         # XXX many many collections if the program allocates a lot
         # XXX more than the current self.space_size.
-        self.large_objects_collect_trigger -= raw_malloc_usage(totalsize)
-        if self.large_objects_collect_trigger < 0:
-            if DEBUG_PRINT:
-                llop.debug_print(lltype.Void, "allocated",
-                                 self._initial_trigger -
-                                     self.large_objects_collect_trigger,
-                                 "bytes, triggering full collection")
-            self.semispace_collect()
+        self._check_rawsize_alloced(raw_malloc_usage(totalsize))
         result = self.allocate_external_object(totalsize)
         if not result:
             raise MemoryError()
@@ -231,7 +293,10 @@ class HybridGC(GenerationGC):
         # need to follow suit.
         llmemory.raw_memclear(result, totalsize)
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        self.gen2_rawmalloced_objects.append(result + size_gc_header)
+        if resizable:
+            self.gen2_resizable_objects.append(result + size_gc_header)
+        else:
+            self.gen2_rawmalloced_objects.append(result + size_gc_header)
         return result
 
     def allocate_external_object(self, totalsize):
@@ -394,6 +459,7 @@ class HybridGC(GenerationGC):
         if self.is_collecting_gen3():
             self.sweep_rawmalloced_objects(generation=3)
         self.sweep_rawmalloced_objects(generation=2)
+        self.sweep_rawmalloced_objects(generation=-2)
         # As we just collected, it's fine to raw_malloc'ate up to space_size
         # bytes again before we should force another collect.
         self.large_objects_collect_trigger = self.space_size
@@ -412,7 +478,7 @@ class HybridGC(GenerationGC):
             # to any gen2 object.  In this case, A remains a bit too long in
             # last_generation_root_objects, but this will be fixed by the
             # next collect_last_generation_roots().
-        else:
+        elif generation == 3:
             objects = self.gen3_rawmalloced_objects
             # generation 3 sweep: remove from last_generation_root_objects
             # all the objects that we are about to free
@@ -424,6 +490,11 @@ class HybridGC(GenerationGC):
                     newgen3roots.append(obj)
             gen3roots.delete()
             self.last_generation_root_objects = newgen3roots
+        else:
+            # mostly a hack: the generation number -2 is the part of the
+            # generation 2 that lives in gen2_resizable_objects
+            ll_assert(generation == -2, "bogus 'generation'")
+            objects = self.gen2_resizable_objects
 
         surviving_objects = self.AddressStack()
         if DEBUG_PRINT: alive_count = alive_size = 0
@@ -441,7 +512,7 @@ class HybridGC(GenerationGC):
                 if DEBUG_PRINT:alive_size+=raw_malloc_usage(self.get_size(obj))
                 if generation == 3:
                     surviving_objects.append(obj)
-                else:
+                elif generation == 2:
                     ll_assert((tid & GCFLAG_AGE_MASK) < GCFLAG_AGE_MAX,
                               "wrong age for generation 2 object")
                     tid += GCFLAG_AGE_ONE
@@ -455,11 +526,18 @@ class HybridGC(GenerationGC):
                         tid |= GCFLAG_UNVISITED
                         surviving_objects.append(obj)
                     self.header(obj).tid = tid
+                elif generation == -2:
+                    # the object stays in generation -2
+                    tid |= GCFLAG_UNVISITED
+                    surviving_objects.append(obj)
+                    self.header(obj).tid = tid
         objects.delete()
         if generation == 2:
             self.gen2_rawmalloced_objects = surviving_objects
-        else:
+        elif generation == 3:
             self.gen3_rawmalloced_objects = surviving_objects
+        elif generation == -2:
+            self.gen2_resizable_objects = surviving_objects
         if DEBUG_PRINT:
             llop.debug_print(lltype.Void,
                              "| [hyb] gen", generation,
@@ -521,3 +599,6 @@ class HybridGC(GenerationGC):
                   "gen3: unexpected GCFLAG_UNVISITED")
         ll_assert((tid & GCFLAG_AGE_MASK) == GCFLAG_AGE_MAX,
                   "gen3: wrong age field")
+
+    def can_malloc_nonmovable(self):
+        return True
