@@ -3,11 +3,8 @@ from pypy.jit.codegen.cli.rgenop import RCliGenOp
 from pypy.jit.codegen.dump.rgenop import RDumpGenOp
 from pypy.jit.rainbow.test.test_interpreter import TestOOType as RainbowTest
 
-class TestRainbowCli(RainbowTest):
+class CliMixin(object):
     RGenOp = RCliGenOp
-
-    # for the individual tests see
-    # ====> ../../../rainbow/test/test_interpreter.py
 
     def _invoke(self, generated, residualargs):
         
@@ -33,6 +30,12 @@ class TestRainbowCli(RainbowTest):
 
     def check_insns(self, expected=None, **counts):
         "Cannot check instructions in the generated assembler."
+
+class TestRainbowCli(CliMixin, RainbowTest):
+
+    # for the individual tests see
+    # ====> ../../../rainbow/test/test_interpreter.py
+
 
     def test_simple_opt_const_propagation1(self):
         py.test.skip('mono crash')

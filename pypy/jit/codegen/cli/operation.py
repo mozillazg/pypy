@@ -169,7 +169,7 @@ class GetField(Operation):
         self.fieldinfo = clitype.GetField(fieldname)
 
     def restype(self):
-        return self.fieldinfo.FieldType
+        return self.fieldinfo.get_FieldType()
 
     def emit(self):
         self.gv_obj.load(self.builder)
