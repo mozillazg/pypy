@@ -453,7 +453,6 @@ class AppTestFfi:
         arg1.free()
     
     def test_callback(self):
-        skip("FIXME: compare actually receives a pair of int**")
         import _rawffi
         import struct
         libc = _rawffi.get_libc()
@@ -464,8 +463,8 @@ class AppTestFfi:
         resarray = _rawffi.Array('i')(1)
         bogus_args = False
         def compare(a, b):
-            a1 = _rawffi.Array('i').fromaddress(a, 1)
-            a2 = _rawffi.Array('i').fromaddress(b, 1)
+            a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(a, 1)[0], 1)
+            a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(b, 1)[0], 1)
             if a1[0] not in [1,2,3,4] or a2[0] not in [1,2,3,4]:
                 print "comparing", a1[0], "with", a2[0]
                 bogus_args = True
@@ -504,6 +503,30 @@ class AppTestFfi:
         assert res[0] == 1<<42
         a1.free()
         del cb
+
+    def test_raising_callback(self):
+        import _rawffi, sys
+        import StringIO
+        lib = _rawffi.CDLL(self.lib_name)
+        err = StringIO.StringIO()
+        orig = sys.stderr
+        sys.stderr = err
+        try:
+            runcallback = lib.ptr('runcallback', ['P'], 'q')
+            def callback():
+                1/0
+
+            cb = _rawffi.CallbackPtr(callback, [], 'q')
+            a1 = cb.byptr()
+            res = runcallback(a1)
+            a1.free()
+            del cb
+            val = err.getvalue()
+            assert 'ZeroDivisionError' in val
+            assert 'callback' in val
+        finally:
+            sys.stderr = orig
+
 
     def test_setattr_struct(self):
         import _rawffi
@@ -771,16 +794,19 @@ class AppTestAutoFree:
 
     def test_structure_autofree(self):
         import gc, _rawffi
+        gc.collect()
         S = _rawffi.Structure([('x', 'i')])
         oldnum = _rawffi._num_of_allocated_objects()
         s = S(autofree=True)
         s.x = 3
         s = None
         gc.collect()
+        gc.collect()
         assert oldnum == _rawffi._num_of_allocated_objects()
 
     def test_array_autofree(self):
         import gc, _rawffi
+        gc.collect()
         oldnum = _rawffi._num_of_allocated_objects()
 
         A = _rawffi.Array('c')
@@ -789,7 +815,6 @@ class AppTestAutoFree:
         a = None
         gc.collect()
         assert oldnum == _rawffi._num_of_allocated_objects()
-
 
     def teardown_class(cls):
         Tracker.DO_TRACING = False
