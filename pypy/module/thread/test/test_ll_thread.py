@@ -29,13 +29,13 @@ def test_thread_error():
         py.test.fail("Did not raise")
 
 def test_fused():
-    l = allocate_lock_NOAUTO()
-    l.acquire(True)
-    l.fused_release_acquire()
-    could_acquire_again = l.acquire(False)
+    l = allocate_ll_lock()
+    acquire_NOAUTO(l, True)
+    fused_release_acquire_NOAUTO(l)
+    could_acquire_again = acquire_NOAUTO(l, False)
     assert not could_acquire_again
-    l.release()
-    could_acquire_again = l.acquire(False)
+    release_NOAUTO(l)
+    could_acquire_again = acquire_NOAUTO(l, False)
     assert could_acquire_again
 
 
@@ -122,13 +122,13 @@ class AbstractThreadTests(AbstractGCTestClass):
             run._dont_inline_ = True
 
         def bootstrap():
-            state.gil.acquire(True)
+            acquire_NOAUTO(state.gil, True)
             gc_thread_run()
             z = state.z
             state.z = None
             z.run()
             gc_thread_die()
-            state.gil.release()
+            release_NOAUTO(state.gil)
 
         def g(i, j):
             state.z = Z(i, j)
@@ -139,14 +139,14 @@ class AbstractThreadTests(AbstractGCTestClass):
             while state.z is not None:
                 assert willing_to_wait_more > 0
                 willing_to_wait_more -= 1
-                state.gil.release()
+                release_NOAUTO(state.gil)
                 time.sleep(0.005)
-                state.gil.acquire(True)
+                acquire_NOAUTO(state.gil, True)
                 gc_thread_run()
 
         def f():
-            state.gil = allocate_lock_NOAUTO()
-            state.gil.acquire(True)
+            state.gil = allocate_ll_lock()
+            acquire_NOAUTO(state.gil, True)
             state.answers = []
             state.finished = 0
             g(7, 1)
@@ -159,11 +159,11 @@ class AbstractThreadTests(AbstractGCTestClass):
                                                       expected))
                 willing_to_wait_more -= 1
                 done = len(state.answers) == expected
-                state.gil.release()
+                release_NOAUTO(state.gil)
                 time.sleep(0.01)
-                state.gil.acquire(True)
+                acquire_NOAUTO(state.gil, True)
                 gc_thread_run()
-            state.gil.release()
+            release_NOAUTO(state.gil)
             time.sleep(0.1)
             return len(state.answers)
 

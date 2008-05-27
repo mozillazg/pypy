@@ -192,6 +192,9 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
                 os.write(2,
                     "Warning: uncaught exception in callback: %%s %%s\n" %%
                     (callable_name, str(e)))
+                if not we_are_translated():
+                    import traceback
+                    traceback.print_exc()
                 result = errorcode
             if before:
                 before()
@@ -203,6 +206,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     miniglobals = locals().copy()
     miniglobals['Exception'] = Exception
     miniglobals['os'] = os
+    miniglobals['we_are_translated'] = we_are_translated
     exec source.compile() in miniglobals
     return miniglobals['wrapper']
 _make_wrapper_for._annspecialcase_ = 'specialize:memo'

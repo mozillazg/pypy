@@ -16,16 +16,16 @@ from pypy.rlib.rposix import get_errno, set_errno
 
 class GILThreadLocals(OSThreadLocals):
     """A version of OSThreadLocals that enforces a GIL."""
-    GIL = None
+    ll_GIL = None
 
     def setup_threads(self, space):
         """Enable threads in the object space, if they haven't already been."""
-        if self.GIL is None:
+        if self.ll_GIL is None:
             try:
-                self.GIL = thread.allocate_lock_NOAUTO()
+                self.ll_GIL = thread.allocate_ll_lock()
             except thread.error:
                 raise wrap_thread_error(space, "can't allocate GIL")
-            self.GIL.acquire(True)
+            thread.acquire_NOAUTO(self.ll_GIL, True)
             self.enter_thread(space)   # setup the main thread
             # add the GIL-releasing callback as an action on the space
             space.pending_actions.append(GILReleaseAction(self))
@@ -41,22 +41,19 @@ class GILThreadLocals(OSThreadLocals):
         # test_lock_again after the global state was cleared by
         # test_compile_lock.  As a workaround, we repatch these global
         # fields systematically.
-        spacestate.GIL = self.GIL
+        spacestate.ll_GIL = self.ll_GIL
         invoke_around_extcall(before_external_call, after_external_call)
         return result
 
     def yield_thread(self):
         """Notification that the current thread is between two bytecodes:
         release the GIL for a little while."""
-        GIL = self.GIL
+        ll_GIL = self.ll_GIL
         # Other threads can run between the release() and the acquire().
         # This is a single external function so that we are sure that nothing
         # occurs between the release and the acquire, e.g. no GC operation.
-        GIL.fused_release_acquire()
+        thread.fused_release_acquire_NOAUTO(ll_GIL)
         thread.gc_thread_run()
-
-    def getGIL(self):
-        return self.GIL    # XXX temporary hack!
 
 
 class GILReleaseAction(Action):
@@ -82,11 +79,11 @@ def before_external_call():
     # this function must not raise, in such a way that the exception
     # transformer knows that it cannot raise!
     e = get_errno()
-    spacestate.GIL.release()
+    thread.release_NOAUTO(spacestate.ll_GIL)
     set_errno(e)
 
 def after_external_call():
     e = get_errno()
-    spacestate.GIL.acquire(True)
+    thread.acquire_NOAUTO(spacestate.ll_GIL, True)
     thread.gc_thread_run()
     set_errno(e)
