@@ -37,3 +37,11 @@ on CPython::
     >>>> d1.update(d2)
     >>>> print d1['a']
     42
+
+Comparison differencies
+-----------------------
+
+When custom \_\_eq\_\_ function on object (or any other rich comparison
+method) raises an exception, we don't swallow the exception and instead
+report it to user.
+
