@@ -90,7 +90,7 @@ def ll_start_new_thread(func):
 # wrappers...
 
 def get_ident():
-    return c_thread_get_ident()
+    return rffi.cast(lltype.Signed, c_thread_get_ident())
 
 def start_new_thread(x, y):
     """In RPython, no argument can be passed.  You have to use global
@@ -98,7 +98,7 @@ def start_new_thread(x, y):
     nice, but at least it avoids some levels of GC issues.
     """
     assert len(y) == 0
-    return ll_start_new_thread(x)
+    return rffi.cast(lltype.Signed, ll_start_new_thread(x))
 
 class Lock(object):
     """ Container for low-level implementation
