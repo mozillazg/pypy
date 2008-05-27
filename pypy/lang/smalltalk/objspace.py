@@ -106,6 +106,7 @@ class ObjSpace(object):
         define_cls("w_MethodContext", "w_ContextPart")
         define_cls("w_Link", "w_Object")
         define_cls("w_Process", "w_Link")
+        define_cls("w_Point", "w_Object")
         define_cls("w_LinkedList", "w_SequenceableCollection")
         define_cls("w_Semaphore", "w_LinkedList")
         define_cls("w_BlockContext", "w_ContextPart",

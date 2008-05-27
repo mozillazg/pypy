@@ -32,7 +32,20 @@ def make_setter(index0):
 
 def make_getter_setter(index0):
     return make_getter(index0), make_setter(index0)
-    
+
+def make_int_getter(index0):
+    def getter(self, space):
+        return space.unwrap_int(self.read(index0))
+    return getter
+
+def make_int_setter(index0):
+    def setter(self, space, new):
+        return self.write(index0, space.wrap_int(new))
+    return setter
+
+def make_int_getter_setter(index0):
+    return make_int_getter(index0), make_int_setter(index0)
+   
 class LinkWrapper(Wrapper):
     next_link, store_next_link = make_getter_setter(0)
 
@@ -169,23 +182,43 @@ def scheduler(space):
 
 class SemaphoreWrapper(LinkedListWrapper):
 
-    excess_signals, store_excess_signals = make_getter_setter(2)
+    excess_signals, store_excess_signals = make_int_getter_setter(2)
 
     def signal(self, interp):
         if self.is_empty_list():
-            w_value = self.excess_signals()
-            w_value = self.space.wrap_int(self.space.unwrap_int(w_value) + 1)
-            self.store_excess_signals(w_value)
+            value = self.excess_signals(interp.space)
+            self.store_excess_signals(interp.space, value + 1)
         else:
             process = self.remove_first_link_of_list()
             ProcessWrapper(self.space, process).resume(interp)
 
     def wait(self, interp):
-        excess = self.space.unwrap_int(self.excess_signals())
+        excess = self.excess_signals(interp.space)
         w_process = scheduler(interp.space).active_process()
         if excess > 0:
-            w_excess = self.space.wrap_int(excess - 1)
-            self.store_excess_signals(w_excess)
+            self.store_excess_signals(interp.space, excess - 1)
         else:
             self.add_last_link(w_process)
             ProcessWrapper(self.space, w_process).suspend(interp)
+
+class PointWrapper(Wrapper):
+    x, store_x = make_int_getter_setter(0)
+    y, store_y = make_int_getter_setter(1)
+
+# XXX Wrappers below are not used yet.
+class OffsetWrapper(Wrapper):
+    offset_x  = make_int_getter(0)
+    offset_y  = make_int_setter(1)
+
+class MaskWrapper(Wrapper):
+    bits       = make_getter(0)
+    extend_x   = make_int_getter(1)
+    extend_y   = make_int_getter(2)
+    depth      = make_int_getter(3)
+
+class CursorWrapper(MaskWrapper):
+    offset   = make_getter(4)
+ 
+class PointWrapper(Wrapper):
+    x, store_x = make_int_getter_setter(0)
+    y, store_y = make_int_getter_setter(1)

@@ -225,7 +225,7 @@ def test_runimage():
     interp = interpreter.Interpreter()
     interp.store_w_active_context(s_ctx.w_self())
     interp.interpret()
-    
+
 def test_compile_method():
     sourcecode = """fib 
                         ^self < 2 
@@ -233,6 +233,7 @@ def test_compile_method():
                             ifFalse: [ (self - 1) fib + (self - 2) fib ]"""
     perform(w(10).getclass(space), "compile:classified:notifying:", w(sourcecode), w('pypy'), w(None))
     assert perform(w(10), "fib").is_same_object(w(89))
+
 
 def w(any): 
     # XXX could put this on the space?
@@ -244,15 +245,40 @@ def w(any):
             return space.wrap_chr(any)
         else:
             return space.wrap_string(any)
-    if isinstance(any, int):    
-        return space.wrap_int(any)
     if isinstance(any, bool):
         return space.wrap_bool(any)
+    if isinstance(any, int):    
+        return space.wrap_int(any)
     if isinstance(any, float):
         return space.wrap_float(any)
     else:
         raise Exception    
-        
+
+def test_become():
+    sourcecode = """
+    testBecome
+      | p1 p2 a |
+      p1 := 1@2.
+      p2 := #(3 4 5).
+      a := p1 -> p2.
+      (1@2 = a key)        ifFalse: [^false].
+      (#(3 4 5) = a value) ifFalse: [^false].
+      (p1 -> p2 = a)       ifFalse: [^false].
+      (p1 == a key)        ifFalse: [^false].
+      (p2 == a value)      ifFalse: [^false].
+      p1 become: p2.
+      (1@2 = a value)      ifFalse: [^false].
+      (#(3 4 5) = a key)   ifFalse: [^false].
+      (p1 -> p2 = a)       ifFalse: [^false].
+      (p1 == a key)        ifFalse: [^false].
+      (p2 == a value)      ifFalse: [^false].
+  
+      ^true"""
+    perform(w(10).getclass(space), "compile:classified:notifying:", w(sourcecode), w('pypy'), w(None))
+    w_true = w(True)
+    w_result = perform(w(10), "testBecome")
+    w_result.is_same_object(w_true)
+       
 def perform(w_receiver, selector, *arguments_w):
     interp = interpreter.Interpreter(space)
     s_class = w_receiver.shadow_of_my_class(space)

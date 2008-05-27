@@ -441,7 +441,7 @@ class __extend__(ContextPartShadow):
         self.callPrimitive(primitives.MOD, "\\\\", 1, interp)
 
     def bytecodePrimMakePoint(self, interp):
-        raise MissingBytecode("bytecodePrimMakePoint")
+        self.callPrimitive(primitives.MAKE_POINT, "@", 1, interp)
 
     def bytecodePrimBitShift(self, interp):
         self.callPrimitive(primitives.BIT_SHIFT, "bitShift:", 1, interp)
