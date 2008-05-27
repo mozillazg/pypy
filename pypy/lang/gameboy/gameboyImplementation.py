@@ -39,7 +39,7 @@ class GameBoyImplementation(GameBoy):
                         break
                     self.joypad_driver.update(self.event) 
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
-                RSDL.Delay(100)
+                RSDL.Delay(10)
         finally:
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
@@ -72,32 +72,25 @@ class VideoDriverImplementation(VideoDriver):
         self.screen = RSDL.SetVideoMode(self.width, self.height, 32, 0)
         
     def update_display(self):
-        print "    update_display"
+        #print "    update_display"
         RSDL.LockSurface(self.screen)
         self.draw_pixels()
         RSDL.UnlockSurface(self.screen)
         RSDL.Flip(self.screen)
             
     def draw_pixels(self):
-        print  "-"*60
+        str = ""
         for y in range(self.height):
-            str = ""
+            str += "\n"
             for x in range(self.width):
-                if y%2 == 0:
-                    s = self.pixel_map(x, y)
-                    str += s+s
-                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
-            print str;
-        
-        print  "-"*60
+                if y%2 == 0 or True:
+                    px = self.get_pixel_color(x, y)
+                    str += ["#", "%", "+", " ", " "][px]
+                #RSDL_helper.set_pixel(self.screen, x, y, self.pixel_map(x, y))
+        print str;
              
     def pixel_map(self, x, y):
-        px = self.get_pixel_color(x, y)
-        b = px & 0xFF
-        g = (px>>8) & 0xFF
-        r = (px>>16) & 0xFF
-        brightness = 4 * (r+b+g) / (0xFF*3)
-        return [" ", ".", "+", "#", ""][brightness]
+        return [0xFFFFFF, 0xCCCCCC, 0x666666, 0x000000][self.get_pixel_color(x, y)]
         
     def get_pixel_color(self, x, y):
         return self.pixels[x+self.width*y]
