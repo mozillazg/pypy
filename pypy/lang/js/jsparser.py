@@ -1,6 +1,9 @@
 from pypy.rlib.parsing.ebnfparse import parse_ebnf, make_parse_function
 from pypy.rlib.parsing.parsing import ParseError, Rule
 import py
+import sys
+
+sys.setrecursionlimit(10000)
 
 GFILE = py.magic.autopath().dirpath().join("jsgrammar.txt")
 

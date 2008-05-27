@@ -5,7 +5,7 @@ from pypy.lang.js.astbuilder import ASTBuilder
 from pypy.lang.js.jsobj import global_context, W_Object,\
      w_Undefined, W_NewBuiltin, W_IntNumber, w_Null, create_object, W_Boolean,\
      W_FloatNumber, W_String, W_Builtin, W_Array, w_Null,\
-     isnull_or_undefined, W_PrimitiveObject, W_ListObject
+     isnull_or_undefined, W_PrimitiveObject, W_ListObject, W_BaseNumber
 from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
@@ -96,8 +96,11 @@ class W_ArrayObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
-        for i in range(len(args)):
-            array.Put(ctx, str(i), args[i])
+        if len(args) == 1 and isinstance(args[0], W_BaseNumber):
+            array.Put(ctx, 'length', args[0])
+        else:
+            for i in range(len(args)):
+                array.Put(ctx, str(i), args[i])
         return array
 
     def Construct(self, ctx, args=[]):
@@ -371,12 +374,34 @@ class W_Substring(W_NewBuiltin):
         end = max(tmp1, tmp2)
         return W_String(string[start:end])
 
+def common_join(ctx, this, sep=','):
+    length = this.Get(ctx, 'length').ToUInt32(ctx)
+    l = []
+    i = 0
+    while i < length:
+        item = this.Get(ctx, str(i))
+        if isnull_or_undefined(item):
+            item_string = ''
+        else:
+            item_string = item.ToString(ctx)
+        l.append(item_string)
+        i += 1
+        
+    return sep.join(l)
+
 class W_ArrayToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
-        length = this.Get(ctx, 'length').ToUInt32(ctx)
-        sep = ','
-        return W_String(sep.join([this.Get(ctx, str(index)).ToString(ctx) 
-                            for index in range(length)]))
+        return W_String(common_join(ctx, this, sep=','))
+
+class W_ArrayJoin(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        if len(args) >= 1 and not args[0] is w_Undefined:
+            sep = args[0].ToString(ctx)
+        else:
+            sep = ','
+        
+        return W_String(common_join(ctx, this, sep))
+
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
     def Call(self, ctx, args=[], this=None):
