@@ -863,6 +863,7 @@ class BaseRootWalker:
 class ShadowStackRootWalker(BaseRootWalker):
     need_root_stack = True
     thread_setup = None
+    collect_stacks_from_other_threads = None
 
     def __init__(self, gctransformer):
         BaseRootWalker.__init__(self, gctransformer)
@@ -913,6 +914,8 @@ class ShadowStackRootWalker(BaseRootWalker):
             if addr.address[0] != llmemory.NULL:
                 collect_stack_root(gc, addr)
             addr += sizeofaddr
+        if self.collect_stacks_from_other_threads is not None:
+            self.collect_stacks_from_other_threads(collect_stack_root)
 
     def need_thread_support(self):
         from pypy.module.thread import ll_thread    # xxx fish
@@ -1009,7 +1012,21 @@ class ShadowStackRootWalker(BaseRootWalker):
             # done
             gcdata.active_thread = new_aid
 
+        def collect_stack(aid, stacktop, callback):
+            if stacktop != llmemory.NULL:
+                gc = self.gc
+                end = stacktop - sizeofaddr
+                addr = end.address[0]
+                while addr != end:
+                    if addr.address[0] != llmemory.NULL:
+                        callback(gc, addr)
+                    addr += sizeofaddr
+
+        def collect_more_stacks(callback):
+            gcdata.thread_stacks.foreach(collect_stack, callback)
+
         self.thread_setup = thread_setup
         self.thread_prepare = thread_prepare
         self.thread_run = thread_run
         self.thread_die = thread_die
+        self.collect_stacks_from_other_threads = collect_more_stacks

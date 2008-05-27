@@ -188,5 +188,3 @@ class TestUsingBoehm(AbstractThreadTests):
 
 class TestUsingFramework(AbstractThreadTests):
     gcpolicy = 'generation'
-    def getcompiled(self, f, argtypes):
-        py.test.skip("in-progress")
