@@ -32,6 +32,12 @@ XML_ParserCreateNS.result = XML_Parser
 XML_Parse = lib.XML_Parse
 XML_Parse.args = [XML_Parser, ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
 XML_Parse.result = ctypes.c_int
+currents = ['CurrentLineNumber', 'CurrentColumnNumber',
+            'CurrentByteIndex']
+for name in currents:
+    func = getattr(lib, 'XML_Get' + name)
+    func.args = [XML_Parser]
+    func.result = c_int
 
 handler_names = [
     'StartElement',
@@ -148,8 +154,11 @@ class XMLParserType(object):
         def ExternalEntity(unused, context, base, sysId, pubId):
             self._flush_character_buffer()
             conv = self.conv
-            return real_cb(conv(context), conv(base), conv(sysId),
-                           conv(pubId))
+            res = real_cb(conv(context), conv(base), conv(sysId),
+                          conv(pubId))
+            if res is None:
+                return 0
+            return res
         CB = ctypes.CFUNCTYPE(c_int, c_void_p, *([c_char_p] * 4))
         return CB(ExternalEntity)
 
@@ -254,6 +263,8 @@ class XMLParserType(object):
     def __getattr__(self, name):
         if name == 'buffer_text':
             return self.buffer is not None
+        elif name in currents:
+            return getattr(lib, 'XML_Get' + name)(self.itself)
         return self.__dict__[name]
 
     def ParseFile(self, file):
