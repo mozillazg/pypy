@@ -80,10 +80,10 @@ app = gateway.applevel('''
             update1(d, kwargs)
 
     def popitem(d):
-        k = dict.keys(d)
-        if not k:
+        for k in dict.iterkeys(d):
+            break
+        else:
             raise KeyError("popitem(): dictionary is empty")
-        k = k[0]
         v = dict.__getitem__(d, k)
         dict.__delitem__(d, k)
         return k, v
