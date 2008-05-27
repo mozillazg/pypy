@@ -504,9 +504,21 @@ INC_GC = 131
 
 @expose_primitive(BECOME, unwrap_spec=[object, object])
 def func(interp, w_rcvr, w_new):
-    if w_rcvr.become(w_new):
-        return w_rcvr
-    raise PrimitiveFailedError
+    if w_rcvr.size() != w_new.size():
+        raise PrimitiveFailedError
+    w_lefts = []
+    w_rights = []
+    for i in range(w_rcvr.size()):
+        w_left = w_rcvr.at0(interp.space, i)
+        w_right = w_new.at0(interp.space, i)
+        if w_left.become(w_right):
+            w_lefts.append(w_left)
+            w_rights.append(w_right)
+        else:
+            for i in range(len(w_lefts)):
+                w_lefts[i].become(w_rights[i])
+            raise PrimitiveFailedError()
+    return w_rcvr
 
 def fake_bytes_left(interp):
     return interp.space.wrap_int(2**20) # XXX we don't know how to do this :-(
