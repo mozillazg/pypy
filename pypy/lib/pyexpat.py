@@ -39,6 +39,13 @@ for name in currents:
     func.args = [XML_Parser]
     func.result = c_int
 
+XML_SetReturnNSTriplet = lib.XML_SetReturnNSTriplet
+XML_SetReturnNSTriplet.args = [XML_Parser, c_int]
+XML_SetReturnNSTriplet.result = None
+XML_GetSpecifiedAttributeCount = lib.XML_GetSpecifiedAttributeCount
+XML_GetSpecifiedAttributeCount.args = [XML_Parser]
+XML_GetSpecifiedAttributeCount.result = c_int
+
 handler_names = [
     'StartElement',
     'EndElement',
@@ -101,6 +108,7 @@ class XMLParserType(object):
         self.buffer = None
         self.buffer_size = 8192
         self.character_data_handler = None
+        self.intern = {}
 
     def _flush_character_buffer(self):
         if not self.buffer:
@@ -127,6 +135,9 @@ class XMLParserType(object):
         except KeyError:
             cb = getattr(self, 'get_cb_for_%s' % name)(real_cb)
             self.storage[(name, real_cb)] = cb
+        except TypeError:
+            # weellll...
+            cb = getattr(self, 'get_cb_for_%s' % name)(real_cb)
         setter(self.itself, cb)
 
     def get_cb_for_StartElementHandler(self, real_cb):
@@ -135,9 +146,9 @@ class XMLParserType(object):
             conv = self.conv
             self._flush_character_buffer()
             if self.specified_attributes:
-                import pdb
-                pdb.set_trace()
-            max = 0
+                max = XML_GetSpecifiedAttributeCount(self.itself)
+            else:
+                max = 0
             while attrs[max]:
                 max += 2 # copied
             if self.ordered_attributes:
@@ -179,6 +190,26 @@ class XMLParserType(object):
         CB = ctypes.CFUNCTYPE(None, c_void_p, POINTER(c_char), c_int)
         return CB(CharacterData)
 
+    def get_cb_for_EntityDeclHandler(self, real_cb):
+        def EntityDecl(unused, ename, is_param, value, _, base, system_id,
+                       pub_id, not_name):
+            
+            self._flush_character_buffer()
+            args = [ename, is_param, value, base, system_id,
+                    pub_id, not_name]
+            args = [self.conv(arg) for arg in args]
+            real_cb(*args)
+        CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, c_int, c_char_p,
+                               c_int, c_char_p, c_char_p, c_char_p, c_char_p)
+        return CB(EntityDecl)
+
+    def get_cb_for_ElementDeclHandler(self, real_cb):
+        # XXX this is broken, needs tests
+        def ElementDecl(unused, *args):
+            pass
+        CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, c_void_p)
+        return CB(ElementDecl)
+
     def _new_callback_for_string_len(name, sign):
         def get_callback_for_(self, real_cb):
             def func(unused, s, len):
@@ -209,7 +240,7 @@ class XMLParserType(object):
         get_callback_for_.func_name = 'get_cb_for_' + name
         return get_callback_for_
     
-    for name, num in [
+    for name, num_or_sign in [
         ('EndElementHandler', 1),
         ('ProcessingInstructionHandler', 2),
         ('UnparsedEntityDeclHandler', 5),
@@ -218,13 +249,21 @@ class XMLParserType(object):
         ('EndNamespaceDeclHandler', 1),
         ('CommentHandler', 1),
         ('StartCdataSectionHandler', 0),
-        ('EndCdataSectionHandler', 0)]:
-        sign = [None, c_void_p] + [c_char_p] * num
+        ('EndCdataSectionHandler', 0),
+        ('StartDoctypeDeclHandler', [None, c_void_p] + [c_char_p] * 3 + [c_int]),
+        ('XmlDeclHandler', [None, c_void_p, c_char_p, c_char_p, c_int]),
+        ('AttlistDeclHandler', [None, c_void_p] + [c_char_p] * 4 + [c_int]),
+        ('EndDoctypeDeclHandler', 0),
+        ]:
+        if isinstance(num_or_sign, int):
+            sign = [None, c_void_p] + [c_char_p] * num_or_sign
+        else:
+            sign = num_or_sign
         name = 'get_cb_for_' + name
         locals()[name] = _new_callback_for_starargs(name, sign)
 
     def conv_unicode(self, s):
-        if s is None:
+        if s is None or isinstance(s, int):
             return s
         return s.decode(self.encoding)
 
@@ -247,7 +286,7 @@ class XMLParserType(object):
                 self._flush_character_buffer()
                 self.buffer = None
         elif name == 'namespace_prefixes':
-            xxx
+            XML_SetReturnNSTriplet(self.itself, int(bool(value)))
         elif name in setters:
             if name == 'CharacterDataHandler':
                 # XXX we need to flush buffer here
