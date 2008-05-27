@@ -45,11 +45,11 @@ def assertv(code, value):
     elif isinstance(value, bool):
         assert code_val.ToBoolean() == value
     elif isinstance(value, int):
-        assert code_val.ToInt32() == value
+        assert code_val.ToInt32(jsint.global_context) == value
     elif isinstance(value, float):
-        assert code_val.ToNumber(None) == value
+        assert code_val.ToNumber(jsint.global_context) == value
     else:
-        assert code_val.ToString(ctx) == value
+        assert code_val.ToString(jsint.global_context) == value
 
 def asserte(code, value):
     jsint = interpreter.Interpreter()
