@@ -3,6 +3,7 @@ from pypy.module.thread.ll_thread import *
 from pypy.translator.c.test.test_boehm import AbstractGCTestClass
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rlib.objectmodel import we_are_translated
 import py
 
 def setup_module(mod):
@@ -41,6 +42,7 @@ def test_fused():
 
 
 class AbstractThreadTests(AbstractGCTestClass):
+    use_threads = True
 
     def test_start_new_thread(self):
         import time
@@ -123,13 +125,19 @@ class AbstractThreadTests(AbstractGCTestClass):
 
         def bootstrap():
             state.gil.acquire(True)
+            if we_are_translated():
+                llop.gc_thread_run(lltype.Void)
             z = state.z
             state.z = None
             z.run()
+            if we_are_translated():
+                llop.gc_thread_die(lltype.Void)
             state.gil.release()
 
         def g(i, j):
             state.z = Z(i, j)
+            if we_are_translated():
+                llop.gc_thread_prepare(lltype.Void)
             start_new_thread(bootstrap, ())
             # now wait until the new thread really started and consumed 'z'
             willing_to_wait_more = 1000
@@ -139,6 +147,8 @@ class AbstractThreadTests(AbstractGCTestClass):
                 state.gil.release()
                 time.sleep(0.005)
                 state.gil.acquire(True)
+                if we_are_translated():
+                    llop.gc_thread_run(lltype.Void)
 
         def f():
             state.gil = allocate_lock_NOAUTO()
@@ -158,6 +168,8 @@ class AbstractThreadTests(AbstractGCTestClass):
                 state.gil.release()
                 time.sleep(0.01)
                 state.gil.acquire(True)
+                if we_are_translated():
+                    llop.gc_thread_run(lltype.Void)
             state.gil.release()
             time.sleep(0.1)
             return len(state.answers)
