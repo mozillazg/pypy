@@ -454,6 +454,19 @@ def test_send_to_primitive():
           1, "sub"]],
         test)
 
+def test_makePoint():
+    interp = new_interpreter(pushConstantZeroBytecode +
+                             pushConstantOneBytecode +
+                             bytecodePrimMakePoint)
+    interp.step()
+    interp.step()
+    interp.step()
+    w_point = interp.s_active_context().top()
+    from pypy.lang.smalltalk.wrapper import PointWrapper
+    point = PointWrapper(interp.space, w_point)
+    assert point.x(interp.space) == 0
+    assert point.y(interp.space) == 1
+
 def test_longJumpIfTrue():
     interp = new_interpreter(longJumpIfTrue(0) + chr(15) + longJumpIfTrue(0) + chr(15))
     interp.s_active_context().push(space.w_false)

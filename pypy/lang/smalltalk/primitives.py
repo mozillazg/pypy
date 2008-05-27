@@ -280,10 +280,21 @@ def func(interp, f):
     w_res = interp.space.wrap_float(math.exp(f))
     return w_res
 
+MAKE_POINT = 18
+
+@expose_primitive(MAKE_POINT, unwrap_spec=[int, int])
+def func(interp, x, y):
+    w_res = interp.space.classtable['w_Point'].as_class_get_shadow(interp.space).new(2)
+    point = wrapper.PointWrapper(interp.space, w_res)
+    point.store_x(interp.space, x)
+    point.store_y(interp.space, y)
+    return w_res
+
+
 # ___________________________________________________________________________
 # Failure
 
-FAIL = 18
+FAIL = 19
 
 # ___________________________________________________________________________
 # Subscript and Stream Primitives

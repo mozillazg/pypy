@@ -115,7 +115,7 @@ def new_scheduler(w_process=space.w_nil, prioritydict=None):
 def new_semaphore(excess_signals=0):
     w_semaphore = model.W_PointersObject(None, 3)
     semaphore = wrapper.SemaphoreWrapper(space, w_semaphore)
-    semaphore.store_excess_signals(space.wrap_int(excess_signals))
+    semaphore.store_excess_signals(space, excess_signals)
     return semaphore
 
         
@@ -203,9 +203,9 @@ class TestScheduler(object):
 
     def test_semaphore_excess_signal(self):
         semaphore = new_semaphore()
-        
-        semaphore.signal(None)
-        assert space.unwrap_int(semaphore.excess_signals()) == 1
+        self.space = space
+        semaphore.signal(self)
+        assert semaphore.excess_signals(space) == 1
 
     def test_highest_priority(self):
         py.test.raises(FatalError, wrapper.scheduler(space).highest_priority_process)
@@ -227,7 +227,8 @@ class TestScheduler(object):
 
     def test_semaphore_signal_wait(self):
         semaphore = new_semaphore()
-        semaphore.signal(None)
+        self.space = space
+        semaphore.signal(self)
         interp, process, old_process = self.make_processes(4, 2, space.w_false, space.w_true)
         semaphore.wait(interp)
         assert semaphore.is_empty_list()
