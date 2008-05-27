@@ -11,6 +11,8 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem.lltype import typeOf
 from pypy.rlib.debug import ll_assert
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.tool import autopath
 from distutils import sysconfig
 python_inc = sysconfig.get_python_inc()
@@ -141,3 +143,32 @@ class Lock_NOAUTO(object):
 
     def __del__(self):
         lltype.free(self._lock, flavor='raw')
+
+# ____________________________________________________________
+#
+# Thread integration.
+# These are three completely ad-hoc operations at the moment.
+
+def gc_thread_prepare():
+    """To call just before thread.start_new_thread().  This
+    allocates a new shadow stack to be used by the future
+    thread.  If memory runs out, this raises a MemoryError
+    (which can be handled by the caller instead of just getting
+    ignored if it was raised in the newly starting thread).
+    """
+    if we_are_translated():
+        llop.gc_thread_prepare(lltype.Void)
+
+def gc_thread_run():
+    """To call whenever the current thread (re-)acquired the GIL.
+    """
+    if we_are_translated():
+        llop.gc_thread_run(lltype.Void)
+
+def gc_thread_die():
+    """To call just before the final GIL release done by a dying
+    thread.  After a thread_die(), no more gc operation should
+    occur in this thread.
+    """
+    if we_are_translated():
+        llop.gc_thread_die(lltype.Void)

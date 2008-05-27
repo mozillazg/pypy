@@ -45,7 +45,10 @@ class Bootstrapper(object):
         finally:
             # clean up space.threadlocals to remove the ExecutionContext
             # entry corresponding to the current thread
-            space.threadlocals.leave_thread(space)
+            try:
+                space.threadlocals.leave_thread(space)
+            finally:
+                thread.gc_thread_die()
     bootstrap = staticmethod(bootstrap)
 
     def acquire(space, w_callable, args):
@@ -108,6 +111,7 @@ printed unless the exception is SystemExit."""
     bootstrapper.acquire(space, w_callable, args)
     try:
         try:
+            thread.gc_thread_prepare()
             ident = thread.start_new_thread(bootstrapper.bootstrap, ())
         except Exception, e:
             bootstrapper.release()     # normally called by the new thread
