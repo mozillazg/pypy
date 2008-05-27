@@ -6,7 +6,7 @@ from pypy.rpython.extfunc import genericcallable
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import llmemory
-import thread, py, os
+import py, os
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem.lltype import typeOf
@@ -15,7 +15,8 @@ from pypy.tool import autopath
 from distutils import sysconfig
 python_inc = sysconfig.get_python_inc()
 
-error = thread.error
+class error(Exception):
+    pass
 
 eci = ExternalCompilationInfo(
     includes = ['src/thread.h'],
@@ -31,8 +32,17 @@ def llexternal(name, args, result, **kwds):
     return rffi.llexternal(name, args, result, compilation_info=eci,
                            **kwds)
 
-CALLBACK = lltype.Ptr(lltype.FuncType([rffi.VOIDP], rffi.VOIDP))
-c_thread_start = llexternal('RPyThreadStart', [CALLBACK, rffi.VOIDP], rffi.INT)
+def _emulated_start_new_thread(func):
+    import thread
+    try:
+        ident = thread.start_new_thread(func, ())
+    except thread.error:
+        ident = -1
+    return rffi.cast(rffi.INT, ident)
+
+CALLBACK = lltype.Ptr(lltype.FuncType([], lltype.Void))
+c_thread_start = llexternal('RPyThreadStart', [CALLBACK], rffi.INT,
+                            _callable=_emulated_start_new_thread)
 c_thread_get_ident = llexternal('RPyThreadGetIdent', [], rffi.INT)
 
 TLOCKP = rffi.COpaquePtr('struct RPyOpaque_ThreadLock',
@@ -71,47 +81,11 @@ def allocate_lock_NOAUTO():
         raise error("out of resources")
     return Lock_NOAUTO(ll_lock)
 
-def _start_new_thread(x, y):
-    return thread.start_new_thread(x, (y,))
-
-def ll_start_new_thread(l_func, arg):
-    l_arg = cast_instance_to_base_ptr(arg)
-    l_arg = rffi.cast(rffi.VOIDP, l_arg)
-    ident = c_thread_start(l_func, l_arg)
+def ll_start_new_thread(func):
+    ident = c_thread_start(func)
     if ident == -1:
         raise error("can't start new thread")
     return ident
-
-class LLStartNewThread(ExtRegistryEntry):
-    _about_ = _start_new_thread
-    
-    def compute_result_annotation(self, s_func, s_arg):
-        bookkeeper = self.bookkeeper
-        s_result = bookkeeper.emulate_pbc_call(bookkeeper.position_key,
-                                               s_func, [s_arg])
-        assert annmodel.s_None.contains(s_result)
-        return annmodel.SomeInteger()
-    
-    def specialize_call(self, hop):
-        rtyper = hop.rtyper
-        bk = rtyper.annotator.bookkeeper
-        r_result = rtyper.getrepr(hop.s_result)
-        hop.exception_is_here()
-        args_r = [rtyper.getrepr(s_arg) for s_arg in hop.args_s]
-        _callable = hop.args_s[0].const
-        funcptr = lltype.functionptr(CALLBACK.TO, _callable.func_name,
-                                     _callable=_callable)
-        func_s = bk.immutablevalue(funcptr)
-        s_args = [func_s, hop.args_s[1]]
-        obj = rtyper.getannmixlevel().delayedfunction(
-            ll_start_new_thread, s_args, annmodel.SomeInteger())
-        bootstrap = rtyper.getannmixlevel().delayedfunction(
-            _callable, [hop.args_s[1]], annmodel.s_None)
-        vlist = [hop.inputconst(typeOf(obj), obj),
-                 hop.inputconst(typeOf(bootstrap), bootstrap),
-                 #hop.inputarg(args_r[0], 0),
-                 hop.inputarg(args_r[1], 1)]
-        return hop.genop('direct_call', vlist, r_result)
 
 # wrappers...
 
@@ -119,7 +93,12 @@ def get_ident():
     return c_thread_get_ident()
 
 def start_new_thread(x, y):
-    return _start_new_thread(x, y[0])
+    """In RPython, no argument can be passed.  You have to use global
+    variables to pass information to the new thread.  That's not very
+    nice, but at least it avoids some levels of GC issues.
+    """
+    assert len(y) == 0
+    return ll_start_new_thread(x)
 
 class Lock(object):
     """ Container for low-level implementation

@@ -9,38 +9,65 @@ from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.gateway import ObjSpace, W_Root, Arguments
 from pypy.rlib.objectmodel import free_non_gc_object
 
-# This code has subtle memory management issues in order to start
-# a new thread.  It should work correctly with Boehm, but the framework
-# GC will not see the references stored in the raw-malloced Bootstrapper
-# instances => crash.  It crashes with refcounting too
-# (see the skipped test_raw_instance_flavor in
-# rpython/memory/gctransformer/test/test_refcounting).
+
 
 class Bootstrapper(object):
-    _alloc_flavor_ = 'raw'
-    
-    def bootstrap(self):
-        space = self.space
+    "A global container used to pass information to newly starting threads."
+
+    # Passing a closure argument to ll_thread.start_new_thread() would be
+    # theoretically nicer, but comes with messy memory management issues.
+    # This is much more straightforward.
+
+    # The following lock is held whenever the fields
+    # 'bootstrapper.w_callable' and 'bootstrapper.args' are in use.
+    lock = None
+
+    def setup(space):
+        if bootstrapper.lock is None:
+            try:
+                bootstrapper.lock = thread.allocate_lock()
+            except thread.error:
+                raise wrap_thread_error(space, "can't allocate bootstrap lock")
+    setup = staticmethod(setup)
+
+    def bootstrap():
+        # Note that when this runs, we already hold the GIL.  This is ensured
+        # by rffi's callback mecanism: we are a callback for the
+        # c_thread_start() external function.
+        space = bootstrapper.space
+        w_callable = bootstrapper.w_callable
+        args = bootstrapper.args
+        bootstrapper.release()
+        # run!
         space.threadlocals.enter_thread(space)
         try:
-            self.run()
+            bootstrapper.run(space, w_callable, args)
         finally:
-            # release ownership of these objects before we release the GIL.
-            # (for the refcounting gc it is necessary to reset the fields to
-            # None before we use free_non_gc_object(), because the latter
-            # doesn't know that it needs to decref the fields)
-            self.args       = None
-            self.w_callable = None
-            # we can free the empty 'self' structure now
-            free_non_gc_object(self)
             # clean up space.threadlocals to remove the ExecutionContext
-            # entry corresponding to the current thread and release the GIL
+            # entry corresponding to the current thread
             space.threadlocals.leave_thread(space)
+    bootstrap = staticmethod(bootstrap)
 
-    def run(self):
-        space      = self.space
-        w_callable = self.w_callable
-        args       = self.args
+    def acquire(space, w_callable, args):
+        # If the previous thread didn't start yet, wait until it does.
+        # Note that bootstrapper.lock must be a regular lock, not a NOAUTO
+        # lock, because the GIL must be released while we wait.
+        bootstrapper.lock.acquire(True)
+        bootstrapper.space = space
+        bootstrapper.w_callable = w_callable
+        bootstrapper.args = args
+    acquire = staticmethod(acquire)
+
+    def release():
+        # clean up 'bootstrapper' to make it ready for the next
+        # start_new_thread() and release the lock to tell that there
+        # isn't any bootstrapping thread left.
+        bootstrapper.w_callable = None
+        bootstrapper.args = None
+        bootstrapper.lock.release()
+    release = staticmethod(release)
+
+    def run(space, w_callable, args):
         try:
             space.call_args(w_callable, args)
         except OperationError, e:
@@ -49,10 +76,14 @@ class Bootstrapper(object):
                 where = 'thread %d started by ' % ident
                 e.write_unraisable(space, where, w_callable)
             e.clear(space)
+    run = staticmethod(run)
+
+bootstrapper = Bootstrapper()
 
 
 def setup_threads(space):
     space.threadlocals.setup_threads(space)
+    bootstrapper.setup(space)
 
 
 def start_new_thread(space, w_callable, w_args, w_kwargs=NoneNotWrapped):
@@ -74,12 +105,13 @@ printed unless the exception is SystemExit."""
                 space.wrap("first arg must be callable"))
 
     args = Arguments.frompacked(space, w_args, w_kwargs)
-    boot = Bootstrapper()
-    boot.space      = space
-    boot.w_callable = w_callable
-    boot.args       = args
+    bootstrapper.acquire(space, w_callable, args)
     try:
-        ident = thread.start_new_thread(Bootstrapper.bootstrap, (boot,))
+        try:
+            ident = thread.start_new_thread(bootstrapper.bootstrap, ())
+        except Exception, e:
+            bootstrapper.release()     # normally called by the new thread
+            raise
     except thread.error:
         raise wrap_thread_error(space, "can't start new thread")
     return space.wrap(ident)
