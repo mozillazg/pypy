@@ -16,11 +16,11 @@ from pypy.rlib.rposix import get_errno, set_errno
 
 class GILThreadLocals(OSThreadLocals):
     """A version of OSThreadLocals that enforces a GIL."""
-    ll_GIL = None
+    ll_GIL = thread.null_ll_lock
 
     def setup_threads(self, space):
         """Enable threads in the object space, if they haven't already been."""
-        if self.ll_GIL is None:
+        if not self.ll_GIL:
             try:
                 self.ll_GIL = thread.allocate_ll_lock()
             except thread.error:
