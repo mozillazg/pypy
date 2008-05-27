@@ -98,8 +98,8 @@ class Class(Node):
                 # there would be a type mismatch.
                 args =  m_meth.graph.getargs()
                 SELF = args[0].concretetype
-                if not ootype.isSubclass(self.INSTANCE, SELF):
-                    continue
+##                if not ootype.isSubclass(self.INSTANCE, SELF):
+##                    continue
                 f = self.db.genoo.Function(self.db, m_meth.graph, m_name, is_method = True)
                 f.render(ilasm)
             else:
