@@ -32,18 +32,18 @@ class Node(object):
         """
         Initializes the content from the AST specific for each node type
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def emit(self, bytecode):
         """ Emits bytecode
         """
-        raise NotImplementedError
+        raise NotImplementedError()
     
     def get_literal(self):
-        raise NotImplementedError
+        raise NotImplementedError()
     
     def get_args(self, ctx):
-        raise NotImplementedError
+        raise NotImplementedError()
     
     def __str__(self):
         return "%s()"%(self.__class__)

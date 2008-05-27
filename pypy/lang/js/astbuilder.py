@@ -311,9 +311,16 @@ class ASTBuilder(RPythonVisitor):
     def visit_callexpression(self, node):
         pos = self.get_pos(node)
         left = self.dispatch(node.children[0])
-        for rightnode in node.children[1:]:
-            right = self.dispatch(rightnode)
-            left = operations.Call(pos, left, right)
+        nodelist = node.children[1:]
+        while nodelist:
+            currnode = nodelist.pop(0)
+            if isinstance(currnode, Symbol):
+                op = currnode
+                right = self.dispatch(nodelist.pop(0))
+                left = self.BINOP_TO_CLS[op.additional_info](pos, left, right)
+            else:
+                right = self.dispatch(currnode)
+                left = operations.Call(pos, left, right)
         
         return left
         
