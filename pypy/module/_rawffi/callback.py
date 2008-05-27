@@ -33,8 +33,9 @@ def callback(ll_args, ll_res, ll_userdata):
         w_args = space.newlist([space.wrap(rffi.cast(rffi.UINT, ll_args[i]))
                                 for i in range(len(argtypes))])
         w_res = space.call(w_callable, w_args)
-        unwrap_value(space, push_elem, ll_res, 0,
-                     letter2tp(space, callback_ptr.result), w_res)
+        if callback_ptr.res != 'O': # don't return void
+            unwrap_value(space, push_elem, ll_res, 0,
+                         letter2tp(space, callback_ptr.result), w_res)
     except OperationError, e:
         tbprint(space, space.wrap(e.application_traceback),
                 space.wrap(e.errorstr(space)))
