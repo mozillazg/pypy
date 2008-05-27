@@ -53,6 +53,7 @@ class GILThreadLocals(OSThreadLocals):
         # This is a single external function so that we are sure that nothing
         # occurs between the release and the acquire, e.g. no GC operation.
         GIL.fused_release_acquire()
+        thread.gc_thread_run()
 
     def getGIL(self):
         return self.GIL    # XXX temporary hack!
@@ -87,4 +88,5 @@ def before_external_call():
 def after_external_call():
     e = get_errno()
     spacestate.GIL.acquire(True)
+    thread.gc_thread_run()
     set_errno(e)
