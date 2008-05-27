@@ -34,8 +34,8 @@ def increment(ctx, nleft, constval=1):
 
 def sub(ctx, nleft, nright):
     if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
-        ileft = nleft.ToInt32()
-        iright = nright.ToInt32()
+        ileft = nleft.ToInt32(ctx)
+        iright = nright.ToInt32(ctx)
         try:
             return W_IntNumber(ovfcheck(ileft - iright))
         except OverflowError:
@@ -46,8 +46,8 @@ def sub(ctx, nleft, nright):
 
 def mult(ctx, nleft, nright):
     if isinstance(nleft, W_IntNumber) and isinstance(nright, W_IntNumber):
-        ileft = nleft.ToInt32()
-        iright = nright.ToInt32()
+        ileft = nleft.ToInt32(ctx)
+        iright = nright.ToInt32(ctx)
         try:
             return W_IntNumber(ovfcheck(ileft * iright))
         except OverflowError:
@@ -57,9 +57,9 @@ def mult(ctx, nleft, nright):
     return W_FloatNumber(fleft * fright)
 
 def mod(ctx, nleft, nright): # XXX this one is really not following spec
-    ileft = nleft.ToInt32()
-    iright = nright.ToInt32()
-    return W_IntNumber(ileft % iright)
+    fleft = nleft.ToNumber(ctx)
+    fright = nright.ToNumber(ctx)
+    return W_FloatNumber(fleft % fright)
 
 def division(ctx, nleft, nright):
     # XXX optimise for ints and floats

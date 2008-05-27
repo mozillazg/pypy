@@ -47,7 +47,7 @@ class JSTestFile(py.test.collect.Module):
         cls.testcases = cls.interp.global_context.resolve_identifier('testcases')
         cls.tc = cls.interp.global_context.resolve_identifier('tc')
         # override eval
-        cls.interp.global_context.put('eval', W_Builtin(overriden_evaljs))
+        cls.interp.w_Global.Put(cls.interp.global_context, 'eval', W_Builtin(overriden_evaljs))
         
     init_interp = classmethod(init_interp)
     
@@ -72,9 +72,10 @@ class JSTestFile(py.test.collect.Module):
             raise Failed(msg="Javascript Error", excinfo=py.code.ExceptionInfo())
         except:
             raise Failed(excinfo=py.code.ExceptionInfo())
-        testcases = self.interp.global_context.resolve_identifier('testcases')
-        self.tc = self.interp.global_context.resolve_identifier('tc')
-        testcount = testcases.Get('length').ToInt32()
+        ctx = self.interp.global_context
+        testcases = ctx.resolve_identifier('testcases')
+        self.tc = ctx.resolve_identifier('tc')
+        testcount = testcases.Get(ctx, 'length').ToInt32(ctx)
         self.testcases = testcases
         return range(testcount)
 

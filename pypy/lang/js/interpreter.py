@@ -94,10 +94,10 @@ class W_StringObject(W_NativeObject):
 
 class W_ArrayObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
-        proto = ctx.get_global().Get('Array').Get('prototype')
+        proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         for i in range(len(args)):
-            array.Put(str(i), args[i])
+            array.Put(ctx, str(i), args[i])
         return array
 
     def Construct(self, ctx, args=[]):
@@ -127,7 +127,7 @@ def parseIntjs(ctx, args, this):
         return W_FloatNumber(NAN)
     s = args[0].ToString(ctx).strip(" ")
     if len(args) > 1:
-        radix = args[1].ToInt32()
+        radix = args[1].ToInt32(ctx)
     else:
         radix = 10
     if len(s) >= 2 and (s.startswith('0x') or s.startswith('0X')) :
@@ -324,7 +324,7 @@ class W_CharAt(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         if len(args)>=1:
-            pos = args[0].ToInt32()
+            pos = args[0].ToInt32(ctx)
             if (not pos >=0) or (pos > len(string) - 1):
                 return W_String('')
         else:
@@ -349,7 +349,7 @@ class W_IndexOf(W_NewBuiltin):
         if len(args) < 2:
             pos = 0
         else:
-            pos = args[1].ToInt32()
+            pos = args[1].ToInt32(ctx)
         pos = min(max(pos, 0), size)
         return W_IntNumber(string.find(substr, pos))
 
@@ -360,11 +360,11 @@ class W_Substring(W_NewBuiltin):
         if len(args) < 1:
             start = 0
         else:
-            start = args[0].ToInt32()
+            start = args[0].ToInt32(ctx)
         if len(args) < 2:
             end = size
         else:
-            end = args[1].ToInt32()
+            end = args[1].ToInt32(ctx)
         tmp1 = min(max(start, 0), size)
         tmp2 = min(max(end, 0), size)
         start = min(tmp1, tmp2)
@@ -373,9 +373,9 @@ class W_Substring(W_NewBuiltin):
 
 class W_ArrayToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
-        length = this.Get('length').ToUInt32()
+        length = this.Get(ctx, 'length').ToUInt32(ctx)
         sep = ','
-        return W_String(sep.join([this.Get(str(index)).ToString(ctx) 
+        return W_String(sep.join([this.Get(ctx, str(index)).ToString(ctx) 
                             for index in range(length)]))
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
@@ -393,7 +393,7 @@ class Interpreter(object):
     def __init__(self):
         def put_values(obj, dictvalues):
             for key,value in dictvalues.iteritems():
-                obj.Put(key, value)
+                obj.Put(ctx, key, value)
             
         w_Global = W_Object(Class="global")
 
@@ -404,17 +404,17 @@ class Interpreter(object):
         w_Function = W_Function(ctx, Class='Function', 
                               Prototype=w_ObjPrototype)
         
-        w_Global.Put('Function', w_Function)
+        w_Global.Put(ctx, 'Function', w_Function)
         
         w_Object = W_ObjectObject('Object', w_Function)
-        w_Object.Put('prototype', w_ObjPrototype, dd=True, de=True, ro=True)
+        w_Object.Put(ctx, 'prototype', w_ObjPrototype, dd=True, de=True, ro=True)
         
-        w_Global.Put('Object', w_Object)
+        w_Global.Put(ctx, 'Object', w_Object)
         w_FncPrototype = w_Function.Call(ctx, this=w_Function)
-        w_Function.Put('prototype', w_FncPrototype, dd=True, de=True, ro=True)
-        w_Function.Put('constructor', w_Function)
+        w_Function.Put(ctx, 'prototype', w_FncPrototype, dd=True, de=True, ro=True)
+        w_Function.Put(ctx, 'constructor', w_Function)
         
-        w_Object.Put('length', W_IntNumber(1), ro=True, dd=True)
+        w_Object.Put(ctx, 'length', W_IntNumber(1), ro=True, dd=True)
         
         toString = W_ToString(ctx)
         
@@ -439,8 +439,8 @@ class Interpreter(object):
         })
         
         w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
-        w_Boolean.Put('constructor', w_FncPrototype, dd=True, ro=True, de=True)
-        w_Boolean.Put('length', W_IntNumber(1), dd=True, ro=True, de=True)
+        w_Boolean.Put(ctx, 'constructor', w_FncPrototype, dd=True, ro=True, de=True)
+        w_Boolean.Put(ctx, 'length', W_IntNumber(1), dd=True, ro=True, de=True)
         
         w_BoolPrototype = create_object(ctx, 'Object', Value=W_Boolean(False))
         w_BoolPrototype.Class = 'Boolean'
@@ -452,9 +452,9 @@ class Interpreter(object):
             'valueOf': get_value_of('Boolean', ctx),
         })
 
-        w_Boolean.Put('prototype', w_BoolPrototype, dd=True, ro=True, de=True)
+        w_Boolean.Put(ctx, 'prototype', w_BoolPrototype, dd=True, ro=True, de=True)
 
-        w_Global.Put('Boolean', w_Boolean)
+        w_Global.Put(ctx, 'Boolean', w_Boolean)
 
         #Number
         w_Number = W_NumberObject('Number', w_FncPrototype)
@@ -477,18 +477,18 @@ class Interpreter(object):
             'length'   : W_IntNumber(1),
         })
         w_Number.propdict['prototype'].ro = True
-        w_Number.Put('MAX_VALUE', W_FloatNumber(1.7976931348623157e308),
+        w_Number.Put(ctx, 'MAX_VALUE', W_FloatNumber(1.7976931348623157e308),
                      ro=True, dd=True)
-        w_Number.Put('MIN_VALUE', W_FloatNumber(0), ro=True, dd=True)
-        w_Number.Put('NaN', W_FloatNumber(NAN), ro=True, dd=True)
+        w_Number.Put(ctx, 'MIN_VALUE', W_FloatNumber(0), ro=True, dd=True)
+        w_Number.Put(ctx, 'NaN', W_FloatNumber(NAN), ro=True, dd=True)
         # ^^^ this is exactly in test case suite
-        w_Number.Put('POSITIVE_INFINITY', W_FloatNumber(INFINITY),
+        w_Number.Put(ctx, 'POSITIVE_INFINITY', W_FloatNumber(INFINITY),
                      ro=True, dd=True)
-        w_Number.Put('NEGATIVE_INFINITY', W_FloatNumber(-INFINITY),
+        w_Number.Put(ctx, 'NEGATIVE_INFINITY', W_FloatNumber(-INFINITY),
                      ro=True, dd=True)
         
 
-        w_Global.Put('Number', w_Number)
+        w_Global.Put(ctx, 'Number', w_Number)
         
                 
         #String
@@ -508,8 +508,8 @@ class Interpreter(object):
             'substring': W_Substring(ctx),
         })
         
-        w_String.Put('prototype', w_StrPrototype)
-        w_Global.Put('String', w_String)
+        w_String.Put(ctx, 'prototype', w_StrPrototype)
+        w_Global.Put(ctx, 'String', w_String)
 
         w_Array = W_ArrayObject('Array', w_FncPrototype)
 
@@ -522,43 +522,43 @@ class Interpreter(object):
             'toString': W_ArrayToString(ctx),
         })
         
-        w_Array.Put('prototype', w_ArrPrototype)
-        w_Global.Put('Array', w_Array)
+        w_Array.Put(ctx, 'prototype', w_ArrPrototype)
+        w_Global.Put(ctx, 'Array', w_Array)
         
         
         #Math
         w_math = W_Object(Class='Math')
-        w_Global.Put('Math', w_math)
-        w_math.Put('__proto__',  w_ObjPrototype)
-        w_math.Put('prototype', w_ObjPrototype, dd=True, de=True, ro=True)
-        w_math.Put('abs', W_Builtin(absjs, Class='function'))
-        w_math.Put('floor', W_Builtin(floorjs, Class='function'))
-        w_math.Put('pow', W_Builtin(powjs, Class='function'))
-        w_math.Put('sqrt', W_Builtin(sqrtjs, Class='function'))
-        w_math.Put('E', W_FloatNumber(math.e))
-        w_math.Put('PI', W_FloatNumber(math.pi))
+        w_Global.Put(ctx, 'Math', w_math)
+        w_math.Put(ctx, '__proto__',  w_ObjPrototype)
+        w_math.Put(ctx, 'prototype', w_ObjPrototype, dd=True, de=True, ro=True)
+        w_math.Put(ctx, 'abs', W_Builtin(absjs, Class='function'))
+        w_math.Put(ctx, 'floor', W_Builtin(floorjs, Class='function'))
+        w_math.Put(ctx, 'pow', W_Builtin(powjs, Class='function'))
+        w_math.Put(ctx, 'sqrt', W_Builtin(sqrtjs, Class='function'))
+        w_math.Put(ctx, 'E', W_FloatNumber(math.e))
+        w_math.Put(ctx, 'PI', W_FloatNumber(math.pi))
         
-        w_Global.Put('version', W_Builtin(versionjs))
+        w_Global.Put(ctx, 'version', W_Builtin(versionjs))
         
         #Date
         w_Date = W_DateFake(ctx, Class='Date')
-        w_Global.Put('Date', w_Date)
+        w_Global.Put(ctx, 'Date', w_Date)
         
-        w_Global.Put('NaN', W_FloatNumber(NAN))
-        w_Global.Put('Infinity', W_FloatNumber(INFINITY))
-        w_Global.Put('undefined', w_Undefined)
-        w_Global.Put('eval', W_Builtin(evaljs))
-        w_Global.Put('parseInt', W_Builtin(parseIntjs))
-        w_Global.Put('parseFloat', W_Builtin(parseFloatjs))
-        w_Global.Put('isNaN', W_Builtin(isnanjs))
-        w_Global.Put('isFinite', W_Builtin(isfinitejs))            
+        w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN))
+        w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY))
+        w_Global.Put(ctx, 'undefined', w_Undefined)
+        w_Global.Put(ctx, 'eval', W_Builtin(evaljs))
+        w_Global.Put(ctx, 'parseInt', W_Builtin(parseIntjs))
+        w_Global.Put(ctx, 'parseFloat', W_Builtin(parseFloatjs))
+        w_Global.Put(ctx, 'isNaN', W_Builtin(isnanjs))
+        w_Global.Put(ctx, 'isFinite', W_Builtin(isfinitejs))            
 
-        w_Global.Put('print', W_Builtin(printjs))
-        w_Global.Put('this', w_Global)
+        w_Global.Put(ctx, 'print', W_Builtin(printjs))
+        w_Global.Put(ctx, 'this', w_Global)
 
         # DEBUGGING
         if 0:
-            w_Global.Put('pypy_repr', W_Builtin(pypy_repr))
+            w_Global.Put(ctx, 'pypy_repr', W_Builtin(pypy_repr))
         
         self.global_context = ctx
         self.w_Global = w_Global

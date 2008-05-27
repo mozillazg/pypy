@@ -201,8 +201,8 @@ class BaseBinaryComparison(Opcode):
 
 class BaseBinaryBitwiseOp(Opcode):
     def eval(self, ctx, stack):
-        s5 = stack.pop().ToInt32()
-        s6 = stack.pop().ToInt32()
+        s5 = stack.pop().ToInt32(ctx)
+        s6 = stack.pop().ToInt32(ctx)
         stack.append(self.operation(ctx, s5, s6))
     
     def operation(self, ctx, op1, op2):
@@ -287,7 +287,7 @@ class LOAD_REALVAR(Opcode):
     def eval(self, ctx, stack):
         xxx
         scope = ctx.scope[self.depth]
-        stack.append(scope.Get(self.identifier))
+        stack.append(scope.Get(ctx, self.identifier))
         #stack.append(W_Reference(self.identifier, scope))
 
     def __repr__(self):
@@ -298,10 +298,10 @@ class LOAD_ARRAY(Opcode):
         self.counter = counter
 
     def eval(self, ctx, stack):
-        proto = ctx.get_global().Get('Array').Get('prototype')
+        proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         for i in range(self.counter):
-            array.Put(str(self.counter - i - 1), stack.pop())
+            array.Put(ctx, str(self.counter - i - 1), stack.pop())
         stack.append(array)
 
     def __repr__(self):
@@ -325,13 +325,13 @@ class LOAD_FUNCTION(Opcode):
         self.funcobj = funcobj
 
     def eval(self, ctx, stack):
-        proto = ctx.get_global().Get('Function').Get('prototype')
+        proto = ctx.get_global().Get(ctx, 'Function').Get(ctx, 'prototype')
         w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function',
                           callfunc=self.funcobj)
-        w_func.Put('length', W_IntNumber(len(self.funcobj.params)))
+        w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
         w_obj = create_object(ctx, 'Object')
-        w_obj.Put('constructor', w_func, de=True)
-        w_func.Put('prototype', w_obj)
+        w_obj.Put(ctx, 'constructor', w_func, de=True)
+        w_func.Put(ctx, 'prototype', w_obj)
         stack.append(w_func)
 
     def __repr__(self):
@@ -344,7 +344,7 @@ class LOAD_FUNCTION(Opcode):
 
 #     def eval(self, ctx, stack):
 #         value = stack[-1]
-#         ctx.scope[self.depth].Put(self.name, value)
+#         ctx.scope[self.depth].Put(ctx, self.name, value)
 
 #     def __repr__(self):
 #         return 'STORE_VAR "%s"' % self.name
@@ -358,7 +358,7 @@ class LOAD_OBJECT(Opcode):
         for _ in range(self.counter):
             name = stack.pop().ToString(ctx)
             w_elem = stack.pop()
-            w_obj.Put(name, w_elem)
+            w_obj.Put(ctx, name, w_elem)
         stack.append(w_obj)
 
     def __repr__(self):
@@ -370,7 +370,7 @@ class LOAD_MEMBER(Opcode):
 
     def eval(self, ctx, stack):
         w_obj = stack.pop().ToObject(ctx)
-        stack.append(w_obj.Get(self.name))
+        stack.append(w_obj.Get(ctx, self.name))
         #stack.append(W_Reference(self.name, w_obj))
 
     def __repr__(self):
@@ -380,7 +380,7 @@ class LOAD_ELEMENT(Opcode):
     def eval(self, ctx, stack):
         name = stack.pop().ToString(ctx)
         w_obj = stack.pop().ToObject(ctx)
-        stack.append(w_obj.Get(name))
+        stack.append(w_obj.Get(ctx, name))
         #stack.append(W_Reference(name, w_obj))
 
 class COMMA(BaseUnaryOperation):
@@ -449,20 +449,20 @@ class BITOR(BaseBinaryBitwiseOp):
 
 class URSH(BaseBinaryBitwiseOp):
     def eval(self, ctx, stack):
-        op2 = stack.pop().ToUInt32()
-        op1 = stack.pop().ToUInt32()
+        op2 = stack.pop().ToUInt32(ctx)
+        op1 = stack.pop().ToUInt32(ctx)
         stack.append(W_IntNumber(op1 >> (op2 & 0x1F)))
 
 class RSH(BaseBinaryBitwiseOp):
     def eval(self, ctx, stack):
-        op2 = stack.pop().ToUInt32()
-        op1 = stack.pop().ToInt32()
+        op2 = stack.pop().ToUInt32(ctx)
+        op1 = stack.pop().ToInt32(ctx)
         stack.append(W_IntNumber(op1 >> intmask(op2 & 0x1F)))
 
 class LSH(BaseBinaryBitwiseOp):
     def eval(self, ctx, stack):
-        op2 = stack.pop().ToUInt32()
-        op1 = stack.pop().ToInt32()
+        op2 = stack.pop().ToUInt32(ctx)
+        op1 = stack.pop().ToInt32(ctx)
         stack.append(W_IntNumber(op1 << intmask(op2 & 0x1F)))
 
 class MUL(BaseBinaryOperation):
@@ -542,7 +542,7 @@ class BaseStoreMember(Opcode):
         value = stack.pop()
         name = elem.ToString()
         value = self.operation(ctx, left, name, value)
-        left.Put(name, value)
+        left.Put(ctx, name, value)
         stack.append(value)
 
 class STORE_MEMBER(BaseStoreMember):
@@ -551,7 +551,7 @@ class STORE_MEMBER(BaseStoreMember):
 
 class BaseStoreMemberAssign(BaseStoreMember):
     def operation(self, ctx, left, name, value):
-        prev = left.Get(name)
+        prev = left.Get(ctx, name)
         return self.decision(ctx, value, prev)
 
 class STORE_MEMBER_ADD(BaseStoreMemberAssign):
@@ -594,8 +594,8 @@ class BaseAssignOper(BaseStore):
 
 class BaseAssignBitOper(BaseStore):
     def process(self, ctx, name, stack):
-        right = stack.pop().ToInt32()
-        left = ctx.resolve_identifier(name).ToInt32()
+        right = stack.pop().ToInt32(ctx)
+        left = ctx.resolve_identifier(name).ToInt32(ctx)
         result = self.operation(ctx, left, right)
         stack.append(result)
         return result
@@ -705,14 +705,14 @@ class DECLARE_FUNCTION(Opcode):
 
     def eval(self, ctx, stack):
         # function declaration actyally don't run anything
-        proto = ctx.get_global().Get('Function').Get('prototype')
+        proto = ctx.get_global().Get(ctx, 'Function').Get(ctx, 'prototype')
         w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self.funcobj)
-        w_func.Put('length', W_IntNumber(len(self.funcobj.params)))
+        w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
         w_obj = create_object(ctx, 'Object')
-        w_obj.Put('constructor', w_func, de=True)
-        w_func.Put('prototype', w_obj)
+        w_obj.Put(ctx, 'constructor', w_func, de=True)
+        w_func.Put(ctx, 'prototype', w_obj)
         if self.funcobj.name is not None:
-            ctx.put(self.funcobj.name, w_func)
+            ctx.Put(ctx, self.funcobj.name, w_func)
 
     def __repr__(self):
         funcobj = self.funcobj
@@ -728,7 +728,7 @@ class DECLARE_VAR(Opcode):
         self.name = name
 
     def eval(self, ctx, stack):
-        ctx.put(self.name, w_Undefined, dd=True)
+        ctx.Put(ctx, self.name, w_Undefined, dd=True)
 
     def __repr__(self):
         return 'DECLARE_VAR "%s"' % (self.name,)
@@ -758,7 +758,7 @@ class CALL_METHOD(Opcode):
         method = stack.pop()
         what = stack.pop().ToObject(ctx)
         args = stack.pop()
-        r1 = what.Get(method.ToString())
+        r1 = what.Get(ctx, method.ToString())
         if not isinstance(r1, W_PrimitiveObject):
             raise ThrowException(W_String("it is not a callable"))
         try:
@@ -792,7 +792,7 @@ class TRYCATCHBLOCK(Opcode):
                 if self.catchcode is not None:
                     # XXX just copied, I don't know if it's right
                     obj = W_Object()
-                    obj.Put(self.catchparam, e.exception)
+                    obj.Put(ctx, self.catchparam, e.exception)
                     ctx.push_object(obj)
                     try:
                         self.catchcode.run(ctx)
