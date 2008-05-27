@@ -29,18 +29,11 @@ class Register(iRegister):
         return self.value
     
     def add(self, value, use_cycles=True):
-        value = self.process_2_complement(value)
         self.set(self.get(use_cycles)+value, use_cycles)
         
     def sub(self, value, use_cycles=True):
         self.set(self.get(use_cycles)-value, use_cycles)
     
-    def process_2_complement(self, value):
-        # check if the left most bit is set
-        if (value >> 7) == 1:
-            return -(~value) & 0xFF-1
-        else :
-            return value
 #------------------------------------------------------------------------------
 
 class DoubleRegister(iRegister):
@@ -94,19 +87,10 @@ class DoubleRegister(iRegister):
             self.cpu.cycles -= 1
         
     def add(self, value, use_cycles=True):
-        value = self.process_2_complement(value)
         self.set(self.get(use_cycles) + value, use_cycles=use_cycles)
         if use_cycles:
             self.cpu.cycles -= 2
             
-    def process_2_complement(self, value):
-        if value > 0xFF:
-            return value
-        # check if the left most bit is set
-        elif (value >> 7) == 1:
-            return -((~value) & 0xFF)-1
-        else :
-            return value
     
 # ------------------------------------------------------------------------------
 
@@ -202,7 +186,7 @@ DEBUG_INSTRUCTION_COUNTER = 1
 
 class CPU(object):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGIRL GameBoy (TM) Emulator
     
     Central Unit ProcessOR (Sharp LR35902 CPU)
     """
@@ -218,36 +202,36 @@ class CPU(object):
         self.reset()
 
     def ini_registers(self):
-        self.b  = Register(self)
-        self.c  = Register(self)
-        self.bc = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
+        self.b   = Register(self)
+        self.c   = Register(self)
+        self.bc  = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
         
-        self.d  = Register(self)
-        self.e  = Register(self)
-        self.de = DoubleRegister(self, self.d, self.e, constants.RESET_DE)
+        self.d   = Register(self)
+        self.e   = Register(self)
+        self.de  = DoubleRegister(self, self.d, self.e, constants.RESET_DE)
 
-        self.h  = Register(self)
-        self.l  = Register(self)
-        self.hl = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
+        self.h   = Register(self)
+        self.l   = Register(self)
+        self.hl  = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
         
         self.hli = ImmediatePseudoRegister(self, self.hl)
         self.pc  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_PC)
         self.sp  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_SP)
         
-        self.a  = Register(self, constants.RESET_A)
-        self.f  = FlagRegister(self, constants.RESET_F)
-        self.af = DoubleRegister(self, self.a, self.f)
+        self.a   = Register(self, constants.RESET_A)
+        self.f   = FlagRegister(self, constants.RESET_F)
+        self.af  = DoubleRegister(self, self.a, self.f)
         
 
     def reset(self):
         self.reset_registers()
         self.f.reset()
         self.f.z_flag = True
-        self.ime     = False
-        self.halted  = False
-        self.cycles  = 0
-        self.instruction_counter = 0
-        self.last_op_code = -1
+        self.ime      = False
+        self.halted   = False
+        self.cycles   = 0
+        self.instruction_counter        = 0
+        self.last_op_code               = -1
         self.last_fetch_execute_op_code = -1
         
     def reset_registers(self):
@@ -362,7 +346,6 @@ class CPU(object):
         
 
     def handle_pending_interrupt(self):
-        # Interrupts
         if self.halted:
             if self.interrupt.is_pending():
                 self.halted = False
@@ -381,7 +364,6 @@ class CPU(object):
                 return
 
     def fetch_execute(self):
-        # Execution
         opCode = self.fetch()
         #print "    fetch exe:", hex(opCode), "  "
         #, FETCH_EXECUTE_OP_CODES[opCode].__name__
@@ -489,7 +471,7 @@ class CPU(object):
         
     def store_hl_in_pc(self):
         # LD PC,HL, 1 cycle
-        self.ld(DoubleRegisterCallWrapper(self.hl), \
+        self.ld(DoubleRegisterCallWrapper(self.hl), 
                 DoubleRegisterCallWrapper(self.pc))
         
     def fetch_load(self, getCaller, setCaller):
@@ -617,7 +599,7 @@ class CPU(object):
 
     def rotate_left_circular_a(self):
         # RLCA rotate_left_circular_a 1 cycle
-        self.rotate_left_circular(RegisterCallWrapper(self.a), \
+        self.rotate_left_circular(RegisterCallWrapper(self.a), 
                                   RegisterCallWrapper(self.a))
 
     def rotate_left(self, getCaller, setCaller):
@@ -629,7 +611,7 @@ class CPU(object):
 
     def rotate_left_a(self):
         # RLA  1 cycle
-        self.rotate_left(RegisterCallWrapper(self.a), \
+        self.rotate_left(RegisterCallWrapper(self.a), 
                          RegisterCallWrapper(self.a))
         
     def rotate_right_circular(self, getCaller, setCaller):
@@ -640,7 +622,7 @@ class CPU(object):
    
     def rotate_right_circular_a(self):
         # RRCA 1 cycle
-        self.rotate_right_circular(RegisterCallWrapper(self.a), \
+        self.rotate_right_circular(RegisterCallWrapper(self.a), 
                                    RegisterCallWrapper(self.a))
 
     def rotate_right(self, getCaller, setCaller):
@@ -652,7 +634,7 @@ class CPU(object):
 
     def rotate_right_a(self):
         # RRA 1 cycle
-        self.rotate_right(RegisterCallWrapper(self.a), \
+        self.rotate_right(RegisterCallWrapper(self.a), 
                           RegisterCallWrapper(self.a))
 
     def shift_left_arithmetic(self, getCaller, setCaller):
@@ -953,11 +935,11 @@ class CPU(object):
 class CallWrapper(object):   
     
     def get(self, use_cycles=True):
-        raise Exception("called CalLWrapper.get")
+        raise Exception("called CallWrapper.get")
         return 0
     
     def set(self, value, use_cycles=True):
-        raise Exception("called CalLWrapper.set")
+        raise Exception("called CallWrapper.set")
         pass
     
 class NumberCallWrapper(CallWrapper):
@@ -969,7 +951,7 @@ class NumberCallWrapper(CallWrapper):
         return self.number
     
     def set(self, value, use_cycles=True):
-        raise Exception("called CalLWrapper.set")
+        raise Exception("called CallWrapper.set")
         pass
         
 class RegisterCallWrapper(CallWrapper): 
@@ -1009,18 +991,10 @@ class CPUFetchCaller(CallWrapper):
     def get(self,  use_cycles=True):
         return self.cpu.fetch(use_cycles)
 
-# ------------------------------------------------------------------------------
 # OPCODE LOOKUP TABLE GENERATION -----------------------------------------------
 
-
-GROUPED_REGISTERS = [CPU.get_b, 
-                     CPU.get_c, 
-                     CPU.get_d, 
-                     CPU.get_e,
-                     CPU.get_h,
-                     CPU.get_l, 
-                     CPU.get_hli, 
-                     CPU.get_a]
+GROUPED_REGISTERS = [CPU.get_b, CPU.get_c, CPU.get_d,   CPU.get_e,
+                     CPU.get_h, CPU.get_l, CPU.get_hli, CPU.get_a]
 
 def create_group_op_codes(table):
     opCodes =[]
@@ -1049,13 +1023,11 @@ def create_group_op_codes(table):
 
 def group_lambda(function, register_getter, value=None):
     if value is None:
-        def f(s): function(s, RegisterCallWrapper(register_getter(s)), \
+        return lambda s: function(s, RegisterCallWrapper(register_getter(s)), 
                                RegisterCallWrapper(register_getter(s)))
     else:
-        def f(s): function(s, RegisterCallWrapper(register_getter(s)), \
+        return lambda s: function(s, RegisterCallWrapper(register_getter(s)), 
                                RegisterCallWrapper(register_getter(s)), value)
-    f.__name__ += function.__name__
-    return f
     
 def create_load_group_op_codes():
     opCodes = []
@@ -1068,10 +1040,8 @@ def create_load_group_op_codes():
     return opCodes
             
 def load_group_lambda(store_register, load_register):
-        def f(s): CPU.ld(s, RegisterCallWrapper(load_register(s)), \
+        return lambda s: CPU.ld(s, RegisterCallWrapper(load_register(s)),
                                    RegisterCallWrapper(store_register(s)))
-        f.__name__ += "ld"
-        return f
     
 def create_register_op_codes(table):
     opCodes = []
@@ -1105,7 +1075,7 @@ def initialize_op_code_table(table):
     return result
 
 # OPCODE TABLES ---------------------------------------------------------------
-                        
+# Table with one to one mapping of simple OP Codes                
 FIRST_ORDER_OP_CODES = [
     (0x00, CPU.nop),
     (0x08, CPU.load_mem_sp),
@@ -1164,6 +1134,7 @@ FIRST_ORDER_OP_CODES = [
     (0xFF, lambda s: CPU.restart(s, 0x38))
 ]
 
+# Table for RegisterGroup OP Codes: (startAddress, delta, method)
 REGISTER_GROUP_OP_CODES = [
     (0x04, 0x08, CPU.inc),
     (0x05, 0x08, CPU.dec),    
@@ -1180,21 +1151,11 @@ REGISTER_GROUP_OP_CODES = [
 ]    
         
 
-REGISTER_SET_A =    [CPU.get_bc, 
-                     CPU.get_de, 
-                     CPU.get_hl, 
-                     CPU.get_sp]
+REGISTER_SET_A    = [CPU.get_bc,    CPU.get_de, CPU.get_hl,   CPU.get_sp]
+REGISTER_SET_B    = [CPU.get_bc,    CPU.get_de, CPU.get_hl,   CPU.get_af]
+FLAG_REGISTER_SET = [CPU.is_not_z,  CPU.is_z,   CPU.is_not_c, CPU.is_c]
 
-REGISTER_SET_B =    [CPU.get_bc, 
-                     CPU.get_de, 
-                     CPU.get_hl, 
-                     CPU.get_af]
-
-FLAG_REGISTER_SET = [CPU.is_not_z, 
-                     CPU.is_z, 
-                     CPU.is_not_c, 
-                     CPU.is_c]
-
+# Table for Register OP Codes: (startAddress, delta, method, regsiters)
 REGISTER_OP_CODES = [ 
     (0x01, 0x10, CPU.fetch_double_register,     REGISTER_SET_A),
     (0x09, 0x10, CPU.add_hl,                    REGISTER_SET_A),
@@ -1207,7 +1168,7 @@ REGISTER_OP_CODES = [
     (0xC1, 0x10, CPU.pop_double_register,       REGISTER_SET_B),
     (0xC5, 0x10, CPU.push_double_register,      REGISTER_SET_B)
 ]
-
+# Table for Second Order OPCodes: (startAddress, delta, method, [args])
 SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
     (0x00, 0x01, CPU.rotate_left_circular),    
     (0x08, 0x01, CPU.rotate_right_circular),    

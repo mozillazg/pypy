@@ -88,8 +88,8 @@ class JoypadDriver(object):
         self.right.opposite_button = self.left
         
     def create_button_groups(self):
-        self.directions = [self.up, self.right, self.down, self.left]
-        self.buttons = [self.start, self.select, self.a, self.b]
+        self.directions = [self.up,    self.right,  self.down, self.left]
+        self.buttons    = [self.start, self.select, self.a,    self.b]
         
     def get_buttons(self):
         return self.buttons

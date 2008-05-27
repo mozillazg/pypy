@@ -32,21 +32,21 @@ class RAM(iMemory):
     def write(self, address, data):
         address = int(address)
         data = int(data)
+        # C000-DFFF Work RAM (8KB)
+        # E000-FDFF Echo RAM
         if address >= 0xC000 and address <= 0xFDFF:
-            # C000-DFFF Work RAM (8KB)
-            # E000-FDFF Echo RAM
             self.w_ram[address & 0x1FFF] = data
+        # FF80-FFFE High RAM
         elif address >= 0xFF80 and address <= 0xFFFE:
-            # FF80-FFFE High RAM
             self.h_ram[address & 0x7F] = data
 
     def read(self, address):
         address = int(address)
+        # C000-DFFF Work RAM
+        # E000-FDFF Echo RAM
         if address >= 0xC000 and address <= 0xFDFF:
-            # C000-DFFF Work RAM
-            # E000-FDFF Echo RAM
             return self.w_ram[address & 0x1FFF] & 0xFF
+        # FF80-FFFE High RAM
         elif address >= 0xFF80 and address <= 0xFFFE:
-            # FF80-FFFE High RAM
             return self.h_ram[address & 0x7F] & 0xFF
         raise Exception("Invalid Memory access, address out of range")

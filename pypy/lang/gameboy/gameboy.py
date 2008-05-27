@@ -30,16 +30,16 @@ class GameBoy(object):
         self.sound_driver  = SoundDriver()
         
     def create_gamboy_elements(self): 
-        self.ram    = RAM()
+        self.ram       = RAM()
         self.cartridge_manager = CartridgeManager(self.clock)
         self.interrupt = Interrupt()
-        self.cpu    = CPU(self.interrupt, self)
-        self.serial = Serial(self.interrupt)
-        self.timer  = Timer(self.interrupt)
-        self.joypad = Joypad(self.joypad_driver, self.interrupt)
-        self.video  = Video(self.video_driver, self.interrupt, self)
-        #self.sound  = Sound(self.sound_driver)  
-        self.sound = BogusSound()
+        self.cpu       = CPU(self.interrupt, self)
+        self.serial    = Serial(self.interrupt)
+        self.timer     = Timer(self.interrupt)
+        self.joypad    = Joypad(self.joypad_driver, self.interrupt)
+        self.video     = Video(self.video_driver, self.interrupt, self)
+        #self.sound    = Sound(self.sound_driver)  
+        self.sound     = BogusSound()
         
     def get_cartridge_manager(self):
         return self.cartridge_manager
@@ -122,13 +122,15 @@ class GameBoy(object):
     def write(self, address, data):
         receiver = self.get_receiver(address)
         if receiver is None:
+            return
             raise Exception("invalid read address given")
         receiver.write(address, data)
 
     def read(self, address):
         receiver = self.get_receiver(address)
         if receiver is None:
-            raise Exception("invalid read address given")
+            return 0xFF
+            #raise Exception("invalid read address given")
         return receiver.read(address)
 
     def print_receiver_msg(self, address, name):

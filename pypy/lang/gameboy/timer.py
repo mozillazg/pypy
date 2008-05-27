@@ -53,7 +53,8 @@ class Timer(iMemory):
     def get_divider(self):
         return self.div
     
-    def set_divider(self,  data): #DIV register resets on write
+    def set_divider(self,  data): 
+        """ DIV register resets on write """
         self.div = 0
 
     def get_timer_counter(self):
