@@ -1,10 +1,15 @@
-
+import gc
 from pypy.module.thread.ll_thread import *
 from pypy.translator.c.test.test_boehm import AbstractGCTestClass
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import free_non_gc_object
 import py
+
+def setup_module(mod):
+    # Hack to avoid a deadlock if the module is run after other test files :-(
+    # In this module, we assume that ll_thread.start_new_thread() is not
+    # providing us with a GIL equivalent.
+    rffi.aroundstate._freeze_()
 
 def test_lock():
     l = allocate_lock()
@@ -35,8 +40,7 @@ def test_fused():
     assert could_acquire_again
 
 
-class TestUsingBoehm(AbstractGCTestClass):
-    gcpolicy = 'boehm'
+class AbstractThreadTests(AbstractGCTestClass):
 
     def test_start_new_thread(self):
         import time
@@ -51,21 +55,16 @@ class TestUsingBoehm(AbstractGCTestClass):
             def __del__(self):
                 state.freed_counter += 1
 
-        class Y:
-            _alloc_flavor_ = 'raw'
-
-            def bootstrap(self):
-                state.my_thread_ident = get_ident()
-                assert state.my_thread_ident == get_ident()
-                state.seen_value = self.z.value
-                self.z = None
-                free_non_gc_object(self)
-                state.done = 1
+        def bootstrap():
+            state.my_thread_ident = get_ident()
+            assert state.my_thread_ident == get_ident()
+            state.seen_value = state.z.value
+            state.z = None
+            state.done = 1
 
         def g(i):
-            y = Y()
-            y.z = Z(i)
-            start_new_thread(Y.bootstrap, (y,))
+            state.z = Z(i)
+            start_new_thread(bootstrap, ())
         g._dont_inline_ = True
 
         def f():
@@ -76,6 +75,7 @@ class TestUsingBoehm(AbstractGCTestClass):
                 state.done = 0
                 state.seen_value = 0
                 g(i)
+                gc.collect()
                 willing_to_wait_more = 1000
                 while not state.done:
                     willing_to_wait_more -= 1
@@ -86,7 +86,7 @@ class TestUsingBoehm(AbstractGCTestClass):
                 assert state.seen_value == i
             # try to force Boehm to do some freeing
             for i in range(3):
-                llop.gc__collect(lltype.Void)
+                gc.collect()
             return state.freed_counter
 
         fn = self.getcompiled(f, [])
@@ -110,34 +110,39 @@ class TestUsingBoehm(AbstractGCTestClass):
                 self.j = j
             def run(self):
                 j = self.j
-                state.gil.acquire(True)
-                assert j == self.j
                 if self.i > 1:
                     g(self.i-1, self.j * 2)
+                    assert j == self.j
                     g(self.i-2, self.j * 2 + 1)
                 else:
-                    state.answers.append(self.i)
-                assert j == self.j
-                state.gil.release()
+                    if len(state.answers) % 7 == 5:
+                        gc.collect()
+                    state.answers.append(self.j)
                 assert j == self.j
             run._dont_inline_ = True
 
-        class Y(object):
-            _alloc_flavor_ = 'raw'
-            def bootstrap(self):
-                self.z.run()
-                self.z = None
-                free_non_gc_object(self)
-                state.done = 1
+        def bootstrap():
+            state.gil.acquire(True)
+            z = state.z
+            state.z = None
+            z.run()
+            state.gil.release()
 
         def g(i, j):
-            y = Y()
-            y.z = Z(i, j)
-            start_new_thread(Y.bootstrap, (y,))
-        g._dont_inline_ = True
+            state.z = Z(i, j)
+            start_new_thread(bootstrap, ())
+            # now wait until the new thread really started and consumed 'z'
+            willing_to_wait_more = 1000
+            while state.z is not None:
+                assert willing_to_wait_more > 0
+                willing_to_wait_more -= 1
+                state.gil.release()
+                time.sleep(0.005)
+                state.gil.acquire(True)
 
         def f():
             state.gil = allocate_lock_NOAUTO()
+            state.gil.acquire(True)
             state.answers = []
             state.finished = 0
             g(7, 1)
@@ -149,10 +154,11 @@ class TestUsingBoehm(AbstractGCTestClass):
                                     " expected %d" % (len(state.answers),
                                                       expected))
                 willing_to_wait_more -= 1
-                state.gil.acquire(True)
                 done = len(state.answers) == expected
                 state.gil.release()
                 time.sleep(0.01)
+                state.gil.acquire(True)
+            state.gil.release()
             time.sleep(0.1)
             return len(state.answers)
 
@@ -161,8 +167,14 @@ class TestUsingBoehm(AbstractGCTestClass):
         answers = fn()
         assert answers == expected
 
-class TestUsingFramework(TestUsingBoehm):
-    gcpolicy = 'generation'
+class TestRunDirectly(AbstractThreadTests):
+    def getcompiled(self, f, argtypes):
+        return f
 
-    def test_gc_locking(self):
+class TestUsingBoehm(AbstractThreadTests):
+    gcpolicy = 'boehm'
+
+class TestUsingFramework(AbstractThreadTests):
+    gcpolicy = 'generation'
+    def getcompiled(self, f, argtypes):
         py.test.skip("in-progress")
