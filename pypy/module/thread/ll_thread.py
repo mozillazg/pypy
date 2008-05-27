@@ -110,7 +110,9 @@ class Lock(object):
         self._lock = ll_lock
 
     def acquire(self, flag):
-        return bool(c_thread_acquirelock(self._lock, int(flag)))
+        res = c_thread_acquirelock(self._lock, int(flag))
+        res = rffi.cast(lltype.Signed, res)
+        return bool(res)
 
     def release(self):
         # Sanity check: the lock must be locked
@@ -127,6 +129,8 @@ class Lock(object):
 #
 # GIL support wrappers
 
+null_ll_lock = lltype.nullptr(TLOCKP.TO)
+
 def allocate_ll_lock():
     ll_lock = lltype.malloc(TLOCKP.TO, flavor='raw')
     res = c_thread_lock_init(ll_lock)
@@ -136,8 +140,10 @@ def allocate_ll_lock():
     return ll_lock
 
 def acquire_NOAUTO(ll_lock, flag):
-    flag = rffi.cast(rffi.INT, flag)
-    return bool(c_thread_acquirelock_NOAUTO(ll_lock, flag))
+    flag = rffi.cast(rffi.INT, int(flag))
+    res = c_thread_acquirelock_NOAUTO(ll_lock, flag)
+    res = rffi.cast(lltype.Signed, res)
+    return bool(res)
 
 def release_NOAUTO(ll_lock):
     if not we_are_translated():
