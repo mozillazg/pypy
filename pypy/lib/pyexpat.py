@@ -16,10 +16,14 @@ class CConfigure:
 
     XML_Char = configure.SimpleType('XML_Char', ctypes.c_char)
     XML_COMBINED_VERSION = configure.ConstantInteger('XML_COMBINED_VERSION')
+    for name in ['XML_PARAM_ENTITY_PARSING_NEVER',
+                 'XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE',
+                 'XML_PARAM_ENTITY_PARSING_ALWAYS']:
+        locals()[name] = configure.ConstantInteger(name)
 
 info = configure.configure(CConfigure)
-XML_Char = info['XML_Char']
-XML_COMBINED_VERSION = info['XML_COMBINED_VERSION']
+for k, v in info.items():
+    globals()[k] = v
 XML_Parser = ctypes.c_void_p # an opaque pointer
 assert XML_Char is ctypes.c_char # this assumption is everywhere in
 # cpython's expat, let's explode
@@ -45,6 +49,9 @@ XML_SetReturnNSTriplet.result = None
 XML_GetSpecifiedAttributeCount = lib.XML_GetSpecifiedAttributeCount
 XML_GetSpecifiedAttributeCount.args = [XML_Parser]
 XML_GetSpecifiedAttributeCount.result = c_int
+XML_SetParamEntityParsing = lib.XML_SetParamEntityParsing
+XML_SetParamEntityParsing.args = [XML_Parser, c_int]
+XML_SetParamEntityParsing.result = None
 
 handler_names = [
     'StartElement',
@@ -254,6 +261,7 @@ class XMLParserType(object):
         ('XmlDeclHandler', [None, c_void_p, c_char_p, c_char_p, c_int]),
         ('AttlistDeclHandler', [None, c_void_p] + [c_char_p] * 4 + [c_int]),
         ('EndDoctypeDeclHandler', 0),
+        ('SkippedEntityHandler', [None, c_void_p, c_char_p, c_int]),
         ]:
         if isinstance(num_or_sign, int):
             sign = [None, c_void_p] + [c_char_p] * num_or_sign
@@ -299,6 +307,9 @@ class XMLParserType(object):
         else:
             self.__dict__[name] = value
 
+    def SetParamEntityParsing(self, arg):
+        XML_SetParamEntityParsing(self.itself, arg)
+
     def __getattr__(self, name):
         if name == 'buffer_text':
             return self.buffer is not None
@@ -312,7 +323,7 @@ class XMLParserType(object):
 def ErrorString(errno):
     xxx
 
-def ParserCreate(encoding=None, namespace_separator=None):
+def ParserCreate(encoding=None, namespace_separator=None, intern=None):
     if (not isinstance(namespace_separator, str) and
         not namespace_separator is None):
         raise TypeError("ParserCreate() argument 2 must be string or None, not %s" % namespace_separator.__class__.__name__)
