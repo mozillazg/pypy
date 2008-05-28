@@ -572,34 +572,31 @@ Windows, see the `windows document`_)
 
 .. _`windows document`: windows.html
 
-You can
-translate the PyPy's whole of Python interpreter to low level C code. This is
-the largest and
-ultimate example of source that our translation toolchain can process.
-If you don't need threads, the most standard variant nowadays is::
+You can translate the whole of PyPy's Python interpreter to low level C
+code.  This is the largest and ultimate example of RPython program that
+our translation toolchain can process.  The most standard variant
+nowadays is::
 
     cd pypy/translator/goal
-    python translate.py --gc=hybrid targetpypystandalone.py --allworkingmodules --faassen
+    python translate.py --gc=hybrid --thread targetpypystandalone.py --allworkingmodules --faassen
 
 This whole process will take some time and quite a lot of memory (around
 1GB).  It creates an executable ``pypy-c`` in the current directory.
 The ``--gc=hybrid`` option means that the ``pypy-c`` will use our own
 exact generational garbage collector implementation, whose performance
-is rather good nowadays.  The ``--faassen`` option enables all the
+is rather good nowadays.  The ``--thread`` option enables the thread
+module, which is still slightly experimental.
+The ``--faassen`` option enables all the
 worthwhile performance optimizations, but slows down the translation
-itself.  On Linux 32-bit Intel machines you can also add
-``--gcrootfinder=asmgcc`` after ``--gc=hybrid`` for extra speed (and
-extra translation time).
+itself.  On Linux 32-bit Intel machines, if you don't need threads, you
+can get some extra speed (and extra translation time) by removing
+``--thread`` and replacing it with ``--gcrootfinder=asmgcc``.
 
-At the moment, threads only work with the `Boehm-Demers-Weiser garbage
-collector`_.  So to enable them, you need instead::
-
-    cd pypy/translator/goal
-    python translate.py --thread targetpypystandalone.py --allworkingmodules --faassen
-
+An alternative is to use the `Boehm-Demers-Weiser garbage
+collector`_ instead of our own.  For this, use ``--gc=boehm``.
 Be sure to install Boehm before starting the translation (e.g. by running
 ``apt-get install libgc-dev`` on Debian or Ubuntu).  Translating with Boehm
-is a bit faster and less memory-hungry than translating with our own GCs.
+is somewhat faster and less memory-hungry than translating with our own GCs.
 
 In any case, as described above, you can find the produced executable under the
 name ``pypy-c``.  Type ``pypy-c --help`` to see the options it supports --
@@ -618,7 +615,7 @@ interesting options are:
    * ``--gc=boehm|ref|marknsweep|semispace|generation|hybrid``:
      choose between using
      the `Boehm-Demers-Weiser garbage collector`_, our reference
-     counting implementation or three of own collector implementations
+     counting implementation or four of own collector implementations
      (Boehm's collector is the default).
 
 Find a more detailed description of the various options in our `configuration
