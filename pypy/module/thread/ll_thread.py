@@ -54,7 +54,10 @@ def _emulated_start_new_thread(func):
 
 CALLBACK = lltype.Ptr(lltype.FuncType([], lltype.Void))
 c_thread_start = llexternal('RPyThreadStart', [CALLBACK], rffi.INT,
-                            _callable=_emulated_start_new_thread)
+                            _callable=_emulated_start_new_thread,
+                            threadsafe=True)  # release the GIL, but most
+                                              # importantly, reacquire it
+                                              # around the callback
 c_thread_get_ident = llexternal('RPyThreadGetIdent', [], rffi.INT,
                                 _nowrapper=True)    # always call directly
 
