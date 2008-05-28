@@ -34,7 +34,7 @@ class Interrupt(iMemory):
         self.reset()
         
     def create_interrupt_flags(self):
-        self.v_blank = InterruptFlag(True, constants.VBLANK, 0x40)
+        self.vblank = InterruptFlag(True, constants.VBLANK, 0x40)
         self.lcd     = InterruptFlag(False, constants.LCD, 0x48)
         self.timer   = InterruptFlag(False, constants.TIMER, 0x50)
         self.serial  = InterruptFlag(False, constants.SERIAL, 0x58)
@@ -42,7 +42,7 @@ class Interrupt(iMemory):
         
     def create_flag_list(self):
         self.interrupt_flags = [
-            self.v_blank, self.lcd, 
+            self.vblank, self.lcd, 
             self.timer, self.serial,
             self.joypad
         ]
@@ -61,8 +61,8 @@ class Interrupt(iMemory):
         if not self.enable:
             return False
         if mask is None:
-            return self.v_blank.is_pending()
-        elif self.v_blank.is_pending():
+            return self.vblank.is_pending()
+        elif self.vblank.is_pending():
             return self.mask_mapping[mask].is_pending()
         else:
             return False
@@ -74,14 +74,12 @@ class Interrupt(iMemory):
         self.mask_mapping[mask].set_pending(False)
 
     def write(self, address, data):
-        address = int(address)
         if  address == constants.IE:
             self.set_interrupt_enable(data)
         elif address == constants.IF:
             self.set_fnterrupt_flag(data)
 
     def read(self, address):
-        address = int(address)
         if  address == constants.IE:
             return self.get_interrupt_enable()
         elif address == constants.IF:

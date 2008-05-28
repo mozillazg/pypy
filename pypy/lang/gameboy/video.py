@@ -43,7 +43,7 @@ def VideoStatus(object):
         self.h_blank_interrupt  = False
         self.oam_interrupt      = False
         self.h_blank_interrupt  = False
-        self.v_blank_interrupt  = False
+        self.vblank_interrupt  = False
         #Coincidence Flag  (0:LYC<>LY, 1:LYC=LY)
         self.coincidence_flag   = False
         
@@ -53,7 +53,7 @@ def VideoStatus(object):
         value += int(self.h_blank_interrupt)  << 6 
         value += int(self.oam_interrupt)      << 5
         value += int(self.h_blank_interrupt)  << 4
-        value += int(self.v_blank_interrupt)  << 3
+        value += int(self.vblank_interrupt)  << 3
         value += int(self.coincidence_flag)   << 2
         value += self.mode & 0x03
         return value

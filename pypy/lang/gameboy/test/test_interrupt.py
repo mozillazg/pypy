@@ -31,7 +31,7 @@ def test_is_pending_common_masks():
     for flag in interrupt.interrupt_flags:
         interrupt.reset()
         interrupt.enable = True
-        assert interrupt.v_blank.is_pending()
+        assert interrupt.vblank.is_pending()
         flag.set_pending(True)
         assert interrupt.is_pending(flag.mask)
         
@@ -41,7 +41,7 @@ def test_raise_lower_interrupt():
     masks= [constants.LCD, constants.TIMER, 
             constants.JOYPAD, constants.SERIAL]
     interrupt.set_interrupt_enable(True)
-    interrupt.v_blank.set_pending(True)
+    interrupt.vblank.set_pending(True)
     for mask in masks:
         interrupt.raise_interrupt(mask)
         assert interrupt.mask_mapping[mask].is_pending() == True
