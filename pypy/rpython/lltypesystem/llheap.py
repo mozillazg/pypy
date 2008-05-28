@@ -35,6 +35,9 @@ def finish_building_buffer(buf, final_size):
         ll_str.chars[i] = buf.chars[i]
     return ll_str
 
+def thread_prepare():
+    pass
+
 def thread_run():
     pass
 

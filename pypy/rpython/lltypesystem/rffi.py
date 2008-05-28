@@ -163,9 +163,12 @@ def llexternal(name, args, result, _callable=None,
                 return cast(lltype.Unsigned, res)
         return res
     wrapper._annspecialcase_ = 'specialize:ll'
-    # don't inline, as a hack to guarantee that no GC pointer is alive
-    # in the final part of the wrapper
-    wrapper._dont_inline_ = True
+    if invoke_around_handlers:
+        # don't inline, as a hack to guarantee that no GC pointer is alive
+        # in the final part of the wrapper
+        wrapper._dont_inline_ = True
+    else:
+        wrapper._always_inline_ = True
     # for debugging, stick ll func ptr to that
     wrapper._ptr = funcptr
 
