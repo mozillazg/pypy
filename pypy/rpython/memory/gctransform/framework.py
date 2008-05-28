@@ -1013,7 +1013,9 @@ class ShadowStackRootWalker(BaseRootWalker):
             gcdata.active_thread = new_aid
 
         def collect_stack(aid, stacktop, callback):
-            if stacktop != llmemory.NULL:
+            if stacktop != llmemory.NULL and aid != get_aid():
+                # collect all valid stacks from the dict (the entry
+                # corresponding to the current thread is not valid)
                 gc = self.gc
                 end = stacktop - sizeofaddr
                 addr = end.address[0]
