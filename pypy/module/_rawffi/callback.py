@@ -33,7 +33,7 @@ def callback(ll_args, ll_res, ll_userdata):
         w_args = space.newlist([space.wrap(rffi.cast(rffi.UINT, ll_args[i]))
                                 for i in range(len(argtypes))])
         w_res = space.call(w_callable, w_args)
-        if callback_ptr.res != 'O': # don't return void
+        if callback_ptr.result != 'O': # don't return void
             unwrap_value(space, push_elem, ll_res, 0,
                          letter2tp(space, callback_ptr.result), w_res)
     except OperationError, e:
