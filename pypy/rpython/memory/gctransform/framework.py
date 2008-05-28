@@ -22,6 +22,16 @@ import sys
 
 
 class CollectAnalyzer(graphanalyze.GraphAnalyzer):
+
+    def analyze_direct_call(self, graph, seen=None):
+        try:
+            if graph.func._gctransformer_hint_cannot_collect_:
+                return False
+        except AttributeError:
+            pass
+        return graphanalyze.GraphAnalyzer.analyze_direct_call(self, graph,
+                                                              seen)
+    
     def operation_is_true(self, op):
         if op.opname in ('malloc', 'malloc_varsize'):
             flags = op.args[1].value

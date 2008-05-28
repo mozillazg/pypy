@@ -48,12 +48,10 @@ class GILThreadLocals(OSThreadLocals):
     def yield_thread(self):
         """Notification that the current thread is between two bytecodes:
         release the GIL for a little while."""
-        ll_GIL = self.ll_GIL
-        # Other threads can run between the release() and the acquire().
-        # This is a single external function so that we are sure that nothing
-        # occurs between the release and the acquire, e.g. no GC operation.
-        thread.fused_release_acquire_NOAUTO(ll_GIL)
-        thread.gc_thread_run()
+        # Other threads can run between the release() and the acquire()
+        # implicit in the following external function call (which has
+        # otherwise no effect).
+        thread.yield_thread()
 
 
 class GILReleaseAction(Action):
@@ -83,9 +81,11 @@ def before_external_call():
     e = get_errno()
     thread.release_NOAUTO(spacestate.ll_GIL)
     set_errno(e)
+before_external_call._gctransformer_hint_cannot_collect_ = True
 
 def after_external_call():
     e = get_errno()
     thread.acquire_NOAUTO(spacestate.ll_GIL, True)
     thread.gc_thread_run()
     set_errno(e)
+after_external_call._gctransformer_hint_cannot_collect_ = True

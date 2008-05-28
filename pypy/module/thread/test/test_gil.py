@@ -3,6 +3,7 @@ from pypy.module.thread import gil
 from pypy.module.thread.test import test_ll_thread
 from pypy.rpython.lltypesystem import rffi
 from pypy.module.thread import ll_thread as thread
+from pypy.rlib.objectmodel import we_are_translated
 
 class FakeEC(object):
     pass
@@ -48,12 +49,14 @@ class GILTests(test_ll_thread.AbstractGCTestClass):
             subident = thread.start_new_thread(bootstrap, ())
             mainident = thread.get_ident()
             runme()
-            still_waiting = 1000
+            still_waiting = 3000
             while len(state.data) < 2*N:
                 if not still_waiting:
                     raise ValueError("time out")
                 still_waiting -= 1
+                if not we_are_translated(): gil.before_external_call()
                 time.sleep(0.01)
+                if not we_are_translated(): gil.after_external_call()
             i1 = i2 = 0
             for tid, i in state.data:
                 if tid == mainident:

@@ -146,6 +146,10 @@ def llexternal(name, args, result, _callable=None,
             if before: before()
             # NB. it is essential that no exception checking occurs after
             # the call to before(), because we don't have the GIL any more!
+            # It is also essential that no GC pointer is alive between now
+            # and the end of the function, so that the external function
+            # calls below don't need to be guarded by GC shadow stack logic
+            # that would crash if not protected by the GIL!
         res = funcptr(*real_args)
         if invoke_around_handlers:
             if after: after()
@@ -159,7 +163,9 @@ def llexternal(name, args, result, _callable=None,
                 return cast(lltype.Unsigned, res)
         return res
     wrapper._annspecialcase_ = 'specialize:ll'
-    wrapper._always_inline_ = True
+    # don't inline, as a hack to guarantee that no GC pointer is alive
+    # in the final part of the wrapper
+    wrapper._dont_inline_ = True
     # for debugging, stick ll func ptr to that
     wrapper._ptr = funcptr
 
@@ -382,7 +388,7 @@ def COpaquePtr(*args, **kwds):
     return lltype.Ptr(COpaque(*args, **kwds))
 
 def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
-                    sandboxsafe=False):
+                    sandboxsafe=False, _nowrapper=False):
     """Return a pair of functions - a getter and a setter - to access
     the given global C variable.
     """
@@ -421,9 +427,10 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     ))
 
     getter = llexternal(getter_name, [], TYPE, compilation_info=new_eci,
-                        sandboxsafe=sandboxsafe)
+                        sandboxsafe=sandboxsafe, _nowrapper=_nowrapper)
     setter = llexternal(setter_name, [TYPE], lltype.Void,
-                        compilation_info=new_eci, sandboxsafe=sandboxsafe)
+                        compilation_info=new_eci, sandboxsafe=sandboxsafe,
+                        _nowrapper=_nowrapper)
     return getter, setter
 
 # char, represented as a Python character
