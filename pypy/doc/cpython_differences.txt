@@ -13,12 +13,12 @@ PyPy.
 Differences related to garbage collection strategies
 ----------------------------------------------------
 
-PyPy's garbage collector is not based on reference counting, so the
-objects are not freed instantly when they are no longer reachable.  The
-most obvious effect of this is that files are not promptly closed when
-they go out of scope.  For files that are opened for writing, data can
-be left sitting in their output buffers for a while, making the on-disk
-file appear empty or truncated.
+Most of the garbage collectors used or implemented by PyPy are not based on
+reference counting, so the objects are not freed instantly when they are no
+longer reachable.  The most obvious effect of this is that files are not
+promptly closed when they go out of scope.  For files that are opened for
+writing, data can be left sitting in their output buffers for a while, making
+the on-disk file appear empty or truncated.
 
 Fixing this is essentially not possible without forcing a
 reference-counting approach to garbage collection.  The effect that you
@@ -34,7 +34,8 @@ notably, if an object has a __del__, the __del__ is never called more
 than once in PyPy; but CPython will call the same __del__ several times
 if the object is resurrected and dies again.
 
-The built-in function ``id()`` returns numbers that are not addresses.
+The built-in function ``id()`` returns numbers that are not addresses
+for most of PyPy's garbage collectors.
 This is most visible in the default repr: a typical PyPy object can
 pretend to be located ``at 0x00000009``.  This is just its ``id()``, not
 its real address (because the physical address can change).
