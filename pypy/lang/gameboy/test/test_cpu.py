@@ -1276,7 +1276,7 @@ def test_handleInterrupt():
     cpu.reset()
     cpu.halted = True
     cpu.interrupt.set_interrupt_enable()
-    cpu.interrupt.v_blank.set_pending()
+    cpu.interrupt.vblank.set_pending()
     assert cpu.interrupt.is_pending() == True
     cpu.cycles = 4
     cpu.handle_pending_interrupt()
@@ -1290,14 +1290,14 @@ def test_handleInterrupt():
     cpu.sp.set(0x02)
     sp = cpu.sp.get()
     cpu.interrupt.set_interrupt_enable()
-    cpu.interrupt.v_blank.set_pending()
+    cpu.interrupt.vblank.set_pending()
     cpu.interrupt.lcd.set_pending()
     assert cpu.interrupt.is_pending() == True
     cpu.cycles = 0
     cpu.handle_pending_interrupt()
     assert cpu.cycles == 0
     assert cpu.halted == False 
-    assert_default_registers(cpu, pc=cpu.interrupt.v_blank.call_code, sp=sp-2)
+    assert_default_registers(cpu, pc=cpu.interrupt.vblank.call_code, sp=sp-2)
     assert cpu.pop() == 0x34
     assert cpu.pop() == 0x12
 
@@ -1391,7 +1391,7 @@ def test_0xFB():
     cpu.ime = True
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
-    cpu.interrupt.v_blank.set_pending()
+    cpu.interrupt.vblank.set_pending()
     cpu.interrupt.serial.set_pending()
     cpu.interrupt.set_interrupt_enable(True)
     assert cpu.interrupt.is_pending() == True
@@ -1399,8 +1399,8 @@ def test_0xFB():
     assert cpu.ime == True  
     cycle_test(cpu, 0xFB, 1+1)
     assert cpu.interrupt.is_pending() == False
-    assert cpu.interrupt.v_blank.is_pending() == False
-    assert cpu.pc.get() == cpu.interrupt.v_blank.call_code
+    assert cpu.interrupt.vblank.is_pending() == False
+    assert cpu.pc.get() == cpu.interrupt.vblank.call_code
     assert cpu.ime == False
 
 def conditionalCallTest(cpu, opCode, flagSetter):

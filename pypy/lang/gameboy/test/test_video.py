@@ -241,38 +241,119 @@ def test_emulate_h_blank_part_1_1():
     video.line_y_compare = 1
     video.stat = 0x20
     video.cycles = 0
+    video.frames = 0
     assert not video.interrupt.lcd.is_pending()
     video.emulate_hblank()
     assert video.cycles == constants.MODE_2_TICKS
     assert video.interrupt.lcd.is_pending()
     assert video.stat == 0x20 + 0x04 + 0x2
+    assert video.line_y == 1
+    assert video.frames == 0
     
     
 def test_emulate_h_blank_part_2_1():
-    py.test.skip("not yet implemented")
     video = get_video()
     video.line_y = 1
-    video.line_y_compare = 1
-    video.stat = 0x20
+    video.line_y_compare = 0
+    video.stat = 0x0F
     video.cycles = 0
-    assert not video.interrupt.lcd.is_pending()
+    video.frames = 0
     video.emulate_hblank()
+    assert video.line_y == 2
     assert video.cycles == constants.MODE_2_TICKS
-    assert video.interrupt.lcd.is_pending()
-    assert video.stat == 0x20 + 0x04 + 0x2
+    assert not video.interrupt.lcd.is_pending()
+    assert video.stat == 0x0B&0xFC + 0x2
+    assert video.frames == 0
     
-    
-def test_emulate_h_blank_part_1_2():
-    py.test.skip("not yet implemented")
+def test_emulate_h_blank_part_2_2():
     video = get_video()
-    video.line_y = 1
-    video.line_y_compare = 1
-    video.stat = 0x20
+    video.line_y = 144
+    video.line_y_compare = 0
+    video.stat = 0xFB
     video.cycles = 0
-    assert not video.interrupt.lcd.is_pending()
+    video.frames = 0
+    video.frame_skip = 20
+    video.vblank = False
+    video.display = False
     video.emulate_hblank()
-    assert video.cycles == constants.MODE_2_TICKS
+    assert video.line_y == 145
+    assert video.cycles == constants.MODE_1_BEGIN_TICKS
+    assert not video.interrupt.lcd.is_pending()
+    assert video.stat == 0xFB & 0xFC + 0x01
+    assert video.frames == 1
+    assert video.display == False
+    assert video.vblank == True
+    
+
+def test_emulate_h_blank_part_2_2_frame_skip():
+    video = get_video()
+    video.line_y = 144
+    video.line_y_compare = 0
+    video.stat = 0xFB
+    video.cycles = 0
+    video.frames = 10
+    video.frame_skip = 10
+    video.vblank = False
+    video.display = False
+    video.emulate_hblank()
+    assert video.line_y == 145
+    assert video.cycles == constants.MODE_1_BEGIN_TICKS
+    assert not video.interrupt.lcd.is_pending()
+    assert video.stat == 0xFB & 0xFC + 0x01
+    assert video.frames == 0
+    assert video.vblank == True
+    
+    
+def test_emulate_v_vblank_1():
+    video = get_video()   
+    video.interrupt.set_fnterrupt_flag(0)
+    video.stat = 0xFE
+    video.vblank = True
+    video.cycles = 0
+    video.emulate_vblank()
+    assert video.vblank == False
+    assert video.stat == 0xFD
+    assert video.cycles == constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
+    assert video.interrupt.vblank.is_pending()
     assert video.interrupt.lcd.is_pending()
-    assert video.stat == 0x20 + 0x04 + 0x2
+    
+    video.interrupt.set_fnterrupt_flag(0)
+    video.stat = 0x00
+    video.vblank = True
+    assert not video.interrupt.vblank.is_pending()
+    assert not video.interrupt.lcd.is_pending()
+    video.emulate_vblank()
+    assert video.stat == 0x01
+    assert video.interrupt.vblank.is_pending()
+    assert not video.interrupt.lcd.is_pending()
+    
+    
+    
+def test_emulate_v_vblank_2():
+    video = get_video()   
+    video.interrupt.set_fnterrupt_flag(0)
+    video.stat = 0x2D
+    video.vblank = False
+    video.cycles = 0
+    video.line_y = 0
+    video.emulate_vblank()
+    assert video.vblank == False
+    assert video.stat == 0x2E
+    assert video.cycles == constants.MODE_2_TICKS 
+    assert not video.interrupt.vblank.is_pending()
+    assert video.interrupt.lcd.is_pending()
+    
+    video.interrupt.set_fnterrupt_flag(0)
+    video.cycles = 0
+    video.stat = 0xFD
+    video.emulate_vblank()
+    assert video.vblank == False
+    assert video.stat == 0xFE
+    assert video.cycles == constants.MODE_2_TICKS 
+    assert not video.interrupt.lcd.is_pending()
+    
+
+def test_emulate_v_vblank_3():
+    py.test.skip("not yet implemented")
     
     
