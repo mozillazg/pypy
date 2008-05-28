@@ -199,3 +199,25 @@ def test_become_with_shadow():
     assert res
     assert w_clsa.as_class_get_shadow(space) is s_clsb
     assert w_clsb.as_class_get_shadow(space) is s_clsa
+
+def test_word_atput():
+    i = model.W_SmallInteger(100)
+    b = model.W_WordsObject(None, 1)
+    b.atput0(space, 0, i)
+    assert 100 == b.getword(0)
+    i = space.classtable['w_LargePositiveInteger'].as_class_get_shadow(space).new(4)
+    i.atput0(space, 3, space.wrap_int(192))
+    b.atput0(space, 0, i)
+    assert b.getword(0) == 3221225472
+
+def test_word_at():
+    b = model.W_WordsObject(None, 1)
+    b.setword(0, 100)
+    r = b.at0(space, 0)
+    assert isinstance(r, model.W_SmallInteger)
+    assert space.unwrap_int(r) == 100
+
+    b.setword(0, 3221225472)
+    r = b.at0(space, 0)
+    assert isinstance(r, model.W_BytesObject)
+    assert r.size() == 4

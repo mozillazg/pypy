@@ -89,6 +89,7 @@ class ObjSpace(object):
         define_cls("w_Number", "w_Magnitude")
         define_cls("w_Integer", "w_Number")
         define_cls("w_SmallInteger", "w_Integer")
+        define_cls("w_LargePositiveInteger", "w_Integer", format=shadow.BYTES)
         define_cls("w_Float", "w_Number", format=shadow.BYTES)
         define_cls("w_Collection", "w_Object")
         define_cls("w_SequenceableCollection", "w_Collection")
