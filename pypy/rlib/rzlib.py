@@ -1,13 +1,35 @@
 import sys
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.translator.tool.cbuild import ExternalCompilationInfo, external_dir
+
+# Get source:
+# In the dist/external directory, run
+# svn export http://svn.python.org/projects/external/zlib-1.2.3
+zlib_home = external_dir.join("zlib-1.2.3")
+
+if zlib_home.check(dir=True):
+    # Build from sources
+    libraries = []
+    include_dirs = [zlib_home]
+    separate_module_files = [zlib_home.join(s)
+                             for s in ("crc32.c", "adler32.c",
+                                       "deflate.c", "inflate.c", "compress.c",
+                                       "trees.c", "inftrees.c", "inffast.c",
+                                       "zutil.c")]
+else:
+    # Find a precompiled library
+    if sys.platform == "win32":
+        libraries = ['zlib']
+    else:
+        libraries = ['z']
+    include_dirs = []
+    separate_module_files = []
 
 includes = ['zlib.h']
-if sys.platform == "win32":
-    libraries = ['zlib']
-else:
-    libraries = ['z']
+export_symbols = ['crc32', 'adler32', 'deflate', 'inflate',
+                  'deflateInit2_', 'deflateEnd',
+                  'inflateInit2_', 'inflateEnd',]
 
 
 constantnames = '''
@@ -102,7 +124,10 @@ z_stream_p = lltype.Ptr(z_stream)
 def zlib_external(*a, **kw):
     kw['compilation_info'] = ExternalCompilationInfo(
         libraries=libraries,
-        includes=includes
+        includes=includes,
+        include_dirs=include_dirs,
+        separate_module_files=separate_module_files,
+        export_symbols=export_symbols,
     )
     return rffi.llexternal(*a, **kw)
 

@@ -12,6 +12,8 @@ from pypy.tool.udir import udir
 
 debug = 0
 
+external_dir = py.path.local(pypydir).join('..', 'external')
+
 class ExternalCompilationInfo(object):
 
     _ATTRIBUTES = ['pre_include_lines', 'includes', 'include_dirs',
