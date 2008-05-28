@@ -342,7 +342,7 @@ class DefaultMBC(MBC):
                         max_ram_bank_size=0xFFFFFF)
         
     def write(self, address, data):
-        self.ram[address] = data
+        self.ram[self.ram_bank + (address & 0x1FFF)] = data
     
 
 #-------------------------------------------------------------------------------
@@ -769,18 +769,18 @@ class HuC3(MBC):
             self.ram[self.ram_bank + (address & 0x1FFF)] = data
                         
     def write_with_ram_flag_0x0B(self, address, data):
-        data = data & 0xF0
+        compare = data & 0xF0
         if self.clock_shift > 24 and data != 0x60:
             return
-        if data == 0x10:
+        if compare == 0x10:
             self.write_ram_value_clock_shift(address, data)
-        elif data == 0x30:
+        elif compare == 0x30:
             self.write_clock_register_clock_shift(address, data)
-        elif data == 0x40:
+        elif compare == 0x40:
             self.write_clock_shift(address, data)
-        elif data == 0x50:
+        elif compare == 0x50:
             pass
-        elif data == 0x60:
+        elif compare == 0x60:
             self.ram_value = 0x01
          
     def write_ram_value_clock_shift(self, address, data):
