@@ -7,16 +7,47 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.typedef import interp_attrproperty
 from pypy.interpreter.gateway import ObjSpace, W_Root, NoneNotWrapped, interp2app, Arguments
 from pypy.rlib.streamio import Stream
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.translator.tool.cbuild import ExternalCompilationInfo, external_dir
 from pypy.rlib.rarithmetic import intmask, r_longlong
 import sys
+
+# Get source:
+# In the dist/external directory, run
+# svn export http://svn.python.org/projects/external/bzip2-1.0.3
+bzip2_home = external_dir.join("bzip2-1.0.3")
+
+if bzip2_home.check(dir=True):
+    # Build from sources
+    libraries = []
+    include_dirs = [bzip2_home]
+    separate_module_files = [bzip2_home.join(s)
+                             for s in ("bzlib.c",
+                                       "compress.c", "decompress.c",
+                                       "huffman.c", "blocksort.c",
+                                       "crctable.c", "randtable.c")]
+else:
+    # Find a precompiled library
+    libraries = ['bz2']
+    include_dirs = []
+    separate_module_files = []
+export_symbols = ['BZ2_bzCompressInit', 'BZ2_bzDecompressInit',
+                  'BZ2_bzCompress', 'BZ2_bzDecompress',
+                  'BZ2_bzCompressEnd', 'BZ2_bzDecompressEnd',
+                  ]
+
 
 class CConfig:
     _compilation_info_ = ExternalCompilationInfo(
         includes = ['stdio.h', 'sys/types.h', 'bzlib.h'],
-        libraries = ['bz2'],
+        include_dirs = include_dirs,
+        libraries = libraries,
+        separate_module_files=separate_module_files,
+        export_symbols=export_symbols,
     )
-    calling_conv = 'c'
+    if sys.platform == "win32":
+        calling_conv = 'win'
+    else:
+        calling_conv = 'c'
 
     off_t = platform.SimpleType("off_t", rffi.LONGLONG)
     size_t = platform.SimpleType("size_t", rffi.ULONG)
@@ -108,7 +139,8 @@ else:
 
 def external(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=
-                           CConfig._compilation_info_)
+                           CConfig._compilation_info_,
+                           calling_conv=CConfig.calling_conv)
 
 # the least but one parameter should be rffi.VOIDP but it's not used
 # so I trick the compiler to not complain about constanst pointer passed
