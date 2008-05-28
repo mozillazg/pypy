@@ -38,16 +38,8 @@ def llexternal(name, args, result, **kwds):
 def _emulated_start_new_thread(func):
     "NOT_RPYTHON"
     import thread
-    def runner():
-        if rffi.aroundstate.after:
-            rffi.aroundstate.after()
-        try:
-            func()
-        finally:
-            if rffi.aroundstate.before:
-                rffi.aroundstate.before()
     try:
-        ident = thread.start_new_thread(runner, ())
+        ident = thread.start_new_thread(func, ())
     except thread.error:
         ident = -1
     return rffi.cast(rffi.INT, ident)
