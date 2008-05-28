@@ -70,7 +70,9 @@ class GILReleaseAction(Action):
 
 
 class SpaceState:
-    pass
+    def _freeze_(self):
+        self.ll_GIL = thread.null_ll_lock
+        return False
 spacestate = SpaceState()
 
 # Fragile code below.  We have to preserve the C-level errno manually...
