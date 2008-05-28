@@ -173,16 +173,16 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
         errorcode = callable._errorcode_
     else:
         errorcode = TP.TO.RESULT._example()
-    if aroundstate is not None:
-        before = aroundstate.before
-        after = aroundstate.after
-    else:
-        before = None
-        after = None
     callable_name = getattr(callable, '__name__', '?')
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
+            if aroundstate is not None:
+                before = aroundstate.before
+                after = aroundstate.after
+            else:
+                before = None
+                after = None
             if after:
                 after()
             # from now on we hold the GIL
