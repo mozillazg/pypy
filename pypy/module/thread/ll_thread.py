@@ -27,7 +27,7 @@ eci = ExternalCompilationInfo(
                     python_inc],
     export_symbols = ['RPyThreadGetIdent', 'RPyThreadLockInit',
                       'RPyThreadAcquireLock', 'RPyThreadReleaseLock',
-                      'RPyThreadFusedReleaseAcquireLock',]
+                      'RPyThreadYield']
 )
 
 def llexternal(name, args, result, **kwds):
@@ -71,9 +71,9 @@ c_thread_acquirelock_NOAUTO = llexternal('RPyThreadAcquireLock',
 c_thread_releaselock_NOAUTO = llexternal('RPyThreadReleaseLock',
                                          [TLOCKP], lltype.Void,
                                          _nowrapper=True)
-c_thread_fused_releaseacquirelock_NOAUTO = llexternal(
-     'RPyThreadFusedReleaseAcquireLock', [TLOCKP], lltype.Void,
-                                         _nowrapper=True)
+
+# this function does nothing apart from releasing the GIL temporarily.
+yield_thread = llexternal('RPyThreadYield', [], lltype.Void, threadsafe=True)
 
 def allocate_lock():
     return Lock(allocate_ll_lock())
@@ -144,11 +144,6 @@ def release_NOAUTO(ll_lock):
     if not we_are_translated():
         ll_assert(not acquire_NOAUTO(ll_lock, False), "NOAUTO lock not held!")
     c_thread_releaselock_NOAUTO(ll_lock)
-
-def fused_release_acquire_NOAUTO(ll_lock):
-    if not we_are_translated():
-        ll_assert(not acquire_NOAUTO(ll_lock, False), "NOAUTO lock not held!")
-    c_thread_fused_releaseacquirelock_NOAUTO(ll_lock)
 
 # ____________________________________________________________
 #

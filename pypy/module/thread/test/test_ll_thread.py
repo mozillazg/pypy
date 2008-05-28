@@ -28,16 +28,6 @@ def test_thread_error():
     else:
         py.test.fail("Did not raise")
 
-def test_fused():
-    l = allocate_ll_lock()
-    acquire_NOAUTO(l, True)
-    fused_release_acquire_NOAUTO(l)
-    could_acquire_again = acquire_NOAUTO(l, False)
-    assert not could_acquire_again
-    release_NOAUTO(l)
-    could_acquire_again = acquire_NOAUTO(l, False)
-    assert could_acquire_again
-
 
 class AbstractThreadTests(AbstractGCTestClass):
     use_threads = True
