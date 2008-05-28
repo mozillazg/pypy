@@ -6,15 +6,12 @@ from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst, CodeGenSwitch
 from pypy.jit.codegen.cli import operation as ops
-from pypy.jit.codegen.cli.dumpgenerator import DumpGenerator
+from pypy.jit.codegen.cli.methodbuilder import get_methodbuilder
 from pypy.translator.cli.dotnet import CLR, typeof, new_array, box, unbox, clidowncast, classof
 from pypy.translator.cli import dotnet
 System = CLR.System
-Utils = CLR.pypy.runtime.Utils
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
 OpCodes = System.Reflection.Emit.OpCodes
-
-DUMP_IL = False
 
 cVoid = ootype.nullruntimeclass
 cInt32 = classof(System.Int32)
@@ -325,10 +322,8 @@ class GraphBuilder(GenBuilder):
 
     def __init__(self, rgenop, name, res, args, sigtoken):
         self.rgenop = rgenop
-        self.meth = Utils.CreateDynamicMethod(name, res, args)
-        self.il = self.meth.GetILGenerator()
-        if DUMP_IL:
-            self.il = DumpGenerator(self.il)
+        self.meth = get_methodbuilder(name, res, args)
+        self.il = self.meth.get_il_generator()
         self.inputargs_gv = []
         # we start from 1 because the 1st arg is an Object[] containing the genconsts
         for i in range(1, len(args)):
@@ -416,7 +411,7 @@ class GraphBuilder(GenBuilder):
         for gv_const, i in self.genconsts.iteritems():
             consts[i] = gv_const.getobj()
         # build the delegate
-        myfunc = self.meth.CreateDelegate(self.delegatetype, consts)
+        myfunc = self.meth.create_delegate(self.delegatetype, consts)
         self.gv_entrypoint.holder.SetFunc(myfunc)
 
 

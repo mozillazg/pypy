@@ -7,7 +7,6 @@ class CliMixin(object):
     RGenOp = RCliGenOp
 
     def _invoke(self, generated, residualargs):
-        
         # mono sucks; if we call the generated function directly,
         # sometimes the result is wrong (e.g. test_simple_fixed
         # fails).  If we call it by DynamicInvoke, the result is
