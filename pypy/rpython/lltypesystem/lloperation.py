@@ -406,6 +406,9 @@ LL_OPERATIONS = {
     'gc_id':                LLOp(canraise=(MemoryError,), sideeffects=False),
     'gc_set_max_heap_size': LLOp(),
     'gc_can_move'         : LLOp(sideeffects=False),
+    'gc_thread_prepare'   : LLOp(canraise=(MemoryError,)),
+    'gc_thread_run'       : LLOp(),
+    'gc_thread_die'       : LLOp(),
     # experimental operations in support of thread cloning, only
     # implemented by the Mark&Sweep GC
     'gc_x_swap_pool':       LLOp(canraise=(MemoryError,), canunwindgc=True),

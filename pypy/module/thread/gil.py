@@ -5,7 +5,7 @@ Global Interpreter Lock.
 # This module adds a global lock to an object space.
 # If multiple threads try to execute simultaneously in this space,
 # all but one will be blocked.  The other threads get a chance to run
-# from time to time, using the executioncontext's XXX
+# from time to time, using the hook yield_thread().
 
 from pypy.module.thread import ll_thread as thread
 from pypy.module.thread.error import wrap_thread_error
@@ -16,15 +16,16 @@ from pypy.rlib.rposix import get_errno, set_errno
 
 class GILThreadLocals(OSThreadLocals):
     """A version of OSThreadLocals that enforces a GIL."""
-    GIL = None
+    ll_GIL = thread.null_ll_lock
 
     def setup_threads(self, space):
         """Enable threads in the object space, if they haven't already been."""
-        if self.GIL is None:
+        if not self.ll_GIL:
             try:
-                self.GIL = thread.allocate_lock_NOAUTO()
+                self.ll_GIL = thread.allocate_ll_lock()
             except thread.error:
                 raise wrap_thread_error(space, "can't allocate GIL")
+            thread.acquire_NOAUTO(self.ll_GIL, True)
             self.enter_thread(space)   # setup the main thread
             # add the GIL-releasing callback as an action on the space
             space.pending_actions.append(GILReleaseAction(self))
@@ -40,31 +41,17 @@ class GILThreadLocals(OSThreadLocals):
         # test_lock_again after the global state was cleared by
         # test_compile_lock.  As a workaround, we repatch these global
         # fields systematically.
-        spacestate.GIL = self.GIL
+        spacestate.ll_GIL = self.ll_GIL
         invoke_around_extcall(before_external_call, after_external_call)
         return result
-
-    def enter_thread(self, space):
-        "Notification that the current thread is just starting: grab the GIL."
-        self.GIL.acquire(True)
-        OSThreadLocals.enter_thread(self, space)
-
-    def leave_thread(self, space):
-        "Notification that the current thread is stopping: release the GIL."
-        OSThreadLocals.leave_thread(self, space)
-        self.GIL.release()
 
     def yield_thread(self):
         """Notification that the current thread is between two bytecodes:
         release the GIL for a little while."""
-        GIL = self.GIL
-        # Other threads can run between the release() and the acquire().
-        # This is a single external function so that we are sure that nothing
-        # occurs between the release and the acquire, e.g. no GC operation.
-        GIL.fused_release_acquire()
-
-    def getGIL(self):
-        return self.GIL    # XXX temporary hack!
+        # Other threads can run between the release() and the acquire()
+        # implicit in the following external function call (which has
+        # otherwise no effect).
+        thread.yield_thread()
 
 
 class GILReleaseAction(Action):
@@ -81,7 +68,9 @@ class GILReleaseAction(Action):
 
 
 class SpaceState:
-    pass
+    def _freeze_(self):
+        self.ll_GIL = thread.null_ll_lock
+        return False
 spacestate = SpaceState()
 
 # Fragile code below.  We have to preserve the C-level errno manually...
@@ -90,10 +79,13 @@ def before_external_call():
     # this function must not raise, in such a way that the exception
     # transformer knows that it cannot raise!
     e = get_errno()
-    spacestate.GIL.release()
+    thread.release_NOAUTO(spacestate.ll_GIL)
     set_errno(e)
+before_external_call._gctransformer_hint_cannot_collect_ = True
 
 def after_external_call():
     e = get_errno()
-    spacestate.GIL.acquire(True)
+    thread.acquire_NOAUTO(spacestate.ll_GIL, True)
+    thread.gc_thread_run()
     set_errno(e)
+after_external_call._gctransformer_hint_cannot_collect_ = True
