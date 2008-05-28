@@ -17,7 +17,7 @@ that create W_PointersObjects of correct size with attached shadows.
 import sys
 from pypy.rlib import rrandom, objectmodel
 from pypy.rlib.rarithmetic import intmask
-from pypy.lang.smalltalk import constants
+from pypy.lang.smalltalk import constants, error
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.objectmodel import instantiate
 from pypy.lang.smalltalk.tool.bitmanipulation import splitter
@@ -396,10 +396,28 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
         self.words = [0] * size
         
     def at0(self, space, index0):
-        return space.wrap_int(self.getword(index0))
-       
+        val = self.getword(index0)
+        if val & (3 << 30) == 0:
+            return space.wrap_int(val)
+        else:
+            w_result = W_BytesObject(space.classtable['w_LargePositiveInteger'], 4)
+            for i in range(4):
+                w_result.setchar(i, chr((val >> i*8) & 255))
+            return w_result
+ 
     def atput0(self, space, index0, w_value):
-        self.setword(index0, space.unwrap_int(w_value))
+        if isinstance(w_value, W_BytesObject):
+            # XXX Probably we want to allow all subclasses
+            if not (w_value.getclass(self).is_same_object(
+                    space.classtable['w_LargePositiveInteger']) and
+                    w_value.size() == 4):
+                raise UnwrappingError("Failed to convert bytes to word")
+            word = 0
+            for i in range(4):
+                word += ord(w_value.getchar(i)) << 8*i
+        else:
+            word = space.unwrap_int(w_value)
+        self.setword(index0, word)
 
     def getword(self, n):
         return self.words[n]
