@@ -421,11 +421,11 @@ class CStandaloneBuilder(CBuilder):
                 return os.path.join('$(PYPYDIR)', rel)
             else:
                 return path
-        args = ['-l'+libname for libname in self.eci.libraries]
+        args = ['-l'+str(libname) for libname in self.eci.libraries]
         print >> f, 'LIBS =', ' '.join(args)
-        args = ['-L'+makerel(path) for path in self.eci.library_dirs]
+        args = ['-L'+str(makerel(path)) for path in self.eci.library_dirs]
         print >> f, 'LIBDIRS =', ' '.join(args)
-        args = ['-I'+makerel(path) for path in self.eci.include_dirs]
+        args = ['-I'+str(makerel(path)) for path in self.eci.include_dirs]
         write_list(args, 'INCLUDEDIRS =')
         print >> f
         print >> f, 'CFLAGS  =', ' '.join(compiler.compile_extra)
