@@ -16,16 +16,26 @@ Differences related to garbage collection strategies
 XXX: write me please
 
 
-Subclasses of builtin ``dict`` objects
---------------------------------------
+Subclasses of built-in types
+----------------------------
 
-When you pass an instance of a subclass of ``dict`` to the
-``dict.update`` method, CPython simply ignores potentially overridden
-methods, such as ``keys()`` or ``__getitem__()``; on the other hand,
-PyPy correctly calls the overridden versions of the methods.
+Officially, CPython has no rule at all for when exactly
+overriden method of subclasses of built-in types get
+implicitly called or not.  As an approximation, these methods
+are never called by other built-in methods of the same object.
+For example, an overridden ``__getitem__()`` in a subclass of
+``dict`` will not be called by e.g. the built-in ``get()``
+method.
 
-For example, the following code prints ``42`` on PyPy but ``foo``
-on CPython::
+The above is true both in CPython and in PyPy.  Differences
+can occur about whether a built-in function or method will
+call an overridden method of *another* object than ``self``.
+In PyPy, they are generally always called, whereas not in
+CPython.  For example, in PyPy, ``dict1.update(dict2)``
+considers that ``dict2`` is just a general mapping object, and
+will thus call overridden ``keys()``  and ``__getitem__()``
+methods on it.  So the following code prints ``42`` on PyPy
+but ``foo`` on CPython::
 
     >>>> class D(dict):
     ....     def __getitem__(self, key):
@@ -38,10 +48,18 @@ on CPython::
     >>>> print d1['a']
     42
 
-Comparison differencies
+
+Ignored exceptions
 -----------------------
 
-When custom \_\_eq\_\_ function on object (or any other rich comparison
-method) raises an exception, we don't swallow the exception and instead
-report it to user.
+In many corner cases, CPython can silently swallow exceptions.
+The precise list of when this occurs is rather long, even
+though most cases are very uncommon.  The most well-known
+places are custom rich comparison methods (like \_\_eq\_\_);
+dictionary lookup; calls to some built-in functions like
+isinstance().
+
+Unless this behavior is clearly present by design and
+documented as such (as e.g. for hasattr()), in most cases PyPy
+lets the exception propagate instead.
 
