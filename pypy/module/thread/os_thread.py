@@ -9,6 +9,45 @@ from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.gateway import ObjSpace, W_Root, Arguments
 from pypy.rlib.objectmodel import free_non_gc_object
 
+# Here are the steps performed to start a new thread:
+#
+# * The bootstrapper.lock is first acquired to prevent two parallel
+#   starting threads from messing with each other's start-up data.
+#
+# * The start-up data (the app-level callable and arguments) is
+#   stored in the global bootstrapper object.
+#
+# * The GC is notified that a new thread is about to start; in the
+#   framework GC, this allocates a fresh new shadow stack (but doesn't
+#   use it yet).  See gc_thread_prepare().
+#
+# * The new thread is launched at RPython level using an rffi call
+#   to the C function RPyThreadStart() defined in
+#   translator/c/src/thread*.h.  This RPython thread will invoke the
+#   static method bootstrapper.bootstrap() as a call-back.
+#
+# * As if it was a regular callback, rffi adds a wrapper around
+#   bootstrap().  This wrapper acquires and releases the GIL.  In this
+#   way the new thread is immediately GIL-protected.
+#
+# * As soon as the GIL is acquired in the new thread, the gc_thread_run()
+#   operation is called (this is all done by gil.after_external_call(),
+#   called from the rffi-generated wrapper).  The gc_thread_run()
+#   operation will automatically notice that the current thread id was
+#   not seen before, and start using the freshly prepared shadow stack.
+#
+# * Only then does bootstrap() really run.  The first thing it does
+#   is grab the start-up information (app-level callable and args)
+#   out of the global bootstrapper object and release bootstrapper.lock.
+#   Then it calls the app-level callable, to actually run the thread.
+#
+# * After each potential thread switch, as soon as the GIL is re-acquired,
+#   gc_thread_run() is called again; it ensures that the currently
+#   installed shadow stack is the correct one for the currently running
+#   thread.
+#
+# * Just before a thread finishes, gc_thread_die() is called to free
+#   its shadow stack.
 
 
 class Bootstrapper(object):
