@@ -71,9 +71,11 @@ translation_optiondescription = OptionDescription(
                  requires={
                      "shadowstack": [("translation.gctransformer", "framework")],
                      "llvmgc": [("translation.gctransformer", "framework"),
-                                ("translation.backend", "llvm")],
+                                ("translation.backend", "llvm"),
+                                ("translation.thread", False)],
                      "asmgcc": [("translation.gctransformer", "framework"),
-                                ("translation.backend", "c")],
+                                ("translation.backend", "c"),
+                                ("translation.thread", False)],
                     },
                  suggests={
                      "shadowstack": [("translation.gc", "generation")],
