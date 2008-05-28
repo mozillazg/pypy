@@ -477,10 +477,15 @@ class BranchBuilder(GenBuilder):
         self.appendop(op)
 
     def enter_next_block(self, args_gv):
+        seen = {}
         for i in range(len(args_gv)):
-            op = ops.SameAs(self, args_gv[i])
-            self.appendop(op)
-            args_gv[i] = op.gv_res()
+            gv = args_gv[i]
+            if isinstance(gv, GenConst) or gv in seen:
+                op = ops.SameAs(self, gv)
+                self.appendop(op)
+                args_gv[i] = op.gv_res()
+            else:
+                seen[gv] = None
         label = self.graphbuilder.il.DefineLabel()
         self.appendop(ops.MarkLabel(self, label))
         return Label(label, args_gv)
