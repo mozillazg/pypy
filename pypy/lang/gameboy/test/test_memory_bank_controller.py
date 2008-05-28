@@ -150,16 +150,13 @@ def get_default_mbc():
     return DefaultMBC([0]*0xFFFF, [0]*0xFFFF, get_clock_driver()) 
 
 def test_default_mbc_read_write():
-    py.test.skip("buggy implementation of DefaultMBC")
     mbc = get_default_mbc()
-    for i in range(0xFFFF):
+    mbc.ram_bank = 0
+    mbc.ram_enable = True
+    for i in range(0xA000, 0xBFFF):
         mbc.write(i, i)
         assert mbc.read(i) == i
 
-def test_default_mbc_write():
-    py.test.skip("not yet implemented")
-    mbc = get_default_mbc()
-    
 # -----------------------------------------------------------------------------
 
 def get_mbc1(rom_size=128, ram_size=4):
@@ -244,14 +241,12 @@ def get_mbc2(rom_size=16, ram_size=1):
     return MBC2(get_rom(rom_size/32.0), get_ram(ram_size), get_clock_driver())
 
 def test_mbc2_create():
-    py.test.skip("wrong ranges")
     mbc = get_mbc2()
     fail_ini_test(mbc, 2, 0)
     fail_ini_test(mbc, 2, 2)
     fail_ini_test(mbc, 1, 1)
     fail_ini_test(mbc, 17, 1)
-    # only to the upper border of mbc
-    basic_read_write_test(mbc, 0, 0x7FFF)
+    # FIXME read write test missing
     
     
 def test_mbc2_write_ram_enable():
@@ -539,7 +534,7 @@ def test_huc3_write_ram():
         value = +1
         value %= 0xFF
         
-def test_huc3_write_ram_value():
+def test_huc3_write_ram_value_clock_shift():
     mbc = get_huc3()        
     mbc.ram_flag = 0x0B
     for address in range(0xA000, 0xBFFF+1):
@@ -552,7 +547,7 @@ def test_huc3_write_ram_value():
             assert mbc.clock_shift == clock_shift
             mbc.clock_shift = 0
             
-def test_huc3_write_reset_ram_value():
+def test_huc3_write_ram_value_clock_shift():
     mbc = get_huc3()       
     value = 1  
     mbc.ram_flag = 0x0B
@@ -563,8 +558,8 @@ def test_huc3_write_reset_ram_value():
         value = +1
         value %= 0xFF
         
-def test_huc3_write_clock_register():
-    py.test.skip("bug for in the clock")
+def test_huc3_write_clock_register_clock_shift():
+    #py.test.skip("bug for in the clock")
     mbc = get_huc3()        
     value = 1
     mbc.ram_flag = 0x0B
@@ -573,18 +568,17 @@ def test_huc3_write_clock_register():
         clock_register = mbc.clock_register
         mbc.write(address, 0x30+value)
         if clock_shift <= 24:
+            assert mbc.clock_shift == clock_shift+4
             assert mbc.clock_register == (clock_register & \
                                            ~(0x0F << clock_shift)) | \
-                                         (value << clock_shift)
-            assert mbc.clock_shift == clock_shift+4
+                                         ((value & 0x0F) << clock_shift)
         else:
             assert mbc.clock_shift == clock_shift
             mbc.clock_shift = 0
         value = +1
         value %= 0xF
             
-def test_huc3_write_update_clock():
-    py.test.skip("bug for in the clock")
+def test_huc3_write_clock_shift():
     mbc = get_huc3()       
     value = 1  
     mbc.ram_flag = 0x0B
