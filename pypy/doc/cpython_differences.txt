@@ -13,7 +13,36 @@ PyPy.
 Differences related to garbage collection strategies
 ----------------------------------------------------
 
-XXX: write me please
+PyPy's garbage collector is not based on reference counting, so the
+objects are not freed instantly when they are no longer reachable.  The
+most obvious effect of this is that files are not promptly closed when
+they go out of scope.  For files that are opened for writing, data can
+be left sitting in their output buffers for a while, making the on-disk
+file appear empty or truncated.
+
+Fixing this is essentially not possible without forcing a
+reference-counting approach to garbage collection.  The effect that you
+get in CPython has clearly been described as a side-effect of the
+implementation and not a language design decision: programs relying on
+this are basically bogus.  It would anyway be insane to try to enforce
+CPython's behavior in a language spec, given that it has no chance to be
+adopted by Jython or IronPython (or any other port of Python to Java or
+.NET, like PyPy itself).
+
+There are a few extra implications for the difference in the GC.  Most
+notably, if an object has a __del__, the __del__ is never called more
+than once in PyPy; but CPython will call the same __del__ several times
+if the object is resurrected and dies again.
+
+The built-in function ``id()`` returns numbers that are not addresses.
+This is most visible in the default repr: a typical PyPy object can
+pretend to be located ``at 0x00000009``.  This is just its ``id()``, not
+its real address (because the physical address can change).
+
+Note that if you have a long chain of objects, each with a reference to
+the next one, and each with a __del__, PyPy's GC will perform badly.  On
+the bright side, in most other cases, benchmarks have shown that PyPy's
+GCs perform much better than CPython's.
 
 
 Subclasses of built-in types
