@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization;
 using System.IO;
+using System.Reflection;
 using System.Reflection.Emit;
 using pypy.runtime;
 
@@ -116,6 +117,54 @@ namespace pypy.runtime
         {
             return this.func;
         }
+    }
+
+    public class AutoSaveAssembly
+    {
+        private AssemblyBuilder assembly;
+        private string name;
+
+        public static AutoSaveAssembly Create(string name)
+        {
+            return new AutoSaveAssembly(name);
+        }
+
+        public AutoSaveAssembly(string name)
+        {
+            this.name = name;
+            AssemblyName assemblyName = new AssemblyName(); 
+            assemblyName.Name = name;
+            this.assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.RunAndSave);
+        }
+
+        ~AutoSaveAssembly()
+        {
+            this.assembly.Save(this.name);
+        }
+
+        public AssemblyBuilder GetAssemblyBuilder()
+        {
+            return this.assembly;
+        }
+
+        public static TypeBuilder DefineType(ModuleBuilder module, string name)
+        {
+            return module.DefineType(name,
+                                     TypeAttributes.Public |
+                                     TypeAttributes.Class);
+        }
+
+        public static MethodBuilder DefineMethod(TypeBuilder typeBuilder, string name, Type res, Type[] args)
+        {
+            return typeBuilder.DefineMethod("invoke",
+                                            MethodAttributes.HideBySig | 
+                                            MethodAttributes.Static | 
+                                            MethodAttributes.Public, 
+                                            res, 
+                                            args);
+        }
+
+        
     }
 
     public class Utils
