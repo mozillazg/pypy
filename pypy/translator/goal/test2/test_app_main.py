@@ -418,3 +418,22 @@ class TestNonInteractive:
                                  expect_prompt=True, expect_banner=False)
         assert 'hello world\n' in data
         assert '42\n' in data
+
+    def test_non_interactive_stdout_fully_buffered(self):
+        path = getscript(r"""
+            import sys, time
+            sys.stdout.write('\x00(STDOUT)\n\x00')   # stays in buffers
+            time.sleep(1)
+            sys.stderr.write('\x00[STDERR]\n\x00')
+            time.sleep(1)
+            # stdout flushed automatically here
+            """)
+        cmdline = '%s -u "%s" %s' % (sys.executable, app_main, path)
+        print 'POPEN:', cmdline
+        child_in, child_out_err = os.popen4(cmdline)
+        data = child_out_err.read(11)
+        assert data == '\x00[STDERR]\n\x00'    # from stderr
+        child_in.close()
+        data = child_out_err.read(11)
+        assert data == '\x00(STDOUT)\n\x00'    # from stdout
+        child_out_err.close()
