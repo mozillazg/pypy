@@ -22,8 +22,7 @@
 #define RPyOpaque_INITEXPR_ThreadLock  { 0, 0, NULL }
 
 typedef struct {
-	void (*func)(void*);
-	void *arg;
+	void (*func)(void);
 	long id;
 	HANDLE done;
 } callobj;
@@ -35,7 +34,7 @@ typedef struct RPyOpaque_ThreadLock {
 } NRMUTEX, *PNRMUTEX ;
 
 /* prototypes */
-long RPyThreadStart(void (*func)(void *), void *arg);
+long RPyThreadStart(void (*func)(void));
 BOOL InitializeNonRecursiveMutex(PNRMUTEX mutex);
 VOID DeleteNonRecursiveMutex(PNRMUTEX mutex);
 DWORD EnterNonRecursiveMutex(PNRMUTEX mutex, BOOL wait);
@@ -63,23 +62,21 @@ bootstrap(void *call)
 {
 	callobj *obj = (callobj*)call;
 	/* copy callobj since other thread might free it before we're done */
-	void (*func)(void*) = obj->func;
-	void *arg = obj->arg;
+	void (*func)(void) = obj->func;
 
 	obj->id = RPyThreadGetIdent();
 	ReleaseSemaphore(obj->done, 1, NULL);
-	func(arg);
+	func();
 	return 0;
 }
 
-long RPyThreadStart(void (*func)(void *), void *arg)
+long RPyThreadStart(void (*func)(void))
 {
 	unsigned long rv;
 	callobj obj;
 
 	obj.id = -1;	/* guilty until proved innocent */
 	obj.func = func;
-	obj.arg = arg;
 	obj.done = CreateSemaphore(NULL, 0, 1, NULL);
 	if (obj.done == NULL)
 		return -1;

@@ -71,9 +71,11 @@ translation_optiondescription = OptionDescription(
                  requires={
                      "shadowstack": [("translation.gctransformer", "framework")],
                      "llvmgc": [("translation.gctransformer", "framework"),
-                                ("translation.backend", "llvm")],
+                                ("translation.backend", "llvm"),
+                                ("translation.thread", False)],
                      "asmgcc": [("translation.gctransformer", "framework"),
-                                ("translation.backend", "c")],
+                                ("translation.backend", "c"),
+                                ("translation.thread", False)],
                     },
                  suggests={
                      "shadowstack": [("translation.gc", "generation")],
@@ -81,8 +83,7 @@ translation_optiondescription = OptionDescription(
                      "asmgcc": [("translation.gc", "generation")],
                  }),
     BoolOption("thread", "enable use of threading primitives",
-               default=False, cmdline="--thread",
-               requires=[("translation.gc", "boehm")]),
+               default=False, cmdline="--thread"),
     BoolOption("verbose", "Print extra information", default=False),
     BoolOption("debug", "Record extra annotation information",
                cmdline="-d --debug", default=False),

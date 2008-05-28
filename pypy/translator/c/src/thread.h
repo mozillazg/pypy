@@ -44,17 +44,13 @@
 
 #endif
 
-/* common helper: this is a single external function so that we are
-   sure that nothing occurs between the release and the acquire,
-   e.g. no GC operation. */
-
-void RPyThreadFusedReleaseAcquireLock(struct RPyOpaque_ThreadLock *lock);
+/* common helper: this does nothing, but is called with the GIL released.
+   This gives other threads a chance to grab the GIL and run. */
+void RPyThreadYield(void);
 
 #ifndef PYPY_NOT_MAIN_FILE
-void RPyThreadFusedReleaseAcquireLock(struct RPyOpaque_ThreadLock *lock)
+void RPyThreadYield(void)
 {
-	RPyThreadReleaseLock(lock);
-	RPyThreadAcquireLock(lock, 1);
 }
 #endif
 
