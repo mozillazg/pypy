@@ -371,7 +371,6 @@ class TestHandlerException:
         raise RuntimeError(name)
 
     def test(self):
-        py.test.skip("not implemented")
         parser = expat.ParserCreate()
         parser.StartElementHandler = self.StartElementHandler
         try:
@@ -447,7 +446,8 @@ class TestChardataBuffer:
         try:
             import __pypy__
         except ImportError:
-            py.test.skip("Doesn't work on cpy 2.5")
+            pass
+            #py.test.skip("Doesn't work on cpy 2.5")
 
     def test_1025_bytes(self):
         assert self.small_buffer_test(1025) == 2
