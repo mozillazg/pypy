@@ -2,7 +2,8 @@
 import ctypes
 import ctypes.util
 from ctypes_configure import configure
-from ctypes import c_char_p, c_int, c_void_p, POINTER, c_char
+from ctypes import c_char_p, c_int, c_void_p, POINTER, c_char, c_wchar_p
+import sys
 
 lib = ctypes.CDLL(ctypes.util.find_library('expat'))
 
@@ -21,21 +22,31 @@ class CConfigure:
                  'XML_PARAM_ENTITY_PARSING_ALWAYS']:
         locals()[name] = configure.ConstantInteger(name)
 
+    XML_Encoding = configure.Struct('XML_Encoding',[
+                                    ('data', c_void_p),
+                                    ('convert', c_void_p),
+                                    ('release', c_void_p),
+                                    ('map', c_int * 256)])
+    # this is insanely stupid
+    XML_FALSE = configure.ConstantInteger('XML_FALSE')
+    XML_TRUE = configure.ConstantInteger('XML_TRUE')
+
 info = configure.configure(CConfigure)
 for k, v in info.items():
     globals()[k] = v
 XML_Parser = ctypes.c_void_p # an opaque pointer
 assert XML_Char is ctypes.c_char # this assumption is everywhere in
 # cpython's expat, let's explode
-XML_ParserCreate = lib.XML_ParserCreate
-XML_ParserCreate.args = [ctypes.c_char_p]
-XML_ParserCreate.result = XML_Parser
-XML_ParserCreateNS = lib.XML_ParserCreateNS
-XML_ParserCreateNS.args = [c_char_p, c_char]
-XML_ParserCreateNS.result = XML_Parser
-XML_Parse = lib.XML_Parse
-XML_Parse.args = [XML_Parser, ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
-XML_Parse.result = ctypes.c_int
+
+def declare_external(name, args, res):
+    func = getattr(lib, name)
+    func.args = args
+    func.result = res
+    globals()[name] = func
+
+declare_external('XML_ParserCreate', [c_char_p], XML_Parser)
+declare_external('XML_ParserCreateNS', [c_char_p, c_char], XML_Parser)
+declare_external('XML_Parse', [XML_Parser, c_char_p, c_int, c_int], c_int)
 currents = ['CurrentLineNumber', 'CurrentColumnNumber',
             'CurrentByteIndex']
 for name in currents:
@@ -43,15 +54,22 @@ for name in currents:
     func.args = [XML_Parser]
     func.result = c_int
 
-XML_SetReturnNSTriplet = lib.XML_SetReturnNSTriplet
-XML_SetReturnNSTriplet.args = [XML_Parser, c_int]
-XML_SetReturnNSTriplet.result = None
-XML_GetSpecifiedAttributeCount = lib.XML_GetSpecifiedAttributeCount
-XML_GetSpecifiedAttributeCount.args = [XML_Parser]
-XML_GetSpecifiedAttributeCount.result = c_int
-XML_SetParamEntityParsing = lib.XML_SetParamEntityParsing
-XML_SetParamEntityParsing.args = [XML_Parser, c_int]
-XML_SetParamEntityParsing.result = None
+declare_external('XML_SetReturnNSTriplet', [XML_Parser, c_int], None)
+declare_external('XML_GetSpecifiedAttributeCount', [XML_Parser], c_int)
+declare_external('XML_SetParamEntityParsing', [XML_Parser, c_int], None)
+declare_external('XML_GetErrorCode', [XML_Parser], c_int)
+declare_external('XML_StopParser', [XML_Parser, c_int], None)
+lib.XML_ErrorString.args = [c_int]
+lib.XML_ErrorString.result = c_int
+
+declare_external('XML_SetUnknownEncodingHandler', [XML_Parser, c_void_p,
+                                                   c_void_p], None)
+
+def XML_ErrorString(code):
+    res = lib.XML_ErrorString(code)
+    p = c_char_p()
+    p.value = res
+    return p.value
 
 handler_names = [
     'StartElement',
@@ -92,7 +110,8 @@ for name in handler_names:
     setters[name] = cfunc
 
 class ExpatError(Exception):
-    pass
+    def __str__(self):
+        return self.s
 
 error = ExpatError
 
@@ -111,6 +130,7 @@ class XMLParserType(object):
             self.itself = XML_ParserCreateNS(encoding, ord(namespace_separator))
         if not self.itself:
             raise RuntimeError("Creating parser failed")
+        self._set_unknown_encoding_handler()
         self.storage = {}
         self.buffer = None
         self.buffer_size = 8192
@@ -128,10 +148,42 @@ class XMLParserType(object):
         if self.character_data_handler:
             self.character_data_handler(buf)
 
-    def Parse(self, data, is_final):
+    def _set_unknown_encoding_handler(self):
+        def UnknownEncoding(encodingData, name, info_p):
+            info = info_p.contents
+            s = ''.join([chr(i) for i in range(256)])
+            u = s.decode(self.encoding, 'replace')
+            for i in range(len(u)):
+                if u[i] == u'\xfffd':
+                    info.map[i] = -1
+                else:
+                    info.map[i] = ord(u[i])
+            info.data = None
+            info.convert = None
+            info.release = None
+            return 1
+        
+        CB = ctypes.CFUNCTYPE(c_int, c_void_p, c_char_p, POINTER(XML_Encoding))
+        cb = CB(UnknownEncoding)
+        self._unknown_encoding_handler = (cb, UnknownEncoding)
+        XML_SetUnknownEncodingHandler(self.itself, cb, None)
+
+    def _set_error(self, code):
+        e = ExpatError()
+        e.code = code
+        lineno = lib.XML_GetCurrentLineNumber(self.itself)
+        colno = lib.XML_GetCurrentColumnNumber(self.itself)
+        e.offset = colno
+        e.lineno = lineno
+        err = XML_ErrorString(code)[:200]
+        e.s = "%s: line: %d, column: %d" % (err, lineno, colno)
+        self._error = e
+
+    def Parse(self, data, is_final=0):
         res = XML_Parse(self.itself, data, len(data), is_final)
         if res == 0:
-            xxx
+            self._set_error(XML_GetErrorCode(self.itself))
+            raise self.__exc_info[0], self.__exc_info[1], self.__exc_info[2]
         self._flush_character_buffer()
         return res
 
@@ -146,6 +198,15 @@ class XMLParserType(object):
             # weellll...
             cb = getattr(self, 'get_cb_for_%s' % name)(real_cb)
         setter(self.itself, cb)
+
+    def _wrap_cb(self, cb):
+        def f(*args):
+            try:
+                return cb(*args)
+            except:
+                self.__exc_info = sys.exc_info()
+                XML_StopParser(self.itself, XML_FALSE)
+        return f
 
     def get_cb_for_StartElementHandler(self, real_cb):
         def StartElement(unused, name, attrs):
@@ -165,6 +226,7 @@ class XMLParserType(object):
                 for i in range(0, max, 2):
                     res[conv(attrs[i])] = conv(attrs[i + 1])
             real_cb(conv(name), res)
+        StartElement = self._wrap_cb(StartElement)
         CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, POINTER(c_char_p))
         return CB(StartElement)
 
@@ -177,6 +239,7 @@ class XMLParserType(object):
             if res is None:
                 return 0
             return res
+        ExternalEntity = self._wrap_cb(ExternalEntity)
         CB = ctypes.CFUNCTYPE(c_int, c_void_p, *([c_char_p] * 4))
         return CB(ExternalEntity)
 
@@ -189,11 +252,12 @@ class XMLParserType(object):
                     self._flush_character_buffer()
                     if self.character_data_handler is None:
                         return
-                if lgt > self.buffer_size:
+                if lgt >= self.buffer_size:
                     self._call_character_handler(s[:lgt])
                     self.buffer = []
                 else:
                     self.buffer.append(s[:lgt])
+        CharacterData = self._wrap_cb(CharacterData)
         CB = ctypes.CFUNCTYPE(None, c_void_p, POINTER(c_char), c_int)
         return CB(CharacterData)
 
@@ -206,6 +270,7 @@ class XMLParserType(object):
                     pub_id, not_name]
             args = [self.conv(arg) for arg in args]
             real_cb(*args)
+        EntityDecl = self._wrap_cb(EntityDecl)
         CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, c_int, c_char_p,
                                c_int, c_char_p, c_char_p, c_char_p, c_char_p)
         return CB(EntityDecl)
@@ -213,7 +278,8 @@ class XMLParserType(object):
     def get_cb_for_ElementDeclHandler(self, real_cb):
         # XXX this is broken, needs tests
         def ElementDecl(unused, *args):
-            pass
+            print "WARNING! ElementDeclHandler Not supported"
+        ElementDecl = self._wrap_cb(ElementDecl)
         CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, c_void_p)
         return CB(ElementDecl)
 
@@ -224,6 +290,7 @@ class XMLParserType(object):
                 arg = self.conv(s[:len])
                 real_cb(arg)
             func.func_name = name
+            func = self._wrap_cb(func)
             CB = ctypes.CFUNCTYPE(*sign)
             return CB(func)
         get_callback_for_.func_name = 'get_cb_for_' + name
@@ -242,6 +309,7 @@ class XMLParserType(object):
                 args = [self.conv(arg) for arg in args]
                 real_cb(*args)
             func.func_name = name
+            func = self._wrap_cb(func)
             CB = ctypes.CFUNCTYPE(*sign)
             return CB(func)
         get_callback_for_.func_name = 'get_cb_for_' + name
@@ -293,6 +361,12 @@ class XMLParserType(object):
             else:
                 self._flush_character_buffer()
                 self.buffer = None
+        elif name == 'buffer_size':
+            if not isinstance(value, int):
+                raise TypeError("Expected int")
+            if value <= 0:
+                raise ValueError("Expected positive int")
+            self.__dict__[name] = value
         elif name == 'namespace_prefixes':
             XML_SetReturnNSTriplet(self.itself, int(bool(value)))
         elif name in setters:
