@@ -312,6 +312,22 @@ class TestInteraction:
         finally:
             os.environ['PYTHONINSPECT'] = old
 
+    def test_stdout_flushes_before_stdin_blocks(self):
+        # This doesn't really test app_main.py, but a behavior that
+        # can only be checked on top of py.py with pexpect.
+        path = getscript("""
+            import sys
+            sys.stdout.write('Are you suggesting coconuts migrate? ')
+            line = sys.stdin.readline()
+            assert line.rstrip() == 'Not at all. They could be carried.'
+            print 'A five ounce bird could not carry a one pound coconut.'
+            """)
+        py_py = os.path.join(autopath.pypydir, 'bin', 'py.py')
+        child = self._spawn(sys.executable, [py_py, path])
+        child.expect('Are you suggesting coconuts migrate?', timeout=120)
+        child.sendline('Not at all. They could be carried.')
+        child.expect('A five ounce bird could not carry a one pound coconut.')
+
 
 class TestNonInteractive:
 
