@@ -111,9 +111,9 @@ def test_configure():
 
     class CConfig:
         _compilation_info_ = ExternalCompilationInfo(
-            pre_include_lines = ["/* a C comment */",
-                                 "#include <stdio.h>",
-                                 "#include <test_ctypes_platform.h>"],
+            pre_include_bits = ["/* a C comment */",
+                                "#include <stdio.h>",
+                                "#include <test_ctypes_platform.h>"],
             include_dirs = [str(udir)]
         )
 
@@ -130,13 +130,15 @@ def test_configure():
 def test_ifdef():
     class CConfig:
         _compilation_info_ = ExternalCompilationInfo(
-            post_include_lines = ['/* a C comment */',
-                                  '#define XYZZY 42',
-                                  'typedef int foo;',
-                                  'struct s {',
-                                  'int i;',
-                                  'double f;'
-                                  '};'])
+            post_include_bits = ['/* a C comment */',
+                                 '#define XYZZY 42',
+                                 'typedef int foo;',
+                                 '''
+                                 struct s {
+                                   int i;
+                                   double f;
+                                 };
+                                 '''])
 
         s = rffi_platform.Struct('struct s', [('i', rffi.INT)],
                                    ifdef='XYZZY')
@@ -155,7 +157,7 @@ def test_ifdef():
 def test_nested_structs():
     class CConfig:
         _compilation_info_ = ExternalCompilationInfo(
-            post_include_lines="""
+            post_include_bits=["""
             struct x {
             int foo;
             unsigned long bar;
@@ -164,7 +166,7 @@ def test_nested_structs():
             char c;
             struct x x;
             };
-            """.split("\n"))
+            """])
         x = rffi_platform.Struct("struct x", [("bar", rffi.SHORT)])
         y = rffi_platform.Struct("struct y", [("x", x)])
 
@@ -178,7 +180,7 @@ def test_nested_structs():
 def test_nested_structs_in_the_opposite_order():
     class CConfig:
         _compilation_info_ = ExternalCompilationInfo(
-            post_include_lines="""
+            post_include_bits=["""
             struct y {
             int foo;
             unsigned long bar;
@@ -187,7 +189,7 @@ def test_nested_structs_in_the_opposite_order():
             char c;
             struct y y;
             };
-            """.split("\n"))
+            """])
         y = rffi_platform.Struct("struct y", [("bar", rffi.SHORT)])
         x = rffi_platform.Struct("struct x", [("y", y)])
 
