@@ -467,6 +467,7 @@ class ProfOpt(object):
 
     def build(self, option):
         compiler = self.compiler
+        compiler.fix_gcc_random_seed = True
         compiler.compile_extra.append(option)
         compiler.link_extra.append(option)
         try:
@@ -479,6 +480,7 @@ class CompilationError(Exception):
     pass
 
 class CCompiler:
+    fix_gcc_random_seed = False
 
     def __init__(self, cfilenames, eci, outputfilename=None,
                  compiler_exe=None, profbased=None):
@@ -575,11 +577,16 @@ class CCompiler:
         objects = []
         for cfile in self.cfilenames: 
             cfile = py.path.local(cfile)
+            compile_extra = self.compile_extra[:]
+            # -frandom-seed is an attempted workaround for a bug with
+            # -fprofile-generate and -fprofile-use
+            if self.fix_gcc_random_seed:
+                compile_extra.append('-frandom-seed=%s' % (cfile.basename,))
             old = cfile.dirpath().chdir() 
             try: 
                 res = compiler.compile([cfile.basename], 
                                        include_dirs=self.eci.include_dirs,
-                                       extra_preargs=self.compile_extra)
+                                       extra_preargs=compile_extra)
                 assert len(res) == 1
                 cobjfile = py.path.local(res[0]) 
                 assert cobjfile.check()
