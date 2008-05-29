@@ -2,7 +2,8 @@
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, ActivationObject,\
      create_object, W_Object, w_Undefined, newbool,\
-     w_True, w_False, W_List, w_Null, W_Iterator, W_Root
+     w_True, w_False, W_List, w_Null, W_Iterator, W_Root,\
+     DD, DE, RO
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
@@ -330,7 +331,7 @@ class LOAD_FUNCTION(Opcode):
                           callfunc=self.funcobj)
         w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
         w_obj = create_object(ctx, 'Object')
-        w_obj.Put(ctx, 'constructor', w_func, de=True)
+        w_obj.Put(ctx, 'constructor', w_func, flags = DE)
         w_func.Put(ctx, 'prototype', w_obj)
         stack.append(w_func)
 
@@ -542,7 +543,7 @@ class BaseStoreMember(Opcode):
         value = stack.pop()
         name = elem.ToString()
         value = self.operation(ctx, left, name, value)
-        left.Put(ctx, name, value)
+        left.ToObject(ctx).Put(ctx, name, value)
         stack.append(value)
 
 class STORE_MEMBER(BaseStoreMember):
@@ -709,7 +710,7 @@ class DECLARE_FUNCTION(Opcode):
         w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self.funcobj)
         w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
         w_obj = create_object(ctx, 'Object')
-        w_obj.Put(ctx, 'constructor', w_func, de=True)
+        w_obj.Put(ctx, 'constructor', w_func, flags = DE)
         w_func.Put(ctx, 'prototype', w_obj)
         if self.funcobj.name is not None:
             ctx.Put(ctx, self.funcobj.name, w_func)
@@ -728,7 +729,7 @@ class DECLARE_VAR(Opcode):
         self.name = name
 
     def eval(self, ctx, stack):
-        ctx.Put(ctx, self.name, w_Undefined, dd=True)
+        ctx.Put(ctx, self.name, w_Undefined, flags = DD)
 
     def __repr__(self):
         return 'DECLARE_VAR "%s"' % (self.name,)
@@ -829,7 +830,7 @@ class NEW_NO_ARGS(Opcode):
 class LOAD_ITERATOR(Opcode):
     def eval(self, ctx, stack):
         obj = stack.pop().ToObject(ctx)
-        props = [prop.value for prop in obj.propdict.values() if not prop.de]
+        props = [prop.value for prop in obj.propdict.values() if not prop.flags & DE]
         stack.append(W_Iterator(props))
 
 class JUMP_IF_ITERATOR_EMPTY(BaseJump):
@@ -883,7 +884,7 @@ class DELETE_MEMBER(Opcode):
 OpcodeMap = {}
 
 for name, value in locals().items():
-    if name.upper() == name and issubclass(value, Opcode):
+    if name.upper() == name and type(value) == type(Opcode) and issubclass(value, Opcode):
         OpcodeMap[name] = value
 
 opcode_unrolling = unrolling_iterable(OpcodeMap.items())
