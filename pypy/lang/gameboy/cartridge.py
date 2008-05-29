@@ -69,9 +69,9 @@ class CartridgeManager(object):
     
     def __init__(self, clock):
         assert isinstance(clock, Clock)
-        self.clock = clock
+        self.clock     = clock
         self.cartridge = None
-        self.mbc = None
+        self.mbc       = None
         
     def reset(self):
         if not self.has_battery():
@@ -592,31 +592,32 @@ class MBC3(MBC):
 
     def update_clock(self):
         now = self.clock.get_time()
-        if (self.clock_control & 0x40) == 0:
-            elapsed = now - self.clock_time
-            elapsed += self.clock_days * 24*60*60
-            elapsed += self.clock_hours * 60*60
-            elapsed += self.clock_minutes * 60
-            elapsed += self.clock_seconds
-            
-            days = int(math.floor(elapsed / (24.0*60*60.0)))
-            self.clock_days += days
-            elapsed -= days * 24*60*60
-
-            hours = int(math.floor(elapsed / (60*60)))
-            self.clock_hours += hours
-            elapsed -= hours * 60*60
-            
-            minutes = int(math.floor(elapsed / 60))
-            self.clock_minutes += minutes
-            elapsed -= minutes * 60
-            
-            self.clock_seconds += elapsed
-            
-            if self.clock_days >= 512:
-                self.clock_days %= 512
-                self.clock_control |= 0x80
+        elapsed = now - self.clock_time
         self.clock_time = now
+        if (self.clock_control & 0x40) != 0:
+            return
+        elapsed += self.clock_days * 24*60*60
+        elapsed += self.clock_hours * 60*60
+        elapsed += self.clock_minutes * 60
+        elapsed += self.clock_seconds
+        
+        days = int(math.floor(elapsed / (24.0*60*60.0)))
+        self.clock_days += days
+        elapsed -= days * 24*60*60
+
+        hours = int(math.floor(elapsed / (60*60)))
+        self.clock_hours += hours
+        elapsed -= hours * 60*60
+        
+        minutes = int(math.floor(elapsed / 60))
+        self.clock_minutes += minutes
+        elapsed -= minutes * 60
+        
+        self.clock_seconds += elapsed
+        
+        if self.clock_days >= 512:
+            self.clock_days %= 512
+            self.clock_control |= 0x80
 
 
 #-------------------------------------------------------------------------------

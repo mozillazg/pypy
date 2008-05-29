@@ -43,7 +43,7 @@ def VideoStatus(object):
         self.h_blank_interrupt  = False
         self.oam_interrupt      = False
         self.h_blank_interrupt  = False
-        self.vblank_interrupt  = False
+        self.vblank_interrupt   = False
         #Coincidence Flag  (0:LYC<>LY, 1:LYC=LY)
         self.coincidence_flag   = False
         
@@ -68,7 +68,7 @@ class Video(iMemory):
     #frames = 0
     #frame_skip = 0
 
-     # Line Buffer, constants.OAM Cache and Color Palette
+     # Line Buffer, OAM Cache and Color Palette
     #line = []#= new int[8 + 160 + 8]
     #objects = []#= new int[OBJECTS_PER_LINE]
     #palette = []#= new int[1024]
@@ -88,7 +88,7 @@ class Video(iMemory):
 
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
-        # used for enabled or disablind window or background
+        # used for enabled or disabled window or background
         # Bit 7 - LCD Display Enable             (0=Off, 1=On)
         # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
         # Bit 5 - Window Display Enable          (0=Off, 1=On)
@@ -367,7 +367,7 @@ class Video(iMemory):
             
     def emulate_hblank_line_y_compare(self):
         if self.line_y == self.line_y_compare:
-            # constants.LYC=LY interrupt
+            # LYC=LY interrupt
             self.stat |= 0x04
             if (self.stat & 0x40) != 0:
                 self.interrupt.raise_interrupt(constants.LCD)
@@ -377,7 +377,7 @@ class Video(iMemory):
     def emulate_hblank_part_1(self):
         self.stat = (self.stat & 0xFC) | 0x02
         self.cycles += constants.MODE_2_TICKS
-        # constants.OAM interrupt
+        # OAM interrupt
         if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
             self.interrupt.raise_interrupt(constants.LCD)
         
@@ -390,7 +390,6 @@ class Video(iMemory):
             self.frames = 0
         else:
             self.display = False
-
         self.stat    = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_BEGIN_TICKS
         self.vblank  = True
@@ -416,7 +415,7 @@ class Video(iMemory):
     def emulate_vblank_first_y_line(self):
         self.stat = (self.stat & 0xFC) | 0x02
         self.cycles += constants.MODE_2_TICKS
-        # constants.OAM interrupt
+        #OAM interrupt
         if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
             self.interrupt.raise_interrupt(constants.LCD)
             
@@ -433,7 +432,7 @@ class Video(iMemory):
             self.stat = (self.stat & 0xFC) | 0x01
             self.cycles += constants.MODE_1_TICKS - constants.MODE_1_END_TICKS
         if self.line_y == self.line_y_compare:
-            # constants.LYC=LY interrupt
+            #LYC=LY interrupt
             self.stat |= 0x04
             if (self.stat & 0x40) != 0:
                 self.interrupt.raise_interrupt(constants.LCD)
@@ -642,10 +641,10 @@ class Video(iMemory):
             #color
             if (pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and \
                (pattern & 0x11) != 0):
-                # constants.OBJ behind constants.BG color 1-3
+                # OBJ behind BG color 1-3
                 color = (self.background_palette >> ((((pattern >> 3) & 0x02) +\
                         (pattern & 0x01)) << 1)) & 0x03
-             # constants.OBJ above constants.BG
+             # OBJ above BG
             elif ((pattern & 0x04) == 0):
                 color = (self.object_palette_0 >> ((((pattern >> 4) & 0x02) + \
                         ((pattern >> 1) & 0x01)) << 1)) & 0x03

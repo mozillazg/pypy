@@ -17,36 +17,36 @@ def test_ram_read_write():
     except Exception:
         pass
         
-    assert value not in ram.w_ram
-    assert value not in ram.h_ram
+    assert value not in ram.work_ram
+    assert value not in ram.hi_ram
     
     address = 0xC000
     ram.write(address, value)
     assert ram.read(address) == value
-    assert value in  ram.w_ram
-    assert value not in  ram.h_ram
+    assert value in  ram.work_ram
+    assert value not in  ram.hi_ram
     
     address = 0xFDFF
     value += 1
     ram.write(address, value)
     assert ram.read(address) == value
-    assert value in  ram.w_ram
-    assert value not in  ram.h_ram
+    assert value in  ram.work_ram
+    assert value not in  ram.hi_ram
     
     
     address = 0xFF80
     value += 1
     ram.write(address, value)
     assert ram.read(address) == value
-    assert value in  ram.h_ram
-    assert value not in  ram.w_ram
+    assert value in  ram.hi_ram
+    assert value not in  ram.work_ram
     
     address = 0xFFFE
     value += 1
     ram.write(address, value)
     assert ram.read(address) == value
-    assert value in  ram.h_ram
-    assert value not in  ram.w_ram
+    assert value in  ram.hi_ram
+    assert value not in  ram.work_ram
     
     address += 1
     value += 1
@@ -56,5 +56,5 @@ def test_ram_read_write():
         py.test.fail()
     except Exception:
         pass
-    assert value not in  ram.h_ram
-    assert value not in  ram.w_ram
+    assert value not in  ram.hi_ram
+    assert value not in  ram.work_ram
