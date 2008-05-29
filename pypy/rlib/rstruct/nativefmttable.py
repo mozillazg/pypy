@@ -79,18 +79,18 @@ def setup():
                'd': 'double',
                }
 
-    pre_include_lines = []
+    pre_include_bits = []
     for fmtchar, ctype in INSPECT.items():
-        pre_include_lines += ("""
+        pre_include_bits.append("""
             struct about_%s {
                 char pad;
                 %s field;
             };
-        """ % (fmtchar, ctype)).split("\n")
+        """ % (fmtchar, ctype))
 
     class CConfig:
         _compilation_info_ = ExternalCompilationInfo(
-            pre_include_lines = pre_include_lines
+            pre_include_bits = pre_include_bits
         )
 
     for fmtchar, ctype in INSPECT.items():

@@ -16,7 +16,7 @@ import distutils
 
 def eci_from_header(c_header_source):
     return ExternalCompilationInfo(
-        pre_include_lines=c_header_source.split("\n")
+        pre_include_bits=[c_header_source]
     )
 
 def getstruct(name, c_header_source, interesting_fields):

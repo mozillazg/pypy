@@ -97,14 +97,13 @@ class RegisterOs(BaseLazyRegistering):
             defs = []
             for name in self.w_star:
                 data = {'ret_type': 'int', 'name': name}
-                decls.append(decl_snippet % data)
-                defs.append(def_snippet % data)
-            h_source = decls + defs
+                decls.append((decl_snippet % data).strip())
+                defs.append((def_snippet % data).strip())
 
             self.compilation_info = self.compilation_info.merge(
                 ExternalCompilationInfo(
-                post_include_lines = decls,
-                separate_module_sources = ["\n".join(h_source)]
+                post_include_bits = decls,
+                separate_module_sources = ["\n".join(defs)]
             ))
 
     # a simple, yet usefull factory

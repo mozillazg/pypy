@@ -14,18 +14,17 @@ debug = 0
 
 class ExternalCompilationInfo(object):
 
-    _ATTRIBUTES = ['pre_include_lines', 'includes', 'include_dirs',
-                   'post_include_lines', 'libraries', 'library_dirs',
+    _ATTRIBUTES = ['pre_include_bits', 'includes', 'include_dirs',
+                   'post_include_bits', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files',
                    'export_symbols', 'compile_extra', 'link_extra', 'frameworks']
-    _AVOID_DUPLICATES = ['separate_module_files', 'libraries', 'includes',
-                         'include_dirs', 'library_dirs', 'separate_module_sources']
+    _DUPLICATES_OK = ['compile_extra', 'link_extra']
 
     def __init__(self,
-                 pre_include_lines       = [],
+                 pre_include_bits        = [],
                  includes                = [],
                  include_dirs            = [],
-                 post_include_lines      = [],
+                 post_include_bits       = [],
                  libraries               = [],
                  library_dirs            = [],
                  separate_module_sources = [],
@@ -35,17 +34,18 @@ class ExternalCompilationInfo(object):
                  link_extra              = [],
                  frameworks              = []):
         """
-        pre_include_lines: list of lines that should be put at the top
+        pre_include_bits: list of pieces of text that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
-        contain an #include themselves.
+        contain an #include themselves.  (Duplicate pieces are removed.)
 
         includes: list of .h file names to be #include'd from the
         generated .c files.
 
         include_dirs: list of dir names that is passed to the C compiler
 
-        post_include_lines: list of lines that should be put at the top
-        of the generated .c files, after the #includes.
+        post_include_bits: list of pieces of text that should be put at the top
+        of the generated .c files, after the #includes.  (Duplicate pieces are
+        removed.)
 
         libraries: list of library names that is passed to the linker
 
@@ -54,7 +54,7 @@ class ExternalCompilationInfo(object):
         separate_module_sources: list of multiline strings that are
         each written to a .c file and compiled separately and linked
         later on.  (If function prototypes are needed for other .c files
-        to access this, they can be put in post_include_lines.)
+        to access this, they can be put in post_include_bits.)
 
         separate_module_files: list of .c file names that are compiled
         separately and linked later on.  (If an .h file is needed for
@@ -83,7 +83,7 @@ class ExternalCompilationInfo(object):
         """Returns a new ExternalCompilationInfo instance by parsing
         the string 'flags', which is in the typical Unix compiler flags
         format."""
-        pre_include_lines = []
+        pre_include_bits = []
         include_dirs = []
         compile_extra = []
         for arg in flags.split():
@@ -95,13 +95,13 @@ class ExternalCompilationInfo(object):
                     macro, value = macro.split('=')
                 else:
                     value = '1'
-                pre_include_lines.append('#define %s %s' % (macro, value))
+                pre_include_bits.append('#define %s %s' % (macro, value))
             elif arg.startswith('-L') or arg.startswith('-l'):
                 raise ValueError('linker flag found in compiler options: %r'
                                  % (arg,))
             else:
                 compile_extra.append(arg)
-        return cls(pre_include_lines=pre_include_lines,
+        return cls(pre_include_bits=pre_include_bits,
                    include_dirs=include_dirs,
                    compile_extra=compile_extra)
     from_compiler_flags = classmethod(from_compiler_flags)
@@ -176,7 +176,7 @@ class ExternalCompilationInfo(object):
 
         attrs = {}
         for name in self._ATTRIBUTES:
-            if name not in self._AVOID_DUPLICATES:
+            if name in self._DUPLICATES_OK:
                 s = []
                 for i in [self] + others:
                     s += getattr(i, name)
@@ -193,12 +193,12 @@ class ExternalCompilationInfo(object):
         return ExternalCompilationInfo(**attrs)
 
     def write_c_header(self, fileobj):
-        for line in self.pre_include_lines:
-            print >> fileobj, line
+        for piece in self.pre_include_bits:
+            print >> fileobj, piece
         for path in self.includes:
             print >> fileobj, '#include <%s>' % (path,)
-        for line in self.post_include_lines:
-            print >> fileobj, line
+        for piece in self.post_include_bits:
+            print >> fileobj, piece
 
     def _copy_attributes(self):
         d = {}
