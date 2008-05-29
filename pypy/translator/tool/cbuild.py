@@ -19,7 +19,8 @@ class ExternalCompilationInfo(object):
     _ATTRIBUTES = ['pre_include_lines', 'includes', 'include_dirs',
                    'post_include_lines', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files',
-                   'export_symbols', 'compile_extra', 'link_extra', 'frameworks']
+                   'export_symbols', 'compile_extra', 'link_extra',
+                   'extra_objects', 'frameworks']
     _AVOID_DUPLICATES = ['separate_module_files', 'libraries', 'includes',
                          'include_dirs', 'library_dirs', 'separate_module_sources']
 
@@ -35,6 +36,7 @@ class ExternalCompilationInfo(object):
                  export_symbols          = [],
                  compile_extra           = [],
                  link_extra              = [],
+                 extra_objects           = [],
                  frameworks              = []):
         """
         pre_include_lines: list of lines that should be put at the top
@@ -70,6 +72,8 @@ class ExternalCompilationInfo(object):
 
         link_extra: list of parameters which will be directly passed to
         the linker
+
+        extra_objects: list of object files to add to the linker
 
         frameworks: list of Mac OS X frameworks which should passed to the
         linker. Use this instead of the 'libraries' parameter if you want to
@@ -208,14 +212,53 @@ class ExternalCompilationInfo(object):
             d[attr] = getattr(self, attr)
         return d
 
+    def compile_shared_lib(self, being_main=False):
+        eci = self.compile_separate_files(being_main=being_main)
+        if eci is self:
+            return self
+        lib = compile_c_module([], 'externmod', eci)
+        d = eci._copy_attributes()
+        d['libraries'] += (lib,)
+        d['separate_module_files'] = ()
+        d['separate_module_sources'] = ()
+        d['extra_objects'] = []
+        return ExternalCompilationInfo(**d)
+
+    def compile_separate_files(self, being_main=False):
+        cs = CompilationSet(self,
+                            self.separate_module_files,
+                            self.separate_module_sources)
+        cs = cs.convert_sources_to_files(being_main=being_main)
+        objects = cs.compile_objects()
+        if not objects:
+            return self
+        d = self._copy_attributes()
+        d['extra_objects'] += tuple(objects)
+        d['separate_module_files'] = ()
+        d['separate_module_sources'] = ()
+        return ExternalCompilationInfo(**d)
+
+
+class CompilationSet:
+    "A set of source files sharing the same compilation options"
+    def __init__(self, eci, files=None, sources=None):
+        self.objects = []
+        self.eci = eci
+        if files is None:
+            files = []
+        self.files = files
+        if sources is None:
+            sources = []
+        self.sources = sources
+
     def convert_sources_to_files(self, cache_dir=None, being_main=False):
-        if not self.separate_module_sources:
+        if not self.sources:
             return self
         if cache_dir is None:
             cache_dir = udir.join('module_cache').ensure(dir=1)
         num = 0
         files = []
-        for source in self.separate_module_sources:
+        for source in self.sources:
             while 1:
                 filename = cache_dir.join('module_%d.c' % num)
                 num += 1
@@ -224,29 +267,40 @@ class ExternalCompilationInfo(object):
             f = filename.open("w")
             if being_main:
                 f.write("#define PYPY_NOT_MAIN_FILE\n")
-            self.write_c_header(f)
+            self.eci.write_c_header(f)
             source = str(source)
             f.write(source)
             if not source.endswith('\n'):
                 f.write('\n')
             f.close()
             files.append(str(filename))
-        d = self._copy_attributes()
-        d['separate_module_sources'] = ()
-        d['separate_module_files'] += tuple(files)
-        return ExternalCompilationInfo(**d)
+        return CompilationSet(self.eci,
+                              files=list(self.files) + files,
+                              sources=None)
 
-    def compile_shared_lib(self):
-        self = self.convert_sources_to_files()
-        if not self.separate_module_files:
-            return self
-        lib = compile_c_module([], 'externmod', self)
-        d = self._copy_attributes()
-        d['libraries'] += (lib,)
-        d['separate_module_files'] = ()
-        d['separate_module_sources'] = ()
-        return ExternalCompilationInfo(**d)
+    def compile_objects(self):
+        cs = self.convert_sources_to_files()
+        if not cs.files:
+            return []
+        from distutils.ccompiler import new_compiler
 
+        compiler = new_compiler(force=1)
+
+        files = [py.path.local(f).relto(udir) for f in cs.files]
+        files = [str(f) for f in cs.files]
+
+        old = udir.chdir()
+        try:
+            objects = compiler.compile(
+                files,
+                include_dirs=self.eci.include_dirs,
+                )
+            objects = [str(py.path.local(o)) for o in objects]
+        finally:
+            old.chdir()
+
+        return objects
+        
 if sys.platform == 'win32':
     so_ext = '.dll'
 else:
@@ -281,6 +335,74 @@ def ensure_correct_math():
         opt += '/Op'
     gcv['OPT'] = opt
 
+def compile_shared_library(modname, cfiles, extension_options):
+    from distutils.dist import Distribution
+    from distutils.extension import Extension
+    from distutils.ccompiler import get_default_compiler
+    from distutils.command.build_ext import build_ext
+
+    class build_shared_library(build_ext):
+        """ We build shared libraries, not python modules.
+            On windows, avoid to export the initXXX function,
+            and don't use a .pyd extension. """
+        def get_export_symbols(self, ext):
+            return ext.export_symbols
+        def get_ext_filename (self, ext_name):
+            if sys.platform == 'win32':
+                return ext_name + ".dll"
+            else:
+                return ext_name + ".so"
+
+    # distutils.core.setup() is really meant for end-user
+    # interactive usage, because it eats most exceptions and
+    # turn them into SystemExits.  Instead, we directly
+    # instantiate a Distribution, which also allows us to
+    # ignore unwanted features like config files.
+    extra_compile_args = []
+    # ensure correct math on windows
+    if sys.platform == 'win32':
+        extra_compile_args.append('/Op') # get extra precision
+    if get_default_compiler() == 'unix':
+        old_version = False
+        try:
+            g = os.popen('gcc --version', 'r')
+            verinfo = g.read()
+            g.close()
+        except (OSError, IOError):
+            pass
+        else:
+            old_version = verinfo.startswith('2')
+        if not old_version:
+            extra_compile_args.extend(["-Wno-unused-label",
+                                    "-Wno-unused-variable"])
+    attrs = {
+        'name': "testmodule",
+        'ext_modules': [
+            Extension(modname, [str(cfile) for cfile in cfiles],
+                      extra_compile_args=extra_compile_args,
+                      **extension_options)
+            ],
+        'script_name': 'setup.py',
+        'script_args': ['-q', 'build_ext'], # don't remove 'build_ext' here
+        }
+    dist = Distribution(attrs)
+    # patch our own command obj into distutils
+    # because it does not have a facility to accept
+    # custom objects
+    cmdobj = build_shared_library(dist)
+    cmdobj.inplace = True
+    cmdobj.force = True
+    if (sys.platform == 'win32'
+        and sys.executable.lower().endswith('_d.exe')):
+        cmdobj.debug = True
+    dist.command_obj["build_ext"] = cmdobj
+    dist.have_run["build_ext"] = 0
+
+    if not dist.parse_command_line():
+        raise ValueError, "distutils cmdline parse error"
+    dist.run_commands()
+    
+
 def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
     #try:
     #    from distutils.log import set_threshold
@@ -292,7 +414,6 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
     if tmpdir is None:
         tmpdir = udir.join("module_cache").ensure(dir=1)
     num = 0
-    cfiles += eci.separate_module_files
     include_dirs = list(eci.include_dirs)
     include_dirs.append(py.path.local(pypydir).join('translator', 'c'))
     library_dirs = list(eci.library_dirs)
@@ -335,77 +456,17 @@ def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
                         cmd += ' -L%s' % dir
                     os.system(cmd)
                 else:
-                    from distutils.dist import Distribution
-                    from distutils.extension import Extension
-                    from distutils.ccompiler import get_default_compiler
-                    from distutils.command.build_ext import build_ext
-
-                    class build_shared_library(build_ext):
-                        """ We build shared libraries, not python modules.
-                            On windows, avoid to export the initXXX function,
-                            and don't use a .pyd extension. """
-                        def get_export_symbols(self, ext):
-                            return ext.export_symbols
-                        def get_ext_filename (self, ext_name):
-                            if sys.platform == 'win32':
-                                return ext_name + ".dll"
-                            else:
-                                return ext_name + ".so"
+                    extension_options=dict(include_dirs=include_dirs,
+                                        library_dirs=library_dirs,
+                                        libraries=list(libraries),
+                                        export_symbols=export_symbols,
+                                        extra_objects=eci.extra_objects,
+                                        )
 
                     saved_environ = os.environ.items()
                     try:
-                        # distutils.core.setup() is really meant for end-user
-                        # interactive usage, because it eats most exceptions and
-                        # turn them into SystemExits.  Instead, we directly
-                        # instantiate a Distribution, which also allows us to
-                        # ignore unwanted features like config files.
-                        extra_compile_args = []
-                        # ensure correct math on windows
-                        if sys.platform == 'win32':
-                            extra_compile_args.append('/Op') # get extra precision
-                        if get_default_compiler() == 'unix':
-                            old_version = False
-                            try:
-                                g = os.popen('gcc --version', 'r')
-                                verinfo = g.read()
-                                g.close()
-                            except (OSError, IOError):
-                                pass
-                            else:
-                                old_version = verinfo.startswith('2')
-                            if not old_version:
-                                extra_compile_args.extend(["-Wno-unused-label",
-                                                        "-Wno-unused-variable"])
-                        attrs = {
-                            'name': "testmodule",
-                            'ext_modules': [
-                                Extension(modname, [str(cfile) for cfile in cfiles],
-                                    include_dirs=include_dirs,
-                                    library_dirs=library_dirs,
-                                    extra_compile_args=extra_compile_args,
-                                    libraries=list(libraries),
-                                    export_symbols=export_symbols,
-                                          )
-                                ],
-                            'script_name': 'setup.py',
-                            'script_args': ['-q', 'build_ext'], # don't remove 'build_ext' here
-                            }
-                        dist = Distribution(attrs)
-                        # patch our own command obj into distutils
-                        # because it does not have a facility to accept
-                        # custom objects
-                        cmdobj = build_shared_library(dist)
-                        cmdobj.inplace = True
-                        cmdobj.force = True
-                        if (sys.platform == 'win32'
-                            and sys.executable.lower().endswith('_d.exe')):
-                            cmdobj.debug = True
-                        dist.command_obj["build_ext"] = cmdobj
-                        dist.have_run["build_ext"] = 0
-
-                        if not dist.parse_command_line():
-                            raise ValueError, "distutils cmdline parse error"
-                        dist.run_commands()
+                        compile_shared_library(modname, cfiles,
+                                               extension_options)
                     finally:
                         for key, value in saved_environ:
                             if os.environ.get(key) != value:
@@ -574,7 +635,8 @@ class CCompiler:
                         linker_exe linker_so'''.split():
                 compiler.executables[c][0] = self.compiler_exe
         compiler.spawn = log_spawned_cmd(compiler.spawn)
-        objects = []
+
+        objects = list(self.eci.extra_objects)
         for cfile in self.cfilenames: 
             cfile = py.path.local(cfile)
             old = cfile.dirpath().chdir() 

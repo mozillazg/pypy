@@ -7,7 +7,7 @@ from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import so_ext, ExternalCompilationInfo
-from pypy.translator.tool.cbuild import compile_c_module
+from pypy.translator.tool.cbuild import compile_c_module, external_dir
 from pypy.translator.tool.cbuild import CCompiler, ProfOpt
 from pypy.translator.tool.cbuild import import_module_from_directory
 from pypy.translator.tool.cbuild import check_under_under_thread
@@ -125,6 +125,9 @@ class CBuilder(object):
             defines['RPY_SANDBOXED'] = 1
         if CBuilder.have___thread is None:
             CBuilder.have___thread = check_under_under_thread()
+
+        self.eci = self.eci.compile_separate_files(being_main=self.standalone)
+        
         if not self.standalone:
             assert not self.config.translation.instrument
             cfile, extra = gen_source(db, modulename, targetdir, self.eci,
@@ -308,7 +311,14 @@ class CStandaloneBuilder(CBuilder):
         extrafiles = []
         for fn in self.extrafiles:
             fn = py.path.local(fn)
-            if not fn.relto(udir):
+            if fn.relto(udir):
+                pass
+            elif fn.relto(external_dir):
+                newname = self.targetdir.join(fn.relto(external_dir))
+                newname.ensure()
+                fn.copy(newname)
+                fn = newname
+            else:
                 newname = self.targetdir.join(fn.basename)
                 fn.copy(newname)
                 fn = newname
@@ -374,7 +384,7 @@ class CStandaloneBuilder(CBuilder):
             if fn.dirpath() == targetdir:
                 name = fn.basename
             else:
-                assert fn.dirpath().dirpath() == udir
+                assert fn.relto(udir)
                 name = '../' + fn.relto(udir)
                 
             name = name.replace("\\", "/")
@@ -762,8 +772,7 @@ def gen_source_standalone(database, modulename, targetdir, eci,
         print >>fi, "#define INSTRUMENT_NCOUNTER %d" % n
         fi.close()
 
-    eci = eci.convert_sources_to_files(being_main=True)
-    return filename, sg.getextrafiles() + list(eci.separate_module_files)
+    return filename, sg.getextrafiles()
 
 
 def gen_source(database, modulename, targetdir, eci, defines={}):
@@ -822,9 +831,8 @@ def gen_source(database, modulename, targetdir, eci, defines={}):
     libraries = eci.libraries
     f.write(SETUP_PY % locals())
     f.close()
-    eci = eci.convert_sources_to_files(being_main=True)
 
-    return filename, sg.getextrafiles() + list(eci.separate_module_files)
+    return filename, sg.getextrafiles()
 
 
 SETUP_PY = '''
