@@ -47,6 +47,7 @@ class GameBoy(object):
     def load_cartridge(self, cartridge, verify=True):
         self.cartridge_manager.load(cartridge, verify)
         self.cpu.set_rom(self.cartridge_manager.get_rom())
+        self.memory_bank_controller = self.cartridge_manager.get_memory_bank()
         
     def load_cartridge_file(self, path, verify=True):
         self.load_cartridge(CartridgeFile(path), verify)
@@ -58,7 +59,7 @@ class GameBoy(object):
         self.video.set_frame_skip(frameSkip)
 
     def save(self, cartridgeName):
-        self.cartridge.save(cartridgeName)
+        self.cartridge_manager.save(cartridgeName)
 
     def start(self):
         self.sound.start()
@@ -68,7 +69,7 @@ class GameBoy(object):
 
     def reset(self):
         self.ram.reset()
-        self.cartridge.reset()
+        self.memory_bank_controller.reset()
         self.interrupt.reset()
         self.cpu.reset()
         self.serial.reset()
@@ -180,23 +181,23 @@ class GameBoy(object):
 
     def draw_logo(self):
         for index in range(0, 48):
-            bits = self.cartridge.read(0x0104 + index)
-            pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60)\
-                     + ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06)\
-                     + ((bits >> 4) & 0x01)
+            bits = self.memory_bank_controller.read(0x0104 + index)
+            pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60) + \
+                       ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06) + \
+                       ((bits >> 4) & 0x01)
 
-            pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60)\
-                     + ((bits << 2) & 0x18) + ((bits << 1) & 0x06)\
-                     + ((bits << 0) & 0x01)
+            pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60) + \
+                       ((bits << 2) & 0x18) + ((bits << 1) & 0x06) + \
+                       ((bits << 0) & 0x01)
 
             self.video.write(0x8010 + (index << 3), pattern0)
             self.video.write(0x8012 + (index << 3), pattern0)
-
             self.video.write(0x8014 + (index << 3), pattern1)
             self.video.write(0x8016 + (index << 3), pattern1)
 
         for index in range(0, 8):
-            self.video.write(0x8190 + (index << 1), constants.REGISTERED_BITMAP[index])
+            self.video.write(0x8190 + (index << 1), \
+                             constants.REGISTERED_BITMAP[index])
 
         for tile in range(0, 12):
             self.video.write(0x9904 + tile, tile + 1)

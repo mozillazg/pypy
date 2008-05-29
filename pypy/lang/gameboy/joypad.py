@@ -26,7 +26,6 @@ class Joypad(iMemory):
         return self.cycles
 
     def emulate(self, ticks):
-        ticks = int(ticks)
         self.cycles -= ticks
         if self.cycles <= 0:
             if self.driver.is_raised():
@@ -34,13 +33,11 @@ class Joypad(iMemory):
             self.cycles = constants.JOYPAD_CLOCK
 
     def write(self, address, data):
-        address = int(address)
         if address == constants.JOYP:
             self.joyp = (self.joyp & 0xC) + (data & 0x3)
             self.update()
 
     def read(self, address):
-        address = int(address)
         if address == constants.JOYP:
             return (self.joyp << 4) + self.button_code
         return 0xFF

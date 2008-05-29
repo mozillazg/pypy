@@ -32,6 +32,7 @@ class GameBoyImplementation(GameBoy):
    
     
     def mainLoop(self):
+        self.reset()
         try:
             while True:
                 if self.poll_event():

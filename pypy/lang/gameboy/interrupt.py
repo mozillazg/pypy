@@ -5,8 +5,8 @@ from pypy.lang.gameboy.ram import iMemory
 class InterruptFlag(object):
     
     def __init__(self, _reset, mask, call_code):
-        self._reset = _reset
-        self.mask = mask
+        self._reset    = _reset
+        self.mask      = mask
         self.call_code = call_code
         self.reset()
         
@@ -34,18 +34,15 @@ class Interrupt(iMemory):
         self.reset()
         
     def create_interrupt_flags(self):
-        self.vblank = InterruptFlag(True, constants.VBLANK, 0x40)
+        self.vblank  = InterruptFlag(True, constants.VBLANK, 0x40)
         self.lcd     = InterruptFlag(False, constants.LCD, 0x48)
         self.timer   = InterruptFlag(False, constants.TIMER, 0x50)
         self.serial  = InterruptFlag(False, constants.SERIAL, 0x58)
         self.joypad  = InterruptFlag(False, constants.JOYPAD, 0x60)
         
     def create_flag_list(self):
-        self.interrupt_flags = [
-            self.vblank, self.lcd, 
-            self.timer, self.serial,
-            self.joypad
-        ]
+        self.interrupt_flags = [ self.vblank, self.lcd, self.timer, self.serial,
+                                 self.joypad]
 
     def create_flag_mask_mapping(self):
         self.mask_mapping = {}
