@@ -142,6 +142,7 @@ class RZipFile(object):
     def __init__(self, zipname, mode='r', compression=ZIP_STORED):
         if mode != 'r':
             raise TypeError("Read only support by now")
+        mode = mode + 'b'
         self.compression = compression
         self.filename = zipname
         self.mode = mode

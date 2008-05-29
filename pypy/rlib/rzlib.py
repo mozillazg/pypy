@@ -46,7 +46,8 @@ class SimpleCConfig:
     Definitions for basic types defined by zlib.
     """
     _compilation_info_ = ExternalCompilationInfo(
-        includes = includes
+        includes = includes,
+        include_dirs = [zlib_home],
     )
 
     # XXX If Z_PREFIX was defined for the libz build, then these types are
@@ -90,7 +91,8 @@ class ComplexCConfig:
     definitions.
     """
     _compilation_info_ = ExternalCompilationInfo(
-        includes = includes
+        includes = includes,
+        include_dirs = [zlib_home],
     )
 
     z_stream = rffi_platform.Struct(
