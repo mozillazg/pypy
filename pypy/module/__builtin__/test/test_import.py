@@ -536,3 +536,32 @@ class AppTestImportHooks(object):
             tried_imports[0][0] == "datetime"
         finally:
             sys.meta_path.pop()
+
+    def test_path_hooks_leaking(self):
+        class Importer(object):
+            def find_module(self, fullname, path=None):
+                if fullname == "a":
+                    return self
+
+            def load_module(self, name):
+                return sys
+        
+        def importer_for_path(path):
+            if path == "xxx":
+                return Importer()
+            raise ImportError()
+        import sys
+        try:
+            sys.path_hooks.append(importer_for_path)
+            sys.path.insert(0, "yyy")
+            sys.path.insert(0, "xxx")
+            import a
+            try:
+                import b
+            except ImportError:
+                pass
+            assert sys.path_importer_cache['yyy'] is None
+        finally:
+            sys.path.pop(0)
+            sys.path.pop(0)
+            sys.path_hooks.pop()
