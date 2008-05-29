@@ -288,6 +288,24 @@ class CStandaloneBuilder(CBuilder):
     standalone = True
     executable_name = None
 
+    def getprofbased(self):
+        profbased = None
+        if self.config.translation.instrumentctl is not None:
+            profbased = self.config.translation.instrumentctl
+        else:
+            # xxx handling config.translation.profopt is a bit messy, because
+            # it could be an empty string (not to be confused with None) and
+            # because noprofopt can be used as an override.
+            profopt = self.config.translation.profopt
+            if profopt is not None and not self.config.translation.noprofopt:
+                profbased = (ProfOpt, profopt)
+        return profbased
+
+    def has_profopt(self):
+        profbased = self.getprofbased()
+        return (profbased and isinstance(profbased, tuple)
+                and profbased[0] is ProfOpt)
+
     def getentrypointptr(self):
         # XXX check that the entrypoint has the correct
         # signature:  list-of-strings -> int
@@ -296,14 +314,6 @@ class CStandaloneBuilder(CBuilder):
 
     def getccompiler(self):            
         cc = self.config.translation.cc
-        profbased = None
-        if self.config.translation.instrumentctl is not None:
-            profbased = self.config.translation.instrumentctl
-        else:
-            profopt = self.config.translation.profopt
-            if profopt is not None and not self.config.translation.noprofopt:
-                profbased = (ProfOpt, profopt)
-
         # Copy extrafiles to target directory, if needed
         extrafiles = []
         for fn in self.extrafiles:
@@ -316,7 +326,7 @@ class CStandaloneBuilder(CBuilder):
 
         return CCompiler(
             [self.c_source_filename] + extrafiles,
-            self.eci, compiler_exe = cc, profbased = profbased)
+            self.eci, compiler_exe = cc, profbased = self.getprofbased())
 
     def compile(self):
         assert self.c_source_filename
@@ -389,7 +399,7 @@ class CStandaloneBuilder(CBuilder):
             cc = self.config.translation.cc
         else:
             cc = 'gcc'
-        if self.config.translation.profopt:
+        if self.has_profopt():
             profopt = self.config.translation.profopt
             default_target = 'profopt'
         else:
@@ -855,11 +865,14 @@ all: $(DEFAULT_TARGET)
 $(TARGET): $(OBJECTS)
 \t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
 
+# -frandom-seed is an attempted workaround for a gcc bug with -fprofile-*
+# (http://gcc.gnu.org/bugzilla/show_bug.cgi?id=20815)
+
 %.o: %.c
-\t$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)
+\t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -c $< $(INCLUDEDIRS)
 
 %.s: %.c
-\t$(CC) $(CFLAGS) -o $@ -S $< $(INCLUDEDIRS)
+\t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)
 
 %.gcmap: %.s
 \t$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $@ || (rm -f $@ && exit 1)
@@ -868,7 +881,7 @@ gcmaptable.s: $(GCMAPFILES)
 \t$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@ || (rm -f $@ && exit 1)
 
 clean:
-\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) *.gc??
+\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) ../*/*.gc??
 
 clean_noprof:
 \trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES)
