@@ -530,6 +530,7 @@ class MBC3(MBC):
         raise InvalidMemoryAccessException("MBC3.read_clock_data invalid address %i")
     
     def write(self, address, data):
+        print hex(address), hex(data)
         # 0000-1FFF
         if address <= 0x1FFF:
             self.write_ram_enable(address, data)
@@ -585,7 +586,7 @@ class MBC3(MBC):
         self.clock_latched_seconds = self.clock_seconds
         self.clock_latched_minutes = self.clock_minutes
         self.clock_latched_hours   = self.clock_hours
-        self.clock_latched_days    = self.clock_days
+        self.clock_latched_days    = self.clock_days & 0xFF
         self.clock_latched_control = (self.clock_control & 0xFE) | \
                                      ((self.clock_days >> 8) & 0x01)
 
@@ -598,39 +599,22 @@ class MBC3(MBC):
             elapsed += self.clock_minutes * 60
             elapsed += self.clock_seconds
             
-            days = int(math.floor(elapsed / 24*60*60))
+            days = int(math.floor(elapsed / (24.0*60*60.0)))
             self.clock_days += days
             elapsed -= days * 24*60*60
-            #while elapsed >= 246060:
-            #    elapsed -= 246060
-            #    self.clock_days+=1
-                
-            hours = int(math.floor(elapsed / 60*60))
+
+            hours = int(math.floor(elapsed / (60*60)))
             self.clock_hours += hours
             elapsed -= hours * 60*60
-            #while elapsed >= 6060:
-            #    self.clock_hours+=1
-            #    elapsed -= 6060
             
             minutes = int(math.floor(elapsed / 60))
             self.clock_minutes += minutes
-            elapsed -= hours * 60
-            #while elapsed >= 60:
-            #    elapsed -= 60
-            #    self.clock_minutes+=1
+            elapsed -= minutes * 60
             
             self.clock_seconds += elapsed
-            #while self.clock_seconds >= 60:
-            #    self.clock_seconds -= 60
-            #    self.clock_minutes+=1
-            #while self.clock_minutes >= 60:
-            #    self.clock_hours+=1
-            #    self.clock_minutes -= 60
-            #while self.clock_hours >= 24:
-            #    self.clock_hours -= 24
-            #    self.clock_days+=1
-            while self.clock_days >= 512:
-                self.clock_days -= 512
+            
+            if self.clock_days >= 512:
+                self.clock_days %= 512
                 self.clock_control |= 0x80
         self.clock_time = now
 
@@ -806,21 +790,19 @@ class HuC3(MBC):
         now = self.clock.get_time()
         elapsed = now - self.clock_time
         # years (4 bits)
-        while elapsed >= 365246060:
-            self.clock_register += 1 << 24
-            elapsed -= 365246060
+        years = int(math.floor(elapsed / (365*24*60*60)))
+        elapsed -= years*365*24*60*60
         # days (12 bits)
-        while elapsed >= 246060:
-            self.clock_register += 1 << 12
-            elapsed -= 246060
+        days = int(math.floor(elapsed / (24*60*60)))
+        elapsed -= days*24*60*60
         # minutes (12 bits)
-        while elapsed >= 60:
-            self.clock_register += 1
-            elapsed -= 60
-        if (self.clock_register & 0x0000FFF) >= 2460:
-            self.clock_register += (1 << 12) - 2460
-        if (self.clock_register & 0x0FFF000) >= (365 << 12):
-            self.clock_register += (1 << 24) - (365 << 12)
+        minutes = int(math.floor(elapsed / 60))
+        elapsed -= minutes*60
+        
+        self.clock_register |= years << 24
+        self.clock_register |= days << 12
+        self.clock_register |= minutes
+        
         self.clock_time = now - elapsed
 
 
