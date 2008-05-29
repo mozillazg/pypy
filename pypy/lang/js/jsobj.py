@@ -4,22 +4,22 @@ from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
      RangeError, ReturnException
 
+DE = 1
+DD = 2
+RO = 4
+IT = 8
+
 class SeePage(NotImplementedError):
     pass
 
 class Property(object):
-    def __init__(self, name, value, dd=False, 
-                 ro=False, de=False, it=False):
+    def __init__(self, name, value, flags = 0):
         self.name = name
         self.value = value
-        self.dd = dd
-        self.ro = ro
-        self.de = de
-        self.it = it
-    
+        self.flags = flags
+
     def __repr__(self):
-        return "|%s %d%d%d|"%(self.value, self.dd,
-                              self.ro, self.de)
+        return "|%s : %s %d|"%(self.name, self.value, self.flags)
 
 def internal_property(name, value):
     """return a internal property with the right attributes"""
@@ -54,8 +54,7 @@ class W_Root(object):
     def Get(self, ctx, P):
         raise NotImplementedError()
     
-    def Put(self, ctx, P, V, dd=False,
-            ro=False, de=False, it=False):
+    def Put(self, ctx, P, V, flags = 0):
         raise NotImplementedError()
     
     def PutValue(self, w, ctx):
@@ -113,8 +112,7 @@ class W_PrimitiveObject(W_Root):
         self.Prototype = Prototype
         if Prototype is None:
             Prototype = w_Undefined
-        self.propdict['prototype'] = Property('prototype', Prototype,
-                                              dd=True, de=True)
+        self.propdict['prototype'] = Property('prototype', Prototype, flags = DE|DD)
         self.Class = Class
         self.callfunc = callfunc
         if callfunc is not None:
@@ -166,21 +164,20 @@ class W_PrimitiveObject(W_Root):
     
     def CanPut(self, P):
         if P in self.propdict:
-            if self.propdict[P].ro: return False
+            if self.propdict[P].flags & RO: return False
             return True
         if self.Prototype is None: return True
         return self.Prototype.CanPut(P)
 
-    def Put(self, ctx, P, V, dd=False,
-            ro=False, de=False, it=False):
-        try:
-            P = self.propdict[P]
-            if P.ro:
-                return
-            P.value = V
-        except KeyError:
-            self.propdict[P] = Property(P, V,
-                                        dd = dd, ro = ro, de = de, it = it)
+    def Put(self, ctx, P, V, flags = 0):
+        
+        if not self.CanPut(P): return
+        if P in self.propdict:
+            prop = self.propdict[P]
+            prop.value = V
+            prop.flags |= flags
+        else:
+            self.propdict[P] = Property(P, V, flags = flags)
     
     def HasProperty(self, P):
         if P in self.propdict: return True
@@ -189,7 +186,8 @@ class W_PrimitiveObject(W_Root):
     
     def Delete(self, P):
         if P in self.propdict:
-            if self.propdict[P].dd: return False
+            if self.propdict[P].flags & DD:
+                return False
             del self.propdict[P]
             return True
         return True
@@ -235,7 +233,7 @@ class W_PrimitiveObject(W_Root):
             return 'object'
 
 
-class W_Primitive(W_PrimitiveObject):
+class W_Primitive(W_Root):
     """unifying parent for primitives"""
     def ToPrimitive(self, ctx, hint=""):
         return self
@@ -315,8 +313,8 @@ class ActivationObject(W_PrimitiveObject):
 class W_Array(W_ListObject):
     def __init__(self, ctx=None, Prototype=None, Class='Array',
                  Value=w_Undefined, callfunc=None):
-        W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
-        self.Put(ctx, 'length', W_IntNumber(0))
+        super(W_Array, self).__init__(ctx, Prototype, Class, Value, callfunc)
+        self.Put(ctx, 'length', W_IntNumber(0), flags = DD)
         self.length = r_uint(0)
 
     def set_length(self, newlength):
@@ -331,11 +329,10 @@ class W_Array(W_ListObject):
         self.length = newlength
         self.propdict['length'].value = W_FloatNumber(newlength)
 
-    def Put(self, ctx, P, V, dd=False,
-            ro=False, de=False, it=False):
+    def Put(self, ctx, P, V, flags = 0):
         if not self.CanPut(P): return
         if not P in self.propdict:
-            self.propdict[P] = Property(P, V, dd = dd, ro = ro, de = de, it = it)
+            self.propdict[P] = Property(P, V, flags = flags)
         else:
             if P != 'length':
                 self.propdict[P].value = V
@@ -361,7 +358,7 @@ class W_Array(W_ListObject):
 
 class W_Boolean(W_Primitive):
     def __init__(self, boolval):
-        super(W_Primitive, self).__init__()
+        super(W_Boolean, self).__init__()
         self.boolval = bool(boolval)
     
     def ToObject(self, ctx):
@@ -388,14 +385,21 @@ class W_Boolean(W_Primitive):
 
 class W_String(W_Primitive):
     def __init__(self, strval):
-        super(W_Primitive, self).__init__()
+        super(W_String, self).__init__()
         self.strval = strval
 
     def __repr__(self):
         return 'W_String(%s)' % (self.strval,)
 
+    def Get(self, ctx, P): #as hackinsh as can get
+        if P == 'length':
+            return W_FloatNumber(len(self.strval))
+        else:
+            proto = ctx.get_global().Get(ctx, 'String').Get(ctx, 'prototype')
+            return proto.Get(ctx, P)
+
     def ToObject(self, ctx):
-        return create_object(ctx, 'String', Value=self)
+        return self #create_object(ctx, 'String', Value=self)
 
     def ToString(self, ctx=None):
         return self.strval
@@ -427,7 +431,7 @@ class W_BaseNumber(W_Primitive):
     def ToObject(self, ctx):
         return create_object(ctx, 'Number', Value=self)
 
-    def Get(self, ctx, name):
+    def Get(self, ctx, P):
         return w_Undefined
 
     def type(self):
@@ -437,7 +441,7 @@ class W_IntNumber(W_BaseNumber):
     """ Number known to be an integer
     """
     def __init__(self, intval):
-        super(W_Primitive, self).__init__()
+        super(W_IntNumber, self).__init__()
         self.intval = intmask(intval)
 
     def ToString(self, ctx=None):
@@ -467,7 +471,7 @@ class W_FloatNumber(W_BaseNumber):
     """ Number known to be a float
     """
     def __init__(self, floatval):
-        super(W_Primitive, self).__init__()
+        super(W_FloatNumber, self).__init__()
         self.floatval = float(floatval)
     
     def ToString(self, ctx = None):
@@ -480,9 +484,13 @@ class W_FloatNumber(W_BaseNumber):
             else:
                 return '-Infinity'
         try:
-            return str(ovfcheck_float_to_int(self.floatval))
+            intval = ovfcheck_float_to_int(self.floatval)
+            if intval == self.floatval:
+                return str(intval)
         except OverflowError:
-            return str(self.floatval)
+            pass
+        
+        return str(self.floatval)
     
     def ToBoolean(self):
         if isnan(self.floatval):
@@ -553,7 +561,7 @@ class ExecutionContext(object):
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
-                if P.ro:
+                if P.flags & RO:
                     return
                 P.value = value
                 return
@@ -567,7 +575,7 @@ class ExecutionContext(object):
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
-                if P.dd:
+                if P.flags & DD:
                     return False
                 del obj.propdict[name]
                 return True
@@ -575,9 +583,9 @@ class ExecutionContext(object):
                 pass
         return False
 
-    def Put(self, ctx, name, value, dd=False):
+    def Put(self, ctx, name, value, flags = 0):
         assert name is not None
-        self.variable.Put(ctx, name, value, dd=dd)
+        self.variable.Put(ctx, name, value, flags = flags)
     
     def get_global(self):
         return self.scope[-1]
@@ -607,14 +615,14 @@ def global_context(w_global):
     ctx = ExecutionContext([w_global],
                             this = w_global,
                             variable = w_global,
-                            jsproperty = Property('', w_Undefined, dd=True))
+                            jsproperty = Property('', w_Undefined, flags = DD))
     return ctx
 
 def function_context(scope, activation, this=None):
     newscope = scope[:]
     ctx = ExecutionContext(newscope,
                             this = this, 
-                            jsproperty = Property('', w_Undefined, dd=True))
+                            jsproperty = Property('', w_Undefined, flags = DD))
     ctx.push_object(activation)
     return ctx
 

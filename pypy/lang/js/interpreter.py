@@ -4,8 +4,9 @@ from pypy.lang.js.jsparser import parse, ParseError
 from pypy.lang.js.astbuilder import ASTBuilder
 from pypy.lang.js.jsobj import global_context, W_Object,\
      w_Undefined, W_NewBuiltin, W_IntNumber, w_Null, create_object, W_Boolean,\
-     W_FloatNumber, W_String, W_Builtin, W_Array, w_Null,\
-     isnull_or_undefined, W_PrimitiveObject, W_ListObject, W_BaseNumber
+     W_FloatNumber, W_String, W_Builtin, W_Array, w_Null, newbool,\
+     isnull_or_undefined, W_PrimitiveObject, W_ListObject, W_BaseNumber,\
+     DE, DD, RO, IT
 from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
@@ -51,15 +52,15 @@ class W_ObjectObject(W_NativeObject):
 class W_BooleanObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
-            return W_Boolean(args[0].ToBoolean())
+            return newbool(args[0].ToBoolean())
         else:
-            return W_Boolean(False)
+            return newbool(False)
 
     def Construct(self, ctx, args=[]):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
-            Value = W_Boolean(args[0].ToBoolean())
+            Value = newbool(args[0].ToBoolean())
             return create_object(ctx, 'Boolean', Value = Value)
-        return create_object(ctx, 'Boolean', Value = W_Boolean(False))
+        return create_object(ctx, 'Boolean', Value = newbool(False))
 
 class W_NumberObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
@@ -161,17 +162,17 @@ def printjs(ctx, args, this):
 
 def isnanjs(ctx, args, this):
     if len(args) < 1:
-        return W_Boolean(True)
-    return W_Boolean(isnan(args[0].ToNumber(ctx)))
+        return newbool(True)
+    return newbool(isnan(args[0].ToNumber(ctx)))
 
 def isfinitejs(ctx, args, this):
     if len(args) < 1:
-        return W_Boolean(True)
+        return newbool(True)
     n = args[0].ToNumber(ctx)
     if  isinf(n) or isnan(n):
-        return W_Boolean(False)
+        return newbool(False)
     else:
-        return W_Boolean(True)
+        return newbool(True)
         
 def absjs(ctx, args, this):
     val = args[0]
@@ -193,6 +194,9 @@ def sqrtjs(ctx, args, this):
 def versionjs(ctx, args, this):
     return w_Undefined
 
+def unescapejs(ctx, args, this):
+    return args[0]
+
 class W_ToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         return W_String("[object %s]"%this.Class)
@@ -206,8 +210,8 @@ class W_HasOwnProperty(W_NewBuiltin):
         if len(args) >= 1:
             propname = args[0].ToString(ctx)
             if propname in this.propdict:
-                return W_Boolean(True)
-        return W_Boolean(False)
+                return newbool(True)
+        return newbool(False)
 
 class W_IsPrototypeOf(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -216,17 +220,17 @@ class W_IsPrototypeOf(W_NewBuiltin):
             V = args[0].Prototype
             while V is not None:
                 if O == V:
-                    return W_Boolean(True)
+                    return newbool(True)
                 V = V.Prototype
-        return W_Boolean(False)
+        return newbool(False)
 
 class W_PropertyIsEnumerable(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1:
             propname = args[0].ToString(ctx)
             if propname in this.propdict and not this.propdict[propname].de:
-                return W_Boolean(True)
-        return W_Boolean(False)
+                return newbool(True)
+        return newbool(False)
 
 class W_Function(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -322,7 +326,7 @@ def get_value_of(type, ctx):
                 raise JsTypeError('%s.prototype.valueOf called with incompatible type' % self.type())
             return this.Value
     return W_ValueValueOf(ctx)
-        
+
 class W_CharAt(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
@@ -419,7 +423,8 @@ class Interpreter(object):
         def put_values(obj, dictvalues):
             for key,value in dictvalues.iteritems():
                 obj.Put(ctx, key, value)
-            
+        
+        allon = DE | DD | RO
         w_Global = W_Object(Class="global")
 
         ctx = global_context(w_Global)
@@ -432,14 +437,14 @@ class Interpreter(object):
         w_Global.Put(ctx, 'Function', w_Function)
         
         w_Object = W_ObjectObject('Object', w_Function)
-        w_Object.Put(ctx, 'prototype', w_ObjPrototype, dd=True, de=True, ro=True)
+        w_Object.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
         
         w_Global.Put(ctx, 'Object', w_Object)
         w_FncPrototype = w_Function.Call(ctx, this=w_Function)
-        w_Function.Put(ctx, 'prototype', w_FncPrototype, dd=True, de=True, ro=True)
+        w_Function.Put(ctx, 'prototype', w_FncPrototype, flags = allon)
         w_Function.Put(ctx, 'constructor', w_Function)
         
-        w_Object.Put(ctx, 'length', W_IntNumber(1), ro=True, dd=True)
+        w_Object.Put(ctx, 'length', W_IntNumber(1), flags = RO | DD)
         
         toString = W_ToString(ctx)
         
@@ -464,10 +469,10 @@ class Interpreter(object):
         })
         
         w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
-        w_Boolean.Put(ctx, 'constructor', w_FncPrototype, dd=True, ro=True, de=True)
-        w_Boolean.Put(ctx, 'length', W_IntNumber(1), dd=True, ro=True, de=True)
+        w_Boolean.Put(ctx, 'constructor', w_FncPrototype, flags = allon)
+        w_Boolean.Put(ctx, 'length', W_IntNumber(1), flags = allon)
         
-        w_BoolPrototype = create_object(ctx, 'Object', Value=W_Boolean(False))
+        w_BoolPrototype = create_object(ctx, 'Object', Value=newbool(False))
         w_BoolPrototype.Class = 'Boolean'
         
         put_values(w_BoolPrototype, {
@@ -477,7 +482,7 @@ class Interpreter(object):
             'valueOf': get_value_of('Boolean', ctx),
         })
 
-        w_Boolean.Put(ctx, 'prototype', w_BoolPrototype, dd=True, ro=True, de=True)
+        w_Boolean.Put(ctx, 'prototype', w_BoolPrototype, flags = allon)
 
         w_Global.Put(ctx, 'Boolean', w_Boolean)
 
@@ -501,16 +506,13 @@ class Interpreter(object):
             '__proto__': w_empty_fun,
             'length'   : W_IntNumber(1),
         })
-        w_Number.propdict['prototype'].ro = True
-        w_Number.Put(ctx, 'MAX_VALUE', W_FloatNumber(1.7976931348623157e308),
-                     ro=True, dd=True)
-        w_Number.Put(ctx, 'MIN_VALUE', W_FloatNumber(0), ro=True, dd=True)
-        w_Number.Put(ctx, 'NaN', W_FloatNumber(NAN), ro=True, dd=True)
+        w_Number.propdict['prototype'].flags |= RO
+        w_Number.Put(ctx, 'MAX_VALUE', W_FloatNumber(1.7976931348623157e308), flags = RO|DD)
+        w_Number.Put(ctx, 'MIN_VALUE', W_FloatNumber(0), flags = RO|DD)
+        w_Number.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = RO|DD)
         # ^^^ this is exactly in test case suite
-        w_Number.Put(ctx, 'POSITIVE_INFINITY', W_FloatNumber(INFINITY),
-                     ro=True, dd=True)
-        w_Number.Put(ctx, 'NEGATIVE_INFINITY', W_FloatNumber(-INFINITY),
-                     ro=True, dd=True)
+        w_Number.Put(ctx, 'POSITIVE_INFINITY', W_FloatNumber(INFINITY), flags = RO|DD)
+        w_Number.Put(ctx, 'NEGATIVE_INFINITY', W_FloatNumber(-INFINITY), flags = RO|DD)
         
 
         w_Global.Put(ctx, 'Number', w_Number)
@@ -538,16 +540,19 @@ class Interpreter(object):
 
         w_Array = W_ArrayObject('Array', w_FncPrototype)
 
-        w_ArrPrototype = create_object(ctx, 'Object')
-        w_ArrPrototype.Class = 'Array'
+        w_ArrPrototype = W_Array(Prototype=w_ObjPrototype)
         
         put_values(w_ArrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_ArrPrototype,
             'toString': W_ArrayToString(ctx),
+            'join': W_ArrayJoin(ctx)
         })
         
-        w_Array.Put(ctx, 'prototype', w_ArrPrototype)
+        w_Array.Put(ctx, 'prototype', w_ArrPrototype, flags = allon)
+        w_Array.Put(ctx, '__proto__', w_FncPrototype, flags = allon)
+        w_Array.Put(ctx, 'length', W_IntNumber(1), flags = allon)
+        
         w_Global.Put(ctx, 'Array', w_Array)
         
         
@@ -555,7 +560,7 @@ class Interpreter(object):
         w_math = W_Object(Class='Math')
         w_Global.Put(ctx, 'Math', w_math)
         w_math.Put(ctx, '__proto__',  w_ObjPrototype)
-        w_math.Put(ctx, 'prototype', w_ObjPrototype, dd=True, de=True, ro=True)
+        w_math.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
         w_math.Put(ctx, 'abs', W_Builtin(absjs, Class='function'))
         w_math.Put(ctx, 'floor', W_Builtin(floorjs, Class='function'))
         w_math.Put(ctx, 'pow', W_Builtin(powjs, Class='function'))
@@ -577,8 +582,9 @@ class Interpreter(object):
         w_Global.Put(ctx, 'parseFloat', W_Builtin(parseFloatjs))
         w_Global.Put(ctx, 'isNaN', W_Builtin(isnanjs))
         w_Global.Put(ctx, 'isFinite', W_Builtin(isfinitejs))            
-
         w_Global.Put(ctx, 'print', W_Builtin(printjs))
+        w_Global.Put(ctx, 'unescape', W_Builtin(unescapejs))
+
         w_Global.Put(ctx, 'this', w_Global)
 
         # DEBUGGING
@@ -597,6 +603,7 @@ class Interpreter(object):
             # debugging
             self._code = bytecode
         if interactive:
+            print bytecode
             return bytecode.run(self.global_context, retlast=True)
         else:
             bytecode.run(self.global_context)
@@ -614,7 +621,7 @@ def wrap_arguments(pyargs):
         elif isinstance(arg, float):
             res.append(W_FloatNumber(arg))
         elif isinstance(arg, bool):
-            res.append(W_Boolean(arg))
+            res.append(newbool(arg))
         else:
             raise Exception("Cannot wrap %s" % (arg,))
     return res
