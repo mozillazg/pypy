@@ -399,9 +399,20 @@ class CStandaloneBuilder(CBuilder):
             cc = self.config.translation.cc
         else:
             cc = 'gcc'
+        make_no_prof = ''
         if self.has_profopt():
             profopt = self.config.translation.profopt
             default_target = 'profopt'
+            # XXX horrible workaround for a bug of profiling in gcc on
+            # OS X with functions containing a direct call to fork()
+            non_profilable = []
+            assert len(compiler.cfilenames) == len(ofiles)
+            for fn, oname in zip(compiler.cfilenames, ofiles):
+                fn = py.path.local(fn)
+                if '/*--no-profiling-for-this-file!--*/' in fn.read():
+                    non_profilable.append(oname)
+            if non_profilable:
+                make_no_prof = '$(MAKE) %s' % (' '.join(non_profilable),)
         else:
             profopt = ''
             default_target = '$(TARGET)'
@@ -445,6 +456,7 @@ class CStandaloneBuilder(CBuilder):
         else:
             print >> f, 'TFLAGS  = ' + ''
         print >> f, 'PROFOPT = ' + profopt
+        print >> f, 'MAKENOPROF = ' + make_no_prof
         print >> f, 'CC      = ' + cc
         print >> f
         print >> f, MAKEFILE.strip()
@@ -913,6 +925,7 @@ profile:
 ABS_TARGET = $(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))
 
 profopt:
+\t$(MAKENOPROF)    # these files must be compiled without profiling
 \t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)
 \tcd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)
 \t$(MAKE) clean_noprof
