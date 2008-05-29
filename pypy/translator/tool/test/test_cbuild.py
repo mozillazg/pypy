@@ -2,7 +2,7 @@ import py, sys
 
 from pypy.tool.udir import udir 
 from pypy.translator.tool.cbuild import build_executable, \
-     ExternalCompilationInfo, compile_c_module
+     ExternalCompilationInfo, CompilationSet, compile_c_module
 from subprocess import Popen, PIPE, STDOUT
 
 def test_simple_executable(): 
@@ -92,19 +92,20 @@ class TestEci:
         assert e.pre_include_lines == ('1', '2', '3')
 
     def test_convert_sources_to_c_files(self):
-        eci = ExternalCompilationInfo(
-            separate_module_sources = ['xxx'],
-            separate_module_files = ['x.c'],
+        cs = CompilationSet(
+            ExternalCompilationInfo(),
+            sources = ['xxx'],
+            files = ['x.c'],
         )
         cache_dir = udir.join('test_convert_sources').ensure(dir=1)
-        neweci = eci.convert_sources_to_files(cache_dir)
-        assert not neweci.separate_module_sources
-        res = neweci.separate_module_files
+        newcs = cs.convert_sources_to_files(cache_dir)
+        assert not newcs.sources
+        res = newcs.files
         assert len(res) == 2
         assert res[0] == 'x.c'
         assert str(res[1]).startswith(str(cache_dir))
-        e = ExternalCompilationInfo()
-        assert e.convert_sources_to_files() is e
+        cs = CompilationSet(ExternalCompilationInfo())
+        assert cs.convert_sources_to_files() is cs
 
     def test_make_shared_lib(self):
         eci = ExternalCompilationInfo(
