@@ -144,10 +144,10 @@ class W_ZipImporter(Wrappable):
         w = space.wrap
         w_mod = w(Module(space, w(modname)))
         real_name = self.name + os.path.sep + filename
+        space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         result = importing.load_source_module(space, w(modname), w_mod,
                                             filename, buf, write_pyc=False)
-        space.setattr(w_mod, w('__loader__'), space.wrap(self))
         return result
 
     def _parse_mtime(self, space, filename):
@@ -192,11 +192,11 @@ class W_ZipImporter(Wrappable):
         buf = buf[8:] # XXX ugly copy, should use sequential read instead
         w_mod = w(Module(space, w(modname)))
         real_name = self.name + os.path.sep + filename
+        space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         result = importing.load_compiled_module(space, w(modname), w_mod,
                                                 filename, magic, timestamp,
                                                 buf)
-        space.setattr(w_mod, w('__loader__'), space.wrap(self))
         return result
 
     def have_modulefile(self, space, filename):
