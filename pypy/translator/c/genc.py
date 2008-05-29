@@ -865,8 +865,7 @@ all: $(DEFAULT_TARGET)
 $(TARGET): $(OBJECTS)
 \t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
 
-# -frandom-seed is an attempted workaround for a gcc bug with -fprofile-*
-# (http://gcc.gnu.org/bugzilla/show_bug.cgi?id=20815)
+# -frandom-seed is only to try to be as reproducable as possible
 
 %.o: %.c
 \t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -c $< $(INCLUDEDIRS)
