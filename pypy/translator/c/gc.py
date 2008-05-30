@@ -225,7 +225,7 @@ class BoehmGcPolicy(BasicGcPolicy):
 
         else:
             if sys.platform == 'win32':
-               libraries = ['gc_pypy'],
+                libraries = ['gc_pypy'],
             else:
                 libraries = ['gc']
 
