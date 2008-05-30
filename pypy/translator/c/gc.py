@@ -7,6 +7,7 @@ from pypy.rpython.lltypesystem.lltype import \
 from pypy.rpython.memory.gctransform import \
      refcounting, boehm, framework, llvmgcroot, asmgcroot
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.translator.tool.cbuild import ExternalCompilationInfo, CompilationSet
 
 class BasicGcPolicy(object):
     requires_stackless = False
@@ -36,8 +37,8 @@ class BasicGcPolicy(object):
     def struct_after_definition(self, defnode):
         return []
 
-    def gc_libraries(self):
-        return []
+    def compilation_info(self):
+        return ExternalCompilationInfo()
 
     def pre_pre_gc_code(self): # code that goes before include g_prerequisite.h
         gct = self.db.gctransformer
@@ -184,10 +185,55 @@ class BoehmGcPolicy(BasicGcPolicy):
     def rtti_node_factory(self):
         return BoehmGcRuntimeTypeInfo_OpaqueNode
 
-    def gc_libraries(self):
-        if sys.platform == 'win32':
-            return ['gc_pypy']
-        return ['gc']
+    def compilation_info(self):
+        from pypy.translator.tool.cbuild import external_dir
+
+        # Get source:
+        # http://www.hpl.hp.com/personal/Hans_Boehm/gc/gc_source/gc6.8.tar.gz
+        # extract it into the "dist/external" directory
+        gc_home = external_dir.join("gc6.8")
+
+        if gc_home.check(dir=True):
+            from pypy.tool.udir import udir
+            udir.join('gc', 'gc.h').ensure()
+            udir.join('gc', 'gc.h').write('#include "%s/include/gc.h"' % gc_home)
+
+            gc_eci = ExternalCompilationInfo(
+                include_dirs=[gc_home.join('include')],
+                compile_extra=['-DGC_WIN32_THREADS', '-DGC_NOT_DLL'],
+                libraries=['user32'],
+            )
+
+            cs = CompilationSet(gc_eci,
+                files=[gc_home.join(x) for x in
+                       ['malloc.c', 'mallocx.c', 'alloc.c',
+                        'allchblk.c', 'new_hblk.c',
+                        'finalize.c', 'reclaim.c',
+                        'headers.c', 'obj_map.c', 'stubborn.c',
+                        'mark.c', 'mark_rts.c', 'blacklst.c',
+                        'misc.c', 'os_dep.c', 'mach_dep.c',
+                        'dyn_load.c',
+                        'win32_threads.c',
+                        ]])
+
+            eci = ExternalCompilationInfo(
+                include_dirs=[udir],
+                compile_extra=['-DGC_WIN32_THREADS', '-DGC_NOT_DLL'],
+                extra_objects=cs.compile_objects(),
+                libraries=['user32'],
+                )
+
+        else:
+            if sys.platform == 'win32':
+               libraries = ['gc_pypy'],
+            else:
+                libraries = ['gc']
+
+            eci = ExternalCompilationInfo(
+                libraries=libraries,
+            )
+
+        return eci
 
     def pre_pre_gc_code(self):
         for line in BasicGcPolicy.pre_pre_gc_code(self):
@@ -254,7 +300,6 @@ class FrameworkGcRuntimeTypeInfo_OpaqueNode(BoehmGcRuntimeTypeInfo_OpaqueNode):
 
 class NoneGcPolicy(BoehmGcPolicy):
 
-    gc_libraries = RefcountingGcPolicy.gc_libraries.im_func
     gc_startup_code = RefcountingGcPolicy.gc_startup_code.im_func
 
 

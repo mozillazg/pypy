@@ -79,8 +79,7 @@ class CBuilder(object):
 
     def collect_compilation_info(self, db):
         # we need a concrete gcpolicy to do this
-        self.eci = self.eci.merge(ExternalCompilationInfo(
-            libraries=db.gcpolicy.gc_libraries()))
+        self.eci = self.eci.merge(db.gcpolicy.compilation_info())
 
         all = []
         for node in self.db.globalcontainers():
