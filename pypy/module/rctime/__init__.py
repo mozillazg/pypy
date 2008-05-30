@@ -24,20 +24,19 @@ class Module(MixedModule):
 
     def buildloaders(cls):
         from pypy.module.rctime import interp_time
-        import os
         
         # this machinery is needed to expose constants
         # that have to be initialized one time only
         
         Module.interpleveldefs["accept2dyear"] = 'space.wrap(%r)' %\
             interp_time._init_accept2dyear()
-        
-        timezone, daylight, tzname, altzone = interp_time._init_timezone()
-        Module.interpleveldefs['timezone'] = 'space.wrap(%r)' % timezone
-        Module.interpleveldefs['daylight'] = 'space.wrap(%r)' % daylight
+
+        Module.interpleveldefs['timezone'] = 'space.wrap(0)'
+        Module.interpleveldefs['daylight'] = 'space.wrap(0)'
         Module.interpleveldefs['tzname'] = \
-            'space.newlist([space.wrap(%r), space.wrap(%r)])' % tuple(tzname)
-        Module.interpleveldefs['altzone'] = 'space.wrap(%r)' % altzone
+            'space.newlist([space.wrap(""), space.wrap("")])'
+        Module.interpleveldefs['altzone'] = 'space.wrap(0)'
+        
         super(Module, cls).buildloaders()
     buildloaders = classmethod(buildloaders)
 
@@ -46,3 +45,7 @@ class Module(MixedModule):
         '__doc__': 'app_time.__doc__',
         'strptime': 'app_time.strptime',
     }
+
+    def startup(self, space):
+        from pypy.module.rctime import interp_time
+        interp_time.tzset(space)

@@ -405,7 +405,7 @@ def tzset(space):
     _set_module_object(space, "timezone", space.wrap(timezone))
     _set_module_object(space, 'daylight', space.wrap(daylight))
     tzname_w = [space.wrap(tzname[0]), space.wrap(tzname[1])] 
-    _set_module_object(space, 'tzname', space.newtuple(tzname_w))
+    _set_module_object(space, 'tzname', space.newlist(tzname_w))
     _set_module_object(space, 'altzone', space.wrap(altzone))
 tzset.unwrap_spec = [ObjSpace]
 
