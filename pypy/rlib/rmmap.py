@@ -40,6 +40,28 @@ class CConfig:
     if _MS_WINDOWS:
         LPSECURITY_ATTRIBUTES = rffi_platform.SimpleType("LPSECURITY_ATTRIBUTES", rffi.CCHARP)
 
+class CConfigForPagesize:
+    if _POSIX:
+        code = "int get_page_size() { return getpagesize(); }"
+    if _MS_WINDOWS:
+        code = """
+        int get_page_size() {
+            SYSTEM_INFO si;
+            GetSystemInfo(&si);
+            return si.dwPageSize;
+        }"""
+    _compilation_info_ = ExternalCompilationInfo(
+        includes=includes,
+        pre_include_lines=['#ifndef _GNU_SOURCE',
+                           '#define _GNU_SOURCE',
+                           '#endif'],
+        separate_module_sources=[code],
+    )
+    PAGESIZE = rffi_platform.ConstantInteger("get_page_size()")
+
+cConfig = rffi_platform.configure(CConfigForPagesize)
+PAGESIZE = cConfig['PAGESIZE']
+
 constants = {}
 if _POSIX:
     # constants, look in sys/mman.h and platform docs for the meaning
@@ -107,8 +129,6 @@ if _POSIX:
     c_msync = external('msync', [PTR, size_t, rffi.INT], rffi.INT)
     if has_mremap:
         c_mremap = external('mremap', [PTR, size_t, size_t, rffi.ULONG], PTR)
-
-    _get_page_size = external('getpagesize', [], rffi.INT)
 
     def _get_error_no():
         return rposix.get_errno()
@@ -178,14 +198,6 @@ elif _MS_WINDOWS:
     GetLastError = winexternal('GetLastError', [], DWORD)
     
     
-    def _get_page_size():
-        try:
-            si = rffi.make(SYSTEM_INFO)
-            GetSystemInfo(si)
-            return int(si.c_dwPageSize)
-        finally:
-            lltype.free(si, flavor="raw")
-    
     def _get_file_size(handle):
         # XXX use native Windows types like WORD
         high_ref = lltype.malloc(LPDWORD.TO, 1, flavor='raw')
@@ -214,7 +226,6 @@ elif _MS_WINDOWS:
     NULL_HANDLE = rffi.cast(HANDLE, 0)
     INVALID_HANDLE = rffi.cast(HANDLE, -1)
 
-PAGESIZE = _get_page_size()
 NULL = lltype.nullptr(PTR.TO)
 NODATA = lltype.nullptr(PTR.TO)
 
