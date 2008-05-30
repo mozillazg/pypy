@@ -1,7 +1,4 @@
-try:
-    import collections
-except ImportError:
-    from pypy.lib import collections    # python < 2.4
+import collections
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import pyframe
