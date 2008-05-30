@@ -293,6 +293,7 @@ class CompilationSet:
         try:
             objects = compiler.compile(
                 files,
+                extra_preargs=list(self.eci.compile_extra),
                 include_dirs=self.eci.include_dirs,
                 )
             objects = [str(py.path.local(o)) for o in objects]
@@ -663,6 +664,7 @@ def build_executable(*args, **kwds):
     return str(compiler.outputfilename)
 
 def check_boehm_presence(noerr=True):
+    from pypy.translator.c.gc import BoehmGcPolicy
     from pypy.tool.udir import udir
     try:
         cfile = udir.join('check_boehm.c')
@@ -672,14 +674,12 @@ def check_boehm_presence(noerr=True):
 #include <gc/gc.h>
 
 int main() {
+  GC_malloc(10);
   return 0;
 }
 """)
         cfile.close()
-        if sys.platform == 'win32':
-            eci = ExternalCompilationInfo(libraries=['gc_pypy'])
-        else:
-            eci = ExternalCompilationInfo(libraries=['gc'])
+        eci = BoehmGcPolicy(db=None).compilation_info()
         build_executable([cfname], eci, noerr=noerr)
     except CompilationError:
         if noerr:

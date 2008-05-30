@@ -7,7 +7,7 @@ from pypy.translator.c.genc import CExtModuleBuilder
 from pypy import conftest
 
 def setup_module(mod):
-    if not check_boehm_presence():
+    if not check_boehm_presence(noerr=False):
         py.test.skip("Boehm GC not present")
 
 class AbstractGCTestClass(object):
