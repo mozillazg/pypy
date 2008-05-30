@@ -5,8 +5,6 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.tool.cbuild import CompilationError
 import md5
 import py
-import distutils
-import distutils.errors
 
 cache_dir_root = py.path.local(pypydir).join('_cache').ensure(dir=1)
 
