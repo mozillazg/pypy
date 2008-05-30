@@ -365,7 +365,7 @@ class CPU(object):
 
     def fetch_execute(self):
         opCode = self.fetch()
-        #print "    fetch exe:", hex(opCode), "  "
+        print "    fetch exe:", hex(opCode), "  "
         #, FETCH_EXECUTE_OP_CODES[opCode].__name__
         self.last_fetch_execute_op_code = opCode
         FETCH_EXECUTE_OP_CODES[opCode](self)
@@ -568,10 +568,10 @@ class CPU(object):
         self.f.z_flag_compare(self.a.get(), reset=True)
 
     def inc_double_register(self, doubleRegister):
-        self.inc(doubleRegister.get, doubleRegister.set)
+        doubleRegister.set((doubleRegister.get() + 1) & 0xFF)
         
     def dec_double_register(self, doubleRegister):
-        self.dec(doubleRegister.get, doubleRegister.set)
+        doubleRegister.set((doubleRegister.get() - 1) & 0xFF)
         
     def inc(self, getCaller, setCaller):
         # 1 cycle

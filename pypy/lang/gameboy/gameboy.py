@@ -78,7 +78,7 @@ class GameBoy(object):
         self.video.reset()
         self.sound.reset()
         self.cpu.set_rom(self.cartridge_manager.get_rom())
-        self.draw_logo()
+        #self.draw_logo()
 
     def get_cycles(self):
         return min(min(min(min( self.video.get_cycles(), self.serial.get_cycles()),
@@ -202,5 +202,5 @@ class GameBoy(object):
         for tile in range(0, 12):
             self.video.write(0x9904 + tile, tile + 1)
             self.video.write(0x9924 + tile, tile + 13)
-
         self.video.write(0x9905 + 12, 25)
+

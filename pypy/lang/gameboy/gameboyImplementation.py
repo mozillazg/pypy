@@ -32,15 +32,17 @@ class GameBoyImplementation(GameBoy):
    
     
     def mainLoop(self):
-        self.reset()
+        #self.reset()
         try:
-            while True:
-                if self.poll_event():
+            isRunning = True
+            while isRunning:
+                while self.poll_event():
                     if self.check_for_escape():
-                        break
+                        isRunning = False
+                        break 
                     self.joypad_driver.update(self.event) 
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
-                RSDL.Delay(10)
+                #RSDL.Delay(1)
         finally:
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
@@ -80,15 +82,15 @@ class VideoDriverImplementation(VideoDriver):
         RSDL.Flip(self.screen)
             
     def draw_pixels(self):
-        str = ""
+        #str = ""
         for y in range(self.height):
-            str += "\n"
+            #str += "\n"
             for x in range(self.width):
-                if y%2 == 0 or True:
-                    px = self.get_pixel_color(x, y)
-                    str += ["#", "%", "+", " ", " "][px]
-                #RSDL_helper.set_pixel(self.screen, x, y, self.pixel_map(x, y))
-        print str;
+                #if y%2 == 0 or True:
+                #    px = self.get_pixel_color(x, y)
+                #    str += ["#", "%", "+", " ", " "][px]
+                RSDL_helper.set_pixel(self.screen, x, y, self.pixel_map(x, y))
+        #print str;
              
     def pixel_map(self, x, y):
         return [0xFFFFFF, 0xCCCCCC, 0x666666, 0x000000][self.get_pixel_color(x, y)]
