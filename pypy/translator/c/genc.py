@@ -892,7 +892,7 @@ gcmaptable.s: $(GCMAPFILES)
 \t$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@ || (rm -f $@ && exit 1)
 
 clean:
-\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) ../*/*.gc??
+\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) *.gc?? ../module_cache/*.gc??
 
 clean_noprof:
 \trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES)
