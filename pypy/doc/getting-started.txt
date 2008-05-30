@@ -583,7 +583,8 @@ nowadays is::
 Dependencies: this will compile all supported built-in modules, some of
 which have external dependencies.  On a Debian Linux, for example, you
 need to install the following packages: a full C compiler like gcc;
-``python-dev, python-ctypes``; ``libffi-dev, libz-dev, libbz2-dev``.
+``python-dev, python-ctypes``; ``libffi-dev, libz-dev, libbz2-dev,
+libncurses-dev``.
 
 This whole process will take some time and quite a lot of memory (around
 1GB).  It creates an executable ``pypy-c`` in the current directory.
