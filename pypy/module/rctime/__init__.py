@@ -19,15 +19,13 @@ class Module(MixedModule):
         'mktime': 'interp_time.mktime',
         'strftime': 'interp_time.strftime',
         'sleep' : 'interp_time.sleep',
+        'tzset' : 'interp_time.tzset',
     }
 
     def buildloaders(cls):
         from pypy.module.rctime import interp_time
         import os
         
-        if os.name == "posix":
-            Module.interpleveldefs['tzset'] = 'interp_time.tzset'
-
         # this machinery is needed to expose constants
         # that have to be initialized one time only
         

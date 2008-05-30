@@ -273,7 +273,8 @@ for _name in 'short int long'.split():
     for name in (_name, 'unsigned ' + _name):
         TYPES.append(name)
 TYPES += ['signed char', 'unsigned char',
-          'long long', 'unsigned long long', 'size_t']
+          'long long', 'unsigned long long',
+          'size_t', 'time_t']
 if os.name != 'nt':
     TYPES.append('mode_t')
     TYPES.append('pid_t')
@@ -378,7 +379,7 @@ def COpaquePtr(*args, **kwds):
     return lltype.Ptr(COpaque(*args, **kwds))
 
 def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
-                    sandboxsafe=False):
+                    sandboxsafe=False, readonly=False):
     """Return a pair of functions - a getter and a setter - to access
     the given global C variable.
     """
@@ -408,12 +409,17 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     if sys.platform != 'win32':
         lines.append('extern %s %s;' % (c_type, name))
     lines.append(c_getter)
-    lines.append(c_setter)
+
+    symbols = [getter_name]
+    if not readonly:
+        lines.append(c_setter)
+        symbols.append(setter_name)
+
     sources = ('\n'.join(lines),)
     new_eci = eci.merge(ExternalCompilationInfo(
         separate_module_sources = sources,
         post_include_lines = [getter_prototype, setter_prototype],
-        export_symbols = [getter_name, setter_name],
+        export_symbols = symbols,
     ))
 
     getter = llexternal(getter_name, [], TYPE, compilation_info=new_eci,

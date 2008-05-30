@@ -262,8 +262,8 @@ class RegisterOs(BaseLazyRegistering):
             # we only have utime(), which does not allow sub-second resolution
             def os_utime_platform(path, actime, modtime):
                 l_utimbuf = lltype.malloc(UTIMBUFP.TO, flavor='raw')
-                l_utimbuf.c_actime  = int(actime)
-                l_utimbuf.c_modtime = int(modtime)
+                l_utimbuf.c_actime  = rffi.r_time_t(actime)
+                l_utimbuf.c_modtime = rffi.r_time_t(modtime)
                 error = os_utime(path, l_utimbuf)
                 lltype.free(l_utimbuf, flavor='raw')
                 return error

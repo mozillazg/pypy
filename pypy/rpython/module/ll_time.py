@@ -11,8 +11,8 @@ from pypy.rpython.extfunc import BaseLazyRegistering, registering, extdef
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
-if sys.platform.startswith('win'):
-    includes = ['time.h', 'windows.h']
+if sys.platform == 'win32':
+    includes = ['time.h', 'sys/timeb.h']
 else:
     includes = ['sys/time.h', 'time.h', 'errno.h', 'sys/select.h',
                 'sys/types.h', 'unistd.h', 'sys/timeb.h']
@@ -23,11 +23,13 @@ class CConfig:
         includes=includes
     )
     CLOCK_T = platform.SimpleType('clock_t', rffi.INT)
-    TIMEVAL = platform.Struct('struct timeval', [('tv_sec', rffi.INT),
-                                                 ('tv_usec', rffi.INT)])
+    if sys.platform != 'win32':
+        TIMEVAL = platform.Struct('struct timeval', [('tv_sec', rffi.INT),
+                                                     ('tv_usec', rffi.INT)])
     TIME_T = platform.SimpleType('time_t', rffi.INT)
     HAVE_GETTIMEOFDAY = platform.Has('gettimeofday')
     HAVE_FTIME = platform.Has('ftime')
+    HAVE_FTIME64 = platform.Has('_ftime64') 
 
 class CConfigForFTime:
     _compilation_info_ = ExternalCompilationInfo(includes=['sys/timeb.h'])
@@ -49,7 +51,8 @@ class RegisterTime(BaseLazyRegistering):
                 self.CLOCKS_PER_SEC = 1000000
             else:
                 self.CLOCKS_PER_SEC = self.CLK_TCK
-        self.TIMEVALP = lltype.Ptr(self.TIMEVAL)
+        if sys.platform != 'win32':
+            self.TIMEVALP = lltype.Ptr(self.TIMEVAL)
 
     @registering(time.time)
     def register_time_time(self):
@@ -70,15 +73,26 @@ class RegisterTime(BaseLazyRegistering):
         else:
             c_gettimeofday = None
 
-        if self.HAVE_FTIME:
+        if self.HAVE_FTIME or self.HAVE_FTIME64:
             self.configure(CConfigForFTime)
-            c_ftime = self.llexternal('ftime', [lltype.Ptr(self.TIMEB)],
+            
+            if sys.platform == 'win32' and rffi.sizeof(self.TIME_T) == 8:
+                name = '_ftime64'
+            else:
+                name = 'ftime'
+
+            c_ftime = self.llexternal(name, [lltype.Ptr(self.TIMEB)],
                                       lltype.Void,
                                       _nowrapper=True, threadsafe=False)
         else:
             c_ftime = None    # to not confuse the flow space
 
-        c_time = self.llexternal('time', [rffi.VOIDP], self.TIME_T,
+        if sys.platform == 'win32' and rffi.sizeof(self.TIME_T) == 8:
+            name = '_time64'
+        else:
+            name = 'time'
+        
+        c_time = self.llexternal(name, [rffi.VOIDP], self.TIME_T,
                                  _nowrapper=True, threadsafe=False)
 
         def time_time_llimpl():
