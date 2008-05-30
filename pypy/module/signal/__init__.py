@@ -23,9 +23,7 @@ class Module(MixedModule):
         super(Module, cls).buildloaders()
     buildloaders = classmethod(buildloaders)
 
-    def __init__(self, space, *args):
-        "NOT_RPYTHON"
+    def startup(self, space):
         from pypy.module.signal.interp_signal import CheckSignalAction
-        MixedModule.__init__(self, space, *args)
         # add the signal-checking callback as an action on the space
         space.pending_actions.append(CheckSignalAction(space))
