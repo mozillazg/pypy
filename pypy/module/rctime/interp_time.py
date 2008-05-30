@@ -27,7 +27,7 @@ class CConfig:
     time_t = platform.SimpleType("time_t", rffi.LONG)
     size_t = platform.SimpleType("size_t", rffi.LONG)
     has_gettimeofday = platform.Has('gettimeofday')
-    
+
 if _POSIX:
     calling_conv = 'c'
     CConfig.timeval = platform.Struct("struct timeval",
@@ -61,6 +61,18 @@ def external(name, args, result):
 if _POSIX:
     cConfig.timeval.__name__ = "_timeval"
     timeval = cConfig.timeval
+    
+if _WIN:
+    def getter(typ, name):
+        func, _ = rffi.CExternVariable(
+            typ, name,
+            CConfig._compilation_info_,
+            readonly=True)
+        return func
+    
+    get_timezone = getter(rffi.LONG, "_timezone")
+    get_daylight = getter(rffi.LONG, "_daylight")
+    get_tzname = getter(rffi.CCHARPP, "tzname")
 
 CLOCKS_PER_SEC = cConfig.CLOCKS_PER_SEC
 clock_t = cConfig.clock_t
@@ -73,15 +85,27 @@ if cConfig.has_gettimeofday:
     c_gettimeofday = external('gettimeofday', [rffi.VOIDP, rffi.VOIDP], rffi.INT)
 TIME_TP = rffi.CArrayPtr(time_t)
 TM_P = lltype.Ptr(tm)
+
+def m(name):
+    """Name mangling, for VS8.0 which exports 32bit and 64bit versions
+    under different names
+    """
+    if _WIN and rffi.sizeof(time_t) == 8:
+        return '_' + name + '64'
+    else:
+        return name
+    
 c_clock = external('clock', [TIME_TP], clock_t)
-c_time = external('time', [TIME_TP], time_t)
-c_ctime = external('ctime', [TIME_TP], rffi.CCHARP)
-c_gmtime = external('gmtime', [TIME_TP], TM_P)
-c_mktime = external('mktime', [TM_P], time_t)
+c_time = external(m('time'), [TIME_TP], time_t)
+c_ctime = external(m('ctime'), [TIME_TP], rffi.CCHARP)
+c_gmtime = external(m('gmtime'), [TIME_TP], TM_P)
+c_mktime = external(m('mktime'), [TM_P], time_t)
 c_asctime = external('asctime', [TM_P], rffi.CCHARP)
-c_localtime = external('localtime', [TIME_TP], TM_P)
+c_localtime = external(m('localtime'), [TIME_TP], TM_P)
 if _POSIX:
     c_tzset = external('tzset', [], lltype.Void)
+if _WIN:
+    c_tzset = external('_tzset', [], lltype.Void)
 c_strftime = external('strftime', [rffi.CCHARP, size_t, rffi.CCHARP, TM_P],
                       size_t)
 
@@ -92,20 +116,12 @@ def _init_timezone():
     timezone = daylight = altzone = 0
     tzname = ["", ""]
     
-    # pypy cant' use in_dll to access global exported variables
-    # so we can't compute these attributes
-
-    # if _WIN:
-    #     cdll.msvcrt._tzset()
-    # 
-    #     timezone = c_long.in_dll(cdll.msvcrt, "_timezone").value
-    #     if hasattr(cdll.msvcrt, "altzone"):
-    #         altzone = c_long.in_dll(cdll.msvcrt, "altzone").value
-    #     else:
-    #         altzone = timezone - 3600
-    #     daylight = c_long.in_dll(cdll.msvcrt, "_daylight").value
-    #     tzname = _tzname_t.in_dll(cdll.msvcrt, "_tzname")
-    #     tzname = (tzname.tzname_0, tzname.tzname_1)
+    if _WIN:
+        timezone = get_timezone()
+        altzone = timezone - 3600
+        daylight = get_daylight()
+        tznames = get_tzname()
+        tzname = [rffi.charp2str(tznames[0]), rffi.charp2str(tznames[1])]
     if _POSIX:
         YEAR = (365 * 24 + 6) * 3600
 
@@ -143,9 +159,13 @@ def _get_error_msg():
     errno = rposix.get_errno()
     return os.strerror(errno)
 
-def sleep(secs):
-    pytime.sleep(secs)
-sleep.unwrap_spec = [float]
+def sleep(space, secs):
+    try:
+        pytime.sleep(secs)
+    except OverflowError:
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("sleep length is too large"))
+sleep.unwrap_spec = [ObjSpace, float]
 
 def _get_module_object(space, obj_name):
     w_module = space.getbuiltinmodule('time')
@@ -164,10 +184,11 @@ def _get_inttime(space, w_seconds):
     else:
         seconds = space.float_w(w_seconds)
     try:
-        return ovfcheck_float_to_int(seconds)
+        ovfcheck_float_to_int(seconds)
     except OverflowError:
         raise OperationError(space.w_ValueError,
                              space.wrap("time argument too large"))
+    return rffi.r_time_t(seconds)
 
 def _tm_to_tuple(space, t):
     time_tuple = []
@@ -189,7 +210,7 @@ def _tm_to_tuple(space, t):
 def _gettmarg(space, w_tup, allowNone=True):
     if allowNone and space.is_w(w_tup, space.w_None):
         # default to the current local time
-        tt = int(pytime.time())
+        tt = rffi.r_time_t(pytime.time())
         t_ref = lltype.malloc(TIME_TP.TO, 1, flavor='raw')
         t_ref[0] = tt
         pbuf = c_localtime(t_ref)
@@ -364,30 +385,29 @@ def mktime(space, w_tup):
     return space.wrap(float(tt))
 mktime.unwrap_spec = [ObjSpace, W_Root]
 
-if _POSIX:
-    def tzset(space):
-        """tzset()
+def tzset(space):
+    """tzset()
 
-        Initialize, or reinitialize, the local timezone to the value stored in
-        os.environ['TZ']. The TZ environment variable should be specified in
-        standard Unix timezone format as documented in the tzset man page
-        (eg. 'US/Eastern', 'Europe/Amsterdam'). Unknown timezones will silently
-        fall back to UTC. If the TZ environment variable is not set, the local
-        timezone is set to the systems best guess of wallclock time.
-        Changing the TZ environment variable without calling tzset *may* change
-        the local timezone used by methods such as localtime, but this behaviour
-        should not be relied on"""
+    Initialize, or reinitialize, the local timezone to the value stored in
+    os.environ['TZ']. The TZ environment variable should be specified in
+    standard Unix timezone format as documented in the tzset man page
+    (eg. 'US/Eastern', 'Europe/Amsterdam'). Unknown timezones will silently
+    fall back to UTC. If the TZ environment variable is not set, the local
+    timezone is set to the systems best guess of wallclock time.
+    Changing the TZ environment variable without calling tzset *may* change
+    the local timezone used by methods such as localtime, but this behaviour
+    should not be relied on"""
 
-        c_tzset()
-        
-        # reset timezone, altzone, daylight and tzname
-        timezone, daylight, tzname, altzone = _init_timezone()
-        _set_module_object(space, "timezone", space.wrap(timezone))
-        _set_module_object(space, 'daylight', space.wrap(daylight))
-        tzname_w = [space.wrap(tzname[0]), space.wrap(tzname[1])] 
-        _set_module_object(space, 'tzname', space.newtuple(tzname_w))
-        _set_module_object(space, 'altzone', space.wrap(altzone))
-    tzset.unwrap_spec = [ObjSpace]
+    c_tzset()
+
+    # reset timezone, altzone, daylight and tzname
+    timezone, daylight, tzname, altzone = _init_timezone()
+    _set_module_object(space, "timezone", space.wrap(timezone))
+    _set_module_object(space, 'daylight', space.wrap(daylight))
+    tzname_w = [space.wrap(tzname[0]), space.wrap(tzname[1])] 
+    _set_module_object(space, 'tzname', space.newtuple(tzname_w))
+    _set_module_object(space, 'altzone', space.wrap(altzone))
+tzset.unwrap_spec = [ObjSpace]
 
 def strftime(space, format, w_tup=None):
     """strftime(format[, tuple]) -> string
