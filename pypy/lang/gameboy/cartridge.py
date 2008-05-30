@@ -94,6 +94,7 @@ class CartridgeManager(object):
         self.load_battery()
         self.mbc = self.create_bank_controller(self.get_memory_bank_type(), 
                                                self.rom, self.ram, self.clock)
+        print self
         
     def check_rom(self):
         if not self.verify_header():
@@ -150,7 +151,7 @@ class CartridgeManager(object):
     def get_checksum(self):
         return ((self.rom[constants.CHECKSUM_A_ADDRESS]) << 8) \
                 + (self.rom[constants.CHECKSUM_B_ADDRESS])
-    
+
     def has_battery(self):
         return has_cartridge_battery(self.get_memory_bank_type())
     
@@ -172,6 +173,12 @@ class CartridgeManager(object):
     def create_bank_controller(self, type, rom, ram, clock_driver):
         return MEMORY_BANK_MAPPING[type](rom, ram, clock_driver)
 
+    
+    def __repr__(self):
+        return "Type=%s, Destination: %s ramSize: %sKB romSize: %sKB" % \
+                        (self.get_memory_bank_type(), self.get_destination_code(),
+                        self.get_ram_size(), self.get_rom_size()/1024)
+        
 
 # ------------------------------------------------------------------------------
 
@@ -197,9 +204,9 @@ class CartridgeFile(object):
         
         
     def load(self, cartridge_path):
-        cartridge_path = str(cartridge_path)
-        self.cartridge_file_path = cartridge_path
-        self.cartridge_stream = open_file_as_stream(cartridge_path)
+        cartridge_path               = str(cartridge_path)
+        self.cartridge_file_path     = cartridge_path
+        self.cartridge_stream        = open_file_as_stream(cartridge_path)
         self.cartridge_file_contents = map_to_byte(
                                                 self.cartridge_stream.readall())
         self.load_battery(cartridge_path)
@@ -386,9 +393,9 @@ class MBC1(MBC):
         elif address >= 0xA000 and address <= 0xBFFF and self.ram_enable:
             self.ram[self.ram_bank + (address & 0x1FFF)] = data
         else:
-            #return 
-            raise InvalidMemoryAccessException("MBC 1Invalid memory Access address: %s" 
-                                               % hex(address))
+            return 
+            #raise InvalidMemoryAccessException("MBC 1Invalid memory Access address: %s" 
+            #                                   % hex(address))
 
     def write_rom_bank_1(self, address, data):
         if (data & 0x1F) == 0:
