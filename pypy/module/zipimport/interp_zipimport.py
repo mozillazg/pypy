@@ -18,9 +18,9 @@ ZIPSEP = '/'
 # separators, we need to pretend that we had the os.sep.
 
 ENUMERATE_EXTS = unrolling_iterable(
-    [(True, True, os.path.sep + '__init__.pyc'),
-     (True, True, os.path.sep + '__init__.pyo'),
-     (False, True, os.path.sep + '__init__.py'),
+    [(True, True, ZIPSEP + '__init__.pyc'),
+     (True, True, ZIPSEP + '__init__.pyo'),
+     (False, True, ZIPSEP + '__init__.py'),
      (True, False, '.pyc'),
      (True, False, '.pyo'),
      (False, False, '.py')])
@@ -120,7 +120,6 @@ zip_cache = W_ZipCache()
 
 class W_ZipImporter(Wrappable):
     def __init__(self, space, name, dir, prefix):
-        self.space = space
         self.name = name
         self.dir = dir
         self.prefix = prefix
@@ -132,12 +131,12 @@ class W_ZipImporter(Wrappable):
         return space.wrap(self.prefix)
 
     def _find_relative_path(self, filename):
-        if filename.startswith(self.dir.filename):
-            filename = filename[len(self.dir.filename):]
-        if filename.startswith(os.sep):
-            filename = filename[1:]
         if ZIPSEP != os.path.sep:
             filename = filename.replace(os.path.sep, ZIPSEP)
+        if filename.startswith(self.dir.filename):
+            filename = filename[len(self.dir.filename):]
+        if filename.startswith(ZIPSEP):
+            filename = filename[1:]
         return filename
 
     def import_py_file(self, space, modname, filename, buf, pkgpath):
@@ -217,7 +216,7 @@ class W_ZipImporter(Wrappable):
     find_module.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
     def mangle(self, name):
-        return name.replace('.', os.path.sep)
+        return name.replace('.', ZIPSEP)
 
     def load_module(self, space, fullname):
         w = space.wrap
@@ -302,8 +301,10 @@ class W_ZipImporter(Wrappable):
     is_package.unwrap_spec = ['self', ObjSpace, str]
 
     def getarchive(space, self):
-        space = self.space
-        return space.wrap(self.dir.filename)
+        filename = self.dir.filename
+        if ZIPSEP != os.path.sep:
+            filename = filename.replace(ZIPSEP, os.path.sep)
+        return space.wrap(filename)
 
 def descr_new_zipimporter(space, w_type, name):
     w = space.wrap
@@ -347,7 +348,7 @@ def descr_new_zipimporter(space, w_type, name):
         raise OperationError(w_ZipImportError, space.wrap(
             "%s seems not to be a zipfile" % (filename,)))
     prefix = name[len(filename):]
-    if prefix.startswith(os.sep):
+    if prefix.startswith(ZIPSEP):
         prefix = prefix[1:]
     w_result = space.wrap(W_ZipImporter(space, name, dir, prefix))
     zip_cache.set(filename, w_result)
