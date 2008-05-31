@@ -636,14 +636,12 @@ def test_0x07():
     cpu.a.set(value)
     cycle_test(cpu, 0x07, 1)   
     assert_default_registers(cpu, a=((value << 1) | (value >> 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
     
     cpu.reset()
     value = 0x40
     cpu.a.set(value)
     cycle_test(cpu, 0x07, 1)
     assert_default_registers(cpu, a=((value << 1) | (value >> 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
     
 # rrca
 def test_0x0F():
@@ -652,66 +650,44 @@ def test_0x0F():
     cpu.a.set(value)
     cycle_test(cpu, 0x0F, 1)
     assert_default_registers(cpu, a=((value >> 1) | (value << 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
     
     cpu.reset()
     value = 0x02
     cpu.a.set(value)
     cycle_test(cpu, 0x0F, 1)
     assert_default_registers(cpu, a=((value >> 1) | (value << 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
 
 # rla
 def test_0x17():
     cpu = get_cpu()
     value = 0x01
+    cpu.f.set(0x00)
     cpu.a.set(value)
-    cpu.f.c_flag = False
     cycle_test(cpu, 0x17, 1)
     assert_default_registers(cpu, a=(value << 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    
-    cpu.reset()
-    value = 0x01
-    cpu.a.set(value)
-    cpu.f.c_flag = True
-    cycle_test(cpu, 0x17, 1)
-    assert_default_registers(cpu, a=((value << 1)+1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    
-    cpu.reset()
-    value = 0x40
-    cpu.a.set(value)
-    cpu.f.c_flag = False
-    cycle_test(cpu, 0x17, 1)
-    assert_default_registers(cpu, a=(value << 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
     
 # rra
 def test_0x1F():
     cpu = get_cpu()
     value = 0x40
+    cpu.f.set(0x00)
     cpu.a.set(value)
-    cpu.f.c_flag = False
     cycle_test(cpu, 0x1F, 1)
     assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
     
     cpu.reset()
+    cpu.f.set(0x00)
     value = 0x40
     cpu.a.set(value)
-    cpu.f.c_flag = True
-    cycle_test(cpu, 0x1F, 1)
-    assert_default_registers(cpu, a=(0x08+(value >> 1)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    
-    cpu.reset()
-    value = 0x02
-    cpu.a.set(value)
-    cpu.f.c_flag = False
     cycle_test(cpu, 0x1F, 1)
     assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
+    
+    cpu.reset()
+    cpu.f.set(0x00)
+    value = 0x02
+    cpu.a.set(value)
+    cycle_test(cpu, 0x1F, 1)
+    assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
 
 # daa
 def test_0x27():
@@ -728,7 +704,6 @@ def test_0x2F():
     cpu.a.set(value)
     cycle_test(cpu, 0x2F, 1)
     assert_default_registers(cpu, a=value^0xFF, f=None)
-    assert_default_flags(cpu, n_flag=True, h_flag=True)
 
 # scf
 def test_0x37():
@@ -788,21 +763,6 @@ def test_load_registers():
              assert store.get() == value
              opCode += 0x01
 
-
-def test_add_flags():
-    cpu = get_cpu()
-    
-    cpu.a.set(0)
-    cpu.b.set(0)
-    cpu.add_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True, h_flag=False)
-    
-    cpu.reset()
-    cpu.a.set(0x0F)
-    cpu.b.set(0x01)
-    cpu.add_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False, h_flag=True)
-    
     
 # add_A_B to add_A_A
 def test_0x80_to_0x87():
@@ -826,42 +786,6 @@ def test_0x80_to_0x87():
         value += 3
         opCode += 0x01
 
-
-def test_adc_flags():
-    cpu = get_cpu()
-    b = cpu.b
-    a = cpu.a
-    
-    cpu.reset()
-    a.set(0)
-    b.set(0)
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0, f=None)
-    assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False)
-    
-    cpu.reset()
-    a.set(0)
-    b.set(0)
-    cpu.f.c_flag = True
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=1, f=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=False)
-    
-    cpu.reset()
-    a.set(0xF0)
-    b.set(0xFF)
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    # overflow for a
-    assert_default_registers(cpu, a=0xEF, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=True, h_flag=False)
-    
-    cpu.reset()
-    a.set(0x0F)
-    b.set(0x01)
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0x10, f=None, bc=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=True)
-    
 # adc_A_B to adx_A_A
 def test_0x88_to_0x8F():
     cpu = get_cpu()
@@ -911,36 +835,6 @@ def test_0x90_to_0x98():
         assert cpu.a.get() == 0
         value += 3
         opCode += 0x01
-
-def test_sbc_flags():
-    cpu = get_cpu()
-    b = cpu.b
-    a = cpu.a
-    value = 0xFF
-    
-    cpu.reset()
-    a.set(value)
-    b.set(value)
-    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False, n_flag=True)
-    
-    cpu.reset()
-    a.set(value)
-    b.set(value-1)
-    cpu.f.c_flag = True
-    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False, n_flag=True)
-    
-    cpu.reset()
-    a.set(0x20)
-    b.set(0x01)
-    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
-    # overflow for a
-    assert_default_registers(cpu, a=0x1F, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=True, n_flag=True)
-    
     
 # sbc_A_B to sbc_A_A
 def test_0x98_0x9F():
@@ -973,20 +867,6 @@ def test_0x98_0x9F():
         
         value += 3
         opCode += 0x01
-
-def test_and_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.AND(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False)
-    
-    cpu.reset()
-    cpu.a.set(value)
-    cpu.b.set(0)
-    cpu.AND(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True)
     
 # and_A_B to and_A_A
 def test_0xA0_to_0xA7():
@@ -1007,27 +887,8 @@ def test_0xA0_to_0xA7():
             assert cpu.a.get() == (value & value)
         else:
             assert cpu.a.get() == (valueA & value)
-        if cpu.a.get() == 0:
-            assert cpu.f.get() == constants.Z_FLAG
-        else:
-            assert cpu.f.get() == 0
         value += 1
         opCode += 0x01
-
-
-def test_xor_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.XOR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True)
-    
-    cpu.reset()
-    cpu.a.set(value)
-    cpu.b.set(value+1)
-    cpu.XOR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False)
     
 # xor_A_B to xor_A_A
 def test_0xA8_to_0xAF():
@@ -1048,26 +909,9 @@ def test_0xA8_to_0xAF():
             assert cpu.a.get() == (value ^ value)
         else:
             assert cpu.a.get() == (valueA ^ value)
-        if cpu.a.get() == 0:
-            assert cpu.f.z_flag == True
-        else:
-            assert cpu.f.get() == 0
         value += 1
         opCode += 0x01
 
-def test_or_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.OR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False)
-    
-    cpu.reset()
-    cpu.a.set(0)
-    cpu.b.set(0)
-    cpu.OR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True)
     
 # or_A_B to or_A_A
 def test_0xB0_to_0xB7():
@@ -1088,34 +932,9 @@ def test_0xB0_to_0xB7():
             assert cpu.a.get() == (value | value)
         else:
             assert cpu.a.get() == (valueA | value)
-        if cpu.a.get() == 0:
-            assert cpu.f.get() == constants.Z_FLAG
-        else:
-            assert cpu.f.get() == 0
         value += 1
         opCode += 0x01
 
-def test_cp_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True, n_flag=True)
-    
-    cpu.reset()
-    cpu.a.set(value)
-    cpu.b.set(0)
-    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False, n_flag=True)
-    
-    cpu.reset()
-    cpu.a.set(0xF0) 
-    cpu.b.set(0x01)
-    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True)
-    
-                         
 # cp_A_B to cp_A_A
 def test_0xB8_to_0xBF_compare_a():
     cpu = get_cpu()
@@ -1133,13 +952,6 @@ def test_0xB8_to_0xBF_compare_a():
         cycle_test(cpu, opCode, numCycles)
         if register == cpu.a:
             valueA = value
-        assert cpu.f.n_flag == True
-        if valueA == value:
-            assert cpu.f.z_flag == True
-        if value < 0:
-            assert cpu.f.c_flag == True
-        if ((valueA-value) & 0x0F) > (valueA & 0x0F):
-            assert cpu.f.h_flag == True
         value += 1
         opCode += 0x01
 
@@ -1554,21 +1366,6 @@ def test_0xCB():
     assert_default_registers(cpu, pc=pc+1)
     
 
-def test_rotateLeft_flags():
-    cpu = get_cpu()
-    a = cpu.a
-    a.set(0x01)
-    assert_default_flags(cpu)
-    cpu.rotate_left_a()
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    assert_default_registers(cpu, a=0x02, f=None)
-    
-    cpu.reset()
-    a.set(0x40)
-    cpu.rotate_left_a()
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
-    assert_default_registers(cpu, a=0x80, f=None)
-    
     
 # SECOND ORDER OPCODES ---------------------------------------------------------
 

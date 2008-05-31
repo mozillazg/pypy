@@ -158,7 +158,6 @@ def add_flag_test(cpu, method):
     assert_flags(cpu, z=True, n=False, h=True, c=True)
     
 def test_add_a():
-    py.test.skip("Flag check broken")
     cpu = get_cpu()
     cpu.f.set(0xFF)
     cpu.a.set(0x00)
@@ -169,7 +168,6 @@ def test_add_a():
     
     
 def test_add_hl():
-    py.test.skip("Carry flag check broken")
     cpu = get_cpu()
     cpu.f.set(0xFF)
     cpu.hl.set(0x0000)
@@ -223,8 +221,7 @@ def test_and_a():
     method_value_call(cpu, CPU.and_a, 0x12)
     assert cpu.a.get() == 0x12
     assert_flags(cpu, z=False, n=False, h=True, c=False)
-    
-    
+      
 def test_or_a():
     cpu = get_cpu()
     cpu.f.set(0xFF)
@@ -256,8 +253,6 @@ def test_or_a():
     method_value_call(cpu, CPU.or_a, 0xFF)
     assert cpu.a.get() == 0xFF
     assert_flags(cpu, z=False, n=False, h=False, c=False)
-    
-
     
 def test_xor_a():
     cpu = get_cpu()
@@ -348,8 +343,7 @@ def test_reset_bit():
         method_register_value_call(cpu, CPU.reset_bit, cpu.a, i)
         assert cpu.a.get() == 0xFF - (0x01 << i)
         assert cpu.f.get() == 0x00
-
-    
+ 
 def test_unconditional_call():
     cpu = get_cpu()
     cpu.f.set(0x12)
@@ -363,7 +357,6 @@ def test_unconditional_call():
     assert cpu.pop() == 0x12
     assert cpu.pc.get() == 0x5678
     
-
 def test_conditional_call():
     cpu = get_cpu()
     cpu.f.set(0x12)

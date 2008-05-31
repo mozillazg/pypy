@@ -479,39 +479,38 @@ class CPU(object):
         self.ld(CPUFetchCaller(self), setCaller)
 
     def add_a(self, getCaller, setCaller=None):
+        data = getCaller.get()
         # ALU, 1 cycle
-        added = (self.a.get() + getCaller.get()) & 0xFF
-        self.f.z_flag_compare(added)
-        self.f.h_flag_compare(added, self.a.get(), inverted=True)
-        self.f.c_flag = (added < self.a.get())
-        self.a.set(added) # 1 cycle
+        added = (self.a.get() + data) & 0xFF
+        self.add_sub_flag_finish(added, data)
         
     def add_hl(self, register):
         # 2 cycles
-        a=1
-        added = (self.hl.get() + register.get()) & 0xFFFF # 1 cycle
+        data = register.get()
+        added = (self.hl.get() + data) # 1 cycle
         self.f.partial_reset(keep_z=True)
-        self.f.h_flag_compare((added >> 8), self.hl.get())
-        self.f.c_flag_compare(added,        self.hl.get())
-        self.hl.set(added)
+        if ((added ^ self.hl.get() ^ data) & 0x1000) != 0:
+            self.f.h_flag = True
+        self.f.c_flag = (added >= 0x10000 or added < 0)
+        self.hl.set(added & 0xFFFF)
         self.cycles -= 1
         
     def add_a_with_carry(self, getCaller, setCaller=None):
         # 1 cycle
         data = getCaller.get()
         s = self.a.get() + data + int(self.f.c_flag)
-        self.carry_flag_finish(s,data)
+        self.add_sub_flag_finish(s,data)
 
     def subtract_with_carry_a(self, getCaller, setCaller=None):
         # 1 cycle
         data = getCaller.get()
         s = self.a.get() - data - int(self.f.c_flag)
-        self.carry_flag_finish(s, data)
+        self.add_sub_flag_finish(s, data)
         self.f.n_flag = True
         
-    def carry_flag_finish(self, s, data):
+    def add_sub_flag_finish(self, s, data):
         self.f.reset()
-        # set the hflag if the 0x10 bit was affected
+        # set the h flag if the 0x10 bit was affected
         if ((s ^ self.a.get() ^ data) & 0x10) != 0:
             self.f.h_flag = True
         self.f.c_flag = (s >= 0x100 or s < 0)
