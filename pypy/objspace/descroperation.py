@@ -460,10 +460,20 @@ def _make_binop_impl(symbol, specialnames):
             # __xxx__ and __rxxx__ methods where found by identity.
             # Note that space.is_w() is potentially not happy if one of them
             # is None (e.g. with the thunk space)...
-            if (w_left_src is not w_right_src    # XXX
-                and space.is_true(space.issubtype(w_typ2, w_typ1))):
-                w_obj1, w_obj2 = w_obj2, w_obj1
-                w_left_impl, w_right_impl = w_right_impl, w_left_impl
+            if w_left_src is not w_right_src:    # XXX
+                # -- cpython bug compatibility: see objspace/std/test/
+                # -- test_unicodeobject.test_str_unicode_concat_overrides.
+                # -- The following handles "unicode + string subclass" by
+                # -- pretending that the unicode is a superclass of the
+                # -- string, thus giving priority to the string subclass'
+                # -- __radd__() method.  The case "string + unicode subclass"
+                # -- is handled directly by add__String_Unicode().
+                if symbol == '+' and space.is_w(w_typ1, space.w_unicode):
+                    w_typ1 = space.w_basestring
+                # -- end of bug compatibility
+                if space.is_true(space.issubtype(w_typ2, w_typ1)):
+                    w_obj1, w_obj2 = w_obj2, w_obj1
+                    w_left_impl, w_right_impl = w_right_impl, w_left_impl
 
         w_res = _invoke_binop(space, w_left_impl, w_obj1, w_obj2)
         if w_res is not None:

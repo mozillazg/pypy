@@ -554,3 +554,52 @@ class AppTestUnicodeString:
                             '\x00X\x00Y',
                             'X\x00\x00\x00Y\x00\x00\x00',
                             '\x00\x00\x00X\x00\x00\x00Y']
+
+    def test_call_special_methods(self):
+        # xxx not completely clear if these are implementation details or not
+        assert 'abc'.__add__(u'def') == u'abcdef'
+        assert u'abc'.__add__(u'def') == u'abcdef'
+        assert u'abc'.__add__('def') == u'abcdef'
+        # xxx CPython has no str.__radd__ and no unicode.__radd__
+
+    def test_str_unicode_concat_overrides(self):
+        "Test from Jython about being bug-compatible with CPython."
+
+        def check(value, expected):
+            assert type(value) == type(expected)
+            assert value == expected
+
+        def _test_concat(t1, t2):
+            tprecedent = str
+            if issubclass(t1, unicode) or issubclass(t2, unicode):
+                tprecedent = unicode
+
+            class SubclassB(t2):
+                def __add__(self, other):
+                    return SubclassB(t2(self) + t2(other))
+            check(SubclassB('py') + SubclassB('thon'), SubclassB('python'))
+            check(t1('python') + SubclassB('3'), tprecedent('python3'))
+            check(SubclassB('py') + t1('py'), SubclassB('pypy'))
+
+            class SubclassC(t2):
+                def __radd__(self, other):
+                    return SubclassC(t2(other) + t2(self))
+            check(SubclassC('stack') + SubclassC('less'), t2('stackless'))
+            check(t1('iron') + SubclassC('python'), SubclassC('ironpython'))
+            check(SubclassC('tiny') + t1('py'), tprecedent('tinypy'))
+
+            class SubclassD(t2):
+                def __add__(self, other):
+                    return SubclassD(t2(self) + t2(other))
+
+                def __radd__(self, other):
+                    return SubclassD(t2(other) + t2(self))
+            check(SubclassD('di') + SubclassD('ct'), SubclassD('dict'))
+            check(t1('list') + SubclassD(' comp'), SubclassD('list comp'))
+            check(SubclassD('dun') + t1('der'), SubclassD('dunder'))
+
+        _test_concat(str, str)
+        _test_concat(unicode, unicode)
+        # the following two cases are really there to emulate a CPython bug.
+        _test_concat(str, unicode)   # uses hack in add__String_Unicode()
+        _test_concat(unicode, str)   # uses hack in descroperation.binop_impl()
