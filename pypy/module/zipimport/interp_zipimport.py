@@ -309,21 +309,26 @@ def descr_new_zipimporter(space, w_type, name):
     w = space.wrap
     w_ZipImportError = space.getattr(space.getbuiltinmodule('zipimport'),
                                      w('ZipImportError'))
+
+    if os.path.sep != '/':
+        filename = name.replace(os.path.sep, '/')
+    else:
+        filename = name
     ok = False
-    parts = name.split(os.path.sep)
-    filename = "" # make annotator happy
-    for i in range(1, len(parts) + 1):
-        filename = os.path.sep.join(parts[:i])
-        if not filename:
-            filename = os.path.sep
+    while True:
         try:
             s = os.stat(filename)
         except OSError:
-            raise OperationError(w_ZipImportError, space.wrap(
-                "Cannot find name %s" % (filename,)))
-        if not stat.S_ISDIR(s.st_mode):
+            # back up one path element
+            pos = filename.rfind('/')
+            if pos == -1:
+                break
+            filename = filename[:pos]
+            continue
+
+        if stat.S_ISREG(s.st_mode):
             ok = True
-            break
+        break
     if not ok:
         raise OperationError(w_ZipImportError, space.wrap(
             "Did not find %s to be a valid zippath" % (name,)))

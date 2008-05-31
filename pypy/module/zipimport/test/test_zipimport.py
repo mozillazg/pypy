@@ -94,13 +94,14 @@ class AppTestZipimport:
         """)
 
     def test_cache(self):
+        import os
         self.writefile(self, 'x.py', 'y')
         from zipimport import _zip_directory_cache, zipimporter
         new_importer = zipimporter(self.zipfile)
         try:
             assert zipimporter(self.zipfile) is new_importer
         finally:
-            del _zip_directory_cache[self.zipfile]
+            del _zip_directory_cache[self.zipfile.replace(os.path.sep, '/')]
 
     def test_good_bad_arguments(self):
         from zipimport import zipimporter
