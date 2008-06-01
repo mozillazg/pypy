@@ -7,7 +7,9 @@ class BaseTest(BaseRtypingTest):
     def test_creation(self):
         def f():
             x = JudyTree()
-            return len(x)
+            res = len(x)
+            x.free()
+            return res
         assert self.interpret(f, []) == 0
 
 class TestLLtype(BaseTest, LLRtypeMixin):
