@@ -44,8 +44,8 @@ class JSTestFile(py.test.collect.Module):
         if not hasattr(cls, 'shellfile'):
             cls.shellfile = load_file(str(shellpath))
         cls.interp.run(cls.shellfile)
-        cls.testcases = cls.interp.global_context.resolve_identifier('testcases')
-        cls.tc = cls.interp.global_context.resolve_identifier('tc')
+        cls.testcases = cls.interp.global_context.resolve_identifier(cls.interp.global_context, 'testcases')
+        cls.tc = cls.interp.global_context.resolve_identifier(cls.interp.global_context, 'tc')
         # override eval
         cls.interp.w_Global.Put(cls.interp.global_context, 'eval', W_Builtin(overriden_evaljs))
         
@@ -71,10 +71,11 @@ class JSTestFile(py.test.collect.Module):
         except JsBaseExcept:
             raise Failed(msg="Javascript Error", excinfo=py.code.ExceptionInfo())
         except:
+            #print self.interp._code
             raise Failed(excinfo=py.code.ExceptionInfo())
         ctx = self.interp.global_context
-        testcases = ctx.resolve_identifier('testcases')
-        self.tc = ctx.resolve_identifier('tc')
+        testcases = ctx.resolve_identifier(ctx, 'testcases')
+        self.tc = ctx.resolve_identifier(ctx, 'tc')
         testcount = testcases.Get(ctx, 'length').ToInt32(ctx)
         self.testcases = testcases
         return range(testcount)
@@ -89,9 +90,9 @@ class JSTestItem(py.test.collect.Item):
         
     def run(self):
         ctx = JSTestFile.interp.global_context
-        r3 = ctx.resolve_identifier('run_test')
+        r3 = ctx.resolve_identifier(ctx, 'run_test')
         w_test_number = W_IntNumber(self.number)
-        result = r3.Call(ctx=ctx, args=[w_test_number]).ToString()
+        result = r3.Call(ctx=ctx, args=[w_test_number]).ToString(ctx)
         __tracebackhide__ = True
         if result != "passed":
             raise Failed(msg=result)

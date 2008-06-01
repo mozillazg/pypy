@@ -10,6 +10,7 @@ from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
      compare_e, increment, commonnew, mult, division, uminus, mod
 from pypy.rlib.jit import hint
 from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.objectmodel import we_are_translated
 
 class AlreadyRun(Exception):
     pass
@@ -25,13 +26,21 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
     to_pop = 0
     try:
         while i < len(opcodes):
-            for name, op in opcode_unrolling:
+            if we_are_translated():
+                #this is an optimization strategy for translated code
+                #on top of cpython it destroys the performance
+                #besides, this code might be completely wrong
                 opcode = opcodes[i]
-                opcode = hint(opcode, deepfreeze=True)
-                if isinstance(opcode, op):
-                    result = opcode.eval(ctx, stack)
-                    assert result is None
-                    break
+                for name, op in opcode_unrolling:
+                    opcode = hint(opcode, deepfreeze=True)
+                    if isinstance(opcode, op):
+                        result = opcode.eval(ctx, stack)
+                        assert result is None
+                        break
+            else:
+                opcode = opcodes[i]
+                result = opcode.eval(ctx, stack)
+                assert result is None                
             if isinstance(opcode, BaseJump):
                 i = opcode.do_jump(stack, i)
             else:
@@ -110,7 +119,7 @@ class JsCode(object):
 
     def emit_continue(self):
         if not self.startlooplabel:
-            raise ThrowError(W_String("Continue outside loop"))
+            raise ThrowException(W_String("Continue outside loop"))
         self.emit('JUMP', self.startlooplabel[-1])
 
     def emit(self, operation, *args):
@@ -174,6 +183,9 @@ class JsFunction(object):
             self.code.run(ctx)
         except ReturnException, e:
             return e.value
+        except:
+            print "unhandled exception in function:", self.name
+            raise
         return w_Undefined
 
 class Opcode(object):
@@ -275,7 +287,11 @@ class LOAD_VARIABLE(Opcode):
         self.identifier = identifier
 
     def eval(self, ctx, stack):
-        stack.append(ctx.resolve_identifier(self.identifier))
+        try:
+            stack.append(ctx.resolve_identifier(ctx, self.identifier))
+        except:
+            print self.identifier
+            raise
 
     def __repr__(self):
         return 'LOAD_VARIABLE "%s"' % (self.identifier,)
@@ -371,7 +387,11 @@ class LOAD_MEMBER(Opcode):
 
     def eval(self, ctx, stack):
         w_obj = stack.pop().ToObject(ctx)
-        stack.append(w_obj.Get(ctx, self.name))
+        try:
+            stack.append(w_obj.Get(ctx, self.name))
+        except:
+            print w_obj, self.name
+            raise
         #stack.append(W_Reference(self.name, w_obj))
 
     def __repr__(self):
@@ -415,7 +435,7 @@ class TYPEOF_VARIABLE(Opcode):
 
     def eval(self, ctx, stack):
         try:
-            var = ctx.resolve_identifier(self.name)
+            var = ctx.resolve_identifier(ctx, self.name)
             stack.append(W_String(var.type()))
         except ThrowException:
             stack.append(W_String('undefined'))
@@ -541,7 +561,7 @@ class BaseStoreMember(Opcode):
         left = stack.pop()
         elem = stack.pop()
         value = stack.pop()
-        name = elem.ToString()
+        name = elem.ToString(ctx)
         value = self.operation(ctx, left, name, value)
         left.ToObject(ctx).Put(ctx, name, value)
         stack.append(value)
@@ -588,7 +608,7 @@ class STORE(BaseStore):
 class BaseAssignOper(BaseStore):
     def process(self, ctx, name, stack):
         right = stack.pop()
-        left = ctx.resolve_identifier(name)
+        left = ctx.resolve_identifier(ctx, name)
         result = self.operation(ctx, left, right)
         stack.append(result)
         return result
@@ -596,7 +616,7 @@ class BaseAssignOper(BaseStore):
 class BaseAssignBitOper(BaseStore):
     def process(self, ctx, name, stack):
         right = stack.pop().ToInt32(ctx)
-        left = ctx.resolve_identifier(name).ToInt32(ctx)
+        left = ctx.resolve_identifier(ctx, name).ToInt32(ctx)
         result = self.operation(ctx, left, right)
         stack.append(result)
         return result
@@ -627,14 +647,14 @@ class STORE_BITXOR(BaseAssignBitOper):
 
 class STORE_POSTINCR(BaseStore):
     def process(self, ctx, name, stack):
-        value = ctx.resolve_identifier(name)
+        value = ctx.resolve_identifier(ctx, name)
         newval = increment(ctx, value)
         stack.append(value)
         return newval
 
 class STORE_POSTDECR(BaseStore):
     def process(self, ctx, name, stack):
-        value = ctx.resolve_identifier(name)
+        value = ctx.resolve_identifier(ctx, name)
         newval = increment(ctx, value, -1)
         stack.append(value)
         return newval
@@ -742,31 +762,31 @@ class POP(Opcode):
     def eval(self, ctx, stack):
         stack.pop()
 
+def common_call(ctx, r1, args, this, name):
+    if not isinstance(r1, W_PrimitiveObject):
+        raise ThrowException(W_String("%s is not a callable (%s)"%(r1.ToString(ctx), name)))
+    try:
+        res = r1.Call(ctx=ctx, args=args.tolist(), this=this)
+    except JsTypeError:
+        raise ThrowException(W_String("%s is not a function (%s)"%(r1.ToString(ctx), name)))
+    return res
+
 class CALL(Opcode):
     def eval(self, ctx, stack):
         r1 = stack.pop()
         args = stack.pop()
-        if not isinstance(r1, W_PrimitiveObject):
-            raise ThrowException(W_String("it is not a callable"))
-        try:
-            res = r1.Call(ctx=ctx, args=args.tolist(), this=None)
-        except JsTypeError:
-            raise ThrowException(W_String('it is not a function'))
-        stack.append(res)
+        name = r1.ToString(ctx)
+        #XXX hack, this should be comming from context
+        stack.append(common_call(ctx, r1, args, ctx.scope[-1], name))
 
 class CALL_METHOD(Opcode):
     def eval(self, ctx, stack):
         method = stack.pop()
         what = stack.pop().ToObject(ctx)
         args = stack.pop()
-        r1 = what.Get(ctx, method.ToString())
-        if not isinstance(r1, W_PrimitiveObject):
-            raise ThrowException(W_String("it is not a callable"))
-        try:
-            res = r1.Call(ctx=ctx, args=args.tolist(), this=what)
-        except JsTypeError:
-            raise ThrowException(W_String('it is not a function'))
-        stack.append(res)
+        name = method.ToString(ctx) #XXX missing ctx?
+        r1 = what.Get(ctx, name)
+        stack.append(common_call(ctx, r1, args, what, name))
         
 
 class DUP(Opcode):
@@ -856,11 +876,8 @@ class NEXT_ITERATOR(Opcode):
 # ---------------- with support ---------------------
 
 class WITH_START(Opcode):
-    def __init__(self, name):
-        self.name = name
-
     def eval(self, ctx, stack):
-        ctx.push_object(ctx.resolve_identifier(self.name).ToObject(ctx))
+        ctx.push_object(stack.pop().ToObject(ctx))
 
 class WITH_END(Opcode):
     def eval(self, ctx, stack):
@@ -877,7 +894,7 @@ class DELETE(Opcode):
 
 class DELETE_MEMBER(Opcode):
     def eval(self, ctx, stack):
-        what = stack.pop().ToString()
+        what = stack.pop().ToString(ctx)
         obj = stack.pop().ToObject(ctx)
         stack.append(newbool(obj.Delete(what)))
 
