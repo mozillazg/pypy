@@ -603,3 +603,15 @@ class AppTestUnicodeString:
         # the following two cases are really there to emulate a CPython bug.
         _test_concat(str, unicode)   # uses hack in add__String_Unicode()
         _test_concat(unicode, str)   # uses hack in descroperation.binop_impl()
+
+    def test_returns_subclass(self):
+        skip("Failing")
+        class X(unicode):
+            pass
+
+        class Y(object):
+            def __unicode__(self):
+                return X("stuff")
+
+        assert unicode(Y()).__class__ is X
+    
