@@ -30,10 +30,17 @@ class JudyRepr(Repr):
 
     def rtype_len(self, hop):
         v_dict, = hop.inputargs(self)
+        hop.exception_cannot_occur()
         return hop.gendirectcall(ll_dict_len, v_dict)
 
     def rtype_new(self, hop):
+        hop.exception_is_here()
         return hop.gendirectcall(ll_newdict)
+
+    def rtype_method_free(self, hop):
+        v_j, = hop.inputargs(self)
+        hop.exception_is_here()
+        return hop.gendirectcall(ll_free, v_j)
 
 class __extend__(pairtype(JudyRepr, rmodel.Repr)): 
     def rtype_setitem((r_dict, r_key), hop):
@@ -52,3 +59,6 @@ def ll_dict_setitem(dict, key, value):
     
 def ll_dict_len(dict):
     return JudyLCount(dict[0], 0, -1, 0)
+
+def ll_free(dict):
+    lltype.free(dict, flavor='raw')

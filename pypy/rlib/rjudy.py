@@ -10,6 +10,9 @@ class SomeJudyTree(annmodel.SomeObject):
         from pypy.rpython.rjudy import JudyRepr
         return JudyRepr(rtyper)
 
+    def method_free(self):
+        return annmodel.s_None
+
 class JudyTreeEntry(ExtRegistryEntry):
     """ This registers JudyTree to be special-treated by a translation
     toolchain
