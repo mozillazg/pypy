@@ -286,8 +286,41 @@ def strxfrm(s):
     return buf.value
 
 def getdefaultlocale():
-    # TODO: Port code from CPython for Windows and Mac OS
+    # TODO: Port code from CPython for Mac OS
     raise NotImplementedError()
+
+if sys.platform == 'nt':
+    def getdefaultlocale():
+        kernel32 = ctypes.WinDLL('kernel32')
+        encoding = "cp%d" % (kernel32.GetACP())
+
+        GetLocaleInfo = kernel32.GetLocaleInfoA
+        GetLocaleInfo.argtypes = [ctypes.c_long, ctypes.c_long,
+                                  ctypes.c_char_p, ctypes.c_int]
+        GetLocaleInfo.restype = ctypes.c_int
+
+        LOCALE_USER_DEFAULT = 0
+        LOCALE_SISO639LANGNAME =  0x00000059 # ISO abbreviated language name
+        LOCALE_SISO3166CTRYNAME = 0x0000005A # ISO abbreviated country name
+        # according to MSDN, the maximum length of these strings is 9
+
+        language = create_string_buffer(10)
+        if not GetLocaleInfo(
+            LOCALE_USER_DEFAULT,
+            LOCALE_SISO639LANGNAME,
+            language, 10):
+            return None, encoding
+
+        country = create_string_buffer(10)
+        if not GetLocaleInfo(
+            LOCALE_USER_DEFAULT,
+            LOCALE_SISO3166CTRYNAME,
+            country, 10):
+            return None, encoding
+
+        locale = "%s_%s" % (language, country)
+        return locale, encoding
+
 
 if HAS_LANGINFO:
     _nl_langinfo = libc.nl_langinfo
