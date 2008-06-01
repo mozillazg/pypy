@@ -11,7 +11,7 @@ from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
 from pypy.lang.js.jscode import JsCode
-from pypy.rlib.rarithmetic import NAN, INFINITY, isnan, isinf
+from pypy.rlib.rarithmetic import NAN, INFINITY, isnan, isinf, r_uint
 
 ASTBUILDER = ASTBuilder()
 
@@ -307,15 +307,25 @@ class W_ValueToString(W_NewBuiltin):
             raise JsTypeError('Wrong type')
         return W_String(this.Value.ToString(ctx))
 
-
 class W_NumberValueToString(W_ValueToString):
     mytype = 'number'
 
 class W_BooleanValueToString(W_ValueToString):
     mytype = 'boolean'
 
-class W_StringValueToString(W_ValueToString):
-    mytype = 'string'
+class W_StringValueToString(W_NewBuiltin):
+    "this is the toString function for objects with Value"
+    def Call(self, ctx, args=[], this=None):
+        if this.type() != 'string':
+            raise JsTypeError('Wrong type')
+        return this
+
+class W_StringValueOf(W_NewBuiltin):
+    "this is the toString function for objects with Value"
+    def Call(self, ctx, args=[], this=None):
+        if this.type() != 'string':
+            raise JsTypeError('Wrong type')
+        return this
 
 
 def get_value_of(type, ctx):
@@ -398,6 +408,7 @@ class W_ArrayToString(W_NewBuiltin):
         return W_String(common_join(ctx, this, sep=','))
 
 class W_ArrayJoin(W_NewBuiltin):
+    length = 1
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1 and not args[0] is w_Undefined:
             sep = args[0].ToString(ctx)
@@ -406,6 +417,28 @@ class W_ArrayJoin(W_NewBuiltin):
         
         return W_String(common_join(ctx, this, sep))
 
+class W_ArrayReverse(W_NewBuiltin):
+    length = 0
+    def Call(self, ctx, args=[], this=None):
+        r2 = this.Get(ctx, 'length').ToUInt32(ctx)
+        k = r_uint(0)
+        r3 = r_uint(math.floor( float(r2)/2.0 ))
+        if r3 == k:
+            return this
+        
+        while k < r3:
+            r6 = r2 - k - 1
+            r7 = str(k)
+            r8 = str(r6)
+            
+            r9 = this.Get(ctx, r7)
+            r10 = this.Get(ctx, r8)
+            
+            this.Put(ctx, r7, r10)
+            this.Put(ctx, r8, r9)
+            k += 1
+        
+        return this
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
     def Call(self, ctx, args=[], this=None):
@@ -433,13 +466,15 @@ class Interpreter(object):
         
         w_Function = W_Function(ctx, Class='Function', 
                               Prototype=w_ObjPrototype)
-        
         w_Global.Put(ctx, 'Function', w_Function)
+        w_Function.Put(ctx, 'length', W_IntNumber(1), flags = allon)
         
         w_Object = W_ObjectObject('Object', w_Function)
         w_Object.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
         
         w_Global.Put(ctx, 'Object', w_Object)
+        w_Global.Prototype = w_ObjPrototype
+        
         w_FncPrototype = w_Function.Call(ctx, this=w_Function)
         w_Function.Put(ctx, 'prototype', w_FncPrototype, flags = allon)
         w_Function.Put(ctx, 'constructor', w_Function)
@@ -450,7 +485,7 @@ class Interpreter(object):
         
         put_values(w_ObjPrototype, {
             'constructor': w_Object,
-            '__proto__': w_Null,
+            '__proto__': w_FncPrototype,
             'toString': toString,
             'toLocaleString': toString,
             'valueOf': W_ValueOf(ctx),
@@ -461,11 +496,12 @@ class Interpreter(object):
         
         #properties of the function prototype
         put_values(w_FncPrototype, {
-            'constructor': w_FncPrototype,
-            '__proto__': w_ObjPrototype,
+            'constructor': w_Function,
+            '__proto__': w_FncPrototype,
             'toString': W_FToString(ctx),
             'apply': W_Apply(ctx),
-            'call': W_Call(ctx),        
+            'call': W_Call(ctx),
+            'arguments': w_Null,
         })
         
         w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
@@ -528,7 +564,7 @@ class Interpreter(object):
             'constructor': w_FncPrototype,
             '__proto__': w_StrPrototype,
             'toString': W_StringValueToString(ctx),
-            'valueOf': get_value_of('String', ctx),
+            'valueOf': W_StringValueOf(ctx),
             'charAt': W_CharAt(ctx),
             'concat': W_Concat(ctx),
             'indexOf': W_IndexOf(ctx),
@@ -536,6 +572,7 @@ class Interpreter(object):
         })
         
         w_String.Put(ctx, 'prototype', w_StrPrototype)
+        w_String.Put(ctx, 'fromCharCode', w_String) #dummy
         w_Global.Put(ctx, 'String', w_String)
 
         w_Array = W_ArrayObject('Array', w_FncPrototype)
@@ -546,7 +583,9 @@ class Interpreter(object):
             'constructor': w_FncPrototype,
             '__proto__': w_ArrPrototype,
             'toString': W_ArrayToString(ctx),
-            'join': W_ArrayJoin(ctx)
+            'join': W_ArrayJoin(ctx),
+            'reverse': W_ArrayReverse(ctx),
+            'sort': w_FncPrototype, #dummy
         })
         
         w_Array.Put(ctx, 'prototype', w_ArrPrototype, flags = allon)
@@ -574,9 +613,9 @@ class Interpreter(object):
         w_Date = W_DateFake(ctx, Class='Date')
         w_Global.Put(ctx, 'Date', w_Date)
         
-        w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN))
-        w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY))
-        w_Global.Put(ctx, 'undefined', w_Undefined)
+        w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = DE|DD)
+        w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY), flags = DE|DD)
+        w_Global.Put(ctx, 'undefined', w_Undefined, flags = DE|DD)
         w_Global.Put(ctx, 'eval', W_Builtin(evaljs))
         w_Global.Put(ctx, 'parseInt', W_Builtin(parseIntjs))
         w_Global.Put(ctx, 'parseFloat', W_Builtin(parseFloatjs))
@@ -585,7 +624,6 @@ class Interpreter(object):
         w_Global.Put(ctx, 'print', W_Builtin(printjs))
         w_Global.Put(ctx, 'unescape', W_Builtin(unescapejs))
 
-        w_Global.Put(ctx, 'this', w_Global)
 
         # DEBUGGING
         if 0:

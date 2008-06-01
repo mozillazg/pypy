@@ -120,9 +120,9 @@ function startTest() {
 
   // print out bugnumber
 
-  if ( BUGNUMBER ) {
-    print ("BUGNUMBER: " + BUGNUMBER );
-  }
+  // if ( BUGNUMBER ) {
+  //   print ("BUGNUMBER: " + BUGNUMBER );
+  // }
 }
 
 function test() {
