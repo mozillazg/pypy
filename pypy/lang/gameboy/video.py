@@ -53,7 +53,7 @@ def VideoStatus(object):
         value += int(self.h_blank_interrupt)  << 6 
         value += int(self.oam_interrupt)      << 5
         value += int(self.h_blank_interrupt)  << 4
-        value += int(self.vblank_interrupt)  << 3
+        value += int(self.vblank_interrupt)   << 3
         value += int(self.coincidence_flag)   << 2
         value += self.mode & 0x03
         return value
@@ -633,10 +633,10 @@ class Video(iMemory):
     def update_palette(self):
         if not self.dirty:
             return
-        # bit 4/0 = constants.BG color, 
-        # bit 5/1 = constants.OBJ color, 
-        # bit 2   = constants.OBJ palette, 
-        # bit 3   = constants.OBJ priority
+        # bit 4/0 = BG color, 
+        # bit 5/1 = OBJ color, 
+        # bit 2   = OBJ palette, 
+        # bit 3   = OBJ priority
         for pattern in range(0, 64):
             #color
             if (pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and \
