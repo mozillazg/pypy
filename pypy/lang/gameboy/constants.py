@@ -101,44 +101,44 @@ JOYPAD = 0x10 # Joypad Interrupt (INT 60h)
 # ___________________________________________________________________________
 
 # LCD Register Addresses
-LCDC = 0xFF40 # LCD Control */
-STAT = 0xFF41 # LCD Status */
-SCY  = 0xFF42 # BG Scroll Y (0-255) */
-SCX  = 0xFF43 # BG Scroll X (0-255) */
-LY   = 0xFF44 # LCDC Y-Coordinate (0-153) */
-LYC  = 0xFF45 # LY Compare */
-DMA  = 0xFF46 # OAM DMA Transfer */
-BGP  = 0xFF47 # BG Palette Data */
-OBP0 = 0xFF48 # Object Palette 0 Data */
-OBP1 = 0xFF49 # Object Palette 1 Data */
-WY   = 0xFF4A # Window Y Position (0-143) */
-WX   = 0xFF4B # Window X Position (0-166) */
+LCDC = 0xFF40 # LCD Control
+STAT = 0xFF41 # LCD Status
+SCY  = 0xFF42 # BG Scroll Y (0-255)
+SCX  = 0xFF43 # BG Scroll X (0-255)
+LY   = 0xFF44 # LCDC Y-Coordinate (0-153)
+LYC  = 0xFF45 # LY Compare
+DMA  = 0xFF46 # OAM DMA Transfer
+BGP  = 0xFF47 # BG Palette Data
+OBP0 = 0xFF48 # Object Palette 0 Data
+OBP1 = 0xFF49 # Object Palette 1 Data
+WY   = 0xFF4A # Window Y Position (0-143)
+WX   = 0xFF4B # Window X Position (0-166)
  
 # OAM Register Addresses
-OAM_ADDR = 0xFE00 # OAM Object Attribute Map (FE00..FE9F) */
+OAM_ADDR = 0xFE00 # OAM Object Attribute Map (FE00..FE9F)
 OAM_SIZE = 0xA0
  
 # Video RAM Addresses
-VRAM_ADDR = 0x8000 # 8KB Video RAM (8000..9FFF) */
+VRAM_ADDR = 0x8000 # 8KB Video RAM (8000..9FFF)
 VRAM_SIZE = 0x2000
 
 # VRAM Tile Data/Maps Addresses
-VRAM_DATA_A = 0x0000 # 4KB Tile Data (8000..8FFF) */
-VRAM_DATA_B = 0x0800 # 4KB Tile Data (8800..97FF) */
+VRAM_DATA_A = 0x0000 # 4KB Tile Data (8000..8FFF)
+VRAM_DATA_B = 0x0800 # 4KB Tile Data (8800..97FF)
 
-VRAM_MAP_A = 0x1800 # 1KB BG Tile Map 0 (9800..9BFF) */
-VRAM_MAP_B = 0x1C00 # 1KB BG Tile Map 1 (9C00..9FFF) */
+VRAM_MAP_A = 0x1800 # 1KB BG Tile Map 0 (9800..9BFF)
+VRAM_MAP_B = 0x1C00 # 1KB BG Tile Map 1 (9C00..9FFF)
 
 
 #LCD Mode Durations
-MODE_0_TICKS       = 50 # H-Blank */
-MODE_1_TICKS       = 114 # V-Blank */
+MODE_0_TICKS       = 50 # H-Blank
+MODE_1_TICKS       = 114 # V-Blank
 MODE_2_TICKS       = 20 # OAM#/
-MODE_3_BEGIN_TICKS = 12 # Display */
-MODE_3_END_TICKS   = 32 # Display */
+MODE_3_BEGIN_TICKS = 12 # Display
+MODE_3_END_TICKS   = 32 # Display
  
-MODE_1_BEGIN_TICKS = 8 # V-Blank Line 144 */
-MODE_1_END_TICKS   = 1 # V-Blank Line 153 */
+MODE_1_BEGIN_TICKS = 8 # V-Blank Line 144
+MODE_1_END_TICKS   = 1 # V-Blank Line 153
  
 # Objects per Line
 OBJECTS_PER_LINE = 10
@@ -201,31 +201,31 @@ SC = 0xFF02 # Serial Transfer Control
 SOUND_CLOCK = 256 
  
 # Sound Register Addresses
-NR10 = 0xFF10 # AUD1SWEEP */
-NR11 = 0xFF11 # AUD1LEN */
-NR12 = 0xFF12 # AUD1ENV */
-NR13 = 0xFF13 # AUD1LOW */
-NR14 = 0xFF14 # AUD1HIGH */
+NR10 = 0xFF10 # AUD1SWEEP
+NR11 = 0xFF11 # AUD1LEN
+NR12 = 0xFF12 # AUD1ENV
+NR13 = 0xFF13 # AUD1LOW
+NR14 = 0xFF14 # AUD1HIGH
  
-NR21 = 0xFF16 # AUD2LEN */
-NR22 = 0xFF17 # AUD2ENV */
-NR23 = 0xFF18 # AUD2LOW */
-NR24 = 0xFF19 # AUD2HIGH */
+NR21 = 0xFF16 # AUD2LEN
+NR22 = 0xFF17 # AUD2ENV
+NR23 = 0xFF18 # AUD2LOW
+NR24 = 0xFF19 # AUD2HIGH
  
-NR30 = 0xFF1A # AUD3ENA */
-NR31 = 0xFF1B # AUD3LEN */
-NR32 = 0xFF1C # AUD3LEVEL */
-NR33 = 0xFF1D # AUD3LOW */
-NR34 = 0xFF1E # AUD3HIGH */
+NR30 = 0xFF1A # AUD3ENA
+NR31 = 0xFF1B # AUD3LEN
+NR32 = 0xFF1C # AUD3LEVEL
+NR33 = 0xFF1D # AUD3LOW
+NR34 = 0xFF1E # AUD3HIGH
  
-NR41 = 0xFF20 # AUD4LEN */
-NR42 = 0xFF21 # AUD4ENV */
-NR43 = 0xFF22 # AUD4POLY */
-NR44 = 0xFF23 # AUD4GO */
+NR41 = 0xFF20 # AUD4LEN
+NR42 = 0xFF21 # AUD4ENV
+NR43 = 0xFF22 # AUD4POLY
+NR44 = 0xFF23 # AUD4GO
  
-NR50 = 0xFF24 # AUDVOL */
-NR51 = 0xFF25 # AUDTERM */
-NR52 = 0xFF26 # AUDENA */
+NR50 = 0xFF24 # AUDVOL
+NR51 = 0xFF25 # AUDTERM
+NR52 = 0xFF26 # AUDENA
 
 AUD3WAVERAM = 0xFF30
 
