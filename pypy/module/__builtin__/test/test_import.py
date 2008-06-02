@@ -533,6 +533,31 @@ class AppTestImportHooks(object):
             sys.meta_path.append(Importer())
             import datetime
             assert len(tried_imports) == 1
-            tried_imports[0][0] == "datetime"
+            assert tried_imports[0][0] == "datetime"
         finally:
             sys.meta_path.pop()
+
+    def test_importer_cache(self):
+        class FooImporter(object):
+            def __init__(self, name):
+                if not name.startswith("foo_"):
+                    raise ImportError
+            def find_module(self, fullname, path=None):
+                return None
+
+        import sys
+        sys.path_hooks.append(FooImporter)
+        sys.path.insert(0, "foo_something")
+        try:
+            import datetime
+        finally:
+            sys.path_hooks.pop()
+            sys.path.pop(0)
+
+        cache = sys.path_importer_cache
+        assert isinstance(cache['foo_something'], FooImporter)
+        for path, importer in sys.path_importer_cache.items():
+            if path == 'foo_something':
+                assert isinstance(importer, FooImporter)
+            else:
+                assert importer is None
