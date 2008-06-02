@@ -117,7 +117,7 @@ class FlagRegister(Register):
     
     def __init__(self, cpu, reset_value):
         assert isinstance(cpu, CPU)
-        self.cpu = cpu
+        self.cpu         = cpu
         self.reset_value = reset_value
         self.reset()
          
@@ -141,7 +141,7 @@ class FlagRegister(Register):
         self.lower = 0x00
             
     def get(self, use_cycles=True):
-        value = 0
+        value  = 0
         value += (int(self.c_flag) << 4)
         value += (int(self.h_flag) << 5)
         value += (int(self.n_flag) << 6)
@@ -153,7 +153,7 @@ class FlagRegister(Register):
         self.h_flag = bool(value & (1 << 5))
         self.n_flag = bool(value & (1 << 6))
         self.z_flag = bool(value & (1 << 7))
-        self.lower = value & 0x0F
+        self.lower  = value & 0x0F
         if use_cycles:
             self.cpu.cycles -= 1
         
@@ -574,12 +574,6 @@ class CPU(object):
         # DEC rr
         register.dec()
 
-#    def inc_double_register(self, doubleRegister):
-#        doubleRegister.set((doubleRegister.get() + 1) & 0xFF)
-#        
-#    def dec_double_register(self, doubleRegister):        
-#        doubleRegister.set((doubleRegister.get() - 1) & 0xFF)
-   
     def inc(self, getCaller, setCaller):
         # 1 cycle
         data = (getCaller.get() + 1) & 0xFF
@@ -910,7 +904,7 @@ class CPU(object):
 
     def disable_interrups(self):
         # DI/EI 1 cycle
-        self.ime = False
+        self.ime     = False
         self.cycles -= 1
 
     def enable_interrupts(self):

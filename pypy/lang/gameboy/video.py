@@ -33,12 +33,22 @@ class set_tile_line_call_wrapper(VideoCallWraper):
 # -----------------------------------------------------------------------------
 
 def VideoStatus(object):
+    # used for enabled or disabled window or background
+    # Bit 7 - LCD Display Enable             (0=Off, 1=On)
+    # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
+    # Bit 5 - Window Display Enable          (0=Off, 1=On)
+    # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
+    # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
+    # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
+    # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
+    # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
+    
     def __init__(self, video):
         self.video = video
         self.reset()
         
     def reset(self):
-        self.mode               = False
+        self.mode               = 0x02
         self.lyc_ly_coincidence = False
         self.h_blank_interrupt  = False
         self.oam_interrupt      = False
@@ -65,13 +75,6 @@ def VideoStatus(object):
 # -----------------------------------------------------------------------------
 
 class Video(iMemory):
-    #frames = 0
-    #frame_skip = 0
-
-     # Line Buffer, OAM Cache and Color Palette
-    #line = []#= new int[8 + 160 + 8]
-    #objects = []#= new int[OBJECTS_PER_LINE]
-    #palette = []#= new int[1024]
 
     def __init__(self, video_driver, interrupt, memory):
         assert isinstance(video_driver, VideoDriver)
@@ -88,15 +91,6 @@ class Video(iMemory):
 
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
-        # used for enabled or disabled window or background
-        # Bit 7 - LCD Display Enable             (0=Off, 1=On)
-        # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
-        # Bit 5 - Window Display Enable          (0=Off, 1=On)
-        # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
-        # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
-        # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
-        # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
-        # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
         self.control    = 0x91
         self.stat       = 2
         self.line_y     = 0
@@ -403,8 +397,8 @@ class Video(iMemory):
             self.emulate_vblank_other()
 
     def emulate_vblank_vblank(self):
-        self.vblank = False
-        self.stat = (self.stat & 0xFC) | 0x01
+        self.vblank  = False
+        self.stat    = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
         # V-Blank interrupt
         if (self.stat & 0x10) != 0:
@@ -413,7 +407,7 @@ class Video(iMemory):
         self.interrupt.raise_interrupt(constants.VBLANK)
         
     def emulate_vblank_first_y_line(self):
-        self.stat = (self.stat & 0xFC) | 0x02
+        self.stat    = (self.stat & 0xFC) | 0x02
         self.cycles += constants.MODE_2_TICKS
         #OAM interrupt
         if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
@@ -421,8 +415,8 @@ class Video(iMemory):
             
     def emulate_vblank_other(self):
         if self.line_y < 153:
-            self.line_y+=1
-            self.stat = (self.stat & 0xFC) | 0x01
+            self.line_y += 1
+            self.stat    = (self.stat & 0xFC) | 0x01
             if self.line_y == 153:
                 self.cycles += constants.MODE_1_END_TICKS
             else:
@@ -462,9 +456,9 @@ class Video(iMemory):
             self.line[x] = 0x00
 
     def draw_background(self):
-        y = (self.scroll_y + self.line_y) & 0xFF
-        x = self.scroll_x & 0xFF
-        tileMap = constants.VRAM_MAP_A
+        y        = (self.scroll_y + self.line_y) & 0xFF
+        x        = self.scroll_x & 0xFF
+        tileMap  = constants.VRAM_MAP_A
         if (self.control & 0x08) != 0:
             tileMap =  constants.VRAM_MAP_B
         tileData = constants.VRAM_DATA_B
@@ -513,9 +507,7 @@ class Video(iMemory):
                 continue
             tile = self.oam[offset + 2] & 0xFF
             flags = self.oam[offset + 3] & 0xFF
-
             y = self.line_y - y + 16
-
             if ((self.control & 0x04) != 0):
                 # 8x16 tile size
                 if (y < 0 or y > 15):
