@@ -196,12 +196,23 @@ class BoehmGcPolicy(BasicGcPolicy):
         if gc_home.check(dir=True):
             from pypy.tool.udir import udir
             udir.join('gc', 'gc.h').ensure()
-            udir.join('gc', 'gc.h').write('#include "%s/include/gc.h"' % gc_home)
+            udir.join('gc', 'gc.h').write('#include "%s/include/gc.h"\n' % gc_home)
+
+            if sys.platform == 'linux2':
+                ccflags = ['-D_REENTRANT', '-DGC_LINUX_THREADS', '-DTHREAD_LOCAL_ALLOC']
+                libraries = []
+            elif sys.platform == 'win32':
+                ccflags = ['-DGC_WIN32_THREADS', '-DGC_NOT_DLL']
+                libraries = ['user32']
+
+            if sys.platform != "win32":
+                # GC_REDIRECT_TO_LOCAL is not supported on Win32 by gc6.8
+                ccflags.append('-DGC_REDIRECT_TO_LOCAL')
 
             gc_eci = ExternalCompilationInfo(
                 include_dirs=[gc_home.join('include')],
-                compile_extra=['-DGC_WIN32_THREADS', '-DGC_NOT_DLL'],
-                libraries=['user32'],
+                compile_extra=ccflags + ['-DSILENT'],
+                libraries=libraries,
             )
 
             cs = CompilationSet(gc_eci,
@@ -214,13 +225,15 @@ class BoehmGcPolicy(BasicGcPolicy):
                         'misc.c', 'os_dep.c', 'mach_dep.c',
                         'dyn_load.c',
                         'win32_threads.c',
+                        'pthread_support.c', 'pthread_stop_world.c',
+                        'specific.c',
                         ]])
 
             eci = ExternalCompilationInfo(
                 include_dirs=[udir],
-                compile_extra=['-DGC_WIN32_THREADS', '-DGC_NOT_DLL'],
+                compile_extra=ccflags,
                 extra_objects=cs.compile_objects(),
-                libraries=['user32'],
+                libraries=libraries,
                 )
 
         else:
@@ -238,12 +251,6 @@ class BoehmGcPolicy(BasicGcPolicy):
     def pre_pre_gc_code(self):
         for line in BasicGcPolicy.pre_pre_gc_code(self):
             yield line
-        if sys.platform == "linux2":
-            yield "#define _REENTRANT 1"
-            yield "#define GC_LINUX_THREADS 1"
-        if sys.platform != "win32":
-            # GC_REDIRECT_TO_LOCAL is not supported on Win32 by gc6.8
-            yield "#define GC_REDIRECT_TO_LOCAL 1"
         yield '#include <gc/gc.h>'
         yield '#define USING_BOEHM_GC'
 

@@ -289,11 +289,16 @@ class CompilationSet:
         files = [py.path.local(f).relto(udir) for f in cs.files]
         files = [str(f) for f in cs.files]
 
+        if sys.platform == 'win32':
+            ccflags = []
+        else:
+            ccflags = ['-fPIC'] # XXX
+
         old = udir.chdir()
         try:
             objects = compiler.compile(
                 files,
-                extra_preargs=list(self.eci.compile_extra),
+                extra_preargs=list(self.eci.compile_extra) + ccflags,
                 include_dirs=self.eci.include_dirs,
                 )
             objects = [str(py.path.local(o)) for o in objects]
