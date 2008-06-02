@@ -827,6 +827,7 @@ def gen_source(database, modulename, targetdir, eci, defines={}):
     f = targetdir.join('setup.py').open('w')
     include_dirs = eci.include_dirs
     library_dirs = eci.library_dirs
+    extra_objects = eci.extra_objects
     libraries = eci.libraries
     f.write(SETUP_PY % locals())
     f.close()
@@ -850,6 +851,7 @@ setup(name="%(modulename)s",
       ext_modules = [Extension(name = "%(modulename)s",
                             sources = ["%(modulename)s.c"],
                  extra_compile_args = extra_compile_args,
+                      extra_objects = %(extra_objects)s,
                        include_dirs = (PYPY_INCLUDE_DIR,) + %(include_dirs)r,
                        library_dirs = %(library_dirs)r,
                           libraries = %(libraries)r)])
