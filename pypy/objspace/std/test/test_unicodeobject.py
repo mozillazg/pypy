@@ -262,6 +262,11 @@ class AppTestUnicodeString:
         assert unicode(None) == u'None'
         assert unicode(123) == u'123'
         assert unicode([2, 3]) == u'[2, 3]'
+        class U(unicode):
+            pass
+        assert unicode(U()).__class__ is unicode
+        assert U(u'test') == u'test'
+        assert U(u'test').__class__ is U
 
     def test_call_unicode(self):
         skip("does not work")
@@ -605,7 +610,6 @@ class AppTestUnicodeString:
         _test_concat(unicode, str)   # uses hack in descroperation.binop_impl()
 
     def test_returns_subclass(self):
-        skip("Failing")
         class X(unicode):
             pass
 

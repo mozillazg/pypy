@@ -251,25 +251,25 @@ def descr__new__(space, w_unicodetype, w_string='', w_encoding=None, w_errors=No
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
     from pypy.objspace.std.ropeunicodeobject import W_RopeUnicodeObject
     w_obj = w_string
-    w_obj_type = space.type(w_obj)
     
     encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors) 
-    if space.is_w(w_obj_type, space.w_unicode):
+    if space.is_true(space.isinstance(w_obj, space.w_unicode)):
         if encoding is not None or errors is not None:
             raise OperationError(space.w_TypeError,
                                  space.wrap('decoding Unicode is not supported'))
-        if space.is_w(w_unicodetype, space.w_unicode):
-            return w_obj
         w_value = w_obj
-    elif encoding is None and errors is None:
-        if space.is_true(space.isinstance(w_obj, space.w_str)):
-            w_value = unicode_from_string(space, w_obj)
-        elif space.is_true(space.isinstance(w_obj, space.w_unicode)):
-            w_value = w_obj
-        else:
-            w_value = unicode_from_object(space, w_obj)
     else:
-        w_value = unicode_from_encoded_object(space, w_obj, encoding, errors)
+        if encoding is None and errors is None:
+            if space.is_true(space.isinstance(w_obj, space.w_str)):
+                w_value = unicode_from_string(space, w_obj)
+            else:
+                w_value = unicode_from_object(space, w_obj)
+        else:
+            w_value = unicode_from_encoded_object(space, w_obj,
+                                                  encoding, errors)
+        if space.is_w(w_unicodetype, space.w_unicode):
+            return w_value
+
     if space.config.objspace.std.withropeunicode:
         assert isinstance(w_value, W_RopeUnicodeObject)
         w_newobj = space.allocate_instance(W_RopeUnicodeObject, w_unicodetype)
