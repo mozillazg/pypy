@@ -519,8 +519,11 @@ class CPU(object):
         
     def subtract_a(self, getCaller, setCaller=None):
         # 1 cycle
-        self.compare_a(getCaller) # 1 cycle
-        self.a.sub(getCaller.get(use_cycles=False), False)
+        data = getCaller.get()
+        #self.compare_a(data) # 1 cycle
+        self.compare_a_simple(data)
+        self.a.sub(data, False)
+        #self.a.sub(getCaller.get(use_cycles=False), False)
  
     def fetch_subtract_a(self):
         data = self.fetch()
@@ -530,10 +533,10 @@ class CPU(object):
 
     def compare_a(self, getCaller, setCaller=None):
         # 1 cycle
-        self.compare_a_simple(self.a.get() - getCaller.get())
+        self.compare_a_simple(getCaller.get())
         
     def compare_a_simple(self, s):
-        s = s & 0xFF
+        s = (self.a.get() - s) & 0xFF
         self.f.reset()
         self.f.n_flag = True
         self.f.z_flag_compare(s)

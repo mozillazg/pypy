@@ -206,13 +206,30 @@ def test_add_hl():
     assert_flags(cpu, z=False, n=False, h=True, c=True)
     
 def test_add_sp():
-    py.test.skip("not yet implemented")
     cpu = get_cpu()
+    cpu.f.set(0x00)
+    for i in range(0, 0x7F):
+        cpu.sp.set(0x00)
+        prepare_for_fetch(cpu, i);
+        cpu.increment_sp_by_fetch()
+        assert cpu.sp.get() == i
+        assert_flags(cpu, z=False, n=False, h=False, c=False)
+        
+    for i in range(1, 0x7F):
+        cpu.sp.set(0xFF)
+        prepare_for_fetch(cpu, 0xFF - i+1);
+        cpu.increment_sp_by_fetch()
+        assert cpu.sp.get() == 0xFF - i
+        assert_flags(cpu, z=False, n=False, h=False, c=False)
+        
+def test_add_sp_cary_flags():
+    cpu = get_cpu()
+    py.test.skip("test not yet implemented")
     
 def test_and_a():
     cpu = get_cpu()
     cpu.f.set(0xFF)
-    cpu.a.set(0xFF)
+    cpu.sp.set(0xFF)
     method_value_call(cpu, CPU.and_a, 0x00)
     assert cpu.a.get() == 0x00
     assert_flags(cpu, z=True, n=False, h=True, c=False)
@@ -811,7 +828,39 @@ def test_subtract_with_carry_a():
     
     # FIXME add separated Test for each flag
     
-
+def test_subtract_a():
+    cpu = get_cpu()
+    cpu.f.set(0xFF)
+    cpu.a.set(0xFF)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0xFE
+    assert_flags(cpu, z=False, n=True, h=False, c=False)
+    
+    cpu.f.set(0x00)
+    cpu.a.set(0xFF)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0xFE
+    assert_flags(cpu, z=False, n=True, h=False, c=False)
+    
+    cpu.f.set(0xFF)
+    cpu.a.set(0x01)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0x00
+    assert_flags(cpu, z=True, n=True, h=False, c=False)
+    
+    cpu.f.set(0xFF)
+    cpu.a.set(0x10)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0x0F
+    assert_flags(cpu, z=False, n=True, h=True, c=False)
+    
+    cpu.f.set(0xFF)
+    cpu.a.set(0x00)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0xFF
+    assert_flags(cpu, z=False, n=True, h=True, c=True)
+    
+    
 def test_swap():
     cpu = get_cpu()
     cpu.f.set(0xFF)
