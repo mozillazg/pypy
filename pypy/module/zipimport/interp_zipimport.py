@@ -322,7 +322,7 @@ def descr_new_zipimporter(space, w_type, name):
         except OSError:
             # back up one path element
             pos = filename.rfind('/')
-            if pos == -1:
+            if pos < 0:
                 break
             filename = filename[:pos]
             continue
