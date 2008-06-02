@@ -85,38 +85,129 @@ def test_cycles():
     timer.timer_cycles = value
     assert timer.get_cycles() == timer.timer_cycles
     
-def test_emulate_divider_normal():
+def test_emulate_divider():
     timer = get_timer()
-    value = 2
-    timer.timer_cycles = 0
-    timer.emulate_timer(value)
+    timer.divider_cycles = 10
+    timer.div = 1
+    timer.emulate_divider(2)
+    assert timer.div == 1
+    assert timer.divider_cycles == 8
     
-def test_test_emulate_divider_zero():
+def test_test_emulate_divider_below_zero():
     timer = get_timer()
-    value = 2
-    timer.timer_cycles = value
-    timer.emulate_timer(value)
-    assert timer.timer_cycles == value
+    timer.divider_cycles = 0
+    timer.div = 1
+    timer.emulate_divider(2)
+    assert timer.divider_cycles == constants.DIV_CLOCK - 2
+    assert timer.div == 2
+    
+    timer.divider_cycles = 0
+    timer.div = 1
+    timer.emulate_divider(0)
+    assert timer.divider_cycles == constants.DIV_CLOCK
+    assert timer.div == 2
+    
+    timer.divider_cycles = 0
+    timer.div = 0xFF
+    timer.emulate_divider(2)
+    assert timer.divider_cycles == constants.DIV_CLOCK - 2
+    assert timer.div == 0
+    
+    timer.divider_cycles = 0
+    timer.div = 0
+    timer.emulate_divider(2*constants.DIV_CLOCK)
+    assert timer.divider_cycles == constants.DIV_CLOCK
+    assert timer.div == 3
     
 def test_emulate_timer_tac_return():
     timer = get_timer()
-    timer.tac = 0
+    timer.tac          = 0
     timer.timer_cycles = -10
-    cycles = timer.timer_cycles
+    timer.tima         = 3
     timer.emulate_timer(10)
-    assert timer.timer_cycles == cycles
+    assert timer.timer_cycles == -10
+    assert timer.tima == 3
     
 def test_emulate_timer_timer_cycles_return():
     timer = get_timer()
-    timer.tac = 0x04
-    value = 10
-    timer.timer_cycles = value+1
-    cycles = timer.timer_cycles
-    timer.emulate_timer(value)
+    timer.tac          = 0x04
+    timer.timer_cycles = 11
+    cycles             = timer.timer_cycles
+    timer.emulate_timer(10)
     assert timer.timer_cycles == 1
     
+def test_emulate_timer_timer_cycles_tima():
     timer = get_timer()
-    timer.tac = 0x04
+    timer.tac          = 0x04
+    timer.tima         = 0
+    timer.timer_cycles = 0
+    timer.timer_clock  = 5
+    timer.emulate_timer(10)
+    assert timer.tima == 3
+    assert timer.timer_cycles == 5
+    timer.tac          = 0x04
+    timer.tima         = 0xFF
+    timer.tma          = 5
+    timer.timer_cycles = 0
+    timer.timer_clock  = 5
+    timer.emulate_timer(10)
+    assert timer.tima == 2+5
+    assert timer.timer_cycles == 5
+    
+def test_emulate_timer_timer_cycles_tima_single_0_pass():
+    timer = get_timer()
+    timer.tac          = 0x04
+    timer.tima         = 0xFF
+    timer.tma          = 0
+    timer.timer_cycles = 0
+    timer.timer_clock  = 5
+    timer.emulate_timer(10)
+    assert timer.tima == 2
+    assert timer.timer_cycles == 5
+    
+    timer.tac          = 0x04
+    timer.tima         = 0xFF
+    timer.tma          = 1
+    timer.timer_cycles = 0
+    timer.timer_clock  = 5
+    timer.emulate_timer(10)
+    assert timer.tima == 2+1
+    assert timer.timer_cycles == 5
+    
+    
+def test_emulate_timer_timer_cycles_tima_mutli_0_pass():
+    timer = get_timer()
+    timer.tac          = 0x04
+    timer.tima         = 0xFF
+    timer.tma          = 0
+    timer.timer_cycles = 0
+    timer.timer_clock  = 1
+    # emulate 0xFF + 1+1 times => 2 zero passes
+    timer.emulate_timer(0xFF+1)
+    assert timer.tima == 0
+    assert timer.timer_cycles == 1
+    
+    timer.tac          = 0x04
+    timer.tima         = 0xFF
+    timer.tma          = 1
+    timer.timer_cycles = 0
+    timer.timer_clock  = 1
+    # emulate 0xFF + 1+1 times => 2 zero passes
+    timer.emulate_timer(0xFF+1)
+    assert timer.tima == 2*1
+    assert timer.timer_cycles == 1
+    
+    # emulate n zero passes
+    for i in range(1,10):
+        timer.tac          = 0x04
+        timer.tima         = 0xFF
+        timer.tma          = i
+        timer.timer_cycles = 0
+        timer.timer_clock  = 1
+        timer.emulate_timer((0xFF+1)*(i-1))
+        assert timer.tima == i*i
+        assert timer.timer_cycles == 1
+    
     
     
 def test_emulate_timer_interrupt():

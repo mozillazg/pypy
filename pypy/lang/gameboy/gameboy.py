@@ -81,9 +81,11 @@ class GameBoy(object):
         #self.draw_logo()
 
     def get_cycles(self):
-        return min(min(min(min( self.video.get_cycles(), self.serial.get_cycles()),
-                    self.timer.get_cycles()), self.sound.get_cycles()),
-                    self.joypad.get_cycles())
+        return min(min(min(min( self.video.get_cycles(),
+                                self.serial.get_cycles()),
+                                self.timer.get_cycles()),
+                                self.sound.get_cycles()),
+                                self.joypad.get_cycles())
 
     def emulate(self, ticks):
         while ticks > 0:
@@ -185,11 +187,9 @@ class GameBoy(object):
             pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60) + \
                        ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06) + \
                        ((bits >> 4) & 0x01)
-
             pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60) + \
                        ((bits << 2) & 0x18) + ((bits << 1) & 0x06) + \
                        ((bits << 0) & 0x01)
-
             self.video.write(0x8010 + (index << 3), pattern0)
             self.video.write(0x8012 + (index << 3), pattern0)
             self.video.write(0x8014 + (index << 3), pattern1)

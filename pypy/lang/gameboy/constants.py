@@ -34,7 +34,7 @@ TYPE_MBC5_RAM         = 0x1A
 TYPE_MBC5_RAM_BATTERY = 0x1B
 
 TYPE_MBC5_RUMBLE             = 0x1C
-TYPE_MBC5_RUMBLE_RAM          = 0x1D
+TYPE_MBC5_RUMBLE_RAM         = 0x1D
 TYPE_MBC5_RUMBLE_RAM_BATTERY = 0x1E
 
 TYPE_HUC3_RTC_RAM     = 0xFE
@@ -157,11 +157,11 @@ COLOR_MAP =[
 # ___________________________________________________________________________
 
 # Joypad Registers P+
-JOYP = 0xFF00
+JOYP          = 0xFF00
  
 
 # Joypad Poll Speed (64 Hz)
-JOYPAD_CLOCK = GAMEBOY_CLOCK >> 6
+JOYPAD_CLOCK  = GAMEBOY_CLOCK >> 6
 
 
 BUTTON_DOWN   = 0x08

@@ -9,6 +9,7 @@ from pypy.lang.gameboy.interrupt import *
 from math import ceil
 from pypy.lang.gameboy.ram import iMemory
 import time
+import math
 
 
 class Timer(iMemory):
@@ -91,9 +92,9 @@ class Timer(iMemory):
         self.divider_cycles -= ticks
         if self.divider_cycles > 0:
             return
-        while self.divider_cycles <= 0:
-            self.div = (self.div + 1) & 0xFF;
-            self.divider_cycles += constants.DIV_CLOCK;
+        count = int(math.ceil(-self.divider_cycles / constants.DIV_CLOCK)+1)
+        self.divider_cycles += count*constants.DIV_CLOCK
+        self.div = (self.div + count) % (0xFF+1);
             
     def emulate_timer(self,  ticks):
         if (self.tac & 0x04) == 0:
@@ -105,7 +106,21 @@ class Timer(iMemory):
             if self.tima == 0x00:
                 self.tima = self.tma
                 self.interrupt.raise_interrupt(constants.TIMER)
-
+    
+    #def emulate_timer(self,  ticks):
+    #    if (self.tac & 0x04) == 0:
+    #        return
+    #    self.timer_cycles -= ticks
+    #    if self.timer_cycles > 0: return
+    #    count = int(math.ceil(-self.timer_cycles / self.timer_clock)) + 1
+    #    self.timer_cycles += self.timer_clock*count
+    #    # check for zero pass
+    #    if (self.tima + count) > 0xFF:
+    #        self.interrupt.raise_interrupt(constants.TIMER)
+    #        zero_passes = math.ceil(self.tima / count)
+    #        self.tima = (self.tma + count - zero_passes ) % (0xFF +1)
+    #    else:
+    #        self.tima = (self.tima + count) % (0xFF +1)
 # CLOCK DRIVER -----------------------------------------------------------------
 
 class Clock(object):
