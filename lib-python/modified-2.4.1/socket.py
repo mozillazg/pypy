@@ -239,7 +239,8 @@ class _fileobject(object):
                 if self._sock:
                     s = self._sock
                     self._sock = None
-                    s._drop()
+                    if hasattr(s, '_drop'):
+                        s._drop()
 
     def __del__(self):
         try:
