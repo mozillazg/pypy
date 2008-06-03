@@ -290,7 +290,7 @@ class InterpretationTest(object):
         for block in residual_graph.iterblocks():
             for op in block.operations:
                 if op.opname == 'direct_call':
-                    f = getattr(op.args[0].value._obj, "_callable", None)
+                    f = getattr(get_funcobj(op.args[0].value), "_callable", None)
                     if hasattr(f, 'oopspec'):
                         name, _ = f.oopspec.split('(', 1)
                         oops[name] = oops.get(name, 0) + 1
