@@ -37,3 +37,6 @@ def test_callcall():
 def test_sourcename():    
     p = to_ast('x()()').body
     assert p.sourcename == 'test'
+
+def test_empty():
+    p = to_ast(';')

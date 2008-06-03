@@ -10,6 +10,7 @@ from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
      compare_e, increment, commonnew, mult, division, uminus, mod
 from pypy.rlib.jit import hint
 from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.objectmodel import we_are_translated
 
 class AlreadyRun(Exception):
     pass
@@ -25,13 +26,21 @@ def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
     to_pop = 0
     try:
         while i < len(opcodes):
-            for name, op in opcode_unrolling:
-                opcode = opcodes[i]
-                opcode = hint(opcode, deepfreeze=True)
-                if isinstance(opcode, op):
-                    result = opcode.eval(ctx, stack)
-                    assert result is None
-                    break
+            opcode = opcodes[i]
+            if we_are_translated():
+                #this is an optimization strategy for translated code
+                #on top of cpython it destroys the performance
+                #besides, this code might be completely wrong
+                for name, op in opcode_unrolling:
+                    opcode = hint(opcode, deepfreeze=True)
+                    if isinstance(opcode, op):
+                        result = opcode.eval(ctx, stack)
+                        assert result is None
+                        break
+            else:
+                result = opcode.eval(ctx, stack)
+                assert result is None
+
             if isinstance(opcode, BaseJump):
                 i = opcode.do_jump(stack, i)
             else:
@@ -73,7 +82,10 @@ class JsCode(object):
         self.opcodes = []
         self.label_count = 0
         self.has_labels = True
-        self.stack = T()
+        if we_are_translated():
+            self.stack = []
+        else:
+            self.stack = T()
         self.startlooplabel = []
         self.endlooplabel = []
 
@@ -105,7 +117,7 @@ class JsCode(object):
 
     def emit_break(self):
         if not self.endlooplabel:
-            raise ThrowError(W_String("Break outside loop"))
+            raise ThrowException(W_String("Break outside loop"))
         self.emit('JUMP', self.endlooplabel[-1])
 
     def emit_continue(self):
@@ -487,7 +499,7 @@ class UPLUS(BaseUnaryOperation):
             return
         if isinstance(stack[-1], W_FloatNumber):
             return
-        stack.append(stack.pop().ToNumber(ctx))
+        stack.append(W_FloatNumber(stack.pop().ToNumber(ctx)))
 
 class UMINUS(BaseUnaryOperation):
     def eval(self, ctx, stack):

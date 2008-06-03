@@ -124,6 +124,8 @@ class Assignment(Expression):
         addoper = OPERANDS[self.operand]
         if addoper:
             addoper = '_' + self.prefix.upper() + addoper
+        else:
+            addoper = ''
         return addoper
 
 OPERANDS = {
@@ -454,6 +456,8 @@ class Delete(Expression):
         what = self.what
         if isinstance(what, Identifier):
             bytecode.emit('DELETE', what.name)
+        elif isinstance(what, VariableIdentifier):
+            bytecode.emit('DELETE', what.identifier)
         elif isinstance(what, MemberDot):
             what.left.emit(bytecode)
             # XXX optimize
@@ -668,8 +672,6 @@ class VariableDeclaration(Expression):
         if self.expr is not None:
             self.expr.emit(bytecode)
             bytecode.emit('STORE', self.identifier)
-        else:
-            return True
 
 class VariableIdentifier(Expression):
     def __init__(self, pos, depth, identifier):
@@ -690,7 +692,8 @@ class VariableDeclList(Statement):
 
     def emit(self, bytecode):
         for node in self.nodes:
-            if node.emit(bytecode) is None:
+            node.emit(bytecode)
+            if isinstance(node, VariableDeclaration) and node.expr is not None:
                 bytecode.emit('POP')                
     
 class Variable(Statement):
@@ -700,6 +703,13 @@ class Variable(Statement):
 
     def emit(self, bytecode):
         self.body.emit(bytecode)
+
+class Empty(Expression):
+    def __init__(self, pos):
+        self.pos = pos
+
+    def emit(self, bytecode):
+        pass
 
 class Void(Expression):
     def __init__(self, pos, expr):
