@@ -33,7 +33,7 @@ except ImportError:
 
 
 def loadjs(ctx, args, this):
-    filename = args[0].ToString(ctx)
+    filename = args[0].ToString()
     t = load_file(filename)
     return t.execute(ctx)
 
@@ -106,7 +106,7 @@ class JSInterpreter(code.InteractiveConsole):
 
     def showtraceback(self, exc):
         # XXX format exceptions nicier
-        print exc.exception.ToString(None) #XXX should not be none
+        print exc.exception.ToString()
 
     def showsyntaxerror(self, filename, exc):
         # XXX format syntax errors nicier

@@ -341,15 +341,6 @@ def test_break():
     }
     print('out');""", "out")
 
-def test_continue():
-    assertp("""
-    for(x = 0; x < 3; x++) {
-        print(x);
-        continue;
-        print('error');
-    }
-    print('out');""", ["0","1","2","out"])
-
 def test_typeof():
     assertv("""
     var x = 3;
@@ -510,7 +501,7 @@ def test_stricteq():
     yield assertv, "2 !== 2;", False
 
 def test_with():
-    yield assertp, """
+    assertp("""
     var mock = {x:2};
     var x=4;
     print(x);
@@ -525,13 +516,7 @@ def test_with():
         print(y);
     }
     print(x);
-    """, ['4', '2', '3', '4']
-    
-    yield assertp, """
-    with(new Array(1,2,3)) {
-        print(join('.'))
-    }
-    """, "1.2.3"
+    """, ['4', '2', '3', '4'])
 
 def test_bitops():
     yield assertv, "2 ^ 2;", 0
