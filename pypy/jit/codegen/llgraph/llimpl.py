@@ -238,6 +238,11 @@ def guess_result_type(opname, opvars):
     return lltype.typeOf(result)
 
 def genconst(llvalue):
+    # XXX: it conflicts with the comment below :-/
+    if isinstance(llvalue, lltype.LowLevelType):
+        v = flowmodel.Constant(llvalue)
+        v.concretetype = lltype.Void
+        return _to_opaque(v)
     T = lltype.typeOf(llvalue)
     T1 = lltype.erasedType(T)
     if T1 != T:
@@ -256,7 +261,9 @@ def genzeroconst(gv_TYPE):
     return _to_opaque(c)
 
 def _generalcast(T, value):
-    if lltype.typeOf(value) == T:
+    if T is lltype.Void:
+        return value
+    elif lltype.typeOf(value) == T:
         return value
     elif isinstance(T, lltype.Ptr):
         return lltype.cast_pointer(T, value)
