@@ -194,6 +194,19 @@ class SetField(Operation):
         self.gv_value.load(self.builder)
         self.builder.graphbuilder.il.Emit(OpCodes.Stfld, self.fieldinfo)
 
+
+class WriteLine(Operation):
+
+    def __init__(self, builder, message):
+        self.builder = builder
+        self.message = message
+
+    def restype(self):
+        return None
+
+    def emit(self):
+        self.builder.graphbuilder.il.EmitWriteLine(self.message)
+
 def opcode2attrname(opcode):
     if opcode == 'ldc.r8 0':
         return 'Ldc_R8, 0' # XXX this is a hack
