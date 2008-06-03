@@ -472,31 +472,31 @@ class Interpreter(object):
         
         allon = DE | DD | RO
         w_Global = W_Object(Class="global")
-
+        
         ctx = global_context(w_Global)
         
         w_ObjPrototype = W_Object(Prototype=None, Class='Object')
         
         w_Function = W_Function(ctx, Class='Function', 
                               Prototype=w_ObjPrototype)
-        
+        w_Function.Put(ctx, 'length', W_IntNumber(1), flags = allon)
         w_Global.Put(ctx, 'Function', w_Function)
         
         w_Object = W_ObjectObject('Object', w_Function)
         w_Object.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
-        
+        w_Object.Put(ctx, 'length', W_IntNumber(1), flags = RO | DD)
         w_Global.Put(ctx, 'Object', w_Object)
+        w_Global.Prototype = w_ObjPrototype
+        
         w_FncPrototype = w_Function.Call(ctx, this=w_Function)
         w_Function.Put(ctx, 'prototype', w_FncPrototype, flags = allon)
         w_Function.Put(ctx, 'constructor', w_Function)
-        
-        w_Object.Put(ctx, 'length', W_IntNumber(1), flags = RO | DD)
         
         toString = W_ToString(ctx)
         
         put_values(w_ObjPrototype, {
             'constructor': w_Object,
-            '__proto__': w_Null,
+            '__proto__': w_FncPrototype,
             'toString': toString,
             'toLocaleString': toString,
             'valueOf': W_ValueOf(ctx),
@@ -507,11 +507,12 @@ class Interpreter(object):
         
         #properties of the function prototype
         put_values(w_FncPrototype, {
-            'constructor': w_FncPrototype,
-            '__proto__': w_ObjPrototype,
+            'constructor': w_Function,
+            '__proto__': w_FncPrototype,
             'toString': W_FToString(ctx),
             'apply': W_Apply(ctx),
-            'call': W_Call(ctx),        
+            'call': W_Call(ctx),
+            'arguments': w_Null,
         })
         
         w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
@@ -529,7 +530,6 @@ class Interpreter(object):
         })
 
         w_Boolean.Put(ctx, 'prototype', w_BoolPrototype, flags = allon)
-
         w_Global.Put(ctx, 'Boolean', w_Boolean)
 
         #Number
