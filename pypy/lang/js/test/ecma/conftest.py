@@ -18,11 +18,17 @@ def overriden_evaljs(ctx, args, this):
     except JsBaseExcept:
         return W_String("error")
 
+passing_tests = ['Number']
+
 class JSDirectory(py.test.collect.Directory):
 
     def filefilter(self, path):
         if not py.test.config.option.ecma:
-            return False 
+            for i in passing_tests:
+                if i in str(path):
+                    break
+            else:
+                return False
         if path.check(file=1):
             return (path.basename not in exclusionlist)  and (path.ext == '.js')
 
@@ -58,7 +64,11 @@ class JSTestFile(py.test.collect.Module):
           
     def run(self):
         if not py.test.config.option.ecma:
-            py.test.skip("ECMA tests disabled, run with --ecma")
+            for i in passing_tests:
+                if i in self.listnames():
+                    break
+            else:
+                py.test.skip("ECMA tests disabled, run with --ecma")
         if py.test.config.option.collectonly:
             return
         self.init_interp()
