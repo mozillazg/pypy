@@ -636,7 +636,6 @@ class TestPortalOOType(BaseTestPortal):
     test_method_call_promote = _skip
     test_float_promote = _skip
     test_virt_obj_method_call_promote = _skip
-    test_simple_recursive_portal_call_with_exc = _skip
 
 class TestPortalLLType(BaseTestPortal):
     type_system = 'lltype'
