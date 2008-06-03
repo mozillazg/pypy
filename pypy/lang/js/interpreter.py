@@ -430,6 +430,28 @@ class W_ArrayJoin(W_NewBuiltin):
         
         return W_String(common_join(ctx, this, sep))
 
+class W_ArrayReverse(W_NewBuiltin):
+    length = 0
+    def Call(self, ctx, args=[], this=None):
+        r2 = this.Get(ctx, 'length').ToUInt32(ctx)
+        k = r_uint(0)
+        r3 = r_uint(math.floor( float(r2)/2.0 ))
+        if r3 == k:
+            return this
+        
+        while k < r3:
+            r6 = r2 - k - 1
+            r7 = str(k)
+            r8 = str(r6)
+            
+            r9 = this.Get(ctx, r7)
+            r10 = this.Get(ctx, r8)
+            
+            this.Put(ctx, r7, r10)
+            this.Put(ctx, r8, r9)
+            k += 1
+        
+        return this
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
     def Call(self, ctx, args=[], this=None):
@@ -573,6 +595,7 @@ class Interpreter(object):
             '__proto__': w_ArrPrototype,
             'toString': W_ArrayToString(ctx),
             'join': w_arr_join,
+            'reverse': W_ArrayReverse(ctx),
         })
         
         w_Array.Put(ctx, 'prototype', w_ArrPrototype, flags = allon)
@@ -599,9 +622,9 @@ class Interpreter(object):
         w_Date = W_DateFake(ctx, Class='Date')
         w_Global.Put(ctx, 'Date', w_Date)
         
-        w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN))
-        w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY))
-        w_Global.Put(ctx, 'undefined', w_Undefined)
+        w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = DE|DD)
+        w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY), flags = DE|DD)
+        w_Global.Put(ctx, 'undefined', w_Undefined, flags = DE|DD)        
         w_Global.Put(ctx, 'eval', W_Builtin(evaljs))
         w_Global.Put(ctx, 'parseInt', W_Builtin(parseIntjs))
         w_Global.Put(ctx, 'parseFloat', W_Builtin(parseFloatjs))
