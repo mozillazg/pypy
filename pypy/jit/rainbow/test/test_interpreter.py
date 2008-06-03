@@ -1035,6 +1035,15 @@ class SimpleTests(InterpretationTest):
         assert res == 42
         self.check_insns({'direct_call': 1})
 
+    def test_builtin_oosend_with_green_args(self):
+        def fn(ch1, ch2):
+            s = 'hello World'
+            ch3 = hint(ch2, concrete=True)
+            s = s.replace(ch1, ch3)
+            return s[6]
+        res = self.interpret(fn, ['W', 'w'], [])
+        assert res == 'w'
+
     def test_residual_red_call(self):
         def g(x):
             return x+1

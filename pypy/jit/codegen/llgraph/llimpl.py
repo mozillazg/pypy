@@ -376,6 +376,13 @@ def gengetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname):
         vars_gv = [gv_ptr, gv_fieldname]
         return genop(block, "getfield", vars_gv, RESULTTYPE)
 
+def genoosend(block, gv_OBJTYPE, args_gv, gv_RESULT_TYPE):
+    OBJTYPE = _from_opaque(gv_OBJTYPE).value
+    gv_obj = args_gv[1]
+    gv_obj = cast(block, gv_OBJTYPE, gv_obj.v)
+    args_gv[1] = gv_obj
+    return genop(block, "oosend", args_gv, gv_RESULT_TYPE)
+
 def genoosetfield(block, gv_obj, gv_OBJTYPE, gv_fieldname, gv_value):
     v_obj = _from_opaque(gv_obj)
     gv_obj = cast(block, gv_OBJTYPE, gv_obj)

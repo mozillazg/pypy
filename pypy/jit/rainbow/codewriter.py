@@ -1539,7 +1539,7 @@ class BytecodeWriter(object):
                     return 'green', self.can_raise(spaceop)
                 return 'oopspec', self.can_raise(spaceop)
             if not SELFTYPE._lookup_graphs(methname):
-                return 'builtin', self.can_raise(spaceop)
+                return 'residual', self.can_raise(spaceop)
             hs_self = self.hannotator.binding(spaceop.args[1])
             if hs_self.is_green():
                 return 'direct', self.can_raise(spaceop)
@@ -1767,7 +1767,7 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         if has_result:
             self.register_redvar(op.result)
 
-    def handle_builtin_oosend(self, op, withexc):
+    def handle_residual_oosend(self, op, withexc):
         SELFTYPE, name, opargs = self.decompose_oosend(op)
         has_result = self.has_result(op)
         emitted_args = []
@@ -1775,28 +1775,51 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             if v.concretetype == lltype.Void:
                 continue
             emitted_args.append(self.serialize_oparg("red", v))
-        self.emit("builtin_oosend")
+        self.emit_residual_oosend(SELFTYPE, name, emitted_args,
+                                  has_result)
+        if has_result:
+            self.register_redvar(op.result)
+
+    def emit_residual_oosend(self, SELFTYPE, name, emitted_args,
+                             has_result):
+        self.emit("residual_oosend")
         self.emit(len(emitted_args))
         self.emit(*emitted_args)
         methdescindex = self.methdesc_position(SELFTYPE, name)
         self.emit(methdescindex)
         self.emit(has_result)
-        if has_result:
-            self.register_redvar(op.result)
 
     def handle_red_oosend(self, op, withexc):
         SELFTYPE, name, opargs = self.decompose_oosend(op)
         has_result = self.has_result(op)
         graph2tsgraph = dict(self.graphs_from(op))
         self.fill_methodcodes(SELFTYPE, name, graph2tsgraph)
+
+        emitted_args = []
+        for v in op.args[1:]:
+            if v.concretetype == lltype.Void:
+                continue
+            emitted_args.append(self.serialize_oparg("red", v))
+
+        self.emit("goto_if_vstruct", emitted_args[0],
+                  tlabel(("virtual struct oosend", op)))
+        self.emit_residual_oosend(SELFTYPE, name, emitted_args,
+                                  has_result)
+        self.emit("goto", tlabel(("after oosend", op)))
+
+        # virtual struct case
+        self.emit(label(("virtual struct oosend", op)))
         args = graph2tsgraph.values()[0].getargs()
         emitted_args = self.args_of_call(op.args[1:], args)
-        self.emit("red_oosend")
+        self.emit("vstruct_oosend")
         self.emit(*emitted_args)
         methnameindex = self.string_position(name)
         self.emit(methnameindex)
+
         if has_result:
             self.register_redvar(op.result)
+
+        self.emit(label(("after oosend", op)))
 
     def handle_direct_oosend(self, op, withexc):
         SELFTYPE, name, opargs = self.decompose_oosend(op)

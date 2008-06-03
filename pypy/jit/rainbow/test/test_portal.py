@@ -221,11 +221,11 @@ class BaseTestPortal(PortalTest):
 
         res = self.timeshift_from_portal(ll_main, ll_function, [5], policy=P_NOVIRTUAL)
         assert res == 10
-        self.check_insns(indirect_call=2)
+        self.check_method_calls(2)
 
         res = self.timeshift_from_portal(ll_main, ll_function, [0], policy=P_NOVIRTUAL)
         assert res == ord('2')
-        self.check_insns(indirect_call=2)
+        self.check_method_calls(2)
 
     def test_method_call_promote(self):
         class Base(object):
@@ -627,10 +627,12 @@ class BaseTestPortal(PortalTest):
 class TestPortalOOType(BaseTestPortal):
     type_system = 'ootype'
 
+    def check_method_calls(self, n):
+        self.check_insns(oosend=2)
+
     def _skip(self):
         py.test.skip('in progress')
 
-    test_method_call_nonpromote = _skip
     test_method_call_promote = _skip
     test_float_promote = _skip
     test_isinstance = _skip
@@ -641,3 +643,5 @@ class TestPortalOOType(BaseTestPortal):
 class TestPortalLLType(BaseTestPortal):
     type_system = 'lltype'
 
+    def check_method_calls(self, n):
+        self.check_insns(indirect_call=2)
