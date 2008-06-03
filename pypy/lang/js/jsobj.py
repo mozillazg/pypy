@@ -313,7 +313,7 @@ class ActivationObject(W_PrimitiveObject):
 class W_Array(W_ListObject):
     def __init__(self, ctx=None, Prototype=None, Class='Array',
                  Value=w_Undefined, callfunc=None):
-        super(W_Array, self).__init__(ctx, Prototype, Class, Value, callfunc)
+        W_ListObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
         self.Put(ctx, 'length', W_IntNumber(0), flags = DD)
         self.length = r_uint(0)
 
@@ -358,7 +358,7 @@ class W_Array(W_ListObject):
 
 class W_Boolean(W_Primitive):
     def __init__(self, boolval):
-        super(W_Boolean, self).__init__()
+        W_Primitive.__init__(self)
         self.boolval = bool(boolval)
     
     def ToObject(self, ctx):
@@ -385,7 +385,7 @@ class W_Boolean(W_Primitive):
 
 class W_String(W_Primitive):
     def __init__(self, strval):
-        super(W_String, self).__init__()
+        W_Primitive.__init__(self)
         self.strval = strval
 
     def __repr__(self):
@@ -441,7 +441,7 @@ class W_IntNumber(W_BaseNumber):
     """ Number known to be an integer
     """
     def __init__(self, intval):
-        super(W_IntNumber, self).__init__()
+        W_BaseNumber.__init__(self)
         self.intval = intmask(intval)
 
     def ToString(self, ctx=None):
@@ -471,7 +471,7 @@ class W_FloatNumber(W_BaseNumber):
     """ Number known to be a float
     """
     def __init__(self, floatval):
-        super(W_FloatNumber, self).__init__()
+        W_BaseNumber.__init__(self)
         self.floatval = float(floatval)
     
     def ToString(self, ctx = None):

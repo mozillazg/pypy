@@ -133,7 +133,7 @@ class JsCode(object):
                 self.opcodes.append(opcode)
                 return opcode
         raise ValueError("Unknown opcode %s" % (operation,))
-    emit._annspecialcase_ = 'specialize:arg(1)'
+    #emit._annspecialcase_ = 'specialize:arg(1)'
 
     def run(self, ctx, check_stack=True, retlast=False):
         if self.has_labels:
