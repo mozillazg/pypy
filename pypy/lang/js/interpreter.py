@@ -541,18 +541,19 @@ class Interpreter(object):
         w_Array = W_ArrayObject('Array', w_FncPrototype)
 
         w_ArrPrototype = W_Array(Prototype=w_ObjPrototype)
+        w_arr_join = W_ArrayJoin(ctx)
+        w_arr_join.Put(ctx, 'length', W_IntNumber(1), flags=allon)
         
         put_values(w_ArrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_ArrPrototype,
             'toString': W_ArrayToString(ctx),
-            'join': W_ArrayJoin(ctx)
+            'join': w_arr_join,
         })
         
         w_Array.Put(ctx, 'prototype', w_ArrPrototype, flags = allon)
         w_Array.Put(ctx, '__proto__', w_FncPrototype, flags = allon)
         w_Array.Put(ctx, 'length', W_IntNumber(1), flags = allon)
-        
         w_Global.Put(ctx, 'Array', w_Array)
         
         
@@ -603,25 +604,6 @@ class Interpreter(object):
             # debugging
             self._code = bytecode
         if interactive:
-            print bytecode
             return bytecode.run(self.global_context, retlast=True)
         else:
             bytecode.run(self.global_context)
-
-def wrap_arguments(pyargs):
-    "receives a list of arguments and wrap then in their js equivalents"
-    res = []
-    for arg in pyargs:
-        if isinstance(arg, W_Root):
-            res.append(arg)
-        elif isinstance(arg, str):
-            res.append(W_String(arg))
-        elif isinstance(arg, int):
-            res.append(W_IntNumber(arg))
-        elif isinstance(arg, float):
-            res.append(W_FloatNumber(arg))
-        elif isinstance(arg, bool):
-            res.append(newbool(arg))
-        else:
-            raise Exception("Cannot wrap %s" % (arg,))
-    return res
