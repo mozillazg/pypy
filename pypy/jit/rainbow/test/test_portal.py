@@ -352,7 +352,7 @@ class BaseTestPortal(PortalTest):
 
         res = self.timeshift_from_portal(ll_main, ll_function, [5], policy=P_NOVIRTUAL)
         assert res == 123
-        self.check_insns(indirect_call=1)
+        self.check_method_calls(1)
 
     def test_cast_ptr_to_int(self):
         GCS1 = lltype.GcStruct('s1', ('x', lltype.Signed))
@@ -628,7 +628,7 @@ class TestPortalOOType(BaseTestPortal):
     type_system = 'ootype'
 
     def check_method_calls(self, n):
-        self.check_insns(oosend=2)
+        self.check_insns(oosend=n)
 
     def _skip(self):
         py.test.skip('in progress')
@@ -636,7 +636,6 @@ class TestPortalOOType(BaseTestPortal):
     test_method_call_promote = _skip
     test_float_promote = _skip
     test_isinstance = _skip
-    test_greenmethod_call_nonpromote = _skip
     test_virt_obj_method_call_promote = _skip
     test_simple_recursive_portal_call_with_exc = _skip
 
@@ -644,4 +643,4 @@ class TestPortalLLType(BaseTestPortal):
     type_system = 'lltype'
 
     def check_method_calls(self, n):
-        self.check_insns(indirect_call=2)
+        self.check_insns(indirect_call=n)

@@ -1789,7 +1789,7 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         self.emit(methdescindex)
         self.emit(has_result)
 
-    def handle_red_oosend(self, op, withexc):
+    def handle_red_or_yellow_oosend(self, op, withexc, kind):
         SELFTYPE, name, opargs = self.decompose_oosend(op)
         has_result = self.has_result(op)
         graph2tsgraph = dict(self.graphs_from(op))
@@ -1815,11 +1815,20 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         self.emit(*emitted_args)
         methnameindex = self.string_position(name)
         self.emit(methnameindex)
-
+        if kind == 'yellow':
+            self.emit("yellow_retrieve_result_as_red")
+            self.emit(self.type_position(op.result.concretetype))
+            
         if has_result:
             self.register_redvar(op.result)
 
         self.emit(label(("after oosend", op)))
+
+    def handle_yellow_oosend(self, op, withexc):
+        return self.handle_red_or_yellow_oosend(op, withexc, 'yellow')
+
+    def handle_red_oosend(self, op, withexc):
+        return self.handle_red_or_yellow_oosend(op, withexc, 'red')
 
     def handle_direct_oosend(self, op, withexc):
         SELFTYPE, name, opargs = self.decompose_oosend(op)
@@ -1838,10 +1847,6 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         if has_result:
             self.register_redvar(op.result)
 
-    def handle_yellow_oosend(self, op, withexc):
-        self.handle_red_oosend(op, withexc)
-        self.emit("yellow_retrieve_result_as_red")
-        self.emit(self.type_position(op.result.concretetype))
 
     def fill_methodcodes(self, INSTANCE, methname, graph2tsgraph):
         TYPES = [INSTANCE] + INSTANCE._subclasses
