@@ -106,6 +106,7 @@ W_ZipCache.typedef = TypeDef(
     'zip_dict',
     __getitem__ = interp2app(W_ZipCache.getitem),
     __contains__ = interp2app(W_ZipCache.contains),
+    __iter__ = interp2app(W_ZipCache.iterkeys),
     items = interp2app(W_ZipCache.items),
     iteritems = interp2app(W_ZipCache.iteritems),
     keys = interp2app(W_ZipCache.keys),
