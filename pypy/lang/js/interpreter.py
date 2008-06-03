@@ -194,8 +194,32 @@ def sqrtjs(ctx, args, this):
 def versionjs(ctx, args, this):
     return w_Undefined
 
+def _ishex(ch):
+    return ((ch >= 'a' and ch <= 'f') or (ch >= '0' and ch <= '9') or
+            (ch >= 'A' and ch <= 'F'))
+
 def unescapejs(ctx, args, this):
-    return args[0]
+    # XXX consider using StringBuilder here
+    res = []
+    if not isinstance(args[0], W_String):
+        raise JsTypeError(W_String("Expected string"))
+    strval = args[0].strval
+    lgt = len(strval)
+    i = 0
+    while i < lgt:
+        ch = strval[i]
+        if ch == '%':
+            if (i + 2 < lgt and _ishex(strval[i+1]) and _ishex(strval[i+2])):
+                ch = ord(int(strval[i + 1] + strval[i + 2], 16))
+                i += 2
+            elif (i + 5 < lgt and strval[i + 1] == 'u' and
+                  _ishex(strval[i + 2]) and _ishex(strval[i + 3]) and
+                  _ishex(strval[i + 4]) and _ishex(strval[i + 5])):
+                ch = unichr(int(strval[i+2:i+6], 16))
+                i += 5
+        i += 1
+        res.append(ch)
+    return W_String(''.join(res))
 
 class W_ToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
