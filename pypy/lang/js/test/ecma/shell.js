@@ -223,6 +223,11 @@ function writeHeaderToLog( string ) {
 }
 /* end of print functions */
 
+var TIME_1970 = 0;
+var TIME_2000 = 946684800000;
+var TIME_1900 = -2208988800000;
+var TIME_YEAR_0 = -62167219200000;
+
 
 /*
  * When running in the shell, run the garbage collector after the

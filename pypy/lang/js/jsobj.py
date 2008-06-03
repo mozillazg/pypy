@@ -30,7 +30,7 @@ class W_Root(object):
     #    return self
 
     def ToBoolean(self, ctx):
-        raise NotImplementedError()
+        raise NotImplementedError(self.__class__)
 
     def ToPrimitive(self, ctx, hint=""):
         return self
@@ -52,25 +52,25 @@ class W_Root(object):
         return r_uint(0)
     
     def Get(self, ctx, P):
-        raise NotImplementedError()
+        raise NotImplementedError(self.__class__)
     
     def Put(self, ctx, P, V, flags = 0):
-        raise NotImplementedError()
+        raise NotImplementedError(self.__class__)
     
     def PutValue(self, w, ctx):
         pass
     
     def Call(self, ctx, args=[], this=None):
-        raise NotImplementedError()
+        raise NotImplementedError(self.__class__)
 
     def __str__(self):
         return self.ToString(ctx=None)
     
     def type(self):
-        raise NotImplementedError
+        raise NotImplementedError(self.__class__)
         
     def GetPropertyName(self):
-        raise NotImplementedError
+        raise NotImplementedError(self.__class__)
 
 class W_Undefined(W_Root):
     def __str__(self):

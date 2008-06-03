@@ -18,7 +18,7 @@ def overriden_evaljs(ctx, args, this):
     except JsBaseExcept:
         return W_String("error")
 
-passing_tests = ['Number']
+passing_tests = ['Number', 'Boolean']
 
 class JSDirectory(py.test.collect.Directory):
 
