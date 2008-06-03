@@ -712,14 +712,14 @@ class Void(Expression):
         bytecode.emit('LOAD_UNDEFINED')
 
 class With(Statement):
-    def __init__(self, pos, withpart, body):
+    def __init__(self, pos, identifier, body):
         self.pos = pos
-        self.withpart = withpart
+        assert isinstance(identifier, VariableIdentifier)
+        self.identifier = identifier.identifier
         self.body = body
 
     def emit(self, bytecode):
-        self.withpart.emit(bytecode)
-        bytecode.emit('WITH_START')
+        bytecode.emit('WITH_START', self.identifier)
         self.body.emit(bytecode)
         bytecode.emit('WITH_END')
 
@@ -750,6 +750,28 @@ class While(WhileBase):
         bytecode.emit('JUMP', startlabel)
         bytecode.emit_endloop_label(endlabel)    
 
+class ForVarIn(Statement):
+    def __init__(self, pos, vardecl, lobject, body):
+        self.pos = pos
+        assert isinstance(vardecl, VariableDeclaration)
+        self.iteratorname = vardecl.identifier
+        self.object = lobject
+        self.body = body
+
+    
+    def emit(self, bytecode):
+        bytecode.emit('DECLARE_VAR', self.iteratorname)
+        self.object.emit(bytecode)
+        bytecode.emit('LOAD_ITERATOR')
+        precond = bytecode.emit_startloop_label()
+        finish = bytecode.prealocate_endloop_label()
+        bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
+        bytecode.emit('NEXT_ITERATOR', self.iteratorname)
+        self.body.emit(bytecode)
+        bytecode.emit('JUMP', precond)
+        bytecode.emit_endloop_label(finish)
+        bytecode.emit('POP')    
+
 class ForIn(Statement):
     def __init__(self, pos, name, lobject, body):
         self.pos = pos
@@ -770,18 +792,6 @@ class ForIn(Statement):
         bytecode.emit_endloop_label(finish)
         bytecode.emit('POP')
 
-class ForVarIn(ForIn):
-    def __init__(self, pos, vardecl, lobject, body):
-        self.pos = pos
-        assert isinstance(vardecl, VariableDeclaration)
-        self.iteratorname = vardecl.identifier
-        self.object = lobject
-        self.body = body
-
-    def emit(self, bytecode):
-        bytecode.emit('DECLARE_VAR', self.iteratorname)
-        ForIn.emit(self, bytecode)
-
 class For(Statement):
     def __init__(self, pos, setup, condition, update, body):
         self.pos = pos
@@ -794,17 +804,13 @@ class For(Statement):
         self.setup.emit(bytecode)
         if isinstance(self.setup, Expression):
             bytecode.emit('POP')
-        
-        firstep = bytecode.prealocate_label()
-        bytecode.emit('JUMP', firstep)
         precond = bytecode.emit_startloop_label()
         finish = bytecode.prealocate_endloop_label()
-        self.update.emit(bytecode)
-        bytecode.emit('POP')
-        bytecode.emit_label(firstep)
         self.condition.emit(bytecode)
         bytecode.emit('JUMP_IF_FALSE', finish)
         self.body.emit(bytecode)
+        self.update.emit(bytecode)
+        bytecode.emit('POP')
         bytecode.emit('JUMP', precond)
         bytecode.emit_endloop_label(finish)
     

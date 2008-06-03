@@ -256,10 +256,8 @@ class W_NewBuiltin(W_PrimitiveObject):
         if Prototype is None:
             proto = ctx.get_global().Get(ctx, 'Function').Get(ctx, 'prototype')
             Prototype = proto
-        
+
         W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
-        if hasattr(self, 'length'):
-            self.Put(ctx, 'length', W_IntNumber(self.length), flags = DD|RO)
 
     def Call(self, ctx, args=[], this = None):
         raise NotImplementedError
@@ -366,7 +364,7 @@ class W_Boolean(W_Primitive):
     def ToObject(self, ctx):
         return create_object(ctx, 'Boolean', Value=self)
 
-    def ToString(self, ctx):
+    def ToString(self, ctx=None):
         if self.boolval == True:
             return "true"
         return "false"
@@ -388,7 +386,6 @@ class W_Boolean(W_Primitive):
 class W_String(W_Primitive):
     def __init__(self, strval):
         super(W_String, self).__init__()
-        self.Class = 'string' #hack
         self.strval = strval
 
     def __repr__(self):
@@ -401,13 +398,10 @@ class W_String(W_Primitive):
             proto = ctx.get_global().Get(ctx, 'String').Get(ctx, 'prototype')
             return proto.Get(ctx, P)
 
-    def Put(self, ctx, P, V, flags=0):
-        pass
-
     def ToObject(self, ctx):
         return self #create_object(ctx, 'String', Value=self)
 
-    def ToString(self, ctx):
+    def ToString(self, ctx=None):
         return self.strval
     
     def ToBoolean(self):
@@ -420,7 +414,7 @@ class W_String(W_Primitive):
         return 'string'
 
     def GetPropertyName(self):
-        return self.strval
+        return self.ToString()
 
     def ToNumber(self, ctx):
         if not self.strval:
@@ -450,7 +444,7 @@ class W_IntNumber(W_BaseNumber):
         super(W_IntNumber, self).__init__()
         self.intval = intmask(intval)
 
-    def ToString(self, ctx):
+    def ToString(self, ctx=None):
         # XXX incomplete, this doesn't follow the 9.8.1 recommendation
         return str(self.intval)
 
@@ -468,7 +462,7 @@ class W_IntNumber(W_BaseNumber):
         return r_uint(self.intval)
 
     def GetPropertyName(self):
-        return str(self.intval)
+        return self.ToString()
 
     def __repr__(self):
         return 'W_IntNumber(%s)' % (self.intval,)
@@ -480,7 +474,7 @@ class W_FloatNumber(W_BaseNumber):
         super(W_FloatNumber, self).__init__()
         self.floatval = float(floatval)
     
-    def ToString(self, ctx):
+    def ToString(self, ctx = None):
         # XXX incomplete, this doesn't follow the 9.8.1 recommendation
         if isnan(self.floatval):
             return 'NaN'
@@ -523,7 +517,7 @@ class W_List(W_Root):
     def __init__(self, list_w):
         self.list_w = list_w
 
-    def ToString(self, ctx):
+    def ToString(self, ctx = None):
         raise SeePage(42)
 
     def ToBoolean(self):
@@ -544,7 +538,7 @@ class ExecutionContext(object):
         assert scope is not None
         self.scope = scope
         if this is None:
-            self.this = scope[0]
+            self.this = scope[-1]
         else:
             self.this = this
         if variable is None:
@@ -563,7 +557,7 @@ class ExecutionContext(object):
         
     def assign(self, name, value):
         assert name is not None
-        for obj in reversed(self.scope):
+        for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
@@ -577,7 +571,7 @@ class ExecutionContext(object):
         self.variable.Put(self.get_global(), name, value)
 
     def delete_identifier(self, name):
-        for obj in reversed(self.scope):
+        for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
@@ -594,25 +588,26 @@ class ExecutionContext(object):
         self.variable.Put(ctx, name, value, flags = flags)
     
     def get_global(self):
-        return self.scope[0]
+        return self.scope[-1]
             
     def push_object(self, obj):
         """push object into scope stack"""
         assert isinstance(obj, W_PrimitiveObject)
-        self.scope.append(obj)
+        # XXX O(n^2)
+        self.scope.insert(0, obj)
         self.variable = obj
     
     def pop_object(self):
         """remove the last pushed object"""
-        return self.scope.pop()
+        return self.scope.pop(0)
         
-    def resolve_identifier(self, ctx, identifier):
-        if identifier == 'this':
-            return self.this
-        for obj in reversed(self.scope):
+    def resolve_identifier(self, identifier):
+        for obj in self.scope:
             assert isinstance(obj, W_PrimitiveObject)
-            if obj.HasProperty(identifier):
-                return obj.Get(ctx, identifier)
+            try:
+                return obj.propdict[identifier].value
+            except KeyError:
+                pass
         raise ThrowException(W_String("ReferenceError: %s is not defined" % identifier))
 
 def global_context(w_global):
