@@ -47,7 +47,8 @@ class BaseTestPromotion(InterpretationTest):
         self.check_insns(int_add=10, int_mul=0)
 
     def test_promote_after_call(self):
-        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        S = self.GcStruct('S', ('x', lltype.Signed))
+        malloc = self.malloc
         def ll_two(k, s):
             if k > 5:
                 s.x = 20
@@ -55,7 +56,7 @@ class BaseTestPromotion(InterpretationTest):
                 s.x = 10
         def ll_function(n):
             hint(None, global_merge_point=True)
-            s = lltype.malloc(S)
+            s = malloc(S)
             ll_two(n, s)
             k = hint(n, promote=True)
             k *= 17
@@ -66,7 +67,8 @@ class BaseTestPromotion(InterpretationTest):
         self.check_insns(int_mul=0, int_add=1)
 
     def test_promote_after_yellow_call(self):
-        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        S = self.GcStruct('S', ('x', lltype.Signed))
+        malloc = self.malloc
         def ll_two(k, s):
             if k > 5:
                 s.x = 20*k
@@ -77,7 +79,7 @@ class BaseTestPromotion(InterpretationTest):
             
         def ll_function(n):
             hint(None, global_merge_point=True)
-            s = lltype.malloc(S)
+            s = malloc(S)
             c = ll_two(n, s)
             k = hint(s.x, promote=True)
             k += c
@@ -139,9 +141,10 @@ class BaseTestPromotion(InterpretationTest):
         self.check_insns(int_add=0)
 
     def test_merge_then_promote(self):
-        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        S = self.GcStruct('S', ('x', lltype.Signed))
+        malloc = self.malloc
         def ll_two(n):
-            s = lltype.malloc(S)
+            s = malloc(S)
             if n < 0:
                 s.x = 10
             else:
@@ -158,12 +161,13 @@ class BaseTestPromotion(InterpretationTest):
         self.check_insns(int_lt=1, int_mul=0)
 
     def test_vstruct_unfreeze(self):
-        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        S = self.GcStruct('S', ('x', lltype.Signed))
+        malloc = self.malloc
         def ll_two(k):
             return (k+1)*2
         def ll_function(n):
             hint(None, global_merge_point=True)
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.x = n
             k = hint(n, promote=True)
             k = ll_two(k)
@@ -180,7 +184,8 @@ class BaseTestPromotion(InterpretationTest):
         self.check_insns(int_add=0, int_mul=0)
 
     def test_more_promotes(self):
-        S = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed))
+        S = self.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed))
+        malloc = self.malloc
         def ll_two(s, i, m):
             if i > 4:
                 s.x += i
@@ -196,7 +201,7 @@ class BaseTestPromotion(InterpretationTest):
             else:
                 return hint(1, concrete=True)
         def ll_function(n, m):
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.x = 0
             s.y = 0
             i = 0
@@ -275,11 +280,12 @@ class BaseTestPromotion(InterpretationTest):
             hint(x.field, promote=True)
             return m + x.field
 
-        S = lltype.GcStruct('S', ('field', lltype.Signed),
+        S = self.GcStruct('S', ('field', lltype.Signed),
                             hints={'immutable': True})
+        malloc = self.malloc
 
         def struct_S(string):
-            s = lltype.malloc(S)
+            s = malloc(S)
             s.field = int(string)
             return s
         ll_function.convert_arguments = [struct_S, int]
@@ -471,11 +477,11 @@ class TestOOType(OOTypeMixin, BaseTestPromotion):
     def skip(self):
         py.test.skip('in progress')
 
-    test_promote_after_call = skip
-    test_promote_after_yellow_call = skip
-    test_merge_then_promote = skip
-    test_vstruct_unfreeze = skip
-    test_more_promotes = skip
+    #test_promote_after_call = skip
+    #test_promote_after_yellow_call = skip
+    #test_merge_then_promote = skip
+    #test_vstruct_unfreeze = skip
+    #test_more_promotes = skip
     test_remembers_across_mp = skip
     test_virtual_list_copy = skip
     test_raise_result_mixup = skip
