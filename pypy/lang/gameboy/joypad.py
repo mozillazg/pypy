@@ -44,9 +44,9 @@ class Joypad(iMemory):
 
     def update(self):
         oldButtons = self.button_code
-        if self.joyp == 0x1:
+        if self.joyp & 0xF0 == 0x10:
             self.button_code = self.driver.get_button_code()
-        elif self.joyp == 0x2:
+        elif self.joyp & 0xF0 == 0x20:
             self.button_code = self.driver.get_direction_code()
         else:
             self.button_code  = 0xF

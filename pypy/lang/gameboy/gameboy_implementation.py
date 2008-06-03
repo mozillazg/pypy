@@ -32,21 +32,23 @@ class GameBoyImplementation(GameBoy):
    
     
     def mainLoop(self):
-        #self.reset()
         try:
             isRunning = True
-            while isRunning:
-                while self.poll_event():
-                    if self.check_for_escape():
-                        isRunning = False
-                        break 
-                    self.joypad_driver.update(self.event) 
+            while isRunning and self.handle_events():
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
                 #RSDL.Delay(1)
         finally:
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
         return 0
+    
+    def handle_events(self):
+        isRunning = True
+        while self.poll_event():
+            if self.check_for_escape():
+                isRunning = False 
+            self.joypad_driver.update(self.event) 
+        return isRunning
     
     
     def poll_event(self):
@@ -129,11 +131,9 @@ class JoypadDriverImplementation(JoypadDriver):
         self.last_key = rffi.getintfield(p.c_keysym, 'c_sym')
         
     def on_key_down(self):
-        print "press"
         self.toggleButton(self.get_button_handler(self.last_key), True)
     
     def on_key_up(self): 
-        print "release"
         self.toggleButton(self.get_button_handler(self.last_key), False)
     
     def toggleButton(self, pressButtonFunction, enabled):
@@ -142,28 +142,20 @@ class JoypadDriverImplementation(JoypadDriver):
     
     def get_button_handler(self, key):
         if key == RSDL.K_UP:
-            print "    up"
             return JoypadDriver.button_up
         elif key == RSDL.K_RIGHT: 
-            print "    right"
             return JoypadDriver.button_right
         elif key == RSDL.K_DOWN:
-            print "    down"
             return JoypadDriver.button_down
         elif key == RSDL.K_LEFT:
-            print "    left"
             return JoypadDriver.button_left
         elif key == RSDL.K_RETURN:
-            print "    start"
             return JoypadDriver.button_start
         elif key == RSDL.K_SPACE:
-            print "    select"
             return JoypadDriver.button_select
         elif key == RSDL.K_a:
-            print "    A"
             return JoypadDriver.button_a
         elif key == RSDL.K_b:
-            print "    B"
             return JoypadDriver.button_b
         return None
         
