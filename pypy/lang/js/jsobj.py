@@ -489,8 +489,11 @@ class W_FloatNumber(W_BaseNumber):
                 return str(intval)
         except OverflowError:
             pass
-        
-        return str(self.floatval)
+
+        res = str(self.floatval)
+        if (res[-3] == '+' or res[-3] == '-') and res[-2] == '0':
+            res = res[:-2] + res[-1]
+        return res
     
     def ToBoolean(self):
         if isnan(self.floatval):
