@@ -4,7 +4,7 @@ A simple standalone target for the javascript interpreter.
 
 import sys
 from pypy.lang.js.interpreter import *
-from pypy.lang.js.jsobj import ExecutionReturned
+#from pypy.lang.js.jsobj import ExecutionReturned
 
 # __________  Entry point  __________
 
@@ -15,8 +15,8 @@ def entry_point(argv):
         t = load_file(argv[1])
         interp.run(t)
         return 0
-    elif argv[0] == 'foo':
-        raise ExecutionReturned(None)
+ #   elif argv[0] == 'foo':
+ #       raise ExecutionReturned(None)
     else:
         print "Usage: %s jsourcefile" % argv[0]
         return 1
