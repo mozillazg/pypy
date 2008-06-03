@@ -170,12 +170,12 @@ class LLBuilder(GenBuilder):
             v = llimpl.genop(self.b, 'indirect_call', vars_gv, gv_RESULT.v)
         return LLVar(v)
 
-    def genop_oosend(self, (gv_methname, (ARGS_gv, gv_RESULT, _)), gv_self, args_gv):
+    def genop_oosend(self, (gv_TYPE, gv_methname, (ARGS_gv, gv_RESULT, _)), gv_self, args_gv):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_oosend: bad currently_writing")
         vars_gv = [gv_methname, gv_self]
         vars_gv += self._cast_args_gv(ARGS_gv, args_gv)
-        v = llimpl.genop(self.b, 'oosend', vars_gv, gv_RESULT.v)
+        v = llimpl.genoosend(self.b, gv_TYPE.v, vars_gv, gv_RESULT.v)
         return LLVar(v)
 
     def genop_getfield(self, (gv_name, gv_PTRTYPE, gv_FIELDTYPE), gv_ptr):
@@ -490,7 +490,7 @@ class RGenOp(AbstractRGenOp):
         _, meth = TYPE._lookup(methname)
         METH = ootype.typeOf(meth)
         gv_methname = LLConst(llimpl.constFieldName(methname))
-        return (gv_methname, RGenOp.sigToken(METH))
+        return (gv_TYPE(TYPE), gv_methname, RGenOp.sigToken(METH))
 
     constPrebuiltGlobal = genconst
 

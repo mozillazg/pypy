@@ -1084,10 +1084,16 @@ class OOTypeJitInterpreter(JitInterpreter):
         return rtimeshift.genptreq(self.jitstate, ptrbox1,
                                    ptrbox2, False)
 
+    @arguments("red", "jumptarget")
+    def opimpl_goto_if_vstruct(self, objbox, target):
+        if objbox.content is not None:
+            self.frame.pc = target
+
     @arguments("green_varargs", "red_varargs", "string")
-    def opimpl_red_oosend(self, greenargs, redargs, methname):
+    def opimpl_vstruct_oosend(self, greenargs, redargs, methname):
         selfbox = redargs[0]
         vstruct = selfbox.content
+        assert vstruct is not None
         assert isinstance(vstruct, rcontainer.VirtualStruct), 'TODO???'
         bytecode = vstruct.typedesc.methodcodes[methname]
         self.run(self.jitstate, bytecode, greenargs, redargs,
@@ -1104,8 +1110,8 @@ class OOTypeJitInterpreter(JitInterpreter):
         methdesc.green_call(self, None, greenargs)
 
     @arguments("red_varargs", "methdesc", "bool")
-    def opimpl_builtin_oosend(self, redargs, methdesc, has_result):
-        result = rtimeshift.gen_external_oosend(self.jitstate, redargs,
+    def opimpl_residual_oosend(self, redargs, methdesc, has_result):
+        result = rtimeshift.gen_residual_oosend(self.jitstate, redargs,
                                                 methdesc)
         if has_result:
             self.red_result(result)
