@@ -541,11 +541,11 @@ class ExecutionContext(object):
         assert scope is not None
         self.scope = scope
         if this is None:
-            self.this = scope[-1]
+            self.this = scope[0]
         else:
             self.this = this
         if variable is None:
-            self.variable = self.scope[0]
+            self.variable = self.scope[-1]
         else:
             self.variable = variable
         self.debug = debug
@@ -560,7 +560,8 @@ class ExecutionContext(object):
         
     def assign(self, name, value):
         assert name is not None
-        for obj in self.scope:
+        for i in range(len(self.scope)-1, -1, -1):
+            obj = self.scope[i]
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
@@ -574,7 +575,8 @@ class ExecutionContext(object):
         self.variable.Put(self.get_global(), name, value)
 
     def delete_identifier(self, name):
-        for obj in self.scope:
+        for i in range(len(self.scope)-1, -1, -1):
+            obj = self.scope[i]
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 P = obj.propdict[name]
@@ -591,21 +593,21 @@ class ExecutionContext(object):
         self.variable.Put(ctx, name, value, flags = flags)
     
     def get_global(self):
-        return self.scope[-1]
+        return self.scope[0]
             
     def push_object(self, obj):
         """push object into scope stack"""
         assert isinstance(obj, W_PrimitiveObject)
-        # XXX O(n^2)
-        self.scope.insert(0, obj)
+        self.scope.append(obj)
         self.variable = obj
     
     def pop_object(self):
         """remove the last pushed object"""
-        return self.scope.pop(0)
+        return self.scope.pop()
         
     def resolve_identifier(self, identifier):
-        for obj in self.scope:
+        for i in range(len(self.scope)-1, -1, -1):
+            obj = self.scope[i]
             assert isinstance(obj, W_PrimitiveObject)
             try:
                 return obj.propdict[identifier].value

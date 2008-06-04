@@ -298,9 +298,10 @@ class LOAD_REALVAR(Opcode):
         self.identifier = identifier
 
     def eval(self, ctx, stack):
-        xxx
-        scope = ctx.scope[self.depth]
-        stack.append(scope.Get(ctx, self.identifier))
+        raise NotImplementedError()
+        # XXX
+        # scope = ctx.scope[self.depth]
+        # stack.append(scope.Get(ctx, self.identifier))
         #stack.append(W_Reference(self.identifier, scope))
 
     def __repr__(self):
