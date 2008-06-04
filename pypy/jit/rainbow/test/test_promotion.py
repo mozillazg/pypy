@@ -477,6 +477,5 @@ class TestOOType(OOTypeMixin, BaseTestPromotion):
     def skip(self):
         py.test.skip('in progress')
 
-    test_remembers_across_mp = skip
     test_raise_result_mixup = skip
     test_raise_result_mixup_some_more = skip
