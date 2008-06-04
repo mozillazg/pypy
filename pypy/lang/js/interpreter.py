@@ -11,7 +11,8 @@ from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
 from pypy.lang.js.jscode import JsCode
-from pypy.rlib.rarithmetic import NAN, INFINITY, isnan, isinf
+from pypy.rlib.rarithmetic import NAN, INFINITY, isnan, isinf, r_uint
+from pypy.rlib.objectmodel import specialize
 
 ASTBUILDER = ASTBuilder()
 
@@ -342,14 +343,15 @@ class W_StringValueToString(W_ValueToString):
     mytype = 'string'
 
 
-def get_value_of(type, ctx):
+@specialize.memo()
+def get_value_of(type):
     class W_ValueValueOf(W_NewBuiltin):
         "this is the valueOf function for objects with Value"
         def Call(self, ctx, args=[], this=None):
             if type != this.Class:
                 raise JsTypeError('%s.prototype.valueOf called with incompatible type' % self.type())
             return this.Value
-    return W_ValueValueOf(ctx)
+    return W_ValueValueOf
 
 class W_CharAt(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -463,13 +465,13 @@ class W_DateFake(W_NewBuiltin): # XXX This is temporary
 def pypy_repr(ctx, repr, w_arg):
     return W_String(w_arg.__class__.__name__)
 
+def put_values(ctx, obj, dictvalues):
+    for key,value in dictvalues.iteritems():
+        obj.Put(ctx, key, value)
+
 class Interpreter(object):
     """Creates a js interpreter"""
-    def __init__(self):
-        def put_values(obj, dictvalues):
-            for key,value in dictvalues.iteritems():
-                obj.Put(ctx, key, value)
-        
+    def __init__(self):        
         allon = DE | DD | RO
         w_Global = W_Object(Class="global")
         
@@ -494,7 +496,7 @@ class Interpreter(object):
         
         toString = W_ToString(ctx)
         
-        put_values(w_ObjPrototype, {
+        put_values(ctx, w_ObjPrototype, {
             'constructor': w_Object,
             '__proto__': w_FncPrototype,
             'toString': toString,
@@ -506,7 +508,7 @@ class Interpreter(object):
         })
         
         #properties of the function prototype
-        put_values(w_FncPrototype, {
+        put_values(ctx, w_FncPrototype, {
             'constructor': w_Function,
             '__proto__': w_FncPrototype,
             'toString': W_FToString(ctx),
@@ -522,11 +524,11 @@ class Interpreter(object):
         w_BoolPrototype = create_object(ctx, 'Object', Value=newbool(False))
         w_BoolPrototype.Class = 'Boolean'
         
-        put_values(w_BoolPrototype, {
+        put_values(ctx, w_BoolPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_ObjPrototype,
             'toString': W_BooleanValueToString(ctx),
-            'valueOf': get_value_of('Boolean', ctx),
+            'valueOf': get_value_of('Boolean')(ctx),
         })
 
         w_Boolean.Put(ctx, 'prototype', w_BoolPrototype, flags = allon)
@@ -539,14 +541,14 @@ class Interpreter(object):
 
         w_NumPrototype = create_object(ctx, 'Object', Value=W_FloatNumber(0.0))
         w_NumPrototype.Class = 'Number'
-        put_values(w_NumPrototype, {
+        put_values(ctx, w_NumPrototype, {
             'constructor': w_Number,
             '__proto__': w_empty_fun,
             'toString': W_NumberValueToString(ctx),
-            'valueOf': get_value_of('Number', ctx),
+            'valueOf': get_value_of('Number')(ctx),
         })
 
-        put_values(w_Number, {
+        put_values(ctx, w_Number, {
             'constructor': w_FncPrototype,
             'prototype': w_NumPrototype,
             '__proto__': w_empty_fun,
@@ -570,11 +572,11 @@ class Interpreter(object):
         w_StrPrototype = create_object(ctx, 'Object', Value=W_String(''))
         w_StrPrototype.Class = 'String'
         
-        put_values(w_StrPrototype, {
+        put_values(ctx, w_StrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_StrPrototype,
             'toString': W_StringValueToString(ctx),
-            'valueOf': get_value_of('String', ctx),
+            'valueOf': get_value_of('String')(ctx),
             'charAt': W_CharAt(ctx),
             'concat': W_Concat(ctx),
             'indexOf': W_IndexOf(ctx),
@@ -590,7 +592,7 @@ class Interpreter(object):
         w_arr_join = W_ArrayJoin(ctx)
         w_arr_join.Put(ctx, 'length', W_IntNumber(1), flags=allon)
         
-        put_values(w_ArrPrototype, {
+        put_values(ctx, w_ArrPrototype, {
             'constructor': w_FncPrototype,
             '__proto__': w_ArrPrototype,
             'toString': W_ArrayToString(ctx),
