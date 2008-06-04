@@ -219,7 +219,7 @@ def unescapejs(ctx, args, this):
         ch = strval[i]
         if ch == '%':
             if (i + 2 < lgt and _ishex(strval[i+1]) and _ishex(strval[i+2])):
-                ch = ord(int(strval[i + 1] + strval[i + 2], 16))
+                ch = chr(int(strval[i + 1] + strval[i + 2], 16))
                 i += 2
             elif (i + 5 < lgt and strval[i + 1] == 'u' and
                   _ishex(strval[i + 2]) and _ishex(strval[i + 3]) and
@@ -261,7 +261,7 @@ class W_PropertyIsEnumerable(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1:
             propname = args[0].ToString(ctx)
-            if propname in this.propdict and not this.propdict[propname].de:
+            if propname in this.propdict and not this.propdict[propname].flags & DE:
                 return newbool(True)
         return newbool(False)
 

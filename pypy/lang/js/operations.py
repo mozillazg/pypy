@@ -465,7 +465,7 @@ class Delete(Expression):
             bytecode.emit('DELETE_MEMBER')
         elif isinstance(what, Member):
             what.left.emit(bytecode)
-            what.right.emit(bytecode)
+            what.expr.emit(bytecode)
             bytecode.emit('DELETE_MEMBER')
         else:
             what.left.emit(bytecode)
