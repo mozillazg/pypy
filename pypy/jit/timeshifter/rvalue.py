@@ -617,12 +617,12 @@ class FrozenInstanceVar(AbstractFrozenPtrVar, OOTypeMixin):
     PtrRedBox = InstanceRedBox
 
 
-class FrozenPtrVarWithPartialData(FrozenPtrVar):
+class AbstractFrozenPtrVarWithPartialData(AbstractFrozenPtrVar):
 
     def exactmatch(self, box, outgoingvarboxes, memo):
         if self.fz_partialcontent is None:
-            return FrozenPtrVar.exactmatch(self, box, outgoingvarboxes, memo)
-        assert isinstance(box, PtrRedBox)
+            return AbstractFrozenPtrVar.exactmatch(self, box, outgoingvarboxes, memo)
+        assert isinstance(box, AbstractPtrRedBox)
         partialdatamatch = self.fz_partialcontent.match(box,
                                                         memo.partialdatamatch)
         # skip the parent's exactmatch()!
@@ -633,6 +633,15 @@ class FrozenPtrVarWithPartialData(FrozenPtrVar):
             if isinstance(box.content, VirtualContainer):
                 raise DontMerge   # XXX recursive data structures?
         return match
+
+
+class FrozenPtrVarWithPartialData(AbstractFrozenPtrVarWithPartialData, LLTypeMixin):
+    PtrRedBox = PtrRedBox
+    FrozenPtrVar = FrozenPtrVar
+
+class FrozenInstanceVarWithPartialData(AbstractFrozenPtrVarWithPartialData, OOTypeMixin):
+    PtrRedBox = InstanceRedBox
+    FrozenPtrVar = FrozenInstanceVar
 
 
 class FrozenPtrVirtual(FrozenValue):
@@ -673,4 +682,4 @@ PtrRedBox.FrozenPtrVarWithPartialData = FrozenPtrVarWithPartialData
 InstanceRedBox.FrozenPtrVirtual = FrozenPtrVirtual
 InstanceRedBox.FrozenPtrConst = FrozenInstanceConst
 InstanceRedBox.FrozenPtrVar = FrozenInstanceVar
-InstanceRedBox.FrozenPtrVarWithPartialData = None
+InstanceRedBox.FrozenPtrVarWithPartialData = FrozenInstanceVarWithPartialData
