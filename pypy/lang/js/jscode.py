@@ -287,7 +287,7 @@ class LOAD_VARIABLE(Opcode):
         self.identifier = identifier
 
     def eval(self, ctx, stack):
-        stack.append(ctx.resolve_identifier(self.identifier))
+        stack.append(ctx.resolve_identifier(ctx, self.identifier))
 
     def __repr__(self):
         return 'LOAD_VARIABLE "%s"' % (self.identifier,)
@@ -428,7 +428,7 @@ class TYPEOF_VARIABLE(Opcode):
 
     def eval(self, ctx, stack):
         try:
-            var = ctx.resolve_identifier(self.name)
+            var = ctx.resolve_identifier(ctx, self.name)
             stack.append(W_String(var.type()))
         except ThrowException:
             stack.append(W_String('undefined'))
@@ -601,7 +601,7 @@ class STORE(BaseStore):
 class BaseAssignOper(BaseStore):
     def process(self, ctx, name, stack):
         right = stack.pop()
-        left = ctx.resolve_identifier(name)
+        left = ctx.resolve_identifier(ctx, name)
         result = self.operation(ctx, left, right)
         stack.append(result)
         return result
@@ -609,7 +609,7 @@ class BaseAssignOper(BaseStore):
 class BaseAssignBitOper(BaseStore):
     def process(self, ctx, name, stack):
         right = stack.pop().ToInt32(ctx)
-        left = ctx.resolve_identifier(name).ToInt32(ctx)
+        left = ctx.resolve_identifier(ctx, name).ToInt32(ctx)
         result = self.operation(ctx, left, right)
         stack.append(result)
         return result
@@ -640,14 +640,14 @@ class STORE_BITXOR(BaseAssignBitOper):
 
 class STORE_POSTINCR(BaseStore):
     def process(self, ctx, name, stack):
-        value = ctx.resolve_identifier(name)
+        value = ctx.resolve_identifier(ctx, name)
         newval = increment(ctx, value)
         stack.append(value)
         return newval
 
 class STORE_POSTDECR(BaseStore):
     def process(self, ctx, name, stack):
-        value = ctx.resolve_identifier(name)
+        value = ctx.resolve_identifier(ctx, name)
         newval = increment(ctx, value, -1)
         stack.append(value)
         return newval
@@ -873,7 +873,7 @@ class WITH_START(Opcode):
         self.name = name
 
     def eval(self, ctx, stack):
-        ctx.push_object(ctx.resolve_identifier(self.name).ToObject(ctx))
+        ctx.push_object(ctx.resolve_identifier(ctx, self.name).ToObject(ctx))
 
 class WITH_END(Opcode):
     def eval(self, ctx, stack):
