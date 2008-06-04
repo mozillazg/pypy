@@ -605,14 +605,12 @@ class ExecutionContext(object):
         """remove the last pushed object"""
         return self.scope.pop()
         
-    def resolve_identifier(self, identifier):
+    def resolve_identifier(self, ctx, identifier):
         for i in range(len(self.scope)-1, -1, -1):
             obj = self.scope[i]
             assert isinstance(obj, W_PrimitiveObject)
-            try:
-                return obj.propdict[identifier].value
-            except KeyError:
-                pass
+            if obj.HasProperty(identifier):
+                return obj.Get(ctx, identifier)
         raise ThrowException(W_String("ReferenceError: %s is not defined" % identifier))
 
 def global_context(w_global):
