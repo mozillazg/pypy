@@ -7,11 +7,11 @@ from pypy.lang.js.interpreter import *
 
 # __________  Entry point  __________
 
-interp = Interpreter()
 
 def entry_point(argv):
     if len(argv) == 2:
         t = load_file(argv[1])
+        interp = Interpreter()
         interp.run(t)
         return 0
     else:
