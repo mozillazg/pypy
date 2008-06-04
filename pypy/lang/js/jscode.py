@@ -740,7 +740,7 @@ class DECLARE_FUNCTION(Opcode):
         w_obj.Put(ctx, 'constructor', w_func, flags = DE)
         w_func.Put(ctx, 'prototype', w_obj)
         if self.funcobj.name is not None:
-            ctx.Put(ctx, self.funcobj.name, w_func)
+            ctx.scope[-1].Put(ctx, self.funcobj.name, w_func)
 
     def __repr__(self):
         funcobj = self.funcobj
@@ -756,7 +756,7 @@ class DECLARE_VAR(Opcode):
         self.name = name
 
     def eval(self, ctx, stack):
-        ctx.Put(ctx, self.name, w_Undefined, flags = DD)
+        ctx.scope[-1].Put(ctx, self.name, w_Undefined, flags = DD)
 
     def __repr__(self):
         return 'DECLARE_VAR "%s"' % (self.name,)

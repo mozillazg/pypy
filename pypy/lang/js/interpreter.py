@@ -94,15 +94,23 @@ class W_StringObject(W_NativeObject):
             return create_object(ctx, 'String', Value = Value)
         return create_object(ctx, 'String', Value = W_String(''))
 
+def create_array(ctx, elements=[]):
+    proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
+    array = W_Array(ctx, Prototype=proto, Class = proto.Class)
+    i = 0
+    while i < len(elements):
+        array.Put(ctx, str(i), elements[i])
+        i += 1
+    
+    return array
+
 class W_ArrayObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
-        proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
-        array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         if len(args) == 1 and isinstance(args[0], W_BaseNumber):
+            array = create_array(ctx)
             array.Put(ctx, 'length', args[0])
         else:
-            for i in range(len(args)):
-                array.Put(ctx, str(i), args[i])
+            array = create_array(ctx, args)
         return array
 
     def Construct(self, ctx, args=[]):
@@ -353,6 +361,14 @@ def get_value_of(type):
             return this.Value
     return W_ValueValueOf
 
+class W_FromCharCode(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        temp = []
+        for arg in args:
+            temp.append(chr(arg.ToInt32(ctx)))
+        
+        return W_String(''.join(temp))
+
 class W_CharAt(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
@@ -403,6 +419,32 @@ class W_Substring(W_NewBuiltin):
         start = min(tmp1, tmp2)
         end = max(tmp1, tmp2)
         return W_String(string[start:end])
+
+class W_Split(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        
+        if len(args) < 1 or args[0] is w_Undefined:
+            return create_array(ctx, [W_String(string)])
+        else:
+            separator = args[0].ToString(ctx)
+        
+        if len(args) >= 2:
+            limit = args[1].ToUInt32(ctx)
+            raise ThrowException(W_String("limit not implemented"))
+            # array = string.split(separator, limit)
+        else:
+            array = string.split(separator)
+        
+        w_array = create_array(ctx)
+        i = 0
+        while i < len(array):
+            w_str = W_String(array[i])
+            w_array.Put(ctx, str(i), w_str)
+            i += 1
+        
+        return w_array
+
 
 def common_join(ctx, this, sep=','):
     length = this.Get(ctx, 'length').ToUInt32(ctx)
@@ -581,9 +623,11 @@ class Interpreter(object):
             'concat': W_Concat(ctx),
             'indexOf': W_IndexOf(ctx),
             'substring': W_Substring(ctx),
+            'split': W_Split(ctx),
         })
         
         w_String.Put(ctx, 'prototype', w_StrPrototype)
+        w_String.Put(ctx, 'fromCharCode', W_FromCharCode(ctx))
         w_Global.Put(ctx, 'String', w_String)
 
         w_Array = W_ArrayObject('Array', w_FncPrototype)
