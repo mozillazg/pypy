@@ -84,6 +84,7 @@ class JsCode(object):
         self.has_labels = True
         self.startlooplabel = []
         self.endlooplabel = []
+        self.stack = []
 
     def emit_label(self, num = -1):
         if num == -1:
@@ -122,14 +123,20 @@ class JsCode(object):
         self.emit('JUMP', self.startlooplabel[-1])
 
     def emit(self, operation, *args):
-        opcode = None
-        for name, opcodeclass in opcode_unrolling:
-            if operation == name:
-                opcode = opcodeclass(*args)
-                self.opcodes.append(opcode)
-                return opcode
-        raise ValueError("Unknown opcode %s" % (operation,))
+        opcode = getattr(opcodes, operation)(*args)
+        self.opcodes.append(opcode)
+        return opcode
     emit._annspecialcase_ = 'specialize:arg(1)'
+
+    def emit_store(self, operation, identifier):
+        opcode = store_opcodes[operation](identifier)
+        self.opcodes.append(opcode)
+        return opcode
+
+    def emit_store_member(self, operation):
+        opcode = store_member_opcodes[operation]()
+        self.opcodes.append(opcode)
+        return opcode        
 
     def run(self, ctx, check_stack=True, retlast=False):
         if self.has_labels:
@@ -222,8 +229,9 @@ class BaseBinaryBitwiseOp(Opcode):
         s5 = stack.pop().ToInt32(ctx)
         s6 = stack.pop().ToInt32(ctx)
         stack.append(self.operation(ctx, s5, s6))
-    
-    def operation(self, ctx, op1, op2):
+
+    @staticmethod
+    def operation(ctx, op1, op2):
         raise NotImplementedError
 
 class BaseBinaryOperation(Opcode):
@@ -563,7 +571,7 @@ class BaseStoreMember(Opcode):
         left = stack.pop()
         elem = stack.pop()
         value = stack.pop()
-        name = elem.ToString()
+        name = elem.ToString(ctx)
         value = self.operation(ctx, left, name, value)
         left.ToObject(ctx).Put(ctx, name, value)
         stack.append(value)
@@ -903,6 +911,8 @@ class DELETE_MEMBER(Opcode):
         obj = stack.pop().ToObject(ctx)
         stack.append(newbool(obj.Delete(what)))
 
+# different opcode mappings, to make annotator happy
+
 OpcodeMap = {}
 
 for name, value in locals().items():
@@ -910,3 +920,16 @@ for name, value in locals().items():
         OpcodeMap[name] = value
 
 opcode_unrolling = unrolling_iterable(OpcodeMap.items())
+
+class Opcodes:
+    pass
+
+opcodes = Opcodes()
+store_opcodes = {}
+store_member_opcodes = {}
+for name, value in OpcodeMap.items():
+    if name.startswith('STORE_MEMBER'):
+        store_member_opcodes[name] = value
+    elif name.startswith('STORE'):
+        store_opcodes[name] = value
+    setattr(opcodes, name, value)

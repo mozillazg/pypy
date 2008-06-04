@@ -7,6 +7,7 @@ from pypy.lang.js.jsobj import W_String, W_IntNumber, W_FloatNumber,\
 from pypy.rlib.rarithmetic import r_uint, intmask, INFINITY, NAN, ovfcheck,\
      isnan, isinf
 from pypy.lang.js.execution import ThrowException, JsTypeError
+import math
 
 def plus(ctx, nleft, nright):
     if isinstance(nleft, W_String) or isinstance(nright, W_String):
@@ -59,7 +60,7 @@ def mult(ctx, nleft, nright):
 def mod(ctx, nleft, nright): # XXX this one is really not following spec
     fleft = nleft.ToNumber(ctx)
     fright = nright.ToNumber(ctx)
-    return W_FloatNumber(fleft % fright)
+    return W_FloatNumber(math.fmod(fleft, fright))
 
 def division(ctx, nleft, nright):
     # XXX optimise for ints and floats

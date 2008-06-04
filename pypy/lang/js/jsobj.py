@@ -29,7 +29,7 @@ class W_Root(object):
     #def GetValue(self):
     #    return self
 
-    def ToBoolean(self, ctx):
+    def ToBoolean(self):
         raise NotImplementedError(self.__class__)
 
     def ToPrimitive(self, ctx, hint=""):
@@ -358,7 +358,6 @@ class W_Array(W_ListObject):
 
 class W_Boolean(W_Primitive):
     def __init__(self, boolval):
-        W_Primitive.__init__(self)
         self.boolval = bool(boolval)
     
     def ToObject(self, ctx):
@@ -492,7 +491,9 @@ class W_FloatNumber(W_BaseNumber):
 
         res = str(self.floatval)
         if (res[-3] == '+' or res[-3] == '-') and res[-2] == '0':
-            res = res[:-2] + res[-1]
+            cut = len(res) - 2
+            assert cut >= 0
+            res = res[:cut] + res[-1]
         return res
     
     def ToBoolean(self):
