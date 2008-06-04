@@ -476,22 +476,19 @@ class BITOR(BaseBinaryBitwiseOp):
         return W_IntNumber(op1|op2)
 
 class URSH(BaseBinaryBitwiseOp):
-    @staticmethod
-    def eval(ctx, stack):
+    def eval(self, ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)
         op1 = stack.pop().ToUInt32(ctx)
         stack.append(W_IntNumber(op1 >> (op2 & 0x1F)))
 
 class RSH(BaseBinaryBitwiseOp):
-    @staticmethod
-    def eval(ctx, stack):
+    def eval(self, ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)
         op1 = stack.pop().ToInt32(ctx)
         stack.append(W_IntNumber(op1 >> intmask(op2 & 0x1F)))
 
 class LSH(BaseBinaryBitwiseOp):
-    @staticmethod
-    def eval(ctx, stack):
+    def eval(self, ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)
         op1 = stack.pop().ToInt32(ctx)
         stack.append(W_IntNumber(op1 << intmask(op2 & 0x1F)))
@@ -589,15 +586,15 @@ class STORE_MEMBER_ADD(BaseStoreMemberAssign):
     decision = staticmethod(ADD.operation)
 
 class STORE_MEMBER_POSTINCR(BaseStoreMember):
-    def operation(self):
+    def operation(self, *args):
         raise NotImplementedError
 
 class STORE_MEMBER_PREINCR(BaseStoreMember):
-    def operation(self):
+    def operation(self, *args):
         raise NotImplementedError    
 
 class STORE_MEMBER_SUB(BaseStoreMember):
-    def operation(self):
+    def operation(self, *args):
         raise NotImplementedError
 
 class BaseStore(Opcode):
@@ -906,7 +903,7 @@ class DELETE(Opcode):
 
 class DELETE_MEMBER(Opcode):
     def eval(self, ctx, stack):
-        what = stack.pop().ToString()
+        what = stack.pop().ToString(ctx)
         obj = stack.pop().ToObject(ctx)
         stack.append(newbool(obj.Delete(what)))
 

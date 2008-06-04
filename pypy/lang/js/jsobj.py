@@ -572,8 +572,7 @@ class ExecutionContext(object):
                 return
             except KeyError:
                 pass
-        # if not, we need to put this thing in current scope
-        self.variable.Put(self.get_global(), name, value)
+        self.variable.Put(self, name, value)
 
     def delete_identifier(self, name):
         for i in range(len(self.scope)-1, -1, -1):

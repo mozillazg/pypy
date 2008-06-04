@@ -566,6 +566,9 @@ def test_not():
     py.test.skip("not supported")
     assertv("~1", -2)
 
+def test_delete_member():
+    assertv("x = 3; delete this.x", "true")
+
 def test_twoarray():
     assertp("""
     a1 = new Array();
