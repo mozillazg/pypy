@@ -12,8 +12,9 @@ def test_simple():
     bytecode.emit('LOAD_FLOATCONSTANT', 2)
     bytecode.emit('LOAD_FLOATCONSTANT', 4)
     bytecode.emit('ADD')
-    bytecode.run(ExecutionContext([W_Object()]), check_stack=False)
-    assert bytecode.stack[0].ToNumber(None) == 6.0
+    bytecode.emit('POP')
+    res = bytecode.run(ExecutionContext([W_Object()]), check_stack=False, retlast=True)
+    assert res.ToNumber(None) == 6.0
 
 def assertp(code, prints):
     l = []
@@ -560,6 +561,10 @@ def test_inplace_assign():
     yield assertv, "x=2; x&=2; x;", 2
     yield assertv, "x=0; x|=1; x;", 1
     yield assertv, "x=2; x^=2; x;", 0
+
+def test_not():
+    py.test.skip("not supported")
+    assertv("~1", -2)
 
 def test_twoarray():
     assertp("""
