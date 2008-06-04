@@ -82,10 +82,6 @@ class JsCode(object):
         self.opcodes = []
         self.label_count = 0
         self.has_labels = True
-        if we_are_translated():
-            self.stack = []
-        else:
-            self.stack = T()
         self.startlooplabel = []
         self.endlooplabel = []
 
@@ -139,11 +135,20 @@ class JsCode(object):
         if self.has_labels:
             self.remove_labels()
         if 1:
-            return run_bytecode(self.opcodes, ctx, self.stack, check_stack,
+            if we_are_translated():
+                stack = []
+            else:
+                stack = T()
+            return run_bytecode(self.opcodes, ctx, stack, check_stack,
                                 retlast)
         else:
             return run_bytecode_unguarded(self.opcodes, ctx, self,stack,
                                           check_stack, retlast)
+
+    def _freeze_(self):
+        if self.has_labels:
+            self.remove_labels()
+        return True
 
     def remove_labels(self):
         """ Basic optimization to remove all labels and change
@@ -327,6 +332,7 @@ class LOAD_LIST(Opcode):
 
     def eval(self, ctx, stack):
         to_cut = len(stack)-self.counter
+        assert to_cut >= 0
         list_w = stack[to_cut:]
         del stack[to_cut:]
         stack.append(W_List(list_w))
@@ -462,19 +468,22 @@ class BITOR(BaseBinaryBitwiseOp):
         return W_IntNumber(op1|op2)
 
 class URSH(BaseBinaryBitwiseOp):
-    def eval(self, ctx, stack):
+    @staticmethod
+    def eval(ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)
         op1 = stack.pop().ToUInt32(ctx)
         stack.append(W_IntNumber(op1 >> (op2 & 0x1F)))
 
 class RSH(BaseBinaryBitwiseOp):
-    def eval(self, ctx, stack):
+    @staticmethod
+    def eval(ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)
         op1 = stack.pop().ToInt32(ctx)
         stack.append(W_IntNumber(op1 >> intmask(op2 & 0x1F)))
 
 class LSH(BaseBinaryBitwiseOp):
-    def eval(self, ctx, stack):
+    @staticmethod
+    def eval(ctx, stack):
         op2 = stack.pop().ToUInt32(ctx)
         op1 = stack.pop().ToInt32(ctx)
         stack.append(W_IntNumber(op1 << intmask(op2 & 0x1F)))

@@ -13,6 +13,7 @@ from pypy.lang.js.execution import JsTypeError, ThrowException
 from pypy.lang.js.jscode import JsCode, JsFunction
 from constants import unescapedict
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.objectmodel import specialize
 
 import sys
 import os
@@ -119,14 +120,14 @@ class Array(ListOp):
             element.emit(bytecode)
         bytecode.emit('LOAD_ARRAY', len(self.nodes))
 
-class Assignment(Expression):
-    def _get_name(self):
-        addoper = OPERANDS[self.operand]
-        if addoper:
-            addoper = '_' + self.prefix.upper() + addoper
-        else:
-            addoper = ''
-        return addoper
+@specialize.memo()
+def _get_name(prefix, operand):
+    addoper = OPERANDS[operand]
+    if addoper:
+        addoper = '_' + prefix.upper() + addoper
+    else:
+        addoper = ''
+    return addoper
 
 OPERANDS = {
     '='  : '',
@@ -155,21 +156,32 @@ class SimpleIncrement(Expression):
         elif self.atype == '--':
             bytecode.emit('DECR')
 
-class SimpleAssignment(Assignment):
-    def __init__(self, pos, left, right, operand, prefix=''):
-        self.identifier = left.get_literal()
-        self.right = right
-        self.pos = pos
-        self.operand = operand
-        self.prefix = prefix
+def new_simple_assignment(operand, prefix=''):
+    bytecode_name = 'STORE' + _get_name(prefix, operand)
+    class SimpleAssignment(Expression):
+        def __init__(self, pos, left, right):
+            self.identifier = left.get_literal()
+            self.right = right
+            self.pos = pos
 
-    def emit(self, bytecode):
-        if self.right is not None:
-            self.right.emit(bytecode)
-        bytecode_name = 'STORE' + self._get_name()
-        bytecode.emit(bytecode_name, self.identifier)
+        def emit(self, bytecode):
+            if self.right is not None:
+                self.right.emit(bytecode)
+            bytecode.emit(bytecode_name, self.identifier)
+    return SimpleAssignment
 
-class VariableAssignment(Assignment):
+SIMPLE_ASSIGNMENTS = {}
+
+for operand in OPERANDS:
+    for prefix in ['', 'pre', 'post']:
+        SIMPLE_ASSIGNMENTS[(operand, prefix)] = new_simple_assignment(operand, prefix)
+
+def SimpleAssignment(pos, left, right, operand, prefix=''):
+    return SIMPLE_ASSIGNMENTS[(operand, prefix)](pos, left, right)
+
+# XXX VariableAssignment is not used at all, even should explode when
+#     translating, fix it with STORE_FAST and LOAD_FAST
+class VariableAssignment(Expression):
     def __init__(self, pos, left, right, operand):
         xxx # shall never land here for now
         self.identifier = left.identifier
@@ -182,40 +194,60 @@ class VariableAssignment(Assignment):
         self.right.emit(bytecode)
         bytecode.emit('STORE_VAR', self.depth, self.identifier)
 
-class MemberAssignment(Assignment):
-    def __init__(self, pos, what, item, right, operand, prefix=''):
-        # XXX we can optimise here what happens if what is identifier,
-        #     but let's leave it alone for now
-        self.pos = pos
-        self.what = what
-        self.item = item
-        self.right = right
-        self.operand = operand
-        self.prefix = prefix
+def new_member_assignment(operand, prefix):
+    bytecode_name = 'STORE_MEMBER' + _get_name(prefix, operand)
+    class MemberAssignment(Expression):
+        def __init__(self, pos, what, item, right):
+            # XXX we can optimise here what happens if what is identifier,
+            #     but let's leave it alone for now
+            self.pos = pos
+            self.what = what
+            self.item = item
+            self.right = right
 
-    def emit(self, bytecode):
-        if self.right is not None:
-            self.right.emit(bytecode)
-        self.item.emit(bytecode)
-        self.what.emit(bytecode)
-        bytecode.emit('STORE_MEMBER' + self._get_name())
+        def emit(self, bytecode):
+            if self.right is not None:
+                self.right.emit(bytecode)
+            self.item.emit(bytecode)
+            self.what.emit(bytecode)
+            bytecode.emit(bytecode_name)
+    return MemberAssignment
 
-class MemberDotAssignment(Assignment):
-    def __init__(self, pos, what, name, right, operand, prefix=''):
-        self.pos = pos
-        self.what = what
-        self.itemname = name
-        self.right = right
-        self.operand = operand
-        self.prefix = prefix
+MEMBER_ASSIGNMENTS = {}
 
-    def emit(self, bytecode):
-        # XXX optimize this a bit
-        if self.right is not None:
-            self.right.emit(bytecode)
-        bytecode.emit('LOAD_STRINGCONSTANT', self.itemname)
-        self.what.emit(bytecode)
-        bytecode.emit('STORE_MEMBER' + self._get_name())
+for operand in OPERANDS:
+    for prefix in ['', 'pre', 'post']:
+        MEMBER_ASSIGNMENTS[(operand, prefix)] = new_member_assignment(operand, prefix)
+
+def MemberAssignment(pos, what, item, right, operand, prefix=''):
+    return MEMBER_ASSIGNMENTS[(operand, prefix)](pos, what, item, right)
+
+def new_member_dot_assignment(operand, prefix):
+    bytecode_name = 'STORE_MEMBER' + _get_name(prefix, operand)
+    class MemberDotAssignment(Expression):
+        def __init__(self, pos, what, name, right):
+            self.pos = pos
+            self.what = what
+            self.itemname = name
+            self.right = right
+
+        def emit(self, bytecode):
+            # XXX optimize this a bit
+            if self.right is not None:
+                self.right.emit(bytecode)
+            bytecode.emit('LOAD_STRINGCONSTANT', self.itemname)
+            self.what.emit(bytecode)
+            bytecode.emit(bytecode_name)
+    return MemberDotAssignment
+
+MEMBER_DOT_ASSIGNMENTS = {}
+
+for operand in OPERANDS:
+    for prefix in ['', 'pre', 'post']:
+        MEMBER_DOT_ASSIGNMENTS[(operand, prefix)] = new_member_dot_assignment(operand, prefix)
+
+def MemberDotAssignment(pos, what, item, right, operand, prefix=''):
+    return MEMBER_DOT_ASSIGNMENTS[(operand, prefix)](pos, what, item, right)
 
 class Block(Statement):
     def __init__(self, pos, nodes):
