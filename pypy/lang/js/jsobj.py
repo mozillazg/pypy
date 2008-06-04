@@ -3,7 +3,6 @@ from pypy.rlib.rarithmetic import r_uint, intmask, isnan, isinf,\
      ovfcheck_float_to_int, NAN
 from pypy.lang.js.execution import ThrowException, JsTypeError,\
      RangeError, ReturnException
-
 DE = 1
 DD = 2
 RO = 4
@@ -390,15 +389,10 @@ class W_String(W_Primitive):
     def __repr__(self):
         return 'W_String(%s)' % (self.strval,)
 
-    def Get(self, ctx, P): #as hackinsh as can get
-        if P == 'length':
-            return W_FloatNumber(len(self.strval))
-        else:
-            proto = ctx.get_global().Get(ctx, 'String').Get(ctx, 'prototype')
-            return proto.Get(ctx, P)
-
     def ToObject(self, ctx):
-        return self #create_object(ctx, 'String', Value=self)
+        o = create_object(ctx, 'String', Value=self)
+        o.Put(ctx, 'length', W_IntNumber(len(self.strval)), flags = RO|DD)
+        return o
 
     def ToString(self, ctx=None):
         return self.strval
@@ -588,10 +582,6 @@ class ExecutionContext(object):
                 pass
         return False
 
-    def Put(self, ctx, name, value, flags = 0):
-        assert name is not None
-        self.variable.Put(ctx, name, value, flags = flags)
-    
     def get_global(self):
         return self.scope[0]
             
