@@ -772,32 +772,31 @@ class POP(Opcode):
     def eval(self, ctx, stack):
         stack.pop()
 
+def common_call(ctx, r1, args, this, name):
+    if not isinstance(r1, W_PrimitiveObject):
+        raise ThrowException(W_String("%s is not a callable (%s)"%(r1.ToString(ctx), name)))
+    try:
+        res = r1.Call(ctx=ctx, args=args.tolist(), this=this)
+    except JsTypeError:
+        raise ThrowException(W_String("%s is not a function (%s)"%(r1.ToString(ctx), name)))
+    return res
+
 class CALL(Opcode):
     def eval(self, ctx, stack):
         r1 = stack.pop()
         args = stack.pop()
-        if not isinstance(r1, W_PrimitiveObject):
-            raise ThrowException(W_String("it is not a callable"))
-        try:
-            res = r1.Call(ctx=ctx, args=args.tolist(), this=None)
-        except JsTypeError:
-            raise ThrowException(W_String('it is not a function'))
-        stack.append(res)
+        name = r1.ToString(ctx)
+        #XXX hack, this should be comming from context
+        stack.append(common_call(ctx, r1, args, ctx.scope[-1], name))
 
 class CALL_METHOD(Opcode):
     def eval(self, ctx, stack):
         method = stack.pop()
         what = stack.pop().ToObject(ctx)
         args = stack.pop()
-        r1 = what.Get(ctx, method.ToString())
-        if not isinstance(r1, W_PrimitiveObject):
-            raise ThrowException(W_String("it is not a callable"))
-        try:
-            res = r1.Call(ctx=ctx, args=args.tolist(), this=what)
-        except JsTypeError:
-            raise ThrowException(W_String('it is not a function'))
-        stack.append(res)
-        
+        name = method.ToString(ctx)
+        r1 = what.Get(ctx, name)
+        stack.append(common_call(ctx, r1, args, what, name))
 
 class DUP(Opcode):
     def eval(self, ctx, stack):
