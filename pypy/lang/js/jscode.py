@@ -16,12 +16,12 @@ class AlreadyRun(Exception):
     pass
 
 def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
+    popped = False
     if retlast:
         if opcodes[-1] == 'POP':
             opcodes.pop()
             popped = True
-        else:
-            popped = False
+    
     i = 0
     to_pop = 0
     try:
@@ -133,7 +133,7 @@ class JsCode(object):
                 self.opcodes.append(opcode)
                 return opcode
         raise ValueError("Unknown opcode %s" % (operation,))
-    #emit._annspecialcase_ = 'specialize:arg(1)'
+    emit._annspecialcase_ = 'specialize:arg(1)'
 
     def run(self, ctx, check_stack=True, retlast=False):
         if self.has_labels:
