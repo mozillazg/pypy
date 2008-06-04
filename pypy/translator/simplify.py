@@ -84,6 +84,9 @@ def eliminate_empty_blocks(graph):
                 exit = block1.exits[0]
                 assert block1 is not exit.target, (
                     "the graph contains an empty infinite loop")
+                if exit.target.exits:
+                    assert block1 is not exit.target.exits[0].target, (
+                        "the graph contains an empty infinite loop")
                 outputargs = []
                 for v in exit.args:
                     if isinstance(v, Variable):
