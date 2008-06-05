@@ -4,7 +4,7 @@ from pypy.interpreter.baseobjspace import (W_Root, ObjSpace, Wrappable,
 from pypy.interpreter.typedef import (TypeDef, GetSetProperty,
                                       interp_attrproperty)
 from pypy.interpreter.gateway import interp2app
-import time
+import time, sys
 
 class W_StatsEntry(Wrappable):
     def __init__(self, space, frame, callcount, reccallcount, tt, it,
