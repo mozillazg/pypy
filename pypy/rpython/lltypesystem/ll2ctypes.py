@@ -28,6 +28,7 @@ def _setup_ctypes_cache():
         lltype.Signed:   ctypes.c_long,
         lltype.Unsigned: ctypes.c_ulong,
         lltype.Char:     ctypes.c_ubyte,
+        lltype.Bool:     ctypes.c_ubyte,
         rffi.DOUBLE:     ctypes.c_double,
         rffi.FLOAT:      ctypes.c_float,
         rffi.SIGNEDCHAR: ctypes.c_byte,
@@ -169,6 +170,8 @@ def build_new_ctypes_type(T, delayed_builders):
             argtypes = [get_ctypes_type(ARG) for ARG in T.TO.ARGS]
             if T.TO.RESULT is lltype.Void:
                 restype = None
+            elif isinstance(T.TO.RESULT, lltype.Ptr):
+                restype = ctypes.c_void_p
             else:
                 restype = get_ctypes_type(T.TO.RESULT)
             return ctypes.CFUNCTYPE(restype, *argtypes)
@@ -438,6 +441,11 @@ def lltype2ctypes(llobj, normalize=True):
                     assert lltype.typeOf(llres) == T.TO.RESULT
                     if T.TO.RESULT is lltype.Void:
                         return None
+                    elif (isinstance(T.TO.RESULT, lltype.Ptr) and
+                          isinstance(T.TO.RESULT.TO, lltype.OpaqueType)):
+                        # XXX not sure of this
+                        ret = lltype2ctypes(llres)
+                        return ctypes.cast(ret.contents, ctypes.c_void_p).value
                     else:
                         return lltype2ctypes(llres)
                 res = ctypes_func_type(callback)
@@ -521,6 +529,7 @@ def ctypes2lltype(T, cobj):
                                       _callable=_callable)
         elif isinstance(T.TO, lltype.OpaqueType):
             container = lltype._opaque(T.TO)
+            container._storage = cobj
         else:
             raise NotImplementedError(T)
         llobj = lltype._ptr(T, container, solid=True)
