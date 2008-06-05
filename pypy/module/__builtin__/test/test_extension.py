@@ -1,9 +1,8 @@
 from pypy.objspace.std.objspace import StdObjSpace, W_Object
 from pypy.annotation.policy import AnnotatorPolicy
-from pypy.annotation.binaryop import BINARY_OPERATIONS
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.nonconst import NonConstant
+from pypy.rlib.objectmodel import we_are_translated
 
 # XXX Most of this module is an assembly of various hacks
 
@@ -30,19 +29,17 @@ class PyPyObjectType(lltype.OpaqueType):
 
 PyPyObject = lltype.Ptr(PyPyObjectType())
 
-BINARY_OP_TP = rffi.CCallback([PyPyObject, PyPyObject], PyPyObject)
-UNARY_OP_TP = rffi.CCallback([PyPyObject], PyPyObject)
-NEWINT_TP = rffi.CCallback([rffi.LONG], PyPyObject)
-IS_TRUE_TP = rffi.CCallback([PyPyObject], lltype.Bool)
-
 # definition of the PyPy API.
-# XXX should use the ObjSpace.MethodTable
-API_FIELDS = [(op, BINARY_OP_TP) for op in BINARY_OPERATIONS if '_' not in op]
+API_FIELDS = []
+
+# regular part of the interface
+for name, symbol, nbargs, special in StdObjSpace.MethodTable:
+    FUNCTYPE = rffi.CCallback([PyPyObject] * nbargs, PyPyObject)
+    API_FIELDS.append((name, FUNCTYPE))
 
 # some of the ObjSpace.IrregularOpTable items
-API_FIELDS.append(('newint', NEWINT_TP))
-API_FIELDS.append(('getattr', UNARY_OP_TP))
-API_FIELDS.append(('is_true', IS_TRUE_TP))
+API_FIELDS.append(('newint', rffi.CCallback([rffi.LONG], PyPyObject)))
+API_FIELDS.append(('is_true', rffi.CCallback([PyPyObject], lltype.Bool)))
 
 PyPyApiStruct = lltype.Struct('pypy_api', *API_FIELDS)
 
@@ -60,7 +57,10 @@ class ExtensionObjSpace(StdObjSpace):
         for name, _ in API_FIELDS:
             def wrapperFunc(name):
                 def f(*args):
-                    return getattr(self.apiptr[0], name)(*args)
+                    if we_are_translated():
+                        return getattr(self.apiptr[0], name)(*args)
+                    else:
+                        return getattr(StdObjSpace, name)(self, *args)
                 return f
 
             setattr(self, name, wrapperFunc(name))
@@ -180,3 +180,17 @@ def test_extension_function():
     f = compile(apiptr, func)
 
     f() # XXX catch stdout and check the presence of the "OK!" string
+
+def test_more_operations():
+    return # in-progress
+
+    apiptr = lltype.malloc(lltype.Array(lltype.Ptr(PyPyApiStruct)),
+                           1, immortal=True)
+
+    space = ExtensionObjSpace(apiptr)
+
+    def func():
+        space.len(space.wrap("mmap"))
+
+    f = compile(apiptr, func)
+    f()
