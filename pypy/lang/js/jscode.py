@@ -912,7 +912,7 @@ class DELETE_MEMBER(Opcode):
 OpcodeMap = {}
 
 for name, value in locals().items():
-    if name.upper() == name and issubclass(value, Opcode):
+    if name.upper() == name and type(value) == type(Opcode) and issubclass(value, Opcode):
         OpcodeMap[name] = value
 
 opcode_unrolling = unrolling_iterable(OpcodeMap.items())
