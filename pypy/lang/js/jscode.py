@@ -2,8 +2,8 @@
 from pypy.lang.js.jsobj import W_IntNumber, W_FloatNumber, W_String,\
      W_Array, W_PrimitiveObject, ActivationObject,\
      create_object, W_Object, w_Undefined, newbool,\
-     w_True, w_False, W_List, w_Null, W_Iterator, W_Root,\
-     DD, DE, RO
+     w_True, w_False, W_List, w_Null, W_Iterator, W_Root
+import pypy.lang.js.jsobj as jsobj
 from pypy.lang.js.execution import JsTypeError, ReturnException, ThrowException
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.lang.js.baseop import plus, sub, compare, AbstractEC, StrictEC,\
@@ -18,7 +18,7 @@ class AlreadyRun(Exception):
 def run_bytecode(opcodes, ctx, stack, check_stack=True, retlast=False):
     popped = False
     if retlast:
-        if opcodes[-1] == 'POP':
+        if isinstance(opcodes[-1], POP):
             opcodes.pop()
             popped = True
     
@@ -358,7 +358,7 @@ class LOAD_FUNCTION(Opcode):
                           callfunc=self.funcobj)
         w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
         w_obj = create_object(ctx, 'Object')
-        w_obj.Put(ctx, 'constructor', w_func, flags = DE)
+        w_obj.Put(ctx, 'constructor', w_func, flags = jsobj.DE)
         w_func.Put(ctx, 'prototype', w_obj)
         stack.append(w_func)
 
@@ -737,7 +737,7 @@ class DECLARE_FUNCTION(Opcode):
         w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self.funcobj)
         w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
         w_obj = create_object(ctx, 'Object')
-        w_obj.Put(ctx, 'constructor', w_func, flags = DE)
+        w_obj.Put(ctx, 'constructor', w_func, flags = jsobj.DE)
         w_func.Put(ctx, 'prototype', w_obj)
         if self.funcobj.name is not None:
             ctx.scope[-1].Put(ctx, self.funcobj.name, w_func)
@@ -756,7 +756,7 @@ class DECLARE_VAR(Opcode):
         self.name = name
 
     def eval(self, ctx, stack):
-        ctx.scope[-1].Put(ctx, self.name, w_Undefined, flags = DD)
+        ctx.scope[-1].Put(ctx, self.name, w_Undefined, flags = jsobj.DD)
 
     def __repr__(self):
         return 'DECLARE_VAR "%s"' % (self.name,)
@@ -856,7 +856,7 @@ class NEW_NO_ARGS(Opcode):
 class LOAD_ITERATOR(Opcode):
     def eval(self, ctx, stack):
         obj = stack.pop().ToObject(ctx)
-        props = [prop.value for prop in obj.propdict.values() if not prop.flags & DE]
+        props = [prop.value for prop in obj.propdict.values() if not prop.flags & jsobj.DE]
         stack.append(W_Iterator(props))
 
 class JUMP_IF_ITERATOR_EMPTY(BaseJump):
@@ -912,7 +912,7 @@ class DELETE_MEMBER(Opcode):
 OpcodeMap = {}
 
 for name, value in locals().items():
-    if name.upper() == name and type(value) == type(Opcode) and issubclass(value, Opcode):
+    if name.upper() == name and issubclass(value, Opcode):
         OpcodeMap[name] = value
 
 opcode_unrolling = unrolling_iterable(OpcodeMap.items())
