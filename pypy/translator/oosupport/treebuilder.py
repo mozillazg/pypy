@@ -33,7 +33,12 @@ def is_mutable(TYPE):
 
 # TODO: analyze graphs to determine which functions calls could have
 # side effects and which can be inlined safely.
-def can_be_inlined(op):
+def can_be_inlined(op, block):
+    for exit in block.exits:
+        if op.result in exit.args:
+            break
+    else:
+        return True
     try:
         llop = LL_OPERATIONS[op.opname]
         return llop.canfold
@@ -64,7 +69,7 @@ def build_trees_for_block(block):
         for i, v in enumerate(op.args):
             if var_count.get(v, None) == 1 and v not in block.inputargs: # "inline" the operation
                 sub_i, sub_op = var_to_op[v]
-                if can_be_inlined(sub_op):
+                if can_be_inlined(sub_op, block):
                     op.args[i] = SubOperation(sub_op)
                     block.operations[sub_i] = None
     if block.operations != ():
