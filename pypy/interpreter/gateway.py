@@ -213,7 +213,7 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
 
     def visit__object(self, typ):
         name = int_unwrapping_space_method(typ)
-        self.run_args.append("space.%s_w(%s)" %
+        self.run_args.append("space.%s(%s)" %
                              (name, self.scopenext()))
 
     def visit_index(self, typ):
@@ -328,7 +328,7 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
 
     def visit__object(self, typ):
         name = int_unwrapping_space_method(typ)
-        self.unwrap.append("space.%s_w(%s)" % (name,
+        self.unwrap.append("space.%s(%s)" % (name,
                                                self.nextarg()))
 
     def visit_index(self, typ):
@@ -368,13 +368,15 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
     make_fastfunc = staticmethod(make_fastfunc)
 
 def int_unwrapping_space_method(typ):
-    assert typ in (int, str, float, unicode, r_longlong, r_uint, r_ulonglong)
+    assert typ in (int, str, float, unicode, r_longlong, r_uint, r_ulonglong, bool)
     if typ is r_int is r_longlong:
-        return 'r_longlong'
+        return 'r_longlong_w'
     elif typ is r_uint:
-        return 'uint'
+        return 'uint_w'
+    elif typ is bool:
+        return 'is_true'
     else:
-        return typ.__name__
+        return typ.__name__ + '_w'
 
 class BuiltinCode(eval.Code):
     "The code object implementing a built-in (interpreter-level) hook."

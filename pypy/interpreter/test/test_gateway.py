@@ -155,6 +155,16 @@ class TestGateway:
             space.call_function(w_app_g3, w('foo'), w('bar')),
             w('foobar'))
 
+    def test_interp2app_unwrap_spec_bool(self):
+        space = self.space
+        w = space.wrap
+        def g(space, b):
+            return space.wrap(b)
+        app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, bool])
+        w_app_g = space.wrap(app_g)
+        assert self.space.eq_w(space.call_function(w_app_g, space.wrap(True)),
+                               space.wrap(True))
+
     def test_interp2app_unwrap_spec_args_w(self):
         space = self.space
         w = space.wrap
