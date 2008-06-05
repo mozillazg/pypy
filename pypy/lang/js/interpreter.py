@@ -224,6 +224,7 @@ def unescapejs(ctx, args, this):
             elif (i + 5 < lgt and strval[i + 1] == 'u' and
                   _ishex(strval[i + 2]) and _ishex(strval[i + 3]) and
                   _ishex(strval[i + 4]) and _ishex(strval[i + 5])):
+                raise ThrowException(W_String('not implemented'))
                 ch = unichr(int(strval[i+2:i+6], 16))
                 i += 5
         i += 1
@@ -365,7 +366,12 @@ class W_FromCharCode(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         temp = []
         for arg in args:
-            temp.append(chr(arg.ToInt32(ctx)))
+            i = arg.ToInt32(ctx) % 65536 # XXX should be uint16
+            if i > 255:
+                raise ThrowException(W_String('not implemented'))
+                temp.append(unichr(i))
+            else:
+                temp.append(chr(i))
         
         return W_String(''.join(temp))
 
