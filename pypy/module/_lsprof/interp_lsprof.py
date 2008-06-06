@@ -3,7 +3,7 @@ from pypy.interpreter.baseobjspace import (W_Root, ObjSpace, Wrappable,
                                            Arguments)
 from pypy.interpreter.typedef import (TypeDef, GetSetProperty,
                                       interp_attrproperty)
-from pypy.interpreter.gateway import interp2app
+from pypy.interpreter.gateway import interp2app, NoneNotWrapped
 import time, sys
 
 class W_StatsEntry(Wrappable):
@@ -215,7 +215,7 @@ class W_Profiler(Wrappable):
         return stats(space, self.data, factor)
     getstats.unwrap_spec = ['self', ObjSpace]
 
-def descr_new_profile(space, w_type, w_callable=None, time_unit=0.0,
+def descr_new_profile(space, w_type, w_callable=NoneNotWrapped, time_unit=0.0,
                       subcalls=True, builtins=True):
     p = space.allocate_instance(W_Profiler, w_type)
     p.__init__(space, w_callable, time_unit, subcalls, builtins)
