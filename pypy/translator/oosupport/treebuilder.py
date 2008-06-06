@@ -33,17 +33,20 @@ def is_mutable(TYPE):
 
 # TODO: analyze graphs to determine which functions calls could have
 # side effects and which can be inlined safely.
-def can_be_inlined(op, block):
-    for exit in block.exits:
-        if op.result in exit.args:
-            break
-    else:
-        return True
+def can_be_inlined(op):
     try:
         llop = LL_OPERATIONS[op.opname]
         return llop.canfold
     except KeyError:
         return False
+
+def check_not_in_exit(v, block):
+    for exit in block.exits:
+        if v in exit.args:
+            break
+    else:
+        return True
+    return False
 
 def build_op_map(block):
     var_count = {}
@@ -69,11 +72,28 @@ def build_trees_for_block(block):
         for i, v in enumerate(op.args):
             if var_count.get(v, None) == 1 and v not in block.inputargs: # "inline" the operation
                 sub_i, sub_op = var_to_op[v]
-                if can_be_inlined(sub_op, block):
+                if can_be_inlined(sub_op):
                     op.args[i] = SubOperation(sub_op)
                     block.operations[sub_i] = None
+    # another pass
+    for num_op, op in enumerate(block.operations):
+        if op is not None:
+            for i, v in enumerate(op.args):
+                if (var_count.get(v, None) == 1 and v not in block.inputargs
+                    and check_not_in_exit(v, block)):
+                    sub_i, sub_op = var_to_op[v]
+                    safe = True
+                    for k in range(sub_i + 1, num_op):
+                        if block.operations[sub_i] is not None:
+                            safe = False
+                            break
+                    if safe:
+                        op.args[i] = SubOperation(sub_op)
+                        block.operations[sub_i] = None
+                    
     if block.operations != ():
         block.operations = [op for op in block.operations if op is not None]
+
 
 def build_trees(graph):
     if not getattr(graph, 'tree_built', False):
