@@ -76,6 +76,10 @@ def build_trees_for_block(block):
                     op.args[i] = SubOperation(sub_op)
                     block.operations[sub_i] = None
     # another pass
+    # XXX this assumes left-to-right parameter order evaluation,
+    #     we need to differentiate it depending on how backend solves
+    #     the problem (for C and direct/indirect_call is right to left as
+    #     far as I remember)
     for num_op, op in enumerate(block.operations):
         if op is not None:
             for i, v in enumerate(op.args):
