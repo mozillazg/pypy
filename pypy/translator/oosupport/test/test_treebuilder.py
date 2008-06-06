@@ -76,6 +76,7 @@ def test_count_exitswitch():
     def fn(i):
         kind = i & 3 # 2 bits
         str = "%x" % (kind,)
+        #             ^^^^ kind is inlined here
         if kind == 0:   # 00 bits
             res = "0"
         elif kind == 1: # 01 bits
@@ -87,7 +88,7 @@ def test_count_exitswitch():
         return res, str
     graph, eval_func = check_trees(fn, [int], backendopt=True)
     block = graph.startblock
-    assert len(block.operations) == 5
+    assert len(block.operations) == 4
     v0 = block.operations[0].result
     assert block.exitswitch == v0
     for x in range(4):
