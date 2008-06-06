@@ -298,6 +298,12 @@ priorities.  If someone wants to start working in that direction I
 imagine that he might get a (very little) bit of support from us,
 though.
 
+Alternatively, it's possible to write a mixed-module, i.e. an extension
+module for PyPy in RPython, which you can then import from your Python
+program when it runs on top of PyPy.  This is similar to writing a C
+extension module for CPython in term of investment of effort (without
+all the INCREF/DECREF mess, though).
+
 ------------------------------------------------------
 What's the ``"NOT_RPYTHON"`` I see in some docstrings?
 ------------------------------------------------------
