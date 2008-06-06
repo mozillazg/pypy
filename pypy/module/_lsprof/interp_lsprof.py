@@ -207,7 +207,7 @@ class W_Profiler(Wrappable):
 
     def getstats(self, space):
         if self.w_callable is None:
-            factor = 0.000001
+            factor = 1. # we measure time.time in floats
         elif self.time_unit > 0.0:
             factor = self.time_unit
         else:
