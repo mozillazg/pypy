@@ -48,8 +48,6 @@ import os, time
 USAGE = """gcbench [num_repetitions] [--depths=N,N,N..] [--threads=N]"""
 ENABLE_THREADS = True
 
-def println(s):
-    print s
 
 class Node(object):
 
@@ -95,20 +93,20 @@ def print_diagnostics():
 
 def time_construction(depth):
     niters = num_iters(depth)
-    println("Creating %d trees of depth %d" % (niters, depth))
+    print "Creating %d trees of depth %d" % (niters, depth)
     t_start = time.time()
     for i in range(niters):
         temp_tree = Node()
         populate(depth, temp_tree)
         temp_tree = None
     t_finish = time.time()
-    println("\tTop down constrution took %f ms" % ((t_finish-t_start)*1000.))
+    print "\tTop down constrution took %f ms" % ((t_finish-t_start)*1000.)
     t_start = time.time()
     for i in range(niters):
         temp_tree = make_tree(depth)
         temp_tree = None
     t_finish = time.time()
-    println("\tBottom up constrution took %f ms" % ((t_finish-t_start)*1000.))
+    print "\tBottom up constrution took %f ms" % ((t_finish-t_start)*1000.)
 
 DEFAULT_DEPTHS = range(kMinTreeDepth, kMaxTreeDepth+1, 2)
 
@@ -129,20 +127,20 @@ def time_parallel_constructions(depths, nthreads):
     print "All %d threads finished" % (nthreads,)
 
 def main(depths=DEFAULT_DEPTHS, threads=0):
-    println("Garbage Collector Test")
-    println(" Stretching memory with a binary tree of depth %d" % kStretchTreeDepth)
+    print "Garbage Collector Test"
+    print " Stretching memory with a binary tree of depth %d" % kStretchTreeDepth
     print_diagnostics()
     t_start = time.time()
     temp_tree = make_tree(kStretchTreeDepth)
     temp_tree = None
 
     # Create a long lived object
-    println(" Creating a long-lived binary tree of depth %d" % kLongLivedTreeDepth)
+    print " Creating a long-lived binary tree of depth %d" % kLongLivedTreeDepth
     long_lived_tree = Node()
     populate(kLongLivedTreeDepth, long_lived_tree)
 
     # Create long-lived array, filling half of it
-    println(" Creating a long-lived array of %d doubles" % kArraySize)
+    print " Creating a long-lived array of %d doubles" % kArraySize
     array = [0.0] * kArraySize
     i = 1
     while i < kArraySize/2:
@@ -156,12 +154,14 @@ def main(depths=DEFAULT_DEPTHS, threads=0):
         time_constructions(depths)
 
     if long_lived_tree is None or array[1024] != 1.0/1024:
-        println("FAILED")
-        return
+        raise Failed
 
     t_finish = time.time()
     print_diagnostics()
-    println("Completed in %f ms." % ((t_finish-t_start)*1000.))
+    print "Completed in %f ms." % ((t_finish-t_start)*1000.)
+
+class Failed(Exception):
+    pass
 
 
 def argerror():
