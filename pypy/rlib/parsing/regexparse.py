@@ -80,7 +80,7 @@ regex:
   | concatenation;
 
 concatenation:
-    l = repetition+
+    l = repetition*
     return {reduce(operator.add, l, regex.StringExpression(""))};
 
 repetition:
@@ -103,6 +103,8 @@ repetition:
     n = numrange
     '}'
     return {r1 * n[0] + reduce(operator.or_, [r1 * i for i in range(n[1] - n[0] + 1)], regex.StringExpression(""))}
+  | '{'
+    return {regex.StringExpression("{")}
   | primary;
 
 primary:
@@ -113,7 +115,13 @@ primary:
   | c = char
     return {regex.StringExpression(c)}
   | '.'
-    return {regex.RangeExpression(chr(0), chr(255))};
+    return {regex.RangeExpression(chr(0), chr(255))}
+  | '-'
+    return {regex.StringExpression('-')}
+  | '\'
+    return {regex.StringExpression('\\')}
+  | ']'
+    return {regex.StringExpression(']')};
 
 char:
     c = QUOTEDCHAR
@@ -122,10 +130,10 @@ char:
     return {c};
 
 QUOTEDCHAR:
-    `(\\x[0-9a-fA-F]{2})|(\\[0-3]?[0-7][0-7])|(\\c.)|(\\.)`;
+    `(\\x[0-9a-fA-F]{2})|(\\[0-3]?[0-7][0-7])|(\\c.)|(\\[^dswDSW])`;
     
 CHAR:
-    `[^\*\+\(\)\[\]\{\}\|\.\-\?\,\^]`;
+    `[^\*\+\(\)\[\]\{\|\.\-\?\^\\]`;
 
 range:
     '['
@@ -141,7 +149,7 @@ rangeinner:
 
 subrange:
     ']'
-    l = rangeelement+
+    l = rangeelement*
     return {reduce(operator.or_, [set(["]"])] + l)}
   | l = rangeelement+
     return {reduce(operator.or_, l)};
@@ -152,8 +160,20 @@ rangeelement:
     '-'
     c2 = char
     return {set([chr(i) for i in range(ord(c1), ord(c2) + 1)])}
+  | '.'
+    return { set(['.']) }
+  | '*'
+    return { set(['*']) }
+  | '+'
+    return { set(['+']) }
+  | '?'
+    return { set(['?']) }
+  | '-'
+    return { set(['-']) }
+  | '['
+    return { set(['[']) }
   | c = char
-    return {set([c])};
+    return { set([c]) };
 
 numrange:
     n1 = NUM
@@ -458,16 +478,12 @@ class Parser(object):
             _result = None
             _error = None
             _all0 = []
-            _call_status = self._repetition()
-            _result = _call_status.result
-            _error = _call_status.error
-            _all0.append(_result)
             while 1:
                 _choice1 = self._pos
                 try:
                     _call_status = self._repetition()
                     _result = _call_status.result
-                    _error = self._combine_errors(_error, _call_status.error)
+                    _error = _call_status.error
                     _all0.append(_result)
                 except BacktrackException, _exc:
                     _error = self._combine_errors(_error, _exc.error)
@@ -601,13 +617,21 @@ class Parser(object):
                     self._pos = _choice4
                 _choice5 = self._pos
                 try:
+                    _result = self.__chars__('{')
+                    _result = (regex.StringExpression("{"))
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice5
+                _choice6 = self._pos
+                try:
                     _call_status = self._primary()
                     _result = _call_status.result
                     _error = self._combine_errors(_error, _call_status.error)
                     break
                 except BacktrackException, _exc:
                     _error = self._combine_errors(_error, _exc.error)
-                    self._pos = _choice5
+                    self._pos = _choice6
                     raise BacktrackException(_error)
                 _call_status = self._primary()
                 _result = _call_status.result
@@ -720,9 +744,33 @@ class Parser(object):
                 except BacktrackException, _exc:
                     _error = self._combine_errors(_error, _exc.error)
                     self._pos = _choice6
+                _choice7 = self._pos
+                try:
+                    _result = self.__chars__('-')
+                    _result = (regex.StringExpression('-'))
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice7
+                _choice8 = self._pos
+                try:
+                    _result = self.__chars__('\\')
+                    _result = (regex.StringExpression('\\'))
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice8
+                _choice9 = self._pos
+                try:
+                    _result = self.__chars__(']')
+                    _result = (regex.StringExpression(']'))
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice9
                     raise BacktrackException(_error)
-                _result = self.__chars__('.')
-                _result = (regex.RangeExpression(chr(0), chr(255)))
+                _result = self.__chars__(']')
+                _result = (regex.StringExpression(']'))
                 break
             if _status.status == _status.LEFTRECURSION:
                 if _status.result is not None:
@@ -848,7 +896,7 @@ class Parser(object):
         try:
             _result = None
             _error = None
-            _result = self._regex1192240515()
+            _result = self._regex1423754537()
             assert _status.status != _status.LEFTRECURSION
             _status.status = _status.NORMAL
             _status.pos = self._pos
@@ -880,7 +928,7 @@ class Parser(object):
         try:
             _result = None
             _error = None
-            _result = self._regex1323868075()
+            _result = self._regex2132196932()
             assert _status.status != _status.LEFTRECURSION
             _status.status = _status.NORMAL
             _status.pos = self._pos
@@ -1065,16 +1113,12 @@ class Parser(object):
                 try:
                     _result = self.__chars__(']')
                     _all1 = []
-                    _call_status = self._rangeelement()
-                    _result = _call_status.result
-                    _error = _call_status.error
-                    _all1.append(_result)
                     while 1:
                         _choice2 = self._pos
                         try:
                             _call_status = self._rangeelement()
                             _result = _call_status.result
-                            _error = self._combine_errors(_error, _call_status.error)
+                            _error = _call_status.error
                             _all1.append(_result)
                         except BacktrackException, _exc:
                             _error = self._combine_errors(_error, _exc.error)
@@ -1213,21 +1257,69 @@ class Parser(object):
                     self._pos = _choice1
                 _choice2 = self._pos
                 try:
-                    _call_status = self._char()
-                    _result = _call_status.result
-                    _error = self._combine_errors(_error, _call_status.error)
-                    c = _result
-                    _result = (set([c]))
+                    _result = self.__chars__('.')
+                    _result = ( set(['.']) )
                     break
                 except BacktrackException, _exc:
                     _error = self._combine_errors(_error, _exc.error)
                     self._pos = _choice2
+                _choice3 = self._pos
+                try:
+                    _result = self.__chars__('*')
+                    _result = ( set(['*']) )
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice3
+                _choice4 = self._pos
+                try:
+                    _result = self.__chars__('+')
+                    _result = ( set(['+']) )
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice4
+                _choice5 = self._pos
+                try:
+                    _result = self.__chars__('?')
+                    _result = ( set(['?']) )
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice5
+                _choice6 = self._pos
+                try:
+                    _result = self.__chars__('-')
+                    _result = ( set(['-']) )
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice6
+                _choice7 = self._pos
+                try:
+                    _result = self.__chars__('[')
+                    _result = ( set(['[']) )
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice7
+                _choice8 = self._pos
+                try:
+                    _call_status = self._char()
+                    _result = _call_status.result
+                    _error = self._combine_errors(_error, _call_status.error)
+                    c = _result
+                    _result = ( set([c]) )
+                    break
+                except BacktrackException, _exc:
+                    _error = self._combine_errors(_error, _exc.error)
+                    self._pos = _choice8
                     raise BacktrackException(_error)
                 _call_status = self._char()
                 _result = _call_status.result
                 _error = self._combine_errors(_error, _call_status.error)
                 c = _result
-                _result = (set([c]))
+                _result = ( set([c]) )
                 break
             if _status.status == _status.LEFTRECURSION:
                 if _status.result is not None:
@@ -1543,10 +1635,10 @@ class Parser(object):
         self._dict_NUM = {}
         self._pos = 0
         self._inputstream = inputstream
-    def _regex1166214427(self):
+    def _regex2132196932(self):
         _choice0 = self._pos
         _runner = self._Runner(self._inputstream, self._pos)
-        _i = _runner.recognize_1166214427(self._pos)
+        _i = _runner.recognize_2132196932(self._pos)
         if _runner.last_matched_state == -1:
             self._pos = _choice0
             raise BacktrackException
@@ -1557,10 +1649,10 @@ class Parser(object):
         _result = self._inputstream[_pos: _upto]
         self._pos = _upto
         return _result
-    def _regex1192240515(self):
+    def _regex1166214427(self):
         _choice1 = self._pos
         _runner = self._Runner(self._inputstream, self._pos)
-        _i = _runner.recognize_1192240515(self._pos)
+        _i = _runner.recognize_1166214427(self._pos)
         if _runner.last_matched_state == -1:
             self._pos = _choice1
             raise BacktrackException
@@ -1571,10 +1663,10 @@ class Parser(object):
         _result = self._inputstream[_pos: _upto]
         self._pos = _upto
         return _result
-    def _regex1323868075(self):
+    def _regex1423754537(self):
         _choice2 = self._pos
         _runner = self._Runner(self._inputstream, self._pos)
-        _i = _runner.recognize_1323868075(self._pos)
+        _i = _runner.recognize_1423754537(self._pos)
         if _runner.last_matched_state == -1:
             self._pos = _choice2
             raise BacktrackException
@@ -1592,6 +1684,43 @@ class Parser(object):
             self.last_matched_state = -1
             self.last_matched_index = -1
             self.state = -1
+        def recognize_2132196932(runner, i):
+            #auto-generated code, don't edit
+            assert i >= 0
+            input = runner.text
+            state = 0
+            while 1:
+                if state == 0:
+                    try:
+                        char = input[i]
+                        i += 1
+                    except IndexError:
+                        runner.state = 0
+                        return ~i
+                    if '}' <= char <= '\xff':
+                        state = 1
+                    elif '\x00' <= char <= "'":
+                        state = 1
+                    elif '_' <= char <= 'z':
+                        state = 1
+                    elif '@' <= char <= 'Z':
+                        state = 1
+                    elif '/' <= char <= '>':
+                        state = 1
+                    elif char == ',':
+                        state = 1
+                    else:
+                        break
+                runner.last_matched_state = state
+                runner.last_matched_index = i - 1
+                runner.state = state
+                if i == len(input):
+                    return i
+                else:
+                    return ~i
+                break
+            runner.state = state
+            return ~i
         def recognize_1166214427(runner, i):
             #auto-generated code, don't edit
             assert i >= 0
@@ -1635,7 +1764,7 @@ class Parser(object):
                 break
             runner.state = state
             return ~i
-        def recognize_1192240515(runner, i):
+        def recognize_1423754537(runner, i):
             #auto-generated code, don't edit
             assert i >= 0
             input = runner.text
@@ -1649,7 +1778,7 @@ class Parser(object):
                         runner.state = 0
                         return ~i
                     if char == '\\':
-                        state = 6
+                        state = 5
                     else:
                         break
                 if state == 1:
@@ -1661,8 +1790,12 @@ class Parser(object):
                     except IndexError:
                         runner.state = 1
                         return i
-                    if '0' <= char <= '7':
-                        state = 4
+                    if '0' <= char <= '9':
+                        state = 6
+                    elif 'A' <= char <= 'F':
+                        state = 6
+                    elif 'a' <= char <= 'f':
+                        state = 6
                     else:
                         break
                 if state == 2:
@@ -1674,12 +1807,8 @@ class Parser(object):
                     except IndexError:
                         runner.state = 2
                         return i
-                    if '0' <= char <= '9':
-                        state = 5
-                    elif 'A' <= char <= 'F':
-                        state = 5
-                    elif 'a' <= char <= 'f':
-                        state = 5
+                    if '0' <= char <= '7':
+                        state = 4
                     else:
                         break
                 if state == 3:
@@ -1691,21 +1820,9 @@ class Parser(object):
                     except IndexError:
                         runner.state = 3
                         return i
-                    if '\x00' <= char <= '\xff':
-                        state = 7
-                    else:
-                        break
-                if state == 4:
-                    runner.last_matched_index = i - 1
-                    runner.last_matched_state = state
-                    try:
-                        char = input[i]
-                        i += 1
-                    except IndexError:
-                        runner.state = 4
-                        return i
                     if '0' <= char <= '7':
-                        state = 7
+                        state = 2
+                        continue
                     else:
                         break
                 if state == 5:
@@ -1715,11 +1832,32 @@ class Parser(object):
                     except IndexError:
                         runner.state = 5
                         return ~i
-                    if '0' <= char <= '9':
-                        state = 7
-                    elif 'A' <= char <= 'F':
-                        state = 7
-                    elif 'a' <= char <= 'f':
+                    if char == 'x':
+                        state = 1
+                        continue
+                    elif '4' <= char <= '7':
+                        state = 2
+                        continue
+                    elif '0' <= char <= '3':
+                        state = 3
+                        continue
+                    elif 'y' <= char <= '\xff':
+                        state = 4
+                    elif '\x00' <= char <= '/':
+                        state = 4
+                    elif 'E' <= char <= 'R':
+                        state = 4
+                    elif 'e' <= char <= 'r':
+                        state = 4
+                    elif '8' <= char <= 'C':
+                        state = 4
+                    elif 'X' <= char <= 'b':
+                        state = 4
+                    elif 'T' <= char <= 'V':
+                        state = 4
+                    elif 't' <= char <= 'v':
+                        state = 4
+                    elif char == 'c':
                         state = 7
                     else:
                         break
@@ -1730,63 +1868,25 @@ class Parser(object):
                     except IndexError:
                         runner.state = 6
                         return ~i
-                    if '0' <= char <= '3':
-                        state = 1
-                        continue
-                    elif char == 'x':
-                        state = 2
-                        continue
-                    elif char == 'c':
-                        state = 3
-                        continue
-                    elif '4' <= char <= '7':
+                    if '0' <= char <= '9':
                         state = 4
-                        continue
-                    elif 'y' <= char <= '\xff':
-                        state = 7
-                    elif '\x00' <= char <= '/':
-                        state = 7
-                    elif '8' <= char <= 'b':
-                        state = 7
-                    elif 'd' <= char <= 'w':
-                        state = 7
+                    elif 'A' <= char <= 'F':
+                        state = 4
+                    elif 'a' <= char <= 'f':
+                        state = 4
                     else:
                         break
-                runner.last_matched_state = state
-                runner.last_matched_index = i - 1
-                runner.state = state
-                if i == len(input):
-                    return i
-                else:
-                    return ~i
-                break
-            runner.state = state
-            return ~i
-        def recognize_1323868075(runner, i):
-            #auto-generated code, don't edit
-            assert i >= 0
-            input = runner.text
-            state = 0
-            while 1:
-                if state == 0:
+                if state == 7:
+                    runner.last_matched_index = i - 1
+                    runner.last_matched_state = state
                     try:
                         char = input[i]
                         i += 1
                     except IndexError:
-                        runner.state = 0
-                        return ~i
-                    if '~' <= char <= '\xff':
-                        state = 1
-                    elif '\x00' <= char <= "'":
-                        state = 1
-                    elif '_' <= char <= 'z':
-                        state = 1
-                    elif '@' <= char <= 'Z':
-                        state = 1
-                    elif '/' <= char <= '>':
-                        state = 1
-                    elif char == '\\':
-                        state = 1
+                        runner.state = 7
+                        return i
+                    if '\x00' <= char <= '\xff':
+                        state = 4
                     else:
                         break
                 runner.last_matched_state = state
@@ -1810,6 +1910,24 @@ for key, value in Parser.__dict__.iteritems():
         setattr(RegexParser, key, value)
 RegexParser.init_parser = Parser.__init__.im_func
 # generated code between this line and its other occurence
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

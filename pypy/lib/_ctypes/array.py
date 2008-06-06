@@ -2,7 +2,8 @@
 import _rawffi
 
 from _ctypes.basics import _CData, cdata_from_address, _CDataMeta, sizeof
-from _ctypes.basics import keepalive_key, store_reference, CArgObject
+from _ctypes.basics import keepalive_key, store_reference, ensure_objects
+from _ctypes.basics import CArgObject
 from _ctypes.builtin import _string_at_addr, _wstring_at_addr
 
 def _create_unicode(buffer, maxlength):
@@ -114,6 +115,8 @@ def array_get_slice_params(self, index):
 
 def array_slice_setitem(self, index, value):
     start, stop = self._get_slice_params(index)
+    if stop - start != len(value):
+        raise ValueError("Can only assign slices of the same length")
     for i in range(start, stop):
         self[i] = value[i - start]
 
@@ -133,7 +136,6 @@ class Array(_CData):
 
     def __init__(self, *args):
         self._buffer = self._ffiarray(self._length_, autofree=True)
-        self._objects = {}
         for i, arg in enumerate(args):
             self[i] = arg
 
@@ -160,7 +162,7 @@ class Array(_CData):
             self._slice_setitem(index, value)
             return
         index = self._fix_index(index)
-        if getattr(value, '_objects', None) is not None:
+        if ensure_objects(value) is not None:
             store_reference(self, index, value._objects)
         arg = self._type_._CData_value(value)
         if self._type_._fficompositesize is None:
@@ -189,6 +191,10 @@ class Array(_CData):
 ARRAY_CACHE = {}
 
 def create_array_type(base, length):
+    if not isinstance(length, (int, long)):
+        raise TypeError("Can't multiply a ctypes type by a non-integer")
+    if length < 0:
+        raise ValueError("Array length must be >= 0")
     key = (base, length)
     try:
         return ARRAY_CACHE[key]

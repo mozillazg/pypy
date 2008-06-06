@@ -1,6 +1,6 @@
 from pypy.interpreter.gateway import ObjSpace
 from pypy.interpreter.error import OperationError
-from pypy.module.struct.error import StructError
+from pypy.rlib.rstruct.error import StructError
 from pypy.module.struct.formatiterator import CalcSizeFormatIterator
 from pypy.module.struct.formatiterator import PackFormatIterator
 from pypy.module.struct.formatiterator import UnpackFormatIterator

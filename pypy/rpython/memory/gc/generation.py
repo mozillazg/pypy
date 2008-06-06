@@ -1,5 +1,7 @@
 import sys
-from pypy.rpython.memory.gc.semispace import SemiSpaceGC, GCFLAG_IMMORTAL
+from pypy.rpython.memory.gc.semispace import SemiSpaceGC
+from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
+from pypy.rpython.memory.gc.semispace import DEBUG_PRINT
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
@@ -13,11 +15,13 @@ from pypy.rpython.lltypesystem.lloperation import llop
 # pointer to a young object.
 GCFLAG_NO_YOUNG_PTRS = SemiSpaceGC.first_unused_gcflag << 0
 
-# The following flag is set for static roots which are not on the list
-# of static roots yet, but will appear with write barrier
+# The following flag is set on some last-generation objects (== prebuilt
+# objects for GenerationGC, but see also HybridGC).  The flag is set
+# unless the object is already listed in 'last_generation_root_objects'.
+# When a pointer is written inside an object with GCFLAG_NO_HEAP_PTRS
+# set, the write_barrier clears the flag and adds the object to
+# 'last_generation_root_objects'.
 GCFLAG_NO_HEAP_PTRS = SemiSpaceGC.first_unused_gcflag << 1
-
-DEBUG_PRINT = False
 
 class GenerationGC(SemiSpaceGC):
     """A basic generational GC: it's a SemiSpaceGC with an additional
@@ -30,6 +34,13 @@ class GenerationGC(SemiSpaceGC):
     needs_write_barrier = True
     prebuilt_gc_objects_are_static_roots = False
     first_unused_gcflag = SemiSpaceGC.first_unused_gcflag << 2
+
+    # the following values override the default arguments of __init__ when
+    # translating to a real backend.
+    TRANSLATION_PARAMS = {'space_size': 8*1024*1024, # XXX adjust
+                          'nursery_size': 896*1024,
+                          'min_nursery_size': 48*1024,
+                          'auto_nursery_size': True}
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE,
                  nursery_size=128,
@@ -62,6 +73,8 @@ class GenerationGC(SemiSpaceGC):
         self.lb_young_var_basesize = sz
 
     def setup(self):
+        self.last_generation_root_objects = self.AddressStack()
+        self.young_objects_with_id = self.AddressDict()
         SemiSpaceGC.setup(self)
         self.set_nursery_size(self.initial_nursery_size)
         # the GC is fully setup now.  The rest can make use of it.
@@ -120,7 +133,7 @@ class GenerationGC(SemiSpaceGC):
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
         if (has_finalizer or not can_collect or
-            (raw_malloc_usage(size) > self.lb_young_var_basesize and
+            (raw_malloc_usage(size) > self.lb_young_fixedsize and
              raw_malloc_usage(size) > self.largest_young_fixedsize)):
             # ^^^ we do two size comparisons; the first one appears redundant,
             #     but it can be constant-folded if 'size' is a constant; then
@@ -144,18 +157,6 @@ class GenerationGC(SemiSpaceGC):
         if contains_weakptr:
             self.young_objects_with_weakrefs.append(result + size_gc_header)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
-
-    def coalloc_fixedsize_clear(self, coallocator, typeid, size):
-        # note: a coallocated object can never return a weakref, since the
-        # coallocation analysis is done at a time where weakrefs are
-        # represented as opaque objects which aren't allocated using malloc but
-        # with weakref_create
-        if self.is_in_nursery(coallocator):
-            return self.malloc_fixedsize_clear(typeid, size,
-                                               True, False, False)
-        else:
-            return SemiSpaceGC.malloc_fixedsize_clear(self, typeid, size,
-                                                      True, False, False)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
                              offset_to_length, can_collect,
@@ -204,17 +205,6 @@ class GenerationGC(SemiSpaceGC):
         self.nursery_free = result + llarena.round_up_for_allocation(totalsize)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
-    def coalloc_varsize_clear(self, coallocator, typeid,
-                              length, size, itemsize,
-                              offset_to_length):
-        if self.is_in_nursery(coallocator):
-            return self.malloc_varsize_clear(typeid, length, size, itemsize,
-                                             offset_to_length, True, False)
-        else:
-            return SemiSpaceGC.malloc_varsize_clear(self, typeid, length, size,
-                                                    itemsize, offset_to_length,
-                                                    True, False)
-
     # override the init_gc_object methods to change the default value of 'flags',
     # used by objects that are directly created outside the nursery by the SemiSpaceGC.
     # These objects must have the GCFLAG_NO_YOUNG_PTRS flag set immediately.
@@ -225,22 +215,31 @@ class GenerationGC(SemiSpaceGC):
                                 flags=GCFLAG_NO_YOUNG_PTRS|GCFLAG_NO_HEAP_PTRS):
         SemiSpaceGC.init_gc_object_immortal(self, addr, typeid, flags)
 
+    # flags exposed for the HybridGC subclass
+    GCFLAGS_FOR_NEW_YOUNG_OBJECTS = 0   # NO_YOUNG_PTRS never set on young objs
+    GCFLAGS_FOR_NEW_EXTERNAL_OBJECTS = (GCFLAG_EXTERNAL | GCFLAG_FORWARDED |
+                                        GCFLAG_NO_YOUNG_PTRS)
+
+    # ____________________________________________________________
+    # Support code for full collections
+
     def semispace_collect(self, size_changing=False):
         self.reset_young_gcflags() # we are doing a full collection anyway
         self.weakrefs_grow_older()
+        self.ids_grow_older()
         self.reset_nursery()
         if DEBUG_PRINT:
             llop.debug_print(lltype.Void, "major collect, size changing", size_changing)
         SemiSpaceGC.semispace_collect(self, size_changing)
         if DEBUG_PRINT and not size_changing:
             llop.debug_print(lltype.Void, "percent survived", float(self.free - self.tospace) / self.space_size)
-            
 
-    def trace_and_copy(self, obj):
-        # during a full collect, all objects copied might come from the nursery and
-        # so must have this flag set:
-        self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
-        SemiSpaceGC.trace_and_copy(self, obj)
+    def make_a_copy(self, obj, objsize):
+        newobj = SemiSpaceGC.make_a_copy(self, obj, objsize)
+        # During a full collect, all copied objects might implicitly come
+        # from the nursery.  In case they do, we must add this flag:
+        self.header(newobj).tid |= GCFLAG_NO_YOUNG_PTRS
+        return newobj
         # history: this was missing and caused an object to become old but without the
         # flag set.  Such an object is bogus in the sense that the write_barrier doesn't
         # work on it.  So it can eventually contain a ptr to a young object but we didn't
@@ -248,6 +247,12 @@ class GenerationGC(SemiSpaceGC):
         # the next usage.
 
     def reset_young_gcflags(self):
+        # This empties self.old_objects_pointing_to_young, and puts the
+        # GCFLAG_NO_YOUNG_PTRS back on all these objects.  We could put
+        # the flag back more lazily but we expect this list to be short
+        # anyway, and it's much saner to stick to the invariant:
+        # non-young objects all have GCFLAG_NO_YOUNG_PTRS set unless
+        # they are listed in old_objects_pointing_to_young.
         oldlist = self.old_objects_pointing_to_young
         while oldlist.non_empty():
             obj = oldlist.pop()
@@ -258,6 +263,45 @@ class GenerationGC(SemiSpaceGC):
         while self.young_objects_with_weakrefs.non_empty():
             obj = self.young_objects_with_weakrefs.pop()
             self.objects_with_weakrefs.append(obj)
+
+    def collect_roots(self):
+        """GenerationGC: collects all roots.
+           HybridGC: collects all roots, excluding the generation 3 ones.
+        """
+        # Warning!  References from static (and possibly gen3) objects
+        # are found by collect_last_generation_roots(), which must be
+        # called *first*!  If it is called after walk_roots(), then the
+        # HybridGC explodes if one of the _collect_root causes an object
+        # to be added to self.last_generation_root_objects.  Indeed, in
+        # this case, the newly added object is traced twice: once by
+        # collect_last_generation_roots() and once because it was added
+        # in self.rawmalloced_objects_to_trace.
+        self.collect_last_generation_roots()
+        self.root_walker.walk_roots(
+            SemiSpaceGC._collect_root,  # stack roots
+            SemiSpaceGC._collect_root,  # static in prebuilt non-gc structures
+            None)   # we don't need the static in prebuilt gc objects
+
+    def collect_last_generation_roots(self):
+        stack = self.last_generation_root_objects
+        self.last_generation_root_objects = self.AddressStack()
+        while stack.non_empty():
+            obj = stack.pop()
+            self.header(obj).tid |= GCFLAG_NO_HEAP_PTRS
+            # ^^^ the flag we just added will be removed immediately if
+            # the object still contains pointers to younger objects
+            self.trace(obj, self._trace_external_obj, obj)
+        stack.delete()
+
+    def _trace_external_obj(self, pointer, obj):
+        addr = pointer.address[0]
+        if addr != NULL:
+            newaddr = self.copy(addr)
+            pointer.address[0] = newaddr
+            self.write_into_last_generation_obj(obj, newaddr)
+
+    # ____________________________________________________________
+    # Implementation of nursery-only collections
 
     def collect_nursery(self):
         if self.nursery_size > self.top_of_space - self.free:
@@ -277,11 +321,13 @@ class GenerationGC(SemiSpaceGC):
             # GCFLAG_NO_YOUNG_PTRS set again by trace_and_drag_out_of_nursery
             if self.young_objects_with_weakrefs.non_empty():
                 self.invalidate_young_weakrefs()
-            self.notify_objects_just_moved()
+            if self.young_objects_with_id.length() > 0:
+                self.update_young_objects_with_id()
             # mark the nursery as free and fill it with zeroes again
             llarena.arena_reset(self.nursery, self.nursery_size, True)
             if DEBUG_PRINT:
                 llop.debug_print(lltype.Void, "percent survived:", float(scan - beginning) / self.nursery_size)
+            #self.debug_check_consistency()   # -- quite expensive
         else:
             # no nursery - this occurs after a full collect, triggered either
             # just above or by some previous non-nursery-based allocation.
@@ -303,6 +349,8 @@ class GenerationGC(SemiSpaceGC):
         while oldlist.non_empty():
             count += 1
             obj = oldlist.pop()
+            hdr = self.header(obj)
+            hdr.tid |= GCFLAG_NO_YOUNG_PTRS
             self.trace_and_drag_out_of_nursery(obj)
         if DEBUG_PRINT:
             llop.debug_print(lltype.Void, "collect_oldrefs_to_nursery", count)
@@ -333,7 +381,6 @@ class GenerationGC(SemiSpaceGC):
         """obj must not be in the nursery.  This copies all the
         young objects it references out of the nursery.
         """
-        self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
         self.trace(obj, self._trace_drag_out, None)
 
     def _trace_drag_out(self, pointer, ignored):
@@ -346,13 +393,13 @@ class GenerationGC(SemiSpaceGC):
         # weakref; otherwise invalidate the weakref
         while self.young_objects_with_weakrefs.non_empty():
             obj = self.young_objects_with_weakrefs.pop()
-            if not self.is_forwarded(obj):
+            if not self.surviving(obj):
                 continue # weakref itself dies
             obj = self.get_forwarding_address(obj)
             offset = self.weakpointer_offset(self.get_type_id(obj))
             pointing_to = (obj + offset).address[0]
             if self.is_in_nursery(pointing_to):
-                if self.is_forwarded(pointing_to):
+                if self.surviving(pointing_to):
                     (obj + offset).address[0] = self.get_forwarding_address(
                         pointing_to)
                 else:
@@ -360,28 +407,109 @@ class GenerationGC(SemiSpaceGC):
                     continue    # no need to remember this weakref any longer
             self.objects_with_weakrefs.append(obj)
 
-    def write_barrier(self, oldvalue, newvalue, addr_struct):
+    def write_barrier(self, newvalue, addr_struct):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
-
-    def append_to_static_roots(self, pointer, arg):
-        self.root_walker.append_static_root(pointer)
-
-    def move_to_static_roots(self, addr_struct):
-        objhdr = self.header(addr_struct)
-        objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
-        self.trace(addr_struct, self.append_to_static_roots, None)
 
     def remember_young_pointer(self, addr_struct, addr):
         ll_assert(not self.is_in_nursery(addr_struct),
                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
-        oldhdr = self.header(addr_struct)
         if self.is_in_nursery(addr):
             self.old_objects_pointing_to_young.append(addr_struct)
-            oldhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
-        if oldhdr.tid & GCFLAG_NO_HEAP_PTRS:
-            self.move_to_static_roots(addr_struct)
+            self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
+        elif addr == NULL:
+            return
+        self.write_into_last_generation_obj(addr_struct, addr)
     remember_young_pointer._dont_inline_ = True
+
+    def write_into_last_generation_obj(self, addr_struct, addr):
+        objhdr = self.header(addr_struct)
+        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+            if not self.is_last_generation(addr):
+                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.last_generation_root_objects.append(addr_struct)
+
+    def is_last_generation(self, obj):
+        # overridden by HybridGC
+        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
+
+    def _compute_id(self, obj):
+        if self.is_in_nursery(obj):
+            result = self.young_objects_with_id.get(obj)
+            if not result:
+                result = self._next_id()
+                self.young_objects_with_id.setitem(obj, result)
+            return result
+        else:
+            return SemiSpaceGC._compute_id(self, obj)
+
+    def update_young_objects_with_id(self):
+        self.young_objects_with_id.foreach(self._update_object_id,
+                                           self.objects_with_id)
+        self.young_objects_with_id.clear()
+        # NB. the clear() also makes the dictionary shrink back to its
+        # minimal size, which is actually a good idea: a large, mostly-empty
+        # table is bad for the next call to 'foreach'.
+
+    def ids_grow_older(self):
+        self.young_objects_with_id.foreach(self._id_grow_older, None)
+        self.young_objects_with_id.clear()
+
+    def _id_grow_older(self, obj, id, ignored):
+        self.objects_with_id.setitem(obj, id)
+
+    def debug_check_object(self, obj):
+        """Check the invariants about 'obj' that should be true
+        between collections."""
+        SemiSpaceGC.debug_check_object(self, obj)
+        tid = self.header(obj).tid
+        if tid & GCFLAG_NO_YOUNG_PTRS:
+            ll_assert(not self.is_in_nursery(obj),
+                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
+            self.trace(obj, self._debug_no_nursery_pointer, None)
+        elif not self.is_in_nursery(obj):
+            ll_assert(self._d_oopty.contains(obj),
+                      "missing from old_objects_pointing_to_young")
+        if tid & GCFLAG_NO_HEAP_PTRS:
+            ll_assert(self.is_last_generation(obj),
+                      "GCFLAG_NO_HEAP_PTRS on non-3rd-generation object")
+            self.trace(obj, self._debug_no_gen1or2_pointer, None)
+        elif self.is_last_generation(obj):
+            ll_assert(self._d_lgro.contains(obj),
+                      "missing from last_generation_root_objects")
+
+    def _debug_no_nursery_pointer(self, root, ignored):
+        ll_assert(not self.is_in_nursery(root.address[0]),
+                  "GCFLAG_NO_YOUNG_PTRS but found a young pointer")
+    def _debug_no_gen1or2_pointer(self, root, ignored):
+        target = root.address[0]
+        ll_assert(not target or self.is_last_generation(target),
+                  "GCFLAG_NO_HEAP_PTRS but found a pointer to gen1or2")
+
+    def debug_check_consistency(self):
+        if self.DEBUG:
+            self._d_oopty = self.old_objects_pointing_to_young.stack2dict()
+            self._d_lgro = self.last_generation_root_objects.stack2dict()
+            SemiSpaceGC.debug_check_consistency(self)
+            self._d_oopty.delete()
+            self._d_lgro.delete()
+            self.old_objects_pointing_to_young.foreach(
+                self._debug_check_flag_1, None)
+            self.last_generation_root_objects.foreach(
+                self._debug_check_flag_2, None)
+
+    def _debug_check_flag_1(self, obj, ignored):
+        ll_assert(not (self.header(obj).tid & GCFLAG_NO_YOUNG_PTRS),
+                  "unexpected GCFLAG_NO_YOUNG_PTRS")
+    def _debug_check_flag_2(self, obj, ignored):
+        ll_assert(not (self.header(obj).tid & GCFLAG_NO_HEAP_PTRS),
+                  "unexpected GCFLAG_NO_HEAP_PTRS")
+
+    def debug_check_can_copy(self, obj):
+        if self.is_in_nursery(obj):
+            pass    # it's ok to copy an object out of the nursery
+        else:
+            SemiSpaceGC.debug_check_can_copy(self, obj)
 
 # ____________________________________________________________
 
@@ -500,6 +628,7 @@ elif sys.platform == 'darwin':
                 size = rffi.sizeof(rffi.LONGLONG)
                 l2cache_p[0] = rffi.cast(rffi.LONGLONG, 0)
                 len_p[0] = rffi.cast(rffi.SIZE_T, size)
+                # XXX a hack for llhelper not being robust-enough
                 result = sysctlbyname("hw.l2cachesize",
                                       rffi.cast(rffi.VOIDP, l2cache_p),
                                       len_p,

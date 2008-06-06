@@ -1,4 +1,5 @@
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
+from pypy.rlib import rposix
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError, wrap_oserror
@@ -69,6 +70,11 @@ def close(space, fd):
     except OSError, e: 
         raise wrap_oserror(space, e) 
 close.unwrap_spec = [ObjSpace, int]
+
+def closerange(fd_low, fd_high):
+    """Closes all file descriptors in [fd_low, fd_high), ignoring errors."""
+    rposix.closerange(fd_low, fd_high)
+closerange.unwrap_spec = [int, int]
 
 def ftruncate(space, fd, length):
     """Truncate a file to a specified length."""
@@ -407,6 +413,13 @@ def kill(space, pid, sig):
     except OSError, e:
         raise wrap_oserror(space, e)
 kill.unwrap_spec = [ObjSpace, int, int]
+
+def abort(space):
+    """Abort the interpreter immediately.  This 'dumps core' or otherwise fails
+in the hardest way possible on the hosting operating system."""
+    import signal
+    os.kill(os.getpid(), signal.SIGABRT)
+abort.unwrap_spec = [ObjSpace]
 
 def link(space, src, dst):
     "Create a hard link to a file."

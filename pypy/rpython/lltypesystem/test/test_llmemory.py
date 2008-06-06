@@ -15,6 +15,18 @@ def test_simple():
     b.signed[0] = 234
     assert s.x == 234
 
+def test_simple_float():
+    S = lltype.GcStruct("S", ("x", lltype.Float), ("y", lltype.Float))
+    s = lltype.malloc(S)
+    s.x = 123.2
+    s.y = 456.2
+    a = fakeaddress(s)
+    assert a.ref() == s
+    b = a + FieldOffset(S, 'x')
+    assert b.float[0] == 123.2
+    b.float[0] = 234.1
+    assert s.x == 234.1
+
 def test_composite():
     S1 = lltype.GcStruct("S1", ("x", lltype.Signed), ("y", lltype.Signed))
     S2 = lltype.GcStruct("S2", ("s", S1))
@@ -577,4 +589,54 @@ def test_raw_memclear_on_empty_array():
     a = lltype.malloc(A, flavor='raw')
     src = cast_ptr_to_adr(a) + itemoffsetof(A, 0)
     raw_memclear(src, sizeof(lltype.Signed) * 0)
+    
+def test_nonneg():
+    S1 = lltype.GcStruct('S1', ('x', lltype.Float))
+    A1 = lltype.GcArray(lltype.Float)
+    assert sizeof(S1) >= 0
+    assert itemoffsetof(A1, 4) >= 0
+    assert not (sizeof(S1) < 0)
+    assert not (itemoffsetof(A1, 4) < 0)
+    py.test.raises(TypeError, "sizeof(S1) > 0")
+    py.test.raises(TypeError, "sizeof(S1) > 1")
+    py.test.raises(TypeError, "sizeof(S1) <= 0")
+    py.test.raises(TypeError, "sizeof(S1) <= 4")
+    py.test.raises(TypeError, "(-sizeof(S1)) >= 0")
+
+def test_addr_keeps_object_alive():
+    A = lltype.Array(Address)
+    ptr = lltype.malloc(A, 10, immortal=True)
+    adr = cast_ptr_to_adr(ptr) + ArrayItemsOffset(A)
+    del ptr
+    import gc; gc.collect(); gc.collect()
+    # the following line crashes if the array is dead
+    ptr1 = cast_adr_to_ptr(adr, lltype.Ptr(lltype.FixedSizeArray(Address, 1)))
+    ptr1[0] = NULL
+
+def test_realloc():
+    A = lltype.Array(lltype.Float)
+    adr = raw_malloc(sizeof(A, 10))
+    ptr = cast_adr_to_ptr(adr, lltype.Ptr(A))
+    for i in range(10):
+        ptr[i] = float(i)
+    adr2 = raw_realloc_shrink(adr, sizeof(A, 10), sizeof(A, 5))
+    ptr2 = cast_adr_to_ptr(adr2, lltype.Ptr(A))
+    assert len(ptr2) == 5
+    assert ptr2[3] == 3.0
+    assert ptr2[1] == 1.0
+
+def test_realloc_struct():
+    S = lltype.Struct('x', ('one', lltype.Signed),
+                      ('a', lltype.Array(lltype.Float)))
+    adr = raw_malloc(sizeof(S, 5))
+    ptr = cast_adr_to_ptr(adr, lltype.Ptr(S))
+    for i in range(5):
+        ptr.a[i] = float(i)
+    ptr.one = 3
+    adr2 = raw_realloc_grow(adr, sizeof(S, 5), sizeof(S, 10))
+    ptr2 = cast_adr_to_ptr(adr2, lltype.Ptr(S))
+    assert len(ptr2.a) == 10
+    assert ptr2.a[3] == 3.0
+    assert ptr2.a[0] == 0.0
+    assert ptr2.one == 3
     

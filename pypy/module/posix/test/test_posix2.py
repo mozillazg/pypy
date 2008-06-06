@@ -6,6 +6,7 @@ from pypy.rpython.module.ll_os import RegisterOs
 import os
 import py
 import sys
+import signal
 
 def setup_module(mod): 
     mod.space = gettestobjspace(usemodules=['posix'])
@@ -42,6 +43,7 @@ class AppTestPosix:
             cls.w_sysconf_name = space.wrap(sysconf_name)
             cls.w_sysconf_value = space.wrap(os.sysconf_names[sysconf_name])
             cls.w_sysconf_result = space.wrap(os.sysconf(sysconf_name))
+        cls.w_SIGABRT = space.wrap(signal.SIGABRT)
 
     def setup_method(self, meth):
         if getattr(meth, 'need_sparse_files', False):
@@ -189,7 +191,8 @@ class AppTestPosix:
                 os._exit(4)
             pid1, status1 = os.waitpid(pid, 0)
             assert pid1 == pid
-            # XXX check status1
+            assert os.WIFEXITED(status1)
+            assert os.WEXITSTATUS(status1) == 4
         pass # <- please, inspect.getsource(), don't crash
 
     if hasattr(__import__(os.name), "execv"):
@@ -234,10 +237,10 @@ class AppTestPosix:
 
     if hasattr(__import__(os.name), 'popen'):
         def test_popen(self):
-            skip("Not implemented")
             os = self.posix
-            stream = os.popen('echo 1')
-            assert stream.read() == '1\n'
+            for i in range(5):
+                stream = os.popen('echo 1')
+                assert stream.read() == '1\n'
 
     if hasattr(__import__(os.name), '_getfullpathname'):
         def test__getfullpathname(self):
@@ -361,6 +364,36 @@ class AppTestPosix:
         data = os.read(fd, 2)
         assert data == 'X'
         os.close(fd)
+
+    if hasattr(__import__(os.name), "fork"):
+        def test_abort(self):
+            os = self.posix
+            pid = os.fork()
+            if pid == 0:
+                os.abort()
+            pid1, status1 = os.waitpid(pid, 0)
+            assert pid1 == pid
+            assert os.WIFSIGNALED(status1)
+            assert os.WTERMSIG(status1) == self.SIGABRT
+        pass # <- please, inspect.getsource(), don't crash
+
+    def test_closerange(self):
+        os = self.posix
+        if not hasattr(os, 'closerange'):
+            skip("missing os.closerange()")
+        fds = [os.open(self.path + str(i), os.O_CREAT|os.O_WRONLY, 0777)
+               for i in range(15)]
+        fds.sort()
+        start = fds.pop()
+        stop = start + 1
+        while len(fds) > 3 and fds[-1] == start - 1:
+            start = fds.pop()
+        os.closerange(start, stop)
+        for fd in fds:
+            os.close(fd)     # should not have been closed
+        for fd in range(start, stop):
+            raises(OSError, os.fstat, fd)   # should have been closed
+
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

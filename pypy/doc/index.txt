@@ -136,6 +136,9 @@ of the `EU reports`_.
 properties into our interpreter during the translation
 process. This document is also part of the `EU reports`_.
 
+`garbage collector`_ strategies that can be used by the virtual
+machines produced by the translation process.
+
 `parser`_ contains (outdated, unfinished) documentation about
 the parser.
 
@@ -271,7 +274,7 @@ Directory                      explanation/links
 
 `rpython/ootypesystem/`_       the `object-oriented type system`_ for OO backends
 
-`rpython/memory/`_             the garbage collector construction framework
+`rpython/memory/`_             the `garbage collector`_ construction framework
 
 `tool/`_                       various utilities and hacks used from various places 
 
@@ -346,6 +349,7 @@ Directory                      explanation/links
 .. _rtyper: rtyper.html
 .. _`low-level type system`: rtyper.html#low-level-type
 .. _`object-oriented type system`: rtyper.html#oo-type
+.. _`garbage collector`: garbage_collection.html
 .. _`Stackless Transform`: translation.html#the-stackless-transform
 .. _`PyPy Prolog Interpreter`: prolog-interpreter.html
 .. _`Prolog Interpreter`: prolog-interpreter.html

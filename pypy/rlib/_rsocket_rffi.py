@@ -53,8 +53,9 @@ if _MS_WINDOWS:
 constants = {}
 
 eci = ExternalCompilationInfo(
-    pre_include_lines = (HEADER + COND_HEADER).split("\n"),
-    includes = includes
+    post_include_bits = [HEADER, COND_HEADER],
+    includes = includes,
+    libraries = libraries,
 )
 
 class CConfig:

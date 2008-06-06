@@ -119,7 +119,7 @@ def compile(backend):
     features = '--'.join([normalize(f) for f in features.split('--')])
 
     os.chdir(homedir + '/projects/pypy-dist/pypy/translator/goal')
-    run('/usr/local/bin/python translate.py --backend=%(backend)s%(featureoptions)s%(translateoptions)s --text --batch targetpypystandalone.py %(targetoptions)s 2>&1' % locals())
+    run('/usr/local/bin/python translate.py --backend=%(backend)s%(featureoptions)s%(translateoptions)s --batch targetpypystandalone.py %(targetoptions)s 2>&1' % locals())
     if backend == 'llvm':
         run('mv %s/entry_point.ll %s/pypy.ll' % (tmpdir, tmpdir))
 
@@ -183,11 +183,10 @@ def main(backends=[]):
             c
             c--stackless--_faassen
             c--_faassen--_allworkingmodules
-            c--thread
-            c--gc=marksweep--_faassen
+            c--thread--gc=hybrid--_faassen
             c--gc=semispace--_faassen
             c--gc=generation--_faassen
-            c--_objspace-std-withrope
+            c--gc=hybrid--_faassen
             cli--_faassen
             jvm--_faassen
             """.split('\n') if backend.strip() and not backend.strip().startswith('#')]

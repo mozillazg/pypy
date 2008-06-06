@@ -2,28 +2,21 @@ import sys
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
      Arguments
 from pypy.interpreter.error import OperationError, wrap_oserror
-from pypy.interpreter.gateway import interp2app
+from pypy.interpreter.gateway import interp2app, NoneNotWrapped
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 
 from pypy.rlib.libffi import *
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.unroll import unrolling_iterable
 
+_MS_WINDOWS = os.name == "nt"
+
+if _MS_WINDOWS:
+    from pypy.rlib import rwin32
+
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.rarithmetic import intmask, r_uint, r_singlefloat
 from pypy.module._rawffi.tracker import tracker
-
-def _signed_type_for(TYPE):
-    sz = rffi.sizeof(TYPE)
-    if sz == 4:   return ffi_type_sint32
-    elif sz == 8: return ffi_type_sint64
-    else: raise ValueError("unsupported type size for %r" % (TYPE,))
-
-def _unsigned_type_for(TYPE):
-    sz = rffi.sizeof(TYPE)
-    if sz == 4:   return ffi_type_uint32
-    elif sz == 8: return ffi_type_uint64
-    else: raise ValueError("unsupported type size for %r" % (TYPE,))
 
 TYPEMAP = {
     # XXX A mess with unsigned/signed/normal chars :-/
@@ -33,14 +26,12 @@ TYPEMAP = {
     'h' : ffi_type_sshort,
     'u' : ffi_type_uint, # XXX think deeper how to map it properly
     'H' : ffi_type_ushort,
-    'i' : ffi_type_sint,
-    'I' : ffi_type_uint,
-    # xxx don't use ffi_type_slong and ffi_type_ulong - their meaning
-    # changes from a libffi version to another :-((
-    'l' : _signed_type_for(rffi.LONG),
-    'L' : _unsigned_type_for(rffi.ULONG),
-    'q' : _signed_type_for(rffi.LONGLONG),
-    'Q' : _unsigned_type_for(rffi.ULONGLONG),
+    'i' : cast_type_to_ffitype(rffi.INT),
+    'I' : cast_type_to_ffitype(rffi.UINT),
+    'l' : cast_type_to_ffitype(rffi.LONG),
+    'L' : cast_type_to_ffitype(rffi.ULONG),
+    'q' : cast_type_to_ffitype(rffi.LONGLONG),
+    'Q' : cast_type_to_ffitype(rffi.ULONGLONG),
     'f' : ffi_type_float,
     'd' : ffi_type_double,
     's' : ffi_type_pointer,
@@ -124,6 +115,26 @@ def unpack_to_size_alignment(space, w_shape):
         size, alignment = resshape._size_alignment()
         return ('V', length*size, alignment) # value object
 
+def unpack_resshape(space, w_restype):
+    if space.is_w(w_restype, space.w_None):
+        resshape = None
+        ffi_restype = ffi_type_void
+    else:
+        tp_letter, ffi_restype, resshape = unpack_to_ffi_type(space,
+                                                    w_restype,
+                                                    allow_void=True,
+                                                    shape=True)
+    return ffi_restype, resshape
+
+def unpack_argshapes(space, w_argtypes):
+    argletters = []
+    ffi_argtypes = []
+    for w_arg in space.unpackiterable(w_argtypes):
+        argletter, ffi_argtype, _ = unpack_to_ffi_type(space, w_arg)
+        argletters.append(argletter)
+        ffi_argtypes.append(ffi_argtype)
+    return ffi_argtypes, argletters
+
 class W_CDLL(Wrappable):
     def __init__(self, space, name):
         self.cdll = CDLL(name)
@@ -135,15 +146,7 @@ class W_CDLL(Wrappable):
         """ Get a pointer for function name with provided argtypes
         and restype
         """
-        # xxx refactor
-        if space.is_w(w_restype, space.w_None):
-            resshape = None
-            ffi_restype = ffi_type_void
-        else:
-            tp_letter, ffi_restype, resshape = unpack_to_ffi_type(space,
-                                                        w_restype,
-                                                        allow_void=True,
-                                                        shape=True)
+        ffi_restype, resshape = unpack_resshape(space, w_restype)
         w = space.wrap
         argtypes_w = space.unpackiterable(w_argtypes)
         w_argtypes = space.newtuple(argtypes_w)
@@ -155,13 +158,7 @@ class W_CDLL(Wrappable):
                 pass
             else:
                 raise
-        argletters = []
-        ffi_argtypes = []
-        for w_arg in argtypes_w:
-            argletter, ffi_argtype, _ = unpack_to_ffi_type(space, w_arg)
-            argletters.append(argletter)
-            ffi_argtypes.append(ffi_argtype)
-
+        ffi_argtypes, argletters = unpack_argshapes(space, w_argtypes)
         try:
             ptr = self.cdll.getrawpointer(name, ffi_argtypes, ffi_restype)
             w_funcptr = W_FuncPtr(space, ptr, argletters, resshape)
@@ -172,18 +169,15 @@ class W_CDLL(Wrappable):
                 "No symbol %s found in library %s" % (name, self.name)))
     ptr.unwrap_spec = ['self', ObjSpace, str, W_Root, W_Root]
 
-    def getprimitive(self, space, letter, name):
-        from pypy.module._rawffi.array import get_array_cache
-        cache = get_array_cache(space)
-        w_array = cache.get_array_type(letter2tp(space, letter))
+    def getaddressindll(self, space, name):
         try:
             address_as_uint = rffi.cast(lltype.Unsigned,
                                         self.cdll.getaddressindll(name))
         except KeyError:
             raise OperationError(space.w_ValueError,
                                  space.wrap("Cannot find symbol %s" % (name,)))
-        return w_array.fromaddress(space, address_as_uint, 1)
-    getprimitive.unwrap_spec = ['self', ObjSpace, str, str]
+        return space.wrap(address_as_uint)
+    getaddressindll.unwrap_spec = ['self', ObjSpace, str]
 
 def descr_new_cdll(space, w_type, name):
     try:
@@ -196,7 +190,7 @@ W_CDLL.typedef = TypeDef(
     'CDLL',
     __new__     = interp2app(descr_new_cdll),
     ptr         = interp2app(W_CDLL.ptr),
-    getprimitive= interp2app(W_CDLL.getprimitive),
+    getaddressindll = interp2app(W_CDLL.getaddressindll),
     __doc__     = """ C Dynamically loaded library
 use CDLL(libname) to create a handle to a C library (the argument is processed
 the same way as dlopen processes it). On such a library you can call:
@@ -238,7 +232,7 @@ class W_DataInstance(Wrappable):
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw',
                                            zero=True)
             if tracker.DO_TRACING:
-                ll_buf = rffi.cast(rffi.INT, self.ll_buffer)
+                ll_buf = rffi.cast(lltype.Signed, self.ll_buffer)
                 tracker.trace_allocation(ll_buf, self)
 
     def getbuffer(space, self):
@@ -260,7 +254,7 @@ class W_DataInstance(Wrappable):
 
     def _free(self):
         if tracker.DO_TRACING:
-            ll_buf = rffi.cast(rffi.INT, self.ll_buffer)
+            ll_buf = rffi.cast(lltype.Signed, self.ll_buffer)
             tracker.trace_free(ll_buf)
         lltype.free(self.ll_buffer, flavor='raw')
         self.ll_buffer = lltype.nullptr(rffi.VOIDP.TO)
@@ -269,6 +263,9 @@ class W_DataInstance(Wrappable):
         from pypy.module._rawffi.buffer import RawFFIBuffer
         return space.wrap(RawFFIBuffer(self))
     descr_buffer.unwrap_spec = ['self', ObjSpace]
+
+    def getrawsize(self):
+        raise NotImplementedError("abstract base class")
 
 def unwrap_truncate_int(TP, space, w_arg):
     if space.is_true(space.isinstance(w_arg, space.w_int)):
@@ -347,6 +344,26 @@ class W_FuncPtr(Wrappable):
         self.argletters = argletters
         self.resshape = resshape
 
+    def getbuffer(space, self):
+        return space.wrap(rffi.cast(lltype.Unsigned, self.ptr.funcsym))
+
+    # XXX exactly the same as previous one, but arguments are suitable
+    #     for calling with python
+    def _getbuffer(self, space):
+        return space.wrap(rffi.cast(lltype.Unsigned, self.ptr.funcsym))
+
+    def byptr(self, space):
+        from pypy.module._rawffi.array import get_array_cache
+        array_of_ptr = get_array_cache(space).array_of_ptr
+        array = array_of_ptr.allocate(space, 1)
+        array.setitem(space, 0, self._getbuffer(space))
+        if tracker.DO_TRACING:
+            # XXX this is needed, because functions tend to live forever
+            #     hence our testing is not performing that well
+            del tracker.alloced[rffi.cast(lltype.Signed, array.ll_buffer)]
+        return space.wrap(array)
+    byptr.unwrap_spec = ['self', ObjSpace]
+
     def call(self, space, args_w):
         from pypy.module._rawffi.array import W_ArrayInstance
         from pypy.module._rawffi.structure import W_StructureInstance
@@ -394,10 +411,21 @@ class W_FuncPtr(Wrappable):
             return space.w_None
     call.unwrap_spec = ['self', ObjSpace, 'args_w']
 
+def descr_new_funcptr(space, w_tp, addr, w_args, w_res):
+    ffi_args, args = unpack_argshapes(space, w_args)
+    ffi_res, res = unpack_resshape(space, w_res)
+    ptr = RawFuncPtr('???', ffi_args, ffi_res, rffi.cast(rffi.VOIDP, addr))
+    return space.wrap(W_FuncPtr(space, ptr, args, res))
+descr_new_funcptr.unwrap_spec = [ObjSpace, W_Root, r_uint, W_Root, W_Root]
+
 W_FuncPtr.typedef = TypeDef(
     'FuncPtr',
-    __call__ = interp2app(W_FuncPtr.call)
+    __new__  = interp2app(descr_new_funcptr),
+    __call__ = interp2app(W_FuncPtr.call),
+    buffer   = GetSetProperty(W_FuncPtr.getbuffer),
+    byptr    = interp2app(W_FuncPtr.byptr),
 )
+W_FuncPtr.typedef.acceptable_as_base_class = False
 
 def _create_new_accessor(func_name, name):
     def accessor(space, tp_letter):
@@ -429,3 +457,20 @@ def charp2rawstring(space, address, maxlength=-1):
     s = rffi.charpsize2str(rffi.cast(rffi.CCHARP, address), maxlength)
     return space.wrap(s)
 charp2rawstring.unwrap_spec = [ObjSpace, r_uint, int]
+
+if _MS_WINDOWS:
+    def FormatError(space, code):
+        return space.wrap(rwin32.FormatError(code))
+    FormatError.unwrap_spec = [ObjSpace, int]
+
+    def check_HRESULT(space, hresult):
+        if rwin32.FAILED(hresult):
+            raise OperationError(space.w_WindowsError, space.wrap(hresult))
+        return space.wrap(hresult)
+    check_HRESULT.unwrap_spec = [ObjSpace, int]
+
+def get_libc(space):
+    try:
+        return space.wrap(W_CDLL(space, get_libc_name()))
+    except OSError, e:
+        raise wrap_oserror(space, e)

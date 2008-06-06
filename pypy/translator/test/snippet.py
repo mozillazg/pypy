@@ -473,6 +473,15 @@ def somepbc_simplify():
     call_Z_my_method(global_z)
     call_Z_my_method(z)
 
+class ClassWithMethods:
+    def cm(cls, x):
+        return x
+    cm = classmethod(cm)
+
+    def sm(x):
+        return x
+    sm = staticmethod(sm)
+
 
 global_c = C()
 global_c.a = 1

@@ -4,6 +4,8 @@ from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter import pyframe
+from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table, \
+     BytecodeCorruption
 from pypy.rlib.objectmodel import instantiate
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache 
@@ -13,10 +15,10 @@ from pypy.objspace.std.model import W_ANY, StdObjSpaceMultiMethod, StdTypeModel
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.descroperation import DescrOperation
 from pypy.objspace.std import stdtypedef
-from pypy.rlib.rarithmetic import base_int, r_int, r_uint, \
-     r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint, we_are_jitted
+from pypy.rlib.unroll import unrolling_iterable
 import sys
 import os
 import __builtin__
@@ -39,6 +41,19 @@ def registerimplementation(implcls):
     # hint to objspace.std.model to register the implementation class
     assert issubclass(implcls, W_Object)
     _registered_implementations[implcls] = True
+
+
+compare_table = [
+    "lt",   # "<"
+    "le",   # "<="
+    "eq",   # "=="
+    "ne",   # "!="
+    "gt",   # ">"
+    "ge",   # ">="
+    ]
+
+unrolling_compare_ops = unrolling_iterable(
+    enumerate(compare_table))
 
 ##################################################################
 
@@ -149,6 +164,29 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 # def CALL_METHOD(...):
                 from pypy.objspace.std.callmethod import CALL_METHOD
 
+            if self.config.objspace.std.optimized_comparison_op:
+                def COMPARE_OP(f, testnum, *ignored):
+                    import operator
+                    w_2 = f.popvalue()
+                    w_1 = f.popvalue()
+                    w_result = None
+                    if (type(w_2) is W_IntObject and type(w_1) is W_IntObject
+                        and testnum < len(compare_table)):
+                        for i, attr in unrolling_compare_ops:
+                            if i == testnum:
+                                op = getattr(operator, attr)
+                                w_result = f.space.newbool(op(w_1.intval,
+                                                              w_2.intval))
+                                break
+                    else:
+                        for i, attr in unrolling_compare_dispatch_table:
+                            if i == testnum:
+                                w_result = getattr(f, attr)(w_1, w_2)
+                                break
+                        else:
+                            raise BytecodeCorruption, "bad COMPARE_OP oparg"
+                    f.pushvalue(w_result)
+
             if self.config.objspace.std.logspaceoptypes:
                 _space_op_types = []
                 for name, func in pyframe.PyFrame.__dict__.iteritems():
@@ -182,7 +220,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
                                 w_result = operation(w_1)
                                 f.pushvalue(w_result)
                             return func_with_new_name(opimpl, "opcode_impl_for_%s" % operationname)
-                        locals()[name] = make_opimpl(operationname)
+                        locals()[name] = make_opimpl(operationname)                    
 
         self.FrameClass = StdObjSpaceFrame
 
@@ -201,6 +239,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
             self.DictObjectCls = dictobject.W_DictObject
         assert self.DictObjectCls in self.model.typeorder
 
+        from pypy.objspace.std import tupleobject
+        self.TupleObjectCls = tupleobject.W_TupleObject
+
         if not self.config.objspace.std.withrope:
             from pypy.objspace.std import stringobject
             self.StringObjectCls = stringobject.W_StringObject
@@ -211,7 +252,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # install all the MultiMethods into the space instance
         for name, mm in self.MM.__dict__.items():
-            if isinstance(mm, StdObjSpaceMultiMethod) and not hasattr(self, name):
+            if not isinstance(mm, StdObjSpaceMultiMethod):
+                continue
+            if not hasattr(self, name):
                 if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
                     func = mm.install_not_sliced(self.model.typeorder, baked_perform_call=True)
                 else:               
@@ -229,6 +272,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     return func_with_new_name(boundmethod, 'boundmethod_'+name)
                 boundmethod = make_boundmethod()
                 setattr(self, name, boundmethod)  # store into 'space' instance
+            elif self.config.objspace.std.builtinshortcut:
+                from pypy.objspace.std import builtinshortcut
+                builtinshortcut.install(self, mm)
+
+        if self.config.objspace.std.builtinshortcut:
+            from pypy.objspace.std import builtinshortcut
+            builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
 
         # hack to avoid imports in the time-critical functions below
         for cls in self.model.typeorder:
@@ -426,8 +476,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             w_result = x.__spacebind__(self)
             #print 'wrapping', x, '->', w_result
             return w_result
-        if isinstance(x, r_int) or isinstance(x, r_uint) or \
-           isinstance(x, r_longlong) or isinstance(x, r_ulonglong):
+        if isinstance(x, base_int):
             return W_LongObject.fromrarith_int(x)
 
         # _____ below here is where the annotator should not get _____
@@ -442,14 +491,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return r
         if isinstance(x, tuple):
             wrappeditems = [self.wrap(item) for item in list(x)]
-            return W_TupleObject(wrappeditems)
+            return self.newtuple(wrappeditems)
         if isinstance(x, list):
             wrappeditems = [self.wrap(item) for item in x]
             return self.newlist(wrappeditems)
 
         # The following cases are even stranger.
         # Really really only for tests.
-        if isinstance(x, long):
+        if type(x) is long:
             return W_LongObject.fromlong(x)
         if isinstance(x, slice):
             return W_SliceObject(self.wrap(x.start),
@@ -525,8 +574,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return W_LongObject.fromint(self, val)
 
     def newtuple(self, list_w):
+        from pypy.objspace.std.tupletype import wraptuple
         assert isinstance(list_w, list)
-        return W_TupleObject(list_w)
+        return wraptuple(self, list_w)
 
     def newlist(self, list_w):
         if self.config.objspace.std.withmultilist:
@@ -591,8 +641,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
     allocate_instance._annspecialcase_ = "specialize:arg(1)"
 
     def unpacktuple(self, w_tuple, expected_length=-1):
-        assert isinstance(w_tuple, W_TupleObject)
-        t = w_tuple.wrappeditems
+        assert isinstance(w_tuple, self.TupleObjectCls)
+        t = w_tuple.getitems()
         if expected_length != -1 and expected_length != len(t):
             raise ValueError, "got a tuple of length %d instead of %d" % (
                 len(t), expected_length)
@@ -621,16 +671,56 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return w_one is w_two
 
     def is_true(self, w_obj):
-        # first a few shortcuts for performance
+        # a shortcut for performance
+        # NOTE! this method is typically overridden by builtinshortcut.py.
         if type(w_obj) is W_BoolObject:
             return w_obj.boolval
-        if w_obj is self.w_None:
-            return False
-        # then a shortcut for bootstrapping reasons
-        if type(w_obj) is self.DictObjectCls:
-            return w_obj.len() != 0
+        return DescrOperation.is_true(self, w_obj)
+
+    def getattr(self, w_obj, w_name):
+        if not self.config.objspace.std.getattributeshortcut:
+            return DescrOperation.getattr(self, w_obj, w_name)
+
+        # an optional shortcut for performance
+        from pypy.objspace.descroperation import raiseattrerror
+        from pypy.objspace.descroperation import object_getattribute
+        w_type = self.type(w_obj)
+        if not w_type.uses_object_getattribute:
+            # slow path: look for a custom __getattribute__ on the class
+            w_descr = w_type.lookup('__getattribute__')
+            # if it was not actually overriden in the class, we remember this
+            # fact for the next time.
+            if w_descr is object_getattribute(self):
+                w_type.uses_object_getattribute = True
+            return self._handle_getattribute(w_descr, w_obj, w_name)
+
+        # fast path: XXX this is duplicating most of the logic
+        # from the default __getattribute__ and the getattr() method...
+        name = self.str_w(w_name)
+        w_descr = w_type.lookup(name)
+        e = None
+        if w_descr is not None:
+            if not self.is_data_descr(w_descr):
+                w_value = w_obj.getdictvalue_attr_is_in_class(self, w_name)
+                if w_value is not None:
+                    return w_value
+            try:
+                return self.get(w_descr, w_obj)
+            except OperationError, e:
+                if not e.match(self, self.w_AttributeError):
+                    raise
         else:
-            return DescrOperation.is_true(self, w_obj)
+            w_value = w_obj.getdictvalue(self, w_name)
+            if w_value is not None:
+                return w_value
+
+        w_descr = self.lookup(w_obj, '__getattr__')
+        if w_descr is not None:
+            return self.get_and_call_function(w_descr, w_obj, w_name)
+        elif e is not None:
+            raise e
+        else:
+            raiseattrerror(self, w_obj, name)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)

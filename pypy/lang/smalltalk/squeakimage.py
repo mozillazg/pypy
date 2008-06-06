@@ -1,7 +1,7 @@
 import py
 import os
+from pypy.lang.smalltalk import constants
 from pypy.lang.smalltalk import model
-from pypy.lang.smalltalk import objtable, utility
 from pypy.rlib import objectmodel
 from pypy.lang.smalltalk.tool.bitmanipulation import splitter
 
@@ -69,7 +69,8 @@ class CorruptImageError(Exception):
 # ____________________________________________________________
 
 class ImageReader(object):
-    def __init__(self, stream):
+    def __init__(self, space, stream):
+        self.space = space
         self.stream = stream
         self.chunks = {}
         self.chunklist = []
@@ -124,16 +125,13 @@ class ImageReader(object):
             chunk.g_object.init_w_object()
 
     def assign_prebuilt_constants(self):
-        from pypy.lang.smalltalk import classtable, constants, objtable
         # assign w_objects for objects that are already in classtable
         for name, so_index in constants.classes_in_special_object_table.items():
-            # w_object = getattr(classtable, "w_" + name)
-            w_object = classtable.classtable["w_" + name]
+            w_object = self.space.classtable["w_" + name]
             self.special_object(so_index).w_object = w_object
         # assign w_objects for objects that are already in objtable
         for name, so_index in constants.objects_in_special_object_table.items():
-            # w_object = getattr(objtable, "w_" + name)
-            w_object = objtable.objtable["w_" + name]
+            w_object = self.space.objtable["w_" + name]
             self.special_object(so_index).w_object = w_object
 
     def special_object(self, index):
@@ -173,14 +171,14 @@ class ImageReader(object):
         kind, size, format, classid, idhash = (
             splitter[2,6,4,5,12](self.stream.next()))
         assert kind == 3
-        return ImageChunk(size, format, classid, idhash), self.stream.count - 4
+        return ImageChunk(self.space, size, format, classid, idhash), self.stream.count - 4
 
     def read_2wordobjectheader(self):
         assert self.stream.peek() & 3 == 1 #kind
         classid = self.stream.next() - 01 # remove headertype to get pointer
         kind, size, format, _, idhash = splitter[2,6,4,5,12](self.stream.next())
         assert kind == 1
-        return ImageChunk(size, format, classid, idhash), self.stream.count - 4
+        return ImageChunk(self.space, size, format, classid, idhash), self.stream.count - 4
 
     def read_3wordobjectheader(self):
         kind, size = splitter[2,30](self.stream.next())
@@ -189,18 +187,21 @@ class ImageReader(object):
         classid = self.stream.next() - 00 # remove headertype to get pointer
         kind, _, format, _, idhash = splitter[2,6,4,5,12](self.stream.next())
         assert kind == 0
-        return ImageChunk(size, format, classid, idhash), self.stream.count - 4
+        return ImageChunk(self.space, size, format, classid, idhash), self.stream.count - 4
 
 
 # ____________________________________________________________
 
 class SqueakImage(object):
 
-    def from_reader(self, reader):
+    def from_reader(self, space, reader):
+        from pypy.lang.smalltalk import constants
         self.special_objects = [g_object.w_object for g_object in
                                 reader.chunks[reader.specialobjectspointer]
                                 .g_object.pointers]
-        self.objects = [chunk.g_object.w_object for chunk in reader.chunklist]
+
+        for name, idx in constants.objects_in_special_object_table.items():
+            space.objtable["w_" + name] = self.special_objects[idx]
 
     def special(self, index):
         return self.special_objects[index]
@@ -215,7 +216,8 @@ class GenericObject(object):
         GenericObject from the image chunks, and uses them as starting
         point for the actual create of pypy.lang.smalltalk.model classes.
         """
-    def __init__(self):
+    def __init__(self, space):
+        self.space = space
         self.owner = None
 
     def isinitialized(self):
@@ -225,7 +227,7 @@ class GenericObject(object):
         self.owner = reader
         self.value = value
         self.size = -1
-        self.w_object = utility.wrap_int(value)
+        self.w_object = self.space.wrap_int(value)
 
     def initialize(self, chunk, reader):
         self.owner = reader
@@ -252,7 +254,7 @@ class GenericObject(object):
 
     def decode_pointer(self, pointer):
         if (pointer & 1) == 1:
-            small_int = GenericObject()
+            small_int = GenericObject(self.space)
             small_int.initialize_int(pointer >> 1, self.owner)
             return small_int
         else:
@@ -320,19 +322,25 @@ class GenericObject(object):
 
     def fillin_pointersobject(self, w_pointersobject):
         assert self.pointers is not None
-        w_pointersobject._vars = [g_object.w_object for g_object in self.pointers]
-        w_pointersobject.w_class = self.g_class.w_object
-        w_pointersobject.hash = self.chunk.hash12
         if w_pointersobject._shadow is not None:
-            w_pointersobject._shadow.invalidate()
+            w_pointersobject._shadow.detach_shadow()
+        w_pointersobject._vars = [g_object.w_object for g_object in self.pointers]
+        w_class = self.g_class.w_object
+        assert isinstance(w_class, model.W_PointersObject)
+        w_pointersobject.w_class = w_class
+        w_pointersobject.hash = self.chunk.hash12
 
     def fillin_wordsobject(self, w_wordsobject):
         w_wordsobject.words = self.chunk.data
-        w_wordsobject.w_class = self.g_class.w_object
+        w_class = self.g_class.w_object
+        assert isinstance(w_class, model.W_PointersObject)
+        w_wordsobject.w_class = w_class
         w_wordsobject.hash = self.chunk.hash12 # XXX check this
 
     def fillin_bytesobject(self, w_bytesobject):
-        w_bytesobject.w_class = self.g_class.w_object
+        w_class = self.g_class.w_object
+        assert isinstance(w_class, model.W_PointersObject)
+        w_bytesobject.w_class = w_class
         w_bytesobject.bytes = self.get_bytes()
         w_bytesobject.hash = self.chunk.hash12 # XXX check this
     def get_bytes(self):
@@ -359,20 +367,19 @@ class GenericObject(object):
         header = self.chunk.data[0]
         w_compiledmethod.setheader(header>>1) # We untag before giving header
         for i in range(1,w_compiledmethod.literalsize+1):
-            w_compiledmethod.literalatput0(i, self.decode_pointer(self.chunk.data[i]).w_object)
+            w_compiledmethod.literalatput0(
+                self.space, i, self.decode_pointer(self.chunk.data[i]).w_object)
         bbytes = self.get_bytes()[(w_compiledmethod.literalsize + 1)*4:]
-        # XXX assert mirrorcache.get_or_build(self.g_class.w_object) is
-        #            ct.m_CompiledMethod
         w_compiledmethod.bytes = ''.join(bbytes)
 
 class ImageChunk(object):
-    def __init__(self, size, format, classid, hash12):
+    def __init__(self, space, size, format, classid, hash12):
         self.size = size
         self.format = format
         self.classid = classid
         self.hash12 = hash12
         self.data = None
-        self.g_object = GenericObject()
+        self.g_object = GenericObject(space)
 
     def __eq__(self, other):
         "(for testing)"

@@ -75,7 +75,7 @@ else:
         __metaclass__ = extendabletype
         is_and = True
 
-    class __extend__(ast.Or):
+    class __extend__(ast.AbstractTest):
         __metaclass__ = extendabletype
         is_and = False
 

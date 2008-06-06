@@ -193,10 +193,9 @@ class TypeLayoutBuilder(object):
         self.addresses_of_static_ptrs = []
         # this lists contains pointers in raw Structs and Arrays
         self.addresses_of_static_ptrs_in_nongc = []
-        # if not gc.prebuilt_gc_objects_are_static_roots, then
-        # additional_roots_sources counts the number of locations
-        # within prebuilt GC objects that are of type Ptr(Gc)
-        self.additional_roots_sources = 0
+        # for debugging, the following list collects all the prebuilt
+        # GcStructs and GcArrays
+        self.all_prebuilt_gc = []
         self.finalizer_funcptrs = {}
         self.offsettable_cache = {}
         self.next_typeid_cache = {}
@@ -284,6 +283,7 @@ class TypeLayoutBuilder(object):
             hdr = gc.gcheaderbuilder.new_header(value)
             adr = llmemory.cast_ptr_to_adr(hdr)
             gc.init_gc_object_immortal(adr, typeid)
+            self.all_prebuilt_gc.append(value)
 
         # The following collects the addresses of all the fields that have
         # a GC Pointer type, inside the current prebuilt object.  All such
@@ -291,12 +291,10 @@ class TypeLayoutBuilder(object):
         # they could be changed later to point to GC heap objects.
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            if not gc.prebuilt_gc_objects_are_static_roots:
-                for a in gc_pointers_inside(value, adr):
-                    self.additional_roots_sources += 1
-                return
-            else:
+            if gc.prebuilt_gc_objects_are_static_roots or gc.DEBUG:
                 appendto = self.addresses_of_static_ptrs
+            else:
+                return
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
         for a in gc_pointers_inside(value, adr, mutable_only=True):

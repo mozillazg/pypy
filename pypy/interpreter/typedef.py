@@ -91,101 +91,189 @@ def descr__hash__unhashable(space, w_obj):
 no_hash_descr = interp2app(descr__hash__unhashable)
 
 # ____________________________________________________________
+#
+# For each built-in app-level type Xxx that can be subclassed at
+# app-level, the corresponding interp-level W_XxxObject class cannot
+# generally represent instances of app-level subclasses of Xxx.  The
+# reason is that it is missing a place to store the __dict__, the slots,
+# the weakref lifeline, and it typically has no interp-level __del__.
+# So we create a few interp-level subclasses of W_XxxObject, which add
+# some combination of features.
+#
+# We don't build 2**4 == 16 subclasses for all combinations of requested
+# features, but limit ourselves to 6, chosen a bit arbitrarily based on
+# typical usage (case 1 is the most common kind of app-level subclasses;
+# case 2 is the memory-saving kind defined with __slots__).
+#
+#     dict   slots   del   weakrefable
+#
+# 1.    Y      N      N         Y          UserDictWeakref
+# 2.    N      Y      N         N          UserSlots
+# 3.    Y      Y      N         Y          UserDictWeakrefSlots
+# 4.    N      Y      N         Y          UserSlotsWeakref
+# 5.    Y      Y      Y         Y          UserDictWeakrefSlotsDel
+# 6.    N      Y      Y         Y          UserSlotsWeakrefDel
+#
+# Note that if the app-level explicitly requests no dict, we should not
+# provide one, otherwise storing random attributes on the app-level
+# instance would unexpectedly work.  We don't care too much, though, if
+# an object is weakrefable when it shouldn't really be.  It's important
+# that it has a __del__ only if absolutely needed, as this kills the
+# performance of the GCs.
+#
+# Interp-level inheritance is like this:
+#
+#        W_XxxObject base
+#             /   \
+#            1     2
+#           /       \
+#          3         4
+#         /           \
+#        5             6
+
 def get_unique_interplevel_subclass(cls, hasdict, wants_slots, needsdel=False,
                                     weakrefable=False):
-    if needsdel:
-        hasdict = wants_slots = weakrefable = True
-    if hasdict:
-        weakrefable = True
-    else:
-        wants_slots = True
-    return  _get_unique_interplevel_subclass(cls, hasdict, wants_slots, needsdel, weakrefable)
-get_unique_interplevel_subclass._annspecialcase_ = "specialize:memo"
-
-def _get_unique_interplevel_subclass(cls, hasdict, wants_slots, needsdel, weakrefable):
     "NOT_RPYTHON: initialization-time only"    
-    typedef = cls.typedef    
-    if hasdict and typedef.hasdict:
-        hasdict = False
-    if weakrefable and typedef.weakrefable:
-        weakrefable = False
-
     key = cls, hasdict, wants_slots, needsdel, weakrefable
     try:
         return _subclass_cache[key]
     except KeyError:
-        subcls = _buildusercls(cls, hasdict, wants_slots, needsdel, weakrefable)
+        subcls = _getusercls(cls, hasdict, wants_slots, needsdel, weakrefable)
         _subclass_cache[key] = subcls
         return subcls
+get_unique_interplevel_subclass._annspecialcase_ = "specialize:memo"
 _subclass_cache = {}
 
-def _buildusercls(cls, hasdict, wants_slots, wants_del, weakrefable):
-    "NOT_RPYTHON: initialization-time only"
-    name = ['User']
-    if not hasdict:
-        name.append('NoDict')
-    if wants_slots:
-        name.append('WithSlots')
+def enum_interplevel_subclasses(cls):
+    """Return a list of all the extra interp-level subclasses of 'cls' that
+    can be built by get_unique_interplevel_subclass()."""
+    result = []
+    for flag1 in (False, True):
+        for flag2 in (False, True):
+            for flag3 in (False, True):
+                for flag4 in (False, True):
+                    result.append(get_unique_interplevel_subclass(cls, flag1,
+                                                                  flag2, flag3,
+                                                                  flag4))
+    result = dict.fromkeys(result)
+    assert len(result) <= 6
+    return result.keys()
+
+def _getusercls(cls, wants_dict, wants_slots, wants_del, weakrefable):
+    typedef = cls.typedef
+    if wants_dict and typedef.hasdict:
+        wants_dict = False
+    # Forest of if's - see the comment above.
     if wants_del:
-        name.append('WithDel')
-    if weakrefable:
-        name.append('Weakrefable')
-    
-    name.append(cls.__name__)
-    
-    name = ''.join(name)
-    if weakrefable:
-        supercls = _get_unique_interplevel_subclass(cls, hasdict, wants_slots,
-                                                   wants_del, False)
+        if wants_dict:
+            # case 5.  Parent class is 3.
+            parentcls = get_unique_interplevel_subclass(cls, True, True,
+                                                        False, True)
+        else:
+            # case 6.  Parent class is 4.
+            parentcls = get_unique_interplevel_subclass(cls, False, True,
+                                                        False, True)
+        return _usersubclswithfeature(parentcls, "del")
+    elif wants_dict:
+        if wants_slots:
+            # case 3.  Parent class is 1.
+            parentcls = get_unique_interplevel_subclass(cls, True, False,
+                                                        False, True)
+            return _usersubclswithfeature(parentcls, "slots")
+        else:
+            # case 1 (we need to add weakrefable unless it's already in 'cls')
+            if not typedef.weakrefable:
+                return _usersubclswithfeature(cls, "user", "dict", "weakref")
+            else:
+                return _usersubclswithfeature(cls, "user", "dict")
+    else:
+        if weakrefable and not typedef.weakrefable:
+            # case 4.  Parent class is 2.
+            parentcls = get_unique_interplevel_subclass(cls, False, True,
+                                                        False, False)
+            return _usersubclswithfeature(parentcls, "weakref")
+        else:
+            # case 2 (if the base is already weakrefable, case 2 == case 4)
+            return _usersubclswithfeature(cls, "user", "slots")
+
+def _usersubclswithfeature(parentcls, *features):
+    key = parentcls, features
+    try:
+        return _usersubclswithfeature_cache[key]
+    except KeyError:
+        subcls = _builduserclswithfeature(parentcls, *features)
+        _usersubclswithfeature_cache[key] = subcls
+        return subcls
+_usersubclswithfeature_cache = {}
+_allusersubcls_cache = {}
+
+def _builduserclswithfeature(supercls, *features):
+    "NOT_RPYTHON: initialization-time only"
+    name = supercls.__name__
+    name += ''.join([name.capitalize() for name in features])
+    body = {}
+    #print '..........', name, '(', supercls.__name__, ')'
+
+    def add(Proto):
+        for key, value in Proto.__dict__.items():
+            if not key.startswith('__') or key == '__del__':
+                body[key] = value
+
+    if "user" in features:     # generic feature needed by all subcls
+        class Proto(object):
+            def getclass(self, space):
+                return self.w__class__
+
+            def setclass(self, space, w_subtype):
+                # only used by descr_set___class__
+                self.w__class__ = w_subtype
+
+            def user_setup(self, space, w_subtype):
+                self.space = space
+                self.w__class__ = w_subtype
+                self.user_setup_slots(w_subtype.nslots)
+
+            def user_setup_slots(self, nslots):
+                assert nslots == 0
+        add(Proto)
+
+    if "weakref" in features:
         class Proto(object):
             _lifeline_ = None
             def getweakref(self):
                 return self._lifeline_
             def setweakref(self, space, weakreflifeline):
                 self._lifeline_ = weakreflifeline
-    elif wants_del:
-        supercls = _get_unique_interplevel_subclass(cls, hasdict, wants_slots,
-                                                   False, False)
-        parent_destructor = getattr(cls, '__del__', None)
+        add(Proto)
+
+    if "del" in features:
+        parent_destructor = getattr(supercls, '__del__', None)
         class Proto(object):
             def __del__(self):
-                self.clear_all_weakrefs()
-                try:
-                    self.space.userdel(self)
-                except OperationError, e:
-                    e.write_unraisable(self.space, 'method __del__ of ', self)
-                    e.clear(self.space)   # break up reference cycles
+                call_user_destructor(self.space, self)
                 if parent_destructor is not None:
                     parent_destructor(self)
-    elif wants_slots:
-        supercls = _get_unique_interplevel_subclass(cls, hasdict, False, False, False)
-        
+        add(Proto)
+
+    if "slots" in features:
         class Proto(object):
             slots_w = []
             def user_setup_slots(self, nslots):
                 if nslots > 0:
                     self.slots_w = [None] * nslots
-            
             def setslotvalue(self, index, w_value):
                 self.slots_w[index] = w_value
-            
             def getslotvalue(self, index):
                 return self.slots_w[index]
-    elif hasdict:
-        supercls = _get_unique_interplevel_subclass(cls, False, False, False, False)
-        
+        add(Proto)
+
+    if "dict" in features:
         class Proto(object):
             def getdict(self):
                 return self.w__dict__
             
             def setdict(self, space, w_dict):
-                if not space.is_true(space.isinstance(w_dict, space.w_dict)):
-                    raise OperationError(space.w_TypeError,
-                            space.wrap("setting dictionary to a non-dict"))
-                if space.config.objspace.std.withmultidict:
-                    from pypy.objspace.std import dictmultiobject
-                    assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
-                self.w__dict__ = w_dict
+                self.w__dict__ = check_new_dictionary(space, w_dict)
             
             def user_setup(self, space, w_subtype):
                 self.space = space
@@ -216,34 +304,35 @@ def _buildusercls(cls, hasdict, wants_slots, wants_del, weakrefable):
                     if not w_dict.implementation.shadows_anything():
                         return None
                 return space.finditem(w_dict, w_name)
-            
-    else:
-        supercls = cls
-        
-        class Proto(object):
-            
-            def getclass(self, space):
-                return self.w__class__
-            
-            def setclass(self, space, w_subtype):
 
-                # only used by descr_set___class__
-                self.w__class__ = w_subtype
-            
-            
-            def user_setup(self, space, w_subtype):
-                self.space = space
-                self.w__class__ = w_subtype
-                self.user_setup_slots(w_subtype.nslots)
-            
-            def user_setup_slots(self, nslots):
-                assert nslots == 0
-    
-    body = dict([(key, value)
-                 for key, value in Proto.__dict__.items()
-                 if not key.startswith('__') or key == '__del__'])
+        add(Proto)
+
     subcls = type(name, (supercls,), body)
+    _allusersubcls_cache[subcls] = True
     return subcls
+
+# a couple of helpers for the Proto classes above, factored out to reduce
+# the translated code size
+def check_new_dictionary(space, w_dict):
+    if not space.is_true(space.isinstance(w_dict, space.w_dict)):
+        raise OperationError(space.w_TypeError,
+                space.wrap("setting dictionary to a non-dict"))
+    if space.config.objspace.std.withmultidict:
+        from pypy.objspace.std import dictmultiobject
+        assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
+    return w_dict
+check_new_dictionary._dont_inline_ = True
+
+def call_user_destructor(space, w_self):
+    w_self.clear_all_weakrefs()
+    try:
+        space.userdel(w_self)
+    except OperationError, e:
+        e.write_unraisable(space, 'method __del__ of ', w_self)
+        e.clear(space)   # break up reference cycles
+call_user_destructor._dont_inline_ = True
+
+# ____________________________________________________________
 
 def make_descr_typecheck_wrapper(func, extraargs=(), cls=None):
     if func is None:
@@ -776,12 +865,14 @@ Cell.typedef = TypeDef("cell",
 Ellipsis.typedef = TypeDef("Ellipsis",
     __repr__   = interp2app(Ellipsis.descr__repr__),
 )
+Ellipsis.acceptable_as_base_class = False
 
 NotImplemented.typedef = TypeDef("NotImplemented",
     __repr__   = interp2app(NotImplemented.descr__repr__),
 )
 
 SuspendedUnroller.typedef = TypeDef("SuspendedUnroller")
+SuspendedUnroller.acceptable_as_base_class = False
 
 
 interptypes = [ val.typedef for name,val in globals().items() if hasattr(val,'__bases__') and hasattr(val,'typedef')  ]

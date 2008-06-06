@@ -8,6 +8,7 @@ function that directly takes a dictionary as argument.
 import os
 from pypy.rlib import _rsocket_rffi as _c
 from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 # ____________________________________________________________
 # events
@@ -16,10 +17,10 @@ eventnames = '''POLLIN POLLPRI POLLOUT POLLERR POLLHUP POLLNVAL
                 POLLRDNORM POLLRDBAND POLLWRNORM POLLWEBAND POLLMSG'''.split()
 
 eventnames = [name for name in eventnames
-                   if getattr(_c.cConfig, name) is not None]
+                   if _c.constants.get(name) is not None]
 
 for name in eventnames:
-    globals()[name] = getattr(_c.cConfig, name)
+    globals()[name] = _c.constants[name]
 
 class PollError(Exception):
     def __init__(self, errno):
@@ -95,7 +96,8 @@ if hasattr(_c, 'WSAEventSelect'):
 
                 # select socket for desired events
                 event = _c.WSACreateEvent()
-                _c.WSAEventSelect(fd, event, wsaEvents)
+                if _c.WSAEventSelect(fd, event, wsaEvents) != 0:
+                    raise PollError(_c.geterrno())
 
                 eventdict[fd] = event
                 socketevents[numevents] = event
@@ -120,7 +122,7 @@ if hasattr(_c, 'WSAEventSelect'):
             if ret == _c.WSA_WAIT_TIMEOUT:
                 return []
 
-            if ret == _c.WSA_WAIT_FAILED:
+            if ret == r_uint(_c.WSA_WAIT_FAILED):
                 raise PollError(_c.geterrno())
 
             retval = []
@@ -154,8 +156,9 @@ if hasattr(_c, 'WSAEventSelect'):
             lltype.free(info, flavor='raw')
 
         finally:
-            for i in range(numevents):
-                _c.WSACloseEvent(socketevents[i])
+            for fd, event in eventdict.iteritems():
+                _c.WSAEventSelect(fd, event, 0)
+                _c.WSACloseEvent(event)
             lltype.free(socketevents, flavor='raw')
 
         return retval

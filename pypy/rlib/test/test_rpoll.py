@@ -33,7 +33,8 @@ def test_simple():
     assert events[0][1] & POLLOUT
 
     err = cli.connect_ex(servaddr)
-    assert err == 0
+    # win32 oddity: returns WSAEISCONN when the connection finally succeed.
+    assert err == 0 or err == 10056
 
     events = poll({servconn.fileno(): POLLIN,
                    cli.fileno(): POLLIN}, timeout=100)
@@ -46,3 +47,11 @@ def test_simple():
     cli.close()
     servconn.close()
     serv.close()
+
+def test_translate():
+    from pypy.translator.c.test.test_genc import compile
+
+    def func():
+        poll({})
+
+    compile(func, [])

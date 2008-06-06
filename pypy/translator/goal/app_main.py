@@ -141,6 +141,9 @@ def set_unbuffered_io():
     sys.stdout = sys.__stdout__ = os.fdopen(1, 'wb', 0)
     sys.stderr = sys.__stderr__ = os.fdopen(2, 'wb', 0)
 
+def set_fully_buffered_io():
+    sys.stdout = sys.__stdout__ = os.fdopen(1, 'w')
+
 # ____________________________________________________________
 # Main entry point
 
@@ -207,6 +210,7 @@ def entry_point(executable, argv, nanos):
     run_module = False
     run_stdin = False
     oldstyle_classes = False
+    unbuffered = False
     while i < len(argv):
         arg = argv[i]
         if not arg.startswith('-'):
@@ -220,7 +224,7 @@ def entry_point(executable, argv, nanos):
             run_command = True
             break
         elif arg == '-u':
-            set_unbuffered_io()
+            unbuffered = True
         elif arg == '-O':
             pass
         elif arg == '--version':
@@ -262,6 +266,12 @@ def entry_point(executable, argv, nanos):
     # but we need more in the translated PyPy for the compiler package 
     sys.setrecursionlimit(5000)
 
+    if unbuffered:
+        set_unbuffered_io()
+    elif not sys.stdout.isatty():
+        set_fully_buffered_io()
+
+
     mainmodule = type(sys)('__main__')
     sys.modules['__main__'] = mainmodule
 
@@ -286,25 +296,43 @@ def entry_point(executable, argv, nanos):
         signal.signal(signal.SIGINT, signal.default_int_handler)
         if hasattr(signal, "SIGPIPE"):
             signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+        if hasattr(signal, 'SIGXFZ'):
+            signal.signal(signal.SIGXFZ, signal.SIG_IGN)
+        if hasattr(signal, 'SIGXFSZ'):
+            signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
 
-    def is_interactive():
-        return go_interactive or os.getenv('PYTHONINSPECT')
+    def inspect_requested():
+        # We get an interactive prompt in one of the following two cases:
+        #
+        #     * go_interactive=True, either from the "-i" option or
+        #       from the fact that we printed the banner;
+        # or
+        #     * PYTHONINSPECT is set and stdin is a tty.
+        #
+        return (go_interactive or
+                (os.getenv('PYTHONINSPECT') and sys.stdin.isatty()))
 
     success = True
 
     try:
         if run_command:
+            # handle the "-c" command
             cmd = sys.argv.pop(1)
             def run_it():
                 exec cmd in mainmodule.__dict__
             success = run_toplevel(run_it)
         elif run_module:
+            # handle the "-m" command
             def run_it():
                 import runpy
                 runpy.run_module(sys.argv[0], None, '__main__', True)
             success = run_toplevel(run_it)
         elif run_stdin:
-            if is_interactive() or sys.stdin.isatty():
+            # handle the case where no command/filename/module is specified
+            # on the command-line.
+            if go_interactive or sys.stdin.isatty():
+                # If stdin is a tty or if "-i" is specified, we print
+                # a banner and run $PYTHONSTARTUP.
                 print_banner()
                 python_startup = os.getenv('PYTHONSTARTUP')
                 if python_startup:
@@ -319,32 +347,27 @@ def entry_point(executable, argv, nanos):
                                                         'exec')
                             exec co_python_startup in mainmodule.__dict__
                         run_toplevel(run_it)
+                # Then we need a prompt.
                 go_interactive = True
             else:
+                # If not interactive, just read and execute stdin normally.
                 def run_it():
                     co_stdin = compile(sys.stdin.read(), '<stdin>', 'exec')
                     exec co_stdin in mainmodule.__dict__
                 mainmodule.__file__ = '<stdin>'
                 success = run_toplevel(run_it)
         else:
+            # handle the common case where a filename is specified
+            # on the command-line.
             mainmodule.__file__ = sys.argv[0]
             scriptdir = resolvedirof(sys.argv[0])
             sys.path.insert(0, scriptdir)
             success = run_toplevel(execfile, sys.argv[0], mainmodule.__dict__)
-            
-        if is_interactive():
-            try:
-                import _curses
-                import termios
-                from pyrepl.python_reader import main
-                from pyrepl import cmdrepl
-                #import pdb
-                #pdb.Pdb = cmdrepl.replize(pdb.Pdb, 1)
-            except ImportError:
-                success = run_toplevel(interactive_console, mainmodule)
-            else:
-                main(print_banner=False, clear_main=False)
-                success = True
+
+        # start a prompt if requested
+        if inspect_requested():
+            from _pypy_interact import interactive_console
+            success = run_toplevel(interactive_console, mainmodule)
     except SystemExit, e:
         return e.code
     else:
@@ -369,35 +392,6 @@ def print_banner():
     print 'Python %s on %s' % (sys.version, sys.platform)
     print ('Type "help", "copyright", "credits" or '
            '"license" for more information.')
-
-def interactive_console(mainmodule):
-    # some parts of code.py are copied here because it seems to be impossible
-    # to start an interactive console without printing at least one line
-    # of banner
-    import code
-    console = code.InteractiveConsole(mainmodule.__dict__)
-    try:
-        import readline
-    except ImportError:
-        pass
-    more = 0
-    while 1:
-        try:
-            if more:
-                prompt = sys.ps2
-            else:
-                prompt = sys.ps1
-            try:
-                line = raw_input(prompt)
-            except EOFError:
-                console.write("\n")
-                break
-            else:
-                more = console.push(line)
-        except KeyboardInterrupt:
-            console.write("\nKeyboardInterrupt\n")
-            console.resetbuffer()
-            more = 0
 
 
 if __name__ == '__main__':

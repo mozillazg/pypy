@@ -1,4 +1,5 @@
 import _rawffi
+import weakref
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
@@ -34,6 +35,20 @@ TP_TO_DEFAULT = {
  
 DEFAULT_VALUE = object()
 
+class GlobalPyobjContainer(object):
+    def __init__(self):
+        self.objs = []
+
+    def add(self, obj):
+        num = len(self.objs)
+        self.objs.append(weakref.ref(obj))
+        return num
+
+    def get(self, num):
+        return self.objs[num]()
+
+pyobj_container = GlobalPyobjContainer()
+
 def generic_xxx_p_from_param(self, value):
     from _ctypes import Array, _Pointer
     if value is None:
@@ -41,13 +56,21 @@ def generic_xxx_p_from_param(self, value):
     if isinstance(value, basestring):
         return self(value)
     if isinstance(value, _SimpleCData) and \
-           type(value)._type_ in 'zP':
+           type(value)._type_ in 'zZP':
         return value
     return None # eventually raise
 
 class SimpleType(_CDataMeta):
     def __new__(self, name, bases, dct):
-        tp = dct['_type_']
+        try:
+            tp = dct['_type_']
+        except KeyError:
+            for base in bases:
+                if hasattr(base, '_type_'):
+                    tp = base._type_
+                    break
+            else:
+                raise AttributeError("cannot find _type_ attribute")
         if (not isinstance(tp, str) or
             not len(tp) == 1 or
             tp not in SIMPLE_TYPE_CHARS):
@@ -75,7 +98,7 @@ class SimpleType(_CDataMeta):
                     if isinstance(value, unicode):
                         value = value.encode(ConvMode.encoding,
                                              ConvMode.errors)
-                    self._objects = value
+                    #self._objects = value
                     array = _rawffi.Array('c')(len(value)+1, value)
                     value = array.buffer
                     self._objects = {'0': CArgObject(array)}
@@ -98,7 +121,7 @@ class SimpleType(_CDataMeta):
                     if isinstance(value, str):
                         value = value.decode(ConvMode.encoding,
                                              ConvMode.errors)
-                    self._objects = value
+                    #self._objects = value
                     array = _rawffi.Array('u')(len(value)+1, value)
                     value = array.buffer
                     self._objects = {'0': CArgObject(array)}
@@ -174,6 +197,14 @@ class SimpleType(_CDataMeta):
                 return self._buffer[0]
             result.value = property(_getvalue, _setvalue)
 
+        elif tp == 'O':
+            def _setvalue(self, val):
+                num = pyobj_container.add(val)
+                self._buffer[0] = num
+            def _getvalue(self):
+                return pyobj_container.get(self._buffer[0])
+            result.value = property(_getvalue, _setvalue)
+
         return result
 
     from_address = cdata_from_address
@@ -203,6 +234,9 @@ class _SimpleCData(_CData):
         self._buffer = self._ffiarray(1, autofree=True)
         if value is not DEFAULT_VALUE:
             self.value = value
+
+    def _ensure_objects(self):
+        return None
 
     def _getvalue(self):
         return self._buffer[0]

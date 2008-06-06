@@ -1,6 +1,12 @@
 """This test can read and parse PCRE regression tests to try out
-on our regular expression library."""
+on our regular expression library.
 
+We currently only test against testoutput7 (DFA tests). We were doing
+testoutput1, but that was PCRE matching, which was inconsistent with
+our matching on strings like "[ab]{1,3}(ab*|b)" against 'aabbbb'.
+"""
+
+pcre_license = """
 # The PCRE library is distributed under the BSD license. We have borrowed some
 # of the regression tests (the ones that fit under the DFA scope) in order to
 # exercise our regex implementation. Those tests are distributed under PCRE's
@@ -72,22 +78,70 @@ on our regular expression library."""
 #        
 #        End
 
+"""
+
 import py
 from pypy.rlib.parsing.regexparse import make_runner, unescape
 import string
 import re
+import autopath
+this_dir = py.path.local(autopath.this_dir)
 
-py.test.skip("Still in progress")
+#py.test.skip("Still in progress")
 
-def create_pcre_pickle(file, picklefile):
+# Dumper's are objects that can dump/load the suite
+class Dumper(object):
+    def __init__(self, file):
+        pass
+    def dump(self, tests):
+        pass
+    def load(self):
+        return []
+
+class PickleDumper(Dumper):
     import pickle
+    def __init__(self, fileobj):
+        self.file = fileobj
+    def dump(self, tests):
+        pickle.dump(suite, self.file)
+    def load(self):
+        suite = pickle.load(file)
+        return suite
+        
+class PythonDumper(Dumper):
+    def __init__(self, fileobj):
+        self.file = fileobj
+    def dump(self, tests):
+        self.file.write('# Auto-generated file of regular expressions from PCRE library\n')
+        self.file.write(pcre_license)
+        self.file.write('suite = []\n')
+        for test in tests:
+            self.file.write('suite.append(%r)\n' % test)
+    def load(self):
+        d = {}
+        text = self.file.read()
+        exec text in d
+        return d['suite']
 
+def generate_output7():
+    """Create the testoutput7.py file from the PCRE file testoutput7"""
+    create_pcre_pickle(this_dir.join('testoutput7').open(),
+                       PythonDumper(this_dir.join('pcre_test_7.py').open('w')))
+
+def create_pcre_pickle(file, dumper):
+    """Create a filtered PCRE test file for the test."""
     lines = [line for line in file.readlines()]
     
     # Look for things to skip...
     no_escape = r'(^|[^\\])(\\\\)*'                   # Make sure there's no escaping \
     greedy_ops = re.compile(no_escape + r'[*?+}\(]\?')  # Look for *? +? }? (?
     back_refs  = re.compile(no_escape + r'\(.*' + no_escape + r'\\1') # find a \1
+    caret_in_middle = re.compile(no_escape + r'[^\[\\]\^')
+    posix_char_classes = re.compile(no_escape + r'\[[^]]*\[:[^]]+:\][^]]*\]')    # like [[:digit:]]
+    bad_backslashes = re.compile(no_escape + r'(\\Q|\\E|\\G|\\P|\\8|\\9|\\A|\\Z|\\F|\\R|\\B|\\b|\\h|\\H|\\v|\\V|\\z|\\N)')   # PCRE allows \Q.....\E to quote substrings, we dont.
+    
+    # Perl allows single-digit hex escapes. Change \x0 -> \x00, for example
+    expand_perl_hex = re.compile(r'\\x([0-9a-fA-F]{1})(?=[^0-9a-fA-F]|$)')
     
     # suite = [ 
     #            [regex, flags, [(test,result),(test,result),...]]
@@ -123,13 +177,21 @@ def create_pcre_pickle(file, picklefile):
         regex += matches[0][-2] # Add the backslash, if we gotta
         flags = matches[0][-1] # Get the flags for the regex
 
+        # Gotta tolerate Perl's short hexes
+        regex = expand_perl_hex.sub(lambda m: r'\x0'+m.group(1), regex)
+            
         tests = []
-
         if greedy_ops.search(regex) or back_refs.search(regex):
             # Suppress complex features we can't do
             pass
         elif flags:
             # Suppress any test that requires PCRE flags
+            pass
+        elif posix_char_classes.search(regex):
+            pass
+        elif caret_in_middle.search(regex):
+            pass
+        elif bad_backslashes.search(regex):
             pass
         else:
             # In any other case, we're going to add the test
@@ -145,36 +207,54 @@ def create_pcre_pickle(file, picklefile):
                 assert not test.endswith('\\\\\\') # Make sure not three \'s. otherwise this check will get ridiculous
                 if not test.endswith('\\\\'): # Two \'s means a real \
                     test = test[:-1]
-            test = unescape(test)
+            test = expand_perl_hex.sub(lambda m: r'\x0'+m.group(1), test)
+
+            disqualify_test = bad_backslashes.search(test)
+
+            try:
+                test = unescape(test)
+            except Exception:
+                disqualify_test = True
+                print "Warning: could not unescape %r" % test
+                
 
             # Third line in the OUTPUT is the result, either:
             # ' 0: ...' for a match (but this is ONLY escaped by \x__ types)
             # 'No match' for no match
-            match = lines.pop(0).rstrip('\r\n')
-            match = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1),16)), match)
-            if match.startswith('No match'):
-                pass
-            elif match.startswith(' 0:'):
-                # Now we need to eat any further lines like:
-                # ' 1: ....' a subgroup match
-                while lines[0].strip():
-                    # ' 0+ ...' is also possible here
-                    if lines[0][2] in [':','+']:
-                        lines.pop(0)
-                    else:
-                        break
-            else:
-                print " *** %r ***" % match
-                raise Exception("Lost sync in output.")
-            tests.append((test,match))
-    pickle.dump(suite, picklefile)
+            # (other kinds exist, but we ignore them)
+            while lines:
+                match = lines.pop(0).rstrip('\r\n')
+                match = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1),16)), match)
+                if match.startswith('No match') or match.startswith('Error') or match.startswith('Partial'):
+                    match = None
+                    break
+                elif match.startswith(' 0:'):
+                    # Now we need to eat any further lines like:
+                    # ' 1: ....' a subgroup match
+                    match = match[4:]
+                    while lines[0].strip():
+                        # ' 0+ ...' is also possible here
+                        if lines[0][2] in [':','+']:
+                            lines.pop(0)
+                        else:
+                            break
+                    break
+                elif not match:
+                    print " *** %r ***" % match
+                    raise Exception("Lost sync in output.")
+            if not disqualify_test:
+                tests.append((test,match))
+    
+    # Last step, if there are regex's that dont have any tests,
+    # might as well strip them out
+    suite = [test for test in suite if test[2]]
 
-def get_pcre_pickle(file):
-    import pickle
-    suite = pickle.load(file)
-    return suite
+    dumper.dump(suite)
 
 def run_individual_test(regex, tests):
+    """Run a test from the PCRE suite."""
+    
+    # Process the regex and make it ready for make_runner
     regex_to_use = regex
 
     anchor_left = regex_to_use.startswith('^')
@@ -187,10 +267,15 @@ def run_individual_test(regex, tests):
     if not regex_to_use:
         #print "  SKIPPED (Cant do blank regex)"
         return
-        
-    runner = make_runner(regex)
+    
+    print "%s:" % regex_to_use
+    
+    runner = make_runner(regex_to_use)
+    
     # Now run the test expressions against the Regex
     for test, match in tests:
+        print "/%r/%r/" % (test, match)
+        
         # Create possible subsequences that we should test
         if anchor_left:
             start_range = [0]
@@ -201,40 +286,23 @@ def run_individual_test(regex, tests):
             subseq_gen = ( (start, len(test)) for start in start_range )
         else:
             # Go backwards to simulate greediness
-            subseq_gen = ( (start, end) for start in start_range for end in range(len(test)+1, start, -1) )
+            subseq_gen = ( (start, end) for start in start_range for end in range(len(test)+1, start-1, -1) )
 
         # Search the possibilities for a match...
         for start, end in subseq_gen:
             attempt = test[start:end]
-            matched = runner.recognize(attempt)
-            if matched: 
+            if runner.recognize(attempt):
+                assert attempt==match
                 break
-        
-        # Did we get what we expected?
-        if match == 'No match':
-            if matched:
-                assert "FALSE MATCH: regex==%r test==%r" % (regex, test)
-            else:
-                pass
-                #print "  pass:        regex==%r test==%r" % (regex, test)
-        elif match.startswith(' 0: '):
-            if not matched:
-                assert "MISSED:      regex==%r test==%r" % (regex, test)
-            elif not attempt==match[4:]:
-                assert "BAD MATCH:   regex==%r test==%r found==%r expect==%r" % (regex, test, attempt, match[4:])
-            else:
-                pass
-                #print "  pass:        regex==%r test==%r" % (regex, test)
+        else:
+            assert match is None
 
-def run_pcre_tests(suite):
-    """Run PCRE tests as given in suite."""
+def test_output7():
+    suite = PythonDumper(this_dir.join('pcre_test_7.py').open()).load()
     while suite:
         regex, flags, tests = suite.pop(0)
         yield run_individual_test, regex, tests
 
-
-def test_output1():
-    suite = get_pcre_pickle(open('testoutput1.pickle','r'))
-    for test in run_pcre_tests(suite):
-        yield test
-        
+if __name__=="__main__":
+    for fcn, regex, tests in test_output7():
+        fcn(regex,tests)

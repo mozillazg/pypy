@@ -28,14 +28,18 @@ from pypy.translator.jvm.opcodes import \
 from pypy.translator.jvm.option import \
      getoption
 from pypy.translator.jvm.methods import \
-     BaseDumpMethod, InstanceDumpMethod, RecordDumpMethod, ConstantStringDumpMethod
+     BaseDumpMethod, InstanceDumpMethod, RecordDumpMethod, \
+     ConstantStringDumpMethod
 from pypy.translator.oosupport.function import \
      Function as OOFunction
 from pypy.translator.oosupport.constant import \
      push_constant
+from pypy.translator.oosupport.treebuilder import \
+     SubOperation
+from pypy.translator.jvm.cmpopcodes import \
+     can_branch_directly, branch_if
 
-import py
-import pypy.translator.jvm.generator as jvmgen
+import pypy.translator.jvm.typesystem as jvm
 import pypy.translator.jvm.typesystem as jvmtype
 from pypy.translator.jvm.log import log
 
@@ -81,14 +85,14 @@ class EntryPoint(Node):
     # XXX --- perhaps this table would be better placed in typesystem.py
     # so as to constrain the knowledge of lltype and ootype
     _type_conversion_methods = {
-        ootype.Signed:jvmgen.PYPYSTRTOINT,
-        ootype.Unsigned:jvmgen.PYPYSTRTOUINT,
-        lltype.SignedLongLong:jvmgen.PYPYSTRTOLONG,
-        lltype.UnsignedLongLong:jvmgen.PYPYSTRTOULONG,
-        ootype.Bool:jvmgen.PYPYSTRTOBOOL,
-        ootype.Float:jvmgen.PYPYSTRTODOUBLE,
-        ootype.Char:jvmgen.PYPYSTRTOCHAR,
-        ootype.UniChar:jvmgen.PYPYSTRTOCHAR,
+        ootype.Signed:jvm.PYPYSTRTOINT,
+        ootype.Unsigned:jvm.PYPYSTRTOUINT,
+        lltype.SignedLongLong:jvm.PYPYSTRTOLONG,
+        lltype.UnsignedLongLong:jvm.PYPYSTRTOULONG,
+        ootype.Bool:jvm.PYPYSTRTOBOOL,
+        ootype.Float:jvm.PYPYSTRTODOUBLE,
+        ootype.Char:jvm.PYPYSTRTOCHAR,
+        ootype.UniChar:jvm.PYPYSTRTOCHAR,
         ootype.String:None
         }
 
@@ -104,14 +108,13 @@ class EntryPoint(Node):
         #
         #    2. Run the initialization method for the constant class.
         #
-        gen.begin_function(
-            '<clinit>', (), [], jVoid, static=True)
-        gen.emit(jvmgen.NEW, jPyPy)
-        gen.emit(jvmgen.DUP)
+        gen.begin_function('<clinit>', (), [], jVoid, static=True)
+        gen.emit(jvm.NEW, jPyPy)
+        gen.emit(jvm.DUP)
         gen.new_with_jtype(gen.db.jInterlinkImplementation)
-        gen.emit(jvmgen.DUP)
+        gen.emit(jvm.DUP)
         gen.db.interlink_field.store(gen)
-        gen.emit(jvmgen.Method.c(jPyPy, [jPyPyInterlink]))
+        gen.emit(jvm.Method.c(jPyPy, [jPyPyInterlink]))
         gen.db.pypy_field.store(gen)
         gen.db.constant_generator.runtime_init(gen)
         gen.return_val(jVoid)
@@ -138,7 +141,7 @@ class EntryPoint(Node):
                 conv = self._type_conversion_methods[arg.concretetype]
                 if conv: gen.push_pypy()
                 gen.load_jvm_var(jStringArray, 0)
-                gen.emit(jvmgen.ICONST, i)
+                gen.emit(jvm.ICONST, i)
                 gen.load_from_array(jString)
                 if conv: gen.emit(conv)
         else:
@@ -146,9 +149,9 @@ class EntryPoint(Node):
             # python method expects
             arg0 = self.graph.getargs()[0]
             assert isinstance(arg0.concretetype, ootype.List), str(arg0.concretetype)
-            assert arg0.concretetype._ITEMTYPE is ootype.String
+            assert arg0.concretetype.ITEM is ootype.String
             gen.load_jvm_var(jStringArray, 0)
-            gen.emit(jvmgen.PYPYARRAYTOLIST)
+            gen.emit(jvm.PYPYARRAYTOLIST)
 
         # Generate a call to this method
         gen.emit(self.db.pending_function(self.graph))
@@ -166,13 +169,13 @@ class EntryPoint(Node):
             gen.add_comment('Invoking dump method for result of type '
                             +str(RESOOTYPE))
             gen.emit(dumpmethod)      # generate the string
-            gen.emit(jvmgen.PYPYDUMP) # dump to stdout
+            gen.emit(jvm.PYPYDUMP) # dump to stdout
             gen.goto(done_printing)
             gen.end_try()
 
             jexc = self.db.exception_root_object()
             gen.begin_catch(jexc)
-            gen.emit(jvmgen.PYPYDUMPEXCWRAPPER) # dumps to stdout
+            gen.emit(jvm.PYPYDUMPEXCWRAPPER) # dumps to stdout
             gen.end_catch()
 
             gen.mark(done_printing)
@@ -193,12 +196,12 @@ class Function(object):
     name = None                       
     
     def render(self, gen):
-        """ Uses the gen argument, a jvmgen.Generator, to create the
+        """ Uses the gen argument, a jvm.Generator, to create the
         appropriate JVM assembly for this method. """
         raise NotImplementedError
     
     def method(self):
-        """ Returns a jvmgen.Method object that would allow this
+        """ Returns a jvm.Method object that would allow this
         function to be invoked. """
         raise NotImplementedError
 
@@ -267,12 +270,12 @@ class GraphFunction(OOFunction, Function):
         return self.generator.unique_label(prefix)
 
     def method(self):
-        """ Returns a jvmgen.Method that can invoke this function """
+        """ Returns a jvm.Method that can invoke this function """
         if not self.is_method:
-            ctor = jvmgen.Method.s
+            ctor = jvm.Method.s
             startidx = 0
         else:
-            ctor = jvmgen.Method.v
+            ctor = jvm.Method.v
             startidx = 1
         return ctor(self.classty, self.name,
                     self.jargtypes[startidx:], self.jrettype)
@@ -354,11 +357,11 @@ class GraphFunction(OOFunction, Function):
                     # exception to be caught by the normal handlers.
                     self.ilasm.begin_catch(jexcty)
                     self.ilasm.push_interlink()
-                    interlink_method = jvmgen.Method.v(
+                    interlink_method = jvm.Method.v(
                         jPyPyInterlink, "throw"+pyexccls.__name__, [], jVoid)
                     self.ilasm.emit(interlink_method)
-                    self.ilasm.emit(jvmgen.ACONST_NULL)
-                    self.ilasm.emit(jvmgen.ATHROW)
+                    self.ilasm.emit(jvm.ACONST_NULL) # "inform" the verifier...
+                    self.ilasm.emit(jvm.ATHROW)      # ...that we throw here
                     self.ilasm.end_try()        
 
     def begin_catch(self, llexitcase):
@@ -381,7 +384,7 @@ class GraphFunction(OOFunction, Function):
         else:
             # the exception value is on the stack, store it in the proper place
             if isinstance(link.last_exception, flowmodel.Variable):
-                self.ilasm.emit(jvmgen.DUP)
+                self.ilasm.emit(jvm.DUP)
                 self.ilasm.store(link.last_exc_value)
                 fld = self.db.lltype_to_cts(rclass.OBJECT).lookup_field('meta')
                 self.ilasm.emit(fld)
@@ -389,6 +392,77 @@ class GraphFunction(OOFunction, Function):
             else:
                 self.ilasm.store(link.last_exc_value)
             self._setup_link(link)
+
+    def render_normal_block(self, block):
+        """
+        Overload OOFunction.render_normal_block: we intercept blocks where the
+        exitcase tests a bool variable with one use so as to generate more
+        efficient code.  For example, the naive code generation for a test
+        like 'if x < y' yields something like:
+        
+           push x
+           push y
+           jump_if_less_than true
+        false:
+           push 0
+           jump done
+        true:
+           push 1
+        done:
+           store_into_local_var
+           load_from_local_var
+           jump_if_true true_destination
+           jump false_destination
+
+        when it could (should) be
+
+           push x
+           push y
+           jump_if_less_than true_destination
+           jump false_destination
+        """
+
+        def not_in_link_args(v):
+            for link in block.exits:
+                if v in link.args: return False
+            return True
+
+        def true_false_exits():
+            if block.exits[0].exitcase:
+                return block.exits[0], block.exits[1]
+            return block.exits[1], block.exits[0]
+
+        if block.operations:
+            # Look for a case where the block switches on a bool variable
+            # which is produced by the last operation and not used
+            # anywhere else, and where the last operation is a comparison.
+
+            # Watch out for a last operation like:
+            #   v1 = same_as([int_lt(i, j)])
+            last_op = block.operations[-1]
+            while (last_op.opname == "same_as" and
+                   isinstance(last_op.args[0], SubOperation)):
+                last_op = last_op.args[0].op
+            
+            if (block.exitswitch is not None and
+                block.exitswitch.concretetype is ootype.Bool and
+                block.operations[-1].result is block.exitswitch and
+                can_branch_directly(last_op.opname) and
+                not_in_link_args(block.exitswitch)):
+
+                for op in block.operations[:-1]:
+                    self._render_op(op)
+                for arg in last_op.args:
+                    self.ilasm.load(arg)
+                truelink, falselink = true_false_exits()
+                true_label = self.next_label('link_true')
+                branch_if(self.ilasm, last_op.opname, true_label)
+                self._follow_link(falselink)
+                self.set_label(true_label)
+                self._follow_link(truelink)
+                return
+
+        return OOFunction.render_normal_block(self, block)
 
     def render_numeric_switch(self, block):
         if block.exitswitch.concretetype in (ootype.SignedLongLong, ootype.UnsignedLongLong):
@@ -441,9 +515,9 @@ class GraphFunction(OOFunction, Function):
     def _trace(self, str, writeline=False):
         if writeline:
             str += '\n'
-        jvmgen.SYSTEMERR.load(self.generator)
+        jvm.SYSTEMERR.load(self.generator)
         self.generator.load_string(str)
-        jvmgen.PRINTSTREAMPRINTSTR.invoke(self.generator)
+        jvm.PRINTSTREAMPRINTSTR.invoke(self.generator)
 
     def _is_printable(self, res):
 
@@ -478,10 +552,10 @@ class GraphFunction(OOFunction, Function):
                 res.concretetype)
             
             self._trace("  "+prompt+": ")
-            self.generator.emit(jvmgen.SYSTEMERR)
+            self.generator.emit(jvm.SYSTEMERR)
             self.generator.load(res)
             self.generator.emit(jmethod)
-            self.generator.emit(jvmgen.PRINTSTREAMPRINTSTR)
+            self.generator.emit(jvm.PRINTSTREAMPRINTSTR)
             self._trace("\n")
 
     def _trace_enabled(self):
@@ -520,7 +594,7 @@ class StaticMethodInterface(Node, JvmGeneratedClassType):
         self.java_return_type = jrettype
         self.dump_method = ConstantStringDumpMethod(
             self, "StaticMethodInterface")
-        self.invoke_method_obj = jvmgen.Method.v(
+        self.invoke_method_obj = jvm.Method.v(
                 self, 'invoke',
                 self.java_argument_types[1:], self.java_return_type)
         
@@ -528,7 +602,7 @@ class StaticMethodInterface(Node, JvmGeneratedClassType):
         raise KeyError(fieldnm) # no fields
     
     def lookup_method(self, methodnm):
-        """ Given the method name, returns a jvmgen.Method object """
+        """ Given the method name, returns a jvm.Method object """
         assert isinstance(self.java_return_type, JvmType)
         if methodnm == 'invoke':
             return self.invoke_method_obj
@@ -622,9 +696,9 @@ class StaticMethodImplementation(Node, JvmGeneratedClassType):
 
         if bound_to_jty:
             self.bound_to_jty = bound_to_jty
-            self.bound_to_fld = jvmgen.Field(
+            self.bound_to_fld = jvm.Field(
                 self.name, 'bound_to', bound_to_jty, False)
-            self.bind_method = jvmgen.Method.s(
+            self.bind_method = jvm.Method.s(
                 self, 'bind', (self.bound_to_jty,), self)                
         else:
             self.bound_to_jty = None
@@ -655,7 +729,7 @@ class StaticMethodImplementation(Node, JvmGeneratedClassType):
             gen.begin_function(
                 'bind', [], (self.bound_to_jty,), self, static=True)
             gen.new_with_jtype(self)
-            gen.emit(jvmgen.DUP)
+            gen.emit(jvm.DUP)
             gen.load_jvm_var(self.bound_to_jty, 0)
             self.bound_to_fld.store(gen)
             gen.return_val(self)
@@ -734,10 +808,10 @@ class Class(Node, JvmGeneratedClassType):
         """
         JvmGeneratedClassType.__init__(self, name)
         self.rendered = False       # has rendering occurred?
-        self.fields = {}            # maps field name to jvmgen.Field object
+        self.fields = {}            # maps field name to jvm.Field object
         self.interfaces = []        # list of JvmTypes
         self.methods = {}           # maps method name to a Function object*
-        self.abstract_methods = {}  # maps method name to jvmgen.Method object
+        self.abstract_methods = {}  # maps method name to jvm.Method object
         self.set_super_class(supercls)
 
         # * --- actually maps to an object that defines the
@@ -757,9 +831,9 @@ class Class(Node, JvmGeneratedClassType):
             self.throwable = True
 
     def add_field(self, fieldobj, fielddef):
-        """ Creates a new field accessed via the jvmgen.Field
+        """ Creates a new field accessed via the jvm.Field
         descriptor 'fieldobj'.  Must be called before render()."""
-        assert not self.rendered and isinstance(fieldobj, jvmgen.Field)
+        assert not self.rendered and isinstance(fieldobj, jvm.Field)
         self.fields[fieldobj.field_name] = (fieldobj, fielddef)
 
     def add_interface(self, inter):
@@ -772,7 +846,7 @@ class Class(Node, JvmGeneratedClassType):
         return self.super_class.lookup_field(fieldnm)
 
     def lookup_method(self, methodnm):
-        """ Given the method name, returns a jvmgen.Method object """
+        """ Given the method name, returns a jvm.Method object """
         if methodnm in self.methods:
             return self.methods[methodnm].method()
         if methodnm in self.abstract_methods:
@@ -788,7 +862,7 @@ class Class(Node, JvmGeneratedClassType):
 
     def add_abstract_method(self, jmethod):
         """ Adds an abstract method to our list of methods; jmethod should
-        be a jvmgen.Method object """
+        be a jvm.Method object """
         assert jmethod.method_name not in self.methods
         self.abstract_methods[jmethod.method_name] = jmethod
 
@@ -836,7 +910,7 @@ class InterlinkFunction(Function):
         """
         interlink:  the JvmType of the Interlink implementation
         name:       the name of the method
-        helper:     a jvmgen.Method object for the helper func we should invoke
+        helper:     a jvm.Method object for the helper func we should invoke
         """
         self.interlink = interlink
         self.name = name
@@ -850,7 +924,7 @@ class InterlinkFunction(Function):
         else:
             self.return_type = self.helper.return_type
             
-        self.method_obj = jvmgen.Method.v(interlink,
+        self.method_obj = jvm.Method.v(interlink,
                                           self.name,
                                           self.helper.argument_types,
                                           self.return_type)
