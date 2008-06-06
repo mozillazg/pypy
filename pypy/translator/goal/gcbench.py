@@ -128,7 +128,7 @@ def time_parallel_constructions(depths, nthreads):
         t.join()
     print "All %d threads finished" % (nthreads,)
 
-def main(depths=DEFAULT_DEPTHS, threads=1):
+def main(depths=DEFAULT_DEPTHS, threads=0):
     println("Garbage Collector Test")
     println(" Stretching memory with a binary tree of depth %d" % kStretchTreeDepth)
     print_diagnostics()
@@ -150,7 +150,7 @@ def main(depths=DEFAULT_DEPTHS, threads=1):
         i += 1
     print_diagnostics()
 
-    if threads > 1:
+    if threads:
         time_parallel_constructions(depths, threads)
     else:
         time_constructions(depths)
@@ -171,7 +171,7 @@ def argerror():
 
 def entry_point(argv):
     depths = DEFAULT_DEPTHS
-    threads = 1
+    threads = 0
     repeatcount = 1
     for arg in argv[1:]:
         if arg.startswith('--threads='):
