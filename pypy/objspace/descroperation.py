@@ -129,7 +129,11 @@ class DescrOperation:
         return space.get_and_call_function(w_delete, w_descr, w_obj)
 
     def getattr(space, w_obj, w_name):
+        # may be overridden in StdObjSpace
         w_descr = space.lookup(w_obj, '__getattribute__')
+        return space._handle_getattribute(w_descr, w_obj, w_name)
+
+    def _handle_getattribute(space, w_descr, w_obj, w_name):
         try:
             if w_descr is None:   # obscure case
                 raise OperationError(space.w_AttributeError, space.w_None)
@@ -441,6 +445,7 @@ def number_check(space, w_obj):
 
 def _make_binop_impl(symbol, specialnames):
     left, right = specialnames
+
     def binop_impl(space, w_obj1, w_obj2):
         w_typ1 = space.type(w_obj1)
         w_typ2 = space.type(w_obj2)
@@ -455,10 +460,20 @@ def _make_binop_impl(symbol, specialnames):
             # __xxx__ and __rxxx__ methods where found by identity.
             # Note that space.is_w() is potentially not happy if one of them
             # is None (e.g. with the thunk space)...
-            if (w_left_src is not w_right_src    # XXX
-                and space.is_true(space.issubtype(w_typ2, w_typ1))):
-                w_obj1, w_obj2 = w_obj2, w_obj1
-                w_left_impl, w_right_impl = w_right_impl, w_left_impl
+            if w_left_src is not w_right_src:    # XXX
+                # -- cpython bug compatibility: see objspace/std/test/
+                # -- test_unicodeobject.test_str_unicode_concat_overrides.
+                # -- The following handles "unicode + string subclass" by
+                # -- pretending that the unicode is a superclass of the
+                # -- string, thus giving priority to the string subclass'
+                # -- __radd__() method.  The case "string + unicode subclass"
+                # -- is handled directly by add__String_Unicode().
+                if symbol == '+' and space.is_w(w_typ1, space.w_unicode):
+                    w_typ1 = space.w_basestring
+                # -- end of bug compatibility
+                if space.is_true(space.issubtype(w_typ2, w_typ1)):
+                    w_obj1, w_obj2 = w_obj2, w_obj1
+                    w_left_impl, w_right_impl = w_right_impl, w_left_impl
 
         w_res = _invoke_binop(space, w_left_impl, w_obj1, w_obj2)
         if w_res is not None:
@@ -468,15 +483,14 @@ def _make_binop_impl(symbol, specialnames):
             return w_res
         raise OperationError(space.w_TypeError,
                 space.wrap("unsupported operand type(s) for %s" % symbol))
+    
     return func_with_new_name(binop_impl, "binop_%s_impl"%left.strip('_'))
 
 def _make_comparison_impl(symbol, specialnames):
     left, right = specialnames
     op = getattr(operator, left)
+    
     def comparison_impl(space, w_obj1, w_obj2):
-        #from pypy.objspace.std.tlistobject import W_TransparentList
-        #if isinstance(w_obj1, W_TransparentList):
-        #    import pdb;pdb.set_trace()
         w_typ1 = space.type(w_obj1)
         w_typ2 = space.type(w_obj2)
         w_left_src, w_left_impl = space.lookup_in_type_where(w_typ1, left)
@@ -504,7 +518,6 @@ def _make_comparison_impl(symbol, specialnames):
         return space.wrap(op(res, 0))
 
     return func_with_new_name(comparison_impl, 'comparison_%s_impl'%left.strip('_'))
-
 
 def _make_inplace_impl(symbol, specialnames):
     specialname, = specialnames

@@ -45,9 +45,12 @@ class TestEci:
         {
             printf("%f\\n", pow(2.0, 2.0));
         }''')
-        eci = ExternalCompilationInfo(
-            libraries = ['m'],
-        )
+        if sys.platform != 'win32':
+            eci = ExternalCompilationInfo(
+                libraries = ['m'],
+                )
+        else:
+            eci = ExternalCompilationInfo()
         output = build_executable([c_file], eci)
         p = Popen(output, stdout=PIPE, stderr=STDOUT)
         p.wait()
@@ -55,24 +58,38 @@ class TestEci:
     
     def test_merge(self):
         e1 = ExternalCompilationInfo(
-            pre_include_lines  = ['1'],
+            pre_include_bits   = ['1'],
             includes           = ['x.h'],
-            post_include_lines = ['p1']
+            post_include_bits  = ['p1']
         )
         e2 = ExternalCompilationInfo(
-            pre_include_lines  = ['2'],
+            pre_include_bits   = ['2'],
             includes           = ['x.h', 'y.h'],
-            post_include_lines = ['p2'],
+            post_include_bits  = ['p2'],
         )
         e3 = ExternalCompilationInfo(
-            pre_include_lines  = ['3'],
+            pre_include_bits   = ['3'],
             includes           = ['y.h', 'z.h'],
-            post_include_lines = ['p3']
+            post_include_bits  = ['p1', 'p3']
         )
         e = e1.merge(e2, e3)
-        assert e.pre_include_lines == ('1', '2', '3')
+        assert e.pre_include_bits == ('1', '2', '3')
         assert e.includes == ('x.h', 'y.h', 'z.h')
-        assert e.post_include_lines == ('p1', 'p2', 'p3')
+        assert e.post_include_bits == ('p1', 'p2', 'p3')
+
+    def test_merge2(self):
+        e1 = ExternalCompilationInfo(
+            pre_include_bits  = ['1'],
+        )
+        e2 = ExternalCompilationInfo(
+            pre_include_bits  = ['2'],
+        )
+        e3 = ExternalCompilationInfo(
+            pre_include_bits  = ['3'],
+        )
+        e = e1.merge(e2)
+        e = e.merge(e3, e3)
+        assert e.pre_include_bits == ('1', '2', '3')
 
     def test_convert_sources_to_c_files(self):
         eci = ExternalCompilationInfo(
@@ -95,7 +112,8 @@ class TestEci:
             int get()
             {
                 return 42;
-            }''']
+            }'''],
+            export_symbols = ['get']
         )
         neweci = eci.compile_shared_lib()
         assert len(neweci.libraries) == 1
@@ -106,3 +124,35 @@ class TestEci:
         assert ctypes.CDLL(neweci.libraries[0]).get() == 42
         assert not neweci.separate_module_sources
         assert not neweci.separate_module_files
+
+    def test_from_compiler_flags(self):
+        flags = ('-I/some/include/path -I/other/include/path '
+                 '-DMACRO1 -D_MACRO2=baz -?1 -!2')
+        eci = ExternalCompilationInfo.from_compiler_flags(flags)
+        assert eci.pre_include_bits == ('#define MACRO1 1',
+                                        '#define _MACRO2 baz')
+        assert eci.includes == ()
+        assert eci.include_dirs == ('/some/include/path',
+                                    '/other/include/path')
+        assert eci.compile_extra == ('-?1', '-!2')
+
+    def test_from_linker_flags(self):
+        flags = ('-L/some/lib/path -L/other/lib/path '
+                 '-lmylib1 -lmylib2 -?1 -!2')
+        eci = ExternalCompilationInfo.from_linker_flags(flags)
+        assert eci.libraries == ('mylib1', 'mylib2')
+        assert eci.library_dirs == ('/some/lib/path',
+                                    '/other/lib/path')
+        assert eci.link_extra == ('-?1', '-!2')
+
+    def test_from_config_tool(self):
+        sdlconfig = py.path.local.sysfind('sdl-config')
+        if not sdlconfig:
+            py.test.skip("sdl-config not installed")
+        eci = ExternalCompilationInfo.from_config_tool('sdl-config')
+        assert 'SDL' in eci.libraries
+
+    def test_from_missing_config_tool(self):
+        py.test.raises(ImportError,
+                       ExternalCompilationInfo.from_config_tool,
+                       'dxowqbncpqympqhe-config')

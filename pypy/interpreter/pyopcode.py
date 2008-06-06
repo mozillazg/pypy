@@ -18,7 +18,6 @@ from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
 from pypy.tool.stdlib_opcode import unrolling_opcode_descs
 from pypy.tool.stdlib_opcode import opcode_method_names
-from pypy.rlib import rstack # for resume points
 from pypy.rlib.unroll import unrolling_iterable
 
 def unaryoperation(operationname):
@@ -70,6 +69,8 @@ class __extend__(pyframe.PyFrame):
 
     def dispatch(self, pycode, next_instr, ec):
         # For the sequel, force 'next_instr' to be unsigned for performance
+        from pypy.rlib import rstack # for resume points
+
         next_instr = r_uint(next_instr)
         co_code = pycode.co_code
 
@@ -82,6 +83,8 @@ class __extend__(pyframe.PyFrame):
             return self.popvalue()
 
     def handle_bytecode(self, co_code, next_instr, ec):
+        from pypy.rlib import rstack # for resume points
+
         try:
             next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
             rstack.resume_point("handle_bytecode", self, co_code, ec,
@@ -203,6 +206,8 @@ class __extend__(pyframe.PyFrame):
                 return next_instr
 
             if we_are_translated():
+                from pypy.rlib import rstack # for resume points
+
                 for opdesc in unrolling_opcode_descs:
                     # static checks to skip this whole case if necessary
                     if not opdesc.is_enabled(space):
@@ -850,6 +855,8 @@ class __extend__(pyframe.PyFrame):
                                   f.space.w_None)
                       
     def call_function(f, oparg, w_star=None, w_starstar=None):
+        from pypy.rlib import rstack # for resume points
+    
         n_arguments = oparg & 0xff
         n_keywords = (oparg>>8) & 0xff
         keywords = None
@@ -863,6 +870,8 @@ class __extend__(pyframe.PyFrame):
         f.pushvalue(w_result)
         
     def CALL_FUNCTION(f, oparg, *ignored):
+        from pypy.rlib import rstack # for resume points
+
         # XXX start of hack for performance
         if (oparg >> 8) & 0xff == 0:
             # Only positional arguments

@@ -71,13 +71,14 @@ def delegate_String2Unicode(space, w_str):
     return w_uni
 
 def str_w__Unicode(space, w_uni):
-    return space.str_w(space.str(w_uni))
+    return space.str_w(str__Unicode(space, w_uni))
 
 def unicode_w__Unicode(space, w_uni):
     return w_uni._value
 
 def str__Unicode(space, w_uni):
-    return space.call_method(w_uni, 'encode')
+    from pypy.objspace.std.unicodetype import encode_object
+    return encode_object(space, w_uni, None, None)
 
 def eq__Unicode_Unicode(space, w_left, w_right):
     return space.newbool(w_left._value == w_right._value)
@@ -99,14 +100,28 @@ def add__Unicode_Unicode(space, w_left, w_right):
     return W_UnicodeObject(w_left._value + w_right._value)
 
 def add__String_Unicode(space, w_left, w_right):
+    # this function is needed to make 'abc'.__add__(u'def') return
+    # u'abcdef' instead of NotImplemented.  This is what occurs on
+    # top of CPython.
     from pypy.objspace.std.unicodetype import unicode_from_string
+    # XXX fragile implementation detail: for "string + unicode subclass",
+    # if the unicode subclass overrides __radd__(), then it will be
+    # called (see test_str_unicode_concat_overrides).  This occurs as a
+    # result of the following call to space.add() in which the first
+    # argument is a unicode and the second argument a subclass of unicode
+    # (and thus the usual logic about calling __radd__() first applies).
     return space.add(unicode_from_string(space, w_left) , w_right)
 
 add__Rope_Unicode = add__String_Unicode
 
 def add__Unicode_String(space, w_left, w_right):
+    # this function is needed to make 'abc'.__radd__(u'def') return
+    # u'defabc', although it's completely unclear if that's necessary
+    # given that CPython doesn't even have a method str.__radd__().
     from pypy.objspace.std.unicodetype import unicode_from_string
     return space.add(w_left, unicode_from_string(space, w_right))
+    # Note about "unicode + string subclass": look for
+    # "cpython bug compatibility" in descroperation.py
 
 add__Unicode_Rope = add__Unicode_String
 
@@ -752,11 +767,9 @@ def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
                                     w_encoding=None,
                                     w_errors=None):
 
-    from pypy.objspace.std.unicodetype import getdefaultencoding, \
-        _get_encoding_and_errors, encode_object
+    from pypy.objspace.std.unicodetype import _get_encoding_and_errors
+    from pypy.objspace.std.unicodetype import encode_object
     encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
-    if encoding is None:
-        encoding = getdefaultencoding(space)
     w_retval = encode_object(space, w_unistr, encoding, errors)
     return w_retval
 
@@ -945,8 +958,7 @@ def mod__Unicode_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=True)
 
 def buffer__Unicode(space, w_unicode):
-    # xxx this is a slightly strange thing...
-    from pypy.module.struct.unichar import pack_unichar
+    from pypy.rlib.rstruct.unichar import pack_unichar
     charlist = []
     for unich in w_unicode._value:
         pack_unichar(unich, charlist)

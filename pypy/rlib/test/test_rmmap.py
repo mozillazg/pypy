@@ -371,3 +371,14 @@ class TestMMap:
 
         interpret(func, [f.fileno()])
         f.close()
+
+    def test_translated(self):
+        from pypy.translator.c.test.test_genc import compile
+
+        def func(no):
+            m = mmap.mmap(no, 1)
+            r = m.read_byte()
+            m.close()
+            return r
+
+        compile(func, [int])

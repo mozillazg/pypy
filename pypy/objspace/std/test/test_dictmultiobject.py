@@ -58,6 +58,7 @@ class AppTest_DictSharing(test_dictobject.AppTest_DictObject):
         a.__dict__.items() == [("abc", 12)]
 
 
+
 class TestW_DictSmall(test_dictobject.TestW_DictObject):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsmalldicts": True})
@@ -65,6 +66,7 @@ class TestW_DictSmall(test_dictobject.TestW_DictObject):
 class AppTest_DictSmall(test_dictobject.AppTest_DictObject):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsmalldicts": True})
+
 
 class C: pass
 

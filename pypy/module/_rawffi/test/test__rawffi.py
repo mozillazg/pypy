@@ -9,8 +9,8 @@ from pypy.module._rawffi.tracker import Tracker
 import os, sys, py
 
 def setup_module(mod):
-    if sys.platform != 'linux2':
-        py.test.skip("Linux only tests by now")
+    if sys.platform not in ('linux2', 'win32'):
+        py.test.skip("Linux & win32 only tests by now")
 
 class AppTestFfi:
     def prepare_c_example():
@@ -61,6 +61,11 @@ class AppTestFfi:
         unsigned short add_shorts(short one, short two)
         {
            return one + two;
+        }
+
+        void* get_raw_pointer()
+        {
+           return (void*)add_shorts;
         }
 
         char get_char(char* s, unsigned short num)
@@ -140,23 +145,48 @@ class AppTestFfi:
         }
         
         '''))
-        return compile_c_module([c_file], 'x', ExternalCompilationInfo())
+        symbols = """get_char char_check get_raw_pointer
+                     add_shorts
+                     inner_struct_elem create_double_struct free_double_struct
+                     get_array_elem get_array_elem_s
+                     nothing
+                     some_huge_value some_huge_uvalue pass_ll
+                     runcallback
+                     allocate_array
+                     static_int static_double
+                     sum_x_y
+                     give perturb
+                  """.split()
+        eci = ExternalCompilationInfo(export_symbols=symbols)
+        return compile_c_module([c_file], 'x', eci)
     prepare_c_example = staticmethod(prepare_c_example)
     
     def setup_class(cls):
         space = gettestobjspace(usemodules=('_rawffi','struct'))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.prepare_c_example())
+        if sys.platform == 'win32':
+            cls.w_iswin32 = space.wrap(True)
+            cls.w_libc_name = space.wrap('msvcrt')
+            cls.w_libm_name = space.wrap('msvcrt')
+        else:
+            cls.w_iswin32 = space.wrap(False)
+            cls.w_libc_name = space.wrap('libc.so.6')
+            cls.w_libm_name = space.wrap('libm.so')
         cls.w_sizes_and_alignments = space.wrap(dict(
             [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 
     def test_libload(self):
         import _rawffi
-        _rawffi.CDLL('libc.so.6')
+        _rawffi.CDLL(self.libc_name)
+
+    def test_libc_load(self):
+        import _rawffi
+        _rawffi.get_libc()
 
     def test_getattr(self):
         import _rawffi
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.get_libc()
         func = libc.ptr('rand', [], 'i')
         assert libc.ptr('rand', [], 'i') is func # caching
         assert libc.ptr('rand', [], 'l') is not func
@@ -215,6 +245,26 @@ class AppTestFfi:
         arg1.free()
         arg2.free()
 
+    def test_raw_callable(self):
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
+        get_raw_pointer = lib.ptr('get_raw_pointer', [], 'P')
+        ptr = get_raw_pointer()
+        rawcall = _rawffi.FuncPtr(ptr[0], ['h', 'h'], 'H')
+        A = _rawffi.Array('h')
+        arg1 = A(1)
+        arg2 = A(1)
+        arg1[0] = 1
+        arg2[0] = 2
+        res = rawcall(arg1, arg2)
+        assert res[0] == 3
+        arg1.free()
+        arg2.free()
+        assert rawcall.buffer == ptr[0]
+        ptr = rawcall.byptr()
+        assert ptr[0] == rawcall.buffer
+        ptr.free()
+
     def test_short_addition(self):
         import _rawffi
         lib = _rawffi.CDLL(self.lib_name)
@@ -231,7 +281,7 @@ class AppTestFfi:
 
     def test_pow(self):
         import _rawffi
-        libm = _rawffi.CDLL('libm.so')
+        libm = _rawffi.CDLL(self.libm_name)
         pow = libm.ptr('pow', ['d', 'd'], 'd')
         A = _rawffi.Array('d')
         arg1 = A(1)
@@ -246,7 +296,7 @@ class AppTestFfi:
 
     def test_time(self):
         import _rawffi
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.get_libc()
         time = libc.ptr('time', ['z'], 'l')  # 'z' instead of 'P' just for test
         arg = _rawffi.Array('P')(1)
         arg[0] = 0
@@ -255,10 +305,12 @@ class AppTestFfi:
         arg.free()
 
     def test_gettimeofday(self):
+        if self.iswin32:
+            skip("No gettimeofday on win32")
         import _rawffi
         struct_type = _rawffi.Structure([('tv_sec', 'l'), ('tv_usec', 'l')])
         structure = struct_type()
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.get_libc()
         gettimeofday = libc.ptr('gettimeofday', ['P', 'P'], 'i')
 
         arg1 = structure.byptr()
@@ -293,7 +345,7 @@ class AppTestFfi:
                                 ("tm_wday", 'i'),
                                 ("tm_yday", 'i'),
                                 ("tm_isdst", 'i')])
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.get_libc()
         gmtime = libc.ptr('gmtime', ['P'], 'P')
 
         arg = x.byptr()
@@ -403,19 +455,22 @@ class AppTestFfi:
     def test_callback(self):
         import _rawffi
         import struct
-        libc = _rawffi.CDLL('libc.so.6')
+        libc = _rawffi.get_libc()
         ll_to_sort = _rawffi.Array('i')(4)
         for i in range(4):
             ll_to_sort[i] = 4-i
         qsort = libc.ptr('qsort', ['P', 'i', 'i', 'P'], None)
         resarray = _rawffi.Array('i')(1)
+        bogus_args = []
         def compare(a, b):
-            a1 = _rawffi.Array('i').fromaddress(a, 1)
-            a2 = _rawffi.Array('i').fromaddress(b, 1)
+            a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(a, 1)[0], 1)
+            a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(b, 1)[0], 1)
+            print "comparing", a1[0], "with", a2[0]
+            if a1[0] not in [1,2,3,4] or a2[0] not in [1,2,3,4]:
+                bogus_args.append((a1[0], a2[0]))
             if a1[0] > a2[0]:
-                res = -1
-            res = 1
-            return res
+                return 1
+            return -1
         a1 = ll_to_sort.byptr()
         a2 = _rawffi.Array('i')(1)
         a2[0] = len(ll_to_sort)
@@ -426,6 +481,7 @@ class AppTestFfi:
         qsort(a1, a2, a3, a4)
         res = [ll_to_sort[i] for i in range(len(ll_to_sort))]
         assert res == [1,2,3,4]
+        assert not bogus_args
         a1.free()
         a2.free()
         a3.free()
@@ -446,6 +502,30 @@ class AppTestFfi:
         assert res[0] == 1<<42
         a1.free()
         del cb
+
+    def test_raising_callback(self):
+        import _rawffi, sys
+        import StringIO
+        lib = _rawffi.CDLL(self.lib_name)
+        err = StringIO.StringIO()
+        orig = sys.stderr
+        sys.stderr = err
+        try:
+            runcallback = lib.ptr('runcallback', ['P'], 'q')
+            def callback():
+                1/0
+
+            cb = _rawffi.CallbackPtr(callback, [], 'q')
+            a1 = cb.byptr()
+            res = runcallback(a1)
+            a1.free()
+            del cb
+            val = err.getvalue()
+            assert 'ZeroDivisionError' in val
+            assert 'callback' in val
+        finally:
+            sys.stderr = orig
+
 
     def test_setattr_struct(self):
         import _rawffi
@@ -611,15 +691,18 @@ class AppTestFfi:
         assert a[0] == maxptr - 1
         a.free()
 
-    def test_getprimitive(self):
+    def test_getaddressindll(self):
         import _rawffi
         lib = _rawffi.CDLL(self.lib_name)
-        a = lib.getprimitive("l", "static_int")
+        def getprimitive(typecode, name):
+            addr = lib.getaddressindll(name)
+            return _rawffi.Array(typecode).fromaddress(addr, 1)
+        a = getprimitive("l", "static_int")
         assert a[0] == 42
-        a = lib.getprimitive("d", "static_double")
+        a = getprimitive("d", "static_double")
         assert a[0] == 42.42
-        raises(ValueError, lib.getprimitive, 'z', 'ddddddd')
-        raises(ValueError, lib.getprimitive, 'zzz', 'static_int')
+        raises(ValueError, getprimitive, 'z', 'ddddddd')
+        raises(ValueError, getprimitive, 'zzz', 'static_int')
 
     def test_segfault_exception(self):
         import _rawffi
@@ -700,7 +783,6 @@ class AppTestFfi:
         assert a[3] == 'z'
         assert a[4] == 't'
 
-
 class AppTestAutoFree:
     def setup_class(cls):
         space = gettestobjspace(usemodules=('_rawffi', 'struct'))
@@ -711,16 +793,19 @@ class AppTestAutoFree:
 
     def test_structure_autofree(self):
         import gc, _rawffi
+        gc.collect()
         S = _rawffi.Structure([('x', 'i')])
         oldnum = _rawffi._num_of_allocated_objects()
         s = S(autofree=True)
         s.x = 3
         s = None
         gc.collect()
+        gc.collect()
         assert oldnum == _rawffi._num_of_allocated_objects()
 
     def test_array_autofree(self):
         import gc, _rawffi
+        gc.collect()
         oldnum = _rawffi._num_of_allocated_objects()
 
         A = _rawffi.Array('c')
@@ -729,7 +814,6 @@ class AppTestAutoFree:
         a = None
         gc.collect()
         assert oldnum == _rawffi._num_of_allocated_objects()
-
 
     def teardown_class(cls):
         Tracker.DO_TRACING = False

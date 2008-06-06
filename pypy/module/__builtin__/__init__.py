@@ -23,12 +23,6 @@ class Module(MixedModule):
     expose__file__attribute = False
 
     appleveldefs = {
-        'quit'          : 'app_help.exit',
-        'exit'          : 'app_help.exit',
-        'copyright'     : 'app_help.copyright',
-        'license'       : 'app_help.license',
-        'help'          : 'app_help.help',
-
         'execfile'      : 'app_io.execfile',
         'raw_input'     : 'app_io.raw_input',
         'input'         : 'app_io.input',

@@ -58,8 +58,6 @@ class PointerType(_CDataMeta):
             self._buffer = ffiarray(1, autofree=True)
             if value is not None:
                 self.contents = value
-            else:
-                self._objects = {}
         self._ffiarray = ffiarray
         self.__init__ = __init__
         self._type_ = TP
@@ -80,7 +78,7 @@ class _Pointer(_CData):
             raise TypeError("expected %s instead of %s" % (
                 self._type_.__name__, type(value).__name__))
         self._objects = {keepalive_key(1):value}
-        if getattr(value, '_objects', None) is not None:
+        if value._ensure_objects() is not None:
             self._objects[keepalive_key(0)] = value._objects
         value = value._buffer
         self._buffer[0] = value
@@ -108,7 +106,6 @@ class _Pointer(_CData):
 
     contents = property(getcontents, setcontents)
 
-
 def _cast_addr(obj, _, tp):
     if not (isinstance(tp, _CDataMeta) and tp._is_pointer_like()):
         raise TypeError("cast() argument 2 must be a pointer type, not %s"
@@ -121,6 +118,9 @@ def _cast_addr(obj, _, tp):
     if isinstance(obj, (int, long)):
         result = tp()
         result._buffer[0] = obj
+        return result
+    if obj is None:
+        result = tp()
         return result
     if not (isinstance(obj, _CData) and type(obj)._is_pointer_like()):
         raise TypeError("cast() argument 1 must be a pointer, not %s"

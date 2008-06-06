@@ -5,6 +5,7 @@
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.translator.c.test.test_genc import compile
 from pypy.rlib.libffi import *
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.lltypesystem import rffi, lltype
 import os, sys
@@ -12,8 +13,9 @@ import py
 import time
 
 def setup_module(mod):
-    if not sys.platform.startswith('linux'):
-        py.test.skip("Fragile tests, linux only by now")
+    if not (sys.platform.startswith('linux') or
+            sys.platform == 'win32'):
+        py.test.skip("Fragile tests, linux & win32 only by now")
     for name in type_names:
         # XXX force this to be seen by ll2ctypes
         # so that ALLOCATED.clear() clears it
@@ -26,10 +28,22 @@ class TestDLOperations:
 
     def test_dlopen(self):
         py.test.raises(OSError, "dlopen(rffi.str2charp('xxxxxxxxxxxx'))")
-        assert dlopen(rffi.str2charp('/lib/libc.so.6'))
+        if sys.platform == 'win32':
+            assert dlopen(rffi.str2charp('kernel32.dll'))
+        else:
+            assert dlopen(rffi.str2charp('/lib/libc.so.6'))
         
     def get_libc(self):
-        return CDLL('/lib/libc.so.6')
+        if sys.platform == 'win32':
+            return CDLL('msvcrt.dll')
+        else:
+            return CDLL('/lib/libc.so.6')
+    
+    def get_libm(self):
+        if sys.platform == 'win32':
+            return CDLL('msvcrt.dll')
+        else:
+            return CDLL('libm.so')
     
     def test_library_open(self):
         lib = self.get_libc()
@@ -60,7 +74,7 @@ class TestDLOperations:
         assert not ALLOCATED
 
     def test_call_args(self):
-        libm = CDLL('libm.so')
+        libm = self.get_libm()
         pow = libm.getpointer('pow', [ffi_type_double, ffi_type_double],
                               ffi_type_double)
         pow.push_arg(2.0)
@@ -76,9 +90,10 @@ class TestDLOperations:
         assert not ALLOCATED
 
     def test_wrong_args(self):
-        libc = CDLL('libc.so.6')
+        libc = self.get_libc()
         # XXX assume time_t is long
-        ctime = libc.getpointer('time', [ffi_type_pointer], ffi_type_ulong)
+        ulong = cast_type_to_ffitype(rffi.ULONG)
+        ctime = libc.getpointer('time', [ffi_type_pointer], ulong)
         x = lltype.malloc(lltype.GcStruct('xxx'))
         y = lltype.malloc(lltype.GcArray(rffi.LONG), 3)
         z = lltype.malloc(lltype.Array(rffi.LONG), 4, flavor='raw')
@@ -91,9 +106,10 @@ class TestDLOperations:
         # allocation check makes no sense, since we've got GcStructs around
 
     def test_call_time(self):
-        libc = CDLL('libc.so.6')
+        libc = self.get_libc()
         # XXX assume time_t is long
-        ctime = libc.getpointer('time', [ffi_type_pointer], ffi_type_ulong)
+        ulong = cast_type_to_ffitype(rffi.ULONG)
+        ctime = libc.getpointer('time', [ffi_type_pointer], ulong)
         ctime.push_arg(lltype.nullptr(rffi.CArray(rffi.LONG)))
         t0 = ctime.call(rffi.LONG)
         time.sleep(2)
@@ -109,15 +125,48 @@ class TestDLOperations:
         del libc
         assert not ALLOCATED
 
+    def test_closure_heap(self):
+        ch = ClosureHeap()
+
+        assert not ch.free_list
+        a = ch.alloc()
+        assert ch.free_list        
+        b = ch.alloc()
+        
+        chunks = [a, b]
+        p = ch.free_list
+        while p:
+            chunks.append(p)
+            p = rffi.cast(rffi.VOIDPP, p)[0]
+        closure_size = rffi.sizeof(FFI_CLOSUREP.TO)
+        assert len(chunks) == CHUNK//closure_size
+        for i in range(len(chunks) -1 ):
+            s = rffi.cast(rffi.UINT, chunks[i+1])
+            e = rffi.cast(rffi.UINT, chunks[i])
+            assert (e-s) >= rffi.sizeof(FFI_CLOSUREP.TO)
+
+        ch.free(a)
+        assert ch.free_list == rffi.cast(rffi.VOIDP, a)
+        snd = rffi.cast(rffi.VOIDPP, a)[0]
+        assert snd == chunks[2]
+
+        ch.free(b)
+        assert ch.free_list == rffi.cast(rffi.VOIDP, b)
+        snd = rffi.cast(rffi.VOIDPP, b)[0]
+        assert snd == rffi.cast(rffi.VOIDP, a)
+        
     def test_callback(self):
-        libc = CDLL('libc.so.6')
-        qsort = libc.getpointer('qsort', [ffi_type_pointer, ffi_type_slong,
-                                          ffi_type_slong, ffi_type_pointer],
+        slong = cast_type_to_ffitype(rffi.LONG)
+        libc = self.get_libc()
+        qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
+                                          slong, ffi_type_pointer],
                                 ffi_type_void)
 
         def callback(ll_args, ll_res, stuff):
-            a1 = rffi.cast(rffi.INTP, rffi.cast(rffi.VOIDPP, ll_args[0])[0])[0]
-            a2 = rffi.cast(rffi.INTP, rffi.cast(rffi.VOIDPP, ll_args[0])[1])[0]
+            p_a1 = rffi.cast(rffi.VOIDPP, ll_args[0])[0]
+            p_a2 = rffi.cast(rffi.VOIDPP, ll_args[1])[0]
+            a1 = rffi.cast(rffi.INTP, p_a1)[0]
+            a2 = rffi.cast(rffi.INTP, p_a2)[0]
             res = rffi.cast(rffi.INTP, ll_res)
             if a1 > a2:
                 res[0] = 1
@@ -140,6 +189,8 @@ class TestDLOperations:
         qsort.call(lltype.Void)
         assert [to_sort[i] for i in range(4)] == [1,2,3,4]
         lltype.free(to_sort, flavor='raw')
+        keepalive_until_here(ptr)  # <= this test is not translated, but don't
+                                   #    forget this in code that is meant to be
 
     def test_compile(self):
         import py
@@ -148,7 +199,7 @@ class TestDLOperations:
         # with pointer casts
 
         def f(x, y):
-            libm = CDLL('libm.so')
+            libm = self.get_libm()
             c_pow = libm.getpointer('pow', [ffi_type_double, ffi_type_double], ffi_type_double)
             c_pow.push_arg(x)
             c_pow.push_arg(y)
@@ -160,7 +211,7 @@ class TestDLOperations:
         assert res == 16.0
 
     def test_rawfuncptr(self):
-        libm = CDLL('libm.so')
+        libm = self.get_libm()
         pow = libm.getrawpointer('pow', [ffi_type_double, ffi_type_double],
                                  ffi_type_double)
         buffer = lltype.malloc(rffi.DOUBLEP.TO, 3, flavor='raw')
@@ -207,15 +258,17 @@ class TestDLOperations:
         }
         
         '''))
-        lib_name = compile_c_module([c_file], 'x', ExternalCompilationInfo())
+        eci = ExternalCompilationInfo(export_symbols=['sum_x_y'])
+        lib_name = compile_c_module([c_file], 'x', eci)
 
         lib = CDLL(lib_name)
 
-        size = ffi_type_slong.c_size*2
-        alignment = ffi_type_slong.c_alignment
+        slong = cast_type_to_ffitype(rffi.LONG)
+        size = slong.c_size*2
+        alignment = slong.c_alignment
         tp = make_struct_ffitype(size, alignment)
 
-        sum_x_y = lib.getrawpointer('sum_x_y', [tp], ffi_type_slong)
+        sum_x_y = lib.getrawpointer('sum_x_y', [tp], slong)
 
         buffer = lltype.malloc(rffi.LONGP.TO, 3, flavor='raw')
         buffer[0] = 200
@@ -261,7 +314,8 @@ class TestDLOperations:
         }
         
         '''))
-        lib_name = compile_c_module([c_file], 'x', ExternalCompilationInfo())
+        eci = ExternalCompilationInfo(export_symbols=['give', 'perturb'])
+        lib_name = compile_c_module([c_file], 'x', eci)
 
         lib = CDLL(lib_name)
 
@@ -306,3 +360,15 @@ class TestDLOperations:
         del lib
 
         assert not ALLOCATED
+
+class TestWin32Handles:
+    def setup_class(cls):
+        if sys.platform != 'win32':
+            py.test.skip("Win-only test")
+    
+    def test_get_libc_handle(self):
+        handle = get_libc_handle()
+        print get_libc_name()
+        print hex(handle)
+        assert handle != 0
+        assert handle % 0x1000 == 0

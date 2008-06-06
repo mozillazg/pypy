@@ -8,6 +8,7 @@ class Module(MixedModule):
         super(Module, self).__init__(space, w_name) 
         self.checkinterval = 100
         self.recursionlimit = 100
+        self.w_default_encoder = None
         self.defaultencoding = "ascii"
         
     interpleveldefs = {
@@ -49,7 +50,6 @@ class Module(MixedModule):
         'call_tracing'          : 'vm.call_tracing',
         
         'executable'            : 'space.wrap("py.py")', 
-        'copyright'             : 'space.wrap("MIT-License")', 
         'api_version'           : 'version.get_api_version(space)',
         'version_info'          : 'version.get_version_info(space)',
         'version'               : 'version.get_version(space)',
@@ -67,7 +67,9 @@ class Module(MixedModule):
         #'subversion'           : added in Python 2.5
         
         'getdefaultencoding'    : 'interp_encoding.getdefaultencoding', 
-        'setdefaultencoding'    : 'interp_encoding.setdefaultencoding', 
+        'setdefaultencoding'    : 'interp_encoding.setdefaultencoding',
+        # XXX hack
+        '_magic'                : 'version._magic',
 }
     appleveldefs = {
         #'displayhook'           : 'app.displayhook', 
@@ -78,6 +80,7 @@ class Module(MixedModule):
         'exitfunc'              : 'app.exitfunc',
         'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
+        'copyright'             : 'app.copyright_str', 
     }
 
     def setbuiltinmodule(self, w_module, name): 
@@ -126,3 +129,13 @@ class Module(MixedModule):
             else:
                 return space.wrap(operror.application_traceback)
         return None 
+
+    def get_w_default_encoder(self):
+        if self.w_default_encoder is not None:
+            # XXX is this level of caching ok?  CPython has some shortcuts
+            # for common encodings, but as far as I can see it has no general
+            # cache.
+            return self.w_default_encoder
+        else:
+            from pypy.module.sys.interp_encoding import get_w_default_encoder
+            return get_w_default_encoder(self.space)

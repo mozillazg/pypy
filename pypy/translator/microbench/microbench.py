@@ -38,7 +38,7 @@ def run(test_cases, fmt):
         for k in [s for s in testmoddict if s.startswith('test_')] :
             if test_cases:
                 for tc in test_cases:
-                    if k.startswith(tc):
+                    if k.startswith(tc) or microbench.startswith(tc):
                         break
                 else:
                     continue

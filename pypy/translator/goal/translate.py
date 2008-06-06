@@ -55,8 +55,8 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
     IntOption("huge", "Threshold in the number of functions after which "
                       "a local call graph and not a full one is displayed",
               default=100, cmdline="--huge"),
-    BoolOption("text", "Don't start the pygame viewer", default=False,
-               cmdline="--text", negation=False),
+    BoolOption("view", "Start the pygame viewer", default=False,
+               cmdline="--view", negation=False),
     BoolOption("help", "show this help message and exit", default=False,
                cmdline="-h --help", negation=False),
     ArbitraryOption("goals", "XXX",
@@ -193,6 +193,8 @@ def log_options(options, header="options in effect"):
 def log_config(config, header="config used"):
     log('%s:' % header)
     log(str(config))
+    for warning in config.get_warnings():
+        log.WARNING(warning)
 
 def main():
     targetspec_dic, translateconfig, config, args = parse_options_and_load_target()
@@ -239,7 +241,7 @@ def main():
         
         log.event("start debugger...")
 
-        if not translateconfig.text:
+        if translateconfig.view:
             try:
                 t1 = drv.hint_translator
             except (NameError, AttributeError):

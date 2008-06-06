@@ -18,7 +18,7 @@ from pypy.objspace.std.objspace import StdObjSpace
 from pypy.interpreter.special import Ellipsis
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter import gateway
-from pypy.module.struct import ieee
+from pypy.rlib.rstruct import ieee
 
 from pypy.objspace.std.boolobject    import W_BoolObject
 from pypy.objspace.std.complexobject import W_ComplexObject

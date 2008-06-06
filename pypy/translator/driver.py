@@ -32,12 +32,14 @@ DEFAULTS = {
 }
 
 
-def taskdef(taskfunc, deps, title, new_state=None, expected_states=[], idemp=False):
+def taskdef(taskfunc, deps, title, new_state=None, expected_states=[],
+            idemp=False, earlycheck=None):
     taskfunc.task_deps = deps
     taskfunc.task_title = title
     taskfunc.task_newstate = None
     taskfunc.task_expected_states = expected_states
     taskfunc.task_idempotent = idemp
+    taskfunc.task_earlycheck = earlycheck
     return taskfunc
 
 # TODO:
@@ -460,6 +462,16 @@ class TranslationDriver(SimpleTaskEngine):
         "inserting stack checks")
     STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
 
+    def possibly_check_for_boehm(self):
+        if self.config.translation.gc == "boehm":
+            from pypy.translator.tool.cbuild import check_boehm_presence
+            from pypy.translator.tool.cbuild import CompilationError
+            try:
+                check_boehm_presence(noerr=False)
+            except CompilationError, e:
+                i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=hybrid"'
+                raise CompilationError('%s\n--------------------\n%s' % (e, i))
+
     def task_database_c(self):
         translator = self.translator
         if translator.annotator is not None:
@@ -483,7 +495,8 @@ class TranslationDriver(SimpleTaskEngine):
     #
     task_database_c = taskdef(task_database_c,
                             [STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'], 
-                            "Creating database for generating c source")
+                            "Creating database for generating c source",
+                            earlycheck = possibly_check_for_boehm)
     
     def task_source_c(self):  # xxx messy
         translator = self.translator
@@ -666,7 +679,7 @@ class TranslationDriver(SimpleTaskEngine):
         f = file(newexename, 'w')
         f.write("""#!/bin/bash
 LEDIT=`type -p ledit`
-if [ `uname -s` = 'Cygwin' ]; then MONO=; else MONO=mono; fi
+if  uname -s | grep -iq Cygwin ; then MONO=; else MONO=mono; fi
 $LEDIT $MONO "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
 """ % main_exe_name)
         f.close()
@@ -828,6 +841,8 @@ $LEDIT java -Xmx256m -jar $0.jar "$@"
 
     # checkpointing support
     def _event(self, kind, goal, func):
+        if kind == 'planned' and func.task_earlycheck:
+            func.task_earlycheck(self)
         if kind == 'pre':
             fork_before = self.config.translation.fork_before
             if fork_before:

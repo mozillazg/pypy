@@ -19,6 +19,8 @@ class W_TupleObject(W_Object):
         items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems] # XXX generic mixed types unwrap
         return tuple(items)
 
+    def getitems(self):
+        return self.wrappeditems
 
 registerimplementation(W_TupleObject)
 
@@ -122,15 +124,15 @@ def gt__Tuple_Tuple(space, w_tuple1, w_tuple2):
     # No more items to compare -- compare sizes
     return space.newbool(len(items1) > len(items2))
 
-app = gateway.applevel("""
-    def repr__Tuple(t):
-        if len(t) == 1:
-            return "(" + repr(t[0]) + ",)"
-        else:
-            return "(" + ", ".join([repr(x) for x in t]) + ')'
-""", filename=__file__) 
-
-repr__Tuple = app.interphook('repr__Tuple') 
+def repr__Tuple(space, w_tuple):
+    items = w_tuple.wrappeditems
+    # XXX this is quite innefficient, still better than calling
+    #     it via applevel
+    if len(items) == 1:
+        return space.wrap("(" + space.str_w(space.repr(items[0])) + ",)")
+    return space.wrap("(" +
+                 (", ".join([space.str_w(space.repr(item)) for item in items]))
+                      + ")")
 
 def hash__Tuple(space, w_tuple):
     # this is the CPython 2.4 algorithm (changed from 2.3)
@@ -147,6 +149,5 @@ def hash__Tuple(space, w_tuple):
 
 def getnewargs__Tuple(space, w_tuple):
     return space.newtuple([W_TupleObject(w_tuple.wrappeditems)])
-
 
 register_all(vars())

@@ -168,9 +168,6 @@ class ThreadLocals:
     def getmainthreadvalue(self):
         return self._value
 
-    def getGIL(self):
-        return None    # XXX temporary hack!
-
 
 class Action(object):
     """Abstract base class for actions that must be performed regularly,

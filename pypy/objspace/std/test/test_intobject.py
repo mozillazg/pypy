@@ -414,7 +414,22 @@ class AppTestInt:
     def test_getnewargs(self):
         assert  0 .__getnewargs__() == (0,)
 
+    def test_cmp(self):
+        skip("This is a 'wont fix' case")
+        # We don't have __cmp__, we consistently have __eq__ & the others
+        # instead.  In CPython some types have __cmp__ and some types have
+        # __eq__ & the others.
+        assert 1 .__cmp__
+        assert int .__cmp__
+
+
 class AppTestIntOptimizedAdd(AppTestInt):
     def setup_class(cls):
         from pypy.conftest import gettestobjspace
         cls.space = gettestobjspace(**{"objspace.std.optimized_int_add": True})
+
+class AppTestIntOptimizedComp(AppTestInt):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.std.optimized_comparison_op": True})
+        

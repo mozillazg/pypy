@@ -221,10 +221,10 @@ class BaseTestRbuiltin(BaseRtypingTest):
         f = file(tmpfile, 'w')
         f.write('hello world')
         f.close()
-        def f():
+        def fn():
             fd = os.open(tmpfile, os.O_RDONLY, 0777)
             return os.read(fd, 4096)
-        res = self.interpret(f, [])
+        res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'hello world'
 
     def test_os_lseek(self):

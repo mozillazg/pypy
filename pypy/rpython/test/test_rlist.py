@@ -188,47 +188,6 @@ class Freezing:
     def _freeze_(self):
         return True
 
-##def test_list_builder():
-##    def fixed_size_case():
-##        return [42]
-##    def variable_size_case():
-##        lst = []
-##        lst.append(42)
-##        return lst
-
-##    from pypy.rpython.rtyper import LowLevelOpList
-
-##    for fn in [fixed_size_case, variable_size_case]:
-##        t = TranslationContext()
-##        t.buildannotator().build_types(fn, [])
-##        t.buildrtyper().specialize()
-##        LIST = t.graphs[0].getreturnvar().concretetype.TO
-##        llop = LowLevelOpList(None)
-##        v0 = Constant(42)
-##        v0.concretetype = Signed
-##        v1 = Variable()
-##        v1.concretetype = Signed
-##        vr = LIST.list_builder.build(llop, [v0, v1])
-##        assert len(llop) == 3
-##        assert llop[0].opname == 'direct_call'
-##        assert len(llop[0].args) == 3
-##        assert llop[0].args[1].concretetype == Void
-##        assert llop[0].args[1].value == LIST
-##        assert llop[0].args[2].concretetype == Signed
-##        assert llop[0].args[2].value == 2
-##        assert llop[0].result is vr
-##        for op, i, vi in [(llop[1], 0, v0), (llop[2], 1, v1)]:
-##            assert op.opname == 'direct_call'
-##            assert len(op.args) == 5
-##            assert op.args[1].value is dum_nocheck
-##            assert op.args[2] is vr
-##            assert op.args[3].concretetype == Signed
-##            assert op.args[3].value == i
-##            assert op.args[4] is vi
-##            assert op.result.concretetype is Void
-
-
-
 
 class BaseTestRlist(BaseRtypingTest):
 
@@ -498,7 +457,6 @@ class BaseTestRlist(BaseRtypingTest):
         assert self.class_name(res) == 'A'
         #''.join(res.super.typeptr.name) == 'A\00'
         
-
     def test_reverse(self):
         def dummyfn():
             l = [5, 3, 2]
@@ -517,15 +475,15 @@ class BaseTestRlist(BaseRtypingTest):
         assert res == 235
 
     def test_prebuilt_list(self):
-        klist = ['a', 'd', 'z', 'k']
+        klist = [6, 7, 8, 9]
         def dummyfn(n):
             return klist[n]
         res = self.interpret(dummyfn, [0])
-        assert res == 'a'
+        assert res == 6
         res = self.interpret(dummyfn, [3])
-        assert res == 'k'
+        assert res == 9
         res = self.interpret(dummyfn, [-2])
-        assert res == 'z'
+        assert res == 8
 
         klist = ['a', 'd', 'z']
         def mkdummyfn():
@@ -771,6 +729,12 @@ class BaseTestRlist(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == fn()
+
+        def fn():
+            return str([1.25])
+
+        res = self.interpret(fn, [])
+        assert eval(self.ll_to_string(res)) == [1.25]
 
     def test_list_or_None(self):
         empty_list = []
@@ -1389,19 +1353,6 @@ class TestLLtype(BaseTestRlist, LLRtypeMixin):
         for i in range(3):
             lis = self.interpret(fnpop, [i])
             assert list_is_clear(lis, 3-i)
-
-    def test_hints(self):
-        from pypy.rlib.objectmodel import newlist
-        from pypy.rpython.annlowlevel import hlstr
-        
-        def f(z):
-            z = hlstr(z)
-            x = newlist(sizehint=13)
-            x += z
-            return ''.join(x)
-
-        res = self.interpret(f, [self.string_to_ll('abc')])
-        assert self.ll_to_string(res) == 'abc'
 
 class TestOOtype(BaseTestRlist, OORtypeMixin):
     rlist = oo_rlist

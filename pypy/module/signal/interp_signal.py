@@ -21,7 +21,8 @@ signal_names = list(setup())
 eci = ExternalCompilationInfo(
     includes = ['stdlib.h', 'src/signals.h'],
     separate_module_sources = ['#include <src/signals.h>'],
-    include_dirs = [str(py.path.local(autopath.pypydir).join('translator', 'c'))]
+    include_dirs = [str(py.path.local(autopath.pypydir).join('translator', 'c'))],
+    export_symbols = ['pypysig_poll'],
 )
 
 def external(name, args, result, **kwds):

@@ -380,6 +380,8 @@ class InstanceRepr(AbstractInstanceRepr):
         return ll_inst_hash
 
     def rtype_getattr(self, hop):
+        if hop.s_result.is_constant():
+            return hop.inputconst(hop.r_result, hop.s_result.const)
         v_inst, _ = hop.inputargs(self, ootype.Void)
         s_inst = hop.args_s[0]
         attr = hop.args_s[1].const
@@ -469,7 +471,7 @@ class InstanceRepr(AbstractInstanceRepr):
                   resulttype=ootype.Void)
         return v_instance
         
-    def initialize_prebuilt_instance(self, value, classdef, result):
+    def initialize_prebuilt_data(self, value, classdef, result):
         # then add instance attributes from this level
         classrepr = getclassrepr(self.rtyper, self.classdef)
         for mangled, (oot, default) in self.lowleveltype._allfields().items():
@@ -478,7 +480,7 @@ class InstanceRepr(AbstractInstanceRepr):
             elif mangled == 'meta':
                 llattrvalue = classrepr.get_meta_instance()
             elif mangled == '_hash_cache_': # hash() support
-                llattrvalue = hash(value)
+                continue   # already done by initialize_prebuilt_hash()
             else:
                 name = unmangle(mangled, self.rtyper.getconfig())
                 try:
@@ -493,6 +495,10 @@ class InstanceRepr(AbstractInstanceRepr):
                 else:
                     llattrvalue = self.allfields[mangled].convert_const(attrvalue)
             setattr(result, mangled, llattrvalue)
+
+    def initialize_prebuilt_hash(self, value, result):
+        if '_hash_cache_' in self.lowleveltype._allfields():
+            result._hash_cache_ = hash(value)
 
 buildinstancerepr = InstanceRepr
 

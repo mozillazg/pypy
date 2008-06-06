@@ -65,6 +65,9 @@ class W_Root(object):
         raise OperationError(space.w_TypeError,
                              space.wrap("__class__ assignment: only for heap types"))
 
+    def user_setup(self, space, w_subtype):
+        assert False, "only for interp-level user subclasses from typedef.py"
+
     def getname(self, space, default):
         try:
             return space.str_w(space.getattr(self, space.wrap('__name__')))
@@ -73,7 +76,7 @@ class W_Root(object):
                 return default
             raise
 
-    def getrepr(self, space, info):
+    def getrepr(self, space, info, moreinfo=''):
         # XXX slowish
         w_id = space.id(self)
         w_4 = space.wrap(4)
@@ -90,7 +93,8 @@ class W_Root(object):
             if i == 0:
                 break
             w_id = space.rshift(w_id, w_4)
-        return space.wrap("<%s at 0x%s>" % (info, ''.join(addrstring)))
+        return space.wrap("<%s at 0x%s%s>" % (info, ''.join(addrstring),
+                                              moreinfo))
 
     def getslotvalue(self, index):
         raise NotImplementedError
