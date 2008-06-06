@@ -281,6 +281,23 @@ What do you mean by "full program"? All the code in all the modules I use?
 an "entry point" function. The translation toolchain follows all calls
 recursively and discovers what belongs to the program and what not.
 
+-------------------------------------------------------------------------
+Can I use PyPy and RPython to compile smaller parts of my Python program?
+-------------------------------------------------------------------------
+
+No.  That would be possible, and we played with early attempts in that
+direction, but there are many delicate issues: for example, how the
+compiled and the non-compiled parts exchange data.  Supporting this in a
+nice way would be a lot of work.
+
+PyPy is certainly a good starting point for someone that would like to
+work in that direction.  Early attempts were dropped because they
+conflicted with refactorings that we needed in order to progress on the
+rest of PyPy; the currently active developers of PyPy have different
+priorities.  If someone wants to start working in that direction I
+imagine that he might get a (very little) bit of support from us,
+though.
+
 ------------------------------------------------------
 What's the ``"NOT_RPYTHON"`` I see in some docstrings?
 ------------------------------------------------------
