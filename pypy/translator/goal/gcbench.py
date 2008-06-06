@@ -45,8 +45,11 @@
 #                 check for proper locking
 import os, time
 
+USAGE = """gcbench [num_repetitions] [--depths=N,N,N..] [--threads=N]"""
+ENABLE_THREADS = True
+
 def println(s):
-    os.write(1, s+"\n")
+    print s
 
 class Node(object):
 
@@ -107,7 +110,25 @@ def time_construction(depth):
     t_finish = time.time()
     println("\tBottom up constrution took %f ms" % ((t_finish-t_start)*1000.))
 
-def main(depths=range(kMinTreeDepth, kMaxTreeDepth+1, 2)):
+DEFAULT_DEPTHS = range(kMinTreeDepth, kMaxTreeDepth+1, 2)
+
+def time_constructions(depths):
+    for d in depths:
+        time_construction(d)
+
+def time_parallel_constructions(depths, nthreads):
+    import threading
+    threadlist = []
+    print "Starting %d parallel threads..." % (nthreads,)
+    for n in range(nthreads):
+        t = threading.Thread(target=time_constructions, args=(depths,))
+        t.start()
+        threadlist.append(t)
+    for t in threadlist:
+        t.join()
+    print "All %d threads finished" % (nthreads,)
+
+def main(depths=DEFAULT_DEPTHS, threads=1):
     println("Garbage Collector Test")
     println(" Stretching memory with a binary tree of depth %d" % kStretchTreeDepth)
     print_diagnostics()
@@ -129,8 +150,10 @@ def main(depths=range(kMinTreeDepth, kMaxTreeDepth+1, 2)):
         i += 1
     print_diagnostics()
 
-    for d in depths:
-        time_construction(d)
+    if threads > 1:
+        time_parallel_constructions(depths, threads)
+    else:
+        time_constructions(depths)
 
     if long_lived_tree is None or array[1024] != 1.0/1024:
         println("FAILED")
@@ -141,10 +164,41 @@ def main(depths=range(kMinTreeDepth, kMaxTreeDepth+1, 2)):
     println("Completed in %f ms." % ((t_finish-t_start)*1000.))
 
 
+def argerror():
+    print "Usage:"
+    print "   ", USAGE
+    return 2
+
+def entry_point(argv):
+    depths = DEFAULT_DEPTHS
+    threads = 1
+    repeatcount = 1
+    for arg in argv[1:]:
+        if arg.startswith('--threads='):
+            arg = arg[len('--threads='):]
+            if not ENABLE_THREADS:
+                print "threads disabled (they cannot be translated)"
+                return 1
+            try:
+                threads = int(arg)
+            except ValueError:
+                return argerror()
+        elif arg.startswith('--depths='):
+            arg = arg[len('--depths='):].split(',')
+            try:
+                depths = [int(s) for s in arg]
+            except ValueError:
+                return argerror()
+        else:
+            try:
+                repeatcount = int(arg)
+            except ValueError:
+                return argerror()
+    for i in range(repeatcount):
+        main(depths, threads)
+    return 0
+
+
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) > 1:
-        depths = [int(s) for s in sys.argv[1:]]
-        main(depths)
-    else:
-        main()
+    sys.exit(entry_point(sys.argv))
