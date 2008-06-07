@@ -31,7 +31,9 @@ def external(name, args, result, **kwds):
 pypysig_ignore = external('pypysig_ignore', [rffi.INT], lltype.Void)
 pypysig_default = external('pypysig_default', [rffi.INT], lltype.Void)
 pypysig_setflag = external('pypysig_setflag', [rffi.INT], lltype.Void)
-pypysig_poll = external('pypysig_poll', [], rffi.INT)
+pypysig_poll = external('pypysig_poll', [], rffi.INT, threadsafe=False)
+# don't bother releasing the GIL around a call to pypysig_poll: it's
+# pointless and a performance issue
 
 class CheckSignalAction(Action):
     """A repeatitive action at the space level, checking if the
