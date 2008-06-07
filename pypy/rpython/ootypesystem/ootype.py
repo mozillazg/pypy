@@ -1238,10 +1238,14 @@ class _string(_builtin_type):
 
     def ll_find(self, s, start, end):
         # NOT_RPYTHON
+        if start > len(self._str):  # workaround to cope with corner case
+            return -1               # bugs in CPython 2.4 unicode.find('')
         return self._str.find(s._str, start, end)
 
     def ll_rfind(self, s, start, end):
         # NOT_RPYTHON
+        if start > len(self._str):  # workaround to cope with corner case
+            return -1               # bugs in CPython 2.4 unicode.rfind('')
         return self._str.rfind(s._str, start, end)
 
     def ll_count(self, s, start, end):

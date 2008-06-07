@@ -514,6 +514,8 @@ class LLHelpers(AbstractLLHelpers):
         if end > len(s1.chars):
             end = len(s1.chars)
         if len2 == 0:
+            if (end-start) < 0:
+                return -1
             return end
         # Construct the array of possible restarting positions
         T = malloc( SIGNED_ARRAY, len2 )
