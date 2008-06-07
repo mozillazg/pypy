@@ -280,6 +280,16 @@ class StdObjSpace(ObjSpace, DescrOperation):
             from pypy.objspace.std import builtinshortcut
             builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
 
+        # set up the method cache
+        if self.config.objspace.std.withmethodcache:
+            SIZE = 1 << self.config.objspace.std.methodcachesizeexp
+            self.method_cache_versions = [None] * SIZE
+            self.method_cache_names = [None] * SIZE
+            self.method_cache_lookup_where = [(None, None)] * SIZE
+            if self.config.objspace.std.withmethodcachecounter:
+                self.method_cache_hits = {}
+                self.method_cache_misses = {}
+
         # hack to avoid imports in the time-critical functions below
         for cls in self.model.typeorder:
             globals()[cls.__name__] = cls
@@ -419,14 +429,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # execution context themselves (e.g. nearly all space methods)
         ec = ObjSpace.createexecutioncontext(self)
         ec._py_repr = None
-        if self.config.objspace.std.withmethodcache:
-            SIZE = 1 << self.config.objspace.std.methodcachesizeexp
-            ec.method_cache_versions = [None] * SIZE
-            ec.method_cache_names = [None] * SIZE
-            ec.method_cache_lookup_where = [(None, None)] * SIZE
-            if self.config.objspace.std.withmethodcachecounter:
-                ec.method_cache_hits = {}
-                ec.method_cache_misses = {}
         return ec
 
     def createframe(self, code, w_globals, closure=None):
