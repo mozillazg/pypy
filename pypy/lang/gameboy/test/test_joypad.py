@@ -200,66 +200,93 @@ def toggle_multiple_test(driver, codeGetter, buttons):
 def test_reset(joypad=None):
     if joypad is None:
         joypad = get_joypad()
-    assert joypad.joyp == 0xF
+    assert joypad.read_control == 0xF
     assert joypad.cycles == constants.JOYPAD_CLOCK
+    assert joypad.read(constants.JOYP) == 0xFF
         
 def test_emulate():
-    joypad = get_joypad()
-    ticks  = 2
-    cycles = joypad.cycles
-    joypad.emulate(ticks)
-    assert cycles - joypad.cycles == ticks
+    joypad          = get_joypad()
+    joypad.cycles   = 10
+    joypad.emulate(5)
+    assert joypad.cycles == 5
 
 def test_emulate_zero_ticks():
     joypad        = get_joypad()
     joypad.cycles = 2
-    ticks         = 2
-    joypad.emulate(ticks)
+    joypad.emulate(2)
     assert joypad.cycles == constants.JOYPAD_CLOCK
     
 def test_emulate_zero_ticks_update():   
     joypad = get_joypad() 
-    value = 0x1
-    joypad.joyp = value
-    joypad.driver.button_code = 0x4
-    joypad.driver.raised = True
-    joypad.cycles = 2
-    ticks = 2
-    joypad.emulate(ticks)
+    joypad.read_control        = 0x2
+    joypad.driver.button_up()
+    assert joypad.driver.get_direction_code() == constants.BUTTON_UP
+    joypad.driver.raised      = False
+    joypad.cycles             = 2
+    
+    assert joypad.button_code == 0xF
+    joypad.emulate(2)
     assert joypad.cycles      == constants.JOYPAD_CLOCK
-    assert joypad.joyp        == value
-    assert joypad.button_code == 0
+    assert joypad.read_control == 2
+    assert joypad.button_code == 0xF
+    assert joypad.interrupt.joypad.is_pending() == False
+    
+    joypad.driver.raised      = True
+    joypad.cycles             = 2
+    assert joypad.button_code == 0xF
+    joypad.emulate(2)
+    assert joypad.cycles      == constants.JOYPAD_CLOCK
+    assert joypad.read_control == 2
+    assert joypad.button_code == constants.BUTTON_UP
+    assert joypad.interrupt.joypad.is_pending() == True
     
 def test_read_write():
     joypad = get_joypad()
-    value  = 0x2
-    joypad.write(constants.JOYP, value)
-    joyp   = 0xC + (value & 0x3)
-    assert joypad.joyp == joyp
-    joyp = (joyp << 4) + 0xF
-    assert joypad.read(constants.JOYP) == joyp
+    assert joypad.read(constants.JOYP) == 0xFF
+    joypad.write(constants.JOYP, 0x02)
+    assert joypad.read(constants.JOYP)   == 0xCF
     assert joypad.read(constants.JOYP+1) == 0xFF
-    # no change on writing the wrong address
-    joypad.write(constants.JOYP+1, value+1)
-    assert joypad.read(constants.JOYP) == joyp
     
+    joypad.write(constants.JOYP, 0x00)
+    assert joypad.read(constants.JOYP) & 0xF0 == 0xC0
+    
+    joypad.write(constants.JOYP, 0x10)
+    assert joypad.read(constants.JOYP) & 0xF0 == 0xD0
+    
+    joypad.write(constants.JOYP, 0x20)
+    assert joypad.read(constants.JOYP) & 0xF0 == 0xE0
+    
+    joypad.write(constants.JOYP, 0x30)
+    assert joypad.read(constants.JOYP) & 0xF0 == 0xF0
+    
+    joypad.write(constants.JOYP, 0xFF)
+    assert joypad.read(constants.JOYP) & 0xF0 == 0xF0
     
 def test_update():
     joypad = get_joypad()
+    # toogle the buttons
     joypad.driver.button_select()
     assert joypad.driver.get_button_code() == constants.BUTTON_SELECT
     joypad.driver.button_up()
     assert joypad.driver.get_direction_code() == constants.BUTTON_UP
     assert joypad.button_code == 0xF
-    joypad.joyp = 0x1
-    joypad.update()
-    assert joypad.button_code == (constants.BUTTON_SELECT | constants.BUTTON_UP)
     
-    joypad.joyp = 0x2
+    joypad.write(constants.JOYP, 0x10)
     joypad.update()
-    assert joypad.button_code == (constants.BUTTON_SELECT | constants.BUTTON_UP)
+    assert joypad.button_code == constants.BUTTON_SELECT
+    assert joypad.interrupt.joypad.is_pending()
     
-    joypad.joyp = 0x3
+    joypad.interrupt.joypad.set_pending(False)
+    joypad.write(constants.JOYP, 0x10)
+    joypad.update()
+    assert joypad.button_code == constants.BUTTON_SELECT
+    assert joypad.interrupt.joypad.is_pending() ==  False
+    
+    joypad.write(constants.JOYP, 0x20)
+    joypad.update()
+    assert joypad.button_code == constants.BUTTON_UP
+    
+    joypad.write(constants.JOYP, 0x30)
     joypad.update()
     assert joypad.button_code == 0xF
     
