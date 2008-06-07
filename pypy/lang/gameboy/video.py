@@ -5,6 +5,7 @@
 
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import iMemory
+from pypy.lang.gameboy.cpu import process_2_complement
 
 
 
@@ -547,17 +548,20 @@ class Video(iMemory):
     def draw_tiles(self, x, tileMap, tileData):
         while x < 168:
             if (self.control & 0x10) != 0:
-                tile = self.vram[tileMap] & 0xFF
+                tile = self.vram[tileMap]
             else:
-                tile = (self.vram[tileMap] ^ 0x80) & 0xFF
+                tile = (process_2_complement(self.vram[tileMap]) ^ 0x80) & 0xFF
             self.draw_tile(x, tileData + (tile << 4))
             tileMap = (tileMap & 0x1FE0) + ((tileMap + 1) & 0x001F)
             x += 8
-            
+     
+    def draw_tile(self, x, address):
+        pattern =  self.get_pattern(address)
+        for i in range(0, 8):
+            self.line[x + i] = (pattern >> (7-i)) & 0x0101
+                   
     def get_pattern(self, address):
-        pattern  = self.vram[address]      & 0xFF
-        pattern += (self.vram[address + 1] & 0xFF) << 8
-        return pattern
+        return self.vram[address] +(self.vram[address + 1]) << 8
 
     def draw_object(self, caller, x, address, flags):
         pattern = self.get_pattern(address)
@@ -590,11 +594,6 @@ class Video(iMemory):
             color = pattern >> i
             if (color & 0x0202) != 0:
                 caller.call(x + i + 1, color, mask)
-            
-    def draw_tile(self, x, address):
-        pattern =  self.get_pattern(address)
-        for i in range(0, 8):
-            self.line[x + i] = (pattern >> (7-i)) & 0x0101
 
     def draw_object_tile(self, x, address, flags):
         self.draw_object(set_tile_line_call_wrapper(self), x, address, flags)

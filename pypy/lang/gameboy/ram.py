@@ -33,10 +33,10 @@ class RAM(iMemory):
         # C000-DFFF Work RAM (8KB)
         # E000-FDFF Echo RAM
         if address >= 0xC000 and address <= 0xFDFF:
-            self.work_ram[address & 0x1FFF] = data
+            self.work_ram[address & 0x1FFF] = data & 0xFF
         # FF80-FFFE High RAM
         elif address >= 0xFF80 and address <= 0xFFFE:
-            self.hi_ram[address & 0x7F] = data
+            self.hi_ram[address & 0x7F] = data & 0xFF
 
     def read(self, address):
         # C000-DFFF Work RAM

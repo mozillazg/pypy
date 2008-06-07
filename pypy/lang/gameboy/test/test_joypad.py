@@ -75,20 +75,20 @@ def test_press_release():
 
 # TEST JOYPAD DRIVER -----------------------------------------------------------
 
-def test_ini():
+def test_joypad_driver_ini():
     driver = get_driver()
     assert driver.raised               == False
     assert driver.get_button_code()    == 0
     assert driver.get_direction_code() == 0
     
-def test_isRaised():
+def test_joypad_driver_isRaised():
     driver        = get_driver()
     driver.raised = True
     assert driver.raised      == True
     assert driver.is_raised() == True
     assert driver.raised      == False
     
-def test_button_code_values():
+def test_joypad_driver_button_code_values():
     driver = get_driver()
     assert driver.up.code_value     == constants.BUTTON_UP 
     assert driver.right.code_value  == constants.BUTTON_RIGHT   
@@ -98,6 +98,40 @@ def test_button_code_values():
     assert driver.start.code_value  == constants.BUTTON_START
     assert driver.a.code_value      == constants.BUTTON_A
     assert driver.b.code_value      == constants.BUTTON_B
+    
+def test_joypad_driver_button_toggled_values():
+    driver = get_driver()
+    driver.button_a()
+    assert driver.get_button_code() == 0x01
+    
+    driver.reset()
+    driver.button_b()
+    assert driver.get_button_code() == 0x02
+    
+    driver.reset()
+    driver.button_select()
+    assert driver.get_button_code() == 0x04
+    
+    driver.reset()
+    driver.button_start()
+    assert driver.get_button_code() == 0x08
+    
+def test_joypad_driver_direction_toggled_values():
+    driver = get_driver()
+    driver.button_up()
+    assert driver.get_direction_code() == 0x04
+    
+    driver.reset()
+    driver.button_right()
+    assert driver.get_direction_code() == 0x01
+    
+    driver.reset()
+    driver.button_down()
+    assert driver.get_direction_code() == 0x08
+    
+    driver.reset()
+    driver.button_left()
+    assert driver.get_direction_code() == 0x02
     
     
 def test_toggle_opposite_directions():
