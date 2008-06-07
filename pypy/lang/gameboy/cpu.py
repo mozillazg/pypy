@@ -3,12 +3,21 @@ from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import *
 from pypy.lang.gameboy.interrupt import *
 
+# ---------------------------------------------------------------------------
 
-class iRegister(object):
+def process_2_complement(value):
+        # check if the left most bit is set
+    if (value >> 7) == 1:
+        return -((~value) & 0xFF) - 1
+    else :
+        return value
+# ---------------------------------------------------------------------------
+
+class AbstractRegister(object):
     def get(self, use_cycles=True):
         return 0xFF
 
-class Register(iRegister):
+class Register(AbstractRegister):
     
     def __init__(self, cpu, value=0):
         assert isinstance(cpu, CPU)
@@ -36,7 +45,7 @@ class Register(iRegister):
     
 #------------------------------------------------------------------------------
 
-class DoubleRegister(iRegister):
+class DoubleRegister(AbstractRegister):
     
     def __init__(self, cpu, hi, lo, reset_value=0):
         assert isinstance(cpu, CPU)
@@ -806,7 +815,7 @@ class CPU(object):
 
     def get_fetchadded_sp(self):
         # 1 cycle
-        offset = self.process_2_complement(self.fetch()) # 1 cycle
+        offset = process_2_complement(self.fetch()) # 1 cycle
         s = (self.sp.get() + offset) & 0xFFFF
         self.f.reset()
         if (offset >= 0):
@@ -821,12 +830,6 @@ class CPU(object):
                 self.f.h_flag = True
         return s
     
-    def process_2_complement(self, value):
-        # check if the left most bit is set
-        if (value >> 7) == 1:
-            return -((~value) & 0xFF) - 1
-        else :
-            return value
         
     def complement_carry_flag(self):
         # CCF/SCF
@@ -856,7 +859,7 @@ class CPU(object):
     def relative_jump(self):
         # JR +nn, 3 cycles
         #pc = pc & 0xFF00 + ((pc & 0x00FF) + add) & 0xFF
-        self.pc.add(self.process_2_complement(self.fetch())) # 3 + 1 cycles
+        self.pc.add(process_2_complement(self.fetch())) # 3 + 1 cycles
         self.cycles += 1
 
     def relative_conditional_jump(self, cc):

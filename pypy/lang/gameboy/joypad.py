@@ -12,8 +12,8 @@ class Joypad(iMemory):
 
     def __init__(self, joypad_driver, interrupt):
         assert isinstance(joypad_driver, JoypadDriver)
-        assert isinstance(interrupt, Interrupt )
-        self.driver = joypad_driver
+        assert isinstance(interrupt, Interrupt)
+        self.driver    = joypad_driver
         self.interrupt = interrupt
         self.reset()
 
@@ -43,14 +43,14 @@ class Joypad(iMemory):
         return 0xFF
 
     def update(self):
-        oldButtons = self.button_code
+        old_buttons = self.button_code
         if self.read_control & 0x3 == 1:
             self.button_code = self.driver.get_button_code()
         elif self.read_control & 0x3 == 2:
             self.button_code = self.driver.get_direction_code()
         elif self.read_control & 0x3 == 3:
             self.button_code  = 0xF
-        if oldButtons != self.button_code:
+        if old_buttons != self.button_code:
             self.interrupt.raise_interrupt(constants.JOYPAD)
 
 
@@ -107,7 +107,7 @@ class JoypadDriver(object):
         return code
     
     def is_raised(self):
-        raised = self.raised
+        raised      = self.raised
         self.raised = False
         return raised
     
@@ -170,9 +170,9 @@ class JoypadDriver(object):
 class Button(object):
     
     def __init__(self, code_value, opposite_button=None):
-        self.code_value = int(code_value)
+        self.code_value      = int(code_value)
         self.opposite_button = opposite_button
-        self.pressed = False
+        self.pressed         = False
         
     def get_code(self):
         if self.pressed:

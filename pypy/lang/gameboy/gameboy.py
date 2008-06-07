@@ -16,7 +16,7 @@ from pypy.lang.gameboy.timer import *
 from pypy.lang.gameboy.video import *
 from pypy.lang.gameboy.cartridge import *
 
-
+    
 class GameBoy(object):
 
     def __init__(self):
