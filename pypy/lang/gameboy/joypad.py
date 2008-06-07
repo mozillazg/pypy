@@ -18,9 +18,9 @@ class Joypad(iMemory):
         self.reset()
 
     def reset(self):
-        self.joyp = 0xF
-        self.button_code = 0xF
-        self.cycles = constants.JOYPAD_CLOCK
+        self.read_control = 0xF
+        self.button_code  = 0xF
+        self.cycles       = constants.JOYPAD_CLOCK
 
     def get_cycles(self):
         return self.cycles
@@ -34,21 +34,21 @@ class Joypad(iMemory):
 
     def write(self, address, data):
         if address == constants.JOYP:
-            self.joyp = (self.joyp & 0xC) + (data & 0x3)
+            self.read_control = (self.read_control & 0xC) + ((data & 0x30)>>4)
             self.update()
 
     def read(self, address):
         if address == constants.JOYP:
-            return (self.joyp << 4) + self.button_code
+            return (self.read_control << 4) + self.button_code
         return 0xFF
 
     def update(self):
         oldButtons = self.button_code
-        if self.joyp & 0xF0 == 0x10:
+        if self.read_control & 0x3 == 1:
             self.button_code = self.driver.get_button_code()
-        elif self.joyp & 0xF0 == 0x20:
+        elif self.read_control & 0x3 == 2:
             self.button_code = self.driver.get_direction_code()
-        else:
+        elif self.read_control & 0x3 == 3:
             self.button_code  = 0xF
         if oldButtons != self.button_code:
             self.interrupt.raise_interrupt(constants.JOYPAD)
