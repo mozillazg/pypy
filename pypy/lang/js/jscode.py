@@ -230,8 +230,7 @@ class BaseBinaryBitwiseOp(Opcode):
         s6 = stack.pop().ToInt32(ctx)
         stack.append(self.operation(ctx, s5, s6))
 
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         raise NotImplementedError
 
 class BaseBinaryOperation(Opcode):
@@ -419,13 +418,11 @@ class COMMA(BaseUnaryOperation):
         # XXX
 
 class SUB(BaseBinaryOperation):
-    @staticmethod
-    def operation(ctx, left, right):
+    def operation(self, ctx, left, right):
         return sub(ctx, left, right)
 
 class IN(BaseBinaryOperation):
-    @staticmethod
-    def operation(ctx, left, right):
+    def operation(self, ctx, left, right):
         if not isinstance(right, W_Object):
             raise ThrowException(W_String("TypeError"))
         name = left.ToString(ctx)
@@ -456,23 +453,19 @@ class TYPEOF_VARIABLE(Opcode):
 
 
 class ADD(BaseBinaryOperation):
-    @staticmethod
-    def operation(ctx, left, right):
+    def operation(self, ctx, left, right):
         return plus(ctx, left, right)
 
 class BITAND(BaseBinaryBitwiseOp):
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         return W_IntNumber(op1&op2)
 
 class BITXOR(BaseBinaryBitwiseOp):
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         return W_IntNumber(op1^op2)
 
 class BITOR(BaseBinaryBitwiseOp):
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         return W_IntNumber(op1|op2)
 
 class URSH(BaseBinaryBitwiseOp):
@@ -494,18 +487,15 @@ class LSH(BaseBinaryBitwiseOp):
         stack.append(W_IntNumber(op1 << intmask(op2 & 0x1F)))
 
 class MUL(BaseBinaryOperation):
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         return mult(ctx, op1, op2)
 
 class DIV(BaseBinaryOperation):
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         return division(ctx, op1, op2)
 
 class MOD(BaseBinaryOperation):
-    @staticmethod
-    def operation(ctx, op1, op2):
+    def operation(self, ctx, op1, op2):
         return mod(ctx, op1, op2)
 
 class UPLUS(BaseUnaryOperation):
@@ -583,7 +573,8 @@ class BaseStoreMemberAssign(BaseStoreMember):
         return self.decision(ctx, value, prev)
 
 class STORE_MEMBER_ADD(BaseStoreMemberAssign):
-    decision = staticmethod(ADD.operation)
+    def decision(self, ctx, value, prev):
+        return plus(ctx, value, prev)
 
 class STORE_MEMBER_POSTINCR(BaseStoreMember):
     def operation(self, *args):
@@ -629,28 +620,36 @@ class BaseAssignBitOper(BaseStore):
         return result
 
 class STORE_ADD(BaseAssignOper):
-    operation = staticmethod(ADD.operation)
+    def operation(self, ctx, left, right):
+        return plus(ctx, left, right)
 
 class STORE_SUB(BaseAssignOper):
-    operation = staticmethod(SUB.operation)
+    def operation(self, ctx, left, right):
+        return sub(ctx, left, right)
 
 class STORE_MUL(BaseAssignOper):
-    operation = staticmethod(MUL.operation)
+    def operation(self, ctx, left, right):
+        return mult(ctx, left, right)
 
 class STORE_DIV(BaseAssignOper):
-    operation = staticmethod(DIV.operation)
+    def operation(self, ctx, left, right):
+        return division(ctx, left, right)
 
 class STORE_MOD(BaseAssignOper):
-    operation = staticmethod(MOD.operation)
+    def operation(self, ctx, left, right):
+        return mod(ctx, left, right)
 
 class STORE_BITAND(BaseAssignBitOper):
-    operation = staticmethod(BITAND.operation)
+    def operation(self, ctx, op1, op2):
+        return W_IntNumber(op1&op2)
 
 class STORE_BITOR(BaseAssignBitOper):
-    operation = staticmethod(BITOR.operation)
+    def operation(self, ctx, op1, op2):
+        return W_IntNumber(op1|op2)
 
 class STORE_BITXOR(BaseAssignBitOper):
-    operation = staticmethod(BITXOR.operation)
+    def operation(self, ctx, op1, op2):
+        return W_IntNumber(op1^op2)
 
 class STORE_POSTINCR(BaseStore):
     def process(self, ctx, name, stack):
