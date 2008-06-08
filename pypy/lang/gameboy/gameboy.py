@@ -196,11 +196,9 @@ class GameBoy(object):
             self.video.write(0x8012 + (index << 3), pattern0)
             self.video.write(0x8014 + (index << 3), pattern1)
             self.video.write(0x8016 + (index << 3), pattern1)
-
         for index in range(0, 8):
             self.video.write(0x8190 + (index << 1), \
                              constants.REGISTERED_BITMAP[index])
-
         for tile in range(0, 12):
             self.video.write(0x9904 + tile, tile + 1)
             self.video.write(0x9924 + tile, tile + 13)
