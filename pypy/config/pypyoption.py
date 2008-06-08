@@ -138,7 +138,11 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
     BoolOption("usepycfiles", "Write and read pyc files when importing",
                default=True),
-   
+
+    BoolOption("usecodeargs", "store opcodes and opargs in separate lists",
+               default=False,
+               requires=[("objspace.usepycfiles", False)]),
+
     BoolOption("honor__builtins__",
                "Honor the __builtins__ key of a module dictionary",
                default=False),
