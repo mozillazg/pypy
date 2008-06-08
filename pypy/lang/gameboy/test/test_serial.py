@@ -20,10 +20,11 @@ def test_reset():
     
 def test_set_serial_control():
     serial = get_serial()
-    value = 0x12
+    value  = 0x12
     serial.set_serial_control(value)
     assert serial.get_serial_control() == value
-    assert serial.cycles == constants.SERIAL_IDLE_CLOCK + constants.SERIAL_CLOCK
+    assert serial.cycles               == constants.SERIAL_IDLE_CLOCK + \
+                                          constants.SERIAL_CLOCK
     
     
 def test_emulate():
@@ -36,13 +37,13 @@ def test_emulate():
     
     serial.reset()
     serial.serial_control = 0x81
-    serial.cycles = 10
+    serial.cycles         = 10
     cycles = serial.cycles
     serial.emulate(2)
     assert serial.cycles > 0
-    assert cycles-serial.cycles  == 2
-    assert serial.serial_data    == 0
-    assert serial.serial_control == 0x81
+    assert cycles-serial.cycles                 == 2
+    assert serial.serial_data                   == 0
+    assert serial.serial_control                == 0x81
     assert serial.interrupt.serial.is_pending() == False
     
     serial.reset()
@@ -51,21 +52,21 @@ def test_emulate():
     serial.emulate(2)
     assert serial.serial_data    == 0xFF
     assert serial.serial_control == 0x81 & 0x7F
-    assert serial.cycles         == constants.SERIAL_IDLE_CLOCK
+    assert serial.cycles                        == constants.SERIAL_IDLE_CLOCK
     assert serial.interrupt.serial.is_pending() == True
     
     
 def test_read_write():
     serial = get_serial()
     value = 0x12
-    serial.write(constants.SB, value)
-    assert serial.read(constants.SB) == value
-    assert serial.serial_data        == value 
+    serial.write(constants.SERIAL_TRANSFER_DATA, value)
+    assert serial.read(constants.SERIAL_TRANSFER_DATA) == value
+    assert serial.serial_data                          == value 
     
     value += 1
-    serial.write(constants.SC, value)
-    assert serial.read(constants.SC) == value
-    assert serial.serial_control     == value
+    serial.write(constants.SERIAL_TRANSFER_CONTROL, value)
+    assert serial.read(constants.SERIAL_TRANSFER_CONTROL) == value
+    assert serial.serial_control                          == value
     
     assert serial.read(0) == 0xFF
     

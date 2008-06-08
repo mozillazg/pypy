@@ -14,48 +14,48 @@ GAMEBOY_SCREEN_HEIGHT = 144
 # ___________________________________________________________________________
 
 
-TYPE_ROM_ONLY = 0x00
+TYPE_ROM_ONLY                = 0x00
 
-TYPE_MBC1             = 0x01
-TYPE_MBC1_RAM         = 0x02
-TYPE_MBC1_RAM_BATTERY = 0x03
+TYPE_MBC1                    = 0x01
+TYPE_MBC1_RAM                = 0x02
+TYPE_MBC1_RAM_BATTERY        = 0x03
 
-TYPE_MBC2         = 0x05
-TYPE_MBC2_BATTERY = 0x06
+TYPE_MBC2                    = 0x05
+TYPE_MBC2_BATTERY            = 0x06
 
-TYPE_MBC3_RTC_BATTERY     = 0x0F
-TYPE_MBC3_RTC_RAM_BATTERY = 0x10
-TYPE_MBC3                 = 0x11
-TYPE_MBC3_RAM             = 0x12
-TYPE_MBC3_RAM_BATTERY     = 0x13
+TYPE_MBC3_RTC_BATTERY        = 0x0F
+TYPE_MBC3_RTC_RAM_BATTERY    = 0x10
+TYPE_MBC3                    = 0x11
+TYPE_MBC3_RAM                = 0x12
+TYPE_MBC3_RAM_BATTERY        = 0x13
 
-TYPE_MBC5             = 0x19
-TYPE_MBC5_RAM         = 0x1A
-TYPE_MBC5_RAM_BATTERY = 0x1B
+TYPE_MBC5                    = 0x19
+TYPE_MBC5_RAM                = 0x1A
+TYPE_MBC5_RAM_BATTERY        = 0x1B
 
 TYPE_MBC5_RUMBLE             = 0x1C
 TYPE_MBC5_RUMBLE_RAM         = 0x1D
 TYPE_MBC5_RUMBLE_RAM_BATTERY = 0x1E
 
-TYPE_HUC3_RTC_RAM     = 0xFE
-TYPE_HUC1_RAM_BATTERY = 0xFF
+TYPE_HUC3_RTC_RAM            = 0xFE
+TYPE_HUC1_RAM_BATTERY        = 0xFF
 
-CARTRIDGE_TYPE_ADDRESS     = 0x0147
-CARTRIDGE_ROM_SIZE_ADDRESS = 0x0148
-CARTRIDGE_RAM_SIZE_ADDRESS = 0x0149
-CARTRIDGE_RAM_SIZE_MAPPING = {0x00:0, 0x01:8192, 0x02:8192, 0x03:32768}
-DESTINATION_CODE_ADDRESS   = 0x014A
-LICENSEE_ADDRESS           = 0x014B
-ROM_VERSION_ADDRESS        = 0x014C
-HEADER_CHECKSUM_ADDRESS    = 0x014D
-CHECKSUM_A_ADDRESS         = 0x014E
-CHECKSUM_B_ADDRESS         = 0x014F
+CARTRIDGE_TYPE_ADDRESS       = 0x0147
+CARTRIDGE_ROM_SIZE_ADDRESS   = 0x0148
+CARTRIDGE_RAM_SIZE_ADDRESS   = 0x0149
+CARTRIDGE_RAM_SIZE_MAPPING   = {0x00:0, 0x01:8192, 0x02:8192, 0x03:32768}
+DESTINATION_CODE_ADDRESS     = 0x014A
+LICENSEE_ADDRESS             = 0x014B
+ROM_VERSION_ADDRESS          = 0x014C
+HEADER_CHECKSUM_ADDRESS      = 0x014D
+CHECKSUM_A_ADDRESS           = 0x014E
+CHECKSUM_B_ADDRESS           = 0x014F
 
 # ROM Bank Size (16KB)
-ROM_BANK_SIZE = 0x4000
+ROM_BANK_SIZE                = 0x4000
 
 # constants.RAM Bank Size (8KB)
-RAM_BANK_SIZE = 0x2000
+RAM_BANK_SIZE                = 0x2000
 
 CARTRIDGE_FILE_EXTENSION       = ".gb"
 CARTRIDGE_COLOR_FILE_EXTENSION = ".gbc"
@@ -65,13 +65,13 @@ BATTERY_FILE_EXTENSION         = ".sav"
 # CPU FLAGS
 # ___________________________________________________________________________
 
-Z_FLAG = 0x80
-N_FLAG = 0x40
-H_FLAG = 0x20
-C_FLAG = 0x10
+Z_FLAG   = 0x80
+N_FLAG   = 0x40
+H_FLAG   = 0x20
+C_FLAG   = 0x10
 
 RESET_A  = 0x01 
-#RESET_F  = 0xB0 
+#RESET_F = 0xB0 
 RESET_F  = 0x80 
 RESET_BC = 0x0013
 RESET_DE = 0x00D8
@@ -85,8 +85,8 @@ RESET_PC =  0x0100
 # ___________________________________________________________________________
 
 # Interrupt Registers
-IE = 0xFFFF # Interrupt Enable
-IF = 0xFF0F # Interrupt Flag
+IE     = 0xFFFF # Interrupt Enable
+IF     = 0xFF0F # Interrupt Flag
 
 # Interrupt Flags
 VBLANK = 0x01 # V-Blank Interrupt (INT 40h)
@@ -115,19 +115,19 @@ WY   = 0xFF4A # Window Y Position (0-143)
 WX   = 0xFF4B # Window X Position (0-166)
  
 # OAM Register Addresses
-OAM_ADDR = 0xFE00 # OAM Object Attribute Map (FE00..FE9F)
-OAM_SIZE = 0xA0
+OAM_ADDR    = 0xFE00 # OAM Object Attribute Map (FE00..FE9F)
+OAM_SIZE    = 0xA0
  
 # Video RAM Addresses
-VRAM_ADDR = 0x8000 # 8KB Video RAM (8000..9FFF)
-VRAM_SIZE = 0x2000
+VRAM_ADDR   = 0x8000 # 8KB Video RAM (8000..9FFF)
+VRAM_SIZE   = 0x2000
 
 # VRAM Tile Data/Maps Addresses
 VRAM_DATA_A = 0x0000 # 4KB Tile Data (8000..8FFF)
 VRAM_DATA_B = 0x0800 # 4KB Tile Data (8800..97FF)
 
-VRAM_MAP_A = 0x1800 # 1KB BG Tile Map 0 (9800..9BFF)
-VRAM_MAP_B = 0x1C00 # 1KB BG Tile Map 1 (9C00..9FFF)
+VRAM_MAP_A  = 0x1800 # 1KB BG Tile Map 0 (9800..9BFF)
+VRAM_MAP_B  = 0x1C00 # 1KB BG Tile Map 1 (9C00..9FFF)
 
 
 #LCD Mode Durations
@@ -141,7 +141,7 @@ MODE_1_BEGIN_TICKS = 8 # V-Blank Line 144
 MODE_1_END_TICKS   = 1 # V-Blank Line 153
  
 # Objects per Line
-OBJECTS_PER_LINE = 10
+OBJECTS_PER_LINE   = 10
  
 # LCD Color Palette
 COLOR_MAP =[
@@ -181,14 +181,14 @@ BUTTON_A      = 0x01
 # ___________________________________________________________________________
  
 # Serial Clock Speed (8 x 1024 bits/sec)
-SERIAL_CLOCK = GAMEBOY_CLOCK >> 16
+SERIAL_CLOCK      = GAMEBOY_CLOCK >> 16
  
 # Serial Idle Speed (128 Hz)
 SERIAL_IDLE_CLOCK = GAMEBOY_CLOCK >> 7
  
 # Serial Register Addresses
-SB = 0xFF01 # Serial Transfer Data
-SC = 0xFF02 # Serial Transfer Control
+SERIAL_TRANSFER_DATA    = 0xFF01
+SERIAL_TRANSFER_CONTROL = 0xFF02
  
 
 

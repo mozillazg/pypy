@@ -1068,8 +1068,9 @@ def test_0xC9():
     assert_default_registers(cpu, pc=value, sp=valueSp+2)
 
 # reti
-def test_0xD9_returnFormInterrupt():
+def test_0xD9_return_form_interrupt():
     cpu = get_cpu()
+    cpu.interrupt.reset()
     value = 0x1234
     cpu.sp.set(0)
     prepare_for_pop(cpu, value >> 8, value & 0xFF)
@@ -1078,35 +1079,39 @@ def test_0xD9_returnFormInterrupt():
     cycle_test(cpu, 0xD9, 4+2) 
     assert_default_registers(cpu, pc=value+1, sp=2)
     
-def test_handleInterrupt():
+def test_handle_interrupt():
     cpu = get_cpu()
+    cpu.interrupt.reset()
     cpu.halted = True
     cpu.cycles = 0xFF
-    cpu.handle_pending_interrupt()
+    cpu.handle_pending_interrupts()
     assert cpu.cycles == 0
     
     cpu.reset()
+    cpu.interrupt.reset()
     cpu.halted = True
-    cpu.interrupt.set_interrupt_enable()
+    cpu.cycles = 4
+    cpu.interrupt.set_enable_mask(0xFF)
     cpu.interrupt.vblank.set_pending()
     assert cpu.interrupt.is_pending() == True
-    cpu.cycles = 4
-    cpu.handle_pending_interrupt()
+    assert cpu.halted                 == True
+    cpu.handle_pending_interrupts()
     assert cpu.cycles == 0
     assert cpu.halted == False
     
     cpu.reset()
+    cpu.interrupt.reset()
     cpu.halted = False
-    cpu.ime = True
+    cpu.ime    = True
     cpu.pc.set(0x1234)
     cpu.sp.set(0x02)
     sp = cpu.sp.get()
-    cpu.interrupt.set_interrupt_enable()
+    cpu.interrupt.set_enable_mask(0xFF)
     cpu.interrupt.vblank.set_pending()
     cpu.interrupt.lcd.set_pending()
     assert cpu.interrupt.is_pending() == True
     cpu.cycles = 0
-    cpu.handle_pending_interrupt()
+    cpu.handle_pending_interrupts()
     assert cpu.cycles == 0
     assert cpu.halted == False 
     assert_default_registers(cpu, pc=cpu.interrupt.vblank.call_code, sp=sp-2)
@@ -1182,40 +1187,53 @@ def test_0xC3():
 
 
 # di
-def test_0xF3():
+def test_0xF3_disable_interrupt():
     cpu = get_cpu()
+    cpu.interrupt.reset()
     cpu.ime == True
     cycle_test(cpu, 0xF3, 1)
     assert cpu.ime == False
 
 # ei
-def test_0xFB():
-    cpu = get_cpu()
+def test_0xFB_enable_interrupt():
+    cpu        = get_cpu()
+    cpu.interrupt.reset()
     cpu.sp.set(0)
-    cpu.ime = False
+    cpu.ime    = False
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00) # nop 1 cycle
+    print  cpu.interrupt.get_enable_mask()
+    assert cpu.interrupt.is_pending() == False
     cycle_test(cpu, 0xFB, 1+1)
-    assert cpu.ime == True
+    assert cpu.interrupt.is_pending() == False
+    assert cpu.ime                    == True
     
     cpu.reset()
+    cpu.interrupt.reset()
     cpu.sp.set(0)
-    cpu.ime = True
+    cpu.ime    = True
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
     cpu.interrupt.vblank.set_pending()
     cpu.interrupt.serial.set_pending()
-    cpu.interrupt.set_interrupt_enable(True)
+    cpu.interrupt.set_enable_mask(0x1F)
     assert cpu.interrupt.is_pending() == True
-    assert cpu.halted == False
-    assert cpu.ime == True  
+    assert cpu.halted                 == False
+    assert cpu.ime                    == True  
     cycle_test(cpu, 0xFB, 1+1)
-    assert cpu.interrupt.is_pending() == False
+    assert cpu.interrupt.is_pending() == True
     assert cpu.interrupt.vblank.is_pending() == False
-    assert cpu.pc.get() == cpu.interrupt.vblank.call_code
-    assert cpu.ime == False
+    assert cpu.interrupt.serial.is_pending() == True
+    assert cpu.pc.get()               == cpu.interrupt.vblank.call_code
+    assert cpu.ime                    == False
+    
+    cpu.ime    = True
+    cycle_test(cpu, 0xFB, 1+1)
+    assert cpu.interrupt.vblank.is_pending() == False
+    assert cpu.interrupt.serial.is_pending() == False
+    assert cpu.interrupt.is_pending() == False
 
-def conditionalCallTest(cpu, opCode, flagSetter):
+def conditional_call_test(cpu, opCode, flagSetter):
     flagSetter(cpu, False)
     cpu.pc.set(0)
     f = cpu.f.get()
@@ -1234,7 +1252,7 @@ def conditionalCallTest(cpu, opCode, flagSetter):
 # call_NZ_nnnn
 def test_0xC4():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xC4, setFlag0xC4)
+    conditional_call_test(cpu, 0xC4, setFlag0xC4)
     
 def setFlag0xC4(cpu, value):
     cpu.f.z_flag = not value
@@ -1242,7 +1260,7 @@ def setFlag0xC4(cpu, value):
 # call_Z_nnnn
 def test_0xCC():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xCC, setFlag0xC4)
+    conditional_call_test(cpu, 0xCC, setFlag0xC4)
 
 def setFlag0xCC(cpu, value):
     cpu.f.c_flag = not value
@@ -1250,7 +1268,7 @@ def setFlag0xCC(cpu, value):
 # call_NC_nnnn
 def test_0xD4():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xD4, setFlag0xC4)
+    conditional_call_test(cpu, 0xD4, setFlag0xC4)
 
 def setFlag0xD4(cpu, value):
     cpu.f.c_flag = value
@@ -1258,13 +1276,13 @@ def setFlag0xD4(cpu, value):
 # call_C_nnnn
 def test_0xDC():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xDC, setFlag0xC4)
+    conditional_call_test(cpu, 0xDC, setFlag0xC4)
 
 def setFlag0xDC(cpu, value):
     cpu.f.z_flag = value
 
 # push_BC to push_AF
-def test_0xC5_to_0xF5():
+def test_0xC5_to_0xF5_push():
     cpu = get_cpu()
     registers  = [cpu.bc, cpu.de, cpu.hl, cpu.af]
     opCode = 0xC5
@@ -1279,7 +1297,7 @@ def test_0xC5_to_0xF5():
             
 
 # call_nnnn
-def test_0xCD():
+def test_0xCD_call():
     cpu = get_cpu()
     fetchValue = 0x1234
     cpu.sp.set(fetchValue)
@@ -1301,7 +1319,7 @@ def a_nn_test(opCode, cycles, opCaller):
     return cpu
 
 # add_A_nn
-def test_0xC6():
+def test_0xC6_add_a_fetch():
     a_nn_test(0xC6, 2, lambda a, b, cpu: a+b)
 
 # adc_A_nn
