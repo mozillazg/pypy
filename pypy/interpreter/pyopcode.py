@@ -100,8 +100,6 @@ class __extend__(pyframe.PyFrame):
         co_code = pycode.co_code
         co_codeargs = pycode.co_codeargs
 
-        self.name = pycode.co_name
-
         try:
             while True:
                 next_instr = self.handle_bytecode(co_code, co_codeargs, next_instr, ec)
