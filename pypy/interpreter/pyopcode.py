@@ -60,6 +60,31 @@ compare_dispatch_table = [
 unrolling_compare_dispatch_table = unrolling_iterable(
     enumerate(compare_dispatch_table))
 
+def decode_opcode(co_code, next_instr, opcode):
+    if opcode >= HAVE_ARGUMENT:
+        lo = ord(co_code[next_instr])
+        hi = ord(co_code[next_instr+1])
+        next_instr += 2
+        oparg = (hi << 8) | lo
+        hint(opcode, concrete=True)
+        hint(oparg, concrete=True)
+    else:
+        oparg = 0
+
+    while opcode == opcodedesc.EXTENDED_ARG.index:
+        opcode = ord(co_code[next_instr])
+        if opcode < HAVE_ARGUMENT:
+            raise BytecodeCorruption
+        lo = ord(co_code[next_instr+1])
+        hi = ord(co_code[next_instr+2])
+        next_instr += 3
+        oparg = (oparg << 16) | (hi << 8) | lo
+        hint(opcode, concrete=True)
+        hint(oparg, concrete=True)
+
+    return next_instr, opcode, oparg
+decode_opcode._always_inline_ = True
+
 
 class __extend__(pyframe.PyFrame):
     """A PyFrame that knows about interpretation of standard Python opcodes
@@ -73,20 +98,23 @@ class __extend__(pyframe.PyFrame):
 
         next_instr = r_uint(next_instr)
         co_code = pycode.co_code
+        co_codeargs = pycode.co_codeargs
+
+        self.name = pycode.co_name
 
         try:
             while True:
-                next_instr = self.handle_bytecode(co_code, next_instr, ec)
+                next_instr = self.handle_bytecode(co_code, co_codeargs, next_instr, ec)
                 rstack.resume_point("dispatch", self, co_code, ec,
                                     returns=next_instr)
         except ExitFrame:
             return self.popvalue()
 
-    def handle_bytecode(self, co_code, next_instr, ec):
+    def handle_bytecode(self, co_code, co_codeargs, next_instr, ec):
         from pypy.rlib import rstack # for resume points
 
         try:
-            next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
+            next_instr = self.dispatch_bytecode(co_code, co_codeargs, next_instr, ec)
             rstack.resume_point("handle_bytecode", self, co_code, ec,
                                 returns=next_instr)
         except OperationError, operr:
@@ -144,38 +172,25 @@ class __extend__(pyframe.PyFrame):
             next_instr = block.handle(self, unroller)
             return next_instr
 
-    def dispatch_bytecode(self, co_code, next_instr, ec):
+    def dispatch_bytecode(self, co_code, co_codeargs, next_instr, ec):
         space = self.space
         while True:
+            
             self.last_instr = intmask(next_instr)
             if not we_are_jitted():
                 ec.bytecode_trace(self)
                 next_instr = r_uint(self.last_instr)
             opcode = ord(co_code[next_instr])
-            next_instr += 1
+
             if space.config.objspace.logbytecodes:
                 space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
 
-            if opcode >= HAVE_ARGUMENT:
-                lo = ord(co_code[next_instr])
-                hi = ord(co_code[next_instr+1])
-                next_instr += 2
-                oparg = (hi << 8) | lo
+            if space.config.objspace.usecodeargs:
+                oparg = co_codeargs[next_instr]
+                next_instr += 1
             else:
-                oparg = 0
-            hint(opcode, concrete=True)
-            hint(oparg, concrete=True)
-
-            while opcode == opcodedesc.EXTENDED_ARG.index:
-                opcode = ord(co_code[next_instr])
-                if opcode < HAVE_ARGUMENT:
-                    raise BytecodeCorruption
-                lo = ord(co_code[next_instr+1])
-                hi = ord(co_code[next_instr+2])
-                next_instr += 3
-                oparg = (oparg << 16) | (hi << 8) | lo
-                hint(opcode, concrete=True)
-                hint(oparg, concrete=True)
+                next_instr += 1
+                next_instr, opcode, oparg = decode_opcode(co_code, next_instr, opcode)
 
             if opcode == opcodedesc.RETURN_VALUE.index:
                 w_returnvalue = self.popvalue()

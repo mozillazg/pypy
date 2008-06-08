@@ -43,6 +43,16 @@ class TestInterpreter:
         ec = self.space.getexecutioncontext() 
         ec.compiler = self.saved_compiler
 
+    def test_jump(self):
+        code ='''
+            def f(s):
+                if len(s) == 0:
+                    return 42
+                return 24
+        '''
+        assert self.codetest(code, 'f', ['']) == 42
+        assert self.codetest(code, 'f', ['x']) == 24
+
     def test_exception_trivial(self):
         x = self.codetest('''\
                 def f():
