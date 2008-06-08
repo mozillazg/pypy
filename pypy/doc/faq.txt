@@ -223,7 +223,12 @@ whole bunch of heuristics to guess what types are probably going to show
 up where.  In this way, you could compile the program into two copies of
 itself: a "fast" version and a "slow" version.  The former would contain
 many guards that allow it to fall back to the latter if needed.  That
-would be a wholly different project than PyPy, though.
+would be a wholly different project than PyPy, though.  (As far as we
+understand it, this is the approach that the LLVM__ group would like to
+see LLVM used for, so if you feel like working very hard and attempting
+something like this, check with them.)
+
+.. __: http://llvm.org/
 
 What PyPy contains is, on the one hand, an non-soft static type
 inferencer for RPython, which is a sublanguage that we defined just so
