@@ -31,6 +31,7 @@ class Joypad(iMemory):
             if self.driver.is_raised():
                 self.update()
             self.cycles = constants.JOYPAD_CLOCK
+            #self.cycles = 150
 
     def write(self, address, data):
         if address == constants.JOYP:

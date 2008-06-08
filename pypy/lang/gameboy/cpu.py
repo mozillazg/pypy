@@ -345,16 +345,16 @@ class CPU(object):
     
     def emulate(self, ticks):
         self.cycles += ticks
-        self.handle_pending_interrupt()
+        self.handle_pending_interrupts()
         while self.cycles > 0:
             self.execute(self.fetch())
             
     def emulate_step(self):
-        self.handle_pending_interrupt()
+        self.handle_pending_interrupts()
         self.execute(self.fetch())
         
 
-    def handle_pending_interrupt(self):
+    def handle_pending_interrupts(self):
         if self.halted:
             if self.interrupt.is_pending():
                 self.halted = False
@@ -914,7 +914,7 @@ class CPU(object):
         # 1 cycle
         self.ime = True
         self.execute(self.fetch()) #  1
-        self.handle_pending_interrupt()
+        self.handle_pending_interrupts()
 
     def halt(self):
         # HALT/STOP
@@ -922,7 +922,7 @@ class CPU(object):
         # emulate bug when interrupts are pending
         if not self.ime and self.interrupt.is_pending():
             self.execute(self.memory.read(self.pc.get()))
-        self.handle_pending_interrupt()
+        self.handle_pending_interrupts()
 
     def stop(self):
         # 0 cycles
