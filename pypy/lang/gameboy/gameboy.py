@@ -24,12 +24,12 @@ class GameBoy(object):
         self.create_gamboy_elements()
 
     def create_drivers(self):
-        self.clock         = Clock()
         self.joypad_driver = JoypadDriver()
         self.video_driver  = VideoDriver()
         self.sound_driver  = SoundDriver()
         
     def create_gamboy_elements(self): 
+        self.clock     = Clock()
         self.ram       = RAM()
         self.cartridge_manager = CartridgeManager(self.clock)
         self.interrupt = Interrupt()
@@ -128,6 +128,8 @@ class GameBoy(object):
             return
             raise Exception("invalid read address given")
         receiver.write(address, data)
+        if address == constants.STAT or address == 0xFFFF:
+            self.cpu.handle_interrupts()
 
     def read(self, address):
         receiver = self.get_receiver(address)
@@ -156,7 +158,7 @@ class GameBoy(object):
         elif 0xFE00 <= address <= 0xFEFF:
             self.print_receiver_msg(address, "video")
             return self.video
-        elif 0xFF00 <= address <= 0xFF00:
+        elif address == 0xFF00:
             self.print_receiver_msg(address, "joypad")
             return self.joypad
         elif 0xFF01 <= address <= 0xFF02:
@@ -165,7 +167,7 @@ class GameBoy(object):
         elif 0xFF04 <= address <= 0xFF07:
             self.print_receiver_msg(address, "timer")
             return self.timer
-        elif 0xFF0F <= address <= 0xFF0F:
+        elif address == 0xFF0F:
             self.print_receiver_msg(address, "interrupt")
             return self.interrupt
         elif 0xFF10 <= address <= 0xFF3F:
@@ -177,7 +179,7 @@ class GameBoy(object):
         elif 0xFF80 <= address <= 0xFFFE:
             self.print_receiver_msg(address, "ram")
             return self.ram
-        elif 0xFFFF <= address <= 0xFFFF:
+        elif address == 0xFFFF:
             self.print_receiver_msg(address, "interrupt")
             return self.interrupt
 
