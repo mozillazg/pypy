@@ -75,7 +75,7 @@ Status
 ===================================
 
 PyPy can be used to run Python programs on Linux, OS/X,
-Windows, on top of .NET, and (recently) on top of Java.
+Windows, on top of .NET, and on top of Java.
 It is recommended to try out the current Subversion HEAD,
 which contains `major improvements`__ since the last release.
 
@@ -83,10 +83,8 @@ which contains `major improvements`__ since the last release.
 
 PyPy is mainly developed on Linux and Mac OS X.  Windows is supported,
 but platform-specific bugs tend to take longer before we notice and fix
-them.  About 64-bit machines: although support is mostly present, we
-decided to stop tracking and fixing the remaining issues for a while, as
-an attempt to keep some focus.  So PyPy requires a 32-bit machine or OS
-for now.
+them.  Linux 64-bit machines are supported (though it may also take some
+time before we notice and fix bugs).
 
 PyPy's own tests, daily updated, `on Linux`_, `on Windows`_
  and `on built pypy-c`_.
