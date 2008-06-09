@@ -1,5 +1,5 @@
 """
- PyBoy GameBoy (TM) Emulator
+ PyGirl GameBoy (TM) Emulator
  constants.LCD Video Display Processor
 """
 
@@ -293,12 +293,7 @@ class Video(iMemory):
         self.line_y_compare = data
         if (self.control & 0x80) == 0:
             return
-        if self.line_y == self.line_y_compare:
-            # NOTE: raise interrupt once per line
-            if (self.stat & 0x04) == 0:
-                self.line_y_line_y_compare_interrupt_check()
-        else:
-            self.stat &= 0xFB
+        self.emulate_hblank_line_y_compare()
                 
     def get_dma(self):
         return self.dma
@@ -427,7 +422,6 @@ class Video(iMemory):
             self.line_y_line_y_compare_interrupt_check()
         else:
             self.stat &= 0xFB
-            
    
     def emulate_hblank_part_2(self):
         if self.display:
@@ -459,12 +453,10 @@ class Video(iMemory):
         if self.line_y < 153:
             self.emulate_vblank_mode_1()
         else:
-            self.line_y = self.window_line_y = 0
+            self.line_y        = 0
+            self.window_line_y = 0
             self.set_mode_1_between()
-        if self.line_y == self.line_y_compare:
-            self.line_y_line_y_compare_interrupt_check();
-        else:
-            self.stat &= 0xFB
+        self.emulate_hblank_line_y_compare()
             
     def emulate_vblank_mode_1(self):
         self.line_y += 1
@@ -498,24 +490,32 @@ class Video(iMemory):
     def draw_background(self):
         y          = (self.scroll_y + self.line_y) & 0xFF
         x          = self.scroll_x                 & 0xFF
+        tile_map, tile_data = self.prepare_background_data(x, y)
+        self.draw_tiles(8 - (x & 7), tile_map, tile_data)
+        
+    def prepare_background_data(self, x, y):
         tile_map   = self.get_tile_map(0x08)
         tile_map  += ((y >> 3) << 5) + (x >> 3)
         tile_data  = self.get_tile_data(0x10)
         tile_data += (y & 7) << 1
-        self.draw_tiles(8 - (x & 7), tile_map, tile_data)
+        return tile_map, tile_data
          
     def draw_window(self):
         if self.line_y  < self.window_y or \
            self.window_x >= 167 or \
            self.window_line_y >= 144:
                 return
+        tile_map, tile_data = self.prepare_window_data()
+        self.draw_tiles(self.window_x + 1, tile_map, tile_data)
+        self.window_line_y += 1
+
+    def prepare_window_data(self):
         tile_map   = self.get_tile_map(0x40)
         tile_map  += (self.window_line_y >> 3) << 5
         tile_data  = self.get_tile_data(0x10)
         tile_data += (self.window_line_y & 7) << 1
-        self.draw_tiles(self.window_x + 1, tile_map, tile_data)
-        self.window_line_y += 1
-
+        return tile_map, tile_data;
+        
     def get_tile_map(self, mask):
         if (self.control & mask) != 0:
             return constants.VRAM_MAP_B
