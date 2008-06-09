@@ -19,6 +19,17 @@ class W_StatsEntry(Wrappable):
     def get_calls(space, self):
         return self.w_calls
 
+    def repr(self, space):
+        frame_repr = space.str_w(space.repr(self.frame))
+        if not self.w_calls:
+            calls_repr = "None"
+        else:
+            calls_repr = space.str_w(space.repr(self.w_calls))
+        return space.wrap('("%s", %d, %d, %f, %f, %s)' % (
+            frame_repr, self.callcount, self.reccallcount,
+            self.tt, self.it, calls_repr))
+    repr.unwrap_spec = ['self', ObjSpace]
+
 W_StatsEntry.typedef = TypeDef(
     'StatsEntry',
     code = interp_attrproperty('frame', W_StatsEntry),
@@ -27,6 +38,7 @@ W_StatsEntry.typedef = TypeDef(
     inlinetime = interp_attrproperty('it', W_StatsEntry),
     totaltime = interp_attrproperty('tt', W_StatsEntry),
     calls = GetSetProperty(W_StatsEntry.get_calls),
+    __repr__ = interp2app(W_StatsEntry.repr),
 )
 
 class W_StatsSubEntry(Wrappable):
@@ -37,6 +49,12 @@ class W_StatsSubEntry(Wrappable):
         self.it = it
         self.tt = tt
 
+    def repr(self, space):
+        frame_repr = space.str_w(space.repr(self.frame))
+        return space.wrap('("%s", %d, %d, %f, %f)' % (
+            frame_repr, self.callcount, self.reccallcount, self.tt, self.it))
+    repr.unwrap_spec = ['self', ObjSpace]
+
 W_StatsSubEntry.typedef = TypeDef(
     'SubStatsEntry',
     code = interp_attrproperty('frame', W_StatsSubEntry),
@@ -44,6 +62,7 @@ W_StatsSubEntry.typedef = TypeDef(
     reccallcount = interp_attrproperty('reccallcount', W_StatsSubEntry),
     inlinetime = interp_attrproperty('it', W_StatsSubEntry),
     totaltime = interp_attrproperty('tt', W_StatsSubEntry),
+    __repr__ = interp2app(W_StatsSubEntry.repr),
 )
 
 def stats(space, data, factor):
@@ -75,8 +94,8 @@ class ProfilerEntry(object):
         return space.wrap(w_se)
 
 class ProfilerSubEntry(object):
-    def __init__(self, caller):
-        # self.key = caller # XXX why?
+    def __init__(self, frame):
+        self.frame = frame
         self.tt = 0
         self.it = 0
         self.callcount = 0
@@ -84,7 +103,7 @@ class ProfilerSubEntry(object):
         self.recursionLevel = 0
 
     def stats(self, space, parent, factor):
-        w_sse = W_StatsSubEntry(space, parent.frame,
+        w_sse = W_StatsSubEntry(space, self.frame,
                                 self.callcount, self.recursivecallcount,
                                 factor * self.tt, factor * self.it)
         return space.wrap(w_sse)
@@ -96,8 +115,12 @@ class ProfilerContext(object):
         self.previous = profobj.current_context
         entry.recursionLevel += 1
         if profobj.subcalls and self.previous:
-            subentry = ProfilerSubEntry(entry)
-            entry.calls[entry] = subentry
+            caller = self.previous.entry
+            try:
+                subentry = caller.calls[entry]
+            except KeyError:
+                subentry = ProfilerSubEntry(entry.frame)
+                caller.calls[entry] = subentry
             subentry.recursionLevel += 1
         self.t0 = profobj.timer()
 
