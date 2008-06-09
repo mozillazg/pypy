@@ -138,10 +138,10 @@ class AppTestCodeIntrospection:
         assert hash(d1['f'].func_code) == hash(d2['f'].func_code)
 
     def test_inspect(self):
-        def f(obj):
-            pass
+        if not hasattr(len, 'func_code'):
+            skip("Cannot run this test if builtins have no func_code")
         import inspect
-        args, varargs, varkw = inspect.getargs(f.func_code)
+        args, varargs, varkw = inspect.getargs(len.func_code)
         assert args == ['obj']
         assert varargs is None
         assert varkw is None
