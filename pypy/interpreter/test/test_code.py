@@ -1,6 +1,16 @@
 
+from pypy.conftest import gettestobjspace
+from pypy.interpreter import gateway
+import py
 
 class AppTestCodeIntrospection:
+    def setup_class(cls):
+        space = gettestobjspace()
+        cls.space = space
+        if py.test.config.option.runappdirect:
+            cls.w_file = space.wrap(__file__[:-1])
+        else:
+            cls.w_file = space.wrap("None<%s" % gateway.__file__[:-1])
 
     def test_attributes(self):
         def f(): pass
@@ -135,3 +145,14 @@ class AppTestCodeIntrospection:
         assert args == ['obj']
         assert varargs is None
         assert varkw is None
+
+    def test_repr(self):
+        def f():
+            xxx
+        res = repr(f.func_code)
+        expected = ["<code object f",
+                    self.file,
+                    'line']
+        for i in expected:
+            assert i in res
+
