@@ -1,5 +1,5 @@
 """
-PyBoy GameBoy (TM) Emulator
+PyGirl GameBoy (TM) Emulator
  
 Timer and Divider
 """

@@ -357,7 +357,7 @@ class DefaultMBC(MBC):
 
 class MBC1(MBC):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
     
     Memory Bank Controller 1 (2MB ROM, 32KB RAM)
      
@@ -419,7 +419,7 @@ class MBC1(MBC):
       
 class MBC2(MBC):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
     
     Memory Bank Controller 2 (256KB ROM, 512x4bit RAM)
     
@@ -480,7 +480,7 @@ class MBC2(MBC):
 
 class MBC3(MBC):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
     
     Memory Bank Controller 3 (2MB ROM, 32KB RAM, Real Time Clock)
     
@@ -632,7 +632,7 @@ class MBC3(MBC):
 
 class MBC5(MBC):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
     
     Memory Bank Controller 5 (8MB ROM, 128KB RAM)
      *
@@ -693,7 +693,7 @@ class HuC1(MBC1):
 
 class HuC3(MBC):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
     
     Hudson Memory Bank Controller 3 (2MB ROM, 128KB RAM, RTC)
     

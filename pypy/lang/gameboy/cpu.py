@@ -6,7 +6,7 @@ from pypy.lang.gameboy.interrupt import *
 # ---------------------------------------------------------------------------
 
 def process_2_complement(value):
-        # check if the left most bit is set
+    # check if the left most bit is set
     if (value >> 7) == 1:
         return -((~value) & 0xFF) - 1
     else :
@@ -466,8 +466,6 @@ class CPU(object):
     def call(self, address, use_cycles=True):
         # 4 cycles
         self.push_double_register(self.pc, use_cycles)
-        #self.push(self.pc.get_hi(use_cycles), use_cycles) # 2 cycles
-        #self.push(self.pc.get_lo(use_cycles), use_cycles) # 2 cycles
         self.pc.set(address, use_cycles=use_cycles)       # 1 cycle
         if use_cycles:
             self.cycles += 1
@@ -529,10 +527,8 @@ class CPU(object):
     def subtract_a(self, getCaller, setCaller=None):
         # 1 cycle
         data = getCaller.get()
-        #self.compare_a(data) # 1 cycle
         self.compare_a_simple(data)
         self.a.sub(data, False)
-        #self.a.sub(getCaller.get(use_cycles=False), False)
  
     def fetch_subtract_a(self):
         data = self.fetch()
@@ -555,7 +551,6 @@ class CPU(object):
     def hc_flag_finish(self, data):
         if data > self.a.get():
             self.f.c_flag = True
-        #self.f.c_flag_compare(data, self.a.get())
         self.f.h_flag_compare(data, self.a.get())
         
     def and_a(self, getCaller, setCaller=None):
@@ -858,7 +853,6 @@ class CPU(object):
 
     def relative_jump(self):
         # JR +nn, 3 cycles
-        #pc = pc & 0xFF00 + ((pc & 0x00FF) + add) & 0xFF
         self.pc.add(process_2_complement(self.fetch())) # 3 + 1 cycles
         self.cycles += 1
 

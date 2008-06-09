@@ -30,7 +30,7 @@ class InterruptFlag(object):
 
 class Interrupt(iMemory):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
     Interrupt Controller
     """
     

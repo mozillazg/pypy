@@ -5,7 +5,7 @@ from pypy.lang.gameboy.ram import iMemory
 
 class Joypad(iMemory):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
      
     Joypad Input
     """
