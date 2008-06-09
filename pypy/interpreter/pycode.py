@@ -393,3 +393,8 @@ class PyCode(eval.Code):
             #hidden_applevel=False, magic = 62061 | 0x0a0d0000
         ]
         return space.newtuple([new_inst, space.newtuple(tup)])
+
+    def repr(self, space):
+        return space.wrap("<code object %s, file '%s', line %d>" % (
+            self.co_name, self.co_filename, self.co_firstlineno))
+    repr.unwrap_spec = ['self', ObjSpace]
