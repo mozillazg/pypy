@@ -11,6 +11,8 @@ class AppTestFunctionIntrospection:
         def f(): pass
         assert hasattr(f, 'func_code')
         assert f.func_defaults == None
+        f.func_defaults = None
+        assert f.func_defaults == None
         assert f.func_dict == {}
         assert type(f.func_globals) == dict
         #self.assertEquals(f.func_closure, None)  XXX
