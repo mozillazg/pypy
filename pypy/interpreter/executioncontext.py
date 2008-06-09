@@ -6,9 +6,9 @@ def new_framestack():
     return Stack()
 
 def app_profile_call(space, w_callable, frame, event, w_arg):
-    w_result = space.call_function(w_callable,
-                                   space.wrap(frame),
-                                   space.wrap(event), w_arg)
+    space.call_function(w_callable,
+                        space.wrap(frame),
+                        space.wrap(event), w_arg)
 
 class ExecutionContext:
     """An ExecutionContext holds the state of an execution thread
