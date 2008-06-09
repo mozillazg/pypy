@@ -123,7 +123,7 @@ def method_register_value_call(cpu, method, register, number):
 # Tests -----------------------------------------------------------------------
 
 
-def test_add_a_with_carry():
+def test_pa_with_carry():
     cpu = get_cpu()
     cpu.f.set(0xFF)
     cpu.a.set(0x00)
@@ -234,6 +234,12 @@ def test_and_a():
     assert cpu.a.get() == 0x00
     assert_flags(cpu, z=True, n=False, h=True, c=False)
     
+    cpu.a.set(0xFF)
+    method_value_call(cpu, CPU.and_a, 0x12)
+    assert cpu.a.get() == 0x12
+    assert_flags(cpu, z=False, n=False, h=True, c=False)
+    
+    cpu.f.set(0x00)
     cpu.a.set(0xFF)
     method_value_call(cpu, CPU.and_a, 0x12)
     assert cpu.a.get() == 0x12

@@ -2,6 +2,7 @@
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import *
 from pypy.lang.gameboy.interrupt import *
+from pypy.lang.gameboy.debug import *
 
 # ---------------------------------------------------------------------------
 
@@ -356,14 +357,17 @@ class CPU(object):
 
     def handle_pending_interrupts(self):
         if self.halted:
-            if self.interrupt.is_pending():
-                self.halted = False
-                self.cycles -= 4
-            elif (self.cycles > 0):
-                self.cycles = 0
+            self.update_interrupt_cycles()
         if self.ime and self.interrupt.is_pending():
             self.lower_pending_interrupt()
             
+    def update_interrupt_cycles(self):
+        if self.interrupt.is_pending():
+            self.halted = False
+            self.cycles -= 4
+        elif (self.cycles > 0):
+            self.cycles = 0
+        
     def lower_pending_interrupt(self):
         for flag in self.interrupt.interrupt_flags:
             if flag.is_pending():
@@ -377,11 +381,13 @@ class CPU(object):
         #print "    fetch exe:", hex(opCode), "  "
         #, FETCH_EXECUTE_OP_CODES[opCode].__name__
         self.last_fetch_execute_op_code = opCode
+        if DEBUG: log(opCode, is_fetch_execute=True)
         FETCH_EXECUTE_OP_CODES[opCode](self)
         
         
     def execute(self, opCode):
         self.instruction_counter += 1
+        if DEBUG: log(opCode)
         #print self.instruction_counter, "-"*60
         #print "exe: ", hex(opCode),  "   "
         #, OP_CODES[opCode].__name__
@@ -1069,7 +1075,7 @@ def initialize_op_code_table(table):
 
 # OPCODE TABLES ---------------------------------------------------------------
 # Table with one to one mapping of simple OP Codes                
-FIRST_or_aDER_OP_CODES = [
+FIRST_ORDER_OP_CODES = [
     (0x00, CPU.nop),
     (0x08, CPU.load_mem_sp),
     (0x10, CPU.stop),
@@ -1109,14 +1115,14 @@ FIRST_or_aDER_OP_CODES = [
     (0xF8, CPU.store_fetch_added_sp_in_hl),
     (0xCB, CPU.fetch_execute),
     (0xCD, CPU.unconditional_call),
-    (0xC6, lambda s: CPU.add_a(s,               CPUFetchCaller(s))),
+    (0xC6, lambda s: CPU.add_a(s,                 CPUFetchCaller(s))),
     (0xCE, lambda s: CPU.add_a_with_carry(s,      CPUFetchCaller(s))),
     (0xD6, CPU.fetch_subtract_a),
     (0xDE, lambda s: CPU.subtract_with_carry_a(s, CPUFetchCaller(s))),
     (0xE6, lambda s: CPU.and_a(s,                 CPUFetchCaller(s))),
     (0xEE, lambda s: CPU.xor_a(s,                 CPUFetchCaller(s))),
     (0xF6, lambda s: CPU.or_a(s,                  CPUFetchCaller(s))),
-    (0xFE, lambda s: CPU.compare_a(s,           CPUFetchCaller(s))),
+    (0xFE, lambda s: CPU.compare_a(s,             CPUFetchCaller(s))),
     (0xC7, lambda s: CPU.restart(s, 0x00)),
     (0xCF, lambda s: CPU.restart(s, 0x08)),
     (0xD7, lambda s: CPU.restart(s, 0x10)),
@@ -1144,9 +1150,9 @@ REGISTER_GROUP_OP_CODES = [
 ]    
         
 
-REGISTER_SET_A    = [CPU.get_bc,    CPU.get_de, CPU.get_hl,   CPU.get_sp]
-REGISTER_SET_B    = [CPU.get_bc,    CPU.get_de, CPU.get_hl,   CPU.get_af]
-FLAG_REGISTER_SET = [CPU.is_not_z,  CPU.is_z,   CPU.is_not_c, CPU.is_c]
+REGISTER_SET_A    = [CPU.get_bc,   CPU.get_de, CPU.get_hl,   CPU.get_sp]
+REGISTER_SET_B    = [CPU.get_bc,   CPU.get_de, CPU.get_hl,   CPU.get_af]
+FLAG_REGISTER_SET = [CPU.is_not_z, CPU.is_z,   CPU.is_not_c, CPU.is_c]
 
 # Table for Register OP Codes: (startAddress, delta, method, regsiters)
 REGISTER_OP_CODES = [ 
@@ -1162,7 +1168,7 @@ REGISTER_OP_CODES = [
     (0xC5, 0x10, CPU.push_double_register,      REGISTER_SET_B)
 ]
 # Table for Second Order OPCodes: (startAddress, delta, method, [args])
-SECOND_or_aDER_REGISTER_GROUP_OP_CODES = [
+SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
     (0x00, 0x01, CPU.rotate_left_circular),    
     (0x08, 0x01, CPU.rotate_right_circular),    
     (0x10, 0x01, CPU.rotate_left),    
@@ -1178,11 +1184,12 @@ SECOND_or_aDER_REGISTER_GROUP_OP_CODES = [
 
 # RAW OPCODE TABLE INITIALIZATION ----------------------------------------------
 
-FIRST_or_aDER_OP_CODES += create_register_op_codes(REGISTER_OP_CODES)
-FIRST_or_aDER_OP_CODES += create_group_op_codes(REGISTER_GROUP_OP_CODES)
-FIRST_or_aDER_OP_CODES += create_load_group_op_codes()
-SECOND_or_aDER_OP_CODES = create_group_op_codes(SECOND_or_aDER_REGISTER_GROUP_OP_CODES)
+FIRST_ORDER_OP_CODES  += create_register_op_codes(REGISTER_OP_CODES)
+FIRST_ORDER_OP_CODES  += create_group_op_codes(REGISTER_GROUP_OP_CODES)
+FIRST_ORDER_OP_CODES  += create_load_group_op_codes()
+SECOND_ORDER_OP_CODES  = create_group_op_codes(SECOND_ORDER_REGISTER_GROUP_OP_CODES)
 
 
-OP_CODES = initialize_op_code_table(FIRST_or_aDER_OP_CODES)
-FETCH_EXECUTE_OP_CODES = initialize_op_code_table(SECOND_or_aDER_OP_CODES)
+OP_CODES               = initialize_op_code_table(FIRST_ORDER_OP_CODES)
+FETCH_EXECUTE_OP_CODES = initialize_op_code_table(SECOND_ORDER_OP_CODES)
+
