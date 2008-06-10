@@ -230,8 +230,11 @@ class Function(Wrappable):
         return space.newtuple(values_w)
 
     def fset_func_defaults(space, self, w_defaults):
+        if space.is_w(w_defaults, space.w_None):
+            self.defs_w = []
+            return
         if not space.is_true( space.isinstance( w_defaults, space.w_tuple ) ):
-            raise OperationError( space.w_TypeError, space.wrap("func_defaults must be set to a tuple object") )
+            raise OperationError( space.w_TypeError, space.wrap("func_defaults must be set to a tuple object or None") )
         self.defs_w = space.unpackiterable( w_defaults )
 
     def fdel_func_defaults(space, self):

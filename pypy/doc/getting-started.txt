@@ -26,56 +26,6 @@ Just the facts
 ============== 
 
 .. _gettingpypy: 
-
-Downloading & running the PyPy 1.0 release 
---------------------------------------------
-
-*Note: the 1.0 release is out of date.  We strongly recommend that you
-use the latest stable version* (which you can `get via Subversion`_).
-
-Download one of the following release files: 
-
-*pypy-1.0*
-    
-    * `pypy-1.0.0.tar.bz2`_ (sources, unix line endings) or
-    * `pypy-1.0.0.tar.gz`_ (sources, unix line endings) or
-    * `pypy-1.0.0.zip`_ (sources, windows line-endings) or
-    * `pypy-1.0.0-win32.zip`_ (precompiled executables for windows)
-    * or get the `latest stable version via subversion`_.
- 
-After unpacking the source downloads you can change to the
-``pypy-1.0.0`` directory and execute the following command line::
-
-    python pypy/bin/py.py 
-
-This will give you a PyPy prompt, i.e. a very compliant Python
-interpreter implemented in Python.  PyPy passes around `98% of
-CPythons core language regression tests`_.  Because this invocation of
-PyPy still runs on top of CPython, it runs around 2000 times slower
-than the original CPython.
-Many extension modules are not enabled by default; to use them you need
-to pass ``--withmod-NAME`` arguments (for example, ``--withmod-_rawffi``
-is required to import our version of ctypes).
-
-This is probably not something you want to play with for too long,
-though, as it is really slow.
-Since the 0.7.0 release it is possible to use PyPy to `translate
-itself to lower level languages`_ after which it runs standalone, is not
-dependant on CPython anymore and becomes faster (within the same speed
-magnitude as CPython itself).
-
-If you are using the precompiled Windows executables, please look
-at the included ``README.txt`` on how to start already translated
-interpreters.  Note that the examples in the html documentation generally 
-assume that you have a py.py; with precompiled binaries, you need to 
-pick one with the matching features compiled in.
-
-.. _`98% of CPythons core language regression tests`: http://www2.openend.se/~pedronis/pypy-c-test/allworkingmodules/summary.html
-.. _`pypy-1.0.0.tar.bz2`: http://codespeak.net/download/pypy/pypy-1.0.0.tar.bz2
-.. _`pypy-1.0.0.zip`: http://codespeak.net/download/pypy/pypy-1.0.0.zip
-.. _`pypy-1.0.0.tar.gz`: http://codespeak.net/download/pypy/pypy-1.0.0.tar.gz
-.. _`pypy-1.0.0-win32.zip`: http://codespeak.net/download/pypy/pypy-1.0.0-win32.zip
-
 .. _`latest stable version via subversion`:   
 .. _`get via Subversion`:
 
@@ -83,9 +33,15 @@ Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
 
 If you want to play with the stable development PyPy version 
-you can check it out from the repository using subversion. Download 
-and install subversion_ if you don't already have it. Then you can
-issue on the command line (DOS box or terminal)::
+you can check it out from the repository using subversion.
+(Here are `old links`_ to the PyPy release 1.0 -- but don't
+use it, it is too far out of date.)
+
+.. _`old links`: download.html
+
+Download and install subversion_ if you don't already have it.  We have
+some `help on installing subversion`_ for PyPy.  Then you can issue on
+the command line (DOS box or terminal)::
 
     svn co http://codespeak.net/svn/pypy/dist pypy-dist 
 
@@ -98,8 +54,23 @@ After checkout you can get a PyPy interpreter via::
     python pypy-dist/pypy/bin/py.py
 
 have fun :-) 
+This gives you a PyPy prompt, i.e. a very compliant Python
+interpreter implemented in Python.  PyPy passes around `98% of
+CPythons core language regression tests`_.  Because this invocation of
+PyPy still runs on top of CPython, it runs around 2000 times slower
+than the original CPython.
+Many extension modules are not enabled by default; to use them you need
+to pass ``--withmod-NAME`` arguments (for example, ``--withmod-_rawffi``
+is required to import our version of ctypes).
 
-We have some `help on installing subversion`_ for PyPy.
+This is probably not something you want to play with for too long,
+though, as it is really slow.  Instead, you should use PyPy to `translate
+itself to lower level languages`_ after which it runs standalone, is not
+dependant on CPython anymore and becomes faster (within the same speed
+magnitude as CPython itself).
+
+.. _`98% of CPythons core language regression tests`: http://www2.openend.se/~pedronis/pypy-c-test/allworkingmodules/summary.html
+
 Have a look at `interesting starting points`_ 
 for some guidance on how to continue. 
 
@@ -572,34 +543,37 @@ Windows, see the `windows document`_)
 
 .. _`windows document`: windows.html
 
-You can
-translate the PyPy's whole of Python interpreter to low level C code. This is
-the largest and
-ultimate example of source that our translation toolchain can process.
-If you don't need threads, the most standard variant nowadays is::
+You can translate the whole of PyPy's Python interpreter to low level C
+code.  This is the largest and ultimate example of RPython program that
+our translation toolchain can process.  The most standard variant
+nowadays is::
 
     cd pypy/translator/goal
-    python translate.py --gc=hybrid targetpypystandalone.py --allworkingmodules --faassen
+    python translate.py --gc=hybrid --thread targetpypystandalone.py --allworkingmodules --faassen
+
+Dependencies: this will compile all supported built-in modules, some of
+which have external dependencies.  On a Debian Linux, for example, you
+need to install the following packages: a full C compiler like gcc;
+``python-dev, python-ctypes``; ``libffi-dev, libz-dev, libbz2-dev,
+libncurses-dev``.
 
 This whole process will take some time and quite a lot of memory (around
 1GB).  It creates an executable ``pypy-c`` in the current directory.
 The ``--gc=hybrid`` option means that the ``pypy-c`` will use our own
 exact generational garbage collector implementation, whose performance
-is rather good nowadays.  The ``--faassen`` option enables all the
+is rather good nowadays.  The ``--thread`` option enables the thread
+module, which is still slightly experimental.
+The ``--faassen`` option enables all the
 worthwhile performance optimizations, but slows down the translation
-itself.  On Linux 32-bit Intel machines you can also add
-``--gcrootfinder=asmgcc`` after ``--gc=hybrid`` for extra speed (and
-extra translation time).
+itself.  On Linux 32-bit Intel machines, if you don't need threads, you
+can get some extra speed (and extra translation time) by removing
+``--thread`` and replacing it with ``--gcrootfinder=asmgcc``.
 
-At the moment, threads only work with the `Boehm-Demers-Weiser garbage
-collector`_.  So to enable them, you need instead::
-
-    cd pypy/translator/goal
-    python translate.py --thread targetpypystandalone.py --allworkingmodules --faassen
-
+An alternative is to use the `Boehm-Demers-Weiser garbage
+collector`_ instead of our own.  For this, use ``--gc=boehm``.
 Be sure to install Boehm before starting the translation (e.g. by running
 ``apt-get install libgc-dev`` on Debian or Ubuntu).  Translating with Boehm
-is a bit faster and less memory-hungry than translating with our own GCs.
+is somewhat faster and less memory-hungry than translating with our own GCs.
 
 In any case, as described above, you can find the produced executable under the
 name ``pypy-c``.  Type ``pypy-c --help`` to see the options it supports --
@@ -618,7 +592,7 @@ interesting options are:
    * ``--gc=boehm|ref|marknsweep|semispace|generation|hybrid``:
      choose between using
      the `Boehm-Demers-Weiser garbage collector`_, our reference
-     counting implementation or three of own collector implementations
+     counting implementation or four of own collector implementations
      (Boehm's collector is the default).
 
 Find a more detailed description of the various options in our `configuration

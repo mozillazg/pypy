@@ -33,10 +33,10 @@ def get_cpu(new=False):
 
 def test_reset():
     cpu = get_cpu()
-    assert cpu.a.get() == 0x01
+    assert cpu.a.get()  == 0x01
     #assert cpu.f.get() == 0xB0
-    assert cpu.b.get() == 0x00
-    assert cpu.c.get() == 0x13
+    assert cpu.b.get()  == 0x00
+    assert cpu.c.get()  == 0x13
     assert cpu.de.get() == 0x00D8
     assert cpu.hl.get() == 0x014D
     #assert cpu.sp.get() == 0xFFE
@@ -44,66 +44,66 @@ def test_reset():
 def test_getters():
     cpu = get_cpu()
     assert_default_registers(cpu)
-    assert cpu.af.cpu == cpu
-    assert cpu.a.cpu == cpu
-    assert cpu.f.cpu == cpu
+    assert cpu.af.cpu  == cpu
+    assert cpu.a.cpu   == cpu
+    assert cpu.f.cpu   == cpu
     
-    assert cpu.bc.cpu == cpu
-    assert cpu.b.cpu == cpu
-    assert cpu.c.cpu == cpu
+    assert cpu.bc.cpu  == cpu
+    assert cpu.b.cpu   == cpu
+    assert cpu.c.cpu   == cpu
     
-    assert cpu.de.cpu == cpu
-    assert cpu.d.cpu == cpu
-    assert cpu.e.cpu == cpu
+    assert cpu.de.cpu  == cpu
+    assert cpu.d.cpu   == cpu
+    assert cpu.e.cpu   == cpu
     
-    assert cpu.hl.cpu == cpu
+    assert cpu.hl.cpu  == cpu
     assert cpu.hli.cpu == cpu
-    assert cpu.h.cpu == cpu
-    assert cpu.l.cpu == cpu
+    assert cpu.h.cpu   == cpu
+    assert cpu.l.cpu   == cpu
     
-    assert cpu.sp.cpu == cpu
-    assert cpu.pc.cpu == cpu
+    assert cpu.sp.cpu  == cpu
+    assert cpu.pc.cpu  == cpu
     
 
 def test_fetch():
-    cpu = get_cpu()
-    address = 0x3FFF
-    value = 0x12
+    cpu             = get_cpu()
+    address         = 0x3FFF
+    value           = 0x12
     # in rom
     cpu.pc.set(address)
     cpu.rom[address] = value
-    startCycles = cpu.cycles
-    assert cpu.fetch() == value
+    startCycles      = cpu.cycles
+    assert cpu.fetch()            == value
     assert startCycles-cpu.cycles == 1
     # in the memory
-    value = 0x13
-    address = 0xC000
+    value            = 0x13
+    address          = 0xC000
     cpu.pc.set(address)
     cpu.memory.write(address, value)
     assert cpu.fetch() == value
     
     
 def test_read_write():
-    cpu = get_cpu()
-    address = 0xC000
-    value = 0x12
+    cpu         = get_cpu()
+    address     = 0xC000
+    value       = 0x12
     startCycles = cpu.cycles
     cpu.write(address, value)
     assert startCycles-cpu.cycles == 2
     startCycles = cpu.cycles
-    assert cpu.read(address) == value
+    assert cpu.read(address)      == value
     assert startCycles-cpu.cycles == 1
     
-    address +=1
-    value += 1
+    address    +=1
+    value      += 1
     cpu.write(address, value)
-    assert cpu.read(address) == value
+    assert cpu.read(address)      == value
     
 
 def test_relative_conditional_jump():
-    cpu = get_cpu()
-    pc = cpu.pc.get()
-    value = 0x12
+    cpu         = get_cpu()
+    pc          = cpu.pc.get()
+    value       = 0x12
     cpu.rom[constants.RESET_PC] = value
     # test jr_nn
     startCycles = cpu.cycles
@@ -112,26 +112,26 @@ def test_relative_conditional_jump():
     assert_registers(cpu, pc=pc+value+1)
     # test pc.inc
     startCycles = cpu.cycles
-    pc = cpu.pc.get()
+    pc          = cpu.pc.get()
     cpu.relative_conditional_jump(False)
     assert startCycles-cpu.cycles == 2
-    assert cpu.pc.get() == pc+1
+    assert cpu.pc.get()           == pc+1
     
     
 def test_flags():
     cpu = get_cpu()
     cpu.f.set(constants.Z_FLAG)
-    assert cpu.is_z() == True
+    assert cpu.is_z()     == True
     assert cpu.is_not_z() == False
     cpu.f.set(~constants.Z_FLAG)
-    assert cpu.is_z() == False
+    assert cpu.is_z()     == False
     assert cpu.is_not_z() == True
     
     cpu.f.set(constants.C_FLAG)
-    assert cpu.is_c() == True
+    assert cpu.is_c()     == True
     assert cpu.is_not_c() == False
     cpu.f.set(~constants.C_FLAG)
-    assert cpu.is_c() == False
+    assert cpu.is_c()     == False
     assert cpu.is_not_c() == True
  
 def test_flags_memory_access(): 
@@ -173,10 +173,10 @@ def fetch_execute_cycle_test_second_order(cpu, opCode, cycles=0):
 
 def test_create_group_op_codes():
     assert len(GROUPED_REGISTERS) == 8
-    start=0x12
-    step=0x03
-    func = CPU.inc
-    table = [(start, step, func)]
+    start   = 0x12
+    step    = 0x03
+    func    = CPU.inc
+    table   = [(start, step, func)]
     grouped = create_group_op_codes(table)
     assert len(grouped) == len(table)*8
     
@@ -190,13 +190,13 @@ def test_create_group_op_codes():
         
         
 def test_create_register_op_codes():
-    start = 0x09
-    step = 0x10
-    func = CPU.add_hl
+    start     = 0x09
+    step      = 0x10
+    func      = CPU.add_hl
     registers = [CPU.get_bc]*128
-    table = [(start, step, func, registers)]
-    list = create_register_op_codes(table)
-    opCode = start
+    table     = [(start, step, func, registers)]
+    list      = create_register_op_codes(table)
+    opCode     = start
     assert len(list) == len(registers)
     for entry in list:
         assert len(entry) == 2
@@ -256,7 +256,7 @@ def prepare_for_fetch(cpu, value, valueLo=None):
     cpu.memory.write(pc, value & 0xFF)
     
 def test_prepare_for_fetch():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x12
     prepare_for_fetch(cpu, value+1, value)
     assert cpu.fetch() == value
@@ -270,7 +270,7 @@ def prepare_for_pop(cpu, value, valueLo=None):
     cpu.memory.write(sp, value & 0xFF)
     
 def test_prepare_for_pop():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x12
     prepare_for_pop(cpu, value+1, value)
     assert cpu.pop() == value
@@ -286,14 +286,14 @@ def set_registers(registers, value):
 # test helper methods ----------------------------------------------------------
 
 def test_prepare_for_pop():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x12
     prepare_for_pop(cpu, value, value+1)
     assert cpu.pop() == value+1
     assert cpu.pop() == value
     
 def test_prepare_for_fetch():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x12
     prepare_for_fetch(cpu, value, value+1)
     assert cpu.fetch() == value+1
@@ -310,28 +310,28 @@ def test_0x00():
 
 #load_mem_SP
 def test_0x08():
-    cpu = get_cpu()
+    cpu     = get_cpu()
     assert_default_registers(cpu)
     startPC = cpu.pc.get()
     prepare_for_fetch(cpu, 0xCD, 0xEF)
     cpu.sp.set(0x1234)
     cycle_test(cpu, 0x08, 5)
     assert_default_registers(cpu, pc=startPC+2, sp=0x1234)
-    assert cpu.memory.read(0xCDEF) == cpu.sp.get_lo()
+    assert cpu.memory.read(0xCDEF)   == cpu.sp.get_lo()
     assert cpu.memory.read(0xCDEF+1) == cpu.sp.get_hi()
     
 # stop
 def test_0x10():
     cpu = get_cpu()
-    pc = cpu.pc.get()
+    pc  = cpu.pc.get()
     cycle_test(cpu, 0x10, 0)
     # fetches 1 cycle
     assert_default_registers(cpu, pc=pc+1)
     
 # jr_nn
 def test_0x18():
-    cpu = get_cpu();
-    pc = cpu.pc.get()
+    cpu   = get_cpu();
+    pc    = cpu.pc.get()
     value = 0x12
     cpu.rom[constants.RESET_PC] = value
     assert_default_registers(cpu)
@@ -340,10 +340,10 @@ def test_0x18():
     
 # jr_NZ_nn see test_jr_cc_nn
 def test_0x20_0x28_0x30():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0x20
-    value = 0x12
+    value  = 0x12
     for i in range(0, 4):
         prepare_for_fetch(cpu, value)
         pc = cpu.pc.get()
@@ -360,10 +360,10 @@ def test_0x20_0x28_0x30():
         
 # ld_BC_nnnn to ld_SP_nnnn
 def test_0x01_0x11_0x21_0x31_load_register_nnnn():
-    cpu = get_cpu()
-    registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
-    value = 0x12
-    opCode = 0x01
+    cpu       = get_cpu()
+    registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
+    value     = 0x12
+    opCode    = 0x01
     for index in range(0, len(registers)):
         prepare_for_fetch(cpu, value, value+1)
         cycle_test(cpu, opCode, 3)
@@ -374,16 +374,16 @@ def test_0x01_0x11_0x21_0x31_load_register_nnnn():
         
 # add_HL_BC to add_HL_SP
 def test_0x09_0x19_0x29_0x39():
-    cpu = get_cpu()
-    registers= [cpu.bc, cpu.de, cpu.hl, cpu.sp]
-    value = 0x1234
-    opCode = 0x09
+    cpu       = get_cpu()
+    registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
+    value     = 0x1234
+    opCode    = 0x09
     for i in range(0, len(registers)):
         cpu.hl.set(value)
         registers[i].set(value)
         assert  registers[i].get() == value
         cycle_test(cpu, opCode, 2)
-        assert cpu.hl.get() == value+value
+        assert cpu.hl.get()        == value+value
         value += 3
         opCode += 0x10
         
@@ -397,8 +397,8 @@ def test_0x02():
     
 # ld_A_BCi
 def test_0x0A():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     address = 0xC020
     cpu.bc.set(address)
     cpu.write(address, value)
@@ -417,8 +417,8 @@ def test_0x12():
 
 # load_a_DEi
 def test_0x1A():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     address = 0xC020
     cpu.de.set(address)
     cpu.write(address, value)
@@ -433,7 +433,7 @@ def test_0x22():
     cpu.a.set(0x12);
     cycle_test(cpu, 0x22, 2);
     assert cpu.read(0xCDEF) == cpu.a.get()
-    assert cpu.hl.get() == 0xCDEF+1
+    assert cpu.hl.get()     == 0xCDEF+1
 
 # ldd_HLi_A
 def test_0x32():
@@ -442,13 +442,13 @@ def test_0x32():
     cpu.a.set(0x12);
     cycle_test(cpu, 0x32, 2);
     assert cpu.read(0xCDEF) == cpu.a.get()
-    assert cpu.hl.get() == 0xCDEF-1
+    assert cpu.hl.get()     == 0xCDEF-1
     
     
 # ldi_A_HLi
 def test_0x2A():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     address = 0xCDEF
     cpu.hl.set(address)
     cpu.write(address, value)
@@ -458,8 +458,8 @@ def test_0x2A():
 
 # ldd_A_HLi
 def test_0x3A():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     address = 0xCDEF
     cpu.hl.set(address)
     cpu.write(address, value)
@@ -469,30 +469,30 @@ def test_0x3A():
     
 # inc_BC DE HL SP
 def test_0x03_to_0x33_inc_double_registers():
-    cpu = get_cpu()
-    opCode = 0x03
+    cpu       = get_cpu()
+    opCode    = 0x03
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
-    value = 0x12
+    value     = 0x12
     for i in range(0,4):
         set_registers(registers, 0)
         registers[i].set(value)
         cycle_test(cpu, opCode, 2);
-        assert  registers[i].get() == value +1
+        assert  registers[i].get() == value + 1
         cpu.reset()
         opCode += 0x10
         value += 3
  
 # dec_BC
 def test_0x0B_to_0c38_dec_double_registers():
-    cpu = get_cpu()
-    opCode = 0x0B
+    cpu       = get_cpu()
+    opCode    = 0x0B
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.sp]
-    value = 0x12
+    value     = 0x12
     for i in range(0,4):
         set_registers(registers, 0)
         registers[i].set(value)
         cycle_test(cpu, opCode, 2);
-        assert  registers[i].get() == value-1
+        assert  registers[i].get() == value - 1
         cpu.reset()
         cpu.reset()
         opCode += 0x10
@@ -517,10 +517,10 @@ def test_inc():
 
 # inc_B C D E H L  A
 def test_0x04_to_0x3C_inc_registers():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    opCode = 0x04
-    value = 0x12
+    opCode    = 0x04
+    value     = 0x12
     for register in registers:
         if register == cpu.hli:
             opCode += 0x08
@@ -535,7 +535,7 @@ def test_0x04_to_0x3C_inc_registers():
         
 # inc_HLi
 def test_0x34():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x12
     cpu.hl.set(0xCDEF)
     cpu.write(cpu.hl.get(), value)
@@ -545,9 +545,9 @@ def test_0x34():
     
 
 def test_dec():
-    cpu = get_cpu()
+    cpu          = get_cpu()
     # cycle testing is done in the other tests
-    a = cpu.a
+    a            = cpu.a
     a.set(1)
     cpu.f.c_flag = True
     cpu.dec(RegisterCallWrapper(a), RegisterCallWrapper(a))
@@ -571,10 +571,10 @@ def test_dec():
 
 # dec_B C D E H L  A
 def test_0x05_to_0x3D_dec_registers():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    opCode = 0x05
-    value = 0x12
+    opCode    = 0x05
+    value     = 0x12
     for register in registers:
         if register ==  cpu.hli:
             opCode += 0x08
@@ -589,7 +589,7 @@ def test_0x05_to_0x3D_dec_registers():
 
 # dec_HLi
 def test_0x35():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x12
     cpu.hl.set(0xCDEF)
     cpu.write(cpu.hl.get(), value)
@@ -599,10 +599,10 @@ def test_0x35():
     
 # ld_B_nn C D E H L A )
 def test_0x06_to_0x3A():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    opCode = 0x06
-    value = 0x12
+    opCode    = 0x06
+    value     = 0x12
     for i in range(0, len(registers)):
         if registers[i] ==  cpu.hli:
             opCode += 0x08
@@ -611,107 +611,84 @@ def test_0x06_to_0x3A():
         set_registers(registers, 0)
         prepare_for_fetch(cpu, value)
         cycle_test(cpu, opCode, 2)
-        assert registers[i].get() == value
+        assert registers[i].get()   == value
+        # one fetch
         assert cpu.pc.get() - oldPC == 1
         cpu.reset()
         opCode += 0x08
-        value += 3
+        value  += 3
         
 # ld_HLi_nn
 def test_0x36():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     address = 0xCDEF
     prepare_for_fetch(cpu, value)
     cpu.hl.set(address)
-    oldPC = cpu.pc.get()
+    oldPC   = cpu.pc.get()
     cycle_test(cpu, 0x36, 3)
     assert cpu.read(cpu.hl.get()) == value
     assert_default_registers(cpu, pc=oldPC+1, hl=address)
     
 # rlca
 def test_0x07():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x80
     cpu.a.set(value)
     cycle_test(cpu, 0x07, 1)   
     assert_default_registers(cpu, a=((value << 1) | (value >> 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
     
     cpu.reset()
     value = 0x40
     cpu.a.set(value)
     cycle_test(cpu, 0x07, 1)
     assert_default_registers(cpu, a=((value << 1) | (value >> 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
     
 # rrca
 def test_0x0F():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x01
     cpu.a.set(value)
     cycle_test(cpu, 0x0F, 1)
     assert_default_registers(cpu, a=((value >> 1) | (value << 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
     
     cpu.reset()
     value = 0x02
     cpu.a.set(value)
     cycle_test(cpu, 0x0F, 1)
     assert_default_registers(cpu, a=((value >> 1) | (value << 7)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
 
 # rla
 def test_0x17():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x01
+    cpu.f.set(0x00)
     cpu.a.set(value)
-    cpu.f.c_flag = False
     cycle_test(cpu, 0x17, 1)
     assert_default_registers(cpu, a=(value << 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    
-    cpu.reset()
-    value = 0x01
-    cpu.a.set(value)
-    cpu.f.c_flag = True
-    cycle_test(cpu, 0x17, 1)
-    assert_default_registers(cpu, a=((value << 1)+1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    
-    cpu.reset()
-    value = 0x40
-    cpu.a.set(value)
-    cpu.f.c_flag = False
-    cycle_test(cpu, 0x17, 1)
-    assert_default_registers(cpu, a=(value << 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
     
 # rra
 def test_0x1F():
-    cpu = get_cpu()
+    cpu   = get_cpu()
     value = 0x40
+    cpu.f.set(0x00)
     cpu.a.set(value)
-    cpu.f.c_flag = False
     cycle_test(cpu, 0x1F, 1)
     assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
     
     cpu.reset()
+    cpu.f.set(0x00)
     value = 0x40
     cpu.a.set(value)
-    cpu.f.c_flag = True
     cycle_test(cpu, 0x1F, 1)
-    assert_default_registers(cpu, a=(0x08+(value >> 1)) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
+    assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
     
     cpu.reset()
+    cpu.f.set(0x00)
     value = 0x02
     cpu.a.set(value)
-    cpu.f.c_flag = False
     cycle_test(cpu, 0x1F, 1)
     assert_default_registers(cpu, a=(value >> 1) & 0xFF, f=None);
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
 
 # daa
 def test_0x27():
@@ -720,15 +697,14 @@ def test_0x27():
 
 # cpl
 def test_0x2F():
-    cpu = get_cpu()
-    value = 0x12
-    fValue = cpu.f.get()
+    cpu          = get_cpu()
+    value        = 0x12
+    fValue       = cpu.f.get()
     cpu.f.n_flag = False
     cpu.f.h_flag = False
     cpu.a.set(value)
     cycle_test(cpu, 0x2F, 1)
     assert_default_registers(cpu, a=value^0xFF, f=None)
-    assert_default_flags(cpu, n_flag=True, h_flag=True)
 
 # scf
 def test_0x37():
@@ -758,9 +734,9 @@ def test_0x3F():
     
 # halt
 def test_0x76():
-    cpu = get_cpu()
+    cpu        = get_cpu()
     cpu.cycles = 0xFF
-    cpu.ime = True
+    cpu.ime    = True
     assert cpu.halted == False
     cycle_test(cpu, 0x76, cpu.cycles)
     assert cpu.halted == True
@@ -769,9 +745,9 @@ def test_0x76():
 
 # ld_B_B to ld_A_A
 def test_load_registers():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     opCode = 0x40
-    value = 0x12
+    value  = 0x12
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for store in registers:
          for load in registers:
@@ -788,28 +764,13 @@ def test_load_registers():
              assert store.get() == value
              opCode += 0x01
 
-
-def test_add_flags():
-    cpu = get_cpu()
-    
-    cpu.a.set(0)
-    cpu.b.set(0)
-    cpu.add_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True, h_flag=False)
-    
-    cpu.reset()
-    cpu.a.set(0x0F)
-    cpu.b.set(0x01)
-    cpu.add_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False, h_flag=True)
-    
     
 # add_A_B to add_A_A
 def test_0x80_to_0x87():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     opCode = 0x80
     valueA = 0x11
-    value = 0x12
+    value  = 0x12
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -822,51 +783,15 @@ def test_0x80_to_0x87():
         if register == cpu.a:
             assert cpu.a.get() == 2*value
         else:
-            assert cpu.a.get() == valueA+value
-        value += 3
+            assert cpu.a.get() == valueA + value
+        value  += 3
         opCode += 0x01
 
-
-def test_adc_flags():
-    cpu = get_cpu()
-    b = cpu.b
-    a = cpu.a
-    
-    cpu.reset()
-    a.set(0)
-    b.set(0)
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0, f=None)
-    assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False)
-    
-    cpu.reset()
-    a.set(0)
-    b.set(0)
-    cpu.f.c_flag = True
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=1, f=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=False)
-    
-    cpu.reset()
-    a.set(0xF0)
-    b.set(0xFF)
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    # overflow for a
-    assert_default_registers(cpu, a=0xEF, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=True, h_flag=False)
-    
-    cpu.reset()
-    a.set(0x0F)
-    b.set(0x01)
-    cpu.add_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0x10, f=None, bc=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=True)
-    
 # adc_A_B to adx_A_A
 def test_0x88_to_0x8F():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     opCode = 0x88
-    value = 0x12
+    value  = 0x12
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -896,9 +821,9 @@ def test_0x88_to_0x8F():
 
 # sub_A_B to sub_A_A
 def test_0x90_to_0x98():
-    cpu = get_cpu()
-    opCode = 0x90
-    value = 0x12
+    cpu       = get_cpu()
+    opCode    = 0x90
+    value     = 0x12
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -911,42 +836,12 @@ def test_0x90_to_0x98():
         assert cpu.a.get() == 0
         value += 3
         opCode += 0x01
-
-def test_sbc_flags():
-    cpu = get_cpu()
-    b = cpu.b
-    a = cpu.a
-    value = 0xFF
-    
-    cpu.reset()
-    a.set(value)
-    b.set(value)
-    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False, n_flag=True)
-    
-    cpu.reset()
-    a.set(value)
-    b.set(value-1)
-    cpu.f.c_flag = True
-    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
-    assert_default_registers(cpu, a=0, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=True, c_flag=False, h_flag=False, n_flag=True)
-    
-    cpu.reset()
-    a.set(0x20)
-    b.set(0x01)
-    cpu.subtract_with_carry(RegisterCallWrapper(cpu.b), None)
-    # overflow for a
-    assert_default_registers(cpu, a=0x1F, bc=None, f=None)
-    assert_default_flags(cpu, z_flag=False, c_flag=False, h_flag=True, n_flag=True)
-    
     
 # sbc_A_B to sbc_A_A
 def test_0x98_0x9F():
-    cpu = get_cpu()
-    opCode = 0x98
-    value = 0x12
+    cpu       = get_cpu()
+    opCode    = 0x98
+    value     = 0x12
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -973,27 +868,13 @@ def test_0x98_0x9F():
         
         value += 3
         opCode += 0x01
-
-def test_and_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.AND(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False)
-    
-    cpu.reset()
-    cpu.a.set(value)
-    cpu.b.set(0)
-    cpu.AND(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True)
     
 # and_A_B to and_A_A
-def test_0xA0_to_0xA7():
-    cpu = get_cpu()
-    opCode = 0xA0
-    value = 0x12
-    valueA = 0x11
+def test_0xA0_to_0xA7_and_a():
+    cpu       = get_cpu()
+    opCode    = 0xA0
+    value     = 0x12
+    valueA    = 0x11
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -1007,34 +888,15 @@ def test_0xA0_to_0xA7():
             assert cpu.a.get() == (value & value)
         else:
             assert cpu.a.get() == (valueA & value)
-        if cpu.a.get() == 0:
-            assert cpu.f.get() == constants.Z_FLAG
-        else:
-            assert cpu.f.get() == 0
         value += 1
         opCode += 0x01
-
-
-def test_xor_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.XOR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True)
-    
-    cpu.reset()
-    cpu.a.set(value)
-    cpu.b.set(value+1)
-    cpu.XOR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False)
     
 # xor_A_B to xor_A_A
 def test_0xA8_to_0xAF():
-    cpu = get_cpu()
-    opCode = 0xA8
-    value = 0x12
-    valueA = 0x11
+    cpu       = get_cpu()
+    opCode    = 0xA8
+    value     = 0x12
+    valueA    = 0x11
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -1048,33 +910,16 @@ def test_0xA8_to_0xAF():
             assert cpu.a.get() == (value ^ value)
         else:
             assert cpu.a.get() == (valueA ^ value)
-        if cpu.a.get() == 0:
-            assert cpu.f.z_flag == True
-        else:
-            assert cpu.f.get() == 0
         value += 1
         opCode += 0x01
 
-def test_or_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.OR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False)
-    
-    cpu.reset()
-    cpu.a.set(0)
-    cpu.b.set(0)
-    cpu.OR(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True)
     
 # or_A_B to or_A_A
 def test_0xB0_to_0xB7():
-    cpu = get_cpu()
-    opCode = 0xB0
-    value = 0x12
-    valueA = 0x11
+    cpu       = get_cpu()
+    opCode    = 0xB0
+    value     = 0x12
+    valueA    = 0x11
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -1088,40 +933,15 @@ def test_0xB0_to_0xB7():
             assert cpu.a.get() == (value | value)
         else:
             assert cpu.a.get() == (valueA | value)
-        if cpu.a.get() == 0:
-            assert cpu.f.get() == constants.Z_FLAG
-        else:
-            assert cpu.f.get() == 0
         value += 1
         opCode += 0x01
 
-def test_cp_flags():
-    cpu = get_cpu()
-    value = 0x12
-    cpu.a.set(value)
-    cpu.b.set(value)
-    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=True, n_flag=True)
-    
-    cpu.reset()
-    cpu.a.set(value)
-    cpu.b.set(0)
-    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False, n_flag=True)
-    
-    cpu.reset()
-    cpu.a.set(0xF0) 
-    cpu.b.set(0x01)
-    cpu.compare_a(RegisterCallWrapper(cpu.b), None)
-    assert_default_flags(cpu, z_flag=False, h_flag=True, n_flag=True)
-    
-                         
 # cp_A_B to cp_A_A
 def test_0xB8_to_0xBF_compare_a():
-    cpu = get_cpu()
-    opCode = 0xB8
-    value = 0x12
-    valueA = 0x11
+    cpu       = get_cpu()
+    opCode    = 0xB8
+    value     = 0x12
+    valueA    = 0x11
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
@@ -1133,22 +953,15 @@ def test_0xB8_to_0xBF_compare_a():
         cycle_test(cpu, opCode, numCycles)
         if register == cpu.a:
             valueA = value
-        assert cpu.f.n_flag == True
-        if valueA == value:
-            assert cpu.f.z_flag == True
-        if value < 0:
-            assert cpu.f.c_flag == True
-        if ((valueA-value) & 0x0F) > (valueA & 0x0F):
-            assert cpu.f.h_flag == True
         value += 1
         opCode += 0x01
 
 # ret_NZ to ret_C
-def test_0xC0():
-    cpu = get_cpu()
+def test_0xC0_to_0xD8_return_on_condition():
+    cpu    = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0xC0
-    value = 0x1234
+    value  = 0x1234
     for i in range(0, 4):
         cpu.reset()
         prepare_for_pop(cpu, value >> 8, value & 0xFF)
@@ -1166,9 +979,9 @@ def test_0xC0():
 
 # ldh_mem_A
 def test_0xE0():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     valueA = 0x11
-    value = 0x12
+    value  = 0x12
     prepare_for_fetch(cpu, value)
     cpu.a.set(valueA)
     cycle_test(cpu, 0xE0, 3)
@@ -1177,8 +990,8 @@ def test_0xE0():
 
 # add_SP_nn
 def test_0xE8():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     spValue = 0xCDEF
     prepare_for_fetch(cpu, value)
     cpu.sp.set(spValue)
@@ -1187,9 +1000,9 @@ def test_0xE8():
 
 # ldh_A_mem
 def test_0xF0():
-    cpu = get_cpu()
-    valueA = 0x11
-    value= 0x12
+    cpu     = get_cpu()
+    valueA  = 0x11
+    value   = 0x12
     address = 0x13
     cpu.a.set(valueA)
     prepare_for_fetch(cpu, address)
@@ -1198,12 +1011,12 @@ def test_0xF0():
     assert cpu.a.get() == value
 
 # ld_A_mem
-def test_0xFA():
-    cpu = get_cpu()
-    value = 0x11
+def test_0xFA_store_fetched_memory_in_a():
+    cpu    = get_cpu()
+    value  = 0x11
     valueA = 0x12
     cpu.a.set(valueA)
-    pc = cpu.pc.get();
+    pc     = cpu.pc.get();
     prepare_for_fetch(cpu, 0x12, 0x34)
     cpu.write(0x1234, value)
     cycle_test(cpu, 0xFA, 4)
@@ -1211,7 +1024,7 @@ def test_0xFA():
 
 # ld_mem_A
 def test_0xEA():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     valueA = 0x56
     prepare_for_fetch(cpu, 0x12, 0x34)
     cpu.a.set(valueA)
@@ -1221,22 +1034,22 @@ def test_0xEA():
     
 # ld_HL_SP_nn
 def test_0xF8():
-    cpu = get_cpu()
-    value = 0x12
+    cpu     = get_cpu()
+    value   = 0x12
     valueSp = 0x1234
     prepare_for_fetch(cpu, value)
     cpu.sp.set(valueSp)
-    pc = cpu.pc.get()
+    pc      = cpu.pc.get()
     cycle_test(cpu, 0xF8, 3)
-    f = cpu.f.get();
+    f       = cpu.f.get();
     assert_default_registers(cpu, hl=valueSp+value, f=f, sp=valueSp, pc=pc+1)
 
 # pop_BC to pop_AF
 def test_0xC1_to_0xF1():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.bc, cpu.de, cpu.hl, cpu.af]
-    opCode = 0xC1
-    value = 0x1234
+    opCode    = 0xC1
+    value     = 0x1234
     for register in registers:
         cpu.reset()
         prepare_for_pop(cpu, value >> 8, value & 0xFF)
@@ -1247,8 +1060,8 @@ def test_0xC1_to_0xF1():
 
 # ret
 def test_0xC9():
-    cpu = get_cpu()
-    value = 0x1234
+    cpu     = get_cpu()
+    value   = 0x1234
     valueSp = 0x5678
     cpu.sp.set(valueSp)
     prepare_for_pop(cpu, value >> 8, value & 0xFF)
@@ -1256,73 +1069,80 @@ def test_0xC9():
     assert_default_registers(cpu, pc=value, sp=valueSp+2)
 
 # reti
-def test_0xD9_returnFormInterrupt():
-    cpu = get_cpu()
+def test_0xD9_return_form_interrupt():
+    cpu   = get_cpu()
+    cpu.interrupt.reset()
     value = 0x1234
     cpu.sp.set(0)
     prepare_for_pop(cpu, value >> 8, value & 0xFF)
     prepare_for_fetch(cpu, 0x00)
-    pc = cpu.pc.get()
+    pc    = cpu.pc.get()
     cycle_test(cpu, 0xD9, 4+2) 
     assert_default_registers(cpu, pc=value+1, sp=2)
     
-def test_handleInterrupt():
-    cpu = get_cpu()
+def test_handle_interrupt():
+    cpu        = get_cpu()
+    cpu.interrupt.reset()
     cpu.halted = True
     cpu.cycles = 0xFF
-    cpu.handle_pending_interrupt()
+    cpu.handle_pending_interrupts()
     assert cpu.cycles == 0
     
     cpu.reset()
+    cpu.interrupt.reset()
     cpu.halted = True
-    cpu.interrupt.set_interrupt_enable()
-    cpu.interrupt.v_blank.set_pending()
-    assert cpu.interrupt.is_pending() == True
     cpu.cycles = 4
-    cpu.handle_pending_interrupt()
-    assert cpu.cycles == 0
-    assert cpu.halted == False
+    cpu.interrupt.set_enable_mask(0xFF)
+    cpu.interrupt.vblank.set_pending()
+    assert cpu.interrupt.is_pending() == True
+    assert cpu.halted                 == True
+    cpu.handle_pending_interrupts()
+    assert cpu.cycles                 == 0
+    assert cpu.halted                 == False
     
     cpu.reset()
+    cpu.interrupt.reset()
     cpu.halted = False
-    cpu.ime = True
+    cpu.ime    = True
     cpu.pc.set(0x1234)
     cpu.sp.set(0x02)
     sp = cpu.sp.get()
-    cpu.interrupt.set_interrupt_enable()
-    cpu.interrupt.v_blank.set_pending()
+    cpu.interrupt.set_enable_mask(0xFF)
+    cpu.interrupt.vblank.set_pending()
     cpu.interrupt.lcd.set_pending()
     assert cpu.interrupt.is_pending() == True
     cpu.cycles = 0
-    cpu.handle_pending_interrupt()
+    cpu.handle_pending_interrupts()
     assert cpu.cycles == 0
     assert cpu.halted == False 
-    assert_default_registers(cpu, pc=cpu.interrupt.v_blank.call_code, sp=sp-2)
+    assert_default_registers(cpu, pc=cpu.interrupt.vblank.call_code, sp=sp-2)
     assert cpu.pop() == 0x34
     assert cpu.pop() == 0x12
 
 # ld_PC_HL 
-def test_0xE9():
-    cpu = get_cpu()
+def test_0xE9_store_hl_in_pc():
+    cpu   = get_cpu()
     value = 0x1234
     cpu.hl.set(value)
+    cpu.pc.set(0)
     cycle_test(cpu, 0xE9, 1)
     assert_default_registers(cpu, pc=value, hl=value)
 
 # ld_SP_HL
-def test_0xF9():
-    cpu = get_cpu()
+def test_0xF9_store_hl_in_sp():
+    cpu   = get_cpu()
     value = 0x1234
     cpu.hl.set(value)
+    cpu.sp.set(0)
     cycle_test(cpu, 0xF9, 2)
     assert_default_registers(cpu, sp=value, hl=value)
 
 # jp_NZ_nnnn to jp_C_nnnn
 def test_0xC2_to_0xDA():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0xC2
-    value = 0x1234
+    value  = 0x1234
     for i in range(0, 4):
         cpu.reset()
         prepare_for_fetch(cpu, value >> 8, value & 0xFF)
@@ -1342,8 +1162,8 @@ def test_0xC2_to_0xDA():
 
 # ldh_Ci_A
 def test_0xE2():
-    cpu = get_cpu()
-    value = 0x12
+    cpu    = get_cpu()
+    value  = 0x12
     valueA = value+1
     cpu.c.set(value)
     cpu.a.set(valueA)
@@ -1352,7 +1172,7 @@ def test_0xE2():
 
 # ldh_A_Ci
 def test_0xF2():
-    cpu = get_cpu()
+    cpu    = get_cpu()
     valueC = 0x12
     valueA = 0x11
     cpu.c.set(valueC)
@@ -1370,40 +1190,53 @@ def test_0xC3():
 
 
 # di
-def test_0xF3():
+def test_0xF3_disable_interrupt():
     cpu = get_cpu()
-    cpu.ime == True
+    cpu.interrupt.reset()
+    cpu.ime = True
     cycle_test(cpu, 0xF3, 1)
     assert cpu.ime == False
 
 # ei
-def test_0xFB():
-    cpu = get_cpu()
+def test_0xFB_enable_interrupt():
+    cpu        = get_cpu()
+    cpu.interrupt.reset()
     cpu.sp.set(0)
-    cpu.ime = False
+    cpu.ime    = False
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00) # nop 1 cycle
-    cycle_test(cpu, 0xFB, 1+1)
-    assert cpu.ime == True
-    
-    cpu.reset()
-    cpu.sp.set(0)
-    cpu.ime = True
-    cpu.halted = False
-    prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
-    cpu.interrupt.v_blank.set_pending()
-    cpu.interrupt.serial.set_pending()
-    cpu.interrupt.set_interrupt_enable(True)
-    assert cpu.interrupt.is_pending() == True
-    assert cpu.halted == False
-    assert cpu.ime == True  
+    print  cpu.interrupt.get_enable_mask()
+    assert cpu.interrupt.is_pending() == False
     cycle_test(cpu, 0xFB, 1+1)
     assert cpu.interrupt.is_pending() == False
-    assert cpu.interrupt.v_blank.is_pending() == False
-    assert cpu.pc.get() == cpu.interrupt.v_blank.call_code
-    assert cpu.ime == False
+    assert cpu.ime                    == True
+    
+    cpu.reset()
+    cpu.interrupt.reset()
+    cpu.sp.set(0)
+    cpu.ime    = True
+    cpu.halted = False
+    prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
+    cpu.interrupt.vblank.set_pending()
+    cpu.interrupt.serial.set_pending()
+    cpu.interrupt.set_enable_mask(0x1F)
+    assert cpu.interrupt.is_pending() == True
+    assert cpu.halted                 == False
+    assert cpu.ime                    == True  
+    cycle_test(cpu, 0xFB, 1+1)
+    assert cpu.interrupt.is_pending()        == True
+    assert cpu.interrupt.vblank.is_pending() == False
+    assert cpu.interrupt.serial.is_pending() == True
+    assert cpu.pc.get()                      == cpu.interrupt.vblank.call_code
+    assert cpu.ime                           == False
+    
+    cpu.ime    = True
+    cycle_test(cpu, 0xFB, 1+1)
+    assert cpu.interrupt.vblank.is_pending() == False
+    assert cpu.interrupt.serial.is_pending() == False
+    assert cpu.interrupt.is_pending()        == False
 
-def conditionalCallTest(cpu, opCode, flagSetter):
+def conditional_call_test(cpu, opCode, flagSetter):
     flagSetter(cpu, False)
     cpu.pc.set(0)
     f = cpu.f.get()
@@ -1422,7 +1255,7 @@ def conditionalCallTest(cpu, opCode, flagSetter):
 # call_NZ_nnnn
 def test_0xC4():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xC4, setFlag0xC4)
+    conditional_call_test(cpu, 0xC4, setFlag0xC4)
     
 def setFlag0xC4(cpu, value):
     cpu.f.z_flag = not value
@@ -1430,7 +1263,7 @@ def setFlag0xC4(cpu, value):
 # call_Z_nnnn
 def test_0xCC():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xCC, setFlag0xC4)
+    conditional_call_test(cpu, 0xCC, setFlag0xC4)
 
 def setFlag0xCC(cpu, value):
     cpu.f.c_flag = not value
@@ -1438,7 +1271,7 @@ def setFlag0xCC(cpu, value):
 # call_NC_nnnn
 def test_0xD4():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xD4, setFlag0xC4)
+    conditional_call_test(cpu, 0xD4, setFlag0xC4)
 
 def setFlag0xD4(cpu, value):
     cpu.f.c_flag = value
@@ -1446,17 +1279,17 @@ def setFlag0xD4(cpu, value):
 # call_C_nnnn
 def test_0xDC():
     cpu = get_cpu()
-    conditionalCallTest(cpu, 0xDC, setFlag0xC4)
+    conditional_call_test(cpu, 0xDC, setFlag0xC4)
 
 def setFlag0xDC(cpu, value):
     cpu.f.z_flag = value
 
 # push_BC to push_AF
-def test_0xC5_to_0xF5():
-    cpu = get_cpu()
+def test_0xC5_to_0xF5_push():
+    cpu        = get_cpu()
     registers  = [cpu.bc, cpu.de, cpu.hl, cpu.af]
-    opCode = 0xC5
-    value = 0x1234
+    opCode     = 0xC5
+    value      = 0x1234
     for register in registers:
         register.set(value)
         cycle_test(cpu, opCode, 4)
@@ -1467,8 +1300,8 @@ def test_0xC5_to_0xF5():
             
 
 # call_nnnn
-def test_0xCD():
-    cpu = get_cpu()
+def test_0xCD_call():
+    cpu        = get_cpu()
     fetchValue = 0x1234
     cpu.sp.set(fetchValue)
     prepare_for_fetch(cpu, fetchValue)
@@ -1477,19 +1310,19 @@ def test_0xCD():
 
 def a_nn_test(opCode, cycles, opCaller):
     # flags tested already
-    cpu = get_cpu()
-    value = 0x12
+    cpu      = get_cpu()
+    value    = 0x12
     valueAdd = 0x12
     cpu.a.set(value)
     prepare_for_fetch(cpu, valueAdd,)
-    pc = cpu.pc.get()
+    pc       = cpu.pc.get()
     
     cycle_test(cpu, opCode, cycles)
     assert_default_registers(cpu, a=opCaller(value,valueAdd, cpu), pc=pc+1, f=cpu.f.get())
     return cpu
 
 # add_A_nn
-def test_0xC6():
+def test_0xC6_add_a_fetch():
     a_nn_test(0xC6, 2, lambda a, b, cpu: a+b)
 
 # adc_A_nn
@@ -1519,11 +1352,11 @@ def test_0xF6():
 # cp_A_nn
 def test_0xFE():
     # flags tested already
-    cpu = get_cpu()
-    value = 0x12
+    cpu    = get_cpu()
+    value  = 0x12
     valueA = 0x12
     cpu.a.set(valueA)
-    pc = cpu.pc.get()
+    pc     = cpu.pc.get()
     
     cycle_test(cpu, 0xFE, 2)
     
@@ -1531,51 +1364,36 @@ def test_0xFE():
     assert cpu.f.z_flag == True
 
 # rst(0x00) to rst(0x38)
-def test_0xC7_to_0xFF():
-    cpu = get_cpu()
-    opCode = 0xC7
+def test_0xC7_to_0xFF_reset():
+    cpu      = get_cpu()
+    opCode   = 0xC7
     rstValue = 0x00
     for i in range(0,8):
         cpu.reset()
         cpu.pc.set(0x1234)
         cycle_test(cpu, opCode, 4)
-        assert cpu.pop() == 0x34
-        assert cpu.pop() == 0x12
+        assert cpu.pop()    == 0x34
+        assert cpu.pop()    == 0x12
         assert cpu.pc.get() == rstValue
-        opCode += 0x08
+        opCode   += 0x08
         rstValue += 0x08
 
 # switching to other opcode set
 def test_0xCB():
     cpu = get_cpu()
-    pc = cpu.pc.get()
+    pc  = cpu.pc.get()
     prepare_for_fetch(cpu, 0x80)
     cycle_test(cpu, 0xCB, 2)
     assert_default_registers(cpu, pc=pc+1)
     
 
-def test_rotateLeft_flags():
-    cpu = get_cpu()
-    a = cpu.a
-    a.set(0x01)
-    assert_default_flags(cpu)
-    cpu.rotate_left_a()
-    assert_default_flags(cpu, z_flag=False, c_flag=False)
-    assert_default_registers(cpu, a=0x02, f=None)
-    
-    cpu.reset()
-    a.set(0x40)
-    cpu.rotate_left_a()
-    assert_default_flags(cpu, z_flag=False, c_flag=True)
-    assert_default_registers(cpu, a=0x80, f=None)
-    
     
 # SECOND ORDER OPCODES ---------------------------------------------------------
 
 def second_order_test(opCode, createFunction):
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    value = 0xF0
+    value     = 0xF0
     for register in registers:
         cpu.reset()
         register.set(value)
@@ -1621,9 +1439,9 @@ def test_0x38_to_0x3F_shift_word_right_logical():
 
 # bit_B to bit_A
 def test_testBit_opCodes():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    opCode = 0x40
+    opCode    = 0x40
     for register in registers:
         registerOpCode = opCode
         for i in range(8):
@@ -1646,18 +1464,20 @@ def test_testBit_opCodes():
     
 # set_B to set_C
 def test_setBit_opCodes():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    value = 0x12
-    opCode = 0xC0
+    value     = 0x12
+    opCode    = 0xC0
     for register in registers:
         registerOpCode = opCode
         for i in range(8):
             cycles = 2
             if register == cpu.hli:
                 cycles = 4
-                
             cpu.reset()
+            if registerOpCode ==0xFF:
+                print "6544444444444444"
+                
             register.set(0)
             fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
             assert (register.get() & (1<<i)) >> i == 1
@@ -1668,16 +1488,15 @@ def test_setBit_opCodes():
 
 # res_B to res_A
 def test_resetBit_opCodes():
-    cpu = get_cpu()
+    cpu       = get_cpu()
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
-    value = 0x12
-    opCode = 0x80
+    value     = 0x12
+    opCode    = 0x80
     for register in registers:
         registerOpCode = opCode
         cycles = 2
         if register == cpu.hli:
             cycles = 4
-            
         for i in range(8):
             cpu.reset()
             register.set(0)
@@ -1693,7 +1512,127 @@ def test_resetBit_opCodes():
         opCode += 1
     
 
+# LOAD TEST -----------------------------------------------------------------
+# just for double checking ;)
 
-
+def load_test(cpu, test_set):
+    value = 0
+    for test in test_set:
+        opCode    = test[0]
+        reg_write = test[1]
+        reg_read  = test[2]
+        value = 1 + (value + 1) & 0xFE
+        reg_write.set(0)
+        reg_read.set(value)
+        cpu.execute(opCode)
+        assert reg_write.get() == reg_read.get(), hex(opCode)+" load failed!"
+        
+        
+def test_load_b():
+    cpu           = get_cpu()
+    read_register = cpu.b
+    load_test(cpu, 
+              [(0x40, read_register, cpu.b),
+               (0x41, read_register, cpu.c),
+               (0x42, read_register, cpu.d),
+               (0x43, read_register, cpu.e),
+               (0x44, read_register, cpu.h),
+               (0x45, read_register, cpu.l),
+               #(0x46, read_register, cpu.hli),
+               (0x47, read_register, cpu.a)])
+    
+def test_load_c():
+    cpu           = get_cpu()
+    read_register = cpu.c
+    load_test(cpu, 
+              [(0x48, read_register, cpu.b),
+               (0x49, read_register, cpu.c),
+               (0x4A, read_register, cpu.d),
+               (0x4B, read_register, cpu.e),
+               (0x4C, read_register, cpu.h),
+               (0x4D, read_register, cpu.l),
+               #(0x4E, read_register, cpu.hli),
+               (0x4F, read_register, cpu.a)])
+    
+    
+def test_load_d():
+    cpu           = get_cpu()
+    read_register = cpu.d
+    load_test(cpu, 
+              [(0x50, read_register, cpu.b),
+               (0x51, read_register, cpu.c),
+               (0x52, read_register, cpu.d),
+               (0x53, read_register, cpu.e),
+               (0x54, read_register, cpu.h),
+               (0x55, read_register, cpu.l),
+              # (0x56, read_register, cpu.hli),
+               (0x57, read_register, cpu.a)])
+    
+def test_load_e():
+    cpu           = get_cpu()
+    read_register = cpu.e
+    load_test(cpu, 
+              [(0x58, read_register, cpu.b),
+               (0x59, read_register, cpu.c),
+               (0x5A, read_register, cpu.d),
+               (0x5B, read_register, cpu.e),
+               (0x5C, read_register, cpu.h),
+               (0x5D, read_register, cpu.l),
+               #(0x5E, read_register, cpu.hli),
+               (0x5F, read_register, cpu.a)])
+    
+def test_load_h():
+    cpu           = get_cpu()
+    read_register = cpu.h
+    load_test(cpu, 
+              [(0x60, read_register, cpu.b),
+               (0x61, read_register, cpu.c),
+               (0x62, read_register, cpu.d),
+               (0x63, read_register, cpu.e),
+               (0x64, read_register, cpu.h),
+               (0x65, read_register, cpu.l),
+               #(0x66, read_register, cpu.hli),
+               (0x67, read_register, cpu.a)])
+    
+def test_load_l():
+    cpu           = get_cpu()
+    read_register = cpu.l
+    load_test(cpu, 
+              [(0x68, read_register, cpu.b),
+               (0x69, read_register, cpu.c),
+               (0x6A, read_register, cpu.d),
+               (0x6B, read_register, cpu.e),
+               (0x6C, read_register, cpu.h),
+               (0x6D, read_register, cpu.l),
+               #(0x6E, read_register, cpu.hli),
+               (0x6F, read_register, cpu.a)])
+    
+def test_load_hli():
+    cpu           = get_cpu()
+    read_register = cpu.hli
+    load_test(cpu, 
+              [(0x70, read_register, cpu.b),
+               (0x71, read_register, cpu.c),
+               (0x72, read_register, cpu.d),
+               (0x73, read_register, cpu.e),
+               (0x74, read_register, cpu.h),
+               (0x75, read_register, cpu.l),
+               (0x77, read_register, cpu.a)])
+    
+def test_load_a():
+    cpu           = get_cpu()
+    read_register = cpu.a
+    load_test(cpu, 
+              [(0x78, read_register, cpu.b),
+               (0x79, read_register, cpu.c),
+               (0x7A, read_register, cpu.d),
+               (0x7B, read_register, cpu.e),
+               (0x7C, read_register, cpu.h),
+               (0x7D, read_register, cpu.l),
+               #(0x7E, read_register, cpu.hli),
+               (0x7F, read_register, cpu.a)])
+    
+    
+    
 
     

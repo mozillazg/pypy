@@ -234,6 +234,16 @@ class AppTestZipimport:
         assert archive == self.zipfile
         assert importer.prefix == prefix
 
+    def test_zip_directory_cache(self):
+        """ Check full dictionary interface
+        """
+        import os
+        import zipimport
+        self.writefile(
+            self, os.sep.join(("directory", "package", "__init__.py")), "")
+        importer = zipimport.zipimporter(self.zipfile + "/directory")
+        l = [i for i in zipimport._zip_directory_cache]
+        assert len(l)
 
 class AppTestZipimportDeflated(AppTestZipimport):
     compression = ZIP_DEFLATED

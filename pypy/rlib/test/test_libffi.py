@@ -362,6 +362,10 @@ class TestDLOperations:
         assert not ALLOCATED
 
 class TestWin32Handles:
+    def setup_class(cls):
+        if sys.platform != 'win32':
+            py.test.skip("Win-only test")
+    
     def test_get_libc_handle(self):
         handle = get_libc_handle()
         print get_libc_name()

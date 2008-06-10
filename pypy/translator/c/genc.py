@@ -290,6 +290,24 @@ class CStandaloneBuilder(CBuilder):
     standalone = True
     executable_name = None
 
+    def getprofbased(self):
+        profbased = None
+        if self.config.translation.instrumentctl is not None:
+            profbased = self.config.translation.instrumentctl
+        else:
+            # xxx handling config.translation.profopt is a bit messy, because
+            # it could be an empty string (not to be confused with None) and
+            # because noprofopt can be used as an override.
+            profopt = self.config.translation.profopt
+            if profopt is not None and not self.config.translation.noprofopt:
+                profbased = (ProfOpt, profopt)
+        return profbased
+
+    def has_profopt(self):
+        profbased = self.getprofbased()
+        return (profbased and isinstance(profbased, tuple)
+                and profbased[0] is ProfOpt)
+
     def getentrypointptr(self):
         # XXX check that the entrypoint has the correct
         # signature:  list-of-strings -> int
@@ -298,14 +316,6 @@ class CStandaloneBuilder(CBuilder):
 
     def getccompiler(self):            
         cc = self.config.translation.cc
-        profbased = None
-        if self.config.translation.instrumentctl is not None:
-            profbased = self.config.translation.instrumentctl
-        else:
-            profopt = self.config.translation.profopt
-            if profopt is not None and not self.config.translation.noprofopt:
-                profbased = (ProfOpt, profopt)
-
         # Copy extrafiles to target directory, if needed
         extrafiles = []
         for fn in self.extrafiles:
@@ -325,7 +335,7 @@ class CStandaloneBuilder(CBuilder):
 
         return CCompiler(
             [self.c_source_filename] + extrafiles,
-            self.eci, compiler_exe = cc, profbased = profbased)
+            self.eci, compiler_exe = cc, profbased = self.getprofbased())
 
     def compile(self):
         assert self.c_source_filename
@@ -398,9 +408,20 @@ class CStandaloneBuilder(CBuilder):
             cc = self.config.translation.cc
         else:
             cc = 'gcc'
-        if self.config.translation.profopt:
+        make_no_prof = ''
+        if self.has_profopt():
             profopt = self.config.translation.profopt
             default_target = 'profopt'
+            # XXX horrible workaround for a bug of profiling in gcc on
+            # OS X with functions containing a direct call to fork()
+            non_profilable = []
+            assert len(compiler.cfilenames) == len(ofiles)
+            for fn, oname in zip(compiler.cfilenames, ofiles):
+                fn = py.path.local(fn)
+                if '/*--no-profiling-for-this-file!--*/' in fn.read():
+                    non_profilable.append(oname)
+            if non_profilable:
+                make_no_prof = '$(MAKE) %s' % (' '.join(non_profilable),)
         else:
             profopt = ''
             default_target = '$(TARGET)'
@@ -444,6 +465,7 @@ class CStandaloneBuilder(CBuilder):
         else:
             print >> f, 'TFLAGS  = ' + ''
         print >> f, 'PROFOPT = ' + profopt
+        print >> f, 'MAKENOPROF = ' + make_no_prof
         print >> f, 'CC      = ' + cc
         print >> f
         print >> f, MAKEFILE.strip()
@@ -864,11 +886,13 @@ all: $(DEFAULT_TARGET)
 $(TARGET): $(OBJECTS)
 \t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
 
+# -frandom-seed is only to try to be as reproducable as possible
+
 %.o: %.c
-\t$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)
+\t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -c $< $(INCLUDEDIRS)
 
 %.s: %.c
-\t$(CC) $(CFLAGS) -o $@ -S $< $(INCLUDEDIRS)
+\t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)
 
 %.gcmap: %.s
 \t$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $@ || (rm -f $@ && exit 1)
@@ -877,7 +901,7 @@ gcmaptable.s: $(GCMAPFILES)
 \t$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@ || (rm -f $@ && exit 1)
 
 clean:
-\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) *.gc??
+\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) *.gc?? ../module_cache/*.gc??
 
 clean_noprof:
 \trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES)
@@ -910,6 +934,7 @@ profile:
 ABS_TARGET = $(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))
 
 profopt:
+\t$(MAKENOPROF)    # these files must be compiled without profiling
 \t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)
 \tcd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)
 \t$(MAKE) clean_noprof

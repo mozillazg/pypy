@@ -5,55 +5,53 @@ from pypy.lang.gameboy.ram import iMemory
 
 class Joypad(iMemory):
     """
-    PyBoy GameBoy (TM) Emulator
+    PyGirl GameBoy (TM) Emulator
      
     Joypad Input
     """
 
     def __init__(self, joypad_driver, interrupt):
         assert isinstance(joypad_driver, JoypadDriver)
-        assert isinstance(interrupt, Interrupt )
-        self.driver = joypad_driver
+        assert isinstance(interrupt, Interrupt)
+        self.driver    = joypad_driver
         self.interrupt = interrupt
         self.reset()
 
     def reset(self):
-        self.joyp = 0xF
-        self.button_code = 0xF
-        self.cycles = constants.JOYPAD_CLOCK
+        self.read_control = 0xF
+        self.button_code  = 0xF
+        self.cycles       = constants.JOYPAD_CLOCK
 
     def get_cycles(self):
         return self.cycles
 
     def emulate(self, ticks):
-        ticks = int(ticks)
         self.cycles -= ticks
         if self.cycles <= 0:
             if self.driver.is_raised():
                 self.update()
             self.cycles = constants.JOYPAD_CLOCK
+            #self.cycles = 150
 
     def write(self, address, data):
-        address = int(address)
         if address == constants.JOYP:
-            self.joyp = (self.joyp & 0xC) + (data & 0x3)
+            self.read_control = (self.read_control & 0xC) + ((data & 0x30)>>4)
             self.update()
 
     def read(self, address):
-        address = int(address)
         if address == constants.JOYP:
-            return (self.joyp << 4) + self.button_code
+            return (self.read_control << 4) + self.button_code
         return 0xFF
 
     def update(self):
-        oldButtons = self.button_code
-        if self.joyp == 0x1:
+        old_buttons = self.button_code
+        if self.read_control & 0x3 == 1:
             self.button_code = self.driver.get_button_code()
-        elif self.joyp == 0x2:
+        elif self.read_control & 0x3 == 2:
             self.button_code = self.driver.get_direction_code()
-        else:
+        elif self.read_control & 0x3 == 3:
             self.button_code  = 0xF
-        if oldButtons != self.button_code:
+        if old_buttons != self.button_code:
             self.interrupt.raise_interrupt(constants.JOYPAD)
 
 
@@ -88,8 +86,8 @@ class JoypadDriver(object):
         self.right.opposite_button = self.left
         
     def create_button_groups(self):
-        self.directions = [self.up, self.right, self.down, self.left]
-        self.buttons = [self.start, self.select, self.a, self.b]
+        self.directions = [self.up,    self.right,  self.down, self.left]
+        self.buttons    = [self.start, self.select, self.a,    self.b]
         
     def get_buttons(self):
         return self.buttons
@@ -110,7 +108,7 @@ class JoypadDriver(object):
         return code
     
     def is_raised(self):
-        raised = self.raised
+        raised      = self.raised
         self.raised = False
         return raised
     
@@ -173,9 +171,9 @@ class JoypadDriver(object):
 class Button(object):
     
     def __init__(self, code_value, opposite_button=None):
-        self.code_value = int(code_value)
+        self.code_value      = int(code_value)
         self.opposite_button = opposite_button
-        self.pressed = False
+        self.pressed         = False
         
     def get_code(self):
         if self.pressed:

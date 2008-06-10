@@ -33,22 +33,13 @@ def __dirinfo(part):
     except NameError:
         head = this_dir = os.path.realpath(os.path.dirname(sys.argv[0]))
 
-    error = None
     while head:
         partdir = head
         head, tail = os.path.split(head)
         if tail == part:
-            # check if "../py/__init__.py" exists
-            checkfile = os.path.join(partdir, os.pardir, 'py', '__init__.py')
-            if not os.path.exists(checkfile):
-                error = "Cannot find %r" % (os.path.normpath(checkfile),)
             break
     else:
-        error = "Cannot find the parent directory %r of the path %r" % (
-            partdir, this_dir)
-    if error:
-        raise EnvironmentError("Invalid source tree - bogus checkout! " +
-                               error)
+        raise EnvironmentError, "'%s' missing in '%r'" % (partdir, this_dir)
     
     pypy_root = os.path.join(head, '')
     try:

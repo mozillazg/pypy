@@ -1,5 +1,5 @@
 """
-PyBoy GameBoy (TM) Emulator
+PyGirl GameBoy (TM) Emulator
  
 GameBoy Scheduler and Memory Mapper
 
@@ -16,7 +16,7 @@ from pypy.lang.gameboy.timer import *
 from pypy.lang.gameboy.video import *
 from pypy.lang.gameboy.cartridge import *
 
-
+    
 class GameBoy(object):
 
     def __init__(self):
@@ -24,22 +24,22 @@ class GameBoy(object):
         self.create_gamboy_elements()
 
     def create_drivers(self):
-        self.clock         = Clock()
         self.joypad_driver = JoypadDriver()
         self.video_driver  = VideoDriver()
         self.sound_driver  = SoundDriver()
         
     def create_gamboy_elements(self): 
-        self.ram    = RAM()
+        self.clock     = Clock()
+        self.ram       = RAM()
         self.cartridge_manager = CartridgeManager(self.clock)
         self.interrupt = Interrupt()
-        self.cpu    = CPU(self.interrupt, self)
-        self.serial = Serial(self.interrupt)
-        self.timer  = Timer(self.interrupt)
-        self.joypad = Joypad(self.joypad_driver, self.interrupt)
-        self.video  = Video(self.video_driver, self.interrupt, self)
-        #self.sound  = Sound(self.sound_driver)  
-        self.sound = BogusSound()
+        self.cpu       = CPU(self.interrupt, self)
+        self.serial    = Serial(self.interrupt)
+        self.timer     = Timer(self.interrupt)
+        self.joypad    = Joypad(self.joypad_driver, self.interrupt)
+        self.video     = Video(self.video_driver, self.interrupt, self)
+        #self.sound    = Sound(self.sound_driver)  
+        self.sound     = BogusSound()
         
     def get_cartridge_manager(self):
         return self.cartridge_manager
@@ -47,6 +47,7 @@ class GameBoy(object):
     def load_cartridge(self, cartridge, verify=True):
         self.cartridge_manager.load(cartridge, verify)
         self.cpu.set_rom(self.cartridge_manager.get_rom())
+        self.memory_bank_controller = self.cartridge_manager.get_memory_bank()
         
     def load_cartridge_file(self, path, verify=True):
         self.load_cartridge(CartridgeFile(path), verify)
@@ -58,7 +59,7 @@ class GameBoy(object):
         self.video.set_frame_skip(frameSkip)
 
     def save(self, cartridgeName):
-        self.cartridge.save(cartridgeName)
+        self.cartridge_manager.save(cartridgeName)
 
     def start(self):
         self.sound.start()
@@ -68,7 +69,7 @@ class GameBoy(object):
 
     def reset(self):
         self.ram.reset()
-        self.cartridge.reset()
+        self.memory_bank_controller.reset()
         self.interrupt.reset()
         self.cpu.reset()
         self.serial.reset()
@@ -77,12 +78,14 @@ class GameBoy(object):
         self.video.reset()
         self.sound.reset()
         self.cpu.set_rom(self.cartridge_manager.get_rom())
-        self.draw_logo()
+        #self.draw_logo()
 
     def get_cycles(self):
-        return min(min(min(min( self.video.get_cycles(), self.serial.get_cycles()),
-                    self.timer.get_cycles()), self.sound.get_cycles()),
-                    self.joypad.get_cycles())
+        return min(min(min(min( self.video.get_cycles(),
+                                self.serial.get_cycles()),
+                                self.timer.get_cycles()),
+                                self.sound.get_cycles()),
+                                self.joypad.get_cycles())
 
     def emulate(self, ticks):
         while ticks > 0:
@@ -122,13 +125,17 @@ class GameBoy(object):
     def write(self, address, data):
         receiver = self.get_receiver(address)
         if receiver is None:
+            return
             raise Exception("invalid read address given")
         receiver.write(address, data)
+        if address == constants.STAT or address == 0xFFFF:
+            self.cpu.handle_pending_interrupts()
 
     def read(self, address):
         receiver = self.get_receiver(address)
         if receiver is None:
-            raise Exception("invalid read address given")
+            return 0xFF
+            #raise Exception("invalid read address given")
         return receiver.read(address)
 
     def print_receiver_msg(self, address, name):
@@ -151,7 +158,7 @@ class GameBoy(object):
         elif 0xFE00 <= address <= 0xFEFF:
             self.print_receiver_msg(address, "video")
             return self.video
-        elif 0xFF00 <= address <= 0xFF00:
+        elif address == 0xFF00:
             self.print_receiver_msg(address, "joypad")
             return self.joypad
         elif 0xFF01 <= address <= 0xFF02:
@@ -160,7 +167,7 @@ class GameBoy(object):
         elif 0xFF04 <= address <= 0xFF07:
             self.print_receiver_msg(address, "timer")
             return self.timer
-        elif 0xFF0F <= address <= 0xFF0F:
+        elif address == 0xFF0F:
             self.print_receiver_msg(address, "interrupt")
             return self.interrupt
         elif 0xFF10 <= address <= 0xFF3F:
@@ -172,32 +179,28 @@ class GameBoy(object):
         elif 0xFF80 <= address <= 0xFFFE:
             self.print_receiver_msg(address, "ram")
             return self.ram
-        elif 0xFFFF <= address <= 0xFFFF:
+        elif address == 0xFFFF:
             self.print_receiver_msg(address, "interrupt")
             return self.interrupt
 
     def draw_logo(self):
         for index in range(0, 48):
-            bits = self.cartridge.read(0x0104 + index)
-            pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60)\
-                     + ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06)\
-                     + ((bits >> 4) & 0x01)
-
-            pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60)\
-                     + ((bits << 2) & 0x18) + ((bits << 1) & 0x06)\
-                     + ((bits << 0) & 0x01)
-
+            bits = self.memory_bank_controller.read(0x0104 + index)
+            pattern0 = ((bits >> 0) & 0x80) + ((bits >> 1) & 0x60) + \
+                       ((bits >> 2) & 0x18) + ((bits >> 3) & 0x06) + \
+                       ((bits >> 4) & 0x01)
+            pattern1 = ((bits << 4) & 0x80) + ((bits << 3) & 0x60) + \
+                       ((bits << 2) & 0x18) + ((bits << 1) & 0x06) + \
+                       ((bits << 0) & 0x01)
             self.video.write(0x8010 + (index << 3), pattern0)
             self.video.write(0x8012 + (index << 3), pattern0)
-
             self.video.write(0x8014 + (index << 3), pattern1)
             self.video.write(0x8016 + (index << 3), pattern1)
-
         for index in range(0, 8):
-            self.video.write(0x8190 + (index << 1), constants.REGISTERED_BITMAP[index])
-
+            self.video.write(0x8190 + (index << 1), \
+                             constants.REGISTERED_BITMAP[index])
         for tile in range(0, 12):
             self.video.write(0x9904 + tile, tile + 1)
             self.video.write(0x9924 + tile, tile + 13)
-
         self.video.write(0x9905 + 12, 25)
+

@@ -305,3 +305,19 @@ def _get_updater(surviving, updated_address):
             arg.setitem(newkey, value)
     return callback
 _get_updater._annspecialcase_ = 'specialize:memo'
+
+
+def copy_without_null_values(dict):
+    """Make a copy of 'dict' without the key/value pairs where value==NULL."""
+    newdict = AddressDict
+    if not we_are_translated():
+        # when not translated, return a dict of the same kind as 'dict'
+        if not isinstance(dict, BasicAddressDict):
+            from pypy.rpython.memory.lldict import newdict
+    result = newdict()
+    dict.foreach(_null_value_checker, result)
+    return result
+
+def _null_value_checker(key, value, arg):
+    if value:
+        arg.setitem(key, value)

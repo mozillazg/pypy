@@ -9,10 +9,19 @@ class OSThreadLocals:
     def __init__(self):
         self._valuedict = {}   # {thread_ident: ExecutionContext()}
         self._mainthreadident = 0
+        self._mostrecentkey = 0        # fast minicaching for the common case
+        self._mostrecentvalue = None   # fast minicaching for the common case
 
     def getvalue(self):
         ident = thread.get_ident()
-        return self._valuedict.get(ident, None)
+        if ident == self._mostrecentkey:
+            return self._mostrecentvalue
+        else:
+            value = self._valuedict.get(ident, None)
+            # slow path: update the minicache
+            self._mostrecentkey = ident
+            self._mostrecentvalue = value
+            return value
 
     def setvalue(self, value):
         ident = thread.get_ident()
@@ -25,6 +34,9 @@ class OSThreadLocals:
                 del self._valuedict[ident]
             except KeyError:
                 pass
+        # update the minicache to prevent it from containing an outdated value
+        self._mostrecentkey = ident
+        self._mostrecentvalue = value
 
     def getmainthreadvalue(self):
         ident = self._mainthreadident
@@ -52,7 +64,3 @@ class OSThreadLocals:
     def atthreadexit(self, space, exit_func, w_obj):
         ec = space.getexecutioncontext()
         ec.thread_exit_funcs.append((exit_func, w_obj))
-
-    def getGIL(self):
-        return None
-

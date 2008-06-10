@@ -1,5 +1,5 @@
 """
-PyBoy GameBoy (TM) Emulator
+PyGirl GameBoy (TM) Emulator
  
 Audio Processor Unit (Sharp LR35902 APU)
 """

@@ -31,9 +31,9 @@ elif _MS_WINDOWS:
 class CConfig:
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
-        pre_include_lines=['#ifndef _GNU_SOURCE',
-                           '#define _GNU_SOURCE',
-                           '#endif']
+        pre_include_bits=['#ifndef _GNU_SOURCE\n' +
+                          '#define _GNU_SOURCE\n' +
+                          '#endif']
     )
     size_t = rffi_platform.SimpleType("size_t", rffi.LONG)
     off_t = rffi_platform.SimpleType("off_t", rffi.LONG)
@@ -52,9 +52,9 @@ class CConfigForPagesize:
         }"""
     _compilation_info_ = ExternalCompilationInfo(
         includes=includes,
-        pre_include_lines=['#ifndef _GNU_SOURCE',
-                           '#define _GNU_SOURCE',
-                           '#endif'],
+        pre_include_bits=['#ifndef _GNU_SOURCE\n' +
+                          '#define _GNU_SOURCE\n' +
+                          '#endif'],
         separate_module_sources=[code],
     )
     PAGESIZE = rffi_platform.ConstantInteger("get_page_size()")

@@ -537,27 +537,31 @@ class AppTestImportHooks(object):
         finally:
             sys.meta_path.pop()
 
-    def test_importer_cache(self):
-        class FooImporter(object):
-            def __init__(self, name):
-                if not name.startswith("foo_"):
-                    raise ImportError
+    def test_path_hooks_leaking(self):
+        class Importer(object):
             def find_module(self, fullname, path=None):
-                return None
+                if fullname == "a":
+                    return self
 
+            def load_module(self, name):
+                return sys
+        
+        def importer_for_path(path):
+            if path == "xxx":
+                return Importer()
+            raise ImportError()
         import sys
-        sys.path_hooks.append(FooImporter)
-        sys.path.insert(0, "foo_something")
         try:
-            import datetime
+            sys.path_hooks.append(importer_for_path)
+            sys.path.insert(0, "yyy")
+            sys.path.insert(0, "xxx")
+            import a
+            try:
+                import b
+            except ImportError:
+                pass
+            assert sys.path_importer_cache['yyy'] is None
         finally:
-            sys.path_hooks.pop()
             sys.path.pop(0)
-
-        cache = sys.path_importer_cache
-        assert isinstance(cache['foo_something'], FooImporter)
-        for path, importer in sys.path_importer_cache.items():
-            if path == 'foo_something':
-                assert isinstance(importer, FooImporter)
-            else:
-                assert importer is None
+            sys.path.pop(0)
+            sys.path_hooks.pop()

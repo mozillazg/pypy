@@ -461,17 +461,16 @@ class AppTestFfi:
             ll_to_sort[i] = 4-i
         qsort = libc.ptr('qsort', ['P', 'i', 'i', 'P'], None)
         resarray = _rawffi.Array('i')(1)
-        bogus_args = False
+        bogus_args = []
         def compare(a, b):
             a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(a, 1)[0], 1)
             a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(b, 1)[0], 1)
+            print "comparing", a1[0], "with", a2[0]
             if a1[0] not in [1,2,3,4] or a2[0] not in [1,2,3,4]:
-                print "comparing", a1[0], "with", a2[0]
-                bogus_args = True
+                bogus_args.append((a1[0], a2[0]))
             if a1[0] > a2[0]:
-                res = -1
-            res = 1
-            return res
+                return 1
+            return -1
         a1 = ll_to_sort.byptr()
         a2 = _rawffi.Array('i')(1)
         a2[0] = len(ll_to_sort)

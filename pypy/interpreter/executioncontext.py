@@ -5,6 +5,11 @@ from pypy.interpreter.error import OperationError
 def new_framestack():
     return Stack()
 
+def app_profile_call(space, w_callable, frame, event, w_arg):
+    space.call_function(w_callable,
+                        space.wrap(frame),
+                        space.wrap(event), w_arg)
+
 class ExecutionContext:
     """An ExecutionContext holds the state of an execution thread
     in the Python interpreter."""
@@ -13,11 +18,12 @@ class ExecutionContext:
         self.space = space
         self.framestack = new_framestack()
         self.w_tracefunc = None
-        self.w_profilefunc = None
         self.is_tracing = 0
         self.ticker = 0
         self.pending_actions = []
         self.compiler = space.createcompiler()
+        self.profilefunc = None
+        self.w_profilefuncarg = None
 
     def enter(self, frame):
         if self.framestack.depth() > self.space.sys.recursionlimit:
@@ -32,7 +38,7 @@ class ExecutionContext:
             self.framestack.push(frame)
 
     def leave(self, frame):
-        if self.w_profilefunc:
+        if self.profilefunc:
             self._trace(frame, 'leaveframe', None)
                 
         if not frame.hide():
@@ -45,19 +51,22 @@ class ExecutionContext:
         def __init__(self):
             self.framestack = new_framestack()
             self.w_tracefunc = None
-            self.w_profilefunc = None
+            self.profilefunc = None
+            self.w_profilefuncarg = None
             self.is_tracing = 0
 
         def enter(self, ec):
             ec.framestack = self.framestack
             ec.w_tracefunc = self.w_tracefunc
-            ec.w_profilefunc = self.w_profilefunc
+            ec.profilefunc = self.profilefunc
+            ec.w_profilefuncarg = self.w_profilefuncarg
             ec.is_tracing = self.is_tracing
 
         def leave(self, ec):
             self.framestack = ec.framestack
             self.w_tracefunc = ec.w_tracefunc
-            self.w_profilefunc = ec.w_profilefunc
+            self.profilefunc = ec.profilefunc
+            self.w_profilefuncarg = ec.w_profilefuncarg
             self.is_tracing = ec.is_tracing
 
         # the following interface is for pickling and unpickling
@@ -182,9 +191,17 @@ class ExecutionContext:
     def setprofile(self, w_func):
         """Set the global trace function."""
         if self.space.is_w(w_func, self.space.w_None):
-            self.w_profilefunc = None
+            self.profilefunc = None
+            self.w_profilefuncarg = None
         else:
-            self.w_profilefunc = w_func
+            self.w_profilefuncarg = w_func
+            self.profilefunc = app_profile_call
+
+    def setllprofile(self, func, w_arg):
+        self.profilefunc = func
+        if func is not None and w_arg is None:
+            raise ValueError("Cannot call setllprofile with real None")
+        self.w_profilefuncarg = w_arg
 
     def call_tracing(self, w_func, w_args):
         is_tracing = self.is_tracing
@@ -229,7 +246,7 @@ class ExecutionContext:
                 frame.locals2fast()
 
         # Profile cases
-        if self.w_profilefunc is not None:
+        if self.profilefunc is not None:
             if event not in ['leaveframe', 'call']:
                 return
 
@@ -242,11 +259,11 @@ class ExecutionContext:
             self.is_tracing += 1
             try:
                 try:
-                    w_result = space.call_function(self.w_profilefunc,
-                                                        space.wrap(frame),
-                                                        space.wrap(event), w_arg)
+                    self.profilefunc(space, self.w_profilefuncarg,
+                                     frame, event, w_arg)
                 except:
-                    self.w_profilefunc = None
+                    self.profilefunc = None
+                    self.w_profilefuncarg = None
                     raise
 
             finally:

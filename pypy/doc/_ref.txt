@@ -10,6 +10,7 @@
 .. _`pypy/annotation/model.py`: ../../pypy/annotation/model.py
 .. _`bin/`: ../../pypy/bin
 .. _`config/`: ../../pypy/config
+.. _`pypy/config/pypyoption.py`: ../../pypy/config/pypyoption.py
 .. _`doc/`: ../../pypy/doc
 .. _`doc/config/`: ../../pypy/doc/config
 .. _`doc/discussion/`: ../../pypy/doc/discussion

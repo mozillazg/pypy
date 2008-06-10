@@ -5,17 +5,26 @@ from pypy.lang.gameboy import constants
 import py
 import pdb
 
+class TestClock(object):
+    def __init__(self):
+        self.time = 0
+    
+    def get_time(self):
+        return self.time
+    
+
 def get_clock_driver():
     return Clock()
+
 
 RAM_SIZE = 3
 ROM_SIZE = 2
 
 def get_ram(size=RAM_SIZE):
-    return [0] * size * constants.RAM_BANK_SIZE
+    return [0] * int(size * constants.RAM_BANK_SIZE)
 
 def get_rom(size=ROM_SIZE):
-    return [0xFF] * size * constants.ROM_BANK_SIZE
+    return [0xFF] * int(size * constants.ROM_BANK_SIZE)
 
 def fail_ini_test(caller, ram_size, rom_size):
     try:
@@ -150,16 +159,13 @@ def get_default_mbc():
     return DefaultMBC([0]*0xFFFF, [0]*0xFFFF, get_clock_driver()) 
 
 def test_default_mbc_read_write():
-    py.test.skip("buggy implementation of DefaultMBC")
     mbc = get_default_mbc()
-    for i in range(0xFFFF):
+    mbc.ram_bank = 0
+    mbc.ram_enable = True
+    for i in range(0xA000, 0xBFFF):
         mbc.write(i, i)
         assert mbc.read(i) == i
 
-def test_default_mbc_write():
-    py.test.skip("not yet implemented")
-    mbc = get_default_mbc()
-    
 # -----------------------------------------------------------------------------
 
 def get_mbc1(rom_size=128, ram_size=4):
@@ -241,7 +247,7 @@ def test_mbc1_read_write_ram(mbc=None):
 # -----------------------------------------------------------------------------
 
 def get_mbc2(rom_size=16, ram_size=1):
-    return MBC2(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
+    return MBC2(get_rom(rom_size/32.0), get_ram(ram_size), get_clock_driver())
 
 def test_mbc2_create():
     mbc = get_mbc2()
@@ -249,8 +255,7 @@ def test_mbc2_create():
     fail_ini_test(mbc, 2, 2)
     fail_ini_test(mbc, 1, 1)
     fail_ini_test(mbc, 17, 1)
-    # only to the upper border of mbc
-    basic_read_write_test(mbc, 0, 0x7FFF)
+    # FIXME read write test missing
     
     
 def test_mbc2_write_ram_enable():
@@ -290,13 +295,15 @@ def test_mbc2_read_write_ram():
         value %= 0x0F 
     
 # -----------------------------------------------------------------------------
-    
+
 def get_mbc3(rom_size=128, ram_size=4):
-    return MBC3(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
+   return MBC3(get_rom(rom_size), get_ram(ram_size), get_clock_driver())
+
+get_mbc3()
 
 def test_mbc3_create():
     mbc = get_mbc3()
-    fail_ini_test(mbc, 128, -1)
+    fail_ini_test(mbc, 128, 0)
     fail_ini_test(mbc, 128, 5)
     fail_ini_test(mbc, 1, 4)
     fail_ini_test(mbc, 129, 4)
@@ -352,7 +359,6 @@ def test_mbc3_read_write_ram():
     mbc.ram_enable = True
     for address in range(0xA000, 0xBFFF+1):
         mbc.write(address, value)
-        #pdb.runcall(mbc.write, address, value)
         assert mbc.ram[mbc.ram_bank + (address & 0x1FFF)] == value
         assert mbc.read(address) == value;
         value += 1
@@ -388,14 +394,70 @@ def test_mbc3_read_write_clock():
         
         value += 1
         value %= 0xFF
-
+        
 def test_mbc3_update_clock():
-    py.test.skip("not yet implemented")
     mbc = get_mbc3()
+    mbc.clock         = TestClock()
+    mbc.clock.time    = 1 + 2*60 + 3*60*60 + 4*24*60*60
+    mbc.clock_days    = 0
+    mbc.clock_hours   = 0
+    mbc.clock_minutes = 0
+    mbc.clock_seconds = 0
+    mbc.clock_time    = 0
+    mbc.clock_control = 0xFF
+    mbc.update_clock()
+    assert mbc.clock_days    == 0
+    assert mbc.clock_hours   == 0
+    assert mbc.clock_minutes == 0
+    assert mbc.clock_seconds == 0
+    assert mbc.clock_time    == mbc.clock.time 
+    
+    mbc.clock_time    = 0
+    mbc.clock_control = 0x00
+    mbc.update_clock()
+    assert mbc.clock_days    == 4
+    assert mbc.clock_hours   == 3
+    assert mbc.clock_minutes == 2
+    assert mbc.clock_seconds == 1
+    assert mbc.clock_time    == mbc.clock.time 
+    
+def test_mbc3_update_clock_day_overflow():
+    mbc = get_mbc3()
+    mbc.clock         = TestClock()
+    mbc.clock.time    = 2*512*24*60*60 
+    mbc.clock_days    = 0
+    mbc.clock_hours   = 0
+    mbc.clock_minutes = 0
+    mbc.clock_seconds = 0
+    mbc.clock_time    = 0
+    mbc.clock_control = 0x01
+    mbc.update_clock()
+    assert mbc.clock_days    == 0
+    assert mbc.clock_hours   == 0
+    assert mbc.clock_minutes == 0
+    assert mbc.clock_seconds == 0
+    assert mbc.clock_control == 0x81
     
 def test_mbc3_latch_clock():
-    py.test.skip("not yet implemented")
     mbc = get_mbc3()
+    mbc.clock         = TestClock()
+    mbc.clock.time    = 1 + 2*60 + 3*60*60 + (0xFF+2)*24*60*60
+    mbc.clock_days    = 0
+    mbc.clock_hours   = 0
+    mbc.clock_minutes = 0
+    mbc.clock_seconds = 0
+    mbc.clock_time    = 0
+    mbc.clock_control = 0x00
+    mbc.latch_clock()
+    assert mbc.clock_days    == 0xFF+2
+    assert mbc.clock_latched_days == (0xFF+2) & 0xFF
+    assert mbc.clock_hours   == 3
+    assert mbc.clock_latched_hours == 3
+    assert mbc.clock_minutes == 2
+    assert mbc.clock_latched_minutes == 2
+    assert mbc.clock_seconds == 1
+    assert mbc.clock_latched_seconds == 1
+    assert mbc.clock_latched_control == (mbc.clock_days>>8) & 0x01
     
     
 # -----------------------------------------------------------------------------
@@ -531,7 +593,7 @@ def test_huc3_write_ram():
         value = +1
         value %= 0xFF
         
-def test_huc3_write_ram_value():
+def test_huc3_write_ram_value_clock_shift():
     mbc = get_huc3()        
     mbc.ram_flag = 0x0B
     for address in range(0xA000, 0xBFFF+1):
@@ -544,7 +606,7 @@ def test_huc3_write_ram_value():
             assert mbc.clock_shift == clock_shift
             mbc.clock_shift = 0
             
-def test_huc3_write_reset_ram_value():
+def test_huc3_write_ram_value_clock_shift():
     mbc = get_huc3()       
     value = 1  
     mbc.ram_flag = 0x0B
@@ -555,7 +617,7 @@ def test_huc3_write_reset_ram_value():
         value = +1
         value %= 0xFF
         
-def test_huc3_write_clock_register():
+def test_huc3_write_clock_register_clock_shift():
     mbc = get_huc3()        
     value = 1
     mbc.ram_flag = 0x0B
@@ -564,17 +626,17 @@ def test_huc3_write_clock_register():
         clock_register = mbc.clock_register
         mbc.write(address, 0x30+value)
         if clock_shift <= 24:
+            assert mbc.clock_shift == clock_shift+4
             assert mbc.clock_register == (clock_register & \
                                            ~(0x0F << clock_shift)) | \
-                                         (value << clock_shift)
-            assert mbc.clock_shift == clock_shift+4
+                                         ((value & 0x0F) << clock_shift)
         else:
             assert mbc.clock_shift == clock_shift
             mbc.clock_shift = 0
         value = +1
         value %= 0xF
             
-def test_huc3_write_update_clock():
+def test_huc3_write_clock_shift():
     mbc = get_huc3()       
     value = 1  
     mbc.ram_flag = 0x0B
@@ -589,10 +651,17 @@ def test_huc3_write_update_clock():
         value = +1
         value %= 0xF
         
+    
 def test_huc3_update_clock():
-    py.test.skip("not yet implemented")
     mbc = get_huc3()
-    pass
-
+    mbc.clock          = TestClock()
+    mbc.clock.time     = 1*60 + 2*24*60*60 + 3*365*24*60*60
+    mbc.clock_register = 0x00
+    mbc.clock_time     = 0
+    mbc.update_clock()
+    assert mbc.clock_register & 0x00000FFF == 1
+    assert mbc.clock_register & 0x00FFF000 == 2 << 12
+    assert mbc.clock_register & 0xFF000000 == 3 << 24
+    assert mbc.clock_time == mbc.clock.time
 # -----------------------------------------------------------------------------
 

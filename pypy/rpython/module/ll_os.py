@@ -97,14 +97,13 @@ class RegisterOs(BaseLazyRegistering):
             defs = []
             for name in self.w_star:
                 data = {'ret_type': 'int', 'name': name}
-                decls.append(decl_snippet % data)
-                defs.append(def_snippet % data)
-            h_source = decls + defs
+                decls.append((decl_snippet % data).strip())
+                defs.append((def_snippet % data).strip())
 
             self.compilation_info = self.compilation_info.merge(
                 ExternalCompilationInfo(
-                post_include_lines = decls,
-                separate_module_sources = ["\n".join(h_source)]
+                post_include_bits = decls,
+                separate_module_sources = ["\n".join(defs)]
             ))
 
     # a simple, yet usefull factory
@@ -1122,7 +1121,18 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'fork')
     def register_os_fork(self):
-        os_fork = self.llexternal('fork', [], rffi.PID_T)
+        # XXX horrible workaround for a bug of profiling in gcc on
+        # OS X with functions containing a direct call to fork()
+        eci = ExternalCompilationInfo(
+            post_include_bits = ['pid_t _noprof_fork(void);'],
+            separate_module_sources = ['''
+                /*--no-profiling-for-this-file!--*/
+                pid_t _noprof_fork(void) {
+                    return fork();
+                }
+            '''])
+        os_fork = self.llexternal('_noprof_fork', [], rffi.PID_T,
+                                  compilation_info = eci)
 
         def fork_llimpl():
             childpid = rffi.cast(lltype.Signed, os_fork())

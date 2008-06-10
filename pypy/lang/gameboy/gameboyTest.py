@@ -1,4 +1,4 @@
-from pypy.lang.gameboy.gameboyImplementation import *
+from pypy.lang.gameboy.gameboy_implementation import *
 import sys
 
 from AppKit import NSApplication

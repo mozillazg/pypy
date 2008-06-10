@@ -13,6 +13,7 @@ def setup_module(mod):
 class AbstractGCTestClass(object):
     gcpolicy = "boehm"
     stacklessgc = False
+    use_threads = False
    
     # deal with cleanups
     def setup_method(self, meth):
@@ -27,6 +28,7 @@ class AbstractGCTestClass(object):
         from pypy.config.pypyoption import get_pypy_config
         config = get_pypy_config(translating=True)
         config.translation.gc = self.gcpolicy
+        config.translation.thread = self.use_threads
         if self.stacklessgc:
             config.translation.gcrootfinder = "stackless"
         config.translation.simplifying = True

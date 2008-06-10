@@ -183,12 +183,10 @@ def main(backends=[]):
             c
             c--stackless--_faassen
             c--_faassen--_allworkingmodules
-            c--thread
-            c--gc=marksweep--_faassen
+            c--thread--gc=hybrid--_faassen
             c--gc=semispace--_faassen
             c--gc=generation--_faassen
             c--gc=hybrid--_faassen
-            c--_objspace-std-withrope
             cli--_faassen
             jvm--_faassen
             """.split('\n') if backend.strip() and not backend.strip().startswith('#')]

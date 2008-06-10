@@ -63,6 +63,16 @@ class W_File(W_AbstractStream):
                                  space.wrap('I/O operation on closed file'))
         return stream
 
+    def _when_reading_first_flush(self, otherfile):
+        """Flush otherfile before reading from self."""
+        self.stream = streamio.CallbackReadFilter(self.stream,
+                                                  otherfile._try_to_flush)
+
+    def _try_to_flush(self):
+        stream = self.stream
+        if stream is not None:
+            stream.flush()
+
     # ____________________________________________________________
     #
     # The 'direct_' methods assume that the caller already acquired the

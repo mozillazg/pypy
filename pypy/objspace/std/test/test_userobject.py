@@ -207,6 +207,11 @@ class AppTestUserObject:
         s = repr(Foo())
         assert s.startswith('<a.b.c.Foo object at ')
 
+    def test_obscure(self):
+        skip("Too obscure")
+        class Foo(object):
+            locals()[42] = 98
+        # assert did not crash
 
 class AppTestWithMultiMethodVersion2(AppTestUserObject):
     OPTIONS = {}    # for test_builtinshortcut.py

@@ -944,6 +944,32 @@ class TextOutputFilter(Stream):
                                               flush_buffers=False)
 
 
+class CallbackReadFilter(Stream):
+    """Pseudo read filter that invokes a callback before blocking on a read.
+    """
+
+    def __init__(self, base, callback):
+        self.base = base
+        self.callback = callback
+
+    def flush_buffers(self):
+        self.callback()
+
+    tell       = PassThrough("tell",      flush_buffers=False)
+    seek       = PassThrough("seek",      flush_buffers=False)
+    read       = PassThrough("read",      flush_buffers=True)
+    readall    = PassThrough("readall",   flush_buffers=True)
+    readline   = PassThrough("readline",  flush_buffers=True)
+    peek       = PassThrough("peek",      flush_buffers=False)
+    flush      = PassThrough("flush",     flush_buffers=False)
+    flushable  = PassThrough("flushable", flush_buffers=False)
+    close      = PassThrough("close",     flush_buffers=False)
+    write      = PassThrough("write",     flush_buffers=False)
+    truncate   = PassThrough("truncate",  flush_buffers=False)
+    getnewlines= PassThrough("getnewlines",flush_buffers=False)
+    try_to_find_file_descriptor = PassThrough("try_to_find_file_descriptor",
+                                              flush_buffers=False)
+
 # _________________________________________________
 # The following functions are _not_ RPython!
 

@@ -531,7 +531,8 @@ class TestRffiInternals:
         assert interpret(f, []) == 3
     
     def test_implicit_cast(self):
-        z = llexternal('z', [USHORT, ULONG, USHORT, DOUBLE], USHORT)
+        z = llexternal('z', [USHORT, ULONG, USHORT, DOUBLE], USHORT,
+                       sandboxsafe=True)   # to allow the wrapper to be inlined
     
         def f(x, y, xx, yy):
             return z(x, y, xx, yy)

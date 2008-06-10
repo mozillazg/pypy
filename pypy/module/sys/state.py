@@ -94,6 +94,8 @@ class IOState:
         stderr.name = '<stderr>'
         self.w_stderr = space.wrap(stderr)
 
+        stdin._when_reading_first_flush(stdout)
+
 def getio(space):
     return space.fromcache(IOState)
 

@@ -141,6 +141,9 @@ def set_unbuffered_io():
     sys.stdout = sys.__stdout__ = os.fdopen(1, 'wb', 0)
     sys.stderr = sys.__stderr__ = os.fdopen(2, 'wb', 0)
 
+def set_fully_buffered_io():
+    sys.stdout = sys.__stdout__ = os.fdopen(1, 'w')
+
 # ____________________________________________________________
 # Main entry point
 
@@ -207,6 +210,7 @@ def entry_point(executable, argv, nanos):
     run_module = False
     run_stdin = False
     oldstyle_classes = False
+    unbuffered = False
     while i < len(argv):
         arg = argv[i]
         if not arg.startswith('-'):
@@ -220,7 +224,7 @@ def entry_point(executable, argv, nanos):
             run_command = True
             break
         elif arg == '-u':
-            set_unbuffered_io()
+            unbuffered = True
         elif arg == '-O':
             pass
         elif arg == '--version':
@@ -261,6 +265,12 @@ def entry_point(executable, argv, nanos):
     # with PyPy in top of CPython we can only have around 100 
     # but we need more in the translated PyPy for the compiler package 
     sys.setrecursionlimit(5000)
+
+    if unbuffered:
+        set_unbuffered_io()
+    elif not sys.stdout.isatty():
+        set_fully_buffered_io()
+
 
     mainmodule = type(sys)('__main__')
     sys.modules['__main__'] = mainmodule
