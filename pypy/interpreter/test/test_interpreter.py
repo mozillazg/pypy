@@ -231,6 +231,13 @@ class TestInterpreter:
         assert self.codetest(code, 'g', [12, {}]) ==    ()
         assert self.codetest(code, 'g', [12, {3:1}]) == (3,)
 
+    def test_list_comprehension(self):
+        code = '''
+            def f():
+                return [dir() for i in [1]][0]
+        '''
+        assert self.codetest(code, 'f', [])[0] == '_[1]'
+
 
 class TestPyPyInterpreter(TestInterpreter):
     """Runs the previous test with the pypy parser"""
