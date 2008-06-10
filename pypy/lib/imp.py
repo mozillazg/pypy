@@ -78,6 +78,9 @@ def load_module(name, file, filename, description):
        return  load_compiled(name, filename, file)
     raise ValueError, 'invalid description argument: %r' % (description,)
 
+def load_dynamic(name, *args, **kwds):
+    raise ImportError(name)
+
 def load_source(name, pathname, file=None):
     autoopen = file is None
     if autoopen:
