@@ -66,3 +66,11 @@ class Module(Wrappable):
         w_import = space.builtin.get('__import__')
         return space.newtuple([w_import, space.newtuple([w_name])])
 
+    def descr_module__repr__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        name = space.str_w(space.repr(self.w_name))
+        if isinstance(self, MixedModule):
+            return space.wrap("<module %s (built-in)>" % name)
+        w___file__ = space.getattr(self, space.wrap('__file__'))
+        __file__ = space.str_w(space.repr(w___file__))
+        return space.wrap("<module %s from %s>" % (name, __file__))

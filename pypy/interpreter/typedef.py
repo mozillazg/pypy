@@ -704,6 +704,8 @@ Module.typedef = TypeDef("module",
     __new__ = interp2app(Module.descr_module__new__.im_func,
                          unwrap_spec=[ObjSpace, W_Root, Arguments]),
     __init__ = interp2app(Module.descr_module__init__),
+    __repr__ = interp2app(Module.descr_module__repr__,
+                          unwrap_spec=['self', ObjSpace]),
     __reduce__ = interp2app(Module.descr__reduce__,
                             unwrap_spec=['self', ObjSpace]),
     __dict__ = GetSetProperty(descr_get_dict, cls=Module), # module dictionaries are readonly attributes
