@@ -1,3 +1,4 @@
+import collections
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import pyframe
@@ -209,7 +210,7 @@ class FlowExecutionContext(ExecutionContext):
         #for joinpoint in code.getjoinpoints():
         #    self.joinpoints[joinpoint] = []  # list of blocks
         initialblock = SpamBlock(FrameState(frame).copy())
-        self.pendingblocks = [initialblock]
+        self.pendingblocks = collections.deque([initialblock])
         self.graph = FunctionGraph(name or code.co_name, initialblock)
 
     make_link = Link # overridable for transition tracking
@@ -251,7 +252,7 @@ class FlowExecutionContext(ExecutionContext):
 
     def build_flow(self):
         while self.pendingblocks:
-            block = self.pendingblocks.pop(0)
+            block = self.pendingblocks.popleft()
             frame = self.create_frame()
             try:
                 self.recorder = block.patchframe(frame)

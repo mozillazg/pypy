@@ -100,14 +100,28 @@ def add__Unicode_Unicode(space, w_left, w_right):
     return W_UnicodeObject(w_left._value + w_right._value)
 
 def add__String_Unicode(space, w_left, w_right):
+    # this function is needed to make 'abc'.__add__(u'def') return
+    # u'abcdef' instead of NotImplemented.  This is what occurs on
+    # top of CPython.
     from pypy.objspace.std.unicodetype import unicode_from_string
+    # XXX fragile implementation detail: for "string + unicode subclass",
+    # if the unicode subclass overrides __radd__(), then it will be
+    # called (see test_str_unicode_concat_overrides).  This occurs as a
+    # result of the following call to space.add() in which the first
+    # argument is a unicode and the second argument a subclass of unicode
+    # (and thus the usual logic about calling __radd__() first applies).
     return space.add(unicode_from_string(space, w_left) , w_right)
 
 add__Rope_Unicode = add__String_Unicode
 
 def add__Unicode_String(space, w_left, w_right):
+    # this function is needed to make 'abc'.__radd__(u'def') return
+    # u'defabc', although it's completely unclear if that's necessary
+    # given that CPython doesn't even have a method str.__radd__().
     from pypy.objspace.std.unicodetype import unicode_from_string
     return space.add(w_left, unicode_from_string(space, w_right))
+    # Note about "unicode + string subclass": look for
+    # "cpython bug compatibility" in descroperation.py
 
 add__Unicode_Rope = add__Unicode_String
 

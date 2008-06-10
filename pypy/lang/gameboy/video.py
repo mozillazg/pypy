@@ -1,10 +1,11 @@
 """
- PyBoy GameBoy (TM) Emulator
+ PyGirl GameBoy (TM) Emulator
  constants.LCD Video Display Processor
 """
 
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import iMemory
+from pypy.lang.gameboy.cpu import process_2_complement
 
 
 
@@ -33,19 +34,31 @@ class set_tile_line_call_wrapper(VideoCallWraper):
 # -----------------------------------------------------------------------------
 
 def VideoStatus(object):
+    # used for enabled or disabled window or background
+    # Bit 7 - LCD Display Enable             (0=Off, 1=On)
+    # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
+    # Bit 5 - Window Display Enable          (0=Off, 1=On)
+    # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
+    # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
+    # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
+    # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
+    # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
+    
     def __init__(self, video):
         self.video = video
         self.reset()
         
     def reset(self):
-        self.mode               = False
-        self.lyc_ly_coincidence = False
-        self.h_blank_interrupt  = False
-        self.oam_interrupt      = False
-        self.h_blank_interrupt  = False
-        self.v_blank_interrupt  = False
+        self.mode                                    = 0x02
+        self.lcd_enable                              = False
+        self.window_tile_map_select                  = False
+        self.window_enable                           = False
+        self.background_and_window_tile_data_select  = False
+        self.background_tile_map_select              = False
+        self.big_sprite_size                         = False
+        self.sprite_display_enable                   = False
+        self.background_enable                       = False
         #Coincidence Flag  (0:LYC<>LY, 1:LYC=LY)
-        self.coincidence_flag   = False
         
     def read(self):
         value = 0
@@ -53,25 +66,26 @@ def VideoStatus(object):
         value += int(self.h_blank_interrupt)  << 6 
         value += int(self.oam_interrupt)      << 5
         value += int(self.h_blank_interrupt)  << 4
-        value += int(self.v_blank_interrupt)  << 3
+        value += int(self.vblank_interrupt)   << 3
         value += int(self.coincidence_flag)   << 2
         value += self.mode & 0x03
         return value
         
     def write(self, value):
+        self.lyc_ly_coincidence = bool(value & (1 << 7))
+        self.h_blank_interrupt  = bool(value & (1 << 6))
+        self.oam_interrupt      = bool(value & (1 << 5))
+        self.h_blank_interrupt  = bool(value & (1 << 4))
+        self.vblank_interrupt   = bool(value & (1 << 3))
+        self.coincidence_flag   = bool(value & (1 << 2))
+        self.mode               = value & 0x03
+    
+    def get_bg_tile_data_address(self):
         pass
-        
 
 # -----------------------------------------------------------------------------
 
 class Video(iMemory):
-    #frames = 0
-    #frame_skip = 0
-
-     # Line Buffer, constants.OAM Cache and Color Palette
-    #line = []#= new int[8 + 160 + 8]
-    #objects = []#= new int[OBJECTS_PER_LINE]
-    #palette = []#= new int[1024]
 
     def __init__(self, video_driver, interrupt, memory):
         assert isinstance(video_driver, VideoDriver)
@@ -88,15 +102,6 @@ class Video(iMemory):
 
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
-        # used for enabled or disablind window or background
-        # Bit 7 - LCD Display Enable             (0=Off, 1=On)
-        # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
-        # Bit 5 - Window Display Enable          (0=Off, 1=On)
-        # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
-        # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
-        # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
-        # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
-        # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
         self.control    = 0x91
         self.stat       = 2
         self.line_y     = 0
@@ -109,7 +114,7 @@ class Video(iMemory):
         # window position
         self.window_x   = 0
         self.window_y   = 0
-        self.wline_y = 0
+        self.window_line_y = 0
         self.background_palette = 0xFC
         self.object_palette_0   = 0xFF 
         self.object_palette_1   = 0xFF
@@ -145,7 +150,7 @@ class Video(iMemory):
             # Read Online_y
             pass
         elif address == constants.LYC:
-            self.set_ly_compare(data)
+            self.set_line_y_compare(data)
         elif address == constants.DMA:
             self.set_dma(data)
         elif address == constants.BGP:
@@ -163,10 +168,10 @@ class Video(iMemory):
 
     def write_oam(self, address, data):
         if address >= constants.OAM_ADDR and \
-           address < constants.OAM_ADDR + constants.OAM_SIZE:
-            self.oam[address - constants.OAM_ADDR] = data & 0xFF
+           address < (constants.OAM_ADDR + constants.OAM_SIZE):
+            self.oam[address - constants.OAM_ADDR]     = data & 0xFF
         elif address >= constants.VRAM_ADDR and \
-             address < constants.VRAM_ADDR + constants.VRAM_SIZE:
+             address < (constants.VRAM_ADDR + constants.VRAM_SIZE):
               self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
@@ -199,11 +204,11 @@ class Video(iMemory):
             return self.read_oam(address)
         
     def read_oam(self, address):
-        if (address >= constants.OAM_ADDR and \
-           address < constants.OAM_ADDR + constants.OAM_SIZE):
+        if (address >= constants.OAM_ADDR and 
+           address < (constants.OAM_ADDR + constants.OAM_SIZE)):
              return self.oam[address - constants.OAM_ADDR]
-        elif (address >= constants.VRAM_ADDR and \
-           address < constants.VRAM_ADDR + constants.VRAM_SIZE):
+        elif (address >= constants.VRAM_ADDR and 
+           address < (constants.VRAM_ADDR + constants.VRAM_SIZE)):
              return self.vram[address - constants.VRAM_ADDR]
         return 0xFF
 
@@ -236,21 +241,20 @@ class Video(iMemory):
             self.reset_control(data)
         # don't draw window if it was not enabled and not being drawn before
         if (self.control & 0x20) == 0 and (data & 0x20) != 0 and \
-           self.wline_y == 0 and self.line_y > self.window_y:
-             self.wline_y = 144
+           self.window_line_y == 0 and self.line_y > self.window_y:
+             self.window_line_y = 144
         self.control = data
 
     def reset_control(self, data):
         # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
+        self.line_y  = 0
+        self.stat   = (self.stat & 0xFC)
         if (data & 0x80) != 0:
-            self.stat    = (self.stat & 0xFC) | 0x02
+            self.stat    |= 0x02
             self.cycles  = constants.MODE_2_TICKS
-            self.line_y  = 0
             self.display = False
         else:
-            self.stat   = (self.stat & 0xFC) | 0x00
             self.cycles = constants.MODE_1_TICKS
-            self.line_y = 0
             self.clear_frame()
                 
     def get_status(self):
@@ -258,9 +262,13 @@ class Video(iMemory):
 
     def set_status(self, data):
         self.stat = (self.stat & 0x87) | (data & 0x78)
+        self.set_status_bug()
+        
+    def set_status_bug(self) :
         # Gameboy Bug
-        if (self.control & 0x80) != 0 and (self.stat & 0x03) == 0x01 and \
-           (self.stat & 0x44) != 0x44:
+        if (self.control & 0x80) != 0x00 and \
+           (self.stat & 0x03)    == 0x01 and \
+           (self.stat & 0x44)    != 0x44:
              self.interrupt.raise_interrupt(constants.LCD)
 
     def get_scroll_y(self):
@@ -281,51 +289,43 @@ class Video(iMemory):
     def get_line_y_compare(self):
         return self.line_y_compare
 
-    def set_ly_compare(self, data):
+    def set_line_y_compare(self, data):
         self.line_y_compare = data
         if (self.control & 0x80) == 0:
             return
-        if self.line_y == self.line_y_compare:
-            # NOTE: raise interrupt once per line
-            if (self.stat & 0x04) == 0:
-                # constants.LYC=LY interrupt
-                self.stat |= 0x04
-#                if (self.stat & 0x40) != 0:
-                self.interrupt.raise_interrupt(constants.LCD)
-        else:
-            self.stat &= 0xFB
+        self.emulate_hblank_line_y_compare()
                 
     def get_dma(self):
         return self.dma
 
     def set_dma(self, data):
         self.dma = data
-        for index in range(0, constants.OAM_SIZE):
+        for index in range(constants.OAM_SIZE):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
 
     def get_background_palette(self):
         return self.background_palette
 
     def set_background_palette(self, data):
-        if self.background_palette != data:
-            self.background_palette = data
-            self.dirty = True
+        if self.background_palette == data: return
+        self.background_palette = data
+        self.dirty              = True
 
     def get_object_palette_0(self):
         return self.object_palette_0
 
     def set_object_palette_0(self, data):
-        if self.object_palette_0 != data:
-            self.object_palette_0 = data
-            self.dirty = True
+        if self.object_palette_0 == data: return
+        self.object_palette_0 = data
+        self.dirty            = True
 
     def get_object_palette_1(self):
         return self.object_palette_1
 
     def set_object_palette_1(self, data):
-        if self.object_palette_1 != data:
-            self.object_palette_1 = data
-            self.dirty = True
+        if self.object_palette_1 == data: return
+        self.object_palette_1 = data
+        self.dirty            = True
 
     def get_window_y(self):
         return self.window_y
@@ -340,48 +340,89 @@ class Video(iMemory):
         self.window_x = data
 
     def emulate_oam(self):
-        self.stat = (self.stat & 0xFC) | 0x03
-        self.cycles += constants.MODE_3_BEGIN_TICKS
-        self.transfer = True
+        self.set_mode_3_begin()
 
     def emulate_transfer(self):
         if self.transfer:
             if self.display:
                 self.draw_line()
-            self.stat = (self.stat & 0xFC) | 0x03
-            self.cycles += constants.MODE_3_END_TICKS
-            self.transfer = False
+            self.set_mode_3_end()
         else:
-            self.stat = (self.stat & 0xFC)
-            self.cycles += constants.MODE_0_TICKS
-            # H-Blank interrupt
-            if (self.stat & 0x08) != 0 and (self.stat & 0x44) != 0x44:
-                self.interrupt.raise_interrupt(constants.LCD)
-
+            self.set_mode_0()
+    
+    # interrupt checks ---------------------------------------------------
+            
+    def h_blank_interrupt_check(self):
+        if (self.stat & 0x08) != 0 and (self.stat & 0x44) != 0x44:
+             self.interrupt.raise_interrupt(constants.LCD)
+     
+    def oam_interrupt_check(self):
+        if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
+            self.interrupt.raise_interrupt(constants.LCD)
+        
+    def v_blank_interrupt_check(self):
+        if (self.stat & 0x10) != 0:
+            self.interrupt.raise_interrupt(constants.LCD)
+            
+    def line_y_line_y_compare_interrupt_check(self):
+        self.stat |= 0x04
+        if (self.stat & 0x40) != 0:
+            self.interrupt.raise_interrupt(constants.LCD)
+                
+    # mode setting -----------------------------------------------------------
+    
+    def set_mode_3_begin(self):
+        self.stat     = (self.stat & 0xFC) | 0x03
+        self.cycles  += constants.MODE_3_BEGIN_TICKS
+        self.transfer = True
+        
+    def set_mode_3_end(self):
+        self.stat     = (self.stat & 0xFC) | 0x03
+        self.cycles  += constants.MODE_3_END_TICKS
+        self.transfer = False
+        
+    def set_mode_0(self):
+        self.stat    = (self.stat & 0xFC)
+        self.cycles += constants.MODE_0_TICKS
+        self.h_blank_interrupt_check()
+                
+    def set_mode_2(self):
+        self.stat    = (self.stat & 0xFC) | 0x02
+        self.cycles += constants.MODE_2_TICKS
+        self.oam_interrupt_check()
+        
+    def set_mode_1_begin(self):
+        self.stat    = (self.stat & 0xFC) | 0x01
+        self.cycles += constants.MODE_1_BEGIN_TICKS
+        
+    def set_mode_1(self):
+        self.stat    = (self.stat & 0xFC) | 0x01
+        self.cycles += constants.MODE_1_TICKS
+        
+    def set_mode_1_between(self):
+        self.stat    = (self.stat & 0xFC) | 0x01
+        self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
+        
+    def set_mode_1_end(self):
+        self.stat    = (self.stat & 0xFC) | 0x01
+        self.cycles += constants.MODE_1_END_TICKS
+        
+    # ----------------------------------------------------------------
+    
     def emulate_hblank(self):
         self.line_y+=1
         self.emulate_hblank_line_y_compare()
         if self.line_y < 144:
-            self.emulate_hblank_part_1()
+            self.set_mode_2()
         else:
             self.emulate_hblank_part_2()
             
     def emulate_hblank_line_y_compare(self):
         if self.line_y == self.line_y_compare:
-            # constants.LYC=LY interrupt
-            self.stat |= 0x04
-            if (self.stat & 0x40) != 0:
-                self.interrupt.raise_interrupt(constants.LCD)
+            self.line_y_line_y_compare_interrupt_check()
         else:
             self.stat &= 0xFB
-            
-    def emulate_hblank_part_1(self):
-        self.stat = (self.stat & 0xFC) | 0x02
-        self.cycles += constants.MODE_2_TICKS
-        # constants.OAM interrupt
-        if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
-            self.interrupt.raise_interrupt(constants.LCD)
-        
+   
     def emulate_hblank_part_2(self):
         if self.display:
             self.draw_frame()
@@ -391,55 +432,38 @@ class Video(iMemory):
             self.frames = 0
         else:
             self.display = False
-
-        self.stat = (self.stat & 0xFC) | 0x01
-        self.cycles += constants.MODE_1_BEGIN_TICKS
-        self.vblank = True
+        self.set_mode_1_begin()
+        self.vblank  = True
         
     def emulate_vblank(self):
         if self.vblank:
             self.emulate_vblank_vblank()
         elif self.line_y == 0:
-            self.emulate_vblank_first_y_line()
+            self.set_mode_2()
         else:
             self.emulate_vblank_other()
 
     def emulate_vblank_vblank(self):
-        self.vblank = False
-        self.stat = (self.stat & 0xFC) | 0x01
-        self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
-        # V-Blank interrupt
-        if (self.stat & 0x10) != 0:
-            self.interrupt.raise_interrupt(constants.LCD)
-        # V-Blank interrupt
+        self.vblank  = False
+        self.set_mode_1_between()
+        self.v_blank_interrupt_check()
         self.interrupt.raise_interrupt(constants.VBLANK)
         
-    def emulate_vblank_first_y_line(self):
-        self.stat = (self.stat & 0xFC) | 0x02
-        self.cycles += constants.MODE_2_TICKS
-        # constants.OAM interrupt
-        if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
-            self.interrupt.raise_interrupt(constants.LCD)
-            
     def emulate_vblank_other(self):
         if self.line_y < 153:
-            self.line_y+=1
-            self.stat = (self.stat & 0xFC) | 0x01
-            if self.line_y == 153:
-                self.cycles += constants.MODE_1_END_TICKS
-            else:
-                self.cycles += constants.MODE_1_TICKS
+            self.emulate_vblank_mode_1()
         else:
-            self.line_y = self.wline_y = 0
-            self.stat = (self.stat & 0xFC) | 0x01
-            self.cycles += constants.MODE_1_TICKS - constants.MODE_1_END_TICKS
-        if self.line_y == self.line_y_compare:
-            # constants.LYC=LY interrupt
-            self.stat |= 0x04
-            if (self.stat & 0x40) != 0:
-                self.interrupt.raise_interrupt(constants.LCD)
+            self.line_y        = 0
+            self.window_line_y = 0
+            self.set_mode_1_between()
+        self.emulate_hblank_line_y_compare()
+            
+    def emulate_vblank_mode_1(self):
+        self.line_y += 1
+        if self.line_y == 153:
+            self.set_mode_1_end()
         else:
-            self.stat &= 0xFB
+            self.set_mode_1()
     
     def draw_frame(self):
         self.driver.update_display()
@@ -464,40 +488,53 @@ class Video(iMemory):
             self.line[x] = 0x00
 
     def draw_background(self):
-        y = (self.scroll_y + self.line_y) & 0xFF
-        x = self.scroll_x & 0xFF
-        tileMap = constants.VRAM_MAP_A
-        if (self.control & 0x08) != 0:
-            tileMap =  constants.VRAM_MAP_B
-        tileData = constants.VRAM_DATA_B
-        if (self.control & 0x10) != 0:
-            tileData = constants.VRAM_DATA_A
-        tileMap  += ((y >> 3) << 5) + (x >> 3)
-        tileData += (y & 7) << 1
-        self.draw_tiles(8 - (x & 7), tileMap, tileData)
-
+        y          = (self.scroll_y + self.line_y) & 0xFF
+        x          = self.scroll_x                 & 0xFF
+        tile_map, tile_data = self.prepare_background_data(x, y)
+        self.draw_tiles(8 - (x & 7), tile_map, tile_data)
+        
+    def prepare_background_data(self, x, y):
+        tile_map   = self.get_tile_map(0x08)
+        tile_map  += ((y >> 3) << 5) + (x >> 3)
+        tile_data  = self.get_tile_data(0x10)
+        tile_data += (y & 7) << 1
+        return tile_map, tile_data
+         
     def draw_window(self):
-        if self.line_y < self.window_y or self.window_x >= 167 or \
-           self.wline_y >= 144:
-            return
-        tileMap = constants.VRAM_MAP_A
-        if (self.control & 0x40) != 0:
-            tileMap =  constants.VRAM_MAP_B
-        tileData = constants.VRAM_DATA_B
-        if (self.control & 0x10) != 0:
-            tileData = constants.VRAM_DATA_A
-        tileMap += (self.wline_y >> 3) << 5
-        tileData += (self.wline_y & 7) << 1
-        self.draw_tiles(self.window_x + 1, tileMap, tileData)
-        self.wline_y+=1
+        if self.line_y  < self.window_y or \
+           self.window_x >= 167 or \
+           self.window_line_y >= 144:
+                return
+        tile_map, tile_data = self.prepare_window_data()
+        self.draw_tiles(self.window_x + 1, tile_map, tile_data)
+        self.window_line_y += 1
 
+    def prepare_window_data(self):
+        tile_map   = self.get_tile_map(0x40)
+        tile_map  += (self.window_line_y >> 3) << 5
+        tile_data  = self.get_tile_data(0x10)
+        tile_data += (self.window_line_y & 7) << 1
+        return tile_map, tile_data;
+        
+    def get_tile_map(self, mask):
+        if (self.control & mask) != 0:
+            return constants.VRAM_MAP_B
+        else:
+            return constants.VRAM_MAP_A
+        
+    def get_tile_data(self, mask):
+        if (self.control & mask) != 0:
+            return constants.VRAM_DATA_A
+        else:
+            return  constants.VRAM_DATA_B
+        
     def draw_objects(self):
         count = self.scan_objects()
         lastx = 176
         for index in range(176, count):
-            data = self.objects[index]
-            x = (data >> 24) & 0xFF
-            flags = (data >> 12) & 0xFF
+            data    = self.objects[index]
+            x       = (data >> 24) & 0xFF
+            flags   = (data >> 12) & 0xFF
             address = data & 0xFFF
             if (x + 8 <= lastx):
                 self.draw_object_tile(x, address, flags)
@@ -509,15 +546,13 @@ class Video(iMemory):
         count = 0
         # search active objects
         for offset in range(0, 4*40, 4):
-            y = self.oam[offset + 0] & 0xFF
-            x = self.oam[offset + 1] & 0xFF
+            y = self.oam[offset + 0]
+            x = self.oam[offset + 1]
             if (y <= 0 or y >= 144 + 16 or x <= 0 or x >= 168):
                 continue
-            tile = self.oam[offset + 2] & 0xFF
-            flags = self.oam[offset + 3] & 0xFF
-
-            y = self.line_y - y + 16
-
+            tile  = self.oam[offset + 2]
+            flags = self.oam[offset + 3]
+            y     = self.line_y - y + 16
             if ((self.control & 0x04) != 0):
                 # 8x16 tile size
                 if (y < 0 or y > 15):
@@ -543,35 +578,52 @@ class Video(iMemory):
 
     def sort_scan_object(self, count):
         # sort objects from lower to higher priority
-        for index in range(0, count):
+        for index in range(count):
             rightmost = index
             for number in range(index+1, count):
                 if (self.objects[number] >> 20) > \
                    (self.objects[rightmost] >> 20):
                     rightmost = number
             if rightmost != index:
-                data = self.objects[index]
-                self.objects[index] = self.objects[rightmost]
+                data                    = self.objects[index]
+                self.objects[index]     = self.objects[rightmost]
                 self.objects[rightmost] = data
 
-    def draw_tiles(self, x, tileMap, tileData):
+    def draw_tiles(self, x, tile_map, tile_data):
         while x < 168:
             if (self.control & 0x10) != 0:
-                tile = self.vram[tileMap] & 0xFF
+                tile = self.vram[tile_map]
             else:
-                tile = (self.vram[tileMap] ^ 0x80) & 0xFF
-            self.draw_tile(x, tileData + (tile << 4))
-            tileMap = (tileMap & 0x1FE0) + ((tileMap + 1) & 0x001F)
+                tile = (process_2_complement(self.vram[tile_map]) ^ 0x80) & 0xFF
+            self.draw_tile(x, tile_data + (tile << 4))
+            tile_map = (tile_map & 0x1FE0) + ((tile_map + 1) & 0x001F)
             x += 8
-            
+     
+    def draw_tile(self, x, address):
+        pattern =  self.get_pattern(address)
+        for i in range(0, 8):
+            self.line[x + i] = (pattern >> (7-i)) & 0x0101
+                   
     def get_pattern(self, address):
-        pattern  = self.vram[address]      & 0xFF
-        pattern += (self.vram[address + 1] & 0xFF) << 8
-        return pattern
+        return self.vram[address] +(self.vram[address + 1]) << 8
 
+
+    def draw_object_tile(self, x, address, flags):
+        self.draw_object(set_tile_line_call_wrapper(self), x, address, flags)
+                      
+    def set_tile_line(self, pos, color, mask):
+        self.line[pos] |= color | mask
+
+    def draw_overlapped_object_tile(self, x, address, flags):
+        self.draw_object(set_overlapped_object_line_call_wrapper(self), 
+                         x, address, flags)
+        
+    def set_overlapped_object_line(self, pos, color, mask):
+        self.line[pos] = (self.line[pos] & 0x0101) | color | mask
+        
     def draw_object(self, caller, x, address, flags):
         pattern = self.get_pattern(address)
-        mask = 0
+        mask    = 0
         # priority
         if (flags & 0x80) != 0:
             mask |= 0x0008
@@ -579,19 +631,10 @@ class Video(iMemory):
         if (flags & 0x10) != 0:
             mask |= 0x0004
         if (flags & 0x20) != 0:
-            self.draw_object_normal(x, pattern, mask, caller)
-        else:
             self.draw_object_flipped(x, pattern, mask, caller)
+        else:
+            self.draw_object_normal(x, pattern, mask, caller)
             
-    def draw_object_normal(self, x, pattern, mask, caller):
-        for i in range(0, 7):
-            color = pattern >> (6-i)
-            if (color & 0x0202) != 0:
-                caller.call(x+1, color, mask)
-        color = pattern << 1
-        if (color & 0x0202) != 0:
-            caller.call(x+7, color, mask)
-        
     def draw_object_flipped(self, x, pattern, mask, caller):
         color = pattern << 1
         if (color & 0x0202) != 0:
@@ -600,24 +643,15 @@ class Video(iMemory):
             color = pattern >> i
             if (color & 0x0202) != 0:
                 caller.call(x + i + 1, color, mask)
-            
-    def draw_tile(self, x, address):
-        pattern =  self.get_pattern(address)
-        for i in range(0, 8):
-            self.line[x + i] = (pattern >> (7-i)) & 0x0101
-
-    def draw_object_tile(self, x, address, flags):
-        self.draw_object(set_tile_line_call_wrapper(self), x, address, flags)
-        
-    def set_tile_line(self, pos, color, mask):
-        self.line[pos] |= color | mask
-
-    def draw_overlapped_object_tile(self, x, address, flags):
-        self.draw_object(set_overlapped_object_line_call_wrapper(self), \
-                         x, address, flags)
-        
-    def set_overlapped_object_line(self, pos, color, mask):
-        self.line[pos] = (self.line[pos] & 0x0101) | color | mask
+                
+    def draw_object_normal(self, x, pattern, mask, caller):
+        for i in range(0, 7):
+            color = pattern >> (6-i)
+            if (color & 0x0202) != 0:
+                caller.call(x+1, color, mask)
+        color = pattern << 1
+        if (color & 0x0202) != 0:
+            caller.call(x+7, color, mask)
 
     def draw_pixels(self):
         self.update_palette()
@@ -625,7 +659,7 @@ class Video(iMemory):
         offset = self.line_y * self.driver.get_width()
         for x in range(8, 168, 4):
             for i in range(0,4):
-                pattern = self.line[x + i]
+                pattern            = self.line[x + i]
                 pixels[offset + i] = self.palette[pattern]
             offset += 4
 
@@ -633,28 +667,28 @@ class Video(iMemory):
         self.driver.clear_pixels()
 
     def update_palette(self):
-        if not self.dirty:
-            return
-        # bit 4/0 = constants.BG color, 
-        # bit 5/1 = constants.OBJ color, 
-        # bit 2 = constants.OBJ palette, 
-        # bit 3 = constants.OBJ priority
+        if not self.dirty: return
+        # bit 4/0 = BG color, 
+        # bit 5/1 = OBJ color, 
+        # bit 2   = OBJ palette, 
+        # bit 3   = OBJ priority
         for pattern in range(0, 64):
             #color
-            if (pattern & 0x22) == 0 or ((pattern & 0x08) != 0 and \
-               (pattern & 0x11) != 0):
-                # constants.OBJ behind constants.BG color 1-3
+            if (pattern & 0x22) == 0 or \
+               ((pattern & 0x08) != 0 and (pattern & 0x11) != 0):
+                # OBJ behind BG color 1-3
                 color = (self.background_palette >> ((((pattern >> 3) & 0x02) +\
                         (pattern & 0x01)) << 1)) & 0x03
-             # constants.OBJ above constants.BG
+             # OBJ above BG
             elif ((pattern & 0x04) == 0):
                 color = (self.object_palette_0 >> ((((pattern >> 4) & 0x02) + \
                         ((pattern >> 1) & 0x01)) << 1)) & 0x03
             else:
                 color = (self.object_palette_1 >> ((((pattern >> 4) & 0x02) +\
                         ((pattern >> 1) & 0x01)) << 1)) & 0x03
-            index= ((pattern & 0x30) << 4) + (pattern & 0x0F)
-            self.palette[index] = constants.COLOR_MAP[color]
+            index = ((pattern & 0x30) << 4) + (pattern & 0x0F)
+            #self.palette[index] = constants.COLOR_MAP[color]
+            self.palette[index] = color
         self.dirty = False
 
 # ------------------------------------------------------------------------------

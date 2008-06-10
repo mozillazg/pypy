@@ -774,6 +774,15 @@ class LLFrame(object):
         addr = llmemory.cast_ptr_to_adr(ptr)
         return self.heap.can_move(addr)
 
+    def op_gc_thread_prepare(self):
+        self.heap.thread_prepare()
+
+    def op_gc_thread_run(self):
+        self.heap.thread_run()
+
+    def op_gc_thread_die(self):
+        self.heap.thread_die()
+
     def op_gc_free(self, addr):
         # what can you do?
         pass

@@ -520,6 +520,12 @@ class ConfigUpdate(object):
             value = self.convert_from_cmdline(value)
             self.config.setoption(self.option._name, value, who='cmdline')
         except ConfigError, e:
+            # This OptionValueError is going to exit the translate.py process.
+            # Now is the last chance to print the warnings, which might give
+            # more information...  hack.
+            import sys
+            for warning in self.config.get_warnings():
+                print >> sys.stderr, warning
             raise optparse.OptionValueError(e.args[0])
 
     def help_default(self):

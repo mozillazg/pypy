@@ -585,11 +585,11 @@ def find_module(fullname,  path):
     path_hooks = sys.path_hooks
     importer_cache = sys.path_importer_cache 
     for p in path:
-        importer = None
         if importer_cache.get(p,None):
             importer = importer_cache.get(p)
         else:
             importer_cache[p] = None
+            importer = None
             for hook in path_hooks:
                 try:
                     importer = hook(p)

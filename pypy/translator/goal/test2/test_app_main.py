@@ -312,6 +312,22 @@ class TestInteraction:
         finally:
             os.environ['PYTHONINSPECT'] = old
 
+    def test_stdout_flushes_before_stdin_blocks(self):
+        # This doesn't really test app_main.py, but a behavior that
+        # can only be checked on top of py.py with pexpect.
+        path = getscript("""
+            import sys
+            sys.stdout.write('Are you suggesting coconuts migrate? ')
+            line = sys.stdin.readline()
+            assert line.rstrip() == 'Not at all. They could be carried.'
+            print 'A five ounce bird could not carry a one pound coconut.'
+            """)
+        py_py = os.path.join(autopath.pypydir, 'bin', 'py.py')
+        child = self._spawn(sys.executable, [py_py, path])
+        child.expect('Are you suggesting coconuts migrate?', timeout=120)
+        child.sendline('Not at all. They could be carried.')
+        child.expect('A five ounce bird could not carry a one pound coconut.')
+
 
 class TestNonInteractive:
 
@@ -402,3 +418,22 @@ class TestNonInteractive:
                                  expect_prompt=True, expect_banner=False)
         assert 'hello world\n' in data
         assert '42\n' in data
+
+    def test_non_interactive_stdout_fully_buffered(self):
+        path = getscript(r"""
+            import sys, time
+            sys.stdout.write('\x00(STDOUT)\n\x00')   # stays in buffers
+            time.sleep(1)
+            sys.stderr.write('\x00[STDERR]\n\x00')
+            time.sleep(1)
+            # stdout flushed automatically here
+            """)
+        cmdline = '%s -u "%s" %s' % (sys.executable, app_main, path)
+        print 'POPEN:', cmdline
+        child_in, child_out_err = os.popen4(cmdline)
+        data = child_out_err.read(11)
+        assert data == '\x00[STDERR]\n\x00'    # from stderr
+        child_in.close()
+        data = child_out_err.read(11)
+        assert data == '\x00(STDOUT)\n\x00'    # from stdout
+        child_out_err.close()

@@ -58,38 +58,38 @@ class TestEci:
     
     def test_merge(self):
         e1 = ExternalCompilationInfo(
-            pre_include_lines  = ['1'],
+            pre_include_bits   = ['1'],
             includes           = ['x.h'],
-            post_include_lines = ['p1']
+            post_include_bits  = ['p1']
         )
         e2 = ExternalCompilationInfo(
-            pre_include_lines  = ['2'],
+            pre_include_bits   = ['2'],
             includes           = ['x.h', 'y.h'],
-            post_include_lines = ['p2'],
+            post_include_bits  = ['p2'],
         )
         e3 = ExternalCompilationInfo(
-            pre_include_lines  = ['3'],
+            pre_include_bits   = ['3'],
             includes           = ['y.h', 'z.h'],
-            post_include_lines = ['p3']
+            post_include_bits  = ['p1', 'p3']
         )
         e = e1.merge(e2, e3)
-        assert e.pre_include_lines == ('1', '2', '3')
+        assert e.pre_include_bits == ('1', '2', '3')
         assert e.includes == ('x.h', 'y.h', 'z.h')
-        assert e.post_include_lines == ('p1', 'p2', 'p3')
+        assert e.post_include_bits == ('p1', 'p2', 'p3')
 
     def test_merge2(self):
         e1 = ExternalCompilationInfo(
-            pre_include_lines  = ['1'],
+            pre_include_bits  = ['1'],
         )
         e2 = ExternalCompilationInfo(
-            pre_include_lines  = ['2'],
+            pre_include_bits  = ['2'],
         )
         e3 = ExternalCompilationInfo(
-            pre_include_lines  = ['3'],
+            pre_include_bits  = ['3'],
         )
         e = e1.merge(e2)
         e = e.merge(e3, e3)
-        assert e.pre_include_lines == ('1', '2', '3')
+        assert e.pre_include_bits == ('1', '2', '3')
 
     def test_convert_sources_to_c_files(self):
         cs = CompilationSet(
@@ -130,8 +130,8 @@ class TestEci:
         flags = ('-I/some/include/path -I/other/include/path '
                  '-DMACRO1 -D_MACRO2=baz -?1 -!2')
         eci = ExternalCompilationInfo.from_compiler_flags(flags)
-        assert eci.pre_include_lines == ('#define MACRO1 1',
-                                         '#define _MACRO2 baz')
+        assert eci.pre_include_bits == ('#define MACRO1 1',
+                                        '#define _MACRO2 baz')
         assert eci.includes == ()
         assert eci.include_dirs == ('/some/include/path',
                                     '/other/include/path')

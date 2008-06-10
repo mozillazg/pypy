@@ -345,7 +345,6 @@ class W_TypeObject(W_Object):
     def lookup_where_with_method_cache(w_self, name):
         space = w_self.space
         assert space.config.objspace.std.withmethodcache
-        ec = space.getexecutioncontext()
         version_tag = w_self.version_tag
         if version_tag is None:
             tup = w_self._lookup_where(name)
@@ -359,23 +358,23 @@ class W_TypeObject(W_Object):
         # the time - so using the fast current_object_addr_as_int() instead
         # of a slower solution like hash() is still a good trade-off.
         method_hash = r_uint(intmask(version_tag_as_int * hash(name))) >> SHIFT
-        cached_version_tag = ec.method_cache_versions[method_hash]
+        cached_version_tag = space.method_cache_versions[method_hash]
         if cached_version_tag is version_tag:
-            cached_name = ec.method_cache_names[method_hash]
+            cached_name = space.method_cache_names[method_hash]
             if cached_name is name:
-                tup = ec.method_cache_lookup_where[method_hash]
+                tup = space.method_cache_lookup_where[method_hash]
                 if space.config.objspace.std.withmethodcachecounter:
-                    ec.method_cache_hits[name] = \
-                            ec.method_cache_hits.get(name, 0) + 1
+                    space.method_cache_hits[name] = \
+                            space.method_cache_hits.get(name, 0) + 1
 #                print "hit", w_self, name
                 return tup
         tup = w_self._lookup_where(name)
-        ec.method_cache_versions[method_hash] = version_tag
-        ec.method_cache_names[method_hash] = name
-        ec.method_cache_lookup_where[method_hash] = tup
+        space.method_cache_versions[method_hash] = version_tag
+        space.method_cache_names[method_hash] = name
+        space.method_cache_lookup_where[method_hash] = tup
         if space.config.objspace.std.withmethodcachecounter:
-            ec.method_cache_misses[name] = \
-                    ec.method_cache_misses.get(name, 0) + 1
+            space.method_cache_misses[name] = \
+                    space.method_cache_misses.get(name, 0) + 1
 #        print "miss", w_self, name
         return tup
 

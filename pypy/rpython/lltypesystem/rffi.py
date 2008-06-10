@@ -146,6 +146,10 @@ def llexternal(name, args, result, _callable=None,
             if before: before()
             # NB. it is essential that no exception checking occurs after
             # the call to before(), because we don't have the GIL any more!
+            # It is also essential that no GC pointer is alive between now
+            # and the end of the function, so that the external function
+            # calls below don't need to be guarded by GC shadow stack logic
+            # that would crash if not protected by the GIL!
         res = funcptr(*real_args)
         if invoke_around_handlers:
             if after: after()
@@ -159,7 +163,12 @@ def llexternal(name, args, result, _callable=None,
                 return cast(lltype.Unsigned, res)
         return res
     wrapper._annspecialcase_ = 'specialize:ll'
-    wrapper._always_inline_ = True
+    if invoke_around_handlers:
+        # don't inline, as a hack to guarantee that no GC pointer is alive
+        # in the final part of the wrapper
+        wrapper._dont_inline_ = True
+    else:
+        wrapper._always_inline_ = True
     # for debugging, stick ll func ptr to that
     wrapper._ptr = funcptr
 
@@ -173,16 +182,16 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
         errorcode = callable._errorcode_
     else:
         errorcode = TP.TO.RESULT._example()
-    if aroundstate is not None:
-        before = aroundstate.before
-        after = aroundstate.after
-    else:
-        before = None
-        after = None
     callable_name = getattr(callable, '__name__', '?')
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
+            if aroundstate is not None:
+                before = aroundstate.before
+                after = aroundstate.after
+            else:
+                before = None
+                after = None
             if after:
                 after()
             # from now on we hold the GIL
@@ -192,6 +201,9 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
                 os.write(2,
                     "Warning: uncaught exception in callback: %%s %%s\n" %%
                     (callable_name, str(e)))
+                if not we_are_translated():
+                    import traceback
+                    traceback.print_exc()
                 result = errorcode
             if before:
                 before()
@@ -203,6 +215,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     miniglobals = locals().copy()
     miniglobals['Exception'] = Exception
     miniglobals['os'] = os
+    miniglobals['we_are_translated'] = we_are_translated
     exec source.compile() in miniglobals
     return miniglobals['wrapper']
 _make_wrapper_for._annspecialcase_ = 'specialize:memo'
@@ -379,7 +392,7 @@ def COpaquePtr(*args, **kwds):
     return lltype.Ptr(COpaque(*args, **kwds))
 
 def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
-                    sandboxsafe=False, readonly=False):
+                    sandboxsafe=False, readonly=False, _nowrapper=False):
     """Return a pair of functions - a getter and a setter - to access
     the given global C variable.
     """
@@ -418,14 +431,15 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     sources = ('\n'.join(lines),)
     new_eci = eci.merge(ExternalCompilationInfo(
         separate_module_sources = sources,
-        post_include_lines = [getter_prototype, setter_prototype],
+        post_include_bits = [getter_prototype, setter_prototype],
         export_symbols = symbols,
     ))
 
     getter = llexternal(getter_name, [], TYPE, compilation_info=new_eci,
-                        sandboxsafe=sandboxsafe)
+                        sandboxsafe=sandboxsafe, _nowrapper=_nowrapper)
     setter = llexternal(setter_name, [TYPE], lltype.Void,
-                        compilation_info=new_eci, sandboxsafe=sandboxsafe)
+                        compilation_info=new_eci, sandboxsafe=sandboxsafe,
+                        _nowrapper=_nowrapper)
     return getter, setter
 
 # char, represented as a Python character

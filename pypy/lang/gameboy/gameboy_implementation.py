@@ -6,6 +6,7 @@ from pypy.lang.gameboy.video import VideoDriver
 from pypy.lang.gameboy.sound import SoundDriver
 from pypy.lang.gameboy.timer import Clock
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy import debug
 
 from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import lltype, rffi
@@ -33,17 +34,23 @@ class GameBoyImplementation(GameBoy):
     
     def mainLoop(self):
         try:
-            while True:
-                if self.poll_event():
-                    if self.check_for_escape():
-                        break
-                    self.joypad_driver.update(self.event) 
+            isRunning = True
+            while isRunning and self.handle_events():
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
-                RSDL.Delay(100)
+                #RSDL.Delay(1)
         finally:
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
+            debug.print_results()
         return 0
+    
+    def handle_events(self):
+        isRunning = True
+        while self.poll_event():
+            if self.check_for_escape():
+                isRunning = False 
+            self.joypad_driver.update(self.event) 
+        return isRunning
     
     
     def poll_event(self):
@@ -72,32 +79,26 @@ class VideoDriverImplementation(VideoDriver):
         self.screen = RSDL.SetVideoMode(self.width, self.height, 32, 0)
         
     def update_display(self):
-        print "    update_display"
+        #print "    update_display"
         RSDL.LockSurface(self.screen)
         self.draw_pixels()
         RSDL.UnlockSurface(self.screen)
         RSDL.Flip(self.screen)
             
     def draw_pixels(self):
-        print  "-"*60
+        #str = ""
         for y in range(self.height):
-            str = ""
+            #str += "\n"
             for x in range(self.width):
-                if y%2 == 0:
-                    s = self.pixel_map(x, y)
-                    str += s+s
-                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
-            print str;
-        
-        print  "-"*60
+                #if y%2 == 0 or True:
+                #    px = self.get_pixel_color(x, y)
+                #    str += ["#", "%", "+", " ", " "][px]
+                #RSDL_helper.set_pixel(self.screen, x, y, self.pixel_map(x, y))
+                pass
+        #print str;
              
     def pixel_map(self, x, y):
-        px = self.get_pixel_color(x, y)
-        b = px & 0xFF
-        g = (px>>8) & 0xFF
-        r = (px>>16) & 0xFF
-        brightness = 4 * (r+b+g) / (0xFF*3)
-        return [" ", ".", "+", "#", ""][brightness]
+        return [0xFFFFFF, 0xCCCCCC, 0x666666, 0x000000][self.get_pixel_color(x, y)]
         
     def get_pixel_color(self, x, y):
         return self.pixels[x+self.width*y]
@@ -133,11 +134,9 @@ class JoypadDriverImplementation(JoypadDriver):
         self.last_key = rffi.getintfield(p.c_keysym, 'c_sym')
         
     def on_key_down(self):
-        print "press"
         self.toggleButton(self.get_button_handler(self.last_key), True)
     
     def on_key_up(self): 
-        print "release"
         self.toggleButton(self.get_button_handler(self.last_key), False)
     
     def toggleButton(self, pressButtonFunction, enabled):
@@ -146,28 +145,20 @@ class JoypadDriverImplementation(JoypadDriver):
     
     def get_button_handler(self, key):
         if key == RSDL.K_UP:
-            print "    up"
             return JoypadDriver.button_up
         elif key == RSDL.K_RIGHT: 
-            print "    right"
             return JoypadDriver.button_right
         elif key == RSDL.K_DOWN:
-            print "    down"
             return JoypadDriver.button_down
         elif key == RSDL.K_LEFT:
-            print "    left"
             return JoypadDriver.button_left
         elif key == RSDL.K_RETURN:
-            print "    start"
             return JoypadDriver.button_start
         elif key == RSDL.K_SPACE:
-            print "    select"
             return JoypadDriver.button_select
         elif key == RSDL.K_a:
-            print "    A"
             return JoypadDriver.button_a
         elif key == RSDL.K_b:
-            print "    B"
             return JoypadDriver.button_b
         return None
         

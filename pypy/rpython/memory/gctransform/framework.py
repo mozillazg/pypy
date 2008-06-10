@@ -22,6 +22,16 @@ import sys
 
 
 class CollectAnalyzer(graphanalyze.GraphAnalyzer):
+
+    def analyze_direct_call(self, graph, seen=None):
+        try:
+            if graph.func._gctransformer_hint_cannot_collect_:
+                return False
+        except AttributeError:
+            pass
+        return graphanalyze.GraphAnalyzer.analyze_direct_call(self, graph,
+                                                              seen)
+    
     def operation_is_true(self, op):
         if op.opname in ('malloc', 'malloc_varsize'):
             flags = op.args[1].value
@@ -343,6 +353,20 @@ class FrameworkGCTransformer(GCTransformer):
                                  annmodel.s_None,
                                  minimal_transform = False)
 
+        # thread support
+        if translator.config.translation.thread:
+            if not hasattr(root_walker, "need_thread_support"):
+                raise Exception("%s does not support threads" % (
+                    root_walker.__class__.__name__,))
+            root_walker.need_thread_support()
+            self.thread_prepare_ptr = getfn(root_walker.thread_prepare,
+                                            [], annmodel.s_None)
+            self.thread_run_ptr = getfn(root_walker.thread_run,
+                                        [], annmodel.s_None,
+                                        inline=True)
+            self.thread_die_ptr = getfn(root_walker.thread_die,
+                                        [], annmodel.s_None)
+
         annhelper.finish()   # at this point, annotate all mix-level helpers
         annhelper.backend_optimize()
 
@@ -645,6 +669,18 @@ class FrameworkGCTransformer(GCTransformer):
                                   self.c_const_gc,
                                   v_size])
 
+    def gct_gc_thread_prepare(self, hop):
+        assert self.translator.config.translation.thread
+        hop.genop("direct_call", [self.thread_prepare_ptr])
+
+    def gct_gc_thread_run(self, hop):
+        assert self.translator.config.translation.thread
+        hop.genop("direct_call", [self.thread_run_ptr])
+
+    def gct_gc_thread_die(self, hop):
+        assert self.translator.config.translation.thread
+        hop.genop("direct_call", [self.thread_die_ptr])
+
     def gct_malloc_nonmovable_varsize(self, hop):
         TYPE = hop.spaceop.result.concretetype
         if self.gcdata.gc.can_malloc_nonmovable():
@@ -836,6 +872,8 @@ class BaseRootWalker:
 
 class ShadowStackRootWalker(BaseRootWalker):
     need_root_stack = True
+    thread_setup = None
+    collect_stacks_from_other_threads = None
 
     def __init__(self, gctransformer):
         BaseRootWalker.__init__(self, gctransformer)
@@ -855,12 +893,27 @@ class ShadowStackRootWalker(BaseRootWalker):
             return top
         self.decr_stack = decr_stack
 
+    def push_stack(self, addr):
+        top = self.incr_stack(1)
+        top.address[0] = addr
+
+    def pop_stack(self):
+        top = self.decr_stack(1)
+        return top.address[0]
+
+    def allocate_stack(self):
+        result = llmemory.raw_malloc(self.rootstacksize)
+        if result:
+            llmemory.raw_memclear(result, self.rootstacksize)
+        return result
+
     def setup_root_walker(self):
-        stackbase = llmemory.raw_malloc(self.rootstacksize)
+        stackbase = self.allocate_stack()
         ll_assert(bool(stackbase), "could not allocate root stack")
-        llmemory.raw_memclear(stackbase, self.rootstacksize)
         self.gcdata.root_stack_top  = stackbase
         self.gcdata.root_stack_base = stackbase
+        if self.thread_setup is not None:
+            self.thread_setup()
 
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
@@ -871,3 +924,121 @@ class ShadowStackRootWalker(BaseRootWalker):
             if addr.address[0] != llmemory.NULL:
                 collect_stack_root(gc, addr)
             addr += sizeofaddr
+        if self.collect_stacks_from_other_threads is not None:
+            self.collect_stacks_from_other_threads(collect_stack_root)
+
+    def need_thread_support(self):
+        from pypy.module.thread import ll_thread    # xxx fish
+        from pypy.rpython.memory.support import AddressDict
+        from pypy.rpython.memory.support import copy_without_null_values
+        gcdata = self.gcdata
+        # the interfacing between the threads and the GC is done via
+        # three completely ad-hoc operations at the moment:
+        # gc_thread_prepare, gc_thread_run, gc_thread_die.
+        # See docstrings below.
+
+        def get_aid():
+            """Return the thread identifier, cast to an (opaque) address."""
+            return llmemory.cast_int_to_adr(ll_thread.get_ident())
+
+        def thread_setup():
+            """Called once when the program starts."""
+            aid = get_aid()
+            gcdata.main_thread = aid
+            gcdata.active_thread = aid
+            gcdata.thread_stacks = AddressDict()     # {aid: root_stack_top}
+            gcdata._fresh_rootstack = llmemory.NULL
+            gcdata.dead_threads_count = 0
+
+        def thread_prepare():
+            """Called just before thread.start_new_thread().  This
+            allocates a new shadow stack to be used by the future
+            thread.  If memory runs out, this raises a MemoryError
+            (which can be handled by the caller instead of just getting
+            ignored if it was raised in the newly starting thread).
+            """
+            if not gcdata._fresh_rootstack:
+                gcdata._fresh_rootstack = self.allocate_stack()
+                if not gcdata._fresh_rootstack:
+                    raise MemoryError
+
+        def thread_run():
+            """Called whenever the current thread (re-)acquired the GIL.
+            This should ensure that the shadow stack installed in
+            gcdata.root_stack_top/root_stack_base is the one corresponding
+            to the current thread.
+            """
+            aid = get_aid()
+            if gcdata.active_thread != aid:
+                switch_shadow_stacks(aid)
+
+        def thread_die():
+            """Called just before the final GIL release done by a dying
+            thread.  After a thread_die(), no more gc operation should
+            occur in this thread.
+            """
+            aid = get_aid()
+            gcdata.thread_stacks.setitem(aid, llmemory.NULL)
+            old = gcdata.root_stack_base
+            if gcdata._fresh_rootstack == llmemory.NULL:
+                gcdata._fresh_rootstack = old
+            else:
+                llmemory.raw_free(old)
+            install_new_stack(gcdata.main_thread)
+            # from time to time, rehash the dictionary to remove
+            # old NULL entries
+            gcdata.dead_threads_count += 1
+            if (gcdata.dead_threads_count & 511) == 0:
+                gcdata.thread_stacks = copy_without_null_values(
+                    gcdata.thread_stacks)
+
+        def switch_shadow_stacks(new_aid):
+            save_away_current_stack()
+            install_new_stack(new_aid)
+        switch_shadow_stacks._dont_inline_ = True
+
+        def save_away_current_stack():
+            old_aid = gcdata.active_thread
+            # save root_stack_base on the top of the stack
+            self.push_stack(gcdata.root_stack_base)
+            # store root_stack_top into the dictionary
+            gcdata.thread_stacks.setitem(old_aid, gcdata.root_stack_top)
+
+        def install_new_stack(new_aid):
+            # look for the new stack top
+            top = gcdata.thread_stacks.get(new_aid, llmemory.NULL)
+            if top == llmemory.NULL:
+                # first time we see this thread.  It is an error if no
+                # fresh new stack is waiting.
+                base = gcdata._fresh_rootstack
+                gcdata._fresh_rootstack = llmemory.NULL
+                ll_assert(base != llmemory.NULL, "missing gc_thread_prepare")
+                gcdata.root_stack_top = base
+                gcdata.root_stack_base = base
+            else:
+                # restore the root_stack_base from the top of the stack
+                gcdata.root_stack_top = top
+                gcdata.root_stack_base = self.pop_stack()
+            # done
+            gcdata.active_thread = new_aid
+
+        def collect_stack(aid, stacktop, callback):
+            if stacktop != llmemory.NULL and aid != get_aid():
+                # collect all valid stacks from the dict (the entry
+                # corresponding to the current thread is not valid)
+                gc = self.gc
+                end = stacktop - sizeofaddr
+                addr = end.address[0]
+                while addr != end:
+                    if addr.address[0] != llmemory.NULL:
+                        callback(gc, addr)
+                    addr += sizeofaddr
+
+        def collect_more_stacks(callback):
+            gcdata.thread_stacks.foreach(collect_stack, callback)
+
+        self.thread_setup = thread_setup
+        self.thread_prepare = thread_prepare
+        self.thread_run = thread_run
+        self.thread_die = thread_die
+        self.collect_stacks_from_other_threads = collect_more_stacks

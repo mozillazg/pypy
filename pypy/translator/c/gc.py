@@ -73,6 +73,15 @@ class BasicGcPolicy(object):
     def OP_GC_SET_MAX_HEAP_SIZE(self, funcgen, op):
         return ''
 
+    def OP_GC_THREAD_PREPARE(self, funcgen, op):
+        return ''
+
+    def OP_GC_THREAD_RUN(self, funcgen, op):
+        return ''
+
+    def OP_GC_THREAD_DIE(self, funcgen, op):
+        return ''
+
 
 class RefcountingInfo:
     static_deallocator = None
