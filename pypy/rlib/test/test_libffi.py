@@ -11,6 +11,7 @@ from pypy.rpython.lltypesystem import rffi, lltype
 import os, sys
 import py
 import time
+from pypy.rlib.objectmodel import keepalive_until_here
 
 def setup_module(mod):
     if not (sys.platform.startswith('linux') or
@@ -38,12 +39,15 @@ class TestDLOperations:
             return CDLL('msvcrt.dll')
         else:
             return CDLL('/lib/libc.so.6')
+
+    def _libmname(self):
+        if sys.platform == 'win32':
+            return 'msvcrt.dll'
+        else:
+            return 'libm.so'
     
     def get_libm(self):
-        if sys.platform == 'win32':
-            return CDLL('msvcrt.dll')
-        else:
-            return CDLL('libm.so')
+        return CDLL(self._libmname())
     
     def test_library_open(self):
         lib = self.get_libc()
@@ -193,17 +197,17 @@ class TestDLOperations:
                                    #    forget this in code that is meant to be
 
     def test_compile(self):
-        import py
-        py.test.skip("Segfaulting test, skip")
         # XXX cannot run it on top of llinterp, some problems
         # with pointer casts
+        libname = self._libmname()
 
         def f(x, y):
-            libm = self.get_libm()
+            libm = CDLL(libname)
             c_pow = libm.getpointer('pow', [ffi_type_double, ffi_type_double], ffi_type_double)
             c_pow.push_arg(x)
             c_pow.push_arg(y)
             res = c_pow.call(rffi.DOUBLE)
+            keepalive_until_here(libm)
             return res
 
         fn = compile(f, [float, float])
