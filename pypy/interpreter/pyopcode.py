@@ -173,22 +173,27 @@ class __extend__(pyframe.PyFrame):
     def dispatch_bytecode(self, co_code, co_codeargs, next_instr, ec):
         space = self.space
         while True:
-            
+
             self.last_instr = intmask(next_instr)
             if not we_are_jitted():
                 ec.bytecode_trace(self)
                 next_instr = r_uint(self.last_instr)
-            opcode = ord(co_code[next_instr])
+
+            if space.config.objspace.usecodeargs:
+                opcode = ord(co_code[next_instr])
+                oparg = co_codeargs[next_instr]
+                next_instr += 1
+            elif space.config.objspace.predecodeargs:
+                opcode = co_codeargs[next_instr]
+                oparg = co_codeargs[next_instr+1]
+                next_instr += 2
+            else:
+                opcode = ord(co_code[next_instr])
+                next_instr += 1
+                next_instr, opcode, oparg = decode_opcode(co_code, next_instr, opcode)
 
             if space.config.objspace.logbytecodes:
                 space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
-
-            if space.config.objspace.usecodeargs:
-                oparg = co_codeargs[next_instr]
-                next_instr += 1
-            else:
-                next_instr += 1
-                next_instr, opcode, oparg = decode_opcode(co_code, next_instr, opcode)
 
             if opcode == opcodedesc.RETURN_VALUE.index:
                 w_returnvalue = self.popvalue()

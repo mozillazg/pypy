@@ -143,6 +143,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                default=False,
                requires=[("objspace.usepycfiles", False)]),
 
+    BoolOption("predecodeargs", "predecode opargs and opcodes, but store them in the same list",
+               default=False,
+               requires=[("objspace.usepycfiles", False)]),
+
     BoolOption("honor__builtins__",
                "Honor the __builtins__ key of a module dictionary",
                default=False),

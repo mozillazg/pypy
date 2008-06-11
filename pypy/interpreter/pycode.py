@@ -117,12 +117,17 @@ class PyCode(eval.Code):
         return self._signature
 
     def precompute_code(self, code):
-        from pypy.interpreter.pyopcode import decode_opcode
-        if not self.space.config.objspace.usecodeargs:
+        if self.space.config.objspace.usecodeargs:
+            self.compute_codeargs(code)
+        elif self.space.config.objspace.predecodeargs:
+            self.precompute_codeargs(code)
+        else:
+            # "normal" case
             self.co_code = code
             self.co_codeargs = None
-            return
 
+    def compute_codeargs(self, code):
+        from pypy.interpreter.pyopcode import decode_opcode
         next_instr = 0
         codeargs = []
         codelist = []
@@ -161,6 +166,46 @@ class PyCode(eval.Code):
 
         self.co_code = ''.join(codelist)
         self.co_codeargs = codeargs
+
+    def precompute_codeargs(self, code):
+        from pypy.interpreter.pyopcode import decode_opcode
+        next_instr = 0
+        codelist = []
+        orig2new = {} # index in code --> index in codelist
+        new2orig = {} # index in codelist --> index in code
+        while next_instr < len(code):
+            opcode = ord(code[next_instr])
+            orig2new[next_instr] = len(codelist)
+            new2orig[len(codelist)] = next_instr
+            next_instr += 1
+            next_instr, opcode, oparg = decode_opcode(code, next_instr, opcode)
+            codelist.append(opcode)
+            codelist.append(oparg)
+
+        # sanity check
+        for i, j in orig2new.iteritems():
+            assert ord(code[i]) == codelist[j]
+
+        # recompute target addresses
+        i = 0
+        while i<len(codelist):
+            opcode = codelist[i]
+            i+=1
+            oparg = codelist[i]
+            if opcode in stdlib_opcode.hasjabs:
+                codelist[i] = orig2new[oparg]
+            elif opcode in stdlib_opcode.hasjrel:
+                orig_from = new2orig[i-1]
+                orig_to = orig_from + oparg + 3
+                new_from = i
+                new_to = orig2new[orig_to]
+                new_offset = new_to - new_from - 1
+                assert (new_offset % 2) == 0
+                codelist[i] = new_offset
+            i+=1
+
+        self.co_code = code
+        self.co_codeargs = codelist
 
     def _from_code(space, code, hidden_applevel=False):
         """ Initialize the code object from a real (CPython) one.
