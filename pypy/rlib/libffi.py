@@ -446,6 +446,11 @@ class FuncPtr(AbstractFuncPtr):
         self.funcsym = funcsym
         self.argnum = len(self.argtypes)
         self.pushed_args = 0
+        # XXX consider doing the following:
+        #     1. make this thread-local, so we won't interfere with any
+        #        other thread eventually
+        #     2. consider packing it into a struct, this might yield better
+        #        cache-performance, but don't do this without benchmarking!
         self.ll_args = lltype.malloc(rffi.VOIDPP.TO, self.argnum, flavor='raw')
         for i in range(self.argnum):
             # space for each argument
