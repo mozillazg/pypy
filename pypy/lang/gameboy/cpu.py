@@ -791,8 +791,8 @@ class CPU(object):
             delta |= 0x60
         if (self.a.get() & 0x0F) > 0x09:
             delta |= 0x06
-        if (self.a.get() & 0xF0) > 0x80:
-            delta |= 0x60
+            if (self.a.get() & 0xF0) > 0x80:
+                delta |= 0x60
         if (self.a.get() & 0xF0) > 0x90:
             delta |= 0x60
         if not self.is_n():
@@ -820,13 +820,11 @@ class CPU(object):
         s = (self.sp.get() + offset) & 0xFFFF
         self.f.reset()
         if (offset >= 0):
-            if s < self.sp.get():
-                self.f.c_flag = True
+            self.f.c_flag = (s < self.sp.get())
             if (s & 0x0F00) < (self.sp.get() & 0x0F00):
                 self.f.h_flag = True
         else:
-            if s > self.sp.get():
-                self.f.c_flag = True
+            self.f.c_flag = (s > self.sp.get())
             if (s & 0x0F00) > (self.sp.get() & 0x0F00):
                 self.f.h_flag = True
         return s
