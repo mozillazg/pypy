@@ -6,7 +6,7 @@ from pypy.lang.js.jsobj import global_context, W_Object,\
      w_Undefined, W_NewBuiltin, W_IntNumber, w_Null, create_object, W_Boolean,\
      W_FloatNumber, W_String, W_Builtin, W_Array, w_Null, newbool,\
      isnull_or_undefined, W_PrimitiveObject, W_ListObject, W_BaseNumber,\
-     DE, DD, RO, IT
+     DE, DD, RO, IT, Property
 from pypy.lang.js.execution import ThrowException, JsTypeError
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.streamio import open_file_as_stream
@@ -41,14 +41,19 @@ class W_ObjectObject(W_NativeObject):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
             return args[0].ToObject(ctx)
         else:
-            return self.Construct(ctx)
+            return self.Construct(ctx, args)
 
     def Construct(self, ctx, args=[]):
-        if (len(args) >= 1 and not args[0] is w_Undefined and not
-            args[0] is w_Null):
-            # XXX later we could separate builtins and normal objects
+        if len(args) >= 1 and not isnull_or_undefined(args[0]):
+            if args[0].type() == u'Object':
+                return args[0]
             return args[0].ToObject(ctx)
-        return create_object(ctx, u'Object')
+        else:
+            obj = create_object(ctx, u'Object', Value = w_Null)
+            Object = ctx.get_global().Get(ctx, 'Object')
+            obj.propdict[u'prototype'] = Property(u'prototype', Object, DE | DD | RO)
+            obj.propdict[u'__proto__'] = Property(u'prototype', Object, DE | DD | RO)
+            return obj
 
 class W_BooleanObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
@@ -539,10 +544,12 @@ class W_ArrayReverse(W_NewBuiltin):
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
     def Call(self, ctx, args=[], this=None):
-        return create_object(ctx, u'Object')
+        o = create_object(ctx, u'Object')
+        o.Class = u'Date'
+        return o
     
     def Construct(self, ctx, args=[]):
-        return create_object(ctx, u'Object')
+        return self.Call(ctx, args)
 
 def pypy_repr(ctx, repr, w_arg):
     return W_String(w_arg.__class__.__name__)
@@ -576,11 +583,13 @@ class Interpreter(object):
         w_Function.Put(ctx, u'prototype', w_FncPrototype, flags = allon)
         w_Function.Put(ctx, u'constructor', w_Function)
         
+        w_Object.Put(ctx, u'__proto__', w_FncPrototype, flags = allon)
+        
         toString = W_ToString(ctx)
         
         put_values(ctx, w_ObjPrototype, {
             u'constructor': w_Object,
-            u'__proto__': w_FncPrototype,
+            u'__proto__': w_Null,
             u'toString': toString,
             u'toLocaleString': toString,
             u'valueOf': W_ValueOf(ctx),
