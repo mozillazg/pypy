@@ -109,7 +109,7 @@ class PropertyInit(Expression):
     def emit(self, bytecode):
         self.expr.emit(bytecode)
         if isinstance(self.lefthand, Identifier):
-            bytecode.emit('LOAD_STRINGCONSTANT', self.lefthand.name)
+            bytecode.emit('LOAD_STRINGCONSTANT', unicode(self.lefthand.name))
         else:
             self.lefthand.emit(bytecode)
 
@@ -167,7 +167,7 @@ class SimpleAssignment(Assignment):
         if self.right is not None:
             self.right.emit(bytecode)
         bytecode_name = 'STORE' + self._get_name()
-        bytecode.emit_store(bytecode_name, self.identifier)
+        bytecode.emit_store(bytecode_name, unicode(self.identifier))
 
 class VariableAssignment(Assignment):
     def __init__(self, pos, left, right, operand):
@@ -180,7 +180,7 @@ class VariableAssignment(Assignment):
 
     def emit(self, bytecode):
         self.right.emit(bytecode)
-        bytecode.emit('STORE_VAR', self.depth, self.identifier)
+        bytecode.emit('STORE_VAR', self.depth, unicode(self.identifier))
 
 class MemberAssignment(Assignment):
     def __init__(self, pos, what, item, right, operand, prefix=''):
@@ -213,7 +213,7 @@ class MemberDotAssignment(Assignment):
         # XXX optimize this a bit
         if self.right is not None:
             self.right.emit(bytecode)
-        bytecode.emit('LOAD_STRINGCONSTANT', self.itemname)
+        bytecode.emit('LOAD_STRINGCONSTANT', unicode(self.itemname))
         self.what.emit(bytecode)
         bytecode.emit_store_member('STORE_MEMBER' + self._get_name())
 
@@ -262,7 +262,7 @@ class Call(Expression):
         if isinstance(left, MemberDot):
             left.left.emit(bytecode)
             # XXX optimise
-            bytecode.emit('LOAD_STRINGCONSTANT', left.name)
+            bytecode.emit('LOAD_STRINGCONSTANT', unicode(left.name))
             bytecode.emit('CALL_METHOD')
         elif isinstance(left, Member):
             raise NotImplementedError
@@ -300,7 +300,7 @@ class MemberDot(Expression):
     
     def emit(self, bytecode):
         self.left.emit(bytecode)
-        bytecode.emit('LOAD_MEMBER', self.name)    
+        bytecode.emit('LOAD_MEMBER', unicode(self.name))    
 
 class FunctionStatement(Statement):
     def __init__(self, pos, name, params, body):
@@ -310,13 +310,19 @@ class FunctionStatement(Statement):
         else:
             self.name = name.get_literal()
         self.body = body
-        self.params = params
+        self.params = [unicode(param) for param in params]
 
     def emit(self, bytecode):
         code = JsCode()
         if self.body is not None:
             self.body.emit(code)
-        funcobj = JsFunction(self.name, self.params, code)
+        
+        if self.name is None:
+            func_name = None
+        else:
+            func_name = unicode(self.name)
+        
+        funcobj = JsFunction(func_name, self.params, code)
         bytecode.emit('DECLARE_FUNCTION', funcobj)
         if self.name is None:
             bytecode.emit('LOAD_FUNCTION', funcobj)
@@ -331,7 +337,7 @@ class Identifier(Expression):
         self.name = name
 
     def emit(self, bytecode):
-        bytecode.emit('LOAD_VARIABLE', self.name)
+        bytecode.emit('LOAD_VARIABLE', unicode(self.name))
         
     def get_literal(self):
         return self.name
@@ -442,7 +448,7 @@ class Typeof(Expression):
     def emit(self, bytecode):
         # obscure hack to be compatible
         if isinstance(self.left, Identifier):
-            bytecode.emit('TYPEOF_VARIABLE', self.left.name)
+            bytecode.emit('TYPEOF_VARIABLE', unicode(self.left.name))
         else:
             self.left.emit(bytecode)
             bytecode.emit('TYPEOF')
@@ -455,13 +461,13 @@ class Delete(Expression):
     def emit(self, bytecode):
         what = self.what
         if isinstance(what, Identifier):
-            bytecode.emit('DELETE', what.name)
+            bytecode.emit('DELETE', unicode(what.name))
         elif isinstance(what, VariableIdentifier):
-            bytecode.emit('DELETE', what.identifier)
+            bytecode.emit('DELETE', unicode(what.identifier))
         elif isinstance(what, MemberDot):
             what.left.emit(bytecode)
             # XXX optimize
-            bytecode.emit('LOAD_STRINGCONSTANT', what.name)
+            bytecode.emit('LOAD_STRINGCONSTANT', unicode(what.name))
             bytecode.emit('DELETE_MEMBER')
         elif isinstance(what, Member):
             what.left.emit(bytecode)
@@ -553,7 +559,7 @@ class String(Expression):
         self.strval = self.string_unquote(strval)
 
     def emit(self, bytecode):
-        bytecode.emit('LOAD_STRINGCONSTANT', self.strval)
+        bytecode.emit('LOAD_STRINGCONSTANT', unicode(self.strval))
     
     def string_unquote(self, string):
         # XXX I don't think this works, it's very unlikely IMHO
@@ -601,7 +607,7 @@ class SourceElements(Statement):
 
     def emit(self, bytecode):
         for varname in self.var_decl:
-            bytecode.emit('DECLARE_VAR', varname)
+            bytecode.emit('DECLARE_VAR', unicode(varname))
         for funcname, funccode in self.func_decl.items():
             funccode.emit(bytecode)
 
@@ -659,7 +665,7 @@ class Try(Statement):
             self.finallyblock.emit(finallycode)
         else:
             finallycode = None
-        bytecode.emit('TRYCATCHBLOCK', trycode, self.catchparam.get_literal(),
+        bytecode.emit('TRYCATCHBLOCK', trycode, unicode(self.catchparam.get_literal()),
                       catchcode, finallycode)    
 
 class VariableDeclaration(Expression):
@@ -671,7 +677,7 @@ class VariableDeclaration(Expression):
     def emit(self, bytecode):
         if self.expr is not None:
             self.expr.emit(bytecode)
-            bytecode.emit('STORE', self.identifier)
+            bytecode.emit('STORE', unicode(self.identifier))
 
 class VariableIdentifier(Expression):
     def __init__(self, pos, depth, identifier):
@@ -680,7 +686,7 @@ class VariableIdentifier(Expression):
         self.identifier = identifier
 
     def emit(self, bytecode):
-        bytecode.emit('LOAD_VARIABLE', self.identifier)
+        bytecode.emit('LOAD_VARIABLE', unicode(self.identifier))
 
     def get_literal(self):
         return self.identifier
@@ -729,7 +735,7 @@ class With(Statement):
         self.body = body
 
     def emit(self, bytecode):
-        bytecode.emit('WITH_START', self.identifier)
+        bytecode.emit('WITH_START', unicode(self.identifier))
         self.body.emit(bytecode)
         bytecode.emit('WITH_END')
 
@@ -770,13 +776,13 @@ class ForVarIn(Statement):
 
     
     def emit(self, bytecode):
-        bytecode.emit('DECLARE_VAR', self.iteratorname)
+        bytecode.emit('DECLARE_VAR', unicode(self.iteratorname))
         self.object.emit(bytecode)
         bytecode.emit('LOAD_ITERATOR')
         precond = bytecode.emit_startloop_label()
         finish = bytecode.prealocate_endloop_label()
         bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
-        bytecode.emit('NEXT_ITERATOR', self.iteratorname)
+        bytecode.emit('NEXT_ITERATOR', unicode(self.iteratorname))
         self.body.emit(bytecode)
         bytecode.emit('JUMP', precond)
         bytecode.emit_endloop_label(finish)
@@ -796,7 +802,7 @@ class ForIn(Statement):
         precond = bytecode.emit_startloop_label()
         finish = bytecode.prealocate_endloop_label()
         bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
-        bytecode.emit('NEXT_ITERATOR', self.iteratorname)
+        bytecode.emit('NEXT_ITERATOR', unicode(self.iteratorname))
         self.body.emit(bytecode)
         bytecode.emit('JUMP', precond)
         bytecode.emit_endloop_label(finish)

@@ -114,12 +114,12 @@ class JsCode(object):
 
     def emit_break(self):
         if not self.endlooplabel:
-            raise ThrowException(W_String("Break outside loop"))
+            raise ThrowException(W_String(u'Break outside loop'))
         self.emit('JUMP', self.endlooplabel[-1])
 
     def emit_continue(self):
         if not self.startlooplabel:
-            raise ThrowError(W_String("Continue outside loop"))
+            raise ThrowError(W_String(u'Continue outside loop'))
         self.emit('JUMP', self.startlooplabel[-1])
 
     def emit(self, operation, *args):
@@ -324,10 +324,10 @@ class LOAD_ARRAY(Opcode):
         self.counter = counter
 
     def eval(self, ctx, stack):
-        proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
+        proto = ctx.get_global().Get(ctx, u'Array').Get(ctx, u'prototype')
         array = W_Array(ctx, Prototype=proto, Class = proto.Class)
         for i in range(self.counter):
-            array.Put(ctx, str(self.counter - i - 1), stack.pop())
+            array.Put(ctx, unicode(str(self.counter - i - 1)), stack.pop())
         stack.append(array)
 
     def __repr__(self):
@@ -352,13 +352,13 @@ class LOAD_FUNCTION(Opcode):
         self.funcobj = funcobj
 
     def eval(self, ctx, stack):
-        proto = ctx.get_global().Get(ctx, 'Function').Get(ctx, 'prototype')
-        w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function',
+        proto = ctx.get_global().Get(ctx, u'Function').Get(ctx, u'prototype')
+        w_func = W_Object(ctx=ctx, Prototype=proto, Class=u'Function',
                           callfunc=self.funcobj)
-        w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
-        w_obj = create_object(ctx, 'Object')
-        w_obj.Put(ctx, 'constructor', w_func, flags = jsobj.DE)
-        w_func.Put(ctx, 'prototype', w_obj)
+        w_func.Put(ctx, u'length', W_IntNumber(len(self.funcobj.params)))
+        w_obj = create_object(ctx, u'Object')
+        w_obj.Put(ctx, u'constructor', w_func, flags = jsobj.DE)
+        w_func.Put(ctx, u'prototype', w_obj)
         stack.append(w_func)
 
     def __repr__(self):
@@ -381,7 +381,7 @@ class LOAD_OBJECT(Opcode):
         self.counter = counter
     
     def eval(self, ctx, stack):
-        w_obj = create_object(ctx, 'Object')
+        w_obj = create_object(ctx, u'Object')
         for _ in range(self.counter):
             name = stack.pop().ToString(ctx)
             w_elem = stack.pop()
@@ -424,7 +424,7 @@ class SUB(BaseBinaryOperation):
 class IN(BaseBinaryOperation):
     def operation(self, ctx, left, right):
         if not isinstance(right, W_Object):
-            raise ThrowException(W_String("TypeError"))
+            raise ThrowException(W_String(u'TypeError'))
         name = left.ToString(ctx)
         return newbool(right.HasProperty(name))
 
@@ -442,7 +442,7 @@ class TYPEOF_VARIABLE(Opcode):
             var = ctx.resolve_identifier(ctx, self.name)
             stack.append(W_String(var.type()))
         except ThrowException:
-            stack.append(W_String('undefined'))
+            stack.append(W_String(u'undefined'))
 
 #class Typeof(UnaryOp):
 #    def eval(self, ctx):
@@ -732,12 +732,12 @@ class DECLARE_FUNCTION(Opcode):
 
     def eval(self, ctx, stack):
         # function declaration actyally don't run anything
-        proto = ctx.get_global().Get(ctx, 'Function').Get(ctx, 'prototype')
-        w_func = W_Object(ctx=ctx, Prototype=proto, Class='Function', callfunc=self.funcobj)
-        w_func.Put(ctx, 'length', W_IntNumber(len(self.funcobj.params)))
-        w_obj = create_object(ctx, 'Object')
-        w_obj.Put(ctx, 'constructor', w_func, flags = jsobj.DE)
-        w_func.Put(ctx, 'prototype', w_obj)
+        proto = ctx.get_global().Get(ctx, u'Function').Get(ctx, u'prototype')
+        w_func = W_Object(ctx=ctx, Prototype=proto, Class=u'Function', callfunc=self.funcobj)
+        w_func.Put(ctx, u'length', W_IntNumber(len(self.funcobj.params)))
+        w_obj = create_object(ctx, u'Object')
+        w_obj.Put(ctx, u'constructor', w_func, flags = jsobj.DE)
+        w_func.Put(ctx, u'prototype', w_obj)
         if self.funcobj.name is not None:
             ctx.scope[-1].Put(ctx, self.funcobj.name, w_func)
 
@@ -770,11 +770,11 @@ class POP(Opcode):
 
 def common_call(ctx, r1, args, this, name):
     if not isinstance(r1, W_PrimitiveObject):
-        raise ThrowException(W_String("%s is not a callable (%s)"%(r1.ToString(ctx), name)))
+        raise ThrowException(W_String(r1.ToString(ctx) + u' is not a callable (' + name + u')'))
     try:
         res = r1.Call(ctx=ctx, args=args.tolist(), this=this)
     except JsTypeError:
-        raise ThrowException(W_String("%s is not a function (%s)"%(r1.ToString(ctx), name)))
+        raise ThrowException(W_String(r1.ToString(ctx) + u' is not a function (' + name + u')'))
     return res
 
 class CALL(Opcode):

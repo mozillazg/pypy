@@ -50,9 +50,9 @@ class JSInterpreter(code.InteractiveConsole):
         code.InteractiveConsole.__init__(self, locals, filename)
         self.interpreter = Interpreter()
         ctx = self.interpreter.global_context
-        self.interpreter.w_Global.Put(ctx, 'quit', W_Builtin(quitjs))
-        self.interpreter.w_Global.Put(ctx, 'load', W_Builtin(loadjs))
-        self.interpreter.w_Global.Put(ctx, 'trace', W_Builtin(tracejs))
+        self.interpreter.w_Global.Put(ctx, u'quit', W_Builtin(quitjs))
+        self.interpreter.w_Global.Put(ctx, u'load', W_Builtin(loadjs))
+        self.interpreter.w_Global.Put(ctx, u'trace', W_Builtin(tracejs))
 
 
     def runcodefromfile(self, filename):
@@ -68,11 +68,12 @@ class JSInterpreter(code.InteractiveConsole):
         """
         try:
             res = self.interpreter.run(ast, interactive=True)
+            ctx = self.interpreter.global_context
             if res not in (None, w_Undefined):
                 try:
-                    print res.ToString(self.interpreter.w_Global)
+                    print res.ToString(ctx)
                 except ThrowException, exc:
-                    print exc.exception.ToString(self.interpreter.w_Global)
+                    print exc.exception.ToString(ctx)
         except SystemExit:
             raise
         except ThrowException, exc:

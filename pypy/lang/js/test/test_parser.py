@@ -451,7 +451,7 @@ class TestToAstFunction(BaseTestToAST):
 
     def test_function_decl(self):
         self.check('function f(x, y, z) {x;}',
-                   ['DECLARE_FUNCTION f [\'x\', \'y\', \'z\'] [\n  LOAD_VARIABLE "x"\n  POP\n]'])
+                   ['DECLARE_FUNCTION f [u\'x\', u\'y\', u\'z\'] [\n  LOAD_VARIABLE "x"\n  POP\n]'])
 
     def test_function_expression(self):
         self.check('var x = function() {return x}',[

@@ -48,7 +48,7 @@ class W_ObjectObject(W_NativeObject):
             args[0] is w_Null):
             # XXX later we could separate builtins and normal objects
             return args[0].ToObject(ctx)
-        return create_object(ctx, 'Object')
+        return create_object(ctx, u'Object')
 
 class W_BooleanObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
@@ -60,8 +60,8 @@ class W_BooleanObject(W_NativeObject):
     def Construct(self, ctx, args=[]):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
             Value = newbool(args[0].ToBoolean())
-            return create_object(ctx, 'Boolean', Value = Value)
-        return create_object(ctx, 'Boolean', Value = newbool(False))
+            return create_object(ctx, u'Boolean', Value = Value)
+        return create_object(ctx, u'Boolean', Value = newbool(False))
 
 class W_NumberObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
@@ -78,28 +78,28 @@ class W_NumberObject(W_NativeObject):
     def Construct(self, ctx, args=[]):
         if len(args) >= 1 and not isnull_or_undefined(args[0]):
             Value = W_FloatNumber(args[0].ToNumber(ctx))
-            return create_object(ctx, 'Number', Value = Value)
-        return create_object(ctx, 'Number', Value = W_FloatNumber(0.0))
+            return create_object(ctx, u'Number', Value = Value)
+        return create_object(ctx, u'Number', Value = W_FloatNumber(0.0))
 
 class W_StringObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1:
             return W_String(args[0].ToString(ctx))
         else:
-            return W_String('')
+            return W_String(u'')
 
     def Construct(self, ctx, args=[]):
         if len(args) >= 1:
             Value = W_String(args[0].ToString(ctx))
-            return create_object(ctx, 'String', Value = Value)
-        return create_object(ctx, 'String', Value = W_String(''))
+            return Value.ToObject(ctx)
+        return W_String(u'').ToObject(ctx)
 
 def create_array(ctx, elements=[]):
-    proto = ctx.get_global().Get(ctx, 'Array').Get(ctx, 'prototype')
+    proto = ctx.get_global().Get(ctx, u'Array').Get(ctx, u'prototype')
     array = W_Array(ctx, Prototype=proto, Class = proto.Class)
     i = 0
     while i < len(elements):
-        array.Put(ctx, str(i), elements[i])
+        array.Put(ctx, unicode(str(i)), elements[i])
         i += 1
     
     return array
@@ -108,7 +108,7 @@ class W_ArrayObject(W_NativeObject):
     def Call(self, ctx, args=[], this=None):
         if len(args) == 1 and isinstance(args[0], W_BaseNumber):
             array = create_array(ctx)
-            array.Put(ctx, 'length', args[0])
+            array.Put(ctx, u'length', args[0])
         else:
             array = create_array(ctx, args)
         return array
@@ -121,7 +121,7 @@ TEST = False
 def evaljs(ctx, args, this):
     if len(args) >= 1:
         if  isinstance(args[0], W_String):
-            src = args[0].strval
+            src = args[0].ToString(ctx).encode('ascii') # XXX what is the best aproach here?
         else:
             return args[0]
     else:
@@ -129,7 +129,7 @@ def evaljs(ctx, args, this):
     try:
         node = load_source(src, 'evalcode')
     except ParseError, e:
-        raise ThrowException(W_String('SyntaxError: '+str(e)))
+        raise ThrowException(W_String(u'SyntaxError: ' + unicode(str(e))))
 
     bytecode = JsCode()
     node.emit(bytecode)
@@ -138,18 +138,18 @@ def evaljs(ctx, args, this):
 def parseIntjs(ctx, args, this):
     if len(args) < 1:
         return W_FloatNumber(NAN)
-    s = args[0].ToString(ctx).strip(" ")
+    s = args[0].ToString(ctx).strip(u' ')
     if len(args) > 1:
         radix = args[1].ToInt32(ctx)
     else:
         radix = 10
-    if len(s) >= 2 and (s.startswith('0x') or s.startswith('0X')) :
+    if len(s) >= 2 and (s.startswith(u'0x') or s.startswith(u'0X')) :
         radix = 16
         s = s[2:]
-    if s == '' or radix < 2 or radix > 36:
+    if s == u'' or radix < 2 or radix > 36:
         return W_FloatNumber(NAN)
     try:
-        n = int(s, radix)
+        n = int(s.encode('ascii'), radix)
     except ValueError:
         return W_FloatNumber(NAN)
     return W_IntNumber(n)
@@ -157,16 +157,16 @@ def parseIntjs(ctx, args, this):
 def parseFloatjs(ctx, args, this):
     if len(args) < 1:
         return W_FloatNumber(NAN)
-    s = args[0].ToString(ctx).strip(" ")
+    s = args[0].ToString(ctx).strip(u' ')
     try:
-        n = float(s)
+        n = float(s.encode('ascii'))
     except ValueError:
         n = NAN
     return W_FloatNumber(n)
     
 
 def printjs(ctx, args, this):
-    writer(",".join([i.ToString(ctx) for i in args]))
+    writer(u','.join([i.ToString(ctx) for i in args]))
     return w_Undefined
 
 def isnanjs(ctx, args, this):
@@ -204,35 +204,35 @@ def versionjs(ctx, args, this):
     return w_Undefined
 
 def _ishex(ch):
-    return ((ch >= 'a' and ch <= 'f') or (ch >= '0' and ch <= '9') or
-            (ch >= 'A' and ch <= 'F'))
+    return ((ch >= u'a' and ch <= u'f') or (ch >= u'0' and ch <= u'9') or
+            (ch >= u'A' and ch <= u'F'))
 
 def unescapejs(ctx, args, this):
     # XXX consider using StringBuilder here
     res = []
     if not isinstance(args[0], W_String):
-        raise JsTypeError(W_String("Expected string"))
+        raise JsTypeError(W_String(u'Expected string'))
     strval = args[0].strval
     lgt = len(strval)
     i = 0
     while i < lgt:
         ch = strval[i]
-        if ch == '%':
+        if ch == u'%':
             if (i + 2 < lgt and _ishex(strval[i+1]) and _ishex(strval[i+2])):
-                ch = chr(int(strval[i + 1] + strval[i + 2], 16))
+                ch = unichr(int((strval[i + 1] + strval[i + 2]).encode('ascii'), 16))
                 i += 2
             elif (i + 5 < lgt and strval[i + 1] == 'u' and
                   _ishex(strval[i + 2]) and _ishex(strval[i + 3]) and
                   _ishex(strval[i + 4]) and _ishex(strval[i + 5])):
-                ch = unichr(int(strval[i+2:i+6], 16))
+                ch = unichr(int((strval[i+2:i+6]).encode('ascii'), 16))
                 i += 5
         i += 1
         res.append(ch)
-    return W_String(''.join(res))
+    return W_String(u''.join(res))
 
 class W_ToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
-        return W_String("[object %s]"%this.Class)
+        return W_String(u'[object ' + this.Class + u']')
 
 class W_ValueOf(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -273,10 +273,12 @@ class W_Function(W_NewBuiltin):
             argslist = []
             for i in range(tam-1):
                 argslist.append(args[i].ToString(ctx))
-            fargs = ','.join(argslist)
-            functioncode = "function (%s) {%s}"%(fargs, fbody)
+            fargs = u','.join(argslist)
+            functioncode = u'function (' + fargs + u') {' + fbody + u'}'
         else:
-            functioncode = "function () {}"
+            functioncode = u'function () {}'
+        
+        functioncode = unicode(functioncode).encode('ascii') # XXX this is potentialy very bad
         #remove program and sourcelements node
         funcnode = parse(functioncode).children[0].children[0]
         ast = ASTBUILDER.dispatch(funcnode)
@@ -287,15 +289,15 @@ class W_Function(W_NewBuiltin):
     def Construct(self, ctx, args=[]):
         return self.Call(ctx, args, this=None)
 
-functionstring= 'function (arguments go here!) {\n'+ \
-                '    [lots of stuff :)]\n'+ \
-                '}'
+functionstring= u'function (arguments go here!) {\n'+ \
+                u'    [lots of stuff :)]\n'+ \
+                u'}'
 class W_FToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
-        if this.Class == 'Function':
+        if this.Class == u'Function':
             return W_String(functionstring)
         else:
-            raise JsTypeError('this is not a function object')
+            raise JsTypeError(u'this is not a function object')
 
 class W_Apply(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -314,7 +316,7 @@ class W_Apply(W_NewBuiltin):
             elif isnull_or_undefined(arrayArgs):
                 callargs = []
             else:
-                raise JsTypeError('arrayArgs is not an Array or Arguments object')
+                raise JsTypeError(u'arrayArgs is not an Array or Arguments object')
         except IndexError:
             callargs = []
         return this.Call(ctx, callargs, this=thisArg)
@@ -334,21 +336,21 @@ class W_Call(W_NewBuiltin):
 
 class W_ValueToString(W_NewBuiltin):
     "this is the toString function for objects with Value"
-    mytype = ''
+    mytype = u''
     def Call(self, ctx, args=[], this=None):
         if this.Value.type() != self.mytype:
-            raise JsTypeError('Wrong type')
+            raise JsTypeError(u'Wrong type')
         return W_String(this.Value.ToString(ctx))
 
 
 class W_NumberValueToString(W_ValueToString):
-    mytype = 'number'
+    mytype = u'number'
 
 class W_BooleanValueToString(W_ValueToString):
-    mytype = 'boolean'
+    mytype = u'boolean'
 
 class W_StringValueToString(W_ValueToString):
-    mytype = 'string'
+    mytype = u'string'
 
 
 @specialize.memo()
@@ -357,7 +359,7 @@ def get_value_of(type):
         "this is the valueOf function for objects with Value"
         def Call(self, ctx, args=[], this=None):
             if type != this.Class:
-                raise JsTypeError('%s.prototype.valueOf called with incompatible type' % self.type())
+                raise JsTypeError(self.type() + u'.prototype.valueOf called with incompatible type')
             return this.Value
     return W_ValueValueOf
 
@@ -366,12 +368,27 @@ class W_FromCharCode(W_NewBuiltin):
         temp = []
         for arg in args:
             i = arg.ToInt32(ctx) % 65536 # XXX should be uint16
-            if i > 255:
-                temp.append(unichr(i))
-            else:
-                temp.append(chr(i))
+            temp.append(unichr(i))
         
-        return W_String(''.join(temp))
+        return W_String(u''.join(temp))
+
+class W_ToLower(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        if we_are_translated():
+            temp = string.encode('ascii')
+            return W_String(unicode(temp.lower())) # XXX rpython unicode doesn't have lower
+        else:
+            return W_String(string.lower())
+
+class W_ToUpper(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        if we_are_translated():
+            temp = string.encode('ascii')
+            return W_String(unicode(temp.upper())) # XXX rpython unicode doesn't have upper
+        else:
+            return W_String(string.upper())
 
 class W_CharAt(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
@@ -379,16 +396,27 @@ class W_CharAt(W_NewBuiltin):
         if len(args)>=1:
             pos = args[0].ToInt32(ctx)
             if (not pos >=0) or (pos > len(string) - 1):
-                return W_String('')
+                return W_String(u'')
         else:
-            return W_String('')
+            return W_String(u'')
         return W_String(string[pos])
+
+class W_CharCodeAt(W_NewBuiltin):
+    def Call(self, ctx, args=[], this=None):
+        string = this.ToString(ctx)
+        if len(args)>=1:
+            pos = args[0].ToInt32(ctx)
+            if (not pos >=0) or (pos > len(string) - 1):
+                return W_String(u'')
+        else:
+            return W_String(u'')
+        return W_IntNumber(ord(string[pos]))
 
 class W_Concat(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         string = this.ToString(ctx)
         others = [obj.ToString(ctx) for obj in args]
-        string += ''.join(others)
+        string += u''.join(others)
         return W_String(string)
 
 class W_IndexOf(W_NewBuiltin):
@@ -434,30 +462,38 @@ class W_Split(W_NewBuiltin):
             separator = args[0].ToString(ctx)
         
         if len(args) >= 2:
-            limit = args[1].ToUInt32(ctx)
-            raise ThrowException(W_String("limit not implemented"))
+            #limit = args[1].ToUInt32(ctx)
+            raise ThrowException(W_String(u'limit not implemented'))
             # array = string.split(separator, limit)
         else:
-            array = string.split(separator)
+            if we_are_translated():
+                temp = string.encode('ascii')
+                tempsep = separator.encode('ascii')
+                arrtemp = temp.split(tempsep)
+                array = []
+                for i in arrtemp:
+                    array.append(unicode(i))
+            else:
+                array = string.split(separator)
         
         w_array = create_array(ctx)
         i = 0
         while i < len(array):
             w_str = W_String(array[i])
-            w_array.Put(ctx, str(i), w_str)
+            w_array.Put(ctx, unicode(str(i)), w_str)
             i += 1
         
         return w_array
 
 
-def common_join(ctx, this, sep=','):
-    length = this.Get(ctx, 'length').ToUInt32(ctx)
+def common_join(ctx, this, sep=u','):
+    length = this.Get(ctx, u'length').ToUInt32(ctx)
     l = []
     i = 0
     while i < length:
-        item = this.Get(ctx, str(i))
+        item = this.Get(ctx, unicode(str(i)))
         if isnull_or_undefined(item):
-            item_string = ''
+            item_string = u''
         else:
             item_string = item.ToString(ctx)
         l.append(item_string)
@@ -467,21 +503,21 @@ def common_join(ctx, this, sep=','):
 
 class W_ArrayToString(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
-        return W_String(common_join(ctx, this, sep=','))
+        return W_String(common_join(ctx, this, sep=u','))
 
 class W_ArrayJoin(W_NewBuiltin):
     def Call(self, ctx, args=[], this=None):
         if len(args) >= 1 and not args[0] is w_Undefined:
             sep = args[0].ToString(ctx)
         else:
-            sep = ','
+            sep = u','
         
         return W_String(common_join(ctx, this, sep))
 
 class W_ArrayReverse(W_NewBuiltin):
     length = 0
     def Call(self, ctx, args=[], this=None):
-        r2 = this.Get(ctx, 'length').ToUInt32(ctx)
+        r2 = this.Get(ctx, u'length').ToUInt32(ctx)
         k = r_uint(0)
         r3 = r_uint(math.floor( float(r2)/2.0 ))
         if r3 == k:
@@ -489,8 +525,8 @@ class W_ArrayReverse(W_NewBuiltin):
         
         while k < r3:
             r6 = r2 - k - 1
-            r7 = str(k)
-            r8 = str(r6)
+            r7 = unicode(str(k))
+            r8 = unicode(str(r6))
             
             r9 = this.Get(ctx, r7)
             r10 = this.Get(ctx, r8)
@@ -503,10 +539,10 @@ class W_ArrayReverse(W_NewBuiltin):
 
 class W_DateFake(W_NewBuiltin): # XXX This is temporary
     def Call(self, ctx, args=[], this=None):
-        return create_object(ctx, 'Object')
+        return create_object(ctx, u'Object')
     
     def Construct(self, ctx, args=[]):
-        return create_object(ctx, 'Object')
+        return create_object(ctx, u'Object')
 
 def pypy_repr(ctx, repr, w_arg):
     return W_String(w_arg.__class__.__name__)
@@ -519,175 +555,178 @@ class Interpreter(object):
     """Creates a js interpreter"""
     def __init__(self):        
         allon = DE | DD | RO
-        w_Global = W_Object(Class="global")
+        w_Global = W_Object(Class=u'global')
         
         ctx = global_context(w_Global)
         
-        w_ObjPrototype = W_Object(Prototype=None, Class='Object')
+        w_ObjPrototype = W_Object(Prototype=None, Class=u'Object')
         
-        w_Function = W_Function(ctx, Class='Function', 
+        w_Function = W_Function(ctx, Class=u'Function', 
                               Prototype=w_ObjPrototype)
-        w_Function.Put(ctx, 'length', W_IntNumber(1), flags = allon)
-        w_Global.Put(ctx, 'Function', w_Function)
+        w_Function.Put(ctx, u'length', W_IntNumber(1), flags = allon)
+        w_Global.Put(ctx, u'Function', w_Function)
         
-        w_Object = W_ObjectObject('Object', w_Function)
-        w_Object.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
-        w_Object.Put(ctx, 'length', W_IntNumber(1), flags = RO | DD)
-        w_Global.Put(ctx, 'Object', w_Object)
+        w_Object = W_ObjectObject(u'Object', w_Function)
+        w_Object.Put(ctx, u'prototype', w_ObjPrototype, flags = allon)
+        w_Object.Put(ctx, u'length', W_IntNumber(1), flags = RO | DD)
+        w_Global.Put(ctx, u'Object', w_Object)
         w_Global.Prototype = w_ObjPrototype
         
         w_FncPrototype = w_Function.Call(ctx, this=w_Function)
-        w_Function.Put(ctx, 'prototype', w_FncPrototype, flags = allon)
-        w_Function.Put(ctx, 'constructor', w_Function)
+        w_Function.Put(ctx, u'prototype', w_FncPrototype, flags = allon)
+        w_Function.Put(ctx, u'constructor', w_Function)
         
         toString = W_ToString(ctx)
         
         put_values(ctx, w_ObjPrototype, {
-            'constructor': w_Object,
-            '__proto__': w_FncPrototype,
-            'toString': toString,
-            'toLocaleString': toString,
-            'valueOf': W_ValueOf(ctx),
-            'hasOwnProperty': W_HasOwnProperty(ctx),
-            'isPrototypeOf': W_IsPrototypeOf(ctx),
-            'propertyIsEnumerable': W_PropertyIsEnumerable(ctx),
+            u'constructor': w_Object,
+            u'__proto__': w_FncPrototype,
+            u'toString': toString,
+            u'toLocaleString': toString,
+            u'valueOf': W_ValueOf(ctx),
+            u'hasOwnProperty': W_HasOwnProperty(ctx),
+            u'isPrototypeOf': W_IsPrototypeOf(ctx),
+            u'propertyIsEnumerable': W_PropertyIsEnumerable(ctx),
         })
         
         #properties of the function prototype
         put_values(ctx, w_FncPrototype, {
-            'constructor': w_Function,
-            '__proto__': w_FncPrototype,
-            'toString': W_FToString(ctx),
-            'apply': W_Apply(ctx),
-            'call': W_Call(ctx),
-            'arguments': w_Null,
+            u'constructor': w_Function,
+            u'__proto__': w_FncPrototype,
+            u'toString': W_FToString(ctx),
+            u'apply': W_Apply(ctx),
+            u'call': W_Call(ctx),
+            u'arguments': w_Null,
         })
         
-        w_Boolean = W_BooleanObject('Boolean', w_FncPrototype)
-        w_Boolean.Put(ctx, 'constructor', w_FncPrototype, flags = allon)
-        w_Boolean.Put(ctx, 'length', W_IntNumber(1), flags = allon)
+        w_Boolean = W_BooleanObject(u'Boolean', w_FncPrototype)
+        w_Boolean.Put(ctx, u'constructor', w_FncPrototype, flags = allon)
+        w_Boolean.Put(ctx, u'length', W_IntNumber(1), flags = allon)
         
-        w_BoolPrototype = create_object(ctx, 'Object', Value=newbool(False))
-        w_BoolPrototype.Class = 'Boolean'
+        w_BoolPrototype = create_object(ctx, u'Object', Value=newbool(False))
+        w_BoolPrototype.Class = u'Boolean'
         
         put_values(ctx, w_BoolPrototype, {
-            'constructor': w_FncPrototype,
-            '__proto__': w_ObjPrototype,
-            'toString': W_BooleanValueToString(ctx),
-            'valueOf': get_value_of('Boolean')(ctx),
+            u'constructor': w_FncPrototype,
+            u'__proto__': w_ObjPrototype,
+            u'toString': W_BooleanValueToString(ctx),
+            u'valueOf': get_value_of(u'Boolean')(ctx),
         })
 
-        w_Boolean.Put(ctx, 'prototype', w_BoolPrototype, flags = allon)
-        w_Global.Put(ctx, 'Boolean', w_Boolean)
+        w_Boolean.Put(ctx, u'prototype', w_BoolPrototype, flags = allon)
+        w_Global.Put(ctx, u'Boolean', w_Boolean)
 
         #Number
-        w_Number = W_NumberObject('Number', w_FncPrototype)
+        w_Number = W_NumberObject(u'Number', w_FncPrototype)
 
-        w_empty_fun = w_Function.Call(ctx, args=[W_String('')])
+        w_empty_fun = w_Function.Call(ctx, args=[W_String(u'')])
 
-        w_NumPrototype = create_object(ctx, 'Object', Value=W_FloatNumber(0.0))
-        w_NumPrototype.Class = 'Number'
+        w_NumPrototype = create_object(ctx, u'Object', Value=W_FloatNumber(0.0))
+        w_NumPrototype.Class = u'Number'
         put_values(ctx, w_NumPrototype, {
-            'constructor': w_Number,
-            '__proto__': w_empty_fun,
-            'toString': W_NumberValueToString(ctx),
-            'valueOf': get_value_of('Number')(ctx),
+            u'constructor': w_Number,
+            u'__proto__': w_empty_fun,
+            u'toString': W_NumberValueToString(ctx),
+            u'valueOf': get_value_of(u'Number')(ctx),
         })
 
         put_values(ctx, w_Number, {
-            'constructor': w_FncPrototype,
-            'prototype': w_NumPrototype,
-            '__proto__': w_empty_fun,
-            'length'   : W_IntNumber(1),
+            u'constructor': w_FncPrototype,
+            u'prototype': w_NumPrototype,
+            u'__proto__': w_empty_fun,
+            u'length'   : W_IntNumber(1),
         })
-        w_Number.propdict['prototype'].flags |= RO
-        w_Number.Put(ctx, 'MAX_VALUE', W_FloatNumber(1.7976931348623157e308), flags = RO|DD)
-        w_Number.Put(ctx, 'MIN_VALUE', W_FloatNumber(0), flags = RO|DD)
-        w_Number.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = RO|DD)
+        w_Number.propdict[u'prototype'].flags |= RO
+        w_Number.Put(ctx, u'MAX_VALUE', W_FloatNumber(1.7976931348623157e308), flags = RO|DD)
+        w_Number.Put(ctx, u'MIN_VALUE', W_FloatNumber(0.0), flags = RO|DD)
+        w_Number.Put(ctx, u'NaN', W_FloatNumber(NAN), flags = RO|DD)
         # ^^^ this is exactly in test case suite
-        w_Number.Put(ctx, 'POSITIVE_INFINITY', W_FloatNumber(INFINITY), flags = RO|DD)
-        w_Number.Put(ctx, 'NEGATIVE_INFINITY', W_FloatNumber(-INFINITY), flags = RO|DD)
+        w_Number.Put(ctx, u'POSITIVE_INFINITY', W_FloatNumber(INFINITY), flags = RO|DD)
+        w_Number.Put(ctx, u'NEGATIVE_INFINITY', W_FloatNumber(-INFINITY), flags = RO|DD)
         
 
-        w_Global.Put(ctx, 'Number', w_Number)
+        w_Global.Put(ctx, u'Number', w_Number)
         
                 
         #String
-        w_String = W_StringObject('String', w_FncPrototype)
+        w_String = W_StringObject(u'String', w_FncPrototype)
 
-        w_StrPrototype = create_object(ctx, 'Object', Value=W_String(''))
-        w_StrPrototype.Class = 'String'
+        w_StrPrototype = create_object(ctx, u'Object', Value=W_String(u''))
+        w_StrPrototype.Class = u'String'
         
         put_values(ctx, w_StrPrototype, {
-            'constructor': w_FncPrototype,
-            '__proto__': w_StrPrototype,
-            'toString': W_StringValueToString(ctx),
-            'valueOf': get_value_of('String')(ctx),
-            'charAt': W_CharAt(ctx),
-            'concat': W_Concat(ctx),
-            'indexOf': W_IndexOf(ctx),
-            'substring': W_Substring(ctx),
-            'split': W_Split(ctx),
+            u'constructor': w_FncPrototype,
+            u'__proto__': w_StrPrototype,
+            u'toString': W_StringValueToString(ctx),
+            u'valueOf': get_value_of(u'String')(ctx),
+            u'toLowerCase': W_ToLower(ctx),
+            u'toUpperCase': W_ToUpper(ctx),
+            u'charAt': W_CharAt(ctx),
+            u'charCodeAt': W_CharCodeAt(ctx),
+            u'concat': W_Concat(ctx),
+            u'indexOf': W_IndexOf(ctx),
+            u'substring': W_Substring(ctx),
+            u'split': W_Split(ctx),
         })
         
-        w_String.Put(ctx, 'prototype', w_StrPrototype)
-        w_String.Put(ctx, 'fromCharCode', W_FromCharCode(ctx))
-        w_Global.Put(ctx, 'String', w_String)
+        w_String.Put(ctx, u'prototype', w_StrPrototype)
+        w_String.Put(ctx, u'fromCharCode', W_FromCharCode(ctx))
+        w_Global.Put(ctx, u'String', w_String)
 
-        w_Array = W_ArrayObject('Array', w_FncPrototype)
+        w_Array = W_ArrayObject(u'Array', w_FncPrototype)
 
         w_ArrPrototype = W_Array(Prototype=w_ObjPrototype)
         w_arr_join = W_ArrayJoin(ctx)
-        w_arr_join.Put(ctx, 'length', W_IntNumber(1), flags=allon)
+        w_arr_join.Put(ctx, u'length', W_IntNumber(1), flags=allon)
         
         put_values(ctx, w_ArrPrototype, {
-            'constructor': w_FncPrototype,
-            '__proto__': w_ArrPrototype,
-            'toString': W_ArrayToString(ctx),
-            'join': w_arr_join,
-            'reverse': W_ArrayReverse(ctx),
+            u'constructor': w_FncPrototype,
+            u'__proto__': w_ArrPrototype,
+            u'toString': W_ArrayToString(ctx),
+            u'join': w_arr_join,
+            u'reverse': W_ArrayReverse(ctx),
         })
         
-        w_Array.Put(ctx, 'prototype', w_ArrPrototype, flags = allon)
-        w_Array.Put(ctx, '__proto__', w_FncPrototype, flags = allon)
-        w_Array.Put(ctx, 'length', W_IntNumber(1), flags = allon)
-        w_Global.Put(ctx, 'Array', w_Array)
+        w_Array.Put(ctx, u'prototype', w_ArrPrototype, flags = allon)
+        w_Array.Put(ctx, u'__proto__', w_FncPrototype, flags = allon)
+        w_Array.Put(ctx, u'length', W_IntNumber(1), flags = allon)
+        w_Global.Put(ctx, u'Array', w_Array)
         
         
         #Math
-        w_math = W_Object(Class='Math')
-        w_Global.Put(ctx, 'Math', w_math)
-        w_math.Put(ctx, '__proto__',  w_ObjPrototype)
-        w_math.Put(ctx, 'prototype', w_ObjPrototype, flags = allon)
-        w_math.Put(ctx, 'abs', W_Builtin(absjs, Class='function'))
-        w_math.Put(ctx, 'floor', W_Builtin(floorjs, Class='function'))
-        w_math.Put(ctx, 'pow', W_Builtin(powjs, Class='function'))
-        w_math.Put(ctx, 'sqrt', W_Builtin(sqrtjs, Class='function'))
-        w_math.Put(ctx, 'E', W_FloatNumber(math.e))
-        w_math.Put(ctx, 'PI', W_FloatNumber(math.pi))
+        w_math = W_Object(Class=u'Math')
+        w_Global.Put(ctx, u'Math', w_math)
+        w_math.Put(ctx, u'__proto__',  w_ObjPrototype)
+        w_math.Put(ctx, u'prototype', w_ObjPrototype, flags = allon)
+        w_math.Put(ctx, u'abs', W_Builtin(absjs, Class=u'function'))
+        w_math.Put(ctx, u'floor', W_Builtin(floorjs, Class=u'function'))
+        w_math.Put(ctx, u'pow', W_Builtin(powjs, Class=u'function'))
+        w_math.Put(ctx, u'sqrt', W_Builtin(sqrtjs, Class=u'function'))
+        w_math.Put(ctx, u'E', W_FloatNumber(math.e))
+        w_math.Put(ctx, u'PI', W_FloatNumber(math.pi))
         
-        w_Global.Put(ctx, 'version', W_Builtin(versionjs))
+        w_Global.Put(ctx, u'version', W_Builtin(versionjs))
         
         #Date
-        w_Date = W_DateFake(ctx, Class='Date')
-        w_Global.Put(ctx, 'Date', w_Date)
+        w_Date = W_DateFake(ctx, Class=u'Date')
+        w_Global.Put(ctx, u'Date', w_Date)
         
-        w_Global.Put(ctx, 'NaN', W_FloatNumber(NAN), flags = DE|DD)
-        w_Global.Put(ctx, 'Infinity', W_FloatNumber(INFINITY), flags = DE|DD)
-        w_Global.Put(ctx, 'undefined', w_Undefined, flags = DE|DD)        
-        w_Global.Put(ctx, 'eval', W_Builtin(evaljs))
-        w_Global.Put(ctx, 'parseInt', W_Builtin(parseIntjs))
-        w_Global.Put(ctx, 'parseFloat', W_Builtin(parseFloatjs))
-        w_Global.Put(ctx, 'isNaN', W_Builtin(isnanjs))
-        w_Global.Put(ctx, 'isFinite', W_Builtin(isfinitejs))            
-        w_Global.Put(ctx, 'print', W_Builtin(printjs))
-        w_Global.Put(ctx, 'unescape', W_Builtin(unescapejs))
+        w_Global.Put(ctx, u'NaN', W_FloatNumber(NAN), flags = DE|DD)
+        w_Global.Put(ctx, u'Infinity', W_FloatNumber(INFINITY), flags = DE|DD)
+        w_Global.Put(ctx, u'undefined', w_Undefined, flags = DE|DD)        
+        w_Global.Put(ctx, u'eval', W_Builtin(evaljs))
+        w_Global.Put(ctx, u'parseInt', W_Builtin(parseIntjs))
+        w_Global.Put(ctx, u'parseFloat', W_Builtin(parseFloatjs))
+        w_Global.Put(ctx, u'isNaN', W_Builtin(isnanjs))
+        w_Global.Put(ctx, u'isFinite', W_Builtin(isfinitejs))            
+        w_Global.Put(ctx, u'print', W_Builtin(printjs))
+        w_Global.Put(ctx, u'unescape', W_Builtin(unescapejs))
 
-        w_Global.Put(ctx, 'this', w_Global)
+        w_Global.Put(ctx, u'this', w_Global)
 
         # DEBUGGING
         if 0:
-            w_Global.Put(ctx, 'pypy_repr', W_Builtin(pypy_repr))
+            w_Global.Put(ctx, u'pypy_repr', W_Builtin(pypy_repr))
         
         self.global_context = ctx
         self.w_Global = w_Global

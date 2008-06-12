@@ -131,9 +131,9 @@ def AbstractEC(ctx, x, y):
     type1 = x.type()
     type2 = y.type()
     if type1 == type2:
-        if type1 == "undefined" or type1 == "null":
+        if type1 == u"undefined" or type1 == u"null":
             return True
-        if type1 == "number":
+        if type1 == u"number":
             n1 = x.ToNumber(ctx)
             n2 = y.ToNumber(ctx)
             if isnan(n1) or isnan(n2):
@@ -141,37 +141,37 @@ def AbstractEC(ctx, x, y):
             if n1 == n2:
                 return True
             return False
-        elif type1 == "string":
+        elif type1 == u"string":
             return x.ToString(ctx) == y.ToString(ctx)
-        elif type1 == "boolean":
+        elif type1 == u"boolean":
             return x.ToBoolean() == x.ToBoolean()
         # XXX rethink it here
         return x.ToString(ctx) == y.ToString(ctx)
     else:
         #step 14
-        if (type1 == "undefined" and type2 == "null") or \
-           (type1 == "null" and type2 == "undefined"):
+        if (type1 == u"undefined" and type2 == u"null") or \
+           (type1 == u"null" and type2 == u"undefined"):
             return True
-        if type1 == "number" and type2 == "string":
+        if type1 == u"number" and type2 == u"string":
             return AbstractEC(ctx, x, W_FloatNumber(y.ToNumber(ctx)))
-        if type1 == "string" and type2 == "number":
+        if type1 == u"string" and type2 == u"number":
             return AbstractEC(ctx, W_FloatNumber(x.ToNumber(ctx)), y)
-        if type1 == "boolean":
+        if type1 == u"boolean":
             return AbstractEC(ctx, W_FloatNumber(x.ToNumber(ctx)), y)
-        if type2 == "boolean":
+        if type2 == u"boolean":
             return AbstractEC(ctx, x, W_FloatNumber(y.ToNumber(ctx)))
-        if (type1 == "string" or type1 == "number") and \
-            type2 == "object":
+        if (type1 == u"string" or type1 == u"number") and \
+            type2 == u"object":
             return AbstractEC(ctx, x, y.ToPrimitive(ctx))
-        if (type2 == "string" or type2 == "number") and \
-            type1 == "object":
+        if (type2 == u"string" or type2 == u"number") and \
+            type1 == u"object":
             return AbstractEC(ctx, x.ToPrimitive(ctx), y)
         return False
             
         
     objtype = x.GetValue().type()
     if objtype == y.GetValue().type():
-        if objtype == "undefined" or objtype == "null":
+        if objtype == u"undefined" or objtype == u"null":
             return True
         
     if isinstance(x, W_String) and isinstance(y, W_String):
@@ -189,9 +189,9 @@ def StrictEC(ctx, x, y):
     type2 = y.type()
     if type1 != type2:
         return False
-    if type1 == "undefined" or type1 == "null":
+    if type1 == u"undefined" or type1 == u"null":
         return True
-    if type1 == "number":
+    if type1 == u"number":
         n1 = x.ToNumber(ctx)
         n2 = y.ToNumber(ctx)
         if isnan(n1) or isnan(n2):
@@ -199,20 +199,20 @@ def StrictEC(ctx, x, y):
         if n1 == n2:
             return True
         return False
-    if type1 == "string":
+    if type1 == u"string":
         return x.ToString(ctx) == y.ToString(ctx)
-    if type1 == "boolean":
+    if type1 == u"boolean":
         return x.ToBoolean() == x.ToBoolean()
     return x == y
 
 
 def commonnew(ctx, obj, args):
     if not isinstance(obj, W_PrimitiveObject):
-        raise ThrowException(W_String('it is not a constructor'))
+        raise ThrowException(W_String(u'it is not a constructor'))
     try:
         res = obj.Construct(ctx=ctx, args=args)
     except JsTypeError:
-        raise ThrowException(W_String('it is not a constructor'))
+        raise ThrowException(W_String(u'it is not a constructor'))
     return res
 
 def uminus(obj, ctx):
