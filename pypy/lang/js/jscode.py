@@ -881,11 +881,8 @@ class NEXT_ITERATOR(Opcode):
 # ---------------- with support ---------------------
 
 class WITH_START(Opcode):
-    def __init__(self, name):
-        self.name = name
-
     def eval(self, ctx, stack):
-        ctx.push_object(ctx.resolve_identifier(ctx, self.name).ToObject(ctx))
+        ctx.push_object(stack.pop().ToObject(ctx))
 
 class WITH_END(Opcode):
     def eval(self, ctx, stack):

@@ -312,13 +312,23 @@ def test_in():
     """, ["true", "false"])
 
 def test_for():
-    assertp("""
+    yield assertp, """
     i = 0;
     for (i; i<3; i++) {
         print(i);
     }
     print(i);
-    """, ["0","1","2","3"])
+    """, ["0","1","2","3"]
+    
+    yield assertp, """
+    i = 0;
+    for (;;) {
+        if(i >= 3) break;
+        print(i);
+        i++
+    }
+    print(i);
+    """, ["0","1","2","3"]
 
 def test_eval():
     yield assertp, """
@@ -341,6 +351,15 @@ def test_break():
         break;
     }
     print('out');""", "out")
+
+def test_continue():
+    assertp("""
+    for(x = 0; x < 3; x++) {
+        print(x);
+        continue;
+        print('error');
+    }
+    print('out');""", ["0","1","2","out"])
 
 def test_typeof():
     assertv("""
@@ -502,7 +521,7 @@ def test_stricteq():
     yield assertv, "2 !== 2;", False
 
 def test_with():
-    assertp("""
+    yield assertp, """
     var mock = {x:2};
     var x=4;
     print(x);
@@ -517,7 +536,13 @@ def test_with():
         print(y);
     }
     print(x);
-    """, ['4', '2', '3', '4'])
+    """, ['4', '2', '3', '4']
+    
+    yield assertp, """
+    with(new Array(1,2,3)) {
+        print(join('.'))
+    }
+    """, "1.2.3"
 
 def test_bitops():
     yield assertv, "2 ^ 2;", 0

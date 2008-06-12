@@ -748,6 +748,8 @@ class Interpreter(object):
         if not we_are_translated():
             # debugging
             self._code = bytecode
+            if interactive:
+                print bytecode
         if interactive:
             return bytecode.run(self.global_context, retlast=True)
         else:

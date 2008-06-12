@@ -432,6 +432,14 @@ class ASTBuilder(RPythonVisitor):
         else:
             target = None
         return operations.Break(pos, target)
+
+    def visit_continuestatement(self, node):
+        pos = self.get_pos(node)
+        if len(node.children) > 0:
+            target = self.dispatch(node.children[0])
+        else:
+            target = None
+        return operations.Continue(pos, target)
     
     def visit_returnstatement(self, node):
         pos = self.get_pos(node)
@@ -469,7 +477,7 @@ class ASTBuilder(RPythonVisitor):
     
     def visit_withstatement(self, node):
         pos = self.get_pos(node)
-        identifier = self.dispatch(node.children[0])
+        withpart = self.dispatch(node.children[0])
         body = self.dispatch(node.children[1])
-        return operations.With(pos, identifier, body)
+        return operations.With(pos, withpart, body)
         
