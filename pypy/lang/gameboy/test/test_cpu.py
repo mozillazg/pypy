@@ -534,14 +534,13 @@ def test_0x04_to_0x3C_inc_registers():
         value  += 3
         
 # inc_HLi
-def test_0x34():
+def test_0x34_increment_hli():
     cpu   = get_cpu()
-    value = 0x12
     cpu.hl.set(0xCDEF)
-    cpu.write(cpu.hl.get(), value)
-    assert cpu.read(cpu.hl.get()) == value
+    cpu.write(cpu.hl.get(), 0x12)
+    assert cpu.read(cpu.hl.get()) == 0x12
     cycle_test(cpu, 0x34, 3)
-    assert cpu.read(cpu.hl.get()) == value +1
+    assert cpu.read(cpu.hl.get()) == 0x12 +1
     
 
 def test_dec():
@@ -588,14 +587,13 @@ def test_0x05_to_0x3D_dec_registers():
         value  += 3
 
 # dec_HLi
-def test_0x35():
+def test_0x35_decrement_hli():
     cpu   = get_cpu()
-    value = 0x12
     cpu.hl.set(0xCDEF)
-    cpu.write(cpu.hl.get(), value)
-    assert cpu.read(cpu.hl.get()) == value
+    cpu.write(cpu.hl.get(), 0x12)
+    assert cpu.read(cpu.hl.get()) == 0x12
     cycle_test(cpu, 0x35, 3)
-    assert cpu.read(cpu.hl.get()) == value -1
+    assert cpu.read(cpu.hl.get()) == 0x12 -1
     
 # ld_B_nn C D E H L A )
 def test_0x06_to_0x3A():
@@ -788,8 +786,8 @@ def test_0x80_to_0x87_add_A():
         value  += 3
         opCode += 0x01
 
-# adc_A_B to adx_A_A
-def test_0x88_to_0x8F():
+# adc_A_B to adc_A_A
+def test_0x88_to_0x8F_add_with_carry_a():
     cpu    = get_cpu()
     opCode = 0x88
     value  = 0x12
@@ -820,7 +818,7 @@ def test_0x88_to_0x8F():
         opCode += 0x01
 
 # sub_A_B to sub_A_A
-def test_0x90_to_0x98():
+def test_0x90_to_0x98_subtract_a():
     cpu       = get_cpu()
     opCode    = 0x90
     value     = 0x12
@@ -838,7 +836,7 @@ def test_0x90_to_0x98():
         opCode += 0x01
     
 # sbc_A_B to sbc_A_A
-def test_0x98_0x9F():
+def test_0x98_0x9F_subtract_with_carry_a():
     cpu       = get_cpu()
     opCode    = 0x98
     value     = 0x12
@@ -940,20 +938,28 @@ def test_0xB0_to_0xB7():
 def test_0xB8_to_0xBF_compare_a():
     cpu       = get_cpu()
     opCode    = 0xB8
-    value     = 0x12
-    valueA    = 0x11
     registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
     for register in registers:
         cpu.reset()
-        cpu.a.set(valueA)
-        register.set(value)
+        cpu.a.set(0x12)
+        register.set(0x22)
         numCycles= 1
         if register == cpu.hli:
             numCycles = 2
         cycle_test(cpu, opCode, numCycles)
         if register == cpu.a:
-            valueA = value
-        value  += 1
+            assert cpu.f.z_flag == True
+        else:
+            assert cpu.f.z_flag == False
+        
+        cpu.a.set(0x12)
+        register.set(0x12)
+        numCycles= 1
+        if register == cpu.hli:
+            numCycles = 2
+        cycle_test(cpu, opCode, numCycles)
+        assert cpu.f.z_flag == True
+            
         opCode += 0x01
 
 # ret_NZ to ret_C
@@ -1138,7 +1144,7 @@ def test_0xF9_store_hl_in_sp():
     assert_default_registers(cpu, sp=value, hl=value)
 
 # jp_NZ_nnnn to jp_C_nnnn
-def test_0xC2_to_0xDA():
+def test_0xC2_to_0xDA_conditional_jump():
     cpu    = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0xC2
@@ -1326,19 +1332,19 @@ def test_0xC6_add_a_fetch():
     a_nn_test(0xC6, 2, lambda a, b, cpu: a+b)
 
 # adc_A_nn
-def test_0xCE():
+def test_0xCE_add_a_with_carry_fetch():
     a_nn_test(0xCE, 2, lambda a, b, cpu: a+b)
 
 # sub_A_nn
-def test_0xD6():
+def test_0xD6_subtract_a_fetch():
     a_nn_test(0xD6, 2, lambda a, b, cpu: a-b)
 
 # sbc_A_nn
-def test_0xDE():
+def test_0xDE_subtract_with_carry_fetch():
     a_nn_test(0xDE, 2, lambda a, b, cpu: a-b)
 
 # and_A_nn
-def test_0xE6():
+def test_0xE6_and_a_fetch():
     a_nn_test(0xE6, 2, lambda a, b, cpu: a&b)
 
 # xor_A_nn

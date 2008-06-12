@@ -31,7 +31,7 @@ def test_rom1_load():
         pass
     
 def test_rom1_step():
-    py.test.skip()
+    py.test.skip("rom has incorrect header")
     gameboy = GameBoy()
     gameboy.load_cartridge_file(ROM_PATH+"/rom1/rom1.raw", verify=False)
     cpu = gameboy.cpu
@@ -58,12 +58,11 @@ def test_rom3_load():
     
 
 def test_rom3_step():
-    py.test.skip()
     gameboy = GameBoy()
     gameboy.load_cartridge_file(ROM_PATH+"/rom3/rom3.gb")
     cpu = gameboy.cpu
     # jp nop
-    emulate_step_op_codes_test(gameboy, [0xC3])
+    emulate_step_op_codes_test(gameboy, [0, 0xC3])
     emulate_step_op_codes_test(gameboy, [0]*12)
     emulate_step_op_codes_test(gameboy, [0xC3]*100)
     
@@ -100,7 +99,7 @@ def test_rom5_load():
     
 
 def test_rom5_step():
-    py.test.skip("dec and inc dont work as excepted")
+    py.test.skip("wrong usage of inc and its c flag")
     gameboy = GameBoy()
     gameboy.load_cartridge_file(ROM_PATH+"/rom5/rom5.gb")
     cpu = gameboy.cpu
@@ -120,7 +119,7 @@ def test_rom5_step():
     emulate_step_op_codes_test(gameboy, [0x30])
     assert cpu.pc.get()  == pc-2
     # looping in .loop2
-    emulate_step_op_codes_test(gameboy, [0xC6, 0x30]*255)
+    emulate_step_op_codes_test(gameboy, [0xC6, 0x30]*0xFF)
     assert cpu.a.get() == 0
     assert cpu.f.c_flag == True
     # debugg call reseting 
@@ -235,18 +234,18 @@ def test_rom6_step():
                                 
     
 # ------------------------------------------------------------------------------
-    
-def test_rom7_load():
-    py.test.skip("Current Default ROM Implemenation doesnt allow write")
-    gameboy = GameBoy()
-    gameboy.load_cartridge_file(ROM_PATH+"/rom7/rom7.gb")
-    gameboy.emulate(EMULATION_CYCLES)
-    cpu = gameboy.cpu
-    
-    
-def test_rom7_step():
-    py.test.skip("Current Default ROM Implemenation doesnt allow write")
-    
+#    
+#def test_rom7_load():
+#    py.test.skip("Current Default ROM Implemenation doesnt allow write")
+#    gameboy = GameBoy()
+#    gameboy.load_cartridge_file(ROM_PATH+"/rom7/rom7.gb")
+#    gameboy.emulate(EMULATION_CYCLES)
+#    cpu = gameboy.cpu
+#    
+#    
+#def test_rom7_step():
+#    py.test.skip("Current Default ROM Implemenation doesnt allow write")
+#    
 # ------------------------------------------------------------------------------
     
 def test_rom8_load():

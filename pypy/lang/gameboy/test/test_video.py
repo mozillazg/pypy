@@ -351,9 +351,3 @@ def test_emulate_v_vblank_2():
     assert video.stat == 0xFE
     assert video.cycles == constants.MODE_2_TICKS 
     assert not video.interrupt.lcd.is_pending()
-    
-
-def test_emulate_v_vblank_3():
-    py.test.skip("not yet implemented")
-    
-    

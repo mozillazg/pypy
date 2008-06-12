@@ -123,15 +123,26 @@ def method_register_value_call(cpu, method, register, number):
 # Tests -----------------------------------------------------------------------
 
 
-def test_pa_with_carry():
+def test_add_with_carry():
     cpu = get_cpu()
     cpu.f.set(0xFF)
     cpu.a.set(0x00)
     method_value_call(cpu, CPU.add_a_with_carry, 0x00)
     assert cpu.a.get() == 0x01
     assert_flags(cpu, z=False, n=False, h=False, c=False)
-    add_flag_test(cpu, CPU.add_a_with_carry)
     
+    add_flag_test(cpu, CPU.add_a_with_carry)
+     
+def test_add_a():
+    cpu = get_cpu()
+    cpu.f.set(0xFF)
+    cpu.a.set(0x00)
+    method_value_call(cpu, CPU.add_a, 0x00)
+    assert cpu.a.get() == 0x00
+    assert_flags(cpu, z=True, n=False, h=False, c=False)
+    
+    add_flag_test(cpu, CPU.add_a)
+       
 def add_flag_test(cpu, method):
     cpu.f.set(0x00)
     cpu.a.set(0x00)
@@ -156,17 +167,6 @@ def add_flag_test(cpu, method):
     method_value_call(cpu, CPU.add_a_with_carry, 0x01)
     assert cpu.a.get() == 0x00
     assert_flags(cpu, z=True, n=False, h=True, c=True)
-    
-def test_add_a():
-    cpu = get_cpu()
-    cpu.f.set(0xFF)
-    cpu.a.set(0x00)
-    method_value_call(cpu, CPU.add_a, 0x00)
-    assert cpu.a.get() == 0x00
-    assert_flags(cpu, z=True, n=False, h=False, c=False)
-    
-    add_flag_test(cpu, CPU.add_a)
-    
     
 def test_add_hl():
     cpu = get_cpu()

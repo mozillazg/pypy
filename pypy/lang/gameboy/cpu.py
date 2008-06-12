@@ -502,8 +502,7 @@ class CPU(object):
         data = register.get()
         added = (self.hl.get() + data) # 1 cycle
         self.f.partial_reset(keep_z=True)
-        if ((added ^ self.hl.get() ^ data) & 0x1000) != 0:
-            self.f.h_flag = True
+        self.f.h_flag = (((added ^ self.hl.get() ^ data) & 0x1000) != 0) 
         self.f.c_flag = (added >= 0x10000 or added < 0)
         self.hl.set(added & 0xFFFF)
         self.cycles -= 1
@@ -524,8 +523,7 @@ class CPU(object):
     def add_sub_flag_finish(self, s, data):
         self.f.reset()
         # set the h flag if the 0x10 bit was affected
-        if ((s ^ self.a.get() ^ data) & 0x10) != 0:
-            self.f.h_flag = True
+        self.f.h_flag = (((s ^ self.a.get() ^ data) & 0x10) != 0)
         self.f.c_flag = (s >= 0x100 or s < 0)
         self.f.z_flag_compare(s)
         self.a.set(s & 0xFF)  # 1 cycle
@@ -551,12 +549,11 @@ class CPU(object):
         self.f.reset()
         self.f.n_flag = True
         self.f.z_flag_compare(s)
-        self.hc_flag_finish(s)
+        self.subtract_hc_flag_finish(s)
         self.cycles -= 1
             
-    def hc_flag_finish(self, data):
-        if data > self.a.get():
-            self.f.c_flag = True
+    def subtract_hc_flag_finish(self, data):
+        self.f.c_flag = (data > self.a.get())
         self.f.h_flag_compare(data, self.a.get())
         
     def and_a(self, getCaller, setCaller=None):
@@ -687,8 +684,7 @@ class CPU(object):
         self.f.partial_reset(keep_c=True)
         self.f.h_flag = True
         self.f.z_flag = False
-        if (getCaller.get() & (1 << n)) == 0:
-            self.f.z_flag = True
+        self.f.z_flag = ((getCaller.get() & (1 << n)) == 0)
         self.cycles -= 1
 
     def set_bit(self, getCaller, setCaller, n):
