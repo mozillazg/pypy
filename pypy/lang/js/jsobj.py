@@ -35,7 +35,7 @@ class W_Root(object):
         return self
 
     def ToString(self, ctx):
-        return ''
+        return u''
     
     def ToObject(self, ctx):
         # XXX should raise not implemented
@@ -82,36 +82,36 @@ class W_Undefined(W_Root):
         return False
     
     def ToString(self, ctx):
-        return "undefined"
+        return u"undefined"
     
     def type(self):
-        return 'undefined'
+        return u'undefined'
 
 class W_Null(W_Root):
     def __str__(self):
-        return "null"
+        return u'null'
 
     def ToBoolean(self):
         return False
 
     def ToString(self, ctx):
-        return "null"
+        return u'null'
 
     def type(self):
-        return 'null'
+        return u'null'
 
 w_Undefined = W_Undefined()
 w_Null = W_Null()
 
 
 class W_PrimitiveObject(W_Root):
-    def __init__(self, ctx=None, Prototype=None, Class='Object',
+    def __init__(self, ctx=None, Prototype=None, Class=u'Object',
                  Value=w_Undefined, callfunc=None):
         self.propdict = {}
         self.Prototype = Prototype
         if Prototype is None:
             Prototype = w_Undefined
-        self.propdict['prototype'] = Property('prototype', Prototype, flags = DE|DD)
+        self.propdict[u'prototype'] = Property(u'prototype', Prototype, flags = DE|DD)
         self.Class = Class
         self.callfunc = callfunc
         if callfunc is not None:
@@ -122,7 +122,7 @@ class W_PrimitiveObject(W_Root):
 
     def Call(self, ctx, args=[], this=None):
         if self.callfunc is None: # XXX Not sure if I should raise it here
-            raise JsTypeError('not a function')
+            raise JsTypeError(u'not a function')
         act = ActivationObject()
         paramn = len(self.callfunc.params)
         for i in range(paramn):
@@ -132,21 +132,21 @@ class W_PrimitiveObject(W_Root):
             except IndexError:
                 value = w_Undefined
             act.Put(ctx, paramname, value)
-        act.Put(ctx, 'this', this)
+        act.Put(ctx, u'this', this)
         w_Arguments = W_Arguments(self, args)
-        act.Put(ctx, 'arguments', w_Arguments)
+        act.Put(ctx, u'arguments', w_Arguments)
         newctx = function_context(self.Scope, act, this)
         val = self.callfunc.run(ctx=newctx)
         return val
     
     def Construct(self, ctx, args=[]):
-        obj = W_Object(Class='Object')
-        prot = self.Get(ctx, 'prototype')
+        obj = W_Object(Class=u'Object')
+        prot = self.Get(ctx, u'prototype')
         if isinstance(prot, W_PrimitiveObject):
             obj.Prototype = prot
         else: # would love to test this
             #but I fail to find a case that falls into this
-            obj.Prototype = ctx.get_global().Get(ctx, 'Object').Get(ctx, 'prototype')
+            obj.Prototype = ctx.get_global().Get(ctx, u'Object').Get(ctx, u'prototype')
         try: #this is a hack to be compatible to spidermonkey
             self.Call(ctx, args, this=obj)
             return obj
@@ -206,9 +206,9 @@ class W_PrimitiveObject(W_Root):
 
     def DefaultValue(self, ctx, hint=""):
         if hint == "String":
-            return self.internal_def_value(ctx, "toString", "valueOf")
+            return self.internal_def_value(ctx, u"toString", u"valueOf")
         else: # hint can only be empty, String or Number
-            return self.internal_def_value(ctx, "valueOf", "toString")
+            return self.internal_def_value(ctx, u"valueOf", u"toString")
     
     ToPrimitive = DefaultValue
 
@@ -219,17 +219,17 @@ class W_PrimitiveObject(W_Root):
         try:
             res = self.ToPrimitive(ctx, 'String')
         except JsTypeError:
-            return "[object %s]"%(self.Class,)
+            return u'[object ' + self.Class + u']'
         return res.ToString(ctx)
     
     def __str__(self):
-        return "<Object class: %s>" % self.Class
+        return u"<Object class: %s>" % self.Class
 
     def type(self):
         if self.callfunc is not None:
-            return 'function'
+            return u'function'
         else:
-            return 'object'
+            return u'object'
 
 
 class W_Primitive(W_Root):
@@ -241,19 +241,19 @@ def str_builtin(ctx, args, this):
     return W_String(this.ToString(ctx))
 
 class W_Object(W_PrimitiveObject):
-    def __init__(self, ctx=None, Prototype=None, Class='Object',
+    def __init__(self, ctx=None, Prototype=None, Class=u'Object',
                  Value=w_Undefined, callfunc=None):
         W_PrimitiveObject.__init__(self, ctx, Prototype,
                                    Class, Value, callfunc)
 
     def ToNumber(self, ctx):
-        return self.Get(ctx, 'valueOf').Call(ctx, args=[], this=self).ToNumber(ctx)
+        return self.Get(ctx, u'valueOf').Call(ctx, args=[], this=self).ToNumber(ctx)
 
 class W_NewBuiltin(W_PrimitiveObject):
-    def __init__(self, ctx, Prototype=None, Class='function',
+    def __init__(self, ctx, Prototype=None, Class=u'function',
                  Value=w_Undefined, callfunc=None):
         if Prototype is None:
-            proto = ctx.get_global().Get(ctx, 'Function').Get(ctx, 'prototype')
+            proto = ctx.get_global().Get(ctx, u'Function').Get(ctx, u'prototype')
             Prototype = proto
 
         W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
@@ -265,7 +265,7 @@ class W_NewBuiltin(W_PrimitiveObject):
         return self.Class
 
 class W_Builtin(W_PrimitiveObject):
-    def __init__(self, builtin=None, ctx=None, Prototype=None, Class='function',
+    def __init__(self, builtin=None, ctx=None, Prototype=None, Class=u'function',
                  Value=w_Undefined, callfunc=None):        
         W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
         self.set_builtin_call(builtin)
@@ -280,60 +280,60 @@ class W_Builtin(W_PrimitiveObject):
         return self.callfuncbi(ctx, args, None)
         
     def type(self):
-        return 'builtin'
+        return u'builtin'
 
 class W_ListObject(W_PrimitiveObject):
     def tolist(self):
         l = []
         for i in range(self.length):
-            l.append(self.propdict[str(i)].value)
+            l.append(self.propdict[unicode(str(i))].value)
         return l
         
 class W_Arguments(W_ListObject):
     def __init__(self, callee, args):
-        W_PrimitiveObject.__init__(self, Class='Arguments')
-        del self.propdict["prototype"]
+        W_PrimitiveObject.__init__(self, Class=u'Arguments')
+        del self.propdict[u'prototype']
         # XXX None can be dangerous here
-        self.Put(None, 'callee', callee)
-        self.Put(None, 'length', W_IntNumber(len(args)))
+        self.Put(None, u'callee', callee)
+        self.Put(None, u'length', W_IntNumber(len(args)))
         for i in range(len(args)):
-            self.Put(None, str(i), args[i])
+            self.Put(None, unicode(str(i)), args[i])
         self.length = len(args)
 
 class ActivationObject(W_PrimitiveObject):
     """The object used on function calls to hold arguments and this"""
     def __init__(self):
-        W_PrimitiveObject.__init__(self, Class='Activation')
-        del self.propdict["prototype"]
+        W_PrimitiveObject.__init__(self, Class=u'Activation')
+        del self.propdict[u'prototype']
 
     def __repr__(self):
-        return str(self.propdict)
+        return unicode(self.propdict)
     
 class W_Array(W_ListObject):
-    def __init__(self, ctx=None, Prototype=None, Class='Array',
+    def __init__(self, ctx=None, Prototype=None, Class=u'Array',
                  Value=w_Undefined, callfunc=None):
         W_ListObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
-        self.Put(ctx, 'length', W_IntNumber(0), flags = DD)
+        self.Put(ctx, u'length', W_IntNumber(0), flags = DD)
         self.length = r_uint(0)
 
     def set_length(self, newlength):
         if newlength < self.length:
             i = newlength
             while i < self.length:
-                key = str(i)
+                key = unicode(str(i))
                 if key in self.propdict:
                     del self.propdict[key]
                 i += 1
         
         self.length = newlength
-        self.propdict['length'].value = W_FloatNumber(newlength)
+        self.propdict[u'length'].value = W_FloatNumber(float(str(newlength)))
 
     def Put(self, ctx, P, V, flags = 0):
         if not self.CanPut(P): return
         if not P in self.propdict:
             self.propdict[P] = Property(P, V, flags = flags)
         else:
-            if P != 'length':
+            if P != u'length':
                 self.propdict[P].value = V
             else:
                 length = V.ToUInt32(ctx)
@@ -344,11 +344,11 @@ class W_Array(W_ListObject):
                 return
                 
         try:
-            arrayindex = r_uint(float(P))
+            arrayindex = r_uint(float(P.encode('ascii')))
         except ValueError:
             return
         
-        if (arrayindex < self.length) or (arrayindex != float(P)):
+        if (arrayindex < self.length) or (arrayindex != float(P.encode('ascii'))):
             return
         else:
             if (arrayindex + 1) == 0:
@@ -360,12 +360,12 @@ class W_Boolean(W_Primitive):
         self.boolval = bool(boolval)
     
     def ToObject(self, ctx):
-        return create_object(ctx, 'Boolean', Value=self)
+        return create_object(ctx, u'Boolean', Value=self)
 
     def ToString(self, ctx=None):
         if self.boolval == True:
-            return "true"
-        return "false"
+            return u"true"
+        return u"false"
     
     def ToNumber(self, ctx):
         if self.boolval:
@@ -376,22 +376,23 @@ class W_Boolean(W_Primitive):
         return self.boolval
 
     def type(self):
-        return 'boolean'
+        return u'boolean'
         
     def __repr__(self):
-        return "<W_Bool "+str(self.boolval)+" >"
+        return u'<W_Bool %s >' % unicode(str(self.boolval))
 
 class W_String(W_Primitive):
     def __init__(self, strval):
         W_Primitive.__init__(self)
+        assert isinstance(strval, unicode)
         self.strval = strval
 
     def __repr__(self):
-        return 'W_String(%s)' % (self.strval,)
+        return u'W_String(%s)' % self.strval
 
     def ToObject(self, ctx):
-        o = create_object(ctx, 'String', Value=self)
-        o.Put(ctx, 'length', W_IntNumber(len(self.strval)), flags = RO|DD)
+        o = create_object(ctx, u'String', Value=self)
+        o.Put(ctx, u'length', W_IntNumber(len(self.strval)), flags = RO|DD|DE)
         return o
 
     def ToString(self, ctx=None):
@@ -404,7 +405,7 @@ class W_String(W_Primitive):
             return True
 
     def type(self):
-        return 'string'
+        return u'string'
 
     def GetPropertyName(self):
         return self.ToString()
@@ -413,7 +414,7 @@ class W_String(W_Primitive):
         if not self.strval:
             return 0.0
         try:
-            return float(self.strval)
+            return float(self.strval.encode('ascii'))
         except ValueError:
             return NAN
 
@@ -422,13 +423,13 @@ class W_BaseNumber(W_Primitive):
     and those known to be integers
     """
     def ToObject(self, ctx):
-        return create_object(ctx, 'Number', Value=self)
+        return create_object(ctx, u'Number', Value=self)
 
     def Get(self, ctx, P):
         return w_Undefined
 
     def type(self):
-        return 'number'
+        return u'number'
 
 class W_IntNumber(W_BaseNumber):
     """ Number known to be an integer
@@ -439,7 +440,7 @@ class W_IntNumber(W_BaseNumber):
 
     def ToString(self, ctx=None):
         # XXX incomplete, this doesn't follow the 9.8.1 recommendation
-        return str(self.intval)
+        return unicode(str(self.intval))
 
     def ToBoolean(self):
         return bool(self.intval)
@@ -458,33 +459,34 @@ class W_IntNumber(W_BaseNumber):
         return self.ToString()
 
     def __repr__(self):
-        return 'W_IntNumber(%s)' % (self.intval,)
+        return u'W_IntNumber(%s)' % (self.intval,)
 
 class W_FloatNumber(W_BaseNumber):
     """ Number known to be a float
     """
     def __init__(self, floatval):
         W_BaseNumber.__init__(self)
-        self.floatval = float(floatval)
+        assert isinstance(floatval, float)
+        self.floatval = floatval
     
     def ToString(self, ctx = None):
         # XXX incomplete, this doesn't follow the 9.8.1 recommendation
         if isnan(self.floatval):
-            return 'NaN'
+            return u'NaN'
         if isinf(self.floatval):
             if self.floatval > 0:
-                return 'Infinity'
+                return u'Infinity'
             else:
-                return '-Infinity'
+                return u'-Infinity'
         try:
             intval = ovfcheck_float_to_int(self.floatval)
             if intval == self.floatval:
-                return str(intval)
+                return unicode(str(intval))
         except OverflowError:
             pass
 
-        res = str(self.floatval)
-        if (res[-3] == '+' or res[-3] == '-') and res[-2] == '0':
+        res = unicode(str(self.floatval))
+        if (res[-3] == u'+' or res[-3] == u'-') and res[-2] == u'0':
             cut = len(res) - 2
             assert cut >= 0
             res = res[:cut] + res[-1]
@@ -509,7 +511,7 @@ class W_FloatNumber(W_BaseNumber):
         return r_uint(self.floatval)
 
     def __repr__(self):
-        return 'W_FloatNumber(%s)' % (self.floatval,)
+        return u'W_FloatNumber(%s)' % (self.floatval,)
             
 class W_List(W_Root):
     def __init__(self, list_w):
@@ -528,7 +530,7 @@ class W_List(W_Root):
         return self.list_w
 
     def __repr__(self):
-        return 'W_List(%s)' % (self.list_w,)
+        return u'W_List(%s)' % (self.list_w,)
     
 class ExecutionContext(object):
     def __init__(self, scope, this=None, variable=None, 
@@ -546,12 +548,12 @@ class ExecutionContext(object):
         self.debug = debug
         if jsproperty is None:
             #Attribute flags for new vars
-            self.property = Property('',w_Undefined)
+            self.property = Property(u'',w_Undefined)
         else:
             self.property = jsproperty
     
     def __str__(self):
-        return "<ExCtx %s, var: %s>"%(self.scope, self.variable)
+        return u'<ExCtx %s, var: %s>' % (self.scope, self.variable)
         
     def assign(self, name, value):
         assert name is not None
@@ -601,21 +603,21 @@ class ExecutionContext(object):
             assert isinstance(obj, W_PrimitiveObject)
             if obj.HasProperty(identifier):
                 return obj.Get(ctx, identifier)
-        raise ThrowException(W_String("ReferenceError: %s is not defined" % identifier))
+        raise ThrowException(W_String(u'ReferenceError: ' + identifier + u' is not defined'))
 
 def global_context(w_global):
     assert isinstance(w_global, W_PrimitiveObject)
     ctx = ExecutionContext([w_global],
                             this = w_global,
                             variable = w_global,
-                            jsproperty = Property('', w_Undefined, flags = DD))
+                            jsproperty = Property(u'', w_Undefined, flags = DD))
     return ctx
 
 def function_context(scope, activation, this=None):
     newscope = scope[:]
     ctx = ExecutionContext(newscope,
                             this = this, 
-                            jsproperty = Property('', w_Undefined, flags = DD))
+                            jsproperty = Property(u'', w_Undefined, flags = DD))
     ctx.push_object(activation)
     return ctx
 
@@ -623,7 +625,7 @@ def eval_context(calling_context):
     ctx = ExecutionContext(calling_context.scope[:],
                             this = calling_context.this,
                             variable = calling_context.variable,
-                            jsproperty = Property('', w_Undefined))
+                            jsproperty = Property(u'', w_Undefined))
     return ctx
 
 def empty_context():
@@ -631,7 +633,7 @@ def empty_context():
     ctx = ExecutionContext([obj],
                             this = obj,
                             variable = obj,
-                            jsproperty = Property('', w_Undefined))
+                            jsproperty = Property(u'', w_Undefined))
     return ctx
 
 class W_Iterator(W_Root):
@@ -646,7 +648,7 @@ class W_Iterator(W_Root):
         return len(self.elements_w) == 0
     
 def create_object(ctx, prototypename, callfunc=None, Value=w_Undefined):
-    proto = ctx.get_global().Get(ctx, prototypename).Get(ctx, 'prototype')
+    proto = ctx.get_global().Get(ctx, prototypename).Get(ctx, u'prototype')
     obj = W_Object(ctx, callfunc = callfunc,Prototype=proto,
                     Class = proto.Class, Value = Value)
     return obj

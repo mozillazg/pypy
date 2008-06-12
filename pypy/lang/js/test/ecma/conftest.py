@@ -16,7 +16,7 @@ def overriden_evaljs(ctx, args, this):
     try:
         return evaljs(ctx, args, this)
     except JsBaseExcept:
-        return W_String("error")
+        return W_String(u'error')
 
 passing_tests = ['Number', 'Boolean']
 
