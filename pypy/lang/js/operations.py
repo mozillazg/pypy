@@ -239,15 +239,14 @@ class Unconditional(Statement):
     def __init__(self, pos, target):
         self.pos = pos
         self.target = target
-    
+        assert target is None
+
 class Break(Unconditional):
     def emit(self, bytecode):
-        assert self.target is None
         bytecode.emit_break()    
 
 class Continue(Unconditional):
     def emit(self, bytecode):
-        assert self.target is None
         bytecode.emit_continue()
 
 class Call(Expression):
@@ -728,14 +727,14 @@ class Void(Expression):
         bytecode.emit('LOAD_UNDEFINED')
 
 class With(Statement):
-    def __init__(self, pos, identifier, body):
+    def __init__(self, pos, withpart, body):
         self.pos = pos
-        assert isinstance(identifier, VariableIdentifier)
-        self.identifier = identifier.identifier
+        self.withpart = withpart
         self.body = body
 
     def emit(self, bytecode):
-        bytecode.emit('WITH_START', unicode(self.identifier))
+        self.withpart.emit(bytecode)
+        bytecode.emit('WITH_START')
         self.body.emit(bytecode)
         bytecode.emit('WITH_END')
 
@@ -766,47 +765,40 @@ class While(WhileBase):
         bytecode.emit('JUMP', startlabel)
         bytecode.emit_endloop_label(endlabel)    
 
+def common_forvar(bytecode, obj, body, itername):
+    obj.emit(bytecode)
+    bytecode.emit('LOAD_ITERATOR')
+    precond = bytecode.emit_startloop_label()
+    finish = bytecode.prealocate_endloop_label()
+    bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
+    bytecode.emit('NEXT_ITERATOR', itername)
+    body.emit(bytecode)
+    bytecode.emit('JUMP', precond)
+    bytecode.emit_endloop_label(finish)
+    bytecode.emit('POP')
+
 class ForVarIn(Statement):
     def __init__(self, pos, vardecl, lobject, body):
         self.pos = pos
         assert isinstance(vardecl, VariableDeclaration)
-        self.iteratorname = vardecl.identifier
+        self.iteratorname = unicode(vardecl.identifier)
         self.object = lobject
         self.body = body
 
-    
     def emit(self, bytecode):
-        bytecode.emit('DECLARE_VAR', unicode(self.iteratorname))
-        self.object.emit(bytecode)
-        bytecode.emit('LOAD_ITERATOR')
-        precond = bytecode.emit_startloop_label()
-        finish = bytecode.prealocate_endloop_label()
-        bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
-        bytecode.emit('NEXT_ITERATOR', unicode(self.iteratorname))
-        self.body.emit(bytecode)
-        bytecode.emit('JUMP', precond)
-        bytecode.emit_endloop_label(finish)
-        bytecode.emit('POP')    
+        bytecode.emit('DECLARE_VAR', self.iteratorname)
+        common_forvar(bytecode, self.object, self.body, self.iteratorname)
 
 class ForIn(Statement):
     def __init__(self, pos, name, lobject, body):
         self.pos = pos
         #assert isinstance(iterator, Node)
-        self.iteratorname = name
+        self.iteratorname = unicode(name)
         self.object = lobject
         self.body = body
 
     def emit(self, bytecode):
-        self.object.emit(bytecode)
-        bytecode.emit('LOAD_ITERATOR')
-        precond = bytecode.emit_startloop_label()
-        finish = bytecode.prealocate_endloop_label()
-        bytecode.emit('JUMP_IF_ITERATOR_EMPTY', finish)
-        bytecode.emit('NEXT_ITERATOR', unicode(self.iteratorname))
-        self.body.emit(bytecode)
-        bytecode.emit('JUMP', precond)
-        bytecode.emit_endloop_label(finish)
-        bytecode.emit('POP')
+        common_forvar(bytecode, self.object, self.body, self.iteratorname)
 
 class For(Statement):
     def __init__(self, pos, setup, condition, update, body):
@@ -817,16 +809,23 @@ class For(Statement):
         self.body = body
 
     def emit(self, bytecode):
-        self.setup.emit(bytecode)
-        if isinstance(self.setup, Expression):
-            bytecode.emit('POP')
+        if self.setup is not None:
+            self.setup.emit(bytecode)
+            if isinstance(self.setup, Expression):
+                bytecode.emit('POP')
+        
+        firstep = bytecode.prealocate_label()
+        bytecode.emit('JUMP', firstep)
         precond = bytecode.emit_startloop_label()
         finish = bytecode.prealocate_endloop_label()
-        self.condition.emit(bytecode)
-        bytecode.emit('JUMP_IF_FALSE', finish)
+        if self.update is not None:
+            self.update.emit(bytecode)
+            bytecode.emit('POP')
+        bytecode.emit_label(firstep)
+        if self.condition is not None:
+            self.condition.emit(bytecode)
+            bytecode.emit('JUMP_IF_FALSE', finish)
         self.body.emit(bytecode)
-        self.update.emit(bytecode)
-        bytecode.emit('POP')
         bytecode.emit('JUMP', precond)
         bytecode.emit_endloop_label(finish)
     
