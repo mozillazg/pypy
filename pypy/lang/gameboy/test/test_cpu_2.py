@@ -164,6 +164,7 @@ def test_add_a():
     method_value_call(cpu, CPU.add_a, 0x00)
     assert cpu.a.get() == 0x00
     assert_flags(cpu, z=True, n=False, h=False, c=False)
+    
     add_flag_test(cpu, CPU.add_a)
     
     
@@ -222,9 +223,70 @@ def test_add_sp():
         assert cpu.sp.get() == 0xFF - i
         assert_flags(cpu, z=False, n=False, h=False, c=False)
         
-def test_add_sp_cary_flags():
+def test_add_sp_carry():
     cpu = get_cpu()
-    py.test.skip("test not yet implemented")
+    cpu.f.set(0xFF)
+    cpu.sp.set(0xFF)
+    prepare_for_fetch(cpu, 0xFF)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0xFE
+    assert_flags(cpu, z=False, n=False, h=False, c=False)
+
+    cpu.f.set(0x00)
+    cpu.sp.set(0xFF)
+    prepare_for_fetch(cpu, 0xFF)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0xFE
+    assert_flags(cpu, z=False, n=False, h=False, c=False)
+    
+    cpu.f.set(0x00)
+    cpu.sp.set(0x00)
+    prepare_for_fetch(cpu, 0x01)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0x01
+    assert_flags(cpu, z=False, n=False, h=False, c=False)
+    
+    cpu.f.set(0xFF)
+    cpu.sp.set(0x00)
+    prepare_for_fetch(cpu, 0x01)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0x01
+    assert_flags(cpu, z=False, n=False, h=False, c=False)
+    
+    cpu.f.set(0xFF)
+    cpu.sp.set(0x02)
+    prepare_for_fetch(cpu, 0xFE)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0x00
+    assert_flags(cpu, z=False, n=False, h=False, c=False)
+
+def test_add_sp_carry_flags():
+    cpu = get_cpu()   
+    cpu.f.set(0xFF)
+    cpu.sp.set(0x0FFF)
+    prepare_for_fetch(cpu, 0x01)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0x1000
+    assert_flags(cpu, z=False, n=False, h=True, c=False)
+    
+    cpu.sp.set(0x1000)
+    prepare_for_fetch(cpu, 0xFF)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0x0FFF
+    assert_flags(cpu, z=False, n=False, h=True, c=False)
+    
+    cpu.sp.set(0xFFFF)
+    prepare_for_fetch(cpu, 0x01)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0x0000
+    assert_flags(cpu, z=False, n=False, h=True, c=True)
+    
+    cpu.sp.set(0x0000)
+    prepare_for_fetch(cpu, 0xFF)
+    cpu.increment_sp_by_fetch()
+    assert cpu.sp.get() == 0xFFFF
+    assert_flags(cpu, z=False, n=False, h=True, c=True)
+    
     
 def test_and_a():
     cpu = get_cpu()
@@ -457,10 +519,12 @@ def test_decimal_adjust_a():
     py.test.skip("not yet implemented")
     cpu = get_cpu()
     cpu.f.set(0xFF)
+    cpu.a.set(0)
     cpu.decimal_adjust_a()
     assert_flags(cpu, z=False, n=True, h=False, c=False)
     
     cpu.f.set(0x00)
+    cpu.a.set(0)
     cpu.decimal_adjust_a()
     assert_flags(cpu, z=False, n=False, h=False, c=False)
     
@@ -576,7 +640,7 @@ def test_jump():
     cpu.f.set(0xFF)
     prepare_for_double_fetch(cpu, 0x1234)
     cpu.jump()
-    assert cpu.f.get() == 0xFF
+    assert cpu.f.get()  == 0xFF
     assert cpu.pc.get() == 0x1234
 
 def test_conditional_jump():
@@ -584,13 +648,13 @@ def test_conditional_jump():
     cpu.f.set(0xFF)
     prepare_for_double_fetch(cpu, 0x1234)
     cpu.conditional_jump(True)
-    assert cpu.f.get() == 0xFF
+    assert cpu.f.get()  == 0xFF
     assert cpu.pc.get() == 0x1234  
     
     cpu.pc.set(0x1234)
     prepare_for_double_fetch(cpu, 0x1234)
     cpu.conditional_jump(False)
-    assert cpu.f.get() == 0xFF
+    assert cpu.f.get()  == 0xFF
     assert cpu.pc.get() == 0x1234+2
     
 def test_process_2_complement():
@@ -610,16 +674,16 @@ def test_relative_jump():
         cpu.pc.set(0x1234)
         prepare_for_fetch(cpu, i)
         cpu.relative_jump()
-        assert cpu.f.get() == 0xFF
-        #+1 fpr a single fetch
+        assert cpu.f.get()  == 0xFF
+        #+1 for a single fetch
         assert cpu.pc.get() == 0x1234+1 + i
         
     for i in range(1, 0x7F):
         cpu.pc.set(0x1234)
         prepare_for_fetch(cpu, 0xFF - i+1)
         cpu.relative_jump()
-        assert cpu.f.get() == 0xFF
-        #+1 fpr a single fetch
+        assert cpu.f.get()  == 0xFF
+        #+1 for a single fetch
         assert cpu.pc.get() == 0x1234+1 - i
 
 def test_conditional_relative_jump():
@@ -630,7 +694,7 @@ def test_conditional_relative_jump():
         prepare_for_fetch(cpu, i)
         cpu.relative_conditional_jump(True)
         assert cpu.f.get() == 0xFF
-        #+1 fpr a single fetch
+        #+1 for a single fetch
         assert cpu.pc.get() == 0x1234+1 + i
     
     cpu.pc.set(0x1234)
@@ -803,7 +867,6 @@ def test_rotate_right_circular():
     assert cpu.a.get() == 0x01
     assert_flags(cpu, z=False, n=False, h=False, c=False)
     
-
 def test_subtract_with_carry_a():
     cpu = get_cpu()
     cpu.f.set(0xFF)
@@ -830,17 +893,11 @@ def test_subtract_with_carry_a():
     assert cpu.a.get() == 0xFF
     assert_flags(cpu, z=False, n=True, h=True, c=True)
     
-    # FIXME add separated Test for each flag
+    subtract_flag_test(cpu, CPU.subtract_with_carry_a)
     
 def test_subtract_a():
     cpu = get_cpu()
     cpu.f.set(0xFF)
-    cpu.a.set(0xFF)
-    method_value_call(cpu, CPU.subtract_a, 0x01)
-    assert cpu.a.get() == 0xFE
-    assert_flags(cpu, z=False, n=True, h=False, c=False)
-    
-    cpu.f.set(0x00)
     cpu.a.set(0xFF)
     method_value_call(cpu, CPU.subtract_a, 0x01)
     assert cpu.a.get() == 0xFE
@@ -852,19 +909,33 @@ def test_subtract_a():
     assert cpu.a.get() == 0x00
     assert_flags(cpu, z=True, n=True, h=False, c=False)
     
-    cpu.f.set(0xFF)
+    subtract_flag_test(cpu, CPU.subtract_a)
+    
+def subtract_flag_test(cpu, method):
+    cpu.f.set(0x00)
+    cpu.a.set(0xFF)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0xFE
+    assert_flags(cpu, z=False, n=True, h=False, c=False)
+    
+    cpu.f.set(0x00)
+    cpu.a.set(0x01)
+    method_value_call(cpu, CPU.subtract_a, 0x01)
+    assert cpu.a.get() == 0x00
+    assert_flags(cpu, z=True, n=True, h=False, c=False)
+    
+    cpu.f.set(0x00)
     cpu.a.set(0x10)
     method_value_call(cpu, CPU.subtract_a, 0x01)
     assert cpu.a.get() == 0x0F
     assert_flags(cpu, z=False, n=True, h=True, c=False)
     
-    cpu.f.set(0xFF)
+    cpu.f.set(0x00)
     cpu.a.set(0x00)
     method_value_call(cpu, CPU.subtract_a, 0x01)
     assert cpu.a.get() == 0xFF
     assert_flags(cpu, z=False, n=True, h=True, c=True)
-    
-    
+     
 def test_swap():
     cpu = get_cpu()
     cpu.f.set(0xFF)
