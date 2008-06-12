@@ -791,8 +791,8 @@ class CPU(object):
             delta |= 0x60
         if (self.a.get() & 0x0F) > 0x09:
             delta |= 0x06
-            if (self.a.get() & 0xF0) > 0x80:
-                delta |= 0x60
+        if (self.a.get() & 0xF0) > 0x80:
+            delta |= 0x60
         if (self.a.get() & 0xF0) > 0x90:
             delta |= 0x60
         if not self.is_n():
