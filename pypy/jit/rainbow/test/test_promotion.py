@@ -374,6 +374,7 @@ class BaseTestPromotion(InterpretationTest):
         res == 1
 
     def test_raise_result_mixup_some_more(self):
+        from pypy.rpython.annlowlevel import hlstr
         def w(x):
             if x > 1000:
                 return None
@@ -387,7 +388,9 @@ class BaseTestPromotion(InterpretationTest):
                 e = w(x)
                 raise e                
             return x
-        def ll_function(c, x):
+        def ll_function(c1, x):
+            # needed so that both lltype and ootype can index the string with []
+            c = hlstr(c1)
             i = 0
             while True:
                 hint(None, global_merge_point=True)
@@ -401,9 +404,9 @@ class BaseTestPromotion(InterpretationTest):
                     i = x
             r = hint(i, variable=True)
             return r
-        ll_function.convert_arguments = [LLSupport.to_rstr, int]
+        ll_function.convert_arguments = [self.to_rstr, int]
         
-        assert ll_function("oe", 1) == 1
+        assert ll_function(self.to_rstr("oe"), 1) == 1
 
         res = self.interpret(ll_function, ["oe", 1], [],
                              policy=StopAtXPolicy(w))
@@ -478,8 +481,3 @@ class TestLLType(BaseTestPromotion):
 class TestOOType(OOTypeMixin, BaseTestPromotion):
     type_system = "ootype"
     to_rstr = staticmethod(OOSupport.to_rstr)
-
-    def skip(self):
-        py.test.skip('in progress')
-
-    test_raise_result_mixup_some_more = skip
