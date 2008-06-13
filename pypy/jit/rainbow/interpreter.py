@@ -27,8 +27,8 @@ class JitCode(object):
     for nonvoid results the result is appended to the varlist
 
     red vars are just indexes
-    green vars are positive indexes
-    green consts are negative indexes
+    green vars are even indexes
+    green consts are odd indexes
     """
     is_portal = False
     dump_copy = None
