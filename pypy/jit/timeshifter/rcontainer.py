@@ -281,10 +281,15 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
 
     def _iter_fields(self, TYPE):
         try:
-            fields = TYPE._fields
+            fields = TYPE._fields.items()
+            if isinstance(TYPE, ootype.Instance):
+                T = TYPE._superclass
+                while T is not None:
+                    fields = T._fields.items() + fields
+                    T = T._superclass
         except AttributeError:
             return
-        for name, (FIELDTYPE, defl) in fields.iteritems():
+        for name, (FIELDTYPE, defl) in fields:
             yield name, FIELDTYPE
 
     def _get_type_name(self, TYPE):
@@ -292,16 +297,6 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
             return TYPE._name
         except AttributeError:
             return TYPE._short_name()
-
-    def _compute_fielddescs(self, RGenOp):
-        AbstractStructTypeDesc._compute_fielddescs(self, RGenOp)
-        TYPE = self.TYPE
-        if isinstance(TYPE, ootype.Instance):
-            SUPERTYPE = TYPE._superclass
-            if SUPERTYPE is not None:
-                desc = InstanceTypeDesc(RGenOp, SUPERTYPE)
-                self.fielddescs = desc.fielddescs + self.fielddescs
-                self.fielddesc_by_name.update(desc.fielddesc_by_name)
 
 def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
