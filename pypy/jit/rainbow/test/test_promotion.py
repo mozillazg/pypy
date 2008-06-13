@@ -6,7 +6,7 @@ from pypy.jit.rainbow.test.test_interpreter import P_NOVIRTUAL
 from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
 from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
 from pypy.rlib.jit import hint
-from pypy.rpython.module.support import LLSupport
+from pypy.rpython.module.support import LLSupport, OOSupport
 
 class BaseTestPromotion(InterpretationTest):
     small = True
@@ -337,6 +337,7 @@ class BaseTestPromotion(InterpretationTest):
         assert res == 22
 
     def test_raise_result_mixup(self):
+        from pypy.rpython.annlowlevel import hlstr
         def w(x):
             pass
         class E(Exception):
@@ -348,7 +349,9 @@ class BaseTestPromotion(InterpretationTest):
                 w(e)
                 raise e                
             return x
-        def ll_function(c, x):
+        def ll_function(c1, x):
+            # needed so that both lltype and ootype can index the string with []
+            c = hlstr(c1)
             i = 0
             while True:
                 hint(None, global_merge_point=True)
@@ -362,9 +365,9 @@ class BaseTestPromotion(InterpretationTest):
                     i = x
             r = hint(i, variable=True)
             return r
-        ll_function.convert_arguments = [LLSupport.to_rstr, int]
+        ll_function.convert_arguments = [self.to_rstr, int]
         
-        assert ll_function("oe", 1) == 1
+        assert ll_function(self.to_rstr("oe"), 1) == 1
 
         res = self.interpret(ll_function, ["oe", 1], [],
                              policy=StopAtXPolicy(w))
@@ -470,12 +473,13 @@ class BaseTestPromotion(InterpretationTest):
 
 class TestLLType(BaseTestPromotion):
     type_system = "lltype"
+    to_rstr = staticmethod(LLSupport.to_rstr)
 
 class TestOOType(OOTypeMixin, BaseTestPromotion):
     type_system = "ootype"
+    to_rstr = staticmethod(OOSupport.to_rstr)
 
     def skip(self):
         py.test.skip('in progress')
 
-    test_raise_result_mixup = skip
     test_raise_result_mixup_some_more = skip
