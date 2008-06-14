@@ -594,6 +594,14 @@ def learn_nonzeroness(jitstate, ptrbox, nonzeroness):
 ##def ll_gvar_from_constant(jitstate, ll_value):
 ##    return jitstate.curbuilder.rgenop.genconst(ll_value)
 
+def geninstanceof(jitstate, objbox, typedesc):
+    builder = jitstate.curbuilder
+    gv_objbox = objbox.getgenvar(jitstate)
+    gv_res = builder.genop_instanceof(gv_objbox, typedesc.alloctoken)
+    boolbox = rvalue.BoolRedBox(gv_res)
+    #boolbox.iftrue.append(booleffect.PtrIsNonZeroEffect(argbox, reverse)) # ???
+    return boolbox
+
 def gen_residual_oosend(jitstate, argboxes, methdesc):
     builder = jitstate.curbuilder
     selfbox = argboxes[0]

@@ -295,6 +295,12 @@ class LLBuilder(GenBuilder):
                      "genop_ooisnull: bad currently_writing")
         return LLVar(llimpl.genop(self.b, 'ooisnull', [gv_obj], gv_Bool.v))
 
+    def genop_instanceof(self, gv_obj, (gv_TYPE, gv_OBJTYPE)):
+        ll_assert(self.rgenop.currently_writing is self,
+                     "genop_instanceof: bad currently_writing")
+        vars_gv = [gv_obj.v, gv_TYPE.v]
+        return LLVar(llimpl.genop(self.b, 'instanceof', vars_gv, gv_Bool.v))
+
     def genop_cast_int_to_ptr(self, gv_PTRTYPE, gv_int):
         ll_assert(self.rgenop.currently_writing is self,
                      "genop_cast_int_to_ptr: bad currently_writing")

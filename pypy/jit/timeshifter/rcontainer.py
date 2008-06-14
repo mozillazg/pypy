@@ -259,11 +259,16 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
     StructFieldDesc = None # patched later with InstanceFieldDesc
     PtrRedBox = rvalue.InstanceRedBox
 
-    _attrs_ = ['methodcodes']
+    _attrs_ = ['methodcodes', 'supertypedesc']
+    supertypedesc = None
 
     def __init__(self, RGenOp, TYPE):
         AbstractStructTypeDesc.__init__(self, RGenOp, TYPE)
         self.methodcodes = {} # method name --> jitcode
+        if isinstance(TYPE, ootype.Instance):
+            SUPER = TYPE._superclass
+            if SUPER is not None:
+                self.supertypedesc = InstanceTypeDesc(RGenOp, SUPER)
 
     def Ptr(self, TYPE):
         return TYPE
@@ -297,6 +302,14 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
             return TYPE._name
         except AttributeError:
             return TYPE._short_name()
+
+    def issubtype(self, other):
+        desc = self
+        while desc is not None:
+            if desc is other:
+                return True
+            desc = desc.supertypedesc
+        return False
 
 def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)

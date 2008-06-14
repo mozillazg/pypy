@@ -323,7 +323,8 @@ class AbstractRGenOp(object):
     #@staticmethod
     #@specialize.memo()
     #def allocToken(T):
-    #    """Return a token describing the size of the fixed-size type T."""
+    #    """Return a token describing the size of the fixed-size type T.
+    #    For ootype backends, it's also passed to genop_instanceof."""
     #    raise NotImplementedError
 
     #@staticmethod
