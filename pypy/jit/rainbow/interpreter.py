@@ -1084,6 +1084,16 @@ class OOTypeJitInterpreter(JitInterpreter):
         return rtimeshift.genptreq(self.jitstate, ptrbox1,
                                    ptrbox2, False)
 
+    @arguments("red", "structtypedesc", returns="red")
+    def opimpl_red_instanceof(self, objbox, typedesc):
+        if objbox.content is None:
+            return rtimeshift.geninstanceof(self.jitstate, objbox,
+                                            typedesc)
+        # else it's a vstruct
+        objtypedesc = objbox.content.typedesc
+        result = objtypedesc.issubtype(typedesc)
+        return rvalue.ll_fromvalue(self.jitstate, result)
+
     @arguments("red", "jumptarget")
     def opimpl_goto_if_vstruct(self, objbox, target):
         if objbox.content is not None:

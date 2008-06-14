@@ -879,7 +879,7 @@ class BytecodeWriter(object):
     def methdesc_position(self, TYPE, name):
         key = (TYPE, name)
         if key in self.methdesc_positions:
-            return self.methdesc_positions[tok]
+            return self.methdesc_positions[key]
         result = len(self.methdescs)
         desc = MethodDesc(self.RGenOp, self.exceptiondesc, TYPE, name)
         self.methdescs.append(desc)
@@ -1702,6 +1702,20 @@ class OOTypeBytecodeWriter(BytecodeWriter):
 
     def serialize_op_oodowncast(self, op):
         return self.serialize_op_cast_pointer(op)
+
+    def serialize_op_instanceof(self, op):
+        color = self.opcolor(op)
+        if color == 'green':
+            # delegate to the default implementation in
+            # serialize_op, since it works just fine
+            raise NotImplementedError
+        assert color == 'red', 'unknown color %s' % color
+        v1, cType = op.args
+        arg1 = self.serialize_oparg('red', v1)
+        index = self.structtypedesc_position(cType.value)
+        self.emit('red_instanceof')
+        self.emit(arg1, index)
+        self.register_redvar(op.result)
 
     def serialize_op_new(self, op):
         TYPE = op.args[0].value

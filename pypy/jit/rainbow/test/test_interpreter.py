@@ -2018,6 +2018,33 @@ class SimpleTests(InterpretationTest):
         res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
         assert res == 11
 
+    def test_red_isinstance(self):
+        class A:
+            pass
+        class B(A):
+            pass
+        def fn(flag):
+            obj = flag and B() or A()
+            return isinstance(obj, B)
+        res = self.interpret(fn, [True])
+        assert res
+        self.check_insns({})
+
+    def test_red_isinstance_degenerated(self):
+        class A:
+            pass
+        class B(A):
+            pass
+        def g(obj):
+            return obj
+        def fn(flag):
+            obj = flag and B() or A()
+            g(obj) # force container
+            return isinstance(obj, B)
+        res = self.interpret(fn, [True], [], policy=StopAtXPolicy(g))
+        assert res
+        #self.check_insns({})
+
 
     def test_manymanyvars(self):
 
