@@ -5,8 +5,9 @@ class Module(MixedModule):
     applevelname = '_ctypes'
 
     interpleveldefs = {
-        'CDLL'          : 'interp_lib.W_CDLL',
+        'dlopen'          : 'interp_lib.W_CDLL',
     }
 
     appleveldefs = {
+        '_SimpleCData'    : 'app_stubs._SimpleCData',
     }

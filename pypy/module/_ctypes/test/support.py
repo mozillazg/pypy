@@ -40,4 +40,7 @@ class BasicAppTest(object):
         space = gettestobjspace(usemodules=('_ctypes', 'struct'))
         cls.space = space
         cls.w_so_file = space.wrap(str(compile_so_file()))
-
+        cls.w_dll = space.appexec([cls.w_so_file], """(so_file):
+        from _ctypes import dlopen
+        return dlopen(so_file)
+        """)
