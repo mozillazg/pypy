@@ -46,6 +46,16 @@ def __dirinfo(part):
     else:
         error = "Cannot find the parent directory %r of the path %r" % (
             partdir, this_dir)
+    if not error:
+        # check for bogus end-of-line style (e.g. files checked out on
+        # Windows and moved to Unix)
+        f = open(__file__.replace('.pyc', '.py'), 'r')
+        data = f.read()
+        f.close()
+        if data.endswith('\r\n') or data.endswith('\r'):
+            error = ("Bad end-of-line style in the .py files. Typically "
+                     "caused by a zip file or a checkout done on Windows and "
+                     "moved to Unix or vice-versa.")
     if error:
         raise EnvironmentError("Invalid source tree - bogus checkout! " +
                                error)
