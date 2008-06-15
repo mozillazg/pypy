@@ -15,6 +15,7 @@ class W_FuncPtr(Wrappable):
         # we create initial handle with no args, returning int
         self.restype = 'i'
         self.argtypes = []
+        self.has_argtypes = False
         self._regen_handle()
 
     def _regen_handle(self):
@@ -22,12 +23,34 @@ class W_FuncPtr(Wrappable):
         res = TYPEMAP[self.restype]
         self.handle = self.lib.getpointer(self.name, args, res)
 
+    def _guess_argtypes(self, args_w):
+        # XXX
+        return ['d']
+
     def call(self, space, args):
         """ Calling routine - note that we cache handle to ll
         lib, in order to speed up calls. In case arguments or restype
         is defined, we invalidate a cache and call new handle
         """
-        return space.wrap(self.handle.call(lltype.Signed))
+        assert not self.has_argtypes
+        if args:
+            args_w, kwds_w = args.unpack()
+            if kwds_w:
+                raise OperationError(space.w_ValueError, space.wrap(
+                    "Cannot pass keyword arguments to C function"))
+            if args_w:
+                argtypes = self._guess_argtypes(args_w)
+                if self.argtypes != argtypes:
+                    self.argtypes = argtypes
+                    self._regen_handle()
+                for arg in args_w:
+                    self.handle.push_arg(space.float_w(arg))
+        if self.restype == 'i':
+            return space.wrap(self.handle.call(lltype.Signed))
+        elif self.restype == 'd':
+            return space.wrap(self.handle.call(lltype.Float))
+        else:
+            raise NotImplementedError("restype = %s" % self.restype)
     call.unwrap_spec = ['self', ObjSpace, Arguments]
 
     def getargtypes(space, self):
