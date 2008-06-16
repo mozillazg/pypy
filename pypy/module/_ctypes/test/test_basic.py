@@ -14,7 +14,7 @@ class AppTestBasic(BasicAppTest):
         f.restype = c_int
         assert f() == 42
 
-    def test_float_restype(self):
+    def test_double_restype(self):
         from _ctypes import _SimpleCData
         class c_float(_SimpleCData):
             _type_ = 'd'
@@ -22,3 +22,14 @@ class AppTestBasic(BasicAppTest):
         f = self.dll.my_sqrt
         f.restype = c_float
         assert f(4.0) == 2.0
+
+    def test_argtypes(self):
+        from _ctypes import _SimpleCData
+        class c_float(_SimpleCData):
+            _type_ = 'd'
+
+        f = self.dll.my_sqrt
+        f.restype = c_float
+        f.argtypes = [c_float]
+        assert f(4.0) == 2.0
+
