@@ -37,9 +37,7 @@ class W_FuncPtr(Wrappable):
     def push_arg(self, space, argtype, w_arg):
         if argtype == 'i':
             self.handle.push_arg(space.int_w(w_arg))
-        elif argtype == 'd':
-            self.handle.push_arg(space.float_w(w_arg))
-        elif argtype == 'f':
+        elif argtype == 'd' or argtype == "f":
             self.handle.push_arg(space.float_w(w_arg))
         else:
             raise NotImplementedError("Argtype %s" % argtype)
