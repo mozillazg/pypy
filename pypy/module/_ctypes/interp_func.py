@@ -23,41 +23,63 @@ class W_FuncPtr(Wrappable):
         res = TYPEMAP[self.restype]
         self.handle = self.lib.getpointer(self.name, args, res)
 
-    def _guess_argtypes(self, args_w):
-        # XXX
-        return ['d']
+    def _guess_argtypes(self, space, args_w):
+        res = []
+        for w_arg in args_w:
+            if space.is_true(space.isinstance(w_arg, space.w_int)):
+                res.append('i')
+            elif space.is_true(space.isinstance(w_arg, space.w_float)):
+                res.append('d')
+            else:
+                raise NotImplementedError("Arg: %s" % str(w_arg))
+        return res
 
-    def call(self, space, args):
+    def push_arg(self, space, argtype, w_arg):
+        if argtype == 'i':
+            self.handle.push_arg(space.int_w(w_arg))
+        elif argtype == 'd':
+            self.handle.push_arg(space.float_w(w_arg))
+        elif argtype == 'f':
+            self.handle.push_arg(space.float_w(w_arg))
+        else:
+            raise NotImplementedError("Argtype %s" % argtype)
+
+    def call(self, space, args_w):
         """ Calling routine - note that we cache handle to ll
         lib, in order to speed up calls. In case arguments or restype
         is defined, we invalidate a cache and call new handle
         """
-        assert not self.has_argtypes
-        if args:
-            args_w, kwds_w = args.unpack()
-            if kwds_w:
-                raise OperationError(space.w_ValueError, space.wrap(
-                    "Cannot pass keyword arguments to C function"))
-            if args_w:
-                argtypes = self._guess_argtypes(args_w)
-                if self.argtypes != argtypes:
-                    self.argtypes = argtypes
-                    self._regen_handle()
-                for arg in args_w:
-                    self.handle.push_arg(space.float_w(arg))
+        if args_w:
+            if self.has_argtypes:
+                if len(args_w) != len(self.argtypes):
+                    raise OperationError(space.w_TypeError, space.wrap(
+                        "Expected %d args, got %d" % (len(self.argtypes),
+                                                      len(args_w))))
+                argtypes = self.argtypes
+            else:
+                argtypes = self._guess_argtypes(space, args_w)
+            if self.argtypes != argtypes:
+                self.argtypes = argtypes
+                self._regen_handle()
+            for i in range(len(argtypes)):
+                argtype = argtypes[i]
+                w_arg = args_w[i]
+                self.push_arg(space, argtype, w_arg)
         if self.restype == 'i':
             return space.wrap(self.handle.call(lltype.Signed))
         elif self.restype == 'd':
             return space.wrap(self.handle.call(lltype.Float))
         else:
             raise NotImplementedError("restype = %s" % self.restype)
-    call.unwrap_spec = ['self', ObjSpace, Arguments]
+    call.unwrap_spec = ['self', ObjSpace, 'args_w']
 
     def getargtypes(space, self):
-        xxx
+        return self.w_argtypes
 
     def setargtypes(space, self, w_value):
-        xxx
+        self.argtypes = [space.getattr(w_arg, space.wrap('_type_')) for
+                         w_arg in space.unpackiterable(w_value)]
+        self.w_argtypes = w_value
 
     def getrestype(space, self):
         return self.w_restype
