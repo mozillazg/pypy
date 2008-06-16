@@ -74,3 +74,82 @@ def recognize(automaton, s):
             i, state = stack.pop()
 
     return state in automaton.final_states
+
+class Builder(object):
+    def __init__(self):
+        self.nfa = NFA()
+        self.current_state = self.nfa.add_state()
+
+    def add_transition(self, c, state=-1, final=False):
+        if state == -1:
+            state = self.nfa.add_state(final)
+        elif final:
+            self.nfa.final_states[state] = None
+        self.nfa.add_transition(self.current_state, c, state)
+        self.current_state = state
+
+    def add_cycle(self, state):
+        """ We change all transitions pointing to current state
+        to point to state passed as argument
+        """
+        to_replace = self.current_state
+        for (fr, ch), v in self.nfa.transitions.items():
+            for i in range(len(v)):
+                if v[i] == to_replace:
+                    v[i] = state
+            if fr == to_replace:
+                del self.nfa.transitions[(fr, ch)]
+            self.nfa.transitions[(state, ch)] = v
+        try:
+            del self.nfa.final_states[to_replace]
+        except KeyError:
+            pass
+        else:
+            self.nfa.final_states[state] = None
+
+def no_more_chars(i, input):
+    for k in range(i+1, len(input)):
+        if input[k] >= 'a' and input[k] <= 'z':
+            return False
+    return True
+
+def compile_regex(input):
+    """ Simple compilation routine, just in order to not have to mess
+    up with creating automaton by hand. We assume alphabet to be a-z
+    """
+    builder = Builder()
+    i = 0
+    last_anchor = builder.current_state
+    joint_point = -1
+    paren_stack = []
+    last_state = -1
+    while i < len(input):
+        c = input[i]
+        if c >= 'a' and c <= 'z':
+            final = no_more_chars(i, input)
+            last_state = builder.current_state
+            if (final or input[i + 1] == ')') and joint_point != -1:
+                builder.add_transition(c, state=joint_point, final=final)
+                join_point = -1
+            else:
+                builder.add_transition(c, final=final)
+        elif c == "|":
+            last_state = -1
+            joint_point = builder.current_state
+            builder.current_state = last_anchor
+        elif c == '(':
+            paren_stack.append((builder.current_state, last_anchor, joint_point))
+            last_anchor = builder.current_state
+            joint_point = -1
+        elif c == ')':
+            if not paren_stack:
+                raise ValueError("Unmatched parentheses")
+            last_state, last_anchor, joint_point = paren_stack.pop()
+        elif c == '*':
+            if last_state == -1:
+                raise ValueError("Mismatched *")
+            builder.add_cycle(last_state)
+        else:
+            raise ValueError("Unknown char %s" % c)
+        i += 1
+    return builder.nfa
