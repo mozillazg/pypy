@@ -324,7 +324,7 @@ class TestPycStuff:
         mtime = 12345
         co = compile('x = 42', '?', 'exec')
         cpathname = _testfile(importing.get_pyc_magic(space), mtime, co)
-        stream = streamio.open_file_as_stream(cpathname, "r")
+        stream = streamio.open_file_as_stream(cpathname, "rb")
         try:
             stream.seek(8, 0)
             w_code = importing.read_compiled_module(
@@ -346,7 +346,7 @@ class TestPycStuff:
         co = compile('x = 42', '?', 'exec')
         cpathname = _testfile(importing.get_pyc_magic(space), mtime, co)
         w_modulename = space.wrap('somemodule')
-        stream = streamio.open_file_as_stream(cpathname, "r")
+        stream = streamio.open_file_as_stream(cpathname, "rb")
         try:
             w_mod = space.wrap(Module(space, w_modulename))
             magic = importing._r_long(stream)
@@ -392,7 +392,7 @@ class TestPycStuff:
             importing._w_long(stream, 128397198)
         finally:
             stream.close()
-        stream = streamio.open_file_as_stream(pathname, "r")
+        stream = streamio.open_file_as_stream(pathname, "rb")
         try:
             res = importing._r_long(stream)
             assert res == 42
@@ -452,8 +452,8 @@ class TestPycStuff:
                                               cpathname)
         assert ret == 1
 
-        # read compile module
-        stream = streamio.open_file_as_stream(cpathname, "r")
+        # read compiled module
+        stream = streamio.open_file_as_stream(cpathname, "rb")
         try:
             stream.seek(8, 0)
             w_code = importing.read_compiled_module(space, cpathname,
@@ -487,7 +487,7 @@ class TestPycStuff:
                 cpathname = _testfile(importing.get_pyc_magic(space1),
                                       mtime, co)
                 w_modulename = space2.wrap('somemodule')
-                stream = streamio.open_file_as_stream(cpathname, "r")
+                stream = streamio.open_file_as_stream(cpathname, "rb")
                 try:
                     w_mod = space2.wrap(Module(space2, w_modulename))
                     magic = importing._r_long(stream)
