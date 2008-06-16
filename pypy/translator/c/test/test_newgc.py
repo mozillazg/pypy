@@ -896,7 +896,7 @@ class TestUsingFramework(AbstractGCTestClass):
         def fn():
             return rgc.can_move(A())
 
-        c_fn = self.getcompiled(fn, [])
+        c_fn = self.getcompiled(fn)
         assert c_fn() == self.GC_CAN_MOVE
 
     def test_malloc_nonmovable(self):
