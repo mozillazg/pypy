@@ -469,19 +469,25 @@ class BaseTestRffi:
         assert fn() == len(d)
 
     def test_nonmovingbuffer_semispace(self):
-        d = 'some cool data that should not move'
+        d = 'cool data'
         def f():
-            buf = get_nonmovingbuffer(d)
-            try:
-                counter = 0
-                for i in range(len(d)):
-                    if buf[i] == d[i]:
-                        counter += 1
-                return counter
-            finally:
-                free_nonmovingbuffer(d, buf)
+            counter = 0
+            for n in range(32):
+                buf = get_nonmovingbuffer(d)
+                try:
+                    for i in range(len(d)):
+                        if buf[i] == d[i]:
+                            counter += 1
+                finally:
+                    free_nonmovingbuffer(d, buf)
+            return counter
         fn = self.compile(f, [], gcpolicy='semispace')
-        assert fn(expected_extra_mallocs=9) == len(d)
+        # The semispace gc uses raw_malloc for its internal data structs
+        # but hopefully less than 30 times.  So we should get < 30 leaks
+        # unless the get_nonmovingbuffer()/free_nonmovingbuffer() pair
+        # leaks at each iteration.  This is what the following line checks.
+        res = fn(expected_extra_mallocs=range(30))
+        assert res == 32 * len(d)
 
 class TestRffiInternals:
     def test_struct_create(self):
