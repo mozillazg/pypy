@@ -558,7 +558,7 @@ def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
         if gc_buf:
             src = cast_ptr_to_adr(gc_buf) + str_chars_offset
         else:
-            src = cast_ptr_to_adr(raw_buf)
+            src = cast_ptr_to_adr(raw_buf) + itemoffsetof(CCHARP.TO, 0)
         dest = cast_ptr_to_adr(new_buf) + str_chars_offset
         ## FIXME: This is bad, because dest could potentially move
         ## if there are threads involved.
