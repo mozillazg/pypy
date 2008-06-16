@@ -106,6 +106,7 @@ class Builder(object):
             pass
         else:
             self.nfa.final_states[state] = None
+        self.current_state = state
 
 def no_more_chars(i, input):
     for k in range(i+1, len(input)):

@@ -56,6 +56,8 @@ def test_nfa_build():
     re = compile_regex("a*")
     assert re.transitions == {(0, "a"):[0]}
     assert re.final_states.keys() == [0]
+    re = compile_regex("a*b")
+    assert re.transitions == {(0, "a"):[0], (0, "b"):[2]}
 
 def test_nfa_compiledummy():
     py.test.skip("not working")
