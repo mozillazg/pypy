@@ -449,6 +449,7 @@ class BaseTestRffi:
                 return str_from_buffer(raw_buf, gc_buf, len(d), len(d)-1)
             finally:
                 keep_buffer_alive_until_here(raw_buf, gc_buf)
+        assert f() == d[:-1]
         fn = self.compile(f, [], gcpolicy='ref')
         assert fn() == d[:-1]
     
@@ -465,6 +466,7 @@ class BaseTestRffi:
                 return counter
             finally:
                 free_nonmovingbuffer(d, buf)
+        assert f() == len(d)
         fn = self.compile(f, [], gcpolicy='ref')
         assert fn() == len(d)
 
