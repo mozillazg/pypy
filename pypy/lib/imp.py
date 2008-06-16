@@ -19,10 +19,16 @@ PY_CODERESOURCE = 8
 import new
 import sys, os
 
-def get_magic():
-    """Return the magic number for .pyc or .pyo files."""
-    import struct
-    return struct.pack('L', sys._magic())
+# PyPy-specific interface
+try:
+    from sys import _magic as _get_magic_as_int
+    def get_magic():
+        """Return the magic number for .pyc or .pyo files."""
+        import struct
+        return struct.pack('L', _get_magic_as_int())
+except ImportError:
+    # XXX CPython testing hack: delegate to the real imp.get_magic
+    get_magic = __import__('imp').get_magic
 
 def get_suffixes():
     """Return a list of (suffix, mode, type) tuples describing the files
