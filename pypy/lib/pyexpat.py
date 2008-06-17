@@ -61,6 +61,7 @@ declare_external('XML_GetErrorCode', [XML_Parser], c_int)
 declare_external('XML_StopParser', [XML_Parser, c_int], None)
 lib.XML_ErrorString.args = [c_int]
 lib.XML_ErrorString.result = c_int
+declare_external('XML_SetBase', [XML_Parser, c_char_p], None)
 
 declare_external('XML_SetUnknownEncodingHandler', [XML_Parser, c_void_p,
                                                    c_void_p], None)
@@ -389,10 +390,17 @@ class XMLParserType(object):
             return self.buffer is not None
         elif name in currents:
             return getattr(lib, 'XML_Get' + name)(self.itself)
+        elif name == 'ErrorColumnNumber':
+            return lib.XML_GetCurrentColumnNumber(self.itself)
+        elif name == 'ErrorLineNumber':
+            return lib.XML_GetCurrentLineNumber(self.itself)
         return self.__dict__[name]
 
     def ParseFile(self, file):
         return self.Parse(file.read(), False)
+
+    def SetBase(self, base):
+        XML_SetBase(self.itself, base)
 
 def ErrorString(errno):
     xxx
