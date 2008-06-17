@@ -1,4 +1,4 @@
-import pdb
+import pdb, bdb
 import types
 import code
 import sys
@@ -413,7 +413,7 @@ show the program's call graph"""
             locals().update(self.exposed)
             fn(*args)
             pass # for debugger to land
-        except pdb.bdb.BdbQuit:
+        except bdb.BdbQuit:
             pass    
 
 
