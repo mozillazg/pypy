@@ -813,93 +813,6 @@ class SimpleTests(InterpretationTest):
         assert res == 42
         self.check_insns({})
 
-
-    def test_setarrayitem(self):
-        A = lltype.GcArray(lltype.Signed)
-        a = lltype.malloc(A, 2, immortal=True)
-        def ll_function():
-            a[0] = 1
-            a[1] = 2
-            return a[0]+a[1]
-        
-        res = self.interpret(ll_function, [], [])
-        assert res == 3
-
-    def test_red_array(self):
-        A = lltype.GcArray(lltype.Signed)
-        def ll_function(x, y, n):
-            a = lltype.malloc(A, 2)
-            a[0] = x
-            a[1] = y
-            return a[n]*len(a)
-
-        res = self.interpret(ll_function, [21, -21, 0], [])
-        assert res == 42
-        self.check_insns({'malloc_varsize': 1,
-                          'setarrayitem': 2, 'getarrayitem': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
-        res = self.interpret(ll_function, [21, -21, 1], [])
-        assert res == -42
-        self.check_insns({'malloc_varsize': 1,
-                          'setarrayitem': 2, 'getarrayitem': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
-    def test_red_struct_array(self):
-        S = lltype.Struct('s', ('x', lltype.Signed))
-        A = lltype.GcArray(S)
-        def ll_function(x, y, n):
-            a = lltype.malloc(A, 2)
-            a[0].x = x
-            a[1].x = y
-            return a[n].x*len(a)
-
-        res = self.interpret(ll_function, [21, -21, 0], [])
-        assert res == 42
-        self.check_insns({'malloc_varsize': 1,
-                          'setinteriorfield': 2, 'getinteriorfield': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
-        res = self.interpret(ll_function, [21, -21, 1], [])
-        assert res == -42
-        self.check_insns({'malloc_varsize': 1,
-                          'setinteriorfield': 2, 'getinteriorfield': 1,
-                          'getarraysize': 1, 'int_mul': 1})
-
-
-    def test_red_varsized_struct(self):
-        A = lltype.Array(lltype.Signed)
-        S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
-        def ll_function(x, y, n):
-            s = lltype.malloc(S, 3)
-            s.foo = len(s.a)-1
-            s.a[0] = x
-            s.a[1] = y
-            return s.a[n]*s.foo
-
-        res = self.interpret(ll_function, [21, -21, 0], [])
-        assert res == 42
-        self.check_insns(malloc_varsize=1,
-                         getinteriorarraysize=1)
-
-        res = self.interpret(ll_function, [21, -21, 1], [])
-        assert res == -42
-        self.check_insns(malloc_varsize=1,
-                         getinteriorarraysize=1)
-
-    def test_array_of_voids(self):
-        A = lltype.GcArray(lltype.Void)
-        def ll_function(n):
-            a = lltype.malloc(A, 3)
-            a[1] = None
-            b = a[n]
-            res = a, b
-            keepalive_until_here(b)      # to keep getarrayitem around
-            return res
-
-        res = self.interpret(ll_function, [2], [])
-        assert len(res.item0) == 3
-
     def test_red_propagate(self):
         S = self.GcStruct('S', ('n', lltype.Signed))
         malloc = self.malloc
@@ -2137,6 +2050,38 @@ class TestLLType(SimpleTests):
         assert res == 5
         self.check_insns({})
 
+    def test_setarrayitem(self):
+        A = lltype.GcArray(lltype.Signed)
+        a = lltype.malloc(A, 2, immortal=True)
+        def ll_function():
+            a[0] = 1
+            a[1] = 2
+            return a[0]+a[1]
+        
+        res = self.interpret(ll_function, [], [])
+        assert res == 3
+
+    def test_red_struct_array(self):
+        S = lltype.Struct('s', ('x', lltype.Signed))
+        A = lltype.GcArray(S)
+        def ll_function(x, y, n):
+            a = lltype.malloc(A, 2)
+            a[0].x = x
+            a[1].x = y
+            return a[n].x*len(a)
+
+        res = self.interpret(ll_function, [21, -21, 0], [])
+        assert res == 42
+        self.check_insns({'malloc_varsize': 1,
+                          'setinteriorfield': 2, 'getinteriorfield': 1,
+                          'getarraysize': 1, 'int_mul': 1})
+
+        res = self.interpret(ll_function, [21, -21, 1], [])
+        assert res == -42
+        self.check_insns({'malloc_varsize': 1,
+                          'setinteriorfield': 2, 'getinteriorfield': 1,
+                          'getarraysize': 1, 'int_mul': 1})
+
     def test_degenerated_before_return(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
@@ -2213,6 +2158,59 @@ class TestLLType(SimpleTests):
         assert res == 7 * 4
         res = self.interpret(ll_function, [0], [])
         assert res == 4 * 4
+
+    def test_red_array(self):
+        A = lltype.GcArray(lltype.Signed)
+        def ll_function(x, y, n):
+            a = lltype.malloc(A, 2)
+            a[0] = x
+            a[1] = y
+            return a[n]*len(a)
+
+        res = self.interpret(ll_function, [21, -21, 0], [])
+        assert res == 42
+        self.check_insns({'malloc_varsize': 1,
+                          'setarrayitem': 2, 'getarrayitem': 1,
+                          'getarraysize': 1, 'int_mul': 1})
+
+        res = self.interpret(ll_function, [21, -21, 1], [])
+        assert res == -42
+        self.check_insns({'malloc_varsize': 1,
+                          'setarrayitem': 2, 'getarrayitem': 1,
+                          'getarraysize': 1, 'int_mul': 1})
+
+    def test_array_of_voids(self):
+        A = lltype.GcArray(lltype.Void)
+        def ll_function(n):
+            a = lltype.malloc(A, 3)
+            a[1] = None
+            b = a[n]
+            res = a, b
+            keepalive_until_here(b)      # to keep getarrayitem around
+            return res
+
+        res = self.interpret(ll_function, [2], [])
+        assert len(res.item0) == 3
+
+    def test_red_varsized_struct(self):
+        A = lltype.Array(lltype.Signed)
+        S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
+        def ll_function(x, y, n):
+            s = lltype.malloc(S, 3)
+            s.foo = len(s.a)-1
+            s.a[0] = x
+            s.a[1] = y
+            return s.a[n]*s.foo
+
+        res = self.interpret(ll_function, [21, -21, 0], [])
+        assert res == 42
+        self.check_insns(malloc_varsize=1,
+                         getinteriorarraysize=1)
+
+        res = self.interpret(ll_function, [21, -21, 1], [])
+        assert res == -42
+        self.check_insns(malloc_varsize=1,
+                         getinteriorarraysize=1)
 
     def test_red_subcontainer(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
@@ -2352,6 +2350,49 @@ class TestOOType(OOTypeMixin, SimpleTests):
         assert res == 5
         self.check_insns({})
 
+    def test_setarrayitem(self):
+        A = ootype.Array(lltype.Signed)
+        a = ootype.oonewarray(A, 2)
+        def ll_function():
+            a.ll_setitem_fast(0, 1)
+            a.ll_setitem_fast(1, 2)
+            return a.ll_getitem_fast(0) + a.ll_getitem_fast(1)
+        
+        res = self.interpret(ll_function, [], [])
+        assert res == 3
+
+    def test_red_array(self):
+        A = ootype.Array(lltype.Signed)
+        def ll_function(x, y, n):
+            a = ootype.oonewarray(A, 2)
+            a.ll_setitem_fast(0, x)
+            a.ll_setitem_fast(1, y)
+            return a.ll_getitem_fast(n)*a.ll_length()
+
+        res = self.interpret(ll_function, [21, -21, 0], [])
+        assert res == 42
+        self.check_insns({'oonewarray': 1,
+                          'oosend': 4, 'int_mul': 1})
+
+        res = self.interpret(ll_function, [21, -21, 1], [])
+        assert res == -42
+        self.check_insns({'oonewarray': 1,
+                          'oosend': 4, 'int_mul': 1})
+
+    def test_array_of_voids(self):
+        py.test.skip('XXX fixme')
+        A = ootype.Array(lltype.Void)
+        def ll_function(n):
+            a = ootype.oonewarray(A, 3)
+            a.ll_setitem_fast(1, None)
+            b = a.ll_setitem_fast(n)
+            res = a, b
+            keepalive_until_here(b)      # to keep getarrayitem around
+            return res
+
+        res = self.interpret(ll_function, [2], [])
+        assert len(res.item0) == 3
+
     def test_degenerated_before_return(self):
         S = ootype.Instance('S', ootype.ROOT, {'x': ootype.Signed})
         T = ootype.Instance('T', S, {'y': ootype.Float})
@@ -2449,7 +2490,3 @@ class TestOOType(OOTypeMixin, SimpleTests):
     def _skip(self):
         py.test.skip('in progress')
 
-    test_red_array = _skip
-    test_red_struct_array = _skip
-    test_red_varsized_struct = _skip
-    test_array_of_voids = _skip
