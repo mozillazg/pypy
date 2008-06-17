@@ -942,7 +942,6 @@ def str_decode__String_ANY_ANY(space, w_string, w_encoding=None, w_errors=None):
     return decode_object(space, w_string, encoding, errors)
 
 def str_encode__String_ANY_ANY(space, w_string, w_encoding=None, w_errors=None):
-    #import pdb; pdb.set_trace()
     from pypy.objspace.std.unicodetype import _get_encoding_and_errors, \
         encode_object
     encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
