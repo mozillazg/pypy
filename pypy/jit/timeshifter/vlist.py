@@ -518,8 +518,6 @@ def oop_list_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itemb
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
-oop_list_method_setitem_fast = oop_list_setitem
-
 def oop_list_delitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
@@ -530,3 +528,8 @@ def oop_list_delitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
             oopspecdesc.residual_exception(jitstate, IndexError)
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox])
+
+
+oop_list_method_getitem_fast = oop_list_getitem
+oop_list_method_setitem_fast = oop_list_setitem
+oop_list_method_length = oop_list_len

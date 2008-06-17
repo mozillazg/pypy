@@ -130,10 +130,13 @@ class AbstractOopSpecDesc:
 
             self.do_call = do_call
 
+    def isfoldable(self, deepfrozen):
+        return deepfrozen
+
     def residual_call(self, jitstate, argboxes, deepfrozen=False):
         builder = jitstate.curbuilder
         args_gv = []
-        fold = deepfrozen
+        fold = self.isfoldable(deepfrozen)
         for argsrc in self.residualargsources:
             gv_arg = argboxes[argsrc].getgenvar(jitstate)
             args_gv.append(gv_arg)
@@ -292,10 +295,26 @@ class SendOopSpecDesc(AbstractOopSpecDesc):
         self.residualargsources = range(len(self.OOPARGTYPES))
         self.typename = self.SELFTYPE.oopspec_name
         methname = meth._name.lstrip('_')
-        methname = methname.lstrip('ll_')
+        assert methname.startswith('ll_')
+        methname = methname[3:]
         self.method = 'oop_%s_method_%s' % (self.typename, methname)
         self.is_method = True
+        self.methtoken = RGenOp.methToken(self.SELFTYPE, meth._name)
+        
+        self.foldable = False
+        if isinstance(self.SELFTYPE, ootype.Array):
+            if self.SELFTYPE._hints.get('immutable', False):
+                self.foldable = True
+        if getattr(meth, '_callable', None) and \
+           getattr(meth._callable, 'foldable', False):
+            self.foldable = True
 
+    def generate_call(self, builder, args_gv):
+        gv_self, args_gv = args_gv[0], args_gv[1:]
+        return builder.genop_oosend(self.methtoken, gv_self, args_gv)
+
+    def isfoldable(self, deepfrozen):
+        return deepfrozen or self.foldable
 
 class SendOopSpecDesc_list(SendOopSpecDesc):
     pass

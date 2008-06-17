@@ -733,50 +733,6 @@ class SimpleTests(InterpretationTest):
         assert res == 42
         self.check_insns({'int_add': 1})
 
-    def test_simple_array(self):
-        A = lltype.GcArray(lltype.Signed, 
-                            hints={'immutable': True})
-        def ll_function(a):
-            return a[0] * a[1]
-
-        def int_array(string):
-            items = [int(x) for x in string.split(',')]
-            n = len(items)
-            a1 = lltype.malloc(A, n)
-            for i in range(n):
-                a1[i] = items[i]
-            return a1
-        ll_function.convert_arguments = [int_array]
-
-        res = self.interpret(ll_function, ["6,7"], [])
-        assert res == 42
-        self.check_insns({'getarrayitem': 2, 'int_mul': 1})
-        res = self.interpret(ll_function, ["8,3"], [0])
-        assert res == 24
-        self.check_insns({})
-
-    def test_arraysize(self):
-        A = lltype.GcArray(lltype.Signed)
-        def ll_function(a):
-            return len(a)
-
-        def int_array(string):
-            items = [int(x) for x in string.split(',')]
-            n = len(items)
-            a1 = lltype.malloc(A, n)
-            for i in range(n):
-                a1[i] = items[i]
-            return a1
-        ll_function.convert_arguments = [int_array]
-
-        res = self.interpret(ll_function, ["6,7"], [])
-        assert res == 2
-        self.check_insns({'getarraysize': 1})
-        res = self.interpret(ll_function, ["8,3,3,4,5"], [0])
-        assert res == 5
-        self.check_insns({})
-
-
     def test_simple_struct_malloc(self):
         py.test.skip("blue containers: to be reimplemented")
         S = lltype.GcStruct('helloworld', ('hello', lltype.Signed),
@@ -2043,7 +1999,6 @@ class SimpleTests(InterpretationTest):
             return isinstance(obj, B)
         res = self.interpret(fn, [True], [], policy=StopAtXPolicy(g))
         assert res
-        #self.check_insns({})
 
 
     def test_manymanyvars(self):
@@ -2138,6 +2093,49 @@ class SimpleTests(InterpretationTest):
 
 class TestLLType(SimpleTests):
     type_system = "lltype"
+
+    def test_simple_array(self):
+        A = lltype.GcArray(lltype.Signed, 
+                            hints={'immutable': True})
+        def ll_function(a):
+            return a[0] * a[1]
+
+        def int_array(string):
+            items = [int(x) for x in string.split(',')]
+            n = len(items)
+            a1 = lltype.malloc(A, n)
+            for i in range(n):
+                a1[i] = items[i]
+            return a1
+        ll_function.convert_arguments = [int_array]
+
+        res = self.interpret(ll_function, ["6,7"], [])
+        assert res == 42
+        self.check_insns({'getarrayitem': 2, 'int_mul': 1})
+        res = self.interpret(ll_function, ["8,3"], [0])
+        assert res == 24
+        self.check_insns({})
+
+    def test_arraysize(self):
+        A = lltype.GcArray(lltype.Signed)
+        def ll_function(a):
+            return len(a)
+
+        def int_array(string):
+            items = [int(x) for x in string.split(',')]
+            n = len(items)
+            a1 = lltype.malloc(A, n)
+            for i in range(n):
+                a1[i] = items[i]
+            return a1
+        ll_function.convert_arguments = [int_array]
+
+        res = self.interpret(ll_function, ["6,7"], [])
+        assert res == 2
+        self.check_insns({'getarraysize': 1})
+        res = self.interpret(ll_function, ["8,3,3,4,5"], [0])
+        assert res == 5
+        self.check_insns({})
 
     def test_degenerated_before_return(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
@@ -2310,6 +2308,49 @@ class OOTypeMixin(object):
         return insns
 
 class TestOOType(OOTypeMixin, SimpleTests):
+
+    def test_simple_array(self):
+        A = ootype.Array(lltype.Signed,
+                         _hints={'immutable': True})
+        def ll_function(a):
+            return a.ll_getitem_fast(0) * a.ll_getitem_fast(1)
+
+        def int_array(string):
+            items = [int(x) for x in string.split(',')]
+            n = len(items)
+            a1 = ootype.oonewarray(A, n)
+            for i in range(n):
+                a1.ll_setitem_fast(i, items[i])
+            return a1
+        ll_function.convert_arguments = [int_array]
+
+        res = self.interpret(ll_function, ["6,7"], [])
+        assert res == 42
+        self.check_insns({'oosend': 2, 'int_mul': 1})
+        res = self.interpret(ll_function, ["8,3"], [0])
+        assert res == 24
+        self.check_insns({})
+
+    def test_arraysize(self):
+        A = ootype.Array(lltype.Signed)
+        def ll_function(a):
+            return a.ll_length()
+
+        def int_array(string):
+            items = [int(x) for x in string.split(',')]
+            n = len(items)
+            a1 = ootype.oonewarray(A, n)
+            for i in range(n):
+                a1.ll_setitem_fast(i, items[i])
+            return a1
+        ll_function.convert_arguments = [int_array]
+
+        res = self.interpret(ll_function, ["6,7"], [])
+        assert res == 2
+        self.check_insns({'oosend': 1})
+        res = self.interpret(ll_function, ["8,3,3,4,5"], [0])
+        assert res == 5
+        self.check_insns({})
 
     def test_degenerated_before_return(self):
         S = ootype.Instance('S', ootype.ROOT, {'x': ootype.Signed})

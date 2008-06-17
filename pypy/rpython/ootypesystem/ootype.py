@@ -587,8 +587,9 @@ class Array(BuiltinADTType):
     oopspec_new = 'new(length)'
     oopspec_new_argnames = ('length',)
 
-    def __init__(self, ITEMTYPE=None):
+    def __init__(self, ITEMTYPE=None, _hints = {}):
         self.ITEM = ITEMTYPE
+        self._hints = frozendict(_hints)
         self._null = _null_array(self)
         if ITEMTYPE is not None:
             self._init_methods()
@@ -1540,12 +1541,15 @@ class _array(_builtin_type):
     def ll_length(self):
         # NOT_RPYTHON
         return len(self._array)
+    ll_length.oopargcheck = lambda a: bool(a)
+    ll_length.foldable = True
 
     def ll_getitem_fast(self, index):
         # NOT_RPYTHON
         assert typeOf(index) == Signed
         assert index >= 0
         return self._array[index]
+    ll_getitem_fast.oopargcheck = lambda a, index: bool(a)
 
     def ll_setitem_fast(self, index, item):
         # NOT_RPYTHON
@@ -1553,6 +1557,7 @@ class _array(_builtin_type):
         assert typeOf(index) == Signed
         assert index >= 0
         self._array[index] = item
+    ll_setitem_fast.oopargcheck = lambda a, index, item: bool(a)
 
 class _null_array(_null_mixin(_array), _array):
 
