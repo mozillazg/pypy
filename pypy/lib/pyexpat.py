@@ -27,6 +27,13 @@ class CConfigure:
                                     ('convert', c_void_p),
                                     ('release', c_void_p),
                                     ('map', c_int * 256)])
+    XML_Content = configure.Struct('XML_Content',[
+        ('numchildren', c_int),
+        ('children', c_void_p),
+        ('name', c_char_p),
+        ('type', c_int),
+        ('quant', c_int),
+    ])
     # this is insanely stupid
     XML_FALSE = configure.ConstantInteger('XML_FALSE')
     XML_TRUE = configure.ConstantInteger('XML_TRUE')
@@ -34,6 +41,8 @@ class CConfigure:
 info = configure.configure(CConfigure)
 for k, v in info.items():
     globals()[k] = v
+
+XML_Content.children = POINTER(XML_Content)
 XML_Parser = ctypes.c_void_p # an opaque pointer
 assert XML_Char is ctypes.c_char # this assumption is everywhere in
 # cpython's expat, let's explode
@@ -65,6 +74,8 @@ declare_external('XML_SetBase', [XML_Parser, c_char_p], None)
 
 declare_external('XML_SetUnknownEncodingHandler', [XML_Parser, c_void_p,
                                                    c_void_p], None)
+declare_external('XML_FreeContentModel', [XML_Parser, POINTER(XML_Content)],
+                 None)
 
 def XML_ErrorString(code):
     res = lib.XML_ErrorString(code)
@@ -262,11 +273,21 @@ class XMLParserType(object):
         CB = ctypes.CFUNCTYPE(None, c_void_p, POINTER(c_char), c_int)
         return CB(CharacterData)
 
+    def get_cb_for_NotStandaloneHandler(self, real_cb):
+        def NotStandaloneHandler(unused):
+            return real_cb()
+        NotStandaloneHandler = self._wrap_cb(NotStandaloneHandler)
+        CB = ctypes.CFUNCTYPE(c_int, c_void_p)
+        return CB(NotStandaloneHandler)
+
     def get_cb_for_EntityDeclHandler(self, real_cb):
-        def EntityDecl(unused, ename, is_param, value, _, base, system_id,
-                       pub_id, not_name):
-            
+        def EntityDecl(unused, ename, is_param, value, value_len, base,
+                       system_id, pub_id, not_name):
             self._flush_character_buffer()
+            if not value:
+                value = None
+            else:
+                value = value[:value_len]
             args = [ename, is_param, value, base, system_id,
                     pub_id, not_name]
             args = [self.conv(arg) for arg in args]
@@ -276,12 +297,21 @@ class XMLParserType(object):
                                c_int, c_char_p, c_char_p, c_char_p, c_char_p)
         return CB(EntityDecl)
 
+    def _conv_content_model(self, model):
+        children = tuple([self._conv_content_model(model.children[i])
+                          for i in range(model.numchildren)])
+        return (model.type, model.quant, self.conv(model.name),
+                children)
+
     def get_cb_for_ElementDeclHandler(self, real_cb):
-        # XXX this is broken, needs tests
-        def ElementDecl(unused, *args):
-            print "WARNING! ElementDeclHandler Not supported"
+        def ElementDecl(unused, name, model):
+            self._flush_character_buffer()
+            modelobj = self._conv_content_model(model[0])
+            real_cb(name, modelobj)
+            XML_FreeContentModel(self.itself, model)
+
         ElementDecl = self._wrap_cb(ElementDecl)
-        CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, c_void_p)
+        CB = ctypes.CFUNCTYPE(None, c_void_p, c_char_p, POINTER(XML_Content))
         return CB(ElementDecl)
 
     def _new_callback_for_string_len(name, sign):
@@ -342,7 +372,7 @@ class XMLParserType(object):
     def conv_unicode(self, s):
         if s is None or isinstance(s, int):
             return s
-        return s.decode(self.encoding)
+        return s.decode(self.encoding, "strict")
 
     def __setattr__(self, name, value):
         # forest of ifs...
