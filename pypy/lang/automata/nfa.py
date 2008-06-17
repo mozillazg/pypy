@@ -4,6 +4,7 @@ class NFA(object):
         self.num_states = 0
         self.transitions = {}
         self.final_states = {}
+        self.has_epsilon_moves = False
 
     def add_state(self, final=False):
         state = self.num_states
@@ -13,6 +14,8 @@ class NFA(object):
         return self.num_states - 1
 
     def add_transition(self, state, input, next_state):
+        if input == '?':
+            self.has_epsilon_moves = True
         if (state, input) in self.transitions:
             self.transitions[state, input].append(next_state)
         else:
@@ -27,6 +30,96 @@ class NFA(object):
             all_chars[input] = None
         return all_chars
 
+    def _remove_identical_states(self):
+        """ Identical states are ones that have similiar e-moves
+        forward, merge them
+        """
+        possible_merges = {}
+        prohibited_merges = {}
+        changed = False
+        for (s, v), next_s_l in self.transitions.items():
+            if v == '?':
+                for next_s in next_s_l:
+                    if next_s in possible_merges:
+                        possible_merges[next_s][s] = None
+                    else:
+                        possible_merges[next_s] = {s:None}
+            else:
+                prohibited_merges[s] = None
+        for k, v in possible_merges.items():
+            v = dict.fromkeys([i for i in v if i not in prohibited_merges])
+            if len(v) > 1:
+                first = v.keys()[0]
+                self.merge_states(first, v)
+                changed = True
+        return changed
+
+    def merge_states(self, to_what, vdict):
+        for (s, v), next_s_l in self.transitions.items():
+            for i in range(len(next_s_l)):
+                next = next_s_l[i]
+                if next in vdict:
+                    next_s_l[i] = to_what
+        for k in self.final_states.keys():
+            if k in vdict:
+                self.final_states[to_what] = None
+                del final_states[k]
+
+    def _remove_epsilon_moves(self):
+        for (s, v), next_s_l in self.transitions.items():
+            if v == '?': # epsilon move
+                for next_s in next_s_l:
+                    self.merge_moves(next_s, s)
+                    if next_s in self.final_states:
+                        self.final_states[s] = None
+                del self.transitions[(s, v)]
+                return False
+        return True
+
+    def remove_epsilon_moves(self):
+        if not self.has_epsilon_moves:
+            return
+        changed = True
+        while changed:
+            changed = self._remove_identical_states()
+            self.cleanup()
+        changed = False
+        while not changed:
+            changed = self._remove_epsilon_moves()
+        self.cleanup()
+        self.has_epsilon_moves = False
+
+    def _cleanup(self):
+        all = {0:None}
+        accessible = {0:None}
+        for (s, v), next_s_l in self.transitions.items():
+            all[s] = None
+            for next in next_s_l:
+                accessible[next] = None
+                all[next] = None
+        for fs in self.final_states:
+            all[fs] = None
+        if all == accessible:
+            return False
+        else:
+            for (s, v), next_s_l in self.transitions.items():
+                if s not in accessible:
+                    del self.transitions[(s, v)]
+            for fs in self.final_states.keys():
+                if fs not in accessible:
+                    del self.final_states[fs]
+            return True
+
+    def cleanup(self):
+        while self._cleanup():
+            pass
+
+    def merge_moves(self, to_replace, replacement):
+        for (s, c), targets in self.transitions.items():
+            if s == to_replace:
+                for target in targets:
+                    self.add_transition(replacement, c, target)
+    
     def __repr__(self):
         from pprint import pformat
         return "NFA%s" % (pformat(
@@ -49,6 +142,7 @@ def recognize(automaton, s):
     state = 0
     stack = []
     i = 0
+    automaton.remove_epsilon_moves()
     while True:
         char = s[i]
         try:
@@ -75,82 +169,45 @@ def recognize(automaton, s):
 
     return state in automaton.final_states
 
-class Builder(object):
-    def __init__(self):
-        self.nfa = NFA()
-        self.current_state = self.nfa.add_state()
+def in_alphabet(c):
+    return c >= 'a' and c <= 'z'
 
-    def add_transition(self, c, state=-1, final=False):
-        if state == -1:
-            state = self.nfa.add_state(final)
-        elif final:
-            self.nfa.final_states[state] = None
-        self.nfa.add_transition(self.current_state, c, state)
-        self.current_state = state
-
-    def add_cycle(self, state):
-        """ We change all transitions pointing to current state
-        to point to state passed as argument
-        """
-        to_replace = self.current_state
-        for (fr, ch), v in self.nfa.transitions.items():
-            for i in range(len(v)):
-                if v[i] == to_replace:
-                    v[i] = state
-            if fr == to_replace:
-                del self.nfa.transitions[(fr, ch)]
-            self.nfa.transitions[(state, ch)] = v
-        try:
-            del self.nfa.final_states[to_replace]
-        except KeyError:
-            pass
-        else:
-            self.nfa.final_states[state] = None
-        self.current_state = state
-
-def no_more_chars(i, input):
-    for k in range(i+1, len(input)):
-        if input[k] >= 'a' and input[k] <= 'z':
-            return False
-    return True
-
-def compile_regex(input):
-    """ Simple compilation routine, just in order to not have to mess
-    up with creating automaton by hand. We assume alphabet to be a-z
-    """
-    builder = Builder()
-    i = 0
-    last_anchor = builder.current_state
-    joint_point = -1
-    paren_stack = []
+def compile_part(nfa, start_state, input, pos):
+    i = pos
     last_state = -1
+    state = start_state
     while i < len(input):
         c = input[i]
-        if c >= 'a' and c <= 'z':
-            final = no_more_chars(i, input)
-            last_state = builder.current_state
-            if (final or input[i + 1] == ')') and joint_point != -1:
-                builder.add_transition(c, state=joint_point, final=final)
-                join_point = -1
-            else:
-                builder.add_transition(c, final=final)
-        elif c == "|":
-            last_state = -1
-            joint_point = builder.current_state
-            builder.current_state = last_anchor
-        elif c == '(':
-            paren_stack.append((builder.current_state, last_anchor, joint_point))
-            last_anchor = builder.current_state
-            joint_point = -1
+        if in_alphabet(c):
+            next_state = nfa.add_state()
+            nfa.add_transition(state, c, next_state)
+            state = next_state
         elif c == ')':
-            if not paren_stack:
-                raise ValueError("Unmatched parentheses")
-            last_state, last_anchor, joint_point = paren_stack.pop()
-        elif c == '*':
+            break
+        elif c == '(':
+            i, state = compile_part(nfa, state, input, i + 1)
+        elif c == '|':
             if last_state == -1:
-                raise ValueError("Mismatched *")
-            builder.add_cycle(last_state)
+                last_state = nfa.add_state()
+            nfa.add_transition(state, '?', last_state)
+            state = start_state
+        elif c == '*':
+            nfa.add_transition(state, '?', start_state)
+            state = start_state
         else:
             raise ValueError("Unknown char %s" % c)
         i += 1
-    return builder.nfa
+    if last_state != -1:
+        nfa.add_transition(state, '?', last_state)
+        state = last_state
+    return i, state
+
+def compile_regex(input):
+    start = 0
+    nfa = NFA()
+    start_state = nfa.add_state()
+    pos, state = compile_part(nfa, start_state, input, 0)
+    if pos != len(input):
+        raise ValueError("Mismatched parenthesis")
+    nfa.final_states[state] = None
+    return nfa
