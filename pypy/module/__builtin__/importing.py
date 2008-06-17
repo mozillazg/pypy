@@ -416,19 +416,20 @@ def load_source_module(space, w_modulename, w_mod, pathname, source,
     Load a source module from a given file and return its module
     object.
     """
-    w = space.wrap
     pycode = parse_source_module(space, pathname, source)
 
+    if space.config.objspace.usepycfiles and write_pyc:
+        mtime = os.stat(pathname)[stat.ST_MTIME]
+        cpathname = pathname + 'c'
+        print "write_compiled_module", cpathname
+        write_compiled_module(space, pycode, cpathname, mtime)
+
+    w = space.wrap
     w_dict = space.getattr(w_mod, w('__dict__'))
     space.call_method(w_dict, 'setdefault',
                       w('__builtins__'),
                       w(space.builtin))
     pycode.exec_code(space, w_dict, w_dict)
-
-    if space.config.objspace.usepycfiles and write_pyc:
-        mtime = os.stat(pathname)[stat.ST_MTIME]
-        cpathname = pathname + 'c'
-        write_compiled_module(space, pycode, cpathname, mtime)
 
     return w_mod
 
