@@ -1,6 +1,7 @@
 import py
 from pypy.interpreter.module import Module
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError
 import pypy.interpreter.pycode
 from pypy.tool.udir import udir
 from pypy.rlib import streamio
@@ -271,10 +272,10 @@ def _testfile(magic, mtime, co=None):
     f.close()
     return cpathname
 
-def _testfilesource():
+def _testfilesource(source="x=42"):
     pathname = str(udir.join('test.py'))
     f = file(pathname, "wb")
-    f.write("x=42")
+    f.write(source)
     f.close()
     return pathname
 
@@ -422,7 +423,70 @@ class TestPycStuff:
         ret = space.int_w(w_ret)
         assert ret == 42
 
-        #XXX Note tested while no writing
+        cpathname = udir.join('test.pyc')
+        assert cpathname.check()
+        cpathname.remove()
+
+    def test_load_source_module_nowrite(self):
+        space = self.space
+        w_modulename = space.wrap('somemodule')
+        w_mod = space.wrap(Module(space, w_modulename))
+        pathname = _testfilesource()
+        stream = streamio.open_file_as_stream(pathname, "r")
+        try:
+            w_ret = importing.load_source_module(space,
+                                                 w_modulename,
+                                                 w_mod,
+                                                 pathname,
+                                                 stream.readall(),
+                                                 write_pyc=False)
+        finally:
+            stream.close()
+        cpathname = udir.join('test.pyc')
+        assert not cpathname.check()
+
+    def test_load_source_module_syntaxerror(self):
+        # No .pyc file on SyntaxError
+        space = self.space
+        w_modulename = space.wrap('somemodule')
+        w_mod = space.wrap(Module(space, w_modulename))
+        pathname = _testfilesource(source="<Syntax Error>")
+        stream = streamio.open_file_as_stream(pathname, "r")
+        try:
+            w_ret = importing.load_source_module(space,
+                                                 w_modulename,
+                                                 w_mod,
+                                                 pathname,
+                                                 stream.readall())
+        except OperationError:
+            # OperationError("Syntax Error")
+            pass
+        stream.close()
+
+        cpathname = udir.join('test.pyc')
+        assert not cpathname.check()
+        
+    def test_load_source_module_importerror(self):
+        # the .pyc file is created before executing the module
+        space = self.space
+        w_modulename = space.wrap('somemodule')
+        w_mod = space.wrap(Module(space, w_modulename))
+        pathname = _testfilesource(source="a = unknown_name")
+        stream = streamio.open_file_as_stream(pathname, "r")
+        try:
+            w_ret = importing.load_source_module(space,
+                                                 w_modulename,
+                                                 w_mod,
+                                                 pathname,
+                                                 stream.readall())
+        except OperationError:
+            # OperationError("NameError", "global name 'unknown_name' is not defined")
+            pass
+        stream.close()
+
+        # And the .pyc has been generated
+        cpathname = udir.join('test.pyc')
+        assert cpathname.check()
 
     def test_write_compiled_module(self):
         space = self.space
