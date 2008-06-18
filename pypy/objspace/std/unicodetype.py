@@ -147,6 +147,7 @@ from pypy.objspace.std.stringtype import str_splitlines as unicode_splitlines
 from pypy.objspace.std.stringtype import str_strip as unicode_strip
 from pypy.objspace.std.stringtype import str_rstrip as unicode_rstrip
 from pypy.objspace.std.stringtype import str_lstrip as unicode_lstrip
+from pypy.objspace.std.stringtype import str_decode as unicode_decode
 
 # ____________________________________________________________
 
