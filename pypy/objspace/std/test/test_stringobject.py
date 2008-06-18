@@ -645,6 +645,7 @@ class AppTestStringObject:
     def test_decode(self):
         assert 'hello'.decode('rot-13') == 'uryyb'
         assert 'hello'.decode('string-escape') == 'hello'
+        assert u'hello'.decode('rot-13') == 'uryyb'
 
     def test_encode(self):
         assert 'hello'.encode() == 'hello'
