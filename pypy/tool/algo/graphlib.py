@@ -36,6 +36,11 @@ def depth_first_search(root, vertices, edges):
     visit(root)
     return result
 
+def vertices_reachable_from(root, vertices, edges):
+    for event, v in depth_first_search(root, vertices, edges):
+        if event == 'start':
+            yield v
+
 def strong_components(vertices, edges):
     """Enumerates the strongly connected components of a graph.  Each one is
     a set of vertices where any vertex can be reached from any other vertex by
@@ -78,7 +83,9 @@ def strong_components(vertices, edges):
                         component_root[v] = vroot
 
 def all_cycles(root, vertices, edges):
-    """Enumerates cycles.  Each cycle is a list of edges."""
+    """Enumerates cycles.  Each cycle is a list of edges.
+    This may not give stricly all cycles if they are many intermixed cycles.
+    """
     stackpos = {}
     edgestack = []
     result = []
@@ -97,45 +104,122 @@ def all_cycles(root, vertices, edges):
     visit(root)
     return result        
 
+
+def find_roots(vertices, edges):
+    """Find roots, i.e. a minimal set of vertices such that all other
+    vertices are reachable from them."""
+
+    roots = set()
+    notseen = set(vertices)     # set of vertices that are not reachable yet
+                                # from any vertex in 'roots'
+    def addroot(root):
+        roots.add(root)
+        if root in notseen:
+            notseen.remove(root)
+        for v in vertices_reachable_from(root, notseen.union(roots), edges):
+            if v is not root:
+                if v in roots:
+                    roots.remove(v)   # this older root is no longer needed
+                else:
+                    notseen.remove(v)
+
+    while notseen:
+        addroot(notseen.pop())
+    return roots
+
+
+def is_acyclic(vertices, edges):
+    class CycleFound(Exception):
+        pass
+    def visit(vertex):
+        visiting[vertex] = True
+        for edge in edges[vertex]:
+            w = edge.target
+            if w in visiting:
+                raise CycleFound
+            if w in unvisited:
+                del unvisited[w]
+                visit(w)
+        del visiting[vertex]
+    try:
+        unvisited = vertices.copy()
+        while unvisited:
+            visiting = {}
+            root = unvisited.popitem()[0]
+            visit(root)
+    except CycleFound:
+        return False
+    else:
+        return True
+
+
 def break_cycles(vertices, edges):
     """Enumerates a reasonably minimal set of edges that must be removed to
     make the graph acyclic."""
-    # the approach is as follows: for each strongly connected component, find
-    # all cycles (which takens exponential time, potentially). Then break the
-    # edges that are part of the most cycles, until all cycles in that
-    # component are broken.
-    for component in strong_components(vertices, edges):
-        #print '-->', ''.join(component)
-        random_vertex = component.iterkeys().next()
-        cycles = all_cycles(random_vertex, component, edges)
-        if not cycles:
-            continue
-        allcycles = dict.fromkeys([id(cycle) for cycle in cycles])
-        edge2cycles = {}
-        edge_weights = {}
-        for cycle in cycles:
-            #print '\tcycle:', [e.source+e.target for e in cycle]
-            for edge in cycle:
-                edge2cycles.setdefault(edge, []).append(cycle)
-                edge_weights[edge] = edge_weights.get(edge, 0) + 1
-        while allcycles:
-            max_weight = 0
-            max_edge = None
-            for edge, weight in edge_weights.iteritems():
-                if weight >= max_weight:
-                    max_edge = edge
-                    max_weight = weight
-            broken_cycles = edge2cycles[max_edge]
-            assert max_edge is not None
-            # kill this edge
-            yield max_edge
-            for broken_cycle in broken_cycles:
-                try:
-                    del allcycles[id(broken_cycle)]
-                except KeyError:
-                    pass
-                else:
+
+    # the approach is as follows: starting from each root, find some set
+    # of cycles using a simple depth-first search. Then break the
+    # edge that is part of the most cycles.  Repeat.
+
+    remaining_edges = edges.copy()
+    progress = True
+    roots_finished = set()
+    while progress:
+        roots = list(find_roots(vertices, remaining_edges))
+        #print '%d inital roots' % (len(roots,))
+        progress = False
+        for root in roots:
+            if root in roots_finished:
+                continue
+            cycles = all_cycles(root, vertices, remaining_edges)
+            if not cycles:
+                roots_finished.add(root)
+                continue
+            #print 'from root %r: %d cycles' % (root, len(cycles))
+            allcycles = {}
+            edge2cycles = {}
+            for cycle in cycles:
+                allcycles[id(cycle)] = cycle
+                for edge in cycle:
+                    edge2cycles.setdefault(edge, []).append(id(cycle))
+            edge_weights = {}
+            for edge, cycle in edge2cycles.iteritems():
+                edge_weights[edge] = len(cycle)
+            while allcycles:
+                max_weight = 0
+                max_edge = None
+                for edge, weight in edge_weights.iteritems():
+                    if weight > max_weight:
+                        max_edge = edge
+                        max_weight = weight
+                if max_edge is None:
+                    break
+                # kill this edge
+                yield max_edge
+                progress = True
+                # unregister all cycles that have just been broken
+                for broken_cycle_id in edge2cycles[max_edge]:
+                    broken_cycle = allcycles.pop(broken_cycle_id, ())
                     for edge in broken_cycle:
                         edge_weights[edge] -= 1
-                        if edge_weights[edge] == 0:
-                            del edge_weights[edge]
+
+                lst = remaining_edges[max_edge.source][:]
+                lst.remove(max_edge)
+                remaining_edges[max_edge.source] = lst
+    assert is_acyclic(vertices, remaining_edges)
+
+
+def show_graph(vertices, edges):
+    from pypy.translator.tool.graphpage import GraphPage, DotGen
+    class MathGraphPage(GraphPage):
+        def compute(self):
+            dotgen = DotGen('mathgraph')
+            names = {}
+            for i, v in enumerate(vertices):
+                names[v] = 'node%d' % i
+            for i, v in enumerate(vertices):
+                dotgen.emit_node(names[v], label=str(v))
+                for edge in edges[v]:
+                    dotgen.emit_edge(names[edge.source], names[edge.target])
+            self.source = dotgen.generate(target=None)
+    MathGraphPage().display()
