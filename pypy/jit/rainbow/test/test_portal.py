@@ -630,13 +630,6 @@ class TestPortalOOType(BaseTestPortal):
     def check_method_calls(self, n):
         self.check_insns(oosend=n)
 
-    def _skip(self):
-        py.test.skip('in progress')
-
-    test_method_call_promote = _skip
-    test_float_promote = _skip
-    test_virt_obj_method_call_promote = _skip
-
 class TestPortalLLType(BaseTestPortal):
     type_system = 'lltype'
 

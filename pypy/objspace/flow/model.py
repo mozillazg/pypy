@@ -5,6 +5,7 @@
 # a discussion in Berlin, 4th of october 2003
 from __future__ import generators
 import py
+from pypy.rpython.ootypesystem import ootype
 from pypy.tool.uid import uid, Hashable
 from pypy.tool.descriptor import roproperty
 from pypy.tool.sourcetools import PY_IDENTIFIER, nice_repr_for_func
@@ -560,6 +561,8 @@ def checkgraph(graph):
                         if isinstance(n, (int, long)):
                             continue
                         if isinstance(n, (str, unicode)) and len(n) == 1:
+                            continue
+                        if isinstance(ootype.typeOf(n), ootype.OOType):
                             continue
                         assert n != 'default', (
                             "'default' branch of a switch is not the last exit"
