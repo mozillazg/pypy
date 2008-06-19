@@ -57,6 +57,11 @@ class TestSimple:
                 edges['B'][1] in result or
                 edges['E'][0] in result)
 
+    def test_find_roots(self):
+        roots = list(find_roots(self.edges, self.edges))
+        roots.sort()
+        assert ''.join(roots) in ('AG', 'BG', 'EG')
+
 
 class TestLoops:
     # a graph with 20 loops of length 10 each, plus an edge from each loop to
@@ -96,6 +101,12 @@ class TestLoops:
         edges[190].append(Edge(190, 5))
         self.test_break_cycles(edges)
 
+    def test_find_roots(self):
+        roots = find_roots(self.vertices, self.edges)
+        assert len(roots) == 1
+        v = list(roots)[0]
+        assert v in range(10)
+
 
 class TestTree:
     edges = make_edge_dict([Edge(i//2, i) for i in range(1, 52)])
@@ -117,6 +128,12 @@ class TestTree:
     def test_break_cycles(self):
         result = list(break_cycles(self.edges, self.edges))
         assert not result
+
+    def test_find_roots(self):
+        roots = find_roots(self.edges, self.edges)
+        assert len(roots) == 1
+        v = list(roots)[0]
+        assert v == 0
 
 
 class TestChainAndLoop:
@@ -153,7 +170,13 @@ class TestBadCase:
 
     def test_break_cycles(self):
         result = list(break_cycles(self.edges, self.edges))
+        print len(result)
         assert result
+
+    def test_find_roots(self):
+        roots = find_roots(self.edges, self.edges)
+        assert len(roots) == 1
+        assert list(roots)[0] in self.edges
 
 
 class TestRandom:
