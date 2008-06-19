@@ -2486,7 +2486,3 @@ class TestOOType(OOTypeMixin, SimpleTests):
         assert res == 42
         self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
 
-
-    def _skip(self):
-        py.test.skip('in progress')
-
