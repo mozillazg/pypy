@@ -11,7 +11,10 @@ class PdbPlusShow(pdb.Pdb):
 
     def __init__(self, translator):
         pdb.Pdb.__init__(self)
-        self.prompt = "(Pdb+) "
+        if self.prompt == "(Pdb) ":
+            self.prompt = "(Pdb+) "
+        else:
+            self.prompt = self.prompt.replace("(", "(Pdb+ on ", 1)
         self.translator = translator
         self.exposed = {}
 
