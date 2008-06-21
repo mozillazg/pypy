@@ -558,7 +558,8 @@ need to install the following packages: a full C compiler like gcc;
 libncurses-dev``.
 
 This whole process will take some time and quite a lot of memory (around
-1GB).  It creates an executable ``pypy-c`` in the current directory.
+1200 MB on 32 bit machines).  It creates an executable ``pypy-c`` in
+the current directory.
 The ``--gc=hybrid`` option means that the ``pypy-c`` will use our own
 exact generational garbage collector implementation, whose performance
 is rather good nowadays.  The ``--thread`` option enables the thread
