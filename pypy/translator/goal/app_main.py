@@ -193,6 +193,7 @@ def entry_point(executable, argv, nanos):
             # not found!  let's hope that the compiled-in path is ok
             print >> sys.stderr, ('debug: WARNING: library path not found, '
                                   'using compiled-in sys.path')
+            newpath = sys.path[:]
             break
         newpath = sys.pypy_initial_path(dirname)
         if newpath is None:
@@ -200,9 +201,20 @@ def entry_point(executable, argv, nanos):
             if newpath is None:
                 search = dirname    # walk to the parent directory
                 continue
-        sys.path = newpath      # found!
-        break
-    
+        break      # found!
+    path = os.getenv('PYTHONPATH')
+    if path:
+        newpath = path.split(os.pathsep) + newpath
+    newpath.insert(0, '')
+    # remove duplicates
+    _seen = {}
+    sys.path = []
+    for dir in newpath:
+        if dir not in _seen:
+            sys.path.append(dir)
+            _seen[dir] = True
+    del newpath, _seen
+
     go_interactive = False
     run_command = False
     import_site = True
