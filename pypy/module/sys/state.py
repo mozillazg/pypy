@@ -50,12 +50,7 @@ def getinitialpath(srcdir):
     pypy_lib = os.path.join(pypydir, 'lib')
     checkdir(pypy_lib)
 
-    importlist = ['']
-    pythonpath = os.environ.get('PYTHONPATH')
-    if pythonpath:
-        for p in pythonpath.split(os.pathsep):
-            if p:
-                importlist.append(p)
+    importlist = []
     importlist.append(pypy_lib)
     importlist.append(python_std_lib_modified)
     importlist.append(python_std_lib)
