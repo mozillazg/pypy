@@ -112,7 +112,7 @@ def find_roots(vertices, edges):
     rep = {}    # maps all vertices to a random representing vertex
                 # from the same strongly connected component
     for component in strong_components(vertices, edges):
-        random_vertex = component.pop()
+        random_vertex, _ = component.popitem()
         rep[random_vertex] = random_vertex
         for v in component:
             rep[v] = random_vertex
