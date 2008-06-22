@@ -71,11 +71,11 @@ def strong_components(vertices, edges):
                             if discovery_time[wroot] < discovery_time[vroot]:
                                 vroot = wroot
                     if vroot == v:
-                        component = set()
+                        component = {}
                         while True:
                             w = stack.pop()
                             del component_root[w]
-                            component.add(w)
+                            component[w] = True
                             if w == v:
                                 break
                         yield component
