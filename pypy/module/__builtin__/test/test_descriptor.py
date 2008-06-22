@@ -134,7 +134,6 @@ class AppTestBuiltinApp:
 
         assert F().meth(6) == "F(6)[mysuper]E(6)D(6)C(6)B(6)A(6)"
 
-        skip("in-progress: buggy implementation of 'super' subclasses")
         x = mysuper(F, F())
         x.foobar = 42
         assert x.foobar == 42
