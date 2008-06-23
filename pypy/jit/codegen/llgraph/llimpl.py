@@ -51,6 +51,15 @@ def functionptr_general(TYPE, name, **attrs):
         assert isinstance(TYPE, ootype.StaticMethod)
         return ootype.static_meth(TYPE, name, **attrs)
 
+def erasedType(T):
+    if isinstance(T, ootype.Instance):
+        if T is ootype.ROOT:
+            return T
+        while T._superclass is not ootype.ROOT:
+            T = T._superclass
+        return T
+    return lltype.erasedType(T)
+
 def newgraph(gv_FUNCTYPE, name):
     FUNCTYPE = _from_opaque(gv_FUNCTYPE).value
     # 'name' is just a way to track things
@@ -62,7 +71,7 @@ def newgraph(gv_FUNCTYPE, name):
         v.concretetype = ARG
         inputargs.append(v)
         v = flowmodel.Variable()
-        v.concretetype = lltype.erasedType(ARG)
+        v.concretetype = erasedType(ARG)
         erasedinputargs.append(v)
     startblock = flowmodel.Block(inputargs)
     # insert an exploding operation here which is removed by
@@ -77,7 +86,7 @@ def newgraph(gv_FUNCTYPE, name):
     return_var.concretetype = FUNCTYPE.RESULT
     graph = flowmodel.FunctionGraph(name, startblock, return_var)
     v1 = flowmodel.Variable()
-    v1.concretetype = lltype.erasedType(FUNCTYPE.RESULT)
+    v1.concretetype = erasedType(FUNCTYPE.RESULT)
     graph.prereturnblock = flowmodel.Block([v1])
     casting_link(graph.prereturnblock, [v1], graph.returnblock)
     substartblock = flowmodel.Block(erasedinputargs)
@@ -112,7 +121,7 @@ def geninputarg(block, gv_CONCRETE_TYPE):
     assert block.exits == [], "block already closed"
     CONCRETE_TYPE = _from_opaque(gv_CONCRETE_TYPE).value
     v = flowmodel.Variable()
-    v.concretetype = lltype.erasedType(CONCRETE_TYPE)
+    v.concretetype = erasedType(CONCRETE_TYPE)
     block.inputargs.append(v)
     return _to_opaque(v)
 
@@ -155,12 +164,9 @@ def cast(block, gv_TYPE, gv_var):
             opname = 'cast_opaque_ptr'
         elif isinstance(TYPE, ootype.Instance):
             FROMTYPE = v.concretetype
-            if ootype.isSubclass(FROMTYPE, TYPE):
-                opname = 'ooupcast'
-            else:
-                opname = 'oodowncast'
+            opname = erasing_op(FROMTYPE, TYPE)
         else:
-            assert v.concretetype == lltype.erasedType(TYPE)
+            assert v.concretetype == erasedType(TYPE)
             opname = 'cast_pointer'
         block = _from_opaque(block)
         v2 = flowmodel.Variable()
@@ -170,20 +176,21 @@ def cast(block, gv_TYPE, gv_var):
         v = v2
     return _to_opaque(v)
 
+def erasing_op(FROMTYPE, TYPE):
+    if isinstance(TYPE, ootype.Instance):
+        if ootype.isSubclass(FROMTYPE, TYPE):
+            return 'ooupcast'
+        else:
+            return 'oodowncast'
+    return 'cast_pointer'
+
 def erasedvar(v, block):
-    T = lltype.erasedType(v.concretetype)
+    T = erasedType(v.concretetype)
     if T != v.concretetype:
         v2 = flowmodel.Variable()
         v2.concretetype = T
-        op = flowmodel.SpaceOperation("cast_pointer", [v], v2)
-        block.operations.append(op)
-        return v2
-    elif isinstance(T, ootype.Instance):
-        while T._superclass is not ootype.ROOT:
-            T = T._superclass
-        v2 = flowmodel.Variable()
-        v2.concretetype = T
-        op = flowmodel.SpaceOperation("ooupcast", [v], v2)
+        opname = erasing_op(v.concretetype, T)
+        op = flowmodel.SpaceOperation(opname, [v], v2)
         block.operations.append(op)
         return v2
     return v
@@ -244,9 +251,12 @@ def genconst(llvalue):
         v.concretetype = lltype.Void
         return _to_opaque(v)
     T = lltype.typeOf(llvalue)
-    T1 = lltype.erasedType(T)
+    T1 = erasedType(T)
     if T1 != T:
-        llvalue = lltype.cast_pointer(T1, llvalue)
+        if isinstance(T1, ootype.Instance):
+            llvalue = ootype.ooupcast(T1, llvalue)
+        else:
+            llvalue = lltype.cast_pointer(T1, llvalue)
     v = flowmodel.Constant(llvalue)
     v.concretetype = T1
     if v.concretetype == lltype.Void: # XXX genconst should not really be used for Void constants
@@ -255,7 +265,7 @@ def genconst(llvalue):
 
 def genzeroconst(gv_TYPE):
     TYPE = _from_opaque(gv_TYPE).value
-    TYPE = lltype.erasedType(TYPE)
+    TYPE = erasedType(TYPE)
     c = flowmodel.Constant(TYPE._defl())
     c.concretetype = TYPE
     return _to_opaque(c)
@@ -276,6 +286,11 @@ def _generalcast(T, value):
     elif isinstance(T, ootype.StaticMethod):
         fn = value._obj
         return ootype._static_meth(T, graph=fn.graph, _callable=fn._callable)
+    elif isinstance(T, ootype.Instance):
+        T1 = lltype.typeOf(value)
+        if ootype.isSubclass(T, T1):
+            return ootype.oodowncast(T, value)
+        return ootype.ooupcast(T, value)
     else:
         T1 = lltype.typeOf(value)
         if isinstance(T1, ootype.OOType) and T is ootype.Signed:
@@ -635,7 +650,8 @@ def casting_link(source, sourcevars, target):
         else:
             erasedv = flowmodel.Variable()
             erasedv.concretetype = target_v.concretetype
-            source.operations.append(flowmodel.SpaceOperation('cast_pointer',
+            opname = erasing_op(v.concretetype, erasedv.concretetype)
+            source.operations.append(flowmodel.SpaceOperation(opname,
                                                               [v],
                                                               erasedv))
             linkargs.append(erasedv)
