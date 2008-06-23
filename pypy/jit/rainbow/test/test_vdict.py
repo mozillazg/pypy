@@ -76,6 +76,39 @@ class VDictTest(InterpretationTest):
         self.check_insns({})
 
 
+
+    def test_dict_escape(self):
+        d1 = {1: 123, 2: 54, 3:84}
+        d2 = {1: 831, 2: 32, 3:81}
+
+        def getdict(n):
+            if n:
+                return d1
+            else:
+                return d2
+
+        class A:
+            pass
+
+        def f(n):
+            d = getdict(n)
+            x = A()
+            x.d = d
+            return x
+
+        a = []
+
+        def ll_function(n, i):
+            x = f(n)
+            a.append(x)
+            d = hint(x.d, deepfreeze=True)
+            res = d[i]
+            res = hint(res, variable=True)
+            return res
+
+        res = self.interpret(ll_function, [3, 2], [0, 1], policy=P_OOPSPEC)
+        assert res == 54
+
 class TestOOType(OOTypeMixin, VDictTest):
     type_system = "ootype"
 
