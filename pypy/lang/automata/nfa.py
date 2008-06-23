@@ -5,6 +5,7 @@ class NFA(object):
         self.transitions = {}
         self.final_states = {}
         self.has_epsilon_moves = False
+        self.last_transition = (-1, ' ')
 
     def add_state(self, final=False):
         state = self.num_states
@@ -14,12 +15,19 @@ class NFA(object):
         return self.num_states - 1
 
     def add_transition(self, state, input, next_state):
+        self.last_transition = (state, input)
         if input == '?':
             self.has_epsilon_moves = True
         if (state, input) in self.transitions:
             self.transitions[state, input].append(next_state)
         else:
             self.transitions[state, input] = [next_state]
+
+    def fixup_last_transition(self, where):
+        if self.last_transition == (-1, ' '):
+            raise RuntimeError("Something went wrong...")
+        self.transitions[self.last_transition][-1] = where
+        self.last_transition = (-1, ' ')
 
     def get_transitions(self, state, input):
         return self.transitions[state, input]
@@ -40,14 +48,24 @@ class NFA(object):
         for (s, v), next_s_l in self.transitions.items():
             if v == '?':
                 for next_s in next_s_l:
-                    if next_s in possible_merges:
-                        possible_merges[next_s][s] = None
+                    if s == next_s: # complete nonsese
+                        if len(next_s_l) == 1:
+                            del self.transitions[(s, v)]
+                        else:
+                            self.transitions[(s, v)].remove(s)
                     else:
-                        possible_merges[next_s] = {s:None}
+                        if next_s in possible_merges:
+                            possible_merges[next_s][s] = None
+                        else:
+                            possible_merges[next_s] = {s:None}
             else:
                 prohibited_merges[s] = None
         for k, v in possible_merges.items():
-            v = dict.fromkeys([i for i in v if i not in prohibited_merges])
+            new_v = {}
+            for i in v:
+                if i not in prohibited_merges:
+                    new_v[i] = None
+            v = new_v
             if len(v) > 1:
                 first = v.keys()[0]
                 self.merge_states(first, v)
@@ -63,7 +81,7 @@ class NFA(object):
         for k in self.final_states.keys():
             if k in vdict:
                 self.final_states[to_what] = None
-                del final_states[k]
+                del self.final_states[k]
 
     def _remove_epsilon_moves(self):
         for (s, v), next_s_l in self.transitions.items():
@@ -99,7 +117,8 @@ class NFA(object):
                 all[next] = None
         for fs in self.final_states:
             all[fs] = None
-        if all == accessible:
+        # we cannot compare dicts in rpython
+        if len(all) == len(accessible):
             return False
         else:
             for (s, v), next_s_l in self.transitions.items():
@@ -176,24 +195,32 @@ def compile_part(nfa, start_state, input, pos):
     i = pos
     last_state = -1
     state = start_state
+    previous_state = -1
     while i < len(input):
         c = input[i]
         if in_alphabet(c):
             next_state = nfa.add_state()
             nfa.add_transition(state, c, next_state)
+            previous_state = state
             state = next_state
         elif c == ')':
             break
         elif c == '(':
+            previous_state = state
             i, state = compile_part(nfa, state, input, i + 1)
         elif c == '|':
             if last_state == -1:
                 last_state = nfa.add_state()
             nfa.add_transition(state, '?', last_state)
             state = start_state
+            previous_state = -1
         elif c == '*':
-            nfa.add_transition(state, '?', start_state)
-            state = start_state
+            if nfa.last_transition[0] != -1:
+                nfa.fixup_last_transition(previous_state)
+            else:
+                nfa.add_transition(state, '?', previous_state)
+            state = previous_state
+            previous_state = -1
         else:
             raise ValueError("Unknown char %s" % c)
         i += 1
