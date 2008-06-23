@@ -191,8 +191,8 @@ class LLTypeDictTypeDesc(AbstractDictTypeDesc):
                                   args_gv)
 
     def gen_insertclean(self, builder, args_gv):
-        return builder.genop_call(typedesc.tok_ll_insertclean,
-                                  typedesc.gv_ll_insertclean,
+        return builder.genop_call(self.tok_ll_insertclean,
+                                  self.gv_ll_insertclean,
                                   args_gv)
 
 
