@@ -738,6 +738,7 @@ class PromotionPathRoot(AbstractPromotionPath):
 
 class PromotionPathNode(AbstractPromotionPath):
     def __init__(self, next):
+        assert next
         self.next = next
     def follow_path(self, path):
         path.append(self)
