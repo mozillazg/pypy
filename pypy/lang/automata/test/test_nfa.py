@@ -77,23 +77,30 @@ def test_nfa_build():
     assert sorted(re.final_states.keys()) == [4, 9]
     re = compile_regex("a*")
     re.remove_epsilon_moves()
-    assert re.transitions == {(0, "a"):[1],
-                              (1, "a"):[1]}
-    assert sorted(re.final_states.keys()) == [0, 1]
+    assert re.transitions == {(0, "a"):[0]}
+    assert re.final_states.keys() == [0]
     re = compile_regex("a*b")
     re.remove_epsilon_moves()
-    assert re.transitions == {(0, "a"):[1], (1, "b"):[2],
-                              (0, 'b'):[2], (1, 'a'):[1]}
+    assert re.transitions == {(0, "a"):[0], (0, "b"):[2]}
     assert re.final_states.keys() == [2]
     re = compile_regex("|a")
     re.remove_epsilon_moves()
     assert re.transitions == {(0, "a"):[2]}
     assert re.final_states.keys() == [0,2]
+    re = compile_regex("abc(ced)*")
+    re.remove_epsilon_moves()
+    assert re.transitions == {(3, 'c'): [4], (0, 'a'): [1], (5, 'd'): [3],
+                              (4, 'e'): [5], (1, 'b'): [2], (2, 'c'): [3]}
+    assert re.final_states.keys() == [3]
     #re = compile_regex('a{0,3}')
     #assert re.transitions == {(0, "a"):[0,1],
     #                          (1, "a"):[0,2],
     #                          (2, "a"):[0,3]}
     #assert re.final_states.keys() == [0]
+
+def test_nfa_recognize():
+    nfa = compile_regex("abcc*")
+    assert recognize(nfa, "abc")
 
 def test_nfa_compiledummy():
     py.test.skip("not working")
