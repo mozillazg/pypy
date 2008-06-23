@@ -474,6 +474,32 @@ class BaseTestPromotion(InterpretationTest):
         assert res == 11
         self.check_insns(int_add=0)
 
+    def test_promote___class__(self):
+        class A:
+            def __init__(self, x):
+                self.x = x
+            def m(self, other):
+                return self.x + other.x
+        class B(A):
+            def m(self, other):
+                return self.x * other.x
+
+        def make_obj(x, flag):
+            return flag and A(x) or B(x)
+
+        def ll_function(x, flag):
+            hint(None, global_merge_point=True)
+            obj = make_obj(x, flag)
+            obj2 = flag and A(x+2) or B(x+2)
+            hint(obj.__class__, promote=True)
+            return obj.m(obj2)
+
+        res = self.interpret(ll_function, [20, True], [], policy=StopAtXPolicy(make_obj))
+        assert res == 42
+        self.check_insns(malloc=0)
+        self.check_insns(new=0)
+
+
 class TestLLType(BaseTestPromotion):
     type_system = "lltype"
     to_rstr = staticmethod(LLSupport.to_rstr)
@@ -481,3 +507,6 @@ class TestLLType(BaseTestPromotion):
 class TestOOType(OOTypeMixin, BaseTestPromotion):
     type_system = "ootype"
     to_rstr = staticmethod(OOSupport.to_rstr)
+
+    def test_promote___class__(self):
+        py.test.skip('fixme')
