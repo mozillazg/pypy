@@ -236,64 +236,60 @@ def break_cycles_v(vertices, edges):
     """Enumerates a reasonably minimal set of vertices that must be removed to
     make the graph acyclic."""
 
-    # the approach is as follows: starting from each root, find some set
-    # of cycles using a simple depth-first search. Then break the
-    # vertex that is part of the most cycles.  Repeat.
+    # Consider where each cycle should be broken -- we go for the idea
+    # that it is often better to break it as far as possible from the
+    # cycle's entry point, so that the stack check occurs as late as
+    # possible.  For the distance we use a global "depth" computed as
+    # the distance from the roots.  The algo below is:
+    #  - get a list of cycles
+    #  - let maxdepth(cycle) = max(depth(vertex) for vertex in cycle)
+    #  - sort the list of cycles by their maxdepth, nearest first
+    #  - for each cycle in the list, if the cycle is not broken yet,
+    #      remove the vertex with the largest depth
+    #  - repeat the whole procedure until no more cycles are found.
+    # Ordering the cycles themselves nearest first maximizes the chances
+    # that when breaking a nearby cycle - which must be broken in any
+    # case - we remove a vertex and break some further cycles by chance.
 
-    remaining_vertices = vertices.copy()
+    v_depths = vertices
     progress = True
     roots_finished = set()
-    v_depths = None
     while progress:
-        roots = list(find_roots(remaining_vertices, edges))
-        if v_depths is None:
-            #print roots
-            v_depths = compute_depths(roots, remaining_vertices, edges)
-            assert len(v_depths) == len(remaining_vertices)
-            #print v_depths
-            factor = 1.0 / len(v_depths)
-        #print '%d inital roots' % (len(roots,))
+        roots = list(find_roots(v_depths, edges))
+        if v_depths is vertices:  # first time only
+            v_depths = compute_depths(roots, vertices, edges)
+            assert len(v_depths) == len(vertices)  # ...so far.  We remove
+            # from v_depths the vertices at which we choose to break cycles
+        print '%d inital roots' % (len(roots,))
         progress = False
         for root in roots:
             if root in roots_finished:
                 continue
-            cycles = all_cycles(root, remaining_vertices, edges)
+            cycles = all_cycles(root, v_depths, edges)
             if not cycles:
                 roots_finished.add(root)
                 continue
-            #print 'from root %r: %d cycles' % (root, len(cycles))
-            allcycles = {}
-            v2cycles = {}
+            print 'from root %r: %d cycles' % (root, len(cycles))
+            # compute the "depth" of each cycles: how far it goes from any root
+            allcycles = []
             for cycle in cycles:
-                allcycles[id(cycle)] = cycle
-                for edge in cycle:
-                    v2cycles.setdefault(edge.source, []).append(id(cycle))
-            v_weights = {}
-            for v, cycles in v2cycles.iteritems():
-                v_weights[v] = len(cycles) + v_depths.get(v, 0) * factor
-                # The weight of a vertex is the number of cycles going
-                # through it, plus a small value used as a bias in case of
-                # a tie.  The bias is in favor of vertices of large depth.
-            while allcycles:
-                max_weight = 1
-                max_vertex = None
-                for v, weight in v_weights.iteritems():
-                    if weight >= max_weight:
-                        max_vertex = v
-                        max_weight = weight
-                if max_vertex is None:
-                    break
-                # kill this vertex
-                yield max_vertex
-                progress = True
-                # unregister all cycles that have just been broken
-                for broken_cycle_id in v2cycles[max_vertex]:
-                    broken_cycle = allcycles.pop(broken_cycle_id, ())
-                    for edge in broken_cycle:
-                        v_weights[edge.source] -= 1
-
-                del remaining_vertices[max_vertex]
-    assert is_acyclic(remaining_vertices, edges)
+                cycledepth = max([v_depths[edge.source] for edge in cycle])
+                allcycles.append((cycledepth, cycle))
+            allcycles.sort()
+            # consider all cycles starting from the ones with smallest depth
+            for _, cycle in allcycles:
+                try:
+                    choices = [(v_depths[edge.source], edge.source)
+                               for edge in cycle]
+                except KeyError:
+                    pass   # this cycle was already broken
+                else:
+                    # break this cycle by removing the furthest vertex
+                    max_depth, max_vertex = max(choices)
+                    del v_depths[max_vertex]
+                    yield max_vertex
+                    progress = True
+    assert is_acyclic(v_depths, edges)
 
 
 def show_graph(vertices, edges):
