@@ -67,7 +67,7 @@ class TestSimple:
         result.sort()
         assert ''.join(result) == 'AD'
         # the answers 'BD' and 'DE' are correct too, but 'AD' should
-        # be picked because 'A' is the node cycle that is the further
+        # be picked because 'A' is the cycle's node that is the further
         # from the root 'R'.
 
     def test_find_roots(self):
@@ -227,8 +227,9 @@ class TestRandom:
         # assert is_acyclic(): included in break_cycles() itself
 
     def test_break_cycles_v(self):
-        list(break_cycles_v(self.edges, self.edges))
+        result = list(break_cycles_v(self.edges, self.edges))
         # assert is_acyclic(): included in break_cycles_v() itself
+        print len(result), 'vertices removed'
 
     def test_find_roots(self):
         roots = find_roots(self.edges, self.edges)
