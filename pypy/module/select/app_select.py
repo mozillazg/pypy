@@ -66,9 +66,12 @@ On Windows, only sockets are supported; on Unix, all file descriptors.
     else:
         ret = dict(p.poll())
 
+    #iretd = [ f for f in iwtd if ret.get(fddict[id(f)], 0) & (POLLIN|POLLHUP|POLLERR)]
+    #oretd = [ f for f in owtd if ret.get(fddict[id(f)], 0) & POLLOUT]
+    #eretd = [ f for f in ewtd if ret.get(fddict[id(f)], 0) & (POLLERR|POLLPRI)]
     iretd = [ f for f in iwtd if ret.get(fddict[id(f)], 0) & (POLLIN|POLLHUP|POLLERR)]
-    oretd = [ f for f in owtd if ret.get(fddict[id(f)], 0) & POLLOUT]
-    eretd = [ f for f in ewtd if ret.get(fddict[id(f)], 0) & (POLLERR|POLLPRI)]
+    oretd = [ f for f in owtd if ret.get(fddict[id(f)], 0) & (POLLOUT|POLLERR)]
+    eretd = [ f for f in ewtd if ret.get(fddict[id(f)], 0) & POLLPRI]
 
     return iretd, oretd, eretd
     
