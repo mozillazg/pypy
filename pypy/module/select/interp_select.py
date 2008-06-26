@@ -130,7 +130,7 @@ On Windows, only sockets are supported; on Unix, all file descriptors.
             iwtd, owtd, ewtd = rpoll.select(iwtd, owtd, ewtd)
         else:
             iwtd, owtd, ewtd = rpoll.select(iwtd, owtd, ewtd, space.float_w(w_timeout))
-    except rpoll.SelectErorr, s:
+    except rpoll.SelectError, s:
         w_module = space.getbuiltinmodule('select')
         w_errortype = space.getattr(w_module, space.wrap('error'))
         raise OperationError(w_errortype, space.newtuple(
