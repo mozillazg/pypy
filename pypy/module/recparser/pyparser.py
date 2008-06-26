@@ -149,10 +149,6 @@ STType.typedef = TypeDef("parser.st",
     totuple = interp2app(STType.descr_totuple),
 )
 
-def get(space, name):
-    w_module = space.getbuiltinmodule('parser')
-    return space.getattr(w_module, space.wrap(name))
-
 def get_ast_compiler(space):
     from pypy.interpreter.pycompiler import PythonAstCompiler
     compiler = space.createcompiler()
@@ -193,15 +189,10 @@ def ast2tuple(space, node, line_info=0):
 
 ast2tuple.unwrap_spec = [ObjSpace, STType, int]
 
-def check_length(space, items, length):
-    if len(items) < length:
-        raise OperationError(get(space, "ParserError"),
-                             space.wrap("argument too small"))
 
 def unwrap_syntax_tree( space, w_sequence ):
     items = space.unpackiterable( w_sequence )
     parser = space.default_compiler.parser
-    check_length(space, items, 1)
     nodetype = space.int_w( items[0] )
     if parser.is_base_token(nodetype):
         nodes = []
@@ -210,7 +201,6 @@ def unwrap_syntax_tree( space, w_sequence ):
             nodes.append( node )
         return SyntaxNode( nodetype, nodes )
     else:
-        check_length(space, items, 2)
         value = space.str_w( items[1] )
         lineno = -1
         if len(items)>2:
@@ -223,12 +213,8 @@ def sequence2st(space, w_sequence):
 
 
 def source2ast(space, source):
-    from pypy.interpreter.pyparser.error import SyntaxError
     compiler = get_ast_compiler(space)
-    try:
-        return space.wrap(compiler.source2ast(source, 'exec'))
-    except SyntaxError, e:
-        raise OperationError(space.w_SyntaxError, e.wrap_info(space, "<parser-module>"))
+    return space.wrap(compiler.source2ast(source, 'exec'))
 source2ast.unwrap_spec = [ObjSpace, str]
 
 

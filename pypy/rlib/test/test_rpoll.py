@@ -1,7 +1,6 @@
 import thread
 from pypy.rlib.rsocket import *
 from pypy.rlib.rpoll import *
-from pypy.rpython.test.test_llinterp import interpret
 
 def setup_module(mod):
     rsocket_startup()
@@ -48,23 +47,6 @@ def test_simple():
     cli.close()
     servconn.close()
     serv.close()
-
-def test_select():
-    def f():
-        readend, writeend = os.pipe()
-        try:
-            iwtd, owtd, ewtd = select([readend], [], [], 0.0)
-            assert iwtd == owtd == ewtd == []
-            os.write(writeend, 'X')
-            iwtd, owtd, ewtd = select([readend], [], [])
-            assert iwtd == [readend]
-            assert owtd == ewtd == []
-        finally:
-            os.close(readend)
-            os.close(writeend)
-
-    f()
-    interpret(f, [])
 
 def test_translate():
     from pypy.translator.c.test.test_genc import compile

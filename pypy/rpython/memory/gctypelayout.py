@@ -232,8 +232,6 @@ class TypeLayoutBuilder(object):
             return type_id
 
     def offsets2table(self, offsets, TYPE):
-        if len(offsets) == 0:
-            TYPE = lltype.Void    # we can share all zero-length arrays
         try:
             return self.offsettable_cache[TYPE]
         except KeyError:

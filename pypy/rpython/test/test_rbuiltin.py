@@ -530,19 +530,24 @@ class TestLLtype(BaseTestRbuiltin, LLRtypeMixin):
         
 class TestOOtype(BaseTestRbuiltin, OORtypeMixin):
 
+    def test_instantiate_meta(self):
+        class A:
+            pass
+        def f():
+            return instantiate(A)
+        res = self.interpret(f, [])
+        assert res.meta # check that it's not null
+
     def test_instantiate_multiple_meta(self):
         class A:
-            x = 2
+            pass
         class B(A):
-            x = 3
-        def do_stuff(cls):
-            return cls.x
+            pass
         def f(i):
             if i == 1:
                 cls = A
             else:
                 cls = B
-            do_stuff(cls)
             return instantiate(cls)
         res = self.interpret(f, [1])
-        assert res.getmeta() # check that it exists
+        assert res.meta # check that it's not null

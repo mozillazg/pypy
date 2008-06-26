@@ -1,6 +1,5 @@
 from pypy.interpreter import gateway
 from pypy.objspace.std.stdtypedef import *
-from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.basestringtype import basestring_typedef
 from pypy.interpreter.error import OperationError
 
@@ -246,13 +245,8 @@ def unicode_from_string(space, w_str):
         # raising UnicodeDecodeError is messy, "please crash for me"
         return unicode_from_encoded_object(space, w_str, "ascii", "strict")
 
-def unicode_decode__unitypedef_ANY_ANY(space, w_unicode, w_encoding=None,
-                                       w_errors=None):
-    return space.call_method(space.str(w_unicode), 'decode',
-                             w_encoding, w_errors)
 
-
-def descr_new_(space, w_unicodetype, w_string='', w_encoding=None, w_errors=None):
+def descr__new__(space, w_unicodetype, w_string='', w_encoding=None, w_errors=None):
     # NB. the default value of w_obj is really a *wrapped* empty string:
     #     there is gateway magic at work
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
@@ -291,7 +285,7 @@ def descr_new_(space, w_unicodetype, w_string='', w_encoding=None, w_errors=None
 # ____________________________________________________________
 
 unicode_typedef = StdTypeDef("unicode", basestring_typedef,
-    __new__ = newmethod(descr_new_),
+    __new__ = newmethod(descr__new__),
     __doc__ = '''unicode(string [, encoding[, errors]]) -> object
 
 Create a new Unicode object from the given encoded string.
@@ -301,6 +295,3 @@ errors can be 'strict', 'replace' or 'ignore' and defaults to 'strict'.'''
 
 unicode_typedef.custom_hash = True
 unicode_typedef.registermethods(globals())
-
-unitypedef = unicode_typedef
-register_all(vars(), globals())

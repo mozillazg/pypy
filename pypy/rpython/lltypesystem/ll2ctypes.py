@@ -589,7 +589,6 @@ if ctypes:
         else:
             return ctypes.util.find_library('c')
         
-    libc_name = get_libc_name()     # Make sure the name is determined during import, not at runtime
     standard_c_lib = ctypes.cdll.LoadLibrary(get_libc_name())
 
 # ____________________________________________

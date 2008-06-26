@@ -9,7 +9,7 @@ Global Interpreter Lock.
 
 from pypy.module.thread import ll_thread as thread
 from pypy.module.thread.error import wrap_thread_error
-from pypy.interpreter.executioncontext import PeriodicAsyncAction
+from pypy.interpreter.miscutils import Action
 from pypy.module.thread.threadlocals import OSThreadLocals
 from pypy.rlib.objectmodel import invoke_around_extcall
 from pypy.rlib.rposix import get_errno, set_errno
@@ -17,10 +17,6 @@ from pypy.rlib.rposix import get_errno, set_errno
 class GILThreadLocals(OSThreadLocals):
     """A version of OSThreadLocals that enforces a GIL."""
     ll_GIL = thread.null_ll_lock
-
-    def initialize(self, space):
-        # add the GIL-releasing callback as an action on the space
-        space.actionflag.register_action(GILReleaseAction(space))
 
     def setup_threads(self, space):
         """Enable threads in the object space, if they haven't already been."""
@@ -31,6 +27,8 @@ class GILThreadLocals(OSThreadLocals):
                 raise wrap_thread_error(space, "can't allocate GIL")
             thread.acquire_NOAUTO(self.ll_GIL, True)
             self.enter_thread(space)   # setup the main thread
+            # add the GIL-releasing callback as an action on the space
+            space.pending_actions.append(GILReleaseAction(self))
             result = True
         else:
             result = False      # already set up
@@ -44,45 +42,36 @@ class GILThreadLocals(OSThreadLocals):
         # test_compile_lock.  As a workaround, we repatch these global
         # fields systematically.
         spacestate.ll_GIL = self.ll_GIL
-        spacestate.actionflag = space.actionflag
         invoke_around_extcall(before_external_call, after_external_call)
         return result
 
     def yield_thread(self):
-        thread.yield_thread()  # explicitly release the gil (used by test_gil)
-
-
-class GILReleaseAction(PeriodicAsyncAction):
-    """An action called every sys.checkinterval bytecodes.  It releases
-    the GIL to give some other thread a chance to run.
-    """
-
-    def perform(self, executioncontext):
+        """Notification that the current thread is between two bytecodes:
+        release the GIL for a little while."""
         # Other threads can run between the release() and the acquire()
         # implicit in the following external function call (which has
         # otherwise no effect).
         thread.yield_thread()
 
 
-class SpaceState:
+class GILReleaseAction(Action):
+    """An action called when the current thread is between two bytecodes
+    (so that it's a good time to yield some time to other threads).
+    """
+    repeat = True
 
+    def __init__(self, threadlocals):
+        self.threadlocals = threadlocals
+
+    def perform(self):
+        self.threadlocals.yield_thread()
+
+
+class SpaceState:
     def _freeze_(self):
         self.ll_GIL = thread.null_ll_lock
-        self.actionflag = None
-        self.set_actionflag_bit_after_thread_switch = 0
         return False
-
-    def after_thread_switch(self):
-        # this is support logic for the signal module, to help it deliver
-        # signals to the main thread.
-        actionflag = self.actionflag
-        if actionflag is not None:
-            flag = actionflag.get()
-            flag |= self.set_actionflag_bit_after_thread_switch
-            actionflag.set(flag)
-
 spacestate = SpaceState()
-spacestate._freeze_()
 
 # Fragile code below.  We have to preserve the C-level errno manually...
 
@@ -98,13 +87,5 @@ def after_external_call():
     e = get_errno()
     thread.acquire_NOAUTO(spacestate.ll_GIL, True)
     thread.gc_thread_run()
-    spacestate.after_thread_switch()
     set_errno(e)
 after_external_call._gctransformer_hint_cannot_collect_ = True
-
-# The _gctransformer_hint_cannot_collect_ hack is needed for
-# translations in which the *_external_call() functions are not inlined.
-# They tell the gctransformer not to save and restore the local GC
-# pointers in the shadow stack.  This is necessary because the GIL is
-# not held after the call to before_external_call() or before the call
-# to after_external_call().

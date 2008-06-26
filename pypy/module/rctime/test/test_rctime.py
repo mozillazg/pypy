@@ -76,7 +76,6 @@ class AppTestRCTime:
     
     def test_mktime(self):
         import time as rctime
-        import os, sys
         raises(TypeError, rctime.mktime, "foo")
         raises(TypeError, rctime.mktime, None)
         raises(TypeError, rctime.mktime, (1, 2))
@@ -94,8 +93,7 @@ class AppTestRCTime:
         ltime = list(ltime)
         ltime[0] = 67
         ltime = tuple(ltime)
-        if os.name != "nt" and sys.maxint < 1<<32:   # time_t may be 64bit
-            raises(OverflowError, rctime.mktime, ltime)
+        raises(OverflowError, rctime.mktime, ltime)
     
         ltime = list(ltime)
         ltime[0] = 100

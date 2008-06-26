@@ -4,7 +4,7 @@
 import StringIO, sys
 import unittest, py
 
-from pypy.lib import pyexpat
+import pyexpat
 #from xml.parsers import expat
 expat = pyexpat
 
@@ -643,19 +643,3 @@ class TestChardataBuffer:
         assert parser.buffer_size == 1024
         parser.Parse(xml2, 1)
         assert self.n == 4
-
-    def test_segfault(self):
-        py.test.raises(TypeError, expat.ParserCreate, 1234123123)
-
-def test_invalid_data():
-    parser = expat.ParserCreate()
-    parser.Parse('invalid.xml', 0)
-    try:
-        parser.Parse("", 1)
-    except expat.ExpatError, e:
-        assert e.code == 2 # XXX is this reliable?
-        assert e.lineno == 1
-        assert e.message.startswith('syntax error')
-    else:
-        py.test.fail("Did not raise")
-

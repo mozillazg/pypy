@@ -5923,7 +5923,6 @@ class ASTVisitor(object):
             child.accept(self)
 
     def _mutate_list(self, lst):
-        # XXX O(n^2)
         i = 0
         while i < len(lst):
             item = lst[i].mutate(self)

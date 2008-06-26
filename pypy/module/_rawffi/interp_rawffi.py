@@ -98,7 +98,7 @@ def unpack_to_ffi_type(space, w_shape, allow_void=False, shape=False):
             resshape = cache.get_array_type(letter2tp(space, letter))
     else:
         letter = 'V'
-        w_shapetype, w_length = space.viewiterable(w_shape, expected_length=2)
+        w_shapetype, w_length = space.unpacktuple(w_shape, expected_length=2)
         from pypy.module._rawffi.structure import W_Structure
         resshape = space.interp_w(W_Structure, w_shapetype)
         ffi_type = resshape.get_ffi_type()
@@ -109,7 +109,7 @@ def unpack_to_size_alignment(space, w_shape):
         letter = space.str_w(w_shape)
         return letter2tp(space, letter)
     else:
-        w_shapetype, w_length = space.viewiterable(w_shape, expected_length=2)
+        w_shapetype, w_length = space.unpacktuple(w_shape, expected_length=2)
         resshape = space.interp_w(W_DataShape, w_shapetype)
         length = space.int_w(w_length)
         size, alignment = resshape._size_alignment()
@@ -148,7 +148,7 @@ class W_CDLL(Wrappable):
         """
         ffi_restype, resshape = unpack_resshape(space, w_restype)
         w = space.wrap
-        argtypes_w = space.viewiterable(w_argtypes)
+        argtypes_w = space.unpackiterable(w_argtypes)
         w_argtypes = space.newtuple(argtypes_w)
         w_key = space.newtuple([w(name), w_argtypes, w(resshape)])
         try:
@@ -471,6 +471,6 @@ if _MS_WINDOWS:
 
 def get_libc(space):
     try:
-        return space.wrap(W_CDLL(space, libc_name))
+        return space.wrap(W_CDLL(space, get_libc_name()))
     except OSError, e:
         raise wrap_oserror(space, e)

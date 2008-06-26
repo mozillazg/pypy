@@ -185,24 +185,6 @@ def test_mbc1_create(mbc=None):
     
     basic_read_write_test(mbc, 0, 0x7FFF)
     
-def test_mbc1_reset(mbc=None):
-    if mbc==None:
-        mbc = get_mbc1()
-    mbc.rom_bank = 0
-    mbc.memory_model = 1
-    mbc.ram_enable = True
-    mbc.ram_bank = 1
-    mbc.rom = range(0, 128, 3)
-    mbc.ram = range(0, 128, 3)
-    mbc.reset()
-    assert mbc.rom_bank == constants.ROM_BANK_SIZE
-    assert mbc.memory_model == 0
-    assert mbc.ram_enable == False
-    assert mbc.ram_bank == 0
-    assert len(mbc.rom) > 0
-    assert len(mbc.ram) > 0
-    
-    
 def test_mbc1_write_ram_enable(mbc=None):
     if mbc is None:
         mbc = get_mbc1()

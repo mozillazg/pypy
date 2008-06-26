@@ -111,6 +111,8 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
         #
         self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
                      pypy.interpreter.function.Function.funccall_valuestack)
+        self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
+                     pypy.interpreter.function.Function.funccall_obj_valuestack)
 
 
 

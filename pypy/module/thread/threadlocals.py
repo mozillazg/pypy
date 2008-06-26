@@ -15,14 +15,13 @@ class OSThreadLocals:
     def getvalue(self):
         ident = thread.get_ident()
         if ident == self._mostrecentkey:
-            result = self._mostrecentvalue
+            return self._mostrecentvalue
         else:
             value = self._valuedict.get(ident, None)
             # slow path: update the minicache
             self._mostrecentkey = ident
             self._mostrecentvalue = value
-            result = value
-        return result
+            return value
 
     def setvalue(self, value):
         ident = thread.get_ident()
@@ -56,7 +55,11 @@ class OSThreadLocals:
                 exit_func, w_obj = ec.thread_exit_funcs.pop()
                 exit_func(w_obj)
         finally:
-            self.setvalue(None)
+            ident = thread.get_ident()
+            try:
+                del self._valuedict[ident]
+            except KeyError:
+                pass
 
     def atthreadexit(self, space, exit_func, w_obj):
         ec = space.getexecutioncontext()
