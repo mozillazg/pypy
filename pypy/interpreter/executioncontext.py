@@ -287,6 +287,8 @@ class UserDelAction(Action):
     or less anywhere in the middle of code that might not be happy with
     random app-level code mutating data structures under its feet.
     """
+    repeat = True
+
     def __init__(self, space):
         self.space = space
         self.dying_objects_w = []
