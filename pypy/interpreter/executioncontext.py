@@ -118,9 +118,9 @@ class ExecutionContext:
 
     def _do_bytecode_trace(self, frame):
         if self.ticker < 0:
+            self.ticker = self.space.sys.checkinterval
             Action.perform_actions(self.space.pending_actions)
             Action.perform_actions(self.pending_actions)
-            self.ticker = self.space.sys.checkinterval
         if frame.w_f_trace is None or self.is_tracing:
             return
         code = frame.pycode
@@ -278,3 +278,42 @@ class ExecutionContext:
         raise Exception("ExecutionContext instances should not be seen during"
                         " translation.  Now is a good time to inspect the"
                         " traceback and see where this one comes from :-)")
+
+
+class UserDelAction(Action):
+    """An action that invokes all pending app-level __del__() method.
+    This is done as an action instead of immediately when the
+    interp-level __del__() is invoked, because the latter can occur more
+    or less anywhere in the middle of code that might not be happy with
+    random app-level code mutating data structures under its feet.
+    """
+    def __init__(self, space):
+        self.space = space
+        self.dying_objects_w = []
+
+    def register_dying_object(self, w_obj):
+        self.dying_objects_w.append(w_obj)
+        # XXX should force the action to occur as soon as possible.
+        # "space.getexectuion().ticker = 0" is both expensive and not
+        # exactly what we need because it's ok if the action occurs
+        # in any thread
+
+    def perform(self):
+        # Each call to perform() first grabs the self.dying_objects_w
+        # and replaces it with an empty list.  We do this to try to
+        # avoid too deep recursions of the kind of __del__ being called
+        # while in the middle of another __del__ call.
+        pending_w = self.dying_objects_w
+        if len(pending_w) == 0:
+            return     # shortcut
+        self.dying_objects_w = []
+        space = self.space
+        for w_obj in pending_w:
+            try:
+                space.userdel(w_obj)
+            except OperationError, e:
+                e.write_unraisable(space, 'method __del__ of ', w_obj)
+                e.clear(space)   # break up reference cycles
+            # finally, this calls the interp-level destructor for the
+            # cases where there is both an app-level and a built-in __del__.
+            w_obj._call_builtin_destructor()

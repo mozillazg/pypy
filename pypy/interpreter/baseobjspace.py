@@ -1,4 +1,4 @@
-from pypy.interpreter.executioncontext import ExecutionContext
+from pypy.interpreter.executioncontext import ExecutionContext, UserDelAction
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
@@ -137,6 +137,9 @@ class W_Root(object):
             self.setweakref(lifeline.space, None)
             lifeline.clear_all_weakrefs()
 
+    def _call_builtin_destructor(self):
+        pass     # method overridden in typedef.py
+
 
 class Wrappable(W_Root):
     """A subclass of Wrappable is an internal, interpreter-level class
@@ -218,7 +221,8 @@ class ObjSpace(object):
         import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
 
         self.interned_strings = {}
-        self.pending_actions = []
+        self.user_del_action = UserDelAction(self)
+        self.pending_actions = [self.user_del_action]
         self.setoptions(**kw)
 
 #        if self.config.objspace.logbytecodes:
