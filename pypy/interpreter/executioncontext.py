@@ -106,11 +106,13 @@ class ExecutionContext:
 
     def call_trace(self, frame):
         "Trace the call of a function"
-        self._trace(frame, 'call', self.space.w_None)
+        if self.w_tracefunc is not None or self.profilefunc is not None:
+            self._trace(frame, 'call', self.space.w_None)
 
     def return_trace(self, frame, w_retval):
         "Trace the return from a function"
-        self._trace(frame, 'return', w_retval)
+        if self.w_tracefunc is not None:
+            self._trace(frame, 'return', w_retval)
 
     def bytecode_trace(self, frame):
         "Trace function called before each bytecode."
@@ -128,8 +130,8 @@ class ExecutionContext:
     def exception_trace(self, frame, operationerr):
         "Trace function called upon OperationError."
         operationerr.record_interpreter_traceback()
-        space = self.space
-        self._trace(frame, 'exception', None, operationerr)
+        if self.w_tracefunc is not None:
+            self._trace(frame, 'exception', None, operationerr)
         #operationerr.print_detailed_traceback(self.space)
 
     def sys_exc_info(self): # attn: the result is not the wrapped sys.exc_info() !!!
