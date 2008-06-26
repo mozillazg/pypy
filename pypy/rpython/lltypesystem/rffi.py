@@ -379,10 +379,14 @@ def COpaque(name, hints=None, compilation_info=None):
         hints = hints.copy()
     hints['external'] = 'C'
     hints['c_name'] = name
-    def lazy_getsize():
+    def lazy_getsize(cache={}):
         from pypy.rpython.tool import rffi_platform
-        k = {}
-        return rffi_platform.sizeof(name, compilation_info)
+        try:
+            return cache[name]
+        except KeyError:
+            val = rffi_platform.sizeof(name, compilation_info)
+            cache[name] = val
+            return val
     
     hints['getsize'] = lazy_getsize
     return lltype.OpaqueType(name, hints)
