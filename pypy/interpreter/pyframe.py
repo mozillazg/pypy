@@ -348,6 +348,7 @@ class PyFrame(eval.Frame):
         new_frame.instr_prev = space.int_w(w_instr_prev)
 
         self._setcellvars(cellvars)
+        space.frame_trace_action.fire()
 
     def hide(self):
         return self.pycode.hidden_applevel
@@ -539,6 +540,7 @@ class PyFrame(eval.Frame):
         else:
             self.w_f_trace = w_trace
             self.f_lineno = self.get_last_lineno()
+            space.frame_trace_action.fire()
 
     def fdel_f_trace(space, self): 
         self.w_f_trace = None 
