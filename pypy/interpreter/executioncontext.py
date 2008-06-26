@@ -1,5 +1,5 @@
 import sys
-from pypy.interpreter.miscutils import Stack, Action
+from pypy.interpreter.miscutils import Stack
 from pypy.interpreter.error import OperationError
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rlib.unroll import unrolling_iterable
@@ -19,6 +19,9 @@ class ExecutionContext:
     def __init__(self, space):
         self.space = space
         self.framestack = new_framestack()
+        # tracing: space.frame_trace_action.fire() must be called to ensure
+        # that tracing occurs whenever self.w_tracefunc or self.is_tracing
+        # is modified.
         self.w_tracefunc = None
         self.is_tracing = 0
         self.compiler = space.createcompiler()
@@ -61,6 +64,7 @@ class ExecutionContext:
             ec.profilefunc = self.profilefunc
             ec.w_profilefuncarg = self.w_profilefuncarg
             ec.is_tracing = self.is_tracing
+            ec.space.frame_trace_action.fire()
 
         def leave(self, ec):
             self.framestack = ec.framestack
@@ -116,55 +120,8 @@ class ExecutionContext:
             ticker += 1
             actionflag.set(ticker)
         if ticker & actionflag.interesting_bits:  # fast check
-            actionflag.action_dispatcher()            # slow path
+            actionflag.action_dispatcher(self)        # slow path
     bytecode_trace._always_inline_ = True
-
-    def _do_bytecode_trace(self, frame):
-        ./.
-        if frame.w_f_trace is None or self.is_tracing:
-            return
-        code = frame.pycode
-        if frame.instr_lb <= frame.last_instr < frame.instr_ub:
-            if frame.last_instr <= frame.instr_prev:
-                # We jumped backwards in the same line.
-                self._trace(frame, 'line', self.space.w_None)
-        else:
-            size = len(code.co_lnotab) / 2
-            addr = 0
-            line = code.co_firstlineno
-            p = 0
-            lineno = code.co_lnotab
-            while size > 0:
-                c = ord(lineno[p])
-                if (addr + c) > frame.last_instr:
-                    break
-                addr += c
-                if c:
-                    frame.instr_lb = addr
-
-                line += ord(lineno[p + 1])
-                p += 2
-                size -= 1
-
-            if size > 0:
-                while True:
-                    size -= 1
-                    if size < 0:
-                        break
-                    addr += ord(lineno[p])
-                    if ord(lineno[p + 1]):
-                        break
-                    p += 2
-                frame.instr_ub = addr
-            else:
-                frame.instr_ub = sys.maxint
-
-            if frame.instr_lb == frame.last_instr: # At start of line!
-                frame.f_lineno = line
-                self._trace(frame, 'line', self.space.w_None)
-
-        frame.instr_prev = frame.last_instr
-    _do_bytecode_trace._dont_inline_ = True
 
     def exception_trace(self, frame, operationerr):
         "Trace function called upon OperationError."
@@ -188,6 +145,7 @@ class ExecutionContext:
             self.w_tracefunc = None
         else:
             self.w_tracefunc = w_func
+            self.space.frame_trace_action.fire()
 
     def setprofile(self, w_func):
         """Set the global trace function."""
@@ -208,6 +166,7 @@ class ExecutionContext:
         is_tracing = self.is_tracing
         self.is_tracing = 0
         try:
+            self.space.frame_trace_action.fire()
             return self.space.call(w_func, w_args)
         finally:
             self.is_tracing = is_tracing
@@ -271,10 +230,6 @@ class ExecutionContext:
                 frame.last_exception = last_exception
                 self.is_tracing -= 1
 
-    def add_pending_action(self, action):
-        self.pending_actions.append(action)
-        self.ticker = 0
-
     def _freeze_(self):
         raise Exception("ExecutionContext instances should not be seen during"
                         " translation.  Now is a good time to inspect the"
@@ -328,6 +283,7 @@ class ActionFlag:
             assert action.bitmask == self.BYTECODE_COUNTER_OVERFLOW_BIT
             self._periodic_actions.append(action)
             self.has_bytecode_counter = True
+            self.force_tick_counter()
         else:
             self._nonperiodic_actions.append((action, action.bitmask))
         self._rebuild_action_dispatcher()
@@ -338,7 +294,11 @@ class ActionFlag:
         elif interval > self.CHECK_INTERVAL_MAX:
             interval = self.CHECK_INTERVAL_MAX
         space.sys.checkinterval = interval
-        # force the tick counter to a correct value
+        self.force_tick_counter()
+
+    def force_tick_counter(self):
+        # force the tick counter to a valid value -- this actually forces
+        # it to reach BYTECODE_COUNTER_OVERFLOW_BIT at the next opcode.
         ticker = self.get()
         ticker |= self.BYTECODE_COUNTER_MASK
         self.set(ticker)
@@ -361,14 +321,14 @@ class ActionFlag:
                     ticker -= ec.space.sys.checkinterval
                     self.set(ticker)
                     for action in periodic_actions:
-                        action.perform()
+                        action.perform(ec)
 
             # nonperiodic actions
             for action, bitmask in nonperiodic_actions:
                 ticker = self.get()
                 if ticker & bitmask:
                     self.set(ticker & ~ bitmask)
-                    action.perform()
+                    action.perform(ec)
 
         action_dispatcher._dont_inline_ = True
         self.action_dispatcher = action_dispatcher
@@ -382,8 +342,8 @@ class ActionFlag:
 
     # The acceptable range of values for sys.checkinterval, so that
     # the bytecode_counter fits in 20 bits
-    CHECK_INTERVAL_MIN   = 1
-    CHECK_INTERVAL_MAX   = BYTECODE_COUNTER_OVERFLOW_BIT
+    CHECK_INTERVAL_MIN = 1
+    CHECK_INTERVAL_MAX = BYTECODE_COUNTER_OVERFLOW_BIT
 
 
 class AsyncAction(object):
@@ -393,7 +353,15 @@ class AsyncAction(object):
     """
     bitmask = 'auto'
 
-    def perform(self):
+    def __init__(self, space):
+        self.space = space
+
+    def fire(self):
+        """Request for the action to be run before the next opcode.
+        The action must have been registered at space initalization time."""
+        self.space.actionflag.fire(self)
+
+    def perform(self, executioncontext):
         """To be overridden."""
 
 
@@ -404,8 +372,7 @@ class PeriodicAsyncAction(AsyncAction):
     bitmask = ActionFlag.BYTECODE_COUNTER_OVERFLOW_BIT
 
 
-class UserDelAction(Action):
-    ./.
+class UserDelAction(AsyncAction):
     """An action that invokes all pending app-level __del__() method.
     This is done as an action instead of immediately when the
     interp-level __del__() is invoked, because the latter can occur more
@@ -414,24 +381,19 @@ class UserDelAction(Action):
     """
 
     def __init__(self, space):
-        self.space = space
+        AsyncAction.__init__(self, space)
         self.dying_objects_w = []
 
     def register_dying_object(self, w_obj):
         self.dying_objects_w.append(w_obj)
-        # XXX should force the action to occur as soon as possible.
-        # "space.getexectuion().ticker = 0" is both expensive and not
-        # exactly what we need because it's ok if the action occurs
-        # in any thread
+        self.fire()
 
-    def perform(self):
+    def perform(self, executioncontext):
         # Each call to perform() first grabs the self.dying_objects_w
         # and replaces it with an empty list.  We do this to try to
         # avoid too deep recursions of the kind of __del__ being called
         # while in the middle of another __del__ call.
         pending_w = self.dying_objects_w
-        if len(pending_w) == 0:
-            return     # shortcut
         self.dying_objects_w = []
         space = self.space
         for w_obj in pending_w:
@@ -443,3 +405,54 @@ class UserDelAction(Action):
             # finally, this calls the interp-level destructor for the
             # cases where there is both an app-level and a built-in __del__.
             w_obj._call_builtin_destructor()
+
+
+class FrameTraceAction(AsyncAction):
+    """An action that calls the local trace functions (w_f_trace)."""
+
+    def perform(self, executioncontext):
+        frame = executioncontext.framestack.top()
+        if frame.w_f_trace is None or executioncontext.is_tracing:
+            return
+        code = frame.pycode
+        if frame.instr_lb <= frame.last_instr < frame.instr_ub:
+            if frame.last_instr <= frame.instr_prev:
+                # We jumped backwards in the same line.
+                executioncontext._trace(frame, 'line', self.space.w_None)
+        else:
+            size = len(code.co_lnotab) / 2
+            addr = 0
+            line = code.co_firstlineno
+            p = 0
+            lineno = code.co_lnotab
+            while size > 0:
+                c = ord(lineno[p])
+                if (addr + c) > frame.last_instr:
+                    break
+                addr += c
+                if c:
+                    frame.instr_lb = addr
+
+                line += ord(lineno[p + 1])
+                p += 2
+                size -= 1
+
+            if size > 0:
+                while True:
+                    size -= 1
+                    if size < 0:
+                        break
+                    addr += ord(lineno[p])
+                    if ord(lineno[p + 1]):
+                        break
+                    p += 2
+                frame.instr_ub = addr
+            else:
+                frame.instr_ub = sys.maxint
+
+            if frame.instr_lb == frame.last_instr: # At start of line!
+                frame.f_lineno = line
+                executioncontext._trace(frame, 'line', self.space.w_None)
+
+        frame.instr_prev = frame.last_instr
+        self.space.frame_trace_action.fire()     # continue tracing

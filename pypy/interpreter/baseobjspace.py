@@ -1,5 +1,5 @@
-from pypy.interpreter.executioncontext import ExecutionContext, UserDelAction
-from pypy.interpreter.executioncontext import ActionFlag
+from pypy.interpreter.executioncontext import ExecutionContext, ActionFlag
+from pypy.interpreter.executioncontext import UserDelAction, FrameTraceAction
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
@@ -224,7 +224,9 @@ class ObjSpace(object):
         self.interned_strings = {}
         self.actionflag = ActionFlag()    # changed by the signal module
         self.user_del_action = UserDelAction(self)
-        self.register_async_action(self.user_del_action)
+        self.frame_trace_action = FrameTraceAction(self)
+        self.actionflag.register_action(self.user_del_action)
+        self.actionflag.register_action(self.frame_trace_action)
         self.setoptions(**kw)
 
 #        if self.config.objspace.logbytecodes:
