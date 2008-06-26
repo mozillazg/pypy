@@ -25,7 +25,11 @@ class Module(MixedModule):
 
     def __init__(self, space, *args):
         "NOT_RPYTHON"
-        from pypy.module.signal.interp_signal import CheckSignalAction
+        from pypy.module.signal import interp_signal
         MixedModule.__init__(self, space, *args)
         # add the signal-checking callback as an action on the space
-        space.pending_actions.append(CheckSignalAction(space))
+        space.pending_actions.append(interp_signal.CheckSignalAction(space))
+        # use the C-level pypysig_occurred variable as the tick counter
+        space.actionflag.get = interp_signal.pypysig_get_occurred
+        space.actionflag.set = interp_signal.pypysig_set_occurred
+

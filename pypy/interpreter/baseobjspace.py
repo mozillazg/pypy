@@ -1,4 +1,5 @@
 from pypy.interpreter.executioncontext import ExecutionContext, UserDelAction
+from pypy.interpreter.executioncontext import ActionFlag
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
@@ -221,8 +222,9 @@ class ObjSpace(object):
         import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
 
         self.interned_strings = {}
+        self.actionflag = ActionFlag()    # changed by the signal module
         self.user_del_action = UserDelAction(self)
-        self.pending_actions = [self.user_del_action]
+        self.register_async_action(self.user_del_action)
         self.setoptions(**kw)
 
 #        if self.config.objspace.logbytecodes:
