@@ -43,11 +43,11 @@ class ExecutionContext:
     def leave(self, frame):
         if self.profilefunc:
             self._trace(frame, 'leaveframe', None)
-        # xxx optimize a bit
-        self.space.frame_trace_action.fire()
                 
         if not frame.hide():
             self.framestack.pop()
+            if self.w_tracefunc is not None:
+                self.space.frame_trace_action.fire()
 
 
     class Subcontext(object):
@@ -206,6 +206,7 @@ class ExecutionContext:
             finally:
                 self.is_tracing -= 1
                 frame.locals2fast()
+                space.frame_trace_action.fire()
 
         # Profile cases
         if self.profilefunc is not None:
