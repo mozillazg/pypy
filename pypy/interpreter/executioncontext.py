@@ -1,6 +1,8 @@
 import sys
 from pypy.interpreter.miscutils import Stack, Action
 from pypy.interpreter.error import OperationError
+from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.rlib.unroll import unrolling_iterable
 
 def new_framestack():
     return Stack()
@@ -19,8 +21,6 @@ class ExecutionContext:
         self.framestack = new_framestack()
         self.w_tracefunc = None
         self.is_tracing = 0
-        self.ticker = 0
-        self.pending_actions = []
         self.compiler = space.createcompiler()
         self.profilefunc = None
         self.w_profilefuncarg = None
@@ -110,17 +110,17 @@ class ExecutionContext:
         "Trace function called before each bytecode."
         # this is split into a fast path and a slower path that is
         # not invoked every time bytecode_trace() is.
-        ticker = self.ticker - 1
-        self.ticker = ticker
-        if ticker < 0 or frame.w_f_trace is not None:
-            self._do_bytecode_trace(frame)
+        actionflag = self.space.actionflag
+        ticker = actionflag.get()
+        if actionflag.has_bytecode_counter:    # this "if" is constant-folded
+            ticker += 1
+            actionflag.set(ticker)
+        if ticker & actionflag.interesting_bits:  # fast check
+            actionflag.action_dispatcher()            # slow path
     bytecode_trace._always_inline_ = True
 
     def _do_bytecode_trace(self, frame):
-        if self.ticker < 0:
-            self.ticker = self.space.sys.checkinterval
-            Action.perform_actions(self.space.pending_actions)
-            Action.perform_actions(self.pending_actions)
+        ./.
         if frame.w_f_trace is None or self.is_tracing:
             return
         code = frame.pycode
@@ -164,7 +164,8 @@ class ExecutionContext:
                 self._trace(frame, 'line', self.space.w_None)
 
         frame.instr_prev = frame.last_instr
-            
+    _do_bytecode_trace._dont_inline_ = True
+
     def exception_trace(self, frame, operationerr):
         "Trace function called upon OperationError."
         operationerr.record_interpreter_traceback()
@@ -280,14 +281,137 @@ class ExecutionContext:
                         " traceback and see where this one comes from :-)")
 
 
+class ActionFlag:
+    """This holds the global 'action flag'.  It is a single bitfield
+    integer, with bits corresponding to AsyncAction objects that need to
+    be immediately triggered.  The correspondance from bits to
+    AsyncAction instances is built at translation time.  We can quickly
+    check if there is anything at all to do by checking if any of the
+    relevant bits is set.  If threads are enabled, they consume the 20
+    lower bits to hold a counter incremented at each bytecode, to know
+    when to release the GIL.
+    """
+    def __init__(self):
+        self.__flags = 0
+        self._periodic_actions = []
+        self._nonperiodic_actions = []
+        self.unused_bits = self.FREE_BITS[:]
+        self.has_bytecode_counter = False
+        self.interesting_bits = 0
+        self._rebuild_action_dispatcher()
+
+    # '__flags' is "very private" -- don't access it even from elsewhere
+    # in this class.  The get()/set() accessors are meant to be overriden
+    # by the signal module, if it is used.
+    def get(self):
+        return self.__flags
+
+    def set(self, value):
+        self.__flags = value
+
+    def fire(self, action):
+        """Request for the action to be run before the next opcode.
+        The action must have been registered at space initalization time."""
+        ticker = self.get()
+        self.set(ticker | action.bitmask)
+
+    def register_action(self, action):
+        "NOT_RPYTHON"
+        assert isinstance(action, AsyncAction)
+        if action.bitmask == 'auto':
+            while True:
+                action.bitmask = self.unused_bits.pop(0)
+                if not (action.bitmask & self.interesting_bits):
+                    break
+        self.interesting_bits |= action.bitmask
+        if action.bitmask & self.BYTECODE_COUNTER_OVERFLOW_BIT:
+            assert action.bitmask == self.BYTECODE_COUNTER_OVERFLOW_BIT
+            self._periodic_actions.append(action)
+            self.has_bytecode_counter = True
+        else:
+            self._nonperiodic_actions.append((action, action.bitmask))
+        self._rebuild_action_dispatcher()
+
+    def setcheckinterval(self, space, interval):
+        if interval < self.CHECK_INTERVAL_MIN:
+            interval = self.CHECK_INTERVAL_MIN
+        elif interval > self.CHECK_INTERVAL_MAX:
+            interval = self.CHECK_INTERVAL_MAX
+        space.sys.checkinterval = interval
+        # force the tick counter to a correct value
+        ticker = self.get()
+        ticker |= self.BYTECODE_COUNTER_MASK
+        self.set(ticker)
+
+    def _rebuild_action_dispatcher(self):
+        periodic_actions = unrolling_iterable(self._periodic_actions)
+        nonperiodic_actions = unrolling_iterable(self._nonperiodic_actions)
+        has_bytecode_counter = self.has_bytecode_counter
+
+        def action_dispatcher(ec):
+            # periodic actions
+            if has_bytecode_counter:
+                ticker = self.get()
+                if ticker & self.BYTECODE_COUNTER_OVERFLOW_BIT:
+                    # We must run the periodic actions now, but first
+                    # reset the bytecode counter (the following logic
+                    # works because the BYTECODE_COUNTER_OVERFLOW_BIT
+                    # is currently set)
+                    ticker &= ~ self.BYTECODE_COUNTER_MASK
+                    ticker -= ec.space.sys.checkinterval
+                    self.set(ticker)
+                    for action in periodic_actions:
+                        action.perform()
+
+            # nonperiodic actions
+            for action, bitmask in nonperiodic_actions:
+                ticker = self.get()
+                if ticker & bitmask:
+                    self.set(ticker & ~ bitmask)
+                    action.perform()
+
+        action_dispatcher._dont_inline_ = True
+        self.action_dispatcher = action_dispatcher
+
+    # Bits reserved for the bytecode counter, if used
+    BYTECODE_COUNTER_MASK = (1 << 20) - 1
+    BYTECODE_COUNTER_OVERFLOW_BIT = (1 << 20)
+
+    # Free bits
+    FREE_BITS = [1 << _b for _b in range(21, LONG_BIT)]
+
+    # The acceptable range of values for sys.checkinterval, so that
+    # the bytecode_counter fits in 20 bits
+    CHECK_INTERVAL_MIN   = 1
+    CHECK_INTERVAL_MAX   = BYTECODE_COUNTER_OVERFLOW_BIT
+
+
+class AsyncAction(object):
+    """Abstract base class for actions that must be performed
+    asynchronously with regular bytecode execution, but that still need
+    to occur between two opcodes, not at a completely random time.
+    """
+    bitmask = 'auto'
+
+    def perform(self):
+        """To be overridden."""
+
+
+class PeriodicAsyncAction(AsyncAction):
+    """Abstract base class for actions that occur automatically
+    every sys.checkinterval bytecodes.
+    """
+    bitmask = ActionFlag.BYTECODE_COUNTER_OVERFLOW_BIT
+
+
 class UserDelAction(Action):
+    ./.
     """An action that invokes all pending app-level __del__() method.
     This is done as an action instead of immediately when the
     interp-level __del__() is invoked, because the latter can occur more
     or less anywhere in the middle of code that might not be happy with
     random app-level code mutating data structures under its feet.
     """
-    repeat = True
 
     def __init__(self, space):
         self.space = space
