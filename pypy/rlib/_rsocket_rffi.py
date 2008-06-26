@@ -19,6 +19,7 @@ if _POSIX:
                 'sys/un.h',
                 'sys/poll.h',
                 'sys/select.h',
+                'sys/types.h',
                 'netinet/in.h',
                 'netinet/tcp.h',
                 'unistd.h',
@@ -52,10 +53,33 @@ if _MS_WINDOWS:
     COND_HEADER = ''
 constants = {}
 
+if _POSIX:
+    sources = ["""
+    void pypy_macro_wrapper_FD_SET(int fd, fd_set *set)
+    {
+        FD_SET(fd, set);
+    }
+    void pypy_macro_wrapper_FD_ZERO(fd_set *set)
+    {
+        FD_ZERO(set);
+    }
+    void pypy_macro_wrapper_FD_CLR(int fd, fd_set *set)
+    {
+        FD_CLR(fd, set);
+    }
+    int pypy_macro_wrapper_FD_ISSET(int fd, fd_set *set)
+    {
+        return FD_ISSET(fd, set);
+    }
+    """]
+
+else:
+    sources = []
 eci = ExternalCompilationInfo(
     post_include_bits = [HEADER, COND_HEADER],
     includes = includes,
     libraries = libraries,
+    separate_module_sources = sources,
 )
 
 class CConfig:
@@ -183,6 +207,7 @@ constants_w_defaults = [('SOL_IP', 0),
                         ('POLLOUT', 4),
                         ('POLLERR', 8),
                         ('POLLHUP', 16),
+                        ('FD_SETSIZE', 64),
                         ]
 for name, default in constants_w_defaults:
     setattr(CConfig, name, platform.DefinedConstantInteger(name))
@@ -281,9 +306,11 @@ CConfig.timeval = platform.Struct('struct timeval',
 
 if _MS_WINDOWS:
     CConfig.fd_set = platform.Struct('struct fd_set',
-                                   [('fd_count', rffi.UINT),
-                                   # XXX use FD_SETSIZE
-                                   ('fd_array', rffi.CFixedArray(socketfd_type, 64))])
+                                     [('fd_count', rffi.UINT),
+                                      # XXX use FD_SETSIZE
+                                      ('fd_array', rffi.CFixedArray(socketfd_type, 64))])
+else:
+    fd_set = rffi.COpaquePtr('fd_set', compilation_info=eci)
 
 if _MS_WINDOWS:
     CConfig.WSAData = platform.Struct('struct WSAData',
@@ -373,16 +400,16 @@ if MS_WINDOWS:
     WSAEVENT = cConfig.WSAEVENT
     WSANETWORKEVENTS = cConfig.WSANETWORKEVENTS
 timeval = cConfig.timeval
-if MS_WINDOWS:
+if _MS_WINDOWS:
     fd_set = cConfig.fd_set
 
-
-if _POSIX:
-    includes = list(includes)
-    for _name, _header in cond_includes:
-        if getattr(cConfig, _name) is not None:
-            includes.append(_header)
-    eci = ExternalCompilationInfo(includes=includes, libraries=libraries)
+#if _POSIX:
+#    includes = list(includes)
+#    for _name, _header in cond_includes:
+#        if getattr(cConfig, _name) is not None:
+#            includes.append(_header)
+#    eci = ExternalCompilationInfo(includes=includes, libraries=libraries,
+#                                  separate_module_sources=sources)
 
 def external(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci,
@@ -480,6 +507,16 @@ if _POSIX:
     pollfdarray = rffi.CArray(pollfd)
     poll = external('poll', [lltype.Ptr(pollfdarray), nfds_t, rffi.INT],
                     rffi.INT)
+    select = external('select',
+                      [rffi.INT, fd_set, fd_set,
+                       fd_set, lltype.Ptr(timeval)],
+                      rffi.INT)
+    
+    FD_CLR = external('pypy_macro_wrapper_FD_CLR', [rffi.INT, fd_set], lltype.Void)
+    FD_ISSET = external('pypy_macro_wrapper_FD_ISSET', [rffi.INT, fd_set], rffi.INT)
+    FD_SET = external('pypy_macro_wrapper_FD_SET', [rffi.INT, fd_set], lltype.Void)
+    FD_ZERO = external('pypy_macro_wrapper_FD_ZERO', [fd_set], lltype.Void)
+    
 elif MS_WINDOWS:
     select = external('select',
                       [rffi.INT, lltype.Ptr(fd_set), lltype.Ptr(fd_set),
