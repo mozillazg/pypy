@@ -43,6 +43,8 @@ class ExecutionContext:
     def leave(self, frame):
         if self.profilefunc:
             self._trace(frame, 'leaveframe', None)
+        # xxx optimize a bit
+        self.space.frame_trace_action.fire()
                 
         if not frame.hide():
             self.framestack.pop()
