@@ -133,8 +133,8 @@ On Windows, only sockets are supported; on Unix, all file descriptors.
     except rpoll.SelectError, s:
         w_module = space.getbuiltinmodule('select')
         w_errortype = space.getattr(w_module, space.wrap('error'))
-        raise OperationError(w_errortype, space.newtuple(
-            space.wrap(s.errno), space.wrap(s.get_msg())))
+        raise OperationError(w_errortype, space.newtuple([
+            space.wrap(s.errno), space.wrap(s.get_msg())]))
     
     return space.newtuple([
         space.newlist([iwtd_d[i] for i in iwtd]),
