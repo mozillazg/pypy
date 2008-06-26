@@ -9,6 +9,7 @@ import os
 from pypy.rlib import _rsocket_rffi as _c
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import intmask, r_uint
+import math
 
 # ____________________________________________________________
 # events
@@ -23,6 +24,12 @@ for name in eventnames:
     globals()[name] = _c.constants[name]
 
 class PollError(Exception):
+    def __init__(self, errno):
+        self.errno = errno
+    def get_msg(self):
+        return _c.socket_strerror_str(self.errno)
+
+class SelectError(Exception):
     def __init__(self, errno):
         self.errno = errno
     def get_msg(self):
@@ -64,6 +71,63 @@ if hasattr(_c, 'poll'):
         finally:
             lltype.free(pollfds, flavor='raw')
         return retval
+
+def select(inl, outl, excl, timeout=-1.0):
+    nfds = 0
+    if inl: 
+        ll_inl = lltype.malloc(_c.fd_set.TO, flavor='raw')
+        _c.FD_ZERO(ll_inl)
+        for i in inl:
+            _c.FD_SET(i, ll_inl)
+            if i > nfds:
+                nfds = i
+    else:
+        ll_inl = lltype.nullptr(_c.fd_set.TO)
+    if outl: 
+        ll_outl = lltype.malloc(_c.fd_set.TO, flavor='raw')
+        _c.FD_ZERO(ll_outl)
+        for i in outl:
+            _c.FD_SET(i, ll_outl)
+            if i > nfds:
+                nfds = i
+    else:
+        ll_outl = lltype.nullptr(_c.fd_set.TO)
+    if excl: 
+        ll_excl = lltype.malloc(_c.fd_set.TO, flavor='raw')
+        _c.FD_ZERO(ll_excl)
+        for i in excl:
+            _c.FD_SET(i, ll_excl)
+            if i > nfds:
+                nfds = i
+    else:
+        ll_excl = lltype.nullptr(_c.fd_set.TO)
+    if timeout != -1.0:
+        ll_timeval = lltype.malloc(_c.timeval, flavor='raw')
+        frac = math.fmod(timeout, 1.0)
+        ll_timeval.c_tv_sec = int(timeout)
+        ll_timeval.c_tv_usec = int(timeout*1000000.0)
+    else:
+        ll_timeval = lltype.nullptr(_c.timeval)
+    try:
+        res = _c.select(nfds + 1, ll_inl, ll_outl, ll_excl, ll_timeval)
+        if res == -1:
+            raise SelectError(_c.geterrno())
+        if res == 0:
+            return ([], [], [])
+        else:
+            return (
+                [i for i in inl if _c.FD_ISSET(i, ll_inl)],
+                [i for i in outl if _c.FD_ISSET(i, ll_outl)],
+                [i for i in excl if _c.FD_ISSET(i, ll_excl)])
+    finally:
+        if ll_inl:
+            lltype.free(ll_inl, flavor='raw')
+        if ll_outl:
+            lltype.free(ll_outl, flavor='raw')
+        if ll_excl:
+            lltype.free(ll_excl, flavor='raw')
+        if ll_timeval:
+            lltype.free(ll_timeval, flavor='raw')
 
 # ____________________________________________________________
 # poll() for Win32
