@@ -5,7 +5,6 @@ from pypy.rlib import rgc
 def collect(space):
     "Run a full collection."
     rgc.collect()
-    space.user_del_action.perform()
     return space.wrap(0)
     
 collect.unwrap_spec = [ObjSpace]
