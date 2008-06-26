@@ -57,9 +57,6 @@ def setup_directory_structure(space):
                         "sys.modules[__name__] = pkg_substituted")
     setuppkg("pkg_substituted", mod='')
     p = setuppkg("readonly", x='')
-    p = setuppkg("pkg_univnewlines")
-    p.join('__init__.py').write('a=5\nb=6\rc="""hello\r\nworld"""\r')
-    p.join('mod.py').write('a=15\nb=16\rc="""foo\r\nbar"""\r')
 
     # create compiled/x.py and a corresponding pyc file
     p = setuppkg("compiled", x = "x = 84")
@@ -78,9 +75,6 @@ def setup_directory_structure(space):
                                          stream.readall())
         finally:
             stream.close()
-        if space.config.objspace.usepycfiles:
-            # also create a lone .pyc file
-            p.join('lone.pyc').write(p.join('x.pyc').read())
 
     return str(root)
 
@@ -264,16 +258,6 @@ class AppTestImport:
         import sys
         assert glob['sys'] is sys
 
-    def test_universal_newlines(self):
-        import pkg_univnewlines
-        assert pkg_univnewlines.a == 5
-        assert pkg_univnewlines.b == 6
-        assert pkg_univnewlines.c == "hello\nworld"
-        from pkg_univnewlines import mod
-        assert mod.a == 15
-        assert mod.b == 16
-        assert mod.c == "foo\nbar"
-
 def _getlong(data):
     x = marshal.dumps(data)
     return x[-4:]
@@ -300,38 +284,44 @@ class TestPycStuff:
 
     def test_check_compiled_module(self):
         space = self.space
+        pathname = "whatever"
         mtime = 12345
         cpathname = _testfile(importing.get_pyc_magic(space), mtime)
         ret = importing.check_compiled_module(space,
-                                              cpathname,
-                                              mtime)
-        assert ret is True
+                                              pathname,
+                                              mtime,
+                                              cpathname)
+        assert ret == 1
 
         # check for wrong mtime
         ret = importing.check_compiled_module(space,
-                                              cpathname,
-                                              mtime+1)
-        assert ret is False
+                                              pathname,
+                                              mtime+1,
+                                              cpathname)
+        assert ret == 0
         os.remove(cpathname)
 
         # check for wrong version
         cpathname = _testfile(importing.get_pyc_magic(space)+1, mtime)
         ret = importing.check_compiled_module(space,
-                                              cpathname,
-                                              mtime)
-        assert ret is False
+                                              pathname,
+                                              mtime,
+                                              cpathname)
+        assert ret == -1
 
         # check for empty .pyc file
         f = open(cpathname, 'wb')
         f.close()
         ret = importing.check_compiled_module(space,
-                                              cpathname,
-                                              mtime)
-        assert ret is False
+                                              pathname,
+                                              mtime,
+                                              cpathname)
+        assert ret == -1
         os.remove(cpathname)
 
     def test_read_compiled_module(self):
         space = self.space
+        pathname = "whatever"
         mtime = 12345
         co = compile('x = 42', '?', 'exec')
         cpathname = _testfile(importing.get_pyc_magic(space), mtime, co)
@@ -352,6 +342,7 @@ class TestPycStuff:
 
     def test_load_compiled_module(self):
         space = self.space
+        pathname = "whatever"
         mtime = 12345
         co = compile('x = 42', '?', 'exec')
         cpathname = _testfile(importing.get_pyc_magic(space), mtime, co)
@@ -518,10 +509,12 @@ class TestPycStuff:
                                         mtime)
 
         # check
+        pathname = str(udir.join('cpathname.py'))
         ret = importing.check_compiled_module(space,
-                                              cpathname,
-                                              mtime)
-        assert ret is True
+                                              pathname,
+                                              mtime,
+                                              cpathname)
+        assert ret == 1
 
         # read compiled module
         stream = streamio.open_file_as_stream(cpathname, "rb")
@@ -636,41 +629,3 @@ class AppTestImportHooks(object):
             sys.path.pop(0)
             sys.path.pop(0)
             sys.path_hooks.pop()
-
-class AppTestNoPycFile(object):
-    usepycfiles = False
-    lonepycfiles = False
-
-    def setup_class(cls):
-        cls.space = gettestobjspace(**{
-            "objspace.usepycfiles": cls.usepycfiles,
-            "objspace.lonepycfiles": cls.lonepycfiles,
-            })
-        cls.w_usepycfiles = cls.space.wrap(cls.usepycfiles)
-        cls.w_lonepycfiles = cls.space.wrap(cls.lonepycfiles)
-        cls.saved_modules = _setup(cls.space)
-
-    def teardown_class(cls):
-        _teardown(cls.space, cls.saved_modules)
-
-    def test_import_possibly_from_pyc(self):
-        from compiled import x
-        if self.usepycfiles:
-            assert x.__file__.endswith('x.pyc')
-        else:
-            assert x.__file__.endswith('x.py')
-        try:
-            from compiled import lone
-        except ImportError:
-            assert not self.lonepycfiles, "should have found 'lone.pyc'"
-        else:
-            assert self.lonepycfiles, "should not have found 'lone.pyc'"
-            assert lone.__file__.endswith('lone.pyc')
-
-class AppTestNoLonePycFile(AppTestNoPycFile):
-    usepycfiles = True
-    lonepycfiles = False
-
-class AppTestLonePycFile(AppTestNoPycFile):
-    usepycfiles = True
-    lonepycfiles = True

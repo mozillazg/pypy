@@ -3,7 +3,6 @@ Module objects.
 """
 
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.interpreter.error import OperationError
 
 class Module(Wrappable):
     """A module."""
@@ -69,15 +68,9 @@ class Module(Wrappable):
 
     def descr_module__repr__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
-        if self.w_name is not None:
-            name = space.str_w(space.repr(self.w_name))
-        else:
-            name = "'?'"
+        name = space.str_w(space.repr(self.w_name))
         if isinstance(self, MixedModule):
             return space.wrap("<module %s (built-in)>" % name)
-        try:
-            w___file__ = space.getattr(self, space.wrap('__file__'))
-            __file__ = space.str_w(space.repr(w___file__))
-        except OperationError:
-            __file__ = '?'
+        w___file__ = space.getattr(self, space.wrap('__file__'))
+        __file__ = space.str_w(space.repr(w___file__))
         return space.wrap("<module %s from %s>" % (name, __file__))

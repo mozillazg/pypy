@@ -1,7 +1,6 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
-from pypy.interpreter.executioncontext import AsyncAction, AbstractActionFlag
-from pypy.rlib.rarithmetic import LONG_BIT, intmask
+from pypy.interpreter.miscutils import Action
 import signal as cpy_signal
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -23,9 +22,7 @@ eci = ExternalCompilationInfo(
     includes = ['stdlib.h', 'src/signals.h'],
     separate_module_sources = ['#include <src/signals.h>'],
     include_dirs = [str(py.path.local(autopath.pypydir).join('translator', 'c'))],
-    export_symbols = ['pypysig_poll', 'pypysig_default',
-                      'pypysig_ignore', 'pypysig_setflag',
-                      'pypysig_get_occurred', 'pypysig_set_occurred'],
+    export_symbols = ['pypysig_poll'],
 )
 
 def external(name, args, result, **kwds):
@@ -38,100 +35,55 @@ pypysig_poll = external('pypysig_poll', [], rffi.INT, threadsafe=False)
 # don't bother releasing the GIL around a call to pypysig_poll: it's
 # pointless and a performance issue
 
-pypysig_get_occurred = external('pypysig_get_occurred', [],
-                                lltype.Signed, _nowrapper=True)
-pypysig_set_occurred = external('pypysig_set_occurred', [lltype.Signed],
-                                lltype.Void, _nowrapper=True)
-
-
-class SignalActionFlag(AbstractActionFlag):
-    get = staticmethod(pypysig_get_occurred)
-    set = staticmethod(pypysig_set_occurred)
-
-
-class CheckSignalAction(AsyncAction):
-    """An action that is automatically invoked when a signal is received."""
-
-    # The C-level signal handler sets the highest bit of pypysig_occurred:
-    bitmask = intmask(1 << (LONG_BIT-1))
+class CheckSignalAction(Action):
+    """A repeatitive action at the space level, checking if the
+    signal_occurred flag is set and if so, scheduling ReportSignal actions.
+    """
+    repeat = True
 
     def __init__(self, space):
-        AsyncAction.__init__(self, space)
+        self.space = space
         self.handlers_w = {}
-        if space.config.objspace.usemodules.thread:
-            # need a helper action in case signals arrive in a non-main thread
-            self.pending_signals = {}
-            self.reissue_signal_action = ReissueSignalAction(space)
-            space.actionflag.register_action(self.reissue_signal_action)
-        else:
-            self.reissue_signal_action = None
 
-    def perform(self, executioncontext):
+    def perform(self):
         while True:
             n = pypysig_poll()
             if n < 0:
                 break
-            if self.reissue_signal_action is None:
-                # no threads: we can report the signal immediately
-                self.report_signal(n)
-            else:
-                main_ec = self.space.threadlocals.getmainthreadvalue()
-                if executioncontext is main_ec:
-                    # running in the main thread: we can report the
-                    # signal immediately
-                    self.report_signal(n)
-                else:
-                    # running in another thread: we need to hack a bit
-                    self.pending_signals[n] = None
-                    self.reissue_signal_action.fire_after_thread_switch()
+            main_ec = self.space.threadlocals.getmainthreadvalue()
+            main_ec.add_pending_action(ReportSignal(self, n))
 
-    def report_signal(self, n):
+    def get(space):
+        for action in space.pending_actions:
+            if isinstance(action, CheckSignalAction):
+                return action
+        raise OperationError(space.w_RuntimeError,
+                             space.wrap("lost CheckSignalAction"))
+    get = staticmethod(get)
+
+
+class ReportSignal(Action):
+    """A one-shot action for the main thread's execution context."""
+
+    def __init__(self, action, signum):
+        self.action = action
+        self.signum = signum
+
+    def perform(self):
         try:
-            w_handler = self.handlers_w[n]
+            w_handler = self.action.handlers_w[self.signum]
         except KeyError:
             return    # no handler, ignore signal
         # re-install signal handler, for OSes that clear it
-        pypysig_setflag(n)
+        pypysig_setflag(self.signum)
         # invoke the app-level handler
-        space = self.space
+        space = self.action.space
         ec = space.getexecutioncontext()
         try:
             w_frame = ec.framestack.top()
         except IndexError:
             w_frame = space.w_None
-        space.call_function(w_handler, space.wrap(n), w_frame)
-
-    def report_pending_signals(self):
-        # XXX this logic isn't so complicated but I have no clue how
-        # to test it :-(
-        pending_signals = self.pending_signals.keys()
-        self.pending_signals.clear()
-        try:
-            while pending_signals:
-                self.report_signal(pending_signals.pop())
-        finally:
-            # in case of exception, put the undelivered signals back
-            # into the dict instead of silently swallowing them
-            if pending_signals:
-                for n in pending_signals:
-                    self.pending_signals[n] = None
-                self.reissue_signal_action.fire()
-
-
-class ReissueSignalAction(AsyncAction):
-    """A special action to help deliver signals to the main thread.  If
-    a non-main thread caught a signal, this action fires after every
-    thread switch until we land in the main thread.
-    """
-
-    def perform(self, executioncontext):
-        main_ec = self.space.threadlocals.getmainthreadvalue()
-        if executioncontext is main_ec:
-            # now running in the main thread: we can really report the signals
-            self.space.check_signal_action.report_pending_signals()
-        else:
-            # still running in some other thread: try again later
-            self.fire_after_thread_switch()
+        space.call_function(w_handler, space.wrap(self.signum), w_frame)
 
 
 def getsignal(space, signum):
@@ -144,7 +96,7 @@ def getsignal(space, signum):
     None -- if an unknown handler is in effect (XXX UNIMPLEMENTED)
     anything else -- the callable Python object used as a handler
     """
-    action = space.check_signal_action
+    action = CheckSignalAction.get(space)
     if signum in action.handlers_w:
         return action.handlers_w[signum]
     return space.wrap(SIG_DFL)
@@ -172,7 +124,7 @@ def signal(space, signum, w_handler):
         raise OperationError(space.w_ValueError,
                              space.wrap("signal() must be called from the "
                                         "main thread"))
-    action = space.check_signal_action
+    action = CheckSignalAction.get(space)
     if space.eq_w(w_handler, space.wrap(SIG_DFL)):
         pypysig_default(signum)
         action.handlers_w[signum] = w_handler

@@ -8,21 +8,21 @@ class AppTestUserObject:
         cls.space = conftest.gettestobjspace(**cls.OPTIONS)
 
     def test_emptyclass(self):
-        class empty(object): pass
+        class empty: pass
         inst = empty()
         assert isinstance(inst, empty)
-        inst.attr = 23
-        assert inst.attr == 23
+        inst.attr=23
+        assert inst.attr ==23
 
     def test_method(self):
-        class A(object):
+        class A:
             def f(self, v):
                 return v*42
         a = A()
         assert a.f('?') == '??????????????????????????????????????????'
 
     def test_unboundmethod(self):
-        class A(object):
+        class A:
             def f(self, v):
                 return v*17
         a = A()
@@ -46,7 +46,7 @@ class AppTestUserObject:
         assert len(result) ==3
 
     def test_subsubclass(self):
-        class base(object):
+        class base:
             baseattr = 12
         class derived(base):
             derivedattr = 34
@@ -56,7 +56,7 @@ class AppTestUserObject:
         assert inst.derivedattr ==34
 
     def test_descr_get(self):
-        class C(object):
+        class C:
             class desc(object):
                 def __get__(self, ob, cls=None):
                     return 42
@@ -86,21 +86,21 @@ class AppTestUserObject:
         assert c.wibble == 22
 
     def test_class_setattr(self):
-        class C(object):
+        class C:
             pass
         C.a = 1
         assert hasattr(C, 'a')
         assert C.a == 1
 
     def test_add(self):
-        class C(object):
+        class C:
             def __add__(self, other):
                 return self, other
         c1 = C()
         assert c1+3 == (c1, 3)
 
     def test_call(self):
-        class C(object):
+        class C:
             def __call__(self, *args):
                 return args
         c1 = C()
@@ -118,7 +118,7 @@ class AppTestUserObject:
         assert c1.a == '->a'
 
     def test_getattr(self):
-        class C(object):
+        class C:
             def __getattr__(self, name):
                 return '->' + name
         c1 = C()
@@ -206,6 +206,12 @@ class AppTestUserObject:
         Foo.__module__ = 'a.b.c'
         s = repr(Foo())
         assert s.startswith('<a.b.c.Foo object at ')
+
+    def test_obscure(self):
+        skip("Too obscure")
+        class Foo(object):
+            locals()[42] = 98
+        # assert did not crash
 
 class AppTestWithMultiMethodVersion2(AppTestUserObject):
     OPTIONS = {}    # for test_builtinshortcut.py

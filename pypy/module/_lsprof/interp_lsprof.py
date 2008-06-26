@@ -223,6 +223,11 @@ class W_Profiler(Wrappable):
         space.getexecutioncontext().setllprofile(None, None)
     disable.unwrap_spec = ['self', ObjSpace]
 
+    def delete(self, space):
+        self._flush_unmatched()
+        space.getexecutioncontext().setllprofile(None, None)
+    delete.unwrap_spec = ['self', ObjSpace]
+
     def getstats(self, space):
         if self.w_callable is None:
             factor = 1. # we measure time.time in floats
@@ -246,4 +251,5 @@ W_Profiler.typedef = TypeDef(
     enable = interp2app(W_Profiler.enable),
     disable = interp2app(W_Profiler.disable),
     getstats = interp2app(W_Profiler.getstats),
+    __del__ = interp2app(W_Profiler.delete),
 )

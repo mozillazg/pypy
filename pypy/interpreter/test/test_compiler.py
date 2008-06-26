@@ -350,7 +350,7 @@ def wrong3():
     def test_mangling(self):
         snippet = str(py.code.Source(r'''
             __g = "42"
-            class X(object):
+            class X:
                 def __init__(self, u):
                     self.__u = u
                 def __f(__self, __n):
@@ -390,7 +390,7 @@ def wrong3():
 
     def test_chained_access_augassign(self):
         snippet = str(py.code.Source(r'''
-            class R(object):
+            class R:
                count = 0
             c = 0
             for i in [0,1,2]:
@@ -480,7 +480,7 @@ def test():
             def f(self):
                 def get_nested_class():
                     self
-                    class Test(object):
+                    class Test:
                         def _STOP_HERE_(self):
                             return _STOP_HERE_(self)
                 get_nested_class()
@@ -496,7 +496,7 @@ def test():
         space = self.space
         snippet = str(py.code.Source(r'''
             def f(x):
-                class Test(object):
+                class Test:
                     def meth(self):
                         return x + 1
                 return Test()
@@ -533,7 +533,7 @@ def test():
         snippet = str(py.code.Source(r'''
             def f():
                 method_and_var = "var"
-                class Test(object):
+                class Test:
                     def method_and_var(self):
                         return "method"
                     def test(self):
@@ -630,7 +630,7 @@ with somtehing as stuff:
 class AppTestOptimizer:
     def test_constant_fold_add(self):
         import parser
-        class Folder(object):
+        class Folder:
             def defaultvisit(self, node):
                 return node
 

@@ -8,82 +8,7 @@ class AppTestCProfile(object):
         cls.w_expected_output = space.wrap(expected_output)
         cls.space = space
         cls.w_file = space.wrap(__file__)
-
-    def test_direct(self):
-        import _lsprof
-        def getticks():
-            return len(ticks)
-        prof = _lsprof.Profiler(getticks, 0.25, True, False)
-        ticks = []
-        def bar(m):
-            ticks.append(1)
-            if m == 1:
-                foo(42)
-            ticks.append(1)
-        def spam(m):
-            bar(m)
-        def foo(n):
-            bar(n)
-            ticks.append(1)
-            bar(n+1)
-            ticks.append(1)
-            spam(n+2)
-        prof.enable()
-        foo(0)
-        prof.disable()
-        assert len(ticks) == 16
-        stats = prof.getstats()
-        entries = {}
-        for entry in stats:
-            assert hasattr(entry.code, 'co_name')
-            entries[entry.code.co_name] = entry
-        efoo = entries['foo']
-        assert efoo.callcount == 2
-        assert efoo.reccallcount == 1
-        assert efoo.inlinetime == 1.0
-        assert efoo.totaltime == 4.0
-        assert len(efoo.calls) == 2
-        ebar = entries['bar']
-        assert ebar.callcount == 6
-        assert ebar.reccallcount == 3
-        assert ebar.inlinetime == 3.0
-        assert ebar.totaltime == 3.5
-        assert len(ebar.calls) == 1
-        espam = entries['spam']
-        assert espam.callcount == 2
-        assert espam.reccallcount == 0
-        assert espam.inlinetime == 0.0
-        assert espam.totaltime == 1.0
-        assert len(espam.calls) == 1
-
-        foo2bar, foo2spam = efoo.calls
-        if foo2bar.code.co_name == 'spam':
-            foo2bar, foo2spam = foo2spam, foo2bar
-        assert foo2bar.code.co_name == 'bar'
-        assert foo2bar.callcount == 4
-        assert foo2bar.reccallcount == 2
-        assert foo2bar.inlinetime == 2.0
-        assert foo2bar.totaltime == 3.0
-        assert foo2spam.code.co_name == 'spam'
-        assert foo2spam.callcount == 2
-        assert foo2spam.reccallcount == 0
-        assert foo2spam.inlinetime == 0.0
-        assert foo2spam.totaltime == 1.0
-
-        bar2foo, = ebar.calls
-        assert bar2foo.code.co_name == 'foo'
-        assert bar2foo.callcount == 1
-        assert bar2foo.reccallcount == 0
-        assert bar2foo.inlinetime == 0.5
-        assert bar2foo.totaltime == 2.0
-
-        spam2bar, = espam.calls
-        assert spam2bar.code.co_name == 'bar'
-        assert spam2bar.callcount == 2
-        assert spam2bar.reccallcount == 0
-        assert spam2bar.inlinetime == 1.0
-        assert spam2bar.totaltime == 1.0
-
+    
     def test_cprofile(self):
         import sys, os
         # XXX this is evil trickery to walk around the fact that we don't
@@ -113,8 +38,6 @@ class AppTestCProfile(object):
 
             res, prof = do_profiling(Profile)
             assert res[0] == 1000
-            skip("when we reach this point, things seem to work; "
-                 "but we need to review carefully what we expect as output")
             for i, method in enumerate(methodnames):
                 if not res[i + 1] == self.expected_output[method]:
                     print method

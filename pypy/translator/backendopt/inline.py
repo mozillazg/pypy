@@ -378,8 +378,7 @@ class BaseInliner(object):
         # this rewiring does not always succeed. in the cases where it doesn't
         # there will be generic code inserted
         rclass = self.translator.rtyper.type_system.rclass
-        excdata = self.translator.rtyper.getexceptiondata()
-        exc_match = excdata.fn_exception_match
+        exc_match = self.translator.rtyper.getexceptiondata().fn_exception_match
         for link in self.entrymap[self.graph_to_inline.exceptblock]:
             copiedblock = self.copy_block(link.prevblock)
             VALUE, copiedlink = _find_exception_type(copiedblock)
@@ -389,7 +388,7 @@ class BaseInliner(object):
             classdef = self.lltype_to_classdef[VALUE]
             rtyper = self.translator.rtyper
             classrepr = rclass.getclassrepr(rtyper, classdef)
-            vtable = classrepr.getruntime(excdata.lltype_of_exception_type)
+            vtable = classrepr.getruntime()
             var_etype = copiedlink.args[0]
             var_evalue = copiedlink.args[1]
             for exceptionlink in afterblock.exits[1:]:
