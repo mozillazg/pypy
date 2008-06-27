@@ -33,5 +33,5 @@ class Module(MixedModule):
         # use the C-level pypysig_occurred variable as the action flag
         # (the result is that the C-level signal handler will directly
         # set the flag for the CheckSignalAction)
-        space.actionflag.get = interp_signal.pypysig_get_occurred
-        space.actionflag.set = interp_signal.pypysig_set_occurred
+        space.actionflag.__class__ = interp_signal.SignalActionFlag
+        # xxx yes I know the previous line is a hack

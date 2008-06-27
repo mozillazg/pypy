@@ -1,6 +1,6 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
-from pypy.interpreter.executioncontext import AsyncAction
+from pypy.interpreter.executioncontext import AsyncAction, AbstractActionFlag
 from pypy.rlib.rarithmetic import LONG_BIT, intmask
 import signal as cpy_signal
 from pypy.rpython.lltypesystem import lltype, rffi
@@ -40,6 +40,12 @@ pypysig_get_occurred = external('pypysig_get_occurred', [],
                                 lltype.Signed, _nowrapper=True)
 pypysig_set_occurred = external('pypysig_set_occurred', [lltype.Signed],
                                 lltype.Void, _nowrapper=True)
+
+
+class SignalActionFlag(AbstractActionFlag):
+    get = staticmethod(pypysig_get_occurred)
+    set = staticmethod(pypysig_set_occurred)
+
 
 class CheckSignalAction(AsyncAction):
     """An action that is automatically invoked when a signal is received."""
