@@ -28,8 +28,10 @@ class Module(MixedModule):
         from pypy.module.signal import interp_signal
         MixedModule.__init__(self, space, *args)
         # add the signal-checking callback as an action on the space
-        space.pending_actions.append(interp_signal.CheckSignalAction(space))
-        # use the C-level pypysig_occurred variable as the tick counter
+        space.check_signal_action = interp_signal.CheckSignalAction(space)
+        space.actionflag.register_action(space.check_signal_action)
+        # use the C-level pypysig_occurred variable as the action flag
+        # (the result is that the C-level signal handler will directly
+        # set the flag for the CheckSignalAction)
         space.actionflag.get = interp_signal.pypysig_get_occurred
         space.actionflag.set = interp_signal.pypysig_set_occurred
-

@@ -4,6 +4,8 @@
 #ifndef _PYPY_SIGNALS_H
 #define _PYPY_SIGNALS_H
 
+#include "Python.h"   /* XXX  for LONG_MIN */
+
 #include <stdlib.h>
 
 #ifdef MS_WINDOWS
@@ -56,9 +58,19 @@ int pypysig_poll(void);   /* => signum or -1 */
 #define PENDING_SIGNAL_BIT   (LONG_MIN)   /* high bit */
 extern long pypysig_occurred;
 
-/* inlinable helpers to get/set the variable as efficiently as possible */
-static long pypysig_get_occurred(void) { return pypysig_occurred; }
-static void pypysig_set_occurred(long x) { pypysig_occurred = x; }
+/* some C tricks to get/set the variable as efficiently as possible:
+   use macros when compiling as a stand-alone program, but still
+   export a function with the correct name for testing */
+#undef pypysig_get_occurred
+#undef pypysig_set_occurred
+long pypysig_get_occurred(void);
+void pypysig_set_occurred(long x);
+#ifndef PYPY_NOT_MAIN_FILE
+long pypysig_get_occurred(void) { return pypysig_occurred; }
+void pypysig_set_occurred(long x) { pypysig_occurred = x; }
+#endif
+#define pypysig_get_occurred()   (pypysig_occurred)
+#define pypysig_set_occurred(x)  (pypysig_occurred=(x))
 
 /************************************************************/
 /* Implementation                                           */
@@ -123,10 +135,15 @@ void pypysig_setflag(int signum)
 
 int pypysig_poll(void)
 {
-  if (pypysig_occurred & PENDING_SIGNAL_BIT)
+  /* the two commented out lines below are useful for performance in
+     normal usage of pypysig_poll(); however, pypy/module/signal/ is
+     not normal usage.  It only calls pypysig_poll() if the
+     PENDING_SIGNAL_BIT is set, and it clears that bit first. */
+
+/* if (pypysig_occurred & PENDING_SIGNAL_BIT) */
     {
       int i;
-      pypysig_occurred &= ~PENDING_SIGNAL_BIT;
+/*     pypysig_occurred &= ~PENDING_SIGNAL_BIT; */
       for (i=0; i<NSIG; i++)
         if (pypysig_flags[i])
           {

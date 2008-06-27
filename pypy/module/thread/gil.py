@@ -42,6 +42,7 @@ class GILThreadLocals(OSThreadLocals):
         # test_compile_lock.  As a workaround, we repatch these global
         # fields systematically.
         spacestate.ll_GIL = self.ll_GIL
+        spacestate.actionflag = space.actionflag
         invoke_around_extcall(before_external_call, after_external_call)
         return result
 
@@ -68,9 +69,22 @@ class GILReleaseAction(Action):
 
 
 class SpaceState:
+
     def _freeze_(self):
         self.ll_GIL = thread.null_ll_lock
+        self.actionflag = None
+        self.set_actionflag_bit_after_thread_switch = 0
         return False
+
+    def after_thread_switch(self):
+        # this is support logic for the signal module, to help it deliver
+        # signals to the main thread.
+        actionflag = self.actionflag
+        if actionflag is not None:
+            flag = actionflag.get()
+            flag |= self.set_actionflag_bit_after_thread_switch
+            actionflag.set(flag)
+
 spacestate = SpaceState()
 
 # Fragile code below.  We have to preserve the C-level errno manually...
@@ -87,5 +101,6 @@ def after_external_call():
     e = get_errno()
     thread.acquire_NOAUTO(spacestate.ll_GIL, True)
     thread.gc_thread_run()
+    spacestate.after_thread_switch()
     set_errno(e)
 after_external_call._gctransformer_hint_cannot_collect_ = True
