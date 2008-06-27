@@ -63,3 +63,5 @@ class AppTest_ModuleObject:
         assert r.startswith("<module '_exceptions' from ") and \
                'pypy/lib/_exceptions.py' in r and \
                r.endswith('>')
+        nofile = type(_exceptions)('nofile', 'foo')
+        assert repr(nofile) == "<module 'nofile' from ?>"
