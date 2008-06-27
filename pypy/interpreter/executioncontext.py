@@ -343,7 +343,7 @@ class ActionFlag:
     BYTECODE_COUNTER_OVERFLOW_BIT = (1 << 20)
 
     # Free bits
-    FREE_BITS = [1 << _b for _b in range(21, LONG_BIT)]
+    FREE_BITS = [1 << _b for _b in range(21, LONG_BIT-1)]
 
     # The acceptable range of values for sys.checkinterval, so that
     # the bytecode_counter fits in 20 bits
@@ -365,6 +365,14 @@ class AsyncAction(object):
         """Request for the action to be run before the next opcode.
         The action must have been registered at space initalization time."""
         self.space.actionflag.fire(self)
+
+    def fire_after_thread_switch(self):
+        """Bit of a hack: fire() the action but only the next time the GIL
+        is released and re-acquired (i.e. after a portential thread switch).
+        Don't call this if threads are not enabled.
+        """
+        from pypy.module.thread.gil import spacestate
+        spacestate.set_actionflag_bit_after_thread_switch |= self.bitmask
 
     def perform(self, executioncontext):
         """To be overridden."""
