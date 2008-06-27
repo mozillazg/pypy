@@ -23,3 +23,14 @@ class AppTestGC(object):
             assert gc.estimate_heap_size() > 1024
         else:
             raises(RuntimeError, gc.estimate_heap_size)
+
+    def test_enable(self):
+        import gc
+        assert gc.isenabled()
+        gc.disable()
+        assert not gc.isenabled()
+        gc.enable()
+        assert gc.isenabled()
+        gc.enable()
+        assert gc.isenabled()
+        
