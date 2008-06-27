@@ -872,6 +872,9 @@ class _class(object):
     def _cast_to_object(self):
         return make_object(self)
 
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__, self._INSTANCE)
+
 nullruntimeclass = _class(None)
 
 class _instance(object):

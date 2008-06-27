@@ -419,6 +419,9 @@ class LLBuilder(GenBuilder):
 
 def getfieldtype(T, name):
     if isinstance(T, ootype.OOType):
+        if name == '__class__':
+            # XXX hack hack hack
+            return ootype.Class
         _, TYPE = T._lookup_field(name)
         return TYPE
     else:

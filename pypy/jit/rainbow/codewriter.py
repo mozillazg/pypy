@@ -984,6 +984,30 @@ class BytecodeWriter(object):
         self.emit(self.promotiondesc_position(arg.concretetype))
         self.register_greenvar(result)
 
+    def handle_promote_class_hint(self, op, v_obj, result):
+        from pypy.rpython.lltypesystem.rclass import OBJECT
+        from pypy.rpython.ootypesystem.rclass import OBJECT
+        # TODO write tests for these cases
+##        if arg.concretetype is lltype.Void:
+##            return
+##        if self.varcolor(arg) == "green":
+##            self.register_greenvar(result, self.green_position(arg))
+##            return
+        v_class = op.args[2]
+        self.emit("promote")
+        self.emit(self.serialize_oparg("red", v_class))
+        self.emit(self.promotiondesc_position(v_class.concretetype))
+        g_class = self.register_greenvar(("promoted class", op),
+                                         check=False)
+        fielddescindex = self.fielddesc_position(self.OBJECT,
+                                                 self.classfieldname)
+        self.emit("assert_class")
+        self.emit(self.serialize_oparg("red", v_obj))
+        self.emit(g_class)
+        self.emit(fielddescindex)
+
+        self.register_redvar(result)
+
     def handle_global_merge_point_hint(self, op, arg, result):
         if self.hannotator.policy.hotpath:
             raise JitHintError("'global_merge_point' not supported by hotpath")
@@ -1639,6 +1663,9 @@ class LLTypeBytecodeWriter(BytecodeWriter):
     Ptr = staticmethod(lltype.Ptr)
     functionptr = staticmethod(lltype.functionptr)
 
+    from pypy.rpython.lltypesystem.rclass import OBJECT
+    classfieldname = 'typeptr'
+
     def cast_fnptr_to_root(self, fnptr):
         return llmemory.cast_ptr_to_adr(fnptr)
 
@@ -1678,7 +1705,10 @@ class OOTypeBytecodeWriter(BytecodeWriter):
     FuncType = staticmethod(ootype.StaticMethod)
     Ptr = staticmethod(lambda x: x)
     functionptr = staticmethod(ootype.static_meth)        
-    
+
+    from pypy.rpython.ootypesystem.rclass import OBJECT
+    classfieldname = '__class__'
+
     def decompose_oosend(self, op):
         name = op.args[0].value
         opargs = op.args[1:]
@@ -1815,17 +1845,17 @@ class OOTypeBytecodeWriter(BytecodeWriter):
                 continue
             emitted_args.append(self.serialize_oparg("red", v))
 
-        self.emit("goto_if_vstruct", emitted_args[0],
-                  tlabel(("virtual struct oosend", op)))
+        self.emit("goto_if_known_class", emitted_args[0],
+                  tlabel(("constant class oosend", op)))
         self.emit_residual_oosend(SELFTYPE, name, emitted_args,
                                   has_result)
         self.emit("goto", tlabel(("after oosend", op)))
 
         # virtual struct case
-        self.emit(label(("virtual struct oosend", op)))
+        self.emit(label(("constant class oosend", op)))
         args = graph2tsgraph.values()[0].getargs()
         emitted_args = self.args_of_call(op.args[1:], args)
-        self.emit("vstruct_oosend")
+        self.emit("const_oosend")
         self.emit(*emitted_args)
         methnameindex = self.string_position(name)
         self.emit(methnameindex)
@@ -1863,10 +1893,13 @@ class OOTypeBytecodeWriter(BytecodeWriter):
 
 
     def fill_methodcodes(self, INSTANCE, methname, graph2tsgraph):
+        class2typedesc = self.interpreter.class2typedesc
         TYPES = [INSTANCE] + INSTANCE._subclasses
         for T in TYPES:
             descindex = self.structtypedesc_position(T)
             desc = self.structtypedescs[descindex]
+            ooclass = ootype.runtimeClass(T)
+            class2typedesc[ooclass] = desc
             if methname in desc.methodcodes:
                 break # we already filled the codes for this type
             _, meth = T._lookup(methname)

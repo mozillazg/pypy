@@ -474,7 +474,7 @@ class BaseTestPromotion(InterpretationTest):
         assert res == 11
         self.check_insns(int_add=0)
 
-    def test_promote___class__(self):
+    def test_promote_class(self):
         class A:
             def __init__(self, x):
                 self.x = x
@@ -491,8 +491,8 @@ class BaseTestPromotion(InterpretationTest):
             hint(None, global_merge_point=True)
             obj = make_obj(x, flag)
             obj2 = flag and A(x+2) or B(x+2)
-            hint(obj.__class__, promote=True)
-            return obj.m(obj2)
+            promoted_obj = hint(obj, promote_class=True)
+            return promoted_obj.m(obj2)
 
         res = self.interpret(ll_function, [20, True], [], policy=StopAtXPolicy(make_obj))
         assert res == 42
@@ -508,5 +508,3 @@ class TestOOType(OOTypeMixin, BaseTestPromotion):
     type_system = "ootype"
     to_rstr = staticmethod(OOSupport.to_rstr)
 
-    def test_promote___class__(self):
-        py.test.skip('fixme')

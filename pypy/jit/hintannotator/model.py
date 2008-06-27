@@ -346,7 +346,7 @@ class __extend__(SomeLLAbstractValue):
     def same_as(hs_v1):
         return hs_v1
 
-    def hint(hs_v1, hs_flags):
+    def hint(hs_v1, hs_flags, hs_class=None):
         if hs_flags.const.get('variable', False): # only for testing purposes!!!
             return variableoftype(hs_v1.concretetype,
                                   cause='a hint variable=True')
@@ -362,6 +362,9 @@ class __extend__(SomeLLAbstractValue):
             hs_clone = hs_v1.clone()
             hs_clone.deepfrozen = True
             return hs_clone
+        if hs_flags.const.get('promote_class', False):
+            assert hs_class is not None
+            return hs_v1 # XXX?
         for name in ["reverse_split_queue", "global_merge_point",
                      "access_directly"]:
             if hs_flags.const.get(name, False):
@@ -524,7 +527,7 @@ class __extend__(SomeLLAbstractConstant):
         # version of same_as()
         return hs_c1
 
-    def hint(hs_c1, hs_flags):
+    def hint(hs_c1, hs_flags, hs_class=None):
         if hs_flags.const.get('concrete', False):
             for o in hs_c1.origins:
                 o.set_fixed()
@@ -534,7 +537,7 @@ class __extend__(SomeLLAbstractConstant):
         if hs_flags.const.get('forget', False):
             assert isinstance(hs_c1, SomeLLAbstractConstant)
             return reorigin(hs_c1)
-        return SomeLLAbstractValue.hint(hs_c1, hs_flags)
+        return SomeLLAbstractValue.hint(hs_c1, hs_flags, hs_class)
 
     def direct_call(hs_f1, *args_hs):
         bookkeeper = getbookkeeper()

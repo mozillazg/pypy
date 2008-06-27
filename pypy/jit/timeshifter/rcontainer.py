@@ -80,6 +80,7 @@ class AbstractStructTypeDesc(object):
     materialize = None
     StructFieldDesc = None
     PtrRedBox = rvalue.PtrRedBox
+    firstfielddesc = 0
 
     def __init__(self, RGenOp, TYPE):
         self.TYPE = TYPE
@@ -261,6 +262,7 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
 
     _attrs_ = ['methodcodes', 'supertypedesc']
     supertypedesc = None
+    firstfielddesc = 1 # number 0 is __class__, which is special
 
     def __init__(self, RGenOp, TYPE):
         AbstractStructTypeDesc.__init__(self, RGenOp, TYPE)
@@ -285,6 +287,10 @@ class InstanceTypeDesc(AbstractStructTypeDesc):
         return 'gc' # all instances and records are garbage collected
 
     def _iter_fields(self, TYPE):
+        if isinstance(TYPE, ootype.Instance):
+            # the first field is fake, it's used to remember the class of
+            # the object, if known
+            yield '__class__', ootype.Class
         try:
             fields = TYPE._fields.items()
             if isinstance(TYPE, ootype.Instance):
@@ -928,7 +934,7 @@ class VirtualStruct(VirtualContainer):
         # force the box pointing to this VirtualStruct
         self.setforced(genvar)
         fielddescs = typedesc.fielddescs
-        for i in range(len(fielddescs)):
+        for i in range(typedesc.firstfielddesc, len(fielddescs)):
             fielddesc = fielddescs[i]
             box = boxes[i]
             fielddesc.generate_set(jitstate, genvar, box.getgenvar(jitstate))
