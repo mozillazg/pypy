@@ -328,6 +328,25 @@ class AppTest_Descroperation:
 
         setattr(P, "__weakref__", 0)
 
+    def test_subclass_comparison(self):
+        l = []
+        class A(object):
+            def __eq__(self, other):
+                l.append(self.__class__)
+                l.append(other.__class__)
+                return False
+
+            def __lt__(self, other):
+                l.append(self.__class__)
+                l.append(other.__class__)
+                return False
+
+        class B(A):
+            pass
+
+        A() == B()
+        A() < B()
+        assert l == [B, A, A, B]
 
 class AppTestWithBuiltinShortcut(AppTest_Descroperation):
     OPTIONS = {'objspace.std.builtinshortcut': True}
