@@ -629,6 +629,12 @@ class JitInterpreter(object):
         assert gv_switchvar.is_const
         self.green_result(gv_switchvar)
 
+    @arguments("red", "green", "fielddesc", returns="red")
+    def opimpl_assert_class(self, objbox, gv_class, fielddesc):
+        classbox = self.PtrRedBox(gv_class)
+        objbox.remember_field(fielddesc, classbox)
+        return objbox
+
     @arguments()
     def opimpl_reverse_split_queue(self):
         rtimeshift.reverse_split_queue(self.frame.dispatchqueue)
@@ -1050,9 +1056,16 @@ class JitInterpreter(object):
 
 class LLTypeJitInterpreter(JitInterpreter):
     ts = typesystem.llhelper
+    PtrRedBox = rvalue.PtrRedBox
 
 class OOTypeJitInterpreter(JitInterpreter):
     ts = typesystem.oohelper
+    PtrRedBox = rvalue.InstanceRedBox
+
+    def __init__(self, exceptiondesc, RGenOp):
+        JitInterpreter.__init__(self, exceptiondesc, RGenOp)
+        self.class2typedesc = {}
+        self.class_fielddesc = rcontainer.InstanceFieldDesc(RGenOp, ootype.ROOT, '__class__', 0)
 
     @arguments("red", "fielddesc", "bool", returns="red")
     def opimpl_red_oogetfield(self, structbox, fielddesc, deepfrozen):
@@ -1095,17 +1108,36 @@ class OOTypeJitInterpreter(JitInterpreter):
         return rvalue.ll_fromvalue(self.jitstate, result)
 
     @arguments("red", "jumptarget")
-    def opimpl_goto_if_vstruct(self, objbox, target):
-        if objbox.content is not None:
+    def opimpl_goto_if_known_class(self, objbox, target):
+        known_class = False
+        content = objbox.content
+        if content is not None:
+            if isinstance(content, rcontainer.VirtualStruct):
+                known_class = True
+            elif isinstance(content, rcontainer.PartialDataStruct):
+                known_class = content.op_getfield(self.jitstate, self.class_fielddesc) is not None
+            else:
+                assert False, 'TODO?'
+        if known_class:
             self.frame.pc = target
 
     @arguments("green_varargs", "red_varargs", "string")
-    def opimpl_vstruct_oosend(self, greenargs, redargs, methname):
+    def opimpl_const_oosend(self, greenargs, redargs, methname):
+        from pypy.rpython.ootypesystem.rclass import CLASSTYPE
         selfbox = redargs[0]
         vstruct = selfbox.content
         assert vstruct is not None
-        assert isinstance(vstruct, rcontainer.VirtualStruct), 'TODO???'
-        bytecode = vstruct.typedesc.methodcodes[methname]
+        if isinstance(vstruct, rcontainer.PartialDataStruct):
+            classbox = vstruct.op_getfield(self.jitstate, self.class_fielddesc)
+            assert classbox.is_constant()
+            gv_meta = classbox.getgenvar(self.jitstate)
+            meta = gv_meta.revealconst(CLASSTYPE)
+            cls = meta.class_ # to be removed after the merging of the less-meta-instances branch
+            typedesc = self.class2typedesc[cls]
+        else:
+            assert isinstance(vstruct, rcontainer.VirtualStruct)
+            typedesc = vstruct.typedesc
+        bytecode = typedesc.methodcodes[methname]
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)
 

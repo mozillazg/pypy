@@ -41,8 +41,13 @@ class Entry(ExtRegistryEntry):
             hints[key[2:]] = s_value.const
         v = hop.inputarg(hop.args_r[0], arg=0)
         c_hint = hop.inputconst(lltype.Void, hints)
+        vlist = [v, c_hint]
+        if hints.get('promote_class', False):
+            ll_type = hop.rtyper.type_system.rclass.ll_type
+            v_class = hop.gendirectcall(ll_type, v)
+            vlist.append(v_class)
         hop.exception_cannot_occur()
-        return hop.genop('hint', [v, c_hint], resulttype=v.concretetype)
+        return hop.genop('hint', vlist, resulttype=v.concretetype)
 
 
 def we_are_jitted():

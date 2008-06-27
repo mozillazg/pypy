@@ -14,6 +14,9 @@ def fieldType(T, name):
     if isinstance(T, lltype.Struct):
         return getattr(T, name)
     elif isinstance(T, (ootype.Instance, ootype.Record)):
+        if name == '__class__':
+            # XXX hack hack hack
+            return ootype.Class
         _, FIELD = T._lookup_field(name)
         return FIELD
     else:
