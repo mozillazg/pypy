@@ -241,7 +241,7 @@ class ExecutionContext:
                         " traceback and see where this one comes from :-)")
 
 
-class ActionFlag:
+class AbstractActionFlag:
     """This holds the global 'action flag'.  It is a single bitfield
     integer, with bits corresponding to AsyncAction objects that need to
     be immediately triggered.  The correspondance from bits to
@@ -252,22 +252,12 @@ class ActionFlag:
     when to release the GIL.
     """
     def __init__(self):
-        self.__flags = 0
         self._periodic_actions = []
         self._nonperiodic_actions = []
         self.unused_bits = self.FREE_BITS[:]
         self.has_bytecode_counter = False
         self.interesting_bits = 0
         self._rebuild_action_dispatcher()
-
-    # '__flags' is "very private" -- don't access it even from elsewhere
-    # in this class.  The get()/set() accessors are meant to be overriden
-    # by the signal module, if it is used.
-    def get(self):
-        return self.__flags
-
-    def set(self, value):
-        self.__flags = value
 
     def fire(self, action):
         """Request for the action to be run before the next opcode.
@@ -349,6 +339,18 @@ class ActionFlag:
     # the bytecode_counter fits in 20 bits
     CHECK_INTERVAL_MIN = 1
     CHECK_INTERVAL_MAX = BYTECODE_COUNTER_OVERFLOW_BIT
+
+
+class ActionFlag(AbstractActionFlag):
+    """The normal class for space.actionflag.  The signal module provides
+    a different one."""
+    _flags = 0
+
+    def get(self):
+        return self._flags
+
+    def set(self, value):
+        self._flags = value
 
 
 class AsyncAction(object):
