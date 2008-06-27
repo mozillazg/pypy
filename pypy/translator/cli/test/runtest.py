@@ -277,15 +277,22 @@ class CliTest(BaseRtypingTest, OORtypeMixin):
     def _skip_llinterpreter(self, reason, skipLL=True, skipOO=True):
         pass
 
-    def interpret(self, fn, args, annotation=None, backendopt=True, exctrans=False):
+    def _get_backendopt(self, backendopt):
+        if backendopt is None:
+            backendopt = getattr(self, 'backendopt', True) # enable it by default
+        return backendopt
+    
+    def interpret(self, fn, args, annotation=None, backendopt=None, exctrans=False):
+        backendopt = self._get_backendopt(backendopt)
         f = self._compile(fn, args, annotation, backendopt=backendopt, exctrans=exctrans)
         res = f(*args)
         if isinstance(res, ExceptionWrapper):
             raise res
         return res
 
-    def interpret_raises(self, exception, fn, args, backendopt=True, exctrans=False):
+    def interpret_raises(self, exception, fn, args, backendopt=None, exctrans=False):
         import exceptions # needed by eval
+        backendopt = self._get_backendopt(backendopt)
         try:
             self.interpret(fn, args, backendopt=backendopt, exctrans=exctrans)
         except ExceptionWrapper, ex:
