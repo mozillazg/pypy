@@ -386,10 +386,10 @@ class GraphFunction(OOFunction, Function):
             if isinstance(link.last_exception, flowmodel.Variable):
                 # if the code that follows is interested in the class
                 # of the exception, extract it
-                #self.ilasm.dup_jtype(jPyPyThrowable)
+                self.ilasm.dup_jtype(jPyPyThrowable)
                 self.ilasm.store(link.last_exc_value)
-                #self.ilasm.emit(OBJECTGETCLASS)
-                #self.ilasm.store(link.last_exception)
+                self.ilasm.emit(OBJECTGETCLASS)
+                self.ilasm.store(link.last_exception)
             else:
                 self.ilasm.store(link.last_exc_value)
             self._setup_link(link)
