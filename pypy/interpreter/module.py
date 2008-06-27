@@ -71,6 +71,9 @@ class Module(Wrappable):
         name = space.str_w(space.repr(self.w_name))
         if isinstance(self, MixedModule):
             return space.wrap("<module %s (built-in)>" % name)
-        w___file__ = space.getattr(self, space.wrap('__file__'))
-        __file__ = space.str_w(space.repr(w___file__))
+        try:
+            w___file__ = space.getattr(self, space.wrap('__file__'))
+            __file__ = space.str_w(space.repr(w___file__))
+        except OperationError:
+            __file__ = '?'
         return space.wrap("<module %s from %s>" % (name, __file__))
