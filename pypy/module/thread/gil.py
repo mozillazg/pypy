@@ -9,7 +9,7 @@ Global Interpreter Lock.
 
 from pypy.module.thread import ll_thread as thread
 from pypy.module.thread.error import wrap_thread_error
-from pypy.interpreter.miscutils import Action
+from pypy.interpreter.executioncontext import PeriodicAsyncAction
 from pypy.module.thread.threadlocals import OSThreadLocals
 from pypy.rlib.objectmodel import invoke_around_extcall
 from pypy.rlib.rposix import get_errno, set_errno
@@ -17,6 +17,10 @@ from pypy.rlib.rposix import get_errno, set_errno
 class GILThreadLocals(OSThreadLocals):
     """A version of OSThreadLocals that enforces a GIL."""
     ll_GIL = thread.null_ll_lock
+
+    def initialize(self, space):
+        # add the GIL-releasing callback as an action on the space
+        space.actionflag.register_action(GILReleaseAction(space))
 
     def setup_threads(self, space):
         """Enable threads in the object space, if they haven't already been."""
@@ -27,8 +31,6 @@ class GILThreadLocals(OSThreadLocals):
                 raise wrap_thread_error(space, "can't allocate GIL")
             thread.acquire_NOAUTO(self.ll_GIL, True)
             self.enter_thread(space)   # setup the main thread
-            # add the GIL-releasing callback as an action on the space
-            space.pending_actions.append(GILReleaseAction(self))
             result = True
         else:
             result = False      # already set up
@@ -47,25 +49,19 @@ class GILThreadLocals(OSThreadLocals):
         return result
 
     def yield_thread(self):
-        """Notification that the current thread is between two bytecodes:
-        release the GIL for a little while."""
+        thread.yield_thread()  # explicitly release the gil (used by test_gil)
+
+
+class GILReleaseAction(PeriodicAsyncAction):
+    """An action called every sys.checkinterval bytecodes.  It releases
+    the GIL to give some other thread a chance to run.
+    """
+
+    def perform(self, executioncontext):
         # Other threads can run between the release() and the acquire()
         # implicit in the following external function call (which has
         # otherwise no effect).
         thread.yield_thread()
-
-
-class GILReleaseAction(Action):
-    """An action called when the current thread is between two bytecodes
-    (so that it's a good time to yield some time to other threads).
-    """
-    repeat = True
-
-    def __init__(self, threadlocals):
-        self.threadlocals = threadlocals
-
-    def perform(self):
-        self.threadlocals.yield_thread()
 
 
 class SpaceState:
@@ -86,6 +82,7 @@ class SpaceState:
             actionflag.set(flag)
 
 spacestate = SpaceState()
+spacestate._freeze_()
 
 # Fragile code below.  We have to preserve the C-level errno manually...
 
