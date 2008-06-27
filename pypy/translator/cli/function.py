@@ -129,10 +129,10 @@ class Function(OOFunction, Node, CLIBaseGenerator):
         else:
             # the exception value is on the stack, store it in the proper place
             if isinstance(link.last_exception, flowmodel.Variable):
-                #self.ilasm.opcode('dup')
+                self.ilasm.opcode('dup')
                 self.store(link.last_exc_value)
-                #self.ilasm.get_field(('class Object_meta', 'Object', 'meta'))
-                #self.store(link.last_exception)
+                self.ilasm.call_method('[mscorlib]System.Type object::GetType()', virtual=True)
+                self.store(link.last_exception)
             else:
                 self.store(link.last_exc_value)
             self._setup_link(link)
