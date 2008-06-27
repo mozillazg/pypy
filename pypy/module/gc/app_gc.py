@@ -1,17 +1,21 @@
+# NOT_RPYTHON
 
-enabled = [True]
+enabled = True
 
 def isenabled():
-    return enabled[0]
+    global enabled
+    return enabled
 
 def enable():
+    global enabled
     import gc
-    if not enabled[0]:
+    if not enabled:
         gc.enable_finalizers()
-        enabled[0] = True
+        enabled = True
 
 def disable():
+    global enabled
     import gc
-    if enabled[0]:
+    if enabled:
         gc.disable_finalizers()
-        enabled[0] = False
+        enabled = False
