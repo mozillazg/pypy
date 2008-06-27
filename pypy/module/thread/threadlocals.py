@@ -55,11 +55,7 @@ class OSThreadLocals:
                 exit_func, w_obj = ec.thread_exit_funcs.pop()
                 exit_func(w_obj)
         finally:
-            ident = thread.get_ident()
-            try:
-                del self._valuedict[ident]
-            except KeyError:
-                pass
+            self.setvalue(None)
 
     def atthreadexit(self, space, exit_func, w_obj):
         ec = space.getexecutioncontext()
