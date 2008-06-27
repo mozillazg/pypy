@@ -268,7 +268,7 @@ class AbstractActionFlag:
     def register_action(self, action):
         "NOT_RPYTHON"
         assert isinstance(action, AsyncAction)
-        if action.bitmask == 'auto':
+        if action.bitmask == 0:
             while True:
                 action.bitmask = self.unused_bits.pop(0)
                 if not (action.bitmask & self.interesting_bits):
@@ -358,7 +358,7 @@ class AsyncAction(object):
     asynchronously with regular bytecode execution, but that still need
     to occur between two opcodes, not at a completely random time.
     """
-    bitmask = 'auto'
+    bitmask = 0      # means 'please choose one bit automatically'
 
     def __init__(self, space):
         self.space = space
