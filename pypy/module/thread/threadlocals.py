@@ -7,7 +7,6 @@ class OSThreadLocals:
     os_thread.bootstrap()."""
 
     def __init__(self):
-        print 'FRESH NEW THREADLOCALS'
         self._valuedict = {}   # {thread_ident: ExecutionContext()}
         self._mainthreadident = 0
         self._mostrecentkey = 0        # fast minicaching for the common case
@@ -17,19 +16,16 @@ class OSThreadLocals:
         ident = thread.get_ident()
         if ident == self._mostrecentkey:
             result = self._mostrecentvalue
-            print '(cached)',
         else:
             value = self._valuedict.get(ident, None)
             # slow path: update the minicache
             self._mostrecentkey = ident
             self._mostrecentvalue = value
             result = value
-        print '%d => %r' % (ident, result)
         return result
 
     def setvalue(self, value):
         ident = thread.get_ident()
-        print 'SET %d => %r' % (ident, value)
         if value is not None:
             if len(self._valuedict) == 0:
                 self._mainthreadident = ident
@@ -42,7 +38,6 @@ class OSThreadLocals:
         # update the minicache to prevent it from containing an outdated value
         self._mostrecentkey = ident
         self._mostrecentvalue = value
-        print self._valuedict
 
     def getmainthreadvalue(self):
         ident = self._mainthreadident
@@ -51,14 +46,12 @@ class OSThreadLocals:
     def enter_thread(self, space):
         "Notification that the current thread is just starting."
         ec = space.getexecutioncontext()
-        print 'ENTER_THREAD', thread.get_ident(), ec
         ec.thread_exit_funcs = []
 
     def leave_thread(self, space):
         "Notification that the current thread is about to stop."
         try:
             ec = space.getexecutioncontext()
-            print 'LEAVE_THREAD', thread.get_ident(), ec
             while ec.thread_exit_funcs:
                 exit_func, w_obj = ec.thread_exit_funcs.pop()
                 exit_func(w_obj)
