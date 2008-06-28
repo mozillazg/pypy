@@ -9,7 +9,7 @@ from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
     DescrMismatch
 from pypy.interpreter.error import OperationError
 from pypy.tool.sourcetools import compile2, func_with_new_name
-from pypy.rlib.objectmodel import instantiate
+from pypy.rlib.objectmodel import instantiate, we_are_translated
 from pypy.rlib.rarithmetic import intmask
 
 class TypeDef:
@@ -247,12 +247,27 @@ def _builduserclswithfeature(supercls, *features):
         add(Proto)
 
     if "del" in features:
-        parent_destructor = getattr(supercls, '__del__', None)
         class Proto(object):
+            _del_was_called = False
             def __del__(self):
-                call_user_destructor(self.space, self)
-                if parent_destructor is not None:
-                    parent_destructor(self)
+                # the logic below always resurect the objects, so when
+                # running on top of CPython we must manually ensure that
+                # we do it only once
+                if not we_are_translated():
+                    if self._del_was_called:
+                        return
+                    self._del_was_called = True
+                self.clear_all_weakrefs()
+                self.space.user_del_action.register_dying_object(self)
+        # if the base class needs its own interp-level __del__,
+        # we override the _call_builtin_destructor() method to invoke it
+        # after the app-level destructor.
+        parent_destructor = getattr(supercls, '__del__', None)
+        if parent_destructor is not None:
+            def _call_builtin_destructor(self):
+                parent_destructor(self)
+            Proto._call_builtin_destructor = _call_builtin_destructor
+
         add(Proto)
 
     if "slots" in features:
@@ -322,15 +337,6 @@ def check_new_dictionary(space, w_dict):
         assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
     return w_dict
 check_new_dictionary._dont_inline_ = True
-
-def call_user_destructor(space, w_self):
-    w_self.clear_all_weakrefs()
-    try:
-        space.userdel(w_self)
-    except OperationError, e:
-        e.write_unraisable(space, 'method __del__ of ', w_self)
-        e.clear(space)   # break up reference cycles
-call_user_destructor._dont_inline_ = True
 
 # ____________________________________________________________
 
