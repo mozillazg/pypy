@@ -631,6 +631,8 @@ class JitInterpreter(object):
 
     @arguments("red", "green", "fielddesc", returns="red")
     def opimpl_assert_class(self, objbox, gv_class, fielddesc):
+        if isinstance(objbox.content, rcontainer.VirtualStruct):
+            return objbox
         classbox = self.PtrRedBox(gv_class)
         objbox.remember_field(fielddesc, classbox)
         return objbox
