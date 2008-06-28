@@ -363,7 +363,9 @@ class AppTestProxy(object):
     def test_repr(self):
         import _weakref, gc
         for kind in ('ref', 'proxy'):
-            def foobaz(): pass
+            def foobaz():
+                "A random function not returning None."
+                return 42
             w = getattr(_weakref, kind)(foobaz)
             s = repr(w)
             print s
@@ -377,10 +379,10 @@ class AppTestProxy(object):
             try:
                 for i in range(10):
                     if w() is None:
-                        break
+                        break     # only reachable if kind == 'ref'
                     gc.collect()
             except ReferenceError:
-                pass
+                pass    # only reachable if kind == 'proxy'
             s = repr(w)
             print s
             assert "dead" in s
