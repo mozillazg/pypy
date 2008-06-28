@@ -122,7 +122,7 @@ class ReissueSignalAction(AsyncAction):
     thread switch until we land in the main thread.
     """
 
-    def perform(self):
+    def perform(self, executioncontext):
         main_ec = self.space.threadlocals.getmainthreadvalue()
         if executioncontext is main_ec:
             # now running in the main thread: we can really report the signals
