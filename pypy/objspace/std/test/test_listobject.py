@@ -739,13 +739,13 @@ class AppTestW_ListObject:
         assert l[10:] == [0, 1, 2, 3, 4, 6, 7, 8, 9]
 
     def test_mutate_while_extend(self):
-        # this segfaults pypy-c (try py.test -A)
+        # this used to segfault pypy-c (with py.test -A)
         class A(object):
             def __del__(self):
                 print 'del'
                 del lst[:]
-        keepalive = []
         for i in range(10):
+            keepalive = []
             lst = list(str(i)) * 100
             A()
             while lst:
