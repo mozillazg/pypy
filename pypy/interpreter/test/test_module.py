@@ -65,3 +65,6 @@ class AppTest_ModuleObject:
                r.endswith('>')
         nofile = type(_exceptions)('nofile', 'foo')
         assert repr(nofile) == "<module 'nofile' from ?>"
+
+        m = type(_exceptions).__new__(type(_exceptions))
+        assert repr(m).startswith("<module '?'")
