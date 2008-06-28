@@ -69,7 +69,10 @@ class Module(Wrappable):
 
     def descr_module__repr__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
-        name = space.str_w(space.repr(self.w_name))
+        if self.w_name is not None:
+            name = space.str_w(space.repr(self.w_name))
+        else:
+            name = "'?'"
         if isinstance(self, MixedModule):
             return space.wrap("<module %s (built-in)>" % name)
         try:
