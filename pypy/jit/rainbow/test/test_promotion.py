@@ -499,6 +499,19 @@ class BaseTestPromotion(InterpretationTest):
         self.check_insns(malloc=0)
         self.check_insns(new=0)
 
+    def test_promote_class_vstruct(self):
+        class A:
+            def m(self):
+                return 42
+
+        def ll_function():
+            x = A()
+            y = hint(x, promote_class=True)
+            return y.m()
+        res = self.interpret(ll_function, [], [])
+        assert res == 42
+        self.check_insns(malloc=0)
+        self.check_insns(new=0)
 
 class TestLLType(BaseTestPromotion):
     type_system = "lltype"
