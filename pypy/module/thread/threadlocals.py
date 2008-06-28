@@ -15,13 +15,14 @@ class OSThreadLocals:
     def getvalue(self):
         ident = thread.get_ident()
         if ident == self._mostrecentkey:
-            return self._mostrecentvalue
+            result = self._mostrecentvalue
         else:
             value = self._valuedict.get(ident, None)
             # slow path: update the minicache
             self._mostrecentkey = ident
             self._mostrecentvalue = value
-            return value
+            result = value
+        return result
 
     def setvalue(self, value):
         ident = thread.get_ident()
