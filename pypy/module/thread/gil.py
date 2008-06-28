@@ -101,3 +101,10 @@ def after_external_call():
     spacestate.after_thread_switch()
     set_errno(e)
 after_external_call._gctransformer_hint_cannot_collect_ = True
+
+# The _gctransformer_hint_cannot_collect_ hack is needed for
+# translations in which the *_external_call() functions are not inlined.
+# They tell the gctransformer not to save and restore the local GC
+# pointers in the shadow stack.  This is necessary because the GIL is
+# not held after the call to before_external_call() or before the call
+# to after_external_call().
