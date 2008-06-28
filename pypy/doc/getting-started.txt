@@ -54,6 +54,7 @@ After checkout you can get a PyPy interpreter via::
     python pypy-dist/pypy/bin/py.py
 
 have fun :-) 
+Note that you will need a C compiler that is supported by CPython's distutils.
 This gives you a PyPy prompt, i.e. a very compliant Python
 interpreter implemented in Python.  PyPy passes around `98% of
 CPythons core language regression tests`_.  Because this invocation of
@@ -140,7 +141,8 @@ Main entry point
 The py.py interpreter
 +++++++++++++++++++++
 
-To start interpreting Python with PyPy, use Python 2.4 or greater::
+To start interpreting Python with PyPy, install a C compiler that is
+supported by distutils and use Python 2.4 or greater to run PyPy::
 
     cd pypy
     python bin/py.py
