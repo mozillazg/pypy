@@ -7,7 +7,7 @@ class AppTestWeakref(object):
                     
     def test_simple(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a = A()
         assert _weakref.getweakrefcount(a) == 0
@@ -21,7 +21,7 @@ class AppTestWeakref(object):
 
     def test_callback(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a1 = A()
         a2 = A()
@@ -37,7 +37,7 @@ class AppTestWeakref(object):
 
     def test_callback_order(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a1 = A()
         a2 = A()
@@ -53,7 +53,7 @@ class AppTestWeakref(object):
         
     def test_dont_callback_if_weakref_dead(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a1 = A()
         a1.x = 40
@@ -72,7 +72,7 @@ class AppTestWeakref(object):
 
     def test_callback_cannot_ressurect(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a = A()
         alive = A()
@@ -87,7 +87,7 @@ class AppTestWeakref(object):
 
     def test_weakref_reusing(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a = A()
         ref1 = _weakref.ref(a)
@@ -100,7 +100,7 @@ class AppTestWeakref(object):
 
     def test_correct_weakrefcount_after_death(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a = A()
         ref1 = _weakref.ref(a)
@@ -115,7 +115,7 @@ class AppTestWeakref(object):
 
     def test_weakref_equality(self):
         import _weakref, gc
-        class A:
+        class A(object):
             def __eq__(self, other):
                 return True
         a1 = A()
@@ -134,7 +134,7 @@ class AppTestWeakref(object):
 
     def test_getweakrefs(self):
         import _weakref, gc
-        class A:
+        class A(object):
             pass
         a = A()
         assert _weakref.getweakrefs(a) == []
@@ -332,7 +332,7 @@ class AppTestProxy(object):
 
     def test_callable_proxy_type(self):
         import _weakref, gc
-        class Callable:
+        class Callable(object):
             def __call__(self, x):
                 pass
         o = Callable()
