@@ -1030,6 +1030,19 @@ class SimpleTests(InterpretationTest):
         assert res == 44
         self.check_insns({'int_mul': 1, 'int_add': 1, 'int_sub': 1})
 
+    def test_yellow_meth_with_green_result(self):
+        class A:
+            def m(self):
+                return 42
+
+        def fn():
+            x = A()
+            return x.m()
+        res = self.interpret(fn, [])
+        assert res == 42
+        self.check_insns(malloc=0)
+        self.check_insns(new=0)
+
     def test_green_red_mismatch_in_call(self):
         def add(a,b, u):
             return a+b
@@ -1912,7 +1925,6 @@ class SimpleTests(InterpretationTest):
             return isinstance(obj, B)
         res = self.interpret(fn, [True], [], policy=StopAtXPolicy(g))
         assert res
-
 
     def test_manymanyvars(self):
 

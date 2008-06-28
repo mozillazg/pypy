@@ -988,10 +988,10 @@ class BytecodeWriter(object):
         from pypy.rpython.lltypesystem.rclass import OBJECT
         from pypy.rpython.ootypesystem.rclass import OBJECT
         # TODO write tests for these cases
-##        if arg.concretetype is lltype.Void:
+##        if v_obj.concretetype is lltype.Void:
 ##            return
-##        if self.varcolor(arg) == "green":
-##            self.register_greenvar(result, self.green_position(arg))
+##        if self.varcolor(v_obj) == "green":
+##            self.register_greenvar(result, self.green_position(v_obj))
 ##            return
         v_class = op.args[2]
         self.emit("promote")
@@ -1859,12 +1859,19 @@ class OOTypeBytecodeWriter(BytecodeWriter):
         self.emit(*emitted_args)
         methnameindex = self.string_position(name)
         self.emit(methnameindex)
+        result_color = self.varcolor(op.result)
         if kind == 'yellow':
-            self.emit("yellow_retrieve_result_as_red")
-            self.emit(self.type_position(op.result.concretetype))
-            
+            if result_color == 'red':
+                self.emit("yellow_retrieve_result_as_red")
+                self.emit(self.type_position(op.result.concretetype))
+            else:
+                self.emit("yellow_retrieve_result")
+
         if has_result:
-            self.register_redvar(op.result)
+            if result_color == 'red':
+                self.register_redvar(op.result)
+            else:
+                self.register_greenvar(op.result)
 
         self.emit(label(("after oosend", op)))
 
