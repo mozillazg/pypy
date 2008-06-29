@@ -12,6 +12,9 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 import py
 import os
 
+
+DEBUG = False # writes dlerror() messages to stderr
+
 _MS_WINDOWS = os.name == "nt"
 
 if _MS_WINDOWS:
@@ -186,16 +189,23 @@ if not _MS_WINDOWS:
             return ""
         return rffi.charp2str(res)
 
-    def dlopen(name):
+    def dlopen(name, mode=-1):
         """ Wrapper around C-level dlopen
         """
-        if RTLD_LOCAL is not None:
-            mode = RTLD_LOCAL | RTLD_NOW
-        else:
-            mode = RTLD_NOW
+        if mode == -1:
+            if RTLD_LOCAL is not None:
+                mode = RTLD_LOCAL | RTLD_NOW
+            else:
+                mode = RTLD_NOW
         res = c_dlopen(name, rffi.cast(rffi.INT, mode))
         if not res:
-            raise OSError(-1, dlerror())
+            err = dlerror()
+            # because the message would be lost in a translated program (OSError only has an errno),
+            # we offer a way to write it to stderr
+            if DEBUG:
+                import os
+                os.write(2, err)
+            raise OSError(-1, err)
         return res
 
     dlclose = c_dlclose
@@ -514,20 +524,18 @@ class FuncPtr(AbstractFuncPtr):
 
 class CDLL:
     flags = FUNCFLAG_CDECL
-    
-    def __init__(self, libname):
-        self.ll_libname = lltype.nullptr(rffi.CCHARP.TO)
+
+    def __init__(self, libname, unload_on_finalization=True):
+        self.unload_on_finalization = unload_on_finalization
         self.lib = lltype.nullptr(rffi.CCHARP.TO)
-        self.ll_libname = rffi.str2charp(libname)
-        self.lib = dlopen(self.ll_libname)
+        ll_libname = rffi.str2charp(libname)
+        self.lib = dlopen(ll_libname)
+        lltype.free(ll_libname, flavor='raw')
 
     def __del__(self):
-        if self.lib:
+        if self.lib and self.unload_on_finalization:
             dlclose(self.lib)
             self.lib = lltype.nullptr(rffi.CCHARP.TO)
-        if self.ll_libname:
-            lltype.free(self.ll_libname, flavor='raw')
-            self.ll_libname = lltype.nullptr(rffi.CCHARP.TO)
 
     def getpointer(self, name, argtypes, restype):
         # these arguments are already casted to proper ffi
