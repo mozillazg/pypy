@@ -286,7 +286,8 @@ for _name in 'short int long'.split():
     for name in (_name, 'unsigned ' + _name):
         TYPES.append(name)
 TYPES += ['signed char', 'unsigned char',
-          'long long', 'unsigned long long', 'size_t']
+          'long long', 'unsigned long long',
+          'size_t', 'time_t']
 if os.name != 'nt':
     TYPES.append('mode_t')
     TYPES.append('pid_t')
@@ -331,6 +332,7 @@ platform.numbertype_to_rclass[lltype.Signed] = int     # avoid "r_long" for comm
 #        LONGLONG       r_longlong
 #        ULONGLONG      r_ulonglong
 #        SIZE_T         r_size_t
+#        TIME_T         r_time_t
 # --------------------------------------------------------------------
 # Note that rffi.r_int is not necessarily the same as
 # rarithmetic.r_int, etc!  rffi.INT/r_int correspond to the C-level
