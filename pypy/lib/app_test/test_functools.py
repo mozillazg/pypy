@@ -119,7 +119,6 @@ class TestPartial:
         py.test.raises(ZeroDivisionError, self.thetype(f, y=0), 1)
 
     def test_attributes(self):
-        py.test.skip("Unsupported")
         p = self.thetype(hex)
         try:
             del p.__dict__
@@ -129,7 +128,6 @@ class TestPartial:
             raise AssertionError, 'partial object allowed __dict__ to be deleted'
 
     def test_weakref(self):
-        py.test.skip("unsupported")
         f = self.thetype(int, base=16)
         p = proxy(f)
         assert f.func == p.func
@@ -143,12 +141,12 @@ class TestPartial:
         join = self.thetype(''.join)
         assert join(data) == '0123456789'
 
-#class PartialSubclass(functools.partial):
-#    pass
+class PartialSubclass(functools.partial):
+    pass
 
-#class TestPartialSubclass(TestPartial):
+class TestPartialSubclass(TestPartial):
 
-#    thetype = PartialSubclass
+    thetype = PartialSubclass
 
 
 class TestPythonPartial(TestPartial):
@@ -214,7 +212,6 @@ class TestUpdateWrapper:
         assert wrapper.dict_attr == f.dict_attr
 
     def test_builtin_update(self):
-        py.test.skip("Unsupported")
         # Test for bug #1576241
         def wrapper():
             pass
