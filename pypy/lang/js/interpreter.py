@@ -50,7 +50,7 @@ class W_ObjectObject(W_NativeObject):
             return args[0].ToObject(ctx)
         else:
             obj = create_object(ctx, u'Object', Value = w_Null)
-            Object = ctx.get_global().Get(ctx, 'Object')
+            Object = ctx.get_global().Get(ctx, u'Object')
             obj.propdict[u'prototype'] = Property(u'prototype', Object, DE | DD | RO)
             obj.propdict[u'__proto__'] = Property(u'prototype', Object, DE | DD | RO)
             return obj
