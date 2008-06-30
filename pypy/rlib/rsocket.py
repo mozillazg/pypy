@@ -587,10 +587,10 @@ class RSocket(object):
             rffi.setintfield(tv, 'c_tv_sec', int(timeout))
             rffi.setintfield(tv, 'c_tv_usec', int((timeout-int(timeout))
                                                   * 1000000))
-            fds = rffi.make(_c.fd_set)
-            rffi.setintfield(fds, 'c_fd_count', 1)
-            fds.c_fd_array[0] = rffi.cast(_c.socketfd_type, self.fd)
-            null = lltype.nullptr(_c.fd_set)
+            fds = rffi.malloc(_c.fd_set.TO, flavor='raw')
+            _c.FD_ZERO(fds)
+            _c.FD_SET(self.fd, fds)
+            null = lltype.nullptr(_c.fd_set.TO)
             if for_writing:
                 n = _c.select(self.fd + 1, null, fds, null, tv)
             else:

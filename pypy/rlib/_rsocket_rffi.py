@@ -53,8 +53,7 @@ if _MS_WINDOWS:
     COND_HEADER = ''
 constants = {}
 
-if _POSIX:
-    sources = ["""
+sources = ["""
     void pypy_macro_wrapper_FD_SET(int fd, fd_set *set)
     {
         FD_SET(fd, set);
@@ -73,13 +72,16 @@ if _POSIX:
     }
     """]
 
-else:
-    sources = []
 eci = ExternalCompilationInfo(
     post_include_bits = [HEADER, COND_HEADER],
     includes = includes,
     libraries = libraries,
     separate_module_sources = sources,
+    export_symbols = ['pypy_macro_wrapper_FD_ZERO',
+                      'pypy_macro_wrapper_FD_SET',
+                      'pypy_macro_wrapper_FD_CLR',
+                      'pypy_macro_wrapper_FD_ISSET',
+                      ],
 )
 
 class CConfig:
@@ -304,13 +306,7 @@ CConfig.timeval = platform.Struct('struct timeval',
                                          [('tv_sec', rffi.LONG),
                                           ('tv_usec', rffi.LONG)])
 
-if _MS_WINDOWS:
-    CConfig.fd_set = platform.Struct('struct fd_set',
-                                     [('fd_count', rffi.UINT),
-                                      # XXX use FD_SETSIZE
-                                      ('fd_array', rffi.CFixedArray(socketfd_type, 64))])
-else:
-    fd_set = rffi.COpaquePtr('fd_set', compilation_info=eci)
+fd_set = rffi.COpaquePtr('fd_set', compilation_info=eci)
 
 if _MS_WINDOWS:
     CConfig.WSAData = platform.Struct('struct WSAData',
@@ -400,8 +396,6 @@ if MS_WINDOWS:
     WSAEVENT = cConfig.WSAEVENT
     WSANETWORKEVENTS = cConfig.WSANETWORKEVENTS
 timeval = cConfig.timeval
-if _MS_WINDOWS:
-    fd_set = cConfig.fd_set
 
 #if _POSIX:
 #    includes = list(includes)
@@ -414,6 +408,10 @@ if _MS_WINDOWS:
 def external(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci,
                            calling_conv=calling_conv)
+
+def external_c(name, args, result):
+    return rffi.llexternal(name, args, result, compilation_info=eci,
+                           calling_conv='c')
 
 if _POSIX:
     dup = external('dup', [socketfd_type], socketfd_type)
@@ -503,25 +501,22 @@ if _MS_WINDOWS:
                            [socketfd_type, rffi.LONG, rffi.ULONGP],
                            rffi.INT)
 
+select = external('select',
+                  [rffi.INT, fd_set, fd_set,
+                   fd_set, lltype.Ptr(timeval)],
+                  rffi.INT)
+
+FD_CLR = external_c('pypy_macro_wrapper_FD_CLR', [rffi.INT, fd_set], lltype.Void)
+FD_ISSET = external_c('pypy_macro_wrapper_FD_ISSET', [rffi.INT, fd_set], rffi.INT)
+FD_SET = external_c('pypy_macro_wrapper_FD_SET', [rffi.INT, fd_set], lltype.Void)
+FD_ZERO = external_c('pypy_macro_wrapper_FD_ZERO', [fd_set], lltype.Void)
+
 if _POSIX:
     pollfdarray = rffi.CArray(pollfd)
     poll = external('poll', [lltype.Ptr(pollfdarray), nfds_t, rffi.INT],
                     rffi.INT)
-    select = external('select',
-                      [rffi.INT, fd_set, fd_set,
-                       fd_set, lltype.Ptr(timeval)],
-                      rffi.INT)
-    
-    FD_CLR = external('pypy_macro_wrapper_FD_CLR', [rffi.INT, fd_set], lltype.Void)
-    FD_ISSET = external('pypy_macro_wrapper_FD_ISSET', [rffi.INT, fd_set], rffi.INT)
-    FD_SET = external('pypy_macro_wrapper_FD_SET', [rffi.INT, fd_set], lltype.Void)
-    FD_ZERO = external('pypy_macro_wrapper_FD_ZERO', [fd_set], lltype.Void)
     
 elif MS_WINDOWS:
-    select = external('select',
-                      [rffi.INT, lltype.Ptr(fd_set), lltype.Ptr(fd_set),
-                       lltype.Ptr(fd_set), lltype.Ptr(timeval)],
-                      rffi.INT)
     #
     # The following is for pypy.rlib.rpoll
     #
