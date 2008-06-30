@@ -9,6 +9,6 @@ function fib(n) {
     return fib(n-2) + fib(n-1);
 }
 
-var n = arguments[0];
+var n = 32;
 print(fib(n));
 

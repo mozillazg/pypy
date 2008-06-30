@@ -5,7 +5,7 @@
 // modified by Isaac Gouy
 
 var i, c = 0;
-var n = arguments[0];
+var n = 600000;
 
 var X = new Object();
 for (i=1; i<=n; i++) {

@@ -6,12 +6,12 @@ function TreeNode(left,right,item){
    this.left = left;
    this.right = right;
    this.item = item;
-}
+};
 
 TreeNode.prototype.itemCheck = function(){
    if (this.left==null) return this.item;
    else return this.item + this.left.itemCheck() - this.right.itemCheck();
-}
+};
 
 function bottomUpTree(item,depth){
    if (depth>0){
@@ -28,8 +28,12 @@ function bottomUpTree(item,depth){
 
 
 var minDepth = 4;
-var n = arguments[0];
-var maxDepth = Math.max(minDepth + 2, n);
+var n = 12;
+if(minDepth+2 >= n)
+	maxDepth = minDepth+2;
+else
+	maxDepth = n;
+
 var stretchDepth = maxDepth + 1;
 
 var check = bottomUpTree(0,stretchDepth).itemCheck();

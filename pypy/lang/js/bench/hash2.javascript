@@ -4,7 +4,7 @@
 // contributed by David Hedbor
 // modified by Isaac Gouy
 
-var n = arguments[0];
+var n = 10;
 var hash1 = Object();
 var hash2 = Object();
 var arr = Array(10000);

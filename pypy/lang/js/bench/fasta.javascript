@@ -24,14 +24,14 @@ var IUB = {
   B:0.02, D:0.02, H:0.02, K:0.02,
   M:0.02, N:0.02, R:0.02, S:0.02,
   V:0.02, W:0.02, Y:0.02
-}
+};
 
 var HomoSap = {
   a: 0.3029549426680,
   c: 0.1979883004921,
   g: 0.1975473066391,
   t: 0.3015094502008
-}
+};
 
 function makeCumulative(table) {
   var last = null;
@@ -76,13 +76,13 @@ function fastaRandom(n, table) {
   }
 }
 
-var n = arguments[0]
+var n = 45000;
 
-print(">ONE Homo sapiens alu")
-fastaRepeat(2*n, ALU)
+print(">ONE Homo sapiens alu");
+fastaRepeat(2*n, ALU);
 
-print(">TWO IUB ambiguity codes")
-fastaRandom(3*n, IUB)
+print(">TWO IUB ambiguity codes");
+fastaRandom(3*n, IUB);
 
-print(">THREE Homo sapiens frequency")
-fastaRandom(5*n, HomoSap)
+print(">THREE Homo sapiens frequency");
+fastaRandom(5*n, HomoSap);

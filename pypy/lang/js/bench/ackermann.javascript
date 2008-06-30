@@ -11,5 +11,5 @@ function ack(m, n) {
       : ack(m - 1, ack(m, n - 1))));
 }
 
-var n = arguments[0];
+var n = 6;
 print("ack(3, " + n + "): " + ack(3, n));
