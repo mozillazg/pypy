@@ -1,17 +1,13 @@
+"""functools.py - Tools for working with functions and callable objects
+"""
+# Python module wrapper for _functools C module
+# to allow utilities written in Python to be added
+# to the functools module.
+# Written by Nick Coghlan <ncoghlan at gmail.com>
+#   Copyright (C) 2006 Python Software Foundation.
+# See C source code for _functools credits/copyright
 
-def partial_func(func, *args, **keywords):
-    def newfunc(*fargs, **fkeywords):
-        newkeywords = keywords.copy()
-        newkeywords.update(fkeywords)
-        return func(*(args + fargs), **newkeywords)
-    newfunc.func = func
-    newfunc.args = args
-    newfunc.keywords = keywords
-    newfunc.__doc__ = getattr(func, '__doc__', '')
-    return newfunc
-
-partial = staticmethod(partial_func)
-
+from _functools import partial
 from __builtin__ import reduce
 
 # update_wrapper() and wraps() are tools to help write
@@ -52,5 +48,5 @@ def wraps(wrapped,
        This is a convenience function to simplify applying partial() to
        update_wrapper().
     """
-    return partial_func(update_wrapper, wrapped=wrapped,
-                        assigned=assigned, updated=updated)
+    return partial(update_wrapper, wrapped=wrapped,
+                   assigned=assigned, updated=updated)
