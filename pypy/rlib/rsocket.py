@@ -587,7 +587,7 @@ class RSocket(object):
             rffi.setintfield(tv, 'c_tv_sec', int(timeout))
             rffi.setintfield(tv, 'c_tv_usec', int((timeout-int(timeout))
                                                   * 1000000))
-            fds = rffi.malloc(_c.fd_set.TO, flavor='raw')
+            fds = lltype.malloc(_c.fd_set.TO, flavor='raw')
             _c.FD_ZERO(fds)
             _c.FD_SET(self.fd, fds)
             null = lltype.nullptr(_c.fd_set.TO)
