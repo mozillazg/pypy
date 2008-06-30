@@ -62,5 +62,5 @@ function fannkuch(n) {
    }
 }
 
-var n = arguments[0];
+var n = 8;
 print("Pfannkuchen(" + n + ") = " + fannkuch(n));

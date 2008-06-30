@@ -6,7 +6,7 @@
 
 var i, k;
 
-var n = arguments[0];
+var n = 1;
 var x = Array(n);
 var y = Array(n);
 

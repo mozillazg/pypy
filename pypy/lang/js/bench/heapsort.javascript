@@ -10,7 +10,7 @@ var IC = 29573;
 
 var last = 42;
 
-function gen_random(max) { return(max * (last = (last * IA + IC) % IM) / IM); }
+function gen_random(max) { return(max * (last = (last * IA + IC) % IM) / IM); };
 
 function heapsort(n, ra) {
     var l, j, ir, i;
@@ -42,16 +42,16 @@ function heapsort(n, ra) {
         }
         ra[i] = rra;
     }
-}
+};
 
 
-var n = arguments[0];
+var n = 1000;
 var ary, i;
     
 // create an array of N random floats
 ary = Array(n+1);
 for (i=1; i<=n; i++) {
   ary[i] = gen_random(1.0);
-}
+};
 heapsort(n, ary);
 print(ary[n].toFixed(10));

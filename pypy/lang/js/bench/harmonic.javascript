@@ -3,7 +3,8 @@
 //
 // contributed by Isaac Gouy 
 
-var n = arguments[0], partialSum = 0.0;
+var n = 10000000;
+var partialSum = 0.0;
 for (var d = 1; d <= n; d++) partialSum += 1.0/d;
-print(partialSum.toFixed(9));
+print(partialSum);
 
