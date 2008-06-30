@@ -115,6 +115,7 @@ class JSInterpreter(code.InteractiveConsole):
               ' '*exc.source_pos.columnno + \
               '^'
         print 'Syntax Error'
+        print exc.nice_error_message()
 
     def interact(self, banner=None):
         if banner is None:
