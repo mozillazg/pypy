@@ -31,6 +31,16 @@ class AppTest_DictMultiObject(test_dictobject.AppTest_DictObject):
     def test_emptydict_unhashable(self):
         raises(TypeError, "{}[['x']]")
 
+    def test_string_subclass_via_setattr(self):
+        skip("issue383")
+        class S(str):
+            def __hash__(self):
+                return 123
+        s = S("abc")
+        setattr(s, s, 42)
+        assert s.__dict__.keys()[0] is s
+        assert getattr(s, s) == 42
+
 
 class TestW_DictSharing(test_dictobject.TestW_DictObject):
     def setup_class(cls):
