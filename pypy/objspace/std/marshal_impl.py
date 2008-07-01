@@ -459,25 +459,6 @@ def unmarshal_Unicode(space, u, tc):
     return PyUnicode_DecodeUTF8(space, space.wrap(u.get_str()))
 register(TYPE_UNICODE, unmarshal_Unicode)
 
-# not directly supported:
-def marshal_w_buffer(space, w_buffer, m):
-    s = space.str_w(space.str(w_buffer))
-    m.atom_str(TYPE_UNKNOWN, s)
-
-handled_by_any.append( ('buffer', marshal_w_buffer) )
-
-app = gateway.applevel(r'''
-    def string_to_buffer(s):
-        return buffer(s)
-''')
-
-string_to_buffer = app.interphook('string_to_buffer')
-
-def unmarshal_buffer(space, u, tc):
-    w_s = space.wrap(u.get_str())
-    return string_to_buffer(space, w_s)
-register(TYPE_UNKNOWN, unmarshal_buffer)
-
 app = gateway.applevel(r'''
     def set_to_list(theset):
         return [item for item in theset]
@@ -528,8 +509,19 @@ def marshal_w__ANY(space, w_obj, m):
         w_t = space.builtin.get(name)
         if space.is_true(space.issubtype(w_type, w_t)):
             func(space, w_obj, m)
-            break
+            return
+
+    # any unknown object implementing the buffer protocol is
+    # accepted and encoded as a plain string
+    try:
+        s = space.bufferstr_w(w_obj)
+    except OperationError, e:
+        if not e.match(space, space.w_TypeError):
+            raise
     else:
-        raise_exception(space, "unmarshallable object")
+        m.atom_str(TYPE_STRING, s)
+        return
+
+    raise_exception(space, "unmarshallable object")
 
 register_all(vars())
