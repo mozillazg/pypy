@@ -263,7 +263,7 @@ class AppTestSysModulePortedFromCPython:
     def test_setcheckinterval(self):
         raises(TypeError, sys.setcheckinterval)
         orig = sys.getcheckinterval()
-        for n in 1, 100, 120, orig: # orig last to restore starting state
+        for n in 0, 100, 120, orig: # orig last to restore starting state
             sys.setcheckinterval(n)
             assert sys.getcheckinterval() == n
 
