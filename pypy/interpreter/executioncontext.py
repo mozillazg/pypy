@@ -295,6 +295,7 @@ class AbstractActionFlag:
         # force the tick counter to a valid value -- this actually forces
         # it to reach BYTECODE_COUNTER_OVERFLOW_BIT at the next opcode.
         ticker = self.get()
+        ticker &= ~ self.BYTECODE_COUNTER_OVERFLOW_BIT
         ticker |= self.BYTECODE_COUNTER_MASK
         self.set(ticker)
 
@@ -309,10 +310,11 @@ class AbstractActionFlag:
                 ticker = self.get()
                 if ticker & self.BYTECODE_COUNTER_OVERFLOW_BIT:
                     # We must run the periodic actions now, but first
-                    # reset the bytecode counter (the following logic
-                    # works because the BYTECODE_COUNTER_OVERFLOW_BIT
-                    # is currently set)
-                    ticker &= ~ self.BYTECODE_COUNTER_MASK
+                    # reset the bytecode counter (the following line
+                    # works by assuming that we just overflowed the
+                    # counter, i.e. BYTECODE_COUNTER_OVERFLOW_BIT is
+                    # set but none of the BYTECODE_COUNTER_MASK bits
+                    # are).
                     ticker -= ec.space.sys.checkinterval
                     self.set(ticker)
                     for action in periodic_actions:
