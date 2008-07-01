@@ -91,7 +91,7 @@ def try_import_mod(space, w_modulename, filepart, w_parent, w_name, pkgdir=None)
     e = None
     if modtype == PYFILE:
         filename = filepart + ".py"
-        stream = streamio.open_file_as_stream(filename, "r")
+        stream = streamio.open_file_as_stream(filename, "rU")
     else:
         assert modtype == PYCFILE
         filename = filepart + ".pyc"

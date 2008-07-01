@@ -57,6 +57,9 @@ def setup_directory_structure(space):
                         "sys.modules[__name__] = pkg_substituted")
     setuppkg("pkg_substituted", mod='')
     p = setuppkg("readonly", x='')
+    p = setuppkg("pkg_univnewlines")
+    p.join('__init__.py').write('a=5\nb=6\rc="""hello\r\nworld"""\r')
+    p.join('mod.py').write('a=15\nb=16\rc="""foo\r\nbar"""\r')
 
     # create compiled/x.py and a corresponding pyc file
     p = setuppkg("compiled", x = "x = 84")
@@ -257,6 +260,16 @@ class AppTestImport:
         exec "__name__ = None; import sys" in glob
         import sys
         assert glob['sys'] is sys
+
+    def test_universal_newlines(self):
+        import pkg_univnewlines
+        assert pkg_univnewlines.a == 5
+        assert pkg_univnewlines.b == 6
+        assert pkg_univnewlines.c == "hello\nworld"
+        from pkg_univnewlines import mod
+        assert mod.a == 15
+        assert mod.b == 16
+        assert mod.c == "foo\nbar"
 
 def _getlong(data):
     x = marshal.dumps(data)
