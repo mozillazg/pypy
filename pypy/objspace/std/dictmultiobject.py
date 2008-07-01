@@ -154,7 +154,8 @@ class EmptyDictImplementation(DictImplementation):
 
     def get(self, w_lookup):
         space = self.space
-        if not _is_str(space, w_lookup) and not _is_sane_hash(space, w_lookup):
+        if not _is_str(space, w_lookup) and not _is_sane_hash(space,
+                                                        space.type(w_lookup)):
             # give hash a chance to raise an exception
             space.hash(w_lookup)
         return None
@@ -177,7 +178,8 @@ class EmptyDictImplementation(DictImplementation):
 
     def delitem(self, w_key):
         space = self.space
-        if not _is_str(space, w_key) and not _is_sane_hash(space, w_key):
+        if not _is_str(space, w_key) and not _is_sane_hash(space,
+                                                           space.type(w_key)):
             # count hash
             space.hash(w_key)
         raise KeyError
