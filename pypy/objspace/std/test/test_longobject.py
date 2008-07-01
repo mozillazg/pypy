@@ -97,7 +97,6 @@ class AppTestLong:
                 assert y < r <= 0
         for x in [-1L, 0L, 1L, 2L ** 100 - 1, -2L ** 100 - 1]:
             for y in [-105566530L, -1L, 1L, 1034522340L]:
-                continue
                 print "checking division for %s, %s" % (x, y)
                 check_division(x, y)
         # special case from python tests:
