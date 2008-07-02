@@ -101,85 +101,29 @@ def llexternal(name, args, result, _callable=None,
         # sandboxsafe is a hint for "too-small-ness" (e.g. math functions).
         invoke_around_handlers = not sandboxsafe
 
-    unrolling_arg_tps = unrolling_iterable(enumerate(args))
-
-    def decode_args(*args):
-        """Decode the arguments passed to the external function,
-        automatically normalizing to the exact low-level types.
-        """
-        # XXX the next line is a workaround for the annotation bug
-        # shown in rpython.test.test_llann:test_pbctype.  Remove it
-        # when the test is fixed...
-        assert isinstance(lltype.Signed, lltype.Number)
-        real_args = ()
-        to_free = ()
-        for i, TARGET in unrolling_arg_tps:
-            arg = args[i]
-            freeme = None
-            if TARGET == CCHARP:
-                if arg is None:
-                    arg = lltype.nullptr(CCHARP.TO)   # None => (char*)NULL
-                    freeme = arg
-                elif isinstance(arg, str):
-                    arg = str2charp(arg)
-                    # XXX leaks if a str2charp() fails with MemoryError
-                    # and was not the first in this function
-                    freeme = arg
-            elif _isfunctype(TARGET) and not _isllptr(arg):
-                # XXX pass additional arguments
-                if invoke_around_handlers:
-                    arg = llhelper(TARGET, _make_wrapper_for(TARGET, arg,
-                                                             aroundstate))
-                else:
-                    arg = llhelper(TARGET, _make_wrapper_for(TARGET, arg))
-            else:
-                SOURCE = lltype.typeOf(arg)
-                if SOURCE != TARGET:
-                    if TARGET is lltype.Float:
-                        arg = float(arg)
-                    elif ((isinstance(SOURCE, lltype.Number)
-                           or SOURCE is lltype.Bool)
-                      and (isinstance(TARGET, lltype.Number)
-                           or TARGET is lltype.Bool)):
-                        arg = cast(TARGET, arg)
-            real_args = real_args + (arg,)
-            to_free = to_free + (freeme,)
-        return real_args, to_free
-    decode_args._annspecialcase_ = 'specialize:ll'
-    decode_args._always_inline_ = True
-
-    def decode_result(res, *to_free):
-        """Decode the result returned by the low-level function,
-        automatically normalizing it to a common RPython type
-        and freeing temporary values.
-        """
-        for i, TARGET in unrolling_arg_tps:
-            if to_free[i]:
-                lltype.free(to_free[i], flavor='raw')
-        if rarithmetic.r_int is not r_int:
-            if result is INT:
-                return cast(lltype.Signed, res)
-            elif result is UINT:
-                return cast(lltype.Unsigned, res)
-        return res
-    decode_result._annspecialcase_ = 'specialize:ll'
-    decode_result._always_inline_ = True
-
     # The actual wrapper is generated code in order to avoid *args.  The
     # issue is that if malloc-removal is not performed, we cannot write
     # a call to 'funcptr(*real_args)' because this needs to read values
     # from the GC-managed tuple 'real_args', which we cannot do between
     # before() and after() calls.
-
-    argnames = ', '.join(['a%d' % i for i in range(len(args))])
-    if len(args):
-        unpackargnames = '(' + argnames + ',)'
+    argnames =     ', '.join(['a%d' % i for i in range(len(args))])
+    realargnames = ', '.join(['r%d' % i for i in range(len(args))])
+    decode_lines = [
+        'r%d = _decode_arg(ARGS[%d], a%d, tag_invoke_around_handlers)'
+        % (i, i, i) for i in range(len(args))]
+    decode_lines = '; '.join(decode_lines)
+    free_lines = [
+        '_maybe_free_arg(ARGS[%d], a%d, r%d)'
+        % (i, i, i) for i in range(len(args))]
+    free_lines = '; '.join(free_lines)
+    if invoke_around_handlers:
+        tag_invoke_around_handlers = _tagged_true
     else:
-        unpackargnames = '_'
+        tag_invoke_around_handlers = _tagged_false
 
     source = py.code.Source("""
         def wrapper(%(argnames)s):
-            %(unpackargnames)s, to_free = decode_args(%(argnames)s)
+            %(decode_lines)s
             if invoke_around_handlers:
                 before = aroundstate.before
                 after = aroundstate.after
@@ -190,17 +134,26 @@ def llexternal(name, args, result, _callable=None,
                 # and the end of the function, so that the external function
                 # calls below don't need to be guarded by GC shadow stack logic
                 # that would crash if not protected by the GIL!
-            res = funcptr(%(argnames)s)
+            res = funcptr(%(realargnames)s)
             if invoke_around_handlers:
                 if after: after()
-            return decode_result(res, *to_free)
+            %(free_lines)s
+            return _decode_result(RESULT, res)
     """ % locals())
 
-    miniglobals = {'decode_args':            decode_args,
+    # xxx workaround workaround: to avoid strange annotation issues,
+    # make one version of _decode_arg for each wrapper
+    my_decode_arg = func_with_new_name(_decode_arg, 'decode_arg')
+    my_maybe_free_arg = func_with_new_name(_maybe_free_arg, 'maybe_free_arg')
+    miniglobals = {'ARGS':                   args,
+                   'RESULT':                 result,
                    'invoke_around_handlers': invoke_around_handlers,
+                   'tag_invoke_around_handlers': tag_invoke_around_handlers,
                    'aroundstate':            aroundstate,
                    'funcptr':                funcptr,
-                   'decode_result':          decode_result,
+                   '_decode_arg':            my_decode_arg,
+                   '_maybe_free_arg':        my_maybe_free_arg,
+                   '_decode_result':         _decode_result,
                    }
     exec source.compile() in miniglobals
     wrapper = miniglobals['wrapper']
@@ -216,10 +169,67 @@ def llexternal(name, args, result, _callable=None,
 
     return func_with_new_name(wrapper, name)
 
-def _make_wrapper_for(TP, callable, aroundstate=None):
+_tagged_false = lambda: None
+_tagged_true  = lambda: None
+
+def _decode_arg(TARGET, arg, tag_invoke_around_handlers):
+    """Decode one of the arguments passed to the external function,
+    automatically normalizing to the exact low-level type TARGET.
+    """
+    # XXX the next line is a workaround for the annotation bug
+    # shown in rpython.test.test_llann:test_pbctype.  Remove it
+    # when the test is fixed...
+    assert isinstance(lltype.Signed, lltype.Number)
+    if TARGET == CCHARP:
+        if arg is None:
+            arg = lltype.nullptr(CCHARP.TO)   # None => (char*)NULL
+        elif isinstance(arg, str):
+            arg = str2charp(arg)
+            # XXX leaks if a str2charp() fails with MemoryError
+            # and was not the first in this function
+    elif _isfunctype(TARGET) and not _isllptr(arg):
+        # XXX pass additional arguments
+        wrapper = _make_wrapper_for(TARGET, arg, tag_invoke_around_handlers)
+        arg = llhelper(TARGET, wrapper)
+    else:
+        SOURCE = lltype.typeOf(arg)
+        if SOURCE != TARGET:
+            if TARGET is lltype.Float:
+                arg = float(arg)
+            elif ((isinstance(SOURCE, lltype.Number)
+                   or SOURCE is lltype.Bool)
+              and (isinstance(TARGET, lltype.Number)
+                   or TARGET is lltype.Bool)):
+                arg = cast(TARGET, arg)
+    return arg
+_decode_arg._annspecialcase_ = 'specialize:ll'
+_decode_arg._always_inline_ = True
+
+def _maybe_free_arg(TARGET, original_arg, decoded_arg):
+    if TARGET == CCHARP:
+        if isinstance(original_arg, str):
+            lltype.free(decoded_arg, flavor='raw')
+_maybe_free_arg._annspecialcase_ = 'specialize:ll'
+_maybe_free_arg._always_inline_ = True
+
+def _decode_result(RESULT, res):
+    """Decode the result returned by the low-level function,
+    automatically normalizing it to a common RPython type.
+    """
+    if rarithmetic.r_int is not r_int:
+        if RESULT is INT:
+            return cast(lltype.Signed, res)
+        elif RESULT is UINT:
+            return cast(lltype.Unsigned, res)
+    return res
+_decode_result._annspecialcase_ = 'specialize:ll'
+_decode_result._always_inline_ = True
+
+def _make_wrapper_for(TP, callable, tag_invoke_around_handlers):
     """ Function creating wrappers for callbacks. Note that this is
     cheating as we assume constant callbacks and we just memoize wrappers
     """
+    invoke_around_handlers = tag_invoke_around_handlers is _tagged_true
     if hasattr(callable, '_errorcode_'):
         errorcode = callable._errorcode_
     else:
@@ -228,7 +238,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
-            if aroundstate is not None:
+            if invoke_around_handlers:
                 before = aroundstate.before
                 after = aroundstate.after
             else:
@@ -258,6 +268,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     miniglobals['Exception'] = Exception
     miniglobals['os'] = os
     miniglobals['we_are_translated'] = we_are_translated
+    miniglobals['aroundstate'] = aroundstate
     exec source.compile() in miniglobals
     return miniglobals['wrapper']
 _make_wrapper_for._annspecialcase_ = 'specialize:memo'
