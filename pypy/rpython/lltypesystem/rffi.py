@@ -102,7 +102,11 @@ def llexternal(name, args, result, _callable=None,
         invoke_around_handlers = not sandboxsafe
 
     unrolling_arg_tps = unrolling_iterable(enumerate(args))
-    def wrapper(*args):
+
+    def decode_args(*args):
+        """Decode the arguments passed to the external function,
+        automatically normalizing to the exact low-level types.
+        """
         # XXX the next line is a workaround for the annotation bug
         # shown in rpython.test.test_llann:test_pbctype.  Remove it
         # when the test is fixed...
@@ -140,19 +144,15 @@ def llexternal(name, args, result, _callable=None,
                         arg = cast(TARGET, arg)
             real_args = real_args + (arg,)
             to_free = to_free + (freeme,)
-        if invoke_around_handlers:
-            before = aroundstate.before
-            after = aroundstate.after
-            if before: before()
-            # NB. it is essential that no exception checking occurs after
-            # the call to before(), because we don't have the GIL any more!
-            # It is also essential that no GC pointer is alive between now
-            # and the end of the function, so that the external function
-            # calls below don't need to be guarded by GC shadow stack logic
-            # that would crash if not protected by the GIL!
-        res = funcptr(*real_args)
-        if invoke_around_handlers:
-            if after: after()
+        return real_args, to_free
+    decode_args._annspecialcase_ = 'specialize:ll'
+    decode_args._always_inline_ = True
+
+    def decode_result(res, *to_free):
+        """Decode the result returned by the low-level function,
+        automatically normalizing it to a common RPython type
+        and freeing temporary values.
+        """
         for i, TARGET in unrolling_arg_tps:
             if to_free[i]:
                 lltype.free(to_free[i], flavor='raw')
@@ -162,6 +162,48 @@ def llexternal(name, args, result, _callable=None,
             elif result is UINT:
                 return cast(lltype.Unsigned, res)
         return res
+    decode_result._annspecialcase_ = 'specialize:ll'
+    decode_result._always_inline_ = True
+
+    # The actual wrapper is generated code in order to avoid *args.  The
+    # issue is that if malloc-removal is not performed, we cannot write
+    # a call to 'funcptr(*real_args)' because this needs to read values
+    # from the GC-managed tuple 'real_args', which we cannot do between
+    # before() and after() calls.
+
+    argnames = ', '.join(['a%d' % i for i in range(len(args))])
+    if len(args):
+        unpackargnames = '(' + argnames + ',)'
+    else:
+        unpackargnames = '_'
+
+    source = py.code.Source("""
+        def wrapper(%(argnames)s):
+            %(unpackargnames)s, to_free = decode_args(%(argnames)s)
+            if invoke_around_handlers:
+                before = aroundstate.before
+                after = aroundstate.after
+                if before: before()
+                # NB. it is essential that no exception checking occurs after
+                # the call to before(), because we don't have the GIL any more!
+                # It is also essential that no GC pointer is alive between now
+                # and the end of the function, so that the external function
+                # calls below don't need to be guarded by GC shadow stack logic
+                # that would crash if not protected by the GIL!
+            res = funcptr(%(argnames)s)
+            if invoke_around_handlers:
+                if after: after()
+            return decode_result(res, *to_free)
+    """ % locals())
+
+    miniglobals = {'decode_args':            decode_args,
+                   'invoke_around_handlers': invoke_around_handlers,
+                   'aroundstate':            aroundstate,
+                   'funcptr':                funcptr,
+                   'decode_result':          decode_result,
+                   }
+    exec source.compile() in miniglobals
+    wrapper = miniglobals['wrapper']
     wrapper._annspecialcase_ = 'specialize:ll'
     if invoke_around_handlers:
         # don't inline, as a hack to guarantee that no GC pointer is alive
