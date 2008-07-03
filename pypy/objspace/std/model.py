@@ -248,6 +248,7 @@ class StdTypeModel:
     def get_typeorder_with_empty_usersubcls(self):
         if self._typeorder_with_empty_usersubcls is None:
             from pypy.interpreter.typedef import enum_interplevel_subclasses
+            from pypy.objspace.std import stdtypedef
             result = self.typeorder.copy()
             for cls in self.typeorder:
                 if (hasattr(cls, 'typedef') and
@@ -255,9 +256,14 @@ class StdTypeModel:
                     subclslist = enum_interplevel_subclasses(cls)
                     for subcls in subclslist:
                         if cls in subcls.__bases__:   # only direct subclasses
-                            result[subcls] = [(W_Root, None)]
-                            # W_Root="ANY" which always matches,
-                            # even user subclasses
+                            # for user subclasses we only accept "generic"
+                            # matches: "typedef.any" is the applevel-type-based
+                            # matching, and "W_Root" is ANY.
+                            matches = []
+                            if isinstance(cls.typedef, stdtypedef.StdTypeDef):
+                                matches.append((cls.typedef.any, None))
+                            matches.append((W_Root, None))
+                            result[subcls] = matches
             self._typeorder_with_empty_usersubcls = result
         return self._typeorder_with_empty_usersubcls
 
