@@ -166,7 +166,10 @@ class ClassRepr(AbstractClassRepr):
         if cast_to_typeptr:
             vtable = cast_vtable_to_typeptr(vtable)
         return vtable
-    getruntime = getvtable
+
+    def getruntime(self, expected_type):
+        assert expected_type == CLASSTYPE
+        return self.getvtable()
 
     def setup_vtable(self, vtable, rsubcls):
         """Initialize the 'self' portion of the 'vtable' belonging to the
