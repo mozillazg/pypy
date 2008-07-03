@@ -1,4 +1,4 @@
-import functools
+from pypy.lib import functools
 import unittest
 from test import test_support
 from weakref import proxy
