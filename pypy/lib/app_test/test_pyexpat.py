@@ -4,7 +4,7 @@
 import StringIO, sys
 import unittest, py
 
-import pyexpat
+from pypy.lib import pyexpat
 #from xml.parsers import expat
 expat = pyexpat
 
