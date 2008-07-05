@@ -679,8 +679,13 @@ class TranslationDriver(SimpleTaskEngine):
         f = file(newexename, 'w')
         f.write("""#!/bin/bash
 LEDIT=`type -p ledit`
+EXE=`readlink $0`
+if [ -z $EXE ]
+then
+    EXE=$0
+fi
 if  uname -s | grep -iq Cygwin ; then MONO=; else MONO=mono; fi
-$LEDIT $MONO "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
+$LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
 """ % main_exe_name)
         f.close()
         os.chmod(newexename, 0755)
@@ -751,7 +756,12 @@ $LEDIT $MONO "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if i
         f = file(newexename, 'w')
         f.write("""#!/bin/bash
 LEDIT=`type -p ledit`
-$LEDIT java -Xmx256m -jar $0.jar "$@"
+EXE=`readlink $0`
+if [ -z $EXE ]
+then
+    EXE=$0
+fi
+$LEDIT java -Xmx256m -jar $EXE.jar "$@"
 """)
         f.close()
         os.chmod(newexename, 0755)
