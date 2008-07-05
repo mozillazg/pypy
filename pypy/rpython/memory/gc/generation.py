@@ -614,7 +614,8 @@ elif sys.platform == 'darwin':
     sysctlbyname = rffi.llexternal('sysctlbyname',
                                    [rffi.CCHARP, rffi.VOIDP, rffi.SIZE_TP,
                                     rffi.VOIDP, rffi.SIZE_T],
-                                   rffi.INT)
+                                   rffi.INT,
+                                   sandboxsafe=True)
 
     def estimate_best_nursery_size():
         """Try to estimate the best nursery size at run-time, depending
