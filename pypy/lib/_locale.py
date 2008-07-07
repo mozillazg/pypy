@@ -417,7 +417,7 @@ __all__ = (
     'setlocale', 'localeconv', 'strxfrm', 'strcoll',
     'gettext', 'dgettext', 'dcgettext', 'textdomain',
     'bindtextdomain',
-)
+) + _CONSTANTS
 if _bind_textdomain_codeset:
     __all__ += ('bind_textdomain_codeset',)
 if HAS_LANGINFO:
