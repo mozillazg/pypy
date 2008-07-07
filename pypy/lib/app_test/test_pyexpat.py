@@ -643,3 +643,6 @@ class TestChardataBuffer:
         assert parser.buffer_size == 1024
         parser.Parse(xml2, 1)
         assert self.n == 4
+
+    def test_segfault(self):
+        py.test.raises(TypeError, expat.ParserCreate, 1234123123)
