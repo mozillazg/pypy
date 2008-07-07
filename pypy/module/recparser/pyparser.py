@@ -222,8 +222,12 @@ def sequence2st(space, w_sequence):
 
 
 def source2ast(space, source):
+    from pypy.interpreter.pyparser.error import SyntaxError
     compiler = get_ast_compiler(space)
-    return space.wrap(compiler.source2ast(source, 'exec'))
+    try:
+        return space.wrap(compiler.source2ast(source, 'exec'))
+    except SyntaxError, e:
+        raise OperationError(space.w_SyntaxError, e.wrap_info(space, "<parser-module>"))
 source2ast.unwrap_spec = [ObjSpace, str]
 
 
