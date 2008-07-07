@@ -584,7 +584,10 @@ def setgid(space, arg):
 
     Set the current process's group id.
     """
-    os.setgid(arg)
+    try:
+        os.setgid(arg)
+    except OSError, e:
+        raise wrap_oserror(space, e)
     return space.w_None
 setgid.unwrap_spec = [ObjSpace, int]
 
