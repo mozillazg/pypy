@@ -210,6 +210,7 @@ def unwrap_syntax_tree( space, w_sequence ):
             nodes.append( node )
         return SyntaxNode( nodetype, nodes )
     else:
+        check_length(space, items, 2)
         value = space.str_w( items[1] )
         lineno = -1
         if len(items)>2:
