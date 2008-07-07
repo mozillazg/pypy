@@ -227,7 +227,7 @@ class PythonAstCompiler(PyCodeCompiler):
         self.compiler_flags = self.futureFlags.allowed_flags
 
     def compile(self, source, filename, mode, flags):
-        from pyparser.error import SyntaxError
+        from pypy.interpreter.pyparser.error import SyntaxError
         from pypy.interpreter import astcompiler
         from pypy.interpreter.astcompiler.pycodegen import ModuleCodeGenerator
         from pypy.interpreter.astcompiler.pycodegen import InteractiveCodeGenerator

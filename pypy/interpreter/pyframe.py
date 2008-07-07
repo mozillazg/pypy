@@ -255,10 +255,6 @@ class PyFrame(eval.Frame):
         
         w_blockstack = nt([block._get_state_(space) for block in self.blockstack])
         w_fastlocals = maker.slp_into_tuple_with_nulls(space, self.fastlocals_w)
-        tup_base = [
-            w(self.pycode),
-            ]
-
         if self.last_exception is None:
             w_exc_value = space.w_None
             w_tb = space.w_None
@@ -290,7 +286,7 @@ class PyFrame(eval.Frame):
             w_cells,
             ]
 
-        return nt([new_inst, nt(tup_base), nt(tup_state)])
+        return nt([new_inst, nt([]), nt(tup_state)])
 
     def descr__setstate__(self, space, w_args):
         from pypy.module._pickle_support import maker # helper fns

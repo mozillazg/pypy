@@ -55,15 +55,11 @@ def reverseseqiter_new(space, w_seq, w_index):
     w_len = space.len(w_seq)
     index = space.int_w(w_index) - space.int_w(w_len)
     return W_ReverseSeqIterObject(space, w_seq, index)
-def frame_new(space, __args__):
-    args_w, kwds_w = __args__.unpack()
-    w_pycode, = args_w
-    pycode = space.interp_w(PyCode, w_pycode)
-    w = space.wrap
-    # XXX I don't get this? why isn't pycode actually used for anything?
+
+def frame_new(space):
     new_frame = instantiate(space.FrameClass)   # XXX fish
     return space.wrap(new_frame)
-frame_new.unwrap_spec = [ObjSpace, Arguments]
+frame_new.unwrap_spec = [ObjSpace]
 
 def traceback_new(space):
     tb = instantiate(PyTraceback)
