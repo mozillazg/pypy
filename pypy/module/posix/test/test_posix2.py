@@ -306,6 +306,11 @@ class AppTestPosix:
             assert os.getuid() == self.getuid
             assert os.geteuid() == self.geteuid
 
+    if hasattr(os, 'setuid'):
+        def test_os_setuid_error(self):
+            os = self.posix
+            raises(OSError, os.setuid, -100000)
+
     if hasattr(os, 'getgid'):
         def test_os_getgid(self):
             os = self.posix

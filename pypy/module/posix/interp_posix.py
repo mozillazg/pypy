@@ -572,7 +572,10 @@ def setuid(space, arg):
 
     Set the current process's user id.
     """
-    os.setuid(arg)
+    try:
+        os.setuid(arg)
+    except OSError, e:
+        raise wrap_oserror(space, e)
     return space.w_None
 setuid.unwrap_spec = [ObjSpace, int]
 
