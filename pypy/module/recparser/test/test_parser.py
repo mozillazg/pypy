@@ -20,3 +20,11 @@ class AppTestRecparser:
         import parser
         parser.suite("a = 3").totuple()
 
+class AppTestRecparserErrors: 
+    def setup_class(cls):
+        cls.space = space
+
+    def test_sequence2st_bug1(self):
+        import parser
+        raises(parser.ParserError, parser.sequence2st, ())
+
