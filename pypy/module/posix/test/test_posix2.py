@@ -328,6 +328,10 @@ class AppTestPosix:
             assert os.sysconf(self.sysconf_name) == self.sysconf_result
             assert os.sysconf_names[self.sysconf_name] == self.sysconf_value
 
+        def test_os_sysconf_error(self):
+            os = self.posix
+            raises(ValueError, os.sysconf, "!@#$%!#$!@#")
+
     def test_largefile(self):
         os = self.posix
         fd = os.open(self.path2 + 'test_largefile', os.O_RDWR | os.O_CREAT, 0666)

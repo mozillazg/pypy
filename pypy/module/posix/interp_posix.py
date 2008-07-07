@@ -630,8 +630,13 @@ def ttyname(space, fd):
 ttyname.unwrap_spec = [ObjSpace, int]
 
 def sysconf(space, w_num_or_name):
+    # XXX slightly non-nice, reuses the sysconf of the underlying os module
     if space.is_true(space.isinstance(w_num_or_name, space.w_basestring)):
-        num = os.sysconf_names[space.str_w(w_num_or_name)]
+        try:
+            num = os.sysconf_names[space.str_w(w_num_or_name)]
+        except KeyError:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("unrecognized configuration name"))
     else:
         num = space.int_w(w_num_or_name)
     return space.wrap(os.sysconf(num))
