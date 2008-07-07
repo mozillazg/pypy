@@ -63,7 +63,7 @@ def frame_new(space, __args__):
     # XXX I don't get this? why isn't pycode actually used for anything?
     new_frame = instantiate(space.FrameClass)   # XXX fish
     return space.wrap(new_frame)
-frame_new.unwrap_spec = [ObjSpace, PyCode]
+frame_new.unwrap_spec = [ObjSpace, Arguments]
 
 def traceback_new(space):
     tb = instantiate(PyTraceback)
