@@ -436,6 +436,9 @@ def ErrorString(errno):
     xxx
 
 def ParserCreate(encoding=None, namespace_separator=None, intern=None):
+    if (not isinstance(encoding, str) and
+        not encoding is None):
+        raise TypeError("ParserCreate() argument 1 must be string or None, not %s" % encoding.__class__.__name__)
     if (not isinstance(namespace_separator, str) and
         not namespace_separator is None):
         raise TypeError("ParserCreate() argument 2 must be string or None, not %s" % namespace_separator.__class__.__name__)
