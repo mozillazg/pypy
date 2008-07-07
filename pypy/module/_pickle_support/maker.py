@@ -55,30 +55,26 @@ def reverseseqiter_new(space, w_seq, w_index):
     w_len = space.len(w_seq)
     index = space.int_w(w_index) - space.int_w(w_len)
     return W_ReverseSeqIterObject(space, w_seq, index)
-    
 def frame_new(space, __args__):
     args_w, kwds_w = __args__.unpack()
     w_pycode, = args_w
     pycode = space.interp_w(PyCode, w_pycode)
     w = space.wrap
+    # XXX I don't get this? why isn't pycode actually used for anything?
     new_frame = instantiate(space.FrameClass)   # XXX fish
     return space.wrap(new_frame)
-frame_new.unwrap_spec = [ObjSpace, Arguments]
+frame_new.unwrap_spec = [ObjSpace, PyCode]
 
 def traceback_new(space):
     tb = instantiate(PyTraceback)
     return space.wrap(tb)
 traceback_new.unwrap_spec = [ObjSpace]
 
-def generator_new(space, __args__):
-    args_w, kwds_w = __args__.unpack()  #stolen from std/fake.py
-    w_frame, w_running = args_w
-    frame = space.interp_w(PyFrame, w_frame)
-    running = space.int_w(w_running)
+def generator_new(space, frame, running):
     new_generator = GeneratorIterator(frame)
     new_generator.running = running
     return space.wrap(new_generator)
-generator_new.unwrap_spec = [ObjSpace, Arguments]
+generator_new.unwrap_spec = [ObjSpace, PyFrame, int]
 
 def xrangeiter_new(space, current, remaining, step):
     from pypy.module.__builtin__.functional import W_XRangeIterator
