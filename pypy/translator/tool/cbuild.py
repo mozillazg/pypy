@@ -12,6 +12,12 @@ from pypy.tool.udir import udir
 
 debug = 0
 
+CFLAGS = os.getenv("CFLAGS")
+if CFLAGS:
+    CFLAGS = CFLAGS.split()
+else:
+    CFLAGS = ['-O3']
+
 class ExternalCompilationInfo(object):
 
     _ATTRIBUTES = ['pre_include_bits', 'includes', 'include_dirs',
@@ -499,7 +505,7 @@ class CCompiler:
                 self.libraries.append('m')
             if 'pthread' not in self.libraries:
                 self.libraries.append('pthread')
-            self.compile_extra += ['-O3', '-fomit-frame-pointer', '-pthread']
+            self.compile_extra += CFLAGS + ['-fomit-frame-pointer', '-pthread']
             self.link_extra += ['-pthread']
         if sys.platform == 'win32':
             self.link_extra += ['/DEBUG'] # generate .pdb file
@@ -512,7 +518,7 @@ class CCompiler:
                 if s + 'lib' not in self.library_dirs and \
                    os.path.exists(s + 'lib'):
                     self.library_dirs.append(s + 'lib')
-            self.compile_extra += ['-O3', '-fomit-frame-pointer']
+            self.compile_extra += CFLAGS + ['-fomit-frame-pointer']
             for framework in self.frameworks:
                 self.link_extra += ['-framework', framework]
 
