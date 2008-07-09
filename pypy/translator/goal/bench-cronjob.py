@@ -189,6 +189,7 @@ def main(backends=[]):
             c--gc=hybrid--_faassen
             cli--_faassen
             jvm--_faassen
+            jvm--inline-threshold=0--_faassen
             """.split('\n') if backend.strip() and not backend.strip().startswith('#')]
     print time.ctime()
     for backend in backends:
