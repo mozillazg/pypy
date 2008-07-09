@@ -12,7 +12,7 @@ from pypy.translator.llvm.externs2ll import get_incdirs
 def llvm_is_on_path():
     if py.path.local.sysfind("llvm-as") is None or \
        py.path.local.sysfind("llvm-gcc") is None:
-        return False 
+        return False
     return True
 
 def exe_version(exe, cache={}):
@@ -40,7 +40,7 @@ llvm_gcc_version = lambda: exe_version2('llvm-gcc')
 def have_boehm():
     import distutils.sysconfig
     from os.path import exists
-    libdir = distutils.sysconfig.EXEC_PREFIX + "/lib"  
+    libdir = distutils.sysconfig.EXEC_PREFIX + "/lib"
     return exists(libdir + '/libgc.so') or exists(libdir + '/libgc.a')
 
 def postfix():
@@ -89,7 +89,7 @@ class Builder(object):
             model = ''
             if not standalone:
                 model = ' -relocation-model=pic'
-                
+
             self.cmds.append("llc %s %s.bc -f -o %s.s" % (model, base, base))
             self.cmds.append("as %s.s -o %s.o" % (base, base))
 
@@ -106,7 +106,7 @@ class Builder(object):
             self.cmds.append("gcc %s -c %s -O3 -o %s" % (filename, include_opts, objname))
 
         attrs = self.genllvm.eci._copy_attributes()
-        attrs['libraries'] = tuple(libraries) + attrs['libraries'] 
+        attrs['libraries'] = tuple(libraries) + attrs['libraries']
         self.genllvm.eci = ExternalCompilationInfo(**attrs)
 
 # XXX support profile?
@@ -134,7 +134,7 @@ class Builder(object):
         self.dirpath.chdir()
 
         return self.genllvm.entry_name
- 
+
     def setup_linker_command(self, base, exename=None):
         eci = self.genllvm.eci
         library_files = self.genllvm.db.gcpolicy.gc_libraries()
