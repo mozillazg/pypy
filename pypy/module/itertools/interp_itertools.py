@@ -122,11 +122,7 @@ class W_TakeWhile(Wrappable):
         if self.stopped:
             raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
-        try:
-            w_obj = self.space.next(self.iterable)
-        except StopIteration:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
+        w_obj = self.space.next(self.iterable)  # may raise a w_StopIteration
         w_bool = self.space.call_function(self.w_predicate, w_obj)
         if not self.space.is_true(w_bool):
             self.stopped = True
@@ -169,17 +165,10 @@ class W_DropWhile(Wrappable):
 
     def next_w(self):
         if self.started:
-            try:
-                w_obj = self.space.next(self.iterable)
-            except StopIteration:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+            w_obj = self.space.next(self.iterable)  # may raise w_StopIteration
         else:
             while True:
-                try:
-                    w_obj = self.space.next(self.iterable)
-                except StopIteration:
-                    raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
+                w_obj = self.space.next(self.iterable)  # may raise w_StopIter
                 w_bool = self.space.call_function(self.w_predicate, w_obj)
                 if not self.space.is_true(w_bool):
                     self.started = True
@@ -228,11 +217,7 @@ class _IFilterBase(Wrappable):
 
     def next_w(self):
         while True:
-            try:
-                w_obj = self.space.next(self.iterable)
-            except StopIteration:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
+            w_obj = self.space.next(self.iterable)  # may raise w_StopIteration
             if self._call_predicate(w_obj):
                 return w_obj
 
