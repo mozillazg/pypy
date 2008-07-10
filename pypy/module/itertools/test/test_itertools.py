@@ -11,6 +11,7 @@ class AppTestItertools:
             itertools.count(),
             itertools.repeat(None),
             itertools.takewhile(bool, []),
+            itertools.dropwhile(bool, []),
             ]
 
         for it in iterables:
@@ -22,24 +23,24 @@ class AppTestItertools:
     def test_count(self):
         import itertools
 
-        c = itertools.count()
+        it = itertools.count()
         for x in range(10):
-            assert c.next() == x
+            assert it.next() == x
 
     def test_count_firstval(self):
         import itertools
 
-        c = itertools.count(3)
+        it = itertools.count(3)
         for x in range(10):
-            assert c.next() == x + 3
+            assert it.next() == x + 3
 
     def test_count_overflow(self):
         import itertools, sys
 
-        c = itertools.count(sys.maxint)
-        assert c.next() == sys.maxint
-        raises(OverflowError, c.next) 
-        raises(OverflowError, c.next) 
+        it = itertools.count(sys.maxint)
+        assert it.next() == sys.maxint
+        raises(OverflowError, it.next) 
+        raises(OverflowError, it.next) 
 
         raises(OverflowError, itertools.count, sys.maxint + 1)
 
@@ -47,31 +48,31 @@ class AppTestItertools:
         import itertools
 
         o = object()
-        r = itertools.repeat(o)
+        it = itertools.repeat(o)
 
         for x in range(10):
-            assert o is r.next()
+            assert o is it.next()
 
     def test_repeat_times(self):
         import itertools
 
         times = 10
-        r = itertools.repeat(None, times=times)
+        it = itertools.repeat(None, times=times)
         for i in range(times):
-            r.next()
-        raises(StopIteration, r.next)
+            it.next()
+        raises(StopIteration, it.next)
 
-        r = itertools.repeat(None, times=None)
+        it = itertools.repeat(None, times=None)
         for x in range(10):
-            r.next()    # Should be no StopIteration
+            it.next()    # Should be no StopIteration
 
-        r = itertools.repeat(None, times=0)
-        raises(StopIteration, r.next)
-        raises(StopIteration, r.next)
+        it = itertools.repeat(None, times=0)
+        raises(StopIteration, it.next)
+        raises(StopIteration, it.next)
 
-        r = itertools.repeat(None, times=-1)
-        raises(StopIteration, r.next)
-        raises(StopIteration, r.next)
+        it = itertools.repeat(None, times=-1)
+        raises(StopIteration, it.next)
+        raises(StopIteration, it.next)
 
     def test_repeat_overflow(self):
         import itertools
@@ -82,22 +83,48 @@ class AppTestItertools:
     def test_takewhile(self):
         import itertools
 
-        tw = itertools.takewhile(bool, [])
-        raises(StopIteration, tw.next)
+        it = itertools.takewhile(bool, [])
+        raises(StopIteration, it.next)
 
-        tw = itertools.takewhile(bool, [False, True, True])
-        raises(StopIteration, tw.next)
+        it = itertools.takewhile(bool, [False, True, True])
+        raises(StopIteration, it.next)
 
-        tw = itertools.takewhile(bool, [1, 2, 3, 0, 1, 1])
-        for x in range(3):
-            assert tw.next() == x + 1
+        it = itertools.takewhile(bool, [1, 2, 3, 0, 1, 1])
+        for x in [1, 2, 3]:
+            assert it.next() == x
 
-        raises(StopIteration, tw.next)
+        raises(StopIteration, it.next)
 
     def test_takewhile_wrongargs(self):
         import itertools
 
-        tw = itertools.takewhile(None, [1])
-        raises(TypeError, tw.next)
+        it = itertools.takewhile(None, [1])
+        raises(TypeError, it.next)
 
         raises(TypeError, itertools.takewhile, bool, None)
+
+    def test_dropwhile(self):
+        import itertools
+
+        it = itertools.dropwhile(bool, [])
+        raises(StopIteration, it.next)
+
+        it = itertools.dropwhile(bool, [True, True, True])
+        raises(StopIteration, it.next)
+
+        def is_odd(arg):
+            return (arg % 2 == 1)
+
+        it = itertools.dropwhile(is_odd, [1, 3, 5, 2, 4, 6])
+        for x in [2, 4, 6]:
+            assert it.next() == x
+
+        raises(StopIteration, it.next)
+
+    def test_takewhile_wrongargs(self):
+        import itertools
+
+        it = itertools.dropwhile(None, [1])
+        raises(TypeError, it.next)
+
+        raises(TypeError, itertools.dropwhile, bool, None)

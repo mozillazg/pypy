@@ -155,3 +155,60 @@ W_TakeWhile.typedef = TypeDef(
             else:
                 break
     """)
+
+class W_DropWhile(Wrappable):
+
+    def __init__(self, space, w_predicate, w_iterable):
+        self.space = space
+        self.w_predicate = w_predicate
+        self.iterable = space.iter(w_iterable)
+        self.started = False
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if self.started:
+            try:
+                w_obj = self.space.next(self.iterable)
+            except StopIteration:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+        else:
+            while True:
+                try:
+                    w_obj = self.space.next(self.iterable)
+                except StopIteration:
+                    raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+                w_bool = self.space.call_function(self.w_predicate, w_obj)
+                if not self.space.is_true(w_bool):
+                    self.started = True
+                    break
+
+        return w_obj
+
+def W_DropWhile___new__(space, w_subtype, w_predicate, w_iterable):
+    return space.wrap(W_DropWhile(space, w_predicate, w_iterable))
+
+
+W_DropWhile.typedef = TypeDef(
+        'dropwhile',
+        __new__  = interp2app(W_DropWhile___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_DropWhile.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_DropWhile.next_w, unwrap_spec=['self']),
+        __doc__  =     """Make an iterator that drops elements from the iterable as long
+    as the predicate is true; afterwards, returns every
+    element. Note, the iterator does not produce any output until the
+    predicate is true, so it may have a lengthy start-up time.
+
+    Equivalent to :
+
+    def dropwhile(predicate, iterable):
+        iterable = iter(iterable)
+        for x in iterable:
+            if not predicate(x):
+                yield x
+                break
+        for x in iterable:
+            yield x
+    """)
