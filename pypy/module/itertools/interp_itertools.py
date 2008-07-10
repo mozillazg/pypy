@@ -276,3 +276,60 @@ W_IFilterFalse.typedef = TypeDef(
                 yield x
     """)
 
+class W_ISlice (Wrappable):
+
+    def __init__(self, space, w_iterable, start, stop, step):
+        self.iterable = space.iter(w_iterable)
+        self.space = space
+        if stop == -1:
+            stop = start
+            start = 0
+
+        if step == -1:
+            step = 1
+
+        self.start = start
+        self.stop = stop
+        self.step = step
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if self.stop <= 0:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        if self.start >= 0:
+            skip = self.start
+            self.start = -1
+        else:
+            skip = self.step - 1
+
+        try:
+            while skip > 0:
+                self.space.next(self.iterable)
+                skip -= 1
+                self.stop -= 1
+
+        except StopIteration:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        try:
+            w_obj = self.space.next(self.iterable)
+        except StopIteration:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        self.stop -= 1
+        return w_obj
+
+def W_ISlice___new__(space, w_subtype, w_iterable, start, stop, step):
+    # TODO varible arguments number not implemented (optional start, step)
+    return space.wrap(W_ISlice(space, w_iterable, start, stop, step))
+
+W_ISlice.typedef = TypeDef(
+        'islice',
+        __new__  = interp2app(W_ISlice___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, int, int, int]),
+        __iter__ = interp2app(W_ISlice.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_ISlice.next_w, unwrap_spec=['self']),
+        __doc__  = "")
+
