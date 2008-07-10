@@ -497,7 +497,7 @@ class BaseTestPromotion(InterpretationTest):
         res = self.interpret(ll_function, [20, True], [], policy=StopAtXPolicy(make_obj))
         assert res == 42
         self.check_insns(malloc=0)
-        self.check_insns(new=0)
+        self.check_flexswitches(3)
 
     def test_promote_class_vstruct(self):
         class A:
@@ -511,7 +511,25 @@ class BaseTestPromotion(InterpretationTest):
         res = self.interpret(ll_function, [], [])
         assert res == 42
         self.check_insns(malloc=0)
-        self.check_insns(new=0)
+
+    def test_read___class___after_promotion(self):
+        class A:
+            pass
+        class B(A):
+            pass
+
+        def make_obj(flag):
+            return flag and A() or B()
+
+        def ll_function(flag):
+            hint(None, global_merge_point=True)
+            obj = make_obj(flag)
+            promoted_obj = hint(obj, promote_class=True)
+            cls = promoted_obj.__class__
+            return cls is A
+
+        res = self.interpret(ll_function, [True], [], policy=StopAtXPolicy(make_obj))
+        self.check_flexswitches(2)
 
 class TestLLType(BaseTestPromotion):
     type_system = "lltype"
