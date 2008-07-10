@@ -2,6 +2,7 @@ import py
 from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.jit.rainbow.test.test_portal import PortalTest
 from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import OOTypeMixin
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.conftest import Benchmark
 
@@ -69,6 +70,9 @@ class TestLLType(BaseTestTLC):
     type_system = "lltype"
     to_rstr = staticmethod(LLSupport.to_rstr)
 
-##class TestOOType(BaseTestTLC):
-##    type_system = "ootype"
-##    to_rstr = staticmethod(OOSupport.to_rstr)
+class TestOOType(OOTypeMixin, BaseTestTLC):
+    type_system = "ootype"
+    to_rstr = staticmethod(OOSupport.to_rstr)
+
+    def test_nth_item(self):
+        py.test.skip('in progress')
