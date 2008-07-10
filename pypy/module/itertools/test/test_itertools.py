@@ -227,3 +227,20 @@ class AppTestItertools:
         raises(TypeError, itertools.islice, [], None, -1, -1)
         raises(TypeError, itertools.islice, None, 0, -1, -1)
 
+    def test_subclassing(self):
+        import itertools
+        # not sure how useful this actually is, but CPython implements it
+        iterables = [
+            (itertools.count, ()),
+            (itertools.repeat, (None,)),
+            (itertools.takewhile, (bool, [])),
+            (itertools.dropwhile, (bool, [])),
+            (itertools.ifilter, (None, [])),
+            (itertools.ifilterfalse, (None, [])),
+            (itertools.islice, ([], 0, -1, -1)),
+            ]
+        for cls, args in iterables:
+            class A(cls):
+                pass
+            a = A(*args)
+            assert isinstance(a, A)
