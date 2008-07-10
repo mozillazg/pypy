@@ -8,10 +8,6 @@ from pypy.module._rawffi.tracker import Tracker
 
 import os, sys, py
 
-def setup_module(mod):
-    if sys.platform not in ('linux2', 'win32'):
-        py.test.skip("Linux & win32 only tests by now")
-
 class AppTestFfi:
     def prepare_c_example():
         from pypy.tool.udir import udir
@@ -162,17 +158,20 @@ class AppTestFfi:
     prepare_c_example = staticmethod(prepare_c_example)
     
     def setup_class(cls):
+        from pypy.rlib.libffi import get_libc_name
         space = gettestobjspace(usemodules=('_rawffi','struct'))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.prepare_c_example())
+        cls.w_libc_name = space.wrap(get_libc_name())
         if sys.platform == 'win32':
             cls.w_iswin32 = space.wrap(True)
-            cls.w_libc_name = space.wrap('msvcrt')
             cls.w_libm_name = space.wrap('msvcrt')
         else:
             cls.w_iswin32 = space.wrap(False)
-            cls.w_libc_name = space.wrap('libc.so.6')
             cls.w_libm_name = space.wrap('libm.so')
+            if sys.platform == "darwin":
+                cls.w_libm_name = space.wrap('libm.dylib')
+                
         cls.w_sizes_and_alignments = space.wrap(dict(
             [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 

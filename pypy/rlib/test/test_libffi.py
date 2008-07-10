@@ -13,9 +13,6 @@ import py
 import time
 
 def setup_module(mod):
-    if not (sys.platform.startswith('linux') or
-            sys.platform == 'win32'):
-        py.test.skip("Fragile tests, linux & win32 only by now")
     for name in type_names:
         # XXX force this to be seen by ll2ctypes
         # so that ALLOCATED.clear() clears it
@@ -28,20 +25,16 @@ class TestDLOperations:
 
     def test_dlopen(self):
         py.test.raises(OSError, "dlopen(rffi.str2charp('xxxxxxxxxxxx'))")
-        if sys.platform == 'win32':
-            assert dlopen(rffi.str2charp('kernel32.dll'))
-        else:
-            assert dlopen(rffi.str2charp('/lib/libc.so.6'))
+        assert dlopen(rffi.str2charp(get_libc_name()))
         
     def get_libc(self):
-        if sys.platform == 'win32':
-            return CDLL('msvcrt.dll')
-        else:
-            return CDLL('/lib/libc.so.6')
+        return CDLL(get_libc_name())
     
     def get_libm(self):
         if sys.platform == 'win32':
             return CDLL('msvcrt.dll')
+        elif sys.platform == "darwin":
+            return CDLL('libm.dylib')
         else:
             return CDLL('libm.so')
     
