@@ -1001,10 +1001,17 @@ class BytecodeWriter(object):
                                          check=False)
         fielddescindex = self.fielddesc_position(self.OBJECT,
                                                  self.classfieldname)
+        # hack hack hack, which will go away when we merge less-meta-instances
+        if self.__class__.__name__ == 'OOTypeBytecodeWriter':
+            fielddescindex2 = self.fielddesc_position(v_obj.concretetype, 'meta')
+        else:
+            fielddescindex2 = fielddescindex
+
         self.emit("assert_class")
         self.emit(self.serialize_oparg("red", v_obj))
         self.emit(g_class)
         self.emit(fielddescindex)
+        self.emit(fielddescindex2)
 
         self.register_redvar(result)
 

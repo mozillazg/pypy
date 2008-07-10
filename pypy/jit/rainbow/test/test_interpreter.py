@@ -300,11 +300,12 @@ class InterpretationTest(object):
             assert oops.get(name, 0) == count
 
     def check_flexswitches(self, expected_count):
+        from pypy.rpython.ootypesystem import rclass
         residual_graph = self.get_residual_graph()
         count = 0
         for block in residual_graph.iterblocks():
             if (isinstance(block.exitswitch, Variable) and
-                block.exitswitch.concretetype is lltype.Signed):
+                block.exitswitch.concretetype in (lltype.Signed, rclass.CLASSTYPE)):
                 count += 1
         assert count == expected_count
 
@@ -2307,6 +2308,7 @@ class OOTypeMixin(object):
         replace = {
             'getfield': 'oogetfield',
             'setfield': 'oosetfield',
+            'malloc':   'new',
             }
 
         insns = insns.copy()

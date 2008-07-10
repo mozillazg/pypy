@@ -629,12 +629,16 @@ class JitInterpreter(object):
         assert gv_switchvar.is_const
         self.green_result(gv_switchvar)
 
-    @arguments("red", "green", "fielddesc", returns="red")
-    def opimpl_assert_class(self, objbox, gv_class, fielddesc):
+    @arguments("red", "green", "fielddesc", "fielddesc", returns="red")
+    def opimpl_assert_class(self, objbox, gv_class, fielddesc, fielddesc2):
         if isinstance(objbox.content, rcontainer.VirtualStruct):
             return objbox
         classbox = self.PtrRedBox(gv_class)
         objbox.remember_field(fielddesc, classbox)
+
+        # hack hack, see comments in codewriter.py
+        if fielddesc2 != fielddesc:
+            objbox.remember_field(fielddesc2, classbox)
         return objbox
 
     @arguments()
