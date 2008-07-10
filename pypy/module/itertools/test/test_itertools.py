@@ -14,6 +14,7 @@ class AppTestItertools:
             itertools.dropwhile(bool, []),
             itertools.ifilter(None, []),
             itertools.ifilterfalse(None, []),
+            itertools.islice([], 0, -1, -1),
             ]
 
         for it in iterables:
@@ -184,4 +185,45 @@ class AppTestItertools:
         raises(TypeError, it.next)
 
         raises(TypeError, itertools.ifilterfalse, bool, None)
+
+    def test_islice(self):
+        import itertools
+
+        it = itertools.islice([], 0, -1, -1)
+        raises(StopIteration, it.next)
+
+        it = itertools.islice([1, 2, 3], 0, -1, -1)
+        raises(StopIteration, it.next)
+
+        it = itertools.islice([1, 2, 3, 4, 5], 3, -1, -1)
+        for x in [1, 2, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        it = itertools.islice([1, 2, 3, 4, 5], 3, -1, -1)
+        for x in [1, 2, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        it = itertools.islice([1, 2, 3, 4, 5], 1, 3, -1)
+        for x in [2, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        it = itertools.islice([1, 2, 3, 4, 5], 0, 3, 2)
+        for x in [1, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+    def test_islice_overflow(self):
+        import itertools
+        import sys
+
+        raises(OverflowError, itertools.islice, [], sys.maxint + 1, -1, -1)
+
+    def test_islice_wrongargs(self):
+        import itertools
+
+        raises(TypeError, itertools.islice, [], None, -1, -1)
+        raises(TypeError, itertools.islice, None, 0, -1, -1)
 
