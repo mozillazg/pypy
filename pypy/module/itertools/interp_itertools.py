@@ -32,7 +32,9 @@ def W_Count___new__(space, w_subtype, firstval=0):
     """
     Create a new count object and call its initializer.
     """
-    return space.wrap(W_Count(space, firstval))
+    result = space.allocate_instance(W_Count, w_subtype)
+    W_Count.__init__(result, space, firstval)
+    return space.wrap(result)
 
 W_Count.typedef = TypeDef(
         'count',
@@ -83,7 +85,9 @@ def W_Repeat___new__(space, w_subtype, w_obj, w_times=None):
     """
     Create a new repeat object and call its initializer.
     """
-    return space.wrap(W_Repeat(space, w_obj, w_times))
+    result = space.allocate_instance(W_Repeat, w_subtype)
+    W_Repeat.__init__(result, space, w_obj, w_times)
+    return space.wrap(result)
 
 W_Repeat.typedef = TypeDef(
         'repeat',
@@ -131,7 +135,9 @@ class W_TakeWhile(Wrappable):
         return w_obj
 
 def W_TakeWhile___new__(space, w_subtype, w_predicate, w_iterable):
-    return space.wrap(W_TakeWhile(space, w_predicate, w_iterable))
+    result = space.allocate_instance(W_TakeWhile, w_subtype)
+    W_TakeWhile.__init__(result, space, w_predicate, w_iterable)
+    return space.wrap(result)
 
 
 W_TakeWhile.typedef = TypeDef(
@@ -177,7 +183,9 @@ class W_DropWhile(Wrappable):
         return w_obj
 
 def W_DropWhile___new__(space, w_subtype, w_predicate, w_iterable):
-    return space.wrap(W_DropWhile(space, w_predicate, w_iterable))
+    result = space.allocate_instance(W_DropWhile, w_subtype)
+    W_DropWhile.__init__(result, space, w_predicate, w_iterable)
+    return space.wrap(result)
 
 
 W_DropWhile.typedef = TypeDef(
@@ -228,7 +236,9 @@ class W_IFilter(_IFilterBase):
     reverse = False
 
 def W_IFilter___new__(space, w_subtype, w_predicate, w_iterable):
-    return space.wrap(W_IFilter(space, w_predicate, w_iterable))
+    result = space.allocate_instance(W_IFilter, w_subtype)
+    W_IFilter.__init__(result, space, w_predicate, w_iterable)
+    return space.wrap(result)
 
 W_IFilter.typedef = TypeDef(
         'ifilter',
@@ -253,7 +263,9 @@ class W_IFilterFalse(_IFilterBase):
     reverse = True
 
 def W_IFilterFalse___new__(space, w_subtype, w_predicate, w_iterable):
-    return space.wrap(W_IFilterFalse(space, w_predicate, w_iterable))
+    result = space.allocate_instance(W_IFilterFalse, w_subtype)
+    W_IFilterFalse.__init__(result, space, w_predicate, w_iterable)
+    return space.wrap(result)
 
 W_IFilterFalse.typedef = TypeDef(
         'ifilterfalse',
@@ -322,7 +334,9 @@ class W_ISlice (Wrappable):
 
 def W_ISlice___new__(space, w_subtype, w_iterable, start, stop, step):
     # TODO varible arguments number not implemented (optional start, step)
-    return space.wrap(W_ISlice(space, w_iterable, start, stop, step))
+    result = space.allocate_instance(W_ISlice, w_subtype)
+    W_ISlice.__init__(result, space, w_iterable, start, stop, step)
+    return space.wrap(result)
 
 W_ISlice.typedef = TypeDef(
         'islice',
