@@ -106,3 +106,52 @@ W_Repeat.typedef = TypeDef(
             for i in xrange(times):
                 yield object
     """)
+
+class W_TakeWhile(Wrappable):
+
+    def __init__(self, space, w_predicate, w_iterable):
+        self.space = space
+        self.w_predicate = w_predicate
+        self.iterable = space.iter(w_iterable)
+        self.stopped = False
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if self.stopped:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        try:
+            w_obj = self.space.next(self.iterable)
+        except StopIteration:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        w_bool = self.space.call_function(self.w_predicate, w_obj)
+        if not self.space.is_true(w_bool):
+            self.stopped = True
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        return w_obj
+
+def W_TakeWhile___new__(space, w_subtype, w_predicate, w_iterable):
+    return space.wrap(W_TakeWhile(space, w_predicate, w_iterable))
+
+
+W_TakeWhile.typedef = TypeDef(
+        'takewhile',
+        __new__  = interp2app(W_TakeWhile___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_TakeWhile.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_TakeWhile.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that returns elements from the iterable as
+    long as the predicate is true.
+
+    Equivalent to :
+    
+    def takewhile(predicate, iterable):
+        for x in iterable:
+            if predicate(x):
+                yield x
+            else:
+                break
+    """)
