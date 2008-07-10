@@ -118,6 +118,21 @@ class Instance(OOType):
         assert isinstance(INSTANCE, Instance)
         self._subclasses.append(INSTANCE)
 
+    def _all_subclasses(self):
+        """
+        Transitive closure on self._subclasses.
+
+        Return a set containing all direct and indirect subclasses,
+        including itself.
+        """
+        res = set()
+        stack = [self]
+        while stack:
+            item = stack.pop()
+            res.add(item)
+            stack += item._subclasses
+        return res
+
     def _add_fields(self, fields):
         fields = fields.copy()    # mutated below
         for name, defn in fields.iteritems():

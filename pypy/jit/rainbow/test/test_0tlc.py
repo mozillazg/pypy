@@ -73,6 +73,3 @@ class TestLLType(BaseTestTLC):
 class TestOOType(OOTypeMixin, BaseTestTLC):
     type_system = "ootype"
     to_rstr = staticmethod(OOSupport.to_rstr)
-
-    def test_nth_item(self):
-        py.test.skip('in progress')
