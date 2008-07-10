@@ -1908,7 +1908,7 @@ class OOTypeBytecodeWriter(BytecodeWriter):
 
     def fill_methodcodes(self, INSTANCE, methname, graph2tsgraph):
         class2typedesc = self.interpreter.class2typedesc
-        TYPES = [INSTANCE] + INSTANCE._subclasses
+        TYPES = INSTANCE._all_subclasses()
         for T in TYPES:
             descindex = self.structtypedesc_position(T)
             desc = self.structtypedescs[descindex]
