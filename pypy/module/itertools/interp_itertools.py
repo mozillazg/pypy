@@ -213,8 +213,7 @@ W_DropWhile.typedef = TypeDef(
             yield x
     """)
 
-
-class W_IFilter(Wrappable):
+class _IFilterBase(Wrappable):
 
     def __init__(self, space, w_predicate, w_iterable):
         self.space = space
@@ -234,9 +233,14 @@ class W_IFilter(Wrappable):
             except StopIteration:
                 raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
-            w_bool = self.space.call_function(self.w_predicate, w_obj)
-            if self.space.is_true(w_bool):
+            if self._call_predicate(w_obj):
                 return w_obj
+
+
+class W_IFilter(_IFilterBase):
+
+    def _call_predicate(self, w_obj):
+        return self.space.is_true(self.space.call_function(self.w_predicate, w_obj))
 
 def W_IFilter___new__(space, w_subtype, w_predicate, w_iterable):
     return space.wrap(W_IFilter(space, w_predicate, w_iterable))
@@ -259,3 +263,31 @@ W_IFilter.typedef = TypeDef(
             if predicate(x):
                 yield x
     """)
+
+class W_IFilterFalse(_IFilterBase):
+
+    def _call_predicate(self, w_obj):
+        return not self.space.is_true(self.space.call_function(self.w_predicate, w_obj))
+
+def W_IFilterFalse___new__(space, w_subtype, w_predicate, w_iterable):
+    return space.wrap(W_IFilterFalse(space, w_predicate, w_iterable))
+
+W_IFilterFalse.typedef = TypeDef(
+        'ifilterfalse',
+        __new__  = interp2app(W_IFilterFalse___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_IFilterFalse.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_IFilterFalse.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that filters elements from iterable returning
+    only those for which the predicate is False.  If predicate is
+    None, return the items that are false.
+
+    Equivalent to :
+    
+    def ifilterfalse(predicate, iterable):
+        if predicate is None:
+            predicate = bool
+        for x in iterable:
+            if not predicate(x):
+                yield x
+    """)
+
