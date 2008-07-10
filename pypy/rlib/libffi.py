@@ -11,7 +11,7 @@ from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 import py
 import os
-
+import ctypes.util
 
 DEBUG = False # writes dlerror() messages to stderr
 
@@ -170,8 +170,7 @@ def winexternal(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci, calling_conv='win')
 
 if not _MS_WINDOWS:
-    c_dlopen = external('dlopen', [rffi.CCHARP, rffi.INT], rffi.VOIDP,
-                        _nowrapper=True)
+    c_dlopen = external('dlopen', [rffi.CCHARP, rffi.INT], rffi.VOIDP)
     c_dlclose = external('dlclose', [rffi.VOIDP], rffi.INT)
     c_dlerror = external('dlerror', [], rffi.CCHARP)
     c_dlsym = external('dlsym', [rffi.VOIDP, rffi.CCHARP], rffi.VOIDP)
@@ -220,7 +219,7 @@ if not _MS_WINDOWS:
         return res
 
     def get_libc_name():
-        return 'libc.so.6'
+        return ctypes.util.find_library('c')
 
 if _MS_WINDOWS:
     def dlopen(name):
