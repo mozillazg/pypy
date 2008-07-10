@@ -11,11 +11,13 @@ from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 import py
 import os
+import sys
 import ctypes.util
 
 DEBUG = False # writes dlerror() messages to stderr
 
 _MS_WINDOWS = os.name == "nt"
+_MAC_OS = sys.platform == "darwin"
 
 if _MS_WINDOWS:
     from pypy.rlib import rwin32
@@ -23,7 +25,10 @@ if _MS_WINDOWS:
 if not _MS_WINDOWS:
     includes = ['dlfcn.h', 'ffi.h']
     include_dirs = []
-    pot_incl = py.path.local('/usr/include/libffi')
+    if _MAC_OS:
+        pot_incl = py.path.local('/usr/include/ffi') 
+    else:
+        pot_incl = py.path.local('/usr/include/libffi') 
     if pot_incl.check():
         include_dirs.append(str(pot_incl))
     lib_dirs = []
@@ -31,7 +36,12 @@ if not _MS_WINDOWS:
     if pot_lib.check():
         lib_dirs.append(str(pot_lib))
 
+    if _MAC_OS:
+        pre_include_bits = ['#define MACOSX']
+    else: 
+        pre_include_bits = []
     eci = ExternalCompilationInfo(
+        pre_include_bits = pre_include_bits,
         includes = includes,
         libraries = ['ffi', 'dl'],
         include_dirs = include_dirs,
