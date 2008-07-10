@@ -62,17 +62,19 @@ class TestExecutionContext:
         assert space.sys.checkinterval / 10 < i < space.sys.checkinterval * 3
 
     def test_llprofile(self):
+        py.test.skip("not working yet")
         l = []
         
-        def profile_func(space, w_arg, event, frame, w_aarg):
+        def profile_func(space, w_arg, frame, event, w_aarg):
             assert w_arg is space.w_None
-            l.append(frame)
+            l.append(event)
         
         space = self.space
         space.getexecutioncontext().setllprofile(profile_func, space.w_None)
         space.appexec([], """():
-        pass
+        l = []
+        l.append(3)
         """)
         space.getexecutioncontext().setllprofile(None, None)
-        assert l == ['call', 'return', 'call', 'return']
+        assert l == ['call', 'return', 'call', 'c_call', 'c_return', 'return']
 
