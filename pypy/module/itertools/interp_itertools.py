@@ -218,14 +218,14 @@ class _IFilterBase(Wrappable):
     def next_w(self):
         while True:
             w_obj = self.space.next(self.iterable)  # may raise w_StopIteration
-            if self._call_predicate(w_obj):
+            w_pred = self.space.call_function(self.w_predicate, w_obj)
+            pred = self.space.is_true(w_pred)
+            if pred ^ self.reverse:
                 return w_obj
 
 
 class W_IFilter(_IFilterBase):
-
-    def _call_predicate(self, w_obj):
-        return self.space.is_true(self.space.call_function(self.w_predicate, w_obj))
+    reverse = False
 
 def W_IFilter___new__(space, w_subtype, w_predicate, w_iterable):
     return space.wrap(W_IFilter(space, w_predicate, w_iterable))
@@ -250,9 +250,7 @@ W_IFilter.typedef = TypeDef(
     """)
 
 class W_IFilterFalse(_IFilterBase):
-
-    def _call_predicate(self, w_obj):
-        return not self.space.is_true(self.space.call_function(self.w_predicate, w_obj))
+    reverse = True
 
 def W_IFilterFalse___new__(space, w_subtype, w_predicate, w_iterable):
     return space.wrap(W_IFilterFalse(space, w_predicate, w_iterable))
