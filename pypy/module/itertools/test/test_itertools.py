@@ -12,6 +12,7 @@ class AppTestItertools:
             itertools.repeat(None),
             itertools.takewhile(bool, []),
             itertools.dropwhile(bool, []),
+            itertools.ifilter(None, []),
             ]
 
         for it in iterables:
@@ -128,3 +129,30 @@ class AppTestItertools:
         raises(TypeError, it.next)
 
         raises(TypeError, itertools.dropwhile, bool, None)
+
+    def test_ifilter(self):
+        import itertools
+
+        it = itertools.ifilter(None, [])
+        raises(StopIteration, it.next)
+
+        it = itertools.ifilter(None, [1, 0, 2, 3, 0])
+        for x in [1, 2, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        def is_odd(arg):
+            return (arg % 2 == 1)
+
+        it = itertools.ifilter(is_odd, [1, 2, 3, 4, 5, 6])
+        for x in [1, 3, 5]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+    def test_ifilter_wrongargs(self):
+        import itertools
+
+        it = itertools.ifilter(0, [1])
+        raises(TypeError, it.next)
+
+        raises(TypeError, itertools.ifilter, bool, None)
