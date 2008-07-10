@@ -549,4 +549,5 @@ def ll_inst_type(obj):
         # type(None) -> NULL  (for now)
         return ootype.null(CLASSTYPE)
 
-ll_type = ll_inst_type
+def ll_type(obj):
+    return obj.meta
