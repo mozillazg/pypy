@@ -7,6 +7,7 @@ class Module(MixedModule):
     interpleveldefs = {
         'count'     : 'interp_itertools.W_Count',
         'dropwhile' : 'interp_itertools.W_DropWhile',
+        'ifilter'   : 'interp_itertools.W_IFilter',
         'repeat'    : 'interp_itertools.W_Repeat',
         'takewhile' : 'interp_itertools.W_TakeWhile',
     }

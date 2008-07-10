@@ -196,7 +196,7 @@ W_DropWhile.typedef = TypeDef(
         __new__  = interp2app(W_DropWhile___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
         __iter__ = interp2app(W_DropWhile.iter_w, unwrap_spec=['self']),
         next     = interp2app(W_DropWhile.next_w, unwrap_spec=['self']),
-        __doc__  =     """Make an iterator that drops elements from the iterable as long
+        __doc__  = """Make an iterator that drops elements from the iterable as long
     as the predicate is true; afterwards, returns every
     element. Note, the iterator does not produce any output until the
     predicate is true, so it may have a lengthy start-up time.
@@ -211,4 +211,51 @@ W_DropWhile.typedef = TypeDef(
                 break
         for x in iterable:
             yield x
+    """)
+
+
+class W_IFilter(Wrappable):
+
+    def __init__(self, space, w_predicate, w_iterable):
+        self.space = space
+        if space.is_w(w_predicate, space.w_None):
+            self.w_predicate = space.w_bool
+        else:
+            self.w_predicate = w_predicate
+        self.iterable = space.iter(w_iterable)
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        while True:
+            try:
+                w_obj = self.space.next(self.iterable)
+            except StopIteration:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+            w_bool = self.space.call_function(self.w_predicate, w_obj)
+            if self.space.is_true(w_bool):
+                return w_obj
+
+def W_IFilter___new__(space, w_subtype, w_predicate, w_iterable):
+    return space.wrap(W_IFilter(space, w_predicate, w_iterable))
+
+W_IFilter.typedef = TypeDef(
+        'ifilter',
+        __new__  = interp2app(W_IFilter___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_IFilter.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_IFilter.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that filters elements from iterable returning
+    only those for which the predicate is True.  If predicate is
+    None, return the items that are true.
+
+    Equivalent to :
+
+    def ifilter:
+        if predicate is None:
+            predicate = bool
+        for x in iterable:
+            if predicate(x):
+                yield x
     """)
