@@ -25,10 +25,10 @@ class TestDLOperations:
 
     def test_dlopen(self):
         py.test.raises(OSError, "dlopen(rffi.str2charp('xxxxxxxxxxxx'))")
-        assert dlopen(rffi.str2charp(get_libc_name()))
+        assert dlopen(rffi.str2charp(libc_name))
         
     def get_libc(self):
-        return CDLL(get_libc_name())
+        return CDLL(libc_name)
     
     def get_libm(self):
         if sys.platform == 'win32':
@@ -357,11 +357,11 @@ class TestDLOperations:
 class TestWin32Handles:
     def setup_class(cls):
         if sys.platform != 'win32':
-            py.test.skip("Win-only test")
+            py.test.skip("Handle to libc library, Win-only test")
     
     def test_get_libc_handle(self):
         handle = get_libc_handle()
-        print get_libc_name()
+        print libc_name
         print hex(handle)
         assert handle != 0
         assert handle % 0x1000 == 0

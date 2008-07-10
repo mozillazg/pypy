@@ -228,8 +228,7 @@ if not _MS_WINDOWS:
         # XXX rffi.cast here...
         return res
 
-    def get_libc_name():
-        return ctypes.util.find_library('c')
+    libc_name = ctypes.util.find_library('c')
 
 if _MS_WINDOWS:
     def dlopen(name):
@@ -258,8 +257,7 @@ if _MS_WINDOWS:
 
     get_libc_handle = external('get_libc_handle', [], rwin32.HANDLE)
 
-    def get_libc_name():
-        return rwin32.GetModuleFileName(get_libc_handle())
+    libc_name = rwin32.GetModuleFileName(get_libc_handle())
         
 
 FFI_OK = cConfig.FFI_OK

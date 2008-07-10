@@ -847,7 +847,7 @@ class TestUsingFramework(AbstractGCTestClass):
         import gc
         slong = cast_type_to_ffitype(rffi.LONG)
 
-        libc_name = ll2ctypes.get_libc_name()
+        from pypy.rpython.lltypesystem.ll2ctypes import libc_name
 
         def callback(ll_args, ll_res, stuff):
             gc.collect()
