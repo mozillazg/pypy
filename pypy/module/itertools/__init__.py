@@ -6,6 +6,7 @@ class Module(MixedModule):
 
     interpleveldefs = {
         'count'    : 'interp_itertools.W_Count',
+        'repeat'    : 'interp_itertools.W_Repeat',
     }
 
     appleveldefs = {

@@ -1,9 +1,22 @@
 from pypy.conftest import gettestobjspace
 
 class AppTestItertools: 
-
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['itertools'])
+
+    def test_iterables(self):
+        import itertools
+
+        iterables = [
+            itertools.count(),
+            itertools.repeat(None),
+            ]
+
+        for it in iterables:
+            assert hasattr(it, '__iter__')
+            assert iter(it) is it
+            assert hasattr(it, 'next')
+            assert callable(it.next)
 
     def test_count(self):
         import itertools
@@ -12,15 +25,7 @@ class AppTestItertools:
         for x in range(10):
             assert c.next() == x
 
-    def test_count_iterable(self):
-        import itertools
-
-        c = itertools.count()
-        assert hasattr(c, '__iter__')
-        assert iter(c) is c
-        assert hasattr(c, 'next')
-
-    def test_count_param(self):
+    def test_count_firstval(self):
         import itertools
 
         c = itertools.count(3)
@@ -35,8 +40,9 @@ class AppTestItertools:
         raises(OverflowError, c.next) 
         raises(OverflowError, c.next) 
 
+        raises(OverflowError, itertools.count, sys.maxint + 1)
+
     def test_repeat(self):
-        skip("for now")
         import itertools
 
         o = object()
@@ -45,3 +51,29 @@ class AppTestItertools:
         for x in range(10):
             assert o is r.next()
 
+    def test_repeat_times(self):
+        import itertools
+
+        times = 10
+        r = itertools.repeat(None, times=times)
+        for i in range(times):
+            r.next()
+        raises(StopIteration, r.next)
+
+        r = itertools.repeat(None, times=None)
+        for x in range(10):
+            r.next()    # Should be no StopIteration
+
+        r = itertools.repeat(None, times=0)
+        raises(StopIteration, r.next)
+        raises(StopIteration, r.next)
+
+        r = itertools.repeat(None, times=-1)
+        raises(StopIteration, r.next)
+        raises(StopIteration, r.next)
+
+    def test_repeat_overflow(self):
+        import itertools
+        import sys
+
+        raises(OverflowError, itertools.repeat, None, sys.maxint + 1)
