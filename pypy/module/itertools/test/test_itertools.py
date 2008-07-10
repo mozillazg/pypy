@@ -10,6 +10,7 @@ class AppTestItertools:
         iterables = [
             itertools.count(),
             itertools.repeat(None),
+            itertools.takewhile(bool, []),
             ]
 
         for it in iterables:
@@ -77,3 +78,26 @@ class AppTestItertools:
         import sys
 
         raises(OverflowError, itertools.repeat, None, sys.maxint + 1)
+
+    def test_takewhile(self):
+        import itertools
+
+        tw = itertools.takewhile(bool, [])
+        raises(StopIteration, tw.next)
+
+        tw = itertools.takewhile(bool, [False, True, True])
+        raises(StopIteration, tw.next)
+
+        tw = itertools.takewhile(bool, [1, 2, 3, 0, 1, 1])
+        for x in range(3):
+            assert tw.next() == x + 1
+
+        raises(StopIteration, tw.next)
+
+    def test_takewhile_wrongargs(self):
+        import itertools
+
+        tw = itertools.takewhile(None, [1])
+        raises(TypeError, tw.next)
+
+        raises(TypeError, itertools.takewhile, bool, None)
