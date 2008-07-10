@@ -55,8 +55,54 @@ W_Count.typedef = TypeDef(
             n += 1
     """)
 
+
 class W_Repeat(Wrappable):
 
-    def __init__(self, space):
+    def __init__(self, space, w_obj, w_times):
         self.space = space
+        self.w_obj = w_obj
+        
+        if space.is_w(w_times, space.w_None):
+            self.counting = False
+            self.count = 0
+        else:
+            self.counting = True
+            self.count = self.space.int_w(w_times)
 
+    def next_w(self):
+        if self.counting:
+            if self.count <= 0:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+            self.count -= 1
+        return self.w_obj
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+def W_Repeat___new__(space, w_subtype, w_obj, w_times=None):
+    """
+    Create a new repeat object and call its initializer.
+    """
+    return space.wrap(W_Repeat(space, w_obj, w_times))
+
+W_Repeat.typedef = TypeDef(
+        'repeat',
+        __new__  = interp2app(W_Repeat___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_Repeat.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_Repeat.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that returns object over and over again.
+    Runs indefinitely unless the times argument is specified.  Used
+    as argument to imap() for invariant parameters to the called
+    function. Also used with izip() to create an invariant part of a
+    tuple record.
+
+    Equivalent to :
+
+    def repeat(object, times=None):
+        if times is None:
+            while True:
+                yield object
+        else:
+            for i in xrange(times):
+                yield object
+    """)
