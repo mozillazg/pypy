@@ -341,8 +341,11 @@ class AppTestItertools:
             (itertools.imap, (None,)),
             ]
         for cls, args in iterables:
-            class A(cls):
+            try:
+                class A(cls):
+                    pass
+            except TypeError:
                 pass
-            a = A(*args)
-            assert isinstance(a, A)
+            else:
+                assert False, "Subclassing should fail."
 
