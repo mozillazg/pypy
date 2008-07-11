@@ -229,6 +229,9 @@ class ObjSpace(object):
         self.actionflag.register_action(self.frame_trace_action)
         self.setoptions(**kw)
 
+        from pypy.interpreter.pyframe import PyFrame
+        self.FrameClass = PyFrame    # can be overridden to a subclass
+
 #        if self.config.objspace.logbytecodes:
 #            self.bytecodecounts = {}
 
@@ -484,8 +487,7 @@ class ObjSpace(object):
 
     def createframe(self, code, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
-        from pypy.interpreter import pyframe
-        return pyframe.PyFrame(self, code, w_globals, closure)
+        return self.FrameClass(self, code, w_globals, closure)
 
     def allocate_lock(self):
         """Return an interp-level Lock object if threads are enabled,
