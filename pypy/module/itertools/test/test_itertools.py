@@ -368,6 +368,17 @@ class AppTestItertools:
             else:
                 fail("TypeError expected")
 
+    def test_cycle(self):
+        import itertools
+
+        it = itertools.cycle([])
+        raises(StopIteration, it.next)
+        
+        it = itertools.cycle([1, 2, 3])
+        for x in [1, 2, 3, 1, 2, 3, 1, 2, 3]:
+            assert it.next() == x
+
+
     def test_docstrings(self):
         import itertools
         

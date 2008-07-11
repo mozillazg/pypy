@@ -541,3 +541,46 @@ W_IZip.typedef = TypeDef(
     """)
 W_IZip.typedef.acceptable_as_base_class = False
 
+
+class W_Cycle(Wrappable):
+
+    def __init__(self, space, w_iterable):
+        self.space = space
+        self.saved_w = []
+        self.w_iterable = space.iter(w_iterable)
+        self.saved_iterator = None
+        self.exhausted = False
+
+    def next_w(self):
+        if self.exhausted:
+            if not self.saved_w:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+            try:
+                w_obj = self.saved_iterator.next()
+            except StopIteration:
+                self.saved_iterator = iter(self.saved_w)
+                w_obj = self.saved_iterator.next()
+        else:
+            try:
+                w_obj = self.space.next(self.w_iterable)
+            except OperationError, e:
+                if e.match(self.space, self.space.w_StopIteration):
+                    self.exhausted = True
+                    if not self.saved_w:
+                        raise
+                    self.saved_iterator = iter(self.saved_w)
+                    w_obj = self.saved_iterator.next()
+                else:
+                    raise
+            else:
+                self.saved_w.append(w_obj)
+        return w_obj
+
+def W_Cycle___new__(space, w_subtype, w_iterable):
+    return space.wrap(W_Cycle(space, w_iterable))
+
+W_Cycle.typedef = TypeDef(
+        'cycle',
+        __new__  = interp2app(W_Cycle___new__, unwrap_spec=[ObjSpace, W_Root, W_Root]),
+        next     = interp2app(W_Cycle.next_w, unwrap_spec=['self']))
+W_Cycle.typedef.acceptable_as_base_class = False

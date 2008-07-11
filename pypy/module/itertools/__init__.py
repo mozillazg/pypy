@@ -25,16 +25,17 @@ class Module(MixedModule):
     """
 
     interpleveldefs = {
-        'chain'     : 'interp_itertools.W_Chain',
-        'count'     : 'interp_itertools.W_Count',
-        'dropwhile' : 'interp_itertools.W_DropWhile',
-        'ifilter'   : 'interp_itertools.W_IFilter',
-        'ifilterfalse' : 'interp_itertools.W_IFilterFalse',
-        'imap'      : 'interp_itertools.W_IMap',
-        'islice'    : 'interp_itertools.W_ISlice',
-        'izip'      : 'interp_itertools.W_IZip',
-        'repeat'    : 'interp_itertools.W_Repeat',
-        'takewhile' : 'interp_itertools.W_TakeWhile',
+        'chain'         : 'interp_itertools.W_Chain',
+        'count'         : 'interp_itertools.W_Count',
+        'cycle'         : 'interp_itertools.W_Cycle',
+        'dropwhile'     : 'interp_itertools.W_DropWhile',
+        'ifilter'       : 'interp_itertools.W_IFilter',
+        'ifilterfalse'  : 'interp_itertools.W_IFilterFalse',
+        'imap'          : 'interp_itertools.W_IMap',
+        'islice'        : 'interp_itertools.W_ISlice',
+        'izip'          : 'interp_itertools.W_IZip',
+        'repeat'        : 'interp_itertools.W_Repeat',
+        'takewhile'     : 'interp_itertools.W_TakeWhile',
     }
 
     appleveldefs = {
