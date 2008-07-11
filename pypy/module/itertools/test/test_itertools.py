@@ -16,6 +16,7 @@ class AppTestItertools:
             itertools.ifilterfalse(None, []),
             itertools.islice([], 0),
             itertools.chain(),
+            itertools.imap(None),
             ]
 
         for it in iterables:
@@ -277,6 +278,36 @@ class AppTestItertools:
             except TypeError, e:
                 assert str(e) == "chain argument #%d must support iteration" % (x + 1)
 
+    def test_imap(self):
+        import itertools
+
+        it = itertools.imap(None)
+        raises(StopIteration, it.next)
+
+        obj_list = [object(), object(), object()]
+        it = itertools.imap(None, obj_list)
+        for x in obj_list:
+            assert it.next() == (x, )
+        raises(StopIteration, it.next)
+
+        it = itertools.imap(None, [1, 2, 3], [4], [5, 6])
+        assert it.next() == (1, 4, 5)
+        raises(StopIteration, it.next)
+
+        it = itertools.imap(None, [], [], [1], [])
+        raises(StopIteration, it.next)
+
+        it = itertools.imap(str, [0, 1, 0, 1])
+        for x in ['0', '1', '0', '1']:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        import operator
+        it = itertools.imap(operator.add, [1, 2, 3], [4, 5, 6])
+        for x in [5, 7, 9]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
     def test_docstrings(self):
         import itertools
         
@@ -290,6 +321,7 @@ class AppTestItertools:
             itertools.ifilterfalse,
             itertools.islice,
             itertools.chain,
+            itertools.imap,
             ]
         for method in methods:
             assert method.__doc__
@@ -306,6 +338,7 @@ class AppTestItertools:
             (itertools.ifilterfalse, (None, [])),
             (itertools.islice, ([], 0)),
             (itertools.chain, ()),
+            (itertools.imap, (None,)),
             ]
         for cls, args in iterables:
             class A(cls):

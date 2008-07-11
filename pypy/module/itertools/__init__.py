@@ -30,6 +30,7 @@ class Module(MixedModule):
         'dropwhile' : 'interp_itertools.W_DropWhile',
         'ifilter'   : 'interp_itertools.W_IFilter',
         'ifilterfalse' : 'interp_itertools.W_IFilterFalse',
+        'imap'      : 'interp_itertools.W_IMap',
         'islice'    : 'interp_itertools.W_ISlice',
         'repeat'    : 'interp_itertools.W_Repeat',
         'takewhile' : 'interp_itertools.W_TakeWhile',
