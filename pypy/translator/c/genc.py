@@ -312,7 +312,7 @@ class CStandaloneBuilder(CBuilder):
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
-    def getccompiler(self):
+    def getccompiler(self):            
         cc = self.config.translation.cc
         # Copy extrafiles to target directory, if needed
         extrafiles = []
@@ -341,7 +341,12 @@ class CStandaloneBuilder(CBuilder):
         else:
             eci = self.eci.merge(ExternalCompilationInfo(includes=
                                                          [str(self.targetdir)]))
-            self.adaptflags(compiler)
+            if sys.platform == 'darwin':
+                compiler.compile_extra.append('-mdynamic-no-pic')
+            if self.config.translation.compilerflags:
+                compiler.compile_extra.append(self.config.translation.compilerflags)
+            if self.config.translation.linkerflags:
+                compiler.link_extra.append(self.config.translation.linkerflags)
             compiler.build()
         self.executable_name = str(compiler.outputfilename)
         self._compiled = True
@@ -350,16 +355,6 @@ class CStandaloneBuilder(CBuilder):
     def cmdexec(self, args=''):
         assert self._compiled
         return py.process.cmdexec('"%s" %s' % (self.executable_name, args))
-
-    def adaptflags(self, compiler):
-        if sys.platform == 'darwin':
-            compiler.compile_extra.append('-mdynamic-no-pic')
-        if sys.platform == 'sunos5':
-            compiler.link_extra.append("-lrt")
-        if self.config.translation.compilerflags:
-            compiler.compile_extra.append(self.config.translation.compilerflags)
-        if self.config.translation.linkerflags:
-            compiler.link_extra.append(self.config.translation.linkerflags)
 
     def gen_makefile(self, targetdir):
         def write_list(lst, prefix):
@@ -374,8 +369,12 @@ class CStandaloneBuilder(CBuilder):
         self.eci = self.eci.merge(ExternalCompilationInfo(
             includes=['.', str(self.targetdir)]))
         compiler = self.getccompiler()
-       
-        self.adaptflags(compiler)
+        if sys.platform == 'darwin':
+            compiler.compile_extra.append('-mdynamic-no-pic')
+        if self.config.translation.compilerflags:
+            compiler.compile_extra.append(self.config.translation.compilerflags)
+        if self.config.translation.linkerflags:
+            compiler.link_extra.append(self.config.translation.linkerflags)
         assert self.config.translation.gcrootfinder != "llvmgc"
         cfiles = []
         ofiles = []
@@ -399,9 +398,7 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.cc:
             cc = self.config.translation.cc
         else:
-            cc = self.eci.platform.get_compiler()
-            if cc is None:
-                cc = 'gcc'
+            cc = 'gcc'
         make_no_prof = ''
         if self.has_profopt():
             profopt = self.config.translation.profopt

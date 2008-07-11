@@ -180,16 +180,16 @@ def benchmark():
 def main(backends=[]):
     if backends == []:  #_ prefix means target specific option, # prefix to outcomment
         backends = [backend.strip() for backend in """
-            c--opt=0--_no-allworkingmodules
-            c--stackless--gc=boehm--opt=3--_no-allworkingmodules
-            c--gc=boehm--opt=3
-            c--thread--gc=hybrid--opt=3--_no-allworkingmodules
-            c--gc=semispace--opt=3--_no-allworkingmodules
-            c--gc=generation--opt=3--_no-allworkingmodules
-            c--gc=hybrid--opt=3--_no-allworkingmodules
-            cli--opt=3--_no-allworkingmodules
-            jvm--opt=3--_no-allworkingmodules
-            jvm--inline-threshold=0--opt=3--_no-allworkingmodules
+            c
+            c--stackless--_faassen
+            c--_faassen--_allworkingmodules
+            c--thread--gc=hybrid--_faassen
+            c--gc=semispace--_faassen
+            c--gc=generation--_faassen
+            c--gc=hybrid--_faassen
+            cli--_faassen
+            jvm--_faassen
+            jvm--inline-threshold=0--_faassen
             """.split('\n') if backend.strip() and not backend.strip().startswith('#')]
     print time.ctime()
     for backend in backends:

@@ -12,11 +12,10 @@ import math
 #from pypy.rlib.rstr import str_replace
 
 import os
-import pdb
 
 # HELPERS ----------------------------------------------------------------------
 
-def has_cartridge_battery(cartridge_type):    
+def has_cartridge_battery(self, cartridge_type):    
     return (cartridge_type == constants.TYPE_MBC1_RAM_BATTERY 
                 or cartridge_type == constants.TYPE_MBC2_BATTERY 
                 or cartridge_type == constants.TYPE_MBC3_RTC_BATTERY 
@@ -67,17 +66,12 @@ class CartridgeTruncatedException(Exception):
 # CARTRIDGE
 
 class CartridgeManager(object):
-    """
-        Delegates the loading to the CartridgeFile,
-        verifies the Cartridge by calculating the checksums
-    """
+    
     def __init__(self, clock):
         assert isinstance(clock, Clock)
         self.clock     = clock
         self.cartridge = None
         self.mbc       = None
-        self.rom       = [0]
-        self.ram       = [0]
         
     def reset(self):
         if not self.has_battery():
@@ -100,7 +94,7 @@ class CartridgeManager(object):
         self.load_battery()
         self.mbc = self.create_bank_controller(self.get_memory_bank_type(), 
                                                self.rom, self.ram, self.clock)
-        #print self
+        print self
         
     def check_rom(self):
         if not self.verify_header():
@@ -169,9 +163,6 @@ class CartridgeManager(object):
         return (checksum == self.get_checksum())
     
     def verify_header(self):
-        """
-        The memory at 0100-014F contains the cartridge header. 
-        """
         if len(self.rom) < 0x0150:
             return False
         checksum = 0xE7
@@ -194,8 +185,7 @@ class CartridgeManager(object):
     
 class CartridgeFile(object):
     """
-        File mapping. Holds the file contents and is responsible for reading
-        and writing
+        File mapping. Holds the file contents
     """
     def __init__(self, file=None):
         self.reset()
@@ -288,16 +278,15 @@ class MBC(iMemory):
         self.max_ram_bank_size = max_ram_bank_size
         self.rom_bank_size     = rom_bank_size
         self.rom_bank          = self.rom_bank_size
-        self.rom        = []
-        self.ram        = []
         self.reset()
         self.set_rom(rom)
         self.set_ram(ram)
 
     def reset(self):
-        self.rom_bank   = self.rom_bank_size
         self.ram_bank   = 0
         self.ram_enable = False
+        self.rom        = []
+        self.ram        = []
         self.rom_size   = 0
         self.ram_size   = 0
     
@@ -368,7 +357,7 @@ class DefaultMBC(MBC):
 
 class MBC1(MBC):
     """
-    PyGirl Emulator
+    PyGirl GameBoy (TM) Emulator
     
     Memory Bank Controller 1 (2MB ROM, 32KB RAM)
      
@@ -430,7 +419,8 @@ class MBC1(MBC):
       
 class MBC2(MBC):
     """
-    PyGirl GameBoPyGirl 
+    PyGirl GameBoy (TM) Emulator
+    
     Memory Bank Controller 2 (256KB ROM, 512x4bit RAM)
     
     0000-3FFF    ROM Bank 0 (16KB)
@@ -490,7 +480,9 @@ class MBC2(MBC):
 
 class MBC3(MBC):
     """
-    PyGirl GameBoy (TM) EmulatPyGirlBank Controller 3 (2MB ROM, 32KB RAM, Real Time Clock)
+    PyGirl GameBoy (TM) Emulator
+    
+    Memory Bank Controller 3 (2MB ROM, 32KB RAM, Real Time Clock)
     
     0000-3FFF    ROM Bank 0 (16KB)
     4000-7FFF    ROM Bank 1-127 (16KB)
@@ -545,7 +537,7 @@ class MBC3(MBC):
         raise InvalidMemoryAccessException("MBC3.read_clock_data invalid address %i")
     
     def write(self, address, data):
-        #print hex(address), hex(data)
+        print hex(address), hex(data)
         # 0000-1FFF
         if address <= 0x1FFF:
             self.write_ram_enable(address, data)
@@ -642,7 +634,7 @@ class MBC5(MBC):
     """
     PyGirl GameBoy (TM) Emulator
     
-    MPyGirler 5 (8MB ROM, 128KB RAM)
+    Memory Bank Controller 5 (8MB ROM, 128KB RAM)
      *
     0000-3FFF    ROM Bank 0 (16KB)
     4000-7FFF    ROM Bank 1-511 (16KB)
@@ -703,7 +695,7 @@ class HuC3(MBC):
     """
     PyGirl GameBoy (TM) Emulator
     
-    Hudson Memory PyGirl2MB ROM, 128KB RAM, RTC)
+    Hudson Memory Bank Controller 3 (2MB ROM, 128KB RAM, RTC)
     
     0000-3FFF    ROM Bank 0 (16KB)
     4000-7FFF    ROM Bank 1-127 (16KB)

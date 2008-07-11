@@ -2,7 +2,7 @@ from pypy.tool.udir import udir
 import os
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rlib import rmmap as mmap
-from pypy.rlib.rmmap import RTypeError, RValueError, alloc, free
+from pypy.rlib.rmmap import RTypeError, RValueError
 import sys
 
 class TestMMap:
@@ -382,18 +382,3 @@ class TestMMap:
             return r
 
         compile(func, [int])
-
-def test_alloc_free():
-    map_size = 65536
-    data = alloc(map_size)
-    for i in range(0, map_size, 171):
-        data[i] = chr(i & 0xff)
-    for i in range(0, map_size, 171):
-        assert data[i] == chr(i & 0xff)
-    free(data, map_size)
-
-def test_compile_alloc_free():
-    from pypy.translator.c.test.test_genc import compile
-
-    fn = compile(test_alloc_free, [])
-    fn()
