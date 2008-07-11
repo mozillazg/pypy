@@ -99,6 +99,7 @@ class TestExecutionContext:
         check_snippet('args = (1, 2); max(*args)')
         check_snippet('max(1, 2, **{})')
         check_snippet('args = (1, 2); max(*args, **{})')
+        check_snippet('abs(val=0)')
         
     def test_llprofile_c_exception(self):
         l = []
