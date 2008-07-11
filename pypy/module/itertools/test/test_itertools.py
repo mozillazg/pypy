@@ -461,22 +461,23 @@ class AppTestItertools:
     
     def test_subclassing(self):
         import itertools
-        # Although implemented as classes, the itertools functions should not be subclassable
+        # Although (mostly) implemented as classes, the itertools functions should not be subclassable
         iterables = [
-            (itertools.chain, ()),
-            (itertools.count, ()),
-            (itertools.cycle, ()),
-            (itertools.dropwhile, (bool, [])),
-            (itertools.ifilter, (None, [])),
-            (itertools.ifilterfalse, (None, [])),
-            (itertools.imap, (None,)),
-            (itertools.islice, ([], 0)),
-            (itertools.izip, ()),
-            (itertools.repeat, (None,)),
-            (itertools.starmap, (bool, [])),
-            (itertools.takewhile, (bool, [])),
+            itertools.chain,
+            itertools.count,
+            itertools.cycle,
+            itertools.dropwhile,
+            itertools.ifilter,
+            itertools.ifilterfalse,
+            itertools.imap,
+            itertools.islice,
+            itertools.izip,
+            itertools.repeat,
+            itertools.starmap,
+            itertools.takewhile,
+            itertools.tee,
             ]
-        for cls, args in iterables:
+        for cls in iterables:
             try:
                 class A(cls):
                     pass
@@ -484,4 +485,4 @@ class AppTestItertools:
                 pass
             else:
                 assert False, "Subclassing should fail."
-    
+
