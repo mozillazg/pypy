@@ -617,7 +617,7 @@ class W_StarMap(Wrappable):
 
         return self.space.call(self.w_fun, w_obj)
 
-def W_StarMap___new__(space, w_subtype, w_fun,w_iterable):
+def W_StarMap___new__(space, w_subtype, w_fun, w_iterable):
     return space.wrap(W_StarMap(space, w_fun, w_iterable))
 
 W_StarMap.typedef = TypeDef(
@@ -642,3 +642,73 @@ W_StarMap.typedef = TypeDef(
 W_StarMap.typedef.acceptable_as_base_class = False
 
 
+def tee(space, w_iterable, n=2):
+    """Return n independent iterators from a single iterable.
+    Note : once tee() has made a split, the original iterable
+    should not be used anywhere else; otherwise, the iterable could get
+    advanced without the tee objects being informed.
+    
+    Note : this member of the toolkit may require significant auxiliary
+    storage (depending on how much temporary data needs to be stored).
+    In general, if one iterator is going to use most or all of the
+    data before the other iterator, it is faster to use list() instead
+    of tee()
+    
+    Equivalent to :
+    
+    def tee(iterable, n=2):
+        def gen(next, data={}, cnt=[0]):
+            for i in count():
+                if i == cnt[0]:
+                    item = data[i] = next()
+                    cnt[0] += 1
+                else:
+                    item = data.pop(i)
+                yield item
+        it = iter(iterable)
+        return tuple([gen(it.next) for i in range(n)])
+    """
+    if n < 0:
+        raise OperationError(space.w_ValueError, space.wrap("n must be >= 0"))
+    
+    tee_state = TeeState(space, w_iterable)
+    iterators_w = [space.wrap(W_TeeIterable(space, tee_state)) for x in range(n)]
+    return space.newtuple(iterators_w)
+tee.unwrap_spec = [ObjSpace, W_Root, int]
+
+class TeeState(object):
+    def __init__(self, space, w_iterable):
+        self.space = space
+        self.w_iterable = self.space.iter(w_iterable)
+        self.num_saved = 0
+        self.saved_w = []
+
+    def get_next(self, index):
+        if index >= self.num_saved:
+            w_obj = self.space.next(self.w_iterable)
+            self.saved_w.append(w_obj)
+            self.num_saved += 1
+            return w_obj
+        else:
+            return self.saved_w[index]
+
+class W_TeeIterable(Wrappable):
+    def __init__(self, space, tee_state):
+        self.space = space
+        self.tee_state = tee_state
+        self.index = 0
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        try:
+            w_obj = self.tee_state.get_next(self.index)
+            return w_obj
+        finally:
+            self.index += 1
+
+W_TeeIterable.typedef = TypeDef(
+        '_tee',
+        __iter__ = interp2app(W_TeeIterable.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_TeeIterable.next_w, unwrap_spec=['self']))

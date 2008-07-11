@@ -379,7 +379,38 @@ class AppTestItertools:
         it = itertools.starmap(bool, [0])
         raises(TypeError, it.next)
 
-    
+    def test_tee(self):
+        import itertools
+
+        it1, it2 = itertools.tee([])
+        raises(StopIteration, it1.next)
+        raises(StopIteration, it2.next)
+
+        it1, it2 = itertools.tee([1, 2, 3])
+        for x in [1, 2]:
+            assert it1.next() == x
+        for x in [1, 2, 3]:
+            assert it2.next() == x
+        assert it1.next() == 3
+        raises(StopIteration, it1.next)
+        raises(StopIteration, it2.next)
+
+        assert itertools.tee([], 0) == ()
+
+        iterators = itertools.tee([1, 2, 3], 10)
+        for it in iterators:
+            for x in [1, 2, 3]:
+                assert it.next() == x
+            raises(StopIteration, it.next)
+
+    def test_iterables_wrongargs(self):
+        import itertools
+        
+        raises(TypeError, itertools.tee, 0)
+        raises(ValueError, itertools.tee, [], -1)
+        raises(TypeError, itertools.tee, [], None)
+
+
     def test_iterables(self):
         import itertools
     
@@ -396,6 +427,8 @@ class AppTestItertools:
             itertools.repeat(None),
             itertools.starmap(bool, []),
             itertools.takewhile(bool, []),
+            itertools.tee([])[0],
+            itertools.tee([])[1],
             ]
     
         for it in iterables:
@@ -403,7 +436,7 @@ class AppTestItertools:
             assert iter(it) is it
             assert hasattr(it, 'next')
             assert callable(it.next)
-    
+
     def test_docstrings(self):
         import itertools
         
@@ -421,6 +454,7 @@ class AppTestItertools:
             itertools.repeat,
             itertools.starmap,
             itertools.takewhile,
+            itertools.tee,
             ]
         for method in methods:
             assert method.__doc__

@@ -37,6 +37,7 @@ class Module(MixedModule):
         'repeat'        : 'interp_itertools.W_Repeat',
         'starmap'       : 'interp_itertools.W_StarMap',
         'takewhile'     : 'interp_itertools.W_TakeWhile',
+        'tee'           : 'interp_itertools.tee',
     }
 
     appleveldefs = {
