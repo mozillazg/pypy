@@ -136,6 +136,8 @@ class ExecutionContext:
         "Trace the call of a function"
         if self.w_tracefunc is not None or self.profilefunc is not None:
             self._trace(frame, 'call', self.space.w_None)
+            if self.profilefunc:
+                frame.is_being_profiled = True
 
     def return_trace(self, frame, w_retval):
         "Trace the return from a function"
@@ -240,7 +242,7 @@ class ExecutionContext:
 
         # Profile cases
         if self.profilefunc is not None:
-            if event not in ['leaveframe', 'call', 'c_call', 'c_return']:
+            if event not in ['leaveframe', 'call', 'c_call', 'c_return', 'c_exception']:
                 return
 
             last_exception = None

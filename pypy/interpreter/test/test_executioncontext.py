@@ -66,19 +66,60 @@ class TestExecutionContext:
         
         def profile_func(space, w_arg, frame, event, w_aarg):
             assert w_arg is space.w_None
-            l.append((event, frame, w_aarg))
+            l.append(event)
         
         space = self.space
         space.getexecutioncontext().setllprofile(profile_func, space.w_None)
         space.appexec([], """():
-        l = []
-        l.append(3)
-
-        return l
+        pass
         """)
         space.getexecutioncontext().setllprofile(None, None)
-        from pprint import pprint
-        pprint(l)
-        #pprint([(x, y, z) for x,y,z in l if x in ('call','c_call')])
-        assert l == ['call', 'return', 'call', 'c_call', 'c_return', 'return']
+        assert l == ['call', 'return', 'call', 'return']
+
+    def test_llprofile_c_call(self):
+        l = []
+        
+        def profile_func(space, w_arg, frame, event, w_aarg):
+            assert w_arg is space.w_None
+            l.append(event)
+
+        space = self.space
+        space.getexecutioncontext().setllprofile(profile_func, space.w_None)
+
+        def check_snippet(snippet):
+            space.appexec([], """():
+            %s
+            return
+            """ % snippet)
+            space.getexecutioncontext().setllprofile(None, None)
+            assert l == ['call', 'return', 'call', 'c_call', 'c_return', 'return']
+
+        check_snippet('l = []; l.append(42)')
+        check_snippet('max(1, 2)')
+        check_snippet('args = (1, 2); max(*args)')
+        check_snippet('max(1, 2, **{})')
+        check_snippet('args = (1, 2); max(*args, **{})')
+        
+    def test_llprofile_c_exception(self):
+        l = []
+        
+        def profile_func(space, w_arg, frame, event, w_aarg):
+            assert w_arg is space.w_None
+            l.append(event)
+
+        space = self.space
+        space.getexecutioncontext().setllprofile(profile_func, space.w_None)
+
+        def check_snippet(snippet):
+            space.appexec([], """():
+            try:
+                %s
+            except:
+                pass
+            return
+            """ % snippet)
+            space.getexecutioncontext().setllprofile(None, None)
+            assert l == ['call', 'return', 'call', 'c_call', 'c_exception', 'return']
+
+        check_snippet('d = {}; d.__getitem__(42)')
 
