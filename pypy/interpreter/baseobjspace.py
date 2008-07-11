@@ -694,17 +694,10 @@ class ObjSpace(object):
         return self.call_args(w_func, args)
 
     def call_valuestack(self, w_func, nargs, frame):
-        from pypy.interpreter.function import Function, Method
-        from pypy.interpreter.gateway import BuiltinCode
+        from pypy.interpreter.function import Function, Method, is_builtin_code
         if frame.is_being_profiled:
             ec = self.getexecutioncontext()
-            is_c_call = False
-            if isinstance(w_func, Method):
-                code = w_func.w_function.getcode()
-            elif isinstance(w_func, Function):
-                code = w_func.getcode()
-            if isinstance(code, BuiltinCode):
-                is_c_call = True
+            is_c_call = is_builtin_code(w_func)
 
             # XXX: this code is copied&pasted :-( from the slow path
             # below. The profiling info could be not very accurate

@@ -856,6 +856,7 @@ class __extend__(pyframe.PyFrame):
                       
     def call_function(f, oparg, w_star=None, w_starstar=None):
         from pypy.rlib import rstack # for resume points
+        from pypy.interpreter.function import is_builtin_code
     
         n_arguments = oparg & 0xff
         n_keywords = (oparg>>8) & 0xff
@@ -865,7 +866,20 @@ class __extend__(pyframe.PyFrame):
         arguments = f.popvalues(n_arguments)
         args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
         w_function  = f.popvalue()
-        w_result = f.space.call_args(w_function, args)
+        if f.is_being_profiled and is_builtin_code(w_function):
+            is_c_call = is_builtin_code(w_function)
+            ec = f.space.getexecutioncontext()
+            if is_c_call:
+                ec.c_call_trace(f, w_function)
+            try:
+                w_result = f.space.call_args(w_function, args)
+            except OperationError, e:
+                if is_c_call:
+                    ec.c_exception_trace(f, e)
+            if is_c_call:
+                ec.c_return_trace(f, w_function)
+        else:
+            w_result = f.space.call_args(w_function, args)
         rstack.resume_point("call_function", f, returns=w_result)
         f.pushvalue(w_result)
         
