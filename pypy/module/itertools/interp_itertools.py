@@ -476,6 +476,7 @@ class W_IMap(Wrappable):
         if self.identity_fun:
             return self.space.newtuple(w_objects)
         else:
+            # XXX cannot use '*w_objects'; see space.call()
             return self.space.call_function(self.w_fun, *w_objects)
 
 
@@ -712,3 +713,4 @@ W_TeeIterable.typedef = TypeDef(
         '_tee',
         __iter__ = interp2app(W_TeeIterable.iter_w, unwrap_spec=['self']),
         next     = interp2app(W_TeeIterable.next_w, unwrap_spec=['self']))
+W_TeeIterable.typedef.acceptable_as_base_class = False
