@@ -876,6 +876,7 @@ class __extend__(pyframe.PyFrame):
             except OperationError, e:
                 if is_c_call:
                     ec.c_exception_trace(f, e)
+                raise
             if is_c_call:
                 ec.c_return_trace(f, w_function)
         else:
