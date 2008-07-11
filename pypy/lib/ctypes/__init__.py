@@ -24,19 +24,13 @@ if _os.name in ("nt", "ce"):
 
 DEFAULT_MODE = RTLD_LOCAL
 if _os.name == "posix" and _sys.platform == "darwin":
-    import gestalt
+    import platform
 
-    # gestalt.gestalt("sysv") returns the version number of the
-    # currently active system file as BCD.
-    # On OS X 10.4.6 -> 0x1046
-    # On OS X 10.2.8 -> 0x1028
-    # See also http://www.rgaros.nl/gestalt/
-    #
     # On OS X 10.3, we use RTLD_GLOBAL as default mode
     # because RTLD_LOCAL does not work at least on some
     # libraries.
 
-    if gestalt.gestalt("sysv") < 0x1040:
+    if [10, 4] > [int(x) for x in platform.release().split('.')[:2]]:
         DEFAULT_MODE = RTLD_GLOBAL
 
 from _ctypes import FUNCFLAG_CDECL as _FUNCFLAG_CDECL, \
