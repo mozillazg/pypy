@@ -278,6 +278,8 @@ class AppTestItertools:
                 itertools.chain(*args)
             except TypeError, e:
                 assert str(e) == "chain argument #%d must support iteration" % (x + 1)
+            else:
+                fail("TypeError expected")
 
     def test_imap(self):
         import itertools
@@ -309,6 +311,18 @@ class AppTestItertools:
             assert it.next() == x
         raises(StopIteration, it.next)
 
+    def test_imap_wrongargs(self):
+        import itertools
+        
+        # Duplicate python 2.4 behaviour for invalid arguments
+        it = itertools.imap(0)
+        raises(StopIteration, it.next)
+        it = itertools.imap(0, [])
+        raises(StopIteration, it.next)
+        it = itertools.imap(0, [0])
+        raises(TypeError, it.next)
+        raises(TypeError, itertools.imap, None, 0)
+
     def test_izip(self):
         import itertools
 
@@ -338,6 +352,21 @@ class AppTestItertools:
         assert it1.next() == 4
         raises(StopIteration, it.next)
         assert it1.next() == 5
+
+    def test_izip_wrongargs(self):
+        import itertools
+        
+        # Duplicate python 2.4 behaviour for invalid arguments
+        raises(TypeError, itertools.izip, None, 0)
+
+        for x in range(10):
+            args = [()] * x + [None] + [()] * (9 - x)
+            try:
+                itertools.izip(*args)
+            except TypeError, e:
+                assert str(e) == "izip argument #%d must support iteration" % (x + 1)
+            else:
+                fail("TypeError expected")
 
     def test_docstrings(self):
         import itertools
