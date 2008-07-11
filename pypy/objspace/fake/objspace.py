@@ -1,14 +1,15 @@
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, W_Root
+from pypy.interpreter.typedef import TypeDef
 from pypy.rlib.nonconst import NonConstant
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib.rbigint import rbigint
 
-class W_Type(W_Root):
-    _attrs_ = ()
+#class W_Type(W_Root):
+#    _attrs_ = ()
 
 class W_Object(W_Root):
     _attrs_ = ()
-W_Object.typedef = W_Type()
+W_Object.typedef = TypeDef('foobar')
 
 def make_dummy(a=W_Object(), b=W_Object()):
     def fn(*args):
