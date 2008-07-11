@@ -315,20 +315,12 @@ class W_ISlice (Wrappable):
         else:
             skip = self.step - 1
 
-        try:
-            while skip > 0:
-                self.space.next(self.iterable)
-                skip -= 1
-                self.stop -= 1
+        while skip > 0:
+            self.space.next(self.iterable)
+            skip -= 1
+            self.stop -= 1
 
-        except StopIteration:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
-        try:
-            w_obj = self.space.next(self.iterable)
-        except StopIteration:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
+        w_obj = self.space.next(self.iterable)
         self.stop -= 1
         return w_obj
 
