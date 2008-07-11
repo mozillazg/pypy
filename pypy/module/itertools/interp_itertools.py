@@ -435,6 +435,7 @@ W_Chain.typedef = TypeDef(
 W_Chain.typedef.acceptable_as_base_class = False
 
 class W_IMap(Wrappable):
+    _error_name = "imap"
 
     def __init__(self, space, w_fun, args_w):
         self.space = space
@@ -448,7 +449,7 @@ class W_IMap(Wrappable):
                 iterator_w = space.iter(iterable_w)
             except OperationError, e:
                 if e.match(self.space, self.space.w_TypeError):
-                    raise OperationError(space.w_TypeError, space.wrap("imap argument #" + str(i + 1) + " must support iteration"))
+                    raise OperationError(space.w_TypeError, space.wrap(self._error_name + " argument #" + str(i + 1) + " must support iteration"))
                 else:
                     raise
             else:
@@ -511,6 +512,7 @@ W_IMap.typedef.acceptable_as_base_class = False
 
 
 class W_IZip(W_IMap):
+    _error_name = "izip"
 
     def __init__(self, space, args_w):
         super(W_IZip, self).__init__(space, space.w_None, args_w)
