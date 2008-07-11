@@ -104,6 +104,31 @@ class ExecutionContext:
         space.setitem(w_globals, w_key, w_value)
         return w_globals
 
+    def c_call_llprofile(self, w_func):
+        "Profile the call of a builtin function"
+        if self.profilefunc is not None:
+            self._llprofile('c_call', w_func)
+
+    def c_return_llprofile(self, w_retval):
+        "Profile the return from a builtin function"
+        if self.profilefunc is not None:
+            self._llprofile('c_return', w_retval)
+
+    def c_exception_llprofile(self, operationerr):
+        "Profile function called upon OperationError."
+        if self.profilefunc is not None:
+            self._llprofile('c_exception', operationerr)
+
+    def _llprofile(self, event, w_arg):
+        fr = self.framestack.items
+        space = self.space
+        w_callback = self.profilefunc
+        if w_callback is not None:
+            frame = None
+            if fr:
+                frame = fr[0]
+            self.profilefunc(space, self.w_profilefuncarg, frame, event, w_arg)
+
     def call_trace(self, frame):
         "Trace the call of a function"
         if self.w_tracefunc is not None or self.profilefunc is not None:
@@ -182,7 +207,7 @@ class ExecutionContext:
         space = self.space
         
         # Tracing cases
-        if event == 'call':
+        if event in ['call']:
             w_callback = self.w_tracefunc
         else:
             w_callback = frame.w_f_trace

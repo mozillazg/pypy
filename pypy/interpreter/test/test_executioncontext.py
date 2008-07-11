@@ -62,12 +62,11 @@ class TestExecutionContext:
         assert space.sys.checkinterval / 10 < i < space.sys.checkinterval * 3
 
     def test_llprofile(self):
-        py.test.skip("not working yet")
         l = []
         
         def profile_func(space, w_arg, frame, event, w_aarg):
             assert w_arg is space.w_None
-            l.append(event)
+            l.append((event, frame, w_aarg))
         
         space = self.space
         space.getexecutioncontext().setllprofile(profile_func, space.w_None)
@@ -76,5 +75,7 @@ class TestExecutionContext:
         l.append(3)
         """)
         space.getexecutioncontext().setllprofile(None, None)
+        from pprint import pprint
+        pprint([(x, y, z) for x,y,z in l if x in ('call','c_call')])
         assert l == ['call', 'return', 'call', 'c_call', 'c_return', 'return']
 

@@ -480,10 +480,13 @@ class BuiltinCode(eval.Code):
 
     def funcrun(self, func, args):
         space = func.space
+        ctx = space.getexecutioncontext()
         activation = self.activation
         scope_w = args.parse(func.name, self.sig, func.defs_w)
         try:
+            ctx.c_call_llprofile(activation._run)
             w_result = activation._run(space, scope_w)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt,
                                  space.w_None) 
@@ -509,8 +512,11 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
 
     def funcrun(self, func, args):
         space = func.space
+        ctx = space.getexecutioncontext()
         try:
+            ctx.c_call_llprofile(self.func__args__)
             w_result = self.func__args__(space, args)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
@@ -533,13 +539,16 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
 
     def funcrun(self, func, args):
         space = func.space
+        ctx = space.getexecutioncontext()
         try:
             w_obj, newargs = args.popfirst()
         except IndexError:
             return BuiltinCode.funcrun(self, func, args)
         else:
             try:
+                ctx.c_call_llprofile(self.func__args__)
                 w_result = self.func__args__(space, w_obj, newargs)
+                ctx.c_return_llprofile(w_result)
             except KeyboardInterrupt: 
                 raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
             except MemoryError: 
@@ -562,7 +571,10 @@ class BuiltinCode0(BuiltinCode):
     def fastcall_0(self, space, w_func):
         self = hint(self, deepfreeze=True)
         try:
+            ctx = space.getexecutioncontext()
+            ctx.c_call_llprofile(self.fastfunc_0)
             w_result = self.fastfunc_0(space)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
@@ -578,7 +590,10 @@ class BuiltinCode1(BuiltinCode):
     def fastcall_1(self, space, w_func, w1):
         self = hint(self, deepfreeze=True)
         try:
+            ctx = space.getexecutioncontext()
+            ctx.c_call_llprofile(self.fastfunc_1)
             w_result = self.fastfunc_1(space, w1)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
@@ -601,7 +616,10 @@ class BuiltinCode2(BuiltinCode):
     def fastcall_2(self, space, w_func, w1, w2):
         self = hint(self, deepfreeze=True)
         try:
+            ctx = space.getexecutioncontext()
+            ctx.c_call_llprofile(self.fastfunc_2)
             w_result = self.fastfunc_2(space, w1, w2)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
@@ -621,10 +639,13 @@ class BuiltinCode2(BuiltinCode):
         return w_result
 
 class BuiltinCode3(BuiltinCode):
-    def fastcall_3(self, space, func, w1, w2, w3):
+    def fastcall_3(self, space, w_func, w1, w2, w3):
         self = hint(self, deepfreeze=True)
         try:
+            ctx = space.getexecutioncontext()
+            ctx.c_call_llprofile(self.fastfunc_3)
             w_result = self.fastfunc_3(space, w1, w2, w3)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
@@ -644,10 +665,13 @@ class BuiltinCode3(BuiltinCode):
         return w_result
 
 class BuiltinCode4(BuiltinCode):
-    def fastcall_4(self, space, func, w1, w2, w3, w4):
+    def fastcall_4(self, space, w_func, w1, w2, w3, w4):
         self = hint(self, deepfreeze=True)
         try:
+            ctx = space.getexecutioncontext()
+            ctx.c_call_llprofile(self.fastfunc_4)
             w_result = self.fastfunc_4(space, w1, w2, w3, w4)
+            ctx.c_return_llprofile(w_result)
         except KeyboardInterrupt: 
             raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
         except MemoryError: 
