@@ -286,17 +286,38 @@ W_IFilterFalse.typedef = TypeDef(
                 yield x
     """)
 
-class W_ISlice (Wrappable):
-
-    def __init__(self, space, w_iterable, start, stop, step):
+class W_ISlice(Wrappable):
+    def __init__(self, space, w_iterable, w_startstop, args_w):
         self.iterable = space.iter(w_iterable)
         self.space = space
-        if stop == -1:
-            stop = start
-            start = 0
 
-        if step == -1:
+        num_args = len(args_w)
+
+        if num_args == 0:
+            start = 0
+            w_stop = w_startstop
+        elif num_args <= 2:
+            start = space.int_w(w_startstop)
+            w_stop = args_w[0]
+        else:
+            raise OperationError(space.w_TypeError, space.wrap("islice() takes at most 4 arguments (" + str(num_args) + " given)"))
+
+        if space.is_w(w_stop, space.w_None):
+            stop = None
+        else:
+            stop = space.int_w(w_stop)
+
+        if num_args == 2:
+            step = space.int_w(args_w[1])
+        else:
             step = 1
+
+        if start < 0:
+            raise OperationError(space.w_ValueError, space.wrap("Indicies for islice() must be non-negative integers."))
+        if stop is not None and stop < 0:
+            raise OperationError(space.w_ValueError, space.wrap("Stop argument must be a non-negative integer or None."))
+        if step < 1:
+            raise OperationError(space.w_ValueError, space.wrap("Step must be one or lager for islice()."))
 
         self.start = start
         self.stop = stop
@@ -306,7 +327,7 @@ class W_ISlice (Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        if self.stop <= 0:
+        if self.stop is not None and self.stop <= 0:
             raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
         if self.start >= 0:
@@ -318,22 +339,34 @@ class W_ISlice (Wrappable):
         while skip > 0:
             self.space.next(self.iterable)
             skip -= 1
-            self.stop -= 1
+            if self.stop is not None:
+                self.stop -= 1
 
         w_obj = self.space.next(self.iterable)
-        self.stop -= 1
+        if self.stop is not None:
+            self.stop -= 1
         return w_obj
 
-def W_ISlice___new__(space, w_subtype, w_iterable, start, stop, step):
-    # TODO varible arguments number not implemented (optional start, step)
+def W_ISlice___new__(space, w_subtype, w_iterable, w_startstop, args_w):
     result = space.allocate_instance(W_ISlice, w_subtype)
-    W_ISlice.__init__(result, space, w_iterable, start, stop, step)
+    W_ISlice.__init__(result, space, w_iterable, w_startstop, args_w)
     return space.wrap(result)
 
 W_ISlice.typedef = TypeDef(
         'islice',
-        __new__  = interp2app(W_ISlice___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, int, int, int]),
+        __new__  = interp2app(W_ISlice___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, 'args_w']),
         __iter__ = interp2app(W_ISlice.iter_w, unwrap_spec=['self']),
         next     = interp2app(W_ISlice.next_w, unwrap_spec=['self']),
-        __doc__  = "")
+        __doc__  = """Make an iterator that returns selected elements from the
+    iterable.  If start is non-zero, then elements from the iterable
+    are skipped until start is reached. Afterward, elements are
+    returned consecutively unless step is set higher than one which
+    results in items being skipped. If stop is None, then iteration
+    continues until the iterator is exhausted, if at all; otherwise,
+    it stops at the specified position. Unlike regular slicing,
+    islice() does not support negative values for start, stop, or
+    step. Can be used to extract related fields from data where the
+    internal structure has been flattened (for example, a multi-line
+    report may list a name field on every third line).
+    """)
 
