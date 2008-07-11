@@ -465,7 +465,12 @@ class W_IMap(Wrappable):
         if not self.iterators_w:
             raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
-        w_objects = [self.space.next(w_it) for w_it in self.iterators_w]
+        try:
+            w_objects = [self.space.next(w_it) for w_it in self.iterators_w]
+        except OperationError, e:
+            if e.match(self.space, self.space.w_StopIteration):
+                self.iterators_w = None
+            raise
 
         if self.identity_fun:
             return self.space.newtuple(w_objects)

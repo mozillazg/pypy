@@ -327,7 +327,17 @@ class AppTestItertools:
         
         it = itertools.izip([], [], [1], [])
         raises(StopIteration, it.next)
-        
+
+        # Up to one additional item may be consumed per iterable, as per python docs
+        it1 = iter([1, 2, 3, 4, 5, 6])
+        it2 = iter([5, 6])
+        it = itertools.izip(it1, it2)
+        for x in [(1, 5), (2, 6)]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+        assert it1.next() == 4
+        raises(StopIteration, it.next)
+        assert it1.next() == 5
 
     def test_docstrings(self):
         import itertools
