@@ -509,7 +509,7 @@ class AppTestStringObject:
     def test_unicode_join_endcase(self):
         # This class inserts a Unicode object into its argument's natural
         # iteration, in the 3rd position.
-        class OhPhooey(object):
+        class OhPhooey:
             def __init__(self, seq):
                 self.it = iter(seq)
                 self.i = 0

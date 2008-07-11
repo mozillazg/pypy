@@ -5,13 +5,13 @@ from pypy.lang.gameboy.ram import iMemory
 
 class Serial(iMemory):
     """
-    PyGirl Emulator
+    PyGirl GameBoy (TM) Emulator
     Serial Link Controller
      """
 
     def __init__(self, interrupt):
         assert isinstance(interrupt, Interrupt)
-        self.serial_interrupt_flag = interrupt.serial
+        self.interrupt = interrupt
         self.reset()
 
     def reset(self):
@@ -30,7 +30,7 @@ class Serial(iMemory):
             self.serial_data     = 0xFF
             self.serial_control &= 0x7F
             self.cycles          = constants.SERIAL_IDLE_CLOCK
-            self.serial_interrupt_flag.set_pending()
+            self.interrupt.raise_interrupt(constants.SERIAL)
 
     def write(self, address, data):
         if address == constants.SERIAL_TRANSFER_DATA:

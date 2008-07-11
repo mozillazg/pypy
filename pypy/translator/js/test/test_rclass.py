@@ -67,19 +67,10 @@ class TestJsClass(JsTest, BaseTestRclass):
         assert isinstance(res[0], int)
 
     def test_hash_preservation(self):
-        py.test.skip("Broken")
+        py.test.skip("WIP")
 
     def test_issubclass_type(self):
-        py.test.skip("Broken")
-
-    def test___class___attribute(self):
-        py.test.skip("Broken")
-
-    def test_circular_hash_initialization(self):
-        py.test.skip("Broken")
-
-    def test_type(self):
-        py.test.skip("Broken")
+        py.test.skip("WIP")
     
     #def test_isinstance(self):
     #    py.test.skip("WIP")
