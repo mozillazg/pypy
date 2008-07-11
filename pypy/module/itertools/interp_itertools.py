@@ -29,12 +29,7 @@ class W_Count(Wrappable):
 
 
 def W_Count___new__(space, w_subtype, firstval=0):
-    """
-    Create a new count object and call its initializer.
-    """
-    result = space.allocate_instance(W_Count, w_subtype)
-    W_Count.__init__(result, space, firstval)
-    return space.wrap(result)
+    return space.wrap(W_Count(space, firstval))
 
 W_Count.typedef = TypeDef(
         'count',
@@ -56,6 +51,7 @@ W_Count.typedef = TypeDef(
             yield n
             n += 1
     """)
+W_Count.typedef.acceptable_as_base_class = False
 
 
 class W_Repeat(Wrappable):
@@ -82,12 +78,7 @@ class W_Repeat(Wrappable):
         return self.space.wrap(self)
 
 def W_Repeat___new__(space, w_subtype, w_obj, w_times=None):
-    """
-    Create a new repeat object and call its initializer.
-    """
-    result = space.allocate_instance(W_Repeat, w_subtype)
-    W_Repeat.__init__(result, space, w_obj, w_times)
-    return space.wrap(result)
+    return space.wrap(W_Repeat(space, w_obj, w_times))
 
 W_Repeat.typedef = TypeDef(
         'repeat',
@@ -110,6 +101,7 @@ W_Repeat.typedef = TypeDef(
             for i in xrange(times):
                 yield object
     """)
+W_Repeat.typedef.acceptable_as_base_class = False
 
 class W_TakeWhile(Wrappable):
 
@@ -135,9 +127,7 @@ class W_TakeWhile(Wrappable):
         return w_obj
 
 def W_TakeWhile___new__(space, w_subtype, w_predicate, w_iterable):
-    result = space.allocate_instance(W_TakeWhile, w_subtype)
-    W_TakeWhile.__init__(result, space, w_predicate, w_iterable)
-    return space.wrap(result)
+    return space.wrap(W_TakeWhile(space, w_predicate, w_iterable))
 
 
 W_TakeWhile.typedef = TypeDef(
@@ -157,6 +147,7 @@ W_TakeWhile.typedef = TypeDef(
             else:
                 break
     """)
+W_TakeWhile.typedef.acceptable_as_base_class = False
 
 class W_DropWhile(Wrappable):
 
@@ -183,9 +174,7 @@ class W_DropWhile(Wrappable):
         return w_obj
 
 def W_DropWhile___new__(space, w_subtype, w_predicate, w_iterable):
-    result = space.allocate_instance(W_DropWhile, w_subtype)
-    W_DropWhile.__init__(result, space, w_predicate, w_iterable)
-    return space.wrap(result)
+    return space.wrap(W_DropWhile(space, w_predicate, w_iterable))
 
 
 W_DropWhile.typedef = TypeDef(
@@ -209,6 +198,7 @@ W_DropWhile.typedef = TypeDef(
         for x in iterable:
             yield x
     """)
+W_DropWhile.typedef.acceptable_as_base_class = False
 
 class _IFilterBase(Wrappable):
 
@@ -240,9 +230,7 @@ class W_IFilter(_IFilterBase):
     reverse = False
 
 def W_IFilter___new__(space, w_subtype, w_predicate, w_iterable):
-    result = space.allocate_instance(W_IFilter, w_subtype)
-    W_IFilter.__init__(result, space, w_predicate, w_iterable)
-    return space.wrap(result)
+    return space.wrap(W_IFilter(space, w_predicate, w_iterable))
 
 W_IFilter.typedef = TypeDef(
         'ifilter',
@@ -262,14 +250,13 @@ W_IFilter.typedef = TypeDef(
             if predicate(x):
                 yield x
     """)
+W_IFilter.typedef.acceptable_as_base_class = False
 
 class W_IFilterFalse(_IFilterBase):
     reverse = True
 
 def W_IFilterFalse___new__(space, w_subtype, w_predicate, w_iterable):
-    result = space.allocate_instance(W_IFilterFalse, w_subtype)
-    W_IFilterFalse.__init__(result, space, w_predicate, w_iterable)
-    return space.wrap(result)
+    return space.wrap(W_IFilterFalse(space, w_predicate, w_iterable))
 
 W_IFilterFalse.typedef = TypeDef(
         'ifilterfalse',
@@ -289,6 +276,7 @@ W_IFilterFalse.typedef = TypeDef(
             if not predicate(x):
                 yield x
     """)
+W_IFilterFalse.typedef.acceptable_as_base_class = False
 
 class W_ISlice(Wrappable):
     def __init__(self, space, w_iterable, w_startstop, args_w):
@@ -354,9 +342,7 @@ class W_ISlice(Wrappable):
         return w_obj
 
 def W_ISlice___new__(space, w_subtype, w_iterable, w_startstop, args_w):
-    result = space.allocate_instance(W_ISlice, w_subtype)
-    W_ISlice.__init__(result, space, w_iterable, w_startstop, args_w)
-    return space.wrap(result)
+    return space.wrap(W_ISlice(space, w_iterable, w_startstop, args_w))
 
 W_ISlice.typedef = TypeDef(
         'islice',
@@ -375,6 +361,7 @@ W_ISlice.typedef = TypeDef(
     internal structure has been flattened (for example, a multi-line
     report may list a name field on every third line).
     """)
+W_ISlice.typedef.acceptable_as_base_class = False
 
 
 class W_Chain(Wrappable):
@@ -426,9 +413,7 @@ class W_Chain(Wrappable):
         return w_obj
 
 def W_Chain___new__(space, w_subtype, args_w):
-    result = space.allocate_instance(W_Chain, w_subtype)
-    W_Chain.__init__(result, space, args_w)
-    return space.wrap(result)
+    return space.wrap(W_Chain(space, args_w))
 
 W_Chain.typedef = TypeDef(
         'chain',
@@ -447,6 +432,7 @@ W_Chain.typedef = TypeDef(
             for element in it:
                 yield element
     """)
+W_Chain.typedef.acceptable_as_base_class = False
 
 class W_IMap(Wrappable):
 
@@ -488,9 +474,7 @@ class W_IMap(Wrappable):
 
 
 def W_IMap___new__(space, w_subtype, w_fun, args_w):
-    result = space.allocate_instance(W_IMap, w_subtype)
-    W_IMap.__init__(result, space, w_fun, args_w)
-    return space.wrap(result)
+    return space.wrap(W_IMap(space, w_fun, args_w))
 
 W_IMap.typedef = TypeDef(
         'imap',
@@ -518,4 +502,5 @@ W_IMap.typedef = TypeDef(
                 yield function(*args)
     
     """)
+W_IMap.typedef.acceptable_as_base_class = False
 
