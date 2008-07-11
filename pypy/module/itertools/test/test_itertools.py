@@ -242,6 +242,23 @@ class AppTestItertools:
 
         raises(TypeError, itertools.islice, [], 0, 0, 0, 0)
 
+    def test_docstrings(self):
+        import itertools
+        
+        assert itertools.__doc__ != ""
+        methods = [
+            itertools.count,
+            itertools.repeat,
+            itertools.takewhile,
+            itertools.dropwhile,
+            itertools.ifilter,
+            itertools.ifilterfalse,
+            itertools.islice,
+            ]
+        for method in methods:
+            assert method.__doc__ != ""
+        
+
     def test_subclassing(self):
         import itertools
         # not sure how useful this actually is, but CPython implements it
