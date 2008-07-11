@@ -2,7 +2,27 @@
 from pypy.interpreter.mixedmodule import MixedModule 
 
 class Module(MixedModule):
-    """An itertools module."""
+    """Functional tools for creating and using iterators.
+
+    Infinite iterators:
+    count([n]) --> n, n+1, n+2, ...
+    cycle(p) --> p0, p1, ... plast, p0, p1, ...
+    repeat(elem [,n]) --> elem, elem, elem, ... endlessly or up to n times
+
+    Iterators terminating on the shortest input sequence:
+    izip(p, q, ...) --> (p[0], q[0]), (p[1], q[1]), ... 
+    ifilter(pred, seq) --> elements of seq where pred(elem) is True
+    ifilterfalse(pred, seq) --> elements of seq where pred(elem) is False
+    islice(seq, [start,] stop [, step]) --> elements from
+           seq[start:stop:step]
+    imap(fun, p, q, ...) --> fun(p0, q0), fun(p1, q1), ...
+    starmap(fun, seq) --> fun(*seq[0]), fun(*seq[1]), ...
+    tee(it, n=2) --> (it1, it2 , ... itn) splits one iterator into n
+    chain(p, q, ...) --> p0, p1, ... plast, q0, q1, ... 
+    takewhile(pred, seq) --> seq[0], seq[1], until pred fails
+    dropwhile(pred, seq) --> seq[n], seq[n+1], starting when pred fails
+    groupby(iterable[, keyfunc]) --> sub-iterators grouped by value of keyfunc(v)
+    """
 
     interpleveldefs = {
         'count'     : 'interp_itertools.W_Count',
