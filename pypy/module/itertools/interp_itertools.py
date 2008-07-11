@@ -382,30 +382,32 @@ class W_Chain(Wrappable):
 
             i += 1
 
-        self.iterators = iter(iterators_w)
+        self.iterators_w = iterators_w
+        self.current_iterator = 0
+        self.num_iterators = len(iterators_w)
         self.started = False
 
     def iter_w(self):
         return self.space.wrap(self)
 
     def next_w(self):
+        if self.current_iterator >= self.num_iterators:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
         if not self.started:
-            try:
-                self.w_it = self.iterators.next()
-            except StopIteration:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
-            else:
-                self.started = True
+            self.current_iterator = 0
+            self.w_it = self.iterators_w[self.current_iterator]
+            self.started = True
 
         while True:
             try:
                 w_obj = self.space.next(self.w_it)
             except OperationError, e:
                 if e.match(self.space, self.space.w_StopIteration):
-                    try:
-                        self.w_it = self.iterators.next()
-                    except StopIteration:
+                    self.current_iterator += 1
+                    if self.current_iterator >= self.num_iterators:
                         raise OperationError(self.space.w_StopIteration, self.space.w_None)
+                    else:
+                        self.w_it = self.iterators_w[self.current_iterator]
                 else:
                     raise
             else:
@@ -467,17 +469,16 @@ class W_IMap(Wrappable):
             raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
         try:
-            w_objects = [self.space.next(w_it) for w_it in self.iterators_w]
+            w_objects = self.space.newtuple([self.space.next(w_it) for w_it in self.iterators_w])
         except OperationError, e:
             if e.match(self.space, self.space.w_StopIteration):
                 self.iterators_w = None
             raise
 
         if self.identity_fun:
-            return self.space.newtuple(w_objects)
+            return w_objects
         else:
-            # XXX cannot use '*w_objects'; see space.call()
-            return self.space.call_function(self.w_fun, *w_objects)
+            return self.space.call(self.w_fun, w_objects)
 
 
 def W_IMap___new__(space, w_subtype, w_fun, args_w):
@@ -545,7 +546,7 @@ class W_Cycle(Wrappable):
         self.space = space
         self.saved_w = []
         self.w_iterable = space.iter(w_iterable)
-        self.saved_iterator = None
+        self.index = 0
         self.exhausted = False
 
     def iter_w(self):
@@ -556,10 +557,12 @@ class W_Cycle(Wrappable):
             if not self.saved_w:
                 raise OperationError(self.space.w_StopIteration, self.space.w_None)
             try:
-                w_obj = self.saved_iterator.next()
-            except StopIteration:
-                self.saved_iterator = iter(self.saved_w)
-                w_obj = self.saved_iterator.next()
+                w_obj = self.saved_w[self.index]
+            except IndexError:
+                self.index = 1
+                w_obj = self.saved_w[0]
+            else:
+                self.index += 1
         else:
             try:
                 w_obj = self.space.next(self.w_iterable)
@@ -568,11 +571,12 @@ class W_Cycle(Wrappable):
                     self.exhausted = True
                     if not self.saved_w:
                         raise
-                    self.saved_iterator = iter(self.saved_w)
-                    w_obj = self.saved_iterator.next()
+                    self.index = 1
+                    w_obj = self.saved_w[0]
                 else:
                     raise
             else:
+                self.index += 1
                 self.saved_w.append(w_obj)
         return w_obj
 
