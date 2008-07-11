@@ -523,6 +523,9 @@ testmap = [
 
     RegrTest('test_gzip.py', enabled=False, dumbtest=1),
     RegrTest('test_hash.py', enabled=True, core=True),
+    RegrTest('test_hashlib.py', enabled=True, core=True),
+        # test_hashlib is stripped down, originates from 2.5 
+    
     RegrTest('test_heapq.py', enabled=True, core=True),
     RegrTest('test_hexoct.py', enabled=True, core=True),
     RegrTest('test_hmac.py', enabled=True),
