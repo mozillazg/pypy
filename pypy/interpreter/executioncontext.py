@@ -71,8 +71,7 @@ class ExecutionContext:
         def leave(self, ec):
             self.framestack = ec.framestack
             self.w_tracefunc = ec.w_tracefunc
-            self.profilefunc = ec.profilefunc
-            self.w_profilefuncarg = ec.w_profilefuncarg
+            self.setllprofile(ec.profilefunc, ec.w_profilefuncarg)
             self.is_tracing = ec.is_tracing
 
         # the following interface is for pickling and unpickling
@@ -106,20 +105,23 @@ class ExecutionContext:
 
     def c_call_trace(self, frame, w_func):
         "Profile the call of a builtin function"
-        if self.profilefunc is not None:
+        if self.profilefunc is None:
+            frame.is_being_profiled = False
+        else:
             self._trace(frame, 'c_call', w_func)
-            #self._llprofile('c_call', w_func)
 
     def c_return_trace(self, frame, w_retval):
         "Profile the return from a builtin function"
-        if self.profilefunc is not None:
+        if self.profilefunc is None:
+            frame.is_being_profiled = False
+        else:
             self._trace(frame, 'c_return', w_retval)
-            #self._llprofile('c_return', w_retval)
 
     def c_exception_trace(self, frame, operationerr):
         "Profile function called upon OperationError."
-        if self.profilefunc is not None:
-            #self._llprofile('c_exception', operationerr)
+        if self.profilefunc is None:
+            frame.is_being_profiled = False
+        else:
             self._trace(frame, 'c_exception', operationerr)
 
     def _llprofile(self, event, w_arg):
@@ -187,13 +189,15 @@ class ExecutionContext:
             self.profilefunc = None
             self.w_profilefuncarg = None
         else:
-            self.w_profilefuncarg = w_func
-            self.profilefunc = app_profile_call
+            self.setllprofile(app_profile_call, w_func)
 
     def setllprofile(self, func, w_arg):
         self.profilefunc = func
-        if func is not None and w_arg is None:
-            raise ValueError("Cannot call setllprofile with real None")
+        if func is not None:
+            if w_arg is None:
+                raise ValueError("Cannot call setllprofile with real None")
+            for frame in self.framestack.items:
+                frame.is_being_profiled = True
         self.w_profilefuncarg = w_arg
 
     def call_tracing(self, w_func, w_args):
