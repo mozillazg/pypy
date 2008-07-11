@@ -215,8 +215,9 @@ class _IFilterBase(Wrappable):
     def __init__(self, space, w_predicate, w_iterable):
         self.space = space
         if space.is_w(w_predicate, space.w_None):
-            self.w_predicate = space.w_bool
+            self.no_predicate = True
         else:
+            self.no_predicate = False
             self.w_predicate = w_predicate
         self.iterable = space.iter(w_iterable)
 
@@ -226,8 +227,11 @@ class _IFilterBase(Wrappable):
     def next_w(self):
         while True:
             w_obj = self.space.next(self.iterable)  # may raise w_StopIteration
-            w_pred = self.space.call_function(self.w_predicate, w_obj)
-            pred = self.space.is_true(w_pred)
+            if self.no_predicate:
+                pred = self.space.is_true(w_obj)
+            else:
+                w_pred = self.space.call_function(self.w_predicate, w_obj)
+                pred = self.space.is_true(w_pred)
             if pred ^ self.reverse:
                 return w_obj
 
@@ -303,9 +307,11 @@ class W_ISlice(Wrappable):
             raise OperationError(space.w_TypeError, space.wrap("islice() takes at most 4 arguments (" + str(num_args) + " given)"))
 
         if space.is_w(w_stop, space.w_None):
-            stop = None
+            stop = 0
+            self.stoppable = False
         else:
             stop = space.int_w(w_stop)
+            self.stoppable = True
 
         if num_args == 2:
             step = space.int_w(args_w[1])
@@ -314,7 +320,7 @@ class W_ISlice(Wrappable):
 
         if start < 0:
             raise OperationError(space.w_ValueError, space.wrap("Indicies for islice() must be non-negative integers."))
-        if stop is not None and stop < 0:
+        if self.stoppable and stop < 0:
             raise OperationError(space.w_ValueError, space.wrap("Stop argument must be a non-negative integer or None."))
         if step < 1:
             raise OperationError(space.w_ValueError, space.wrap("Step must be one or lager for islice()."))
@@ -327,7 +333,7 @@ class W_ISlice(Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        if self.stop is not None and self.stop <= 0:
+        if self.stoppable and self.stop <= 0:
             raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
         if self.start >= 0:
@@ -339,11 +345,11 @@ class W_ISlice(Wrappable):
         while skip > 0:
             self.space.next(self.iterable)
             skip -= 1
-            if self.stop is not None:
+            if self.stoppable:
                 self.stop -= 1
 
         w_obj = self.space.next(self.iterable)
-        if self.stop is not None:
+        if self.stoppable:
             self.stop -= 1
         return w_obj
 
@@ -375,7 +381,8 @@ class W_Chain(Wrappable):
     def __init__(self, space, args_w):
         self.space = space
         iterators_w = []
-        for i, iterable_w in enumerate(args_w):
+        i = 0
+        for iterable_w in args_w:
             try:
                 iterator_w = space.iter(iterable_w)
             except OperationError, e:
@@ -385,7 +392,10 @@ class W_Chain(Wrappable):
                     raise
             else:
                 iterators_w.append(iterator_w)
-        self.iterators_w = iter(iterators_w)
+
+            i += 1
+
+        self.iterators = iter(iterators_w)
         self.started = False
 
     def iter_w(self):
@@ -394,7 +404,7 @@ class W_Chain(Wrappable):
     def next_w(self):
         if not self.started:
             try:
-                self.w_it = self.iterators_w.next()
+                self.w_it = self.iterators.next()
             except StopIteration:
                 raise OperationError(self.space.w_StopIteration, self.space.w_None)
             else:
@@ -406,7 +416,7 @@ class W_Chain(Wrappable):
             except OperationError, e:
                 if e.match(self.space, self.space.w_StopIteration):
                     try:
-                        self.w_it = self.iterators_w.next()
+                        self.w_it = self.iterators.next()
                     except StopIteration:
                         raise OperationError(self.space.w_StopIteration, self.space.w_None)
                 else:
@@ -437,3 +447,75 @@ W_Chain.typedef = TypeDef(
             for element in it:
                 yield element
     """)
+
+class W_IMap(Wrappable):
+
+    def __init__(self, space, w_fun, args_w):
+        self.space = space
+        self.identity_fun = (self.space.is_w(w_fun, space.w_None))
+        self.w_fun = w_fun
+
+        iterators_w = []
+        i = 0
+        for iterable_w in args_w:
+            try:
+                iterator_w = space.iter(iterable_w)
+            except OperationError, e:
+                if e.match(self.space, self.space.w_TypeError):
+                    raise OperationError(space.w_TypeError, space.wrap("imap argument #" + str(i + 1) + " must support iteration"))
+                else:
+                    raise
+            else:
+                iterators_w.append(iterator_w)
+
+            i += 1
+
+        self.iterators_w = iterators_w
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if not self.iterators_w:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        w_objects = [self.space.next(w_it) for w_it in self.iterators_w]
+
+        if self.identity_fun:
+            return self.space.newtuple(w_objects)
+        else:
+            return self.space.call_function(self.w_fun, *w_objects)
+
+
+def W_IMap___new__(space, w_subtype, w_fun, args_w):
+    result = space.allocate_instance(W_IMap, w_subtype)
+    W_IMap.__init__(result, space, w_fun, args_w)
+    return space.wrap(result)
+
+W_IMap.typedef = TypeDef(
+        'imap',
+        __new__  = interp2app(W_IMap___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, 'args_w']),
+        __iter__ = interp2app(W_IMap.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_IMap.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that computes the function using arguments
+    from each of the iterables. If function is set to None, then
+    imap() returns the arguments as a tuple. Like map() but stops
+    when the shortest iterable is exhausted instead of filling in
+    None for shorter iterables. The reason for the difference is that
+    infinite iterator arguments are typically an error for map()
+    (because the output is fully evaluated) but represent a common
+    and useful way of supplying arguments to imap().
+
+    Equivalent to :
+
+    def imap(function, *iterables):
+        iterables = map(iter, iterables)
+        while True:
+            args = [i.next() for i in iterables]
+            if function is None:
+                yield tuple(args)
+            else:
+                yield function(*args)
+    
+    """)
+
