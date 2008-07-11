@@ -504,3 +504,33 @@ W_IMap.typedef = TypeDef(
     """)
 W_IMap.typedef.acceptable_as_base_class = False
 
+
+class W_IZip(W_IMap):
+
+    def __init__(self, space, args_w):
+        super(W_IZip, self).__init__(space, space.w_None, args_w)
+
+
+def W_IZip___new__(space, w_subtype, args_w):
+    return space.wrap(W_IZip(space, args_w))
+
+W_IZip.typedef = TypeDef(
+        'izip',
+        __new__  = interp2app(W_IZip___new__, unwrap_spec=[ObjSpace, W_Root, 'args_w']),
+        __iter__ = interp2app(W_IZip.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_IZip.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that aggregates elements from each of the
+    iterables.  Like zip() except that it returns an iterator instead
+    of a list. Used for lock-step iteration over several iterables at
+    a time.
+
+    Equivalent to :
+
+    def izip(*iterables):
+        iterables = map(iter, iterables)
+        while iterables:
+            result = [i.next() for i in iterables]
+            yield tuple(result)
+    """)
+W_IZip.typedef.acceptable_as_base_class = False
+

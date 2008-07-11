@@ -17,6 +17,7 @@ class AppTestItertools:
             itertools.islice([], 0),
             itertools.chain(),
             itertools.imap(None),
+            itertools.izip(),
             ]
 
         for it in iterables:
@@ -308,6 +309,26 @@ class AppTestItertools:
             assert it.next() == x
         raises(StopIteration, it.next)
 
+    def test_izip(self):
+        import itertools
+
+        it = itertools.izip()
+        raises(StopIteration, it.next)
+
+        obj_list = [object(), object(), object()]
+        it = itertools.izip(obj_list)
+        for x in obj_list:
+            assert it.next() == (x, )
+        raises(StopIteration, it.next)
+        
+        it = itertools.izip([1, 2, 3], [4], [5, 6])
+        assert it.next() == (1, 4, 5)
+        raises(StopIteration, it.next)
+        
+        it = itertools.izip([], [], [1], [])
+        raises(StopIteration, it.next)
+        
+
     def test_docstrings(self):
         import itertools
         
@@ -322,6 +343,7 @@ class AppTestItertools:
             itertools.islice,
             itertools.chain,
             itertools.imap,
+            itertools.izip,
             ]
         for method in methods:
             assert method.__doc__
@@ -339,6 +361,7 @@ class AppTestItertools:
             (itertools.islice, ([], 0)),
             (itertools.chain, ()),
             (itertools.imap, (None,)),
+            (itertools.izip, ()),
             ]
         for cls, args in iterables:
             try:
