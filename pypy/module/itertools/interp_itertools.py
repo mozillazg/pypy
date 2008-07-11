@@ -514,12 +514,8 @@ W_IMap.typedef.acceptable_as_base_class = False
 class W_IZip(W_IMap):
     _error_name = "izip"
 
-    def __init__(self, space, args_w):
-        super(W_IZip, self).__init__(space, space.w_None, args_w)
-
-
 def W_IZip___new__(space, w_subtype, args_w):
-    return space.wrap(W_IZip(space, args_w))
+    return space.wrap(W_IZip(space, space.w_None, args_w))
 
 W_IZip.typedef = TypeDef(
         'izip',
@@ -603,3 +599,46 @@ W_Cycle.typedef = TypeDef(
                 yield element    
     """)
 W_Cycle.typedef.acceptable_as_base_class = False
+
+class W_StarMap(Wrappable):
+
+    def __init__(self, space, w_fun, w_iterable):
+        self.space = space
+        self.w_fun = w_fun
+        self.w_iterable = self.space.iter(w_iterable)
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        w_obj = self.space.next(self.w_iterable)
+        if not self.space.is_true(self.space.isinstance(w_obj, self.space.w_tuple)):
+            raise OperationError(self.space.w_TypeError, self.space.wrap("iterator must return a tuple"))
+
+        return self.space.call(self.w_fun, w_obj)
+
+def W_StarMap___new__(space, w_subtype, w_fun,w_iterable):
+    return space.wrap(W_StarMap(space, w_fun, w_iterable))
+
+W_StarMap.typedef = TypeDef(
+        'starmap',
+        __new__  = interp2app(W_StarMap___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_StarMap.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_StarMap.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that computes the function using arguments
+    tuples obtained from the iterable. Used instead of imap() when
+    argument parameters are already grouped in tuples from a single
+    iterable (the data has been ``pre-zipped''). The difference
+    between imap() and starmap() parallels the distinction between
+    function(a,b) and function(*c).
+
+    Equivalent to :
+
+    def starmap(function, iterable):
+        iterable = iter(iterable)
+        while True:
+            yield function(*iterable.next())    
+    """)
+W_StarMap.typedef.acceptable_as_base_class = False
+
+
