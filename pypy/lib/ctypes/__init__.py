@@ -30,8 +30,8 @@ if _os.name == "posix" and _sys.platform == "darwin":
     # because RTLD_LOCAL does not work at least on some
     # libraries.
 
-    if [10, 4] > [int(x) for x in platform.release().split('.')[:2]]:
-        DEFAULT_MODE = RTLD_GLOBAL
+    if int(platform.release().split('.')[0]) < 8:
+          DEFAULT_MODE = RTLD_GLOBAL
 
 from _ctypes import FUNCFLAG_CDECL as _FUNCFLAG_CDECL, \
      FUNCFLAG_PYTHONAPI as _FUNCFLAG_PYTHONAPI
