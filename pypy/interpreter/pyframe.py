@@ -101,6 +101,10 @@ class PyFrame(eval.Frame):
     def execute_frame(self):
         """Execute this frame.  Main entry point to the interpreter."""
         from pypy.rlib import rstack
+        # the following 'assert' is an annotation hint: it hides from
+        # the annotator all methods that are defined in PyFrame but
+        # overridden in the FrameClass subclass of PyFrame.
+        assert isinstance(self, self.space.FrameClass)
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
         try:
