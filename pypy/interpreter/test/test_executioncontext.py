@@ -73,9 +73,12 @@ class TestExecutionContext:
         space.appexec([], """():
         l = []
         l.append(3)
+
+        return l
         """)
         space.getexecutioncontext().setllprofile(None, None)
         from pprint import pprint
-        pprint([(x, y, z) for x,y,z in l if x in ('call','c_call')])
+        pprint(l)
+        #pprint([(x, y, z) for x,y,z in l if x in ('call','c_call')])
         assert l == ['call', 'return', 'call', 'c_call', 'c_return', 'return']
 
