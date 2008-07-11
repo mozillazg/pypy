@@ -872,8 +872,6 @@ class __extend__(pyframe.PyFrame):
     def CALL_FUNCTION(f, oparg, *ignored):
         from pypy.rlib import rstack # for resume points
 
-        import pdb;pdb.set_trace()
-
         # XXX start of hack for performance
         if (oparg >> 8) & 0xff == 0:
             # Only positional arguments
