@@ -694,9 +694,42 @@ class ObjSpace(object):
         return self.call_args(w_func, args)
 
     def call_valuestack(self, w_func, nargs, frame):
+        from pypy.interpreter.function import Function, Method
+        from pypy.interpreter.gateway import BuiltinCode
+        if frame.is_being_profiled:
+            ec = self.getexecutioncontext()
+            is_c_call = False
+            if isinstance(w_func, Method):
+                code = w_func.w_function.getcode()
+            elif isinstance(w_func, Function):
+                code = w_func.getcode()
+            if isinstance(code, BuiltinCode):
+                is_c_call = True
+
+            # XXX: this code is copied&pasted :-( from the slow path
+            # below. The profiling info could be not very accurate
+            # because by doing this we disable fast paths when calling
+            # the function
+            args = frame.make_arguments(nargs)
+            try:
+                try:
+                    if is_c_call:
+                        ec.c_call_trace(frame, w_func)
+                    w_res = self.call_args(w_func, args)
+                    if is_c_call:
+                        ec.c_return_trace(frame, w_res)
+                    return w_res
+                except OperationError, e:
+                    if is_c_call:
+                        ec.c_exception_trace(frame, e)
+                    raise
+            finally:
+                if isinstance(args, ArgumentsFromValuestack):
+                    args.frame = None
+
+        
         if not self.config.objspace.disable_call_speedhacks:
             # XXX start of hack for performance
-            from pypy.interpreter.function import Function, Method
             hint(w_func.__class__, promote=True)
             if isinstance(w_func, Method):
                 w_inst = w_func.w_instance
