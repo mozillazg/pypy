@@ -4,10 +4,10 @@ from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib.rbigint import rbigint
 
 class W_Type(W_Root):
-    pass
+    _attrs_ = ()
 
 class W_Object(W_Root):
-    pass
+    _attrs_ = ()
 W_Object.typedef = W_Type()
 
 def make_dummy(a=W_Object(), b=W_Object()):
