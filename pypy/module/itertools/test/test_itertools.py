@@ -356,6 +356,29 @@ class AppTestItertools:
         for x in [1, 2, 3, 1, 2, 3, 1, 2, 3]:
             assert it.next() == x
 
+    def test_starmap(self):
+        import itertools, operator
+
+        it = itertools.starmap(operator.add, [])
+        raises(StopIteration, it.next)
+
+        it = itertools.starmap(operator.add, [(0, 1), (2, 3), (4, 5)])
+        for x in [1, 5, 9]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+    def test_starmap_wrongargs(self):
+        import itertools
+
+        it = itertools.starmap(None, [(1, )])
+        raises(TypeError, it.next)
+
+        it = itertools.starmap(None, [])
+        raises(StopIteration, it.next)
+
+        it = itertools.starmap(bool, [0])
+        raises(TypeError, it.next)
+
     
     def test_iterables(self):
         import itertools
@@ -371,6 +394,7 @@ class AppTestItertools:
             itertools.islice([], 0),
             itertools.izip(),
             itertools.repeat(None),
+            itertools.starmap(bool, []),
             itertools.takewhile(bool, []),
             ]
     
@@ -395,6 +419,7 @@ class AppTestItertools:
             itertools.islice,
             itertools.izip,
             itertools.repeat,
+            itertools.starmap,
             itertools.takewhile,
             ]
         for method in methods:
@@ -414,6 +439,7 @@ class AppTestItertools:
             (itertools.islice, ([], 0)),
             (itertools.izip, ()),
             (itertools.repeat, (None,)),
+            (itertools.starmap, (bool, [])),
             (itertools.takewhile, (bool, [])),
             ]
         for cls, args in iterables:
