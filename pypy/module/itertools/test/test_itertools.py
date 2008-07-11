@@ -14,7 +14,7 @@ class AppTestItertools:
             itertools.dropwhile(bool, []),
             itertools.ifilter(None, []),
             itertools.ifilterfalse(None, []),
-            itertools.islice([], 0, -1, -1),
+            itertools.islice([], 0),
             ]
 
         for it in iterables:
@@ -189,23 +189,23 @@ class AppTestItertools:
     def test_islice(self):
         import itertools
 
-        it = itertools.islice([], 0, -1, -1)
+        it = itertools.islice([], 0)
         raises(StopIteration, it.next)
 
-        it = itertools.islice([1, 2, 3], 0, -1, -1)
+        it = itertools.islice([1, 2, 3], 0)
         raises(StopIteration, it.next)
 
-        it = itertools.islice([1, 2, 3, 4, 5], 3, -1, -1)
+        it = itertools.islice([1, 2, 3, 4, 5], 3)
         for x in [1, 2, 3]:
             assert it.next() == x
         raises(StopIteration, it.next)
 
-        it = itertools.islice([1, 2, 3, 4, 5], 3, -1, -1)
+        it = itertools.islice([1, 2, 3, 4, 5], 3)
         for x in [1, 2, 3]:
             assert it.next() == x
         raises(StopIteration, it.next)
 
-        it = itertools.islice([1, 2, 3, 4, 5], 1, 3, -1)
+        it = itertools.islice([1, 2, 3, 4, 5], 1, 3)
         for x in [2, 3]:
             assert it.next() == x
         raises(StopIteration, it.next)
@@ -215,17 +215,32 @@ class AppTestItertools:
             assert it.next() == x
         raises(StopIteration, it.next)
 
+        it = itertools.islice([1, 2, 3], 0, None)
+        for x in [1, 2, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
     def test_islice_overflow(self):
         import itertools
         import sys
 
-        raises(OverflowError, itertools.islice, [], sys.maxint + 1, -1, -1)
+        raises(OverflowError, itertools.islice, [], sys.maxint + 1)
 
     def test_islice_wrongargs(self):
         import itertools
 
-        raises(TypeError, itertools.islice, [], None, -1, -1)
-        raises(TypeError, itertools.islice, None, 0, -1, -1)
+        raises(TypeError, itertools.islice, None, 0)
+
+        raises(ValueError, itertools.islice, [], -1)
+
+        raises(ValueError, itertools.islice, [], -1, 0)
+        raises(ValueError, itertools.islice, [], 0, -1)
+
+        raises(ValueError, itertools.islice, [], 0, 0, -1)
+        raises(ValueError, itertools.islice, [], 0, 0, 0)
+        raises(TypeError, itertools.islice, [], 0, 0, None)
+
+        raises(TypeError, itertools.islice, [], 0, 0, 0, 0)
 
     def test_subclassing(self):
         import itertools
@@ -237,10 +252,11 @@ class AppTestItertools:
             (itertools.dropwhile, (bool, [])),
             (itertools.ifilter, (None, [])),
             (itertools.ifilterfalse, (None, [])),
-            (itertools.islice, ([], 0, -1, -1)),
+            (itertools.islice, ([], 0)),
             ]
         for cls, args in iterables:
             class A(cls):
                 pass
             a = A(*args)
             assert isinstance(a, A)
+
