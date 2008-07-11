@@ -551,6 +551,9 @@ class W_Cycle(Wrappable):
         self.saved_iterator = None
         self.exhausted = False
 
+    def iter_w(self):
+        return self.space.wrap(self)
+
     def next_w(self):
         if self.exhausted:
             if not self.saved_w:
@@ -582,5 +585,21 @@ def W_Cycle___new__(space, w_subtype, w_iterable):
 W_Cycle.typedef = TypeDef(
         'cycle',
         __new__  = interp2app(W_Cycle___new__, unwrap_spec=[ObjSpace, W_Root, W_Root]),
-        next     = interp2app(W_Cycle.next_w, unwrap_spec=['self']))
+        __iter__ = interp2app(W_Cycle.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_Cycle.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator returning elements from the iterable and
+    saving a copy of each. When the iterable is exhausted, return
+    elements from the saved copy. Repeats indefinitely.
+    
+    Equivalent to :
+    
+    def cycle(iterable):
+        saved = []
+        for element in iterable:
+            yield element
+            saved.append(element)
+        while saved:
+            for element in saved:
+                yield element    
+    """)
 W_Cycle.typedef.acceptable_as_base_class = False

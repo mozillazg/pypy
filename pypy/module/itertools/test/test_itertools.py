@@ -4,28 +4,6 @@ class AppTestItertools:
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['itertools'])
 
-    def test_iterables(self):
-        import itertools
-
-        iterables = [
-            itertools.count(),
-            itertools.repeat(None),
-            itertools.takewhile(bool, []),
-            itertools.dropwhile(bool, []),
-            itertools.ifilter(None, []),
-            itertools.ifilterfalse(None, []),
-            itertools.islice([], 0),
-            itertools.chain(),
-            itertools.imap(None),
-            itertools.izip(),
-            ]
-
-        for it in iterables:
-            assert hasattr(it, '__iter__')
-            assert iter(it) is it
-            assert hasattr(it, 'next')
-            assert callable(it.next)
-
     def test_count(self):
         import itertools
 
@@ -378,40 +356,65 @@ class AppTestItertools:
         for x in [1, 2, 3, 1, 2, 3, 1, 2, 3]:
             assert it.next() == x
 
-
+    
+    def test_iterables(self):
+        import itertools
+    
+        iterables = [
+            itertools.chain(),
+            itertools.count(),
+            itertools.cycle([]),
+            itertools.dropwhile(bool, []),
+            itertools.ifilter(None, []),
+            itertools.ifilterfalse(None, []),
+            itertools.imap(None),
+            itertools.islice([], 0),
+            itertools.izip(),
+            itertools.repeat(None),
+            itertools.takewhile(bool, []),
+            ]
+    
+        for it in iterables:
+            assert hasattr(it, '__iter__')
+            assert iter(it) is it
+            assert hasattr(it, 'next')
+            assert callable(it.next)
+    
     def test_docstrings(self):
         import itertools
         
         assert itertools.__doc__
         methods = [
+            itertools.chain,
             itertools.count,
-            itertools.repeat,
-            itertools.takewhile,
+            itertools.cycle,
             itertools.dropwhile,
             itertools.ifilter,
             itertools.ifilterfalse,
-            itertools.islice,
-            itertools.chain,
             itertools.imap,
+            itertools.islice,
             itertools.izip,
+            itertools.repeat,
+            itertools.takewhile,
             ]
         for method in methods:
             assert method.__doc__
-
+    
     def test_subclassing(self):
         import itertools
-        # not sure how useful this actually is, but CPython implements it
+        # Although implemented as classes, the itertools functions should not be subclassable
         iterables = [
+            (itertools.chain, ()),
             (itertools.count, ()),
-            (itertools.repeat, (None,)),
-            (itertools.takewhile, (bool, [])),
+            (itertools.cycle, ()),
             (itertools.dropwhile, (bool, [])),
             (itertools.ifilter, (None, [])),
             (itertools.ifilterfalse, (None, [])),
-            (itertools.islice, ([], 0)),
-            (itertools.chain, ()),
             (itertools.imap, (None,)),
+            (itertools.islice, ([], 0)),
             (itertools.izip, ()),
+            (itertools.repeat, (None,)),
+            (itertools.takewhile, (bool, [])),
             ]
         for cls, args in iterables:
             try:
@@ -421,4 +424,4 @@ class AppTestItertools:
                 pass
             else:
                 assert False, "Subclassing should fail."
-
+    
