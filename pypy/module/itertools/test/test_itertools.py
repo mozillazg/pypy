@@ -15,6 +15,7 @@ class AppTestItertools:
             itertools.ifilter(None, []),
             itertools.ifilterfalse(None, []),
             itertools.islice([], 0),
+            itertools.chain(),
             ]
 
         for it in iterables:
@@ -242,10 +243,44 @@ class AppTestItertools:
 
         raises(TypeError, itertools.islice, [], 0, 0, 0, 0)
 
+    def test_chain(self):
+        import itertools
+        
+        it = itertools.chain()
+        raises(StopIteration, it.next)
+        raises(StopIteration, it.next)
+        
+        it = itertools.chain([1, 2, 3])
+        for x in [1, 2, 3]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        it = itertools.chain([1, 2, 3], [4], [5, 6])
+        for x in [1, 2, 3, 4, 5, 6]:
+            assert it.next() == x
+        raises(StopIteration, it.next)
+
+        it = itertools.chain([], [], [1], [])
+        assert it.next() == 1
+        raises(StopIteration, it.next)
+
+    def test_chain_wrongargs(self):
+        import itertools
+        
+        raises(TypeError, itertools.chain, None)
+        raises(TypeError, itertools.chain, [], None)
+        
+        for x in range(10):
+            args = [()] * x + [None] + [()] * (9 - x)
+            try:
+                itertools.chain(*args)
+            except TypeError, e:
+                assert str(e) == "chain argument #%d must support iteration" % (x + 1)
+
     def test_docstrings(self):
         import itertools
         
-        assert itertools.__doc__ != ""
+        assert itertools.__doc__
         methods = [
             itertools.count,
             itertools.repeat,
@@ -254,10 +289,10 @@ class AppTestItertools:
             itertools.ifilter,
             itertools.ifilterfalse,
             itertools.islice,
+            itertools.chain,
             ]
         for method in methods:
-            assert method.__doc__ != ""
-        
+            assert method.__doc__
 
     def test_subclassing(self):
         import itertools
@@ -270,6 +305,7 @@ class AppTestItertools:
             (itertools.ifilter, (None, [])),
             (itertools.ifilterfalse, (None, [])),
             (itertools.islice, ([], 0)),
+            (itertools.chain, ()),
             ]
         for cls, args in iterables:
             class A(cls):

@@ -370,3 +370,70 @@ W_ISlice.typedef = TypeDef(
     report may list a name field on every third line).
     """)
 
+
+class W_Chain(Wrappable):
+    def __init__(self, space, args_w):
+        self.space = space
+        iterators_w = []
+        for i, iterable_w in enumerate(args_w):
+            try:
+                iterator_w = space.iter(iterable_w)
+            except OperationError, e:
+                if e.match(self.space, self.space.w_TypeError):
+                    raise OperationError(space.w_TypeError, space.wrap("chain argument #" + str(i + 1) + " must support iteration"))
+                else:
+                    raise
+            else:
+                iterators_w.append(iterator_w)
+        self.iterators_w = iter(iterators_w)
+        self.started = False
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if not self.started:
+            try:
+                self.w_it = self.iterators_w.next()
+            except StopIteration:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+            else:
+                self.started = True
+
+        while True:
+            try:
+                w_obj = self.space.next(self.w_it)
+            except OperationError, e:
+                if e.match(self.space, self.space.w_StopIteration):
+                    try:
+                        self.w_it = self.iterators_w.next()
+                    except StopIteration:
+                        raise OperationError(self.space.w_StopIteration, self.space.w_None)
+                else:
+                    raise
+            else:
+                break
+        return w_obj
+
+def W_Chain___new__(space, w_subtype, args_w):
+    result = space.allocate_instance(W_Chain, w_subtype)
+    W_Chain.__init__(result, space, args_w)
+    return space.wrap(result)
+
+W_Chain.typedef = TypeDef(
+        'chain',
+        __new__  = interp2app(W_Chain___new__, unwrap_spec=[ObjSpace, W_Root, 'args_w']),
+        __iter__ = interp2app(W_Chain.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_Chain.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that returns elements from the first iterable
+    until it is exhausted, then proceeds to the next iterable, until
+    all of the iterables are exhausted. Used for treating consecutive
+    sequences as a single sequence.
+
+    Equivalent to :
+
+    def chain(*iterables):
+        for it in iterables:
+            for element in it:
+                yield element
+    """)
