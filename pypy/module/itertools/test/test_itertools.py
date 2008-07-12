@@ -245,7 +245,7 @@ class AppTestItertools:
         raises(StopIteration, it.next)
 
     def test_chain_wrongargs(self):
-        import itertools, re
+        import itertools
         
         raises(TypeError, itertools.chain, None)
         raises(TypeError, itertools.chain, [], None)
@@ -256,7 +256,7 @@ class AppTestItertools:
             try:
                 itertools.chain(*args)
             except TypeError, e:
-                assert re.search(r'\b%d\b' % (x + 1), str(e))
+                assert str(e).find("#" + str(x + 1) + " ") >= 0
             else:
                 fail("TypeError expected")
 
@@ -344,7 +344,7 @@ class AppTestItertools:
             try:
                 itertools.izip(*args)
             except TypeError, e:
-                assert re.search(r'\b%d\b' % (x + 1), str(e))
+                assert str(e).find("#" + str(x + 1) + " ") >= 0
             else:
                 fail("TypeError expected")
 
@@ -496,6 +496,13 @@ class AppTestItertools:
             assert g.next() is x
         raises(StopIteration, g.next)
         raises(StopIteration, it.next)
+
+    def test_groupby_wrongargs(self):
+        import itertools
+
+        raises(TypeError, itertools.groupby, 0)
+        it = itertools.groupby([0], 1)
+        raises(TypeError, it.next)
 
     def test_iterables(self):
         import itertools
