@@ -49,12 +49,12 @@ def find_modtype(space, filepart):
     """ This is the way pypy does it.  A pyc is only used if the py file exists AND
     the pyc file contains the timestamp of the py. """
     pyfile_exist, pycfile_exists, pycfile_ts_valid = info_modtype(space, filepart)
-    if pycfile_ts_valid:
-        return PYCFILE
-    elif pyfile_exist:
-        return PYFILE
-    else:
+    if not pyfile_exist:
         return NOFILE
+    elif pycfile_ts_valid:
+        return PYCFILE
+    else:
+        return PYFILE
     
 def find_modtype_cpython(space, filepart):
     """ This is the way cpython does it (where the py file doesnt exist but there
