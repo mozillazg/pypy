@@ -29,6 +29,7 @@ class Module(MixedModule):
         'count'         : 'interp_itertools.W_Count',
         'cycle'         : 'interp_itertools.W_Cycle',
         'dropwhile'     : 'interp_itertools.W_DropWhile',
+        'groupby'       : 'interp_itertools.W_GroupBy',
         'ifilter'       : 'interp_itertools.W_IFilter',
         'ifilterfalse'  : 'interp_itertools.W_IFilterFalse',
         'imap'          : 'interp_itertools.W_IMap',

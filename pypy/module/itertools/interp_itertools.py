@@ -718,3 +718,142 @@ W_TeeIterable.typedef = TypeDef(
         __iter__ = interp2app(W_TeeIterable.iter_w, unwrap_spec=['self']),
         next     = interp2app(W_TeeIterable.next_w, unwrap_spec=['self']))
 W_TeeIterable.typedef.acceptable_as_base_class = False
+
+
+class W_GroupBy(Wrappable):
+
+    def __init__(self, space, w_iterable, w_fun):
+        self.space = space
+        self.w_iterable = self.space.iter(w_iterable)
+        self.identity_fun = self.space.is_w(w_fun, self.space.w_None)
+        self.w_fun = w_fun
+        self.index = 0
+        self.lookahead = False
+        self.exhausted = False
+        self.started = False
+        self.group_edge = True
+        self.w_lookahead = self.space.w_None
+        self.w_key = self.space.w_None
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if self.exhausted:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        if not self.started:
+            self.started = True
+            try:
+                w_obj = self.space.next(self.w_iterable)
+            except OperationError, e:
+                if e.match(self.space, self.space.w_StopIteration):
+                    self.exhausted = True
+                raise
+            else:
+                self.w_lookahead = w_obj
+                if self.identity_fun:
+                    self.w_key = w_obj
+                else:
+                    self.w_key = self.space.call_function(self.w_fun, w_obj)
+                self.lookahead = True
+
+        if not self.group_edge:
+            # Consume unwanted input until we reach the next group
+            try:
+                while True:
+                    self.group_next(self.index)
+            except StopIteration:
+                pass
+            if self.exhausted:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+        w_iterator = self.space.wrap(W_GroupByIterator(self.space, self.index, self))
+        return self.space.newtuple([self.w_key, w_iterator])
+
+    def group_next(self, group_index):
+        self.group_edge = False
+        if group_index < self.index:
+            raise StopIteration
+        else:
+            if self.lookahead:
+                self.lookahead = False
+                return self.w_lookahead
+
+            try:
+                w_obj = self.space.next(self.w_iterable)
+            except OperationError, e:
+                if e.match(self.space, self.space.w_StopIteration):
+                    self.exhausted = True
+                    raise StopIteration
+                else:
+                    raise
+            else:
+                if self.identity_fun:
+                    w_new_key = w_obj
+                else:
+                    w_new_key = self.space.call_function(self.w_fun, w_obj)
+                if self.space.eq_w(self.w_key, w_new_key):
+                    return w_obj
+                else:
+                    self.index += 1
+                    self.w_lookahead = w_obj
+                    self.w_key = w_new_key
+                    self.lookahead = True
+                    self.group_edge = True
+                    raise StopIteration
+
+def W_GroupBy___new__(space, w_subtype, w_iterable, w_fun=None):
+    return space.wrap(W_GroupBy(space, w_iterable, w_fun))
+
+W_GroupBy.typedef = TypeDef(
+        'groupby',
+        __new__  = interp2app(W_GroupBy___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
+        __iter__ = interp2app(W_GroupBy.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_GroupBy.next_w, unwrap_spec=['self']),
+        __doc__  = """Make an iterator that returns consecutive keys and groups from the
+    iterable. The key is a function computing a key value for each
+    element. If not specified or is None, key defaults to an identity
+    function and returns the element unchanged. Generally, the
+    iterable needs to already be sorted on the same key function.
+
+    The returned group is itself an iterator that shares the
+    underlying iterable with groupby(). Because the source is shared,
+    when the groupby object is advanced, the previous group is no
+    longer visible. So, if that data is needed later, it should be
+    stored as a list:
+
+       groups = []
+       uniquekeys = []
+       for k, g in groupby(data, keyfunc):
+           groups.append(list(g))      # Store group iterator as a list
+           uniquekeys.append(k)
+    """)
+W_GroupBy.typedef.acceptable_as_base_class = False
+
+class W_GroupByIterator(Wrappable):
+    def __init__(self, space, index, groupby):
+        self.space = space
+        self.index = index
+        self.groupby = groupby
+        self.exhausted = False
+
+    def iter_w(self):
+        return self.space.wrap(self)
+
+    def next_w(self):
+        if self.exhausted:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        try:
+            w_obj = self.groupby.group_next(self.index)
+        except StopIteration:
+            self.exhausted = True
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+        else:
+            return w_obj
+
+W_GroupByIterator.typedef = TypeDef(
+        '_groupby',
+        __iter__ = interp2app(W_GroupByIterator.iter_w, unwrap_spec=['self']),
+        next     = interp2app(W_GroupByIterator.next_w, unwrap_spec=['self']))
+W_GroupByIterator.typedef.acceptable_as_base_class = False
