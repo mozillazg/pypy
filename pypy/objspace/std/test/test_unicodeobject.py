@@ -269,17 +269,10 @@ class AppTestUnicodeString:
         assert U(u'test').__class__ is U
 
     def test_call_unicode(self):
-        skip("does not work")
-        class X:
+        class X(object):
             def __unicode__(self):
                 return u'x'
-
-        try:
-            unicode(X(), 'ascii')
-        except TypeError, t:
-            assert 'need string or buffer' in str(t)
-        else:
-            raise Exception("DID NOT RAISE")
+        raises(TypeError, unicode, X(), 'ascii')
 
     def test_startswith(self):
         assert u'ab'.startswith(u'ab') is True
