@@ -1,5 +1,6 @@
 import py
 from pypy.rlib import streamio
+from pypy.rlib.streamio import StreamErrors
 from errno import EINTR
 
 from pypy.interpreter.error import OperationError
@@ -9,8 +10,6 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import interp2app
 
 import os
-
-StreamErrors = (OSError, streamio.StreamError)
 
 def wrap_streamerror(space, e):
     if isinstance(e, streamio.StreamError):
