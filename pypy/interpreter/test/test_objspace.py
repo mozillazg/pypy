@@ -108,7 +108,7 @@ class TestObjSpace:
 
         w_oldstyle = self.space.appexec([], """():
             class NoCall:
-                __metaclass__ = _classobj
+                pass
             return NoCall()""")
         assert not is_callable(w_oldstyle)
         self.space.setattr(w_oldstyle, self.space.wrap("__call__"), w_func)

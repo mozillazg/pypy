@@ -3,7 +3,7 @@ import autopath
 
 class AppTestBuiltinApp:
     def test_staticmethod(self):
-        class C:
+        class C(object):
             def f(a, b):
                 return a+b
             f = staticmethod(f)
@@ -18,7 +18,7 @@ class AppTestBuiltinApp:
         assert D.f("abc", "def") == "abcdef"
 
     def test_classmethod(self):
-        class C:
+        class C(object):
             def f(cls, stuff):
                 return cls, stuff
             f = classmethod(f)
@@ -189,7 +189,7 @@ class AppTestBuiltinApp:
         assert C.__dict__["f"](p) == "B.f->C.f"
 
     def test_super_errors(self):
-        class C:
+        class C(object):
             pass
         class D(C):
             pass
@@ -231,7 +231,7 @@ class AppTestBuiltinApp:
     def test_property_docstring(self):
         assert property.__doc__.startswith('property')
 
-        class A:
+        class A(object):
             pass
 
         A.x = property(lambda x: x, lambda x, y: x, lambda x:x, 'xxx')

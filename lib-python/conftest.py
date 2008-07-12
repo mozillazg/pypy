@@ -297,23 +297,15 @@ class AppTestCaseMethod(py.test.collect.Item):
 class RegrTest: 
     """ Regression Test Declaration.""" 
     def __init__(self, basename, enabled=False, dumbtest=False,
-                                 oldstyle=False, core=False,
+                                 core=False,
                                  compiler=None, 
                                  usemodules = ''): 
         self.basename = basename 
         self.enabled = enabled 
         self.dumbtest = dumbtest 
-        # we have to determine the value of oldstyle
-        # lazily because at RegrTest() call time the command
-        # line options haven't been parsed!
-        self._oldstyle = oldstyle 
         self._usemodules = usemodules.split()
         self._compiler = compiler 
         self.core = core
-
-    def oldstyle(self): 
-        return self._oldstyle #or pypy_option.oldstyle 
-    oldstyle = property(oldstyle)
 
     def usemodules(self):
         return self._usemodules #+ pypy_option.usemodules
@@ -325,7 +317,7 @@ class RegrTest:
 
     def getoptions(self): 
         l = []
-        for name in 'oldstyle', 'core': 
+        for name in ['core']:
             if getattr(self, name): 
                 l.append(name)
         for name in self.usemodules: 
@@ -365,18 +357,13 @@ class RegrTest:
         self._prepare(space)
         fspath = self.getfspath()
         assert fspath.check()
-        if self.oldstyle: 
-            space.enable_old_style_classes_as_default_metaclass() 
-        try: 
-            modname = fspath.purebasename 
-            space.appexec([], '''():
-                from test import %(modname)s
-                m = %(modname)s
-                if hasattr(m, 'test_main'):
-                    m.test_main()
-            ''' % locals())
-        finally: 
-            space.enable_new_style_classes_as_default_metaclass() 
+        modname = fspath.purebasename 
+        space.appexec([], '''():
+            from test import %(modname)s
+            m = %(modname)s
+            if hasattr(m, 'test_main'):
+                m.test_main()
+        ''' % locals())
 
 testmap = [
     RegrTest('test___all__.py', enabled=True, core=True),
@@ -422,7 +409,7 @@ testmap = [
     RegrTest('test_cgi.py', enabled=True),
     RegrTest('test_charmapcodec.py', enabled=True, core=True),
     RegrTest('test_cl.py', enabled=False, dumbtest=1),
-    RegrTest('test_class.py', enabled=True, oldstyle=True, core=True),
+    RegrTest('test_class.py', enabled=True, core=True),
     RegrTest('test_cmath.py', enabled=True, dumbtest=1, core=True),
     RegrTest('test_codeccallbacks.py', enabled=True, core=True),
     RegrTest('test_codecencodings_cn.py', enabled=False),
@@ -438,11 +425,11 @@ testmap = [
     RegrTest('test_codecmaps_tw.py', enabled=False),
     RegrTest('test_codecs.py', enabled=True, core=True),
     RegrTest('test_codeop.py', enabled=True, core=True),
-    RegrTest('test_coercion.py', enabled=True, oldstyle=True, core=True),
+    RegrTest('test_coercion.py', enabled=True, core=True),
     
     RegrTest('test_colorsys.py', enabled=True),
     RegrTest('test_commands.py', enabled=True),
-    RegrTest('test_compare.py', enabled=True, oldstyle=True, core=True),
+    RegrTest('test_compare.py', enabled=True, core=True),
     RegrTest('test_compile.py', enabled=True, core=True),
     RegrTest('test_compiler.py', enabled=True, core=False), # this test tests the compiler package from stdlib
     RegrTest('test_complex.py', enabled=True, core=True),
@@ -463,8 +450,8 @@ testmap = [
     RegrTest('test_decimal.py', enabled=True),
     RegrTest('test_decorators.py', enabled=True, core=True),
     RegrTest('test_deque.py', enabled=True, core=True),
-    RegrTest('test_descr.py', enabled=True, core=True, oldstyle=True, usemodules='_weakref'),
-    RegrTest('test_descrtut.py', enabled=True, core=True, oldstyle=True),
+    RegrTest('test_descr.py', enabled=True, core=True, usemodules='_weakref'),
+    RegrTest('test_descrtut.py', enabled=True, core=True),
     RegrTest('test_dict.py', enabled=True, core=True),
 
     RegrTest('test_difflib.py', enabled=True, dumbtest=1),
@@ -577,7 +564,7 @@ testmap = [
     RegrTest('test_multifile.py', enabled=True),
     RegrTest('test_mutants.py', enabled=True, dumbtest=1, core="possibly"),
     RegrTest('test_netrc.py', enabled=True),
-    RegrTest('test_new.py', enabled=True, core=True, oldstyle=True),
+    RegrTest('test_new.py', enabled=True, core=True),
     RegrTest('test_nis.py', enabled=False),
     RegrTest('test_normalization.py', enabled=False),
     RegrTest('test_ntpath.py', enabled=True, dumbtest=1),
@@ -635,7 +622,7 @@ testmap = [
     RegrTest('test_re.py', enabled=True, core=True),
 
     RegrTest('test_regex.py', enabled=False),
-    RegrTest('test_repr.py', enabled=True, oldstyle=True, core=True),
+    RegrTest('test_repr.py', enabled=True, core=True),
         #rev 10840: 6 of 12 tests fail. Always minor stuff like
         #'<function object at 0x40db3e0c>' != '<built-in function hash>'
 
@@ -903,11 +890,6 @@ class ReallyRunFileExternal(py.test.collect.Item):
         if option.use_compiled:
             execpath, info = getexecutable()        
         pypy_options = []
-        if regrtest.oldstyle: 
-            if (option.use_compiled and
-                not info.get('objspace.std.oldstyle', False)):
-                py.test.skip("old-style classes not available with this pypy-c")
-            pypy_options.append('--oldstyle') 
         if regrtest.compiler:
             pypy_options.append('--compiler=%s' % regrtest.compiler)
         pypy_options.extend(

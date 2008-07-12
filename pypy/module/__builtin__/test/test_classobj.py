@@ -1,8 +1,5 @@
 
 class AppTestOldstyle(object):
-    def setup_class(cls):
-        from pypy.conftest import gettestobjspace
-        cls.space = gettestobjspace(**{"objspace.std.oldstyle": True})
 
     def test_simple(self):
         class A:

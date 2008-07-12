@@ -314,7 +314,7 @@ class AppTest_DictObject:
         assert str(d) == '{0: {...}}'
 
         # Mutating while repr'ing
-        class Machiavelli:
+        class Machiavelli(object):
             def __repr__(self):
                 d.clear()
                 return "42"

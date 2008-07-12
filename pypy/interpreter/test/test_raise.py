@@ -96,7 +96,7 @@ class AppTestRaise:
         raises(StopIteration, f)
 
     def test_userclass(self):
-        class A:
+        class A(object):
             def __init__(self, x=None):
                 self.x = x
         class B(A):
@@ -124,7 +124,8 @@ class AppTestRaise:
             assert b.x == 42
 
     def test_it(self):
-        C = _classobj('C', (), {})
+        class C:
+            pass
         # this used to explode in the exception normalization step:
         try:
             {}[C]

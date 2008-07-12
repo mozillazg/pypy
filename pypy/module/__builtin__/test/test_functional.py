@@ -156,10 +156,10 @@ class AppTestAllAny:
 
     def test_all(self):
 
-        class TestFailingBool:
+        class TestFailingBool(object):
             def __nonzero__(self):
                 raise RuntimeError
-        class TestFailingIter:
+        class TestFailingIter(object):
             def __iter__(self):
                 raise RuntimeError
 
@@ -178,10 +178,10 @@ class AppTestAllAny:
 
     def test_any(self):
 
-        class TestFailingBool:
+        class TestFailingBool(object):
             def __nonzero__(self):
                 raise RuntimeError
-        class TestFailingIter:
+        class TestFailingIter(object):
             def __iter__(self):
                 raise RuntimeError
 
