@@ -875,7 +875,7 @@ class __extend__(pyframe.PyFrame):
                 w_result = f.space.call_args(w_function, args)
             except OperationError, e:
                 if is_c_call:
-                    ec.c_exception_trace(f, e)
+                    ec.c_exception_trace(f, e.w_value)
                 raise
             if is_c_call:
                 ec.c_return_trace(f, w_function)
