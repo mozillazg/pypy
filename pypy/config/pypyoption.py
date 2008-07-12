@@ -44,8 +44,6 @@ module_suggests = {    # the reason you want _rawffi is for ctypes, which
                        # because 'P' is missing from the app-level one
                        '_rawffi': [("objspace.usemodules.struct", True)],
                        }
-if os.name == "posix":
-    module_dependencies['rctime'] = [("objspace.usemodules.select", True),]
 
 module_import_dependencies = {
     # no _rawffi if importing pypy.rlib.libffi raises ImportError
