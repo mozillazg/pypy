@@ -63,10 +63,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     PACKAGE_PATH = 'objspace.std'
 
-    def setoptions(self, **kwds):
-        if "oldstyle" in kwds:
-            self.config.objspace.std.oldstyle = kwds["oldstyle"]
-
     def initialize(self):
         "NOT_RPYTHON: only for initializing the space."
         self._typecache = Cache()
@@ -314,10 +310,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.make_builtins()
         self.sys.setmodule(w_mod)
 
-        # dummy old-style classes types
-        self.w_classobj = W_TypeObject(self, 'classobj', [self.w_object], {})
-        self.w_instance = W_TypeObject(self, 'instance', [self.w_object], {})
-        self.setup_old_style_classes()
+        # the type of old-style classes
+        self.w_classobj = self.builtin.get('__metaclass__')
 
         # fix up a problem where multimethods apparently don't 
         # like to define this at interp-level 
@@ -336,9 +330,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         """)
         self.w_dict.__flags__ = old_flags
 
-        if self.config.objspace.std.oldstyle:
-            self.enable_old_style_classes_as_default_metaclass()
-
         # final setup
         self.setup_builtin_modules()
         # Adding transparent proxy call
@@ -350,23 +341,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
                           self.wrap(app_proxy))
             self.setattr(w___pypy__, self.wrap('get_tproxy_controller'),
                           self.wrap(app_proxy_controller))
-
-    def enable_old_style_classes_as_default_metaclass(self):
-        self.setitem(self.builtin.w_dict, self.wrap('__metaclass__'), self.w_classobj)
-
-    def enable_new_style_classes_as_default_metaclass(self):
-        space = self
-        try: 
-            self.delitem(self.builtin.w_dict, self.wrap('__metaclass__')) 
-        except OperationError, e: 
-            if not e.match(space, space.w_KeyError): 
-                raise 
-
-    def setup_old_style_classes(self):
-        """NOT_RPYTHON"""
-        # sanity check that this approach is working and is not too late
-        self.w_classobj = self.getattr(self.builtin, self.wrap('_classobj'))
-        self.w_instance = self.getattr(self.builtin, self.wrap('_instance'))
 
     def create_builtin_module(self, pyname, publicname):
         """NOT_RPYTHON

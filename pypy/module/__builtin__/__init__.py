@@ -68,11 +68,8 @@ class Module(MixedModule):
         'file'          : 'state.get(space).w_file',
         'open'          : 'state.get(space).w_file',
 
-        # old-style classes dummy support
-        '_classobj'     : 'interp_classobj.W_ClassObject',
-        '_instance'     : 'interp_classobj.W_InstanceObject',
-        # default __metaclass__
-        '__metaclass__' : '(space.w_type)',
+        # default __metaclass__: old-style class
+        '__metaclass__' : 'interp_classobj.W_ClassObject',
 
         # interp-level function definitions
         'abs'           : 'operation.abs',

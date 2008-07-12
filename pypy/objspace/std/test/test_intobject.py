@@ -386,7 +386,7 @@ class AppTestInt:
         assert (j(100) >> 2,  type(j(100) >> 2)) == (      25, int)
 
     def test_special_int(self):
-        class a:
+        class a(object):
             def __int__(self): 
                 self.ar = True 
                 return None
@@ -394,12 +394,12 @@ class AppTestInt:
         raises(TypeError, int, inst) 
         assert inst.ar == True 
 
-        class b: 
+        class b(object): 
             pass 
         raises((AttributeError,TypeError), int, b()) 
 
     def test_special_long(self):
-        class a:
+        class a(object):
             def __long__(self): 
                 self.ar = True 
                 return None
@@ -407,7 +407,7 @@ class AppTestInt:
         raises(TypeError, long, inst) 
         assert inst.ar == True 
 
-        class b: 
+        class b(object): 
             pass 
         raises((AttributeError,TypeError), long, b()) 
 
