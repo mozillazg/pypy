@@ -2,14 +2,12 @@ import autopath
 import py, os
 from pypy.config.config import OptionDescription, BoolOption, IntOption, ArbitraryOption, FloatOption
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
-from pypy.config.config import ConfigError
 
 DEFL_INLINE_THRESHOLD = 32.4    # just enough to inline add__Int_Int()
 # and just small enough to prevend inlining of some rlist functions.
 
 DEFL_PROF_BASED_INLINE_THRESHOLD = 32.4
 DEFL_CLEVER_MALLOC_REMOVAL_INLINE_THRESHOLD = 32.4
-DEFL_LOW_INLINE_THRESHOLD = DEFL_INLINE_THRESHOLD / 2.0
 
 translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
@@ -17,7 +15,7 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--stackless",
                requires=[("translation.type_system", "lltype")]),
     ChoiceOption("type_system", "Type system to use when RTyping",
-                 ["lltype", "ootype"], cmdline=None, default="lltype",
+                 ["lltype", "ootype"], cmdline=None,
                  requires={
                      "ootype": [
                                 ("translation.backendopt.constfold", False),
@@ -27,7 +25,7 @@ translation_optiondescription = OptionDescription(
                                 ]
                      }),
     ChoiceOption("backend", "Backend to use for code generation",
-                 ["c", "llvm", "cli", "jvm", "js"], default="c",
+                 ["c", "llvm", "cli", "jvm", "js"],
                  requires={
                      "c":      [("translation.type_system", "lltype")],
                      "llvm":   [("translation.type_system", "lltype"),
@@ -41,11 +39,9 @@ translation_optiondescription = OptionDescription(
     BoolOption("llvm_via_c", "compile llvm via C",
                default=False, cmdline="--llvm-via-c",
                requires=[("translation.backend", "llvm")]),
-
-    # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
                  ["boehm", "ref", "marksweep", "semispace", "statistics",
-                  "generation", "hybrid", "markcompact", "none"],
+                  "generation", "hybrid", "none"],
                   "ref", requires={
                      "ref": [("translation.rweakref", False), # XXX
                              ("translation.gctransformer", "ref")],
@@ -57,7 +53,6 @@ translation_optiondescription = OptionDescription(
                      "generation": [("translation.gctransformer", "framework")],
                      "hybrid": [("translation.gctransformer", "framework")],
                      "boehm": [("translation.gctransformer", "boehm")],
-                     "markcompact": [("translation.gctransformer", "framework")],
                      },
                   cmdline="--gc"),
     ChoiceOption("gctransformer", "GC transformer that is used - internal",
@@ -68,10 +63,6 @@ translation_optiondescription = OptionDescription(
                      "ref": [("translation.gcrootfinder", "n/a")],
                      "none": [("translation.gcrootfinder", "n/a")],
                  }),
-    OptionDescription("gcconfig", "Configure garbage collectors", [
-        BoolOption("debugprint", "Turn on debug printing for the GC",
-                   default=False)
-        ]),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
                  ["n/a", "shadowstack", "llvmgc", "asmgcc"],
@@ -91,10 +82,18 @@ translation_optiondescription = OptionDescription(
                      "llvmgc": [("translation.gc", "generation")],
                      "asmgcc": [("translation.gc", "generation")],
                  }),
-
-    # other noticeable options
     BoolOption("thread", "enable use of threading primitives",
                default=False, cmdline="--thread"),
+    BoolOption("verbose", "Print extra information", default=False),
+    BoolOption("debug", "Record extra annotation information",
+               cmdline="-d --debug", default=False),
+    BoolOption("insist", "Try hard to go on RTyping", default=False,
+               cmdline="--insist"),
+    IntOption("withsmallfuncsets",
+              "Represent groups of less funtions than this as indices into an array",
+               default=0),
+    BoolOption("countmallocs", "Count mallocs and frees", default=False,
+               cmdline=None),
     BoolOption("sandbox", "Produce a fully-sandboxed executable",
                default=False, cmdline="--sandbox",
                requires=[("translation.thread", False)]),
@@ -102,11 +101,6 @@ translation_optiondescription = OptionDescription(
                default=True),
 
     # misc
-    BoolOption("verbose", "Print extra information", default=False),
-    BoolOption("debug", "Record extra annotation information",
-               cmdline="-d --debug", default=True),
-    BoolOption("insist", "Try hard to go on RTyping", default=False,
-               cmdline="--insist"),
     StrOption("cc", "Specify compiler to use for compiling generated C", cmdline="--cc"),
     StrOption("profopt", "Specify profile based optimization script",
               cmdline="--profopt"),
@@ -114,21 +108,10 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--no-profopt", negation=False),
     BoolOption("instrument", "internal: turn instrumentation on",
                default=False, cmdline=None),
-    BoolOption("countmallocs", "Count mallocs and frees", default=False,
-               cmdline=None),
-    ChoiceOption("fork_before",
-                 "(UNIX) Create restartable checkpoint before step",
-                 ["annotate", "rtype", "backendopt", "database", "source",
-                  "hintannotate", "timeshift"],
-                 default=None, cmdline="--fork-before"),
 
     ArbitraryOption("instrumentctl", "internal",
                default=None),
     StrOption("output", "Output file name", cmdline="--output"),
-
-    BoolOption("dump_static_data_info", "Dump static data info",
-               cmdline="--dump_static_data_info",
-               default=False, requires=[("translation.backend", "c")]),
 
     # portability options
     BoolOption("vanilla",
@@ -157,9 +140,11 @@ translation_optiondescription = OptionDescription(
                "attempt to pre-allocate the list",
                default=False,
                cmdline='--listcompr'),
-    IntOption("withsmallfuncsets",
-              "Represent groups of less funtions than this as indices into an array",
-               default=0),
+    ChoiceOption("fork_before",
+                 "(UNIX) Create restartable checkpoint before step",
+                 ["annotate", "rtype", "backendopt", "database", "source",
+                  "hintannotate", "timeshift"],
+                 default=None, cmdline="--fork-before"),
 
     # options for ootype
     OptionDescription("ootype", "Object Oriented Typesystem options", [
@@ -288,84 +273,3 @@ def get_combined_translation_config(other_optdescr=None,
             value = getattr(existing_config, child._name)
             config._cfgimpl_values[child._name] = value
     return config
-
-# ____________________________________________________________
-
-OPT_LEVELS = ['0', '1', 'size', 'mem', '2', '3']
-DEFAULT_OPT_LEVEL = '2'
-
-OPT_TABLE_DOC = {
-    '0':    'No optimization.  Uses the Boehm GC.',
-    '1':    'Enable a default set of optimizations.  Uses the Boehm GC.',
-    'size': 'Optimize for the size of the executable.  Uses the Boehm GC.',
-    'mem':  'Optimize for run-time memory usage and use a memory-saving GC.',
-    '2':    'Enable most optimizations and use a high-performance GC.',
-    '3':    'Enable all optimizations and use a high-performance GC.',
-    }
-
-OPT_TABLE = {
-    #level:  gc          backend optimizations...
-    '0':    'boehm       nobackendopt',
-    '1':    'boehm       lowinline',
-    'size': 'boehm       lowinline     remove_asserts',
-    'mem':  'markcompact lowinline     remove_asserts',
-    '2':    'hybrid      extraopts',
-    '3':    'hybrid      extraopts     remove_asserts',
-    }
-
-def set_opt_level(config, level):
-    """Apply optimization suggestions on the 'config'.
-    The optimizations depend on the selected level and possibly on the backend.
-    """
-    # warning: during some tests, the type_system and the backend may be
-    # unspecified and we get None.  It shouldn't occur in translate.py though.
-    type_system = config.translation.type_system
-    backend = config.translation.backend
-
-    try:
-        opts = OPT_TABLE[level]
-    except KeyError:
-        raise ConfigError("no such optimization level: %r" % (level,))
-    words = opts.split()
-    gc = words.pop(0)
-
-    # set the GC (only meaningful with lltype)
-    config.translation.suggest(gc=gc)
-
-    # set the backendopts
-    for word in words:
-        if word == 'nobackendopt':
-            config.translation.backendopt.suggest(none=True)
-        elif word == 'lowinline':
-            config.translation.backendopt.suggest(inline_threshold=
-                                                DEFL_LOW_INLINE_THRESHOLD)
-        elif word == 'remove_asserts':
-            config.translation.backendopt.suggest(remove_asserts=True)
-        elif word == 'extraopts':
-            config.translation.suggest(withsmallfuncsets=5)
-        else:
-            raise ValueError(word)
-
-    hasbackendopts = 'nobackendopt' not in words
-    config.translation.suggest(list_comprehension_operations=hasbackendopts)
-
-# ----------------------------------------------------------------
-
-PLATFORMS = [
-    'host',
-    'maemo',
-]
-
-def set_platform(config, platform):
-    from pypy.rlib.pyplatform import Platform, Maemo
-    from pypy.rlib import pyplatform
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
-    if isinstance(platform, str):
-        if platform == 'maemo':
-            platform = Maemo(cc=config.translation.cc or None)
-        elif platform == 'host':
-            return
-        else:
-            raise NotImplementedError('Platform = %s' % (platform,))
-    assert isinstance(platform, Platform)
-    pyplatform.platform = platform

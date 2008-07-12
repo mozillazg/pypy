@@ -1,10 +1,9 @@
 try:
     import dis
-    import new
 except ImportError:
     pass
 else:
-    import sys
+    import new, sys
 
     N_NOPS = 10**7
     N = int(50)

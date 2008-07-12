@@ -249,24 +249,17 @@ section 3.
            Report from the PyPy project to the E.U.,
            http://codespeak.net/svn/pypy/extradoc/eu-report/D05.1_Publish_on_translating_a_very-high-level_description.pdf
 
-.. _`PyPy's RPython`: 
-
 ------------------------------
 What is this RPython language?
 ------------------------------
 
-RPython is a restricted subset of the Python language.   It is used for 
-implementing dynamic language interpreters within the PyPy framework.  The
-restrictions are to ensure that type inference (and so, ultimately, translation
-to other languages) of RPython programs is possible. These restrictions only
-apply after the full import happens, so at import time arbitrary Python code can
-be executed. 
-
-The property of "being RPython" always applies to a full program, not to single
-functions or modules (the translation tool chain does a full program analysis).
-"Full program" in the context of "being RPython" is all the code reachable from
-an "entry point" function. The translation toolchain follows all calls
-recursively and discovers what belongs to the program and what not.
+RPython is a restricted subset of the Python language. The restrictions are to
+ensure that type inference (and so, ultimately, translation to other languages) of
+the program is possible. These restrictions only apply after the full import
+happens, so at import time arbitrary Python code can be executed. Another
+important point is that the property of "being RPython" always applies to a full
+program, not to single functions or modules (the translation tool chain does a
+full program analysis).
 
 The restrictions that apply to programs to be RPython mostly limit the ability
 of mixing types in arbitrary ways. RPython does not allow the usage of two
@@ -284,17 +277,14 @@ To read more about the RPython limitations read the `RPython description`_.
 
 .. _`RPython description`: coding-guide.html#restricted-python
 
--------------------------------------------------------------------------
-Does RPython have anything to do with Zope's Restricted Python? 
--------------------------------------------------------------------------
 
-No.  `Zope's RestrictedPython`_ aims to provide a sandboxed 
-execution environment for CPython.   `PyPy's RPython`_ is the implementation
-language for dynamic language interpreters.  However, PyPy also provides 
-a robust `sandboxed Python Interpreter`_. 
+--------------------------------------------------------------------------
+What do you mean by "full program"? All the code in all the modules I use?
+--------------------------------------------------------------------------
 
-.. _`sandboxed Python Interpreter`: sandbox.html
-.. _`Zope's RestrictedPython`: http://pypi.python.org/pypi/RestrictedPython
+"Full program" in the context of "being RPython" is all the code reachable from
+an "entry point" function. The translation toolchain follows all calls
+recursively and discovers what belongs to the program and what not.
 
 -------------------------------------------------------------------------
 Can I use PyPy and RPython to compile smaller parts of my Python program?

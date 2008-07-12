@@ -97,6 +97,9 @@ class ReprTests(unittest.TestCase):
         eq(r(n), expected)
 
     def test_instance(self):
+        # Disabled for PyPy because it relies on oldstyle class behaviour.
+        # Running the test under oldstyle results in many more other problems
+        # though.
         eq = self.assertEquals
         i1 = ClassWithRepr("a")
         eq(r(i1), repr(i1))
@@ -131,9 +134,8 @@ class ReprTests(unittest.TestCase):
         # Functions
         eq(repr(hash), '<built-in function hash>')
         # Methods
-        self.failUnless('method' in repr(''.split))
-        self.failUnless('str' in repr(''.split))
-        self.failUnless('split' in repr(''.split))
+        self.failUnless(repr(''.split).find(
+            "bound method str.split of '' at 0x") > -1)
 
     def test_xrange(self):
         import warnings
@@ -172,9 +174,7 @@ class ReprTests(unittest.TestCase):
     def test_descriptors(self):
         eq = self.assertEquals
         # method descriptors
-        self.assert_('method' in repr(dict.items))
-        self.assert_('dict' in repr(dict.items))
-        self.assert_('items' in repr(dict.items))
+        eq(repr(dict.items), "<unbound method dict.items>")
         # XXX member descriptors
         # XXX attribute descriptors
         # XXX slot descriptors
@@ -222,7 +222,8 @@ class LongReprTest(unittest.TestCase):
                 os.remove(p)
         del sys.path[0]
 
-    def test_module(self):
+    def DONOTtest_module(self):
+        # PyPy really doesn't (want to) do these complex module reprs.
         eq = self.assertEquals
         touch(os.path.join(self.subpkgname, self.pkgname + os.extsep + 'py'))
         from areallylongpackageandmodulenametotestreprtruncation.areallylongpackageandmodulenametotestreprtruncation import areallylongpackageandmodulenametotestreprtruncation

@@ -9,7 +9,6 @@ from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rlib.rmmap import alloc
 import py
 import os
 import sys
@@ -328,6 +327,9 @@ def ll_callback(ffi_cif, ll_res, ll_args, ll_userdata):
     userdata = rffi.cast(USERDATA_P, ll_userdata)
     userdata.callback(ll_args, ll_res, userdata)
 
+# heap for closures
+from pypy.jit.codegen.i386.codebuf import memhandler
+
 CHUNK = 4096
 CLOSURES = rffi.CArrayPtr(FFI_CLOSUREP.TO)
 
@@ -337,7 +339,7 @@ class ClosureHeap(object):
         self.free_list = lltype.nullptr(rffi.VOIDP.TO)
 
     def _more(self):
-        chunk = rffi.cast(CLOSURES, alloc(CHUNK))
+        chunk = rffi.cast(CLOSURES, memhandler.alloc(CHUNK))
         count = CHUNK//rffi.sizeof(FFI_CLOSUREP.TO)
         for i in range(count):
             rffi.cast(rffi.VOIDPP, chunk)[0] = self.free_list
