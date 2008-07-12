@@ -2,9 +2,6 @@
 import py
 from pypy.conftest import gettestobjspace, option
 
-def setup_module(mod):
-    py.test.importorskip("pygreen")   # found e.g. in py/trunk/contrib 
-
 class AppTestDistributedGreensock(object):
     def setup_class(cls):
         if not option.runappdirect:
@@ -44,7 +41,7 @@ def count():
     def test_remote_call(self):
         from distributed import socklayer
         import sys
-        from pygreen.greenexecnet import PopenGateway
+        from py.__.green.greenexecnet import PopenGateway
         gw = PopenGateway()
         rp = socklayer.spawn_remote_side(self.remote_side_code, gw)
         a = rp.get_remote("a")
@@ -52,8 +49,8 @@ def count():
     
     def test_remote_counting(self):
         from distributed import socklayer
-        from pygreen.greensock2 import allof
-        from pygreen.greenexecnet import PopenGateway
+        from py.__.green.greensock2 import allof
+        from py.__.green.greenexecnet import PopenGateway
         gws = [PopenGateway() for i in range(3)]
         rps = [socklayer.spawn_remote_side(self.remote_side_code, gw)
                for gw in gws]

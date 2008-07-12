@@ -341,7 +341,6 @@ class GenericGCTests(GCTest):
         b = B()
         b.nextid = 1
         b.num_deleted = 0
-        b.num_deleted_c = 0
         class A(object):
             def __init__(self):
                 self.id = b.nextid
@@ -354,7 +353,6 @@ class GenericGCTests(GCTest):
         class C(A):
             def __del__(self):
                 b.num_deleted += 1
-                b.num_deleted_c += 1
         def f(x, y):
             persistent_a1 = A()
             persistent_a2 = A()
@@ -367,7 +365,6 @@ class GenericGCTests(GCTest):
             llop.gc__collect(lltype.Void)
             llop.gc__collect(lltype.Void)
             b.bla = persistent_a1.id + persistent_a2.id + persistent_a3.id + persistent_a4.id
-            print b.num_deleted_c
             return b.num_deleted
         run = self.runner(f, nbargs=2)
         # runs collect recursively 4 times
@@ -798,15 +795,6 @@ class TestSemiSpaceGC(GenericMovingGCTests):
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
-            GC_PARAMS = {'space_size': 2048}
-            root_stack_depth = 200
-
-class TestMarkCompactGC(GenericMovingGCTests):
-    gcname = 'markcompact'
-
-    class gcpolicy(gc.FrameworkGcPolicy):
-        class transformerclass(framework.FrameworkGCTransformer):
-            from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
             GC_PARAMS = {'space_size': 2048}
             root_stack_depth = 200
 
