@@ -154,8 +154,6 @@ class StreamError(Exception):
     def __init__(self, message):
         self.message = message
 
-StreamErrors = (OSError, StreamError)     # errors that can generally be raised
-
 
 class Stream(object):
 

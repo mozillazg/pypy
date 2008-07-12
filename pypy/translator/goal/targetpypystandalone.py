@@ -7,7 +7,6 @@ from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
 from pypy.config.config import Config, to_optparse, make_dict, SUPPRESS_USAGE
-from pypy.config.config import ConflictConfigError
 from pypy.tool.option import make_objspace
 from pypy.translator.goal.nanos import setup_nanos
 
@@ -31,7 +30,6 @@ def create_entry_point(space, w_dict):
     w_os = setup_nanos(space)
 
     def entry_point(argv):
-        space.timer.start("Entrypoint")
         #debug("entry point starting") 
         #for arg in argv: 
         #    debug(" argv -> " + arg)
@@ -46,14 +44,10 @@ def create_entry_point(space, w_dict):
             argv = argv[:1] + argv[3:]
         try:
             try:
-                space.timer.start("space.startup")
                 space.call_function(w_run_toplevel, w_call_startup_gateway)
-                space.timer.stop("space.startup")
                 w_executable = space.wrap(argv[0])
                 w_argv = space.newlist([space.wrap(s) for s in argv[1:]])
-                space.timer.start("w_entry_point")
                 w_exitcode = space.call_function(w_entry_point, w_executable, w_argv, w_os)
-                space.timer.stop("w_entry_point")
                 exitcode = space.int_w(w_exitcode)
                 # try to pull it all in
             ##    from pypy.interpreter import main, interactive, error
@@ -66,16 +60,12 @@ def create_entry_point(space, w_dict):
                 return 1
         finally:
             try:
-                space.timer.start("space.finish")
                 space.call_function(w_run_toplevel, w_call_finish_gateway)
-                space.timer.stop("space.finish")
             except OperationError, e:
                 debug("OperationError:")
                 debug(" operror-type: " + e.w_type.getname(space, '?'))
                 debug(" operror-value: " + space.str_w(space.str(e.w_value)))
                 return 1
-        space.timer.stop("Entrypoint")
-        space.timer.dump()
         return exitcode
     return entry_point
 
@@ -100,28 +90,25 @@ class PyPyTarget(object):
                              parserkwargs={'usage': self.usage})
         return parser
 
-    def handle_config(self, config, translateconfig):
-        self.translateconfig = translateconfig
-        # set up the objspace optimizations based on the --opt argument
-        from pypy.config.pypyoption import set_pypy_opt_level
-        set_pypy_opt_level(config, translateconfig.opt)
-
+    def handle_config(self, config):
         # as of revision 27081, multimethod.py uses the InstallerVersion1 by default
         # because it is much faster both to initialize and run on top of CPython.
         # The InstallerVersion2 is optimized for making a translator-friendly
         # structure for low level backends. However, InstallerVersion1 is still
         # preferable for high level backends, so we patch here.
-
         from pypy.objspace.std import multimethod
-        if config.objspace.std.multimethods == 'mrd':
+        if config.translation.type_system == 'lltype':
             assert multimethod.InstallerVersion1.instance_counter == 0,\
                    'The wrong Installer version has already been instatiated'
             multimethod.Installer = multimethod.InstallerVersion2
-        elif config.objspace.std.multimethods == 'doubledispatch':
+        else:
             # don't rely on the default, set again here
             assert multimethod.InstallerVersion2.instance_counter == 0,\
                    'The wrong Installer version has already been instatiated'
             multimethod.Installer = multimethod.InstallerVersion1
+
+    def handle_translate_config(self, translateconfig):
+        self.translateconfig = translateconfig
 
     def print_help(self, config):
         self.opt_parser(config).print_help()
@@ -141,33 +128,15 @@ class PyPyTarget(object):
         # expose the following variables to ease debugging
         global space, entry_point
 
-        if config.objspace.allworkingmodules:
-            from pypy.config.pypyoption import enable_allworkingmodules
-            enable_allworkingmodules(config)
-
         if config.translation.thread:
             config.objspace.usemodules.thread = True
         elif config.objspace.usemodules.thread:
-            try:
-                config.translation.thread = True
-            except ConflictConfigError:
-                # If --allworkingmodules is given, we reach this point
-                # if threads cannot be enabled (e.g. they conflict with
-                # something else).  In this case, we can try setting the
-                # usemodules.thread option to False again.  It will
-                # cleanly fail if that option was set to True by the
-                # command-line directly instead of via --allworkingmodules.
-                config.objspace.usemodules.thread = False
+            config.translation.thread = True
 
         if config.translation.stackless:
             config.objspace.usemodules._stackless = True
         elif config.objspace.usemodules._stackless:
-            try:
-                config.translation.stackless = True
-            except ConflictConfigError:
-                raise ConflictConfigError("please use the --stackless option "
-                                          "to translate.py instead of "
-                                          "--withmod-_stackless directly")
+            config.translation.stackless = True
 
         if not config.translation.rweakref:
             config.objspace.usemodules._weakref = False
@@ -215,7 +184,7 @@ class PyPyTarget(object):
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
-                     'portal',
+                     'handle_translate_config', 'portal',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 

@@ -23,8 +23,7 @@ class ExternalCompilationInfo(object):
     _ATTRIBUTES = ['pre_include_bits', 'includes', 'include_dirs',
                    'post_include_bits', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files',
-                   'export_symbols', 'compile_extra', 'link_extra',
-                   'frameworks']
+                   'export_symbols', 'compile_extra', 'link_extra', 'frameworks']
     _DUPLICATES_OK = ['compile_extra', 'link_extra']
 
     def __init__(self,
@@ -39,8 +38,7 @@ class ExternalCompilationInfo(object):
                  export_symbols          = [],
                  compile_extra           = [],
                  link_extra              = [],
-                 frameworks              = [],
-                 platform                = None):
+                 frameworks              = []):
         """
         pre_include_bits: list of pieces of text that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -81,17 +79,11 @@ class ExternalCompilationInfo(object):
         linker. Use this instead of the 'libraries' parameter if you want to
         link to a framework bundle. Not suitable for unix-like .dylib
         installations.
-
-        platform: an object that can identify the platform
         """
         for name in self._ATTRIBUTES:
             value = locals()[name]
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
-        if platform is None:
-            from pypy.rlib import pyplatform
-            platform = pyplatform.platform
-        self.platform = platform
 
     def from_compiler_flags(cls, flags):
         """Returns a new ExternalCompilationInfo instance by parsing
@@ -158,8 +150,7 @@ class ExternalCompilationInfo(object):
     from_config_tool = classmethod(from_config_tool)
 
     def _value(self):
-        return tuple([getattr(self, x) for x in self._ATTRIBUTES]
-                     + [self.platform])
+        return tuple([getattr(self, x) for x in self._ATTRIBUTES])
 
     def __hash__(self):
         return hash(self._value())
@@ -176,7 +167,6 @@ class ExternalCompilationInfo(object):
         for attr in self._ATTRIBUTES:
             val = getattr(self, attr)
             info.append("%s=%s" % (attr, repr(val)))
-        info.append("platform=%s" % repr(self.platform))
         return "<ExternalCompilationInfo (%s)>" % ", ".join(info)
 
     def merge(self, *others):
@@ -206,11 +196,6 @@ class ExternalCompilationInfo(object):
                             s.add(elem)
                             attr.append(elem)
                 attrs[name] = attr
-        for other in others:
-            if other.platform != self.platform:
-                raise Exception("Mixing ECI for different platforms %s and %s"%
-                                (other.platform, self.platform))
-        attrs['platform'] = self.platform
         return ExternalCompilationInfo(**attrs)
 
     def write_c_header(self, fileobj):
@@ -513,23 +498,15 @@ class CCompiler:
         self.compile_extra = list(eci.compile_extra)
         self.link_extra = list(eci.link_extra)
         self.frameworks = list(eci.frameworks)
-        if compiler_exe is not None:
-            self.compiler_exe = compiler_exe
-        else:
-            self.compiler_exe = eci.platform.get_compiler()
+        self.compiler_exe = compiler_exe
         self.profbased = profbased
         if not sys.platform in ('win32', 'darwin'): # xxx
             if 'm' not in self.libraries:
                 self.libraries.append('m')
-            self.compile_extra += CFLAGS + ['-fomit-frame-pointer']
             if 'pthread' not in self.libraries:
                 self.libraries.append('pthread')
-            if sys.platform != 'sunos5': 
-                self.compile_extra += ['-pthread']
-                self.link_extra += ['-pthread']
-            else:
-                self.compile_extra += ['-pthreads']
-                self.link_extra += ['-lpthread']
+            self.compile_extra += CFLAGS + ['-fomit-frame-pointer', '-pthread']
+            self.link_extra += ['-pthread']
         if sys.platform == 'win32':
             self.link_extra += ['/DEBUG'] # generate .pdb file
         if sys.platform == 'darwin':

@@ -231,13 +231,11 @@ else:
             return self._visitAbstractTest(node, False)
 
         def visitTuple(self, node):
-            nodes = node.nodes
-            consts_w = [None] * len(nodes)
-            for i in range(len(nodes)):
-                subnode = nodes[i]
+            consts_w = []
+            for subnode in node.nodes:
                 if not isinstance(subnode, ast.Const):
                     return node     # not all constants
-                consts_w[i] = subnode.value
+                consts_w.append(subnode.value)
             return ast.Const(self.space.newtuple(consts_w))
 
         def visitFor(self, node):

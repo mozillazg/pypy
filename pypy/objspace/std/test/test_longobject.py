@@ -60,6 +60,7 @@ class AppTestLong:
         assert a == 3L
 
     def test_compare(self):
+        skip("in-progress")
         BIG = 1L << 9999
         assert 0 == 0L
         assert not (0 != 0L)

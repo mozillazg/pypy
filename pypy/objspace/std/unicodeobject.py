@@ -474,7 +474,7 @@ def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start
 def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.unpacktuple(w_prefixes):
         prefix = space.unicode_w(w_prefix)
         if _check_startswith_substring(unistr, prefix, start, end):
             return space.w_True
@@ -483,7 +483,7 @@ def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
 def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.unpacktuple(w_suffixes):
         suffix = space.unicode_w(w_suffix)
         if _check_endswith_substring(unistr, suffix, start, end):
             return space.w_True
@@ -772,6 +772,14 @@ def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
     encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
     w_retval = encode_object(space, w_unistr, encoding, errors)
     return w_retval
+
+def unicode_decode__Unicode_ANY_ANY(space, w_unicode, w_encoding=None, w_errors=None):
+    from pypy.objspace.std.unicodetype import _get_encoding_and_errors,\
+         decode_object, unicode_from_string
+    encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
+    if encoding is None and errors is None:
+        return unicode_from_string(space, w_unicode)
+    return decode_object(space, w_unicode, encoding, errors)
 
 def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
     unistr = w_unistr._value

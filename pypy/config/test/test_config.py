@@ -530,15 +530,6 @@ def test_choice_suggests():
     assert not c.toplevel
 
 
-def test_bogus_suggests():
-    descr = OptionDescription("test", '', [
-        BoolOption("toplevel", "", suggests=[("opt", "bogusvalue")]),
-        ChoiceOption("opt", "", ["a", "b", "c"], "a"),
-    ])
-    c = Config(descr)
-    py.test.raises(ConfigError, "c.toplevel = True")
-
-
 def test_delattr():
     descr = OptionDescription("opt", "", [
     OptionDescription("s1", "", [
@@ -558,7 +549,7 @@ def test_validator():
 
     def my_validator_2(config):
         assert config is c
-        raise ConflictConfigError
+        raise ConfigError
 
     descr = OptionDescription("opt", "", [
         BoolOption('booloption1', 'option test1', default=False,
