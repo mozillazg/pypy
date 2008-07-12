@@ -714,7 +714,7 @@ class ObjSpace(object):
                     return w_res
                 except OperationError, e:
                     if is_c_call:
-                        ec.c_exception_trace(frame, e)
+                        ec.c_exception_trace(frame, e.w_value)
                     raise
             finally:
                 if isinstance(args, ArgumentsFromValuestack):

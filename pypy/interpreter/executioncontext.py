@@ -117,12 +117,12 @@ class ExecutionContext:
         else:
             self._trace(frame, 'c_return', w_retval)
 
-    def c_exception_trace(self, frame, operationerr):
+    def c_exception_trace(self, frame, w_exc):
         "Profile function called upon OperationError."
         if self.profilefunc is None:
             frame.is_being_profiled = False
         else:
-            self._trace(frame, 'c_exception', operationerr)
+            self._trace(frame, 'c_exception', w_exc)
 
     def _llprofile(self, event, w_arg):
         fr = self.framestack.items
