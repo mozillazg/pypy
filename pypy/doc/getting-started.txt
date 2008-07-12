@@ -551,7 +551,7 @@ our translation toolchain can process.  The most standard variant
 nowadays is::
 
     cd pypy/translator/goal
-    python translate.py --gc=hybrid --thread targetpypystandalone.py --allworkingmodules --faassen
+    python translate.py --gc=hybrid --thread targetpypystandalone.py --allworkingmodules --allopts
 
 Dependencies: this will compile all supported built-in modules, some of
 which have external dependencies.  On a Debian Linux, for example, you
@@ -566,7 +566,7 @@ The ``--gc=hybrid`` option means that the ``pypy-c`` will use our own
 exact generational garbage collector implementation, whose performance
 is rather good nowadays.  The ``--thread`` option enables the thread
 module, which is still slightly experimental.
-The ``--faassen`` option enables all the
+The ``--allopts`` option enables all the
 worthwhile performance optimizations, but slows down the translation
 itself.  On Linux 32-bit Intel machines, if you don't need threads, you
 can get some extra speed (and extra translation time) by removing
