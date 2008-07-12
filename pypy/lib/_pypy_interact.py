@@ -5,14 +5,8 @@ import sys
 
 def interactive_console(mainmodule=None):
     try:
-        from _pypy_irc_topic import some_topic
-        text = "And now for something completely different: ``%s''" % (
-            some_topic(),)
-        if len(text) >= 80:
-            i = text[:80].rfind(' ')
-            print text[:i]
-            text = text[i+1:]
-        print text
+        import _pypy_irc_topic
+        print "``%s''" % (_pypy_irc_topic.some_topic(),)
     except ImportError:
         pass
     try:
