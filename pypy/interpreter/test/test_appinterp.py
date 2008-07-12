@@ -86,7 +86,7 @@ def test_applevelinterp_functions(space):
 
 def test_applevel_class(space, applevel_temp = applevel_temp):
     app = applevel_temp('''
-        class C: 
+        class C(object):
             clsattr = 42 
             def __init__(self, x=13): 
                 self.attr = x 

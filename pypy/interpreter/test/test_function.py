@@ -191,7 +191,7 @@ class AppTestMethod:
     def test_get_get(self):
         # sanxiyn's test from email
         def m(self): return self
-        class C: pass
+        class C(object): pass
         class D(C): pass
         C.m = m
         D.m = C.m
@@ -201,7 +201,7 @@ class AppTestMethod:
         assert d.m() == d
 
     def test_method_eq(self):
-        class C:
+        class C(object):
             def m(): pass
         c = C()
         assert C.m == C.m
@@ -229,10 +229,6 @@ class AppTestMethod:
         assert repr(A.f) == "<unbound method A.f>"
         assert repr(A().f).startswith("<bound method A.f of <") 
         class B:
-            try:
-                __metaclass__ = _classobj
-            except NameError: # non-pypy, assuming oldstyle implicitely
-                pass
             def f(self):
                 pass
         assert repr(B.f) == "<unbound method B.f>"
@@ -240,13 +236,13 @@ class AppTestMethod:
 
 
     def test_method_call(self):
-        class C:
+        class C(object):
             def __init__(self, **kw):
                 pass
         c = C(type='test')
 
     def test_method_w_callable(self):
-        class A:
+        class A(object):
             def __call__(self, x):
                 return x
         import new
@@ -254,7 +250,7 @@ class AppTestMethod:
         assert im() == 3
 
     def test_method_w_callable_call_function(self):
-        class A:
+        class A(object):
             def __call__(self, x, y):
                 return x+y
         import new

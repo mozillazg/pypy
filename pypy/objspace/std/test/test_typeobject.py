@@ -215,15 +215,9 @@ class AppTestTypeObject:
             assert 0, "shouldn't be able to create inheritance cycles"
 
         # let's throw a classic class into the mix:
-        try:
-            class Classic:
-                __metaclass__ = _classobj
-                def meth2(self):
-                    return 3
-        except NameError:
-            class Classic:
-                def meth2(self):
-                    return 3
+        class Classic:
+            def meth2(self):
+                return 3
 
         D.__bases__ = (C, Classic)
 
@@ -369,27 +363,14 @@ class AppTestTypeObject:
         assert type(HasInnerMetaclass) == HasInnerMetaclass.__metaclass__
 
     def test_implicit_metaclass(self):
-        global __metaclass__
-        try:
-            old_metaclass = __metaclass__
-            has_old_metaclass = True
-        except NameError:
-            has_old_metaclass = False
-            
         class __metaclass__(type):
             pass
 
-        class HasImplicitMetaclass:
-            pass
+        g = {'__metaclass__': __metaclass__}
+        exec "class HasImplicitMetaclass: pass\n" in g
 
-        try:
-            assert type(HasImplicitMetaclass) == __metaclass__
-        finally:
-            if has_old_metaclass:
-                __metaclass__ = old_metaclass
-            else:
-                del __metaclass__
-
+        HasImplicitMetaclass = g['HasImplicitMetaclass']
+        assert type(HasImplicitMetaclass) == __metaclass__
 
     def test_mro(self):
         class A_mro(object):
@@ -410,8 +391,8 @@ class AppTestTypeObject:
         assert getattr(B_mro(), 'a', None) == None
 
     def test_abstract_mro(self):
-        class A1:
-            __metaclass__ = _classobj
+        class A1:    # old-style class
+            pass
         class B1(A1):
             pass
         class C1(A1):
@@ -595,7 +576,7 @@ class AppTestTypeObject:
 
     def test_only_classic_bases_fails(self):
         class C:
-            __metaclass__ = _classobj
+            pass
         raises(TypeError, type, 'D', (C,), {})
 
     def test_set___class__(self):

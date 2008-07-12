@@ -181,20 +181,6 @@ iter(callable, sentinel) -> iterator calling callable() until it returns
 """
     if w_sentinel is None:
         return space.iter(w_collection_or_callable) 
-        # XXX it seems that CPython checks the following 
-        #     for newstyle but doesn't for oldstyle classes :-( 
-        #w_res = space.iter(w_collection_or_callable)
-        #w_typeres = space.type(w_res) 
-        #try: 
-        #    space.getattr(w_typeres, space.wrap('next'))
-        #except OperationError, e: 
-        #    if not e.match(space, space.w_AttributeError): 
-        #        raise 
-        #    raise OperationError(space.w_TypeError, 
-        #        space.wrap("iter() returned non-iterator of type '%s'" % 
-        #                   w_typeres.name))
-        #else: 
-        #    return w_res 
     else:
         return iter_sentinel(space, w_collection_or_callable, w_sentinel)
 

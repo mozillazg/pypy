@@ -207,7 +207,7 @@ class ObjSpace(object):
 
     full_exceptions = True  # full support for exceptions (normalization & more)
 
-    def __init__(self, config=None, **kw):
+    def __init__(self, config=None):
         "NOT_RPYTHON: Basic initialization of objects."
         self.fromcache = InternalSpaceCache(self).getorbuild
         self.threadlocals = ThreadLocals()
@@ -227,7 +227,6 @@ class ObjSpace(object):
         self.frame_trace_action = FrameTraceAction(self)
         self.actionflag.register_action(self.user_del_action)
         self.actionflag.register_action(self.frame_trace_action)
-        self.setoptions(**kw)
 
         from pypy.interpreter.pyframe import PyFrame
         self.FrameClass = PyFrame    # can be overridden to a subclass
@@ -236,10 +235,6 @@ class ObjSpace(object):
 #            self.bytecodecounts = {}
 
         self.initialize()
-
-    def setoptions(self):
-        # override this in subclasses for extra-options
-        pass
 
     def startup(self):
         # To be called before using the space
@@ -735,10 +730,15 @@ class ObjSpace(object):
                 return w_value
         return None
 
+    def is_oldstyle_instance(self, w_obj):
+        # xxx hack hack hack
+        from pypy.module.__builtin__.interp_classobj import W_InstanceObject
+        obj = self.interpclass_w(w_obj)
+        return obj is not None and isinstance(obj, W_InstanceObject)
+
     def callable(self, w_obj):
         if self.lookup(w_obj, "__call__") is not None:
-            w_is_oldstyle = self.isinstance(w_obj, self.w_instance)
-            if self.is_true(w_is_oldstyle):
+            if self.is_oldstyle_instance(w_obj):
                 # ugly old style class special treatment, but well ...
                 try:
                     self.getattr(w_obj, self.wrap("__call__"))

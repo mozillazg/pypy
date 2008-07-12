@@ -91,7 +91,7 @@ class AppTestAppFloatTest:
         assert 0.0 == round(22.22222, -2)
 
     def test_special_float_method(self):
-        class a:
+        class a(object):
             def __float__(self): 
                 self.ar = True 
                 return None
@@ -99,7 +99,7 @@ class AppTestAppFloatTest:
         raises(TypeError, float, inst) 
         assert inst.ar 
 
-        class b: 
+        class b(object): 
             pass 
         raises((AttributeError, TypeError), float, b()) 
 

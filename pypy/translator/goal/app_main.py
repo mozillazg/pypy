@@ -10,8 +10,6 @@ options:
   -u             unbuffered binary stdout and stderr
   -h, --help     show this help message and exit
   -m             library module to be run as a script (terminates option list)
-  -k, --oldstyle use old-style classes instead of newstyle classes
-                 everywhere %(oldstyle)s
   --version      print the PyPy version
   --info         print translation information about this PyPy executable
 """
@@ -123,10 +121,7 @@ def print_info():
 
 def print_help():
     print 'usage: %s [options]' % (sys.executable,)
-    details = {'oldstyle': ''}
-    if sys.pypy_translation_info['objspace.std.oldstyle']:
-        details['oldstyle'] = '[default]'
-    print __doc__ % details
+    print __doc__
 
 def print_error(msg):
     print >> sys.stderr, msg
@@ -221,7 +216,6 @@ def entry_point(executable, argv, nanos):
     i = 0
     run_module = False
     run_stdin = False
-    oldstyle_classes = False
     unbuffered = False
     while i < len(argv):
         arg = argv[i]
@@ -260,8 +254,6 @@ def entry_point(executable, argv, nanos):
                 return 2
             run_module = True
             break
-        elif arg in ('-k', '--oldstyle'):
-            oldstyle_classes = True
         elif arg == '--':
             i += 1
             break     # terminates option list
@@ -286,10 +278,6 @@ def entry_point(executable, argv, nanos):
 
     mainmodule = type(sys)('__main__')
     sys.modules['__main__'] = mainmodule
-
-    if oldstyle_classes:
-        import __builtin__
-        __builtin__.__metaclass__ = __builtin__._classobj
 
     if import_site:
         try:

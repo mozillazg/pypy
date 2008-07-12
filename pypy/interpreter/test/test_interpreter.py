@@ -263,7 +263,7 @@ class AppTestInterpreter:
     def test_print(self):
         import sys
         save = sys.stdout 
-        class Out:
+        class Out(object):
             def __init__(self):
                 self.args = []
             def write(self, *args):
