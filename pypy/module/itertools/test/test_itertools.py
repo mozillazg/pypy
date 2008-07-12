@@ -434,12 +434,30 @@ class AppTestItertools:
             raises(StopIteration, g.next)
         raises(StopIteration, it.next)
 
+        # consumes after group started
         it = itertools.groupby([0, 0, 0, 0, 1])
+        k1, g1 = it.next()
+        assert g1.next() == 0
+        k2, g2 = it.next()
+        raises(StopIteration, g1.next)
+        assert g2.next() == 1
+        raises(StopIteration, g2.next)
+
+        # skips with not started group
+        it = itertools.groupby([0, 0, 1])
         k1, g1 = it.next()
         k2, g2 = it.next()
         raises(StopIteration, g1.next)
         assert g2.next() == 1
         raises(StopIteration, g2.next)
+
+        it = itertools.groupby([0, 1, 2])
+        k1, g1 = it.next()
+        k2, g2 = it.next()
+        k2, g3 = it.next()
+        raises(StopIteration, g1.next)
+        raises(StopIteration, g2.next)
+        assert g3.next() == 2
 
         def half_floor(x):
             return x // 2
