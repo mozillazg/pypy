@@ -494,9 +494,6 @@ def parse_attraccess(tokens, builder):
     """parses token list like ['a', '.', 'b', '.', 'c', ...]
 
     and returns an ast node : ast.Getattr(Getattr(Name('a'), 'b'), 'c' ...)
-
-    Well, no, that's lying.  In reality this is also parsing everything
-    that goes in the grammar 'trailer' rule.
     """
     token = tokens[0]
     # XXX HACK for when parse_attraccess is called from build_decorator
@@ -617,12 +614,10 @@ class ArglistObject(ObjectAccessor):
         self.lineno = lineno
 
     def __str__(self):
-        return repr(self)
+        return "<ArgList: (%s, %s, %s)>" % self.value
 
     def __repr__(self):
-        return "<ArgList: (%s, %s, %s)>" % (self.arguments,
-                                            self.stararg,
-                                            self.dstararg)
+        return "<ArgList: (%s, %s, %s)>" % self.value
 
 class SubscriptObject(ObjectAccessor):
     """helper class to build subscript list

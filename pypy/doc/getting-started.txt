@@ -102,10 +102,11 @@ testing tool that we are using and enhancing for PyPy.
 **Note that running all the tests takes a very long time, and
 enormous amounts of memory if you are trying to run them all
 in the same process; test_all.py is only suitable to run a
-subset of them at a time.**  To run them all daily we have a BuildBot based
-setup, a summary of its results can be seen at:
+subset of them at a time.**  To run them all we have an
+`autotest driver`_ that executes the tests directory by
+directory and produces pages like the following one:
 
-    http://codespeak.net:8099/summary
+    http://wyvern.cs.uni-duesseldorf.de/pypytest/summary.html
 
 .. _`if PyPy works on your machine/platform`: index.html#status
 .. _`autotest driver`: http://codespeak.net/pipermail/pypy-dev/2006q3/003273.html
@@ -197,7 +198,6 @@ usual CPython console.  You can then access internal objects of PyPy
 (e.g. the object space) and any variables you have created on the PyPy
 prompt with the prefix ``w_``:: 
 
-    .. >>> import py ; py.test.skip("skipchunk")
     >>>> a = 123
     >>>> <Ctrl-C>
     *** Entering interpreter-level console ***
@@ -546,49 +546,44 @@ Windows, see the `windows document`_)
 .. _`windows document`: windows.html
 
 You can translate the whole of PyPy's Python interpreter to low level C
-code.  (This is the largest and ultimate example of RPython program that
-our translation toolchain can process.)
+code.  This is the largest and ultimate example of RPython program that
+our translation toolchain can process.  The most standard variant
+nowadays is::
 
-1. Install dependencies.  You need (these are Debian package names,
-   adapt as needed):
+    cd pypy/translator/goal
+    python translate.py --gc=hybrid --thread targetpypystandalone.py --allworkingmodules --faassen
 
-   * gcc
-   * ``python-dev``
-   * ``python-ctypes``
-   * ``libffi-dev``
-   * ``libz-dev`` (for the optional ``zlib`` module)
-   * ``libbz2-dev`` (for the optional ``bz2`` module)
-   * ``libncurses-dev`` (for the optional ``_minimal_curses`` module)
-   * ``libgc-dev`` (only when translating with `--opt=0, 1` or `size`)
+Dependencies: this will compile all supported built-in modules, some of
+which have external dependencies.  On a Debian Linux, for example, you
+need to install the following packages: a full C compiler like gcc;
+``python-dev, python-ctypes``; ``libffi-dev, libz-dev, libbz2-dev,
+libncurses-dev``.
 
-2. Be warned that translation is time-consuming (30 min to
-   over one hour) and extremely RAM-hungry (kill it if it
-   starts swapping heavily).  If you have less than 1.5 GB of
-   RAM (or a slow machine) you might want to pick the
-   `optimization level`_ `1` in the next step.  A level of
-   `2` or `3` gives much better results, though.
+This whole process will take some time and quite a lot of memory (around
+1200 MB on 32 bit machines).  It creates an executable ``pypy-c`` in
+the current directory.
+The ``--gc=hybrid`` option means that the ``pypy-c`` will use our own
+exact generational garbage collector implementation, whose performance
+is rather good nowadays.  The ``--thread`` option enables the thread
+module, which is still slightly experimental.
+The ``--faassen`` option enables all the
+worthwhile performance optimizations, but slows down the translation
+itself.  On Linux 32-bit Intel machines, if you don't need threads, you
+can get some extra speed (and extra translation time) by removing
+``--thread`` and replacing it with ``--gcrootfinder=asmgcc``.
 
-3. Run::
+An alternative is to use the `Boehm-Demers-Weiser garbage
+collector`_ instead of our own.  For this, use ``--gc=boehm``.
+Be sure to install Boehm before starting the translation (e.g. by running
+``apt-get install libgc-dev`` on Debian or Ubuntu).  Translating with Boehm
+is somewhat faster and less memory-hungry than translating with our own GCs.
 
-     cd pypy/translator/goal
-     python translate.py --opt=3 targetpypystandalone.py
-
-   possibly replacing ``--opt=3`` with ``--opt=1`` or another
-   `optimization level`_ of your choice.
-
-   On Linux 32-bit Intel machines, if you don't need threads, you
-   can get some extra speed (and extra translation time) by adding
-   ``--gcrootfinder=asmgcc`` just after the ``--opt`` option.
-
-.. _`optimization level`: config/opt.html
-
-If everything works correctly this will create an executable
-``pypy-c`` in the current directory.  Type ``pypy-c --help``
-to see the options it supports -- mainly the same basic
-options as CPython.  In addition, ``pypy-c --info`` prints the
-translation options that where used to produce this particular
-executable.  This executable can be moved around or copied on
-other machines; see Installation_ below.
+In any case, as described above, you can find the produced executable under the
+name ``pypy-c``.  Type ``pypy-c --help`` to see the options it supports --
+mainly the same basic options as CPython.  In addition, ``pypy-c --info``
+prints the translation options that where used to produce this particular
+executable.  This executable can be moved around or copied on other machines;
+see Installation_ below.
 
 The ``translate.py`` script takes a very large number of options controlling
 what to translate and how.  See ``translate.py -h``. Some of the more

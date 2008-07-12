@@ -419,7 +419,7 @@ def descr_file_newlines(space, file):
         result.append(space.wrap('\n'))
     if newlines & 4:
         result.append(space.wrap('\r\n'))
-    return space.newtuple(result[:])
+    return space.newtuple(result)
 
 def descr_file_softspace(space, file):
     return space.wrap(file.softspace)

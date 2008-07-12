@@ -1,6 +1,4 @@
 import sys, os
-import os.path
-import shutil
 
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.tool.taskengine import SimpleTaskEngine
@@ -16,6 +14,22 @@ import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
+
+DEFAULTS = {
+  'translation.gc': 'ref',
+  'translation.cc': None,
+  'translation.profopt': None,
+
+  'translation.thread': False, # influences GC policy
+
+  'translation.stackless': False,
+  'translation.debug': True,
+  'translation.insist': False,
+  'translation.backend': 'c',
+  'translation.fork_before': None,
+  'translation.backendopt.raisingop2direct_call' : False,
+  'translation.backendopt.merge_if_blocks': True,
+}
 
 
 def taskdef(taskfunc, deps, title, new_state=None, expected_states=[],
@@ -79,7 +93,7 @@ class TranslationDriver(SimpleTaskEngine):
 
         if config is None:
             from pypy.config.pypyoption import get_pypy_config
-            config = get_pypy_config(translating=True)
+            config = get_pypy_config(DEFAULTS, translating=True)
         self.config = config
         if overrides is not None:
             self.config.override(overrides)
@@ -117,7 +131,7 @@ class TranslationDriver(SimpleTaskEngine):
             explicit_task = task
             parts = task.split('_')
             if len(parts) == 1:
-                if task in ('annotate',):
+                if task in ('annotate'):
                     expose_task(task)
             else:
                 task, postfix = parts
@@ -367,7 +381,6 @@ class TranslationDriver(SimpleTaskEngine):
         "Backendopt before Hint-annotate")
 
     def task_hintannotate_lltype(self):
-        raise NotImplementedError("JIT is not implemented on trunk, look at oo-jit branch instead")
         from pypy.jit.hintannotator.annotator import HintAnnotator
         from pypy.jit.hintannotator.model import OriginFlags
         from pypy.jit.hintannotator.model import SomeLLAbstractConstant
@@ -396,8 +409,6 @@ class TranslationDriver(SimpleTaskEngine):
                                        "Hint-annotate")
 
     def task_timeshift_lltype(self):
-        raise NotImplementedError("JIT is not implemented on trunk, look at oo-jit branch instead")
-
         from pypy.jit.timeshifter.hrtyper import HintRTyper
         from pypy.jit.codegen import detect_cpu
         cpu = detect_cpu.autodetect()
@@ -493,25 +504,18 @@ class TranslationDriver(SimpleTaskEngine):
         database = self.database
         c_source_filename = cbuilder.generate_source(database)
         self.log.info("written: %s" % (c_source_filename,))
-        if self.config.translation.dump_static_data_info:
-            from pypy.translator.tool.staticsizereport import dump_static_data_info
-            targetdir = cbuilder.targetdir
-            fname = dump_static_data_info(self.log, database, targetdir)
-            shutil.copy(str(fname), self.compute_exe_name() + '.staticdata.info')
-
     #
     task_source_c = taskdef(task_source_c, ['database_c'], "Generating c source")
 
-    def compute_exe_name(self):
-        newexename = self.exe_name % self.get_info()
-        if '/' not in newexename and '\\' not in newexename:
-            newexename = './' + newexename
-        return mkexename(newexename)
-
     def create_exe(self):
         if self.exe_name is not None:
+            import shutil
             exename = mkexename(self.c_entryp)
-            newexename = self.compute_exe_name()
+            info = {'backend': self.config.translation.backend}
+            newexename = self.exe_name % self.get_info()
+            if '/' not in newexename and '\\' not in newexename:
+                newexename = './' + newexename
+            newexename = mkexename(newexename)
             shutil.copy(exename, newexename)
             self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
@@ -654,6 +658,8 @@ class TranslationDriver(SimpleTaskEngine):
 
     def copy_cli_exe(self):
         # XXX messy
+        import os.path
+        import shutil
         main_exe = self.c_entryp._exe
         usession_path, main_exe_name = os.path.split(main_exe)
         pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
@@ -685,6 +691,8 @@ $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work 
         os.chmod(newexename, 0755)
 
     def copy_cli_dll(self):
+        import os.path
+        import shutil
         dllname = self.gen.outfile
         usession_path, dll_name = os.path.split(dllname)
         pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
