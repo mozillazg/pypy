@@ -49,6 +49,7 @@ class FakeObjSpace(ObjSpace):
     
     def initialize(self):
         self.config.objspace.geninterp = False
+        self.config.objspace.disable_call_speedhacks = True
         self.wrap_cache = {}
         self.make_builtins()
 
