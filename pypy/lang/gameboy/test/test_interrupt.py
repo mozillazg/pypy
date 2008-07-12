@@ -25,17 +25,17 @@ def test_set_get_enable_mask():
     assert interrupt.get_enable_mask() == 0x00
     
     interrupt.set_enable_mask(0x01)
-    assert interrupt.v_blank.is_enabled()
+    assert interrupt.vblank.is_enabled()
     assert interrupt.get_enable_mask() == 0x01
     
     # enable all interrupts 0x01 - 0x10
     interrupt.set_enable_mask(0xFF)
-    assert interrupt.v_blank.is_enabled()
+    assert interrupt.vblank.is_enabled()
     assert interrupt.get_enable_mask() == 0xFF
     
 def test_is_pending():
     interrupt = get_interrupt()
-    interrupt.v_blank.set_pending()
+    interrupt.vblank.set_pending()
     assert interrupt.is_pending()     == False
     assert interrupt.is_pending(0x00) == False
     
@@ -50,9 +50,22 @@ def test_is_pending_common_masks():
     for flag in interrupt.interrupt_flags:
         interrupt.reset()
         interrupt.set_enable_mask(0xFF)
-        assert interrupt.v_blank.is_pending()
+        assert interrupt.vblank.is_pending()
         flag.set_pending(True)
         assert interrupt.is_pending(flag.mask)
+    
+def test_raise_lower_interrupt():
+    interrupt = get_interrupt()
+    masks= [constants.LCD, constants.TIMER, 
+            constants.JOYPAD, constants.SERIAL]
+    interrupt.set_enable_mask(0xFF)
+    interrupt.vblank.set_pending(True)
+    for mask in masks:
+        interrupt.raise_interrupt(mask)
+        assert interrupt.mask_mapping[mask].is_pending() == True
+        assert interrupt.is_pending(mask) == True
+        interrupt.lower(mask)
+        assert interrupt.is_pending(mask) == False
     
 def test_read_write():
     interrupt = get_interrupt()

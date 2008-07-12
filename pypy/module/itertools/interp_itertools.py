@@ -9,17 +9,21 @@ class W_Count(Wrappable):
     def __init__(self, space, firstval):
         self.space = space
         self.c = firstval
+        self.overflowed = False
 
     def iter_w(self):
         return self.space.wrap(self)
 
     def next_w(self):
+        if self.overflowed:
+            raise OperationError(self.space.w_OverflowError,
+                    self.space.wrap("cannot count beyond sys.maxint"))
+
         c = self.c
         try:
             self.c = ovfcheck(self.c + 1)
         except OverflowError:
-            raise OperationError(self.space.w_OverflowError,
-                    self.space.wrap("cannot count beyond sys.maxint"))
+            self.overflowed = True
 
         return self.space.wrap(c)
 
@@ -285,33 +289,26 @@ class W_ISlice(Wrappable):
             start = 0
             w_stop = w_startstop
         elif num_args <= 2:
-            if space.is_w(w_startstop, space.w_None):
-                start = 0
-            else:
-                start = space.int_w(w_startstop)
+            start = space.int_w(w_startstop)
             w_stop = args_w[0]
         else:
             raise OperationError(space.w_TypeError, space.wrap("islice() takes at most 4 arguments (" + str(num_args) + " given)"))
 
         if space.is_w(w_stop, space.w_None):
-            stop = -1
-            stoppable = False
+            stop = 0
+            self.stoppable = False
         else:
             stop = space.int_w(w_stop)
-            stoppable = True
+            self.stoppable = True
 
         if num_args == 2:
-            w_step = args_w[1]
-            if space.is_w(w_step, space.w_None):
-                step = 1
-            else:
-                step = space.int_w(w_step)
+            step = space.int_w(args_w[1])
         else:
             step = 1
 
         if start < 0:
             raise OperationError(space.w_ValueError, space.wrap("Indicies for islice() must be non-negative integers."))
-        if stoppable and stop < 0:
+        if self.stoppable and stop < 0:
             raise OperationError(space.w_ValueError, space.wrap("Stop argument must be a non-negative integer or None."))
         if step < 1:
             raise OperationError(space.w_ValueError, space.wrap("Step must be one or lager for islice()."))
@@ -324,21 +321,25 @@ class W_ISlice(Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        if self.start >= 0:               # first call only
-            consume = self.start + 1
+        if self.stoppable and self.stop <= 0:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        if self.start >= 0:
+            skip = self.start
             self.start = -1
-        else:                             # all following calls
-            consume = self.step
-        if self.stop >= 0:
-            if self.stop < consume:
-                raise OperationError(self.space.w_StopIteration,
-                                     self.space.w_None)
-            self.stop -= consume
-        while True:
-            w_obj = self.space.next(self.iterable)
-            consume -= 1
-            if consume <= 0:
-                return w_obj
+        else:
+            skip = self.step - 1
+
+        while skip > 0:
+            self.space.next(self.iterable)
+            skip -= 1
+            if self.stoppable:
+                self.stop -= 1
+
+        w_obj = self.space.next(self.iterable)
+        if self.stoppable:
+            self.stop -= 1
+        return w_obj
 
 def W_ISlice___new__(space, w_subtype, w_iterable, w_startstop, args_w):
     return space.wrap(W_ISlice(space, w_iterable, w_startstop, args_w))
@@ -381,32 +382,30 @@ class W_Chain(Wrappable):
 
             i += 1
 
-        self.iterators_w = iterators_w
-        self.current_iterator = 0
-        self.num_iterators = len(iterators_w)
+        self.iterators = iter(iterators_w)
         self.started = False
 
     def iter_w(self):
         return self.space.wrap(self)
 
     def next_w(self):
-        if self.current_iterator >= self.num_iterators:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
         if not self.started:
-            self.current_iterator = 0
-            self.w_it = self.iterators_w[self.current_iterator]
-            self.started = True
+            try:
+                self.w_it = self.iterators.next()
+            except StopIteration:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+            else:
+                self.started = True
 
         while True:
             try:
                 w_obj = self.space.next(self.w_it)
             except OperationError, e:
                 if e.match(self.space, self.space.w_StopIteration):
-                    self.current_iterator += 1
-                    if self.current_iterator >= self.num_iterators:
+                    try:
+                        self.w_it = self.iterators.next()
+                    except StopIteration:
                         raise OperationError(self.space.w_StopIteration, self.space.w_None)
-                    else:
-                        self.w_it = self.iterators_w[self.current_iterator]
                 else:
                     raise
             else:
@@ -436,7 +435,6 @@ W_Chain.typedef = TypeDef(
 W_Chain.typedef.acceptable_as_base_class = False
 
 class W_IMap(Wrappable):
-    _error_name = "imap"
 
     def __init__(self, space, w_fun, args_w):
         self.space = space
@@ -450,7 +448,7 @@ class W_IMap(Wrappable):
                 iterator_w = space.iter(iterable_w)
             except OperationError, e:
                 if e.match(self.space, self.space.w_TypeError):
-                    raise OperationError(space.w_TypeError, space.wrap(self._error_name + " argument #" + str(i + 1) + " must support iteration"))
+                    raise OperationError(space.w_TypeError, space.wrap("imap argument #" + str(i + 1) + " must support iteration"))
                 else:
                     raise
             else:
@@ -464,17 +462,18 @@ class W_IMap(Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        w_objects = self.space.newtuple([self.space.next(w_it) for w_it in self.iterators_w])
+        if not self.iterators_w:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        w_objects = [self.space.next(w_it) for w_it in self.iterators_w]
+
         if self.identity_fun:
-            return w_objects
+            return self.space.newtuple(w_objects)
         else:
-            return self.space.call(self.w_fun, w_objects)
+            return self.space.call_function(self.w_fun, *w_objects)
 
 
 def W_IMap___new__(space, w_subtype, w_fun, args_w):
-    if len(args_w) == 0:
-        raise OperationError(space.w_TypeError,
-                  space.wrap("imap() must have at least two arguments"))
     return space.wrap(W_IMap(space, w_fun, args_w))
 
 W_IMap.typedef = TypeDef(
@@ -505,359 +504,3 @@ W_IMap.typedef = TypeDef(
     """)
 W_IMap.typedef.acceptable_as_base_class = False
 
-
-class W_IZip(W_IMap):
-    _error_name = "izip"
-
-    def next_w(self):
-        # argh.  izip(*args) is almost like imap(None, *args) except
-        # that the former needs a special case for len(args)==0
-        # while the latter just raises a TypeError in this situation.
-        if len(self.iterators_w) == 0:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-        return W_IMap.next_w(self)
-
-def W_IZip___new__(space, w_subtype, args_w):
-    return space.wrap(W_IZip(space, space.w_None, args_w))
-
-W_IZip.typedef = TypeDef(
-        'izip',
-        __new__  = interp2app(W_IZip___new__, unwrap_spec=[ObjSpace, W_Root, 'args_w']),
-        __iter__ = interp2app(W_IZip.iter_w, unwrap_spec=['self']),
-        next     = interp2app(W_IZip.next_w, unwrap_spec=['self']),
-        __doc__  = """Make an iterator that aggregates elements from each of the
-    iterables.  Like zip() except that it returns an iterator instead
-    of a list. Used for lock-step iteration over several iterables at
-    a time.
-
-    Equivalent to :
-
-    def izip(*iterables):
-        iterables = map(iter, iterables)
-        while iterables:
-            result = [i.next() for i in iterables]
-            yield tuple(result)
-    """)
-W_IZip.typedef.acceptable_as_base_class = False
-
-
-class W_Cycle(Wrappable):
-
-    def __init__(self, space, w_iterable):
-        self.space = space
-        self.saved_w = []
-        self.w_iterable = space.iter(w_iterable)
-        self.index = 0
-        self.exhausted = False
-
-    def iter_w(self):
-        return self.space.wrap(self)
-
-    def next_w(self):
-        if self.exhausted:
-            if not self.saved_w:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
-            try:
-                w_obj = self.saved_w[self.index]
-            except IndexError:
-                self.index = 1
-                w_obj = self.saved_w[0]
-            else:
-                self.index += 1
-        else:
-            try:
-                w_obj = self.space.next(self.w_iterable)
-            except OperationError, e:
-                if e.match(self.space, self.space.w_StopIteration):
-                    self.exhausted = True
-                    if not self.saved_w:
-                        raise
-                    self.index = 1
-                    w_obj = self.saved_w[0]
-                else:
-                    raise
-            else:
-                self.index += 1
-                self.saved_w.append(w_obj)
-        return w_obj
-
-def W_Cycle___new__(space, w_subtype, w_iterable):
-    return space.wrap(W_Cycle(space, w_iterable))
-
-W_Cycle.typedef = TypeDef(
-        'cycle',
-        __new__  = interp2app(W_Cycle___new__, unwrap_spec=[ObjSpace, W_Root, W_Root]),
-        __iter__ = interp2app(W_Cycle.iter_w, unwrap_spec=['self']),
-        next     = interp2app(W_Cycle.next_w, unwrap_spec=['self']),
-        __doc__  = """Make an iterator returning elements from the iterable and
-    saving a copy of each. When the iterable is exhausted, return
-    elements from the saved copy. Repeats indefinitely.
-    
-    Equivalent to :
-    
-    def cycle(iterable):
-        saved = []
-        for element in iterable:
-            yield element
-            saved.append(element)
-        while saved:
-            for element in saved:
-                yield element    
-    """)
-W_Cycle.typedef.acceptable_as_base_class = False
-
-class W_StarMap(Wrappable):
-
-    def __init__(self, space, w_fun, w_iterable):
-        self.space = space
-        self.w_fun = w_fun
-        self.w_iterable = self.space.iter(w_iterable)
-
-    def iter_w(self):
-        return self.space.wrap(self)
-
-    def next_w(self):
-        w_obj = self.space.next(self.w_iterable)
-        if not self.space.is_true(self.space.isinstance(w_obj, self.space.w_tuple)):
-            raise OperationError(self.space.w_TypeError, self.space.wrap("iterator must return a tuple"))
-
-        return self.space.call(self.w_fun, w_obj)
-
-def W_StarMap___new__(space, w_subtype, w_fun, w_iterable):
-    return space.wrap(W_StarMap(space, w_fun, w_iterable))
-
-W_StarMap.typedef = TypeDef(
-        'starmap',
-        __new__  = interp2app(W_StarMap___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
-        __iter__ = interp2app(W_StarMap.iter_w, unwrap_spec=['self']),
-        next     = interp2app(W_StarMap.next_w, unwrap_spec=['self']),
-        __doc__  = """Make an iterator that computes the function using arguments
-    tuples obtained from the iterable. Used instead of imap() when
-    argument parameters are already grouped in tuples from a single
-    iterable (the data has been ``pre-zipped''). The difference
-    between imap() and starmap() parallels the distinction between
-    function(a,b) and function(*c).
-
-    Equivalent to :
-
-    def starmap(function, iterable):
-        iterable = iter(iterable)
-        while True:
-            yield function(*iterable.next())    
-    """)
-W_StarMap.typedef.acceptable_as_base_class = False
-
-
-def tee(space, w_iterable, n=2):
-    """Return n independent iterators from a single iterable.
-    Note : once tee() has made a split, the original iterable
-    should not be used anywhere else; otherwise, the iterable could get
-    advanced without the tee objects being informed.
-    
-    Note : this member of the toolkit may require significant auxiliary
-    storage (depending on how much temporary data needs to be stored).
-    In general, if one iterator is going to use most or all of the
-    data before the other iterator, it is faster to use list() instead
-    of tee()
-    
-    Equivalent to :
-    
-    def tee(iterable, n=2):
-        def gen(next, data={}, cnt=[0]):
-            for i in count():
-                if i == cnt[0]:
-                    item = data[i] = next()
-                    cnt[0] += 1
-                else:
-                    item = data.pop(i)
-                yield item
-        it = iter(iterable)
-        return tuple([gen(it.next) for i in range(n)])
-    """
-    if n < 0:
-        raise OperationError(space.w_ValueError, space.wrap("n must be >= 0"))
-    
-    tee_state = TeeState(space, w_iterable)
-    iterators_w = [space.wrap(W_TeeIterable(space, tee_state)) for x in range(n)]
-    return space.newtuple(iterators_w)
-tee.unwrap_spec = [ObjSpace, W_Root, int]
-
-class TeeState(object):
-    def __init__(self, space, w_iterable):
-        self.space = space
-        self.w_iterable = self.space.iter(w_iterable)
-        self.num_saved = 0
-        self.saved_w = []
-
-    def get_next(self, index):
-        if index >= self.num_saved:
-            w_obj = self.space.next(self.w_iterable)
-            self.saved_w.append(w_obj)
-            self.num_saved += 1
-            return w_obj
-        else:
-            return self.saved_w[index]
-
-class W_TeeIterable(Wrappable):
-    def __init__(self, space, tee_state):
-        self.space = space
-        self.tee_state = tee_state
-        self.index = 0
-
-    def iter_w(self):
-        return self.space.wrap(self)
-
-    def next_w(self):
-        try:
-            w_obj = self.tee_state.get_next(self.index)
-            return w_obj
-        finally:
-            self.index += 1
-
-W_TeeIterable.typedef = TypeDef(
-        '_tee',
-        __iter__ = interp2app(W_TeeIterable.iter_w, unwrap_spec=['self']),
-        next     = interp2app(W_TeeIterable.next_w, unwrap_spec=['self']))
-W_TeeIterable.typedef.acceptable_as_base_class = False
-
-
-class W_GroupBy(Wrappable):
-
-    def __init__(self, space, w_iterable, w_fun):
-        self.space = space
-        self.w_iterable = self.space.iter(w_iterable)
-        self.identity_fun = self.space.is_w(w_fun, self.space.w_None)
-        self.w_fun = w_fun
-        self.index = 0
-        self.lookahead = False
-        self.exhausted = False
-        self.started = False
-        # new_group - new group not started yet, next should not skip any items
-        self.new_group = True 
-        self.w_lookahead = self.space.w_None
-        self.w_key = self.space.w_None
-
-    def iter_w(self):
-        return self.space.wrap(self)
-
-    def next_w(self):
-        if self.exhausted:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
-        if not self.new_group:
-            # Consume unwanted input until we reach the next group
-            try:
-                while True:
-                    self.group_next(self.index)
-
-            except StopIteration:
-                pass
-            if self.exhausted:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
-        if not self.started:
-            self.started = True
-            try:
-                w_obj = self.space.next(self.w_iterable)
-            except OperationError, e:
-                if e.match(self.space, self.space.w_StopIteration):
-                    self.exhausted = True
-                raise
-            else:
-                self.w_lookahead = w_obj
-                if self.identity_fun:
-                    self.w_key = w_obj
-                else:
-                    self.w_key = self.space.call_function(self.w_fun, w_obj)
-                self.lookahead = True
-
-        self.new_group = False
-        w_iterator = self.space.wrap(W_GroupByIterator(self.space, self.index, self))
-        return self.space.newtuple([self.w_key, w_iterator])
-
-    def group_next(self, group_index):
-        if group_index < self.index:
-            raise StopIteration
-        else:
-            if self.lookahead:
-                self.lookahead = False
-                return self.w_lookahead
-
-            try:
-                w_obj = self.space.next(self.w_iterable)
-            except OperationError, e:
-                if e.match(self.space, self.space.w_StopIteration):
-                    self.exhausted = True
-                    raise StopIteration
-                else:
-                    raise
-            else:
-                if self.identity_fun:
-                    w_new_key = w_obj
-                else:
-                    w_new_key = self.space.call_function(self.w_fun, w_obj)
-                if self.space.eq_w(self.w_key, w_new_key):
-                    return w_obj
-                else:
-                    self.index += 1
-                    self.w_lookahead = w_obj
-                    self.w_key = w_new_key
-                    self.lookahead = True
-                    self.new_group = True #new group
-                    raise StopIteration
-
-def W_GroupBy___new__(space, w_subtype, w_iterable, w_key=None):
-    return space.wrap(W_GroupBy(space, w_iterable, w_key))
-
-W_GroupBy.typedef = TypeDef(
-        'groupby',
-        __new__  = interp2app(W_GroupBy___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root]),
-        __iter__ = interp2app(W_GroupBy.iter_w, unwrap_spec=['self']),
-        next     = interp2app(W_GroupBy.next_w, unwrap_spec=['self']),
-        __doc__  = """Make an iterator that returns consecutive keys and groups from the
-    iterable. The key is a function computing a key value for each
-    element. If not specified or is None, key defaults to an identity
-    function and returns the element unchanged. Generally, the
-    iterable needs to already be sorted on the same key function.
-
-    The returned group is itself an iterator that shares the
-    underlying iterable with groupby(). Because the source is shared,
-    when the groupby object is advanced, the previous group is no
-    longer visible. So, if that data is needed later, it should be
-    stored as a list:
-
-       groups = []
-       uniquekeys = []
-       for k, g in groupby(data, keyfunc):
-           groups.append(list(g))      # Store group iterator as a list
-           uniquekeys.append(k)
-    """)
-W_GroupBy.typedef.acceptable_as_base_class = False
-
-class W_GroupByIterator(Wrappable):
-    def __init__(self, space, index, groupby):
-        self.space = space
-        self.index = index
-        self.groupby = groupby
-        self.exhausted = False
-
-    def iter_w(self):
-        return self.space.wrap(self)
-
-    def next_w(self):
-        if self.exhausted:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
-        try:
-            w_obj = self.groupby.group_next(self.index)
-        except StopIteration:
-            self.exhausted = True
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-        else:
-            return w_obj
-
-W_GroupByIterator.typedef = TypeDef(
-        '_groupby',
-        __iter__ = interp2app(W_GroupByIterator.iter_w, unwrap_spec=['self']),
-        next     = interp2app(W_GroupByIterator.next_w, unwrap_spec=['self']))
-W_GroupByIterator.typedef.acceptable_as_base_class = False
