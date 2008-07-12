@@ -731,7 +731,8 @@ class W_GroupBy(Wrappable):
         self.lookahead = False
         self.exhausted = False
         self.started = False
-        self.group_edge = True
+        # new_group - new group not started yet, next should not skip any items
+        self.new_group = True 
         self.w_lookahead = self.space.w_None
         self.w_key = self.space.w_None
 
@@ -741,6 +742,17 @@ class W_GroupBy(Wrappable):
     def next_w(self):
         if self.exhausted:
             raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        if not self.new_group:
+            # Consume unwanted input until we reach the next group
+            try:
+                while True:
+                    self.group_next(self.index)
+
+            except StopIteration:
+                pass
+            if self.exhausted:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
 
         if not self.started:
             self.started = True
@@ -758,20 +770,11 @@ class W_GroupBy(Wrappable):
                     self.w_key = self.space.call_function(self.w_fun, w_obj)
                 self.lookahead = True
 
-        if not self.group_edge:
-            # Consume unwanted input until we reach the next group
-            try:
-                while True:
-                    self.group_next(self.index)
-            except StopIteration:
-                pass
-            if self.exhausted:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+        self.new_group = False
         w_iterator = self.space.wrap(W_GroupByIterator(self.space, self.index, self))
         return self.space.newtuple([self.w_key, w_iterator])
 
     def group_next(self, group_index):
-        self.group_edge = False
         if group_index < self.index:
             raise StopIteration
         else:
@@ -799,7 +802,7 @@ class W_GroupBy(Wrappable):
                     self.w_lookahead = w_obj
                     self.w_key = w_new_key
                     self.lookahead = True
-                    self.group_edge = True
+                    self.new_group = True #new group
                     raise StopIteration
 
 def W_GroupBy___new__(space, w_subtype, w_iterable, w_fun=None):
