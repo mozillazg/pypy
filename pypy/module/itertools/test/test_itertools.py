@@ -245,17 +245,18 @@ class AppTestItertools:
         raises(StopIteration, it.next)
 
     def test_chain_wrongargs(self):
-        import itertools
+        import itertools, re
         
         raises(TypeError, itertools.chain, None)
         raises(TypeError, itertools.chain, [], None)
-        
+
+        # The error message should indicate which argument was dodgy
         for x in range(10):
             args = [()] * x + [None] + [()] * (9 - x)
             try:
                 itertools.chain(*args)
             except TypeError, e:
-                assert str(e) == "chain argument #%d must support iteration" % (x + 1)
+                assert re.search(r'\b%d\b' % (x + 1), str(e))
             else:
                 fail("TypeError expected")
 
@@ -332,17 +333,18 @@ class AppTestItertools:
         assert it1.next() == 5
 
     def test_izip_wrongargs(self):
-        import itertools
+        import itertools, re
         
         # Duplicate python 2.4 behaviour for invalid arguments
         raises(TypeError, itertools.izip, None, 0)
 
+        # The error message should indicate which argument was dodgy
         for x in range(10):
             args = [()] * x + [None] + [()] * (9 - x)
             try:
                 itertools.izip(*args)
             except TypeError, e:
-                assert str(e) == "izip argument #%d must support iteration" % (x + 1)
+                assert re.search(r'\b%d\b' % (x + 1), str(e))
             else:
                 fail("TypeError expected")
 
@@ -403,13 +405,79 @@ class AppTestItertools:
                 assert it.next() == x
             raises(StopIteration, it.next)
 
-    def test_iterables_wrongargs(self):
+    def test_tee_wrongargs(self):
         import itertools
         
         raises(TypeError, itertools.tee, 0)
         raises(ValueError, itertools.tee, [], -1)
         raises(TypeError, itertools.tee, [], None)
 
+    def test_groupby(self):
+        import itertools
+        
+        it = itertools.groupby([])
+        raises(StopIteration, it.next)
+
+        it = itertools.groupby([1, 2, 2, 3, 3, 3, 4, 4, 4, 4])
+        for x in [1, 2, 3, 4]:
+            k, g = it.next()
+            assert k == x
+            assert len(list(g)) == x
+            raises(StopIteration, g.next)
+        raises(StopIteration, it.next)
+
+        it = itertools.groupby([0, 1, 2, 3, 4, 5], None)
+        for x in [0, 1, 2, 3, 4, 5]:
+            k, g = it.next()
+            assert k == x
+            assert g.next() == x
+            raises(StopIteration, g.next)
+        raises(StopIteration, it.next)
+
+        it = itertools.groupby([0, 0, 0, 0, 1])
+        k1, g1 = it.next()
+        k2, g2 = it.next()
+        raises(StopIteration, g1.next)
+        assert g2.next() == 1
+        raises(StopIteration, g2.next)
+
+        def half_floor(x):
+            return x // 2
+        it = itertools.groupby([0, 1, 2, 3, 4, 5], half_floor)
+        for x in [0, 1, 2]:
+            k, g = it.next()
+            assert k == x
+            assert half_floor(g.next()) == x
+            assert half_floor(g.next()) == x
+            raises(StopIteration, g.next)
+        raises(StopIteration, it.next)
+
+        # Grouping is not based on key identity
+        class NeverEqual(object):
+            def __eq__(self, other):
+                return False
+        objects = [NeverEqual(), NeverEqual(), NeverEqual()]
+        it = itertools.groupby(objects)
+        for x in objects:
+            print "Trying", x
+            k, g = it.next()
+            assert k is x
+            assert g.next() is x
+            raises(StopIteration, g.next)
+        raises(StopIteration, it.next)
+        
+        # Grouping is based on key equality
+        class AlwaysEqual(object):
+            def __eq__(self, other):
+                return True
+        objects = [AlwaysEqual(), AlwaysEqual(), AlwaysEqual()]
+        it = itertools.groupby(objects)
+        k, g = it.next()
+        assert k is objects[0]
+        for x in objects:
+            assert g.next() is x
+        raises(StopIteration, g.next)
+        raises(StopIteration, it.next)
 
     def test_iterables(self):
         import itertools
@@ -419,6 +487,7 @@ class AppTestItertools:
             itertools.count(),
             itertools.cycle([]),
             itertools.dropwhile(bool, []),
+            itertools.groupby([]),
             itertools.ifilter(None, []),
             itertools.ifilterfalse(None, []),
             itertools.imap(None),
@@ -446,6 +515,7 @@ class AppTestItertools:
             itertools.count,
             itertools.cycle,
             itertools.dropwhile,
+            itertools.groupby,
             itertools.ifilter,
             itertools.ifilterfalse,
             itertools.imap,
@@ -467,6 +537,7 @@ class AppTestItertools:
             itertools.count,
             itertools.cycle,
             itertools.dropwhile,
+            itertools.groupby,
             itertools.ifilter,
             itertools.ifilterfalse,
             itertools.imap,
