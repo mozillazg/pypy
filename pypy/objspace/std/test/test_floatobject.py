@@ -184,3 +184,10 @@ class AppTestAppFloatTest:
         assert 13 < 13.01
         assert 13 <= 13.0
         assert 13 <= 13.01
+
+    def test_multimethod_slice(self):
+        assert 5 .__add__(3.14) is NotImplemented
+        assert 3.25 .__add__(5) == 8.25
+        if hasattr(int, '__eq__'):  # for py.test -A: CPython is inconsistent
+            assert 5 .__eq__(3.14) is NotImplemented
+            assert 3.14 .__eq__(5) is False
