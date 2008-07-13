@@ -114,6 +114,7 @@ try:
     del funcName
 
 except ImportError:
+    raise # XXX Don't try to load nonexistent C modules on PyPy
     # We don't have the _hashlib OpenSSL module?
     # use the built in legacy interfaces via a wrapper function
     new = __py_new
@@ -121,7 +122,7 @@ except ImportError:
     # lookup the C function to use directly for the named constructors
     md5 = __get_builtin_constructor('md5')
     sha1 = __get_builtin_constructor('sha1')
-    #sha224 = __get_builtin_constructor('sha224')
-    #sha256 = __get_builtin_constructor('sha256')
-    #sha384 = __get_builtin_constructor('sha384')
-    #sha512 = __get_builtin_constructor('sha512')
+    sha224 = __get_builtin_constructor('sha224')
+    sha256 = __get_builtin_constructor('sha256')
+    sha384 = __get_builtin_constructor('sha384')
+    sha512 = __get_builtin_constructor('sha512')
