@@ -50,6 +50,7 @@ More condensed:
     'a4337bc45a8fc544c03f52dc550cd6e1e87021bc896588bd79e901e2'
 
 """
+import _hashlib
 
 
 def __get_builtin_constructor(name):
@@ -74,11 +75,10 @@ def __hash_new(name, string=''):
         # the OpenSSL library prior to 0.9.8 doesn't provide them.
         return __get_builtin_constructor(name)(string)
 
+new = __hash_new
 
 def _setfuncs():
-    import _hashlib
     # use the wrapper of the C implementation
-    new = __hash_new
 
     sslprefix = 'openssl_'
     for opensslfuncname, func in vars(_hashlib).items():
