@@ -1,6 +1,3 @@
-# XXX ported version of the original hashlib.py from python
-# XXX 2.5, only supports md5 and sha1 by using the existing 
-# XXX modules of PyPy 
 # $Id: hashlib.py 52533 2006-10-29 18:01:12Z georg.brandl $
 #
 #  Copyright (C) 2005   Gregory P. Smith (greg@electricrain.com)
@@ -62,16 +59,7 @@ def __get_builtin_constructor(name):
     elif name in ('MD5', 'md5'):
         import md5
         return md5.new
-    # XXX code for other codecs deleted here 
     raise ValueError, "unsupported hash type"
-
-
-def __py_new(name, string=''):
-    """new(name, string='') - Return a new hashing object using the named algorithm;
-    optionally initialized with a string.
-    """
-    return __get_builtin_constructor(name)(string)
-
 
 def __hash_new(name, string=''):
     """new(name, string='') - Return a new hashing object using the named algorithm;
@@ -87,42 +75,28 @@ def __hash_new(name, string=''):
         return __get_builtin_constructor(name)(string)
 
 
-try:
+def _setfuncs():
     import _hashlib
     # use the wrapper of the C implementation
     new = __hash_new
 
-    for opensslFuncName in filter(lambda n: n.startswith('openssl_'), dir(_hashlib)):
-        funcName = opensslFuncName[len('openssl_'):]
+    sslprefix = 'openssl_'
+    for opensslfuncname, func in vars(_hashlib).items():
+        if not opensslfuncname.startswith(sslprefix):
+            continue
+        funcname = opensslfuncname[len(sslprefix):]
         try:
             # try them all, some may not work due to the OpenSSL
             # version not supporting that algorithm.
-            f = getattr(_hashlib, opensslFuncName)
-            f()
+            func() 
             # Use the C function directly (very fast)
-            exec funcName + ' = f'
+            globals()[funcname] = func 
         except ValueError:
             try:
                 # Use the builtin implementation directly (fast)
-                exec funcName + ' = __get_builtin_constructor(funcName)'
+                globals()[funcname] = __get_builtin_constructor(funcname) 
             except ValueError:
                 # this one has no builtin implementation, don't define it
                 pass
-    # clean up our locals
-    del f
-    del opensslFuncName
-    del funcName
 
-except ImportError:
-    raise # XXX Don't try to load nonexistent C modules on PyPy
-    # We don't have the _hashlib OpenSSL module?
-    # use the built in legacy interfaces via a wrapper function
-    new = __py_new
-
-    # lookup the C function to use directly for the named constructors
-    md5 = __get_builtin_constructor('md5')
-    sha1 = __get_builtin_constructor('sha1')
-    sha224 = __get_builtin_constructor('sha224')
-    sha256 = __get_builtin_constructor('sha256')
-    sha384 = __get_builtin_constructor('sha384')
-    sha512 = __get_builtin_constructor('sha512')
+_setfuncs()
