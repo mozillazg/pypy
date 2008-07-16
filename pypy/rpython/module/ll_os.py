@@ -133,8 +133,12 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'execv')
     def register_os_execv(self):
-        os_execv = self.llexternal('execv', [rffi.CCHARP, rffi.CCHARPP],
-                                   rffi.INT)
+        eci = self.gcc_profiling_bug_workaround(
+            'int _noprof_execv(char *path, char *argv[])',
+            'return execv(path, argv);')
+        os_execv = self.llexternal('_noprof_execv',
+                                   [rffi.CCHARP, rffi.CCHARPP],
+                                   rffi.INT, compilation_info = eci)
 
         def execv_llimpl(path, args):
             l_args = rffi.liststr2charpp(args)
@@ -148,8 +152,12 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'execve')
     def register_os_execve(self):
+        eci = self.gcc_profiling_bug_workaround(
+            'int _noprof_execve(char *filename, char *argv[], char *envp[])',
+            'return execve(filename, argv, envp);')
         os_execve = self.llexternal(
-            'execve', [rffi.CCHARP, rffi.CCHARPP, rffi.CCHARPP], rffi.INT)
+            '_noprof_execve', [rffi.CCHARP, rffi.CCHARPP, rffi.CCHARPP],
+            rffi.INT, compilation_info = eci)
 
         def execve_llimpl(path, args, env):
             # XXX Check path, args, env for \0 and raise TypeErrors as
@@ -1121,16 +1129,8 @@ class RegisterOs(BaseLazyRegistering):
 
     @registering_if(os, 'fork')
     def register_os_fork(self):
-        # XXX horrible workaround for a bug of profiling in gcc on
-        # OS X with functions containing a direct call to fork()
-        eci = ExternalCompilationInfo(
-            post_include_bits = ['pid_t _noprof_fork(void);'],
-            separate_module_sources = ['''
-                /*--no-profiling-for-this-file!--*/
-                pid_t _noprof_fork(void) {
-                    return fork();
-                }
-            '''])
+        eci = self.gcc_profiling_bug_workaround('pid_t _noprof_fork(void)',
+                                                'return fork();')
         os_fork = self.llexternal('_noprof_fork', [], rffi.PID_T,
                                   compilation_info = eci)
 
@@ -1221,6 +1221,19 @@ class RegisterOs(BaseLazyRegistering):
 
         return extdef([int], str, "ll_os.ttyname",
                       llimpl=ttyname_llimpl)
+
+    # ____________________________________________________________
+    # XXX horrible workaround for a bug of profiling in gcc on
+    # OS X with functions containing a direct call to some system calls
+    # like fork(), execv(), execve()
+    def gcc_profiling_bug_workaround(self, decl, body):
+        body = ('/*--no-profiling-for-this-file!--*/\n'
+                '%s {\n'
+                '\t%s\n'
+                '}\n' % (decl, body,))
+        return ExternalCompilationInfo(
+            post_include_bits = [decl + ';'],
+            separate_module_sources = [body])
 
 # ____________________________________________________________
 # Support for os.environ
