@@ -181,7 +181,8 @@ class RZipFile(object):
             # file_offset must be computed below...
             (x.create_version, x.create_system, x.extract_version, x.reserved,
                 x.flag_bits, x.compress_type, t, d,
-                x.CRC, x.compress_size, x.file_size) = centdir[1:12]
+                crc, x.compress_size, x.file_size) = centdir[1:12]
+            x.CRC = r_uint(crc) & 0xffffffff
             x.dostime = t
             x.dosdate = d
             x.volume, x.internal_attr, x.external_attr = centdir[15:18]
@@ -237,7 +238,7 @@ class RZipFile(object):
                   "Unsupported compression method %d for file %s" % \
             (zinfo.compress_type, filename)
         crc = crc32(bytes)
-        if crc != r_uint(zinfo.CRC):
+        if crc != zinfo.CRC:
             raise BadZipfile, "Bad CRC-32 for file %s" % filename
         return bytes
     
