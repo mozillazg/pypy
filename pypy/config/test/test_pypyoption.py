@@ -1,7 +1,6 @@
 import py
-from pypy.config.pypyoption import get_pypy_config, set_pypy_opt_level
+from pypy.config.pypyoption import get_pypy_config
 from pypy.config.config import Config, ConfigError
-from pypy.config.translationoption import set_opt_level
 
 thisdir = py.magic.autopath().dirpath()
 
@@ -30,32 +29,10 @@ def test_frameworkgc():
         conf.translation.gc = name
         assert conf.translation.gctransformer == "framework"
 
-def test_set_opt_level():
-    conf = get_pypy_config()
-    set_opt_level(conf, '0')
-    assert conf.translation.gc == 'boehm'
-    assert conf.translation.backendopt.none == True
-    conf = get_pypy_config()
-    set_opt_level(conf, '2')
-    assert conf.translation.gc != 'boehm'
-    assert not conf.translation.backendopt.none
-    conf = get_pypy_config()
-    set_opt_level(conf, 'mem')
-    assert conf.translation.gc == 'marksweep'
-    assert not conf.translation.backendopt.none
-
-def test_set_pypy_opt_level():
-    conf = get_pypy_config()
-    set_pypy_opt_level(conf, '2')
-    assert conf.objspace.std.withmultidict
-    conf = get_pypy_config()
-    set_pypy_opt_level(conf, '0')
-    assert not conf.objspace.std.withmultidict
-
 def test_rweakref_required():
     conf = get_pypy_config()
     conf.translation.rweakref = False
-    set_pypy_opt_level(conf, '3')
+    conf.objspace.std.allopts = True
 
     assert not conf.objspace.std.withtypeversion
     assert not conf.objspace.std.withmethodcache

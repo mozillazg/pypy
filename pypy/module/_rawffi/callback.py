@@ -30,7 +30,7 @@ def callback(ll_args, ll_res, ll_userdata):
     argtypes = callback_ptr.args
     space = callback_ptr.space
     try:
-        w_args = space.newlist([space.wrap(rffi.cast(rffi.ULONG, ll_args[i]))
+        w_args = space.newlist([space.wrap(rffi.cast(rffi.UINT, ll_args[i]))
                                 for i in range(len(argtypes))])
         w_res = space.call(w_callable, w_args)
         if callback_ptr.result != 'O': # don't return void
