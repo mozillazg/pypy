@@ -505,8 +505,16 @@ class CCompiler:
                 self.libraries.append('m')
             if 'pthread' not in self.libraries:
                 self.libraries.append('pthread')
-            self.compile_extra += CFLAGS + ['-fomit-frame-pointer', '-pthread']
-            self.link_extra += ['-pthread']
+          
+            self.compile_extra += CFLAGS + ['-fomit-frame-pointer']
+            if sys.platform != 'sunos5': 
+                self.compile_extra += ['-pthread']
+                self.link_extra += ['-pthread']
+            else:
+                self.compile_extra += ['-pthreads']
+                # XXX probably socket and nsl should rather go
+                # to be defined in the socket module 
+                self.link_extra += ['-lpthread', '-lsocket', '-lnsl'] 
         if sys.platform == 'win32':
             self.link_extra += ['/DEBUG'] # generate .pdb file
         if sys.platform == 'darwin':

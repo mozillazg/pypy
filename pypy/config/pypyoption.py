@@ -37,6 +37,15 @@ if sys.platform == "win32":
     del working_modules["termios"]
     del working_modules["_minimal_curses"]
 
+if sys.platform == "sunos5":
+    del working_modules['mmap']   # depend on ctypes, can'T get at c-level 'errono'
+    del working_modules['rctime'] # depend on ctypes, missing tm_zone/tm_gmtoff
+    del working_modules['signal'] # depend on ctypes, can'T get at c-level 'errono'
+    del working_modules['fcntl']  # LOCK_NB not defined
+    del working_modules["_minimal_curses"]
+    del working_modules["termios"]
+
+
 
 module_dependencies = {}
 module_suggests = {    # the reason you want _rawffi is for ctypes, which
