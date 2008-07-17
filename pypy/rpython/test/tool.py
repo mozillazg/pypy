@@ -46,8 +46,6 @@ class LLRtypeMixin(object):
     type_system = 'lltype'
 
     def ll_to_string(self, s):
-        if not s:
-            return None
         return ''.join(s.chars)
 
     def ll_to_unicode(self, s):

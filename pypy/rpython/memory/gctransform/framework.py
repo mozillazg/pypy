@@ -7,7 +7,6 @@ from pypy.rpython.memory import gctypelayout
 from pypy.rpython.memory.gc import marksweep
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rlib import rstack
 from pypy.rlib.debug import ll_assert
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.support import var_needsgc
@@ -26,10 +25,7 @@ class CollectAnalyzer(graphanalyze.GraphAnalyzer):
 
     def analyze_direct_call(self, graph, seen=None):
         try:
-            func = graph.func
-            if func is rstack.stack_check:
-                return self.translator.config.translation.stackless
-            if func._gctransformer_hint_cannot_collect_:
+            if graph.func._gctransformer_hint_cannot_collect_:
                 return False
         except AttributeError:
             pass
@@ -142,7 +138,7 @@ class FrameworkGCTransformer(GCTransformer):
         self.gcdata = gcdata
         self.malloc_fnptr_cache = {}
 
-        gcdata.gc = GCClass(translator.config.translation, **GC_PARAMS)
+        gcdata.gc = GCClass(**GC_PARAMS)
         root_walker = self.build_root_walker()
         gcdata.set_query_functions(gcdata.gc)
         gcdata.gc.set_root_walker(root_walker)
@@ -230,6 +226,10 @@ class FrameworkGCTransformer(GCTransformer):
             [s_gc] + [annmodel.SomeInteger(nonneg=True) for i in range(5)]
             + [annmodel.SomeBool(), annmodel.SomeBool()], s_gcref)
         self.collect_ptr = getfn(GCClass.collect.im_func,
+            [s_gc], annmodel.s_None)
+        self.disable_finalizers_ptr = getfn(GCClass.disable_finalizers.im_func,
+            [s_gc], annmodel.s_None)
+        self.enable_finalizers_ptr = getfn(GCClass.enable_finalizers.im_func,
             [s_gc], annmodel.s_None)
         self.can_move_ptr = getfn(GCClass.can_move.im_func,
                                   [s_gc, annmodel.SomeAddress()],
@@ -566,6 +566,21 @@ class FrameworkGCTransformer(GCTransformer):
                              resulttype=llmemory.GCREF)
         self.pop_roots(hop, livevars)
         return v_result
+
+    def gct_gc__disable_finalizers(self, hop):
+        # cannot collect()
+        op = hop.spaceop
+        hop.genop("direct_call", [self.disable_finalizers_ptr,
+                                  self.c_const_gc],
+                  resultvar=op.result)
+
+    def gct_gc__enable_finalizers(self, hop):
+        # can collect() because it typically calls pending finalizers
+        op = hop.spaceop
+        livevars = self.push_roots(hop)
+        hop.genop("direct_call", [self.enable_finalizers_ptr, self.c_const_gc],
+                  resultvar=op.result)
+        self.pop_roots(hop, livevars)
 
     def gct_gc_x_swap_pool(self, hop):
         op = hop.spaceop

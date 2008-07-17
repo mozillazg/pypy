@@ -75,7 +75,7 @@ class DescrOperation:
         descr = space.interpclass_w(w_descr)
         # a special case for performance and to avoid infinite recursion
         if type(descr) is Function:
-            return descr.call_obj_args(w_obj, args)
+            return descr.call_args(args.prepend(w_obj))
         else:
             w_impl = space.get(w_descr, w_obj)
             return space.call_args(w_impl, args)
@@ -290,8 +290,6 @@ class DescrOperation:
                 raise OperationError(space.w_TypeError, 
                                      space.wrap("unhashable type"))
             return default_identity_hash(space, w_obj)
-        # XXX CPython has a special case for types with "__hash__ = None"
-        # to produce a nicer error message, namely "unhashable type: 'X'".
         w_result = space.get_and_call_function(w_hash, w_obj)
         if space.is_true(space.isinstance(w_result, space.w_int)): 
             return w_result 

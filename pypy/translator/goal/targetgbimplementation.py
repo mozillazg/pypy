@@ -1,7 +1,7 @@
 import os
 import py
 import pdb
-from pypy.lang.gameboy.gameboy_implementation import GameBoyImplementation
+from pypy.lang.gameboy.gameboyImplementation import GameBoyImplementation
 
 
 ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
@@ -20,10 +20,7 @@ def entry_point(argv=None):
     except:
         print "Corrupt Cartridge"
         gameBoy.load_cartridge_file(str(filename), verify=False)
-    try:
-        gameBoy.mainLoop()
-    except:
-        pass
+    gameBoy.mainLoop()
     #pdb.runcall(gameBoy.mainLoop)
     return 0
     
@@ -36,11 +33,8 @@ def target(*args):
 def test_target():
     entry_point(["b", ROM_PATH+"/rom9/rom9.gb"])
     
-    
-# STARTPOINT ===================================================================
 
-if __name__ == '__main__':
-    from AppKit import NSApplication
-    NSApplication.sharedApplication()
-    
-    test_target()
+
+#from AppKit import NSApplication
+#NSApplication.sharedApplication()
+#entry_point()
