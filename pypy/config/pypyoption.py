@@ -285,7 +285,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "special case the 'list[integer]' expressions",
                    default=False),
         BoolOption("builtinshortcut",
-                   "a shortcut for operations between built-in types XXX BROKEN",
+                   "a shortcut for operations between built-in types",
                    default=False),
         BoolOption("getattributeshortcut",
                    "track types that override __getattribute__",
