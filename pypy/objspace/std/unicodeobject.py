@@ -773,14 +773,6 @@ def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
     w_retval = encode_object(space, w_unistr, encoding, errors)
     return w_retval
 
-def unicode_decode__Unicode_ANY_ANY(space, w_unicode, w_encoding=None, w_errors=None):
-    from pypy.objspace.std.unicodetype import _get_encoding_and_errors,\
-         decode_object, unicode_from_string
-    encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
-    if encoding is None and errors is None:
-        return unicode_from_string(space, w_unicode)
-    return decode_object(space, w_unicode, encoding, errors)
-
 def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
     unistr = w_unistr._value
     unisub = w_unisub._value
