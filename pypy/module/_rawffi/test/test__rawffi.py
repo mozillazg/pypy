@@ -458,12 +458,11 @@ class AppTestFfi:
         ll_to_sort = _rawffi.Array('i')(4)
         for i in range(4):
             ll_to_sort[i] = 4-i
-        qsort = libc.ptr('qsort', ['P', 'i', 'i', 'P'], None)
-        resarray = _rawffi.Array('i')(1)
+        qsort = libc.ptr('qsort', ['P', 'l', 'l', 'P'], None)
         bogus_args = []
         def compare(a, b):
-            a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(a, 1)[0], 1)
-            a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('i').fromaddress(b, 1)[0], 1)
+            a1 = _rawffi.Array('i').fromaddress(_rawffi.Array('P').fromaddress(a, 1)[0], 1)
+            a2 = _rawffi.Array('i').fromaddress(_rawffi.Array('P').fromaddress(b, 1)[0], 1)
             print "comparing", a1[0], "with", a2[0]
             if a1[0] not in [1,2,3,4] or a2[0] not in [1,2,3,4]:
                 bogus_args.append((a1[0], a2[0]))
@@ -471,9 +470,9 @@ class AppTestFfi:
                 return 1
             return -1
         a1 = ll_to_sort.byptr()
-        a2 = _rawffi.Array('i')(1)
+        a2 = _rawffi.Array('l')(1)
         a2[0] = len(ll_to_sort)
-        a3 = _rawffi.Array('i')(1)
+        a3 = _rawffi.Array('l')(1)
         a3[0] = struct.calcsize('i')
         cb = _rawffi.CallbackPtr(compare, ['P', 'P'], 'i')
         a4 = cb.byptr()
