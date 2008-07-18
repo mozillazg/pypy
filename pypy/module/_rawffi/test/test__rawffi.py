@@ -592,16 +592,18 @@ class AppTestFfi:
 
     def test_repr(self):
         import _rawffi, struct
-        s = struct.calcsize("i")
+        isize = struct.calcsize("i")
+        lsize = struct.calcsize("l")
         assert (repr(_rawffi.Array('i')) ==
-                "<_rawffi.Array 'i' (%d, %d)>" % (s, s))
+                "<_rawffi.Array 'i' (%d, %d)>" % (isize, isize))
 
         # fragile
         S = _rawffi.Structure([('x', 'c'), ('y', 'l')])
-        assert repr(_rawffi.Array((S, 2))) == "<_rawffi.Array 'V' (16, 4)>"
+        assert (repr(_rawffi.Array((S, 2))) ==
+                "<_rawffi.Array 'V' (%d, %d)>" % (4*lsize, lsize))
 
         assert (repr(_rawffi.Structure([('x', 'i'), ('yz', 'i')])) ==
-                "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*s, s))
+                "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*isize, isize))
 
         s = _rawffi.Structure([('x', 'i'), ('yz', 'i')])()
         assert repr(s) == "<_rawffi struct %x>" % (s.buffer,)
