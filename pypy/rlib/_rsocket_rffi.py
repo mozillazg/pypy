@@ -7,11 +7,11 @@ from pypy.rlib.rposix import get_errno as geterrno
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 from pypy.rlib.rarithmetic import intmask, r_uint
-import os
+import os,sys
 
 _POSIX = os.name == "posix"
 _MS_WINDOWS = os.name == "nt"
-
+_SOLARIS = sys.platform == "sunos5"
 
 if _POSIX:
     includes = ('sys/types.h',
@@ -36,6 +36,10 @@ if _POSIX:
     HEADER = ''.join(['#include <%s>\n' % filename for filename in includes])
     COND_HEADER = ''.join(['#ifdef %s\n#include <%s>\n#endif\n' % cond_include
                           for cond_include in cond_includes])
+
+if _SOLARIS:
+    libraries = libraries + ('socket', 'nsl')
+
 if _MS_WINDOWS:
     includes = ()
     libraries = ('ws2_32',)
