@@ -295,11 +295,11 @@ class W_ISlice(Wrappable):
             raise OperationError(space.w_TypeError, space.wrap("islice() takes at most 4 arguments (" + str(num_args) + " given)"))
 
         if space.is_w(w_stop, space.w_None):
-            stop = 0
-            self.stoppable = False
+            stop = -1
+            stoppable = False
         else:
             stop = space.int_w(w_stop)
-            self.stoppable = True
+            stoppable = True
 
         if num_args == 2:
             step = space.int_w(args_w[1])
@@ -308,7 +308,7 @@ class W_ISlice(Wrappable):
 
         if start < 0:
             raise OperationError(space.w_ValueError, space.wrap("Indicies for islice() must be non-negative integers."))
-        if self.stoppable and stop < 0:
+        if stoppable and stop < 0:
             raise OperationError(space.w_ValueError, space.wrap("Stop argument must be a non-negative integer or None."))
         if step < 1:
             raise OperationError(space.w_ValueError, space.wrap("Step must be one or lager for islice()."))
@@ -321,25 +321,21 @@ class W_ISlice(Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        if self.stoppable and self.stop <= 0:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
-        if self.start >= 0:
-            skip = self.start
+        if self.start >= 0:               # first call only
+            consume = self.start + 1
             self.start = -1
-        else:
-            skip = self.step - 1
-
-        while skip > 0:
-            self.space.next(self.iterable)
-            skip -= 1
-            if self.stoppable:
-                self.stop -= 1
-
-        w_obj = self.space.next(self.iterable)
-        if self.stoppable:
-            self.stop -= 1
-        return w_obj
+        else:                             # all following calls
+            consume = self.step
+        if self.stop >= 0:
+            if self.stop < consume:
+                raise OperationError(self.space.w_StopIteration,
+                                     self.space.w_None)
+            self.stop -= consume
+        while True:
+            w_obj = self.space.next(self.iterable)
+            consume -= 1
+            if consume <= 0:
+                return w_obj
 
 def W_ISlice___new__(space, w_subtype, w_iterable, w_startstop, args_w):
     return space.wrap(W_ISlice(space, w_iterable, w_startstop, args_w))

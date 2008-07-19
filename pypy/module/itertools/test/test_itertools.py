@@ -181,11 +181,6 @@ class AppTestItertools:
             assert it.next() == x
         raises(StopIteration, it.next)
 
-        it = itertools.islice([1, 2, 3, 4, 5], 3)
-        for x in [1, 2, 3]:
-            assert it.next() == x
-        raises(StopIteration, it.next)
-
         it = itertools.islice([1, 2, 3, 4, 5], 1, 3)
         for x in [2, 3]:
             assert it.next() == x
@@ -200,6 +195,8 @@ class AppTestItertools:
         for x in [1, 2, 3]:
             assert it.next() == x
         raises(StopIteration, it.next)
+
+        assert list(itertools.islice(xrange(100), 10, 3)) == []
 
     def test_islice_overflow(self):
         import itertools
