@@ -585,6 +585,14 @@ class TestDotnetRtyping(CliTest):
             return int32_type.get_Name()
         assert self.interpret(fn, []) == 'Int32'
 
+    def test_classof_external_assembly(self):
+        utils_class = classof(Utils)
+        def fn():
+            utils_obj = box(utils_class)
+            utils_type = clidowncast(utils_obj, System.Type)
+            return utils_type.get_Name()
+        assert self.interpret(fn, []) == 'Utils'
+
     def test_classof_compare(self):
         int32_a = classof(System.Int32)
         int32_b = classof(System.Int32)

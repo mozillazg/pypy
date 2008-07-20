@@ -366,7 +366,7 @@ def box(x):
             assert isinstance(TYPE, ootype.StaticMethod)
             return typeof(TYPE)
         else:
-            name = '%s.%s' % (x._INSTANCE._namespace, x._INSTANCE._classname)
+            name = x._INSTANCE._assembly_qualified_name
             t = CLR.System.Type.GetType(name)
             assert t is not None
             return t
