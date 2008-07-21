@@ -197,7 +197,7 @@ class _SetArrayElem(MicroInstruction):
             generator.ilasm.opcode('ldnull')
         else:
             generator.load(v_elem)
-        elemtype = generator.cts.lltype_to_cts(v_array.concretetype)
+        elemtype = generator.cts.lltype_to_cts(v_array.concretetype._ELEMENT)
         generator.ilasm.opcode('stelem', elemtype)
 
 class _TypeOf(MicroInstruction):
