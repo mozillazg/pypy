@@ -2,7 +2,7 @@
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import *
 from pypy.lang.gameboy.interrupt import *
-from pypy.lang.gameboy.debug import *
+#from pypy.lang.gameboy.debug import *
 
 # ---------------------------------------------------------------------------
 
@@ -381,13 +381,13 @@ class CPU(object):
         #print "    fetch exe:", hex(opCode), "  "
         #, FETCH_EXECUTE_OP_CODES[opCode].__name__
         self.last_fetch_execute_op_code = opCode
-        if DEBUG: log(opCode, is_fetch_execute=True)
+        #if DEBUG: log(opCode, is_fetch_execute=True)
         FETCH_EXECUTE_OP_CODES[opCode](self)
         
         
     def execute(self, opCode):
         self.instruction_counter += 1
-        if DEBUG: log(opCode)
+        #if DEBUG: log(opCode)
         #print self.instruction_counter, "-"*60
         #print "exe: ", hex(opCode),  "   "
         #, OP_CODES[opCode].__name__
@@ -431,13 +431,11 @@ class CPU(object):
         else:
             data = self.memory.read(self.pc.get(use_cycles))
         self.pc.inc(use_cycles) # 2 cycles
-        print "    fetch: ", data
         return data
     
     def fetch_double_address(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
-        print hex(hi), hex(lo)
         return (hi << 8) + lo
         
     def fetch_double_register(self, register):
@@ -471,7 +469,6 @@ class CPU(object):
         self.cycles += 1
         
     def call(self, address, use_cycles=True):
-        print "call", hex(address), "pc", hex(self.pc.get())
         # 4 cycles
         self.push_double_register(self.pc, use_cycles)
         self.pc.set(address, use_cycles=use_cycles)       # 1 cycle
