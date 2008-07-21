@@ -282,6 +282,14 @@ class TestDotnetRtyping(CliTest):
             return x[0]
         assert self.interpret(fn, []) is None
 
+    def test_array_setitem(self):
+        def fn():
+            array = new_array(System.Object, 5)
+            array[0] = ArrayList()
+            return array[0].GetType().get_Name()
+        res = self.interpret(fn, [])
+        assert res == 'ArrayList'
+
     def test_array_length(self):
         def fn():
             x = init_array(System.Object, box(42), box(43))
