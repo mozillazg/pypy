@@ -85,9 +85,9 @@ def prepare_for_fetch(cpu, value, valueLo=None):
 def test_prepare_for_fetch():
     cpu = get_cpu()
     value = 0x12
-    prepare_for_fetch(cpu, value+1, value)
+    prepare_for_fetch(cpu, value+5, value)
     assert cpu.fetch() == value
-    assert cpu.fetch() == value+1
+    assert cpu.fetch() == value+5
         
 def prepare_for_pop(cpu, value, valueLo=None):
     sp = cpu.sp.get()
@@ -99,9 +99,9 @@ def prepare_for_pop(cpu, value, valueLo=None):
 def test_prepare_for_pop():
     cpu = get_cpu()
     value = 0x12
-    prepare_for_pop(cpu, value+1, value)
+    prepare_for_pop(cpu, value+5, value)
     assert cpu.pop() == value
-    assert cpu.pop() == value+1
+    assert cpu.pop() == value+5
         
 def set_registers(registers, value):
     #if registers is not list:

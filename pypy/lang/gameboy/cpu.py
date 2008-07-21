@@ -431,12 +431,13 @@ class CPU(object):
         else:
             data = self.memory.read(self.pc.get(use_cycles))
         self.pc.inc(use_cycles) # 2 cycles
-       # print "    fetch: ", data
+        print "    fetch: ", data
         return data
     
     def fetch_double_address(self):
         lo = self.fetch() # 1 cycle
         hi = self.fetch() # 1 cycle
+        print hex(hi), hex(lo)
         return (hi << 8) + lo
         
     def fetch_double_register(self, register):
@@ -470,6 +471,7 @@ class CPU(object):
         self.cycles += 1
         
     def call(self, address, use_cycles=True):
+        print "call", hex(address), "pc", hex(self.pc.get())
         # 4 cycles
         self.push_double_register(self.pc, use_cycles)
         self.pc.set(address, use_cycles=use_cycles)       # 1 cycle
@@ -753,7 +755,7 @@ class CPU(object):
 
     def write_a_at_expaded_c_address(self):
         # LDH (C),A 2 cycles
-        self.write(0xFF00 + self.bc.get_lo(), self.a.get()) # 2 cycles
+        self.write(0xFF00 + self.c.get(), self.a.get()) # 2 cycles
         
     def load_and_increment_hli_a(self):
         # loadAndIncrement (HL),A 2 cycles
