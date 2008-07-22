@@ -585,6 +585,13 @@ class TestDotnetRtyping(CliTest):
             return f
         self.interpret(fn, [])
 
+    def test_valuetype_key(self):
+        def fn():
+            d = {}
+            d[OpCodes.Add] = 42
+            return d[OpCodes.Add]
+        assert self.interpret(fn, []) == 42
+
     def test_classof(self):
         int32_class = classof(System.Int32)
         def fn():
