@@ -17,7 +17,7 @@ class Operation:
         if self._gv_res is None:
             restype = self.restype()
             if restype is not None:
-                loc = self.builder.graphbuilder.il.DeclareLocal(restype)
+                loc = self.methbuilder.il.DeclareLocal(restype)
                 self._gv_res = GenLocalVar(loc)
         return self._gv_res
 
@@ -28,38 +28,38 @@ class Operation:
         raise NotImplementedError
 
     def storeResult(self):
-        self.gv_res().store(self.builder)
+        self.gv_res().store(self.methbuilder)
 
 
 class UnaryOp(Operation):
-    def __init__(self, builder, gv_x):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_x):
+        self.methbuilder = methbuilder
         self.gv_x = gv_x
 
     def pushAllArgs(self):
-        self.gv_x.load(self.builder)
+        self.gv_x.load(self.methbuilder)
 
     def emit(self):
         self.pushAllArgs()
-        self.builder.graphbuilder.il.Emit(self.getOpCode())
+        self.methbuilder.il.Emit(self.getOpCode())
         self.storeResult()
 
     def getOpCode(self):
         raise NotImplementedError
 
 class BinaryOp(Operation):
-    def __init__(self, builder, gv_x, gv_y):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_x, gv_y):
+        self.methbuilder = methbuilder
         self.gv_x = gv_x
         self.gv_y = gv_y
 
     def pushAllArgs(self):
-        self.gv_x.load(self.builder)
-        self.gv_y.load(self.builder)
+        self.gv_x.load(self.methbuilder)
+        self.gv_y.load(self.methbuilder)
 
     def emit(self):
         self.pushAllArgs()
-        self.builder.graphbuilder.il.Emit(self.getOpCode())
+        self.methbuilder.il.Emit(self.getOpCode())
         self.storeResult()
 
     def getOpCode(self):
@@ -69,25 +69,25 @@ class BinaryOp(Operation):
 class SameAs(UnaryOp):
     def emit(self):
         gv_res = self.gv_res()
-        self.gv_x.load(self.builder)
-        self.gv_res().store(self.builder)
+        self.gv_x.load(self.methbuilder)
+        self.gv_res().store(self.methbuilder)
 
 class MarkLabel(Operation):
 
-    def __init__(self, builder, label):
-        self.builder = builder
+    def __init__(self, methbuilder, label):
+        self.methbuilder = methbuilder
         self.label = label
 
     def restype(self):
         return None
 
     def emit(self):
-        self.builder.graphbuilder.il.MarkLabel(self.label)
+        self.methbuilder.il.MarkLabel(self.label)
         
 class FollowLink(Operation):
     
-    def __init__(self, builder, outputargs_gv, inputargs_gv, label):
-        self.builder = builder
+    def __init__(self, methbuilder, outputargs_gv, inputargs_gv, label):
+        self.methbuilder = methbuilder
         self.outputargs_gv = outputargs_gv
         self.inputargs_gv = inputargs_gv
         self.label = label
@@ -97,15 +97,15 @@ class FollowLink(Operation):
 
     def emit(self):
         for i in range(len(self.outputargs_gv)):
-            self.outputargs_gv[i].load(self.builder)
-            self.inputargs_gv[i].store(self.builder)
-        self.builder.graphbuilder.il.Emit(OpCodes.Br, self.label)
+            self.outputargs_gv[i].load(self.methbuilder)
+            self.inputargs_gv[i].store(self.methbuilder)
+        self.methbuilder.il.Emit(OpCodes.Br, self.label)
 
 
 class Branch(Operation):
     
-    def __init__(self, builder, gv_cond, opcode, label):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_cond, opcode, label):
+        self.methbuilder = methbuilder
         self.gv_cond = gv_cond
         self.opcode = opcode
         self.label = label
@@ -115,31 +115,31 @@ class Branch(Operation):
 
     def emit(self):
         if self.gv_cond is not None:
-            self.gv_cond.load(self.builder)
-        self.builder.graphbuilder.il.Emit(self.opcode, self.label)
+            self.gv_cond.load(self.methbuilder)
+        self.methbuilder.il.Emit(self.opcode, self.label)
 
 class Return(Operation):
 
-    def __init__(self, builder, gv_x):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_x):
+        self.methbuilder = methbuilder
         self.gv_x = gv_x
 
     def restype(self):
         return None
 
     def emit(self):
-        retvar = self.builder.graphbuilder.retvar
-        retlabel = self.builder.graphbuilder.retlabel
+        retvar = self.methbuilder.retvar
+        retlabel = self.methbuilder.retlabel
         if self.gv_x is not None:
-            self.gv_x.load(self.builder)
-            self.builder.graphbuilder.il.Emit(OpCodes.Stloc, retvar)
-        self.builder.graphbuilder.il.Emit(OpCodes.Br, retlabel)
+            self.gv_x.load(self.methbuilder)
+            self.methbuilder.il.Emit(OpCodes.Stloc, retvar)
+        self.methbuilder.il.Emit(OpCodes.Br, retlabel)
 
 class Call(Operation):
 
-    def __init__(self, builder, sigtoken, gv_fnptr, args_gv):
+    def __init__(self, methbuilder, sigtoken, gv_fnptr, args_gv):
         from pypy.jit.codegen.cli.rgenop import class2type
-        self.builder = builder
+        self.methbuilder = methbuilder
         self.sigtoken = sigtoken
         self.gv_fnptr = gv_fnptr
         self.args_gv = args_gv
@@ -152,18 +152,18 @@ class Call(Operation):
         from pypy.jit.codegen.cli.rgenop import class2type
         delegate_type = class2type(self.sigtoken.funcclass)
         meth_invoke = delegate_type.GetMethod('Invoke')
-        self.gv_fnptr.load(self.builder)
-        self.builder.graphbuilder.il.Emit(OpCodes.Castclass, delegate_type)
+        self.gv_fnptr.load(self.methbuilder)
+        self.methbuilder.il.Emit(OpCodes.Castclass, delegate_type)
         for gv_arg in self.args_gv:
-            gv_arg.load(self.builder)
-        self.builder.graphbuilder.il.EmitCall(OpCodes.Callvirt, meth_invoke, None)
+            gv_arg.load(self.methbuilder)
+        self.methbuilder.il.EmitCall(OpCodes.Callvirt, meth_invoke, None)
         self.storeResult()
 
 
 class GetField(Operation):
 
-    def __init__(self, builder, gv_obj, fieldname):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_obj, fieldname):
+        self.methbuilder = methbuilder
         self.gv_obj = gv_obj
         clitype = gv_obj.getCliType()
         self.fieldinfo = clitype.GetField(fieldname)
@@ -172,15 +172,15 @@ class GetField(Operation):
         return self.fieldinfo.get_FieldType()
 
     def emit(self):
-        self.gv_obj.load(self.builder)
-        self.builder.graphbuilder.il.Emit(OpCodes.Ldfld, self.fieldinfo)
+        self.gv_obj.load(self.methbuilder)
+        self.methbuilder.il.Emit(OpCodes.Ldfld, self.fieldinfo)
         self.storeResult()
 
 
 class SetField(Operation):
 
-    def __init__(self, builder, gv_obj, gv_value, fieldname):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_obj, gv_value, fieldname):
+        self.methbuilder = methbuilder
         self.gv_obj = gv_obj
         self.gv_value = gv_value
         clitype = gv_obj.getCliType()
@@ -190,14 +190,14 @@ class SetField(Operation):
         return None
 
     def emit(self):
-        self.gv_obj.load(self.builder)
-        self.gv_value.load(self.builder)
-        self.builder.graphbuilder.il.Emit(OpCodes.Stfld, self.fieldinfo)
+        self.gv_obj.load(self.methbuilder)
+        self.gv_value.load(self.methbuilder)
+        self.methbuilder.il.Emit(OpCodes.Stfld, self.fieldinfo)
 
 class DoFlexSwitch(Operation):
 
-    def __init__(self, builder, gv_flexswitch, gv_exitswitch, args_gv):
-        self.builder = builder
+    def __init__(self, methbuilder, gv_flexswitch, gv_exitswitch, args_gv):
+        self.methbuilder = methbuilder
         self.gv_flexswitch = gv_flexswitch
         self.gv_exitswitch = gv_exitswitch
         self.args_gv = args_gv # XXX: remove duplicates
@@ -206,38 +206,38 @@ class DoFlexSwitch(Operation):
         return None
 
     def emit(self):
-        gbuilder = self.builder.graphbuilder
-        il = gbuilder.il
+        mbuilder = self.methbuilder
+        il = mbuilder.il
         # get MethodInfo for LowLevelFlexSwitch.execute
         clitype = self.gv_flexswitch.flexswitch.GetType()
         meth_execute = clitype.GetMethod('execute')
 
         # setup the correct inputargs
-        manager = InputArgsManager(gbuilder, self.args_gv)
-        manager.copy_from_args(self.builder)
+        manager = InputArgsManager(mbuilder, self.args_gv)
+        manager.copy_from_args(mbuilder)
 
         # jumpto = flexswitch.execute(exitswitch, inputargs);
         # goto dispatch_jump;
-        self.gv_flexswitch.load(self.builder)
-        self.gv_exitswitch.load(self.builder)
-        il.Emit(OpCodes.Ldloc, gbuilder.inputargs_var)
+        self.gv_flexswitch.load(mbuilder)
+        self.gv_exitswitch.load(mbuilder)
+        il.Emit(OpCodes.Ldloc, mbuilder.inputargs_var)
         il.Emit(OpCodes.Callvirt, meth_execute)
-        il.Emit(OpCodes.Stloc, gbuilder.jumpto_var)
-        il.Emit(OpCodes.Br, gbuilder.dispatch_jump_label)
+        il.Emit(OpCodes.Stloc, mbuilder.jumpto_var)
+        il.Emit(OpCodes.Br, mbuilder.dispatch_jump_label)
 
 
 class InputArgsManager:
 
-    def __init__(self, graphbuilder, args_gv):
-        self.inputargs_var = graphbuilder.inputargs_var
-        self.inputargs_clitype = graphbuilder.inputargs_clitype
+    def __init__(self, methbuilder, args_gv):
+        self.inputargs_var = methbuilder.inputargs_var
+        self.inputargs_clitype = methbuilder.inputargs_clitype
         self.args_gv = args_gv
 
     def basename_from_type(self, clitype):
         return clitype.get_Name()
 
-    def copy_from_args(self, builder):
-        il = builder.graphbuilder.il
+    def copy_from_args(self, methbuilder):
+        il = methbuilder.methbuilder.il
         inputargs_var = self.inputargs_var
         inputargs_clitype = self.inputargs_clitype
         counters = {}
@@ -255,15 +255,15 @@ class InputArgsManager:
 
 class WriteLine(Operation):
 
-    def __init__(self, builder, message):
-        self.builder = builder
+    def __init__(self, methbuilder, message):
+        self.methbuilder = methbuilder
         self.message = message
 
     def restype(self):
         return None
 
     def emit(self):
-        self.builder.graphbuilder.il.EmitWriteLine(self.message)
+        self.methbuilder.il.EmitWriteLine(self.message)
 
 def opcode2attrname(opcode):
     if opcode == 'ldc.r8 0':
@@ -327,7 +327,7 @@ def renderCustomOp(opname, baseclass, steps, out):
             if 'call' in step:
                 return # XXX, fix this
             attrname = opcode2attrname(step)
-            body.append('self.builder.graphbuilder.il.Emit(OpCodes.%s)' % attrname)
+            body.append('self.methbuilder.il.Emit(OpCodes.%s)' % attrname)
         elif isinstance(step, cli_opcodes.MapException):
             return # XXX, TODO
         else:
