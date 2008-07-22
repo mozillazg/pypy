@@ -194,6 +194,64 @@ class SetField(Operation):
         self.gv_value.load(self.builder)
         self.builder.graphbuilder.il.Emit(OpCodes.Stfld, self.fieldinfo)
 
+class DoFlexSwitch(Operation):
+
+    def __init__(self, builder, gv_flexswitch, gv_exitswitch, args_gv):
+        self.builder = builder
+        self.gv_flexswitch = gv_flexswitch
+        self.gv_exitswitch = gv_exitswitch
+        self.args_gv = args_gv # XXX: remove duplicates
+
+    def restype(self):
+        return None
+
+    def emit(self):
+        gbuilder = self.builder.graphbuilder
+        il = gbuilder.il
+        # get MethodInfo for LowLevelFlexSwitch.execute
+        clitype = self.gv_flexswitch.flexswitch.GetType()
+        meth_execute = clitype.GetMethod('execute')
+
+        # setup the correct inputargs
+        manager = InputArgsManager(gbuilder, self.args_gv)
+        manager.copy_from_args(self.builder)
+
+        # jumpto = flexswitch.execute(exitswitch, inputargs);
+        # goto dispatch_jump;
+        self.gv_flexswitch.load(self.builder)
+        self.gv_exitswitch.load(self.builder)
+        il.Emit(OpCodes.Ldloc, gbuilder.inputargs_var)
+        il.Emit(OpCodes.Callvirt, meth_execute)
+        il.Emit(OpCodes.Stloc, gbuilder.jumpto_var)
+        il.Emit(OpCodes.Br, gbuilder.dispatch_jump_label)
+
+
+class InputArgsManager:
+
+    def __init__(self, graphbuilder, args_gv):
+        self.inputargs_var = graphbuilder.inputargs_var
+        self.inputargs_clitype = graphbuilder.inputargs_clitype
+        self.args_gv = args_gv
+
+    def basename_from_type(self, clitype):
+        return clitype.get_Name()
+
+    def copy_from_args(self, builder):
+        il = builder.graphbuilder.il
+        inputargs_var = self.inputargs_var
+        inputargs_clitype = self.inputargs_clitype
+        counters = {}
+        for gv_arg in self.args_gv:
+            clitype = gv_arg.getCliType()
+            basename = self.basename_from_type(clitype)
+            count = counters.get(clitype, 0)
+            fieldname = '%s_%d' % (basename, count)
+            counters[clitype] = count+1
+            field = inputargs_clitype.GetField(fieldname)
+
+            il.Emit(OpCodes.Ldloc, inputargs_var)
+            gv_arg.load(builder)
+            il.Emit(OpCodes.Stfld, field)
 
 class WriteLine(Operation):
 

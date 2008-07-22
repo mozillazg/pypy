@@ -4,13 +4,17 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
-from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst, CodeGenSwitch
+from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
+from pypy.jit.codegen.model import CodeGenSwitch
 from pypy.jit.codegen.cli import operation as ops
 from pypy.jit.codegen.cli.methodbuilder import get_methodbuilder
-from pypy.translator.cli.dotnet import CLR, typeof, new_array, box, unbox, clidowncast, classof
+from pypy.translator.cli.dotnet import CLR, typeof, new_array, init_array
+from pypy.translator.cli.dotnet import box, unbox, clidowncast, classof
 from pypy.translator.cli import dotnet
 System = CLR.System
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
+LowLevelFlexSwitch = CLR.pypy.runtime.LowLevelFlexSwitch
+InputArgs = CLR.pypy.runtime.InputArgs
 OpCodes = System.Reflection.Emit.OpCodes
 
 cVoid = ootype.nullruntimeclass
@@ -20,6 +24,8 @@ cDouble = classof(System.Double)
 cObject = classof(System.Object)
 cString = classof(System.String)
 cChar = classof(System.Char)
+cInputArgs = classof(InputArgs)
+cUtils = classof(CLR.pypy.runtime.Utils)
 
 class SigToken:
     def __init__(self, args, res, funcclass):
@@ -213,6 +219,19 @@ class FunctionConst(BaseConst):
             assert T is ootype.Object
             return ootype.cast_to_object(self.holder.GetFunc())
 
+class FlexSwitchConst(BaseConst):
+
+    def __init__(self, flexswitch):
+        self.flexswitch = flexswitch
+
+    def getobj(self):
+        return self.flexswitch
+
+    def load(self, builder):
+        index = self._get_index(builder)
+        self._load_from_array(builder, index, self.flexswitch.GetType())
+
+
 class Label(GenLabel):
     def __init__(self, label, inputargs_gv):
         self.label = label
@@ -338,6 +357,8 @@ class GraphBuilder(GenBuilder):
         else:
             self.retvar = None
         self.retlabel = self.il.DefineLabel()
+        self.blockids = {}
+        self.has_flexswitches = False
 
     def appendbranch(self, branchbuilder):
         self.branches.append(branchbuilder)
@@ -395,10 +416,19 @@ class GraphBuilder(GenBuilder):
     def genop_ooisnull(self, gv_obj):
         raise NotImplementedError
 
+    def flexswitch(self, gv_exitswitch, args_gv):
+        return self.branches[0].flexswitch(gv_exitswitch, args_gv)
+
     def end(self):
+        # emit initialization code
+        self.emit_preamble()
+        
         # render all the pending branches
         for branchbuilder in self.branches:
             branchbuilder.replayops()
+
+        # emit dispatch_jump, if there are flexswitches
+        self.emit_dispatch_jump()
 
         # render the return block for last, else the verifier could complain        
         self.il.MarkLabel(self.retlabel)
@@ -413,6 +443,45 @@ class GraphBuilder(GenBuilder):
         # build the delegate
         myfunc = self.meth.create_delegate(self.delegatetype, consts)
         self.gv_entrypoint.holder.SetFunc(myfunc)
+
+    def _setup_flexswitches(self):
+        if self.has_flexswitches:
+            return
+        self.has_flexswitches = True
+        self.dispatch_jump_label = self.il.DefineLabel()
+        self.inputargs_clitype = class2type(cInputArgs)
+        self.inputargs_var = self.il.DeclareLocal(self.inputargs_clitype)
+        self.jumpto_var = self.il.DeclareLocal(class2type(cInt32))
+
+    def emit_preamble(self):
+        if not self.has_flexswitches:
+            return        
+        # InputArgs inputargs_var = new InputArgs()
+        clitype = class2type(cInputArgs)
+        ctor = clitype.GetConstructor(new_array(System.Type, 0))
+        self.il.Emit(OpCodes.Newobj, ctor)
+        self.il.Emit(OpCodes.Stloc, self.inputargs_var)
+
+    def emit_dispatch_jump(self):
+        if not self.has_flexswitches:
+            return
+        # make sure we don't enter dispatch_jump by mistake
+        self.il.Emit(OpCodes.Br, self.retlabel)
+        self.il.MarkLabel(self.dispatch_jump_label)
+
+        labels = new_array(System.Reflection.Emit.Label,
+                           len(self.blockids))
+        for genlabel, blockid in self.blockids.iteritems():
+            labels[blockid] = genlabel.label
+
+        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        self.il.Emit(OpCodes.Switch, labels)
+        # XXX: handle blockids that are inside flexswitch cases
+        # default: Utils.throwInvalidBlockId(jumpto)
+        clitype = class2type(cUtils)
+        meth = clitype.GetMethod("throwInvalidBlockId")
+        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        self.il.Emit(OpCodes.Call, meth)
 
 
 class BranchBuilder(GenBuilder):
@@ -488,7 +557,13 @@ class BranchBuilder(GenBuilder):
                 seen[gv] = None
         label = self.graphbuilder.il.DefineLabel()
         self.appendop(ops.MarkLabel(self, label))
-        return Label(label, args_gv)
+        return self.create_label(label, args_gv)
+
+    def create_label(self, label, args_gv):
+        res = Label(label, args_gv)
+        blockids = self.graphbuilder.blockids
+        blockids[res] = len(blockids)
+        return res
 
     def _jump_if(self, gv_condition, opcode):
         label = self.graphbuilder.il.DefineLabel()
@@ -504,6 +579,22 @@ class BranchBuilder(GenBuilder):
     def jump_if_true(self, gv_condition, args_for_jump_gv):
         return self._jump_if(gv_condition, OpCodes.Brtrue)
 
+    def flexswitch(self, gv_exitswitch, args_gv):
+        self.graphbuilder._setup_flexswitches()
+        flexswitch = IntFlexSwitch()
+        flexswitch.xxxbuilder = BranchBuilder(self.graphbuilder, self.graphbuilder.il.DefineLabel())
+        gv_flexswitch = flexswitch.gv_flexswitch
+        lbl = self.graphbuilder.il.DefineLabel()
+        default_label = self.create_label(lbl, args_gv)
+        default_blockid = self.graphbuilder.blockids[default_label]
+        flexswitch.llflexswitch.set_default_blockid(default_blockid)
+        op = ops.DoFlexSwitch(self, gv_flexswitch, gv_exitswitch, args_gv)
+        self.appendop(op)
+        default_builder = BranchBuilder(self.graphbuilder, default_label.label)
+        self.graphbuilder.appendbranch(default_builder)
+        self.is_open = False
+        return flexswitch, default_builder
+
     def appendop(self, op):
         self.operations.append(op)
 
@@ -516,6 +607,19 @@ class BranchBuilder(GenBuilder):
         il.MarkLabel(self.label)
         for op in self.operations:
             op.emit()
+
+
+class IntFlexSwitch(CodeGenSwitch):
+
+    def __init__(self):
+        self.llflexswitch = LowLevelFlexSwitch()
+        self.gv_flexswitch = FlexSwitchConst(self.llflexswitch)
+
+    def add_case(self, gv_case):
+        return self.xxxbuilder
+        #import pdb;pdb.set_trace()
+
+
 
 global_rgenop = RCliGenOp()
 RCliGenOp.constPrebuiltGlobal = global_rgenop.genconst

@@ -34,7 +34,7 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
         py.test.skip('fixme')
 
     def test_switch_direct(self):
-        py.test.skip('no promotion/flexswitch for now please :-)')
+        py.test.skip('in-progress')
 
     def test_large_switch_direct(self):
         py.test.skip('no promotion/flexswitch for now please :-)')
