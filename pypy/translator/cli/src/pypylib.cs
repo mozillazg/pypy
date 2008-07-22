@@ -87,6 +87,8 @@ namespace pypy.test
     public delegate double DelegateType_double__double_1(double a);
     public delegate double DelegateType_double_int_double(int a, double b);
     public delegate void DelegateType_void_int_1(int a);
+    public delegate bool DelegateType_bool_bool_1(bool a);
+    public delegate char DelegateType_char_char_1(char a);
     public delegate int DelegateType_int__int_1(int a);
     public delegate int DelegateType_int__int_2(int a, int b);
     public delegate int DelegateType_int__int_3(int a, int b, int c);
