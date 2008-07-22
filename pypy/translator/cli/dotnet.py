@@ -690,6 +690,8 @@ known_delegates = {
     ootype.StaticMethod([], ootype.Signed): CLR.pypy.test.DelegateType_int__0,
     ootype.StaticMethod([ootype.Signed, ootype.Float], ootype.Float): CLR.pypy.test.DelegateType_double_int_double,
     ootype.StaticMethod([ootype.Float], ootype.Float):         CLR.pypy.test.DelegateType_double__double_1,
+    ootype.StaticMethod([ootype.Bool], ootype.Bool):           CLR.pypy.test.DelegateType_bool_bool_1,
+    ootype.StaticMethod([ootype.Char], ootype.Char):           CLR.pypy.test.DelegateType_char_char_1,
     ootype.StaticMethod([ootype.Signed], ootype.Void):         CLR.pypy.test.DelegateType_void_int_1,
     ootype.StaticMethod([ootype.Signed], ootype.Signed):       CLR.pypy.test.DelegateType_int__int_1,
     ootype.StaticMethod([ootype.Signed] * 2, ootype.Signed):   CLR.pypy.test.DelegateType_int__int_2,

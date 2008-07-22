@@ -99,3 +99,8 @@ class TestRainbowCli(CliMixin, RainbowTest):
     test_degenerated_at_return = skip
     test_degenerated_via_substructure = skip
     test_red_subclass = skip
+
+    test_builtin_oosend_with_green_args = skip
+    test_red_isinstance_degenerated = skip
+    test_red_array = skip
+    
