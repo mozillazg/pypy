@@ -105,25 +105,25 @@ class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
 
     def test_dump_assembly(self):
         import os
-        from pypy.jit.codegen.cli import methodbuilder
+        from pypy.jit.codegen.cli import methodfactory
 
         # clear the global state, setup env
-        methodbuilder.assemblyData = methodbuilder.AssemblyData()
+        methodfactory.assemblyData = methodfactory.AssemblyData()
         oldenv = os.environ.get('PYPYJITLOG')
         os.environ['PYPYJITLOG'] = 'generated.dll'
         try:
             self.test_adder_compile()
         finally:
             # reset the global state, clear env
-            methodbuilder.assemblyData = methodbuilder.AssemblyData()
+            methodfactory.assemblyData = methodfactory.AssemblyData()
             if oldenv:
                 os.environ['PYPYJITLOG'] = oldenv
             else:
                 del os.environ['PYPYJITLOG']
 
-            f = py.path.local('generated.dll')
-            assert f.check()
-            f.remove()
+        f = py.path.local('generated.dll')
+        assert f.check()
+        f.remove()
 
     def test_largedummy_compile(self):
         py.test.skip('it works only if we increase .maxstack')

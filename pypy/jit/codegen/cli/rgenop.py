@@ -7,7 +7,7 @@ from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
 from pypy.jit.codegen.model import CodeGenSwitch
 from pypy.jit.codegen.cli import operation as ops
-from pypy.jit.codegen.cli.methodbuilder import get_methodbuilder
+from pypy.jit.codegen.cli.methodfactory import get_method_wrapper
 from pypy.translator.cli.dotnet import CLR, typeof, new_array, init_array
 from pypy.translator.cli.dotnet import box, unbox, clidowncast, classof
 from pypy.translator.cli import dotnet
@@ -60,20 +60,20 @@ class GenArgVar(GenVar):
     def getCliType(self):
         return self.cliType
 
-    def load(self, methbuilder):
+    def load(self, meth):
         if self.index == 0:
-            methbuilder.il.Emit(OpCodes.Ldarg_0)
+            meth.il.Emit(OpCodes.Ldarg_0)
         elif self.index == 1:
-            methbuilder.il.Emit(OpCodes.Ldarg_1)
+            meth.il.Emit(OpCodes.Ldarg_1)
         elif self.index == 2:
-            methbuilder.il.Emit(OpCodes.Ldarg_2)
+            meth.il.Emit(OpCodes.Ldarg_2)
         elif self.index == 3:
-            methbuilder.il.Emit(OpCodes.Ldarg_3)
+            meth.il.Emit(OpCodes.Ldarg_3)
         else:
-            methbuilder.il.Emit(OpCodes.Ldarg, self.index)
+            meth.il.Emit(OpCodes.Ldarg, self.index)
 
-    def store(self, methbuilder):
-        methbuilder.il.Emit(OpCodes.Starg, self.index)
+    def store(self, meth):
+        meth.il.Emit(OpCodes.Starg, self.index)
 
     def __repr__(self):
         return "GenArgVar(%d)" % self.index
@@ -85,11 +85,11 @@ class GenLocalVar(GenVar):
     def getCliType(self):
         return self.v.get_LocalType()
 
-    def load(self, methbuilder):
-        methbuilder.il.Emit(OpCodes.Ldloc, self.v)
+    def load(self, meth):
+        meth.il.Emit(OpCodes.Ldloc, self.v)
 
-    def store(self, methbuilder):
-        methbuilder.il.Emit(OpCodes.Stloc, self.v)
+    def store(self, meth):
+        meth.il.Emit(OpCodes.Stloc, self.v)
 
 
 class IntConst(GenConst):
@@ -109,8 +109,8 @@ class IntConst(GenConst):
     def getCliType(self):
         return class2type(self.cliclass)
 
-    def load(self, methbuilder):
-        methbuilder.il.Emit(OpCodes.Ldc_I4, self.value)
+    def load(self, meth):
+        meth.il.Emit(OpCodes.Ldc_I4, self.value)
 
     def __repr__(self):
         return "int const=%s" % self.value
@@ -130,28 +130,28 @@ class FloatConst(GenConst):
     def getCliType(self):
         return typeof(System.Double)
 
-    def load(self, methbuilder):
-        methbuilder.il.Emit(OpCodes.Ldc_R8, self.value)
+    def load(self, meth):
+        meth.il.Emit(OpCodes.Ldc_R8, self.value)
 
     def __repr__(self):
         return "float const=%s" % self.value
 
 class BaseConst(GenConst):
 
-    def _get_index(self, methbuilder):
+    def _get_index(self, meth):
         # check whether there is already an index associated to this const
         try:
-            index = methbuilder.genconsts[self]
+            index = meth.genconsts[self]
         except KeyError:
-            index = len(methbuilder.genconsts)
-            methbuilder.genconsts[self] = index
+            index = len(meth.genconsts)
+            meth.genconsts[self] = index
         return index
 
-    def _load_from_array(self, methbuilder, index, clitype):
-        methbuilder.il.Emit(OpCodes.Ldarg_0)
-        methbuilder.il.Emit(OpCodes.Ldc_I4, index)
-        methbuilder.il.Emit(OpCodes.Ldelem_Ref)
-        methbuilder.il.Emit(OpCodes.Castclass, clitype)
+    def _load_from_array(self, meth, index, clitype):
+        meth.il.Emit(OpCodes.Ldarg_0)
+        meth.il.Emit(OpCodes.Ldc_I4, index)
+        meth.il.Emit(OpCodes.Ldelem_Ref)
+        meth.il.Emit(OpCodes.Castclass, clitype)
 
     def getobj(self):
         raise NotImplementedError
@@ -170,7 +170,7 @@ class ObjectConst(BaseConst):
     def getobj(self):
         return self.obj
 
-    def load(self, methbuilder):
+    def load(self, meth):
         assert False, 'XXX'
 ##        import pdb;pdb.set_trace()
 ##        index = self._get_index(builder)
@@ -201,14 +201,14 @@ class FunctionConst(BaseConst):
         #return ootype.ooupcast(OBJECT, self.holder)
         return self.holder
 
-    def load(self, methbuilder):
+    def load(self, meth):
         holdertype = box(self.holder).GetType()
         funcfield = holdertype.GetField('func')
         delegatetype = self.delegatetype
-        index = self._get_index(methbuilder)
-        self._load_from_array(methbuilder, index, holdertype)
-        methbuilder.il.Emit(OpCodes.Ldfld, funcfield)
-        methbuilder.il.Emit(OpCodes.Castclass, delegatetype)
+        index = self._get_index(meth)
+        self._load_from_array(meth, index, holdertype)
+        meth.il.Emit(OpCodes.Ldfld, funcfield)
+        meth.il.Emit(OpCodes.Castclass, delegatetype)
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -227,9 +227,9 @@ class FlexSwitchConst(BaseConst):
     def getobj(self):
         return self.flexswitch
 
-    def load(self, methbuilder):
-        index = self._get_index(methbuilder)
-        self._load_from_array(methbuilder, index, self.flexswitch.GetType())
+    def load(self, meth):
+        index = self._get_index(meth)
+        self._load_from_array(meth, index, self.flexswitch.GetType())
 
 
 class Label(GenLabel):
@@ -335,21 +335,22 @@ class RCliGenOp(AbstractRGenOp):
             args[i+1] = class2type(argsclass[i])
         restype = class2type(sigtoken.res)
         delegatetype = class2type(sigtoken.funcclass)
-        builder = GraphBuilder(self, name, restype, args, delegatetype)
-        return builder, builder.gv_entrypoint, builder.inputargs_gv[:]
+        graph = GraphGenerator(self, name, restype, args, delegatetype)
+        builder = graph.branches[0]
+        return builder, graph.gv_entrypoint, graph.inputargs_gv[:]
 
 
 class GraphInfo:
     def __init__(self):
         self.has_flexswitches = False
-        self.blocks = [] # blockid -> (methbuilder, label)
+        self.blocks = [] # blockid -> (meth, label)
 
-class MethodBuilder(GenBuilder):
+class MethodGenerator:
     
     def __init__(self, rgenop, name, restype, args, delegatetype, graphinfo):
         self.rgenop = rgenop
-        self.meth = get_methodbuilder(name, restype, args)
-        self.il = self.meth.get_il_generator()
+        self.meth_wrapper = get_method_wrapper(name, restype, args)
+        self.il = self.meth_wrapper.get_il_generator()
         self.inputargs_gv = []
         # we start from 1 because the 1st arg is an Object[] containing the genconsts
         for i in range(1, len(args)):
@@ -368,63 +369,7 @@ class MethodBuilder(GenBuilder):
     def appendbranch(self, branchbuilder):
         self.branches.append(branchbuilder)
 
-    def start_writing(self):
-        self.branches[0].start_writing()
-
-    def pause_writing(self, args_gv):
-        return self.branches[0].pause_writing(args_gv)
- 
-    def finish_and_return(self, sigtoken, gv_returnvar):
-        return self.branches[0].finish_and_return(sigtoken,
-                                                  gv_returnvar)
-
-    def finish_and_goto(self, outputargs_gv, target):
-        return self.branches[0].finish_and_goto(outputargs_gv, target)
-
-    def enter_next_block(self, args_gv):
-        return self.branches[0].enter_next_block(args_gv)
-
-    def jump_if_false(self, gv_condition, args_for_jump_gv):
-        return self.branches[0].jump_if_false(gv_condition,
-                                              args_for_jump_gv)
-
-    def jump_if_true(self, gv_condition, args_for_jump_gv):
-        return self.branches[0].jump_if_true(gv_condition,
-                                             args_for_jump_gv)
-
-    @specialize.arg(1)
-    def genop1(self, opname, gv_arg):
-        return self.branches[0].genop1(opname, gv_arg)
-    
-    @specialize.arg(1)
-    def genop2(self, opname, gv_arg1, gv_arg2):
-        return self.branches[0].genop2(opname, gv_arg1, gv_arg2)
-
-    def genop_call(self, sigtoken, gv_fnptr, args_gv):
-        return self.branches[0].genop_call(sigtoken, gv_fnptr, args_gv)
-
-    def genop_same_as(self, gv_x):
-        return self.branches[0].genop_same_as(gv_x)
-
-    def genop_oogetfield(self, fieldtoken, gv_obj):
-        return self.branches[0].genop_oogetfield(fieldtoken, gv_obj)
-
-    def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
-        return self.branches[0].genop_oosetfield(fieldtoken, gv_obj, gv_value)
-
-    def genop_oonewarray(self, alloctoken, gv_length):
-        raise NotImplementedError
-        
-    def genop_oononnull(self, gv_obj):
-        raise NotImplementedError
-    
-    def genop_ooisnull(self, gv_obj):
-        raise NotImplementedError
-
-    def flexswitch(self, gv_exitswitch, args_gv):
-        return self.branches[0].flexswitch(gv_exitswitch, args_gv)
-
-    def end(self):
+    def emit_code(self):
         # emit initialization code
         self.emit_preamble()
         
@@ -446,7 +391,7 @@ class MethodBuilder(GenBuilder):
         for gv_const, i in self.genconsts.iteritems():
             consts[i] = gv_const.getobj()
         # build the delegate
-        myfunc = self.meth.create_delegate(self.delegatetype, consts)
+        myfunc = self.meth_wrapper.create_delegate(self.delegatetype, consts)
         self.gv_entrypoint.holder.SetFunc(myfunc)
 
     def emit_preamble(self):
@@ -456,10 +401,10 @@ class MethodBuilder(GenBuilder):
         pass
 
 
-class GraphBuilder(MethodBuilder):
+class GraphGenerator(MethodGenerator):
     def __init__(self, rgenop, name, restype, args, delegatetype):
         graphinfo = GraphInfo()
-        MethodBuilder.__init__(self, rgenop, name, restype, args, delegatetype, graphinfo)
+        MethodGenerator.__init__(self, rgenop, name, restype, args, delegatetype, graphinfo)
 
     def setup_flexswitches(self):
         if self.graphinfo.has_flexswitches:
@@ -502,30 +447,28 @@ class GraphBuilder(MethodBuilder):
         self.il.Emit(OpCodes.Call, meth)
 
 
-
-
 class BranchBuilder(GenBuilder):
 
-    def __init__(self, methbuilder, label):
-        self.methbuilder = methbuilder
-        self.rgenop = methbuilder.rgenop
+    def __init__(self, meth, label):
+        self.meth = meth
+        self.rgenop = meth.rgenop
         self.label = label
         self.operations = []
         self.is_open = False
-        self.genconsts = methbuilder.genconsts
+        self.genconsts = meth.genconsts
 
     def start_writing(self):
         self.is_open = True
 
     def finish_and_return(self, sigtoken, gv_returnvar):
-        op = ops.Return(self.methbuilder, gv_returnvar)
+        op = ops.Return(self.meth, gv_returnvar)
         self.appendop(op)
         self.is_open = False
 
     def finish_and_goto(self, outputargs_gv, target):
         inputargs_gv = target.inputargs_gv
         assert len(inputargs_gv) == len(outputargs_gv)
-        op = ops.FollowLink(self.methbuilder, outputargs_gv,
+        op = ops.FollowLink(self.meth, outputargs_gv,
                             inputargs_gv, target.label)
         self.appendop(op)
         self.is_open = False
@@ -533,7 +476,7 @@ class BranchBuilder(GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         opcls = ops.getopclass1(opname)
-        op = opcls(self.methbuilder, gv_arg)
+        op = opcls(self.meth, gv_arg)
         self.appendop(op)
         gv_res = op.gv_res()
         return gv_res
@@ -541,28 +484,28 @@ class BranchBuilder(GenBuilder):
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         opcls = ops.getopclass2(opname)
-        op = opcls(self.methbuilder, gv_arg1, gv_arg2)
+        op = opcls(self.meth, gv_arg1, gv_arg2)
         self.appendop(op)
         gv_res = op.gv_res()
         return gv_res
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-        op = ops.Call(self.methbuilder, sigtoken, gv_fnptr, args_gv)
+        op = ops.Call(self.meth, sigtoken, gv_fnptr, args_gv)
         self.appendop(op)
         return op.gv_res()
 
     def genop_same_as(self, gv_x):
-        op = ops.SameAs(self.methbuilder, gv_x)
+        op = ops.SameAs(self.meth, gv_x)
         self.appendop(op)
         return op.gv_res()
 
     def genop_oogetfield(self, fieldtoken, gv_obj):
-        op = ops.GetField(self.methbuilder, gv_obj, fieldtoken)
+        op = ops.GetField(self.meth, gv_obj, fieldtoken)
         self.appendop(op)
         return op.gv_res()
 
     def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
-        op = ops.SetField(self.methbuilder, gv_obj, gv_value, fieldtoken)
+        op = ops.SetField(self.meth, gv_obj, gv_value, fieldtoken)
         self.appendop(op)
 
     def enter_next_block(self, args_gv):
@@ -570,28 +513,28 @@ class BranchBuilder(GenBuilder):
         for i in range(len(args_gv)):
             gv = args_gv[i]
             if isinstance(gv, GenConst) or gv in seen:
-                op = ops.SameAs(self.methbuilder, gv)
+                op = ops.SameAs(self.meth, gv)
                 self.appendop(op)
                 args_gv[i] = op.gv_res()
             else:
                 seen[gv] = None
-        label = self.methbuilder.il.DefineLabel()
-        self.appendop(ops.MarkLabel(self.methbuilder, label))
+        label = self.meth.il.DefineLabel()
+        self.appendop(ops.MarkLabel(self.meth, label))
         return self.create_label(label, args_gv)
 
     def create_label(self, label, args_gv):
-        blocks = self.methbuilder.graphinfo.blocks
+        blocks = self.meth.graphinfo.blocks
         blockid = len(blocks)
         result = Label(blockid, label, args_gv)
-        blocks.append((self.methbuilder, result))
+        blocks.append((self.meth, result))
         return result
 
     def _jump_if(self, gv_condition, opcode):
-        label = self.methbuilder.il.DefineLabel()
-        op = ops.Branch(self.methbuilder, gv_condition, opcode, label)
+        label = self.meth.il.DefineLabel()
+        op = ops.Branch(self.meth, gv_condition, opcode, label)
         self.appendop(op)
-        branch = BranchBuilder(self.methbuilder, label)
-        self.methbuilder.appendbranch(branch)
+        branch = BranchBuilder(self.meth, label)
+        self.meth.appendbranch(branch)
         return branch
 
     def jump_if_false(self, gv_condition, args_for_jump_gv):
@@ -601,18 +544,18 @@ class BranchBuilder(GenBuilder):
         return self._jump_if(gv_condition, OpCodes.Brtrue)
 
     def flexswitch(self, gv_exitswitch, args_gv):
-        # XXX: this code is valid only for Methbuilder
-        self.methbuilder.setup_flexswitches()
+        # XXX: this code is valid only for Meth
+        self.meth.setup_flexswitches()
         flexswitch = IntFlexSwitch()
-        flexswitch.xxxbuilder = BranchBuilder(self.methbuilder, self.methbuilder.il.DefineLabel())
+        flexswitch.xxxbuilder = BranchBuilder(self.meth, self.meth.il.DefineLabel())
         gv_flexswitch = flexswitch.gv_flexswitch
-        lbl = self.methbuilder.il.DefineLabel()
+        lbl = self.meth.il.DefineLabel()
         default_label = self.create_label(lbl, args_gv)
         flexswitch.llflexswitch.set_default_blockid(default_label.blockid)
-        op = ops.DoFlexSwitch(self.methbuilder, gv_flexswitch, gv_exitswitch, args_gv)
+        op = ops.DoFlexSwitch(self.meth, gv_flexswitch, gv_exitswitch, args_gv)
         self.appendop(op)
-        default_builder = BranchBuilder(self.methbuilder, default_label.label)
-        self.methbuilder.appendbranch(default_builder)
+        default_builder = BranchBuilder(self.meth, default_label.label)
+        self.meth.appendbranch(default_builder)
         self.is_open = False
         return flexswitch, default_builder
 
@@ -620,11 +563,11 @@ class BranchBuilder(GenBuilder):
         self.operations.append(op)
 
     def end(self):
-        self.methbuilder.end()
+        self.meth.emit_code()
 
     def replayops(self):
         assert not self.is_open
-        il = self.methbuilder.il
+        il = self.meth.il
         il.MarkLabel(self.label)
         for op in self.operations:
             op.emit()
