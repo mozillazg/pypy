@@ -233,9 +233,9 @@ class FlexSwitchConst(BaseConst):
 
 
 class Label(GenLabel):
-    def __init__(self, blockid, label, inputargs_gv):
+    def __init__(self, blockid, il_label, inputargs_gv):
         self.blockid = blockid
-        self.label = label
+        self.il_label = il_label
         self.inputargs_gv = inputargs_gv
 
 
@@ -358,16 +358,26 @@ class MethodGenerator:
         self.delegatetype = delegatetype
         self.gv_entrypoint = FunctionConst(delegatetype)
         self.genconsts = {}
-        self.branches = [BranchBuilder(self, self.il.DefineLabel())]
+        self.branches = []
+        self.newbranch()
         if restype is not None:
             self.retvar = self.il.DeclareLocal(restype)
         else:
             self.retvar = None
-        self.retlabel = self.il.DefineLabel()
+        self.il_retlabel = self.il.DefineLabel()
         self.graphinfo = graphinfo
 
-    def appendbranch(self, branchbuilder):
-        self.branches.append(branchbuilder)
+    def newbranch(self):
+        branch = BranchBuilder(self, self.il.DefineLabel())
+        self.branches.append(branch)
+        return branch
+
+    def newblock(self, args_gv):
+        blocks = self.graphinfo.blocks
+        blockid = len(blocks)
+        result = Label(blockid, self.il.DefineLabel(), args_gv)
+        blocks.append((self, result))
+        return result
 
     def emit_code(self):
         # emit initialization code
@@ -381,7 +391,7 @@ class MethodGenerator:
         self.emit_before_returnblock()
 
         # render the return block for last, else the verifier could complain        
-        self.il.MarkLabel(self.retlabel)
+        self.il.MarkLabel(self.il_retlabel)
         if self.retvar:
             self.il.Emit(OpCodes.Ldloc, self.retvar)
         self.il.Emit(OpCodes.Ret)
@@ -410,7 +420,7 @@ class GraphGenerator(MethodGenerator):
         if self.graphinfo.has_flexswitches:
             return
         self.graphinfo.has_flexswitches = True
-        self.dispatch_jump_label = self.il.DefineLabel()
+        self.il_dispatch_jump_label = self.il.DefineLabel()
         self.inputargs_clitype = class2type(cInputArgs)
         self.inputargs_var = self.il.DeclareLocal(self.inputargs_clitype)
         self.jumpto_var = self.il.DeclareLocal(class2type(cInt32))
@@ -428,17 +438,17 @@ class GraphGenerator(MethodGenerator):
         if not self.graphinfo.has_flexswitches:
             return
         # make sure we don't enter dispatch_jump by mistake
-        self.il.Emit(OpCodes.Br, self.retlabel)
-        self.il.MarkLabel(self.dispatch_jump_label)
+        self.il.Emit(OpCodes.Br, self.il_retlabel)
+        self.il.MarkLabel(self.il_dispatch_jump_label)
 
-        labels = new_array(System.Reflection.Emit.Label,
+        il_labels = new_array(System.Reflection.Emit.Label,
                            len(self.graphinfo.blocks))
-        for blockid, (builder, genlabel) in self.graphinfo.blocks:
+        for blockid, (builder, label) in self.graphinfo.blocks:
             assert builder is self
-            labels[blockid] = genlabel.label
+            il_labels[blockid] = label.il_label
 
         self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        self.il.Emit(OpCodes.Switch, labels)
+        self.il.Emit(OpCodes.Switch, il_labels)
         # XXX: handle blockids that are inside flexswitch cases
         # default: Utils.throwInvalidBlockId(jumpto)
         clitype = class2type(cUtils)
@@ -449,10 +459,10 @@ class GraphGenerator(MethodGenerator):
 
 class BranchBuilder(GenBuilder):
 
-    def __init__(self, meth, label):
+    def __init__(self, meth, il_label):
         self.meth = meth
         self.rgenop = meth.rgenop
-        self.label = label
+        self.il_label = il_label
         self.operations = []
         self.is_open = False
         self.genconsts = meth.genconsts
@@ -465,11 +475,11 @@ class BranchBuilder(GenBuilder):
         self.appendop(op)
         self.is_open = False
 
-    def finish_and_goto(self, outputargs_gv, target):
-        inputargs_gv = target.inputargs_gv
+    def finish_and_goto(self, outputargs_gv, label):
+        inputargs_gv = label.inputargs_gv
         assert len(inputargs_gv) == len(outputargs_gv)
         op = ops.FollowLink(self.meth, outputargs_gv,
-                            inputargs_gv, target.label)
+                            inputargs_gv, label.il_label)
         self.appendop(op)
         self.is_open = False
 
@@ -518,23 +528,14 @@ class BranchBuilder(GenBuilder):
                 args_gv[i] = op.gv_res()
             else:
                 seen[gv] = None
-        label = self.meth.il.DefineLabel()
-        self.appendop(ops.MarkLabel(self.meth, label))
-        return self.create_label(label, args_gv)
-
-    def create_label(self, label, args_gv):
-        blocks = self.meth.graphinfo.blocks
-        blockid = len(blocks)
-        result = Label(blockid, label, args_gv)
-        blocks.append((self.meth, result))
-        return result
+        label = self.meth.newblock(args_gv)
+        self.appendop(ops.MarkLabel(self.meth, label.il_label))
+        return label
 
     def _jump_if(self, gv_condition, opcode):
-        label = self.meth.il.DefineLabel()
-        op = ops.Branch(self.meth, gv_condition, opcode, label)
+        branch = self.meth.newbranch()
+        op = ops.Branch(self.meth, gv_condition, opcode, branch.il_label)
         self.appendop(op)
-        branch = BranchBuilder(self.meth, label)
-        self.meth.appendbranch(branch)
         return branch
 
     def jump_if_false(self, gv_condition, args_for_jump_gv):
@@ -544,20 +545,19 @@ class BranchBuilder(GenBuilder):
         return self._jump_if(gv_condition, OpCodes.Brtrue)
 
     def flexswitch(self, gv_exitswitch, args_gv):
-        # XXX: this code is valid only for Meth
+        # XXX: this code is valid only for GraphGenerator
         self.meth.setup_flexswitches()
         flexswitch = IntFlexSwitch()
-        flexswitch.xxxbuilder = BranchBuilder(self.meth, self.meth.il.DefineLabel())
+        flexswitch.xxxbuilder = self.meth.newbranch()
         gv_flexswitch = flexswitch.gv_flexswitch
-        lbl = self.meth.il.DefineLabel()
-        default_label = self.create_label(lbl, args_gv)
-        flexswitch.llflexswitch.set_default_blockid(default_label.blockid)
-        op = ops.DoFlexSwitch(self.meth, gv_flexswitch, gv_exitswitch, args_gv)
+        default_branch = self.meth.newbranch()
+        label = default_branch.label
+        flexswitch.llflexswitch.set_default_blockid(label.blockid)
+        op = ops.DoFlexSwitch(self.meth, gv_flexswitch,
+                              gv_exitswitch, args_gv)
         self.appendop(op)
-        default_builder = BranchBuilder(self.meth, default_label.label)
-        self.meth.appendbranch(default_builder)
         self.is_open = False
-        return flexswitch, default_builder
+        return flexswitch, default_branch
 
     def appendop(self, op):
         self.operations.append(op)
@@ -568,7 +568,7 @@ class BranchBuilder(GenBuilder):
     def replayops(self):
         assert not self.is_open
         il = self.meth.il
-        il.MarkLabel(self.label)
+        il.MarkLabel(self.il_label)
         for op in self.operations:
             op.emit()
 
