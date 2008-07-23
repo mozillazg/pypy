@@ -7,7 +7,7 @@ AutoSaveAssembly = CLR.pypy.runtime.AutoSaveAssembly
 MethodAttributes = System.Reflection.MethodAttributes
 TypeAttributes = System.Reflection.TypeAttributes
 
-class AbstractMethodBuilder:
+class AbstractMethodWrapper:
     
     def get_il_generator(self):
         raise NotImplementedError
@@ -15,7 +15,7 @@ class AbstractMethodBuilder:
     def create_delegate(self, delegatetype, consts):
         raise NotImplementedError
 
-class DynamicMethodBuilder(AbstractMethodBuilder):
+class DynamicMethodWrapper(AbstractMethodWrapper):
     
     def __init__(self, name, res, args):
         self.dynmeth = Utils.CreateDynamicMethod(name, res, args)
@@ -52,7 +52,7 @@ class AssemblyData:
 assemblyData = AssemblyData()
 
 
-class AssemblyMethodBuilder(AbstractMethodBuilder):
+class AssemblyMethodWrapper(AbstractMethodWrapper):
     
     def __init__(self, name, res, args):
         module = assemblyData.module
@@ -71,10 +71,10 @@ class AssemblyMethodBuilder(AbstractMethodBuilder):
                                               consts,
                                               methinfo)
 
-def get_methodbuilder(name, res, args):
+def get_method_wrapper(name, res, args):
     if assemblyData.is_enabled():
         assemblyData.create()
-        return AssemblyMethodBuilder(name, res, args)
+        return AssemblyMethodWrapper(name, res, args)
     else:
-        return DynamicMethodBuilder(name, res, args)
+        return DynamicMethodWrapper(name, res, args)
 
