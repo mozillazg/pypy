@@ -74,23 +74,23 @@ class SameAs(UnaryOp):
 
 class MarkLabel(Operation):
 
-    def __init__(self, meth, label):
+    def __init__(self, meth, il_label):
         self.meth = meth
-        self.label = label
+        self.il_label = il_label
 
     def restype(self):
         return None
 
     def emit(self):
-        self.meth.il.MarkLabel(self.label)
+        self.meth.il.MarkLabel(self.il_label)
         
 class FollowLink(Operation):
     
-    def __init__(self, meth, outputargs_gv, inputargs_gv, label):
+    def __init__(self, meth, outputargs_gv, inputargs_gv, il_label):
         self.meth = meth
         self.outputargs_gv = outputargs_gv
         self.inputargs_gv = inputargs_gv
-        self.label = label
+        self.il_label = il_label
 
     def restype(self):
         return None
@@ -99,16 +99,15 @@ class FollowLink(Operation):
         for i in range(len(self.outputargs_gv)):
             self.outputargs_gv[i].load(self.meth)
             self.inputargs_gv[i].store(self.meth)
-        self.meth.il.Emit(OpCodes.Br, self.label)
-
+        self.meth.il.Emit(OpCodes.Br, self.il_label)
 
 class Branch(Operation):
     
-    def __init__(self, meth, gv_cond, opcode, label):
+    def __init__(self, meth, gv_cond, opcode, il_label):
         self.meth = meth
         self.gv_cond = gv_cond
         self.opcode = opcode
-        self.label = label
+        self.il_label = il_label
 
     def restype(self):
         return None
@@ -116,7 +115,7 @@ class Branch(Operation):
     def emit(self):
         if self.gv_cond is not None:
             self.gv_cond.load(self.meth)
-        self.meth.il.Emit(self.opcode, self.label)
+        self.meth.il.Emit(self.opcode, self.il_label)
 
 class Return(Operation):
 
@@ -129,11 +128,11 @@ class Return(Operation):
 
     def emit(self):
         retvar = self.meth.retvar
-        retlabel = self.meth.retlabel
+        il_retlabel = self.meth.il_retlabel
         if self.gv_x is not None:
             self.gv_x.load(self.meth)
             self.meth.il.Emit(OpCodes.Stloc, retvar)
-        self.meth.il.Emit(OpCodes.Br, retlabel)
+        self.meth.il.Emit(OpCodes.Br, il_retlabel)
 
 class Call(Operation):
 
@@ -223,7 +222,7 @@ class DoFlexSwitch(Operation):
         il.Emit(OpCodes.Ldloc, mbuilder.inputargs_var)
         il.Emit(OpCodes.Callvirt, meth_execute)
         il.Emit(OpCodes.Stloc, mbuilder.jumpto_var)
-        il.Emit(OpCodes.Br, mbuilder.dispatch_jump_label)
+        il.Emit(OpCodes.Br, mbuilder.il_dispatch_jump_label)
 
 
 class InputArgsManager:
