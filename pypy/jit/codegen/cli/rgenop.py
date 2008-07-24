@@ -370,6 +370,7 @@ class MethodGenerator:
         self.graphinfo = graphinfo
 
         self.gv_entrypoint = FunctionConst(delegatetype)
+        self.gv_inputargs = None
         self.genconsts = {}
         self.branches = []
         self.newbranch()
@@ -452,7 +453,6 @@ class GraphGenerator(MethodGenerator):
             return
         self.graphinfo.has_flexswitches = True
         self.il_dispatch_jump_label = self.il.DefineLabel()
-        self.gv_inputargs = self.newlocalvar(class2type(cInputArgs))
         self.jumpto_var = self.il.DeclareLocal(class2type(cInt32))
 
     def get_op_Return(self, gv_returnvar):
@@ -468,8 +468,10 @@ class GraphGenerator(MethodGenerator):
 
     def emit_preamble(self):
         if not self.graphinfo.has_flexswitches:
-            return        
-        # InputArgs inputargs_var = new InputArgs()
+            return
+        
+        # InputArgs inputargs = new InputArgs()
+        self.gv_inputargs = self.newlocalvar(class2type(cInputArgs))
         clitype = self.gv_inputargs.getCliType()
         ctor = clitype.GetConstructor(new_array(System.Type, 0))
         self.il.Emit(OpCodes.Newobj, ctor)
@@ -522,8 +524,6 @@ class FlexSwitchCaseGenerator(MethodGenerator):
             gv_local = self.newlocalvar(gv_arg.getCliType())
             self.linkargs_gv_map[gv_arg] = gv_local
 
-        self.gv_inputargs = self.inputargs_gv[1] # InputArgs is always the 2nd argument
-
     def map_genvar(self, gv_var):
         return self.linkargs_gv_map.get(gv_var, gv_var)
 
@@ -538,6 +538,14 @@ class FlexSwitchCaseGenerator(MethodGenerator):
 
     def emit_preamble(self):
         from pypy.jit.codegen.cli.operation import InputArgsManager
+
+        # InputArgs inputargs = (InputArgs)obj // obj is the 2nd arg
+        clitype = class2type(cInputArgs)
+        self.gv_inputargs = self.newlocalvar(clitype)
+        self.inputargs_gv[1].load(self)
+        self.il.Emit(OpCodes.Castclass, clitype)
+        self.gv_inputargs.store(self)
+
         linkargs_out_gv = []
         for gv_linkarg in self.linkargs_gv:
             gv_var = self.linkargs_gv_map[gv_linkarg]
@@ -677,7 +685,7 @@ class IntFlexSwitch(CodeGenSwitch):
         graph = self.graph
         name = graph.name + '_case'
         restype = class2type(cInt32)
-        arglist = [class2type(cInt32), class2type(cInputArgs)]
+        arglist = [class2type(cInt32), class2type(cObject)]
         delegatetype = class2type(cFlexSwitchCase)
         graphinfo = graph.graphinfo
         meth = FlexSwitchCaseGenerator(graph.rgenop, name, restype,
