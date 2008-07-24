@@ -26,6 +26,7 @@ cString = classof(System.String)
 cChar = classof(System.Char)
 cInputArgs = classof(InputArgs)
 cUtils = classof(CLR.pypy.runtime.Utils)
+cFlexSwitchCase = classof(CLR.pypy.runtime.FlexSwitchCase)
 
 class SigToken:
     def __init__(self, args, res, funcclass):
@@ -233,11 +234,20 @@ class FlexSwitchConst(BaseConst):
 
 
 class Label(GenLabel):
-    def __init__(self, blockid, il_label, inputargs_gv):
+    def __init__(self, blockid, il, inputargs_gv):
         self.blockid = blockid
-        self.il_label = il_label
+        self.il_label = il.DefineLabel()
+        self.il_trampoline_label = il.DefineLabel()
         self.inputargs_gv = inputargs_gv
 
+    def emit_trampoline(self, meth):
+        from pypy.jit.codegen.cli.operation import InputArgsManager
+        from pypy.jit.codegen.cli.operation import mark
+        il = meth.il
+        manager = InputArgsManager(meth, self.inputargs_gv)
+        il.MarkLabel(self.il_trampoline_label)
+        manager.copy_to_args()
+        il.Emit(OpCodes.Br, self.il_label)
 
 class RCliGenOp(AbstractRGenOp):
 
@@ -328,14 +338,11 @@ class RCliGenOp(AbstractRGenOp):
         pass
 
     def newgraph(self, sigtoken, name):
-        argsclass = sigtoken.args
-        args = new_array(System.Type, len(argsclass)+1)
-        args[0] = System.Type.GetType("System.Object[]")
-        for i in range(len(argsclass)):
-            args[i+1] = class2type(argsclass[i])
+        arglist = [class2type(cls) for cls in sigtoken.args]
         restype = class2type(sigtoken.res)
         delegatetype = class2type(sigtoken.funcclass)
-        graph = GraphGenerator(self, name, restype, args, delegatetype)
+        graph = GraphGenerator(self, name, restype, arglist,
+                               delegatetype)
         builder = graph.branches[0]
         return builder, graph.gv_entrypoint, graph.inputargs_gv[:]
 
@@ -344,11 +351,16 @@ class GraphInfo:
     def __init__(self):
         self.has_flexswitches = False
         self.blocks = [] # blockid -> (meth, label)
+        self.flexswitch_meths = []
+        self.main_retlabel = None
 
 class MethodGenerator:
     
-    def __init__(self, rgenop, name, restype, args, delegatetype, graphinfo):
+    def __init__(self, rgenop, name, restype, arglist,
+                 delegatetype, graphinfo):
         self.rgenop = rgenop
+        self.name = name
+        args = self._get_args_array(arglist)
         self.meth_wrapper = get_method_wrapper(name, restype, args)
         self.il = self.meth_wrapper.get_il_generator()
         self.inputargs_gv = []
@@ -356,16 +368,25 @@ class MethodGenerator:
         for i in range(1, len(args)):
             self.inputargs_gv.append(GenArgVar(i, args[i]))
         self.delegatetype = delegatetype
+        self.graphinfo = graphinfo
+
         self.gv_entrypoint = FunctionConst(delegatetype)
         self.genconsts = {}
         self.branches = []
         self.newbranch()
-        if restype is not None:
-            self.retvar = self.il.DeclareLocal(restype)
+        if restype is None:
+            self.gv_retvar = None
+            self.retlabel = self.newblock([])
         else:
-            self.retvar = None
-        self.il_retlabel = self.il.DefineLabel()
-        self.graphinfo = graphinfo
+            self.gv_retvar = self.newlocalvar(restype)
+            self.retlabel = self.newblock([self.gv_retvar])
+
+    def _get_args_array(self, arglist):
+        array = new_array(System.Type, len(arglist)+1)
+        array[0] = System.Type.GetType("System.Object[]")
+        for i in range(len(arglist)):
+            array[i+1] = arglist[i]
+        return array
 
     def newbranch(self):
         branch = BranchBuilder(self, self.il.DefineLabel())
@@ -375,9 +396,18 @@ class MethodGenerator:
     def newblock(self, args_gv):
         blocks = self.graphinfo.blocks
         blockid = len(blocks)
-        result = Label(blockid, self.il.DefineLabel(), args_gv)
+        result = Label(blockid, self.il, args_gv)
         blocks.append((self, result))
         return result
+
+    def newlocalvar(self, clitype):
+        return GenLocalVar(self.il.DeclareLocal(clitype))
+
+    def map_genvar(self, gv_var):
+        return gv_var
+
+    def get_op_Return(self, gv_returnvar):
+        raise NotImplementedError
 
     def emit_code(self):
         # emit initialization code
@@ -390,10 +420,11 @@ class MethodGenerator:
         # emit dispatch_jump, if there are flexswitches
         self.emit_before_returnblock()
 
-        # render the return block for last, else the verifier could complain        
-        self.il.MarkLabel(self.il_retlabel)
-        if self.retvar:
-            self.il.Emit(OpCodes.Ldloc, self.retvar)
+        # emit the return block at last, else the verifier complains
+        self.il.MarkLabel(self.retlabel.il_label)
+        if self.gv_retvar:
+            self.gv_retvar.load(self)
+
         self.il.Emit(OpCodes.Ret)
 
         # initialize the array of genconsts
@@ -415,37 +446,50 @@ class GraphGenerator(MethodGenerator):
     def __init__(self, rgenop, name, restype, args, delegatetype):
         graphinfo = GraphInfo()
         MethodGenerator.__init__(self, rgenop, name, restype, args, delegatetype, graphinfo)
+        graphinfo.graph_retlabel = self.retlabel
 
     def setup_flexswitches(self):
         if self.graphinfo.has_flexswitches:
             return
         self.graphinfo.has_flexswitches = True
         self.il_dispatch_jump_label = self.il.DefineLabel()
-        self.inputargs_clitype = class2type(cInputArgs)
-        self.inputargs_var = self.il.DeclareLocal(self.inputargs_clitype)
+        self.gv_inputargs = self.newlocalvar(class2type(cInputArgs))
         self.jumpto_var = self.il.DeclareLocal(class2type(cInt32))
+
+    def get_op_Return(self, gv_returnvar):
+        return ops.Return(self, gv_returnvar)
+
+    def emit_code(self):
+        self.emit_flexswitches()
+        MethodGenerator.emit_code(self)
+
+    def emit_flexswitches(self):
+        for meth in self.graphinfo.flexswitch_meths:
+            meth.emit_code()
 
     def emit_preamble(self):
         if not self.graphinfo.has_flexswitches:
             return        
         # InputArgs inputargs_var = new InputArgs()
-        clitype = class2type(cInputArgs)
+        clitype = self.gv_inputargs.getCliType()
         ctor = clitype.GetConstructor(new_array(System.Type, 0))
         self.il.Emit(OpCodes.Newobj, ctor)
-        self.il.Emit(OpCodes.Stloc, self.inputargs_var)
+        self.gv_inputargs.store(self)
 
     def emit_before_returnblock(self):
         if not self.graphinfo.has_flexswitches:
             return
         # make sure we don't enter dispatch_jump by mistake
-        self.il.Emit(OpCodes.Br, self.il_retlabel)
+        self.il.Emit(OpCodes.Br, self.retlabel.il_label)
         self.il.MarkLabel(self.il_dispatch_jump_label)
 
-        il_labels = new_array(System.Reflection.Emit.Label,
-                           len(self.graphinfo.blocks))
-        for blockid, (builder, label) in self.graphinfo.blocks:
-            assert builder is self
-            il_labels[blockid] = label.il_label
+        blocks = self.graphinfo.blocks
+        il_labels = new_array(System.Reflection.Emit.Label, len(blocks))
+        for blockid in range(len(blocks)):
+            builder, label = blocks[blockid]
+            if builder is not self:
+                continue # XXX FIXME
+            il_labels[blockid] = label.il_trampoline_label
 
         self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
         self.il.Emit(OpCodes.Switch, il_labels)
@@ -455,6 +499,51 @@ class GraphGenerator(MethodGenerator):
         meth = clitype.GetMethod("throwInvalidBlockId")
         self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
         self.il.Emit(OpCodes.Call, meth)
+
+        # emit all the trampolines to the blocks
+        for builder, label in blocks:
+            if builder is not self:
+                continue #XXX?
+            label.emit_trampoline(self)
+
+class FlexSwitchCaseGenerator(MethodGenerator):
+    flexswitch = None
+    value = -1
+    linkargs_gv = None
+    linkargs_gv_map = None
+
+    def set_parent_flexswitch(self, flexswitch, value):
+        self.parent_flexswitch = flexswitch
+        self.value = value
+
+    def set_linkargs_gv(self, linkargs_gv):
+        self.linkargs_gv = linkargs_gv
+        self.linkargs_gv_map = {}
+        for gv_arg in linkargs_gv:
+            gv_local = self.newlocalvar(gv_arg.getCliType())
+            self.linkargs_gv_map[gv_arg] = gv_local
+
+        self.gv_inputargs = self.inputargs_gv[1] # InputArgs is always the 2nd argument
+
+    def map_genvar(self, gv_var):
+        return self.linkargs_gv_map.get(gv_var, gv_var)
+
+    def get_op_Return(self, gv_returnvar):
+        return ops.ReturnFromFlexSwitch(self, gv_returnvar)
+
+    def emit_code(self):
+        MethodGenerator.emit_code(self)
+        func = self.gv_entrypoint.holder.GetFunc()
+        self.parent_flexswitch.llflexswitch.add_case(self.value, func)
+
+    def emit_preamble(self):
+        from pypy.jit.codegen.cli.operation import InputArgsManager
+        linkargs_out_gv = []
+        for gv_linkarg in self.linkargs_gv:
+            gv_var = self.linkargs_gv_map[gv_linkarg]
+            linkargs_out_gv.append(gv_var)
+        manager = InputArgsManager(self, linkargs_out_gv)
+        manager.copy_to_args()
 
 
 class BranchBuilder(GenBuilder):
@@ -471,7 +560,7 @@ class BranchBuilder(GenBuilder):
         self.is_open = True
 
     def finish_and_return(self, sigtoken, gv_returnvar):
-        op = ops.Return(self.meth, gv_returnvar)
+        op = self.meth.get_op_Return(gv_returnvar)
         self.appendop(op)
         self.is_open = False
 
@@ -493,6 +582,10 @@ class BranchBuilder(GenBuilder):
     
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
+        # XXX: also other ops
+        gv_arg1 = self.meth.map_genvar(gv_arg1)
+        gv_arg2 = self.meth.map_genvar(gv_arg2)
+        
         opcls = ops.getopclass2(opname)
         op = opcls(self.meth, gv_arg1, gv_arg2)
         self.appendop(op)
@@ -547,11 +640,10 @@ class BranchBuilder(GenBuilder):
     def flexswitch(self, gv_exitswitch, args_gv):
         # XXX: this code is valid only for GraphGenerator
         self.meth.setup_flexswitches()
-        flexswitch = IntFlexSwitch()
-        flexswitch.xxxbuilder = self.meth.newbranch()
+        flexswitch = IntFlexSwitch(self.meth, args_gv)
         gv_flexswitch = flexswitch.gv_flexswitch
         default_branch = self.meth.newbranch()
-        label = default_branch.label
+        label = default_branch.enter_next_block(args_gv)
         flexswitch.llflexswitch.set_default_blockid(label.blockid)
         op = ops.DoFlexSwitch(self.meth, gv_flexswitch,
                               gv_exitswitch, args_gv)
@@ -575,14 +667,26 @@ class BranchBuilder(GenBuilder):
 
 class IntFlexSwitch(CodeGenSwitch):
 
-    def __init__(self):
+    def __init__(self, graph, linkargs_gv):
+        self.graph = graph
+        self.linkargs_gv = linkargs_gv
         self.llflexswitch = LowLevelFlexSwitch()
         self.gv_flexswitch = FlexSwitchConst(self.llflexswitch)
 
     def add_case(self, gv_case):
-        return self.xxxbuilder
-        #import pdb;pdb.set_trace()
-
+        graph = self.graph
+        name = graph.name + '_case'
+        restype = class2type(cInt32)
+        arglist = [class2type(cInt32), class2type(cInputArgs)]
+        delegatetype = class2type(cFlexSwitchCase)
+        graphinfo = graph.graphinfo
+        meth = FlexSwitchCaseGenerator(graph.rgenop, name, restype,
+                                       arglist, delegatetype, graphinfo)
+        graphinfo.flexswitch_meths.append(meth)
+        value = gv_case.revealconst(ootype.Signed)
+        meth.set_parent_flexswitch(self, value)
+        meth.set_linkargs_gv(self.linkargs_gv)
+        return meth.branches[0]
 
 
 global_rgenop = RCliGenOp()

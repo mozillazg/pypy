@@ -32,6 +32,7 @@ class DynamicMethodWrapper(AbstractMethodWrapper):
 class AssemblyData:
     assembly = None
     name = None
+    methcount = 0
 
     def is_enabled(self):
         if self.name is None:
@@ -56,6 +57,8 @@ class AssemblyMethodWrapper(AbstractMethodWrapper):
     
     def __init__(self, name, res, args):
         module = assemblyData.module
+        name = '%s_%d' % (name, assemblyData.methcount)
+        assemblyData.methcount += 1
         self.typeBuilder = AutoSaveAssembly.DefineType(module, name)
         self.meth = AutoSaveAssembly.DefineMethod(self.typeBuilder,
                                                   "invoke", res, args)
