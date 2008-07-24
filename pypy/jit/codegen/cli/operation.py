@@ -13,12 +13,10 @@ class Operation:
         return self.gv_x.getCliType()
 
     def gv_res(self):
-        from pypy.jit.codegen.cli.rgenop import GenLocalVar
         if self._gv_res is None:
             restype = self.restype()
             if restype is not None:
-                loc = self.meth.il.DeclareLocal(restype)
-                self._gv_res = GenLocalVar(loc)
+                self._gv_res = self.meth.newlocalvar(restype)
         return self._gv_res
 
     def emit(self):
@@ -127,12 +125,29 @@ class Return(Operation):
         return None
 
     def emit(self):
-        retvar = self.meth.retvar
-        il_retlabel = self.meth.il_retlabel
+        gv_retvar = self.meth.gv_retvar
+        retlabel = self.meth.retlabel
         if self.gv_x is not None:
             self.gv_x.load(self.meth)
-            self.meth.il.Emit(OpCodes.Stloc, retvar)
-        self.meth.il.Emit(OpCodes.Br, il_retlabel)
+            gv_retvar.store(self.meth)
+        self.meth.il.Emit(OpCodes.Br, retlabel.il_label)
+
+class ReturnFromFlexSwitch(Operation):
+
+    def __init__(self, meth, gv_x):
+        self.meth = meth
+        self.gv_x = gv_x
+
+    def restype(self):
+        return None
+
+    def emit(self):
+        il = self.meth.il
+        manager = InputArgsManager(self.meth, [self.gv_x])
+        manager.copy_from_args()
+        blockid = self.meth.graphinfo.graph_retlabel.blockid
+        il.Emit(OpCodes.Ldc_I4, blockid)
+        il.Emit(OpCodes.Ret)
 
 class Call(Operation):
 
@@ -193,6 +208,10 @@ class SetField(Operation):
         self.gv_value.load(self.meth)
         self.meth.il.Emit(OpCodes.Stfld, self.fieldinfo)
 
+def mark(il, s):
+    il.Emit(OpCodes.Ldstr, s)
+    il.Emit(OpCodes.Pop)
+
 class DoFlexSwitch(Operation):
 
     def __init__(self, meth, gv_flexswitch, gv_exitswitch, args_gv):
@@ -205,40 +224,39 @@ class DoFlexSwitch(Operation):
         return None
 
     def emit(self):
-        mbuilder = self.meth
-        il = mbuilder.il
+        graph = self.meth
+        il = graph.il
         # get MethodInfo for LowLevelFlexSwitch.execute
         clitype = self.gv_flexswitch.flexswitch.GetType()
         meth_execute = clitype.GetMethod('execute')
 
         # setup the correct inputargs
-        manager = InputArgsManager(mbuilder, self.args_gv)
-        manager.copy_from_args(mbuilder)
+        manager = InputArgsManager(graph, self.args_gv)
+        manager.copy_from_args()
 
         # jumpto = flexswitch.execute(exitswitch, inputargs);
         # goto dispatch_jump;
-        self.gv_flexswitch.load(mbuilder)
-        self.gv_exitswitch.load(mbuilder)
-        il.Emit(OpCodes.Ldloc, mbuilder.inputargs_var)
+        self.gv_flexswitch.load(graph)
+        self.gv_exitswitch.load(graph)
+        graph.gv_inputargs.load(graph)
         il.Emit(OpCodes.Callvirt, meth_execute)
-        il.Emit(OpCodes.Stloc, mbuilder.jumpto_var)
-        il.Emit(OpCodes.Br, mbuilder.il_dispatch_jump_label)
+        il.Emit(OpCodes.Stloc, graph.jumpto_var)
+        il.Emit(OpCodes.Br, graph.il_dispatch_jump_label)
 
 
 class InputArgsManager:
 
     def __init__(self, meth, args_gv):
-        self.inputargs_var = meth.inputargs_var
-        self.inputargs_clitype = meth.inputargs_clitype
+        self.meth = meth
         self.args_gv = args_gv
 
     def basename_from_type(self, clitype):
         return clitype.get_Name()
 
-    def copy_from_args(self, meth):
-        il = meth.meth.il
-        inputargs_var = self.inputargs_var
-        inputargs_clitype = self.inputargs_clitype
+    def _get_fields(self):
+        fields = []
+        gv_inputargs = self.meth.gv_inputargs
+        inputargs_clitype = gv_inputargs.getCliType()
         counters = {}
         for gv_arg in self.args_gv:
             clitype = gv_arg.getCliType()
@@ -247,10 +265,32 @@ class InputArgsManager:
             fieldname = '%s_%d' % (basename, count)
             counters[clitype] = count+1
             field = inputargs_clitype.GetField(fieldname)
+            fields.append(field)
+        return fields
 
-            il.Emit(OpCodes.Ldloc, inputargs_var)
-            gv_arg.load(builder)
+    def copy_from_args(self):
+        il = self.meth.il
+        gv_inputargs = self.meth.gv_inputargs
+        fields = self._get_fields()
+        assert len(self.args_gv) == len(fields)
+        for i in range(len(self.args_gv)):
+            gv_arg = self.args_gv[i]
+            field = fields[i]
+            gv_inputargs.load(self.meth)
+            gv_arg.load(self.meth)
             il.Emit(OpCodes.Stfld, field)
+
+    def copy_to_args(self):
+        il = self.meth.il
+        gv_inputargs = self.meth.gv_inputargs
+        fields = self._get_fields()
+        assert len(self.args_gv) == len(fields)
+        for i in range(len(self.args_gv)):
+            gv_arg = self.args_gv[i]
+            field = fields[i]
+            gv_inputargs.load(self.meth)
+            il.Emit(OpCodes.Ldfld, field)
+            gv_arg.store(self.meth)
 
 class WriteLine(Operation):
 
