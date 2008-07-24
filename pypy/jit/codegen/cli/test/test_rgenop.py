@@ -33,9 +33,6 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
     def test_float_loop_direct(self):
         py.test.skip('fixme')
 
-    def test_defaultonly_switch(self):
-        py.test.skip('no promotion/flexswitch for now please :-)')
-
     def test_read_frame_var_direct(self):
         py.test.skip('fixme: add support for frames')
 
