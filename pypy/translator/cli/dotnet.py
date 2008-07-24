@@ -648,6 +648,27 @@ class Entry(ExtRegistryEntry):
         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result.lowleveltype)
 
 
+def cliupcast(obj, TYPE):
+    return obj
+
+class Entry(ExtRegistryEntry):
+    _about_ = cliupcast
+
+    def compute_result_annotation(self, s_value, s_type):
+        if isinstance(s_type.const, ootype.OOType):
+            TYPE = s_type.const
+        else:
+            cliClass = s_type.const
+            TYPE = cliClass._INSTANCE
+        assert ootype.isSubclass(s_value.ootype, TYPE)
+        return SomeOOInstance(TYPE)
+
+    def specialize_call(self, hop):
+        assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)
+        v_inst = hop.inputarg(hop.args_r[0], arg=0)
+        return hop.genop('ooupcast', [v_inst], resulttype = hop.r_result.lowleveltype)
+
+
 def cast_to_native_object(obj):
     raise TypeError, "cast_to_native_object is meant to be rtyped and not called direclty"
 

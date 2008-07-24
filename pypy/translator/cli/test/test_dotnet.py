@@ -8,7 +8,7 @@ from pypy.translator.cli.test.runtest import CliTest
 from pypy.translator.cli.dotnet import SomeCliClass, SomeCliStaticMethod,\
      NativeInstance, CLR, box, unbox, OverloadingResolver, NativeException,\
      native_exc, new_array, init_array, typeof, eventhandler, clidowncast,\
-     classof, cast_to_native_object, cast_from_native_object
+     cliupcast, classof, cast_to_native_object, cast_from_native_object
 
 System = CLR.System
 ArrayList = CLR.System.Collections.ArrayList
@@ -405,6 +405,19 @@ class TestDotnetRtyping(CliTest):
             c.Add(None)
             return c.get_Item(0)
         res = self.interpret(fn, [])
+        assert res is None
+
+    def test_cliupcast(self):
+        def fn(flag):
+            a = ArrayList()
+            a.Add(None)
+            if flag:
+                obj = cliupcast(a, System.Object)
+            else:
+                obj = box(42)
+            b = clidowncast(obj, ArrayList)
+            return b.get_Item(0)
+        res = self.interpret(fn, [True])
         assert res is None
 
     def test_mix_None_and_instance(self):
