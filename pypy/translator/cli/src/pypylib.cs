@@ -116,8 +116,8 @@ namespace pypy.runtime
     {
         public int default_blockid = -1;
         public int numcases = 0;
-        public int[] values = new int[10]; // XXX maxlength?
-        public FlexSwitchCase[] cases = new FlexSwitchCase[10];
+        public int[] values = new int[4];
+        public FlexSwitchCase[] cases = new FlexSwitchCase[4];
 
         public void set_default_blockid(int blockid)
         {
@@ -126,9 +126,23 @@ namespace pypy.runtime
 
         public void add_case(int v, FlexSwitchCase c)
         {
+            if (numcases >= values.Length)
+                grow();
             values[numcases] = v;
             cases[numcases] = c;
             numcases++;
+        }
+
+        private void grow()
+        {
+            int newsize = values.Length * 2;
+            int[] newvalues = new int[newsize];
+            Array.Copy(values, newvalues, values.Length);
+            values = newvalues;
+            
+            FlexSwitchCase[] newcases = new FlexSwitchCase[newsize];
+            Array.Copy(cases, newcases, cases.Length);
+            cases = newcases;
         }
         
         public int execute(int v, InputArgs args)
