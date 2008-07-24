@@ -14,6 +14,7 @@ from pypy.translator.cli import dotnet
 System = CLR.System
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
 LowLevelFlexSwitch = CLR.pypy.runtime.LowLevelFlexSwitch
+FlexSwitchCase = CLR.pypy.runtime.FlexSwitchCase
 InputArgs = CLR.pypy.runtime.InputArgs
 OpCodes = System.Reflection.Emit.OpCodes
 
@@ -26,7 +27,7 @@ cString = classof(System.String)
 cChar = classof(System.Char)
 cInputArgs = classof(InputArgs)
 cUtils = classof(CLR.pypy.runtime.Utils)
-cFlexSwitchCase = classof(CLR.pypy.runtime.FlexSwitchCase)
+cFlexSwitchCase = classof(FlexSwitchCase)
 
 class SigToken:
     def __init__(self, args, res, funcclass):
@@ -198,9 +199,7 @@ class FunctionConst(BaseConst):
         self.delegatetype = delegatetype
 
     def getobj(self):
-        # XXX: should the conversion be done automatically?
-        #return ootype.ooupcast(OBJECT, self.holder)
-        return self.holder
+        return dotnet.cliupcast(self.holder, System.Object)
 
     def load(self, meth):
         holdertype = box(self.holder).GetType()
@@ -222,15 +221,15 @@ class FunctionConst(BaseConst):
 
 class FlexSwitchConst(BaseConst):
 
-    def __init__(self, flexswitch):
-        self.flexswitch = flexswitch
+    def __init__(self, llflexswitch):
+        self.llflexswitch = llflexswitch
 
     def getobj(self):
-        return self.flexswitch
+        return dotnet.cliupcast(self.llflexswitch, System.Object)
 
     def load(self, meth):
         index = self._get_index(meth)
-        self._load_from_array(meth, index, self.flexswitch.GetType())
+        self._load_from_array(meth, index, self.llflexswitch.GetType())
 
 
 class Label(GenLabel):
@@ -534,7 +533,8 @@ class FlexSwitchCaseGenerator(MethodGenerator):
     def emit_code(self):
         MethodGenerator.emit_code(self)
         func = self.gv_entrypoint.holder.GetFunc()
-        self.parent_flexswitch.llflexswitch.add_case(self.value, func)
+        func2 = clidowncast(func, FlexSwitchCase)
+        self.parent_flexswitch.llflexswitch.add_case(self.value, func2)
 
     def emit_preamble(self):
         from pypy.jit.codegen.cli.operation import InputArgsManager

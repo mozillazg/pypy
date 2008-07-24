@@ -125,9 +125,6 @@ class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
     def test_largedummy_compile(self):
         py.test.skip('it works only if we increase .maxstack')
 
-    def test_switch_compile(self):
-        py.test.skip('no promotion/flexswitch for now please :-)')
-
     def test_large_switch_compile(self):
         py.test.skip('no promotion/flexswitch for now please :-)')
 

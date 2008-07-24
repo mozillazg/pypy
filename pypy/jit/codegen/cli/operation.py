@@ -227,7 +227,7 @@ class DoFlexSwitch(Operation):
         graph = self.meth
         il = graph.il
         # get MethodInfo for LowLevelFlexSwitch.execute
-        clitype = self.gv_flexswitch.flexswitch.GetType()
+        clitype = self.gv_flexswitch.llflexswitch.GetType()
         meth_execute = clitype.GetMethod('execute')
 
         # setup the correct inputargs
