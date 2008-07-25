@@ -8,6 +8,7 @@ from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
 from pypy.jit.codegen.model import CodeGenSwitch
 from pypy.jit.codegen.cli import operation as ops
 from pypy.jit.codegen.cli.methodfactory import get_method_wrapper
+from pypy.jit.codegen.cli.args_manager import ArgsManager
 from pypy.translator.cli.dotnet import CLR, typeof, new_array, init_array
 from pypy.translator.cli.dotnet import box, unbox, clidowncast, classof
 from pypy.translator.cli import dotnet
@@ -15,7 +16,6 @@ System = CLR.System
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
 LowLevelFlexSwitch = CLR.pypy.runtime.LowLevelFlexSwitch
 FlexSwitchCase = CLR.pypy.runtime.FlexSwitchCase
-InputArgs = CLR.pypy.runtime.InputArgs
 OpCodes = System.Reflection.Emit.OpCodes
 
 cVoid = ootype.nullruntimeclass
@@ -25,7 +25,6 @@ cDouble = classof(System.Double)
 cObject = classof(System.Object)
 cString = classof(System.String)
 cChar = classof(System.Char)
-cInputArgs = classof(InputArgs)
 cUtils = classof(CLR.pypy.runtime.Utils)
 cFlexSwitchCase = classof(FlexSwitchCase)
 
@@ -242,9 +241,9 @@ class Label(GenLabel):
     def emit_trampoline(self, meth):
         from pypy.jit.codegen.cli.operation import mark
         il = meth.il
-        manager = InputArgsManager(meth, self.inputargs_gv)
+        args_manager = meth.graphinfo.args_manager
         il.MarkLabel(self.il_trampoline_label)
-        manager.copy_from_inputargs()
+        args_manager.copy_from_inputargs(meth, self.inputargs_gv)
         il.Emit(OpCodes.Br, self.il_label)
 
 class RCliGenOp(AbstractRGenOp):
@@ -351,6 +350,7 @@ class GraphInfo:
         self.blocks = [] # blockid -> (meth, label)
         self.flexswitch_meths = []
         self.main_retlabel = None
+        self.args_manager = ArgsManager()
 
 class MethodGenerator:
     
@@ -397,6 +397,7 @@ class MethodGenerator:
         blockid = len(blocks)
         result = Label(blockid, self.il, args_gv)
         blocks.append((self, result))
+        self.graphinfo.args_manager.register(args_gv)
         return result
 
     def newlocalvar(self, clitype):
@@ -458,8 +459,8 @@ class GraphGenerator(MethodGenerator):
         return ops.Return(self, gv_returnvar)
 
     def emit_code(self):
-        self.emit_flexswitches()
         MethodGenerator.emit_code(self)
+        self.emit_flexswitches()
 
     def emit_flexswitches(self):
         for meth in self.graphinfo.flexswitch_meths:
@@ -468,9 +469,13 @@ class GraphGenerator(MethodGenerator):
     def emit_preamble(self):
         if not self.graphinfo.has_flexswitches:
             return
-        
+
+        # compute the shape of InputArgs
+        args_manager = self.graphinfo.args_manager
+        args_manager.close()
+
         # InputArgs inputargs = new InputArgs()
-        self.gv_inputargs = self.newlocalvar(class2type(cInputArgs))
+        self.gv_inputargs = self.newlocalvar(args_manager.getCliType())
         clitype = self.gv_inputargs.getCliType()
         ctor = clitype.GetConstructor(new_array(System.Type, 0))
         self.il.Emit(OpCodes.Newobj, ctor)
@@ -522,6 +527,7 @@ class FlexSwitchCaseGenerator(MethodGenerator):
         for gv_arg in linkargs_gv:
             gv_local = self.newlocalvar(gv_arg.getCliType())
             self.linkargs_gv_map[gv_arg] = gv_local
+        self.graphinfo.args_manager.register(linkargs_gv)
 
     def map_genvar(self, gv_var):
         return self.linkargs_gv_map.get(gv_var, gv_var)
@@ -537,7 +543,8 @@ class FlexSwitchCaseGenerator(MethodGenerator):
 
     def emit_preamble(self):
         # InputArgs inputargs = (InputArgs)obj // obj is the 2nd arg
-        clitype = class2type(cInputArgs)
+        args_manager = self.graphinfo.args_manager
+        clitype = args_manager.getCliType()
         self.gv_inputargs = self.newlocalvar(clitype)
         self.inputargs_gv[1].load(self)
         self.il.Emit(OpCodes.Castclass, clitype)
@@ -547,9 +554,7 @@ class FlexSwitchCaseGenerator(MethodGenerator):
         for gv_linkarg in self.linkargs_gv:
             gv_var = self.linkargs_gv_map[gv_linkarg]
             linkargs_out_gv.append(gv_var)
-        manager = InputArgsManager(self, linkargs_out_gv)
-        manager.copy_from_inputargs()
-
+        args_manager.copy_from_inputargs(self, linkargs_out_gv)
 
 class BranchBuilder(GenBuilder):
 
@@ -692,55 +697,6 @@ class IntFlexSwitch(CodeGenSwitch):
         meth.set_parent_flexswitch(self, value)
         meth.set_linkargs_gv(self.linkargs_gv)
         return meth.branches[0]
-
-
-class InputArgsManager:
-
-    def __init__(self, meth, args_gv):
-        self.meth = meth
-        self.args_gv = args_gv
-
-    def basename_from_type(self, clitype):
-        return clitype.get_Name()
-
-    def _get_fields(self):
-        fields = []
-        gv_inputargs = self.meth.gv_inputargs
-        inputargs_clitype = gv_inputargs.getCliType()
-        counters = {}
-        for gv_arg in self.args_gv:
-            clitype = gv_arg.getCliType()
-            basename = self.basename_from_type(clitype)
-            count = counters.get(clitype, 0)
-            fieldname = '%s_%d' % (basename, count)
-            counters[clitype] = count+1
-            field = inputargs_clitype.GetField(fieldname)
-            fields.append(field)
-        return fields
-
-    def copy_to_inputargs(self):
-        il = self.meth.il
-        gv_inputargs = self.meth.gv_inputargs
-        fields = self._get_fields()
-        assert len(self.args_gv) == len(fields)
-        for i in range(len(self.args_gv)):
-            gv_arg = self.args_gv[i]
-            field = fields[i]
-            gv_inputargs.load(self.meth)
-            gv_arg.load(self.meth)
-            il.Emit(OpCodes.Stfld, field)
-
-    def copy_from_inputargs(self):
-        il = self.meth.il
-        gv_inputargs = self.meth.gv_inputargs
-        fields = self._get_fields()
-        assert len(self.args_gv) == len(fields)
-        for i in range(len(self.args_gv)):
-            gv_arg = self.args_gv[i]
-            field = fields[i]
-            gv_inputargs.load(self.meth)
-            il.Emit(OpCodes.Ldfld, field)
-            gv_arg.store(self.meth)
 
 global_rgenop = RCliGenOp()
 RCliGenOp.constPrebuiltGlobal = global_rgenop.genconst
