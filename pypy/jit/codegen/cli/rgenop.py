@@ -240,12 +240,11 @@ class Label(GenLabel):
         self.inputargs_gv = inputargs_gv
 
     def emit_trampoline(self, meth):
-        from pypy.jit.codegen.cli.operation import InputArgsManager
         from pypy.jit.codegen.cli.operation import mark
         il = meth.il
         manager = InputArgsManager(meth, self.inputargs_gv)
         il.MarkLabel(self.il_trampoline_label)
-        manager.copy_to_args()
+        manager.copy_from_inputargs()
         il.Emit(OpCodes.Br, self.il_label)
 
 class RCliGenOp(AbstractRGenOp):
@@ -537,8 +536,6 @@ class FlexSwitchCaseGenerator(MethodGenerator):
         self.parent_flexswitch.llflexswitch.add_case(self.value, func2)
 
     def emit_preamble(self):
-        from pypy.jit.codegen.cli.operation import InputArgsManager
-
         # InputArgs inputargs = (InputArgs)obj // obj is the 2nd arg
         clitype = class2type(cInputArgs)
         self.gv_inputargs = self.newlocalvar(clitype)
@@ -551,7 +548,7 @@ class FlexSwitchCaseGenerator(MethodGenerator):
             gv_var = self.linkargs_gv_map[gv_linkarg]
             linkargs_out_gv.append(gv_var)
         manager = InputArgsManager(self, linkargs_out_gv)
-        manager.copy_to_args()
+        manager.copy_from_inputargs()
 
 
 class BranchBuilder(GenBuilder):
@@ -696,6 +693,54 @@ class IntFlexSwitch(CodeGenSwitch):
         meth.set_linkargs_gv(self.linkargs_gv)
         return meth.branches[0]
 
+
+class InputArgsManager:
+
+    def __init__(self, meth, args_gv):
+        self.meth = meth
+        self.args_gv = args_gv
+
+    def basename_from_type(self, clitype):
+        return clitype.get_Name()
+
+    def _get_fields(self):
+        fields = []
+        gv_inputargs = self.meth.gv_inputargs
+        inputargs_clitype = gv_inputargs.getCliType()
+        counters = {}
+        for gv_arg in self.args_gv:
+            clitype = gv_arg.getCliType()
+            basename = self.basename_from_type(clitype)
+            count = counters.get(clitype, 0)
+            fieldname = '%s_%d' % (basename, count)
+            counters[clitype] = count+1
+            field = inputargs_clitype.GetField(fieldname)
+            fields.append(field)
+        return fields
+
+    def copy_to_inputargs(self):
+        il = self.meth.il
+        gv_inputargs = self.meth.gv_inputargs
+        fields = self._get_fields()
+        assert len(self.args_gv) == len(fields)
+        for i in range(len(self.args_gv)):
+            gv_arg = self.args_gv[i]
+            field = fields[i]
+            gv_inputargs.load(self.meth)
+            gv_arg.load(self.meth)
+            il.Emit(OpCodes.Stfld, field)
+
+    def copy_from_inputargs(self):
+        il = self.meth.il
+        gv_inputargs = self.meth.gv_inputargs
+        fields = self._get_fields()
+        assert len(self.args_gv) == len(fields)
+        for i in range(len(self.args_gv)):
+            gv_arg = self.args_gv[i]
+            field = fields[i]
+            gv_inputargs.load(self.meth)
+            il.Emit(OpCodes.Ldfld, field)
+            gv_arg.store(self.meth)
 
 global_rgenop = RCliGenOp()
 RCliGenOp.constPrebuiltGlobal = global_rgenop.genconst

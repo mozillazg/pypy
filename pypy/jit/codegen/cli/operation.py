@@ -142,9 +142,10 @@ class ReturnFromFlexSwitch(Operation):
         return None
 
     def emit(self):
+        from pypy.jit.codegen.cli.rgenop import InputArgsManager
         il = self.meth.il
         manager = InputArgsManager(self.meth, [self.gv_x])
-        manager.copy_from_args()
+        manager.copy_to_inputargs()
         blockid = self.meth.graphinfo.graph_retlabel.blockid
         il.Emit(OpCodes.Ldc_I4, blockid)
         il.Emit(OpCodes.Ret)
@@ -224,6 +225,7 @@ class DoFlexSwitch(Operation):
         return None
 
     def emit(self):
+        from pypy.jit.codegen.cli.rgenop import InputArgsManager
         graph = self.meth
         il = graph.il
         # get MethodInfo for LowLevelFlexSwitch.execute
@@ -232,7 +234,7 @@ class DoFlexSwitch(Operation):
 
         # setup the correct inputargs
         manager = InputArgsManager(graph, self.args_gv)
-        manager.copy_from_args()
+        manager.copy_to_inputargs()
 
         # jumpto = flexswitch.execute(exitswitch, inputargs);
         # goto dispatch_jump;
@@ -243,54 +245,6 @@ class DoFlexSwitch(Operation):
         il.Emit(OpCodes.Stloc, graph.jumpto_var)
         il.Emit(OpCodes.Br, graph.il_dispatch_jump_label)
 
-
-class InputArgsManager:
-
-    def __init__(self, meth, args_gv):
-        self.meth = meth
-        self.args_gv = args_gv
-
-    def basename_from_type(self, clitype):
-        return clitype.get_Name()
-
-    def _get_fields(self):
-        fields = []
-        gv_inputargs = self.meth.gv_inputargs
-        inputargs_clitype = gv_inputargs.getCliType()
-        counters = {}
-        for gv_arg in self.args_gv:
-            clitype = gv_arg.getCliType()
-            basename = self.basename_from_type(clitype)
-            count = counters.get(clitype, 0)
-            fieldname = '%s_%d' % (basename, count)
-            counters[clitype] = count+1
-            field = inputargs_clitype.GetField(fieldname)
-            fields.append(field)
-        return fields
-
-    def copy_from_args(self):
-        il = self.meth.il
-        gv_inputargs = self.meth.gv_inputargs
-        fields = self._get_fields()
-        assert len(self.args_gv) == len(fields)
-        for i in range(len(self.args_gv)):
-            gv_arg = self.args_gv[i]
-            field = fields[i]
-            gv_inputargs.load(self.meth)
-            gv_arg.load(self.meth)
-            il.Emit(OpCodes.Stfld, field)
-
-    def copy_to_args(self):
-        il = self.meth.il
-        gv_inputargs = self.meth.gv_inputargs
-        fields = self._get_fields()
-        assert len(self.args_gv) == len(fields)
-        for i in range(len(self.args_gv)):
-            gv_arg = self.args_gv[i]
-            field = fields[i]
-            gv_inputargs.load(self.meth)
-            il.Emit(OpCodes.Ldfld, field)
-            gv_arg.store(self.meth)
 
 class WriteLine(Operation):
 
