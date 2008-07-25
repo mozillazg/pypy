@@ -142,11 +142,10 @@ class ReturnFromFlexSwitch(Operation):
         return None
 
     def emit(self):
-        from pypy.jit.codegen.cli.rgenop import InputArgsManager
         il = self.meth.il
-        manager = InputArgsManager(self.meth, [self.gv_x])
-        manager.copy_to_inputargs()
-        blockid = self.meth.graphinfo.graph_retlabel.blockid
+        graphinfo = self.meth.graphinfo
+        graphinfo.args_manager.copy_to_inputargs(self.meth, [self.gv_x])
+        blockid = graphinfo.graph_retlabel.blockid
         il.Emit(OpCodes.Ldc_I4, blockid)
         il.Emit(OpCodes.Ret)
 
@@ -225,7 +224,6 @@ class DoFlexSwitch(Operation):
         return None
 
     def emit(self):
-        from pypy.jit.codegen.cli.rgenop import InputArgsManager
         graph = self.meth
         il = graph.il
         # get MethodInfo for LowLevelFlexSwitch.execute
@@ -233,8 +231,8 @@ class DoFlexSwitch(Operation):
         meth_execute = clitype.GetMethod('execute')
 
         # setup the correct inputargs
-        manager = InputArgsManager(graph, self.args_gv)
-        manager.copy_to_inputargs()
+        args_manager = graph.graphinfo.args_manager
+        args_manager.copy_to_inputargs(graph, self.args_gv)
 
         # jumpto = flexswitch.execute(exitswitch, inputargs);
         # goto dispatch_jump;
