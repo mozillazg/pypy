@@ -22,8 +22,11 @@ def autodetect():
         mach = os.popen('uname -m', 'r').read().strip()
         if not mach:
             raise ProcessorAutodetectError, "cannot run 'uname -m'"
-    if mach == 'x86_64' and sys.maxint == 2147483647:
-        mach = 'x86'     # it's a 64-bit processor but in 32-bits mode, maybe
+    if mach == 'x86_64':
+        if sys.maxint == 2147483647:
+            mach = 'x86'     # it's a 64-bit processor but in 32-bits mode, maybe
+        else:
+            assert sys.maxint == 2 ** 63 - 1
     try:
         return {'i386': 'i386',
                 'i486': 'i386',
@@ -31,7 +34,8 @@ def autodetect():
                 'i686': 'i386',
                 'i86pc': 'i386',    # Solaris/Intel
                 'x86':   'i386',    # Apple
-                'Power Macintosh': 'ppc', 
+                'Power Macintosh': 'ppc',
+                'x86_64': 'x86_64', 
                 }[mach]
     except KeyError:
         raise ProcessorAutodetectError, "unsupported processor '%s'" % mach
