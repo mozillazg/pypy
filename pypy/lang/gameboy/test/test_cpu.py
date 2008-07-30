@@ -356,32 +356,37 @@ def test_0x10():
     assert_default_registers(cpu, pc=pc+1)
     
 # jr_nn
-def test_0x18():
+def test_0x18_relative_jump():
     cpu   = get_cpu();
-    pc    = cpu.pc.get()
-    value = 0x12
-    cpu.rom[constants.RESET_PC] = value
-    assert_default_registers(cpu)
-    cycle_test(cpu, 0x18, 3)
-    assert_default_registers(cpu, pc=pc+value+1)
+    for jump in range(-128,128):
+        cpu.pc.set(0x1234)
+        prepare_for_fetch(cpu, jump & 0xFF)
+        cycle_test(cpu, 0x18, 3)
+        # relative offset + one fetch
+        assert cpu.pc.get() == 0x1234 + jump + 1
+        assert_default_registers(cpu, f=cpu.f.get(), pc=0x1234+jump+1)
     
 # jr_NZ_nn see test_jr_cc_nn
-def test_0x20_0x28_0x30():
+def test_0x20_to_0x38_relative_conditional_jump():
     cpu    = get_cpu()
     flags  = [~constants.Z_FLAG, constants.Z_FLAG, ~constants.C_FLAG, constants.C_FLAG]
     opCode = 0x20
     value  = 0x12
     for i in range(0, 4):
-        prepare_for_fetch(cpu, value)
-        pc = cpu.pc.get()
-        cpu.f.set(flags[i])
-        cycle_test(cpu, opCode, 3)
-        assert cpu.pc.get() == pc+value+1
+        for jump in range(-128,128):
+            cpu.pc.set(0x1234)
+            prepare_for_fetch(cpu, jump & 0xFF)
+            cpu.f.set(flags[i])
+            cycle_test(cpu, opCode, 3)
+            # relative offset + one fetch
+            assert cpu.pc.get() == 0x1234 + jump + 1
+            assert_default_registers(cpu, f=cpu.f.get(), pc=0x1234+jump+1)
         
         pc = cpu.pc.get()
         cpu.f.set(~flags[i])
         cycle_test(cpu, opCode, 2)
         assert cpu.pc.get() == pc+1
+        assert_default_registers(cpu, f=cpu.f.get(), pc=pc+1)
         value  += 3
         opCode += 0x08
         
@@ -443,7 +448,7 @@ def test_0x12():
     assert cpu.read(cpu.de.get()) == cpu.a.get()
 
 # load_a_DEi
-def test_0x1A():
+def test_0x1A_store_memory_at_de_in_a():
     cpu     = get_cpu()
     value   = 0x12
     address = 0xC020
@@ -1056,7 +1061,7 @@ def test_0xFA_store_fetched_memory_in_a():
     assert_default_registers(cpu, a=value, pc=pc+2)
 
 # ld_mem_A
-def test_0xEA():
+def test_0xEA_store_a_at_fetched_address():
     cpu    = get_cpu()
     valueA = 0x56
     prepare_for_fetch(cpu, 0x12, 0x34)
@@ -1110,7 +1115,8 @@ def test_0xD9_return_form_interrupt():
     prepare_for_pop(cpu, value >> 8, value & 0xFF)
     prepare_for_fetch(cpu, 0x00)
     pc    = cpu.pc.get()
-    cycle_test(cpu, 0xD9, 4+2) 
+    cycle_test(cpu, 0xD9, 4+1+1) 
+    # pc: popped value + 
     assert_default_registers(cpu, pc=value+1, sp=2)
     
 def test_handle_interrupt():
@@ -1194,7 +1200,7 @@ def test_0xC2_to_0xDA_conditional_jump():
         opCode += 0x08
 
 # ldh_Ci_A
-def test_0xE2_write_a_at_expaded_c_address():
+def test_0xE2_write_a_at_expanded_c_address():
     cpu    = get_cpu()
     value  = 0x12
     valueA = value+1
@@ -1213,14 +1219,6 @@ def test_0xF2():
     cpu.write(0xFF00+valueC, valueA)
     cycle_test(cpu, 0xF2, 2)
     assert_default_registers(cpu, a=valueA, bc=valueC)
-
-# jp_nnnn
-def test_0xC3():
-    cpu = get_cpu()
-    prepare_for_fetch(cpu, 0x12, 0x34)
-    cycle_test(cpu, 0xC3, 4)
-    assert_default_registers(cpu, pc=0x1234)
-
 
 # di
 def test_0xF3_disable_interrupt():
@@ -1268,6 +1266,15 @@ def test_0xFB_enable_interrupt():
     assert cpu.interrupt.vblank.is_pending() == False
     assert cpu.interrupt.serial.is_pending() == False
     assert cpu.interrupt.is_pending()        == False
+
+# jp_nnnn
+
+# JUMP AND CALL TESTING ========================================================
+def test_0xC3_jump():
+    cpu = get_cpu()
+    prepare_for_fetch(cpu, 0x12, 0x34)
+    cycle_test(cpu, 0xC3, 4)
+    assert_default_registers(cpu, pc=0x1234)
 
 def conditional_call_test(cpu, opCode, flagSetter):
     # set the condition to false and dont call
@@ -1323,21 +1330,6 @@ def test_0xDC_call_C_nnnn():
 def set_flag_0xDC(cpu, value):
     cpu.f.c_flag = value
 
-# push_BC to push_AF
-def test_0xC5_to_0xF5_push():
-    cpu        = get_cpu()
-    registers  = [cpu.bc, cpu.de, cpu.hl, cpu.af]
-    opCode     = 0xC5
-    value      = 0x1234
-    for register in registers:
-        register.set(value)
-        cycle_test(cpu, opCode, 4)
-        assert cpu.memory.read(cpu.sp.get()+1) == value >> 8
-        assert cpu.memory.read(cpu.sp.get()) == value & 0xFF
-        opCode += 0x10
-        value  += 0x0101
-            
-
 # call_nnnn
 def test_0xCD_call():
     cpu        = get_cpu()
@@ -1347,6 +1339,26 @@ def test_0xCD_call():
     cycle_test(cpu, 0xCD, 6)
     assert_default_registers(cpu, pc=fetchValue, sp=fetchValue-2)
 
+# push_BC to push_AF
+def test_0xC5_to_0xF5_push_double_register():
+    cpu        = get_cpu()
+    registers  = [cpu.bc, cpu.de, cpu.hl, cpu.af]
+    opCode     = 0xC5
+    value      = 0x1234
+    for register in registers:
+        sp = cpu.sp.get()
+        register.set(value)
+        cycle_test(cpu, opCode, 4)
+        assert cpu.memory.read(cpu.sp.get()+1) == value >> 8
+        assert cpu.memory.read(cpu.sp.get())   == value & 0xFF
+        assert cpu.sp.get() == sp - 2
+        assert cpu.pop() == value & 0xFF
+        assert cpu.pop() == value >> 8
+        assert cpu.sp.get() == sp 
+        opCode += 0x10
+        value  += 0x0101
+         
+         
 def a_nn_test(opCode, cycles, opCaller):
     # flags tested already
     cpu      = get_cpu()

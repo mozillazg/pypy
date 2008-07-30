@@ -6,12 +6,10 @@ from pypy.lang.gameboy.video import VideoDriver
 from pypy.lang.gameboy.sound import SoundDriver
 from pypy.lang.gameboy.timer import Clock
 from pypy.lang.gameboy import constants
-#from pypy.lang.gameboy import debug
 
 from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import specialize
-import py
 
 # GAMEBOY ----------------------------------------------------------------------
 
@@ -41,8 +39,11 @@ class GameBoyImplementation(GameBoy):
         finally:
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
-            #debug.print_results()
+            self.handle_execution_error()
         return 0
+    
+    def handle_execution_error(self):
+        pass
     
     def handle_events(self):
         isRunning = True
@@ -93,7 +94,6 @@ class VideoDriverImplementation(VideoDriver):
                 #if y%2 == 0 or True:
                 #    px = self.get_pixel_color(x, y)
                 #    str += ["#", "%", "+", " ", " "][px]
-                RSDL_helper.set_pixel(self.screen, x, y, self.pixel_map(x, y))
                 pass
         #print str;
              
