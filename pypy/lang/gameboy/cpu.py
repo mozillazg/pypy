@@ -2,7 +2,10 @@
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import *
 from pypy.lang.gameboy.interrupt import *
-#from pypy.lang.gameboy.debug import *
+
+from pypy.rlib.objectmodel import we_are_translated
+if not we_are_translated():
+    from pypy.lang.gameboy.debug import *
 
 # ---------------------------------------------------------------------------
 
@@ -365,7 +368,7 @@ class CPU(object):
         if self.interrupt.is_pending():
             self.halted = False
             self.cycles -= 4
-        elif (self.cycles > 0):
+        elif self.cycles > 0:
             self.cycles = 0
         
     def lower_pending_interrupt(self):
@@ -377,24 +380,15 @@ class CPU(object):
                 return
 
     def fetch_execute(self):
-        opCode = self.fetch()
-        #print "    fetch exe:", hex(opCode), "  "
-        #, FETCH_EXECUTE_OP_CODES[opCode].__name__
-        self.last_fetch_execute_op_code = opCode
-        #if DEBUG: log(opCode, is_fetch_execute=True)
-        FETCH_EXECUTE_OP_CODES[opCode](self)
+        op_code = self.fetch()
+        self.last_fetch_execute_op_code = op_code
+        FETCH_EXECUTE_OP_CODES[op_code](self)
         
         
-    def execute(self, opCode):
+    def execute(self, op_code):
         self.instruction_counter += 1
-        #if DEBUG: log(opCode)
-        #print self.instruction_counter, "-"*60
-        #print "exe: ", hex(opCode),  "   "
-        #, OP_CODES[opCode].__name__
-        #print "    pc:", hex(self.pc.get()), "sp:", hex(self.sp.get())
-        #self.print_registers()
-        self.last_op_code = opCode
-        OP_CODES[opCode](self)
+        self.last_op_code = op_code
+        OP_CODES[op_code](self)
         
     def print_registers(self):
         print "    a: "+hex(self.a.get())
@@ -892,7 +886,7 @@ class CPU(object):
         # RETI 4 cycles
         self.ret() # 4 cycles
         self.enable_interrupts() # 1 cycle + others
-        self.cycles += 1
+        #self.cycles += 1
 
     def restart(self, nn):
         # RST nn 4 cycles
@@ -983,35 +977,35 @@ class CPUFetchCaller(CallWrapper):
     def get(self,  use_cycles=True):
         return self.cpu.fetch(use_cycles)
 
-# OPCODE LOOKUP TABLE GENERATION -----------------------------------------------
+# op_code LOOKUP TABLE GENERATION -----------------------------------------------
 
 GROUPED_REGISTERS = [CPU.get_b, CPU.get_c, CPU.get_d,   CPU.get_e,
                      CPU.get_h, CPU.get_l, CPU.get_hli, CPU.get_a]
 
 def create_group_op_codes(table):
-    opCodes =[]
+    op_codes =[]
     for entry in table:
-        opCode   = entry[0]
+        op_code   = entry[0]
         step     = entry[1]
         function = entry[2]
         if len(entry) == 4:
             for registerGetter in GROUPED_REGISTERS:
                 for n in entry[3]:
-                    opCodes.append((opCode, group_lambda(function, registerGetter, n)))
-                    opCode += step
+                    op_codes.append((op_code, group_lambda(function, registerGetter, n)))
+                    op_code += step
         if len(entry) == 5:
             entryStep = entry[4]
             for registerGetter in GROUPED_REGISTERS:
-                stepOpCode = opCode
+                stepop_code = op_code
                 for n in entry[3]:
-                    opCodes.append((stepOpCode, group_lambda(function, registerGetter, n)))
-                    stepOpCode += entryStep
-                opCode+=step
+                    op_codes.append((stepop_code, group_lambda(function, registerGetter, n)))
+                    stepop_code += entryStep
+                op_code+=step
         else:
             for registerGetter in GROUPED_REGISTERS:
-                opCodes.append((opCode,group_lambda(function, registerGetter)))
-                opCode += step
-    return opCodes
+                op_codes.append((op_code,group_lambda(function, registerGetter)))
+                op_code += step
+    return op_codes
 
 def group_lambda(function, register_getter, value=None):
     if value is None:
@@ -1022,29 +1016,29 @@ def group_lambda(function, register_getter, value=None):
                                RegisterCallWrapper(register_getter(s)), value)
     
 def create_load_group_op_codes():
-    opCodes = []
-    opCode  = 0x40
+    op_codes = []
+    op_code  = 0x40
     for storeRegister in GROUPED_REGISTERS:
         for loadRegister in GROUPED_REGISTERS:
             if loadRegister != CPU.get_hli or storeRegister != CPU.get_hli:
-                opCodes.append((opCode, load_group_lambda(storeRegister, loadRegister)))
-            opCode += 1
-    return opCodes
+                op_codes.append((op_code, load_group_lambda(storeRegister, loadRegister)))
+            op_code += 1
+    return op_codes
             
 def load_group_lambda(store_register, load_register):
         return lambda s: CPU.ld(s, RegisterCallWrapper(load_register(s)),
                                    RegisterCallWrapper(store_register(s)))
     
 def create_register_op_codes(table):
-    opCodes = []
+    op_codes = []
     for entry in table:
-        opCode   = entry[0]
+        op_code   = entry[0]
         step     = entry[1]
         function = entry[2]
         for registerOrGetter in entry[3]:
-            opCodes.append((opCode, register_lambda(function, registerOrGetter)))
-            opCode += step
-    return opCodes
+            op_codes.append((op_code, register_lambda(function, registerOrGetter)))
+            op_code += step
+    return op_codes
 
 def register_lambda(function, registerOrGetter):
     if callable(registerOrGetter):
@@ -1066,7 +1060,7 @@ def initialize_op_code_table(table):
             result[pos] = entry[-1]
     return result
 
-# OPCODE TABLES ---------------------------------------------------------------
+# op_code TABLES ---------------------------------------------------------------
 # Table with one to one mapping of simple OP Codes                
 FIRST_ORDER_OP_CODES = [
     (0x00, CPU.nop),
@@ -1147,7 +1141,7 @@ REGISTER_SET_A    = [CPU.get_bc,   CPU.get_de, CPU.get_hl,   CPU.get_sp]
 REGISTER_SET_B    = [CPU.get_bc,   CPU.get_de, CPU.get_hl,   CPU.get_af]
 FLAG_REGISTER_SET = [CPU.is_not_z, CPU.is_z,   CPU.is_not_c, CPU.is_c]
 
-# Table for Register OP Codes: (startAddress, delta, method, regsiters)
+# Table for Register OP Codes: (startAddress, delta, method, registers)
 REGISTER_OP_CODES = [ 
     (0x01, 0x10, CPU.fetch_double_register,     REGISTER_SET_A),
     (0x09, 0x10, CPU.add_hl,                    REGISTER_SET_A),
@@ -1160,7 +1154,7 @@ REGISTER_OP_CODES = [
     (0xC1, 0x10, CPU.pop_double_register,       REGISTER_SET_B),
     (0xC5, 0x10, CPU.push_double_register,      REGISTER_SET_B)
 ]
-# Table for Second Order OPCodes: (startAddress, delta, method, [args])
+# Table for Second Order op_codes: (startAddress, delta, method, [args])
 SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
     (0x00, 0x01, CPU.rotate_left_circular),    
     (0x08, 0x01, CPU.rotate_right_circular),    
@@ -1175,7 +1169,7 @@ SECOND_ORDER_REGISTER_GROUP_OP_CODES = [
     (0x80, 0x01, CPU.reset_bit, range(0, 8), 0x08)         
 ]
 
-# RAW OPCODE TABLE INITIALIZATION ----------------------------------------------
+# RAW op_code TABLE INITIALIZATION ----------------------------------------------
 
 FIRST_ORDER_OP_CODES  += create_register_op_codes(REGISTER_OP_CODES)
 FIRST_ORDER_OP_CODES  += create_group_op_codes(REGISTER_GROUP_OP_CODES)
