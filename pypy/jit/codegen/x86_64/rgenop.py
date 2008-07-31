@@ -42,6 +42,12 @@ class Builder(model.GenBuilder):
         self.mc.ADD(gv_z.reg, gv_y.reg)
         return gv_z
     
+    def op_int_sub(self, gv_x, gv_y):
+        gv_z = self.allocate_register()
+        self.mc.MOV(gv_z.reg, gv_x.reg)
+        self.mc.SUB(gv_z.reg, gv_y.reg)
+        return gv_z
+    
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         self.mc.MOV("rax", gv_returnvar.reg)

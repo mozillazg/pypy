@@ -43,6 +43,7 @@ class X86_64CodeBuilder(object):
     
     ADD = make_two_quadreg_instr("\x00")
     MOV = make_two_quadreg_instr("\x89")
+    SUB = make_two_quadreg_instr("\x28")
     
     def RET(self):
         self.write("\xC3")

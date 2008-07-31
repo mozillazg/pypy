@@ -30,3 +30,13 @@ def test_ret():
     four = fp(4, 17)
     assert four == 4
     print four
+    
+def test_sub():
+    builder, fp, inputargs_gv, token = make_testbuilder()
+    genv0 = inputargs_gv[0] #the first argument "place"
+    genv1 = inputargs_gv[1] 
+    genv_result = builder.genop2("int_sub", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
+    builder.finish_and_return(token, genv_result)
+    four = fp(10, 6)
+    assert four == 4
+    print four
