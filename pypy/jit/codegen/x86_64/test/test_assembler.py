@@ -16,3 +16,8 @@ def test_add():
     assert mc.get_as_string() == "\x49\x00\xC3"
     mc.ADD("rbx", "rbx")
     assert mc.get_as_string() == "\x49\x00\xC3\x48\x00\xDB"
+    
+def test_mov():
+    mc = AsmTest()
+    mc.MOV("r15","rsp")
+    assert mc.get_as_string() == "\x4C\x8B\xFC"
