@@ -3,12 +3,23 @@ from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.x86_64.objmodel import IntVar, Const
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
 
+def make_two_argument_method(name):
+    def op_int(self, gv_x, gv_y):
+        gv_z = self.allocate_register()
+        self.mc.MOV(gv_z.reg, gv_x.reg)
+        method = getattr(self.mc, name)
+        method(gv_z.reg, gv_y.reg)
+        return gv_z
+    return op_int
+    
+
 class Builder(model.GenBuilder):
 
     MC_SIZE = 65536
 
     def __init__(self):
         self.mc = InMemoryCodeBuilder(self.MC_SIZE)
+        #callee-saved registers are commented out
         self.freeregisters ={        
                 "rax":None,
                 "rcx":None,
@@ -36,17 +47,8 @@ class Builder(model.GenBuilder):
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
     
-    def op_int_add(self, gv_x, gv_y):
-        gv_z = self.allocate_register()
-        self.mc.MOV(gv_z.reg, gv_x.reg)
-        self.mc.ADD(gv_z.reg, gv_y.reg)
-        return gv_z
-    
-    def op_int_sub(self, gv_x, gv_y):
-        gv_z = self.allocate_register()
-        self.mc.MOV(gv_z.reg, gv_x.reg)
-        self.mc.SUB(gv_z.reg, gv_y.reg)
-        return gv_z
+    op_int_add  = make_two_argument_method("ADD")
+    op_int_sub  = make_two_argument_method("SUB")
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
