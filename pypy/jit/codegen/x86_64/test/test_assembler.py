@@ -13,11 +13,11 @@ class AsmTest(assembler.X86_64CodeBuilder):
 def test_add():
     mc = AsmTest()
     mc.ADD("rax", "r11")
-    assert mc.get_as_string() == "\x49\x00\xC3"
+    assert mc.get_as_string() == "\x4C\x00\xD8"
     mc.ADD("rbx", "rbx")
-    assert mc.get_as_string() == "\x49\x00\xC3\x48\x00\xDB"
+    assert mc.get_as_string() == "\x4C\x00\xD8\x48\x00\xDB"
     
 def test_mov():
     mc = AsmTest()
     mc.MOV("r15","rsp")
-    assert mc.get_as_string() == "\x4C\x8B\xFC"
+    assert mc.get_as_string() == "\x49\x89\xE7"
