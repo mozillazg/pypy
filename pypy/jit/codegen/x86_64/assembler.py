@@ -18,6 +18,18 @@ REGISTER_MAP = {
                 "r15": (1, 7),
                 }                  
 
+def make_two_quadreg_instr(opcode):
+    # XXX for now, arg1 and arg2 are registers
+    def quadreg_instr(self, arg1, arg2):
+        rexR, modrm1 = self.get_register_bits(arg1)
+        rexB, modrm2 = self.get_register_bits(arg2)
+        #rexW(1) = 64bitMode rexX(0) = doesn't matter
+        self.write_rex_byte(1, rexR, 0, rexB)
+        self.write(opcode)
+        self.write_modRM_byte(3, modrm1, modrm2)
+    return quadreg_instr
+
+
 class X86_64CodeBuilder(object):
     """ creats x86_64 opcodes"""
     def write(self, data):
@@ -28,15 +40,9 @@ class X86_64CodeBuilder(object):
         """ tells the current position in memory"""
         raise NotImplementedError
     
-    # XXX for now, arg1 and arg2 are registers
-    def ADD(self, arg1, arg2):
-        rexR, modrm1 = self.get_register_bits(arg1)
-        rexB, modrm2 = self.get_register_bits(arg2)
-        #rexW(1) = 64bitMode rexX(0) = doesn't matter
-        self.write_rex_byte(1, rexR, 0, rexB)
-        self.write('\x00')
-        self.write_modRM_byte(3, modrm1, modrm2)
-               
+    ADD = make_two_quadreg_instr("\x00")
+    MOV = make_two_quadreg_instr("\x8B")
+        
     def get_register_bits(self, register):
         return REGISTER_MAP[register]
     
@@ -48,3 +54,4 @@ class X86_64CodeBuilder(object):
     def write_modRM_byte(self, mod, reg, rm):
         byte = mod << 6 | (reg << 3) | rm
         self.write(chr(byte))
+        
