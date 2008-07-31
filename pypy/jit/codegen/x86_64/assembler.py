@@ -24,9 +24,10 @@ def make_two_quadreg_instr(opcode):
         rexR, modrm1 = self.get_register_bits(arg1)
         rexB, modrm2 = self.get_register_bits(arg2)
         #rexW(1) = 64bitMode rexX(0) = doesn't matter
-        self.write_rex_byte(1, rexR, 0, rexB)
+        # exchange the two arguments (rexB/rexR) (modrm2/modrm1)
+        self.write_rex_byte(1, rexB, 0, rexR)
         self.write(opcode)
-        self.write_modRM_byte(3, modrm1, modrm2)
+        self.write_modRM_byte(3, modrm2, modrm1)
     return quadreg_instr
 
 
@@ -41,7 +42,10 @@ class X86_64CodeBuilder(object):
         raise NotImplementedError
     
     ADD = make_two_quadreg_instr("\x00")
-    MOV = make_two_quadreg_instr("\x8B")
+    MOV = make_two_quadreg_instr("\x89")
+    
+    def RET(self):
+        self.write("\xC3")
         
     def get_register_bits(self, register):
         return REGISTER_MAP[register]
