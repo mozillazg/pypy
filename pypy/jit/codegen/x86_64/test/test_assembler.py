@@ -14,3 +14,5 @@ def test_add():
     mc = AsmTest()
     mc.ADD("rax", "r11")
     assert mc.get_as_string() == "\x49\x00\xC3"
+    mc.ADD("rbx", "rbx")
+    assert mc.get_as_string() == "\x49\x00\xC3\x48\x00\xDB"
