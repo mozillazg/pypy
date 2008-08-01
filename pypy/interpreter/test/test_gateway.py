@@ -388,3 +388,74 @@ class TestGateway:
         w_app_g_run = space.wrap(app_g_run)
         w_bound = space.get(w_app_g_run, w("hello"), space.w_str)
         assert space.eq_w(space.call_function(w_bound), w(42))
+
+    def test_interp2app_fastcall(self):
+        space = self.space
+        w = space.wrap
+        w_3 = w(3)
+
+        def f(space):
+            return w_3
+        app_f = gateway.interp2app_temp(f, unwrap_spec=[gateway.ObjSpace])
+        w_app_f = w(app_f)
+
+        # sanity
+        assert isinstance(w_app_f.code, gateway.BuiltinCode0)
+
+        called = []
+        fastcall_0 = w_app_f.code.fastcall_0
+        def witness_fastcall_0(space, w_func):
+            called.append(w_func)
+            return fastcall_0(space, w_func)
+
+        w_app_f.code.fastcall_0 = witness_fastcall_0
+
+        w_3 = space.newint(3)
+        w_res = space.call_function(w_app_f)
+
+        assert w_res is w_3
+        assert called == [w_app_f]
+
+        called = []
+
+        w_res = space.appexec([w_app_f], """(f):
+        return f()
+        """)
+
+        assert w_res is w_3
+        assert called == [w_app_f]
+
+    def test_interp2app_fastcall_method(self):
+        space = self.space
+        w = space.wrap
+        w_3 = w(3)
+
+        def f(space, w_self, w_x):
+            return w_x
+        app_f = gateway.interp2app_temp(f, unwrap_spec=[gateway.ObjSpace,
+                                                        gateway.W_Root,
+                                                        gateway.W_Root])
+        w_app_f = w(app_f)
+
+        # sanity
+        assert isinstance(w_app_f.code, gateway.BuiltinCode2)
+
+        called = []
+        fastcall_2 = w_app_f.code.fastcall_2
+        def witness_fastcall_2(space, w_func, w_a, w_b):
+            called.append(w_func)
+            return fastcall_2(space, w_func, w_a, w_b)
+
+        w_app_f.code.fastcall_2 = witness_fastcall_2    
+    
+        w_res = space.appexec([w_app_f, w_3], """(f, x):
+        class A(object):
+           m = f # not a builtin function, so works as method
+        y = A().m(x)
+        b = A().m
+        z = b(x)
+        return y is x and z is x
+        """)
+
+        assert space.is_true(w_res)
+        assert called == [w_app_f, w_app_f]       
