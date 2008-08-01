@@ -48,7 +48,7 @@ def cpython_code_signature(code):
     return argnames, varargname, kwargname
 
 cpython_magic, = struct.unpack("<i", imp.get_magic())
-
+default_magic = 62061 | 0x0a0d0000 # value for Python 2.4.1
 
 class PyCode(eval.Code):
     "CPython-style code objects."
@@ -56,7 +56,7 @@ class PyCode(eval.Code):
     def __init__(self, space,  argcount, nlocals, stacksize, flags,
                      code, consts, names, varnames, filename,
                      name, firstlineno, lnotab, freevars, cellvars,
-                     hidden_applevel=False, magic = 62061 | 0x0a0d0000): # value for Python 2.4.1
+                     hidden_applevel=False, magic = default_magic):
         """Initialize a new code object from parameters given by
         the pypy compiler"""
         self.space = space
@@ -337,7 +337,7 @@ class PyCode(eval.Code):
                           str, W_Root, W_Root, 
                           W_Root, str, str, int, 
                           str, W_Root, 
-                          W_Root]
+                          W_Root, int]
 
 
     def descr_code__new__(space, w_subtype,
@@ -345,7 +345,8 @@ class PyCode(eval.Code):
                           codestring, w_constants, w_names,
                           w_varnames, filename, name, firstlineno,
                           lnotab, w_freevars=NoneNotWrapped,
-                          w_cellvars=NoneNotWrapped):
+                          w_cellvars=NoneNotWrapped,
+                          magic=default_magic):
         if argcount < 0:
             raise OperationError(space.w_ValueError,
                                  space.wrap("code: argcount must not be negative"))
@@ -365,7 +366,7 @@ class PyCode(eval.Code):
             cellvars = []
         code = space.allocate_instance(PyCode, w_subtype)
         PyCode.__init__(code, space, argcount, nlocals, stacksize, flags, codestring, consts_w, names,
-                      varnames, filename, name, firstlineno, lnotab, freevars, cellvars)
+                      varnames, filename, name, firstlineno, lnotab, freevars, cellvars, magic=magic)
         return space.wrap(code)
     descr_code__new__.unwrap_spec = unwrap_spec 
 
@@ -390,7 +391,7 @@ class PyCode(eval.Code):
             w(self.co_lnotab), 
             space.newtuple([w(v) for v in self.co_freevars]),
             space.newtuple([w(v) for v in self.co_cellvars]),
-            #hidden_applevel=False, magic = 62061 | 0x0a0d0000
+            w(self.magic),
         ]
         return space.newtuple([new_inst, space.newtuple(tup)])
 
