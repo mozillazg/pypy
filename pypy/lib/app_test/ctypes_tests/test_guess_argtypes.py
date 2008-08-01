@@ -18,7 +18,6 @@ def test_wrap_args():
     assert guess(['xca']) == [c_char_p]
     assert guess([None]) == [c_void_p]
     assert guess([c_int(3)]) == [c_int]
-    assert guess([u'xca']) == [c_char_p]
 
     class Stuff:
         pass

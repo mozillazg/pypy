@@ -7,8 +7,7 @@ Gateway between app-level and interpreter-level:
 
 """
 
-import types, sys, os
-from pypy.tool.compat import md5
+import types, sys, md5, os
 
 NoneNotWrapped = object()
 
@@ -207,7 +206,7 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
                              % (self.scopenext(), self.scopenext()))
 
     def visit_args_w(self, el):
-        self.run_args.append("space.viewiterable(%s)" % self.scopenext())
+        self.run_args.append("space.unpacktuple(%s)" % self.scopenext())
 
     def visit_w_args(self, el):
         self.run_args.append(self.scopenext())
@@ -406,7 +405,7 @@ class BuiltinCode(eval.Code):
         #  baseobjspace.W_Root is for wrapped arguments to keep wrapped
         #  baseobjspace.Wrappable subclasses imply interp_w and a typecheck
         #  argument.Arguments is for a final rest arguments Arguments object
-        # 'args_w' for viewiterable applied to rest arguments
+        # 'args_w' for unpacktuple applied to rest arguments
         # 'w_args' for rest arguments passed as wrapped tuple
         # str,int,float: unwrap argument as such type
         # (function, cls) use function to check/unwrap argument of type cls
@@ -480,13 +479,9 @@ class BuiltinCode(eval.Code):
         return space.wrap(self.docstring)
 
     def funcrun(self, func, args):
-        return BuiltinCode.funcrun_obj(self, func, None, args)
-
-    def funcrun_obj(self, func, w_obj, args):
         space = func.space
         activation = self.activation
-        scope_w = args.parse_obj(w_obj, func.name, self.sig,
-                                 func.defs_w, self.minargs)
+        scope_w = args.parse(func.name, self.sig, func.defs_w)
         try:
             w_result = activation._run(space, scope_w)
         except KeyboardInterrupt: 
@@ -500,8 +495,6 @@ class BuiltinCode(eval.Code):
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e)))
         except DescrMismatch, e:
-            if w_obj is not None:
-                args = args.prepend(w_obj)
             return scope_w[0].descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
@@ -537,33 +530,35 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
         return w_result
 
 class BuiltinCodePassThroughArguments1(BuiltinCode):
-    fast_natural_arity = -1
 
-    def funcrun_obj(self, func, w_obj, args):
+    def funcrun(self, func, args):
         space = func.space
         try:
-            w_result = self.func__args__(space, w_obj, args)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
-            return args.firstarg().descr_call_mismatch(space,
-                                                  self.descrmismatch_op,
-                                                  self.descr_reqcls,
-                                                  args.prepend(w_obj))
-        if w_result is None:
-            w_result = space.w_None
-        return w_result
+            w_obj, newargs = args.popfirst()
+        except IndexError:
+            return BuiltinCode.funcrun(self, func, args)
+        else:
+            try:
+                w_result = self.func__args__(space, w_obj, newargs)
+            except KeyboardInterrupt: 
+                raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
+            except MemoryError: 
+                raise OperationError(space.w_MemoryError, space.w_None)
+            except NotImplementedError, e:
+                raise
+            except RuntimeError, e: 
+                raise OperationError(space.w_RuntimeError, 
+                                     space.wrap("internal error: " + str(e))) 
+            except DescrMismatch, e:
+                return args.firstarg().descr_call_mismatch(space,
+                                                      self.descrmismatch_op,
+                                                      self.descr_reqcls,
+                                                      args)
+            if w_result is None:
+                w_result = space.w_None
+            return w_result
 
 class BuiltinCode0(BuiltinCode):
-    fast_natural_arity = 0
-    
     def fastcall_0(self, space, w_func):
         self = hint(self, deepfreeze=True)
         try:
@@ -580,8 +575,6 @@ class BuiltinCode0(BuiltinCode):
         return w_result
 
 class BuiltinCode1(BuiltinCode):
-    fast_natural_arity = 1
-    
     def fastcall_1(self, space, w_func, w1):
         self = hint(self, deepfreeze=True)
         try:
@@ -605,8 +598,6 @@ class BuiltinCode1(BuiltinCode):
         return w_result
 
 class BuiltinCode2(BuiltinCode):
-    fast_natural_arity = 2
-    
     def fastcall_2(self, space, w_func, w1, w2):
         self = hint(self, deepfreeze=True)
         try:
@@ -630,8 +621,6 @@ class BuiltinCode2(BuiltinCode):
         return w_result
 
 class BuiltinCode3(BuiltinCode):
-    fast_natural_arity = 3
-    
     def fastcall_3(self, space, func, w1, w2, w3):
         self = hint(self, deepfreeze=True)
         try:
@@ -655,8 +644,6 @@ class BuiltinCode3(BuiltinCode):
         return w_result
 
 class BuiltinCode4(BuiltinCode):
-    fast_natural_arity = 4
-    
     def fastcall_4(self, space, func, w1, w2, w3, w4):
         self = hint(self, deepfreeze=True)
         try:

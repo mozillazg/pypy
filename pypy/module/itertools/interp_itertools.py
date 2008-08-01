@@ -9,17 +9,21 @@ class W_Count(Wrappable):
     def __init__(self, space, firstval):
         self.space = space
         self.c = firstval
+        self.overflowed = False
 
     def iter_w(self):
         return self.space.wrap(self)
 
     def next_w(self):
+        if self.overflowed:
+            raise OperationError(self.space.w_OverflowError,
+                    self.space.wrap("cannot count beyond sys.maxint"))
+
         c = self.c
         try:
             self.c = ovfcheck(self.c + 1)
         except OverflowError:
-            raise OperationError(self.space.w_OverflowError,
-                    self.space.wrap("cannot count beyond sys.maxint"))
+            self.overflowed = True
 
         return self.space.wrap(c)
 
@@ -285,10 +289,7 @@ class W_ISlice(Wrappable):
             start = 0
             w_stop = w_startstop
         elif num_args <= 2:
-            if space.is_w(w_startstop, space.w_None):
-                start = 0
-            else:
-                start = space.int_w(w_startstop)
+            start = space.int_w(w_startstop)
             w_stop = args_w[0]
         else:
             raise OperationError(space.w_TypeError, space.wrap("islice() takes at most 4 arguments (" + str(num_args) + " given)"))
@@ -301,11 +302,7 @@ class W_ISlice(Wrappable):
             stoppable = True
 
         if num_args == 2:
-            w_step = args_w[1]
-            if space.is_w(w_step, space.w_None):
-                step = 1
-            else:
-                step = space.int_w(w_step)
+            step = space.int_w(args_w[1])
         else:
             step = 1
 
@@ -464,7 +461,16 @@ class W_IMap(Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        w_objects = self.space.newtuple([self.space.next(w_it) for w_it in self.iterators_w])
+        if not self.iterators_w:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+
+        try:
+            w_objects = self.space.newtuple([self.space.next(w_it) for w_it in self.iterators_w])
+        except OperationError, e:
+            if e.match(self.space, self.space.w_StopIteration):
+                self.iterators_w = None
+            raise
+
         if self.identity_fun:
             return w_objects
         else:
@@ -472,9 +478,6 @@ class W_IMap(Wrappable):
 
 
 def W_IMap___new__(space, w_subtype, w_fun, args_w):
-    if len(args_w) == 0:
-        raise OperationError(space.w_TypeError,
-                  space.wrap("imap() must have at least two arguments"))
     return space.wrap(W_IMap(space, w_fun, args_w))
 
 W_IMap.typedef = TypeDef(
@@ -508,14 +511,6 @@ W_IMap.typedef.acceptable_as_base_class = False
 
 class W_IZip(W_IMap):
     _error_name = "izip"
-
-    def next_w(self):
-        # argh.  izip(*args) is almost like imap(None, *args) except
-        # that the former needs a special case for len(args)==0
-        # while the latter just raises a TypeError in this situation.
-        if len(self.iterators_w) == 0:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-        return W_IMap.next_w(self)
 
 def W_IZip___new__(space, w_subtype, args_w):
     return space.wrap(W_IZip(space, space.w_None, args_w))
@@ -806,8 +801,8 @@ class W_GroupBy(Wrappable):
                     self.new_group = True #new group
                     raise StopIteration
 
-def W_GroupBy___new__(space, w_subtype, w_iterable, w_key=None):
-    return space.wrap(W_GroupBy(space, w_iterable, w_key))
+def W_GroupBy___new__(space, w_subtype, w_iterable, w_fun=None):
+    return space.wrap(W_GroupBy(space, w_iterable, w_fun))
 
 W_GroupBy.typedef = TypeDef(
         'groupby',
