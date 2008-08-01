@@ -351,7 +351,7 @@ class TestShortcuts(object):
         code = PyCode._from_code(self.space, f.func_code)
         fn = Function(self.space, code, self.space.newdict())
 
-        assert fn.code.do_fastcall == 1
+        assert fn.code.fast_natural_arity == 1
 
         called = []
         fastcall_1 = fn.code.fastcall_1
@@ -384,7 +384,7 @@ class TestShortcuts(object):
         code = PyCode._from_code(self.space, f.func_code)
         fn = Function(self.space, code, self.space.newdict())
 
-        assert fn.code.do_fastcall == 2
+        assert fn.code.fast_natural_arity == 2
 
         called = []
         fastcall_2 = fn.code.fastcall_2

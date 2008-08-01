@@ -559,6 +559,8 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
             return w_result
 
 class BuiltinCode0(BuiltinCode):
+    fast_natural_arity = 0
+    
     def fastcall_0(self, space, w_func):
         self = hint(self, deepfreeze=True)
         try:
@@ -575,6 +577,8 @@ class BuiltinCode0(BuiltinCode):
         return w_result
 
 class BuiltinCode1(BuiltinCode):
+    fast_natural_arity = 1
+    
     def fastcall_1(self, space, w_func, w1):
         self = hint(self, deepfreeze=True)
         try:
@@ -598,6 +602,8 @@ class BuiltinCode1(BuiltinCode):
         return w_result
 
 class BuiltinCode2(BuiltinCode):
+    fast_natural_arity = 2
+    
     def fastcall_2(self, space, w_func, w1, w2):
         self = hint(self, deepfreeze=True)
         try:
@@ -621,6 +627,8 @@ class BuiltinCode2(BuiltinCode):
         return w_result
 
 class BuiltinCode3(BuiltinCode):
+    fast_natural_arity = 3
+    
     def fastcall_3(self, space, func, w1, w2, w3):
         self = hint(self, deepfreeze=True)
         try:
@@ -644,6 +652,8 @@ class BuiltinCode3(BuiltinCode):
         return w_result
 
 class BuiltinCode4(BuiltinCode):
+    fast_natural_arity = 4
+    
     def fastcall_4(self, space, func, w1, w2, w3, w4):
         self = hint(self, deepfreeze=True)
         try:

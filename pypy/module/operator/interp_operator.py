@@ -173,6 +173,8 @@ class SimpleClosureBuiltinFunction(function.BuiltinFunction):
 
 
 class SimpleClosureCode(eval.Code):
+    fast_natural_arity = 1
+    
     sig = (['obj'], None, None)
 
     def __init__(self, co_name, is_attrgetter):
