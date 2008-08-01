@@ -30,7 +30,7 @@ class Function(Wrappable):
     def __repr__(self):
         # return "function %s.%s" % (self.space, self.name)
         # maybe we want this shorter:
-        return "<Function %s>" % self.name
+        return "<Function %s>" % getattr(self, 'name', '?')
 
     def call_args(self, args):
         return self.code.funcrun(self, args) # delegate activation to code
