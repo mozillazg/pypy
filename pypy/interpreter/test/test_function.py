@@ -216,6 +216,19 @@ class AppTestMethod:
         assert res[0] is a
         assert res[1] == (42,)        
 
+    def test_obscure_varargs(self):
+        class A(object):
+            def func(*args):
+                return args
+        a = A()
+        res = a.func(42)
+        assert res[0] is a
+        assert res[1] == 42
+
+        res = a.func(*(42,))
+        assert res[0] is a
+        assert res[1] == 42        
+
     def test_simple_kwargs(self):
         class A(object):
             def func(self, **kwargs):
