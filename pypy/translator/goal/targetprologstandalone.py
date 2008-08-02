@@ -27,9 +27,7 @@ def entry_point(argv):
 
 # _____ Define and setup target ___
 
-def handle_config(config):
-    return
-    config.translation.stackless = True
+# XXX this should suggest --stackless somehow
 
 def target(driver, args):
     driver.exe_name = 'pyrolog-%(backend)s'

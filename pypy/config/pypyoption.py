@@ -296,6 +296,9 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "a instrumentation option: before exit, print the types seen by "
                    "certain simpler bytecodes",
                    default=False),
+        ChoiceOption("multimethods", "the multimethod implementation to use",
+                     ["doubledispatch", "mrd"],
+                     default="mrd"),
      ]),
 ])
 
@@ -343,6 +346,10 @@ def set_pypy_opt_level(config, level):
     # completely disable geninterp in a level 0 translation
     if level == '0':
         config.objspace.suggest(geninterp=False)
+
+    # some optimizations have different effects depending on the typesystem
+    if type_system == 'ootype':
+        config.objspace.std.suggest(multimethods="doubledispatch")
 
 
 if __name__ == '__main__':
