@@ -50,7 +50,7 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
               cmdline=None),
     ChoiceOption("opt",
                  "optimization level", OPT_LEVELS, default=DEFAULT_OPT_LEVEL,
-                 cmdline="--opt"),
+                 cmdline="--opt -O"),
     BoolOption("profile",
                "cProfile (to debug the speed of the translation process)",
                default=False,
