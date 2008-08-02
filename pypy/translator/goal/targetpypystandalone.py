@@ -90,25 +90,28 @@ class PyPyTarget(object):
                              parserkwargs={'usage': self.usage})
         return parser
 
-    def handle_config(self, config):
+    def handle_config(self, config, translateconfig):
+        self.translateconfig = translateconfig
+        # set up the objspace optimizations based on the --opt argument
+        from pypy.config.pypyoption import set_pypy_opt_level
+        set_pypy_opt_level(config, translateconfig.opt)
+
         # as of revision 27081, multimethod.py uses the InstallerVersion1 by default
         # because it is much faster both to initialize and run on top of CPython.
         # The InstallerVersion2 is optimized for making a translator-friendly
         # structure for low level backends. However, InstallerVersion1 is still
         # preferable for high level backends, so we patch here.
+
         from pypy.objspace.std import multimethod
-        if config.translation.type_system == 'lltype':
+        if config.objspace.std.multimethods == 'mrd':
             assert multimethod.InstallerVersion1.instance_counter == 0,\
                    'The wrong Installer version has already been instatiated'
             multimethod.Installer = multimethod.InstallerVersion2
-        else:
+        elif config.objspace.std.multimethods == 'doubledispatch':
             # don't rely on the default, set again here
             assert multimethod.InstallerVersion2.instance_counter == 0,\
                    'The wrong Installer version has already been instatiated'
             multimethod.Installer = multimethod.InstallerVersion1
-
-    def handle_translate_config(self, translateconfig):
-        self.translateconfig = translateconfig
 
     def print_help(self, config):
         self.opt_parser(config).print_help()
@@ -184,7 +187,7 @@ class PyPyTarget(object):
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
-                     'handle_translate_config', 'portal',
+                     'portal',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 
