@@ -84,10 +84,18 @@ class AppTestFunction:
         assert res[0] == 23
         assert res[1] == (42,)
 
+        res = func(23, *(42,))
+        assert res[0] == 23
+        assert res[1] == (42,)        
+
     def test_simple_kwargs(self):
         def func(arg1, **kwargs):
             return arg1, kwargs
         res = func(23, value=42)
+        assert res[0] == 23
+        assert res[1] == {'value': 42}
+
+        res = func(23, **{'value': 42})
         assert res[0] == 23
         assert res[1] == {'value': 42}
 
@@ -146,6 +154,15 @@ class AppTestFunction:
             return arg1, kw
         raises(TypeError, func, 42, **{'arg1': 23})
 
+    def test_kwargs_bound_blind(self):
+        class A(object):
+            def func(self, **kw):
+                return self, kw
+        func = A().func
+
+        func(self=23) # XXX different behavior from CPython
+        # xxx raises(TypeError, func, self=23)
+
     def test_kwargs_confusing_name(self):
         def func(self):    # 'self' conflicts with the interp-level
             return self*7  # argument to call_function()
@@ -177,6 +194,42 @@ class AppTestFunction:
         assert type(f.__doc__) is unicode
 
 class AppTestMethod: 
+    def test_simple_call(self):
+        class A(object):
+            def func(self, arg2):
+                return self, arg2
+        a = A()
+        res = a.func(42)
+        assert res[0] is a
+        assert res[1] == 42
+
+    def test_simple_varargs(self):
+        class A(object):
+            def func(self, *args):
+                return self, args
+        a = A()
+        res = a.func(42)
+        assert res[0] is a
+        assert res[1] == (42,)
+
+        res = a.func(*(42,))
+        assert res[0] is a
+        assert res[1] == (42,)        
+
+    def test_simple_kwargs(self):
+        class A(object):
+            def func(self, **kwargs):
+                return self, kwargs
+        a = A()
+            
+        res = a.func(value=42)
+        assert res[0] is a
+        assert res[1] == {'value': 42}
+
+        res = a.func(**{'value': 42})
+        assert res[0] is a
+        assert res[1] == {'value': 42}
+
     def test_get(self):
         def func(self): return self
         class Object(object): pass
