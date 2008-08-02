@@ -12,6 +12,8 @@ from pypy.config.config import to_optparse, OptionDescription, BoolOption, \
                                ArbitraryOption, StrOption, IntOption, Config, \
                                ChoiceOption, OptHelpFormatter
 from pypy.config.translationoption import get_combined_translation_config
+from pypy.config.translationoption import set_opt_level
+from pypy.config.translationoption import OPT_LEVELS, DEFAULT_OPT_LEVEL
 
 
 GOALS= [
@@ -46,6 +48,9 @@ def goal_options():
 translate_optiondescr = OptionDescription("translate", "XXX", [
     StrOption("targetspec", "XXX", default='targetpypystandalone',
               cmdline=None),
+    ChoiceOption("opt",
+                 "optimization level", OPT_LEVELS, default=DEFAULT_OPT_LEVEL,
+                 cmdline="--opt"),
     BoolOption("profile",
                "cProfile (to debug the speed of the translation process)",
                default=False,
@@ -72,17 +77,7 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
     
 OVERRIDES = {
     'translation.debug': False,
-    'translation.insist': False,
-
-    'translation.gc': 'boehm',
     'translation.backend': 'c',
-    'translation.stackless': False,
-    'translation.backendopt.raisingop2direct_call' : False,
-    'translation.backendopt.merge_if_blocks': True,
-
-    'translation.cc': None,
-    'translation.profopt': None,
-    'translation.output': None,
 }
 
 import py
@@ -161,6 +156,9 @@ def parse_options_and_load_target():
                 optiondescr,
                 existing_config=config,
                 translating=True)
+
+    # apply the optimization level settings
+    set_opt_level(config, translateconfig.opt)
 
     # let the target modify or prepare itself
     # based on the config
