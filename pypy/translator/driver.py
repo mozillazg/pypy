@@ -15,22 +15,6 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
-DEFAULTS = {
-  'translation.gc': 'ref',
-  'translation.cc': None,
-  'translation.profopt': None,
-
-  'translation.thread': False, # influences GC policy
-
-  'translation.stackless': False,
-  'translation.debug': True,
-  'translation.insist': False,
-  'translation.backend': 'c',
-  'translation.fork_before': None,
-  'translation.backendopt.raisingop2direct_call' : False,
-  'translation.backendopt.merge_if_blocks': True,
-}
-
 
 def taskdef(taskfunc, deps, title, new_state=None, expected_states=[],
             idemp=False, earlycheck=None):
@@ -93,7 +77,7 @@ class TranslationDriver(SimpleTaskEngine):
 
         if config is None:
             from pypy.config.pypyoption import get_pypy_config
-            config = get_pypy_config(DEFAULTS, translating=True)
+            config = get_pypy_config(translating=True)
         self.config = config
         if overrides is not None:
             self.config.override(overrides)
