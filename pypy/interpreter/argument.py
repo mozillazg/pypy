@@ -86,7 +86,7 @@ class AbstractArguments:
         scopelen = len(argnames)
         has_vararg = varargname is not None
         has_kwarg = kwargname is not None
-        if  has_vararg:
+        if has_vararg:
             scopelen += 1
         if has_kwarg:
             scopelen += 1
