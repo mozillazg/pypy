@@ -499,7 +499,7 @@ def call__Type(space, w_type, __args__):
             return space.type(w_obj)
     # invoke the __new__ of the type
     w_newfunc = space.getattr(w_type, space.wrap('__new__'))
-    w_newobject = space.call_args(w_newfunc, __args__.prepend(w_type))
+    w_newobject = space.call_obj_args(w_newfunc, w_type, __args__)
     # maybe invoke the __init__ of the type
     if space.is_true(space.isinstance(w_newobject, w_type)):
         w_descr = space.lookup(w_newobject, '__init__')

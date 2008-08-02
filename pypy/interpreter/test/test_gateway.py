@@ -459,3 +459,54 @@ class TestGateway:
 
         assert space.is_true(w_res)
         assert called == [w_app_f, w_app_f]       
+
+    def test_pass_trough_arguments(self):
+        space = self.space
+
+        called = []
+        
+        def f(space, __args__):
+            called.append(__args__)
+            a_w, _ = __args__.unpack()
+            return space.newtuple([space.wrap('f')]+a_w)
+
+        def g(space, w_self, __args__):
+            called.append(__args__)
+            a_w, _ = __args__.unpack()
+            return space.newtuple([space.wrap('g'), w_self, ]+a_w)
+
+        w_f = space.wrap(gateway.interp2app_temp(f,
+                         unwrap_spec=[gateway.ObjSpace,
+                                      gateway.Arguments]))
+
+        w_g = space.wrap(gateway.interp2app_temp(g,
+                         unwrap_spec=[gateway.ObjSpace,
+                                      gateway.W_Root,
+                                      gateway.Arguments]))
+
+        args = argument.Arguments(space, [space.wrap(7)])
+
+        w_res = space.call_args(w_f, args)
+        assert space.is_true(space.eq(w_res, space.wrap(('f', 7))))
+        
+        # white-box check for opt
+        assert called[0] is args
+        called = []
+
+        w_self = space.wrap('self')
+
+        args0 = argument.Arguments(space, [space.wrap(0)])
+        args = args0.prepend(w_self)
+
+        w_res = space.call_args(w_g, args)
+        assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 0))))
+        
+        # white-box check for opt
+        assert called[0] is args0
+        called = []
+
+        args3 = argument.Arguments(space, [space.wrap(3)])
+        w_res = space.call_obj_args(w_g, w_self, args3)
+        assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 3))))
+        # white-box check for opt
+        assert called[0] is args3       

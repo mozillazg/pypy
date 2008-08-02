@@ -100,7 +100,7 @@ class Function(Wrappable):
         stkargs = frame.make_arguments(nargs)
         args = stkargs.prepend(w_obj)
         try:
-            return self.call_args(args)
+            return self.call_args(args) # xxx Function.call_obj_args
         finally:
             if isinstance(stkargs, ArgumentsFromValuestack):
                 stkargs.frame = None
@@ -319,29 +319,29 @@ class Method(Wrappable):
         space = self.space
         if self.w_instance is not None:
             # bound method
-            args = args.prepend(self.w_instance)
+            return space.call_obj_args(self.w_function, self.w_instance, args)
+
+        # unbound method
+        w_firstarg = args.firstarg()
+        if w_firstarg is not None and space.is_true(
+                space.abstract_isinstance(w_firstarg, self.w_class)):
+            pass  # ok
         else:
-            # unbound method
-            w_firstarg = args.firstarg()
-            if w_firstarg is not None and space.is_true(
-                    space.abstract_isinstance(w_firstarg, self.w_class)):
-                pass  # ok
+            myname = self.getname(space,"")
+            clsdescr = self.w_class.getname(space,"")
+            if clsdescr:
+                clsdescr+=" "
+            if w_firstarg is None:
+                instdescr = "nothing"
             else:
-                myname = self.getname(space,"")
-                clsdescr = self.w_class.getname(space,"")
-                if clsdescr:
-                    clsdescr+=" "
-                if w_firstarg is None:
-                    instdescr = "nothing"
-                else:
-                    instname = space.abstract_getclass(w_firstarg).getname(space,"")
-                    if instname:
-                        instname += " "
-                    instdescr = "%sinstance" %instname
-                msg = ("unbound method %s() must be called with %s"
-                       "instance as first argument (got %s instead)")  % (myname, clsdescr, instdescr)
-                raise OperationError(space.w_TypeError,
-                                     space.wrap(msg))
+                instname = space.abstract_getclass(w_firstarg).getname(space,"")
+                if instname:
+                    instname += " "
+                instdescr = "%sinstance" %instname
+            msg = ("unbound method %s() must be called with %s"
+                   "instance as first argument (got %s instead)")  % (myname, clsdescr, instdescr)
+            raise OperationError(space.w_TypeError,
+                                 space.wrap(msg))
         return space.call_args(self.w_function, args)
 
     def descr_method_get(self, w_obj, w_cls=None):

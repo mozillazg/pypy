@@ -665,6 +665,9 @@ class ObjSpace(object):
                     return True
         return False
 
+    def call_obj_args(self, w_callable, w_obj, args):
+        return self.call_args(w_callable, args.prepend(w_obj))
+
     def call(self, w_callable, w_args, w_kwds=None):
         args = Arguments.frompacked(self, w_args, w_kwds)
         return self.call_args(w_callable, args)
