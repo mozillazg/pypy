@@ -666,6 +666,12 @@ class ObjSpace(object):
         return False
 
     def call_obj_args(self, w_callable, w_obj, args):
+        if not self.config.objspace.disable_call_speedhacks:
+            # XXX start of hack for performance            
+            from pypy.interpreter.function import Function        
+            if isinstance(w_callable, Function):
+                return w_callable.call_obj_args(w_obj, args)
+            # XXX end of hack for performance
         return self.call_args(w_callable, args.prepend(w_obj))
 
     def call(self, w_callable, w_args, w_kwds=None):

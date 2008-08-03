@@ -57,6 +57,8 @@ class Code(Wrappable):
         frame.setfastscope(scope_w)
         return frame.run()
 
+    def funcrun_obj(self, func, w_obj, args):
+        return self.funcrun(func, args.prepend(w_obj))
         
     # a performance hack (see gateway.BuiltinCode1/2/3 and pycode.PyCode)
     def fastcall_0(self, space, func):

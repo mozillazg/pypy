@@ -33,7 +33,12 @@ class Function(Wrappable):
         return "<Function %s>" % getattr(self, 'name', '?')
 
     def call_args(self, args):
-        return self.code.funcrun(self, args) # delegate activation to code
+        # delegate activation to code        
+        return self.code.funcrun(self, args)
+
+    def call_obj_args(self, w_obj, args):
+        # delegate activation to code
+        return self.code.funcrun_obj(self, w_obj, args)
 
     def getcode(self):
         return self.code
@@ -98,9 +103,8 @@ class Function(Wrappable):
                                        frame.peekvalue(1),
                                        frame.peekvalue(0))
         stkargs = frame.make_arguments(nargs)
-        args = stkargs.prepend(w_obj)
         try:
-            return self.call_args(args) # xxx Function.call_obj_args
+            return self.call_obj_args(w_obj, stkargs)
         finally:
             if isinstance(stkargs, ArgumentsFromValuestack):
                 stkargs.frame = None

@@ -479,9 +479,13 @@ class BuiltinCode(eval.Code):
         return space.wrap(self.docstring)
 
     def funcrun(self, func, args):
+        return BuiltinCode.funcrun_obj(self, func, None, args)
+
+    def funcrun_obj(self, func, w_obj, args):
         space = func.space
         activation = self.activation
-        scope_w = args.parse(func.name, self.sig, func.defs_w)
+        scope_w = args.parse_obj(w_obj, func.name, self.sig,
+                                 func.defs_w, self.minargs)
         try:
             w_result = activation._run(space, scope_w)
         except KeyboardInterrupt: 
@@ -495,6 +499,8 @@ class BuiltinCode(eval.Code):
             raise OperationError(space.w_RuntimeError, 
                                  space.wrap("internal error: " + str(e)))
         except DescrMismatch, e:
+            if w_obj is not None:
+                args = args.prepend(w_obj)
             return scope_w[0].descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
@@ -531,32 +537,27 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
 
 class BuiltinCodePassThroughArguments1(BuiltinCode):
 
-    def funcrun(self, func, args):
+    def funcrun_obj(self, func, w_obj, args):
         space = func.space
         try:
-            w_obj, newargs = args.popfirst()
-        except IndexError:
-            return BuiltinCode.funcrun(self, func, args)
-        else:
-            try:
-                w_result = self.func__args__(space, w_obj, newargs)
-            except KeyboardInterrupt: 
-                raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-            except MemoryError: 
-                raise OperationError(space.w_MemoryError, space.w_None)
-            except NotImplementedError, e:
-                raise
-            except RuntimeError, e: 
-                raise OperationError(space.w_RuntimeError, 
-                                     space.wrap("internal error: " + str(e))) 
-            except DescrMismatch, e:
-                return args.firstarg().descr_call_mismatch(space,
-                                                      self.descrmismatch_op,
-                                                      self.descr_reqcls,
-                                                      args)
-            if w_result is None:
-                w_result = space.w_None
-            return w_result
+            w_result = self.func__args__(space, w_obj, args)
+        except KeyboardInterrupt: 
+            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
+        except MemoryError: 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except NotImplementedError, e:
+            raise
+        except RuntimeError, e: 
+            raise OperationError(space.w_RuntimeError, 
+                                 space.wrap("internal error: " + str(e))) 
+        except DescrMismatch, e:
+            return args.firstarg().descr_call_mismatch(space,
+                                                  self.descrmismatch_op,
+                                                  self.descr_reqcls,
+                                                  args.prepend(w_obj))
+        if w_result is None:
+            w_result = space.w_None
+        return w_result
 
 class BuiltinCode0(BuiltinCode):
     fast_natural_arity = 0
