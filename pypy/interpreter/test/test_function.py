@@ -160,8 +160,18 @@ class AppTestFunction:
                 return self, kw
         func = A().func
 
-        func(self=23) # XXX different behavior from CPython
-        # xxx raises(TypeError, func, self=23)
+        # don't want the extra argument passing of raises
+        try:
+            func(self=23)
+            assert False
+        except TypeError:
+            pass
+
+        try:
+            func(**{'self': 23})
+            assert False
+        except TypeError:
+            pass        
 
     def test_kwargs_confusing_name(self):
         def func(self):    # 'self' conflicts with the interp-level

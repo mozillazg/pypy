@@ -241,7 +241,6 @@ class ArgumentsFromValuestack(AbstractArguments):
         input_argcount =  0
 
         if w_firstarg is not None:
-            blindargs = blindargs or 1
             upfront = 1
             if co_argcount > 0:
                 scope_w[0] = w_firstarg
@@ -446,7 +445,6 @@ class Arguments(AbstractArguments):
         input_argcount =  0
 
         if w_firstarg is not None:
-            blindargs = blindargs or 1
             upfront = 1
             if co_argcount > 0:
                 scope_w[0] = w_firstarg
