@@ -212,7 +212,19 @@ class PyCode(eval.Code):
                                   func.closure)
         sig = self._signature
         # speed hack
-        args_matched = args.parse_into_scope(frame.fastlocals_w, func.name,
+        args_matched = args.parse_into_scope(None, frame.fastlocals_w,
+                                             func.name,
+                                             sig, func.defs_w)
+        frame.init_cells()
+        return frame.run()
+
+    def funcrun_obj(self, func, w_obj, args):
+        frame = self.space.createframe(self, func.w_func_globals,
+                                  func.closure)
+        sig = self._signature
+        # speed hack
+        args_matched = args.parse_into_scope(w_obj, frame.fastlocals_w,
+                                             func.name,
                                              sig, func.defs_w)
         frame.init_cells()
         return frame.run()

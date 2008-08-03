@@ -495,22 +495,19 @@ class TestGateway:
 
         w_self = space.wrap('self')
 
-        args0 = argument.Arguments(space, [space.wrap(0)])
-        args = args0.prepend(w_self)
-
-        w_res = space.call_args(w_g, args)
-        assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 0))))
-        
-        # white-box check for opt
-        assert called[0] is args0
-        called = []
-
         args3 = argument.Arguments(space, [space.wrap(3)])
         w_res = space.call_obj_args(w_g, w_self, args3)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 3))))
         # white-box check for opt
         assert called[0] is args3
 
+        # no opt in this case
+        args0 = argument.Arguments(space, [space.wrap(0)])
+        args = args0.prepend(w_self)
+
+        w_res = space.call_args(w_g, args)
+        assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 0))))
+        
     def test_plain(self):
         space = self.space
 
@@ -538,3 +535,46 @@ class TestGateway:
         args3 = argument.Arguments(space, [space.wrap(3)])
         w_res = space.call_obj_args(w_g, w_self, args3)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 3))))
+
+
+class AppTestKeywordsToBuiltinSanity(object):
+
+    def test_type(self):
+        class X(object):
+            def __init__(self, **kw):
+                pass
+        clash = type.__call__.func_code.co_varnames[0]
+
+        X(**{clash: 33})
+        type.__call__(X, **{clash: 33})
+
+    def test_object_new(self):
+        class X(object):
+            def __init__(self, **kw):
+                pass
+        clash = object.__new__.func_code.co_varnames[0]
+
+        X(**{clash: 33})
+        object.__new__(X, **{clash: 33})
+
+
+    def test_dict_new(self):
+        clash = dict.__new__.func_code.co_varnames[0]
+
+        dict(**{clash: 33})
+        dict.__new__(dict, **{clash: 33})        
+
+    def test_dict_init(self):
+        d = {}
+        clash = dict.__init__.func_code.co_varnames[0]
+
+        d.__init__(**{clash: 33})
+        dict.__init__(d, **{clash: 33})
+
+    def test_dict_update(self):
+        d = {}
+        clash = dict.update.func_code.co_varnames[0]
+
+        d.update(**{clash: 33})
+        dict.update(d, **{clash: 33})        
+        
