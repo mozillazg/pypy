@@ -338,10 +338,11 @@ def set_pypy_opt_level(config, level):
 
     # memory-saving optimizations
     if level == 'mem':
-        config.objspace.std.suggest(withsmallint=True)
+        config.objspace.std.suggest(withprebuiltint=True)
         config.objspace.std.suggest(withrangelist=True)
         config.objspace.std.suggest(withprebuiltchar=True)
         config.objspace.std.suggest(withsharingdict=True)
+        # xxx other options? ropes maybe?
 
     # completely disable geninterp in a level 0 translation
     if level == '0':
