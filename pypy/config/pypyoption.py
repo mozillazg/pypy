@@ -157,11 +157,11 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
         BoolOption("withsmallint", "use tagged integers",
                    default=False,
-                   requires=[("translation.gc", "boehm")]),
+                   requires=[("translation.gc", "boehm"),
+                             ("objspace.std.withprebuiltint", False)]),
 
         BoolOption("withprebuiltint", "prebuild commonly used int objects",
-                   default=False,
-                   requires=[("objspace.std.withsmallint", False)]),
+                   default=False),
 
         IntOption("prebuiltintfrom", "lowest integer which is prebuilt",
                   default=-5, cmdline="--prebuiltintfrom"),
