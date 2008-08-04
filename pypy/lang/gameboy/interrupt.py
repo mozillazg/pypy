@@ -66,7 +66,7 @@ class Interrupt(iMemory):
         if  address == constants.IE:
             self.set_enable_mask(data)
         elif address == constants.IF:
-            self.set_fnterrupt_flag(data)
+            self.set_interrupt_flag(data)
 
     def read(self, address):
         if  address == constants.IE:
@@ -105,6 +105,6 @@ class Interrupt(iMemory):
                 flag |= interrupt_flag.mask
         return flag | 0xE0
 
-    def set_fnterrupt_flag(self, data):
+    def set_interrupt_flag(self, data):
         for flag in self.interrupt_flags:
             flag.set_pending((data & flag.mask) != 0)
