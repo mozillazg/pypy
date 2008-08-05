@@ -1,7 +1,7 @@
 import os
 import py
 import pdb
-from pypy.lang.gameboy.gameboy_implementation import GameBoyImplementation
+from pypy.lang.gameboy.profiling.gameboy_profiling_implementation import GameBoyProfilingImplementation
 
 
 ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
@@ -14,7 +14,7 @@ def entry_point(argv=None):
         pos = str(9)
         filename = ROM_PATH+"/rom"+pos+"/rom"+pos+".gb"
     print "loading rom: ", str(filename)
-    gameBoy = GameBoyImplementation()
+    gameBoy = GameBoyProfilingImplementation()
     try:
         gameBoy.load_cartridge_file(str(filename))
     except:
