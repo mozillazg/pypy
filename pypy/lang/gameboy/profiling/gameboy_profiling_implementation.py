@@ -11,9 +11,10 @@ from pypy.lang.gameboy.debug.debug_socket_memory import *
 class GameBoyProfilingImplementation(GameBoyImplementation):
     
     def __init__(self, cycleLimit=0):
-        GameBoy.__init__(self)
+        GameBoyImplementation.__init__(self)
         self.cycleLimit = cycleLimit
-        self.cpu = ProfilingCPU(self.interrupt, self, self.cycleLimit)
+        self.cpu = ProfilingCPU(self.interrupt, self)
+        self.cpu.cycle_limit = cycleLimit
         
     def handle_executed_op_code(self, is_fetch_execute=True):
         self.process_cpu_profiling_data()
