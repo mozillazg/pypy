@@ -180,7 +180,6 @@ class FlagRegister(Register):
     def c_flag_compare(self, value, compare_and=0x01, reset=False):
         if reset:
              self.reset()
-        #print hex(value), hex(compare_and), (value & compare_and) != 0
         self.c_flag = ((value & compare_and) != 0)
 
     def h_flag_compare(self, value, a, inverted=False):
@@ -809,7 +808,6 @@ class CPU(object):
             if (s & 0x0F00) > (self.sp.get() & 0x0F00):
                 self.f.h_flag = True
         return s
-    
         
     def complement_carry_flag(self):
         # CCF/SCF
@@ -1002,10 +1000,10 @@ def create_group_op_codes(table):
 def group_lambda(function, register_getter, value=None):
     if value is None:
         return lambda s: function(s, RegisterCallWrapper(register_getter(s)), 
-                               RegisterCallWrapper(register_getter(s)))
+                                     RegisterCallWrapper(register_getter(s)))
     else:
         return lambda s: function(s, RegisterCallWrapper(register_getter(s)), 
-                               RegisterCallWrapper(register_getter(s)), value)
+                                     RegisterCallWrapper(register_getter(s)), value)
     
 def create_load_group_op_codes():
     op_codes = []
