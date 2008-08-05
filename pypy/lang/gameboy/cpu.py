@@ -390,13 +390,6 @@ class CPU(object):
         self.last_op_code = op_code
         OP_CODES[op_code](self)
         
-    def print_registers(self):
-        print "    a: "+hex(self.a.get())
-        str = "    af: "+hex(self.af.get())
-        str += " bc: "+hex(self.bc.get())
-        str += " de: "+hex(self.de.get())
-        str += " hl: "+hex(self.hl.get())
-        print str
         
     # -------------------------------------------------------------------
         
@@ -412,7 +405,6 @@ class CPU(object):
         return self.memory.read(address)
 
     def write(self, address, data):
-        # print "    write: ", "a:", hex(address), "v:", hex(data)
         # 2 cycles
         self.memory.write(address, data)
         self.cycles -= 2
