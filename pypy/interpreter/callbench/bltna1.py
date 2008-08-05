@@ -1,14 +1,28 @@
 from sup import run
 
 def w(N, start):
-    d = {}
-    d1 = {}
+    l = []
     start()
     i = 0
     while i < N:
-        d.update(d1)
-        d.update(d1)
-        d.update(d1)
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
         i+=1
     
 run(w, 1000)

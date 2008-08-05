@@ -1,15 +1,29 @@
 from sup import run
 
 def w(N, start):
-    d = {}
-    d1 = {}
+    l = []
     start()
     i = 0
-    u = dict.update
+    z = l.__init__
     while i < N:
-        u(d, d1)
-        u(d, d1)
-        u(d, d1)
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
+        z()
         i+=1
     
 run(w, 1000)
