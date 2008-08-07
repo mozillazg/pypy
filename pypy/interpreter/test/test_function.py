@@ -280,6 +280,46 @@ class AppTestMethod:
             __metaclass__ = A().foo
         assert Fun[:2] == ('Fun', ())
 
+    def test_unbound_abstract_typecheck(self):
+        import new
+        def f(*args):
+            return args
+        m = new.instancemethod(f, None, "foobar")
+        raises(TypeError, m)
+        raises(TypeError, m, None)
+        raises(TypeError, m, "egg")
+
+        m = new.instancemethod(f, None, (str, int))     # really obscure...
+        assert m(4) == (4,)
+        assert m("uh") == ("uh",)
+        raises(TypeError, m, [])
+
+        class MyBaseInst(object):
+            pass
+        class MyInst(MyBaseInst):
+            def __init__(self, myclass):
+                self.myclass = myclass
+            def __class__(self):
+                if self.myclass is None:
+                    raise AttributeError
+                return self.myclass
+            __class__ = property(__class__)
+        class MyClass(object):
+            pass
+        BBase = MyClass()
+        BSub1 = MyClass()
+        BSub2 = MyClass()
+        BBase.__bases__ = ()
+        BSub1.__bases__ = (BBase,)
+        BSub2.__bases__ = (BBase,)
+        x = MyInst(BSub1)
+        m = new.instancemethod(f, None, BSub1)
+        assert m(x) == (x,)
+        raises(TypeError, m, MyInst(BBase))
+        raises(TypeError, m, MyInst(BSub2))
+        raises(TypeError, m, MyInst(None))
+        raises(TypeError, m, MyInst(42))
+
 
 class TestMethod: 
     def setup_method(self, method):
