@@ -150,6 +150,9 @@ class AppTestAbstractInst:
         assert issubclass(MyBaseInst, MyBaseInst)
         assert not issubclass(MyBaseInst, MyInst)
         assert not issubclass(MyInst, MyInst2)
+        assert issubclass(MyInst, (MyBaseInst, MyClass))
+        assert issubclass(MyInst, (MyClass, (), (MyBaseInst,)))
+        assert not issubclass(MyInst, (MyClass, (), (MyInst2,)))
 
         BBase = MyClass()
         BSub1 = MyClass()
@@ -179,4 +182,3 @@ class AppTestAbstractInst:
         assert not issubclass(BSub1, BSub2)
         assert not issubclass(MyInst, BSub1)
         assert not issubclass(BSub1, MyInst)
-
