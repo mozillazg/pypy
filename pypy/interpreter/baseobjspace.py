@@ -654,8 +654,13 @@ class ObjSpace(object):
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
         if self.is_w(w_exc_type, w_check_class):
-            return True
-        return self.abstract_issubclass_w(w_exc_type, w_check_class)
+            return True   # fast path (also here to handle string exceptions)
+        try:
+            return self.abstract_issubclass_w(w_exc_type, w_check_class)
+        except OperationError, e:
+            if e.match(self, self.w_TypeError):   # string exceptions maybe
+                return False
+            raise
 
     def call(self, w_callable, w_args, w_kwds=None):
         args = Arguments.frompacked(self, w_args, w_kwds)
