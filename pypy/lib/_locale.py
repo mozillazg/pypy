@@ -2,7 +2,6 @@
 """
 Support for POSIX locales.
 """
-
 raise ImportError("_locale.py is still incomplete")
 
 from ctypes import (Structure, POINTER, create_string_buffer,
@@ -13,8 +12,6 @@ from ctypes_configure.configure import (configure, ExternalCompilationInfo,
     ConstantInteger, DefinedConstantInteger, SimpleType)
 
 size_t = c_int
-
-# XXX check where this comes from
 CHAR_MAX = 127
 
 _CONSTANTS = (
@@ -419,7 +416,7 @@ __all__ = (
     'Error',
     'setlocale', 'localeconv', 'strxfrm', 'strcoll',
     'gettext', 'dgettext', 'dcgettext', 'textdomain',
-    'bindtextdomain', 'CHAR_MAX',
+    'bindtextdomain',
 ) + _CONSTANTS
 if _bind_textdomain_codeset:
     __all__ += ('bind_textdomain_codeset',)

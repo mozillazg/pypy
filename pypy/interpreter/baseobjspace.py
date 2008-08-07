@@ -8,8 +8,6 @@ from pypy.rlib.jit import hint
 from pypy.tool.cache import Cache
 from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib.timer import DummyTimer, Timer
 import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
@@ -140,23 +138,6 @@ class W_Root(object):
             self.setweakref(lifeline.space, None)
             lifeline.clear_all_weakrefs()
 
-    __already_enqueued_for_destruction = False
-
-    def _enqueue_for_destruction(self, space):
-        """Put the object in the destructor queue of the space.
-        At a later, safe point in time, UserDelAction will use
-        space.userdel() to call the object's app-level __del__ method.
-        """
-        # this function always resurect the object, so when
-        # running on top of CPython we must manually ensure that
-        # we enqueue it only once
-        if not we_are_translated():
-            if self.__already_enqueued_for_destruction:
-                return
-            self.__already_enqueued_for_destruction = True
-        self.clear_all_weakrefs()
-        space.user_del_action.register_dying_object(self)
-
     def _call_builtin_destructor(self):
         pass     # method overridden in typedef.py
 
@@ -253,11 +234,6 @@ class ObjSpace(object):
 #        if self.config.objspace.logbytecodes:
 #            self.bytecodecounts = {}
 
-        if self.config.objspace.timing:
-            self.timer = Timer()
-        else:
-            self.timer = DummyTimer()
-
         self.initialize()
 
     def startup(self):
@@ -270,10 +246,7 @@ class ObjSpace(object):
             modname = self.str_w(w_modname)
             mod = self.interpclass_w(self.getbuiltinmodule(modname))
             if isinstance(mod, Module):
-                import time
-                self.timer.start("startup " + modname)
                 mod.startup(self)
-                self.timer.stop("startup " + modname)
 
     def finish(self):
         w_exitfunc = self.sys.getdictvalue_w(self, 'exitfunc')
@@ -667,51 +640,47 @@ class ObjSpace(object):
                                    (i, plural))
         return items
 
-    def viewiterable(self, w_iterable, expected_length=-1):
-        """ More or less the same as unpackiterable, but does not return
-        a copy. Please don't modify the result
-        """
-        return make_sure_not_resized(self.unpackiterable(w_iterable,
-                                                         expected_length)[:])
+    def unpacktuple(self, w_tuple, expected_length=-1):
+        """Same as unpackiterable(), but only for tuples.
+        Only use for bootstrapping or performance reasons."""
+        tuple_length = self.int_w(self.len(w_tuple))
+        if expected_length != -1 and tuple_length != expected_length:
+            raise UnpackValueError("got a tuple of length %d instead of %d" % (
+                tuple_length, expected_length))
+        items = [
+            self.getitem(w_tuple, self.wrap(i)) for i in range(tuple_length)]
+        return items
 
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
         if self.is_w(w_exc_type, w_check_class):
-            return True   # fast path (also here to handle string exceptions)
-        try:
-            return self.abstract_issubclass_w(w_exc_type, w_check_class)
-        except OperationError, e:
-            if e.match(self, self.w_TypeError):   # string exceptions maybe
-                return False
-            raise
+            return True
+        if self.is_true(self.abstract_issubclass(w_exc_type, w_check_class)):
+            return True
 
-    def call_obj_args(self, w_callable, w_obj, args):
-        if not self.config.objspace.disable_call_speedhacks:
-            # XXX start of hack for performance            
-            from pypy.interpreter.function import Function        
-            if isinstance(w_callable, Function):
-                return w_callable.call_obj_args(w_obj, args)
-            # XXX end of hack for performance
-        return self.call_args(w_callable, args.prepend(w_obj))
+        if self.is_true(self.isinstance(w_check_class, self.w_tuple)):
+            exclst_w = self.unpacktuple(w_check_class)
+            for w_e in exclst_w:
+                if self.exception_match(w_exc_type, w_e):
+                    return True
+        return False
 
     def call(self, w_callable, w_args, w_kwds=None):
         args = Arguments.frompacked(self, w_args, w_kwds)
         return self.call_args(w_callable, args)
 
     def call_function(self, w_func, *args_w):
-        nargs = len(args_w) # used for pruning funccall versions
-        if not self.config.objspace.disable_call_speedhacks and nargs < 5:
+        if not self.config.objspace.disable_call_speedhacks:
             # XXX start of hack for performance
             from pypy.interpreter.function import Function, Method
             if isinstance(w_func, Method):
                 w_inst = w_func.w_instance
                 if w_inst is not None:
-                    if nargs < 4:
-                        func = w_func.w_function
-                        if isinstance(func, Function):
-                            return func.funccall(w_inst, *args_w)
-                elif args_w and (
-                        self.abstract_isinstance_w(args_w[0], w_func.w_class)):
+                    func = w_func.w_function
+                    if isinstance(func, Function):
+                        return func.funccall(w_inst, *args_w)
+                elif args_w and self.is_true(
+                        self.abstract_isinstance(args_w[0], w_func.w_class)):
                     w_func = w_func.w_function
 
             if isinstance(w_func, Function):
@@ -729,13 +698,12 @@ class ObjSpace(object):
             if isinstance(w_func, Method):
                 w_inst = w_func.w_instance
                 if w_inst is not None:
-                    w_func = w_func.w_function
-                    # reuse callable stack place for w_inst
-                    frame.settopvalue(w_inst, nargs)
-                    nargs += 1
-                elif nargs > 0 and (
-                    self.abstract_isinstance_w(frame.peekvalue(nargs-1),   #    :-(
-                                               w_func.w_class)):
+                    func = w_func.w_function
+                    if isinstance(func, Function):
+                        return func.funccall_obj_valuestack(w_inst, nargs, frame)
+                elif nargs > 0 and self.is_true(
+                    self.abstract_isinstance(frame.peekvalue(nargs-1),   #    :-(
+                                             w_func.w_class)):
                     w_func = w_func.w_function
 
             if isinstance(w_func, Function):
@@ -787,34 +755,61 @@ class ObjSpace(object):
         w_objtype = self.type(w_obj)
         return self.issubtype(w_objtype, w_type)
 
-    def abstract_issubclass_w(self, w_cls1, w_cls2):
-        # Equivalent to 'issubclass(cls1, cls2)'.  The code below only works
-        # for the simple case (new-style class, new-style class).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
-        return self.is_true(self.issubtype(w_cls1, w_cls2))
+    def abstract_issubclass(self, w_obj, w_cls, failhard=False):
+        try:
+            return self.issubtype(w_obj, w_cls)
+        except OperationError, e:
+            if not e.match(self, self.w_TypeError):
+                raise
+            try:
+                self.getattr(w_cls, self.wrap('__bases__')) # type sanity check
+                return self.recursive_issubclass(w_obj, w_cls)
+            except OperationError, e:
+                if failhard or not (e.match(self, self.w_TypeError) or
+                                    e.match(self, self.w_AttributeError)):
+                    raise
+                else:
+                    return self.w_False
 
-    def abstract_isinstance_w(self, w_obj, w_cls):
-        # Equivalent to 'isinstance(obj, cls)'.  The code below only works
-        # for the simple case (new-style instance, new-style class).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
-        return self.is_true(self.isinstance(w_obj, w_cls))
+    def recursive_issubclass(self, w_obj, w_cls):
+        if self.is_w(w_obj, w_cls):
+            return self.w_True
+        for w_base in self.unpackiterable(self.getattr(w_obj,
+                                                       self.wrap('__bases__'))):
+            if self.is_true(self.recursive_issubclass(w_base, w_cls)):
+                return self.w_True
+        return self.w_False
 
-    def abstract_isclass_w(self, w_obj):
-        # Equivalent to 'isinstance(obj, type)'.  The code below only works
-        # for the simple case (new-style instance without special stuff).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
-        return self.is_true(self.isinstance(w_obj, self.w_type))
+    def abstract_isinstance(self, w_obj, w_cls):
+        try:
+            return self.isinstance(w_obj, w_cls)
+        except OperationError, e:
+            if not e.match(self, self.w_TypeError):
+                raise
+            try:
+                w_objcls = self.getattr(w_obj, self.wrap('__class__'))
+                return self.abstract_issubclass(w_objcls, w_cls)
+            except OperationError, e:
+                if not (e.match(self, self.w_TypeError) or
+                        e.match(self, self.w_AttributeError)):
+                    raise
+                return self.w_False
+
+    def abstract_isclass(self, w_obj):
+        if self.is_true(self.isinstance(w_obj, self.w_type)):
+            return self.w_True
+        if self.findattr(w_obj, self.wrap('__bases__')) is not None:
+            return self.w_True
+        else:
+            return self.w_False
 
     def abstract_getclass(self, w_obj):
-        # Equivalent to 'obj.__class__'.  The code below only works
-        # for the simple case (new-style instance without special stuff).
-        # This method is patched with the full logic by the __builtin__
-        # module when it is loaded.
-        return self.type(w_obj)
-
+        try:
+            return self.getattr(w_obj, self.wrap('__class__'))
+        except OperationError, e:
+            if e.match(self, self.w_TypeError) or e.match(self, self.w_AttributeError):
+                return self.type(w_obj)
+            raise
 
     def eval(self, expression, w_globals, w_locals):
         "NOT_RPYTHON: For internal debugging."
