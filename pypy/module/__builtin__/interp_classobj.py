@@ -235,6 +235,7 @@ def make_binary_returning_notimplemented_instance_method(name):
         except OperationError, e:
             if e.match(space, space.w_AttributeError):
                 return space.w_NotImplemented
+            raise
         else:
             if w_meth is None:
                 return space.w_NotImplemented
