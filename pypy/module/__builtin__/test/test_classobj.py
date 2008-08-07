@@ -444,6 +444,21 @@ class AppTestOldstyle(object):
         raises(TypeError, "a + 1.1")
         assert l == [1, 1.1]
 
+    def test_binaryop_raises(self):
+        class A:
+            def __add__(self, other):
+                raise this_exception
+            def __iadd__(self, other):
+                raise this_exception
+
+        a = A()
+        this_exception = ValueError
+        raises(ValueError, "a + 1")
+        raises(ValueError, "a += 1")
+        this_exception = AttributeError
+        raises(AttributeError, "a + 1")
+        raises(AttributeError, "a += 1")
+
     def test_iadd(self):
         class A:
             def __init__(self):
@@ -647,19 +662,23 @@ class AppTestOldstyle(object):
 
     def test_catch_attributeerror_of_descriptor(self):
         def booh(self):
-            raise AttributeError, "booh"
+            raise this_exception, "booh"
 
         class E:
             __eq__ = property(booh)
             __iadd__ = property(booh)
 
         e = E()
+        this_exception = AttributeError
         raises(TypeError, "e += 1")
         # does not crash
         E() == E()
         class I:
             __init__ = property(booh)
         raises(AttributeError, I)
+
+        this_exception = ValueError
+        raises(ValueError, "e += 1")
 
     def test_multiple_inheritance_more(self):
         l = []
@@ -715,6 +734,10 @@ class AppTestOldstyle(object):
         assert Y() != X()
 
     def test_assignment_to_del(self):
+        import sys
+        if not hasattr(sys, 'pypy_objspaceclass'):
+            skip("assignment to __del__ doesn't give a warning in CPython")
+
         import warnings
         
         warnings.simplefilter('error', RuntimeWarning)
