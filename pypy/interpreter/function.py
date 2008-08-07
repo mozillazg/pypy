@@ -343,8 +343,8 @@ class Method(Wrappable):
         else:
             # unbound method
             w_firstarg = args.firstarg()
-            if w_firstarg is not None and space.is_true(
-                    space.abstract_isinstance(w_firstarg, self.w_class)):
+            if w_firstarg is not None and (
+                    space.abstract_isinstance_w(w_firstarg, self.w_class)):
                 pass  # ok
             else:
                 myname = self.getname(space,"")
@@ -372,7 +372,7 @@ class Method(Wrappable):
             # only allow binding to a more specific class than before
             if (w_cls is not None and
                 not space.is_w(w_cls, space.w_None) and
-                not space.is_true(space.abstract_issubclass(w_cls, self.w_class))):
+                not space.abstract_issubclass_w(w_cls, self.w_class)):
                 return space.wrap(self)    # subclass test failed
             else:
                 return descr_function_get(space, self.w_function, w_obj, w_cls)
