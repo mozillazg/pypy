@@ -752,21 +752,21 @@ class ObjSpace(object):
         # for the simple case (new-style class, new-style class).
         # This method is patched with the full logic by the __builtin__
         # module when it is loaded.
-        return self.unwrap(self.issubtype(w_cls1, w_cls2))
+        return self.is_true(self.issubtype(w_cls1, w_cls2))
 
     def abstract_isinstance_w(self, w_obj, w_cls):
         # Equivalent to 'isinstance(obj, cls)'.  The code below only works
         # for the simple case (new-style instance, new-style class).
         # This method is patched with the full logic by the __builtin__
         # module when it is loaded.
-        return self.unwrap(self.isinstance(w_obj, w_cls))
+        return self.is_true(self.isinstance(w_obj, w_cls))
 
     def abstract_isclass_w(self, w_obj):
         # Equivalent to 'isinstance(obj, type)'.  The code below only works
         # for the simple case (new-style instance without special stuff).
         # This method is patched with the full logic by the __builtin__
         # module when it is loaded.
-        return self.unwrap(self.isinstance(w_obj, self.w_type))
+        return self.is_true(self.isinstance(w_obj, self.w_type))
 
     def abstract_getclass(self, w_obj):
         # Equivalent to 'obj.__class__'.  The code below only works
