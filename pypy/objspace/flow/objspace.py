@@ -194,20 +194,6 @@ class FlowObjSpace(ObjSpace):
         from pypy.objspace.flow import specialcase
         specialcase.setup(self)
 
-    def exception_match(self, w_exc_type, w_check_class):
-        try:
-            check_class = self.unwrap(w_check_class)
-        except UnwrapException:
-            raise Exception, "non-constant except guard"
-        if not isinstance(check_class, tuple):
-            # the simple case
-            return ObjSpace.exception_match(self, w_exc_type, w_check_class)
-        # checking a tuple of classes
-        for w_klass in self.unpacktuple(w_check_class):
-            if ObjSpace.exception_match(self, w_exc_type, w_klass):
-                return True
-        return False
-
     def getconstclass(space, w_cls):
         try:
             ecls = space.unwrap(w_cls)
