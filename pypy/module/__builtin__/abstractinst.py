@@ -135,7 +135,7 @@ def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
     # -- case (class-like-object, tuple-of-classes)
     if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
         for w_klass in space.unpacktuple(w_klass_or_tuple):
-            if abstract_issubclass_w(w_derived, w_klass):
+            if abstract_issubclass_w(space, w_derived, w_klass):
                 return True
         return False
 
