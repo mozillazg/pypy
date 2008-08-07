@@ -22,7 +22,7 @@ class BoehmGCTransformer(GCTransformer):
         mh = mallocHelpers()
         mh.allocate = lambda size: llop.boehm_malloc(llmemory.Address, size)
         c_realloc = rffi.llexternal('GC_REALLOC', [rffi.VOIDP, rffi.INT],
-                                    rffi.VOIDP, sandboxsafe=True)
+                                    rffi.VOIDP)
         def _realloc(ptr, size):
             return llmemory.cast_ptr_to_adr(c_realloc(rffi.cast(rffi.VOIDP, ptr), size))
         mh.realloc = _realloc

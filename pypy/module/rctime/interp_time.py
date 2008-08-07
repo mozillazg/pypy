@@ -166,16 +166,17 @@ def _get_inttime(space, w_seconds):
     return rffi.r_time_t(seconds)
 
 def _tm_to_tuple(space, t):
-    time_tuple = [
-        space.wrap(rffi.getintfield(t, 'c_tm_year') + 1900),
-        space.wrap(rffi.getintfield(t, 'c_tm_mon') + 1), # want january == 1
-        space.wrap(rffi.getintfield(t, 'c_tm_mday')),
-        space.wrap(rffi.getintfield(t, 'c_tm_hour')),
-        space.wrap(rffi.getintfield(t, 'c_tm_min')),
-        space.wrap(rffi.getintfield(t, 'c_tm_sec')),
-        space.wrap((rffi.getintfield(t, 'c_tm_wday') + 6) % 7), # want monday == 0
-        space.wrap(rffi.getintfield(t, 'c_tm_yday') + 1), # want january, 1 == 1
-        space.wrap(rffi.getintfield(t, 'c_tm_isdst'))]
+    time_tuple = []
+
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_year') + 1900))
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_mon') + 1)) # want january == 1
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_mday')) )
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_hour')) )
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_min')) )
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_sec')) )
+    time_tuple.append(space.wrap((rffi.getintfield(t, 'c_tm_wday') + 6) % 7)) # want monday == 0
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_yday') + 1)) # want january, 1 == 1
+    time_tuple.append(space.wrap(rffi.getintfield(t, 'c_tm_isdst')) )
     
     w_struct_time = _get_module_object(space, 'struct_time')
     w_time_tuple = space.newtuple(time_tuple)

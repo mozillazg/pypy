@@ -503,28 +503,6 @@ class AppTestBuiltinOptimized(object):
         s = """ """
         # XXX write this test!
 
-    def test_shadow_case_bound_method(self):
-        s = """def test(l):
-        n = len(l)
-        old_len = len
-        class A(object):
-            x = 5
-            def length(self, o):
-                return self.x*old_len(o)
-        import __builtin__
-        __builtin__.len = A().length
-        try:
-            m = len(l)
-        finally:
-            __builtin__.len = old_len
-        return n+m
-        """
-        ns = {}
-        exec s in ns
-        res = ns["test"]([2,3,4])
-        assert res == 18
-        
-
 class TestInternal:
 
     def setup_method(self,method):

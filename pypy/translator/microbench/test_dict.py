@@ -49,9 +49,7 @@ def test_dict_raw_range():
     for x in range(iterations):
         pass
 
-# class and attrs
-
-class NewStyle(object):
+class A:
     def __init__(self):
         self.a = 3
         self.b = 4
@@ -62,7 +60,7 @@ class NewStyle(object):
 
 
 def test_dict_class_dict_getmethod():
-    a = NewStyle()
+    a = A()
     for x in range(iterations):
         a.f 
         a.f 
@@ -70,7 +68,7 @@ def test_dict_class_dict_getmethod():
         a.f 
         
 def test_dict_instance_getattr_instance_dict():
-    a = NewStyle()
+    a = A()
     for x in range(iterations):
         a.a 
         a.b 
@@ -78,7 +76,7 @@ def test_dict_instance_getattr_instance_dict():
         a.b 
 
 def test_dict_instance_setattr_instance_dict():
-    a = NewStyle()
+    a = A()
     for x in range(iterations):
         a.a = 3
         a.b = 4
@@ -86,51 +84,7 @@ def test_dict_instance_setattr_instance_dict():
         a.b = 4
 
 def test_dict_instance_setnewattr_instance_dict():
-    a = NewStyle()
-    for x in range(iterations):
-        a.c = 3
-        a.d = 4
-        a.e = 5
-        a.f = 6
-
-# old-style
-
-class OldStyle:
-    def __init__(self):
-        self.a = 3
-        self.b = 4
-    def f(self):
-        pass
-    def g(self):
-        pass
-
-
-def test_dict_class_dict_getmethod_old_style():
-    a = OldStyle()
-    for x in range(iterations):
-        a.f 
-        a.f 
-        a.f 
-        a.f 
-        
-def test_dict_instance_getattr_instance_dict_old_style():
-    a = OldStyle()
-    for x in range(iterations):
-        a.a 
-        a.b 
-        a.a 
-        a.b 
-
-def test_dict_instance_setattr_instance_dict_old_style():
-    a = OldStyle()
-    for x in range(iterations):
-        a.a = 3
-        a.b = 4
-        a.a = 3
-        a.b = 4
-
-def test_dict_instance_setnewattr_instance_dict_old_style():
-    a = OldStyle()
+    a = A()
     for x in range(iterations):
         a.c = 3
         a.d = 4
