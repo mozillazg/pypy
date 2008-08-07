@@ -15,6 +15,35 @@ class AppTestOldstyle(object):
         assert a.__class__ is A
         assert a.__dict__ == {'b': 2}
 
+    def test_isinstance(self):
+        class A:
+            pass
+        class B(A):
+            pass
+        class C(A):
+            pass
+        assert isinstance(B(), A)
+        assert isinstance(B(), B)
+        assert not isinstance(B(), C)
+        assert not isinstance(A(), B)
+        assert isinstance(B(), (A, C))
+        assert isinstance(B(), (C, (), (C, B)))
+        assert not isinstance(B(), ())
+
+    def test_issubclass(self):
+        class A:
+            pass
+        class B(A):
+            pass
+        class C(A):
+            pass
+        assert issubclass(A, A)
+        assert not issubclass(A, B)
+        assert not issubclass(A, C)
+        assert issubclass(B, A)
+        assert issubclass(B, B)
+        assert not issubclass(B, C)
+
     def test_mutate_class_special(self):
         class A:
             a = 1

@@ -85,6 +85,16 @@ class W_ClassObject(Wrappable):
                                      space.wrap("__bases__ items must be classes"))
         self.bases_w = bases_w
 
+    def is_subclass_of(self, other):
+        assert isinstance(other, W_ClassObject)
+        if self is other:
+            return True
+        for base in self.bases_w:
+            assert isinstance(base, W_ClassObject)
+            if base.is_subclass_of(other):
+                return True
+        return False
+
     def lookup(self, space, w_attr):
         # returns w_value or interplevel None
         w_result = space.finditem(self.w_dict, w_attr)
