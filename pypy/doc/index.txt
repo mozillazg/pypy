@@ -93,8 +93,7 @@ PyPy's own tests, daily updated, `on Linux`_, `on Windows`_
 
 `Nightly compliance test runs for compiled pypy-c`_.
 
-`compliance test status`_ shows outcomes of compliance test runs
-against PyPy on top of CPython.
+information dating from early 2007: 
 
 `PyPy LOC statistics`_ shows LOC statistics about PyPy.
 
