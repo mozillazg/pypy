@@ -11,7 +11,10 @@ class Code(Wrappable):
     Abstract base class."""
     hidden_applevel = False
 
-    fast_natural_arity = -1
+    # n >= 0 : arity
+    # -n: special cases
+    # -99: hopeless    
+    fast_natural_arity = -99
 
     def __init__(self, co_name):
         self.co_name = co_name

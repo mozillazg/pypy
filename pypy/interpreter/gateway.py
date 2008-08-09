@@ -536,6 +536,7 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
         return w_result
 
 class BuiltinCodePassThroughArguments1(BuiltinCode):
+    fast_natural_arity = -1
 
     def funcrun_obj(self, func, w_obj, args):
         space = func.space
