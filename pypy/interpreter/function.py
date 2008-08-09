@@ -86,7 +86,7 @@ class Function(Wrappable):
                 return code.fastcall_4(self.space, self, frame.peekvalue(3),
                                        frame.peekvalue(2), frame.peekvalue(1),
                                         frame.peekvalue(0))
-        elif fast_natural_arity == -1 and nargs > 1:
+        elif fast_natural_arity == -1 and nargs >= 1:
             from pypy.interpreter import gateway
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             w_obj = frame.peekvalue(nargs-1)
