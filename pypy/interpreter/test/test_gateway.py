@@ -1,4 +1,4 @@
-
+from pypy.conftest import gettestobjspace
 from pypy.interpreter import gateway
 from pypy.interpreter import argument
 import py
@@ -570,18 +570,30 @@ class TestPassThroughArguments:
         assert len(called) == 2              
         assert called[0] == 'funcrun' # bad
         called = []
-        
+
         w_res = space.appexec([w_g], """(g):
         class A(object):
            m = g # not a builtin function, so works as method
-        a = A()
-        y = a.m(33)        
-        return y == ('g', a, 33)
+        d = {'A': A}
+        exec \"\"\"
+# own compiler
+a = A()
+y = a.m(33)
+\"\"\" in d
+        return d['y'] == ('g', d['a'], 33)
         """)
         assert space.is_true(w_res)
         assert len(called) == 1
         assert isinstance(called[0], argument.AbstractArguments)
-        
+
+class TestPassThroughArguments_CALL_METHOD(TestPassThroughArguments):
+
+    def setup_class(cls):
+        space = gettestobjspace(usemodules=('_stackless',), **{
+            "objspace.opcodes.CALL_METHOD": True
+            })
+        cls.space = space
+        py.test.skip("shows pessimization with CALL_METHOD")
 
 class AppTestKeywordsToBuiltinSanity(object):
 
