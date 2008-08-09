@@ -491,7 +491,7 @@ class TestGateway:
 
 class TestPassThroughArguments:
     
-    def test_pass_trough_arguments(self):
+    def test_pass_trough_arguments0(self):
         space = self.space
 
         called = []
@@ -501,18 +501,8 @@ class TestPassThroughArguments:
             a_w, _ = __args__.unpack()
             return space.newtuple([space.wrap('f')]+a_w)
 
-        def g(space, w_self, __args__):
-            called.append(__args__)
-            a_w, _ = __args__.unpack()
-            return space.newtuple([space.wrap('g'), w_self, ]+a_w)
-
         w_f = space.wrap(gateway.interp2app_temp(f,
                          unwrap_spec=[gateway.ObjSpace,
-                                      gateway.Arguments]))
-
-        w_g = space.wrap(gateway.interp2app_temp(g,
-                         unwrap_spec=[gateway.ObjSpace,
-                                      gateway.W_Root,
                                       gateway.Arguments]))
 
         args = argument.Arguments(space, [space.wrap(7)])
@@ -522,7 +512,21 @@ class TestPassThroughArguments:
         
         # white-box check for opt
         assert called[0] is args
+
+    def test_pass_trough_arguments1(self):
+        space = self.space
+
         called = []
+        
+        def g(space, w_self, __args__):
+            called.append(__args__)
+            a_w, _ = __args__.unpack()
+            return space.newtuple([space.wrap('g'), w_self, ]+a_w)
+
+        w_g = space.wrap(gateway.interp2app_temp(g,
+                         unwrap_spec=[gateway.ObjSpace,
+                                      gateway.W_Root,
+                                      gateway.Arguments]))
 
         w_self = space.wrap('self')
 
