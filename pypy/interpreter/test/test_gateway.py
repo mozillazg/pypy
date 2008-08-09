@@ -553,7 +553,35 @@ class TestPassThroughArguments:
         # no opt in this case
         assert len(called) == 2      
         assert called[0] == 'funcrun'
+        called = []
 
+        # higher level interfaces
+
+        w_res = space.call_function(w_g, w_self)
+        assert space.is_true(space.eq(w_res, space.wrap(('g', 'self'))))
+        assert len(called) == 2              
+        assert called[0] == 'funcrun' # bad
+        called = []
+        
+        w_res = space.appexec([w_g], """(g):
+        return g('self', 11)
+        """)
+        assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 11))))
+        assert len(called) == 2              
+        assert called[0] == 'funcrun' # bad
+        called = []
+        
+        w_res = space.appexec([w_g], """(g):
+        class A(object):
+           m = g # not a builtin function, so works as method
+        a = A()
+        y = a.m(33)        
+        return y == ('g', a, 33)
+        """)
+        assert space.is_true(w_res)
+        assert len(called) == 1
+        assert isinstance(called[0], argument.AbstractArguments)
+        
 
 class AppTestKeywordsToBuiltinSanity(object):
 
