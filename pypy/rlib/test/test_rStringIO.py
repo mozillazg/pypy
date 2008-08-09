@@ -96,7 +96,6 @@ def test_truncate():
     assert f.tell() == 3
 
 def test_bug():
-    import py; py.test.skip("in-progress")
     f = RStringIO()
     f.write('0')
     f.write('1')
