@@ -528,20 +528,31 @@ class TestPassThroughArguments:
                                       gateway.W_Root,
                                       gateway.Arguments]))
 
+        old_funcrun = w_g.code.funcrun
+        def funcrun_witness(func, args):
+            called.append('funcrun')
+            return old_funcrun(func, args)
+
+        w_g.code.funcrun = funcrun_witness
+
         w_self = space.wrap('self')
 
         args3 = argument.Arguments(space, [space.wrap(3)])
         w_res = space.call_obj_args(w_g, w_self, args3)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 3))))
         # white-box check for opt
+        assert len(called) == 1
         assert called[0] is args3
 
-        # no opt in this case
+        called = []
         args0 = argument.Arguments(space, [space.wrap(0)])
         args = args0.prepend(w_self)
 
         w_res = space.call_args(w_g, args)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 0))))
+        # no opt in this case
+        assert len(called) == 2      
+        assert called[0] == 'funcrun'
 
 
 class AppTestKeywordsToBuiltinSanity(object):
