@@ -1,22 +1,28 @@
 from sup import run
 
 def w(N, start):
-    o = object
+    l = []
     start()
     i = 0
     while i < N:
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()
-        o()        
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
+        l.__init__()
         i+=1
     
 run(w, 1000)

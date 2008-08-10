@@ -33,97 +33,76 @@ class Function(Wrappable):
         return "<Function %s>" % getattr(self, 'name', '?')
 
     def call_args(self, args):
-        return self.code.funcrun(self, args) # delegate activation to code
+        # delegate activation to code        
+        return self.code.funcrun(self, args)
+
+    def call_obj_args(self, w_obj, args):
+        # delegate activation to code
+        return self.code.funcrun_obj(self, w_obj, args)
 
     def getcode(self):
         return self.code
     
     def funccall(self, *args_w): # speed hack
         code = self.getcode() # hook for the jit
-        if len(args_w) == 0:
-            w_res = code.fastcall_0(self.space, self)
-            if w_res is not None:
-                return w_res
-        elif len(args_w) == 1:
-            w_res = code.fastcall_1(self.space, self, args_w[0])
-            if w_res is not None:
-                return w_res
-        elif len(args_w) == 2:
-            w_res = code.fastcall_2(self.space, self, args_w[0], args_w[1])
-            if w_res is not None:
-                return w_res
-        elif len(args_w) == 3:
-            w_res = code.fastcall_3(self.space, self, args_w[0],
-                                    args_w[1], args_w[2])
-            if w_res is not None:
-                return w_res
-        elif len(args_w) == 4:
-            w_res = code.fastcall_4(self.space, self, args_w[0],
-                                    args_w[1], args_w[2], args_w[3])
-            if w_res is not None:
-                return w_res
+        nargs = len(args_w)
+        fast_natural_arity = code.fast_natural_arity
+        if nargs == fast_natural_arity:
+            if nargs == 0:
+                return code.fastcall_0(self.space, self)
+            elif nargs == 1:
+                return code.fastcall_1(self.space, self, args_w[0])
+            elif nargs == 2:
+                return code.fastcall_2(self.space, self, args_w[0], args_w[1])
+            elif nargs == 3:
+                return code.fastcall_3(self.space, self, args_w[0],
+                                       args_w[1], args_w[2])
+            elif nargs == 4:
+                return code.fastcall_4(self.space, self, args_w[0],
+                                       args_w[1], args_w[2], args_w[3])
+        elif nargs >= 1 and fast_natural_arity == -1:
+            from pypy.interpreter import gateway
+            assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
+            return code.funcrun_obj(self, args_w[0],
+                                    Arguments(self.space,
+                                              list(args_w[1:])))
         return self.call_args(Arguments(self.space, list(args_w)))
 
     def funccall_valuestack(self, nargs, frame): # speed hack
         code = self.getcode() # hook for the jit
-        if nargs == 0:
-            w_res = code.fastcall_0(self.space, self)
-            if w_res is not None:
-                return w_res
-        elif nargs == 1:
-            w_res = code.fastcall_1(self.space, self, frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
-        elif nargs == 2:
-            w_res = code.fastcall_2(self.space, self, frame.peekvalue(1),
-                                    frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
-        elif nargs == 3:
-            w_res = code.fastcall_3(self.space, self, frame.peekvalue(2),
-                                    frame.peekvalue(1), frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
-        elif nargs == 4:
-            w_res = code.fastcall_4(self.space, self, frame.peekvalue(3),
-                                    frame.peekvalue(2), frame.peekvalue(1),
-                                    frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
+        fast_natural_arity = code.fast_natural_arity        
+        if nargs == fast_natural_arity:        
+            if nargs == 0:
+                return code.fastcall_0(self.space, self)
+            elif nargs == 1:
+                return code.fastcall_1(self.space, self, frame.peekvalue(0))
+            elif nargs == 2:
+                return code.fastcall_2(self.space, self, frame.peekvalue(1),
+                                       frame.peekvalue(0))
+            elif nargs == 3:
+                return code.fastcall_3(self.space, self, frame.peekvalue(2),
+                                       frame.peekvalue(1), frame.peekvalue(0))
+            elif nargs == 4:
+                return code.fastcall_4(self.space, self, frame.peekvalue(3),
+                                       frame.peekvalue(2), frame.peekvalue(1),
+                                        frame.peekvalue(0))
+        elif fast_natural_arity == -1 and nargs >= 1:
+            from pypy.interpreter import gateway
+            assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
+            w_obj = frame.peekvalue(nargs-1)
+            args = frame.make_arguments(nargs-1)
+            try:
+                return code.funcrun_obj(self, w_obj, args)
+            finally:
+                if isinstance(args, ArgumentsFromValuestack):
+                    args.frame = None
+                    
         args = frame.make_arguments(nargs)
         try:
             return self.call_args(args)
         finally:
             if isinstance(args, ArgumentsFromValuestack):
                 args.frame = None
-
-    def funccall_obj_valuestack(self, w_obj, nargs, frame): # speed hack
-        code = self.getcode() # hook for the jit
-        if nargs == 0:
-            w_res = code.fastcall_1(self.space, self, w_obj)
-            if w_res is not None:
-                return w_res
-        elif nargs == 1:
-            w_res = code.fastcall_2(self.space, self, w_obj, frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
-        elif nargs == 2:
-            w_res = code.fastcall_3(self.space, self, w_obj, frame.peekvalue(1),
-                                    frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
-        elif nargs == 3:
-            w_res = code.fastcall_4(self.space, self, w_obj, frame.peekvalue(2),
-                                    frame.peekvalue(1), frame.peekvalue(0))
-            if w_res is not None:
-                return w_res
-        stkargs = frame.make_arguments(nargs)
-        args = stkargs.prepend(w_obj)
-        try:
-            return self.call_args(args)
-        finally:
-            if isinstance(stkargs, ArgumentsFromValuestack):
-                stkargs.frame = None
 
     def getdict(self):
         if self.w_func_dict is None:
@@ -339,29 +318,29 @@ class Method(Wrappable):
         space = self.space
         if self.w_instance is not None:
             # bound method
-            args = args.prepend(self.w_instance)
+            return space.call_obj_args(self.w_function, self.w_instance, args)
+
+        # unbound method
+        w_firstarg = args.firstarg()
+        if w_firstarg is not None and space.is_true(
+                space.abstract_isinstance(w_firstarg, self.w_class)):
+            pass  # ok
         else:
-            # unbound method
-            w_firstarg = args.firstarg()
-            if w_firstarg is not None and space.is_true(
-                    space.abstract_isinstance(w_firstarg, self.w_class)):
-                pass  # ok
+            myname = self.getname(space,"")
+            clsdescr = self.w_class.getname(space,"")
+            if clsdescr:
+                clsdescr+=" "
+            if w_firstarg is None:
+                instdescr = "nothing"
             else:
-                myname = self.getname(space,"")
-                clsdescr = self.w_class.getname(space,"")
-                if clsdescr:
-                    clsdescr+=" "
-                if w_firstarg is None:
-                    instdescr = "nothing"
-                else:
-                    instname = space.abstract_getclass(w_firstarg).getname(space,"")
-                    if instname:
-                        instname += " "
-                    instdescr = "%sinstance" %instname
-                msg = ("unbound method %s() must be called with %s"
-                       "instance as first argument (got %s instead)")  % (myname, clsdescr, instdescr)
-                raise OperationError(space.w_TypeError,
-                                     space.wrap(msg))
+                instname = space.abstract_getclass(w_firstarg).getname(space,"")
+                if instname:
+                    instname += " "
+                instdescr = "%sinstance" %instname
+            msg = ("unbound method %s() must be called with %s"
+                   "instance as first argument (got %s instead)")  % (myname, clsdescr, instdescr)
+            raise OperationError(space.w_TypeError,
+                                 space.wrap(msg))
         return space.call_args(self.w_function, args)
 
     def descr_method_get(self, w_obj, w_cls=None):
