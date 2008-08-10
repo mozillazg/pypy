@@ -71,7 +71,7 @@ class Function(Wrappable):
     def funccall_valuestack(self, nargs, frame): # speed hack
         code = self.getcode() # hook for the jit
         fast_natural_arity = code.fast_natural_arity        
-        if nargs == code.fast_natural_arity:        
+        if nargs == fast_natural_arity:        
             if nargs == 0:
                 return code.fastcall_0(self.space, self)
             elif nargs == 1:
