@@ -16,10 +16,20 @@ def run(func, n):
         st[0] = t()
 
     ref(n, start)
-    elapsed_ref = t() - st[0]
+    elapsed_ref1 = t() - st[0]
+    ref(n, start)
+    elapsed_ref2 = t() - st[0]
+    ref(n, start)
+    elapsed_ref3 = t() - st[0]    
+    elapsed_ref = min(elapsed_ref1, elapsed_ref2, elapsed_ref3)
 
     func(n, start)
-    elapsed = t() - st[0]
+    elapsed1 = t() - st[0]
+    func(n, start)
+    elapsed2 = t() - st[0]
+    func(n, start)
+    elapsed3 = t() - st[0]
+    elapsed = min(elapsed1, elapsed2, elapsed3)    
 
     #if elapsed < elapsed_ref*10:
     #    print "not enough meat", elapsed, elapsed_ref

@@ -2,8 +2,9 @@ from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
 from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
-from pypy.interpreter.argument import Arguments
+from pypy.interpreter import argument
 from pypy.interpreter import pyframe
+from pypy.interpreter import function
 from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table, \
      BytecodeCorruption
 from pypy.rlib.objectmodel import instantiate
@@ -147,12 +148,22 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     nargs = oparg & 0xff
                     w_function = w_value
                     try:
-                        w_result = f.space.call_valuestack(w_function, nargs, f)
+                        w_result = f.call_likely_builtin(w_function, nargs)
                         # XXX XXX fix the problem of resume points!
                         #rstack.resume_point("CALL_FUNCTION", f, nargs, returns=w_result)
                     finally:
                         f.dropvalues(nargs)
                     f.pushvalue(w_result)
+
+                def call_likely_builtin(f, w_function, nargs):
+                    if isinstance(w_function, function.Function):
+                        return w_function.funccall_valuestack(nargs, f)
+                    args = f.make_arguments(nargs)
+                    try:
+                        return f.space.call_args(w_function, args)
+                    finally:
+                        if isinstance(args, argument.ArgumentsFromValuestack):
+                            args.frame = None
 
             if self.config.objspace.opcodes.CALL_METHOD:
                 # def LOOKUP_METHOD(...):

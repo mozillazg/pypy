@@ -75,7 +75,7 @@ class DescrOperation:
         descr = space.interpclass_w(w_descr)
         # a special case for performance and to avoid infinite recursion
         if type(descr) is Function:
-            return descr.call_args(args.prepend(w_obj))
+            return descr.call_obj_args(w_obj, args)
         else:
             w_impl = space.get(w_descr, w_obj)
             return space.call_args(w_impl, args)

@@ -2,12 +2,7 @@ from sup import run
 
 def w(N, start):
     class A(object):
-        def __init__(self):
-            pass
-
-    class B(object):
-        def __init__(self, x, y):
-            pass
+        pass
 
     start()
     i = 0
@@ -17,10 +12,11 @@ def w(N, start):
         A()
         A()
         A()
-        B(1, 2)
-        B(1, 2)
-        B(1, 2)   
-        B(1, 2)
+        A()
+        A()
+        A()
+        A()
+        A()
         i+=1
     
 run(w, 1000)
