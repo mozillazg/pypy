@@ -104,30 +104,6 @@ class Function(Wrappable):
             if isinstance(args, ArgumentsFromValuestack):
                 args.frame = None
 
-    def funccall_obj_valuestack(self, w_obj, nargs, frame): # speed hack
-        code = self.getcode() # hook for the jit
-        if nargs+1 == code.fast_natural_arity:        
-            if nargs == 0:
-                return code.fastcall_1(self.space, self, w_obj)
-            elif nargs == 1:
-                return code.fastcall_2(self.space, self, w_obj,
-                                       frame.peekvalue(0))
-            elif nargs == 2:
-                return code.fastcall_3(self.space, self, w_obj,
-                                       frame.peekvalue(1),
-                                       frame.peekvalue(0))
-            elif nargs == 3:
-                return code.fastcall_4(self.space, self, w_obj,
-                                       frame.peekvalue(2),
-                                       frame.peekvalue(1),
-                                       frame.peekvalue(0))
-        stkargs = frame.make_arguments(nargs)
-        try:
-            return self.call_obj_args(w_obj, stkargs)
-        finally:
-            if isinstance(stkargs, ArgumentsFromValuestack):
-                stkargs.frame = None
-
     def getdict(self):
         if self.w_func_dict is None:
             self.w_func_dict = self.space.newdict()

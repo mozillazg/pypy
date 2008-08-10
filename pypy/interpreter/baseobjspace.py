@@ -679,15 +679,17 @@ class ObjSpace(object):
         return self.call_args(w_callable, args)
 
     def call_function(self, w_func, *args_w):
-        if not self.config.objspace.disable_call_speedhacks:
+        nargs = len(args_w) # used for pruning funccall versions
+        if not self.config.objspace.disable_call_speedhacks and nargs < 5:
             # XXX start of hack for performance
             from pypy.interpreter.function import Function, Method
             if isinstance(w_func, Method):
                 w_inst = w_func.w_instance
                 if w_inst is not None:
-                    func = w_func.w_function
-                    if isinstance(func, Function):
-                        return func.funccall(w_inst, *args_w)
+                    if nargs < 4:
+                        func = w_func.w_function
+                        if isinstance(func, Function):
+                            return func.funccall(w_inst, *args_w)
                 elif args_w and self.is_true(
                         self.abstract_isinstance(args_w[0], w_func.w_class)):
                     w_func = w_func.w_function
@@ -707,9 +709,10 @@ class ObjSpace(object):
             if isinstance(w_func, Method):
                 w_inst = w_func.w_instance
                 if w_inst is not None:
-                    func = w_func.w_function
-                    if isinstance(func, Function):
-                        return func.funccall_obj_valuestack(w_inst, nargs, frame)
+                    w_func = w_func.w_function
+                    # reuse callable stack place for w_inst
+                    frame.settopvalue(w_inst, nargs)
+                    nargs += 1
                 elif nargs > 0 and self.is_true(
                     self.abstract_isinstance(frame.peekvalue(nargs-1),   #    :-(
                                              w_func.w_class)):
