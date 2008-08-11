@@ -85,6 +85,16 @@ class W_ClassObject(Wrappable):
                                      space.wrap("__bases__ items must be classes"))
         self.bases_w = bases_w
 
+    def is_subclass_of(self, other):
+        assert isinstance(other, W_ClassObject)
+        if self is other:
+            return True
+        for base in self.bases_w:
+            assert isinstance(base, W_ClassObject)
+            if base.is_subclass_of(other):
+                return True
+        return False
+
     def lookup(self, space, w_attr):
         # returns w_value or interplevel None
         w_result = space.finditem(self.w_dict, w_attr)
@@ -225,6 +235,7 @@ def make_binary_returning_notimplemented_instance_method(name):
         except OperationError, e:
             if e.match(space, space.w_AttributeError):
                 return space.w_NotImplemented
+            raise
         else:
             if w_meth is None:
                 return space.w_NotImplemented
@@ -314,11 +325,6 @@ class W_InstanceObject(Wrappable):
 
 
     def getattr(self, space, w_name, exc=True):
-        name = space.str_w(w_name)
-        if name == "__dict__":
-            return self.w_dict
-        elif name == "__class__":
-            return self.w_class
         w_result = space.finditem(self.w_dict, w_name)
         if w_result is not None:
             return w_result
@@ -328,7 +334,7 @@ class W_InstanceObject(Wrappable):
                 raise OperationError(
                     space.w_AttributeError,
                     space.wrap("%s instance has no attribute %s" % (
-                        self.w_class.name, name)))
+                        self.w_class.name, space.str_w(w_name))))
             else:
                 return None
         w_descr_get = space.lookup(w_value, '__get__')
@@ -337,7 +343,12 @@ class W_InstanceObject(Wrappable):
         return space.call_function(w_descr_get, w_value, self, self.w_class)
 
     def descr_getattribute(self, space, w_attr):
-        #import pdb; pdb.set_trace()
+        name = space.str_w(w_attr)
+        if len(name) >= 8 and name[0] == '_':
+            if name == "__dict__":
+                return self.w_dict
+            elif name == "__class__":
+                return self.w_class
         try:
             return self.getattr(space, w_attr)
         except OperationError, e:
