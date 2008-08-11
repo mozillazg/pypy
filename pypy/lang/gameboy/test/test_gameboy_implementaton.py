@@ -1,9 +1,13 @@
-import py
-from pypy.lang.gameboy.gameboy_implementation import *
-from pypy.lang.gameboy import constants
-
 import py, sys
 from pypy import conftest
+
+from pypy.lang.gameboy import constants
+
+# check if the lib-sdl import fails here
+try:
+    from pypy.lang.gameboy.gameboy_implementation import *
+except ImportError:
+    py.test.skip("lib sdl is not installed")
 
 #
 #  This test file is skipped unless run with "py.test --view".
@@ -14,6 +18,7 @@ from pypy import conftest
 if sys.platform == 'darwin':
     from AppKit import NSApplication
     NSApplication.sharedApplication()
+
 
 class TestGameBoyImplementation(object):
 
