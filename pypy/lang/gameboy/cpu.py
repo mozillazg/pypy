@@ -3,10 +3,6 @@ from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import *
 from pypy.lang.gameboy.interrupt import *
 
-from pypy.rlib.objectmodel import we_are_translated
-if not we_are_translated():
-    from pypy.lang.gameboy.debug import *
-
 # ---------------------------------------------------------------------------
 
 def process_2_complement(value):
