@@ -87,8 +87,8 @@ class Module(MixedModule):
         'coerce'        : 'operation.coerce',
         'divmod'        : 'operation.divmod',
         '_issubtype'    : 'operation._issubtype',
-        'issubclass'    : 'operation.issubclass',
-        'isinstance'    : 'operation.isinstance',
+        'issubclass'    : 'abstractinst.app_issubclass',
+        'isinstance'    : 'abstractinst.app_isinstance',
         'getattr'       : 'operation.getattr',
         'setattr'       : 'operation.setattr',
         'delattr'       : 'operation.delattr',
@@ -151,6 +151,12 @@ class Module(MixedModule):
                 # xxx hide the installer
                 space.delitem(self.w_dict, space.wrap(name))
                 del self.loaders[name]
+        # install the more general version of isinstance() & co. in the space
+        from pypy.module.__builtin__ import abstractinst as ab
+        space.abstract_isinstance_w = ab.abstract_isinstance_w.__get__(space)
+        space.abstract_issubclass_w = ab.abstract_issubclass_w.__get__(space)
+        space.abstract_isclass_w = ab.abstract_isclass_w.__get__(space)
+        space.abstract_getclass = ab.abstract_getclass.__get__(space)
 
     def startup(self, space):
         # install zipimport hook if --withmod-zipimport is used
