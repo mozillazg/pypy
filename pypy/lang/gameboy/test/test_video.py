@@ -1,6 +1,8 @@
-from pypy.lang.gameboy.video import *
+
+from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import Interrupt
-import pypy.lang.gameboy.constants
+from pypy.lang.gameboy.video import Video
+from pypy.lang.gameboy.video import VideoDriver
 import py
 
 class Memory(object):
@@ -306,7 +308,7 @@ def test_emulate_h_blank_part_2_2_frame_skip():
     
 def test_emulate_v_vblank_1():
     video = get_video()   
-    video.interrupt.set_fnterrupt_flag(0)
+    video.interrupt.set_interrupt_flag(0)
     video.stat = 0xFE
     video.vblank = True
     video.cycles = 0
@@ -317,7 +319,7 @@ def test_emulate_v_vblank_1():
     assert video.interrupt.vblank.is_pending()
     assert video.interrupt.lcd.is_pending()
     
-    video.interrupt.set_fnterrupt_flag(0)
+    video.interrupt.set_interrupt_flag(0)
     video.stat = 0x00
     video.vblank = True
     assert not video.interrupt.vblank.is_pending()
@@ -331,7 +333,7 @@ def test_emulate_v_vblank_1():
     
 def test_emulate_v_vblank_2():
     video = get_video()   
-    video.interrupt.set_fnterrupt_flag(0)
+    video.interrupt.set_interrupt_flag(0)
     video.stat = 0x2D
     video.vblank = False
     video.cycles = 0
@@ -343,7 +345,7 @@ def test_emulate_v_vblank_2():
     assert not video.interrupt.vblank.is_pending()
     assert video.interrupt.lcd.is_pending()
     
-    video.interrupt.set_fnterrupt_flag(0)
+    video.interrupt.set_interrupt_flag(0)
     video.cycles = 0
     video.stat = 0xFD
     video.emulate_vblank()
