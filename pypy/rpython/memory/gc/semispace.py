@@ -72,14 +72,6 @@ class SemiSpaceGC(MovingGCBase):
         self.objects_with_weakrefs = self.AddressStack()
         self.objects_with_id = self.AddressDict()
 
-    def disable_finalizers(self):
-        self.finalizer_lock_count += 1
-
-    def enable_finalizers(self):
-        self.finalizer_lock_count -= 1
-        if self.run_finalizers.non_empty():
-            self.execute_finalizers()
-
     # This class only defines the malloc_{fixed,var}size_clear() methods
     # because the spaces are filled with zeroes in advance.
 

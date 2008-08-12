@@ -400,12 +400,15 @@ class UserDelAction(AsyncAction):
     def __init__(self, space):
         AsyncAction.__init__(self, space)
         self.dying_objects_w = []
+        self.finalizers_lock_count = 0
 
     def register_dying_object(self, w_obj):
         self.dying_objects_w.append(w_obj)
         self.fire()
 
     def perform(self, executioncontext):
+        if self.finalizers_lock_count > 0:
+            return
         # Each call to perform() first grabs the self.dying_objects_w
         # and replaces it with an empty list.  We do this to try to
         # avoid too deep recursions of the kind of __del__ being called

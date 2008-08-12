@@ -93,8 +93,6 @@ opcodes = _proc_dict({
 
     'gc__collect':              jvm.SYSTEMGC,
     'gc_set_max_heap_size':     Ignore,
-    'gc__enable_finalizers':    Ignore,
-    'gc__disable_finalizers':   Ignore,
     'resume_point':             Ignore,
 
     'debug_assert':              [], # TODO: implement?

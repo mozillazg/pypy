@@ -4,18 +4,43 @@ class AppTestGC(object):
         gc.collect() # mostly a "does not crash" kind of test
 
     def test_disable_finalizers(self):
-        # on top of PyPy we can't easily test this, except by using
-        # obsure hacks, so for now we'll live with a "does not crash"
-        # kind of test
         import gc
+        class X(object):
+            created = 0
+            deleted = 0
+            def __init__(self):
+                X.created += 1
+            def __del__(self):
+                X.deleted += 1
+        def runtest(should_be_enabled):
+            gc.collect()
+            if should_be_enabled:
+                assert X.deleted == X.created
+            else:
+                old_deleted = X.deleted
+            X(); X(); X()
+            gc.collect()
+            if should_be_enabled:
+                assert X.deleted == X.created
+            else:
+                assert X.deleted == old_deleted
+
+        runtest(True)
         gc.disable_finalizers()
+        runtest(False)
+        runtest(False)
         gc.enable_finalizers()
-        # we can test that nesting appears to work
+        runtest(True)
+        # test nesting
         gc.disable_finalizers()
         gc.disable_finalizers()
+        runtest(False)
         gc.enable_finalizers()
+        runtest(False)
         gc.enable_finalizers()
+        runtest(True)
         raises(ValueError, gc.enable_finalizers)
+        runtest(True)
 
     def test_estimate_heap_size(self):
         import sys, gc
