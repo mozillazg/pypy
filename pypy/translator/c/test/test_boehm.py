@@ -420,6 +420,3 @@ class TestUsingBoehm(AbstractGCTestClass):
         c_fn = self.getcompiled(wrapper, [])
         res = c_fn()
         assert res == 1
-
-    test_disable_finalizers = (
-        snippet.SemiSpaceGCTests.test_disable_finalizers.im_func)

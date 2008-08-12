@@ -102,12 +102,6 @@ class GCManagedHeap(object):
     def collect(self):
         self.gc.collect()
 
-    def disable_finalizers(self):
-        self.gc.disable_finalizers()
-
-    def enable_finalizers(self):
-        self.gc.enable_finalizers()
-
     def can_move(self, addr):
         return self.gc.can_move(addr)
 

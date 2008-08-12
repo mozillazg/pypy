@@ -227,10 +227,6 @@ class FrameworkGCTransformer(GCTransformer):
             + [annmodel.SomeBool(), annmodel.SomeBool()], s_gcref)
         self.collect_ptr = getfn(GCClass.collect.im_func,
             [s_gc], annmodel.s_None)
-        self.disable_finalizers_ptr = getfn(GCClass.disable_finalizers.im_func,
-            [s_gc], annmodel.s_None)
-        self.enable_finalizers_ptr = getfn(GCClass.enable_finalizers.im_func,
-            [s_gc], annmodel.s_None)
         self.can_move_ptr = getfn(GCClass.can_move.im_func,
                                   [s_gc, annmodel.SomeAddress()],
                                   annmodel.SomeBool())
@@ -566,21 +562,6 @@ class FrameworkGCTransformer(GCTransformer):
                              resulttype=llmemory.GCREF)
         self.pop_roots(hop, livevars)
         return v_result
-
-    def gct_gc__disable_finalizers(self, hop):
-        # cannot collect()
-        op = hop.spaceop
-        hop.genop("direct_call", [self.disable_finalizers_ptr,
-                                  self.c_const_gc],
-                  resultvar=op.result)
-
-    def gct_gc__enable_finalizers(self, hop):
-        # can collect() because it typically calls pending finalizers
-        op = hop.spaceop
-        livevars = self.push_roots(hop)
-        hop.genop("direct_call", [self.enable_finalizers_ptr, self.c_const_gc],
-                  resultvar=op.result)
-        self.pop_roots(hop, livevars)
 
     def gct_gc_x_swap_pool(self, hop):
         op = hop.spaceop
