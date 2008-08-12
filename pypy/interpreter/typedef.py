@@ -9,7 +9,7 @@ from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
     DescrMismatch
 from pypy.interpreter.error import OperationError
 from pypy.tool.sourcetools import compile2, func_with_new_name
-from pypy.rlib.objectmodel import instantiate, we_are_translated
+from pypy.rlib.objectmodel import instantiate
 from pypy.rlib.rarithmetic import intmask
 
 class TypeDef:
@@ -248,17 +248,8 @@ def _builduserclswithfeature(supercls, *features):
 
     if "del" in features:
         class Proto(object):
-            _del_was_called = False
             def __del__(self):
-                # the logic below always resurect the objects, so when
-                # running on top of CPython we must manually ensure that
-                # we do it only once
-                if not we_are_translated():
-                    if self._del_was_called:
-                        return
-                    self._del_was_called = True
-                self.clear_all_weakrefs()
-                self.space.user_del_action.register_dying_object(self)
+                self._enqueue_for_destruction(self.space)
         # if the base class needs its own interp-level __del__,
         # we override the _call_builtin_destructor() method to invoke it
         # after the app-level destructor.

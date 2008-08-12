@@ -5,6 +5,7 @@ class AppTestGC(object):
 
     def test_disable_finalizers(self):
         import gc
+
         class X(object):
             created = 0
             deleted = 0
@@ -12,18 +13,31 @@ class AppTestGC(object):
                 X.created += 1
             def __del__(self):
                 X.deleted += 1
+
+        class OldX:
+            created = 0
+            deleted = 0
+            def __init__(self):
+                OldX.created += 1
+            def __del__(self):
+                OldX.deleted += 1
+
         def runtest(should_be_enabled):
+            runtest1(should_be_enabled, X)
+            runtest1(should_be_enabled, OldX)
+
+        def runtest1(should_be_enabled, Cls):
             gc.collect()
             if should_be_enabled:
-                assert X.deleted == X.created
+                assert Cls.deleted == Cls.created
             else:
-                old_deleted = X.deleted
-            X(); X(); X()
+                old_deleted = Cls.deleted
+            Cls(); Cls(); Cls()
             gc.collect()
             if should_be_enabled:
-                assert X.deleted == X.created
+                assert Cls.deleted == Cls.created
             else:
-                assert X.deleted == old_deleted
+                assert Cls.deleted == old_deleted
 
         runtest(True)
         gc.disable_finalizers()

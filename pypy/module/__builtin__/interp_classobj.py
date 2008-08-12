@@ -630,6 +630,13 @@ class W_InstanceObject(Wrappable):
                                  space.wrap("instance has no next() method"))
         return space.call_function(w_func)
 
+    def descr_del(self, space):
+        # Note that this is called from executioncontext.UserDelAction
+        # via the space.userdel() method.
+        w_func = self.getattr(space, space.wrap('__del__'), False)
+        if w_func is not None:
+            space.call_function(w_func)
+
 rawdict = {}
 
 # unary operations
@@ -719,20 +726,11 @@ W_InstanceObject.typedef = TypeDef("instance",
     next = interp2app(W_InstanceObject.descr_next,
                       unwrap_spec=['self', ObjSpace]),
     __weakref__ = make_weakref_descr(W_InstanceObject),
+    __del__ = interp2app(W_InstanceObject.descr_del,
+                         unwrap_spec=['self', ObjSpace]),
     **rawdict
 )
 
 class W_InstanceObjectWithDel(W_InstanceObject):
     def __del__(self):
-        self.clear_all_weakrefs()
-        try:
-            self.descr_del()
-        except OperationError, e:
-            e.write_unraisable(self.space, 'method __del__ of ', self)
-            e.clear(self.space)   # break up reference cycles
-
-    def descr_del(self):
-        space = self.space
-        w_func = self.getattr(space, space.wrap('__del__'), False)
-        if w_func is not None:
-            space.call_function(w_func)
+        self._enqueue_for_destruction(self.space)
