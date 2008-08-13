@@ -1,10 +1,11 @@
 from pypy.jit.codegen import model
+# Wrapper Classes
 
-
-class IntVar(model.GenVar):
+class Register64(model.GenVar):
     def __init__(self, reg):
         self.reg = reg
 
-class Const(model.GenConst):
+# TODO: support 64-bit Constants
+class Constant32(model.GenConst):
     def __init__(self, value):
         self.value = value
