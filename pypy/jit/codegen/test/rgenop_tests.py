@@ -404,6 +404,53 @@ def get_switch_runner(T, RGenOp):
         return res
     return switch_runner
 
+def make_switch_many_args(T, rgenop):
+    """
+    def f(v0, v1, v2, v3, v4):
+        if v0 == 0: # switch
+            return 21*v1
+        elif v0 == 1:
+            return 21+v1+v2+v3+v4
+        else:
+            return v1
+    """
+    sigtoken = rgenop.sigToken(T.FUNC5)
+    builder, gv_switch, [gv0, gv1, gv2, gv3, gv4] = rgenop.newgraph(sigtoken, "switch_many_args")
+    builder.start_writing()
+
+    flexswitch, default_builder = builder.flexswitch(gv0, [gv1, gv2, gv3, gv4])
+    const21 = rgenop.genconst(21)
+
+    # default
+    default_builder.finish_and_return(sigtoken, gv1)
+    # case == 0
+    const0 = rgenop.genconst(0)
+    case_builder = flexswitch.add_case(const0)
+    gv_res_case0 = case_builder.genop2('int_mul', const21, gv1)
+    case_builder.finish_and_return(sigtoken, gv_res_case0)
+    # case == 1
+    const1 = rgenop.genconst(1)
+    case_builder = flexswitch.add_case(const1)
+    gv_tmp1 = case_builder.genop2('int_add', const21, gv1)
+    gv_tmp2 = case_builder.genop2('int_add', gv_tmp1, gv2)
+    gv_tmp3 = case_builder.genop2('int_add', gv_tmp2, gv3)
+    gv_res_case1 = case_builder.genop2('int_add', gv_tmp3, gv3)
+    case_builder.finish_and_return(sigtoken, gv_res_case1)
+
+    builder.end()
+    return gv_switch
+
+def get_switch_many_args_runner(T, RGenOp):
+    def switch_runner(x, y, z, w, k):
+        rgenop = RGenOp()
+        gv_switchfn = make_switch_many_args(T, rgenop)
+        switchfn = gv_switchfn.revealconst(T.Ptr(T.FUNC5))
+        res = switchfn(x, y, z, w, k)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return switch_runner
+
+
 def make_large_switch(T, rgenop):
     """
     def f(v0, v1):
@@ -1101,6 +1148,15 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         res = fn(42, 18)
         assert res == 18
 
+    def test_switch_many_args_compile(self):
+        fn = self.compile(get_switch_many_args_runner(self.T, self.RGenOp), [int, int, int, int, int])
+        res = fn(0, 2, 3, 4, 5)
+        assert res == 42
+        res = fn(1, 4, 5, 6, 6)
+        assert res == 42
+        res = fn(42, 16, 3, 4, 5)
+        assert res == 16
+
     def test_large_switch_compile(self):
         fn = self.compile(get_large_switch_runner(self.T, self.RGenOp), [int, int])
         res = fn(0, 2)
@@ -1338,6 +1394,17 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         res = fnptr(1, 16)
         assert res == 37
         res = fnptr(42, 16)
+        assert res == 16
+
+    def test_switch_many_args_direct(self):
+        rgenop = self.RGenOp()
+        gv_switchfn = make_switch_many_args(self.T, rgenop)
+        fnptr = self.cast(gv_switchfn, 5)
+        res = fnptr(0, 2, 3, 4, 5)
+        assert res == 42
+        res = fnptr(1, 4, 5, 6, 6)
+        assert res == 42
+        res = fnptr(42, 16, 3, 4, 5)
         assert res == 16
 
     def test_large_switch_direct(self):
