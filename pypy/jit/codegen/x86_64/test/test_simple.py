@@ -1,9 +1,11 @@
 from pypy.jit.codegen.x86_64.rgenop import RX86_64GenOp
 from pypy.rpython.lltypesystem import lltype
 from ctypes import cast, c_void_p, CFUNCTYPE, c_long, c_double
+from pypy.jit.codegen.x86_64.objmodel import Register64, Constant32
+
+rgenop = RX86_64GenOp()
 
 def make_testbuilder():
-    rgenop = RX86_64GenOp()
     FUNC = lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed) #the funtiontype(arguments,returntype) of the graph we will create
     token = rgenop.sigToken(FUNC)
     builder, entrypoint, inputargs_gv = rgenop.newgraph(token, "test")
@@ -12,7 +14,7 @@ def make_testbuilder():
     fp = cast(c_void_p(entrypoint.value),
               CFUNCTYPE(c_long, *ctypestypes))
     return builder, fp, inputargs_gv, token
-
+    
 def test_add():
     builder, fp, inputargs_gv, token = make_testbuilder()
     genv0 = inputargs_gv[0] #the first argument "place"

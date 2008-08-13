@@ -1,16 +1,46 @@
 from pypy.jit.codegen import model
 from pypy.rlib.objectmodel import specialize
-from pypy.jit.codegen.x86_64.objmodel import IntVar, Const
+from pypy.jit.codegen.x86_64.objmodel import Register64, Constant32
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
+#TODO: understand llTypesystem
+from pypy.rpython.lltypesystem import llmemory, lltype 
+from pypy.jit.codegen.ia32.objmodel import LL_TO_GENVAR
 
+
+
+# TODO: support zero or one arg.
+# This method calles the assembler to generate code.
+# It saves the operands in the helpregister gv_z
+# and determine the Type of the operands,
+# to choose the right method in assembler.py
 def make_two_argument_method(name):
     def op_int(self, gv_x, gv_y):
         gv_z = self.allocate_register()
-        self.mc.MOV(gv_z.reg, gv_x.reg)
-        method = getattr(self.mc, name)
-        method(gv_z.reg, gv_y.reg)
+        self.mc.MOV_QWREG_QWREG(gv_z, gv_x)
+        method = getattr(self.mc, name+typeToString(gv_x)+typeToString(gv_y))
+        method(gv_z, gv_y)
         return gv_z
     return op_int
+
+
+
+# helper of "make_two_argument_method" to choose 
+# the right assembler method
+def typeToString(parseMe):
+    if isinstance(parseMe,Constant32):
+        return "_IMM32"
+    if isinstance(parseMe,Register64):
+        return "_QWREG"
+
+
+
+# a small helper that provides correct type signature
+def map_arg(arg):
+    if isinstance(arg, lltype.Ptr):
+        arg = llmemory.Address
+    if isinstance(arg, (lltype.Array, lltype.Struct)):
+        arg = lltype.Void
+    return LL_TO_GENVAR[arg]
     
 
 class Builder(model.GenBuilder):
@@ -36,7 +66,7 @@ class Builder(model.GenBuilder):
                # "r14":None,
                # "r15":None,
                }
-        
+                   
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         genmethod = getattr(self, 'op_' + opname)
@@ -52,31 +82,44 @@ class Builder(model.GenBuilder):
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
-        self.mc.MOV("rax", gv_returnvar.reg)
+        self.mc.MOV_QWREG_QWREG(Register64("rax"), gv_returnvar)
         self.mc.RET()
     
     def allocate_register(self, register=None):
         if register is None:
-            return IntVar(self.freeregisters.popitem()[0])
+            return Register64(self.freeregisters.popitem()[0])
         else:
             del self.freeregisters[register]
-            return IntVar(register)
+            return Register64(register)
+        
+    def end(self):
+        pass
         
 
 class RX86_64GenOp(model.AbstractRGenOp):
-
-
+    
     @staticmethod
     @specialize.memo()
     def sigToken(FUNCTYPE):
-        return None
-    
+        return ([map_arg(arg) for arg in FUNCTYPE.ARGS if arg
+                is not lltype.Void], map_arg(FUNCTYPE.RESULT))
+
+    # wrappes a integer value
+    def genconst(self, llvalue):
+        T = lltype.typeOf(llvalue)
+        # TODO: other cases(?)
+        if T is lltype.Signed:
+            return Constant32(llvalue)
+        
     def newgraph(self, sigtoken, name):
-        # XXX for now assume that all functions take two ints and return an int
+        arg_tokens, res_token = sigtoken
+        inputargs_gv = []
         builder = Builder()
-        inputargs_gv = [builder.allocate_register("rdi"),
-                        builder.allocate_register("rsi")]
-        #XXX
-        entrypoint = Const(builder.mc.tell())
-        return builder, entrypoint, inputargs_gv
+        # TODO: Builder._open()
+        entrypoint = builder.mc.tell()
+        # TODO: support more than two reg
+        register_list = ["rdi","rsi"]
+        inputargs_gv = [builder.allocate_register(register_list[i])
+                                for i in range(len(arg_tokens))]
+        return builder,Constant32(entrypoint), inputargs_gv
     
