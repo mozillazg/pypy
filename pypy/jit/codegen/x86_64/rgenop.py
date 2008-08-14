@@ -18,14 +18,14 @@ def make_two_argument_method(name):
     def op_int(self, gv_x, gv_y):
         gv_z = self.allocate_register()
         self.mc.MOV_QWREG_QWREG(gv_z, gv_x)
-        method = getattr(self.mc, name+typeToString(gv_x)+typeToString(gv_y))
+        method = getattr(self.mc, name + type_to_string(gv_x)+type_to_string(gv_y))
         method(gv_z, gv_y)
         return gv_z
     return op_int
 
 def make_one_argument_method(name):
     def op_int(self, gv_x):
-        method = getattr(self.mc, name+typeToString(gv_x))
+        method = getattr(self.mc, name+type_to_string(gv_x))
         method(gv_x)
         return gv_x
     return op_int
@@ -34,13 +34,8 @@ def make_one_argument_method(name):
 
 # helper of "make_two_argument_method" to choose 
 # the right assembler method
-def typeToString(parseMe):
-    if isinstance(parseMe,Constant32):
-        return "_IMM32"
-    if isinstance(parseMe,Register64):
-        return "_QWREG"
-        
-
+def type_to_string(parse_me):
+    return parse_me._dispatchname
 
 
 # a small helper that provides correct type signature
