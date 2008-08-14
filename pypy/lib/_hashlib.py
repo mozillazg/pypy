@@ -5,6 +5,11 @@ import ctypes.util
 libpath = ctypes.util.find_library('ssl')
 lib = CDLL(libpath) # Linux, OS X
 
+def bufferstr(x):
+    if isinstance(x, basestring):
+        return str(x)
+    else:
+        return buffer(x)[:]
 
 # FIXME do we really need this anywhere here?
 class ENV_MD(Structure):
@@ -112,6 +117,7 @@ class hash(object):
     
     def update(self, string):
         "Update this hash object's state with the provided string."
+        string = bufferstr(string)
         lib.EVP_DigestUpdate(byref(self._obj), c_char_p(string), c_uint(len(string)))
 
 def new(name, string=''):
@@ -131,11 +137,9 @@ def new(name, string=''):
     
     ctx = _new_ENV_MD()
     lib.EVP_DigestInit(pointer(ctx), digest)
-    
+
     h = hash(_get_digest(ctx), name)
     if string:
-        if not isinstance(string, str):
-            raise ValueError("hash content is not string")
         h.update(string)
     return hash(ctx, name)
 
