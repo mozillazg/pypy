@@ -9,9 +9,26 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 
 def skip(self):
     py.test.skip("not implemented yet")
+    
+def make_inc(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
+    builder, gv_inc, gv_x = rgenop.newgraph(sigtoken, "inc")
+    builder.start_writing()
+    gv_result = builder.genop1("int_inc", gv_x[0])
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_inc
 
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RX86_64GenOp
+    
+    def test_inc(self):
+        rgenop = self.RGenOp()
+        inc_result = make_inc(rgenop)
+        fnptr = self.cast(inc_result,1)
+        res = fnptr(0)
+        assert res == 1
+        
     test_directtesthelper_direct = skip
     test_dummy_compile = skip
     test_cast_raising = skip
