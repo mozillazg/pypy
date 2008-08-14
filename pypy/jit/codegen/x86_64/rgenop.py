@@ -94,6 +94,8 @@ class Builder(model.GenBuilder):
         if register is None:
             return Register64(self.freeregisters.popitem()[0])
         else:
+            if not self.freeregisters:
+                raise NotImplementedError("spilling not implemented")
             del self.freeregisters[register]
             return Register64(register)
         
