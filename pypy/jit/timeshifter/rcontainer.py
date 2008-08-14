@@ -1371,6 +1371,7 @@ class PartialDataStruct(AbstractContainer):
         searchindex = fielddesc.fieldindex
         for i in range(len(self.data)):
             if self.data[i][0] == searchindex:
+                # XXX I think we never arrive here anyway
                 self.data[i] = searchindex, box
                 return
         else:
