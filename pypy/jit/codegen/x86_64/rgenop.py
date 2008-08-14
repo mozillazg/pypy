@@ -8,7 +8,8 @@ from pypy.jit.codegen.ia32.objmodel import LL_TO_GENVAR
 
 
 
-# TODO: support zero or one arg.
+# TODO: support zero arg.
+
 # This method calles the assembler to generate code.
 # It saves the operands in the helpregister gv_z
 # and determine the Type of the operands,
@@ -22,6 +23,13 @@ def make_two_argument_method(name):
         return gv_z
     return op_int
 
+def make_one_argument_method(name):
+    def op_int(self, gv_x):
+        method = getattr(self.mc, name+typeToString(gv_x))
+        method(gv_x)
+        return gv_x
+    return op_int
+
 
 
 # helper of "make_two_argument_method" to choose 
@@ -31,6 +39,7 @@ def typeToString(parseMe):
         return "_IMM32"
     if isinstance(parseMe,Register64):
         return "_QWREG"
+        
 
 
 
@@ -79,6 +88,7 @@ class Builder(model.GenBuilder):
     
     op_int_add  = make_two_argument_method("ADD")
     op_int_sub  = make_two_argument_method("SUB")
+    op_int_inc  = make_one_argument_method("INC")
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")

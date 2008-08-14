@@ -1,7 +1,10 @@
+import py
 from pypy.jit.codegen.x86_64.rgenop import RX86_64GenOp
 from pypy.rpython.lltypesystem import lltype
 from ctypes import cast, c_void_p, CFUNCTYPE, c_long, c_double
 from pypy.jit.codegen.x86_64.objmodel import Register64, Constant32
+from pypy.jit.codegen.test.rgenop_tests import AbstractTestBase
+from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 
 rgenop = RX86_64GenOp()
 
@@ -14,7 +17,7 @@ def make_testbuilder():
     fp = cast(c_void_p(entrypoint.value),
               CFUNCTYPE(c_long, *ctypestypes))
     return builder, fp, inputargs_gv, token
-    
+        
 def test_add():
     builder, fp, inputargs_gv, token = make_testbuilder()
     genv0 = inputargs_gv[0] #the first argument "place"

@@ -52,6 +52,22 @@ def make_two_operand_instr(opcode,imm32_mod=None):
             self.write(opcode)
             self.write_modRM_byte(3, modrm2, modrm1)        
     return quadreg_instr
+        
+        
+# This method wirtes the bitencodings into
+# the memory. mod is operation specific
+def make_one_operand_instr(opcode,mod = None):
+    def quadreg_instr(self, arg1):
+        # Todo: other cases e.g memory as operand
+        if isinstance(arg1,Register64):
+            rexB, modrm1 = self.get_register_bits(arg1.reg)
+            rexX = 0
+            
+        # rexW(1) = 64bitMode 
+        self.write_rex_byte(1, 0, rexX, rexB)
+        self.write(opcode)
+        self.write_modRM_byte(3, mod, modrm1)        
+    return quadreg_instr
     
 class X86_64CodeBuilder(object):
     """ creats x86_64 opcodes"""
@@ -66,6 +82,8 @@ class X86_64CodeBuilder(object):
     # The opcodes differs depending on the operands
     ADD_QWREG_IMM32 = make_two_operand_instr("\x81",2)  
     ADD_QWREG_QWREG = make_two_operand_instr("\x00")
+    
+    INC_QWREG       = make_one_operand_instr("\xFF",0)
     
     MOV_QWREG_IMM32 = make_two_operand_instr("\xC7",0)
     MOV_QWREG_QWREG = make_two_operand_instr("\x89")
