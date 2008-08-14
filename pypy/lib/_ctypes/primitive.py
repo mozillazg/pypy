@@ -250,7 +250,7 @@ class _SimpleCData(_CData):
         return self.value
 
     def __repr__(self):
-        return "%s(%s)" % (type(self).__name__, self.value)
+        return "%s(%r)" % (type(self).__name__, self.value)
 
     def __nonzero__(self):
         return self._buffer[0] not in (0, '\x00')
