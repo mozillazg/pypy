@@ -381,6 +381,7 @@ class TranslationDriver(SimpleTaskEngine):
         "Backendopt before Hint-annotate")
 
     def task_hintannotate_lltype(self):
+        raise NotImplementedError("JIT is not implemented on trunk, look at oo-jit branch instead")
         from pypy.jit.hintannotator.annotator import HintAnnotator
         from pypy.jit.hintannotator.model import OriginFlags
         from pypy.jit.hintannotator.model import SomeLLAbstractConstant
@@ -409,6 +410,8 @@ class TranslationDriver(SimpleTaskEngine):
                                        "Hint-annotate")
 
     def task_timeshift_lltype(self):
+        raise NotImplementedError("JIT is not implemented on trunk, look at oo-jit branch instead")
+
         from pypy.jit.timeshifter.hrtyper import HintRTyper
         from pypy.jit.codegen import detect_cpu
         cpu = detect_cpu.autodetect()
