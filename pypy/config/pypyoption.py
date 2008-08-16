@@ -27,7 +27,8 @@ working_modules.update(dict.fromkeys(
     ["_socket", "unicodedata", "mmap", "fcntl",
       "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "dyngram", "_rawffi", "termios", "zlib",
-     "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO"]
+     "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
+     "thread"]
 ))
 
 if sys.platform == "win32":
