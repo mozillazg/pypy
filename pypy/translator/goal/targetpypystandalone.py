@@ -7,6 +7,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
 from pypy.config.config import Config, to_optparse, make_dict, SUPPRESS_USAGE
+from pypy.config.config import ConflictConfigError
 from pypy.tool.option import make_objspace
 from pypy.translator.goal.nanos import setup_nanos
 
@@ -134,7 +135,16 @@ class PyPyTarget(object):
         if config.translation.thread:
             config.objspace.usemodules.thread = True
         elif config.objspace.usemodules.thread:
-            config.translation.thread = True
+            try:
+                config.translation.thread = True
+            except ConflictConfigError:
+                # If --allworkingmodules is given, we reach this point
+                # if threads cannot be enabled (e.g. they conflict with
+                # something else).  In this case, we can try setting the
+                # usemodules.thread option to False again.  It will
+                # cleanly fail if that option was set to True by the
+                # command-line directly instead of via --allworkingmodules.
+                config.objspace.usemodules.thread = False
 
         if config.translation.stackless:
             config.objspace.usemodules._stackless = True
