@@ -16,7 +16,8 @@ from pypy.lang.gameboy.timer import *
 from pypy.lang.gameboy.video import *
 from pypy.lang.gameboy.cartridge import *
 
-    
+import pdb
+
 class GameBoy(object):
 
     def __init__(self):
@@ -68,6 +69,7 @@ class GameBoy(object):
         self.sound.stop()
 
     def reset(self):
+        print "python resetting gameboy"
         self.ram.reset()
         self.memory_bank_controller.reset()
         self.interrupt.reset()
@@ -78,7 +80,7 @@ class GameBoy(object):
         self.video.reset()
         self.sound.reset()
         self.cpu.set_rom(self.cartridge_manager.get_rom())
-        #self.draw_logo()
+        self.draw_logo()
 
     def get_cycles(self):
         return min(min(min(min( self.video.get_cycles(),

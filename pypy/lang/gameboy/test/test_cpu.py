@@ -1037,7 +1037,7 @@ def test_0xE8():
     assert cpu.sp.get() == spValue+value
 
 # ldh_A_mem
-def test_0xF0():
+def test_0xF0_store_memory_at_axpanded_fetch_address_in_a():
     cpu     = get_cpu()
     valueA  = 0x11
     value   = 0x12
