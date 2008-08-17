@@ -3,7 +3,7 @@ import py, os
 import sys
 from pypy.config.config import OptionDescription, BoolOption, IntOption, ArbitraryOption
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
-from pypy.config.config import ConfigError
+from pypy.config.config import ConflictConfigError
 
 modulepath = py.magic.autopath().dirpath().dirpath().join("module")
 all_modules = [p.basename for p in modulepath.listdir()
@@ -27,7 +27,8 @@ working_modules.update(dict.fromkeys(
     ["_socket", "unicodedata", "mmap", "fcntl",
       "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "dyngram", "_rawffi", "termios", "zlib",
-     "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO"]
+     "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
+     "thread"]
 ))
 
 if sys.platform == "win32":
@@ -74,7 +75,8 @@ def get_module_validator(modname):
                     "The module %r is disabled\n" % (modname,) +
                     "because importing %s raised %s\n" % (name, errcls) +
                     str(e))
-                raise ConfigError("--withmod-%s: %s" % (modname, errcls))
+                raise ConflictConfigError("--withmod-%s: %s" % (modname,
+                                                                errcls))
         return validator
     else:
         return None
@@ -165,11 +167,11 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
         BoolOption("withsmallint", "use tagged integers",
                    default=False,
-                   requires=[("translation.gc", "boehm")]),
+                   requires=[("translation.gc", "boehm"),
+                             ("objspace.std.withprebuiltint", False)]),
 
         BoolOption("withprebuiltint", "prebuild commonly used int objects",
-                   default=False,
-                   requires=[("objspace.std.withsmallint", False)]),
+                   default=False),
 
         IntOption("prebuiltintfrom", "lowest integer which is prebuilt",
                   default=-5, cmdline="--prebuiltintfrom"),
@@ -304,45 +306,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "a instrumentation option: before exit, print the types seen by "
                    "certain simpler bytecodes",
                    default=False),
-
-        BoolOption("allopts",
-                   "enable all thought-to-be-working optimizations",
-                   default=False,
-                   suggests=[("objspace.opcodes.CALL_LIKELY_BUILTIN", True),
-                             ("objspace.opcodes.CALL_METHOD", True),
-                             ("translation.withsmallfuncsets", 5),
-                             ("translation.profopt",
-                              "-c 'from richards import main;main(); from test import pystone; pystone.main()'"),
-                             ("objspace.std.withmultidict", True),
-#                             ("objspace.std.withstrjoin", True),
-                             ("objspace.std.withshadowtracking", True),
-#                             ("objspace.std.withstrslice", True),
-#                             ("objspace.std.withsmallint", True),
-                             ("objspace.std.withrangelist", True),
-                             ("objspace.std.withmethodcache", True),
-#                             ("objspace.std.withfastslice", True),
-                             ("objspace.std.withprebuiltchar", True),
-                             ("objspace.std.builtinshortcut", True),
-                             ("objspace.std.optimized_list_getitem", True),
-                             ("objspace.std.getattributeshortcut", True),
-                             ("translation.list_comprehension_operations",True),
-                             ("translation.backendopt.remove_asserts",True),
-                             ],
-                   cmdline="--allopts --faassen", negation=False),
-
-##         BoolOption("llvmallopts",
-##                    "enable all optimizations, and use llvm compiled via C",
-##                    default=False,
-##                    requires=[("objspace.std.allopts", True),
-##                              ("translation.llvm_via_c", True),
-##                              ("translation.backend", "llvm")],
-##                    cmdline="--llvm-faassen", negation=False),
+        ChoiceOption("multimethods", "the multimethod implementation to use",
+                     ["doubledispatch", "mrd"],
+                     default="mrd"),
      ]),
-    #BoolOption("lowmem", "Try to use less memory during translation",
-    #           default=False, cmdline="--lowmem",
-    #           requires=[("objspace.geninterp", False)]),
-
-
 ])
 
 def get_pypy_config(overrides=None, translating=False):
@@ -350,6 +317,51 @@ def get_pypy_config(overrides=None, translating=False):
     return get_combined_translation_config(
             pypy_optiondescription, overrides=overrides,
             translating=translating)
+
+def set_pypy_opt_level(config, level):
+    """Apply PyPy-specific optimization suggestions on the 'config'.
+    The optimizations depend on the selected level and possibly on the backend.
+    """
+    # warning: during some tests, the type_system and the backend may be
+    # unspecified and we get None.  It shouldn't occur in translate.py though.
+    type_system = config.translation.type_system
+    backend = config.translation.backend
+
+    # all the good optimizations for PyPy should be listed here
+    if level in ['2', '3']:
+        config.objspace.opcodes.suggest(CALL_LIKELY_BUILTIN=True)
+        config.objspace.opcodes.suggest(CALL_METHOD=True)
+        config.objspace.std.suggest(withmultidict=True)
+        config.objspace.std.suggest(withshadowtracking=True)
+        config.objspace.std.suggest(withrangelist=True)
+        config.objspace.std.suggest(withmethodcache=True)
+        config.objspace.std.suggest(withprebuiltchar=True)
+        config.objspace.std.suggest(builtinshortcut=True)
+        config.objspace.std.suggest(optimized_list_getitem=True)
+        config.objspace.std.suggest(getattributeshortcut=True)
+
+    # extra costly optimizations only go in level 3
+    if level == '3':
+        config.translation.suggest(profopt=
+            "-c 'from richards import main;main(); "
+                "from test import pystone; pystone.main()'")
+
+    # memory-saving optimizations
+    if level == 'mem':
+        config.objspace.std.suggest(withprebuiltint=True)
+        config.objspace.std.suggest(withrangelist=True)
+        config.objspace.std.suggest(withprebuiltchar=True)
+        config.objspace.std.suggest(withsharingdict=True)
+        # xxx other options? ropes maybe?
+
+    # completely disable geninterp in a level 0 translation
+    if level == '0':
+        config.objspace.suggest(geninterp=False)
+
+    # some optimizations have different effects depending on the typesystem
+    if type_system == 'ootype':
+        config.objspace.std.suggest(multimethods="doubledispatch")
+
 
 if __name__ == '__main__':
     config = get_pypy_config()
