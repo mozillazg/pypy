@@ -12,6 +12,7 @@ import math
 #from pypy.rlib.rstr import str_replace
 
 import os
+import pdb
 
 # HELPERS ----------------------------------------------------------------------
 
@@ -72,6 +73,8 @@ class CartridgeManager(object):
         self.clock     = clock
         self.cartridge = None
         self.mbc       = None
+        self.rom       = [0]
+        self.ram       = [0]
         
     def reset(self):
         if not self.has_battery():
@@ -278,6 +281,8 @@ class MBC(iMemory):
         self.max_ram_bank_size = max_ram_bank_size
         self.rom_bank_size     = rom_bank_size
         self.rom_bank          = self.rom_bank_size
+        self.rom        = []
+        self.ram        = []
         self.reset()
         self.set_rom(rom)
         self.set_ram(ram)
@@ -285,8 +290,6 @@ class MBC(iMemory):
     def reset(self):
         self.ram_bank   = 0
         self.ram_enable = False
-        self.rom        = []
-        self.ram        = []
         self.rom_size   = 0
         self.ram_size   = 0
     

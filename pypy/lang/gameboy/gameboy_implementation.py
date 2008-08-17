@@ -31,11 +31,12 @@ class GameBoyImplementation(GameBoy):
    
     
     def mainLoop(self):
+        self.reset()
         try:
             isRunning = True
             while isRunning and self.handle_events():
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
-                #RSDL.Delay(1)
+                RSDL.Delay(1)
         except :
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
@@ -94,7 +95,7 @@ class VideoDriverImplementation(VideoDriver):
                 #if y%2 == 0 or True:
                 #    px = self.get_pixel_color(x, y)
                 #    str += ["#", "%", "+", " ", " "][px]
-                pass
+                RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
         #print str;
              
     def pixel_map(self, x, y):
