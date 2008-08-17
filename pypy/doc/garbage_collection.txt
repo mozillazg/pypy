@@ -26,7 +26,7 @@ RPython program, use the ``--gc=NAME`` option of ``translate.py``.
 For more details, see the `overview of command line options for
 translation`_.
 
-.. _`overview of command line options for translation`: config/commandline.html#overview-of-command-line-options-for-translation
+.. _`overview of command line options for translation`: config/commandline.html#translation
 
 Mark and Sweep
 --------------
