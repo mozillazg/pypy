@@ -115,7 +115,7 @@ class TranslationDriver(SimpleTaskEngine):
             explicit_task = task
             parts = task.split('_')
             if len(parts) == 1:
-                if task in ('annotate'):
+                if task in ('annotate',):
                     expose_task(task)
             else:
                 task, postfix = parts
