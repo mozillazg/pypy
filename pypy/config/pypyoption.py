@@ -131,12 +131,15 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         for modname in all_modules]),
 
     BoolOption("allworkingmodules", "use as many working modules as possible",
+               # NB. defaults to False for py.py and tests, but
+               # targetpypystandalone suggests True, which can be overridden
+               # with --no-allworkingmodules.
                default=False,
                cmdline="--allworkingmodules",
                suggests=[("objspace.usemodules.%s" % (modname, ), True)
                              for modname in working_modules
                              if modname in all_modules],
-               negation=False),
+               negation=True),
 
     BoolOption("geninterp", "specify whether geninterp should be used",
                cmdline=None,

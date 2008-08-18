@@ -132,6 +132,15 @@ class PyPyTarget(object):
         # expose the following variables to ease debugging
         global space, entry_point
 
+        # not really clean, but setting the default of allworkingmodules
+        # to True has two problems: it doesn't implies its suggests (the
+        # config machinery doesn't handle that case), and we don't want
+        # allworkingmodules to be enabled for all spaces by default
+        # (e.g. in py.py or in tests).  Auto-generated helps report the
+        # default of allworkingmodules to be False, though, which is a
+        # bit annoying.
+        config.objspace.suggest(allworkingmodules=True)
+
         if config.translation.thread:
             config.objspace.usemodules.thread = True
         elif config.objspace.usemodules.thread:
