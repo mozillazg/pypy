@@ -77,7 +77,6 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
     
 OVERRIDES = {
     'translation.debug': False,
-    'translation.backend': 'c',
 }
 
 import py
