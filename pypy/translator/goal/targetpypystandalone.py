@@ -158,7 +158,12 @@ class PyPyTarget(object):
         if config.translation.stackless:
             config.objspace.usemodules._stackless = True
         elif config.objspace.usemodules._stackless:
-            config.translation.stackless = True
+            try:
+                config.translation.stackless = True
+            except ConflictConfigError:
+                raise ConflictConfigError("please use the --stackless option "
+                                          "to translate.py instead of "
+                                          "--withmod-_stackless directly")
 
         if not config.translation.rweakref:
             config.objspace.usemodules._weakref = False
