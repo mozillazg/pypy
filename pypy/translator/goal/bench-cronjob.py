@@ -181,15 +181,15 @@ def main(backends=[]):
     if backends == []:  #_ prefix means target specific option, # prefix to outcomment
         backends = [backend.strip() for backend in """
             c
-            c--stackless--_O3
-            c--_O3--_allworkingmodules
-            c--thread--gc=hybrid--_O3
-            c--gc=semispace--_O3
-            c--gc=generation--_O3
-            c--gc=hybrid--_O3
-            cli--_O3
-            jvm--_O3
-            jvm--inline-threshold=0--_O3
+            c--stackless--opt=3
+            c--opt=3--_allworkingmodules
+            c--thread--gc=hybrid--opt=3
+            c--gc=semispace--opt=3
+            c--gc=generation--opt=3
+            c--gc=hybrid--opt=3
+            cli--opt=3
+            jvm--opt=3
+            jvm--inline-threshold=0--opt=3
             """.split('\n') if backend.strip() and not backend.strip().startswith('#')]
     print time.ctime()
     for backend in backends:
