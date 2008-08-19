@@ -3,7 +3,7 @@ from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import build_executable
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.tool.cbuild import CompilationError
-import md5
+from pypy.tool.compat import md5
 import py
 
 cache_dir_root = py.path.local(pypydir).join('_cache').ensure(dir=1)
