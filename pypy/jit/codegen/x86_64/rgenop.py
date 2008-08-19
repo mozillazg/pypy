@@ -1,6 +1,6 @@
 from pypy.jit.codegen import model
 from pypy.rlib.objectmodel import specialize
-from pypy.jit.codegen.x86_64.objmodel import Register64, Constant32
+from pypy.jit.codegen.x86_64.objmodel import Register64, Immediate32
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
 #TODO: understand llTypesystem
 from pypy.rpython.lltypesystem import llmemory, lltype 
@@ -17,25 +17,18 @@ from pypy.jit.codegen.ia32.objmodel import LL_TO_GENVAR
 def make_two_argument_method(name):
     def op_int(self, gv_x, gv_y):
         gv_z = self.allocate_register()
-        self.mc.MOV_QWREG_QWREG(gv_z, gv_x)
-        method = getattr(self.mc, name + type_to_string(gv_x)+type_to_string(gv_y))
+        self.mc.MOV(gv_z, gv_x)
+        method = getattr(self.mc, name)
         method(gv_z, gv_y)
         return gv_z
     return op_int
 
 def make_one_argument_method(name):
     def op_int(self, gv_x):
-        method = getattr(self.mc, name+type_to_string(gv_x))
+        method = getattr(self.mc, name)
         method(gv_x)
         return gv_x
     return op_int
-
-
-
-# helper of "make_two_argument_method" to choose 
-# the right assembler method
-def type_to_string(parse_me):
-    return parse_me._dispatchname
 
 
 # a small helper that provides correct type signature
@@ -84,10 +77,13 @@ class Builder(model.GenBuilder):
     op_int_add  = make_two_argument_method("ADD")
     op_int_sub  = make_two_argument_method("SUB")
     op_int_inc  = make_one_argument_method("INC")
+    op_int_dec  = make_one_argument_method("DEC")
+    op_int_push = make_one_argument_method("PUSH")
+    op_int_pop  = make_one_argument_method("POP")
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
-        self.mc.MOV_QWREG_QWREG(Register64("rax"), gv_returnvar)
+        self.mc.MOV(Register64("rax"), gv_returnvar)
         self.mc.RET()
     
     def allocate_register(self, register=None):
@@ -116,7 +112,7 @@ class RX86_64GenOp(model.AbstractRGenOp):
         T = lltype.typeOf(llvalue)
         # TODO: other cases(?)
         if T is lltype.Signed:
-            return Constant32(llvalue)
+            return Immediate32(llvalue)
         
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
@@ -128,5 +124,5 @@ class RX86_64GenOp(model.AbstractRGenOp):
         register_list = ["rdi","rsi"]
         inputargs_gv = [builder.allocate_register(register_list[i])
                                 for i in range(len(arg_tokens))]
-        return builder,Constant32(entrypoint), inputargs_gv
+        return builder,Immediate32(entrypoint), inputargs_gv
     

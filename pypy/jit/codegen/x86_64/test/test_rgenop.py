@@ -19,6 +19,15 @@ def make_inc(rgenop):
     builder.end()
     return gv_inc
 
+def make_dec(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
+    builder, gv_dec, gv_x = rgenop.newgraph(sigtoken, "dec")
+    builder.start_writing()
+    gv_result = builder.genop1("int_dec", gv_x[0])
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_dec
+
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RX86_64GenOp
     
@@ -28,6 +37,20 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(inc_result,1)
         res = fnptr(0)
         assert res == 1
+        
+    def test_dec(self):
+        rgenop = self.RGenOp()
+        dec_result = make_dec(rgenop)
+        fnptr = self.cast(dec_result,1)
+        res = fnptr(2)
+        assert res == 1
+        
+    #def test_push_and_pop(self):
+    #    rgenop = self.RGenOp()
+    #    push_result = make_push(rgenop)
+    #    fnptr = self.cast(push_result,1)
+    #    res = fnptr(2)
+    #    assert res == 1
         
     test_directtesthelper_direct = skip
     test_dummy_compile = skip
