@@ -2,7 +2,7 @@ import py
 from pypy.jit.codegen.x86_64.rgenop import RX86_64GenOp
 from pypy.rpython.lltypesystem import lltype
 from ctypes import cast, c_void_p, CFUNCTYPE, c_long, c_double
-from pypy.jit.codegen.x86_64.objmodel import Register64, Constant32
+from pypy.jit.codegen.x86_64.objmodel import Register64, Immediate32
 from pypy.jit.codegen.test.rgenop_tests import AbstractTestBase
 from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 

@@ -1,4 +1,4 @@
-from pypy.jit.codegen.x86_64.objmodel import Register64, Constant32
+from pypy.jit.codegen.x86_64.objmodel import Register64, Immediate32
 
 #Mapping from register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
@@ -21,25 +21,30 @@ REGISTER_MAP = {
                 }
 
 # This method wirtes the bitencodings into
-# the memory. imm32 is used when the operation
-# has an constant as operand
-def make_two_operand_instr(opcode,imm32_mod=None):
+# the memory. The parameters are overwritten
+# if one of the operands is an register
+def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None, md1 = None, md2 = None):
     def quadreg_instr(self, arg1, arg2):
+        # move the parameter 
+        # to the inner function
+        modrm1 = md1
+        modrm2 = md2
+        rexW = W
+        rexR = R
+        rexX = X
+        rexB = B
         # Todo: other cases e.g memory as operand
         if isinstance(arg1,Register64):
             rexR, modrm1 = self.get_register_bits(arg1.reg)
             
         if isinstance(arg2,Register64):
             rexB, modrm2 = self.get_register_bits(arg2.reg)
-        if isinstance(arg2,Constant32): # e.g IMMEDIATE32
-            rexB = 0
             
-        # rexW(1) = 64bitMode rexX(0) = doesn't matter
-        # exchange the two arguments (rexB/rexR) (modrm2/modrm1)
-        if isinstance(arg2,Constant32):
-            self.write_rex_byte(1, rexB, 0, rexR)
+        # exchange the two arguments (modrm2/modrm1)
+        if isinstance(arg2,Immediate32):
+            self.write_rex_byte(rexW, rexR, rexX, rexB)
             self.write(opcode)
-            self.write_modRM_byte(3, imm32_mod, modrm1)
+            self.write_modRM_byte(3, modrm2, modrm1)
             # FIXME: Bad solution
             # TODO: support values > 255
             if(arg2.value<256):
@@ -48,25 +53,35 @@ def make_two_operand_instr(opcode,imm32_mod=None):
                 self.write(chr(0))
                 self.write(chr(0))
         else:
-            self.write_rex_byte(1, rexB, 0, rexR)
+            # FIXME: exchange the two arguments (rexB/rexR)
+            self.write_rex_byte(rexW, rexB, rexX, rexR)
             self.write(opcode)
             self.write_modRM_byte(3, modrm2, modrm1)        
     return quadreg_instr
         
         
 # This method wirtes the bitencodings into
-# the memory. mod is operation specific
-def make_one_operand_instr(opcode,mod = None):
-    def quadreg_instr(self, arg1):
+# the memory. The parameters are overwritten
+# if one of the operands is an register
+def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None,  md1 = None, md2 = None):
+    def quadreg_instr(self, arg1):       
+        # move the parameter 
+        # to the inner function
+        modrm1 = md1
+        modrm2 = md2
+        rexW = W
+        rexR = R
+        rexX = X
+        rexB = B
+        
         # Todo: other cases e.g memory as operand
         if isinstance(arg1,Register64):
             rexB, modrm1 = self.get_register_bits(arg1.reg)
-            rexX = 0
             
         # rexW(1) = 64bitMode 
-        self.write_rex_byte(1, 0, rexX, rexB)
+        self.write_rex_byte(rexW, rexR, rexX, rexB)
         self.write(opcode)
-        self.write_modRM_byte(3, mod, modrm1)        
+        self.write_modRM_byte(3, modrm2, modrm1)        
     return quadreg_instr
     
 class X86_64CodeBuilder(object):
@@ -79,19 +94,57 @@ class X86_64CodeBuilder(object):
         """ tells the current position in memory"""
         raise NotImplementedError
     
+    
     # The opcodes differs depending on the operands
-    ADD_QWREG_IMM32 = make_two_operand_instr("\x81",2)  
-    ADD_QWREG_QWREG = make_two_operand_instr("\x00")
     
-    INC_QWREG       = make_one_operand_instr("\xFF",0)
+    # FIXME: rexX,rexB are set
+    _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", None, 2)  
+    _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x00", None, None)
     
-    MOV_QWREG_IMM32 = make_two_operand_instr("\xC7",0)
-    MOV_QWREG_QWREG = make_two_operand_instr("\x89")
+    _DEC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", None, 1)
+    _INC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", None, 0)
+
+     
+    _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", None, 0)
+    _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", None, None)
     
-    SUB_QWREG_QWREG = make_two_operand_instr("\x28")
+    # FIXME: rexW is set 
+    _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", None, 0)
+    _PUSH_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xFF", None, 6)
+     
+    _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", None, None)
+    
+    # TODO: maybe a problem with more ore less than two arg.
+    def ADD(self, op1, op2):
+        method = getattr(self, "_ADD"+op1.to_string()+op2.to_string())
+        method(op1, op2)
+        
+    def DEC(self, op1):
+        method = getattr(self, "_DEC"+op1.to_string())
+        method(op1)
+        
+    def INC(self, op1):
+        method = getattr(self, "_INC"+op1.to_string())
+        method(op1)
+        
+    def POP(self, op1):
+        method = getattr(self, "_POP"+op1.to_string())
+        method(op1)
+        
+    def PUSH(self, op1):
+        method = getattr(self, "_POP"+op1.to_string())
+        method(op1)
+        
+    def MOV(self, op1, op2):
+        method = getattr(self, "_MOV"+op1.to_string()+op2.to_string())
+        method(op1, op2)
     
     def RET(self):
         self.write("\xC3")
+        
+    def SUB(self, op1, op2):
+        method = getattr(self, "_SUB"+op1.to_string()+op2.to_string())
+        method(op1, op2)
         
     def get_register_bits(self, register):
         return REGISTER_MAP[register]

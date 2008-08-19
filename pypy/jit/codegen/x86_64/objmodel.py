@@ -1,13 +1,25 @@
 from pypy.jit.codegen import model
 # Wrapper Classes
-
+# The opcaodes differ from the type of
+# the operand. So every wrapper is necessary
 class Register64(model.GenVar):
-    _dispatchname = "_QWREG"
     def __init__(self, reg):
         self.reg = reg
+        
+    def to_string(self):
+        return "_QWREG"
 
-# TODO: support 64-bit Constants
-class Constant32(model.GenConst):
-    _dispatchname = "_IMM32"
+class Immediate32(model.GenConst):
     def __init__(self, value):
         self.value = value
+        
+    def to_string(self):
+        return "_IMM32"
+    
+# TODO: understand GenConst
+class Immediate64(model.GenConst):
+    def __init__(self, value):
+        self.value = value
+        
+    def to_string(self):
+        return "_IMM64"
