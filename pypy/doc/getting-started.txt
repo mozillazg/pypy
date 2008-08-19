@@ -571,7 +571,7 @@ our translation toolchain can process.)
 3. Run::
 
      cd pypy/translator/goal
-     python translate.py --opt=3 targetpypystandalone.py --allworkingmodules
+     python translate.py --opt=3 targetpypystandalone.py
 
    possibly replacing ``--opt=3`` with ``--opt=1`` or another
    `optimization level`_ of your choice.
