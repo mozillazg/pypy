@@ -474,6 +474,14 @@ class AppTestItertools:
             raises(StopIteration, g.next)
         raises(StopIteration, it.next)
 
+        # keyword argument
+        it = itertools.groupby([0, 1, 2, 3, 4, 5], key = half_floor)
+        for x in [0, 1, 2]:
+            k, g = it.next()
+            assert k == x
+            assert list(g) == [x*2, x*2+1]
+        raises(StopIteration, it.next)
+
         # Grouping is not based on key identity
         class NeverEqual(object):
             def __eq__(self, other):
