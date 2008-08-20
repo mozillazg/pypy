@@ -21,10 +21,11 @@ class AppTestItertools:
     def test_count_overflow(self):
         import itertools, sys
 
-        it = itertools.count(sys.maxint)
-        assert it.next() == sys.maxint
-        raises(OverflowError, it.next) 
-        raises(OverflowError, it.next) 
+        # this checks for exact implementation details... that's 2.5 behavior
+        it = itertools.count(sys.maxint - 1)
+        assert it.next() == sys.maxint - 1
+        raises(OverflowError, it.next)
+        raises(OverflowError, it.next)
 
         raises(OverflowError, itertools.count, sys.maxint + 1)
 
@@ -41,20 +42,21 @@ class AppTestItertools:
         import itertools
 
         times = 10
-        it = itertools.repeat(None, times=times)
+        it = itertools.repeat(None, times)
         for i in range(times):
             it.next()
         raises(StopIteration, it.next)
 
-        it = itertools.repeat(None, times=None)
-        for x in range(10):
-            it.next()    # Should be no StopIteration
+        #---does not work in CPython 2.5
+        #it = itertools.repeat(None, None)
+        #for x in range(10):
+        #    it.next()    # Should be no StopIteration
 
-        it = itertools.repeat(None, times=0)
+        it = itertools.repeat(None, 0)
         raises(StopIteration, it.next)
         raises(StopIteration, it.next)
 
-        it = itertools.repeat(None, times=-1)
+        it = itertools.repeat(None, -1)
         raises(StopIteration, it.next)
         raises(StopIteration, it.next)
 
@@ -198,10 +200,16 @@ class AppTestItertools:
 
         assert list(itertools.islice(xrange(100), 10, 3)) == []
 
+        # new in 2.5: start=None or step=None
+        assert list(itertools.islice(xrange(10), None)) == range(10)
+        assert list(itertools.islice(xrange(10), None,None)) == range(10)
+        assert list(itertools.islice(xrange(10), None,None,None)) == range(10)
+
     def test_islice_overflow(self):
         import itertools
         import sys
-
+        if '__pypy__' not in sys.builtin_module_names:
+            skip("CPython 2.5 gives a strange ValueError")
         raises(OverflowError, itertools.islice, [], sys.maxint + 1)
 
     def test_islice_wrongargs(self):
@@ -216,7 +224,6 @@ class AppTestItertools:
 
         raises(ValueError, itertools.islice, [], 0, 0, -1)
         raises(ValueError, itertools.islice, [], 0, 0, 0)
-        raises(TypeError, itertools.islice, [], 0, 0, None)
 
         raises(TypeError, itertools.islice, [], 0, 0, 0, 0)
 
@@ -260,8 +267,9 @@ class AppTestItertools:
     def test_imap(self):
         import itertools
 
-        it = itertools.imap(None)
-        raises(StopIteration, it.next)
+        #---does not work in CPython 2.5
+        #it = itertools.imap(None)
+        #raises(StopIteration, it.next)
 
         obj_list = [object(), object(), object()]
         it = itertools.imap(None, obj_list)
@@ -291,8 +299,6 @@ class AppTestItertools:
         import itertools
         
         # Duplicate python 2.4 behaviour for invalid arguments
-        it = itertools.imap(0)
-        raises(StopIteration, it.next)
         it = itertools.imap(0, [])
         raises(StopIteration, it.next)
         it = itertools.imap(0, [0])
@@ -325,9 +331,10 @@ class AppTestItertools:
         for x in [(1, 5), (2, 6)]:
             assert it.next() == x
         raises(StopIteration, it.next)
-        assert it1.next() == 4
-        raises(StopIteration, it.next)
-        assert it1.next() == 5
+        assert it1.next() in [3, 4]
+        #---does not work in CPython 2.5
+        #raises(StopIteration, it.next)
+        #assert it1.next() in [4, 5]
 
     def test_izip_wrongargs(self):
         import itertools, re
@@ -512,7 +519,7 @@ class AppTestItertools:
             itertools.groupby([]),
             itertools.ifilter(None, []),
             itertools.ifilterfalse(None, []),
-            itertools.imap(None),
+            itertools.imap(None, []),
             itertools.islice([], 0),
             itertools.izip(),
             itertools.repeat(None),
@@ -553,7 +560,13 @@ class AppTestItertools:
     
     def test_subclassing(self):
         import itertools
-        # Although (mostly) implemented as classes, the itertools functions should not be subclassable
+        # Although (mostly) implemented as classes, the itertools functions
+        # should probably not be subclassable.  They are in CPython but
+        # subclassing them is insane if you ask me (and really forbidden
+        # by the docs, that pretend that they are functions).
+        import sys
+        if '__pypy__' not in sys.builtin_module_names:
+            skip("itertools types are subclassable in CPython")
         iterables = [
             itertools.chain,
             itertools.count,

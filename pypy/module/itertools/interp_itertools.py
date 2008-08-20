@@ -9,21 +9,17 @@ class W_Count(Wrappable):
     def __init__(self, space, firstval):
         self.space = space
         self.c = firstval
-        self.overflowed = False
 
     def iter_w(self):
         return self.space.wrap(self)
 
     def next_w(self):
-        if self.overflowed:
-            raise OperationError(self.space.w_OverflowError,
-                    self.space.wrap("cannot count beyond sys.maxint"))
-
         c = self.c
         try:
             self.c = ovfcheck(self.c + 1)
         except OverflowError:
-            self.overflowed = True
+            raise OperationError(self.space.w_OverflowError,
+                    self.space.wrap("cannot count beyond sys.maxint"))
 
         return self.space.wrap(c)
 
@@ -289,7 +285,10 @@ class W_ISlice(Wrappable):
             start = 0
             w_stop = w_startstop
         elif num_args <= 2:
-            start = space.int_w(w_startstop)
+            if space.is_w(w_startstop, space.w_None):
+                start = 0
+            else:
+                start = space.int_w(w_startstop)
             w_stop = args_w[0]
         else:
             raise OperationError(space.w_TypeError, space.wrap("islice() takes at most 4 arguments (" + str(num_args) + " given)"))
@@ -302,7 +301,11 @@ class W_ISlice(Wrappable):
             stoppable = True
 
         if num_args == 2:
-            step = space.int_w(args_w[1])
+            w_step = args_w[1]
+            if space.is_w(w_step, space.w_None):
+                step = 1
+            else:
+                step = space.int_w(w_step)
         else:
             step = 1
 
