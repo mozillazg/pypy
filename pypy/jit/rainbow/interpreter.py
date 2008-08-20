@@ -1115,6 +1115,7 @@ class OOTypeJitInterpreter(JitInterpreter):
 
     @arguments("red", "jumptarget")
     def opimpl_goto_if_known_class(self, objbox, target):
+        assert isinstance(objbox, rvalue.AbstractPtrRedBox)
         known_class = False
         content = objbox.content
         if content is not None:
@@ -1131,6 +1132,7 @@ class OOTypeJitInterpreter(JitInterpreter):
     def opimpl_const_oosend(self, greenargs, redargs, methname):
         from pypy.rpython.ootypesystem.rclass import CLASSTYPE
         selfbox = redargs[0]
+        assert isinstance(selfbox, rvalue.AbstractPtrRedBox)
         vstruct = selfbox.content
         assert vstruct is not None
         if isinstance(vstruct, rcontainer.PartialDataStruct):

@@ -79,7 +79,7 @@ class AbstractStructTypeDesc(object):
     firstsubstructdesc = None
     materialize = None
     StructFieldDesc = None
-    PtrRedBox = rvalue.PtrRedBox
+    PtrRedBox = None
     firstfielddesc = 0
 
     def __init__(self, RGenOp, TYPE):
@@ -239,6 +239,7 @@ class AbstractStructTypeDesc(object):
 class StructTypeDesc(AbstractStructTypeDesc):
     
     StructFieldDesc = None # patched later with StructFieldDesc
+    PtrRedBox = rvalue.PtrRedBox
 
     _attrs_ = []
 

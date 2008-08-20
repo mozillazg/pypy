@@ -891,6 +891,7 @@ class _class(object):
         return '%s(%s)' % (self.__class__.__name__, self._INSTANCE)
 
 nullruntimeclass = _class(None)
+Class._null = nullruntimeclass
 
 class _instance(object):
     

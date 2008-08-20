@@ -337,6 +337,12 @@ def renderCustomOp(opname, baseclass, steps, out):
 UNARYOPS = fillops(cli_opcodes.unary_ops, "UnaryOp")
 BINARYOPS = fillops(cli_opcodes.binary_ops, "BinaryOp")
 
+class XXX(BinaryOp):
+    pass
+
+BINARYOPS['oostring'] = XXX
+BINARYOPS['subclassof'] = XXX
+
 @specialize.memo()
 def getopclass1(opname):
     try:
