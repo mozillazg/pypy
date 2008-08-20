@@ -1,3 +1,6 @@
+# Note that PyPy contains also a built-in module 'itertools' which will
+# hide this one if compiled in.
+
 """Functional tools for creating and using iterators.
 
 Infinite iterators:
