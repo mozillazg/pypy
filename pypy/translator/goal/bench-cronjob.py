@@ -181,8 +181,8 @@ def main(backends=[]):
     if backends == []:  #_ prefix means target specific option, # prefix to outcomment
         backends = [backend.strip() for backend in """
             c--opt=0--_no-allworkingmodules
-            c--stackless--opt=3--_no-allworkingmodules
-            c--opt=3
+            c--stackless--gc=boehm--opt=3--_no-allworkingmodules
+            c--gc=boehm--opt=3
             c--thread--gc=hybrid--opt=3--_no-allworkingmodules
             c--gc=semispace--opt=3--_no-allworkingmodules
             c--gc=generation--opt=3--_no-allworkingmodules
