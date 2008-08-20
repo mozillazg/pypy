@@ -443,6 +443,10 @@ class W_IMap(Wrappable):
         self.identity_fun = (self.space.is_w(w_fun, space.w_None))
         self.w_fun = w_fun
 
+        if len(args_w) == 0:
+            raise OperationError(space.w_TypeError,
+                      space.wrap("imap() must have at least two arguments"))
+
         iterators_w = []
         i = 0
         for iterable_w in args_w:
@@ -464,16 +468,7 @@ class W_IMap(Wrappable):
         return self.space.wrap(self)
 
     def next_w(self):
-        if not self.iterators_w:
-            raise OperationError(self.space.w_StopIteration, self.space.w_None)
-
-        try:
-            w_objects = self.space.newtuple([self.space.next(w_it) for w_it in self.iterators_w])
-        except OperationError, e:
-            if e.match(self.space, self.space.w_StopIteration):
-                self.iterators_w = None
-            raise
-
+        w_objects = self.space.newtuple([self.space.next(w_it) for w_it in self.iterators_w])
         if self.identity_fun:
             return w_objects
         else:
