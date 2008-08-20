@@ -188,7 +188,7 @@ def test_mbc1_create(mbc=None):
 def test_mbc1_reset(mbc=None):
     if mbc==None:
         mbc = get_mbc1()
-    mbc.rom_bank = constants.ROM_BANK_SIZE +1
+    mbc.rom_bank = 0
     mbc.memory_model = 1
     mbc.ram_enable = True
     mbc.ram_bank = 1

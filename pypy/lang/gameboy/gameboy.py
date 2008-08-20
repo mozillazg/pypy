@@ -92,7 +92,7 @@ class GameBoy(object):
     def emulate(self, ticks):
         while ticks > 0:
             count = self.get_cycles()
-            #print "emulating", ticks, "cycles, available", count
+            print "python: ticks", count
             self.cpu.emulate(count)
             self.serial.emulate(count)
             self.timer.emulate(count)
@@ -204,5 +204,5 @@ class GameBoy(object):
         for tile in range(0, 12):
             self.video.write(0x9904 + tile, tile + 1)
             self.video.write(0x9924 + tile, tile + 13)
-        self.video.write(0x9905 + 12, 25)
+        self.video.write(0x9904 + 12, 25)
 

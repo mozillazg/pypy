@@ -107,11 +107,26 @@ def test_set_line_y_compare():
     assert video.interrupt.lcd.is_pending() == False
     
     video.control = 0x80
-    video.line_y = value
+    video.line_y = 0xF6
+    video.stat = 0x04
+    video.write(0xFF45, value)
+    assert video.stat == 0x04
+    assert video.interrupt.lcd.is_pending() == False
+    
+    video.control = 0x80
+    video.line_y = 0xF6
+    video.stat = 0x00
+    video.write(0xFF45, value)
+    assert video.stat == 0x04
+    assert video.interrupt.lcd.is_pending() == False
+    
+    video.control = 0x80
+    video.line_y = 0xF6
     video.stat = 0x40
     video.write(0xFF45, value)
     assert video.stat == 0x44
     assert video.interrupt.lcd.is_pending() == True
+    
     
     
 def test_control():

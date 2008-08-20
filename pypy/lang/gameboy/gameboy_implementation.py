@@ -10,6 +10,7 @@ from pypy.lang.gameboy import constants
 from pypy.rlib.rsdl import RSDL, RSDL_helper
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import specialize
+import time
 
 # GAMEBOY ----------------------------------------------------------------------
 
@@ -36,7 +37,8 @@ class GameBoyImplementation(GameBoy):
             isRunning = True
             while isRunning and self.handle_events():
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
-                RSDL.Delay(1)
+                time.sleep(10/1000)
+                RSDL.Delay(10)
         except :
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
@@ -88,14 +90,15 @@ class VideoDriverImplementation(VideoDriver):
         RSDL.Flip(self.screen)
             
     def draw_pixels(self):
-        #str = ""
+        pass
+        str = ""
         for y in range(self.height):
-            #str += "\n"
+            str += "\n"
             for x in range(self.width):
-                #if y%2 == 0 or True:
-                #    px = self.get_pixel_color(x, y)
-                #    str += ["#", "%", "+", " ", " "][px]
-                RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
+                if y%2 == 0 or True:
+                    px = self.get_pixel_color(x, y)
+                    str += ["#", "%", "+", " ", " "][px]
+                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
         #print str;
              
     def pixel_map(self, x, y):
