@@ -4,6 +4,17 @@ Here are the remaining errors of CPython 2.5's test_itertools.  FWIW I
 consider them all as obscure undocumented implementation details.
 
 
+======================================================================
+ERROR: test_islice (__main__.TestBasicOps)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "test_itertools.py", line 285, in test_islice
+    self.assertRaises(ValueError, islice, xrange(10), 'a')
+  File "/home/arigo/pypysrc/lib-python/2.4.1/unittest.py", line 322, in failUnlessRaises
+    return
+  File "/home/arigo/pypysrc/lib-python/2.4.1/unittest.py", line 320, in failUnlessRaises
+    callableObj(*args, **kwargs)
+TypeError: expected integer, got str object
 
 ======================================================================
 ERROR: test_tee (__main__.TestBasicOps)
