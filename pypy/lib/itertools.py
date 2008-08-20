@@ -368,14 +368,14 @@ class islice:
                 self.donext = self.it.next
             except AttributeError:
                 raise TypeError
-        while self.cnt < self.start:
-            self.donext()
+        nextindex = self.start
+        if self.stop is not None and nextindex >= self.stop:
+            raise StopIteration
+        while self.cnt <= nextindex:
+            nextitem = self.donext()
             self.cnt += 1
-        if self.stop is None or self.cnt < self.stop:
-            self.start += self.step 
-            self.cnt += 1
-            return self.donext()
-        raise StopIteration 
+        self.start += self.step 
+        return nextitem
 
 class izip:
     """Make an iterator that aggregates elements from each of the
