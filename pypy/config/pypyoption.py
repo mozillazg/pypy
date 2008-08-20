@@ -28,12 +28,12 @@ working_modules.update(dict.fromkeys(
       "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "dyngram", "_rawffi", "termios", "zlib",
      "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
-     "thread"]
+     "thread", "itertools"]
 ))
 
 working_oo_modules = default_modules.copy()
 working_oo_modules.update(dict.fromkeys(
-    []    # XXX at least, this probably works: "md5", "sha", "cStringIO"
+    ["md5", "sha", "cStringIO", "itertools"]
 ))
 
 if sys.platform == "win32":
