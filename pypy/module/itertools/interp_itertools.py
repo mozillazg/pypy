@@ -804,8 +804,8 @@ class W_GroupBy(Wrappable):
                     self.new_group = True #new group
                     raise StopIteration
 
-def W_GroupBy___new__(space, w_subtype, w_iterable, w_fun=None):
-    return space.wrap(W_GroupBy(space, w_iterable, w_fun))
+def W_GroupBy___new__(space, w_subtype, w_iterable, w_key=None):
+    return space.wrap(W_GroupBy(space, w_iterable, w_key))
 
 W_GroupBy.typedef = TypeDef(
         'groupby',
