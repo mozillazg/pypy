@@ -16,7 +16,7 @@ import pdb
 
 # HELPERS ----------------------------------------------------------------------
 
-def has_cartridge_battery(self, cartridge_type):    
+def has_cartridge_battery(cartridge_type):    
     return (cartridge_type == constants.TYPE_MBC1_RAM_BATTERY 
                 or cartridge_type == constants.TYPE_MBC2_BATTERY 
                 or cartridge_type == constants.TYPE_MBC3_RTC_BATTERY 
@@ -67,7 +67,10 @@ class CartridgeTruncatedException(Exception):
 # CARTRIDGE
 
 class CartridgeManager(object):
-    
+    """
+        Delegates the loading to the CartridgeFile,
+        verifies the Cartridge by calculating the checksums
+    """
     def __init__(self, clock):
         assert isinstance(clock, Clock)
         self.clock     = clock
@@ -188,7 +191,8 @@ class CartridgeManager(object):
     
 class CartridgeFile(object):
     """
-        File mapping. Holds the file contents
+        File mapping. Holds the file contents and is responsible for reading
+        and writing
     """
     def __init__(self, file=None):
         self.reset()
@@ -288,6 +292,7 @@ class MBC(iMemory):
         self.set_ram(ram)
 
     def reset(self):
+        self.rom_bank   = self.rom_bank_size
         self.ram_bank   = 0
         self.ram_enable = False
         self.rom_size   = 0
