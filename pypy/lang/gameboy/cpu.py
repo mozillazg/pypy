@@ -347,11 +347,11 @@ class CPU(object):
         self.cycles += ticks
         self.handle_pending_interrupts()
         while self.cycles > 0:
-            self.execute(self.fetch())
+            self.execute(self.fetch(use_cycles=False))
             
     def emulate_step(self):
         self.handle_pending_interrupts()
-        self.execute(self.fetch())
+        self.execute(self.fetch(use_cycles=False))
         
 
     def handle_pending_interrupts(self):
@@ -407,7 +407,8 @@ class CPU(object):
 
     def fetch(self, use_cycles=True):
         # Fetching  1 cycle
-        self.cycles += 1
+        if use_cycles:
+            self.cycles += 1
         if self.pc.get(use_cycles) <= 0x3FFF:
             data =  self.rom[self.pc.get(use_cycles)]
         else:
