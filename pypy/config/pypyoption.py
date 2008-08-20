@@ -31,6 +31,11 @@ working_modules.update(dict.fromkeys(
      "thread"]
 ))
 
+working_oo_modules = default_modules.copy()
+working_oo_modules.update(dict.fromkeys(
+    []    # XXX at least, this probably works: "md5", "sha", "cStringIO"
+))
+
 if sys.platform == "win32":
     # unix only modules
     del working_modules["crypt"]
@@ -131,14 +136,13 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         for modname in all_modules]),
 
     BoolOption("allworkingmodules", "use as many working modules as possible",
-               # NB. defaults to False for py.py and tests, but
-               # targetpypystandalone suggests True, which can be overridden
-               # with --no-allworkingmodules.
-               default=False,
+               # NB. defaults to True, but in py.py this is overridden by
+               # a False suggestion because it takes a while to start up.
+               # Actual module enabling only occurs if
+               # enable_allworkingmodules() is called, and it depends
+               # on the selected backend.
+               default=True,
                cmdline="--allworkingmodules",
-               suggests=[("objspace.usemodules.%s" % (modname, ), True)
-                             for modname in working_modules
-                             if modname in all_modules],
                negation=True),
 
     BoolOption("geninterp", "specify whether geninterp should be used",
@@ -364,6 +368,17 @@ def set_pypy_opt_level(config, level):
     # some optimizations have different effects depending on the typesystem
     if type_system == 'ootype':
         config.objspace.std.suggest(multimethods="doubledispatch")
+
+
+def enable_allworkingmodules(config):
+    if config.translation.type_system == 'ootype':
+        modules = working_oo_modules
+    else:
+        modules = working_modules
+    # ignore names from 'essential_modules', notably 'exceptions', which
+    # may not be present in config.objspace.usemodules at all
+    modules = [name for name in modules if name not in essential_modules]
+    config.objspace.usemodules.suggest(**dict.fromkeys(modules, True))
 
 
 if __name__ == '__main__':

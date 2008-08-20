@@ -16,6 +16,7 @@ from py.compat.optparse import make_option
 from pypy.interpreter import main, interactive, error, gateway
 from pypy.config.config import OptionDescription, BoolOption, StrOption
 from pypy.config.config import Config, to_optparse
+from pypy.config import pypyoption
 import os, sys
 import time
 
@@ -58,6 +59,10 @@ def main_(argv=None):
     args = option.process_options(parser, argv[1:])
     if interactiveconfig.verbose:
         error.RECORD_INTERPLEVEL_TRACEBACK = True
+    # --allworkingmodules takes really long to start up, but can be forced on
+    config.objspace.suggest(allworkingmodules=False)
+    if config.objspace.allworkingmodules:
+        pypyoption.enable_allworkingmodules(config)
 
     # create the object space
 
