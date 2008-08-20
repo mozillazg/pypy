@@ -267,10 +267,6 @@ class AppTestItertools:
     def test_imap(self):
         import itertools
 
-        #---does not work in CPython 2.5
-        #it = itertools.imap(None)
-        #raises(StopIteration, it.next)
-
         obj_list = [object(), object(), object()]
         it = itertools.imap(None, obj_list)
         for x in obj_list:
@@ -304,6 +300,10 @@ class AppTestItertools:
         it = itertools.imap(0, [0])
         raises(TypeError, it.next)
         raises(TypeError, itertools.imap, None, 0)
+
+        raises(TypeError, itertools.imap, None)
+        raises(TypeError, itertools.imap, bool)
+        raises(TypeError, itertools.imap, 42)
 
     def test_izip(self):
         import itertools

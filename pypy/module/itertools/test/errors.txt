@@ -38,14 +38,6 @@ Traceback (most recent call last):
 AssertionError: '<count object at 0x08fcdcac>' != 'count(3)'
 
 ======================================================================
-FAIL: test_imap (__main__.TestBasicOps)
-----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "itest25.py", line 231, in test_imap
-    self.assertRaises(TypeError, imap, operator.neg)
-AssertionError: TypeError not raised
-
-======================================================================
 FAIL: test_izip (__main__.TestBasicOps)
 ----------------------------------------------------------------------
 Traceback (most recent call last):
