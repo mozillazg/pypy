@@ -31,9 +31,9 @@ class __extend__(annmodel.SomeOOBoundMeth):
 
 class __extend__(annmodel.SomeOOStaticMeth):
     def rtyper_makerepr(self, rtyper):
-        return OOStaticMethRepr(self.method)
+        return OOStaticMethRepr(self.ootype)
     def rtyper_makekey(self):
-        return self.__class__, self.method
+        return self.__class__, self.ootype
 
 
 class OOObjectRepr(Repr):

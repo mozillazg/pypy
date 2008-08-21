@@ -576,7 +576,7 @@ class SomeOOBoundMeth(SomeObject):
 class SomeOOStaticMeth(SomeObject):
     immutable = True
     def __init__(self, method):
-        self.method = method
+        self.ootype = method
         
 NUMBER = object()
 annotation_to_ll_map = [
@@ -594,7 +594,7 @@ def annotation_to_lltype(s_val, info=None):
     if isinstance(s_val, SomeOOInstance):
         return s_val.ootype
     if isinstance(s_val, SomeOOStaticMeth):
-        return s_val.method
+        return s_val.ootype
     if isinstance(s_val, SomeOOClass):
         return s_val.ootype
     if isinstance(s_val, SomeInteriorPtr):
