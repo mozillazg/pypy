@@ -24,8 +24,8 @@ class AbstractExceptionDesc:
         null_exc_value = self.etrafo.c_null_evalue.value
         self.gv_null_exc_type = RGenOp.constPrebuiltGlobal(null_exc_type)
         self.gv_null_exc_value = RGenOp.constPrebuiltGlobal(null_exc_value)
-
-        self._create_boxes(RGenOp)
+        self.null_exc_type_box = self.PtrRedBox(self.gv_null_exc_type)
+        self.null_exc_value_box = self.PtrRedBox(self.gv_null_exc_value)
         self.lazy_exception_path = lazy_exception_path
 
     def _freeze_(self):
@@ -37,8 +37,8 @@ class AbstractExceptionDesc:
         gv_evalue = self.genop_get_exc_value(builder)
         self.genop_set_exc_type (builder, self.gv_null_exc_type )
         self.genop_set_exc_value(builder, self.gv_null_exc_value)
-        etypebox  = rvalue.PtrRedBox( gv_etype )
-        evaluebox = rvalue.PtrRedBox(gv_evalue)
+        etypebox  = self.PtrRedBox( gv_etype )
+        evaluebox = self.PtrRedBox(gv_evalue)
         etypebox .known_nonzero = known_occurred
         evaluebox.known_nonzero = known_occurred
         rtimeshift.setexctypebox (jitstate, etypebox)
@@ -59,11 +59,9 @@ class AbstractExceptionDesc:
 
 
 class LLTypeExceptionDesc(AbstractExceptionDesc):
-    
-    def _create_boxes(self, RGenOp):
-        self.null_exc_type_box = rvalue.PtrRedBox(self.gv_null_exc_type)
-        self.null_exc_value_box = rvalue.PtrRedBox(self.gv_null_exc_value)
 
+    PtrRedBox = rvalue.PtrRedBox
+    
     def genop_get_exc_type(self, builder):
         return builder.genop_getfield(self.exc_type_token, self.gv_excdata)
 
@@ -82,10 +80,8 @@ class LLTypeExceptionDesc(AbstractExceptionDesc):
 
 
 class OOTypeExceptionDesc(AbstractExceptionDesc):
-    def _create_boxes(self, RGenOp):
-        # XXX: think more about exceptions
-        self.null_exc_type_box = rvalue.InstanceRedBox(self.gv_null_exc_type)
-        self.null_exc_value_box = rvalue.InstanceRedBox(self.gv_null_exc_value)
+
+    PtrRedBox = rvalue.InstanceRedBox
 
     def genop_get_exc_type(self, builder):
         return builder.genop_oogetfield(self.exc_type_token, self.gv_excdata)
