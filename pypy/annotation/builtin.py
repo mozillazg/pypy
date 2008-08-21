@@ -577,7 +577,7 @@ def cast_from_object(T, obj):
     if TYPE is ootype.Object:
         return SomeOOObject()
     elif TYPE is ootype.Class:
-        return SomeOOClass(TYPE)
+        return SomeOOClass(ootype.ROOT) # ???
     elif isinstance(TYPE, ootype.StaticMethod):
         return SomeOOStaticMeth(TYPE)
     elif isinstance(TYPE, ootype.OOType):

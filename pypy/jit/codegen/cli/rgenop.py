@@ -169,7 +169,7 @@ class ObjectConst(BaseConst):
         return cliobj.GetType()
 
     def getobj(self):
-        return self.obj
+        return dotnet.cast_to_native_object(self.obj)
 
     def load(self, meth):
         assert False, 'XXX'
@@ -342,6 +342,9 @@ class RCliGenOp(AbstractRGenOp):
                                delegatetype)
         builder = graph.branches[0]
         return builder, graph.gv_entrypoint, graph.inputargs_gv[:]
+
+    def replay(self, label):
+        raise NotImplementedError
 
 
 class GraphInfo:
@@ -620,6 +623,18 @@ class BranchBuilder(GenBuilder):
     def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
         op = ops.SetField(self.meth, gv_obj, gv_value, fieldtoken)
         self.appendop(op)
+
+    def genop_oosend(self, methtoken, gv_self, args_gv):
+        raise NotImplementedError
+
+    def genop_oononnull(self, gv_obj):
+        raise NotImplementedError
+
+    def genop_ooisnull(self, gv_obj):
+        raise NotImplementedError
+
+    def genop_new(self, gv_obj):
+        raise NotImplementedError
 
     def enter_next_block(self, args_gv):
         seen = {}

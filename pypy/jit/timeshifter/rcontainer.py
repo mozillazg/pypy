@@ -59,7 +59,7 @@ class FrozenContainer(AbstractContainer):
 class AbstractStructTypeDesc(object):
     __metaclass__ = cachedtype
 
-    VirtualStructCls = None # patched later with VirtualStruct
+    #VirtualStructCls = None # patched later with VirtualStruct
 
     _attrs_ =  """TYPE PTRTYPE name
                     firstsubstructdesc arrayfielddesc
@@ -79,7 +79,7 @@ class AbstractStructTypeDesc(object):
     firstsubstructdesc = None
     materialize = None
     StructFieldDesc = None
-    PtrRedBox = None
+    #PtrRedBox = None
     firstfielddesc = 0
 
     def __init__(self, RGenOp, TYPE):
@@ -328,7 +328,7 @@ def create_varsize(jitstate, contdesc, sizebox):
 
 class VirtualizableStructTypeDesc(StructTypeDesc):
 
-    VirtualStructCls = None # patched later with VirtualizableStruct
+    #VirtualStructCls = None # patched later with VirtualizableStruct
 
     _attrs_  =  """redirected_fielddescs
                    redirected
@@ -648,7 +648,7 @@ class FieldDesc(object):
     __metaclass__ = cachedtype
     _attrs_ = 'structdesc'
 
-    PtrRedBox = None
+    #PtrRedBox = None
     allow_void = False
     virtualizable = False
     gv_default = None
