@@ -443,10 +443,6 @@ class W_IMap(Wrappable):
         self.identity_fun = (self.space.is_w(w_fun, space.w_None))
         self.w_fun = w_fun
 
-        if len(args_w) == 0:
-            raise OperationError(space.w_TypeError,
-                      space.wrap("imap() must have at least two arguments"))
-
         iterators_w = []
         i = 0
         for iterable_w in args_w:
@@ -476,6 +472,9 @@ class W_IMap(Wrappable):
 
 
 def W_IMap___new__(space, w_subtype, w_fun, args_w):
+    if len(args_w) == 0:
+        raise OperationError(space.w_TypeError,
+                  space.wrap("imap() must have at least two arguments"))
     return space.wrap(W_IMap(space, w_fun, args_w))
 
 W_IMap.typedef = TypeDef(
@@ -509,6 +508,14 @@ W_IMap.typedef.acceptable_as_base_class = False
 
 class W_IZip(W_IMap):
     _error_name = "izip"
+
+    def next_w(self):
+        # argh.  izip(*args) is almost like imap(None, *args) except
+        # that the former needs a special case for len(args)==0
+        # while the latter just raises a TypeError in this situation.
+        if len(self.iterators_w) == 0:
+            raise OperationError(self.space.w_StopIteration, self.space.w_None)
+        return W_IMap.next_w(self)
 
 def W_IZip___new__(space, w_subtype, args_w):
     return space.wrap(W_IZip(space, space.w_None, args_w))
