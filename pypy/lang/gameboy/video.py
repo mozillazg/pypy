@@ -31,7 +31,7 @@ class set_tile_line_call_wrapper(VideoCallWraper):
 
 # -----------------------------------------------------------------------------
 
-def VideoStatus(object):
+class VideoControl(object):
     # used for enabled or disabled window or background
     # Bit 7 - LCD Display Enable             (0=Off, 1=On)
     # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
@@ -42,41 +42,41 @@ def VideoStatus(object):
     # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
     # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
     
-    def __init__(self, video):
-        self.video = video
+    def __init__(self):
         self.reset()
         
     def reset(self):
-        self.mode                                    = 0x02
-        self.lcd_enable                              = False
-        self.window_tile_map_select                  = False
-        self.window_enable                           = False
-        self.background_and_window_tile_data_select  = False
-        self.background_tile_map_select              = False
-        self.big_sprite_size                         = False
-        self.sprite_display_enable                   = False
-        self.background_enable                       = False
-        #Coincidence Flag  (0:LYC<>LY, 1:LYC=LY)
+        self.lcd_enabled                              = True
+        self.window_upper_tile_map_selected                  = False
+        self.window_enabled                           = False
+        self.background_and_window_lower_tile_data_selected  = True
+        self.background_upper_tile_map_selected              = False
+        self.big_sprite_size_selected                            = False
+        self.sprite_display_enabled                   = False
+        self.background_enabled                       = True
         
     def read(self):
         value = 0
-        value += int(self.lyc_ly_coincidence) << 7 
-        value += int(self.h_blank_interrupt)  << 6 
-        value += int(self.oam_interrupt)      << 5
-        value += int(self.h_blank_interrupt)  << 4
-        value += int(self.vblank_interrupt)   << 3
-        value += int(self.coincidence_flag)   << 2
-        value += self.mode & 0x03
+        value += int(self.lcd_enabled)                              << 7 
+        value += int(self.window_upper_tile_map_selected)           << 6 
+        value += int(self.window_enabled)                           << 5
+        value += int(self.background_and_window_lower_tile_data_selected)  << 4
+        value += int(self.background_upper_tile_map_selected)       << 3
+        value += int(self.big_sprite_size_selected)                 << 2
+        value += int(self.sprite_display_enabled)                   << 1
+        value += int(self.background_enabled)
         return value
         
     def write(self, value):
-        self.lyc_ly_coincidence = bool(value & (1 << 7))
-        self.h_blank_interrupt  = bool(value & (1 << 6))
-        self.oam_interrupt      = bool(value & (1 << 5))
-        self.h_blank_interrupt  = bool(value & (1 << 4))
-        self.vblank_interrupt   = bool(value & (1 << 3))
-        self.coincidence_flag   = bool(value & (1 << 2))
-        self.mode               = value & 0x03
+        self.lcd_enabled                             = bool(value & (1 << 7))
+        self.window_upper_tile_map_selected          = bool(value & (1 << 6))
+        self.window_enabled                          = bool(value & (1 << 5))
+        self.background_and_window_lower_tile_data_selected = \
+                                                       bool(value & (1 << 4))
+        self.background_upper_tile_map_selected      = bool(value & (1 << 3))
+        self.big_sprite_size_selected                = bool(value & (1 << 2))
+        self.sprite_display_enabled                  = bool(value & (1 << 1))
+        self.background_enabled                      = bool(value & (1 << 0))
     
     def get_bg_tile_data_address(self):
         pass
@@ -87,9 +87,10 @@ class Video(iMemory):
 
     def __init__(self, video_driver, interrupt, memory):
         assert isinstance(video_driver, VideoDriver)
-        self.driver = video_driver
-        self.interrupt = interrupt
-        self.memory = memory
+        self.driver     = video_driver
+        self.interrupt  = interrupt
+        self.control     = VideoControl()
+        self.memory     = memory
         self.reset()
 
     def get_frame_skip(self):
@@ -100,7 +101,7 @@ class Video(iMemory):
 
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
-        self.control    = 0x91
+        self.control.reset()
         self.stat       = 2
         self.line_y     = 0
         self.line_y_compare = 0
@@ -218,7 +219,7 @@ class Video(iMemory):
 
     def emulate(self, ticks):
         ticks = int(ticks)
-        if (self.control & 0x80) != 0:
+        if self.control.lcd_enabled:
             self.cycles -= ticks
             self.consume_cycles()
             
@@ -235,16 +236,17 @@ class Video(iMemory):
                 self.emulate_transfer()
 
     def get_control(self):
-        return self.control
+        return self.control.read()
 
     def set_control(self, data):
-        if (self.control & 0x80) != (data & 0x80):
+        if (self.control.read() & 0x80) != (data & 0x80):
             self.reset_control(data)
         # don't draw window if it was not enabled and not being drawn before
-        if (self.control & 0x20) == 0 and (data & 0x20) != 0 and \
+        if not self.control.window_enabled and \
+           (data & 0x20) != 0 and \
            self.window_line_y == 0 and self.line_y > self.window_y:
-             self.window_line_y = 144
-        self.control = data
+                self.window_line_y = 144
+        self.control.write(data)
 
     def reset_control(self, data):
         # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
@@ -267,7 +269,7 @@ class Video(iMemory):
         
     def set_status_bug(self) :
         # Gameboy Bug
-        if (self.control & 0x80) != 0x00 and \
+        if self.control.lcd_enabled and \
            (self.stat & 0x03)    == 0x01 and \
            (self.stat & 0x44)    != 0x44:
              self.interrupt.raise_interrupt(constants.LCD)
@@ -292,9 +294,8 @@ class Video(iMemory):
 
     def set_line_y_compare(self, data):
         self.line_y_compare = data
-        if (self.control & 0x80) == 0:
-            return
-        self.emulate_hblank_line_y_compare(stat_check=True)
+        if self.control.lcd_enabled:
+            self.emulate_hblank_line_y_compare(stat_check=True)
                 
     def get_dma(self):
         return self.dma
@@ -478,13 +479,13 @@ class Video(iMemory):
         self.driver.update_display()
 
     def draw_line(self):
-        if (self.control & 0x01) != 0:
+        if self.control.background_enabled:
             self.draw_background()
         else:
             self.draw_clean_background()
-        if (self.control & 0x20) != 0:
+        if self.control.window_enabled:
             self.draw_window()
-        if (self.control & 0x02) != 0:
+        if self.control.sprite_display_enabled:
             self.draw_objects()
         self.draw_pixels()
 
@@ -522,13 +523,13 @@ class Video(iMemory):
         return tile_map, tile_data;
         
     def get_tile_map(self, mask):
-        if (self.control & mask) != 0:
+        if (self.control.read() & mask) != 0:
             return constants.VRAM_MAP_B
         else:
             return constants.VRAM_MAP_A
         
     def get_tile_data(self, mask):
-        if (self.control & mask) != 0:
+        if (self.control.read() & mask) != 0:
             return constants.VRAM_DATA_A
         else:
             return  constants.VRAM_DATA_B
@@ -558,7 +559,7 @@ class Video(iMemory):
             tile  = self.oam[offset + 2]
             flags = self.oam[offset + 3]
             y     = self.line_y - y + 16
-            if ((self.control & 0x04) != 0):
+            if self.control.big_sprite_size_selected:
                 # 8x16 tile size
                 if (y < 0 or y > 15):
                     continue
@@ -596,7 +597,7 @@ class Video(iMemory):
 
     def draw_tiles(self, x, tile_map, tile_data):
         while x < 168:
-            if (self.control & 0x10) != 0:
+            if self.control.background_and_window_lower_tile_data_selected:
                 tile = self.vram[tile_map]
             else:
                 tile = (self.vram[tile_map] ^ 0x80) & 0xFF

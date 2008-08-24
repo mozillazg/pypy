@@ -29,7 +29,7 @@ def get_video_driver():
 def test_reset():
     video = get_video()
     assert video.cycles == constants.MODE_2_TICKS
-    assert video.control == 0x91
+    assert video.control.read() == 0x91
     assert video.stat == 2
     assert video.line_y == 0
     assert video.line_y_compare == 0
@@ -56,8 +56,7 @@ def test_reset():
 
 def test_read_write_properties():
     video = get_video()
-    checks = [(0xFF40, "control"),
-              (0xFF42, "scroll_y"),
+    checks = [(0xFF42, "scroll_y"),
               (0xFF43, "scroll_x"), 
               #(0xFF44, "line_y"), read only
               (0xFF45, "line_y_compare"), 
@@ -79,6 +78,14 @@ def test_read_write_properties():
         assert video.read(address) == value
         counted_value = (counted_value + 1 ) % 0xFF
         
+def test_read_write_control():
+    video = get_video()
+    (0xFF40, "control")
+    value = 0x2
+    video.write(0xFF40, value)
+    assert video.control.read() == value
+    assert video.read(0xFF40) == value
+    
 def test_set_status():
     video = get_video()
     value = 0x95
@@ -87,7 +94,7 @@ def test_set_status():
     video.write(0xFF41, value)
     assert video.stat == (valueb & 0x87) | (value & 0x78)
     
-    video.control = 0x80
+    video.control.write(0x80)
     video.stat = 0x01
     video.write(0xFF41, 0x01)
     assert video.interrupt.lcd.is_pending()
@@ -99,28 +106,28 @@ def test_set_line_y_compare():
     video.write(0xFF45, value)
     assert video.line_y_compare == value
     
-    video.control = 0x80
+    video.control.write(0x80)
     video.line_y = value -1
     video.stat = 0xFF
     video.write(0xFF45, value)
     assert video.stat == 0xFB
     assert video.interrupt.lcd.is_pending() == False
     
-    video.control = 0x80
+    video.control.write(0x80)
     video.line_y = 0xF6
     video.stat = 0x04
     video.write(0xFF45, value)
     assert video.stat == 0x04
     assert video.interrupt.lcd.is_pending() == False
     
-    video.control = 0x80
+    video.control.write(0x80)
     video.line_y = 0xF6
     video.stat = 0x00
     video.write(0xFF45, value)
     assert video.stat == 0x04
     assert video.interrupt.lcd.is_pending() == False
     
-    video.control = 0x80
+    video.control.write(0x80)
     video.line_y = 0xF6
     video.stat = 0x40
     video.write(0xFF45, value)
@@ -132,30 +139,30 @@ def test_set_line_y_compare():
 def test_control():
     video = get_video()
     
-    video.control = 0x80
+    video.control.write(0x80)
     video.window_line_y = 1
     video.write(0xFF40, 0x80)
-    assert video.control == 0x80
+    assert video.control.read() == 0x80
     assert video.window_line_y == 1
     
 def test_control_window_draw_skip():
     video = get_video()   
-    video.control = 0x80
+    video.control.write(0x80)
     video.window_y = 0
     video.line_y = 1
     video.window_line_y = 0
     video.write(0xFF40, 0x80+0x20)
-    assert video.control == 0x80+0x20
+    assert video.control.read() == 0x80+0x20
     assert video.window_line_y == 144
  
 def test_control_reset1():
     video = get_video()   
-    video.control = 0
+    video.control.write(0)
     video.stat = 0x30
     video.line_y = 1
     video.display = True
     video.write(0xFF40, 0x80)
-    assert video.control == 0x80
+    assert video.control.read() == 0x80
     assert video.stat == 0x30 + 0x02
     assert video.cycles == constants.MODE_2_TICKS
     assert video.line_y == 0
@@ -163,12 +170,12 @@ def test_control_reset1():
     
 def test_control_reset2():
     video = get_video()   
-    video.control = 0x80
+    video.control.write(0x80)
     video.stat = 0x30
     video.line_y = 1
     video.display = True
     video.write(0xFF40, 0x30)
-    assert video.control == 0x30
+    assert video.control.read() == 0x30
     assert video.stat == 0x30
     assert video.cycles == constants.MODE_1_TICKS
     assert video.line_y == 0
