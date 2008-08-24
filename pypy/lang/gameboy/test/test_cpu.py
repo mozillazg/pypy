@@ -301,10 +301,19 @@ def test_prepare_for_fetch():
 
 # CPU Helper Methods Testing ---------------------------------------------------
 
+def test_fetch():
+    cpu = get_cpu()
+    cpu.pc.set(100)
+    prepare_for_fetch(cpu, 0x12)
+    assert cpu.fetch() == 0x12
+    assert_default_registers(cpu, pc=100+1)
+    
 def test_fetch_double_address():
     cpu = get_cpu()
+    cpu.pc.set(100)
     prepare_for_fetch(cpu, 0x12, 0x34)
     assert cpu.fetch_double_address() ==  0x1234
+    assert_default_registers(cpu, pc=100+2)
     
 
 def test_push_double_register():
@@ -320,7 +329,7 @@ def test_push_double_register():
 def test_call():
     cpu = get_cpu()
     cpu.pc.set(0x1234)
-    cpu.sp.set(0x03)
+    cpu.sp.set(3)
     cpu.call(0x4321)
     assert_default_registers(cpu, sp=1, pc=0x4321)
     assert cpu.pop() == 0x34
@@ -1331,13 +1340,29 @@ def set_flag_0xDC(cpu, value):
     cpu.f.c_flag = value
 
 # call_nnnn
-def test_0xCD_call():
+def test_unconditional_call():
     cpu        = get_cpu()
     fetchValue = 0x1234
-    cpu.sp.set(fetchValue)
-    prepare_for_fetch(cpu, fetchValue)
+    cpu.pc.set(0x2244)
+    cpu.sp.set(3)
+    prepare_for_fetch(cpu, 0x12, 0x34)
+    cpu.unconditional_call()
+    assert_default_registers(cpu, pc=fetchValue, sp=1)
+    # two fetches happened in between
+    assert cpu.pop() == 0x44+2
+    assert cpu.pop() == 0x22
+    
+def test_0xCD_unconditional_call():
+    cpu        = get_cpu(new=True)
+    fetchValue = 0x1234
+    cpu.pc.set(0x2244)
+    cpu.sp.set(3)
+    prepare_for_fetch(cpu, 0x12, 0x34)
     cycle_test(cpu, 0xCD, 6)
-    assert_default_registers(cpu, pc=fetchValue, sp=fetchValue-2)
+    assert_default_registers(cpu, pc=fetchValue, sp=1)
+    # two fetches happened in between
+    assert cpu.pop() == 0x44+2
+    assert cpu.pop() == 0x22
 
 # push_BC to push_AF
 def test_0xC5_to_0xF5_push_double_register():
