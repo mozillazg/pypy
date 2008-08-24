@@ -425,6 +425,7 @@ class CPU(object):
         self.double_register_inverse_call(CPUFetchCaller(self), register)
 
     def push(self, data, use_cycles=True):
+        print hex(data)
         # Stack, 2 cycles
         self.sp.dec(use_cycles) # 2 cycles
         self.memory.write(self.sp.get(use_cycles), data)

@@ -6,8 +6,6 @@
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import iMemory
 from pypy.lang.gameboy.cpu import process_2_complement
-import pdb
-
 
 # -----------------------------------------------------------------------------
 class VideoCallWraper(object):
@@ -114,7 +112,7 @@ class Video(iMemory):
         # window position
         self.window_x   = 0
         self.window_y   = 0
-        self.window_line_y = 0
+        self.window_line_y      = 0
         self.background_palette = 0xFC
         self.object_palette_0   = 0xFF 
         self.object_palette_1   = 0xFF
@@ -124,11 +122,11 @@ class Video(iMemory):
         self.vblank     = True
         self.dirty      = True
 
-        self.vram       = [0]*constants.VRAM_SIZE
-        # Object Attribute Memor
-        self.oam        = [0]*constants.OAM_SIZE
+        self.vram       = [0] * constants.VRAM_SIZE
+        # Object Attribute Memory
+        self.oam        = [0] * constants.OAM_SIZE
         
-        self.line       = [0]* (8+160+8)
+        self.line       = [0] * (8 + 160 + 8)
         self.objects    = [0] * constants.OBJECTS_PER_LINE
         self.palette    = [0] * 1024
         
@@ -147,7 +145,7 @@ class Video(iMemory):
         elif address == constants.SCX:
             self.set_scroll_x(data)
         elif address == constants.LY:
-            # Read Online_y
+            # Read Only: line_y
             pass
         elif address == constants.LYC:
             self.set_line_y_compare(data)
@@ -178,7 +176,7 @@ class Video(iMemory):
                 self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
-        address = int(address)
+        print address, hex(address)
         if address == constants.LCDC:
             return self.get_control()
         elif address == constants.STAT:
@@ -219,17 +217,14 @@ class Video(iMemory):
         return self.cycles
 
     def emulate(self, ticks):
-        print "python: video emulating"
         ticks = int(ticks)
         if (self.control & 0x80) != 0:
             self.cycles -= ticks
             self.consume_cycles()
-        print "python: video emulating DONE"
             
     def consume_cycles(self):
         while self.cycles <= 0:
             mode = self.stat & 0x03
-            print mode
             if mode == 0:
                 self.emulate_hblank()
             elif mode == 1:
@@ -252,7 +247,6 @@ class Video(iMemory):
         self.control = data
 
     def reset_control(self, data):
-        print "python reset control"
         # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
         self.line_y  = 0
         self.stat   = (self.stat & 0xFC)
@@ -268,7 +262,6 @@ class Video(iMemory):
         return 0x80 | self.stat
 
     def set_status(self, data):
-        print "python set_status"
         self.stat = (self.stat & 0x87) | (data & 0x78)
         self.set_status_bug()
         
@@ -378,48 +371,40 @@ class Video(iMemory):
             self.interrupt.raise_interrupt(constants.LCD)
                 
     # mode setting -----------------------------------------------------------
-    
+   
     def set_mode_3_begin(self):
-        print "set_mode_3_begin"
         self.stat     = (self.stat & 0xFC) | 0x03
         self.cycles  += constants.MODE_3_BEGIN_TICKS
         self.transfer = True
         
     def set_mode_3_end(self):
-        print "set_mode_3_end"
         self.stat     = (self.stat & 0xFC) | 0x03
         self.cycles  += constants.MODE_3_END_TICKS
         self.transfer = False
-        
+
     def set_mode_0(self):
-        print "set_mode_0"
         self.stat    = (self.stat & 0xFC)
         self.cycles += constants.MODE_0_TICKS
         self.h_blank_interrupt_check()
-                
+       
     def set_mode_2(self):
-        print "set_mode_2"
         self.stat    = (self.stat & 0xFC) | 0x02
         self.cycles += constants.MODE_2_TICKS
         self.oam_interrupt_check()
-        
+      
     def set_mode_1_begin(self):
-        print "set_mode_1_begin"
         self.stat    = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_BEGIN_TICKS
         
     def set_mode_1(self):
-        print "set_mode_1"
         self.stat    = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_TICKS
         
     def set_mode_1_between(self):
-        print "set_mode_1_between"
         self.stat    = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
         
     def set_mode_1_end(self):
-        print "set_mode_1_end"
         self.stat    = (self.stat & 0xFC) | 0x01
         self.cycles += constants.MODE_1_END_TICKS
         
@@ -614,7 +599,7 @@ class Video(iMemory):
             if (self.control & 0x10) != 0:
                 tile = self.vram[tile_map]
             else:
-                tile = (process_2_complement(self.vram[tile_map]) ^ 0x80) & 0xFF
+                tile = (self.vram[tile_map] ^ 0x80) & 0xFF
             self.draw_tile(x, tile_data + (tile << 4))
             tile_map = (tile_map & 0x1FE0) + ((tile_map + 1) & 0x001F)
             x += 8
@@ -707,8 +692,8 @@ class Video(iMemory):
                 color = (self.object_palette_1 >> ((((pattern >> 4) & 0x02) +\
                         ((pattern >> 1) & 0x01)) << 1)) & 0x03
             index = ((pattern & 0x30) << 4) + (pattern & 0x0F)
-            #self.palette[index] = constants.COLOR_MAP[color]
-            self.palette[index] = color
+            self.palette[index] = constants.COLOR_MAP[color]
+            #self.palette[index] = color
         self.dirty = False
 
 # ------------------------------------------------------------------------------

@@ -290,8 +290,13 @@ def test_add_sp_carry_flags():
     
 def test_and_a():
     cpu = get_cpu()
-    cpu.f.set(0xFF)
     cpu.sp.set(0xFF)
+    cpu.f.set(0xFF)
+    method_value_call(cpu, CPU.and_a, 0x00)
+    assert cpu.a.get() == 0x00
+    assert_flags(cpu, z=True, n=False, h=True, c=False)
+    
+    cpu.f.set(0x00)
     method_value_call(cpu, CPU.and_a, 0x00)
     assert cpu.a.get() == 0x00
     assert_flags(cpu, z=True, n=False, h=True, c=False)
