@@ -816,7 +816,7 @@ class AbstractTestRstr(BaseRtypingTest):
             else:
                 return llstr1
         res = self.interpret(f, [0])
-        assert res == self.string_to_ll(None)
+        assert self.ll_to_string(res) is None
         res = self.interpret(f, [1])
         assert self.ll_to_string(res) == "hello"
 
