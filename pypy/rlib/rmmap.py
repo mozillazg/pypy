@@ -181,7 +181,8 @@ elif _MS_WINDOWS:
                                [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORD],
                                rffi.VOIDP)
     VirtualProtect = winexternal('VirtualProtect',
-                                 [rffi.VOIDP, rffi.SIZE_T, DWORD, DWORDP], BOOL)
+                                 [rffi.VOIDP, rffi.SIZE_T, DWORD, LPDWORD],
+                                 BOOL)
     VirtualFree = winexternal('VirtualFree',
                               [rffi.VOIDP, rffi.SIZE_T, DWORD], BOOL)
 
@@ -741,7 +742,7 @@ elif _MS_WINDOWS:
                            PAGE_EXECUTE_READWRITE)
         if not res:
             raise MemoryError
-        arg = lltype.malloc(DWORDP.TO, 1, zero=True, flavor='raw')
+        arg = lltype.malloc(LPDWORD.TO, 1, zero=True, flavor='raw')
         VirtualProtect(res, map_size, PAGE_EXECUTE_READWRITE, arg)
         lltype.free(arg, flavor='raw')
         # ignore errors, just try
