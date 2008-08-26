@@ -7,7 +7,8 @@ Gateway between app-level and interpreter-level:
 
 """
 
-import types, sys, md5, os
+import types, sys, os
+from pypy.tool.compat import md5
 
 NoneNotWrapped = object()
 
