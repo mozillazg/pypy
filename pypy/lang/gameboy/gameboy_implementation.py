@@ -18,6 +18,7 @@ class GameBoyImplementation(GameBoy):
     
     def __init__(self):
         GameBoy.__init__(self)
+        self.is_running = False
         self.init_sdl()
         
     def init_sdl(self):
@@ -33,13 +34,13 @@ class GameBoyImplementation(GameBoy):
     
     def mainLoop(self):
         self.reset()
+        self.is_running = True
         try:
-            isRunning = True
-            while isRunning and self.handle_events():
+            while self.is_running and self.handle_events():
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
                 time.sleep(10/1000)
-                RSDL.Delay(10)
         except :
+            self.is_running = False 
             lltype.free(self.event, flavor='raw')
             RSDL.Quit()
             self.handle_execution_error()
@@ -49,12 +50,11 @@ class GameBoyImplementation(GameBoy):
         pass
     
     def handle_events(self):
-        isRunning = True
-        while self.poll_event():
+        while self.poll_event() and self.is_running:
             if self.check_for_escape():
-                isRunning = False 
+                self.is_running = False 
             self.joypad_driver.update(self.event) 
-        return isRunning
+        return self.is_running
     
     
     def poll_event(self):
