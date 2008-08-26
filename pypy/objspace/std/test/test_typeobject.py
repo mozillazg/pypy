@@ -313,6 +313,27 @@ class AppTestTypeObject:
         else:
             raise TestFailed, "didn't catch MRO conflict"
 
+    def test_mutable_bases_versus_nonheap_types(self):
+        skip("in-progress")
+        class A(int):
+            __slots__ = []
+        class C(int):
+            pass
+        raises(TypeError, 'C.__bases__ = (A,)')
+        raises(TypeError, 'int.__bases__ = (object,)')
+        C.__bases__ = (int,)
+
+    def test_compatible_slot_layout(self):
+        skip("in-progress")
+        class A(object):
+            __slots__ = ['a']
+        class B(A):
+            __slots__ = ['b1', 'b2']
+        class C(A):
+            pass
+        class D(B, C):    # assert does not raise TypeError
+            pass
+
     def test_builtin_add(self):
         x = 5
         assert x.__add__(6) == 11
