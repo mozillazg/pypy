@@ -24,7 +24,7 @@ Translating pypy
 ----------------
 
 Run::
-  ./translate.py --platform=maemo --opt=mem
+  ./translate.py --platform=maemo --opt=mem targetpypystandalone --no-allworkingmodules
 
 This should create pypy-c which is able to run on top of scratchbox. To run it
 you need to copy pypy-c, together with libraries to a place accessible
