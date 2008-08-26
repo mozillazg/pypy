@@ -48,6 +48,7 @@ class W_TypeObject(W_Object):
     from pypy.objspace.std.typetype import type_typedef as typedef
 
     lazyloaders = {} # can be overridden by specific instances
+    version_tag = None
 
     uses_object_getattribute = False
     # ^^^ for config.objspace.std.getattributeshortcut
@@ -77,7 +78,7 @@ class W_TypeObject(W_Object):
 
         if space.config.objspace.std.withtypeversion:
             if w_self.instancetypedef.hasdict or custom_metaclass:
-                w_self.version_tag = None
+                pass
             else:
                 w_self.version_tag = VersionTag()
 
