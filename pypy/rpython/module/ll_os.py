@@ -394,17 +394,6 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([], int, export_name="ll_os.ll_os_setsid",
                       llimpl=setsid_llimpl)
 
-    @registering_if(os, 'chroot')
-    def register_os_chroot(self):
-        os_chroot = self.llexternal('chroot', [rffi.CCHARP], rffi.INT)
-        def chroot_llimpl(arg):
-            result = os_chroot(arg)
-            if result == -1:
-                raise OSError(rposix.get_errno(), "os_chroot failed")
-
-        return extdef([str], None, export_name="ll_os.ll_os_chroot",
-                      llimpl=chroot_llimpl)
-
     @registering_if(os, 'uname')
     def register_os_uname(self):
         CHARARRAY = lltype.FixedSizeArray(lltype.Char, 1)
@@ -462,17 +451,9 @@ class RegisterOs(BaseLazyRegistering):
     def register_os_setuid(self):
         return self.extdef_for_function_int_to_int('setuid')
 
-    @registering_if(os, 'seteuid')
-    def register_os_seteuid(self):
-        return self.extdef_for_function_int_to_int('seteuid')
-
     @registering_if(os, 'setgid')
     def register_os_setgid(self):
         return self.extdef_for_function_int_to_int('setgid')
-
-    @registering_if(os, 'setegid')
-    def register_os_setegid(self):
-        return self.extdef_for_function_int_to_int('setegid')
 
     @registering_if(os, 'getpid')
     def register_os_getpid(self):
@@ -481,11 +462,6 @@ class RegisterOs(BaseLazyRegistering):
     @registering_if(os, 'getgid')
     def register_os_getgid(self):
         return self.extdef_for_os_function_returning_int('getgid')
-
-    @registering_if(os, 'getegid')
-    def register_os_getegid(self):
-        return self.extdef_for_os_function_returning_int('getegid')
-    
 
     @registering(os.open)
     def register_os_open(self):

@@ -2,16 +2,10 @@
  PyGirl Emulator
  constants.LCD Video Display Processor
 """
-import math
-import operator
+
 from pypy.lang.gameboy import constants
-from pypy.lang.gameboy.constants import SPRITE_SIZE, GAMEBOY_SCREEN_WIDTH, \
-                                        GAMEBOY_SCREEN_HEIGHT
 from pypy.lang.gameboy.ram import iMemory
-from pypy.lang.gameboy.cpu import process_2s_complement
-from pypy.lang.gameboy.video_register import ControlRegister, StatusRegister
-from pypy.lang.gameboy.video_sprite import Sprite, Tile, Background, Window
-from pypy.lang.gameboy.video_mode import Mode0, Mode1, Mode2, Mode3
+from pypy.lang.gameboy.cpu import process_2_complement
 
 # -----------------------------------------------------------------------------
 class VideoCallWraper(object):
@@ -33,115 +27,174 @@ class set_tile_line_call_wrapper(VideoCallWraper):
     
     def call(self, pos, color, mask):
         self.video.set_tile_line(pos, color, mask)
+    
 
+# -----------------------------------------------------------------------------
+
+class ControlRegister(object):
+    # used for enabled or disabled window or background
+    # Bit 7 - LCD Display Enable             (0=Off, 1=On)
+    # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
+    # Bit 5 - Window Display Enable          (0=Off, 1=On)
+    # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
+    # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
+    # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
+    # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
+    # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        self.lcd_enabled                              = True
+        self.window_upper_tile_map_selected           = False
+        self.window_enabled                           = False
+        self.background_and_window_lower_tile_data_selected  = True
+        self.background_upper_tile_map_selected       = False
+        self.big_sprite_size_selected                 = False
+        self.sprite_display_enabled                   = False
+        self.background_enabled                       = True
+        
+    def read(self):
+        value = 0
+        value += int(self.lcd_enabled)                              << 7 
+        value += int(self.window_upper_tile_map_selected)           << 6 
+        value += int(self.window_enabled)                           << 5
+        value += int(self.background_and_window_lower_tile_data_selected)  << 4
+        value += int(self.background_upper_tile_map_selected)       << 3
+        value += int(self.big_sprite_size_selected)                 << 2
+        value += int(self.sprite_display_enabled)                   << 1
+        value += int(self.background_enabled)
+        return value
+        
+    def write(self, value):
+        self.lcd_enabled                             = bool(value & (1 << 7))
+        self.window_upper_tile_map_selected          = bool(value & (1 << 6))
+        self.window_enabled                          = bool(value & (1 << 5))
+        self.background_and_window_lower_tile_data_selected = \
+                                                       bool(value & (1 << 4))
+        self.background_upper_tile_map_selected      = bool(value & (1 << 3))
+        self.big_sprite_size_selected                = bool(value & (1 << 2))
+        self.sprite_display_enabled                  = bool(value & (1 << 1))
+        self.background_enabled                      = bool(value & (1 << 0))
+    
+
+# -----------------------------------------------------------------------------
+
+class StatusRegister(object):
+    
+    """
+    Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
+    Bit 5 - Mode 2 OAM Interrupt         (1=Enable) (Read/Write)
+    Bit 4 - Mode 1 V-Blank Interrupt     (1=Enable) (Read/Write)
+    Bit 3 - Mode 0 H-Blank Interrupt     (1=Enable) (Read/Write)
+    Bit 2 - Coincidence Flag  (0:LYC<>LY, 1:LYC=LY) (Read Only)
+    Bit 1-0 - Mode Flag       (Mode 0-3, see below) (Read Only)
+            0: During H-Blank
+            1: During V-Blank
+            2: During Searching OAM-RAM
+            3: During Transfering Data to LCD Driver
+    """
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        self._mode = 0x02
+        self.line_y_compare_flag      = False
+        self.mode_0_h_blank_interrupt = False
+        self.mode_1_v_blank_interrupt = False
+        self.mode_2_oam_interrupt     = False
+        self.line_y_compare_interrupt = False
+        self.status                   = True
+        
+        
+    def read(self, extend=False):
+        value =  self._mode
+        value += self.line_y_compare_flag      << 2
+        value += self.mode_0_h_blank_interrupt << 3
+        value += self.mode_1_v_blank_interrupt << 4
+        value += self.mode_2_oam_interrupt     << 5
+        value += self.line_y_compare_interrupt << 6
+        if extend:
+            value += int(self.status) << 7
+        return value
+        
+        
+    def write(self, value, write_all=False, \
+              keep_mode_0_h_blank_interrupt=False):
+        if write_all:
+            self._mode                  = value      & 0x03
+            self.line_y_compare_flag    = bool(value & (1 << 2))
+            self.status                 = bool(value & (1 << 7))
+        self.mode_0_h_blank_interrupt   = bool(value & (1 << 3))
+        self.mode_1_v_blank_interrupt   = bool(value & (1 << 4))
+        self.mode_2_oam_interrupt       = bool(value & (1 << 5))
+        self.line_y_compare_interrupt   = bool(value & (1 << 6))
+        
+    def get_mode(self):
+        return self._mode
+    
+    def set_mode(self, mode):
+        self._mode = mode & 0x03
+        
+    def line_y_compare_check(self):
+        return not self.line_y_compare_flag or not self.line_y_compare_interrupt
+        
 # -----------------------------------------------------------------------------
 
 class Video(iMemory):
 
     def __init__(self, video_driver, interrupt, memory):
         assert isinstance(video_driver, VideoDriver)
-        self.driver                 = video_driver
-        self.v_blank_interrupt_flag = interrupt.v_blank
-        self.lcd_interrupt_flag     = interrupt.lcd
-        self.window                 = Window(self)
-        self.background             = Background(self)
-        self.status                 = StatusRegister(self)
-        self.control                = ControlRegister(self.window, 
-                                                      self.background)
-        self.memory                 = memory
-        self.create_tile_maps()
-        self.create_sprites()
+        self.driver     = video_driver
+        self.interrupt  = interrupt
+        self.control    = ControlRegister()
+        self.status     = StatusRegister()
+        self.memory     = memory
         self.reset()
-    
-    def create_tile_maps(self):
-        # create the maxumal possible sprites
-        self.tile_map_0 = [None] * 32 * 32
-        self.tile_map_1 = [None] * 32 * 32
-        self.tile_maps = [self.tile_map_0, self.tile_map_1]
-    
-    def update_tile(self, address, data):
-        # XXX to implement
-        #self.get_tile(address).set_data();
-        pass
-    
-    def get_tile(self, address):
-        # XXX to implement
-        pass
-    
-    def reset_all_tiles(self):
-        #for tile in self.tile_map_0:
-        #    tile.reset()
-        #for tile in self.tile_map_1:
-        #    tile.reset()
-        pass
-    
-    def create_sprites(self):
-        self.sprites = [None] * 40
-        for i in range(40):
-            self.sprites[i] = Sprite(self)
 
-    def update_all_sprites(self):
-        for i in range(40):
-            address = 1 * 4
-            self.sprites[i].set_data(self.oam[address + 0],
-                                     self.oam[address + 1],
-                                     self.oam[address + 2],
-                                     self.oam[address + 3])
-            
-    def update_sprite(self, address, data):
-        # XXX why cant I use None here
-        attribute = [-1] * 4
-        # assign the data to the correct attribute
-        attribute[address % 4] = data
-        self.get_sprite(address).set_data(attribute[0], attribute[1], 
-                                          attribute[2], attribute[3])
-       
-    def get_sprite(self, address):
-        address -= constants.OAM_ADDR
-        # address divided by 4 gives the correct sprite, each sprite has 4
-        # bytes of attributes
-        return self.sprites[ int(math.floor(address / 4)) ]
-        
-    def reset_all_sprites(self):
-        #for sprite in self.sprites:
-        #    sprite.reset()
-        pass
-         
+    def get_frame_skip(self):
+        return self.frame_skip
+
+    def set_frame_skip(self, frame_skip):
+        self.frame_skip = frame_skip
+
     def reset(self):
+        self.cycles     = constants.MODE_2_TICKS
         self.control.reset()
         self.status.reset()
-        self.background.reset()
-        self.window.reset()
-        self.cycles     = constants.MODE_2_TICKS
         self.line_y     = 0
         self.line_y_compare = 0
         self.dma        = 0xFF
+        # SCROLLX and SCROLLY hold the coordinates of background to
+        # be displayed in the left upper corner of the screen.
+        self.scroll_x   = 0
+        self.scroll_y   = 0
         # window position
+        self.window_x   = 0
+        self.window_y   = 0
+        self.window_line_y      = 0
         self.background_palette = 0xFC
         self.object_palette_0   = 0xFF 
         self.object_palette_1   = 0xFF
 
         self.transfer   = True
         self.display    = True
-        self.v_blank    = True
+        self.vblank     = True
         self.dirty      = True
 
         self.vram       = [0] * constants.VRAM_SIZE
-        self.reset_all_tiles()
         # Object Attribute Memory
         self.oam        = [0] * constants.OAM_SIZE
-        self.reset_all_sprites()
         
-        #XXX remove those dumb helper "objects"
-        self.line       = [0] * (SPRITE_SIZE + GAMEBOY_SCREEN_WIDTH + SPRITE_SIZE)
+        self.line       = [0] * (8 + 160 + 8)
         self.objects    = [0] * constants.OBJECTS_PER_LINE
         self.palette    = [0] * 1024
         
         self.frames     = 0
         self.frame_skip = 0
-    
-    # Read Write shared memory -------------------------------------------------
-    
+
     def write(self, address, data):
         address = int(address)
         # assert data >= 0x00 and data <= 0xFF
@@ -153,9 +206,9 @@ class Video(iMemory):
             self.set_scroll_y(data)
         elif address == constants.SCX:
             self.set_scroll_x(data)
-        #elif address == constants.LY:
-        #    Read Only: line_y
-        #    pass
+        elif address == constants.LY:
+            # Read Only: line_y
+            pass
         elif address == constants.LYC:
             self.set_line_y_compare(data)
         elif address == constants.DMA:
@@ -170,12 +223,19 @@ class Video(iMemory):
             self.set_window_y(data)
         elif address == constants.WX:
             self.set_window_x(data)
-        elif constants.OAM_ADDR <= address < \
-        constants.OAM_ADDR + constants.OAM_SIZE:
-            self.set_oam(address, data)
-        elif constants.VRAM_ADDR <= address < \
-        constants.VRAM_ADDR + constants.VRAM_SIZE:
-            self.set_vram(address, data)
+        else:
+            self.write_oam(address, data)
+
+    def write_oam(self, address, data):
+        if address >= constants.OAM_ADDR and \
+           address < (constants.OAM_ADDR + constants.OAM_SIZE):
+                self.oam[address - constants.OAM_ADDR]     = data & 0xFF
+        elif address >= constants.VRAM_ADDR and \
+             address < (constants.VRAM_ADDR + constants.VRAM_SIZE):
+                if (address - constants.VRAM_ADDR) == 0x1910 or \
+                (address - constants.VRAM_ADDR) == 0x1911:
+                    pass
+                self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
         if address == constants.LCDC:
@@ -202,24 +262,38 @@ class Video(iMemory):
             return self.get_window_y()
         elif address == constants.WX:
             return self.get_window_x()
-        elif constants.OAM_ADDR <= address < \
-        constants.OAM_ADDR + constants.OAM_SIZE:
-            return self.get_oam(address)
-        elif constants.VRAM_ADDR <= address < \
-        constants.VRAM_ADDR + constants.VRAM_SIZE:
-            return self.get_vram(address)
+        else:
+            return self.read_oam(address)
+        
+    def read_oam(self, address):
+        if (address >= constants.OAM_ADDR and 
+           address < (constants.OAM_ADDR + constants.OAM_SIZE)):
+             return self.oam[address - constants.OAM_ADDR]
+        elif (address >= constants.VRAM_ADDR and 
+           address < (constants.VRAM_ADDR + constants.VRAM_SIZE)):
+             return self.vram[address - constants.VRAM_ADDR]
         return 0xFF
 
-    # Getters and Setters ------------------------------------------------------
-    
-    def get_frame_skip(self):
-        return self.frame_skip
-
-    def set_frame_skip(self, frame_skip):
-        self.frame_skip = frame_skip
-        
     def get_cycles(self):
         return self.cycles
+
+    def emulate(self, ticks):
+        ticks = int(ticks)
+        if self.control.lcd_enabled:
+            self.cycles -= ticks
+            self.consume_cycles()
+            
+    def consume_cycles(self):
+        while self.cycles <= 0:
+            mode = self.status.get_mode()
+            if mode == 0:
+                self.emulate_hblank()
+            elif mode == 1:
+                self.emulate_vblank()
+            elif mode == 2:
+                self.emulate_oam()
+            else:
+                self.emulate_transfer()
 
     def get_control(self):
         return self.control.read()
@@ -227,11 +301,14 @@ class Video(iMemory):
     def set_control(self, data):
         if self.control.lcd_enabled != bool(data & 0x80):
             self.reset_control(data)
-        self.window.update_line_y(data)
+        # don't draw window if it was not enabled and not being drawn before
+        if not self.control.window_enabled and (data & 0x20) != 0 and \
+           self.window_line_y == 0 and self.line_y > self.window_y:
+                self.window_line_y = 144
         self.control.write(data)
 
     def reset_control(self, data):
-        # NOTE: do not reset LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
+        # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
         self.line_y  = 0
         if (data & 0x80) != 0:
             self.status.set_mode(0x02)
@@ -252,108 +329,45 @@ class Video(iMemory):
     def set_status_bug(self) :
         # Gameboy Bug
         if self.control.lcd_enabled and \
-           self.status.get_mode() == 1 and \
+           self.status.get_mode() == 0x01 and \
            self.status.line_y_compare_check():
-                self.lcd_interrupt_flag.set_pending()
-        
-    def get_scroll_x(self):
-        """ see set_scroll_x """
-        return self.background.scroll_x
+             self.interrupt.raise_interrupt(constants.LCD)
 
-    def set_scroll_x(self, data):
-        """
-        Specifies the position in the 256x256 pixels BG map (32x32 tiles) which 
-        is to be displayed at the upper/left LCD display position.
-        Values in range from 0-255 may be used for X/Y each, the video 
-        controller automatically wraps back to the upper (left) position in BG
-        map when drawing exceeds the lower (right) border of the BG map area.
-        """
-        self.background.scroll_x = data
-        
     def get_scroll_y(self):
-        """ see set_scroll_x """
-        return self.background.scroll_y
+        return self.scroll_y
                 
     def set_scroll_y(self, data):
-        """ see set_scroll_x """
-        self.background.scroll_y = data
+        self.scroll_y = data
+        
+    def get_scroll_x(self):
+        return self.scroll_x
+
+    def set_scroll_x(self, data):
+        self.scroll_x = data
         
     def get_line_y(self):
-        """ see set_line_y """
         return self.line_y
-    
-    def set_line_y(self):
-        """
-        The LY indicates the vertical line to which the present data is 
-        transferred to the LCD Driver. The LY can take on any value between 0 
-        through 153. The values between 144 and 153 indicate the V-Blank period.
-        Writing will reset the counter.
-        """
-        pass
 
     def get_line_y_compare(self):
-        """ see set_line_y_compare"""
         return self.line_y_compare
 
     def set_line_y_compare(self, data):
-        """
-        The gameboy permanently compares the value of the LYC and LY registers.
-        When both values are identical, the coincident bit in the STAT register
-        becomes set, and (if enabled) a STAT interrupt is requested.
-        """
         self.line_y_compare = data
         if self.control.lcd_enabled:
-            self.status.mode0.emulate_hblank_line_y_compare(stat_check=True)
+            self.emulate_hblank_line_y_compare(stat_check=True)
                 
     def get_dma(self):
         return self.dma
 
     def set_dma(self, data):
-        """
-        Writing to this register launches a DMA transfer from ROM or RAM to OAM
-        memory (sprite attribute table). The written value specifies the
-        transfer source address divided by 100h, ie. source & destination are:
-            Source:      XX00-XX9F   ;XX in range from 00-F1h
-            Destination: FE00-FE9F
-        It takes 160 microseconds until the transfer has completed, during this
-        time the CPU can access only HRAM (memory at FF80-FFFE). For this
-        reason, the programmer must copy a short procedure into HRAM, and use
-        this procedure to start the transfer from inside HRAM, and wait until
-        the transfer has finished:
-            ld  (0FF46h),a ;start DMA transfer, a=start address/100h
-            ld  a,28h      ;delay...
-            wait:          ;total 5x40 cycles, approx 200ms
-            dec a          ;1 cycle
-            jr  nz,wait    ;4 cycles
-        Most programs are executing this procedure from inside of their VBlank
-        procedure, but it is possible to execute it during display redraw also,
-        allowing to display more than 40 sprites on the screen (ie. for example 
-        40 sprites in upper half, and other 40 sprites in lower half of the
-        screen).
-        """
         self.dma = data
         for index in range(constants.OAM_SIZE):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
-        self.update_all_sprites()
 
     def get_background_palette(self):
-        """ see set_background_palette"""
         return self.background_palette
 
     def set_background_palette(self, data):
-        """
-        This register assigns gray shades to the color numbers of the BG and 
-        Window tiles.
-          Bit 7-6 - Shade for Color Number 3
-          Bit 5-4 - Shade for Color Number 2
-          Bit 3-2 - Shade for Color Number 1
-          Bit 1-0 - Shade for Color Number 0
-        The four possible gray shades are:
-          0  White
-          1  Light gray
-          2  Dark gray
-          3  Black
-        """
         if self.background_palette != data:
             self.background_palette = data
             self.dirty              = True
@@ -362,11 +376,6 @@ class Video(iMemory):
         return self.object_palette_0
 
     def set_object_palette_0(self, data):
-        """
-        This register assigns gray shades for sprite palette 0. It works exactly
-        as BGP (FF47), except that the lower two bits aren't used because sprite
-        data 00 is transparent.
-        """
         if self.object_palette_0 != data:
             self.object_palette_0 = data
             self.dirty            = True
@@ -375,76 +384,150 @@ class Video(iMemory):
         return self.object_palette_1
 
     def set_object_palette_1(self, data):
-        """
-        This register assigns gray shades for sprite palette 1. It works exactly
-        as BGP (FF47), except that the lower two bits aren't used because sprite
-        data 00 is transparent.
-        """
         if self.object_palette_1 != data:
             self.object_palette_1 = data
             self.dirty            = True
 
     def get_window_y(self):
-        """ see set_window.y """
-        return self.window.y
+        return self.window_y
 
     def set_window_y(self, data):
-        """
-        Specifies the upper/left positions of the Window area. (The window is an
-        alternate background area which can be displayed above of the normal
-        background. OBJs (sprites) may be still displayed above or behinf the 
-        window, just as for normal BG.)
-        The window becomes visible (if enabled) when positions are set in range
-        WX=0..166, WY=0..143. A postion of WX=7, WY=0 locates the window at
-        upper left, it is then completly covering normal background.
-        """
-        self.window.y = data
+        self.window_y = data
         
     def get_window_x(self):
-        return self.window.x
+        return self.window_x
 
     def set_window_x(self, data):
-        self.window.x = data
+        self.window_x = data
 
-    def set_oam(self, address, data):
-        """
-        sets one byte of the object attribute memory.
-        The object attribute memory stores the position and seme other
-        attributes of the sprites, this works only during the v-blank and
-        the h-blank period.
-        """
-        self.oam[address - constants.OAM_ADDR] = data & 0xFF
-        self.update_sprite(address, data)
+    def emulate_oam(self):
+        self.set_mode_3_begin()
+
+    def emulate_transfer(self):
+        if self.transfer:
+            if self.display:
+                self.draw_line()
+            self.set_mode_3_end()
+        else:
+            self.set_mode_0()
+    
+    # interrupt checks ---------------------------------------------------
+            
+    def h_blank_interrupt_check(self):
+        if self.status.mode_0_h_blank_interrupt and \
+        self.status.line_y_compare_check():
+             self.interrupt.raise_interrupt(constants.LCD)
+     
+    def oam_interrupt_check(self):
+        if self.status.mode_2_oam_interrupt and \
+        self.status.line_y_compare_check():
+            self.interrupt.raise_interrupt(constants.LCD)
         
-    def get_oam(self, address):
-        return self.get_sprite(address).get_data_at(address);
+    def v_blank_interrupt_check(self):
+        if self.status.mode_1_v_blank_interrupt:
+            self.interrupt.raise_interrupt(constants.LCD)
+            
+    def line_y_line_y_compare_interrupt_check(self):
+        self.status.line_y_compare_flag = True
+        if self.status.line_y_compare_interrupt:
+            self.interrupt.raise_interrupt(constants.LCD)
+                
+    # mode setting -----------------------------------------------------------
+   
+    def set_mode_3_begin(self):
+        self.status.set_mode(3)
+        self.cycles  += constants.MODE_3_BEGIN_TICKS
+        self.transfer = True
         
-    def set_vram(self, address, data):
-       """
-       sets one byte of the video memory.
-       The video memory contains the tiles used to display.
-       """
-       self.vram[address - constants.VRAM_ADDR] = data & 0xFF
-       self.update_tile(address, data)
-    
-    def get_vram(self, address):
-        #self.get_tile(address).get_data()[address % 4]
-        return self.vram[address - constants.VRAM_ADDR]
-    
-    # emulation ----------------------------------------------------------------
+    def set_mode_3_end(self):
+        self.status.set_mode(3)
+        self.cycles  += constants.MODE_3_END_TICKS
+        self.transfer = False
 
-    def emulate(self, ticks):
-        if self.control.lcd_enabled:
-            self.cycles -= int(ticks)
-            while self.cycles <= 0:
-                self.current_mode().emulate()
-
-    def current_mode(self):
-        return self.status.current_mode
-
+    def set_mode_0(self):
+        self.status.set_mode(0)
+        self.cycles += constants.MODE_0_TICKS
+        self.h_blank_interrupt_check()
+       
+    def set_mode_2(self):
+        self.status.set_mode(2)
+        self.cycles += constants.MODE_2_TICKS
+        self.oam_interrupt_check()
+      
+    def set_mode_1_begin(self):
+        self.status.set_mode(1)
+        self.cycles += constants.MODE_1_BEGIN_TICKS
+        
+    def set_mode_1(self):
+        self.status.set_mode(1)
+        self.cycles += constants.MODE_1_TICKS
+        
+    def set_mode_1_between(self):
+        self.status.set_mode(1)
+        self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
+        
+    def set_mode_1_end(self):
+        self.status.set_mode(1)
+        self.cycles += constants.MODE_1_END_TICKS
+        
+    # ----------------------------------------------------------------
     
-    
-    # graphics handling --------------------------------------------------------
+    def emulate_hblank(self):
+        self.line_y+=1
+        self.emulate_hblank_line_y_compare()
+        if self.line_y < 144:
+            self.set_mode_2()
+        else:
+            self.emulate_hblank_part_2()
+            
+    def emulate_hblank_line_y_compare(self, stat_check=False):
+        if self.line_y == self.line_y_compare:
+            if not (stat_check and self.status.line_y_compare_flag):
+                self.line_y_line_y_compare_interrupt_check()
+        else:
+            self.status.line_y_compare_flag = False
+   
+    def emulate_hblank_part_2(self):
+        if self.display:
+            self.draw_frame()
+        self.frames += 1
+        if self.frames >= self.frame_skip:
+            self.display = True
+            self.frames = 0
+        else:
+            self.display = False
+        self.set_mode_1_begin()
+        self.vblank  = True
+        
+    def emulate_vblank(self):
+        if self.vblank:
+            self.emulate_vblank_vblank()
+        elif self.line_y == 0:
+            self.set_mode_2()
+        else:
+            self.emulate_vblank_other()
+
+    def emulate_vblank_vblank(self):
+        self.vblank  = False
+        self.set_mode_1_between()
+        self.v_blank_interrupt_check()
+        self.interrupt.raise_interrupt(constants.VBLANK)
+        
+    def emulate_vblank_other(self):
+        if self.line_y < 153:
+            self.emulate_vblank_mode_1()
+        else:
+            self.line_y        = 0
+            self.window_line_y = 0
+            self.set_mode_1_between()
+        self.emulate_hblank_line_y_compare()
+            
+    def emulate_vblank_mode_1(self):
+        self.line_y += 1
+        if self.line_y == 153:
+            self.set_mode_1_end()
+        else:
+            self.set_mode_1()
     
     def draw_frame(self):
         self.driver.update_display()
@@ -454,77 +537,81 @@ class Video(iMemory):
         self.driver.update_display()
 
     def draw_line(self):
-        if self.background.enabled:
-            self.background.draw_line(self.line_y)
+        if self.control.background_enabled:
+            self.draw_background()
         else:
-            self.background.draw_clean_line(self.line_y)
-        if self.window.enabled:
-            self.window.draw_line(self.line_y)
-        if self.control.sprites_enabled:
-            #self.draw_sprites_line_new()
-            self.draw_sprites_line()
-        self.draw_pixels_line()
+            self.draw_clean_background()
+        if self.control.window_enabled:
+            self.draw_window()
+        if self.control.sprite_display_enabled:
+            self.draw_objects()
+        self.draw_pixels()
 
-    def draw_sprites_line_new(self):
-        sprites_on_line = self.get_drawable_sprites_on_line(self.line_y)
+    def draw_clean_background(self):
+        for x in range(0, 8+160+8):
+            self.line[x] = 0x00
+
+    def draw_background(self):
+        y          = (self.scroll_y + self.line_y) & 0xFF
+        x          = self.scroll_x                 & 0xFF
+        tile_map, tile_data = self.prepare_background_data(x, y)
+        self.draw_tiles(8 - (x & 7), tile_map, tile_data)
         
-        last_sprite = sprites_on_line[0]
-        last_sprite.draw()
+    def prepare_background_data(self, x, y):
+        tile_map   = self.get_tile_map(0x08)
+        tile_map  += ((y >> 3) << 5) + (x >> 3)
+        tile_data  = self.get_tile_data(0x10)
+        tile_data += (y & 7) << 1
+        return tile_map, tile_data
+         
+    def draw_window(self):
+        if self.line_y  < self.window_y or self.window_x >= 167 or \
+           self.window_line_y >= 144:
+                return
+        tile_map, tile_data = self.prepare_window_data()
+        self.draw_tiles(self.window_x + 1, tile_map, tile_data)
+        self.window_line_y += 1
+
+    def prepare_window_data(self):
+        tile_map   = self.get_tile_map(0x40)
+        tile_map  += (self.window_line_y >> 3) << 5
+        tile_data  = self.get_tile_data(0x10)
+        tile_data += (self.window_line_y & 7) << 1
+        return tile_map, tile_data;
         
-        for sprite in sprites_on_line[1:]:
-            if sprite.overlaps_on_line(last_sprite, self.line_y):
-                sprite.draw_overlapped()
-            else:
-                sprite.draw()
-            
-    def get_active_sprites_on_line(self, line_y):
-        found = []
-        for i in range(len(self.sprites)):
-            if self.sprites[i].intersects_line(line_y) and \
-            self.sprites[i].enabled:
-                found.append(self.sprites[i])
-        return found
-    
-    def get_drawable_sprites_on_line(self, line_y):
-        sprites_on_line = self.get_active_sprites_on_line(self.line_y)
-        sprites_on_line = self.sort_drawable_sprites(sprites_on_line)
-        # only 10 sprites per line
-        return sprites_on_line[:constants.OBJECTS_PER_LINE]
-    
-    def sort_drawable_sprites(self, sprites):
-        """
-        returns an ordered list of selected sprites. 
-        The order rules are as following:
-        1. order by x -coordinates, lower first
-        2. order by id, lower first
-        """
-        return sprites.sort(key=operator.itemgetter("x"))
-    
-    
-    # -----------------------------------------------
-    
-    def draw_sprites_line(self):
-        count = self.scan_sprites()
+    def get_tile_map(self, mask):
+        if (self.control.read() & mask) != 0:
+            return constants.VRAM_MAP_B
+        else:
+            return constants.VRAM_MAP_A
+        
+    def get_tile_data(self, mask):
+        if (self.control.read() & mask) != 0:
+            return constants.VRAM_DATA_A
+        else:
+            return  constants.VRAM_DATA_B
+        
+    def draw_objects(self):
+        count = self.scan_objects()
         lastx = 176
         for index in range(176, count):
             data    = self.objects[index]
             x       = (data >> 24) & 0xFF
             flags   = (data >> 12) & 0xFF
             address = data & 0xFFF
-            if (x + SPRITE_SIZE <= lastx):
+            if (x + 8 <= lastx):
                 self.draw_object_tile(x, address, flags)
             else:
                 self.draw_overlapped_object_tile(x, address, flags)
             lastx = x
 
-    def scan_sprites(self):
+    def scan_objects(self):
         count = 0
         # search active objects
         for offset in range(0, 4*40, 4):
             y = self.oam[offset + 0]
             x = self.oam[offset + 1]
-            if (y <= 0 or y >= SPRITE_SIZE + GAMEBOY_SCREEN_HEIGHT + SPRITE_SIZE
-            or x <= 0 or x >= GAMEBOY_SCREEN_WIDTH + SPRITE_SIZE):
+            if (y <= 0 or y >= 144 + 16 or x <= 0 or x >= 168):
                 continue
             tile  = self.oam[offset + 2]
             flags = self.oam[offset + 3]
@@ -549,10 +636,10 @@ class Video(iMemory):
             count += 1
             if count >= constants.OBJECTS_PER_LINE:
                 break
-        self.sort_scan_sprite(count)
+        self.sort_scan_object(count)
         return count
 
-    def sort_scan_sprite(self, count):
+    def sort_scan_object(self, count):
         # sort objects from lower to higher priority
         for index in range(count):
             rightmost = index
@@ -566,14 +653,14 @@ class Video(iMemory):
                 self.objects[rightmost] = data
 
     def draw_tiles(self, x, tile_map, tile_data):
-        while x < GAMEBOY_SCREEN_WIDTH+SPRITE_SIZE:
+        while x < 168:
             if self.control.background_and_window_lower_tile_data_selected:
                 tile = self.vram[tile_map]
             else:
                 tile = (self.vram[tile_map] ^ 0x80) & 0xFF
             self.draw_tile(x, tile_data + (tile << 4))
             tile_map = (tile_map & 0x1FE0) + ((tile_map + 1) & 0x001F)
-            x += SPRITE_SIZE
+            x += 8
      
     def draw_tile(self, x, address):
         pattern =  self.get_pattern(address)
@@ -629,13 +716,14 @@ class Video(iMemory):
         if (color & 0x0202) != 0:
             caller.call(x+7, color, mask)
 
-    def draw_pixels_line(self):
+    def draw_pixels(self):
         self.update_palette()
         pixels = self.driver.get_pixels()
         offset = self.line_y * self.driver.get_width()
-        for x in range(SPRITE_SIZE, GAMEBOY_SCREEN_WIDTH+SPRITE_SIZE, 4):
+        for x in range(8, 168, 4):
             for i in range(0,4):
-                pixels[offset + i] = self.palette[self.line[x + i]]
+                pattern            = self.line[x + i]
+                pixels[offset + i] = self.palette[pattern]
             offset += 4
 
     def clear_pixels(self):
