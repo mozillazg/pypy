@@ -428,7 +428,6 @@ class Video(iMemory):
             self.interrupt.raise_interrupt(constants.LCD)
             
     def line_y_line_y_compare_interrupt_check(self):
-        print "line_y_line_y_compare_interrupt_check"
         self.status.line_y_compare_flag = True
         if self.status.line_y_compare_interrupt:
             self.interrupt.raise_interrupt(constants.LCD)
@@ -483,10 +482,7 @@ class Video(iMemory):
             
     def emulate_hblank_line_y_compare(self, stat_check=False):
         if self.line_y == self.line_y_compare:
-            if stat_check: 
-                if not self.status.line_y_compare_flag:
-                    self.line_y_line_y_compare_interrupt_check()
-            else:
+            if not (stat_check and self.status.line_y_compare_flag):
                 self.line_y_line_y_compare_interrupt_check()
         else:
             self.status.line_y_compare_flag = False
