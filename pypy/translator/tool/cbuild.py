@@ -23,7 +23,8 @@ class ExternalCompilationInfo(object):
     _ATTRIBUTES = ['pre_include_bits', 'includes', 'include_dirs',
                    'post_include_bits', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files',
-                   'export_symbols', 'compile_extra', 'link_extra', 'frameworks']
+                   'export_symbols', 'compile_extra', 'link_extra',
+                   'frameworks']
     _DUPLICATES_OK = ['compile_extra', 'link_extra']
 
     def __init__(self,
@@ -38,7 +39,8 @@ class ExternalCompilationInfo(object):
                  export_symbols          = [],
                  compile_extra           = [],
                  link_extra              = [],
-                 frameworks              = []):
+                 frameworks              = [],
+                 platform                = 'host'):
         """
         pre_include_bits: list of pieces of text that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -79,11 +81,15 @@ class ExternalCompilationInfo(object):
         linker. Use this instead of the 'libraries' parameter if you want to
         link to a framework bundle. Not suitable for unix-like .dylib
         installations.
+
+        platform: an unique identifier of compile platform, useful for
+        caching.
         """
         for name in self._ATTRIBUTES:
             value = locals()[name]
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
+        self.platform = platform
 
     def from_compiler_flags(cls, flags):
         """Returns a new ExternalCompilationInfo instance by parsing
@@ -196,6 +202,11 @@ class ExternalCompilationInfo(object):
                             s.add(elem)
                             attr.append(elem)
                 attrs[name] = attr
+        for other in others:
+            if other.platform != self.platform:
+                raise Exception("Mixing ECI for different platforms %s and %s"%
+                                (other.platform, self.platform))
+        attrs['platform'] = self.platform
         return ExternalCompilationInfo(**attrs)
 
     def write_c_header(self, fileobj):
@@ -250,6 +261,24 @@ class ExternalCompilationInfo(object):
         d['separate_module_files'] = ()
         d['separate_module_sources'] = ()
         return ExternalCompilationInfo(**d)
+
+    def get_emulator_for_platform(self):
+        if self.platform == 'host':
+            return ''
+        elif self.platform == 'maemo':
+            # XXX how to do it in better way???
+            return '/scratchbox/login '
+        else:
+            raise NotImplementedError("Platform = %s" % (self.platform,))
+
+    def get_compiler_for_platform(self):
+        if self.platform == 'host':
+            return None
+        elif self.platform == 'maemo':
+            # XXX this should be settable somehow, not sure exactly how
+            return '/scratchbox/compilers/cs2005q3.2-glibc-arm/bin/sbox-arm-linux-gcc'
+        else:
+            raise NotImplementedError("Platform = %s" % (self.platform,))
 
 if sys.platform == 'win32':
     so_ext = '.dll'
@@ -498,7 +527,10 @@ class CCompiler:
         self.compile_extra = list(eci.compile_extra)
         self.link_extra = list(eci.link_extra)
         self.frameworks = list(eci.frameworks)
-        self.compiler_exe = compiler_exe
+        if compiler_exe is not None:
+            self.compiler_exe = compiler_exe
+        else:
+            self.compiler_exe = eci.get_compiler_for_platform()
         self.profbased = profbased
         if not sys.platform in ('win32', 'darwin'): # xxx
             if 'm' not in self.libraries:
