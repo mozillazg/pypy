@@ -70,11 +70,13 @@ class W_TypeObject(W_Object):
 
         if overridetypedef is not None:
             setup_builtin_type(w_self)
+            custom_metaclass = False
         else:
             setup_user_defined_type(w_self)
+            custom_metaclass = not space.is_w(space.type(w_self), space.w_type)
 
         if space.config.objspace.std.withtypeversion:
-            if w_self.instancetypedef.hasdict:
+            if w_self.instancetypedef.hasdict or custom_metaclass:
                 w_self.version_tag = None
             else:
                 w_self.version_tag = VersionTag()
