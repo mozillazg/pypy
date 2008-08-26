@@ -337,3 +337,19 @@ def set_opt_level(config, level):
             config.translation.suggest(list_comprehension_operations=True)
         else:
             raise ValueError(word)
+
+# ----------------------------------------------------------------
+
+PLATFORMS = [
+    'host',
+    'maemo',
+]
+
+def set_platform(config, platform):
+    if platform == 'maemo':
+        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        # XXX evil hackery
+        func_defs = list(ExternalCompilationInfo.__init__.func_defaults)
+        func_defs[-1] = 'maemo'
+        ExternalCompilationInfo.__init__.im_func.func_defaults = tuple(func_defs)
+        

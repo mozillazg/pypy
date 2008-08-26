@@ -14,6 +14,7 @@ from pypy.config.config import to_optparse, OptionDescription, BoolOption, \
 from pypy.config.translationoption import get_combined_translation_config
 from pypy.config.translationoption import set_opt_level
 from pypy.config.translationoption import OPT_LEVELS, DEFAULT_OPT_LEVEL
+from pypy.config.translationoption import PLATFORMS, set_platform
 
 
 GOALS= [
@@ -51,6 +52,9 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
     ChoiceOption("opt",
                  "optimization level", OPT_LEVELS, default=DEFAULT_OPT_LEVEL,
                  cmdline="--opt -O"),
+    ChoiceOption("platform",
+                 "target platform", ['host'] + PLATFORMS, default='host',
+                 cmdline='--platform'),
     BoolOption("profile",
                "cProfile (to debug the speed of the translation process)",
                default=False,
@@ -64,6 +68,8 @@ translate_optiondescr = OptionDescription("translate", "XXX", [
                cmdline="--view", negation=False),
     BoolOption("help", "show this help message and exit", default=False,
                cmdline="-h --help", negation=False),
+    BoolOption("fullhelp", "show full help message and exit", default=False,
+               cmdline="--full-help", negation=False),
     ArbitraryOption("goals", "XXX",
                     defaultfactory=list),
     # xxx default goals ['annotate', 'rtype', 'backendopt', 'source', 'compile']
@@ -155,6 +161,9 @@ def parse_options_and_load_target():
                 optiondescr,
                 existing_config=config,
                 translating=True)
+
+    # apply the platform settings
+    set_platform(config, translateconfig.platform)
 
     # apply the optimization level settings
     set_opt_level(config, translateconfig.opt)
