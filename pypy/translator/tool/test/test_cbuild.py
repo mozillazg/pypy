@@ -160,6 +160,8 @@ class TestEci:
     def test_platforms(self):
         eci = ExternalCompilationInfo(platform='xxx')
         eci2 = ExternalCompilationInfo()
+        assert eci != eci2
+        assert hash(eci) != hash(eci2)
         py.test.raises(Exception, eci2.merge, eci)
         assert eci.merge(eci).platform == 'xxx'
 

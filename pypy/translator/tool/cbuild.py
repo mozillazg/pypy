@@ -156,7 +156,8 @@ class ExternalCompilationInfo(object):
     from_config_tool = classmethod(from_config_tool)
 
     def _value(self):
-        return tuple([getattr(self, x) for x in self._ATTRIBUTES])
+        return tuple([getattr(self, x) for x in self._ATTRIBUTES]
+                     + [self.platform])
 
     def __hash__(self):
         return hash(self._value())
