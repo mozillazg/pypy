@@ -1,5 +1,5 @@
 """
-PyGirl GameBoy (TM) Emulator
+PyGirl Emulator
 
 Work and High RAM
 """

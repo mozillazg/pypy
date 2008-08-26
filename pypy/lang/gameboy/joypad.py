@@ -5,7 +5,7 @@ from pypy.lang.gameboy.ram import iMemory
 
 class Joypad(iMemory):
     """
-    PyGirl GameBoy (TM) Emulator
+    PyGirl Emulator
      
     Joypad Input
     """
@@ -31,7 +31,6 @@ class Joypad(iMemory):
             if self.driver.is_raised():
                 self.update()
             self.cycles = constants.JOYPAD_CLOCK
-            #self.cycles = 150
 
     def write(self, address, data):
         if address == constants.JOYP:
@@ -61,6 +60,10 @@ class Joypad(iMemory):
 class JoypadDriver(object):
     """
     Maps the Input to the Button and Direction Codes
+    get_button_code and get_direction_code are called by the system
+    to check for pressed buttons
+    On Button change an interrupt flag self.raised is set to send later
+    and interrupt to inform the system for a pressed button
     """
     def __init__(self):
         self.raised = False

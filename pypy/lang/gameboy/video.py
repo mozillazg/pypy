@@ -1,5 +1,5 @@
 """
- PyGirl GameBoy (TM) Emulator
+ PyGirl Emulator
  constants.LCD Video Display Processor
 """
 
@@ -31,7 +31,7 @@ class set_tile_line_call_wrapper(VideoCallWraper):
 
 # -----------------------------------------------------------------------------
 
-class VideoControl(object):
+class ControlRegister(object):
     # used for enabled or disabled window or background
     # Bit 7 - LCD Display Enable             (0=Off, 1=On)
     # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
@@ -47,11 +47,11 @@ class VideoControl(object):
         
     def reset(self):
         self.lcd_enabled                              = True
-        self.window_upper_tile_map_selected                  = False
+        self.window_upper_tile_map_selected           = False
         self.window_enabled                           = False
         self.background_and_window_lower_tile_data_selected  = True
-        self.background_upper_tile_map_selected              = False
-        self.big_sprite_size_selected                            = False
+        self.background_upper_tile_map_selected       = False
+        self.big_sprite_size_selected                 = False
         self.sprite_display_enabled                   = False
         self.background_enabled                       = True
         
@@ -78,9 +78,69 @@ class VideoControl(object):
         self.sprite_display_enabled                  = bool(value & (1 << 1))
         self.background_enabled                      = bool(value & (1 << 0))
     
-    def get_bg_tile_data_address(self):
-        pass
 
+# -----------------------------------------------------------------------------
+
+class StatusRegister(object):
+    
+    """
+    Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
+    Bit 5 - Mode 2 OAM Interrupt         (1=Enable) (Read/Write)
+    Bit 4 - Mode 1 V-Blank Interrupt     (1=Enable) (Read/Write)
+    Bit 3 - Mode 0 H-Blank Interrupt     (1=Enable) (Read/Write)
+    Bit 2 - Coincidence Flag  (0:LYC<>LY, 1:LYC=LY) (Read Only)
+    Bit 1-0 - Mode Flag       (Mode 0-3, see below) (Read Only)
+            0: During H-Blank
+            1: During V-Blank
+            2: During Searching OAM-RAM
+            3: During Transfering Data to LCD Driver
+    """
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        self._mode = 0x02
+        self.line_y_compare_flag      = False
+        self.mode_0_h_blank_interrupt = False
+        self.mode_1_v_blank_interrupt = False
+        self.mode_2_oam_interrupt     = False
+        self.line_y_compare_interrupt = False
+        self.status                   = True
+        
+        
+    def read(self, extend=False):
+        value =  self._mode
+        value += self.line_y_compare_flag      << 2
+        value += self.mode_0_h_blank_interrupt << 3
+        value += self.mode_1_v_blank_interrupt << 4
+        value += self.mode_2_oam_interrupt     << 5
+        value += self.line_y_compare_interrupt << 6
+        if extend:
+            value += int(self.status) << 7
+        return value
+        
+        
+    def write(self, value, write_all=False, \
+              keep_mode_0_h_blank_interrupt=False):
+        if write_all:
+            self._mode                  = value      & 0x03
+            self.line_y_compare_flag    = bool(value & (1 << 2))
+            self.status                 = bool(value & (1 << 7))
+        self.mode_0_h_blank_interrupt   = bool(value & (1 << 3))
+        self.mode_1_v_blank_interrupt   = bool(value & (1 << 4))
+        self.mode_2_oam_interrupt       = bool(value & (1 << 5))
+        self.line_y_compare_interrupt   = bool(value & (1 << 6))
+        
+    def get_mode(self):
+        return self._mode
+    
+    def set_mode(self, mode):
+        self._mode = mode & 0x03
+        
+    def line_y_compare_check(self):
+        return not self.line_y_compare_flag or not self.line_y_compare_interrupt
+        
 # -----------------------------------------------------------------------------
 
 class Video(iMemory):
@@ -89,7 +149,8 @@ class Video(iMemory):
         assert isinstance(video_driver, VideoDriver)
         self.driver     = video_driver
         self.interrupt  = interrupt
-        self.control     = VideoControl()
+        self.control    = ControlRegister()
+        self.status     = StatusRegister()
         self.memory     = memory
         self.reset()
 
@@ -102,7 +163,7 @@ class Video(iMemory):
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
         self.control.reset()
-        self.stat       = 2
+        self.status.reset()
         self.line_y     = 0
         self.line_y_compare = 0
         self.dma        = 0xFF
@@ -177,7 +238,6 @@ class Video(iMemory):
                 self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
-        print address, hex(address)
         if address == constants.LCDC:
             return self.get_control()
         elif address == constants.STAT:
@@ -225,7 +285,7 @@ class Video(iMemory):
             
     def consume_cycles(self):
         while self.cycles <= 0:
-            mode = self.stat & 0x03
+            mode = self.status.get_mode()
             if mode == 0:
                 self.emulate_hblank()
             elif mode == 1:
@@ -239,11 +299,10 @@ class Video(iMemory):
         return self.control.read()
 
     def set_control(self, data):
-        if (self.control.read() & 0x80) != (data & 0x80):
+        if self.control.lcd_enabled != bool(data & 0x80):
             self.reset_control(data)
         # don't draw window if it was not enabled and not being drawn before
-        if not self.control.window_enabled and \
-           (data & 0x20) != 0 and \
+        if not self.control.window_enabled and (data & 0x20) != 0 and \
            self.window_line_y == 0 and self.line_y > self.window_y:
                 self.window_line_y = 144
         self.control.write(data)
@@ -251,27 +310,27 @@ class Video(iMemory):
     def reset_control(self, data):
         # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
         self.line_y  = 0
-        self.stat   = (self.stat & 0xFC)
         if (data & 0x80) != 0:
-            self.stat    |= 0x02
+            self.status.set_mode(0x02)
             self.cycles  = constants.MODE_2_TICKS
             self.display = False
         else:
+            self.status.set_mode(0)
             self.cycles = constants.MODE_1_TICKS
             self.clear_frame()
                 
     def get_status(self):
-        return 0x80 | self.stat
+        return self.status.read(extend=True)
 
     def set_status(self, data):
-        self.stat = (self.stat & 0x87) | (data & 0x78)
+        self.status.write(data)
         self.set_status_bug()
         
     def set_status_bug(self) :
         # Gameboy Bug
         if self.control.lcd_enabled and \
-           (self.stat & 0x03)    == 0x01 and \
-           (self.stat & 0x44)    != 0x44:
+           self.status.get_mode() == 0x01 and \
+           self.status.line_y_compare_check():
              self.interrupt.raise_interrupt(constants.LCD)
 
     def get_scroll_y(self):
@@ -309,25 +368,25 @@ class Video(iMemory):
         return self.background_palette
 
     def set_background_palette(self, data):
-        if self.background_palette == data: return
-        self.background_palette = data
-        self.dirty              = True
+        if self.background_palette != data:
+            self.background_palette = data
+            self.dirty              = True
 
     def get_object_palette_0(self):
         return self.object_palette_0
 
     def set_object_palette_0(self, data):
-        if self.object_palette_0 == data: return
-        self.object_palette_0 = data
-        self.dirty            = True
+        if self.object_palette_0 != data:
+            self.object_palette_0 = data
+            self.dirty            = True
 
     def get_object_palette_1(self):
         return self.object_palette_1
 
     def set_object_palette_1(self, data):
-        if self.object_palette_1 == data: return
-        self.object_palette_1 = data
-        self.dirty            = True
+        if self.object_palette_1 != data:
+            self.object_palette_1 = data
+            self.dirty            = True
 
     def get_window_y(self):
         return self.window_y
@@ -355,58 +414,61 @@ class Video(iMemory):
     # interrupt checks ---------------------------------------------------
             
     def h_blank_interrupt_check(self):
-        if (self.stat & 0x08) != 0 and (self.stat & 0x44) != 0x44:
+        if self.status.mode_0_h_blank_interrupt and \
+        self.status.line_y_compare_check():
              self.interrupt.raise_interrupt(constants.LCD)
      
     def oam_interrupt_check(self):
-        if (self.stat & 0x20) != 0 and (self.stat & 0x44) != 0x44:
+        if self.status.mode_2_oam_interrupt and \
+        self.status.line_y_compare_check():
             self.interrupt.raise_interrupt(constants.LCD)
         
     def v_blank_interrupt_check(self):
-        if (self.stat & 0x10) != 0:
+        if self.status.mode_1_v_blank_interrupt:
             self.interrupt.raise_interrupt(constants.LCD)
             
     def line_y_line_y_compare_interrupt_check(self):
-        self.stat |= 0x04
-        if (self.stat & 0x40) != 0:
+        print "line_y_line_y_compare_interrupt_check"
+        self.status.line_y_compare_flag = True
+        if self.status.line_y_compare_interrupt:
             self.interrupt.raise_interrupt(constants.LCD)
                 
     # mode setting -----------------------------------------------------------
    
     def set_mode_3_begin(self):
-        self.stat     = (self.stat & 0xFC) | 0x03
+        self.status.set_mode(3)
         self.cycles  += constants.MODE_3_BEGIN_TICKS
         self.transfer = True
         
     def set_mode_3_end(self):
-        self.stat     = (self.stat & 0xFC) | 0x03
+        self.status.set_mode(3)
         self.cycles  += constants.MODE_3_END_TICKS
         self.transfer = False
 
     def set_mode_0(self):
-        self.stat    = (self.stat & 0xFC)
+        self.status.set_mode(0)
         self.cycles += constants.MODE_0_TICKS
         self.h_blank_interrupt_check()
        
     def set_mode_2(self):
-        self.stat    = (self.stat & 0xFC) | 0x02
+        self.status.set_mode(2)
         self.cycles += constants.MODE_2_TICKS
         self.oam_interrupt_check()
       
     def set_mode_1_begin(self):
-        self.stat    = (self.stat & 0xFC) | 0x01
+        self.status.set_mode(1)
         self.cycles += constants.MODE_1_BEGIN_TICKS
         
     def set_mode_1(self):
-        self.stat    = (self.stat & 0xFC) | 0x01
+        self.status.set_mode(1)
         self.cycles += constants.MODE_1_TICKS
         
     def set_mode_1_between(self):
-        self.stat    = (self.stat & 0xFC) | 0x01
+        self.status.set_mode(1)
         self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
         
     def set_mode_1_end(self):
-        self.stat    = (self.stat & 0xFC) | 0x01
+        self.status.set_mode(1)
         self.cycles += constants.MODE_1_END_TICKS
         
     # ----------------------------------------------------------------
@@ -422,12 +484,12 @@ class Video(iMemory):
     def emulate_hblank_line_y_compare(self, stat_check=False):
         if self.line_y == self.line_y_compare:
             if stat_check: 
-                if (self.stat & 0x04) == 0:
+                if not self.status.line_y_compare_flag:
                     self.line_y_line_y_compare_interrupt_check()
             else:
                 self.line_y_line_y_compare_interrupt_check()
         else:
-            self.stat &= 0xFB
+            self.status.line_y_compare_flag = False
    
     def emulate_hblank_part_2(self):
         if self.display:
@@ -507,8 +569,7 @@ class Video(iMemory):
         return tile_map, tile_data
          
     def draw_window(self):
-        if self.line_y  < self.window_y or \
-           self.window_x >= 167 or \
+        if self.line_y  < self.window_y or self.window_x >= 167 or \
            self.window_line_y >= 144:
                 return
         tile_map, tile_data = self.prepare_window_data()

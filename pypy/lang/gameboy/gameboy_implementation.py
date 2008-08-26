@@ -85,7 +85,6 @@ class VideoDriverImplementation(VideoDriver):
         self.screen = RSDL.SetVideoMode(self.width, self.height, 32, 0)
         
     def update_display(self):
-        #print "    update_display"
         RSDL.LockSurface(self.screen)
         self.draw_pixels()
         RSDL.UnlockSurface(self.screen)
@@ -172,7 +171,9 @@ class JoypadDriverImplementation(JoypadDriver):
 # SOUND DRIVER -----------------------------------------------------------------
 
 class SoundDriverImplementation(SoundDriver):
-    
+    """
+    The current implementation doesnt handle sound yet
+    """
     def __init__(self):
         SoundDriver.__init__(self)
         self.create_sound_driver()

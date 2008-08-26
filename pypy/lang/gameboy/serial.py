@@ -5,7 +5,7 @@ from pypy.lang.gameboy.ram import iMemory
 
 class Serial(iMemory):
     """
-    PyGirl GameBoy (TM) Emulator
+    PyGirl Emulator
     Serial Link Controller
      """
 
