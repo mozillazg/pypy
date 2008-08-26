@@ -156,3 +156,34 @@ class TestEci:
         py.test.raises(ImportError,
                        ExternalCompilationInfo.from_config_tool,
                        'dxowqbncpqympqhe-config')
+
+    def test_platforms(self):
+        eci = ExternalCompilationInfo(platform='xxx')
+        eci2 = ExternalCompilationInfo()
+        py.test.raises(Exception, eci2.merge, eci)
+        assert eci.merge(eci).platform == 'xxx'
+
+    def test_standalone_maemo(self):
+        # XXX skip if there is no scratchbox
+        if not py.path.local('/scratchbox/login').check():
+            py.test.skip("No scratchbox detected")
+        tmpdir = self.tmpdir
+        c_file = tmpdir.join('stand1.c')
+        c_file.write('''
+        #include <math.h>
+        #include <stdio.h>
+        
+        int main()
+        {
+            printf("%f\\n", pow(2.0, 2.0));
+            return 0;
+        }''')
+        if sys.platform == 'win32':
+            py.test.skip("No cross-compilation on windows yet")
+        else:
+            eci = ExternalCompilationInfo(platform='maemo',
+                                          libraries=['m'])
+        output = build_executable([c_file], eci)
+        py.test.raises(py.process.cmdexec.Error, py.process.cmdexec, output)
+        result = py.process.cmdexec(eci.get_emulator_for_platform() + output)
+        assert result.startswith('4.0')
