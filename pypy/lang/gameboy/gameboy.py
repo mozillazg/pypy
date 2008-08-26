@@ -1,5 +1,5 @@
 """
-PyGirl GameBoy (TM) Emulator
+PyGirl Emulator
  
 GameBoy Scheduler and Memory Mapper
 
@@ -92,7 +92,6 @@ class GameBoy(object):
     def emulate(self, ticks):
         while ticks > 0:
             count = self.get_cycles()
-            print "python: ticks", count
             self.cpu.emulate(count)
             self.serial.emulate(count)
             self.timer.emulate(count)
@@ -128,7 +127,7 @@ class GameBoy(object):
         receiver = self.get_receiver(address)
         if receiver is None:
             return
-            raise Exception("invalid read address given")
+            #raise Exception("invalid read address given")
         receiver.write(address, data)
         if address == constants.STAT or address == 0xFFFF:
             self.cpu.handle_pending_interrupts()

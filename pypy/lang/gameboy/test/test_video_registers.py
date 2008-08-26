@@ -1,9 +1,13 @@
 from pypy.lang.gameboy import constants
-from pypy.lang.gameboy.video import VideoControl
+from pypy.lang.gameboy.video import ControlRegister
+from pypy.lang.gameboy.video import StatusRegister
 import py
 
+
+# ControlRegister --------------------------------------------------------------
+
 def test_video_control_reset():
-    control = VideoControl()
+    control = ControlRegister()
     assert control.read() == 0x91
     control.write(0xFF)
     assert control.read() == 0xFF
@@ -11,8 +15,8 @@ def test_video_control_reset():
     assert control.read() == 0x91
     
     
-def test_read_write_properties():
-    control   = VideoControl()
+def test_video_control_read_write_properties():
+    control   = ControlRegister()
     properties = ["lcd_enabled",  
                   "window_upper_tile_map_selected", 
                   "window_enabled", 
@@ -43,3 +47,29 @@ def test_read_write_properties():
         assert control.read() & (1 << index) == (1 << index)
         assert control.read() & (~(1 << index)) == 0
         
+        
+# StatusRegister ---------------------------------------------------------------
+
+def test_video_status_reset():
+    status = StatusRegister()
+    assert status.read(extend=True) == 0x02 + 0x80
+    
+    status.write(0x00, write_all=True)
+    assert status.read(extend=True) == 0x00
+    status.reset()
+    assert status.read(extend=True) == 0x02 + 0x80
+    
+    status.write(0xFF, write_all=True)
+    assert status.read(extend=True) == 0xFF
+    status.reset()
+    assert status.read(extend=True) == 0x02 + 0x80
+    
+def test_video_status_mode():
+    status = StatusRegister()
+    assert status.get_mode() == 2
+    
+    for i in range(3):
+        status.set_mode(i)
+        assert status.get_mode() == i
+    status.set_mode(4)
+    assert status.get_mode()  == 0
