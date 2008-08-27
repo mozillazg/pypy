@@ -32,16 +32,17 @@ class set_tile_line_call_wrapper(VideoCallWraper):
 # -----------------------------------------------------------------------------
 
 class ControlRegister(object):
-    # used for enabled or disabled window or background
-    # Bit 7 - LCD Display Enable             (0=Off, 1=On)
-    # Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
-    # Bit 5 - Window Display Enable          (0=Off, 1=On)
-    # Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
-    # Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
-    # Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
-    # Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
-    # Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
-    
+    """
+    used for enabled or disabled window or background
+    Bit 7 - LCD Display Enable             (0=Off, 1=On)
+    Bit 6 - Window Tile Map Display Select (0=9800-9BFF, 1=9C00-9FFF)
+    Bit 5 - Window Display Enable          (0=Off, 1=On)
+    Bit 4 - BG & Window Tile Data Select   (0=8800-97FF, 1=8000-8FFF)
+    Bit 3 - BG Tile Map Display Select     (0=9800-9BFF, 1=9C00-9FFF)
+    Bit 2 - OBJ (Sprite) Size              (0=8x8, 1=8x16)
+    Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
+    Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
+    """
     def __init__(self):
         self.reset()
         
@@ -82,7 +83,6 @@ class ControlRegister(object):
 # -----------------------------------------------------------------------------
 
 class StatusRegister(object):
-    
     """
     Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
     Bit 5 - Mode 2 OAM Interrupt         (1=Enable) (Read/Write)
@@ -95,7 +95,6 @@ class StatusRegister(object):
             2: During Searching OAM-RAM
             3: During Transfering Data to LCD Driver
     """
-    
     def __init__(self):
         self.reset()
         
@@ -194,7 +193,9 @@ class Video(iMemory):
         
         self.frames     = 0
         self.frame_skip = 0
-
+    
+    # Read Write shared memory -------------------------------------------------
+    
     def write(self, address, data):
         address = int(address)
         # assert data >= 0x00 and data <= 0xFF
@@ -274,26 +275,10 @@ class Video(iMemory):
              return self.vram[address - constants.VRAM_ADDR]
         return 0xFF
 
+    # Getters and Setters ------------------------------------------------------
+    
     def get_cycles(self):
         return self.cycles
-
-    def emulate(self, ticks):
-        ticks = int(ticks)
-        if self.control.lcd_enabled:
-            self.cycles -= ticks
-            self.consume_cycles()
-            
-    def consume_cycles(self):
-        while self.cycles <= 0:
-            mode = self.status.get_mode()
-            if mode == 0:
-                self.emulate_hblank()
-            elif mode == 1:
-                self.emulate_vblank()
-            elif mode == 2:
-                self.emulate_oam()
-            else:
-                self.emulate_transfer()
 
     def get_control(self):
         return self.control.read()
@@ -332,26 +317,51 @@ class Video(iMemory):
            self.status.get_mode() == 0x01 and \
            self.status.line_y_compare_check():
              self.interrupt.raise_interrupt(constants.LCD)
-
-    def get_scroll_y(self):
-        return self.scroll_y
-                
-    def set_scroll_y(self, data):
-        self.scroll_y = data
         
     def get_scroll_x(self):
+        """ see set_scroll_x """
         return self.scroll_x
 
     def set_scroll_x(self, data):
+        """
+        Specifies the position in the 256x256 pixels BG map (32x32 tiles) which 
+        is to be displayed at the upper/left LCD display position.
+        Values in range from 0-255 may be used for X/Y each, the video 
+        controller automatically wraps back to the upper (left) position in BG
+        map when drawing exceeds the lower (right) border of the BG map area.
+        """
         self.scroll_x = data
+    def get_scroll_y(self):
+        """ see set_scroll_x """
+        return self.scroll_y
+                
+    def set_scroll_y(self, data):
+        """ see set_scroll_x """
+        self.scroll_y = data
         
     def get_line_y(self):
+        """ see set_line_y """
         return self.line_y
+    
+    def set_line_y(self):
+        """
+        The LY indicates the vertical line to which the present data is 
+        transferred to the LCD Driver. The LY can take on any value between 0 
+        through 153. The values between 144 and 153 indicate the V-Blank period.
+        Writing will reset the counter.
+        """
+        pass
 
     def get_line_y_compare(self):
+        """ see set_line_y_compare"""
         return self.line_y_compare
 
     def set_line_y_compare(self, data):
+        """
+        The gameboy permanently compares the value of the LYC and LY registers.
+        When both values are identical, the coincident bit in the STAT register
+        becomes set, and (if enabled) a STAT interrupt is requested.
+        """
         self.line_y_compare = data
         if self.control.lcd_enabled:
             self.emulate_hblank_line_y_compare(stat_check=True)
@@ -360,14 +370,50 @@ class Video(iMemory):
         return self.dma
 
     def set_dma(self, data):
+        """
+        Writing to this register launches a DMA transfer from ROM or RAM to OAM
+        memory (sprite attribute table). The written value specifies the
+        transfer source address divided by 100h, ie. source & destination are:
+            Source:      XX00-XX9F   ;XX in range from 00-F1h
+            Destination: FE00-FE9F
+        It takes 160 microseconds until the transfer has completed, during this
+        time the CPU can access only HRAM (memory at FF80-FFFE). For this
+        reason, the programmer must copy a short procedure into HRAM, and use
+        this procedure to start the transfer from inside HRAM, and wait until
+        the transfer has finished:
+            ld  (0FF46h),a ;start DMA transfer, a=start address/100h
+            ld  a,28h      ;delay...
+            wait:          ;total 5x40 cycles, approx 200ms
+            dec a          ;1 cycle
+            jr  nz,wait    ;4 cycles
+        Most programs are executing this procedure from inside of their VBlank
+        procedure, but it is possible to execute it during display redraw also,
+        allowing to display more than 40 sprites on the screen (ie. for example 
+        40 sprites in upper half, and other 40 sprites in lower half of the
+        screen).
+        """
         self.dma = data
         for index in range(constants.OAM_SIZE):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
 
     def get_background_palette(self):
+        """ see set_background_palette"""
         return self.background_palette
 
     def set_background_palette(self, data):
+        """
+        This register assigns gray shades to the color numbers of the BG and 
+        Window tiles.
+          Bit 7-6 - Shade for Color Number 3
+          Bit 5-4 - Shade for Color Number 2
+          Bit 3-2 - Shade for Color Number 1
+          Bit 1-0 - Shade for Color Number 0
+        The four possible gray shades are:
+          0  White
+          1  Light gray
+          2  Dark gray
+          3  Black
+        """
         if self.background_palette != data:
             self.background_palette = data
             self.dirty              = True
@@ -376,6 +422,11 @@ class Video(iMemory):
         return self.object_palette_0
 
     def set_object_palette_0(self, data):
+        """
+        This register assigns gray shades for sprite palette 0. It works exactly
+        as BGP (FF47), except that the lower two bits aren't used because sprite
+        data 00 is transparent.
+        """
         if self.object_palette_0 != data:
             self.object_palette_0 = data
             self.dirty            = True
@@ -384,14 +435,29 @@ class Video(iMemory):
         return self.object_palette_1
 
     def set_object_palette_1(self, data):
+        """
+        This register assigns gray shades for sprite palette 1. It works exactly
+        as BGP (FF47), except that the lower two bits aren't used because sprite
+        data 00 is transparent.
+        """
         if self.object_palette_1 != data:
             self.object_palette_1 = data
             self.dirty            = True
 
     def get_window_y(self):
+        """ see set_window_y """
         return self.window_y
 
     def set_window_y(self, data):
+        """
+        Specifies the upper/left positions of the Window area. (The window is an
+        alternate background area which can be displayed above of the normal
+        background. OBJs (sprites) may be still displayed above or behinf the 
+        window, just as for normal BG.)
+        The window becomes visible (if enabled) when positions are set in range
+        WX=0..166, WY=0..143. A postion of WX=7, WY=0 locates the window at
+        upper left, it is then completly covering normal background.
+        """
         self.window_y = data
         
     def get_window_x(self):
@@ -400,16 +466,6 @@ class Video(iMemory):
     def set_window_x(self, data):
         self.window_x = data
 
-    def emulate_oam(self):
-        self.set_mode_3_begin()
-
-    def emulate_transfer(self):
-        if self.transfer:
-            if self.display:
-                self.draw_line()
-            self.set_mode_3_end()
-        else:
-            self.set_mode_0()
     
     # interrupt checks ---------------------------------------------------
             
@@ -433,7 +489,24 @@ class Video(iMemory):
             self.interrupt.raise_interrupt(constants.LCD)
                 
     # mode setting -----------------------------------------------------------
-   
+    """
+    The two lower STAT bits show the current status of the LCD controller.
+    Mode 0: The LCD controller is in the H-Blank period and
+          the CPU can access both the display RAM (8000h-9FFFh)
+          and OAM (FE00h-FE9Fh)
+    
+    Mode 1: The LCD contoller is in the V-Blank period (or the
+          display is disabled) and the CPU can access both the
+          display RAM (8000h-9FFFh) and OAM (FE00h-FE9Fh)
+
+    Mode 2: The LCD controller is reading from OAM memory.
+          The CPU <cannot> access OAM memory (FE00h-FE9Fh)
+          during this period.
+
+    Mode 3: The LCD controller is reading from both OAM and VRAM,
+          The CPU <cannot> access OAM and VRAM during this period.
+          CGB Mode: Cannot access Palette Data (FF69,FF6B) either.
+    """
     def set_mode_3_begin(self):
         self.status.set_mode(3)
         self.cycles  += constants.MODE_3_BEGIN_TICKS
@@ -470,7 +543,36 @@ class Video(iMemory):
         self.status.set_mode(1)
         self.cycles += constants.MODE_1_END_TICKS
         
-    # ----------------------------------------------------------------
+    # emulation ----------------------------------------------------------------
+
+    def emulate(self, ticks):
+        ticks = int(ticks)
+        if self.control.lcd_enabled:
+            self.cycles -= ticks
+            self.consume_cycles()
+            
+    def consume_cycles(self):
+        while self.cycles <= 0:
+            mode = self.status.get_mode()
+            if mode == 0:
+                self.emulate_hblank()
+            elif mode == 1:
+                self.emulate_vblank()
+            elif mode == 2:
+                self.emulate_oam()
+            else:
+                self.emulate_transfer()
+                
+    def emulate_oam(self):
+        self.set_mode_3_begin()
+
+    def emulate_transfer(self):
+        if self.transfer:
+            if self.display:
+                self.draw_line()
+            self.set_mode_3_end()
+        else:
+            self.set_mode_0()
     
     def emulate_hblank(self):
         self.line_y+=1
@@ -528,6 +630,8 @@ class Video(iMemory):
             self.set_mode_1_end()
         else:
             self.set_mode_1()
+    
+    # graphics handling --------------------------------------------------------
     
     def draw_frame(self):
         self.driver.update_display()
