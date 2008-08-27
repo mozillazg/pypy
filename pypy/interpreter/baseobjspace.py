@@ -8,8 +8,6 @@ from pypy.rlib.jit import hint
 from pypy.tool.cache import Cache
 from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib.timer import DummyTimer, Timer
 import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
@@ -253,11 +251,6 @@ class ObjSpace(object):
 #        if self.config.objspace.logbytecodes:
 #            self.bytecodecounts = {}
 
-        if self.config.objspace.timing:
-            self.timer = Timer()
-        else:
-            self.timer = DummyTimer()
-
         self.initialize()
 
     def startup(self):
@@ -270,10 +263,7 @@ class ObjSpace(object):
             modname = self.str_w(w_modname)
             mod = self.interpclass_w(self.getbuiltinmodule(modname))
             if isinstance(mod, Module):
-                import time
-                self.timer.start("startup " + modname)
                 mod.startup(self)
-                self.timer.stop("startup " + modname)
 
     def finish(self):
         w_exitfunc = self.sys.getdictvalue_w(self, 'exitfunc')
@@ -667,12 +657,16 @@ class ObjSpace(object):
                                    (i, plural))
         return items
 
-    def viewiterable(self, w_iterable, expected_length=-1):
-        """ More or less the same as unpackiterable, but does not return
-        a copy. Please don't modify the result
-        """
-        return make_sure_not_resized(self.unpackiterable(w_iterable,
-                                                         expected_length)[:])
+    def unpacktuple(self, w_tuple, expected_length=-1):
+        """Same as unpackiterable(), but only for tuples.
+        Only use for bootstrapping or performance reasons."""
+        tuple_length = self.int_w(self.len(w_tuple))
+        if expected_length != -1 and tuple_length != expected_length:
+            raise UnpackValueError("got a tuple of length %d instead of %d" % (
+                tuple_length, expected_length))
+        items = [
+            self.getitem(w_tuple, self.wrap(i)) for i in range(tuple_length)]
+        return items
 
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""

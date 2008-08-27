@@ -416,12 +416,11 @@ def build_testlist_gexp(builder, nb):
     if l == 1:
         builder.push(atoms[0])
         return
+    items = []
     token = atoms[1]
     if isinstance(token, TokenObject) and token.name == builder.parser.tokens['COMMA']:
-        items = []
         for i in range(0, l, 2): # this is atoms not 1
             items.append(atoms[i])
-        builder.push(ast.Tuple(items, lineno))
     else:
         # genfor: 'i for i in j'
         # GenExpr(GenExprInner(Name('i'), [GenExprFor(AssName('i', 'OP_ASSIGN'), Name('j'), [])])))]))
@@ -429,6 +428,20 @@ def build_testlist_gexp(builder, nb):
         genexpr_for = parse_genexpr_for(atoms[1:])
         genexpr_for[0].is_outmost = True
         builder.push(ast.GenExpr(ast.GenExprInner(expr, genexpr_for, lineno), lineno))
+        return
+    isConst = True
+    values = []
+    for item in items:
+        if isinstance(item, ast.Const):
+            values.append(item.value)
+        else:
+            isConst = False
+            break
+    if isConst:
+        builder.push(ast.Const(builder.space.newtuple(values), lineno))
+    else:
+        builder.push(ast.Tuple(items, lineno))
+    return
 
 def build_lambdef(builder, nb):
     """lambdef: 'lambda' [varargslist] ':' test"""
@@ -726,8 +739,21 @@ def build_exprlist(builder, nb):
     if len(atoms) <= 2:
         builder.push(atoms[0])
     else:
-        items = [atoms[index] for index in range(0, len(atoms), 2)]
-        builder.push(ast.Tuple(items, atoms[0].lineno))
+        names = []
+        values = []
+        isConst = True
+        for index in range(0, len(atoms), 2):
+            item = atoms[index]
+            names.append(item)
+            if isinstance(item, ast.Const):
+                values.append(item)
+            else:
+                isConst = False
+        if isConst:
+            builder.push(ast.Const(builder.space.newtuple(values), atoms[0].lineno))
+        else:
+            builder.push(ast.Tuple(names, atoms[0].lineno))
+
 
 def build_while_stmt(builder, nb):
     """while_stmt: 'while' test ':' suite ['else' ':' suite]"""

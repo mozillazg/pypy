@@ -593,7 +593,7 @@ def str_endswith__String_String_ANY_ANY(space, w_self, w_suffix, w_start, w_end)
 def str_endswith__String_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
     (u_self, _, start, end) = _convert_idx_params(space, w_self,
                                                   space.wrap(''), w_start, w_end)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.unpacktuple(w_suffixes):
         if space.is_true(space.isinstance(w_suffix, space.w_unicode)):
             w_u = space.call_function(space.w_unicode, w_self)
             return space.call_method(w_u, "endswith", w_suffixes, w_start,
@@ -611,7 +611,7 @@ def str_startswith__String_String_ANY_ANY(space, w_self, w_prefix, w_start, w_en
 def str_startswith__String_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
     (u_self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
                                                   w_start, w_end)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.unpacktuple(w_prefixes):
         if space.is_true(space.isinstance(w_prefix, space.w_unicode)):
             w_u = space.call_function(space.w_unicode, w_self)
             return space.call_method(w_u, "startswith", w_prefixes, w_start,
