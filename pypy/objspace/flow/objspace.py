@@ -51,8 +51,7 @@ class FlowObjSpace(ObjSpace):
         self.w_tuple    = Constant(tuple)
         self.concrete_mode = 0
         for exc in [KeyError, ValueError, IndexError, StopIteration,
-                    AssertionError, TypeError, AttributeError, ImportError,
-                    RuntimeError]:
+                    AssertionError, TypeError, AttributeError, ImportError]:
             clsname = exc.__name__
             setattr(self, 'w_'+clsname, Constant(exc))
         # the following exceptions are the ones that should not show up
@@ -374,7 +373,7 @@ class FlowObjSpace(ObjSpace):
         if outcome is StopIteration:
             raise OperationError(self.w_StopIteration, w_exc_value)
         elif outcome is RuntimeError:
-            raise flowcontext.ImplicitOperationError(self.w_RuntimeError,
+            raise flowcontext.ImplicitOperationError(Constant(RuntimeError),
                                                      w_exc_value)
         else:
             return w_item
@@ -471,6 +470,12 @@ class FlowObjSpace(ObjSpace):
         # have w_KeyboardInterrupt, which is not very helpful
         raise KeyboardInterrupt
     w_KeyboardInterrupt = property(w_KeyboardInterrupt)
+
+    def w_RuntimeError(self):
+        # XXX same as w_KeyboardInterrupt()
+        raise RuntimeError("the interpreter raises RuntimeError during "
+                           "flow graph construction")
+    w_RuntimeError = property(w_RuntimeError)
 
 # the following gives us easy access to declare more for applications:
 NOT_REALLY_CONST = {
