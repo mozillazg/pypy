@@ -633,10 +633,9 @@ class CCompiler:
 
             old = cfile.dirpath().chdir()
             try:
-                res = compiler.compile([str(cfile)],
+                res = compiler.compile([cfile.basename],
                                        include_dirs=self.eci.include_dirs,
-                                       extra_preargs=compile_extra,
-                                       output_dir=str(cfile.dirpath()))
+                                       extra_preargs=compile_extra)
                 assert len(res) == 1
                 cobjfile = py.path.local(res[0])
                 assert cobjfile.check()
