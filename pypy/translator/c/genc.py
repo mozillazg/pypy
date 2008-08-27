@@ -402,7 +402,7 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.cc:
             cc = self.config.translation.cc
         else:
-            cc = eci.get_compiler_for_platform()
+            cc = self.eci.get_compiler_for_platform()
             if cc is None:
                 cc = 'gcc'
         make_no_prof = ''
