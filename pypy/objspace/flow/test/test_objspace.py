@@ -337,6 +337,18 @@ class TestFlowObjSpace(Base):
         traverse(find_exceptions, x)
         assert found == {ValueError: True, ZeroDivisionError: True, OverflowError: True}
 
+    def loop_in_bare_except_bug(lst):
+        try:
+            for x in lst:
+                pass
+        except:
+            raise
+
+    def test_loop_in_bare_except_bug(self):
+        x = self.codetest(self.loop_in_bare_except_bug)
+        simplify_graph(x)
+        self.show(x)
+
     #__________________________________________________________
     def freevar(self, x):
         def adder(y):
