@@ -108,7 +108,7 @@ def descr_set__bases__(space, w_type, w_value):
     if not w_type.is_heaptype():
         raise OperationError(space.w_TypeError,
                              space.wrap("can't set %s.__bases__" %
-                                        w_type.name))
+                                        (w_type.name,)))
     if not space.is_true(space.isinstance(w_value, space.w_tuple)):
         raise OperationError(space.w_TypeError,
                              space.wrap("can only assign tuple"
@@ -120,7 +120,7 @@ def descr_set__bases__(space, w_type, w_value):
         raise OperationError(space.w_TypeError,
                              space.wrap("can only assign non-empty tuple"
                                         " to %s.__bases__, not ()"%
-                                        w_type.name))
+                                        (w_type.name,)))
 
     for w_newbase in newbases_w:
         if isinstance(w_newbase, W_TypeObject):
