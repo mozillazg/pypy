@@ -580,18 +580,23 @@ def build_listmaker(builder, nb):
 def build_decorator(builder, nb):
     """decorator: '@' dotted_name [ '(' [arglist] ')' ] NEWLINE"""
     atoms = get_atoms(builder, nb)
-    nodes = []
-    # remove '@', '(' and ')' from atoms and use parse_attraccess
-    for token in atoms[1:]:
-        if isinstance(token, TokenObject) and (
-               token.name == builder.parser.tokens['LPAR']
-               or token.name == builder.parser.tokens['RPAR']
-               or token.name == builder.parser.tokens['NEWLINE']):
-            # skip those ones
-            continue
-        else:
-            nodes.append(token)
-    obj = parse_attraccess(nodes, builder)
+    # collect all nodes up to '(' or NEWLINE
+    end = 1
+    while True:
+        token = atoms[end]
+        if isinstance(token, TokenObject):
+            if token.name == builder.parser.tokens['NEWLINE']:
+                arglist = None
+                break
+            if token.name == builder.parser.tokens['LPAR']:
+                arglist = atoms[end+1]
+                if not isinstance(arglist, ArglistObject):  # because it's RPAR
+                    arglist = ArglistObject([], None, None, token.lineno)
+                break
+        end += 1
+    obj = parse_attraccess(atoms[1:end], builder)
+    if arglist is not None:
+        obj = reduce_callfunc(obj, arglist)
     builder.push(obj)
 
 def build_funcdef(builder, nb):
