@@ -3,7 +3,9 @@ from pypy.lang.gameboy.ram import iMemory
 
 
 class InterruptFlag(object):
-    
+    """
+    An Interrupt Flag handles a single interrupt channel
+    """
     def __init__(self, _reset, mask, call_code):
         self._reset    = _reset
         self.mask      = mask
@@ -32,6 +34,28 @@ class Interrupt(iMemory):
     """
     PyGirl Emulator
     Interrupt Controller
+    
+    V-Blank Interrupt
+    The V-Blank interrupt occurs ca. 59.7 times a second on a regular GB and ca.
+    61.1 times a second on a Super GB (SGB). This interrupt occurs at the
+    beginning of the V-Blank period (LY=144).
+    During this period video hardware is not using video ram so it may be freely
+    accessed. This period lasts approximately 1.1 milliseconds.
+    
+    LCDC Status Interrupt
+    There are various reasons for this interrupt to occur as described by the STAT
+    register ($FF40). One very popular reason is to indicate to the user when the
+    video hardware is about to redraw a given LCD line. This can be useful for
+    dynamically controlling the SCX/SCY registers ($FF43/$FF42) to perform special
+        video effects.
+        
+    Joypad interrupt is requested when any of the above Input lines changes from
+    High to Low. Generally this should happen when a key becomes pressed
+    (provided that the button/direction key is enabled by above Bit4/5), 
+    however, because of switch bounce, one or more High to Low transitions are 
+    usually produced both when pressing or releasing a key.
+
+
     """
     
     def __init__(self):

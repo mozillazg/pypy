@@ -169,6 +169,9 @@ class CartridgeManager(object):
         return (checksum == self.get_checksum())
     
     def verify_header(self):
+        """
+        The memory at 0100-014F contains the cartridge header. 
+        """
         if len(self.rom) < 0x0150:
             return False
         checksum = 0xE7
