@@ -20,7 +20,8 @@ def build_executable_cache(c_files, eci):
     try:
         return path.read()
     except py.error.Error:
-        result = eci.platform.execute(build_executable(c_files, eci))
+        result = py.process.cmdexec(eci.get_emulator_for_platform() +
+                                    build_executable(c_files, eci))
         path.write(result)
         return result
 

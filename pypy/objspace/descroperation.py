@@ -290,8 +290,6 @@ class DescrOperation:
                 raise OperationError(space.w_TypeError, 
                                      space.wrap("unhashable type"))
             return default_identity_hash(space, w_obj)
-        # XXX CPython has a special case for types with "__hash__ = None"
-        # to produce a nicer error message, namely "unhashable type: 'X'".
         w_result = space.get_and_call_function(w_hash, w_obj)
         if space.is_true(space.isinstance(w_result, space.w_int)): 
             return w_result 
