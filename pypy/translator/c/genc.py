@@ -399,7 +399,9 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.cc:
             cc = self.config.translation.cc
         else:
-            cc = 'gcc'
+            cc = eci.get_compiler_for_platform()
+            if cc is None:
+                cc = 'gcc'
         make_no_prof = ''
         if self.has_profopt():
             profopt = self.config.translation.profopt
