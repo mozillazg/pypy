@@ -292,10 +292,6 @@ class FlowExecutionContext(ExecutionContext):
                     e.w_type is self.space.w_ImportError):
                     raise ImportError('import statement always raises %s' % (
                         e,))
-                if (e.w_type is self.space.w_RuntimeError and
-                    not hasattr(e, '_comes_from_implicit')):
-                    raise RuntimeError('during flow graph construction: %r' % (
-                        e.w_value,))
                 link = self.make_link([e.w_type, e.w_value], self.graph.exceptblock)
                 self.recorder.crnt_block.closeblock(link)
 
@@ -383,9 +379,7 @@ class FlowExecutionContext(ExecutionContext):
         operr = ExecutionContext.sys_exc_info(self)
         if isinstance(operr, ImplicitOperationError):
             # re-raising an implicit operation makes it an explicit one
-            src = operr
             operr = OperationError(operr.w_type, operr.w_value)
-            operr._comes_from_implicit = src
         return operr
 
     # hack for unrolling iterables, don't use this

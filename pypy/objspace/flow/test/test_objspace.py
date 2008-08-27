@@ -342,6 +342,7 @@ class TestFlowObjSpace(Base):
             for x in lst:
                 pass
         except:
+            lst.append(5)
             raise
 
     def test_loop_in_bare_except_bug(self):
