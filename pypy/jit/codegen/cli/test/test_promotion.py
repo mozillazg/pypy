@@ -31,3 +31,5 @@ class TestPromotionCli(CliMixin, PromotionTest):
     test_vstruct_unfreeze = skip
     test_promote_after_call = skip
     test_merge_then_promote = skip
+    test_promote_class = skip
+    test_read___class___after_promotion = skip

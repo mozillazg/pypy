@@ -97,6 +97,8 @@ class GenBuilder(object):
 ##     def genop_oonewarray(self, alloctoken, gv_length):
 ##     def genop_oosend(self, methtoken, gv_self, args_gv): 
 ##     def genop_oononnull(self, gv_obj):
+##     def genop_ooisnull(self, gv_obj):
+
 ##     def genop_oogetfield(self, fieldtoken, gv_obj):
 ##     def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
 

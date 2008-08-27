@@ -194,12 +194,16 @@ class InterpretationTest(object):
         self._cache_order.append(key)
         return self.writer, self.jitcode
 
-    def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
+    def convert_and_serialize(self, ll_function, values, **kwds):
         if hasattr(ll_function, 'convert_arguments'):
             assert len(ll_function.convert_arguments) == len(values)
             values = [decoder(value) for decoder, value in zip(
                                         ll_function.convert_arguments, values)]
         writer, jitcode= self.serialize(ll_function, values, **kwds)
+        return values, writer, jitcode
+
+    def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
+        values, writer, jitcode = self.convert_and_serialize(ll_function, values, **kwds)
         argcolors = []
         for i, ll_val in enumerate(values):
             color = writer.varcolor(self.graph.startblock.inputargs[i])
