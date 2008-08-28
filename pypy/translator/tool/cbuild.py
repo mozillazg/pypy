@@ -9,7 +9,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("cbuild")
 py.log.setconsumer("cbuild", ansi_log)
 from pypy.tool.udir import udir
-from pypy.tool.pyplatform import Platform
+from pypy.rlib.pyplatform import Platform
 
 debug = 0
 
