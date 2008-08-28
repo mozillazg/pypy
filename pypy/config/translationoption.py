@@ -348,8 +348,11 @@ PLATFORMS = [
 def set_platform(config, platform):
     if platform == 'maemo':
         from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        from pypy.tool.pyplatform import Maemo
         # XXX evil hackery
         func_defs = list(ExternalCompilationInfo.__init__.func_defaults)
-        func_defs[-1] = 'maemo'
+        func_defs[-1] = Maemo()
         ExternalCompilationInfo.__init__.im_func.func_defaults = tuple(func_defs)
+    elif platform != 'host':
+        raise NotImplementedError('Platform = %s' % (platform,))
         
