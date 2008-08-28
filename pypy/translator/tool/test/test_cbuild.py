@@ -158,7 +158,7 @@ class TestEci:
                        'dxowqbncpqympqhe-config')
 
     def test_platforms(self):
-        from pypy.tool.pyplatform import Maemo
+        from pypy.rlib.pyplatform import Maemo
         eci = ExternalCompilationInfo(platform=Maemo())
         eci2 = ExternalCompilationInfo()
         assert eci != eci2
@@ -168,7 +168,7 @@ class TestEci:
         assert eci.merge(eci).platform == Maemo()
 
     def test_platform(self):
-        from pypy.tool.pyplatform import Platform
+        from pypy.rlib.pyplatform import Platform
         class Expected(Exception):
             pass
         
@@ -189,7 +189,7 @@ class TestEci:
         assert eci.platform.execute() == 3
 
     def test_standalone_maemo(self):
-        from pypy.tool.pyplatform import Maemo
+        from pypy.rlib.pyplatform import Maemo
         # XXX skip if there is no scratchbox
         if not py.path.local('/scratchbox/login').check():
             py.test.skip("No scratchbox detected")

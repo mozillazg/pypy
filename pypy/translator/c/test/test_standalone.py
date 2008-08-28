@@ -227,7 +227,7 @@ def test_separate_files():
     assert "  ll_strtod.o" in makefile
 
 def test_cross_compilation():
-    from pypy.tool.pyplatform import Platform
+    from pypy.rlib.pyplatform import Platform
     from pypy.config.translationoption import set_platform
 
     class X(Platform):
