@@ -1,17 +1,44 @@
 import py
 from pypy.jit.codegen.cli.rgenop import RCliGenOp
 from pypy.jit.rainbow.test.test_interpreter import TestOOType as RainbowTest
-from pypy.translator.cli.test.runtest import compile_graph
+from pypy.translator.cli.test.runtest import compile_graph, get_annotation
+from pypy.annotation import model as annmodel
 
+def wrap_convert_arguments(callee, convert_arguments):
+    indexes = range(len(convert_arguments))
+    convnames = ['conv%d' % i for i in indexes]
+    argnames =  ['arg%d' % i for i in indexes]
+    varnames =  ['var%d' % i for i in indexes]
+    lines = []
+    lines.append('def fn(%s):' % ', '.join(argnames))
+    for var, conv, arg in zip(varnames, convnames, argnames):
+        lines.append('    %s = %s(%s)' % (var, conv, arg))
+    lines.append('    return callee(%s)' % ', '.join(varnames))
+    
+    src = py.code.Source('\n'.join(lines))
+    mydict = (dict(zip(convnames, convert_arguments)))
+    mydict['callee'] = callee
+    exec src.compile() in mydict
+    return mydict['fn']
 
 class CompiledCliMixin(object):
     RGenOp = RCliGenOp
     translate_support_code = True
 
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
-        values, writer, jitcode = self.convert_and_serialize(ll_function, values, **kwds)
+        newvalues, writer, jitcode = self.convert_and_serialize(ll_function, values, **kwds)
         translator = self.rtyper.annotator.translator
-        func = compile_graph(self.rewriter.portal_entry_graph, translator)
+        graph = self.rewriter.portal_entry_graph
+        
+        if hasattr(ll_function, 'convert_arguments'):
+            fn = wrap_convert_arguments(self.rewriter.portal_entry, ll_function.convert_arguments)
+            FUNC = self.rewriter.PORTAL_FUNCTYPE
+            args_s = [get_annotation(value) for value in values]
+            s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
+            graph = self.rewriter.annhelper.getgraph(fn, args_s, s_result)
+            self.rewriter.annhelper.finish()
+
+        func = compile_graph(graph, translator, nowrap=True)
         return func(*values)
 
 
@@ -25,6 +52,16 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     
     def skip(self):
         py.test.skip('in progress')
+
+    def test_convert_arguments(self):
+        def ll_function(x):
+            return x+40
+        def getlen(string):
+            return len(string)
+        ll_function.convert_arguments = [getlen]
+        res = self.interpret(ll_function, ["xx"], [])
+        assert res == 42
+
 
     test_simple_struct = skip
     test_complex_struct = skip
