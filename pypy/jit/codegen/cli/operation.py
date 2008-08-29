@@ -176,11 +176,15 @@ class Call(Operation):
 
 class GetField(Operation):
 
-    def __init__(self, meth, gv_obj, fieldname):
+    def __init__(self, meth, gv_obj, fieldtoken):
+        from pypy.jit.codegen.cli.rgenop import class2type
         self.meth = meth
         self.gv_obj = gv_obj
-        clitype = gv_obj.getCliType()
-        self.fieldinfo = clitype.GetField(fieldname)
+        if fieldtoken.cls is None:
+            clitype = gv_obj.getCliType() # XXX: it's a Record, need to think how to fix
+        else:
+            clitype = class2type(fieldtoken.cls)
+        self.fieldinfo = clitype.GetField(fieldtoken.name)
 
     def restype(self):
         return self.fieldinfo.get_FieldType()
@@ -193,12 +197,16 @@ class GetField(Operation):
 
 class SetField(Operation):
 
-    def __init__(self, meth, gv_obj, gv_value, fieldname):
+    def __init__(self, meth, gv_obj, gv_value, fieldtoken):
+        from pypy.jit.codegen.cli.rgenop import class2type
         self.meth = meth
         self.gv_obj = gv_obj
         self.gv_value = gv_value
-        clitype = gv_obj.getCliType()
-        self.fieldinfo = clitype.GetField(fieldname)
+        if fieldtoken.cls is None:
+            clitype = gv_obj.getCliType() # XXX: it's a Record, need to think how to fix
+        else:
+            clitype = class2type(fieldtoken.cls)
+        self.fieldinfo = clitype.GetField(fieldtoken.name)
 
     def restype(self):
         return None
