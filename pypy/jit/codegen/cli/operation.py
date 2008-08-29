@@ -184,7 +184,7 @@ class GetField(Operation):
             clitype = gv_obj.getCliType() # XXX: it's a Record, need to think how to fix
         else:
             clitype = class2type(fieldtoken.cls)
-        self.fieldinfo = clitype.GetField(fieldtoken.name)
+        self.fieldinfo = clitype.GetField(str(fieldtoken.name))
 
     def restype(self):
         return self.fieldinfo.get_FieldType()
@@ -206,7 +206,7 @@ class SetField(Operation):
             clitype = gv_obj.getCliType() # XXX: it's a Record, need to think how to fix
         else:
             clitype = class2type(fieldtoken.cls)
-        self.fieldinfo = clitype.GetField(fieldtoken.name)
+        self.fieldinfo = clitype.GetField(str(fieldtoken.name))
 
     def restype(self):
         return None
