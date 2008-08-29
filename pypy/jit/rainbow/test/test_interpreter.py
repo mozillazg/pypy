@@ -724,15 +724,15 @@ class SimpleTests(InterpretationTest):
     def test_complex_struct(self):
         S = self.GcStruct('S', ('n', lltype.Signed))
         PTRS = self.Ptr(S)
-        T = self.GcStruct('T', ('succ', PTRS), ('n', lltype.Signed))
+        T = self.GcStruct('T', ('s', PTRS), ('n', lltype.Signed))
         malloc = self.malloc
         
         def ll_function(x, y):
             t = malloc(T)
-            t.succ = malloc(S)
-            t.succ.n = y
+            t.s = malloc(S)
+            t.s.n = y
             t.n = x
-            return t.n + t.succ.n
+            return t.n + t.s.n
 
         res = self.interpret(ll_function, [20, 22])
         assert res == 42
@@ -778,7 +778,7 @@ class SimpleTests(InterpretationTest):
         malloc = self.malloc
         def ll_function():
             s = malloc(S)
-            s.x = 123
+            s.xx = 123
             return s
         res = self.interpret(ll_function, [], [])
         assert res.x == 123
