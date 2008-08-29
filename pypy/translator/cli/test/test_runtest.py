@@ -15,4 +15,10 @@ class TestRunTest(BaseTestRunTest, CliTest):
             return a0
         res = self.interpret(fn, [42]*10)
         assert res == 42
-    
+
+    def test_input_string(self):
+        def fn(s):
+            return len(s)
+
+        res = self.interpret(fn, ["hello"])
+        assert res == 5

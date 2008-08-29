@@ -8,7 +8,7 @@ from pypy.translator.translator import TranslationContext
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 from pypy.rpython.lltypesystem.lltype import typeOf
 from pypy.rpython.ootypesystem import ootype
-from pypy.annotation.model import lltype_to_annotation
+from pypy.annotation.model import lltype_to_annotation, SomeString
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.backendopt.checkvirtual import check_virtual_methods
 from pypy.rpython.ootypesystem import ootype
@@ -132,6 +132,7 @@ class TestEntryPoint(BaseEntryPoint):
             CTS.types.uint64: 'ToUInt64',
             CTS.types.bool: 'ToBoolean',
             CTS.types.char: 'ToChar',
+            CTS.types.string: 'ToString',
             }
 
         try:
@@ -264,6 +265,12 @@ class ExceptionWrapper:
     def __repr__(self):
         return 'ExceptionWrapper(%s)' % repr(self.class_name)
 
+def get_annotation(x):
+    if isinstance(x, basestring) and len(x) > 1:
+        return SomeString()
+    else:
+        return lltype_to_annotation(typeOf(x))
+
 class CliTest(BaseRtypingTest, OORtypeMixin):
     def __init__(self):
         self._func = None
@@ -272,7 +279,7 @@ class CliTest(BaseRtypingTest, OORtypeMixin):
 
     def _compile(self, fn, args, ann=None, backendopt=True, auto_raise_exc=False, exctrans=False):
         if ann is None:
-            ann = [lltype_to_annotation(typeOf(x)) for x in args]
+            ann = [get_annotation(x) for x in args]
         if self._func is fn and self._ann == ann:
             return self._cli_func
         else:
