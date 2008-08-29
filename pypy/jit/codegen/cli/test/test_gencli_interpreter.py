@@ -63,7 +63,6 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
         assert res == 42
 
 
-    test_complex_struct = skip
     test_degenerate_with_voids = skip
     test_arith_plus_minus = skip
     test_plus_minus = skip
