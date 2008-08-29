@@ -142,6 +142,56 @@ class StatusRegister(object):
         
 # -----------------------------------------------------------------------------
 
+class Sprite(object):
+    
+    def __init__(self):
+        self.big_size = False
+        self.reset()
+
+    def reset(self):
+        self.x = 0
+        self.y = 0
+        self._tile_number = 0
+        self.object_behind_background = False
+        self.x_flipped = False
+        self.y_flipped = False
+        self.use_object_pallette_1 = False
+        
+    def get_tile_number(self):
+        return self._tile_number
+    
+    def set_tile_number(self, patter_number):
+        self._tile_number = patter_number & 0xFF
+        
+    def get_width(self):
+        return 8
+    
+    def get_height(self):
+        if self.big_size:
+            return 16
+        else:
+            return 8
+         
+    def overlaps(self, sprite):
+        return False
+    
+# -----------------------------------------------------------------------------
+    
+    
+class Tile(object):
+    
+    def __init__(self):
+        pass
+    
+    
+    def set_tile_data(self, rom, height):
+        self.height = height
+        
+    def get_tile_dta(self):
+        pass
+    
+# -----------------------------------------------------------------------------
+
 class Video(iMemory):
 
     def __init__(self, video_driver, interrupt, memory):

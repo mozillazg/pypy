@@ -60,13 +60,23 @@ class Timer(iMemory):
         return self.divider
     
     def set_divider(self,  data): 
-        """ DIV register resets on write """
+        """ 
+        This register is incremented at rate of 16384Hz (~16779Hz on SGB). 
+        Writing any value to this register resets it to 00h. 
+        """
         self.divider = 0
 
     def get_timer_counter(self):
         return self.timer_counter
     
     def set_timer_counter(self,  data):
+        """
+        TIMA
+        This timer is incremented by a clock frequency specified by the TAC 
+        register ($FF07). When the value overflows (gets bigger than FFh) then
+        it will be reset to the value specified in TMA (FF06), and an interrupt
+        will be requested, as described below.
+        """
         self.timer_counter = data
 
 
@@ -74,6 +84,9 @@ class Timer(iMemory):
         return self.timer_modulo
     
     def set_timer_modulo(self,  data):
+        """
+        When the TIMA overflows, this data will be loaded.
+        """
         self.timer_modulo = data
 
 
@@ -81,6 +94,14 @@ class Timer(iMemory):
         return 0xF8 | self.timer_control
 
     def set_timer_control(self,  data):
+        """
+        Bit 2    - Timer Stop  (0=Stop, 1=Start)
+        Bits 1-0 - Input Clock Select
+             00:   4096 Hz
+             01: 262144 Hz
+             10:  65536 Hz
+             11:  16384 Hz
+        """
         if (self.timer_control & 0x03) != (data & 0x03):
             self.timer_clock  = constants.TIMER_CLOCK[data & 0x03]
             self.timer_cycles = constants.TIMER_CLOCK[data & 0x03]
@@ -113,9 +134,18 @@ class Timer(iMemory):
         while self.timer_cycles <= 0:
             self.timer_counter = (self.timer_counter + 1) & 0xFF
             self.timer_cycles += self.timer_clock
-            if self.timer_counter == 0x00:
-                self.timer_counter = self.timer_modulo
-                self.interrupt.raise_interrupt(constants.TIMER)
+            self.timer_interrupt_check()
+    
+    def timer_interrupt_check(self):
+        """
+        Each time when the timer overflows (ie. when TIMA gets bigger than FFh),
+        then an interrupt is requested by setting Bit 2 in the IF Register 
+        (FF0F). When that interrupt is enabled, then the CPU will execute it by
+        calling the timer interrupt vector at 0050h.
+        """
+        if self.timer_counter == 0x00:
+            self.timer_counter = self.timer_modulo
+            self.interrupt.raise_interrupt(constants.TIMER)
     
     #def emulate_timer(self,  ticks):
     #    if (self.timer_control & 0x04) == 0:
