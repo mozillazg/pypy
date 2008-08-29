@@ -34,6 +34,11 @@ class SigToken:
         self.res = res
         self.funcclass = funcclass
 
+class FieldToken:
+    def __init__(self, cls, name):
+        self.cls = cls
+        self.name = name
+
 def class2type(cls):
     'Cast a PBC of type ootype.Class into a System.Type instance'
     if cls is cVoid:
@@ -323,8 +328,11 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def fieldToken(T, name):
-        _, FIELD = T._lookup_field(name)
-        return name #, RCliGenOp.kindToken(FIELD)
+        if isinstance(T, ootype.Record):
+            cls = ootype.nullruntimeclass
+        else:
+            cls = ootype.runtimeClass(T)
+        return FieldToken(cls, name)
 
     @staticmethod
     @specialize.memo()

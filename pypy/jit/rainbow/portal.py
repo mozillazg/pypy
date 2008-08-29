@@ -90,6 +90,7 @@ class PortalRewriter(object):
             PTR_RESFUNC = self.PTR_RESIDUAL_FUNCTYPE
             args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
             s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
+            self.annhelper = annhelper
             self.portal_entry_graph = annhelper.getgraph(
                 self.portal_entry, args_s, s_result)
             portal_entry_graph_ptr = annhelper.graph2delayed(
