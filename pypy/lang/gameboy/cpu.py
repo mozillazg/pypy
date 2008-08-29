@@ -941,17 +941,13 @@ class CPU(object):
 # ------------------------------------------------------------------------------
 
 class CallWrapper(object):   
-    
     def get(self, use_cycles=True):
         raise Exception("called CallWrapper.get")
-        return 0
     
     def set(self, value, use_cycles=True):
         raise Exception("called CallWrapper.set")
-        pass
     
 class NumberCallWrapper(CallWrapper):
-    
     def __init__(self, number):
         self.number = number
     
@@ -960,7 +956,6 @@ class NumberCallWrapper(CallWrapper):
     
     def set(self, value, use_cycles=True):
         raise Exception("called CallWrapper.set")
-        pass
         
 class RegisterCallWrapper(CallWrapper): 
     def __init__(self, register):
