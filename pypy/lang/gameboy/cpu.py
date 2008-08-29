@@ -124,7 +124,41 @@ class ImmediatePseudoRegister(Register):
 # ------------------------------------------------------------------------------
   
 class FlagRegister(Register):
+    """
+    The Flag Register (lower 8bit of AF register)
+      Bit  Name  Set Clr  Expl.
+      7    zf    Z   NZ   Zero Flag
+      6    n     -   -    Add/Sub-Flag (BCD)
+      5    h     -   -    Half Carry Flag (BCD)
+      4    cy    C   NC   Carry Flag
+      3-0  -     -   -    Not used (always zero)
+    Conatins the result from the recent instruction which has affected flags.
     
+    The Zero Flag (Z)
+    This bit becomes set (1) if the result of an operation has been zero (0). 
+    Used  for conditional jumps.
+    
+    The Carry Flag (C, or Cy)
+    Becomes set when the result of an addition became bigger than FFh (8bit) or
+    FFFFh (16bit). Or when the result of a subtraction or comparision became 
+    less than zero (much as for Z80 and 80x86 CPUs, but unlike as for 65XX and 
+    ARM  CPUs). Also the flag becomes set when a rotate/shift operation has 
+    shifted-out a "1"-bit.
+    Used for conditional jumps, and for instructions such like ADC, SBC, RL, 
+    RLA, etc.
+    
+    The BCD Flags (N, H)
+    These flags are (rarely) used for the DAA instruction only, N Indicates
+    whether the previous instruction has been an addition or subtraction, and H
+    indicates carry for lower 4bits of the result, also for DAA, the C flag must
+    indicate carry for upper 8bits.
+    After adding/subtracting two BCD numbers, DAA is intended to convert the
+    result into BCD format; BCD numbers are ranged from 00h to 99h rather than 
+    00h to FFh.
+    Because C and H flags must contain carry-outs for each digit, DAA cannot be
+    used for 16bit operations (which have 4 digits), or for INC/DEC operations
+    (which do not affect C-flag).    
+    """
     def __init__(self, cpu, reset_value):
         assert isinstance(cpu, CPU)
         self.cpu         = cpu
@@ -134,16 +168,17 @@ class FlagRegister(Register):
     def reset(self):
         self.partial_reset()
         
-    def partial_reset(self, keep_z=False, keep_n=False, keep_h=False, keep_c=False,\
+    def partial_reset(self, keep_is_zero=False, keep_is_subtraction=False, 
+                      keep_is_half_carry=False, keep_is_carry=False,\
                 keep_p=False, keep_s=False):
-        if not keep_z:
-            self.z_flag = False
-        if not keep_n:
-            self.n_flag = False
-        if not keep_h:
-            self.h_flag = False
-        if not keep_c:
-            self.c_flag = False
+        if not keep_is_zero:
+            self.is_zero = False
+        if not keep_is_subtraction:
+            self.is_subtraction = False
+        if not keep_is_half_carry:
+            self.is_half_carry = False
+        if not keep_is_carry:
+            self.is_carry = False
         if not keep_p:
             self.p_flag = False
         if not keep_s:
@@ -152,41 +187,41 @@ class FlagRegister(Register):
             
     def get(self, use_cycles=True):
         value  = 0
-        value += (int(self.c_flag) << 4)
-        value += (int(self.h_flag) << 5)
-        value += (int(self.n_flag) << 6)
-        value += (int(self.z_flag) << 7)
+        value += (int(self.is_carry) << 4)
+        value += (int(self.is_half_carry) << 5)
+        value += (int(self.is_subtraction) << 6)
+        value += (int(self.is_zero) << 7)
         return value + self.lower
             
     def set(self, value, use_cycles=True):
-        self.c_flag = bool(value & (1 << 4))
-        self.h_flag = bool(value & (1 << 5))
-        self.n_flag = bool(value & (1 << 6))
-        self.z_flag = bool(value & (1 << 7))
-        self.lower  = value & 0x0F
+        self.is_carry        = bool(value & (1 << 4))
+        self.is_half_carry  = bool(value & (1 << 5))
+        self.is_subtraction = bool(value & (1 << 6))
+        self.is_zero        = bool(value & (1 << 7))
+        self.lower          = value & 0x0F
         if use_cycles:
             self.cpu.cycles -= 1
         
-    def z_flag_compare(self, a, reset=False):
+    def is_zero_check(self, a, reset=False):
         if reset:
              self.reset()
         if isinstance(a, (Register)):
             a = a.get()
-        self.z_flag = ((a & 0xFF) == 0)
+        self.is_zero = ((a & 0xFF) == 0)
             
-    def c_flag_compare(self, value, compare_and=0x01, reset=False):
+    def is_carry_compare(self, value, compare_and=0x01, reset=False):
         if reset:
              self.reset()
-        self.c_flag = ((value & compare_and) != 0)
+        self.is_carry = ((value & compare_and) != 0)
 
-    def h_flag_compare(self, value, a, inverted=False):
+    def is_half_carry_compare(self, value, a, inverted=False):
         if inverted:
-            self.h_flag = ((value & 0x0F) < (a & 0x0F))
+            self.is_half_carry = ((value & 0x0F) < (a & 0x0F))
         else:
-            self.h_flag = ((value & 0x0F) > (a & 0x0F))
+            self.is_half_carry = ((value & 0x0F) > (a & 0x0F))
             
-    #def c_flag_compare(self, a, b):
-    #    self.c_flag = (a < b)
+    #def is_carry_compare(self, a, b):
+    #    self.is_carry = (a < b)
         
 # # ------------------------------------------------------------------------------
 
@@ -211,41 +246,41 @@ class CPU(object):
         self.reset()
 
     def ini_registers(self):
-        self.b   = Register(self)
-        self.c   = Register(self)
-        self.bc  = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
+        self.b    = Register(self)
+        self.c    = Register(self)
+        self.bc   = DoubleRegister(self, self.b, self.c, constants.RESET_BC)
         
-        self.d   = Register(self)
-        self.e   = Register(self)
-        self.de  = DoubleRegister(self, self.d, self.e, constants.RESET_DE)
+        self.d    = Register(self)
+        self.e    = Register(self)
+        self.de   = DoubleRegister(self, self.d, self.e, constants.RESET_DE)
 
-        self.h   = Register(self)
-        self.l   = Register(self)
-        self.hl  = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
+        self.h    = Register(self)
+        self.l    = Register(self)
+        self.hl   = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
         
-        self.hli = ImmediatePseudoRegister(self, self.hl)
-        self.pc  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_PC)
-        self.sp  = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_SP)
+        self.hli  = ImmediatePseudoRegister(self, self.hl)
+        self.pc   = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_PC)
+        self.sp   = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_SP)
         
-        self.a   = Register(self, constants.RESET_A)
-        self.f   = FlagRegister(self, constants.RESET_F)
-        self.af  = DoubleRegister(self, self.a, self.f)
+        self.a    = Register(self, constants.RESET_A)
+        self.flag = FlagRegister(self, constants.RESET_F)
+        self.af   = DoubleRegister(self, self.a, self.flag)
         
 
     def reset(self):
         self.reset_registers()
-        self.f.reset()
-        self.f.z_flag = True
-        self.ime      = False
-        self.halted   = False
-        self.cycles   = 0
+        self.flag.reset()
+        self.flag.is_zero = True
+        self.ime          = False
+        self.halted       = False
+        self.cycles       = 0
         self.instruction_counter        = 0
         self.last_op_code               = -1
         self.last_fetch_execute_op_code = -1
         
     def reset_registers(self):
         self.a.reset()
-        self.f.reset()
+        self.flag.reset()
         self.bc.reset()
         self.de.reset()
         self.hl.reset()
@@ -306,25 +341,25 @@ class CPU(object):
 
     def is_z(self):
         """ zero flag"""
-        return self.f.z_flag
+        return self.flag.is_zero
 
     def is_c(self):
         """ carry flag, true if the result did not fit in the register"""
-        return self.f.c_flag
+        return self.flag.is_carry
 
     def is_h(self):
         """ half carry, carry from bit 3 to 4"""
-        return self.f.h_flag
+        return self.flag.is_half_carry
 
     def is_n(self):
         """ subtract flag, true if the last operation was a subtraction"""
-        return self.f.n_flag
+        return self.flag.is_subtraction
     
     def isS(self):
-        return self.f.s_flag
+        return self.flag.s_flag
     
     def is_p(self):
-        return self.f.p_flag
+        return self.flag.p_flag
     
     def is_not_z(self):
         return not self.is_z()
@@ -483,31 +518,31 @@ class CPU(object):
         # 2 cycles
         data = register.get()
         added = (self.hl.get() + data) # 1 cycle
-        self.f.partial_reset(keep_z=True)
-        self.f.h_flag = (((added ^ self.hl.get() ^ data) & 0x1000) != 0) 
-        self.f.c_flag = (added >= 0x10000 or added < 0)
+        self.flag.partial_reset(keep_is_zero=True)
+        self.flag.is_half_carry = (((added ^ self.hl.get() ^ data) & 0x1000) != 0) 
+        self.flag.is_carry = (added >= 0x10000 or added < 0)
         self.hl.set(added & 0xFFFF)
         self.cycles -= 1
         
     def add_a_with_carry(self, getCaller, setCaller=None):
         # 1 cycle
         data = getCaller.get()
-        s = self.a.get() + data + int(self.f.c_flag)
+        s = self.a.get() + data + int(self.flag.is_carry)
         self.add_sub_flag_finish(s,data)
 
     def subtract_with_carry_a(self, getCaller, setCaller=None):
         # 1 cycle
         data = getCaller.get()
-        s = self.a.get() - data - int(self.f.c_flag)
+        s = self.a.get() - data - int(self.flag.is_carry)
         self.add_sub_flag_finish(s, data)
-        self.f.n_flag = True
+        self.flag.is_subtraction = True
         
     def add_sub_flag_finish(self, s, data):
-        self.f.reset()
+        self.flag.reset()
         # set the h flag if the 0x10 bit was affected
-        self.f.h_flag = (((s ^ self.a.get() ^ data) & 0x10) != 0)
-        self.f.c_flag = (s >= 0x100 or s < 0)
-        self.f.z_flag_compare(s)
+        self.flag.is_half_carry = (((s ^ self.a.get() ^ data) & 0x10) != 0)
+        self.flag.is_carry = (s >= 0x100 or s < 0)
+        self.flag.is_zero_check(s)
         self.a.set(s & 0xFF)  # 1 cycle
         
     def subtract_a(self, getCaller, setCaller=None):
@@ -528,32 +563,32 @@ class CPU(object):
         
     def compare_a_simple(self, s):
         s = (self.a.get() - s) & 0xFF
-        self.f.reset()
-        self.f.n_flag = True
-        self.f.z_flag_compare(s)
-        self.subtract_hc_flag_finish(s)
+        self.flag.reset()
+        self.flag.is_subtraction = True
+        self.flag.is_zero_check(s)
+        self.subtract_his_carry_finish(s)
         self.cycles -= 1
             
-    def subtract_hc_flag_finish(self, data):
-        self.f.c_flag = (data > self.a.get())
-        self.f.h_flag_compare(data, self.a.get())
+    def subtract_his_carry_finish(self, data):
+        self.flag.is_carry = (data > self.a.get())
+        self.flag.is_half_carry_compare(data, self.a.get())
         
     def and_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set(self.a.get() & getCaller.get())  # 1 cycle
-        self.f.reset()
-        self.f.z_flag_compare(self.a.get())
-        self.f.h_flag = True
+        self.flag.reset()
+        self.flag.is_zero_check(self.a.get())
+        self.flag.is_half_carry = True
 
     def xor_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set( self.a.get() ^ getCaller.get())  # 1 cycle
-        self.f.z_flag_compare(self.a.get(), reset=True)
+        self.flag.is_zero_check(self.a.get(), reset=True)
 
     def or_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set(self.a.get() | getCaller.get())  # 1 cycle
-        self.f.z_flag_compare(self.a.get(), reset=True)
+        self.flag.is_zero_check(self.a.get(), reset=True)
 
     def inc_double_register(self, register):
         # INC rr
@@ -566,18 +601,18 @@ class CPU(object):
     def inc(self, getCaller, setCaller):
         # 1 cycle
         data = (getCaller.get() + 1) & 0xFF
-        self.dec_inc_flag_finish(data, setCaller, 0x00)
+        self.dec_inis_carry_finish(data, setCaller, 0x00)
         
     def dec(self, getCaller, setCaller):
         # 1 cycle
         data = (getCaller.get() - 1) & 0xFF
-        self.dec_inc_flag_finish(data, setCaller, 0x0F)
-        self.f.n_flag = True
+        self.dec_inis_carry_finish(data, setCaller, 0x0F)
+        self.flag.is_subtraction = True
      
-    def dec_inc_flag_finish(self, data, setCaller, compare):
-        self.f.partial_reset(keep_c=True)
-        self.f.z_flag_compare(data)
-        self.f.h_flag = ((data & 0x0F) == compare)
+    def dec_inis_carry_finish(self, data, setCaller, compare):
+        self.flag.partial_reset(keep_is_carry=True)
+        self.flag.is_zero_check(data)
+        self.flag.is_half_carry = ((data & 0x0F) == compare)
         setCaller.set(data) # 1 cycle
 
     def rotate_left_circular(self, getCaller, setCaller):
@@ -595,7 +630,7 @@ class CPU(object):
     def rotate_left(self, getCaller, setCaller):
         # 1 cycle
         data = getCaller.get()
-        s = ((data & 0x7F) << 1) + int(self.f.c_flag)
+        s = ((data & 0x7F) << 1) + int(self.flag.is_carry)
         self.flags_and_setter_finish(s, data, setCaller, 0x80) # 1 cycle
 
     def rotate_left_a(self):
@@ -618,7 +653,7 @@ class CPU(object):
         # 1 cycle
         data = getCaller.get()
         s = (data >> 1)
-        if self.f.c_flag:
+        if self.flag.is_carry:
             s +=  0x80
         self.flags_and_setter_finish(s, data, setCaller) # 1 cycle
 
@@ -648,25 +683,24 @@ class CPU(object):
     def flags_and_setter_finish(self, s, data, setCaller, compare_and=0x01):
         # 2 cycles
         s &= 0xFF
-        self.f.reset()
-        self.f.z_flag_compare(s)
-        self.f.c_flag_compare(data, compare_and)
+        self.flag.reset()
+        self.flag.is_zero_check(s)
+        self.flag.is_carry_compare(data, compare_and)
         setCaller.set(s) # 1 cycle
 
     def swap(self, getCaller, setCaller):
         data = getCaller.get()
         # 1 cycle
         s = ((data << 4) + (data >> 4)) & 0xFF
-        self.f.z_flag_compare(s, reset=True)
+        self.flag.is_zero_check(s, reset=True)
         setCaller.set(s)
 
 
     def test_bit(self, getCaller, setCaller, n):
         # 2 cycles
-        self.f.partial_reset(keep_c=True)
-        self.f.h_flag = True
-        self.f.z_flag = False
-        self.f.z_flag = ((getCaller.get() & (1 << n)) == 0)
+        self.flag.partial_reset(keep_is_carry=True)
+        self.flag.is_half_carry = True
+        self.flag.is_zero = ((getCaller.get() & (1 << n)) == 0)
         self.cycles -= 1
 
     def set_bit(self, getCaller, setCaller, n):
@@ -733,7 +767,7 @@ class CPU(object):
         # LDH (nn),A 3 cycles
         self.write(0xFF00 + self.fetch(), self.a.get()) # 2 + 1 cycles
 
-    def write_a_at_expaded_c_address(self):
+    def write_a_at_expanded_c_address(self):
         # LDH (C),A 2 cycles
         self.write(0xFF00 + self.c.get(), self.a.get()) # 2 cycles
         
@@ -757,8 +791,8 @@ class CPU(object):
     def complement_a(self):
         # CPA
         self.a.set(self.a.get() ^ 0xFF)
-        self.f.n_flag = True
-        self.f.h_flag = True
+        self.flag.is_subtraction = True
+        self.flag.is_half_carry = True
 
     def decimal_adjust_a(self):
         # DAA 1 cycle
@@ -777,10 +811,10 @@ class CPU(object):
             self.a.set((self.a.get() + delta) & 0xFF) # 1 cycle
         else:
             self.a.set((self.a.get() - delta) & 0xFF) # 1 cycle
-        self.f.partial_reset(keep_n=True)
+        self.flag.partial_reset(keep_is_subtraction=True)
         if delta >= 0x60:
-            self.f.c_flag = True
-        self.f.z_flag_compare(self.a.get())
+            self.flag.is_carry = True
+        self.flag.is_zero_check(self.a.get())
 
     def increment_sp_by_fetch(self):
         # ADD SP,nn 4 cycles
@@ -796,25 +830,25 @@ class CPU(object):
         # 1 cycle
         offset = process_2_complement(self.fetch()) # 1 cycle
         s = (self.sp.get() + offset) & 0xFFFF
-        self.f.reset()
+        self.flag.reset()
         if (offset >= 0):
-            self.f.c_flag = (s < self.sp.get())
+            self.flag.is_carry = (s < self.sp.get())
             if (s & 0x0F00) < (self.sp.get() & 0x0F00):
-                self.f.h_flag = True
+                self.flag.is_half_carry = True
         else:
-            self.f.c_flag = (s > self.sp.get())
+            self.flag.is_carry = (s > self.sp.get())
             if (s & 0x0F00) > (self.sp.get() & 0x0F00):
-                self.f.h_flag = True
+                self.flag.is_half_carry = True
         return s
         
     def complement_carry_flag(self):
         # CCF/SCF
-        self.f.partial_reset(keep_z=True, keep_c=True)
-        self.f.c_flag = not self.f.c_flag
+        self.flag.partial_reset(keep_is_zero=True, keep_is_carry=True)
+        self.flag.is_carry = not self.flag.is_carry
 
     def set_carry_flag(self):
-        self.f.partial_reset(keep_z=True)
-        self.f.c_flag = True
+        self.flag.partial_reset(keep_is_zero=True)
+        self.flag.is_carry = True
 
     def nop(self):
         # NOP 1 cycle
@@ -880,7 +914,7 @@ class CPU(object):
         # RST nn 4 cycles
         self.call(nn) # 4 cycles
 
-    def disable_interrups(self):
+    def disable_interrupts(self):
         # DI/EI 1 cycle
         self.ime     = False
         self.cycles -= 1
@@ -1072,9 +1106,9 @@ FIRST_ORDER_OP_CODES = [
     (0x37, CPU.set_carry_flag),
     (0x3F, CPU.complement_carry_flag),
     (0x76, CPU.halt),
-    (0xF3, CPU.disable_interrups),
+    (0xF3, CPU.disable_interrupts),
     (0xFB, CPU.enable_interrupts),
-    (0xE2, CPU.write_a_at_expaded_c_address),
+    (0xE2, CPU.write_a_at_expanded_c_address),
     (0xEA, CPU.store_a_at_fetched_address),
     (0xF2, CPU.store_expanded_c_in_a),
     (0xFA, CPU.store_fetched_memory_in_a),
