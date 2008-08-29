@@ -202,7 +202,7 @@ class FlagRegister(Register):
         if use_cycles:
             self.cpu.cycles -= 1
         
-    def is_zero_check(self, a, reset=False):
+    def zero_check(self, a, reset=False):
         if reset:
              self.reset()
         if isinstance(a, (Register)):
@@ -542,7 +542,7 @@ class CPU(object):
         # set the h flag if the 0x10 bit was affected
         self.flag.is_half_carry = (((s ^ self.a.get() ^ data) & 0x10) != 0)
         self.flag.is_carry = (s >= 0x100 or s < 0)
-        self.flag.is_zero_check(s)
+        self.flag.zero_check(s)
         self.a.set(s & 0xFF)  # 1 cycle
         
     def subtract_a(self, getCaller, setCaller=None):
@@ -565,7 +565,7 @@ class CPU(object):
         s = (self.a.get() - s) & 0xFF
         self.flag.reset()
         self.flag.is_subtraction = True
-        self.flag.is_zero_check(s)
+        self.flag.zero_check(s)
         self.subtract_his_carry_finish(s)
         self.cycles -= 1
             
@@ -577,18 +577,18 @@ class CPU(object):
         # 1 cycle
         self.a.set(self.a.get() & getCaller.get())  # 1 cycle
         self.flag.reset()
-        self.flag.is_zero_check(self.a.get())
+        self.flag.zero_check(self.a.get())
         self.flag.is_half_carry = True
 
     def xor_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set( self.a.get() ^ getCaller.get())  # 1 cycle
-        self.flag.is_zero_check(self.a.get(), reset=True)
+        self.flag.zero_check(self.a.get(), reset=True)
 
     def or_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set(self.a.get() | getCaller.get())  # 1 cycle
-        self.flag.is_zero_check(self.a.get(), reset=True)
+        self.flag.zero_check(self.a.get(), reset=True)
 
     def inc_double_register(self, register):
         # INC rr
@@ -611,7 +611,7 @@ class CPU(object):
      
     def dec_inis_carry_finish(self, data, setCaller, compare):
         self.flag.partial_reset(keep_is_carry=True)
-        self.flag.is_zero_check(data)
+        self.flag.zero_check(data)
         self.flag.is_half_carry = ((data & 0x0F) == compare)
         setCaller.set(data) # 1 cycle
 
@@ -684,7 +684,7 @@ class CPU(object):
         # 2 cycles
         s &= 0xFF
         self.flag.reset()
-        self.flag.is_zero_check(s)
+        self.flag.zero_check(s)
         self.flag.is_carry_compare(data, compare_and)
         setCaller.set(s) # 1 cycle
 
@@ -692,7 +692,7 @@ class CPU(object):
         data = getCaller.get()
         # 1 cycle
         s = ((data << 4) + (data >> 4)) & 0xFF
-        self.flag.is_zero_check(s, reset=True)
+        self.flag.zero_check(s, reset=True)
         setCaller.set(s)
 
 
@@ -814,7 +814,7 @@ class CPU(object):
         self.flag.partial_reset(keep_is_subtraction=True)
         if delta >= 0x60:
             self.flag.is_carry = True
-        self.flag.is_zero_check(self.a.get())
+        self.flag.zero_check(self.a.get())
 
     def increment_sp_by_fetch(self):
         # ADD SP,nn 4 cycles
@@ -1054,7 +1054,7 @@ def load_group_lambda(store_register, load_register):
 def create_register_op_codes(table):
     op_codes = []
     for entry in table:
-        op_code   = entry[0]
+        op_code  = entry[0]
         step     = entry[1]
         function = entry[2]
         for registerOrGetter in entry[3]:
