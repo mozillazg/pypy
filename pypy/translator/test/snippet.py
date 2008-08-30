@@ -553,6 +553,30 @@ def flow_identity_info(x=object, y=object):
         else:
             return (None, None)
 
+def star_args0(*args):
+    return args[0] / 2
+
+def call_star_args0(z):
+    return star_args0(z)
+
+def star_args1(a, *args):
+    return a + args[0] / 2
+
+def call_star_args1(z):
+    return star_args1(z, 20)
+
+def star_args1def(a=4, *args):
+    if args:
+        return a + args[0] / 2
+    else:
+        return a*3
+
+def call_star_args1def(z):
+    a = star_args1def(z, 22)
+    b = star_args1def(5)
+    c = star_args1def()
+    return a+b+c
+    
 def star_args(x, y, *args):
     return x + args[0]
 
