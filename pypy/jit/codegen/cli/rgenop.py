@@ -39,6 +39,13 @@ class FieldToken:
         self.cls = cls
         self.name = name
 
+class AllocToken:
+    def __init__(self, ooclass):
+        self.ooclass = ooclass
+
+    def getCliType(self):
+        return class2type(self.ooclass)
+
 def class2type(cls):
     'Cast a PBC of type ootype.Class into a System.Type instance'
     if cls is cVoid:
@@ -337,7 +344,7 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def allocToken(T):
-        return RCliGenOp.kindToken(T)
+        return AllocToken(ootype.runtimeClass(T))
 
     def check_no_open_mc(self):
         pass
@@ -641,8 +648,10 @@ class BranchBuilder(GenBuilder):
     def genop_ooisnull(self, gv_obj):
         raise NotImplementedError
 
-    def genop_new(self, gv_obj):
-        raise NotImplementedError
+    def genop_new(self, alloctoken):
+        op = ops.New(self.meth, alloctoken)
+        self.appendop(op)
+        return op.gv_res()
 
     def enter_next_block(self, args_gv):
         seen = {}
