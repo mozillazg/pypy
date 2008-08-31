@@ -1,4 +1,5 @@
 import py
+from pypy.rpython.lltypesystem import lltype
 from pypy.jit.codegen.cli.rgenop import RCliGenOp
 from pypy.jit.rainbow.test.test_interpreter import TestOOType as RainbowTest
 from pypy.translator.cli.test.runtest import compile_graph, get_annotation
@@ -62,8 +63,20 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
         res = self.interpret(ll_function, ["xx"], [])
         assert res == 42
 
+    def test_degenerate_with_voids(self):
+        # the original test can't be executed when compiled because we can't
+        # inspect the content of an instance return an instance as a result;
+        # instead, we just check the class name
+        S = self.GcStruct('S', ('y', lltype.Void),
+                               ('x', lltype.Signed))
+        malloc = self.malloc
+        def ll_function():
+            s = malloc(S)
+            s.x = 123
+            return s
+        res = self.interpret(ll_function, [], [])
+        assert res.class_name == 'S'
 
-    test_degenerate_with_voids = skip
     test_arith_plus_minus = skip
     test_plus_minus = skip
     test_red_virtual_container = skip

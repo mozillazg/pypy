@@ -1,7 +1,7 @@
 import py
 from pypy.rlib.objectmodel import specialize
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.dotnet import CLR, typeof
+from pypy.translator.cli.dotnet import CLR, typeof, new_array
 from pypy.translator.cli import opcodes as cli_opcodes
 System = CLR.System
 OpCodes = System.Reflection.Emit.OpCodes
@@ -215,6 +215,20 @@ class SetField(Operation):
         self.gv_obj.load(self.meth)
         self.gv_value.load(self.meth)
         self.meth.il.Emit(OpCodes.Stfld, self.fieldinfo)
+
+class New(Operation):
+
+    def __init__(self, meth, alloctoken):
+        self.meth = meth
+        self.clitype = alloctoken.getCliType()
+
+    def restype(self):
+        return self.clitype
+
+    def emit(self):
+        ctor = self.clitype.GetConstructor(new_array(System.Type, 0))
+        self.meth.il.Emit(OpCodes.Newobj, ctor)
+        self.storeResult()
 
 def mark(il, s):
     il.Emit(OpCodes.Ldstr, s)
