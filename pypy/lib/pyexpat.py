@@ -50,7 +50,7 @@ assert XML_Char is ctypes.c_char # this assumption is everywhere in
 def declare_external(name, args, res):
     func = getattr(lib, name)
     func.args = args
-    func.result = res
+    func.restype = res
     globals()[name] = func
 
 declare_external('XML_ParserCreate', [c_char_p], XML_Parser)
@@ -61,27 +61,20 @@ currents = ['CurrentLineNumber', 'CurrentColumnNumber',
 for name in currents:
     func = getattr(lib, 'XML_Get' + name)
     func.args = [XML_Parser]
-    func.result = c_int
+    func.restype = c_int
 
 declare_external('XML_SetReturnNSTriplet', [XML_Parser, c_int], None)
 declare_external('XML_GetSpecifiedAttributeCount', [XML_Parser], c_int)
 declare_external('XML_SetParamEntityParsing', [XML_Parser, c_int], None)
 declare_external('XML_GetErrorCode', [XML_Parser], c_int)
 declare_external('XML_StopParser', [XML_Parser, c_int], None)
-lib.XML_ErrorString.args = [c_int]
-lib.XML_ErrorString.result = c_int
+declare_external('XML_ErrorString', [c_int], c_char_p)
 declare_external('XML_SetBase', [XML_Parser, c_char_p], None)
 
 declare_external('XML_SetUnknownEncodingHandler', [XML_Parser, c_void_p,
                                                    c_void_p], None)
 declare_external('XML_FreeContentModel', [XML_Parser, POINTER(XML_Content)],
                  None)
-
-def XML_ErrorString(code):
-    res = lib.XML_ErrorString(code)
-    p = c_char_p()
-    p.value = res
-    return p.value
 
 handler_names = [
     'StartElement',
