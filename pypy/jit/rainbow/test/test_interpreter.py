@@ -778,7 +778,7 @@ class SimpleTests(InterpretationTest):
         malloc = self.malloc
         def ll_function():
             s = malloc(S)
-            s.xx = 123
+            s.x = 123
             return s
         res = self.interpret(ll_function, [], [])
         assert res.x == 123
