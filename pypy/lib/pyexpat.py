@@ -148,6 +148,7 @@ class XMLParserType(object):
         self.buffer_size = 8192
         self.character_data_handler = None
         self.intern = {}
+        self.__exc_info = None
 
     def _flush_character_buffer(self):
         if not self.buffer:
@@ -189,13 +190,19 @@ class XMLParserType(object):
         e.lineno = lineno
         err = XML_ErrorString(code)[:200]
         e.s = "%s: line: %d, column: %d" % (err, lineno, colno)
+        e.message = e.s
         self._error = e
 
     def Parse(self, data, is_final=0):
         res = XML_Parse(self.itself, data, len(data), is_final)
         if res == 0:
             self._set_error(XML_GetErrorCode(self.itself))
-            raise self.__exc_info[0], self.__exc_info[1], self.__exc_info[2]
+            if self.__exc_info:
+                exc_info = self.__exc_info
+                self.__exc_info = None
+                raise exc_info[0], exc_info[1], exc_info[2]
+            else:
+                raise self._error
         self._flush_character_buffer()
         return res
 

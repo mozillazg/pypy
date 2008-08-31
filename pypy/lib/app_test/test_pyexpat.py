@@ -646,3 +646,16 @@ class TestChardataBuffer:
 
     def test_segfault(self):
         py.test.raises(TypeError, expat.ParserCreate, 1234123123)
+
+def test_invalid_data():
+    parser = expat.ParserCreate()
+    parser.Parse('invalid.xml', 0)
+    try:
+        parser.Parse("", 1)
+    except expat.ExpatError, e:
+        assert e.code == 2 # XXX is this reliable?
+        assert e.lineno == 1
+        assert e.message.startswith('syntax error')
+    else:
+        py.test.fail("Did not raise")
+
