@@ -307,6 +307,8 @@ class Record(BuiltinType):
 
     # We try to keep Record as similar to Instance as possible, so backends
     # can treat them polymorphically, if they choose to do so.
+
+    _classes = {}
     
     def __init__(self, fields, _hints={}):
         self._fields = frozendict()
@@ -314,6 +316,15 @@ class Record(BuiltinType):
             self._fields[name] = ITEMTYPE, ITEMTYPE._defl()
         self._null = _null_record(self)
         self._hints = frozendict(_hints)
+
+    @property
+    def _class(self):
+        try:
+            return self._classes[self]
+        except KeyError:
+            cls = _class(self)
+            self._classes[self] = cls
+            return cls
 
     def _defl(self):
         return self._null
@@ -1767,7 +1778,11 @@ def oonewarray(ARRAY, length):
 def runtimenew(class_):
     assert isinstance(class_, _class)
     assert class_ is not nullruntimeclass
-    return make_instance(class_._INSTANCE)
+    TYPE = class_._INSTANCE
+    if isinstance(TYPE, Record):
+        return _record(TYPE)
+    else:
+        return make_instance(TYPE)
 
 def static_meth(FUNCTION, name,  **attrs):
     return _static_meth(FUNCTION, _name=name, **attrs)
@@ -1812,7 +1827,7 @@ def overrideDefaultForFields(INSTANCE, fields):
     INSTANCE._override_default_for_fields(fields)
 
 def runtimeClass(INSTANCE):
-    assert isinstance(INSTANCE, Instance)
+    assert isinstance(INSTANCE, (Instance, Record))
     return INSTANCE._class
 
 def isSubclass(C1, C2):
