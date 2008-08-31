@@ -32,7 +32,7 @@ def test_assign_super_attr():
 
     assert d.a == 1
 
-def test_runtime_instanciation():
+def test_runtime_instantiation():
     I = Instance("test", ROOT, {"a": Signed})
     c = runtimeClass(I)
     i = runtimenew(c)
@@ -40,6 +40,27 @@ def test_runtime_instanciation():
     assert typeOf(i) == I
     assert typeOf(c) == Class
 
+def test_record_equivalence():
+    R1 = Record({"a": Signed})
+    R2 = Record({"a": Signed})
+    assert R1 == R2
+    assert hash(R1) == hash(R2)
+    assert R1._class is R2._class
+
+def test_runtime_record_instantiation():
+    R = Record({"a": Signed})
+    c = runtimeClass(R)
+    r = runtimenew(c)
+
+    assert typeOf(r) == R
+    assert typeOf(c) == Class
+
+def test_class_records():
+    R1 = Record({"a": Signed})
+    R2 = Record({"a": Signed})
+    assert R1 == R2
+    assert runtimeClass(R1) is runtimeClass(R2)
+ 
 def test_classof():
     I = Instance("test", ROOT, {"a": Signed})
     c = runtimeClass(I)
