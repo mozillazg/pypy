@@ -6,8 +6,8 @@ class InterruptFlag(object):
     """
     An Interrupt Flag handles a single interrupt channel
     """
-    def __init__(self, reset, mask, call_code):
-        self._reset    = reset
+    def __init__(self, _reset, mask, call_code):
+        self._reset    = _reset
         self.mask      = mask
         self.call_code = call_code
         self.reset()
@@ -19,8 +19,8 @@ class InterruptFlag(object):
     def is_pending(self):
         return self._is_pending
     
-    def set_pending(self, is_pending=True):
-        self._is_pending = is_pending
+    def set_pending(self, _is_pending=True):
+        self._is_pending = _is_pending
         
     def is_enabled(self):
         return self.enabled
@@ -61,22 +61,25 @@ class Interrupt(iMemory):
     def __init__(self):
         self.create_interrupt_flags()
         self.create_flag_list()
+        self.create_flag_mask_mapping()
         self.reset()
         
     def create_interrupt_flags(self):
-        self.v_blank  = InterruptFlag(True,  constants.VBLANK, 0x40)
-        self.lcd      = InterruptFlag(False, constants.LCD,    0x48)
-        self.timer    = InterruptFlag(False, constants.TIMER,  0x50)
-        self.serial   = InterruptFlag(False, constants.SERIAL, 0x58)
-        self.joypad   = InterruptFlag(False, constants.JOYPAD, 0x60)
+        self.vblank  = InterruptFlag(True,  constants.VBLANK, 0x40)
+        self.lcd     = InterruptFlag(False, constants.LCD,    0x48)
+        self.timer   = InterruptFlag(False, constants.TIMER,  0x50)
+        self.serial  = InterruptFlag(False, constants.SERIAL, 0x58)
+        self.joypad  = InterruptFlag(False, constants.JOYPAD, 0x60)
         
     def create_flag_list(self):
-        self.interrupt_flags = [ self.v_blank,
-                                 self.lcd,
-                                 self.timer,
-                                 self.serial,
+        self.interrupt_flags = [ self.vblank, self.lcd, self.timer, self.serial,
                                  self.joypad]
 
+    def create_flag_mask_mapping(self):
+        self.mask_mapping = {}
+        for flag in self.interrupt_flags:
+            self.mask_mapping[flag.mask] = flag
+        
     def reset(self):
         self.set_enable_mask(0x0)
         for flag in self.interrupt_flags:
@@ -100,6 +103,12 @@ class Interrupt(iMemory):
     def is_pending(self, mask=0xFF):
         return (self.get_enable_mask() & self.get_interrupt_flag() & mask) != 0
     
+    def raise_interrupt(self, mask):
+        self.mask_mapping[mask].set_pending(True)
+
+    def lower(self, mask):
+        self.mask_mapping[mask].set_pending(False)
+
     def get_enable_mask(self):
         enabled = 0x00
         for interrupt_flag in self.interrupt_flags:
@@ -109,7 +118,7 @@ class Interrupt(iMemory):
 
     def set_enable_mask(self, enable_mask):
         for flag in self.interrupt_flags:
-            flag.set_enabled(bool(enable_mask & flag.mask))
+            flag.set_enabled((enable_mask & flag.mask) != 0)
         self.enable_rest_data = enable_mask & 0xE0;
         
     

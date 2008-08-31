@@ -28,7 +28,7 @@ class Joypad(iMemory):
         assert isinstance(joypad_driver, JoypadDriver)
         assert isinstance(interrupt, Interrupt)
         self.driver    = joypad_driver
-        self.joypad_interrupt_flag = interrupt.joypad
+        self.interrupt = interrupt
         self.reset()
 
     def reset(self):
@@ -65,7 +65,7 @@ class Joypad(iMemory):
         elif self.read_control & 0x3 == 3:
             self.button_code  = 0xF
         if old_buttons != self.button_code:
-            self.joypad_interrupt_flag.set_pending()
+            self.interrupt.raise_interrupt(constants.JOYPAD)
 
 
 # ------------------------------------------------------------------------------

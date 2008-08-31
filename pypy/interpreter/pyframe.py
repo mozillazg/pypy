@@ -152,22 +152,15 @@ class PyFrame(eval.Frame):
             dic_w[key] = w_value
         return dic_w
 
-    # we need two popvalues that return different data types:
-    # one in case we want list another in case of tuple
-    def _new_popvalues():
-        def popvalues(self, n):
-            values_w = [None] * n
-            while True:
-                n -= 1
-                if n < 0:
-                    break
-                hint(n, concrete=True)
-                values_w[n] = self.popvalue()
-            return values_w
-        return popvalues
-    popvalues = _new_popvalues()
-    popvalues_mutable = _new_popvalues()
-    del _new_popvalues
+    def popvalues(self, n):
+        values_w = [None] * n
+        while True:
+            n -= 1
+            if n < 0:
+                break
+            hint(n, concrete=True)
+            values_w[n] = self.popvalue()
+        return values_w
 
     def peekvalues(self, n):
         values_w = [None] * n
