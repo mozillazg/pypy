@@ -69,6 +69,7 @@ class GameBoy(object):
         self.sound.stop()
 
     def reset(self):
+        print "python resetting gameboy"
         self.ram.reset()
         self.memory_bank_controller.reset()
         self.interrupt.reset()
@@ -125,8 +126,8 @@ class GameBoy(object):
     def write(self, address, data):
         receiver = self.get_receiver(address)
         if receiver is None:
-            raise Exception("invalid read address given")
-        	#return
+            return
+            #raise Exception("invalid read address given")
         receiver.write(address, data)
         if address == constants.STAT or address == 0xFFFF:
             self.cpu.handle_pending_interrupts()
@@ -134,8 +135,8 @@ class GameBoy(object):
     def read(self, address):
         receiver = self.get_receiver(address)
         if receiver is None:
-           # raise Exception("invalid read address given")
-        	return 0xFF
+            return 0xFF
+            #raise Exception("invalid read address given")
         return receiver.read(address)
 
     def print_receiver_msg(self, address, name):

@@ -457,38 +457,9 @@ class TestMethod:
         w_meth5 = meth3.descr_method_get(space.wrap('hello'), space.w_str)
         assert space.is_w(w_meth5, w_meth3)
 
-class TestShortcuts(object):
+class TestShortcuts(object): 
 
-    def test_call_function(self):
-        space = self.space
-        
-        d = {}
-        for i in range(10):
-            args = "(" + ''.join(["a%d," % a for a in range(i)]) + ")"
-            exec """
-def f%s:
-    return %s
-""" % (args, args) in d
-            f = d['f']
-            res = f(*range(i))
-            code = PyCode._from_code(self.space, f.func_code)
-            fn = Function(self.space, code, self.space.newdict())
-
-            assert fn.code.fast_natural_arity == i|PyCode.FLATPYCALL
-            if i < 5:
-
-                 def bomb(*args):
-                     assert False, "shortcutting should have avoided this"
-
-                 code.funcrun = bomb
-                 code.funcrun_obj = bomb
-
-            args_w = map(space.wrap, range(i))            
-            w_res = space.call_function(fn, *args_w)
-            check = space.is_true(space.eq(w_res, space.wrap(res)))
-            assert check
-
-    def test_flatcall(self):
+    def test_fastcall(self):
         space = self.space
         
         def f(a):
@@ -496,26 +467,32 @@ def f%s:
         code = PyCode._from_code(self.space, f.func_code)
         fn = Function(self.space, code, self.space.newdict())
 
-        assert fn.code.fast_natural_arity == 1|PyCode.FLATPYCALL
+        assert fn.code.fast_natural_arity == 1
 
-        def bomb(*args):
-            assert False, "shortcutting should have avoided this"
+        called = []
+        fastcall_1 = fn.code.fastcall_1
+        def witness_fastcall_1(space, w_func, w_arg):
+            called.append(w_func)
+            return fastcall_1(space, w_func, w_arg)
 
-        code.funcrun = bomb
-        code.funcrun_obj = bomb
+        fn.code.fastcall_1 = witness_fastcall_1
 
         w_3 = space.newint(3)
         w_res = space.call_function(fn, w_3)
 
         assert w_res is w_3
+        assert called == [fn]
+
+        called = []
 
         w_res = space.appexec([fn, w_3], """(f, x):
         return f(x)
         """)
 
         assert w_res is w_3
+        assert called == [fn]
 
-    def test_flatcall_method(self):
+    def test_fastcall_method(self):
         space = self.space
         
         def f(self, a):
@@ -523,13 +500,15 @@ def f%s:
         code = PyCode._from_code(self.space, f.func_code)
         fn = Function(self.space, code, self.space.newdict())
 
-        assert fn.code.fast_natural_arity == 2|PyCode.FLATPYCALL
+        assert fn.code.fast_natural_arity == 2
 
-        def bomb(*args):
-            assert False, "shortcutting should have avoided this"
+        called = []
+        fastcall_2 = fn.code.fastcall_2
+        def witness_fastcall_2(space, w_func, w_arg1, w_arg2):
+            called.append(w_func)
+            return fastcall_2(space, w_func, w_arg1, w_arg2)
 
-        code.funcrun = bomb
-        code.funcrun_obj = bomb
+        fn.code.fastcall_2 = witness_fastcall_2
 
         w_3 = space.newint(3)
         w_res = space.appexec([fn, w_3], """(f, x):
@@ -542,6 +521,7 @@ def f%s:
         """)
 
         assert space.is_true(w_res)
+        assert called == [fn, fn]       
 
         
         

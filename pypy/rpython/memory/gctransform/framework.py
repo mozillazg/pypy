@@ -7,7 +7,6 @@ from pypy.rpython.memory import gctypelayout
 from pypy.rpython.memory.gc import marksweep
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rlib import rstack
 from pypy.rlib.debug import ll_assert
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.support import var_needsgc
@@ -26,10 +25,7 @@ class CollectAnalyzer(graphanalyze.GraphAnalyzer):
 
     def analyze_direct_call(self, graph, seen=None):
         try:
-            func = graph.func
-            if func is rstack.stack_check:
-                return self.translator.config.translation.stackless
-            if func._gctransformer_hint_cannot_collect_:
+            if graph.func._gctransformer_hint_cannot_collect_:
                 return False
         except AttributeError:
             pass
@@ -142,7 +138,7 @@ class FrameworkGCTransformer(GCTransformer):
         self.gcdata = gcdata
         self.malloc_fnptr_cache = {}
 
-        gcdata.gc = GCClass(translator.config.translation, **GC_PARAMS)
+        gcdata.gc = GCClass(**GC_PARAMS)
         root_walker = self.build_root_walker()
         gcdata.set_query_functions(gcdata.gc)
         gcdata.gc.set_root_walker(root_walker)
