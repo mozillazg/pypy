@@ -69,25 +69,39 @@ class Function(Wrappable):
         return self.call_args(Arguments(self.space, list(args_w)))
 
     def funccall_valuestack(self, nargs, frame): # speed hack
+        from pypy.interpreter import gateway
         code = self.getcode() # hook for the jit
         fast_natural_arity = code.fast_natural_arity        
-        if nargs == fast_natural_arity:        
-            if nargs == 0:
-                return code.fastcall_0(self.space, self)
-            elif nargs == 1:
-                return code.fastcall_1(self.space, self, frame.peekvalue(0))
-            elif nargs == 2:
-                return code.fastcall_2(self.space, self, frame.peekvalue(1),
-                                       frame.peekvalue(0))
-            elif nargs == 3:
-                return code.fastcall_3(self.space, self, frame.peekvalue(2),
-                                       frame.peekvalue(1), frame.peekvalue(0))
-            elif nargs == 4:
-                return code.fastcall_4(self.space, self, frame.peekvalue(3),
-                                       frame.peekvalue(2), frame.peekvalue(1),
-                                        frame.peekvalue(0))
+        if nargs == fast_natural_arity:
+            from pypy.interpreter.pycode import PyCode
+            if type(code) is PyCode:
+                new_frame = self.space.createframe(code, self.w_func_globals,
+                                                   self.closure)
+                for i in xrange(nargs):
+                    w_arg = frame.peekvalue(nargs-1-i)
+                    new_frame.fastlocals_w[i] = w_arg
+                return new_frame.run()                
+            else:
+                if nargs == 0:
+                    assert isinstance(code, gateway.BuiltinCode0)
+                    return code.fastcall_0(self.space, self)
+                elif nargs == 1:
+                    assert isinstance(code, gateway.BuiltinCode1)
+                    return code.fastcall_1(self.space, self, frame.peekvalue(0))
+                elif nargs == 2:
+                    assert isinstance(code, gateway.BuiltinCode2)
+                    return code.fastcall_2(self.space, self, frame.peekvalue(1),
+                                           frame.peekvalue(0))
+                elif nargs == 3:
+                    assert isinstance(code, gateway.BuiltinCode3)
+                    return code.fastcall_3(self.space, self, frame.peekvalue(2),
+                                           frame.peekvalue(1), frame.peekvalue(0))
+                elif nargs == 4:
+                    assert isinstance(code, gateway.BuiltinCode4)
+                    return code.fastcall_4(self.space, self, frame.peekvalue(3),
+                                           frame.peekvalue(2), frame.peekvalue(1),
+                                            frame.peekvalue(0))
         elif fast_natural_arity == -1 and nargs >= 1:
-            from pypy.interpreter import gateway
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             w_obj = frame.peekvalue(nargs-1)
             args = frame.make_arguments(nargs-1)
