@@ -129,6 +129,14 @@ class LowLevelDatabase(OODatabase):
         self.classnames.add((namespace, name))            
         return name
 
+    def class_or_record_name(self, TYPE):
+        if isinstance(TYPE, ootype.Instance):
+            return self.class_name(TYPE)
+        elif isinstance(TYPE, ootype.Record):
+            return self.get_record_name(TYPE)
+        else:
+            assert False
+
     def class_name(self, INSTANCE):
         try:
             NATIVE_INSTANCE = INSTANCE._hints['NATIVE_INSTANCE']

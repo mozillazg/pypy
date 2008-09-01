@@ -348,8 +348,8 @@ class CLIClassConst(CLIBaseConstMixin, ClassConst):
                 FUNC = self.value._FUNC
                 classname = self.db.record_delegate(FUNC)
             else:
-                INSTANCE = self.value._INSTANCE
-                classname = self.db.class_name(INSTANCE)
+                TYPE = self.value._INSTANCE
+                classname = self.db.class_or_record_name(TYPE)
             gen.ilasm.opcode('ldtoken', classname)
             gen.ilasm.call('class [mscorlib]System.Type class [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)')
             return
