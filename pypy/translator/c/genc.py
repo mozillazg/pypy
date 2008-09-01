@@ -313,9 +313,6 @@ class CStandaloneBuilder(CBuilder):
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
     def getccompiler(self):
-        # XXX note that overwritten cc here will not affect already
-        #     performed steps in cbuild.py
-        #     completely unsure how to get rid of this inconsistency
         cc = self.config.translation.cc
         # Copy extrafiles to target directory, if needed
         extrafiles = []

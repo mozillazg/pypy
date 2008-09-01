@@ -213,3 +213,4 @@ class TestEci:
         py.test.raises(py.process.cmdexec.Error, py.process.cmdexec, output)
         result = eci.platform.execute(output)
         assert result.startswith('4.0')
+
