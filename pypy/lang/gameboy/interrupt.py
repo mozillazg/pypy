@@ -6,8 +6,8 @@ class InterruptFlag(object):
     """
     An Interrupt Flag handles a single interrupt channel
     """
-    def __init__(self, _reset, mask, call_code):
-        self._reset    = _reset
+    def __init__(self, reset, mask, call_code):
+        self._reset    = reset
         self.mask      = mask
         self.call_code = call_code
         self.reset()
@@ -19,8 +19,8 @@ class InterruptFlag(object):
     def is_pending(self):
         return self._is_pending
     
-    def set_pending(self, _is_pending=True):
-        self._is_pending = _is_pending
+    def set_pending(self, is_pending=True):
+        self._is_pending = is_pending
         
     def is_enabled(self):
         return self.enabled
@@ -65,14 +65,14 @@ class Interrupt(iMemory):
         self.reset()
         
     def create_interrupt_flags(self):
-        self.vblank  = InterruptFlag(True,  constants.VBLANK, 0x40)
-        self.lcd     = InterruptFlag(False, constants.LCD,    0x48)
-        self.timer   = InterruptFlag(False, constants.TIMER,  0x50)
-        self.serial  = InterruptFlag(False, constants.SERIAL, 0x58)
-        self.joypad  = InterruptFlag(False, constants.JOYPAD, 0x60)
+        self.v_blank  = InterruptFlag(True,  constants.VBLANK, 0x40)
+        self.lcd      = InterruptFlag(False, constants.LCD,    0x48)
+        self.timer    = InterruptFlag(False, constants.TIMER,  0x50)
+        self.serial   = InterruptFlag(False, constants.SERIAL, 0x58)
+        self.joypad   = InterruptFlag(False, constants.JOYPAD, 0x60)
         
     def create_flag_list(self):
-        self.interrupt_flags = [ self.vblank, self.lcd, self.timer, self.serial,
+        self.interrupt_flags = [ self.v_blank, self.lcd, self.timer, self.serial,
                                  self.joypad]
 
     def create_flag_mask_mapping(self):
@@ -104,7 +104,7 @@ class Interrupt(iMemory):
         return (self.get_enable_mask() & self.get_interrupt_flag() & mask) != 0
     
     def raise_interrupt(self, mask):
-        self.mask_mapping[mask].set_pending(True)
+        self.mask_mapping[mask].set_pending()
 
     def lower(self, mask):
         self.mask_mapping[mask].set_pending(False)

@@ -545,7 +545,7 @@ class MBC3(MBC):
         raise InvalidMemoryAccessException("MBC3.read_clock_data invalid address %i")
     
     def write(self, address, data):
-        print hex(address), hex(data)
+        #print hex(address), hex(data)
         # 0000-1FFF
         if address <= 0x1FFF:
             self.write_ram_enable(address, data)
