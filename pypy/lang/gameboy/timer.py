@@ -23,7 +23,7 @@ class Timer(iMemory):
 
     def __init__(self, interrupt):
         assert isinstance(interrupt, Interrupt)
-        self.interrupt = interrupt
+        self.timer_interrupt_flag = interrupt.timer
         self.reset()
 
     def reset(self):
@@ -145,7 +145,7 @@ class Timer(iMemory):
         """
         if self.timer_counter == 0x00:
             self.timer_counter = self.timer_modulo
-            self.interrupt.raise_interrupt(constants.TIMER)
+            self.timer_interrupt_flag.set_pending()
     
     #def emulate_timer(self,  ticks):
     #    if (self.timer_control & 0x04) == 0:

@@ -44,7 +44,7 @@ def test_emulate():
     assert cycles-serial.cycles                 == 2
     assert serial.serial_data                   == 0
     assert serial.serial_control                == 0x81
-    assert serial.interrupt.serial.is_pending() == False
+    assert not serial.serial_interrupt_flag.is_pending()
     
     serial.reset()
     serial.serial_control = 0x81
@@ -53,7 +53,7 @@ def test_emulate():
     assert serial.serial_data    == 0xFF
     assert serial.serial_control == 0x81 & 0x7F
     assert serial.cycles                        == constants.SERIAL_IDLE_CLOCK
-    assert serial.interrupt.serial.is_pending() == True
+    assert serial.serial_interrupt_flag.is_pending()
     
     
 def test_read_write():
