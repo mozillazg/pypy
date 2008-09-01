@@ -263,7 +263,7 @@ def test_emulate_zero_ticks_update():
     assert joypad.cycles      == constants.JOYPAD_CLOCK
     assert joypad.read_control == 2
     assert joypad.button_code == 0xF
-    assert joypad.interrupt.joypad.is_pending() == False
+    assert not joypad.joypad_interrupt_flag.is_pending()
     
     joypad.driver.raised      = True
     joypad.cycles             = 2
@@ -272,7 +272,7 @@ def test_emulate_zero_ticks_update():
     assert joypad.cycles      == constants.JOYPAD_CLOCK
     assert joypad.read_control == 2
     assert joypad.button_code == constants.BUTTON_UP
-    assert joypad.interrupt.joypad.is_pending() == True
+    assert joypad.joypad_interrupt_flag.is_pending()
     
 def test_read_write():
     joypad = get_joypad()
@@ -308,13 +308,13 @@ def test_update():
     joypad.write(constants.JOYP, 0x10)
     joypad.update()
     assert joypad.button_code == constants.BUTTON_SELECT
-    assert joypad.interrupt.joypad.is_pending()
+    assert joypad.joypad_interrupt_flag.is_pending()
     
-    joypad.interrupt.joypad.set_pending(False)
+    joypad.joypad_interrupt_flag.set_pending(False)
     joypad.write(constants.JOYP, 0x10)
     joypad.update()
     assert joypad.button_code == constants.BUTTON_SELECT
-    assert joypad.interrupt.joypad.is_pending() ==  False
+    assert not joypad.joypad_interrupt_flag.is_pending()
     
     joypad.write(constants.JOYP, 0x20)
     joypad.update()

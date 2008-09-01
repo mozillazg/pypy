@@ -216,12 +216,11 @@ def test_emulate_timer_interrupt():
     timer.timer_control = 0x04
     timer.timer_counter = -1
     # raise an interupt as we pass 0
-    assert timer.interrupt.is_pending(constants.TIMER) == False
-    assert timer.interrupt.timer.is_pending()          == False
+    assert not timer.timer_interrupt_flag.is_pending()
     timer.timer_cycles = -timer.timer_clock+1
     timer.emulate_timer(ticks)
     assert timer.timer_cycles  == 1
     assert timer.timer_counter == timer.timer_modulo
-    assert timer.interrupt.timer.is_pending()
+    assert timer.timer_interrupt_flag.is_pending()
     
     

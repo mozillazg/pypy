@@ -11,7 +11,7 @@ class Serial(iMemory):
 
     def __init__(self, interrupt):
         assert isinstance(interrupt, Interrupt)
-        self.interrupt = interrupt
+        self.serial_interrupt_flag = interrupt.serial
         self.reset()
 
     def reset(self):
@@ -30,7 +30,7 @@ class Serial(iMemory):
             self.serial_data     = 0xFF
             self.serial_control &= 0x7F
             self.cycles          = constants.SERIAL_IDLE_CLOCK
-            self.interrupt.raise_interrupt(constants.SERIAL)
+            self.serial_interrupt_flag.set_pending()
 
     def write(self, address, data):
         if address == constants.SERIAL_TRANSFER_DATA:
