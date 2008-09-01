@@ -35,8 +35,8 @@ class SigToken:
         self.funcclass = funcclass
 
 class FieldToken:
-    def __init__(self, cls, name):
-        self.cls = cls
+    def __init__(self, ooclass, name):
+        self.ooclass = ooclass
         self.name = name
 
 class AllocToken:
@@ -335,11 +335,8 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def fieldToken(T, name):
-        if isinstance(T, ootype.Record):
-            cls = ootype.nullruntimeclass
-        else:
-            cls = ootype.runtimeClass(T)
-        return FieldToken(cls, name)
+        ooclass = ootype.runtimeClass(T)
+        return FieldToken(ooclass, name)
 
     @staticmethod
     @specialize.memo()
