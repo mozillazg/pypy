@@ -51,7 +51,7 @@ def test_video_control_read_write_properties():
 # StatusRegister ---------------------------------------------------------------
 
 def test_video_status_reset():
-    status = StatusRegister()
+    status = StatusRegister(None)
     assert status.read(extend=True) == 0x02 + 0x80
     
     status.write(0x00, write_all=True)
@@ -65,7 +65,7 @@ def test_video_status_reset():
     assert status.read(extend=True) == 0x02 + 0x80
     
 def test_video_status_mode():
-    status = StatusRegister()
+    status = StatusRegister(None)
     assert status.get_mode() == 2
     
     for i in range(3):

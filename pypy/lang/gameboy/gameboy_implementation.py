@@ -38,7 +38,8 @@ class GameBoyImplementation(GameBoy):
         try:
             while self.is_running and self.handle_events():
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
-                time.sleep(10/1000)
+                RSDL.Delay(1)
+                #time.sleep(10/1000)
         except :
             self.is_running = False 
             lltype.free(self.event, flavor='raw')

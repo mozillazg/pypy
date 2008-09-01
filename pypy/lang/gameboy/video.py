@@ -82,6 +82,36 @@ class ControlRegister(object):
 
 # -----------------------------------------------------------------------------
 
+class Mode(object):
+    def id(self):
+        raise Exception()
+    def __init__(self, video):
+        self.video = video
+
+class Mode0(Mode):
+    def id(self):
+        return 0
+    def emulate(self):
+        self.video.emulate_hblank()
+
+class Mode1(Mode):
+    def id(self):
+        return 1
+    def emulate(self):
+        self.video.emulate_v_blank()
+
+class Mode2(Mode):
+    def id(self):
+        return 2
+    def emulate(self):
+        self.video.emulate_oam()
+
+class Mode3(Mode):
+    def id(self):
+        return 3
+    def emulate(self):
+        self.video.emulate_transfer()
+
 class StatusRegister(object):
     """
     Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
@@ -95,11 +125,15 @@ class StatusRegister(object):
             2: During Searching OAM-RAM
             3: During Transfering Data to LCD Driver
     """
-    def __init__(self):
+    def __init__(self, video):
+        self.modes                  = [Mode0(video),
+                                       Mode1(video),
+                                       Mode2(video),
+                                       Mode3(video)]
         self.reset()
         
     def reset(self):
-        self._mode = 0x02
+        self.set_mode(0x02)
         self.line_y_compare_flag      = False
         self.mode_0_h_blank_interrupt = False
         self.mode_1_v_blank_interrupt = False
@@ -109,7 +143,7 @@ class StatusRegister(object):
         
         
     def read(self, extend=False):
-        value =  self._mode
+        value =  self.get_mode()
         value += self.line_y_compare_flag      << 2
         value += self.mode_0_h_blank_interrupt << 3
         value += self.mode_1_v_blank_interrupt << 4
@@ -123,7 +157,7 @@ class StatusRegister(object):
     def write(self, value, write_all=False,
               keep_mode_0_h_blank_interrupt=False):
         if write_all:
-            self._mode                  = value      & 0x03
+            self.set_mode(value & 0x03)
             self.line_y_compare_flag    = bool(value & (1 << 2))
             self.status                 = bool(value & (1 << 7))
         self.mode_0_h_blank_interrupt   = bool(value & (1 << 3))
@@ -132,14 +166,14 @@ class StatusRegister(object):
         self.line_y_compare_interrupt   = bool(value & (1 << 6))
         
     def get_mode(self):
-        return self._mode
+        return self.current_mode.id()
     
     def set_mode(self, mode):
-        self._mode = mode & 0x03
+        self.current_mode = self.modes[mode & 0x03]
         
     def line_y_compare_check(self):
         return not self.line_y_compare_flag or not self.line_y_compare_interrupt
-        
+
 # -----------------------------------------------------------------------------
 
 class Sprite(object):
@@ -199,7 +233,7 @@ class Video(iMemory):
         self.v_blank_interrupt_flag = interrupt.v_blank
         self.lcd_interrupt_flag     = interrupt.lcd
         self.control                = ControlRegister()
-        self.status                 = StatusRegister()
+        self.status                 = StatusRegister(self)
         self.memory                 = memory
         self.reset()
 
@@ -257,9 +291,9 @@ class Video(iMemory):
             self.set_scroll_y(data)
         elif address == constants.SCX:
             self.set_scroll_x(data)
-        elif address == constants.LY:
-            # Read Only: line_y
-            pass
+        #elif address == constants.LY:
+        #    Read Only: line_y
+        #    pass
         elif address == constants.LYC:
             self.set_line_y_compare(data)
         elif address == constants.DMA:
@@ -274,18 +308,9 @@ class Video(iMemory):
             self.set_window_y(data)
         elif address == constants.WX:
             self.set_window_x(data)
-        else:
-            self.write_oam(address, data)
-
-    def write_oam(self, address, data):
-        if address >= constants.OAM_ADDR and \
-           address < (constants.OAM_ADDR + constants.OAM_SIZE):
-                self.oam[address - constants.OAM_ADDR]     = data & 0xFF
-        elif address >= constants.VRAM_ADDR and \
-             address < (constants.VRAM_ADDR + constants.VRAM_SIZE):
-                if (address - constants.VRAM_ADDR) == 0x1910 or \
-                (address - constants.VRAM_ADDR) == 0x1911:
-                    pass
+        elif constants.OAM_ADDR <= address < constants.OAM_ADDR + constants.OAM_SIZE:
+                self.oam[address - constants.OAM_ADDR] = data & 0xFF
+        elif constants.VRAM_ADDR <= address < constants.VRAM_ADDR + constants.VRAM_SIZE:
                 self.vram[address - constants.VRAM_ADDR] = data & 0xFF
             
     def read(self, address):
@@ -313,15 +338,9 @@ class Video(iMemory):
             return self.get_window_y()
         elif address == constants.WX:
             return self.get_window_x()
-        else:
-            return self.read_oam(address)
-        
-    def read_oam(self, address):
-        if (address >= constants.OAM_ADDR and 
-           address < (constants.OAM_ADDR + constants.OAM_SIZE)):
+        elif constants.OAM_ADDR <= address < constants.OAM_ADDR + constants.OAM_SIZE:
              return self.oam[address - constants.OAM_ADDR]
-        elif (address >= constants.VRAM_ADDR and 
-           address < (constants.VRAM_ADDR + constants.VRAM_SIZE)):
+        elif constants.VRAM_ADDR <= address < constants.VRAM_ADDR + constants.VRAM_SIZE:
              return self.vram[address - constants.VRAM_ADDR]
         return 0xFF
 
@@ -343,7 +362,7 @@ class Video(iMemory):
         self.control.write(data)
 
     def reset_control(self, data):
-        # NOTE: do not reset constants.LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
+        # NOTE: do not reset LY=LYC flag (bit 2) of the STAT register (Mr. Do!)
         self.line_y  = 0
         if (data & 0x80) != 0:
             self.status.set_mode(0x02)
@@ -364,7 +383,7 @@ class Video(iMemory):
     def set_status_bug(self) :
         # Gameboy Bug
         if self.control.lcd_enabled and \
-           self.status.get_mode() == 0x01 and \
+           self.status.get_mode() == 1 and \
            self.status.line_y_compare_check():
                 self.lcd_interrupt_flag.set_pending()
         
@@ -597,23 +616,14 @@ class Video(iMemory):
     # emulation ----------------------------------------------------------------
 
     def emulate(self, ticks):
-        ticks = int(ticks)
         if self.control.lcd_enabled:
-            self.cycles -= ticks
-            self.consume_cycles()
-            
-    def consume_cycles(self):
-        while self.cycles <= 0:
-            mode = self.status.get_mode()
-            if mode == 0:
-                self.emulate_hblank()
-            elif mode == 1:
-                self.emulate_v_blank()
-            elif mode == 2:
-                self.emulate_oam()
-            else:
-                self.emulate_transfer()
-                
+            self.cycles -= int(ticks)
+            while self.cycles <= 0:
+                self.current_mode().emulate()
+
+    def current_mode(self):
+        return self.status.current_mode
+               
     def emulate_oam(self):
         self.set_mode_3_begin()
 
