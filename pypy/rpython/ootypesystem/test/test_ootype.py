@@ -59,7 +59,16 @@ def test_class_builtintype():
     L2 = List(Signed)
     assert L1 == L2
     assert runtimeClass(L1) is runtimeClass(L2)
- 
+
+def test_class_class():
+    L = List(Signed)
+    R = Record({"a": Signed})
+    c1 = runtimeClass(L)
+    c2 = runtimeClass(R)
+    C1 = typeOf(c1)
+    C2 = typeOf(c2)
+    assert runtimeClass(C1) is runtimeClass(C2)
+
 def test_classof():
     I = Instance("test", ROOT, {"a": Signed})
     c = runtimeClass(I)

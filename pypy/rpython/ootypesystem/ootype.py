@@ -15,6 +15,18 @@ class OOType(LowLevelType):
 
     oopspec_name = None
 
+    _classes = {}
+
+    @property
+    def _class(self):
+        try:
+            return self._classes[self]
+        except KeyError:
+            cls = _class(self)
+            self._classes[self] = cls
+            return cls
+
+
     def _is_compatible(TYPE1, TYPE2):
         if TYPE1 == TYPE2:
             return True
@@ -87,7 +99,7 @@ class Instance(OOType):
         self._add_methods(methods)
 
         self._null = make_null_instance(self)
-        self._class = _class(self)
+        self.__dict__['_class'] = _class(self)
 
     def __eq__(self, other):
         return self is other
@@ -293,17 +305,6 @@ class Meth(StaticMethod):
 
 
 class BuiltinType(SpecializableType):
-
-    _classes = {}
-
-    @property
-    def _class(self):
-        try:
-            return self._classes[self]
-        except KeyError:
-            cls = _class(self)
-            self._classes[self] = cls
-            return cls
 
     def _example(self):
         return new(self)
@@ -1826,9 +1827,9 @@ def addMethods(INSTANCE, methods):
 def overrideDefaultForFields(INSTANCE, fields):
     INSTANCE._override_default_for_fields(fields)
 
-def runtimeClass(INSTANCE):
-    assert isinstance(INSTANCE, (Instance, BuiltinType))
-    return INSTANCE._class
+def runtimeClass(TYPE):
+    assert isinstance(TYPE, OOType)
+    return TYPE._class
 
 def isSubclass(C1, C2):
     c = C1
