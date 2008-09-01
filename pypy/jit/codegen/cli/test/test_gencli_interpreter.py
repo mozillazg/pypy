@@ -77,11 +77,9 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
         res = self.interpret(ll_function, [], [])
         assert res.class_name == 'S'
 
-    test_arith_plus_minus = skip
-    test_plus_minus = skip
-    test_red_virtual_container = skip
-    test_red_propagate = skip
-    test_merge_structures = skip
+    def test_arith_plus_minus(self):
+        py.test.skip("Cannot work unless we add support for constant arguments in compiled tests")
+
     test_green_with_side_effects = skip
     test_compile_time_const_tuple = skip
     test_green_deepfrozen_oosend = skip
