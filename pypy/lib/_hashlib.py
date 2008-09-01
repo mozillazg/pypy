@@ -1,5 +1,6 @@
 from ctypes import *
 import ctypes.util
+from ctypes_configure import configure
 
 # Note: OpenSSL on OS X only provides md5 and sha1
 libpath = ctypes.util.find_library('ssl')
@@ -11,33 +12,33 @@ def bufferstr(x):
     else:
         return buffer(x)[:]
 
-# FIXME do we really need this anywhere here?
-class ENV_MD(Structure):
-    # XXX Should there be more to this object?.
-    _fields_ = [
-        ('type', c_int),
-        ('pkey_type', c_int),
-        ('md_size', c_int),
-    ]
+class CConfig:
+    _compilation_info_ = configure.ExternalCompilationInfo(
+        includes=['openssl/evp.h'],
+        )
+    EVP_MD = configure.Struct('EVP_MD',
+                              [])
+    EVP_MD_CTX = configure.Struct('EVP_MD_CTX',
+                                  [('digest', c_void_p)])
+c = configure.configure(CConfig)
+EVP_MD_CTX = c['EVP_MD_CTX']
+EVP_MD = c['EVP_MD']
 
-class _dummy_env_md(Structure):
-    # XXX used for OS X, a bit hairy
-    _fields_ = [
-        ('digest', ENV_MD),
-        ('two', c_int),
-        ('three', c_int),
-        ('four', c_int),
-        ('five', c_int),
-        ]
+def patch_fields(fields):
+    res = []
+    for k, v in fields:
+        if k == 'digest':
+            res.append((k, POINTER(EVP_MD)))
+        else:
+            res.append((k, v))
+    return res
 
-def _new_ENV_MD():
-    return _dummy_env_md()
+class EVP_MD_CTX(Structure):
+    _fields_ = patch_fields(EVP_MD_CTX._fields_)
+del c
 
 # OpenSSL initialization
 lib.OpenSSL_add_all_digests()
-
-def _get_digest(ctx):
-    return ctx.digest
 
 # taken from evp.h, max size is 512 bit, 64 chars
 lib.EVP_MAX_MD_SIZE = 64
@@ -62,10 +63,10 @@ class hash(object):
     def __init__(self, obj, name):
         self.name = name # part of API
         #print 'obj is ', obj
-        if isinstance(obj, _dummy_env_md):
+        if isinstance(obj, EVP_MD_CTX):
             self._obj = obj.digest
         else:
-            self._obj = obj  # private
+            self._obj = obj
     
     def __repr__(self):
         # format is not the same as in C module
@@ -73,7 +74,7 @@ class hash(object):
     
     def copy(self):
         "Return a copy of the hash object."
-        ctxnew = _new_ENV_MD()
+        ctxnew = EVP_MD_CTX()
         lib.EVP_MD_CTX_copy(byref(ctxnew), byref(self._obj))
         return hash(ctxnew, self.name)
     
@@ -135,10 +136,10 @@ def new(name, string=''):
     if not digest:
         raise ValueError("unknown hash function")
     
-    ctx = _new_ENV_MD()
+    ctx = EVP_MD_CTX()
     lib.EVP_DigestInit(pointer(ctx), digest)
 
-    h = hash(_get_digest(ctx), name)
+    h = hash(ctx.digest, name)
     if string:
         h.update(string)
     return hash(ctx, name)
