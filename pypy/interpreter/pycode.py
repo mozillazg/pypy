@@ -163,8 +163,6 @@ class PyCode(eval.Code):
     def _compute_fastcall(self):
         # Speed hack!
         self.fast_natural_arity = -99
-        if not (0 <= self.co_argcount <= 4):
-            return
         if self.co_flags & (CO_VARARGS | CO_VARKEYWORDS):
             return
         if len(self._args_as_cellvars) > 0:
