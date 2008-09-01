@@ -45,7 +45,7 @@ def test_reset():
     assert video.object_palette_1 == 0xFF
     assert video.transfer == True
     assert video.display == True
-    assert video.vblank == True
+    assert video.v_blank == True
     assert video.dirty == True
     assert len(video.vram) == constants.VRAM_SIZE
     assert len(video.oam) == constants.OAM_SIZE
@@ -98,7 +98,7 @@ def test_set_status():
     video.control.write(0x80)
     video.status.write(0x01, write_all=True)
     video.write(0xFF41, 0x01)
-    assert video.interrupt.lcd.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
     
     
 def test_set_line_y_compare():
@@ -113,28 +113,28 @@ def test_set_line_y_compare():
     assert video.status.read(extend=True) == 0xFF
     video.write(0xFF45, value)
     assert video.status.read(extend=True) == 0xFB
-    assert video.interrupt.lcd.is_pending() == False
+    assert video.lcd_interrupt_flag.is_pending() == False
     
     video.control.write(0x80)
     video.line_y = 0xF6
     video.status.write(0x04, write_all=True)
     video.write(0xFF45, value)
     assert video.status.read(extend=True) == 0x04
-    assert video.interrupt.lcd.is_pending() == False
+    assert video.lcd_interrupt_flag.is_pending() == False
     
     video.control.write(0x80)
     video.line_y = 0xF6
     video.status.write(0x00, write_all=True)
     video.write(0xFF45, value)
     assert video.status.read(extend=True) == 0x04
-    assert video.interrupt.lcd.is_pending() == False
+    assert video.lcd_interrupt_flag.is_pending() == False
     
     video.control.write(0x80)
     video.line_y = 0xF6
     video.status.write(0x40, write_all=True)
     video.write(0xFF45, value)
     assert video.status.read(extend=True) == 0x44
-    assert video.interrupt.lcd.is_pending() == True
+    assert video.lcd_interrupt_flag.is_pending() == True
     
     
     
@@ -241,16 +241,16 @@ def test_emulate_transfer():
     video.emulate_transfer()
     assert video.status.read(extend=True) == 0xF0
     assert video.cycles == constants.MODE_0_TICKS
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     
     video.transfer = False
     video.cycles = 0
     video.status.write(0xF8, write_all=True)
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     video.emulate_transfer()
     assert video.status.read(extend=True) == 0xF8
     assert video.cycles == constants.MODE_0_TICKS
-    assert video.interrupt.lcd.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
     
     video.transfer = True
     video.cycles = 0
@@ -269,7 +269,7 @@ def test_emulate_hblank_line_y_compare():
     video.status.line_y_compare_interrupt = False
     video.emulate_hblank_line_y_compare()
     assert not video.status.line_y_compare_flag
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     
     video.reset()
     video.line_y = 0x12
@@ -278,7 +278,7 @@ def test_emulate_hblank_line_y_compare():
     video.status.line_y_compare_interrupt = False
     video.emulate_hblank_line_y_compare()
     assert video.status.line_y_compare_flag
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     
     video.reset()
     video.line_y = 0x12
@@ -287,7 +287,7 @@ def test_emulate_hblank_line_y_compare():
     video.status.line_y_compare_interrupt = True
     video.emulate_hblank_line_y_compare()
     assert video.status.line_y_compare_flag
-    assert video.interrupt.lcd.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
     
 def test_emulate_hblank_line_y_compare_status_check():
     video = get_video()   
@@ -297,7 +297,7 @@ def test_emulate_hblank_line_y_compare_status_check():
     video.status.line_y_compare_interrupt = True
     video.emulate_hblank_line_y_compare(stat_check=True)
     assert video.status.line_y_compare_flag
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     
     video.reset()
     video.line_y = 0x12
@@ -306,7 +306,7 @@ def test_emulate_hblank_line_y_compare_status_check():
     video.status.line_y_compare_interrupt = True
     video.emulate_hblank_line_y_compare(stat_check=True)
     assert video.status.line_y_compare_flag
-    assert video.interrupt.lcd.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
 
 def test_emulate_h_blank_part_1_1():
     video = get_video()
@@ -315,10 +315,10 @@ def test_emulate_h_blank_part_1_1():
     video.status.write(0x20, write_all=True)
     video.cycles = 0
     video.frames = 0
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     video.emulate_hblank()
     assert video.cycles == constants.MODE_2_TICKS
-    assert video.interrupt.lcd.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
     assert video.status.get_mode() == 2
     assert video.status.read(extend=True) == 0x20 + 0x04 + 0x2
     assert video.line_y == 1
@@ -335,7 +335,7 @@ def test_emulate_h_blank_part_2_1():
     video.emulate_hblank()
     assert video.line_y == 2
     assert video.cycles == constants.MODE_2_TICKS
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     assert video.status.read(extend=True) == 0x0B&0xFC + 0x2
     assert video.frames == 0
     
@@ -347,16 +347,16 @@ def test_emulate_h_blank_part_2_2():
     video.cycles = 0
     video.frames = 0
     video.frame_skip = 20
-    video.vblank = False
+    video.v_blank = False
     video.display = False
     video.emulate_hblank()
     assert video.line_y == 145
     assert video.cycles == constants.MODE_1_BEGIN_TICKS
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     assert video.status.read(extend=True) == 0xFB & 0xFC + 0x01
     assert video.frames == 1
     assert video.display == False
-    assert video.vblank == True
+    assert video.v_blank == True
     
 
 def test_emulate_h_blank_part_2_2_frame_skip():
@@ -367,62 +367,66 @@ def test_emulate_h_blank_part_2_2_frame_skip():
     video.cycles = 0
     video.frames = 10
     video.frame_skip = 10
-    video.vblank = False
+    video.v_blank = False
     video.display = False
     video.emulate_hblank()
     assert video.line_y == 145
     assert video.cycles == constants.MODE_1_BEGIN_TICKS
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     assert video.status.read(extend=True) == 0xFB & 0xFC + 0x01
     assert video.frames == 0
-    assert video.vblank == True
+    assert video.v_blank == True
     
     
-def test_emulate_v_vblank_1():
+def test_emulate_v_v_blank_1():
     video = get_video()   
-    video.interrupt.set_interrupt_flag(0)
+    video.lcd_interrupt_flag.set_pending(False)
+    video.v_blank_interrupt_flag.set_pending(False)
     video.status.write(0xFE, write_all=True)
-    video.vblank = True
+    video.v_blank = True
     video.cycles = 0
-    video.emulate_vblank()
-    assert video.vblank == False
+    video.emulate_v_blank()
+    assert video.v_blank == False
     assert video.status.get_mode() == 1
     assert video.status.read(extend=True) == 0xFD
     assert video.cycles == constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
-    assert video.interrupt.vblank.is_pending()
-    assert video.interrupt.lcd.is_pending()
+    assert video.v_blank_interrupt_flag.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
     
-    video.interrupt.set_interrupt_flag(0)
+    video.lcd_interrupt_flag.set_pending(False)
+    video.v_blank_interrupt_flag.set_pending(False)
     video.status.write(0x00, write_all=True)
-    video.vblank = True
-    assert not video.interrupt.vblank.is_pending()
-    assert not video.interrupt.lcd.is_pending()
-    video.emulate_vblank()
+    video.v_blank = True
+    assert not video.v_blank_interrupt_flag.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
+    video.emulate_v_blank()
     assert video.status.read(extend=True) == 0x01
-    assert video.interrupt.vblank.is_pending()
-    assert not video.interrupt.lcd.is_pending()
+    assert video.v_blank_interrupt_flag.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()
     
     
     
-def test_emulate_v_vblank_2():
+def test_emulate_v_v_blank_2():
     video = get_video()   
-    video.interrupt.set_interrupt_flag(0)
+    video.lcd_interrupt_flag.set_pending(False)
+    video.v_blank_interrupt_flag.set_pending(False)
     video.status.write(0x2D, write_all=True)
-    video.vblank = False
+    video.v_blank = False
     video.cycles = 0
     video.line_y = 0
-    video.emulate_vblank()
-    assert video.vblank == False
+    video.emulate_v_blank()
+    assert video.v_blank == False
     assert video.status.read(extend=True) == 0x2E
     assert video.cycles == constants.MODE_2_TICKS 
-    assert not video.interrupt.vblank.is_pending()
-    assert video.interrupt.lcd.is_pending()
+    assert not video.v_blank_interrupt_flag.is_pending()
+    assert video.lcd_interrupt_flag.is_pending()
     
-    video.interrupt.set_interrupt_flag(0)
+    video.lcd_interrupt_flag.set_pending(False)
+    video.v_blank_interrupt_flag.set_pending(False)
     video.cycles = 0
     video.status.write(0xFD, write_all=True)
-    video.emulate_vblank()
-    assert video.vblank == False
+    video.emulate_v_blank()
+    assert video.v_blank == False
     assert video.status.read(extend=True) == 0xFE
     assert video.cycles == constants.MODE_2_TICKS 
-    assert not video.interrupt.lcd.is_pending()
+    assert not video.lcd_interrupt_flag.is_pending()

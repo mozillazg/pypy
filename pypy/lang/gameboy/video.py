@@ -120,7 +120,7 @@ class StatusRegister(object):
         return value
         
         
-    def write(self, value, write_all=False, \
+    def write(self, value, write_all=False,
               keep_mode_0_h_blank_interrupt=False):
         if write_all:
             self._mode                  = value      & 0x03
@@ -168,7 +168,7 @@ class Sprite(object):
     
     def get_height(self):
         if self.big_size:
-            return 16
+            return 2*8
         else:
             return 8
          
@@ -182,25 +182,25 @@ class Tile(object):
     
     def __init__(self):
         pass
-    
-    
+
     def set_tile_data(self, rom, height):
         self.height = height
-        
-    def get_tile_dta(self):
+
+    def get_tile_data(self):
         pass
-    
+
 # -----------------------------------------------------------------------------
 
 class Video(iMemory):
 
     def __init__(self, video_driver, interrupt, memory):
         assert isinstance(video_driver, VideoDriver)
-        self.driver     = video_driver
-        self.interrupt  = interrupt
-        self.control    = ControlRegister()
-        self.status     = StatusRegister()
-        self.memory     = memory
+        self.driver                 = video_driver
+        self.v_blank_interrupt_flag = interrupt.v_blank
+        self.lcd_interrupt_flag     = interrupt.lcd
+        self.control                = ControlRegister()
+        self.status                 = StatusRegister()
+        self.memory                 = memory
         self.reset()
 
     def get_frame_skip(self):
@@ -230,7 +230,7 @@ class Video(iMemory):
 
         self.transfer   = True
         self.display    = True
-        self.vblank     = True
+        self.v_blank     = True
         self.dirty      = True
 
         self.vram       = [0] * constants.VRAM_SIZE
@@ -366,7 +366,7 @@ class Video(iMemory):
         if self.control.lcd_enabled and \
            self.status.get_mode() == 0x01 and \
            self.status.line_y_compare_check():
-             self.interrupt.raise_interrupt(constants.LCD)
+                self.lcd_interrupt_flag.set_pending()
         
     def get_scroll_x(self):
         """ see set_scroll_x """
@@ -522,21 +522,22 @@ class Video(iMemory):
     def h_blank_interrupt_check(self):
         if self.status.mode_0_h_blank_interrupt and \
         self.status.line_y_compare_check():
-             self.interrupt.raise_interrupt(constants.LCD)
+            self.lcd_interrupt_flag.set_pending()
      
     def oam_interrupt_check(self):
         if self.status.mode_2_oam_interrupt and \
         self.status.line_y_compare_check():
-            self.interrupt.raise_interrupt(constants.LCD)
+            self.lcd_interrupt_flag.set_pending()
         
     def v_blank_interrupt_check(self):
         if self.status.mode_1_v_blank_interrupt:
-            self.interrupt.raise_interrupt(constants.LCD)
+            self.lcd_interrupt_flag.set_pending()
+        self.v_blank_interrupt_flag.set_pending()
             
     def line_y_line_y_compare_interrupt_check(self):
         self.status.line_y_compare_flag = True
         if self.status.line_y_compare_interrupt:
-            self.interrupt.raise_interrupt(constants.LCD)
+            self.lcd_interrupt_flag.set_pending()
                 
     # mode setting -----------------------------------------------------------
     """
@@ -607,7 +608,7 @@ class Video(iMemory):
             if mode == 0:
                 self.emulate_hblank()
             elif mode == 1:
-                self.emulate_vblank()
+                self.emulate_v_blank()
             elif mode == 2:
                 self.emulate_oam()
             else:
@@ -649,32 +650,31 @@ class Video(iMemory):
         else:
             self.display = False
         self.set_mode_1_begin()
-        self.vblank  = True
+        self.v_blank  = True
         
-    def emulate_vblank(self):
-        if self.vblank:
-            self.emulate_vblank_vblank()
+    def emulate_v_blank(self):
+        if self.v_blank:
+            self.emulate_v_blank_v_blank()
         elif self.line_y == 0:
             self.set_mode_2()
         else:
-            self.emulate_vblank_other()
+            self.emulate_v_blank_other()
 
-    def emulate_vblank_vblank(self):
-        self.vblank  = False
+    def emulate_v_blank_v_blank(self):
+        self.v_blank  = False
         self.set_mode_1_between()
         self.v_blank_interrupt_check()
-        self.interrupt.raise_interrupt(constants.VBLANK)
         
-    def emulate_vblank_other(self):
+    def emulate_v_blank_other(self):
         if self.line_y < 153:
-            self.emulate_vblank_mode_1()
+            self.emulate_v_blank_mode_1()
         else:
             self.line_y        = 0
             self.window_line_y = 0
             self.set_mode_1_between()
         self.emulate_hblank_line_y_compare()
             
-    def emulate_vblank_mode_1(self):
+    def emulate_v_blank_mode_1(self):
         self.line_y += 1
         if self.line_y == 153:
             self.set_mode_1_end()

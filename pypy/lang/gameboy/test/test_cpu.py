@@ -1141,7 +1141,7 @@ def test_handle_interrupt():
     cpu.halted = True
     cpu.cycles = 4
     cpu.interrupt.set_enable_mask(0xFF)
-    cpu.interrupt.vblank.set_pending()
+    cpu.interrupt.v_blank.set_pending()
     assert cpu.interrupt.is_pending() == True
     assert cpu.halted                 == True
     cpu.handle_pending_interrupts()
@@ -1156,14 +1156,14 @@ def test_handle_interrupt():
     cpu.sp.set(0x02)
     sp = cpu.sp.get()
     cpu.interrupt.set_enable_mask(0xFF)
-    cpu.interrupt.vblank.set_pending()
+    cpu.interrupt.v_blank.set_pending()
     cpu.interrupt.lcd.set_pending()
     assert cpu.interrupt.is_pending() == True
     cpu.cycles = 0
     cpu.handle_pending_interrupts()
     assert cpu.cycles == 0
     assert cpu.halted == False 
-    assert_default_registers(cpu, pc=cpu.interrupt.vblank.call_code, sp=sp-2)
+    assert_default_registers(cpu, pc=cpu.interrupt.v_blank.call_code, sp=sp-2)
     assert cpu.pop()  == 0x34
     assert cpu.pop()  == 0x12
 
@@ -1245,7 +1245,7 @@ def test_0xFB_enable_interrupt():
     cpu.ime    = False
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00) # nop 1 cycle
-    print  cpu.interrupt.get_enable_mask()
+    #print  cpu.interrupt.get_enable_mask()
     assert cpu.interrupt.is_pending() == False
     cycle_test(cpu, 0xFB, 1+1)
     assert cpu.interrupt.is_pending() == False
@@ -1257,7 +1257,7 @@ def test_0xFB_enable_interrupt():
     cpu.ime    = True
     cpu.halted = False
     prepare_for_fetch(cpu, 0x00)  # nop 1 cycle
-    cpu.interrupt.vblank.set_pending()
+    cpu.interrupt.v_blank.set_pending()
     cpu.interrupt.serial.set_pending()
     cpu.interrupt.set_enable_mask(0x1F)
     assert cpu.interrupt.is_pending() == True
@@ -1265,14 +1265,14 @@ def test_0xFB_enable_interrupt():
     assert cpu.ime                    == True  
     cycle_test(cpu, 0xFB, 1+1)
     assert cpu.interrupt.is_pending()        == True
-    assert cpu.interrupt.vblank.is_pending() == False
+    assert cpu.interrupt.v_blank.is_pending() == False
     assert cpu.interrupt.serial.is_pending() == True
-    assert cpu.pc.get()                      == cpu.interrupt.vblank.call_code
+    assert cpu.pc.get()                      == cpu.interrupt.v_blank.call_code
     assert cpu.ime                           == False
     
     cpu.ime    = True
     cycle_test(cpu, 0xFB, 1+1)
-    assert cpu.interrupt.vblank.is_pending() == False
+    assert cpu.interrupt.v_blank.is_pending() == False
     assert cpu.interrupt.serial.is_pending() == False
     assert cpu.interrupt.is_pending()        == False
 
@@ -1551,8 +1551,8 @@ def test_setBit_op_codes():
             if register == cpu.hli:
                 cycles = 4
             cpu.reset()
-            if registerOpCode ==0xFF:
-                print "6544444444444444"
+            #if registerOpCode ==0xFF:
+            #    print "6544444444444444"
                 
             register.set(0)
             fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
@@ -1580,8 +1580,8 @@ def test_reset_bit_op_codes():
             assert (register.get() & (1<<i)) == 0
             register.set(0xFF)
             fetch_execute_cycle_test_second_order(cpu, registerOpCode, cycles)
-            print register.get(), (register.get() & (1<<i)), hex(registerOpCode) ,i
-            print
+            #print register.get(), (register.get() & (1<<i)), hex(registerOpCode) ,i
+            #print
             assert (register.get() & (1<<i)) == 0
                   
             registerOpCode += 0x08
