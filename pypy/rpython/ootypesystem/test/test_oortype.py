@@ -372,13 +372,16 @@ def test_mix_class_record_instance():
     c1 = runtimeClass(I)
     c2 = runtimeClass(R)
     c3 = runtimeClass(L)
+    c4 = runtimeClass(Class)
     def fn(flag):
         if flag == 0:
             return c1
         elif flag == 1:
             return c2
-        else:
+        elif flag == 2:
             return c3
+        else:
+            return c4
 
     res = interpret(fn, [0], type_system='ootype')
     assert res is c1
@@ -386,3 +389,5 @@ def test_mix_class_record_instance():
     assert res is c2
     res = interpret(fn, [2], type_system='ootype')
     assert res is c3
+    res = interpret(fn, [3], type_system='ootype')
+    assert res is c4
