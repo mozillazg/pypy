@@ -184,14 +184,9 @@ class ObjectConst(BaseConst):
         return dotnet.cast_to_native_object(self.obj)
 
     def load(self, meth):
-        assert False, 'XXX'
-##        import pdb;pdb.set_trace()
-##        index = self._get_index(builder)
-##        if self.obj is None:
-##            t = typeof(System.Object)
-##        else:
-##            t = self.obj.GetType()
-##        self._load_from_array(builder, index, t)
+        index = self._get_index(meth)
+        clitype = self.getCliType()
+        self._load_from_array(meth, index, clitype)
 
     @specialize.arg(1)
     def revealconst(self, T):
