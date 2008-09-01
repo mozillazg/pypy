@@ -9,7 +9,6 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("cbuild")
 py.log.setconsumer("cbuild", ansi_log)
 from pypy.tool.udir import udir
-from pypy.rlib.pyplatform import Platform
 
 debug = 0
 
@@ -41,7 +40,7 @@ class ExternalCompilationInfo(object):
                  compile_extra           = [],
                  link_extra              = [],
                  frameworks              = [],
-                 platform                = Platform()):
+                 platform                = None):
         """
         pre_include_bits: list of pieces of text that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -89,6 +88,9 @@ class ExternalCompilationInfo(object):
             value = locals()[name]
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
+        if platform is None:
+            from pypy.rlib import pyplatform
+            platform = pyplatform.platform
         self.platform = platform
 
     def from_compiler_flags(cls, flags):

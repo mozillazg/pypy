@@ -25,7 +25,22 @@ class Platform(object):
 
 class Maemo(Platform):
     def get_compiler(self):
+        # XXX how to make this reliable???
         return '/scratchbox/compilers/cs2005q3.2-glibc-arm/bin/sbox-arm-linux-gcc'
     
     def execute(self, cmd):
         return py.process.cmdexec('/scratchbox/login ' + cmd)
+
+class OverloadCompilerPlatform(Platform):
+    def __init__(self, previous_platform, cc):
+        self.previous_platform = previous_platform
+        self.cc = cc
+
+    def get_compiler(self):
+        return self.cc
+
+    def execute(self, cmd):
+        return self.previous_platform.execute(cmd)
+
+platform = Platform()
+
