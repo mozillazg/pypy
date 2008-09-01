@@ -53,6 +53,12 @@ def test_class_records():
     R2 = Record({"a": Signed})
     assert R1 == R2
     assert runtimeClass(R1) is runtimeClass(R2)
+
+def test_class_builtintype():
+    L1 = List(Signed)
+    L2 = List(Signed)
+    assert L1 == L2
+    assert runtimeClass(L1) is runtimeClass(L2)
  
 def test_classof():
     I = Instance("test", ROOT, {"a": Signed})

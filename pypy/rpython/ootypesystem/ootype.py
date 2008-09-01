@@ -294,6 +294,17 @@ class Meth(StaticMethod):
 
 class BuiltinType(SpecializableType):
 
+    _classes = {}
+
+    @property
+    def _class(self):
+        try:
+            return self._classes[self]
+        except KeyError:
+            cls = _class(self)
+            self._classes[self] = cls
+            return cls
+
     def _example(self):
         return new(self)
 
@@ -308,23 +319,12 @@ class Record(BuiltinType):
     # We try to keep Record as similar to Instance as possible, so backends
     # can treat them polymorphically, if they choose to do so.
 
-    _classes = {}
-    
     def __init__(self, fields, _hints={}):
         self._fields = frozendict()
         for name, ITEMTYPE in fields.items():
             self._fields[name] = ITEMTYPE, ITEMTYPE._defl()
         self._null = _null_record(self)
         self._hints = frozendict(_hints)
-
-    @property
-    def _class(self):
-        try:
-            return self._classes[self]
-        except KeyError:
-            cls = _class(self)
-            self._classes[self] = cls
-            return cls
 
     def _defl(self):
         return self._null
@@ -1827,7 +1827,7 @@ def overrideDefaultForFields(INSTANCE, fields):
     INSTANCE._override_default_for_fields(fields)
 
 def runtimeClass(INSTANCE):
-    assert isinstance(INSTANCE, (Instance, Record))
+    assert isinstance(INSTANCE, (Instance, BuiltinType))
     return INSTANCE._class
 
 def isSubclass(C1, C2):

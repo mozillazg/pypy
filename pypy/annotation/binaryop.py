@@ -953,7 +953,7 @@ class __extend__(pairtype(SomeOOClass, SomeOOClass)):
             common = r1.ootype
         elif r1.ootype is ootype.Object or r2.ootype is ootype.Object:
             common = ootype.Object
-        elif isinstance(r1.ootype, ootype.Record) or isinstance(r2.ootype, ootype.Record):
+        elif isinstance(r1.ootype, ootype.BuiltinType) or isinstance(r2.ootype, ootype.BuiltinType):
             common = ootype.Object
         else:
             common = ootype.commonBaseclass(r1.ootype, r2.ootype)

@@ -367,16 +367,22 @@ def test_ooidentityhash():
 def test_mix_class_record_instance():
     I = Instance("test", ROOT, {"a": Signed})
     R = Record({"x": Signed})
+    L = List(Signed)
 
     c1 = runtimeClass(I)
     c2 = runtimeClass(R)
+    c3 = runtimeClass(L)
     def fn(flag):
-        if flag:
+        if flag == 0:
             return c1
-        else:
+        elif flag == 1:
             return c2
+        else:
+            return c3
 
-    res = interpret(fn, [True], type_system='ootype')
+    res = interpret(fn, [0], type_system='ootype')
     assert res is c1
-    res = interpret(fn, [False], type_system='ootype')
+    res = interpret(fn, [1], type_system='ootype')
     assert res is c2
+    res = interpret(fn, [2], type_system='ootype')
+    assert res is c3
