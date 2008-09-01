@@ -5,6 +5,8 @@ from ctypes_configure import configure
 # Note: OpenSSL on OS X only provides md5 and sha1
 libpath = ctypes.util.find_library('ssl')
 lib = CDLL(libpath) # Linux, OS X
+lib.EVP_get_digestbyname.restype = c_void_p
+lib.EVP_DigestInit.argtypes = [c_void_p, c_void_p]
 
 def bufferstr(x):
     if isinstance(x, basestring):
