@@ -1,14 +1,13 @@
 #!/usr/bin/env python 
-from __future__ import generators
         
-from pypy.lang.gameboy.gameboy_implementation import *
+from pypy.lang.gameboy.profiling.evaluation.gameboy_evaluation_implementation import *
 from pypy.lang.gameboy.profiling.evaluation.evaluation_cpu import EvaluationCPU
 from pypy.lang.gameboy.debug import debug
 from pypy.lang.gameboy.debug.debug_socket_memory import *
 
 # GAMEBOY ----------------------------------------------------------------------
 
-class GameBoyProfilingImplementation(GameBoyImplementation):
+class GameBoyEvaluationImplementation(GameBoyImplementation):
     
     def __init__(self, cycleLimit=0):
         GameBoyImplementation.__init__(self)
