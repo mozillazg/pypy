@@ -13,7 +13,7 @@ class GameBoyEvaluationImplementation(GameBoyImplementation):
     def __init__(self, cycleLimit=0):
         GameBoyImplementation.__init__(self)
         self.cycleLimit = cycleLimit
-        self.cpu = EvaluationCPU(self.interrupt, self)
+        self.cpu = EvaluationCPU(self.interrupt, self, cycleLimit)
         self.cpu.cycle_limit = cycleLimit
     
     def handle_execution_error(self):

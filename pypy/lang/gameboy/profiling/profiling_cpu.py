@@ -9,22 +9,23 @@ class ProfilingCPU(CPU):
     
     def __init__(self, interrupt, memory):
         CPU.__init__(self, interrupt, memory)
-        self.cycle_limit = 0
-        self.op_code_count           = 0
-        self.fetch_exec_opcode_histo = [0]*(0xFF+1)
-        self.opcode_histo            = [0]*(0xFF+1)
-    
-    def fetch_execute(self):
-        CPU.fetch_execute(self)
-        self.op_code_count += 1
-        self.fetch_exec_opcode_histo[self.last_fetch_execute_op_code] += 1
-        debug.log(self.last_fetch_execute_op_code, is_fetch_execute=True)
+        self.op_codes = []
         
-    
-    def execute(self, opCode):
-        CPU.execute(self, opCode)
-        debug.log(self.last_op_code)
-        self.op_code_count += 1
-        self.opcode_histo[self.last_op_code] += 1
-        #if self.op_code_count >= self.cycle_limit:
-        #    raise Exception("Maximal Cyclecount reached")
+    def run(self, op_codes):
+        self.op_codes = op_codes
+        self.pc.set(0)
+        i = 0
+        while i < len(op_codes):
+            self.execute(op_codes[i])
+            i += 1
+            if op_codes[i] == 0xCB:
+                i += 1
+            self.pc.set(i) # 2 cycles
+        
+    def fetch(self, use_cycles=True):
+         # Fetching  1 cycle
+        if use_cycles:
+            self.cycles += 1
+        data =  self.op_codes[self.pc.get(use_cycles) % len(self.op_codes)];
+        self.pc.inc(use_cycles) # 2 cycles
+        return data

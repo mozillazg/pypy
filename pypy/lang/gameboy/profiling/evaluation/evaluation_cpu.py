@@ -7,9 +7,9 @@ from pypy.lang.gameboy.debug import debug
 class EvaluationCPU(CPU):
     
     
-    def __init__(self, interrupt, memory):
+    def __init__(self, interrupt, memory, cycleLimit):
         CPU.__init__(self, interrupt, memory)
-        self.cycle_limit = 0
+        self.cycle_limit = cycleLimit
         self.op_code_count           = 0
         self.fetch_exec_opcode_histo = [0]*(0xFF+1)
         self.opcode_histo            = [0]*(0xFF+1)
@@ -26,5 +26,5 @@ class EvaluationCPU(CPU):
         debug.log(self.last_op_code)
         self.op_code_count += 1
         self.opcode_histo[self.last_op_code] += 1
-        #if self.op_code_count >= self.cycle_limit:
-        #    raise Exception("Maximal Cyclecount reached")
+        if self.op_code_count >= self.cycle_limit:
+            raise Exception("Maximal Cyclecount reached")
