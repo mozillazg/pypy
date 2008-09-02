@@ -12,21 +12,25 @@ from pypy.lang.gameboy.profiling.profiling_cpu import ProfilingCPU
 
 
 def entry_point(argv=None):
+    typical = False
+    count = 100
     if argv is not None and len(argv) >= 1:
         typical = argv[1] == "1"
-        print "Running typical set"
+        if len(argv) >= 2:
+            count = int(argv[2])
+        
+    if typical:
+        op_codes = TYPICAL_LIST
+        print "Running Typical Set"
     else:
-        typical = False
-        print "running normal set"
+        op_codes = FULL_LIST
+        print "Running Normal Set"
         
     cpu = ProfilingCPU(Interrupt(), iMemory())
     
-    op_codes = FULL_LIST
-    if typical:
-        op_codes = TYPICAL_LIST
-        
+    
     start_time = time.time()
-    for i in range(1):
+    for i in range(count):
         cpu.run(op_codes)
     end_time = time.time()
     print end_time - start_time
@@ -35,13 +39,16 @@ def entry_point(argv=None):
     
 def create_all_op_codes():
     list = []
+    forbidden = [0xCB, 211]
     for i in range(0xFF):
-        if i != 0xCB and OP_CODES[i] is not None:
+        if i not in forbidden and OP_CODES[i] is not None:
             list.append(i)
-              
+    
+    forbidden = [] 
     for i in range(0xFF):
-        list.append(0xCB)
-        list.append(i)
+        if i not in forbidden:
+            list.append(0xCB)
+            list.append(i)
         
     return list
 
