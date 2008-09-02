@@ -13,19 +13,17 @@ class ProfilingCPU(CPU):
         
     def run(self, op_codes):
         self.op_codes = op_codes
-        self.pc.set(0)
         i = 0
         while i < len(op_codes):
+            self.pc.set(i)
             self.execute(op_codes[i])
-            i += 1
             if op_codes[i] == 0xCB:
                 i += 1
-            self.pc.set(i) # 2 cycles
+            i += 1
         
     def fetch(self, use_cycles=True):
-         # Fetching  1 cycle
         if use_cycles:
             self.cycles += 1
-        data =  self.op_codes[self.pc.get(use_cycles) % len(self.op_codes)];
-        self.pc.inc(use_cycles) # 2 cycles
+        data =  self.op_codes[self.pc.get() % len(self.op_codes)];
+        self.pc.inc(use_cycles)
         return data
