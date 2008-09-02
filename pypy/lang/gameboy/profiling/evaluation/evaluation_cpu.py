@@ -4,7 +4,7 @@ from pypy.lang.gameboy.cpu import CPU
 from pypy.lang.gameboy.debug import debug
 
 
-class ProfilingCPU(CPU):
+class EvaluationCPU(CPU):
     
     
     def __init__(self, interrupt, memory):
