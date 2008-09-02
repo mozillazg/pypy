@@ -134,6 +134,8 @@ class LowLevelDatabase(OODatabase):
             return self.class_name(TYPE)
         elif isinstance(TYPE, ootype.Record):
             return self.get_record_name(TYPE)
+        elif isinstance(TYPE, ootype.OOType):
+            return self.cts.lltype_to_cts(TYPE)
         else:
             assert False
 
