@@ -80,7 +80,9 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_arith_plus_minus(self):
         py.test.skip("Cannot work unless we add support for constant arguments in compiled tests")
 
-    test_compile_time_const_tuple = skip
+    def test_compile_time_const_tuple(self):
+        py.test.skip("Fails, and it seems to be related to missing support for constant arguments")
+
     test_green_deepfrozen_oosend = skip
     test_direct_oosend_with_green_self = skip
     test_builtin_oosend_with_green_args = skip

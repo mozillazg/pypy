@@ -39,6 +39,19 @@ class FieldToken:
         self.ooclass = ooclass
         self.name = name
 
+    def getFieldInfo(self):
+        clitype = class2type(self.ooclass)
+        return clitype.GetField(str(self.name))
+
+class MethToken:
+    def __init__(self, ooclass, name):
+        self.ooclass = ooclass
+        self.name = name
+
+    def getMethodInfo(self):
+        clitype = class2type(self.ooclass)
+        return clitype.GetMethod(str(self.name))
+
 class AllocToken:
     def __init__(self, ooclass):
         self.ooclass = ooclass
@@ -171,14 +184,12 @@ class BaseConst(GenConst):
 
 class ObjectConst(BaseConst):
 
-    def __init__(self, obj):
+    def __init__(self, ooclass, obj):
+        self.ooclass = ooclass
         self.obj = obj
 
     def getCliType(self):
-        if self.obj == ootype.NULL:
-            return class2type(cObject)
-        cliobj = dotnet.cast_to_native_object(self.obj)
-        return cliobj.GetType()
+        return class2type(self.ooclass)
 
     def getobj(self):
         return dotnet.cast_to_native_object(self.obj)
@@ -246,7 +257,6 @@ class Label(GenLabel):
         self.inputargs_gv = inputargs_gv
 
     def emit_trampoline(self, meth):
-        from pypy.jit.codegen.cli.operation import mark
         il = meth.il
         args_manager = meth.graphinfo.args_manager
         il.MarkLabel(self.il_trampoline_label)
@@ -272,8 +282,9 @@ class RCliGenOp(AbstractRGenOp):
         elif T is ootype.Float:
             return FloatConst(llvalue)
         elif isinstance(T, ootype.OOType):
+            ooclass = ootype.runtimeClass(T)
             obj = ootype.cast_to_object(llvalue)
-            return ObjectConst(obj)
+            return ObjectConst(ooclass, obj)
         else:
             assert False, "XXX not implemented"
 
@@ -305,7 +316,8 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def methToken(TYPE, methname):
-        return methname #XXX
+        ooclass = ootype.runtimeClass(TYPE)
+        return MethToken(ooclass, methname)
 
     @staticmethod
     @specialize.memo()
@@ -632,7 +644,9 @@ class BranchBuilder(GenBuilder):
         self.appendop(op)
 
     def genop_oosend(self, methtoken, gv_self, args_gv):
-        raise NotImplementedError
+        op = ops.OOSend(self.meth, gv_self, args_gv, methtoken)
+        self.appendop(op)
+        return op.gv_res()
 
     def genop_oononnull(self, gv_obj):
         raise NotImplementedError
@@ -724,4 +738,4 @@ class IntFlexSwitch(CodeGenSwitch):
 
 global_rgenop = RCliGenOp()
 RCliGenOp.constPrebuiltGlobal = global_rgenop.genconst
-zero_const = ObjectConst(ootype.NULL)
+zero_const = ObjectConst(cObject, ootype.NULL)

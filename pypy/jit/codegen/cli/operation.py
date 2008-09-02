@@ -6,7 +6,7 @@ from pypy.translator.cli import opcodes as cli_opcodes
 System = CLR.System
 OpCodes = System.Reflection.Emit.OpCodes
 
-class Operation:
+class Operation(object):
     _gv_res = None
 
     def restype(self):
@@ -177,11 +177,9 @@ class Call(Operation):
 class GetField(Operation):
 
     def __init__(self, meth, gv_obj, fieldtoken):
-        from pypy.jit.codegen.cli.rgenop import class2type
         self.meth = meth
         self.gv_obj = gv_obj
-        clitype = class2type(fieldtoken.ooclass)
-        self.fieldinfo = clitype.GetField(str(fieldtoken.name))
+        self.fieldinfo = fieldtoken.getFieldInfo()
 
     def restype(self):
         return self.fieldinfo.get_FieldType()
@@ -195,12 +193,10 @@ class GetField(Operation):
 class SetField(Operation):
 
     def __init__(self, meth, gv_obj, gv_value, fieldtoken):
-        from pypy.jit.codegen.cli.rgenop import class2type
         self.meth = meth
         self.gv_obj = gv_obj
         self.gv_value = gv_value
-        clitype = class2type(fieldtoken.ooclass)
-        self.fieldinfo = clitype.GetField(str(fieldtoken.name))
+        self.fieldinfo = fieldtoken.getFieldInfo()
 
     def restype(self):
         return None
@@ -223,6 +219,28 @@ class New(Operation):
         ctor = self.clitype.GetConstructor(new_array(System.Type, 0))
         self.meth.il.Emit(OpCodes.Newobj, ctor)
         self.storeResult()
+
+class OOSend(Operation):
+
+    def __init__(self, meth, gv_self, args_gv, methtoken):
+        self.meth = meth
+        self.gv_self = gv_self
+        self.args_gv = args_gv
+        self.methodinfo = methtoken.getMethodInfo()
+
+    def restype(self):
+        clitype = self.methodinfo.get_ReturnType()
+        if clitype is typeof(System.Void):
+            return None
+        return clitype
+
+    def emit(self):
+        self.gv_self.load(self.meth)
+        for gv_arg in self.args_gv:
+            gv_arg.load(self.meth)
+        self.meth.il.Emit(OpCodes.Callvirt, self.methodinfo)
+        if self.restype() is not None:
+            self.storeResult()
 
 def mark(il, s):
     il.Emit(OpCodes.Ldstr, s)
@@ -308,7 +326,9 @@ def fillops(ops, baseclass):
             code = source.compile()
             exec code in globals(), out
         elif value is cli_opcodes.DoNothing:
-            out[opname] = SameAs
+            # create a new subclass of SameAs; we can't use SameAs directly
+            # because its restype could be patched later
+            out[opname] = type(opname, (SameAs,), {})
         else:
             renderCustomOp(opname, baseclass, value, out)
 
