@@ -425,7 +425,8 @@ class CPU(object):
     # -------------------------------------------------------------------
         
     def debug(self):
-        print "0xDD called"
+        #print "0xDD called"
+        pass
         
     def read(self, hi, lo=None):
         # memory Access, 1 cycle
