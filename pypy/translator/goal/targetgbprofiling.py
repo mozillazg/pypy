@@ -1,32 +1,90 @@
 import os
+import sys
 import py
 import pdb
-from pypy.lang.gameboy.profiling.gameboy_profiling_implementation import GameBoyProfilingImplementation
+import time
+from pypy.lang.gameboy.cpu import OP_CODES, FETCH_EXECUTE_OP_CODES
+from pypy.lang.gameboy.ram import iMemory
+from pypy.lang.gameboy.interrupt import Interrupt
+from pypy.lang.gameboy.profiling.profiling_cpu import ProfilingCPU
 
 
-ROM_PATH = str(py.magic.autopath().dirpath().dirpath().dirpath())+"/lang/gameboy/rom"
 
 
 def entry_point(argv=None):
-    if argv is not None and len(argv) > 1:
-        filename = argv[1]
+    if argv is not None and len(argv) >= 1:
+        typical = argv[1] == "1"
+        print "Running typical set"
     else:
-        pos = str(9)
-        filename = ROM_PATH+"/rom"+pos+"/rom"+pos+".gb"
-    print "loading rom: ", str(filename)
-    gameBoy = GameBoyProfilingImplementation()
-    try:
-        gameBoy.load_cartridge_file(str(filename))
-    except:
-        print "Corrupt Cartridge"
-        gameBoy.load_cartridge_file(str(filename), verify=False)
-    try:
-        gameBoy.mainLoop()
-    except:
-        pass
-    #pdb.runcall(gameBoy.mainLoop)
-    return 0
+        typical = False
+        print "running normal set"
+        
+    cpu = ProfilingCPU(Interrupt(), iMemory())
     
+    op_codes = FULL_LIST
+    if typical:
+        op_codes = TYPICAL_LIST
+        
+    start_time = time.time()
+    for i in range(1):
+        cpu.run(op_codes)
+    end_time = time.time()
+    print end_time - start_time
+    return 1
+    
+    
+def create_all_op_codes():
+    list = []
+    for i in range(0xFF):
+        if i != 0xCB and OP_CODES[i] is not None:
+            list.append(i)
+              
+    for i in range(0xFF):
+        list.append(0xCB)
+        list.append(i)
+        
+    return list
+
+def create_typical_op_codes():
+    list = []
+    append_to_opcode_list(list, 0xff, 911896);
+    append_to_opcode_list(list, 0x20, 260814);
+    append_to_opcode_list(list, 0xf0, 166327);
+    append_to_opcode_list(list, 0xfe, 166263);
+    append_to_opcode_list(list, 0x13, 74595);
+    append_to_opcode_list(list, 0x12, 74582);
+    append_to_opcode_list(list, 0x2a, 72546);
+    append_to_opcode_list(list, 0xb1, 70495);
+    append_to_opcode_list(list, 0xb, 70487);
+    append_to_opcode_list(list, 0x78, 70487);
+    append_to_opcode_list(list, 0x5, 24998);
+    append_to_opcode_list(list, 0x32, 24962);
+    append_to_opcode_list(list, 0x38, 4129);
+    append_to_opcode_list(list, 0xd, 3170);
+    append_to_opcode_list(list, 0x22, 1034);
+    append_to_opcode_list(list, 0xcd, 308);
+    append_to_opcode_list(list, 0x21, 294);
+    append_to_opcode_list(list, 0xc9, 292);
+    append_to_opcode_list(list, 0xf5, 284);
+    append_to_opcode_list(list, 0xf1, 282);
+    append_to_opcode_list(list, 0xc3, 277);
+    append_to_opcode_list(list, 0x77, 275);
+    append_to_opcode_list(list, 0x7e, 261);
+    append_to_opcode_list(list, 0x3c, 260);
+    append_to_opcode_list(list, 0xe0, 88);
+    append_to_opcode_list(list, 0x3e, 55);
+    append_to_opcode_list(list, 0xea, 47);
+    append_to_opcode_list(list, 0xaf, 45);
+    append_to_opcode_list(list, 0x70, 40);
+    append_to_opcode_list(list, 0x7d, 40);
+    return list
+
+def append_to_opcode_list(list, op_code, count):
+    for i in range(count):
+        list.append(op_code)
+    
+TYPICAL_LIST = create_typical_op_codes()
+FULL_LIST = create_all_op_codes()
 
 # _____ Define and setup target ___
 
@@ -34,4 +92,9 @@ def target(*args):
     return entry_point, None
 
 def test_target():
-    entry_point(["b", ROM_PATH+"/rom9/rom9.gb"])
+    entry_point()
+
+
+if __name__ == '__main__':
+    entry_point(sys.argv)
+    

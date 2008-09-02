@@ -35,3 +35,12 @@ def target(*args):
 
 def test_target():
     entry_point(["b", ROM_PATH+"/rom9/rom9.gb"])
+    
+    
+# STARTPOINT ===================================================================
+
+if __name__ == '__main__':
+    from AppKit import NSApplication
+    NSApplication.sharedApplication()
+    
+    test_target()
