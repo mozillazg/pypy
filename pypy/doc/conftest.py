@@ -1,6 +1,5 @@
 import py
 from py.__.doc.conftest import Directory, DoctestText, DocfileTests
-from py.__.rest.directive import register_linkrole
 
 thisdir = py.magic.autopath().dirpath()
 
@@ -42,6 +41,7 @@ class Directory(Directory):
 
 try:
     from docutils.parsers.rst import directives, states, roles
+    from py.__.rest.directive import register_linkrole
 except ImportError:
     pass
 else:
