@@ -69,7 +69,6 @@ class GameBoy(object):
         self.sound.stop()
 
     def reset(self):
-        print "python resetting gameboy"
         self.ram.reset()
         self.memory_bank_controller.reset()
         self.interrupt.reset()

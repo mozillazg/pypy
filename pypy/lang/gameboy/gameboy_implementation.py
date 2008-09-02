@@ -36,10 +36,10 @@ class GameBoyImplementation(GameBoy):
         self.reset()
         self.is_running = True
         try:
-            while self.is_running and self.handle_events():
+            while self.is_running:
+                self.handle_events()
                 self.emulate(constants.GAMEBOY_CLOCK >> 2)
                 RSDL.Delay(1)
-                #time.sleep(10/1000)
         except :
             self.is_running = False 
             lltype.free(self.event, flavor='raw')
@@ -51,11 +51,10 @@ class GameBoyImplementation(GameBoy):
         pass
     
     def handle_events(self):
-        while self.poll_event() and self.is_running:
-            if self.check_for_escape():
-                self.is_running = False 
-            self.joypad_driver.update(self.event) 
-        return self.is_running
+        self.poll_event()
+        if self.check_for_escape():
+            self.is_running = False 
+        self.joypad_driver.update(self.event)
     
     
     def poll_event(self):
@@ -100,7 +99,8 @@ class VideoDriverImplementation(VideoDriver):
                 #if y%2 == 0 or True:
                 #    px = self.get_pixel_color(x, y)
                 #    str += ["#", "%", "+", " ", " "][px]
-                RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
+                #RSDL_helper.set_pixel(self.screen, x, y, self.get_pixel_color(x, y))
+                pass
         #print str;
              
     @specialize.arg(3)   

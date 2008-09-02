@@ -100,7 +100,7 @@ class CartridgeManager(object):
         self.load_battery()
         self.mbc = self.create_bank_controller(self.get_memory_bank_type(), 
                                                self.rom, self.ram, self.clock)
-        print self
+        #print self
         
     def check_rom(self):
         if not self.verify_header():
