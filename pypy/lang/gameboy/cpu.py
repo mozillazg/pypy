@@ -493,20 +493,20 @@ class CPU(object):
         if use_cycles:
             self.cycles += 1
         
-    def ld(self, getCaller, setCaller):
+    def load(self, getCaller, setCaller):
         # 1 cycle
         setCaller.set(getCaller.get()) # 1 cycle
         
     def load_fetch_register(self, register):
-        self.ld(CPUFetchCaller(self), RegisterCallWrapper(register))
+        self.load(CPUFetchCaller(self), RegisterCallWrapper(register))
         
     def store_hl_in_pc(self):
         # LD PC,HL, 1 cycle
-        self.ld(DoubleRegisterCallWrapper(self.hl), 
+        self.load(DoubleRegisterCallWrapper(self.hl), 
                 DoubleRegisterCallWrapper(self.pc))
         
     def fetch_load(self, getCaller, setCaller):
-        self.ld(CPUFetchCaller(self), setCaller)
+        self.load(CPUFetchCaller(self), setCaller)
 
     def add_a(self, getCaller, setCaller=None):
         data = getCaller.get()
@@ -1043,7 +1043,7 @@ def create_load_group_op_codes():
     return op_codes
             
 def load_group_lambda(store_register, load_register):
-        return lambda s: CPU.ld(s, RegisterCallWrapper(load_register(s)),
+        return lambda s: CPU.load(s, RegisterCallWrapper(load_register(s)),
                                    RegisterCallWrapper(store_register(s)))
     
 def create_register_op_codes(table):
