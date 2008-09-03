@@ -56,6 +56,23 @@ def make_colororder(graph, hannotator):
         colororder = None
     return colororder
 
+def make_revealargs(argiter):    
+    def revealargs(args_gv):
+        args = ()
+        j = 0
+        for ARG in argiter:
+            if ARG == lltype.Void:
+                args += (None, )
+            else:
+                genconst = args_gv[j]
+                arg = genconst.revealconst(ARG)
+                args += (arg, )
+                j += 1
+        return args
+    
+    return revealargs
+
+
 class BaseCallDesc(object):
 
     __metaclass__ = cachedtype
@@ -76,19 +93,11 @@ class BaseCallDesc(object):
             if ARG == lltype.Void:
                 voidargcount += 1
         argiter = unrolling_iterable(ARGS)
+        revealargs = make_revealargs(argiter)
     
         def do_perform_call(rgenop, fn_or_meth, args_gv):
             assert len(args_gv) + voidargcount == numargs
-            args = ()
-            j = 0
-            for ARG in argiter:
-                if ARG == lltype.Void:
-                    args += (None, )
-                else:
-                    genconst = args_gv[j]
-                    arg = genconst.revealconst(ARG)
-                    args += (arg, )
-                    j += 1
+            args = revealargs(args_gv)
             result = maybe_on_top_of_llinterp(self.exceptiondesc, fn_or_meth)(*args)
             if RESULT is lltype.Void:
                 return None
@@ -195,14 +204,48 @@ class MethodDesc(BaseCallDesc):
         self.methtoken = RGenOp.methToken(SELFTYPE, methname)
         self.redboxbuilder = rvalue.ll_redboxbuilder(METH.RESULT)
         self.colororder = None
-        ARGS = (SELFTYPE,) + METH.ARGS
-        do_perform_call = self._define_do_perform_call(ARGS, METH.RESULT)
+        do_perform_call = self._define_do_perform_call(SELFTYPE, METH, methname)
         self._define_return_value(RGenOp, METH)
 
         def perform_call(rgenop, gv_fnptr, args_gv):
             assert gv_fnptr is None
-            return do_perform_call(rgenop, meth, args_gv)
+            return do_perform_call(rgenop, args_gv)
         self.perform_call = perform_call
+
+    def _define_do_perform_call(self, SELFTYPE, METH, methname):
+        from pypy.rpython.lltypesystem import lltype
+        numargs = len(METH.ARGS)+1
+        voidargcount = 0
+        for ARG in METH.ARGS:
+            if ARG == lltype.Void:
+                voidargcount += 1
+        argiter = unrolling_iterable(METH.ARGS)
+        revealargs = make_revealargs(argiter)
+
+        # we can't call bound_meth(*args) because SomeOOBoundMeth
+        # does not support call_args, so we have to generate
+        # bound_meth(args[0], args[1], ...) and use exec
+        bm_args = ['args[%d]' % i for i in range(numargs-1)]
+        call_bm = 'result = bound_meth(%s)' % ', '.join(bm_args)
+        src = py.code.Source("""
+        def do_perform_call(rgenop, args_gv):
+          try:
+            assert len(args_gv) + voidargcount == numargs
+            this = args_gv[0].revealconst(SELFTYPE)
+            args = revealargs(args_gv[1:])
+            bound_meth = getattr(this, methname)
+            %s
+            if METH.RESULT is lltype.Void:
+                return None
+            else:
+                return rgenop.genconst(result)
+          except Exception, e:
+            import pdb;pdb.xpm()
+        """ % call_bm)
+        exec src.compile() in locals()
+        self.do_perform_call = do_perform_call
+        return do_perform_call
+
 
 class BytecodeWriter(object):
 
