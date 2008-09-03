@@ -854,7 +854,8 @@ class _object(object):
         elif other.obj is None:
             return self.obj is None
         else:
-            return self.obj == other.obj
+            return self.obj.__class__ == other.obj.__class__ and \
+                   self.obj == other.obj
 
     def __ne__(self, other):
         return not (self == other)
