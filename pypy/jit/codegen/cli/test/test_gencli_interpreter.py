@@ -88,7 +88,9 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
 
     check_count_depth = False # see test_self_referential_structures
     
-    test_known_nonzero = skip
+    def test_known_nonzero(self):
+        py.test.skip("Involves promotion")
+
     test_debug_assert_ptr_nonzero = skip
     test_indirect_red_call = skip
     test_indirect_red_call_with_exc = skip
