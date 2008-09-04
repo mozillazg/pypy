@@ -226,10 +226,10 @@ class OOSend(Operation):
         self.meth = meth
         self.gv_self = gv_self
         self.args_gv = args_gv
-        self.methodinfo = methtoken.getMethodInfo()
+        self.methtoken = methtoken
 
     def restype(self):
-        clitype = self.methodinfo.get_ReturnType()
+        clitype = self.methtoken.getReturnType()
         if clitype is typeof(System.Void):
             return None
         return clitype
@@ -238,7 +238,7 @@ class OOSend(Operation):
         self.gv_self.load(self.meth)
         for gv_arg in self.args_gv:
             gv_arg.load(self.meth)
-        self.meth.il.Emit(OpCodes.Callvirt, self.methodinfo)
+        self.methtoken.emit_call(self.meth.il)
         if self.restype() is not None:
             self.storeResult()
 

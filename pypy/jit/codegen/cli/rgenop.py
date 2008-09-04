@@ -27,6 +27,7 @@ cString = classof(System.String)
 cChar = classof(System.Char)
 cUtils = classof(CLR.pypy.runtime.Utils)
 cFlexSwitchCase = classof(FlexSwitchCase)
+cpypyString = classof(CLR.pypy.runtime.String)
 
 class SigToken:
     def __init__(self, args, res, funcclass):
@@ -44,6 +45,7 @@ class FieldToken:
         return clitype.GetField(str(self.name))
 
 class MethToken:
+
     def __init__(self, ooclass, name):
         self.ooclass = ooclass
         self.name = name
@@ -51,6 +53,31 @@ class MethToken:
     def getMethodInfo(self):
         clitype = class2type(self.ooclass)
         return clitype.GetMethod(str(self.name))
+
+    def getReturnType(self):
+        methodinfo = self.getMethodInfo()
+        return methodinfo.get_ReturnType()
+
+    def emit_call(self, il):
+        raise NotImplementedError
+
+
+class VirtualMethToken(MethToken):
+
+    def emit_call(self, il):
+        methodinfo = self.getMethodInfo()
+        il.Emit(OpCodes.Callvirt, methodinfo)
+
+
+class StaticMethodToken(MethToken):
+    def __init__(self, ooclass, name):
+        self.ooclass = ooclass
+        self.name = name
+
+    def emit_call(self, il):
+        methodinfo = self.getMethodInfo()
+        il.Emit(OpCodes.Call, methodinfo)
+
 
 class AllocToken:
     def __init__(self, ooclass):
@@ -316,8 +343,11 @@ class RCliGenOp(AbstractRGenOp):
     @staticmethod
     @specialize.memo()
     def methToken(TYPE, methname):
-        ooclass = ootype.runtimeClass(TYPE)
-        return MethToken(ooclass, methname)
+        if TYPE is ootype.String:
+            return StaticMethodToken(cpypyString, methname)
+        else:
+            ooclass = ootype.runtimeClass(TYPE)
+            return VirtualMethToken(ooclass, methname)
 
     @staticmethod
     @specialize.memo()
