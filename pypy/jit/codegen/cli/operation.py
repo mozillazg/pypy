@@ -221,6 +221,23 @@ class New(Operation):
         self.meth.il.Emit(OpCodes.Newobj, ctor)
         self.storeResult()
 
+class OONewArray(Operation):
+
+    def __init__(self, meth, alloctoken, gv_length):
+        self.meth = meth
+        self.gv_length = gv_length
+        self.elemtype = alloctoken.getCliType()
+        self.clitype = self.elemtype.MakeArrayType()
+
+    def restype(self):
+        return self.clitype
+
+    def emit(self):
+        self.gv_length.load(self.meth)
+        self.meth.il.Emit(OpCodes.Newarr, self.elemtype)
+        self.storeResult()
+
+
 class OOSend(Operation):
 
     def __init__(self, meth, gv_self, args_gv, methtoken):
