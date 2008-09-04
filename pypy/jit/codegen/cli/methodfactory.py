@@ -70,6 +70,7 @@ class AssemblyMethodWrapper(AbstractMethodWrapper):
     def create_delegate(self, delegatetype, consts):
         t = self.typeBuilder.CreateType()
         methinfo = t.GetMethod("invoke")
+        #assemblyData.auto_save_assembly.Save()
         return System.Delegate.CreateDelegate(delegatetype,
                                               consts,
                                               methinfo)

@@ -171,7 +171,8 @@ class Call(Operation):
         for gv_arg in self.args_gv:
             gv_arg.load(self.meth)
         self.meth.il.EmitCall(OpCodes.Callvirt, meth_invoke, None)
-        self.storeResult()
+        if self.restype():
+            self.storeResult()
 
 
 class GetField(Operation):
@@ -299,6 +300,8 @@ def opcode2attrname(opcode):
     return '_'.join(parts)
 
 def is_comparison(opname):
+    if opname in ('ooisnull', 'oononnull'):
+        return True
     suffixes = '_lt _le _eq _ne _gt _ge'.split()
     for suffix in suffixes:
         if opname.endswith(suffix):

@@ -679,10 +679,16 @@ class BranchBuilder(GenBuilder):
         return op.gv_res()
 
     def genop_oononnull(self, gv_obj):
-        raise NotImplementedError
+        OP = ops.getopclass1('oononnull')
+        op = OP(self.meth, gv_obj)
+        self.appendop(op)
+        return op.gv_res()
 
     def genop_ooisnull(self, gv_obj):
-        raise NotImplementedError
+        OP = ops.getopclass1('ooisnull')
+        op = OP(self.meth, gv_obj)
+        self.appendop(op)
+        return op.gv_res()
 
     def genop_new(self, alloctoken):
         op = ops.New(self.meth, alloctoken)

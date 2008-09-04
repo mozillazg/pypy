@@ -47,9 +47,6 @@ misc_ops = {
     'cli_eventhandler':         [EventHandler],
     'cli_getstaticfield':       [GetStaticField],
     'cli_setstaticfield':       [SetStaticField],
-    'oois':                     'ceq',
-    'ooisnull':                 [PushAllArgs, 'ldnull', 'ceq'],
-    'oononnull':                [PushAllArgs, 'ldnull', 'ceq']+Not,
     'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
     'subclassof':               [PushAllArgs, 'call bool [pypylib]pypy.runtime.Utils::SubclassOf(class [mscorlib]System.Type, class[mscorlib]System.Type)'],
     'ooidentityhash':           [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],
@@ -108,6 +105,10 @@ unary_ops = {
 
     'ullong_is_true':            [PushAllArgs, 'ldc.i8 0', 'cgt.un'],
     'ullong_invert':             'not',
+
+    'oois':                     'ceq',
+    'ooisnull':                 [PushAllArgs, 'nop', 'nop', 'nop', 'ldnull', 'ceq'],
+    'oononnull':                [PushAllArgs, 'nop', 'nop', 'nop', 'nop', 'ldnull', 'ceq']+Not,
 
     # when casting from bool we want that every truth value is casted
     # to 1: we can't simply DoNothing, because the CLI stack could
