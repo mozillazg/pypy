@@ -89,13 +89,17 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     check_count_depth = False # see test_self_referential_structures
     
     def test_known_nonzero(self):
-        py.test.skip("Involves promotion")
+        py.test.skip("replay: NotImplementedError")
 
-    test_debug_assert_ptr_nonzero = skip
-    test_indirect_red_call = skip
-    test_indirect_red_call_with_exc = skip
-    test_indirect_gray_call = skip
-    test_indirect_residual_red_call = skip
+    def test_debug_assert_ptr_nonzero(self):
+        py.test.skip("replay: NotImplementedError")
+
+    def test_indirect_red_call_with_exc(self):
+        py.test.skip("replay: NotImplementedError")
+
+    def test_indirect_gray_call(self):
+        py.test.skip('mono 1.2 crashes, try again with a newer version')
+        
     test_constant_indirect_red_call = skip
     test_constant_indirect_red_call_no_result = skip
     test_indirect_sometimes_residual_pure_red_call = skip

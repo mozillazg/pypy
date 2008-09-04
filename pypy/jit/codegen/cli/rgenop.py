@@ -52,7 +52,12 @@ class MethToken:
 
     def getMethodInfo(self):
         clitype = class2type(self.ooclass)
-        return clitype.GetMethod(str(self.name))
+        res = clitype.GetMethod(str(self.name))
+        if res is None:
+            print 'getMethodInfo --> None'
+            print 'clitype =', clitype.get_FullName()
+            print 'name =', self.name
+        return res
 
     def getReturnType(self):
         methodinfo = self.getMethodInfo()
@@ -70,14 +75,37 @@ class VirtualMethToken(MethToken):
 
 
 class StaticMethodToken(MethToken):
-    def __init__(self, ooclass, name):
-        self.ooclass = ooclass
-        self.name = name
 
     def emit_call(self, il):
         methodinfo = self.getMethodInfo()
         il.Emit(OpCodes.Call, methodinfo)
 
+class ArrayMethodToken(MethToken):
+
+    def __init__(self, name, itemclass):
+        self.name = name
+        self.itemclass = itemclass
+
+    def getReturnType(self):
+        if self.name == 'll_getitem_fast':
+            return class2type(self.itemclass)
+        elif self.name == 'll_setitem_fast':
+            return class2type(cVoid) # ???
+        elif self.name == 'll_length':
+            return class2type(cInt32)
+        else:
+            assert False
+
+    def emit_call(self, il):
+        itemtype = class2type(self.itemclass)
+        if self.name == 'll_getitem_fast':
+            il.Emit(OpCodes.Ldelem, itemtype)
+        elif self.name == 'll_setitem_fast':
+            il.Emit(OpCodes.Stelem, itemtype)
+        elif self.name == 'll_length':
+            il.Emit(OpCodes.Ldlen)
+        else:
+            assert False
 
 class AllocToken:
     def __init__(self, ooclass):
@@ -345,6 +373,9 @@ class RCliGenOp(AbstractRGenOp):
     def methToken(TYPE, methname):
         if TYPE is ootype.String:
             return StaticMethodToken(cpypyString, methname)
+        elif isinstance(TYPE, ootype.Array):
+            itemclass = RCliGenOp.kindToken(TYPE.ITEM)
+            return ArrayMethodToken(methname, itemclass)
         else:
             ooclass = ootype.runtimeClass(TYPE)
             return VirtualMethToken(ooclass, methname)
@@ -692,6 +723,11 @@ class BranchBuilder(GenBuilder):
 
     def genop_new(self, alloctoken):
         op = ops.New(self.meth, alloctoken)
+        self.appendop(op)
+        return op.gv_res()
+
+    def genop_oonewarray(self, alloctoken, gv_length):
+        op = ops.OONewArray(self.meth, alloctoken, gv_length)
         self.appendop(op)
         return op.gv_res()
 
