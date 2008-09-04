@@ -54,6 +54,12 @@ def push_constant(db, TYPE, value, gen):
     if is_primitive(TYPE):
         return constgen.push_primitive_constant(gen, TYPE, value)
 
+    if TYPE is ootype.Object:
+        obj = value.obj
+        T2 = ootype.typeOf(obj)
+        if is_primitive(T2):
+            return constgen.push_primitive_constant(gen, T2, obj)
+
     const = constgen.record_const(value)
     if const.is_inline():
         const.push_inline(gen, TYPE)
