@@ -238,6 +238,12 @@ namespace pypy.runtime
 
     public class Utils
     {
+
+        public static void debug_fatalerror(string msg)
+        {
+          throw new Exception("debug_fatalerror: " + msg);
+        }
+
         public static DynamicMethod CreateDynamicMethod(string name, Type res, Type[] args)
         {
             return new DynamicMethod(name, res, args, typeof(Utils).Module);
