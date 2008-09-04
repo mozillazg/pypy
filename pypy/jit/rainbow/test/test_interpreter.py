@@ -1170,6 +1170,7 @@ class SimpleTests(InterpretationTest):
         S.become(lltype.GcStruct('s', ('ps', lltype.Ptr(S))))
         return S
 
+    check_count_depth = True
     def test_self_referential_structures(self):
         S = self._make_self_referential_type()
         malloc = self.malloc
@@ -1187,7 +1188,8 @@ class SimpleTests(InterpretationTest):
             return x
         
         res = self.interpret(f, [3], [], policy=P_NOVIRTUAL)
-        assert count_depth(res) == 2
+        if self.check_count_depth:
+            assert count_depth(res) == 2
 
     def test_known_nonzero(self):
         S = self.GcStruct('s', ('x', lltype.Signed))

@@ -86,12 +86,8 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_residual_red_call_with_exc(self):
         py.test.skip("Exceptions not yet supported")
 
-    test_yellow_meth_with_green_result = skip
-    test_simple_indirect_call = skip
-    test_normalize_indirect_call = skip
-    test_normalize_indirect_call_more = skip
-    test_green_char_at_merge = skip
-    test_self_referential_structures = skip
+    check_count_depth = False # see test_self_referential_structures
+    
     test_known_nonzero = skip
     test_debug_assert_ptr_nonzero = skip
     test_indirect_red_call = skip
