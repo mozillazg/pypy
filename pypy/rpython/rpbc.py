@@ -403,6 +403,9 @@ class SingleFrozenPBCRepr(Repr):
             raise TyperError("getattr on a constant PBC returns a non-constant")
         return hop.inputconst(hop.r_result, hop.s_result.const)
 
+    def convert_const(self, value):
+        return None
+
     def convert_desc(self, frozendesc):
         assert frozendesc is self.frozendesc
         return object()  # lowleveltype is Void
