@@ -229,7 +229,6 @@ class MethodDesc(BaseCallDesc):
         call_bm = 'result = bound_meth(%s)' % ', '.join(bm_args)
         src = py.code.Source("""
         def do_perform_call(rgenop, args_gv):
-          try:
             assert len(args_gv) + voidargcount == numargs
             this = args_gv[0].revealconst(SELFTYPE)
             args = revealargs(args_gv[1:])
@@ -239,8 +238,6 @@ class MethodDesc(BaseCallDesc):
                 return None
             else:
                 return rgenop.genconst(result)
-          except Exception, e:
-            import pdb;pdb.xpm()
         """ % call_bm)
         exec src.compile() in locals()
         self.do_perform_call = do_perform_call

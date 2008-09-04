@@ -38,6 +38,16 @@ PRIMITIVE_TYPES = set([ootype.Void, ootype.Bool, ootype.Char, ootype.UniChar,
 def is_primitive(TYPE):
     return TYPE in PRIMITIVE_TYPES
 
+def get_primitive_constant(TYPE, value):
+    if is_primitive(TYPE):
+        return TYPE, value
+    if TYPE is ootype.Object:
+        obj = value.obj
+        T2 = ootype.typeOf(obj)
+        if obj is not None and is_primitive(T2):
+            return T2, obj
+    return None, None
+
 def push_constant(db, TYPE, value, gen):
     """ General method that pushes the value of the specified constant
     onto the stack.  Use this when you want to load a constant value.
@@ -50,15 +60,10 @@ def push_constant(db, TYPE, value, gen):
     """
 
     constgen = db.constant_generator
-    
-    if is_primitive(TYPE):
-        return constgen.push_primitive_constant(gen, TYPE, value)
 
-    if TYPE is ootype.Object:
-        obj = value.obj
-        T2 = ootype.typeOf(obj)
-        if is_primitive(T2):
-            return constgen.push_primitive_constant(gen, T2, obj)
+    TYPE2, value2 = get_primitive_constant(TYPE, value)
+    if TYPE2 is not None:
+        return constgen.push_primitive_constant(gen, TYPE2, value2)
 
     const = constgen.record_const(value)
     if const.is_inline():
@@ -435,7 +440,8 @@ class AbstractConst(object):
     # Internal helpers
     
     def _record_const_if_complex(self, TYPE, value):
-        if not is_primitive(TYPE):
+        TYPE2, value2 = get_primitive_constant(TYPE, value)
+        if not TYPE2:
             self.db.constant_generator.record_const(value)
 
 
