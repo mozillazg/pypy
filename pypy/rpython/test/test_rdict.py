@@ -496,6 +496,17 @@ class BaseTestRdict(BaseRtypingTest):
         res = self.interpret(g, [3])
         assert res == 77
 
+    def test_singlefrozenpbc_as_value(self):
+        class A:
+            def _freeze_(self):
+                return True
+        a = A()
+        d = {42: a}
+        def fn(key):
+            return d[key]
+        res = self.interpret(fn, [42])
+        assert res is None
+
 
 class TestLLtype(BaseTestRdict, LLRtypeMixin):
     def test_dict_but_not_with_char_keys(self):
