@@ -83,7 +83,6 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_compile_time_const_tuple(self):
         py.test.skip("Fails, and it seems to be related to missing support for constant arguments")
 
-    test_residual_red_call = skip
     test_residual_red_call_with_exc = skip
     test_simple_meth = skip
     test_simple_red_meth = skip
