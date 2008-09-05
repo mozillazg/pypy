@@ -1,0 +1,30 @@
+Some random notes about memory-saving GCs
+=========================================
+
+Possibilities:
+
+* squeak-like mark-compact collector
+
+* deferred refcounting strategy
+
+* deferred refcounting with a nursery
+
+Tests:
+
+We need to decide size of tests. ie how much interpreter size
+matters.
+
+Also we need to decide what exactly we mean by "memory footprint".
+avg, min or max size?
+
+Also, suggestions include:
+
+* allocate objects all the time, but total number of objects stay constant
+
+* allocate objects in bursts and immediately throw them away
+
+* have small number of live objects and from time to time burst allocate
+  ton of them and throw them away
+
+I think we need some kind of graph which shows how exactly this grows with
+number of objects.
