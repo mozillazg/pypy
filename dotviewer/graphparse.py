@@ -5,7 +5,9 @@ Graph file parsing.
 import os, sys, re
 import msgstruct
 
-re_nonword = re.compile(r'([^0-9a-zA-Z_.]+)')
+# a "nonword" is a separator between words.  A sequence of '\' and a letter
+# is considered as a separator too.
+re_nonword = re.compile(r'((?:[^0-9a-zA-Z_.\\]|\\[a-z])+)')
 re_plain   = re.compile(r'graph [-0-9.]+ [-0-9.]+ [-0-9.]+$', re.MULTILINE)
 re_digraph = re.compile(r'\b(graph|digraph)\b', re.IGNORECASE)
 
