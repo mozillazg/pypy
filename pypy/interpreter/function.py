@@ -6,10 +6,13 @@ objects; the difference lies in the code object found in their func_code
 attribute.
 """
 
+from pypy.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.eval import Code
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
+
+funccallunrolling = unrolling_iterable(range(4))
 
 class Function(Wrappable):
     """A function is a code object captured with some environment:
@@ -44,24 +47,40 @@ class Function(Wrappable):
         return self.code
     
     def funccall(self, *args_w): # speed hack
+        from pypy.interpreter import gateway
+        from pypy.interpreter.pycode import PyCode
+        
         code = self.getcode() # hook for the jit
         nargs = len(args_w)
         fast_natural_arity = code.fast_natural_arity
         if nargs == fast_natural_arity:
             if nargs == 0:
+                assert isinstance(code, gateway.BuiltinCode0)                
                 return code.fastcall_0(self.space, self)
             elif nargs == 1:
+                assert isinstance(code, gateway.BuiltinCode1)
                 return code.fastcall_1(self.space, self, args_w[0])
             elif nargs == 2:
+                assert isinstance(code, gateway.BuiltinCode2)
                 return code.fastcall_2(self.space, self, args_w[0], args_w[1])
             elif nargs == 3:
+                assert isinstance(code, gateway.BuiltinCode3)                
                 return code.fastcall_3(self.space, self, args_w[0],
                                        args_w[1], args_w[2])
             elif nargs == 4:
+                assert isinstance(code, gateway.BuiltinCode4)                
                 return code.fastcall_4(self.space, self, args_w[0],
                                        args_w[1], args_w[2], args_w[3])
+        elif (nargs|PyCode.FLATPYCALL) == fast_natural_arity:
+            assert isinstance(code, PyCode)            
+            if nargs < 5:
+                new_frame = self.space.createframe(code, self.w_func_globals,
+                                                   self.closure)
+                for i in funccallunrolling:
+                    if i < nargs:
+                        new_frame.fastlocals_w[i] = args_w[i]
+                return new_frame.run()                                    
         elif nargs >= 1 and fast_natural_arity == -1:
-            from pypy.interpreter import gateway
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             return code.funcrun_obj(self, args_w[0],
                                     Arguments(self.space,
@@ -70,37 +89,33 @@ class Function(Wrappable):
 
     def funccall_valuestack(self, nargs, frame): # speed hack
         from pypy.interpreter import gateway
+        from pypy.interpreter.pycode import PyCode
+            
         code = self.getcode() # hook for the jit
         fast_natural_arity = code.fast_natural_arity        
         if nargs == fast_natural_arity:
-            from pypy.interpreter.pycode import PyCode
-            if type(code) is PyCode:
-                new_frame = self.space.createframe(code, self.w_func_globals,
-                                                   self.closure)
-                for i in xrange(nargs):
-                    w_arg = frame.peekvalue(nargs-1-i)
-                    new_frame.fastlocals_w[i] = w_arg
-                return new_frame.run()                
-            else:
-                if nargs == 0:
-                    assert isinstance(code, gateway.BuiltinCode0)
-                    return code.fastcall_0(self.space, self)
-                elif nargs == 1:
-                    assert isinstance(code, gateway.BuiltinCode1)
-                    return code.fastcall_1(self.space, self, frame.peekvalue(0))
-                elif nargs == 2:
-                    assert isinstance(code, gateway.BuiltinCode2)
-                    return code.fastcall_2(self.space, self, frame.peekvalue(1),
-                                           frame.peekvalue(0))
-                elif nargs == 3:
-                    assert isinstance(code, gateway.BuiltinCode3)
-                    return code.fastcall_3(self.space, self, frame.peekvalue(2),
-                                           frame.peekvalue(1), frame.peekvalue(0))
-                elif nargs == 4:
-                    assert isinstance(code, gateway.BuiltinCode4)
-                    return code.fastcall_4(self.space, self, frame.peekvalue(3),
-                                           frame.peekvalue(2), frame.peekvalue(1),
-                                            frame.peekvalue(0))
+            if nargs == 0:
+                assert isinstance(code, gateway.BuiltinCode0)
+                return code.fastcall_0(self.space, self)
+            elif nargs == 1:
+                assert isinstance(code, gateway.BuiltinCode1)
+                return code.fastcall_1(self.space, self, frame.peekvalue(0))
+            elif nargs == 2:
+                assert isinstance(code, gateway.BuiltinCode2)
+                return code.fastcall_2(self.space, self, frame.peekvalue(1),
+                                       frame.peekvalue(0))
+            elif nargs == 3:
+                assert isinstance(code, gateway.BuiltinCode3)
+                return code.fastcall_3(self.space, self, frame.peekvalue(2),
+                                       frame.peekvalue(1), frame.peekvalue(0))
+            elif nargs == 4:
+                assert isinstance(code, gateway.BuiltinCode4)
+                return code.fastcall_4(self.space, self, frame.peekvalue(3),
+                                       frame.peekvalue(2), frame.peekvalue(1),
+                                        frame.peekvalue(0))
+        elif (nargs|PyCode.FLATPYCALL) == fast_natural_arity:
+            assert isinstance(code, PyCode)
+            return self._flat_pycall(code, nargs, frame)
         elif fast_natural_arity == -1 and nargs >= 1:
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             w_obj = frame.peekvalue(nargs-1)
@@ -117,6 +132,15 @@ class Function(Wrappable):
         finally:
             if isinstance(args, ArgumentsFromValuestack):
                 args.frame = None
+
+    def _flat_pycall(self, code, nargs, frame):
+        # code is a PyCode
+        new_frame = self.space.createframe(code, self.w_func_globals,
+                                                   self.closure)
+        for i in xrange(nargs):
+            w_arg = frame.peekvalue(nargs-1-i)
+            new_frame.fastlocals_w[i] = w_arg
+        return new_frame.run()                        
 
     def getdict(self):
         if self.w_func_dict is None:
