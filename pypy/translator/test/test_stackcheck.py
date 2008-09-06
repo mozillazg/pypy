@@ -118,7 +118,7 @@ def test_gctransformed():
             if in_between and spaceop.opname == 'gc_reload_possibly_moved':
                 reload += 1
                 
-        assert reload == 1 # we would like this to be zero
+        assert reload == 0
         
 def test_stackless():
     t = TranslationContext()
@@ -132,6 +132,7 @@ def test_stackless():
     t.checkgraphs()
     assert n == 1
 
+    t.config.translation.stackless = True
     stacklesstransf = StacklessTransformer(t, g)
         
     f_graph = graphof(t, f)
