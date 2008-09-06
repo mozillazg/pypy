@@ -1,12 +1,18 @@
 
 from pypy.translator.benchmark import bench_mem
+import time
 
-def test_basic():
-    res = bench_mem.run_child('python', ['-c', 'pass'])
-    assert 'python' in res
+def test_compute_memory_usage():
+    pid = bench_mem.run_child('python', ['-c', 'import time;time.sleep(1)'])
+    time.sleep(.3)
+    assert pid
+    res = open('/proc/%d/smaps' % pid).read()
+    parsed = bench_mem.parse_smaps_output(res)
+    assert parsed.shared
+    assert parsed.private
 
 def test_parse():
-    res = bench_mem.parse_pmap_output(example_data)
+    res = bench_mem.parse_smaps_output(example_data)
     assert res.private == 796 + 120 + 924
     assert res.shared == 60
     assert res.priv_map == {
