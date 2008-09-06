@@ -474,7 +474,7 @@ def f%s:
             code = PyCode._from_code(self.space, f.func_code)
             fn = Function(self.space, code, self.space.newdict())
 
-            assert fn.code.fast_natural_arity == i                 
+            assert fn.code.fast_natural_arity == i|PyCode.FLATPYCALL
             if i < 5:
 
                  def bomb(*args):
@@ -488,7 +488,7 @@ def f%s:
             check = space.is_true(space.eq(w_res, space.wrap(res)))
             assert check
 
-    def test_fastcall(self):
+    def test_flatcall(self):
         space = self.space
         
         def f(a):
@@ -496,7 +496,7 @@ def f%s:
         code = PyCode._from_code(self.space, f.func_code)
         fn = Function(self.space, code, self.space.newdict())
 
-        assert fn.code.fast_natural_arity == 1
+        assert fn.code.fast_natural_arity == 1|PyCode.FLATPYCALL
 
         def bomb(*args):
             assert False, "shortcutting should have avoided this"
@@ -515,7 +515,7 @@ def f%s:
 
         assert w_res is w_3
 
-    def test_fastcall_method(self):
+    def test_flatcall_method(self):
         space = self.space
         
         def f(self, a):
@@ -523,7 +523,7 @@ def f%s:
         code = PyCode._from_code(self.space, f.func_code)
         fn = Function(self.space, code, self.space.newdict())
 
-        assert fn.code.fast_natural_arity == 2
+        assert fn.code.fast_natural_arity == 2|PyCode.FLATPYCALL
 
         def bomb(*args):
             assert False, "shortcutting should have avoided this"
