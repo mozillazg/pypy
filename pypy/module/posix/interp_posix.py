@@ -591,12 +591,32 @@ def setgid(space, arg):
     return space.w_None
 setgid.unwrap_spec = [ObjSpace, int]
 
+def chroot(space, path):
+    """ chroot(path)
+
+    Change root directory to path.
+    """
+    try:
+        os.chroot(path)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    return space.w_None
+chroot.unwrap_spec = [ObjSpace, str]
+
 def getgid(space):
     """ getgid() -> gid
     
     Return the current process's group id.
     """
     return space.wrap(os.getgid())
+getgid.unwrap_spec = [ObjSpace]
+
+def getegid(space):
+    """ getegid() -> gid
+    
+    Return the current process's effective group id.
+    """
+    return space.wrap(os.getegid())
 getgid.unwrap_spec = [ObjSpace]
 
 def geteuid(space):
