@@ -28,3 +28,21 @@ Also, suggestions include:
 
 I think we need some kind of graph which shows how exactly this grows with
 number of objects.
+
+Some notes how to read memory footprint on linux:
+
+all stuff that we want to know is located in /proc/$pid/smaps (beginning
+from linux 2.6.16, which is almost any apparently). This contains:
+Size, Rss, Shared and Private. Note that all addresses are virtual, which means
+that having the same address in two processes doesn't mean it's the same memory.
+
+Explanation:
+Size: total (virtual) size of memory, possibly irrelevant
+Rss: real size of memory
+Shared: memory shared with other processes. Note that this is simply a counter
+how many processes reference it. Memory can move private -> shared in case
+some other process will load the same library or so.
+Private: private memory owned by a process.
+
+Distinction clean/dirty is related to swap and probably irrelevant to our
+measurments.
