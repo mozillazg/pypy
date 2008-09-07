@@ -63,8 +63,10 @@ class ListItem:
                     # things more general
                     self, other = other, self
 
-            if self.resized and other.dont_resize:
-                raise TooLateForChange()
+            if other.dont_resize:
+                if self.resized:                    
+                    raise TooLateForChange()
+                self.dont_resize = True
             if other.mutated: self.mutate()
             if other.resized:
                 self.resize()
