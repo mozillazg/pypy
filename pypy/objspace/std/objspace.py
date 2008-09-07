@@ -8,6 +8,7 @@ from pypy.interpreter import function
 from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table, \
      BytecodeCorruption
 from pypy.rlib.objectmodel import instantiate
+from pypy.rlib.debug import make_sure_not_resized
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache 
 from pypy.tool.sourcetools import func_with_new_name
@@ -563,6 +564,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newtuple(self, list_w):
         from pypy.objspace.std.tupletype import wraptuple
         assert isinstance(list_w, list)
+        make_sure_not_resized(list_w)
         return wraptuple(self, list_w)
 
     def newlist(self, list_w):

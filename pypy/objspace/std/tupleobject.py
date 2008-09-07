@@ -3,11 +3,14 @@ from pypy.objspace.std.inttype import wrapint
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.interpreter import gateway
+from pypy.rlib.debug import make_sure_not_resized
+from pypy.annotation import model as annmodel
 
 class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
     
     def __init__(w_self, wrappeditems):
+        make_sure_not_resized(wrappeditems)
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
 
     def __repr__(w_self):
