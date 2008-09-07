@@ -3047,7 +3047,7 @@ class TestAnnotateTestCase:
         def checker(ann, bk):
             called.append(True)
             assert not ann.listdef.listitem.mutated
-            ann.listdef.dont_resize_any_more()
+            ann.listdef.never_resize()
         
         def f():
             l = [1,2,3]
