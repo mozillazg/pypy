@@ -11,12 +11,15 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import NoneNotWrapped 
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.debug import make_sure_not_resized
 
 # helper
 
 def unpack_str_tuple(space,w_str_tuple):
-    return [space.str_w(w_el) for w_el in space.unpackiterable(w_str_tuple)]
+    els = []
+    for w_el in space.unpackiterable(w_str_tuple):
+        els.append(space.str_w(w_el))
+    return els
+
 
 # code object contants, for co_flags below
 CO_OPTIMIZED    = 0x0001
@@ -63,7 +66,7 @@ class PyCode(eval.Code):
         self.co_stacksize = stacksize
         self.co_flags = flags
         self.co_code = code
-        self.co_consts_w = make_sure_not_resized(consts)
+        self.co_consts_w = consts
         self.co_names_w = [space.new_interned_str(aname) for aname in names]
         self.co_varnames = varnames
         self.co_freevars = freevars
@@ -119,13 +122,12 @@ class PyCode(eval.Code):
             This method is called by our compile builtin function.
         """
         assert isinstance(code, types.CodeType)
-        newconsts_w = [None] * len(code.co_consts)
-        num = 0
+        newconsts_w = []
         for const in code.co_consts:
             if isinstance(const, types.CodeType): # from stable compiler
                 const = PyCode._from_code(space, const, hidden_applevel=hidden_applevel)
-            newconsts_w[num] = space.wrap(const)
-            num += 1
+
+            newconsts_w.append(space.wrap(const))
         # stick the underlying CPython magic value, if the code object
         # comes from there
         return PyCode(space, code.co_argcount,
@@ -211,14 +213,12 @@ class PyCode(eval.Code):
 
     def _to_code(self):
         """For debugging only."""
-        consts = [None] * len(self.co_consts_w)
-        num = 0
+        consts = []
         for w in self.co_consts_w:
             if isinstance(w, PyCode):
-                consts[num] = w._to_code()
+                consts.append(w._to_code())
             else:
-                consts[num] = self.space.unwrap(w)
-            num += 1
+                consts.append(self.space.unwrap(w))
         return new.code( self.co_argcount,
                          self.co_nlocals,
                          self.co_stacksize,
@@ -321,11 +321,8 @@ class PyCode(eval.Code):
                                  space.wrap("code: argcount must not be negative"))
         if nlocals < 0:
             raise OperationError(space.w_ValueError,
-                                 space.wrap("code: nlocals must not be negative"))
-        if not space.is_true(space.isinstance(w_constants, space.w_tuple)):
-            raise OperationError(space.w_TypeError,
-                                 space.wrap("Expected tuple for constants"))
-        consts_w   = space.viewiterable(w_constants)
+                                 space.wrap("code: nlocals must not be negative"))        
+        consts_w   = space.unpacktuple(w_constants)
         names      = unpack_str_tuple(space, w_names)
         varnames   = unpack_str_tuple(space, w_varnames)
         if w_freevars is not None:
