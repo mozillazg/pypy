@@ -323,6 +323,15 @@ class SomeIterator(SomeObject):
     def can_be_none(self):
         return False
 
+class SomeListIterator(SomeObject):
+    def __init__(self, listdefs):
+        self.listdefs = listdefs
+
+    def __eq__(self, other):
+        if not isinstance(other, SomeListIterator):
+            return False
+        return dict.fromkeys(self.listdefs) == dict.fromkeys(other.listdefs)
+
 class SomeInstance(SomeObject):
     "Stands for an instance of a (user-defined) class."
 
