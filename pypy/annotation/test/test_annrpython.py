@@ -10,7 +10,7 @@ from pypy.annotation.annrpython import RPythonAnnotator as _RPythonAnnotator
 from pypy.translator.translator import graphof as tgraphof
 from pypy.annotation import policy
 from pypy.annotation import specialize
-from pypy.annotation.listdef import ListDef
+from pypy.annotation.listdef import ListDef, TooLateForChange
 from pypy.annotation.dictdef import DictDef
 from pypy.objspace.flow.model import *
 from pypy.rlib.rarithmetic import r_uint, base_int, r_longlong, r_ulonglong
@@ -3039,6 +3039,28 @@ class TestAnnotateTestCase:
             return x[:-1]
 
         a.build_types(f, [str])
+
+    def test_listitem_no_mutating(self):
+        from pypy.rlib.debug import check_annotation
+        called = []
+
+        def checker(ann, bk):
+            called.append(True)
+            assert not ann.listdef.listitem.mutated
+            ann.listdef.dont_resize_any_more()
+        
+        def f():
+            l = [1,2,3]
+            check_annotation(l, checker)
+            return l
+
+        def g():
+            l = f()
+            l.append(4)
+
+        a = self.RPythonAnnotator()
+        py.test.raises(TooLateForChange, a.build_types, g, [])
+        assert called
 
 def g(n):
     return [0,1,2,n]

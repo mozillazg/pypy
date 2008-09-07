@@ -26,6 +26,7 @@ class ListItem:
         self.bookkeeper = bookkeeper
         self.itemof = {}  # set of all ListDefs using this ListItem
         self.read_locations = {}
+        self.dont_resize = False
         if bookkeeper is None:
             self.dont_change_any_more = True
 
@@ -37,7 +38,7 @@ class ListItem:
 
     def resize(self):
         if not self.resized:
-            if self.dont_change_any_more:
+            if self.dont_change_any_more or self.dont_resize:
                 raise TooLateForChange
             self.resized = True
 
@@ -180,6 +181,9 @@ class ListDef:
     def resize(self):
         self.listitem.mutate()
         self.listitem.resize()
+
+    def dont_resize_any_more(self):
+        self.listitem.dont_resize = True
 
 
 MOST_GENERAL_LISTDEF = ListDef(None, SomeObject())
