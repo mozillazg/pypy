@@ -7,6 +7,7 @@ from pypy.rpython.memory import gctypelayout
 from pypy.rpython.memory.gc import marksweep
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib import rstack
 from pypy.rlib.debug import ll_assert
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.support import var_needsgc
@@ -25,7 +26,10 @@ class CollectAnalyzer(graphanalyze.GraphAnalyzer):
 
     def analyze_direct_call(self, graph, seen=None):
         try:
-            if graph.func._gctransformer_hint_cannot_collect_:
+            func = graph.func
+            if func is rstack.stack_check:
+                return self.translator.config.translation.stackless
+            if func._gctransformer_hint_cannot_collect_:
                 return False
         except AttributeError:
             pass

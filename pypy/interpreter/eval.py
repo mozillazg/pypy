@@ -62,18 +62,6 @@ class Code(Wrappable):
 
     def funcrun_obj(self, func, w_obj, args):
         return self.funcrun(func, args.prepend(w_obj))
-        
-    # a performance hack (see gateway.BuiltinCode1/2/3 and pycode.PyCode)
-    def fastcall_0(self, space, func):
-        raise NotImplementedError
-    def fastcall_1(self, space, func, w1):
-        raise NotImplementedError        
-    def fastcall_2(self, space, func, w1, w2):
-        raise NotImplementedError                
-    def fastcall_3(self, space, func, w1, w2, w3):
-        raise NotImplementedError
-    def fastcall_4(self, space, func, w1, w2, w3, w4):
-        raise NotImplementedError                                
 
 class Frame(Wrappable):
     """A frame is an environment supporting the execution of a code object.
