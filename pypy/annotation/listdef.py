@@ -182,7 +182,9 @@ class ListDef:
         self.listitem.mutate()
         self.listitem.resize()
 
-    def dont_resize_any_more(self):
+    def never_resize(self):
+        if self.listitem.resized:
+            raise TooLateForChange()
         self.listitem.dont_resize = True
 
 
