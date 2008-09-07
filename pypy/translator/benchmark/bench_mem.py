@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """ Usage: bench_mem.py [-l log] program_name [arg0] [arg1] ...
+
+Run a program with given args under constant memory usage monitoring.
+Dump output (which is step & private memory used) into a file suitable
+for plotting with gnuplot.
 """
 import os
 import py
