@@ -3062,6 +3062,21 @@ class TestAnnotateTestCase:
         py.test.raises(TooLateForChange, a.build_types, g, [])
         assert called
 
+    def test_listitem_never_resize(self):
+        from pypy.rlib.debug import check_annotation
+
+        def checker(ann, bk):
+            ann.listdef.never_resize()
+
+        def f():
+            l = [1,2,3]
+            l.append(4)
+            check_annotation(l, checker)
+
+        a = self.RPythonAnnotator()
+        py.test.raises(TooLateForChange, a.build_types, f, [])
+        
+
 def g(n):
     return [0,1,2,n]
 
