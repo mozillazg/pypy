@@ -80,3 +80,21 @@ class Entry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.inputarg(hop.args_r[0], arg=0)
 
+def make_sure_not_resized(arg):
+    """ Function checking whether annotation of SomeList is never resized,
+    useful for debugging. Does nothing when run directly
+    """
+    pass
+
+class Entry(ExtRegistryEntry):
+    _about_ = make_sure_not_resized
+
+    def compute_result_annotation(self, s_arg):
+        from pypy.annotation.model import SomeList
+        assert isinstance(s_arg, SomeList)
+        s_arg.listdef.never_resize()
+        return s_arg
+    
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        return hop.inputarg(hop.args_r[0], arg=0)
