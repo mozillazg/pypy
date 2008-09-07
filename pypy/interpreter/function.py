@@ -213,7 +213,7 @@ class Function(Wrappable):
             w(self.code),
             self.w_func_globals,
             w_closure,
-            nt(self.defs_w[:]),
+            nt(self.defs_w),
             self.w_func_dict,
             self.w_module,
         ]
@@ -244,7 +244,7 @@ class Function(Wrappable):
         values_w = self.defs_w
         if not values_w:
             return space.w_None
-        return space.newtuple(values_w[:])
+        return space.newtuple(values_w)
 
     def fset_func_defaults(space, self, w_defaults):
         if space.is_w(w_defaults, space.w_None):
