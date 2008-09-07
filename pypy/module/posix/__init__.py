@@ -97,6 +97,8 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['getegid'] = 'interp_posix.getegid'
     if hasattr(os, 'setuid'):
         interpleveldefs['setuid'] = 'interp_posix.setuid'
+    if hasattr(os, 'seteuid'):
+        interpleveldefs['seteuid'] = 'interp_posix.seteuid'
     if hasattr(os, 'setgid'):
         interpleveldefs['setgid'] = 'interp_posix.setgid'
     # not visible via os, inconsistency in nt:

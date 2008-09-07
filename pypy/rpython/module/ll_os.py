@@ -462,6 +462,10 @@ class RegisterOs(BaseLazyRegistering):
     def register_os_setuid(self):
         return self.extdef_for_function_int_to_int('setuid')
 
+    @registering_if(os, 'seteuid')
+    def register_os_seteuid(self):
+        return self.extdef_for_function_int_to_int('seteuid')
+
     @registering_if(os, 'setgid')
     def register_os_setgid(self):
         return self.extdef_for_function_int_to_int('setgid')

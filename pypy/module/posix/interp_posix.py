@@ -579,6 +579,18 @@ def setuid(space, arg):
     return space.w_None
 setuid.unwrap_spec = [ObjSpace, int]
 
+def seteuid(space, arg):
+    """ seteuid(uid)
+
+    Set the current process's effective user id.
+    """
+    try:
+        os.seteuid(arg)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    return space.w_None
+seteuid.unwrap_spec = [ObjSpace, int]
+
 def setgid(space, arg):
     """ setgid(gid)
 
