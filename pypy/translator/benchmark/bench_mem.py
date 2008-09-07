@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-""" Usage: bench_mem.py program_name [arg0] [arg1] ...
+""" Usage: bench_mem.py [-l log] program_name [arg0] [arg1] ...
 """
 import os
 import py
@@ -49,25 +49,33 @@ class ChildProcess(object):
     realos = os
     
     def __init__(self, name, args):
+        signal.signal(signal.SIGCHLD, lambda a,b: self.close())
         self.pid = run_child(name, args)
+        self.results = []
 
     def loop(self, logfile, interval):
         if isinstance(logfile, basestring):
             logfile = open(logfile, 'w')
         counter = 0
-        while 1:
-            try:
-                res = parse_smaps_output(open('/proc/%d/smaps' % self.pid).read())
-                print >>logfile, counter, ' ', res.private
-            except IOError:
-                self.close()
-                return
-            counter += 1
-            time.sleep(interval)
+        try:
+            while 1:
+                try:
+                    res = parse_smaps_output(open('/proc/%d/smaps' % self.pid).read())
+                    self.results.append((counter, res.private))
+                    if logfile:
+                        print >>logfile, counter, ' ', res.private
+                except IOError:
+                    return
+                counter += 1
+                time.sleep(interval)
+        except (KeyboardInterrupt, SystemExit):
+            os.kill(self.pid, signal.SIGTERM)
+            raise
 
     def close(self):
-        if self.pid:
+        if self.pid != -1:
             self.realos.waitpid(self.pid, 0)
+            self.pid = -1
 
     def __del__(self):
         self.close()
@@ -78,9 +86,27 @@ def run_child(name, args):
         os.execvp(name, [name] + args)
     return pid
 
+def parse_options(argv):
+    num = 0
+    logname = None
+    while num < len(argv):
+        arg = argv[num]
+        if arg == '-l':
+            logname = argv[num + 1]
+            num += 1
+        else:
+            name = argv[num]
+            if logname is None:
+                logname = py.path.local(name).basename + '.log'
+            args = argv[num + 1:]
+            return logname, name, args
+        num += 1
+    raise Exception("Wrong arguments: %s" % (argv,))
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print __doc__
         sys.exit(1)
-    cp = ChildProcess(sys.argv[1], sys.argv[2:])
-    cp.loop(sys.stdout, 0.1)
+    logname, name, args = parse_options(sys.argv[1:])
+    cp = ChildProcess(name, args)
+    cp.loop(logname, 0)
