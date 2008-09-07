@@ -63,8 +63,11 @@ class ListItem:
                     # things more general
                     self, other = other, self
 
+            if self.resized and other.dont_resize:
+                raise TooLateForChange()
             if other.mutated: self.mutate()
-            if other.resized: self.resize()
+            if other.resized:
+                self.resize()
             if other.range_step != self.range_step:
                 self.setrangestep(self._step_map[type(self.range_step),
                                                  type(other.range_step)])
