@@ -1,4 +1,5 @@
-from pypy.jit.codegen.x86_64.objmodel import Register64, Immediate32
+from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32
+
 
 #Mapping from register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
@@ -19,14 +20,23 @@ REGISTER_MAP = {
                 "r14": (1, 6),
                 "r15": (1, 7),
                 }
-
+                
+REGISTER_MAP_8BIT = {
+                    "al":0,
+                    "cl":1,
+                    "dl":2,
+                    }
+                    
 # This method wirtes the bitencodings into
 # the memory. The parameters are overwritten
 # if one of the operands is an register
-def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None, md1 = None, md2 = None):
+# tttn codes the flags and is only used by SETcc
+# extra is an extra byte for long opcodes like imul
+def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None, m = None, md1 = None, md2 = None, tttn = None, extra = None):
     def quadreg_instr(self, arg1, arg2):
         # move the parameter 
         # to the inner function
+        mod = m
         modrm1 = md1
         modrm2 = md2
         rexW = W
@@ -36,37 +46,44 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
         # Todo: other cases e.g memory as operand
         if isinstance(arg1,Register64):
             rexR, modrm1 = self.get_register_bits(arg1.reg)
-            
-        if isinstance(arg2,Register64):
-            rexB, modrm2 = self.get_register_bits(arg2.reg)
+        elif isinstance(arg1,Register8):
+            modrm1 = self.get_register_bits_8Bit(arg1.reg)
             
         # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate32):
+            # e.g: IMUL
+            if(modrm2=="sameReg"):
+                modrm2 = modrm1
+                rexB = rexR
             self.write_rex_byte(rexW, rexR, rexX, rexB)
             self.write(opcode)
             self.write_modRM_byte(3, modrm2, modrm1)
-            # FIXME: Bad solution
-            # TODO: support values > 255
-            if(arg2.value<256):
-                self.write(chr(arg2.value)) 
-                self.write(chr(0))
-                self.write(chr(0))
-                self.write(chr(0))
-        else:
+            self.writeImm32(arg2.value)
+        elif isinstance(arg2,Immediate8):
+            self.write_rex_byte(rexW, rexR, rexX, rexB)
+            self.write(opcode)
+            self.write_modRM_byte(3, modrm2, modrm1)
+            self.write(chr(arg2.value)) 
+        elif isinstance(arg2,Register64):
+            rexB, modrm2 = self.get_register_bits(arg2.reg)            
             # FIXME: exchange the two arguments (rexB/rexR)
             self.write_rex_byte(rexW, rexB, rexX, rexR)
             self.write(opcode)
-            self.write_modRM_byte(3, modrm2, modrm1)        
+            # used in imul
+            if not extra == None:
+                self.write(extra)
+            self.write_modRM_byte(mod, modrm2, modrm1)        
     return quadreg_instr
         
         
 # This method wirtes the bitencodings into
 # the memory. The parameters are overwritten
 # if one of the operands is an register
-def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None,  md1 = None, md2 = None):
+def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None, m = None, md1 = None, md2 = None, tttn=None, extra = None):
     def quadreg_instr(self, arg1):       
         # move the parameter 
         # to the inner function
+        mod = m
         modrm1 = md1
         modrm2 = md2
         rexW = W
@@ -77,13 +94,18 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         # Todo: other cases e.g memory as operand
         if isinstance(arg1,Register64):
             rexB, modrm1 = self.get_register_bits(arg1.reg)
+        if isinstance(arg1,Register8):
+            modrm1 = self.get_register_bits_8Bit(arg1.reg)
             
         # rexW(1) = 64bitMode 
         self.write_rex_byte(rexW, rexR, rexX, rexB)
         self.write(opcode)
-        self.write_modRM_byte(3, modrm2, modrm1)        
+        if not tttn == None:
+            byte = (9 << 4) | tttn
+            self.write(chr(byte))
+        self.write_modRM_byte(mod, modrm2, modrm1)        
     return quadreg_instr
-    
+        
 class X86_64CodeBuilder(object):
     """ creats x86_64 opcodes"""
     def write(self, data):
@@ -96,27 +118,45 @@ class X86_64CodeBuilder(object):
     
     
     # The opcodes differs depending on the operands
+    # Params:
+    # W, R, X, B, Opcode, mod, modrm1, modrm2
     
     # FIXME: rexX,rexB are set
-    _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", None, 2)  
-    _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x00", None, None)
+    _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 2)  
+    _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x00", 3, None, None)
     
-    _DEC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", None, 1)
-    _INC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", None, 0)
+    # FIXME: rexB is set
+    _CMP_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    1, "\x81", 3, None, 7)
+    _CMP_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x39", 3, None, None)
+    # FIXME: rex B is set
+    _CMP_8REG_IMM8   = make_two_operand_instr(   0,    0,    0,    0, "\x82", 3, None, 7)
+    
+    _DEC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 1)
+    _INC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 0)
 
      
-    _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", None, 0)
-    _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", None, None)
+    _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", 3, None, 0)
+    _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
+    
+    _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
+    _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
     
     # FIXME: rexW is set 
-    _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", None, 0)
-    _PUSH_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xFF", None, 6)
+    _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", 3, None, 0)
+    _PUSH_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 6)
      
-    _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", None, None)
+    _SETG_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,15)
+     
+    _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", 3, None, None)    
+    _SUB_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 5)
     
     # TODO: maybe a problem with more ore less than two arg.
     def ADD(self, op1, op2):
         method = getattr(self, "_ADD"+op1.to_string()+op2.to_string())
+        method(op1, op2)
+        
+    def CMP(self, op1, op2):
+        method = getattr(self, "_CMP"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
     def DEC(self, op1):
@@ -126,6 +166,10 @@ class X86_64CodeBuilder(object):
     def INC(self, op1):
         method = getattr(self, "_INC"+op1.to_string())
         method(op1)
+        
+    def JMP(self,displ):
+        self.write("\xE9")
+        self.writeImm32(displ)
         
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
@@ -138,9 +182,22 @@ class X86_64CodeBuilder(object):
     def MOV(self, op1, op2):
         method = getattr(self, "_MOV"+op1.to_string()+op2.to_string())
         method(op1, op2)
+        
+    def IMUL(self, op1, op2):
+        method = getattr(self, "_IMUL"+op1.to_string()+op2.to_string())
+        # exchange the two arguments because 
+        # the result is in the first register 
+        if(op1.to_string()=="_QWREG" and op2.to_string()=="_QWREG"):
+            method(op2, op1)
+        else:
+            method(op1, op2)
     
     def RET(self):
         self.write("\xC3")
+        
+    def SETG(self, op1):
+        method = getattr(self, "_SETG"+op1.to_string())
+        method(op1)
         
     def SUB(self, op1, op2):
         method = getattr(self, "_SUB"+op1.to_string()+op2.to_string())
@@ -149,6 +206,22 @@ class X86_64CodeBuilder(object):
     def get_register_bits(self, register):
         return REGISTER_MAP[register]
     
+    def get_register_bits_8Bit(self, register):
+        return REGISTER_MAP_8BIT[register]
+    
+    # Parse the integervalue to an charakter
+    # and write it
+    def writeImm32(self, imm32):
+        x = hex(imm32)
+        # parse to string and cut "0x" off
+        # fill with zeros if to short
+        y = "0"*(10-len(x))+x[2:len(x)]
+        assert len(y) == 8            
+        self.write(chr(int(y[6:8],16))) 
+        self.write(chr(int(y[4:6],16)))
+        self.write(chr(int(y[2:4],16)))
+        self.write(chr(int(y[0:2],16)))
+            
     
     # Rex-Prefix 4WRXB see AMD vol3 page 45
     def write_rex_byte(self, rexW, rexR, rexX, rexB):
