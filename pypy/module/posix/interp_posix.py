@@ -603,6 +603,18 @@ def setgid(space, arg):
     return space.w_None
 setgid.unwrap_spec = [ObjSpace, int]
 
+def setegid(space, arg):
+    """ setegid(gid)
+
+    Set the current process's effective group id.
+    """
+    try:
+        os.setegid(arg)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    return space.w_None
+setgid.unwrap_spec = [ObjSpace, int]
+
 def chroot(space, path):
     """ chroot(path)
 
