@@ -29,11 +29,11 @@ def make_mul(rgenop):
     builder.end()
     return gv_mul
     
-def make_mul_im32(rgenop):
+def make_mul_imm(rgenop, num):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_mul, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
     builder.start_writing()
-    gv_result = builder.genop2("int_mul", gv_x, rgenop.genconst(200))
+    gv_result = builder.genop2("int_mul", gv_x, rgenop.genconst(num))
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_mul
@@ -77,7 +77,7 @@ def make_pop(rgenop):
 
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RX86_64GenOp
-                    
+                        
     def test_inc(self):
         rgenop = self.RGenOp()
         inc_function = make_inc(rgenop)
@@ -94,10 +94,19 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         
     def test_mul_im32(self):
         rgenop = self.RGenOp()
-        mul_function = make_mul_im32(rgenop)
+        mul_function = make_mul_imm(rgenop,200)
         fnptr = self.cast(mul_function,1)
         res = fnptr(210)
         assert res == 42000
+        
+    # segmentation fault at mov(qwreg,imm64)
+    
+    #def test_mul_im64(self):
+    #    rgenop = self.RGenOp()
+    #    mul_function = make_mul_imm(rgenop,int("123456789",16))
+    #    fnptr = self.cast(mul_function,1)
+    #    res = fnptr(2)
+    #    assert res == int("123456789",16)*2
         
     def test_mul(self):
         rgenop = self.RGenOp()

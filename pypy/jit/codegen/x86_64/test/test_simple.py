@@ -21,7 +21,7 @@ def make_testbuilder(num_of_args):
     return builder, fp, inputargs_gv, token
     
 class TestSimple():   
-     
+    
     def test_add_big_num(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
         genv0 = inputargs_gv[0] #the first argument "place"
@@ -77,3 +77,4 @@ class TestSimple():
         eight = fp(10)
         assert eight == 8
         print eight
+        
