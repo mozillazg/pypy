@@ -267,6 +267,11 @@ class LazyObjSpaceGetter(object):
         return space
 
 
+class AppError(Exception):
+
+    def __init__(self, excinfo):
+        self.excinfo = excinfo
+
 class PyPyTestFunction(py.test.collect.Function):
     # All PyPy test items catch and display OperationErrors specially.
     #
@@ -279,8 +284,13 @@ class PyPyTestFunction(py.test.collect.Function):
                 raise OpErrKeyboardInterrupt, OpErrKeyboardInterrupt(), tb
             appexcinfo = appsupport.AppExceptionInfo(space, e) 
             if appexcinfo.traceback: 
-                raise Failed(excinfo=appsupport.AppExceptionInfo(space, e))
-            raise 
+                raise AppError(appexcinfo)
+            raise
+
+    def repr_failure(self, excinfo, outerr):
+        if excinfo.errisinstance(AppError):
+            excinfo = excinfo.value.excinfo
+        return super(PyPyTestFunction, self).repr_failure(excinfo, outerr)
 
 _pygame_imported = False
 

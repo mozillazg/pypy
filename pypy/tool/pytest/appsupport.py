@@ -29,6 +29,10 @@ class AppCode(object):
             return py.code.Source(self.path.read(mode="rU"))
     fullsource = property(fullsource, None, None, "Full source of AppCode")
 
+    def getargs(self):
+        # xxx WIP
+        return []
+
 class AppFrame(py.code.Frame):
 
     def __init__(self, space, pyframe):
