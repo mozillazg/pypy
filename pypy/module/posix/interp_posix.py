@@ -613,7 +613,7 @@ def setegid(space, arg):
     except OSError, e:
         raise wrap_oserror(space, e)
     return space.w_None
-setgid.unwrap_spec = [ObjSpace, int]
+setegid.unwrap_spec = [ObjSpace, int]
 
 def chroot(space, path):
     """ chroot(path)
