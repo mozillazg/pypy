@@ -111,6 +111,22 @@ def run_cooperative(func):
             lambda x: os.write(parentwrite, x),
             pid)
 
+def measure(measure_func, funcs_to_run):
+    results = []
+    for func in funcs_to_run:
+        read, write, pid = run_cooperative(func)
+        elem = []
+        while 1:
+            res = read()
+            if res == 'e':
+                os.waitpid(pid, 0)
+                break
+            else:
+                elem.append(measure_func(pid))
+                write('x')
+        results.append(elem)
+    return results
+
 def run_child(name, args):
     pid = os.fork()
     if not pid:
