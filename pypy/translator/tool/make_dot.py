@@ -54,10 +54,11 @@ class DotGen:
                   color="black", 
                   dir="forward",
                   weight="5",
+                  constraint="true",
                   ):
         d = locals()
         attrs = [('%s="%s"' % (x, d[x].replace('"', '\\"').replace('\n', '\\n')))
-                 for x in ['label', 'style', 'color', 'dir', 'weight']]
+                 for x in ['label', 'style', 'color', 'dir', 'weight', 'constraint']]
         self.emit('edge [%s];' % ", ".join(attrs))
         self.emit('%s -> %s' % (safename(name1), safename(name2)))
 
