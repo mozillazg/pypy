@@ -26,13 +26,27 @@ def test_parse():
 def test_run_cooperative():
     def f(read, write):
         x = read()
-        assert x == '3'
-        write('4')
+        assert x == 'y'
+        write('x')
     
     read, write, pid = bench_mem.run_cooperative(f)
     assert pid
-    write('3')
-    assert read() == '4'
+    write('y')
+    assert read() == 'x'
+
+def test_measure_cooperative():
+    def f1(read, write):
+        write('g')
+        read()
+        write('g')
+        read()
+        write('e')
+
+    def measure(arg):
+        return 42
+
+    measurments = bench_mem.measure(measure, [f1, f1])
+    assert measurments == [[42, 42], [42, 42]]
 
 example_data = '''
 08048000-0813f000 r-xp 00000000 fd:00 75457      /usr/bin/python2.5
