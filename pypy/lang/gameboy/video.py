@@ -85,32 +85,109 @@ class ControlRegister(object):
 class Mode(object):
     def id(self):
         raise Exception()
+    
     def __init__(self, video):
         self.video = video
+
+    def emulate_hblank_line_y_compare(self, stat_check=False):
+        if self.video.line_y == self.video.line_y_compare:
+            if not (stat_check and self.video.status.line_y_compare_flag):
+                self.video.line_y_line_y_compare_interrupt_check()
+        else:
+            self.video.status.line_y_compare_flag = False
 
 class Mode0(Mode):
     def id(self):
         return 0
+    
     def emulate(self):
-        self.video.emulate_hblank()
-
+        #self.video.emulate_hblank()
+        self.emulate_hblank()
+        
+    def emulate_hblank(self):
+        self.video.line_y += 1
+        self.emulate_hblank_line_y_compare()
+        if self.video.line_y < 144:
+            self.video.set_mode_2()
+        else:
+            self.emulate_hblank_part_2()
+            
+    def emulate_hblank_part_2(self):
+        if self.video.display:
+            self.video.draw_frame()
+        self.video.frames += 1
+        if self.video.frames >= self.video.frame_skip:
+            self.video.display = True
+            self.video.frames = 0
+        else:
+            self.video.display = False
+        self.video.set_mode_1_begin()
+        self.video.v_blank  = True
+        
+            
 class Mode1(Mode):
     def id(self):
         return 1
+    
     def emulate(self):
-        self.video.emulate_v_blank()
-
+        self.emulate_v_blank()
+   
+    def emulate_v_blank(self):
+        if self.video.v_blank:
+            self.emulate_v_blank_v_blank()
+        elif self.video.line_y == 0:
+            self.video.set_mode_2()
+        else:
+            self.emulate_v_blank_other()
+ 
+    def emulate_v_blank_v_blank(self):
+        self.video.v_blank  = False
+        self.video.set_mode_1_between()
+        self.video.v_blank_interrupt_check()
+                  
+    def emulate_v_blank_other(self):
+        if self.video.line_y < 153:
+            self.emulate_v_blank_mode_1()
+        else:
+            self.video.line_y        = 0
+            self.video.window_line_y = 0
+            self.video.set_mode_1_between()
+        self.emulate_hblank_line_y_compare() 
+                
+    def emulate_v_blank_mode_1(self):
+        self.video.line_y += 1
+        if self.video.line_y == 153:
+            self.video.set_mode_1_end()
+        else:
+            self.video.set_mode_1()
+            
 class Mode2(Mode):
     def id(self):
         return 2
+    
     def emulate(self):
-        self.video.emulate_oam()
+        self.emulate_oam()
+        
+    def emulate_oam(self):
+        self.video.set_mode_3_begin()
 
 class Mode3(Mode):
+
     def id(self):
         return 3
+    
     def emulate(self):
-        self.video.emulate_transfer()
+        self.emulate_transfer()
+        
+    def emulate_transfer(self):
+        if self.video.transfer:
+            if self.video.display:
+                self.video.draw_line()
+            self.video.set_mode_3_end()
+        else:
+            self.video.set_mode_0()
+        
+# -----------------------------------------------------------------------------
 
 class StatusRegister(object):
     """
@@ -126,11 +203,15 @@ class StatusRegister(object):
             3: During Transfering Data to LCD Driver
     """
     def __init__(self, video):
-        self.modes                  = [Mode0(video),
-                                       Mode1(video),
-                                       Mode2(video),
-                                       Mode3(video)]
+    	self.create_modes(video)
         self.reset()
+        
+    def create_modes(self, video):
+    	self.mode0 = Mode0(video)
+    	self.mode1 = Mode1(video)
+    	self.mode2 = Mode2(video)
+    	self.mode3 = Mode3(video)
+        self.modes   = [self.mode0, self.mode1, self.mode2, self.mode3]
         
     def reset(self):
         self.set_mode(0x02)
@@ -433,7 +514,7 @@ class Video(iMemory):
         """
         self.line_y_compare = data
         if self.control.lcd_enabled:
-            self.emulate_hblank_line_y_compare(stat_check=True)
+            self.status.mode0.emulate_hblank_line_y_compare(stat_check=True)
                 
     def get_dma(self):
         return self.dma
@@ -623,73 +704,8 @@ class Video(iMemory):
 
     def current_mode(self):
         return self.status.current_mode
-               
-    def emulate_oam(self):
-        self.set_mode_3_begin()
 
-    def emulate_transfer(self):
-        if self.transfer:
-            if self.display:
-                self.draw_line()
-            self.set_mode_3_end()
-        else:
-            self.set_mode_0()
     
-    def emulate_hblank(self):
-        self.line_y+=1
-        self.emulate_hblank_line_y_compare()
-        if self.line_y < 144:
-            self.set_mode_2()
-        else:
-            self.emulate_hblank_part_2()
-            
-    def emulate_hblank_line_y_compare(self, stat_check=False):
-        if self.line_y == self.line_y_compare:
-            if not (stat_check and self.status.line_y_compare_flag):
-                self.line_y_line_y_compare_interrupt_check()
-        else:
-            self.status.line_y_compare_flag = False
-   
-    def emulate_hblank_part_2(self):
-        if self.display:
-            self.draw_frame()
-        self.frames += 1
-        if self.frames >= self.frame_skip:
-            self.display = True
-            self.frames = 0
-        else:
-            self.display = False
-        self.set_mode_1_begin()
-        self.v_blank  = True
-        
-    def emulate_v_blank(self):
-        if self.v_blank:
-            self.emulate_v_blank_v_blank()
-        elif self.line_y == 0:
-            self.set_mode_2()
-        else:
-            self.emulate_v_blank_other()
-
-    def emulate_v_blank_v_blank(self):
-        self.v_blank  = False
-        self.set_mode_1_between()
-        self.v_blank_interrupt_check()
-        
-    def emulate_v_blank_other(self):
-        if self.line_y < 153:
-            self.emulate_v_blank_mode_1()
-        else:
-            self.line_y        = 0
-            self.window_line_y = 0
-            self.set_mode_1_between()
-        self.emulate_hblank_line_y_compare()
-            
-    def emulate_v_blank_mode_1(self):
-        self.line_y += 1
-        if self.line_y == 153:
-            self.set_mode_1_end()
-        else:
-            self.set_mode_1()
     
     # graphics handling --------------------------------------------------------
     
