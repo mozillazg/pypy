@@ -23,6 +23,17 @@ def test_parse():
         '/lib/libncurses.so.5.6' : 60,
        }
 
+def test_run_cooperative():
+    def f(read, write):
+        x = read()
+        assert x == '3'
+        write('4')
+    
+    read, write, pid = bench_mem.run_cooperative(f)
+    assert pid
+    write('3')
+    assert read() == '4'
+
 example_data = '''
 08048000-0813f000 r-xp 00000000 fd:00 75457      /usr/bin/python2.5
 Size:                988 kB

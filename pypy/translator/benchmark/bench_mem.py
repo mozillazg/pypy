@@ -53,6 +53,7 @@ class ChildProcess(object):
     realos = os
     
     def __init__(self, name, args):
+        self.pid = -1
         signal.signal(signal.SIGCHLD, lambda a,b: self.close())
         self.pid = run_child(name, args)
         self.results = []
@@ -83,6 +84,32 @@ class ChildProcess(object):
 
     def __del__(self):
         self.close()
+
+def run_cooperative(func):
+    """ The idea is that we fork() and execute the function func in one
+    process. In parent process we measure private memory obtained by a process
+    when we read anything in pipe. We send back that we did that
+    """
+    parentread, childwrite = os.pipe()
+    childread, parentwrite = os.pipe()
+    pid = os.fork()
+    if not pid:
+        os.close(parentread)
+        os.close(parentwrite)
+        try:
+            func(lambda : os.read(childread, 1),
+                 lambda x: os.write(childwrite, x))
+        except (SystemExit, KeyboardInterrupt):
+            pass
+        except:
+            import traceback
+            traceback.print_tb(sys.exc_info()[2])
+        os._exit(1)
+    os.close(childread)
+    os.close(childwrite)
+    return (lambda : os.read(parentread, 1),
+            lambda x: os.write(parentwrite, x),
+            pid)
 
 def run_child(name, args):
     pid = os.fork()
