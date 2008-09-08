@@ -279,12 +279,12 @@ class PyPyTestFunction(py.test.collect.Function):
         try:
             target(*args)
         except OperationError, e:
+            tb = sys.exc_info()[2]
             if e.match(space, space.w_KeyboardInterrupt):
-                tb = sys.exc_info()[2]
                 raise OpErrKeyboardInterrupt, OpErrKeyboardInterrupt(), tb
             appexcinfo = appsupport.AppExceptionInfo(space, e) 
             if appexcinfo.traceback: 
-                raise AppError(appexcinfo)
+                raise AppError, AppError(appexcinfo), tb
             raise
 
     def repr_failure(self, excinfo, outerr):
