@@ -33,6 +33,7 @@ def make_one_argument_method(name):
 
 
 # a small helper that provides correct type signature
+# used by sigtoken
 def map_arg(arg):
     if isinstance(arg, lltype.Ptr):
         arg = llmemory.Address
@@ -101,13 +102,13 @@ class Builder(model.GenBuilder):
     
     def op_int_gt(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
-        # You can not use evry register for
+        # You can not use every register for
         # 8 bit operations, so you have to
         # choose rax,rcx or rdx 
         # TODO: rcx rdx
         gv_z = self.allocate_register("rax")
         self.mc.SETG(Register8("al"))
-        return Register8("al")
+        return Register64("rax")
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")

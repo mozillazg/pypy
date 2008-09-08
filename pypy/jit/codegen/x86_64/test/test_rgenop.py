@@ -9,7 +9,17 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 
 def skip(self):
     py.test.skip("not implemented yet")
+
+def make_cmp_gt(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_cmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
+    builder.start_writing()
     
+    gv_result = builder.genop2("int_gt", gv_x, gv_y)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_cmp
+
 def make_mul(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_mul, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
@@ -63,10 +73,11 @@ def make_pop(rgenop):
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_pop
+        
 
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RX86_64GenOp
-    
+                    
     def test_inc(self):
         rgenop = self.RGenOp()
         inc_function = make_inc(rgenop)
@@ -94,6 +105,17 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(mul_function,2)
         res = fnptr(1200,300)
         assert res == 360000
+        
+    def test_greater(self):
+        rgenop = self.RGenOp()
+        cmp_function = make_cmp_gt(rgenop)
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3>4?
+        assert res == 0  # false
+        res = fnptr(4,3)
+        assert res == 1 
+        res = fnptr(4,4)
+        assert res == 0
         
    # def test_push_and_pop(self):
    #     rgenop = self.RGenOp()
