@@ -1,4 +1,4 @@
-from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32
+from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32, Immediate64
 
 
 #Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
@@ -108,6 +108,29 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         self.write_modRM_byte(mod, modrm2, modrm1)        
     return quadreg_instr
         
+# TODO: comment        
+def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None, B = None, opcode =None, md1 = None, md2 = None):
+    def quadreg_instr(self, arg1, arg2):
+        # move the parameter 
+        # to the inner function
+        modrm1 = md1
+        modrm2 = md2
+        rexW = W
+        rexR = R
+        rexX = X
+        rexB = B
+        # TODO: other cases e.g memory as operand
+        # FIXME: rexB?
+        if isinstance(arg1,Register64):
+            rexB, modrm1 = self.get_register_bits(arg1.reg)
+            
+        # exchange the two arguments (modrm2/modrm1)
+        if isinstance(arg2,Immediate64):
+            self.write_rex_byte(rexW, rexR, rexX, rexB)
+            self.write(opcode+chr(modrm1))
+            self.writeImm64(arg2.value)
+    return quadreg_instr
+        
 class X86_64CodeBuilder(object):
     """ creats x86_64 opcodes"""
     def write(self, data):
@@ -139,10 +162,13 @@ class X86_64CodeBuilder(object):
      
     _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", 3, None, 0)
     _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
-    
+    _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"\xB8",None,None)
+        
     _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
     _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
     
+    _JMP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 4)
+
     # FIXME: rexW is set 
     _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", 3, None, 0)
     _PUSH_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 6)
@@ -169,9 +195,12 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_INC"+op1.to_string())
         method(op1)
         
-    def JMP(self,displ):
-        self.write("\xE9")
-        self.writeImm32(displ)
+    # op1 must be a register
+    def JMP(self,op1):
+        method = getattr(self, "_JMP"+op1.to_string())
+        method(op1)
+        #self.write("\xE9")
+        #self.writeImm32(displ)
         
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
@@ -219,6 +248,24 @@ class X86_64CodeBuilder(object):
         # fill with zeros if to short
         y = "0"*(10-len(x))+x[2:len(x)]
         assert len(y) == 8            
+        self.write(chr(int(y[6:8],16))) 
+        self.write(chr(int(y[4:6],16)))
+        self.write(chr(int(y[2:4],16)))
+        self.write(chr(int(y[0:2],16)))
+        
+        
+    # Parse the integervalue to an charakter
+    # and write it
+    def writeImm64(self, imm64):
+        x = hex(imm64)
+        # parse to string and cut "0x" off
+        # fill with zeros if to short
+        y = "0"*(18-len(x))+x[2:len(x)]
+        assert len(y) == 16    
+        self.write(chr(int(y[14:16],16))) 
+        self.write(chr(int(y[12:14],16)))
+        self.write(chr(int(y[10:12],16)))
+        self.write(chr(int(y[8:10],16)))        
         self.write(chr(int(y[6:8],16))) 
         self.write(chr(int(y[4:6],16)))
         self.write(chr(int(y[2:4],16)))

@@ -1,6 +1,6 @@
 from pypy.jit.codegen import model
 from pypy.rlib.objectmodel import specialize
-from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32
+from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32, Immediate64
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
 #TODO: understand llTypesystem
 from pypy.rpython.lltypesystem import llmemory, lltype 
@@ -20,7 +20,16 @@ def make_two_argument_method(name):
         gv_z = self.allocate_register()
         self.mc.MOV(gv_z, gv_x)
         method = getattr(self.mc, name)
-        method(gv_z, gv_y)
+        
+        # Many operations don't support
+        # 64 Bit Immmediates directly
+        if isinstance(gv_y,Immediate64):
+            gv_w = self.allocate_register()
+            self.mc.MOV(gv_w, gv_y)
+            method(gv_z, gv_w)
+        else: 
+            method(gv_z, gv_y)
+            
         return gv_z
     return op_int
 
@@ -96,7 +105,7 @@ class Builder(model.GenBuilder):
 
     def jump_if_true(self, gv_condition, args_for_jump_gv):
         targetbuilder = Builder()
-        self.mc.CMP(gv_condition, Immediate8(0))
+        self.mc.CMP(gv_condition, Immediate32(0))
         #targetbuilder.come_from(self.mc, 'JNE')
         return targetbuilder
     
@@ -117,11 +126,13 @@ class Builder(model.GenBuilder):
         self.mc.RET()
         self._close()
         
-   #TODO: Implementation
+    # if the label is greater than 32bit
+    # it must be in a register
     def finish_and_goto(self, outputargs_gv, target):
         self._open()
-        #FIXME: startaddr is maybe not 32bit
-        self.mc.JMP(target.startaddr)
+        gv_x = self.allocate_register()
+        self.mc.MOV(gv_x,Immediate64(target.startaddr))
+        self.mc.JMP(gv_x)
         self._close()
     
     def allocate_register(self, register=None):
@@ -158,7 +169,10 @@ class RX86_64GenOp(model.AbstractRGenOp):
         T = lltype.typeOf(llvalue)
         # TODO: other cases(?),imm64
         if T is lltype.Signed:
-            return Immediate32(llvalue)
+            if llvalue > int("FFFFFFFF",16):
+                return Immediate64(llvalue)
+            else:
+                return Immediate32(llvalue)
         
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
