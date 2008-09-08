@@ -1,7 +1,7 @@
 from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32
 
 
-#Mapping from register to coding (Rex.W or Rex.B , ModRM)
+#Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
                 "rax": (0, 0),
                 "rcx": (0, 1),
@@ -21,6 +21,7 @@ REGISTER_MAP = {
                 "r15": (1, 7),
                 }
                 
+# Mapping from 8Bit-Register to coding
 REGISTER_MAP_8BIT = {
                     "al":0,
                     "cl":1,
@@ -30,8 +31,8 @@ REGISTER_MAP_8BIT = {
 # This method wirtes the bitencodings into
 # the memory. The parameters are overwritten
 # if one of the operands is an register
-# tttn codes the flags and is only used by SETcc
-# extra is an extra byte for long opcodes like imul
+# tttn isn't used yet
+# extra is an extra byte for long opcodes like IMUL
 def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None, m = None, md1 = None, md2 = None, tttn = None, extra = None):
     def quadreg_instr(self, arg1, arg2):
         # move the parameter 
@@ -43,7 +44,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
         rexR = R
         rexX = X
         rexB = B
-        # Todo: other cases e.g memory as operand
+        # TODO: other cases e.g memory as operand
         if isinstance(arg1,Register64):
             rexR, modrm1 = self.get_register_bits(arg1.reg)
         elif isinstance(arg1,Register8):
@@ -51,7 +52,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             
         # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate32):
-            # e.g: IMUL
+            # e.g: IMUL (source==dest)
             if(modrm2=="sameReg"):
                 modrm2 = modrm1
                 rexB = rexR
@@ -69,7 +70,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             # FIXME: exchange the two arguments (rexB/rexR)
             self.write_rex_byte(rexW, rexB, rexX, rexR)
             self.write(opcode)
-            # used in imul
+            # used in imul (extra long opcode)
             if not extra == None:
                 self.write(extra)
             self.write_modRM_byte(mod, modrm2, modrm1)        
@@ -79,6 +80,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
 # This method wirtes the bitencodings into
 # the memory. The parameters are overwritten
 # if one of the operands is an register
+# tttn codes the flags and is only used by SETcc
 def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None, m = None, md1 = None, md2 = None, tttn=None, extra = None):
     def quadreg_instr(self, arg1):       
         # move the parameter 
@@ -91,7 +93,7 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         rexX = X
         rexB = B
         
-        # Todo: other cases e.g memory as operand
+        # TODO: other cases e.g memory as operand
         if isinstance(arg1,Register64):
             rexB, modrm1 = self.get_register_bits(arg1.reg)
         if isinstance(arg1,Register8):
@@ -119,7 +121,7 @@ class X86_64CodeBuilder(object):
     
     # The opcodes differs depending on the operands
     # Params:
-    # W, R, X, B, Opcode, mod, modrm1, modrm2
+    # W, R, X, B, Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
     
     # FIXME: rexX,rexB are set
     _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 2)  
