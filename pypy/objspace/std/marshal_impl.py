@@ -319,7 +319,7 @@ def marshal_w__Tuple(space, w_tuple, m):
     m.put_w_seq(w_tuple)
 
 def unmarshal_Tuple(space, u, tc):
-    items_w = u.get_list_w()
+    items_w = u.get_tuple_w()
     return space.newtuple(items_w)
 register(TYPE_TUPLE, unmarshal_Tuple)
 

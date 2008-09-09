@@ -486,28 +486,34 @@ class Unmarshaller(_Base):
         return w_ret
 
     # inlined version to save a nesting level
-    def get_list_w(self):
-        self.nesting += 1
-        lng = self.get_lng()
-        res_w = [None] * lng
-        idx = 0
-        space = self.space
-        w_ret = space.w_None # something not None
-        if self.nesting < MAX_MARSHAL_DEPTH:
-            while idx < lng:
-                tc = self.get1()
-                w_ret = self._dispatch[ord(tc)](space, self, tc)
-                if w_ret is None:
-                    break
-                res_w[idx] = w_ret
-                idx += 1
-        else:
-            self._overflow()
-        if w_ret is None:
-            raise OperationError(space.w_TypeError, space.wrap(
-                'NULL object in marshal data'))
-        self.nesting -= 1
-        return res_w
+    def _new_get_list_w():
+        def get_list_w(self):
+            self.nesting += 1
+            lng = self.get_lng()
+            res_w = [None] * lng
+            idx = 0
+            space = self.space
+            w_ret = space.w_None # something not None
+            if self.nesting < MAX_MARSHAL_DEPTH:
+                while idx < lng:
+                    tc = self.get1()
+                    w_ret = self._dispatch[ord(tc)](space, self, tc)
+                    if w_ret is None:
+                        break
+                    res_w[idx] = w_ret
+                    idx += 1
+            else:
+                self._overflow()
+            if w_ret is None:
+                raise OperationError(space.w_TypeError, space.wrap(
+                    'NULL object in marshal data'))
+            self.nesting -= 1
+            return res_w
+        return get_list_w
+
+    get_list_w = _new_get_list_w()
+    # another version not to degenerate resulting list to resizable
+    get_tuple_w = _new_get_list_w()
 
     def _overflow(self):
         self.raise_exc('object too deeply nested to unmarshal')

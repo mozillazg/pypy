@@ -14,6 +14,9 @@ class W_ListObject(W_SeqObject):
     from pypy.objspace.std.listtype import list_typedef as typedef
     
     def __init__(w_self, wrappeditems):
+        if len(wrappeditems) > 0:
+            elem = wrappeditems.pop()
+            wrappeditems.append(elem)
         w_self.wrappeditems = wrappeditems
 
     def __repr__(w_self):
@@ -96,7 +99,7 @@ def contains__List_ANY(space, w_list, w_obj):
 
 def iter__List(space, w_list):
     from pypy.objspace.std import iterobject
-    return iterobject.W_FastSeqIterObject(w_list, w_list.wrappeditems)
+    return iterobject.W_FastListIterObject(w_list, w_list.wrappeditems)
 
 def add__List_List(space, w_list1, w_list2):
     return W_ListObject(w_list1.wrappeditems + w_list2.wrappeditems)
