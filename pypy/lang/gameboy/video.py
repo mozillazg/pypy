@@ -228,7 +228,7 @@ class Mode1(Mode):
             self.emulate_v_blank_mode_1()
         else:
             self.video.line_y        = 0
-            self.video.window_line_y = 0
+            self.video.window.line_y = 0
             self.set_between()
         self.emulate_hblank_line_y_compare() 
                 
@@ -270,7 +270,6 @@ class Mode2(Mode):
         
     def emulate_oam(self):
         self.video.status.set_mode(3)
-
 
 class Mode3(Mode):
     """
@@ -408,7 +407,6 @@ class Sprite(object):
     def set_data(self, byte0=None, byte1=None, byte2=None, byte3=None):
         """
         extracts the sprite data from an oam entry
-        
         """
         if byte0 is not None:
             self.extract_y_position(byte0)
@@ -503,7 +501,30 @@ class Tile(object):
 
     def get_tile_data(self):
         pass
+# -----------------------------------------------------------------------------
 
+class Window(object):
+    
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.x      = 0
+        self.y      = 0
+        self.line_y = 0
+        
+
+class Background(object):
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        # SCROLLX and SCROLLY hold the coordinates of background to
+        # be displayed in the left upper corner of the screen.
+        self.scroll_x   = 0
+        self.scroll_y   = 0
+        
 # -----------------------------------------------------------------------------
 
 class Video(iMemory):
@@ -514,42 +535,53 @@ class Video(iMemory):
         self.v_blank_interrupt_flag = interrupt.v_blank
         self.lcd_interrupt_flag     = interrupt.lcd
         self.control                = ControlRegister()
+        self.window                 = Window()
         self.status                 = StatusRegister(self)
+        self.background             = Background()
         self.memory                 = memory
-        self.create_tiles()
+        self.create_tile_maps()
         self.create_sprites()
         self.reset()
     
-    def create_tiles(self):
-        self.tiles = [None]
+    def create_tile_maps(self):
+        # create the maxumal possible sprites
+        self.tile_map_1 = [None]*32*32
+        self.tile_map_2 = [None]*32*32
+    
+    def update_tiles(self):
+        pass
     
     def create_sprites(self):
         self.sprites = [None] * 40
         for i in range(40):
             self.sprites[i] = Sprite()
 
+    def update_sprites(self):
+        for i in range(40):
+            address = 1 * 4
+            self.sprites[i].set_data(self.oam[address + 0],
+                                     self.oam[address + 1],
+                                     self.oam[address + 2],
+                                     self.oam[address + 3])
+            
+            
     def reset(self):
-        self.cycles     = constants.MODE_2_TICKS
         self.control.reset()
         self.status.reset()
+        self.background.reset()
+        self.window.reset()
+        self.cycles     = constants.MODE_2_TICKS
         self.line_y     = 0
         self.line_y_compare = 0
         self.dma        = 0xFF
-        # SCROLLX and SCROLLY hold the coordinates of background to
-        # be displayed in the left upper corner of the screen.
-        self.scroll_x   = 0
-        self.scroll_y   = 0
         # window position
-        self.window_x   = 0
-        self.window_y   = 0
-        self.window_line_y      = 0
         self.background_palette = 0xFC
         self.object_palette_0   = 0xFF 
         self.object_palette_1   = 0xFF
 
         self.transfer   = True
         self.display    = True
-        self.v_blank     = True
+        self.v_blank    = True
         self.dirty      = True
 
         self.vram       = [0] * constants.VRAM_SIZE
@@ -648,8 +680,8 @@ class Video(iMemory):
             self.reset_control(data)
         # don't draw window if it was not enabled and not being drawn before
         if not self.control.window_enabled and (data & 0x20) != 0 and \
-           self.window_line_y == 0 and self.line_y > self.window_y:
-                self.window_line_y = 144
+           self.window.line_y == 0 and self.line_y > self.window.y:
+                self.window.line_y = 144
         self.control.write(data)
 
     def reset_control(self, data):
@@ -680,7 +712,7 @@ class Video(iMemory):
         
     def get_scroll_x(self):
         """ see set_scroll_x """
-        return self.scroll_x
+        return self.background.scroll_x
 
     def set_scroll_x(self, data):
         """
@@ -690,14 +722,15 @@ class Video(iMemory):
         controller automatically wraps back to the upper (left) position in BG
         map when drawing exceeds the lower (right) border of the BG map area.
         """
-        self.scroll_x = data
+        self.background.scroll_x = data
+        
     def get_scroll_y(self):
         """ see set_scroll_x """
-        return self.scroll_y
+        return self.background.scroll_y
                 
     def set_scroll_y(self, data):
         """ see set_scroll_x """
-        self.scroll_y = data
+        self.background.scroll_y = data
         
     def get_line_y(self):
         """ see set_line_y """
@@ -757,14 +790,6 @@ class Video(iMemory):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
         self.update_sprites()
 
-    def update_sprites(self):
-        for i in range(40):
-            address = 1 * 4
-            self.sprites[i].set_data(self.oam[address + 0],
-                                     self.oam[address + 1],
-                                     self.oam[address + 2],
-                                     self.oam[address + 3])
-            
     def get_background_palette(self):
         """ see set_background_palette"""
         return self.background_palette
@@ -814,8 +839,8 @@ class Video(iMemory):
             self.dirty            = True
 
     def get_window_y(self):
-        """ see set_window_y """
-        return self.window_y
+        """ see set_window.y """
+        return self.window.y
 
     def set_window_y(self, data):
         """
@@ -827,22 +852,25 @@ class Video(iMemory):
         WX=0..166, WY=0..143. A postion of WX=7, WY=0 locates the window at
         upper left, it is then completly covering normal background.
         """
-        self.window_y = data
+        self.window.y = data
         
     def get_window_x(self):
-        return self.window_x
+        return self.window.x
 
     def set_window_x(self, data):
-        self.window_x = data
+        self.window.x = data
 
     def set_oam(self, address, data):
         self.oam[address - constants.OAM_ADDR] = data & 0xFF
+        #self.update_sprites(address)
+        self.update_sprites()
         
     def get_oam(self, address):
         return self.oam[address - constants.OAM_ADDR]
         
     def set_vram(self, address, data):
        self.vram[address - constants.VRAM_ADDR] = data & 0xFF
+       self.update_tiles()
     
     def get_vram(self, address):
         return self.vram[address - constants.VRAM_ADDR]
@@ -885,8 +913,8 @@ class Video(iMemory):
             self.line[x] = 0x00
 
     def draw_background(self):
-        y          = (self.scroll_y + self.line_y) & 0xFF
-        x          = self.scroll_x                 & 0xFF
+        y          = (self.background.scroll_y + self.line_y) & 0xFF
+        x          = self.background.scroll_x                 & 0xFF
         tile_map, tile_data = self.prepare_background_data(x, y)
         self.draw_tiles(8 - (x & 7), tile_map, tile_data)
         
@@ -898,18 +926,19 @@ class Video(iMemory):
         return tile_map, tile_data
          
     def draw_window(self):
-        if self.line_y  < self.window_y or self.window_x >= 167 or \
-           self.window_line_y >= 144:
+        if self.line_y  < self.window.y or self.window.x >= 167 or \
+           self.window.line_y >= 144:
                 return
-        tile_map, tile_data = self.prepare_window_data()
-        self.draw_tiles(self.window_x + 1, tile_map, tile_data)
-        self.window_line_y += 1
+        else:
+            tile_map, tile_data = self.prepare_window_data()
+            self.draw_tiles(self.window.x + 1, tile_map, tile_data)
+            self.window.line_y += 1
 
     def prepare_window_data(self):
         tile_map   = self.get_tile_map(0x40)
-        tile_map  += (self.window_line_y >> 3) << 5
+        tile_map  += (self.window.line_y >> 3) << 5
         tile_data  = self.get_tile_data(0x10)
-        tile_data += (self.window_line_y & 7) << 1
+        tile_data += (self.window.line_y & 7) << 1
         return tile_map, tile_data;
         
     def get_tile_map(self, mask):
