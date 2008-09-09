@@ -1,4 +1,5 @@
 from pypy.objspace.std.objspace import *
+from pypy.objspace.std.seqinterface import W_SeqObject
 from pypy.objspace.std.inttype import wrapint
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject
@@ -6,7 +7,7 @@ from pypy.interpreter import gateway
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.annotation import model as annmodel
 
-class W_TupleObject(W_Object):
+class W_TupleObject(W_SeqObject):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
     
     def __init__(w_self, wrappeditems):
