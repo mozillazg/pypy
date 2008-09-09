@@ -5,12 +5,14 @@ Run a program with given args under constant memory usage monitoring.
 Dump output (which is step & private memory used) into a file suitable
 for plotting with gnuplot.
 """
+import autopath
 import os
 import py
 import time
 import re
 import signal
 import sys
+import socket
 
 class Result(object):
     def __init__(self, priv_map, shared_map, starttime=None):
@@ -85,41 +87,39 @@ class ChildProcess(object):
     def __del__(self):
         self.close()
 
-def run_cooperative(func):
+SOCK_FILE = '/tmp/bench_mem'
+
+def run_cooperative(f, func_name=None):
     """ The idea is that we fork() and execute the function func in one
     process. In parent process we measure private memory obtained by a process
     when we read anything in pipe. We send back that we did that
     """
-    parentread, childwrite = os.pipe()
-    childread, parentwrite = os.pipe()
-    pid = os.fork()
-    if not pid:
-        os.close(parentread)
-        os.close(parentwrite)
-        try:
-            func(lambda : os.read(childread, 1),
-                 lambda x: os.write(childwrite, x))
-        except (SystemExit, KeyboardInterrupt):
-            pass
-        except:
-            import traceback
-            traceback.print_tb(sys.exc_info()[2])
-        os._exit(1)
-    os.close(childread)
-    os.close(childwrite)
-    return (lambda : os.read(parentread, 1),
-            lambda x: os.write(parentwrite, x),
-            pid)
+    gw = py.execnet.PopenGateway()
+    if func_name is None:
+        func_name = f.func_name
+    code = py.code.Source(py.code.Source("""
+    import os
+    channel.send(os.getpid())
+    """), py.code.Source(f), py.code.Source(
+    "%s(channel.receive, channel.send)" % func_name))
+    channel = gw.remote_exec(code)
+    pid = channel.receive()
+    return channel.receive, channel.send, pid
+
+def smaps_measure_func(pid):
+    return parse_smaps_output(open('/proc/%d/smaps' % pid).read())    
 
 def measure(measure_func, funcs_to_run):
     results = []
     for func in funcs_to_run:
-        read, write, pid = run_cooperative(func)
+        if isinstance(func, tuple):
+            read, write, pid = run_cooperative(*func)
+        else:
+            read, write, pid = run_cooperative(func)
         elem = []
         while 1:
             res = read()
             if res == 'e':
-                os.waitpid(pid, 0)
                 break
             else:
                 elem.append(measure_func(pid))

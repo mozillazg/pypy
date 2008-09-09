@@ -28,7 +28,7 @@ def test_run_cooperative():
         x = read()
         assert x == 'y'
         write('x')
-    
+
     read, write, pid = bench_mem.run_cooperative(f)
     assert pid
     write('y')
