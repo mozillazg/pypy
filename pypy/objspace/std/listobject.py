@@ -29,6 +29,12 @@ class W_ListObject(W_SeqObject):
     def append(w_list, w_item):
         w_list.wrappeditems.append(w_item)
 
+    def getlength(self):
+        return len(self.wrappeditems)
+
+    def getitem(self, i):
+        return self.wrappeditems[i]
+
 
 registerimplementation(W_ListObject)
 

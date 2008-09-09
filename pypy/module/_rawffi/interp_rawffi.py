@@ -148,7 +148,7 @@ class W_CDLL(Wrappable):
         """
         ffi_restype, resshape = unpack_resshape(space, w_restype)
         w = space.wrap
-        argtypes_w = space.unpackiterable(w_argtypes)
+        argtypes_w = space.viewiterable(w_argtypes)
         w_argtypes = space.newtuple(argtypes_w)
         w_key = space.newtuple([w(name), w_argtypes, w(resshape)])
         try:

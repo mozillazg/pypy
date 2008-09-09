@@ -26,6 +26,12 @@ class W_TupleObject(W_SeqObject):
     def getitems(self):
         return self.wrappeditems
 
+    def getlength(self):
+        return len(self.wrappeditems)
+
+    def getitem(self, i):
+        return self.wrappeditems[i]
+
 registerimplementation(W_TupleObject)
 
 
