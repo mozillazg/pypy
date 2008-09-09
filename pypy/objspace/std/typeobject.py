@@ -545,10 +545,10 @@ def compute_mro(w_self):
         if not space.is_w(w_where, space.w_type):
             w_mro_meth = space.get(w_mro_func, w_self)
             w_mro = space.call_function(w_mro_meth)
-            w_self.mro_w = space.viewiterable(w_mro)
+            w_self.mro_w = space.unpackiterable(w_mro)
             # do some checking here
             return    # done
-    w_self.mro_w = w_self.compute_default_mro()[:]
+    w_self.mro_w = w_self.compute_default_mro()
 
 # ____________________________________________________________
 
