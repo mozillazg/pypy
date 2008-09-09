@@ -23,6 +23,19 @@ def test_parse():
         '/lib/libncurses.so.5.6' : 60,
        }
 
+def test_parse2():
+    res = bench_mem.parse_smaps_output(example_data2)
+    assert res.private == 796 + 120 + 924
+    assert res.shared == 60
+    assert res.priv_map == {
+        '/usr/bin/python2.5': 796 + 120,
+        '[heap]'            : 924,
+        }
+    assert res.shared_map == {
+        '/lib/libncurses.so.5.6' : 60,
+       }
+    
+
 def test_run_cooperative():
     def f(read, write):
         x = read()
@@ -47,6 +60,37 @@ def test_measure_cooperative():
 
     measurments = bench_mem.measure(measure, [f1, f1])
     assert measurments == [[42, 42], [42, 42]]
+
+example_data2 = '''
+08048000-0813f000 r-xp 00000000 fd:00 75457      /usr/bin/python2.5
+Size:                988 kB
+Rss:                 796 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:       796 kB
+Private_Dirty:         0 kB
+0813f000-08164000 rw-p 000f6000 fd:00 75457      /usr/bin/python2.5
+Size:                148 kB
+Rss:                 120 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:        12 kB
+Private_Dirty:       108 kB
+08164000-0825c000 rw-p 08164000 00:00 0          [heap]
+Size:                992 kB
+Rss:                 924 kB
+Shared_Clean:          0 kB
+Shared_Dirty:          0 kB
+Private_Clean:         0 kB
+Private_Dirty:       924 kB
+b7baf000-b7beb000 r-xp 00000000 08:01 218        /lib/libncurses.so.5.6
+Size:                240 kB
+Rss:                  60 kB
+Shared_Clean:         60 kB
+Shared_Dirty:          0 kB
+Private_Clean:         0 kB
+Private_Dirty:         0 kB
+'''
 
 example_data = '''
 08048000-0813f000 r-xp 00000000 fd:00 75457      /usr/bin/python2.5

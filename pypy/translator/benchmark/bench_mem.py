@@ -48,7 +48,9 @@ def parse_smaps_output(raw_data):
             priv_map[name]   = priv + priv_map.get(name, 0)
         if shared:
             shared_map[name] = shared + shared_map.get(name, 0)
-        num += 8
+        num += 7
+        if num < len(lines) and lines[num].startswith('Referenced'):
+            num += 1
     return Result(priv_map, shared_map)
 
 class ChildProcess(object):
