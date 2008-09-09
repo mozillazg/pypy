@@ -257,9 +257,13 @@ def setitem__List_Slice_List(space, w_list, w_slice, w_list2):
     l = w_list2.wrappeditems
     return _setitem_slice_helper(space, w_list, w_slice, l, len(l))
 
+def setitem__List_Slice_Tuple(space, w_tuple, w_slice, w_iterable):
+    l = w_tuple.wrappeditems
+    return _setitem_slice_helper2(space, w_tuple, w_slice, l, len(l))
+
 def setitem__List_Slice_ANY(space, w_list, w_slice, w_iterable):
-    l = space.unpackiterable(w_iterable)
-    return _setitem_slice_helper(space, w_list, w_slice, l, len(l))
+    l = space.immutableiterable(w_iterable)
+    return _setitem_slice_helper2(space, w_list, w_slice, l, len(l))
 
 def _setitem_slice_helper(space, w_list, w_slice, sequence2, len2):
     oldsize = len(w_list.wrappeditems)
@@ -305,6 +309,57 @@ def _setitem_slice_helper(space, w_list, w_slice, sequence2, len2):
         items[start] = sequence2[i]
         start += step
     return space.w_None
+
+
+def _setitem_slice_helper2(space, w_list, w_slice, sequence2, len2):
+    make_sure_not_resized(sequence2)
+    oldsize = len(w_list.wrappeditems)
+    start, stop, step, slicelength = w_slice.indices4(space, oldsize)
+    assert slicelength >= 0
+    items = w_list.wrappeditems
+
+    if step == 1:  # Support list resizing for non-extended slices
+        delta = len2 - slicelength
+        if delta >= 0:
+            newsize = oldsize + delta
+            # XXX support this in rlist!
+            items += [None] * delta
+            lim = start+len2
+            i = newsize - 1
+            while i >= lim:
+                items[i] = items[i-delta]
+                i -= 1
+        else:
+            # shrinking requires the careful memory management of _del_slice()
+            _del_slice(w_list, start, start-delta)
+    elif len2 != slicelength:  # No resize for extended slices
+        raise OperationError(space.w_ValueError, space.wrap("attempt to "
+              "assign sequence of size %d to extended slice of size %d" %
+              (len2,slicelength)))
+
+    if sequence2 is items:
+        if step > 0:
+            # Always copy starting from the right to avoid
+            # having to make a shallow copy in the case where
+            # the source and destination lists are the same list.
+            i = len2 - 1
+            start += i*step
+            while i >= 0:
+                items[start] = sequence2[i]
+                start -= step
+                i -= 1
+            return space.w_None
+        else:
+            # Make a shallow copy to more easily handle the reversal case
+            sequence2 = list(sequence2)
+    for i in range(len2):
+        items[start] = sequence2[i]
+        start += step
+    return space.w_None
+#_setitem_slice_helper.func_name = name
+
+#_setitem_slice_helper = _new_slice_helper('_setitem_slice_helper')
+#_setitem_slice_helper2 = _new_slice_helper('_setitem_slice_helper2')
 
 app = gateway.applevel("""
     def listrepr(currently_in_repr, l):
