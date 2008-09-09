@@ -1,6 +1,7 @@
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.video import ControlRegister
 from pypy.lang.gameboy.video import StatusRegister
+from pypy.lang.gameboy.test.test_video import get_video
 import py
 
 
@@ -51,7 +52,7 @@ def test_video_control_read_write_properties():
 # StatusRegister ---------------------------------------------------------------
 
 def test_video_status_reset():
-    status = StatusRegister(None)
+    status = StatusRegister(get_video())
     assert status.read(extend=True) == 0x02 + 0x80
     
     status.write(0x00, write_all=True)
@@ -65,7 +66,7 @@ def test_video_status_reset():
     assert status.read(extend=True) == 0x02 + 0x80
     
 def test_video_status_mode():
-    status = StatusRegister(None)
+    status = StatusRegister(get_video())
     assert status.get_mode() == 2
     
     for i in range(3):
