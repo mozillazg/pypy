@@ -395,19 +395,88 @@ class Sprite(object):
         self.reset()
 
     def reset(self):
-        self.x = 0
-        self.y = 0
-        self._tile_number = 0
+        self.x              = 0
+        self.y              = 0
+        self.tile           = None
         self.object_behind_background = False
-        self.x_flipped = False
-        self.y_flipped = False
-        self.use_object_pallette_1 = False
+        self.x_flipped      = False
+        self.y_flipped      = False
+        self.palette_number = 0
+        self.hidden         = True
+        
+        
+    def set_data(self, byte0=None, byte1=None, byte2=None, byte3=None):
+        """
+        extracts the sprite data from an oam entry
+        
+        """
+        if byte0 is not None:
+            self.extract_y_position(byte0)
+        if byte0 is not None:
+            self.extract_x_position(byte1)
+        if byte0 is not None:
+            self.extract_tile_number(byte2)
+        if byte0 is not None:
+            self.extract_attributes_and_flags(byte3)
+        
+    def extract_y_position(self, data):
+        """
+        extracts the  Y Position
+        Specifies the sprites vertical position on the screen (minus 16).
+        An offscreen value (for example, Y=0 or Y>=160) hides the sprite.
+        """
+        self.y = data # - 16
+        self.hide_check()
+    
+    def extract_x_position(self, data):
+        """
+        extracts the  X Position
+        Specifies the sprites horizontal position on the screen (minus 8).
+        An offscreen value (X=0 or X>=168) hides the sprite, but the sprite
+        still affects the priority ordering - a better way to hide a sprite is 
+        to set its Y-coordinate offscreen.
+        """
+        self.x = data # - 8
+        self.hide_check()
+    
+    def extract_tile_number(self, data):
+        """
+        extracts the Tile/Pattern Number
+        Specifies the sprites Tile Number (00-FF). This (unsigned) value selects
+        a tile from memory at 8000h-8FFFh. In CGB Mode this could be either in
+        VRAM Bank 0 or 1, depending on Bit 3 of the following byte.
+        In 8x16 mode, the lower bit of the tile number is ignored. Ie. the 
+        upper 8x8 tile is "NN AND FEh", and the lower 8x8 tile is "NN OR 01h".
+        """
+        self.tile_number = data
+    
+    def extract_attributes_and_flags(self, data):
+        """
+        extracts the Attributes/Flags:
+        Bit7   OBJ-to-BG Priority (0=OBJ Above BG, 1=OBJ Behind BG color 1-3)
+                 (Used for both BG and Window. BG color 0 is always behind OBJ)
+        Bit6   Y flip          (0=Normal, 1=Vertically mirrored)
+        Bit5   X flip          (0=Normal, 1=Horizontally mirrored)
+        Bit4   Palette number  **Non CGB Mode Only** (0=OBP0, 1=OBP1)
+        Bit3   Tile VRAM-Bank  **CGB Mode Only**     (0=Bank 0, 1=Bank 1)
+        Bit2-0 Palette number  **CGB Mode Only**     (OBP0-7)
+        """
+        self.object_behind_background   = bool(data  & (1 << 7))
+        self.x_flipped                  = bool(data  & (1 << 6))
+        self.y_flipped                  = bool(data  & (1 << 5))
+        self.palette_number             = bool(data  & (1 << 3)) 
+        
+        
+    def hide_check(self):
+        if self.y <= 0  or self.y >= 160:
+            self.hidden = True
+        elif self.x <= 0  or self.x >= 168:
+            self.hidden = True
+        else:
+            self.hidden = False
         
     def get_tile_number(self):
-        return self._tile_number
-    
-    def set_tile_number(self, patter_number):
-        self._tile_number = patter_number & 0xFF
+        return self.tile.id
         
     def get_width(self):
         return 8
@@ -429,8 +498,8 @@ class Tile(object):
     def __init__(self):
         pass
 
-    def set_tile_data(self, rom, height):
-        self.height = height
+    def set_tile_data(self, data):
+        pass
 
     def get_tile_data(self):
         pass
@@ -447,13 +516,17 @@ class Video(iMemory):
         self.control                = ControlRegister()
         self.status                 = StatusRegister(self)
         self.memory                 = memory
+        self.create_tiles()
+        self.create_sprites()
         self.reset()
-
-    def get_frame_skip(self):
-        return self.frame_skip
-
-    def set_frame_skip(self, frame_skip):
-        self.frame_skip = frame_skip
+    
+    def create_tiles(self):
+        self.tiles = [None]
+    
+    def create_sprites(self):
+        self.sprites = [None] * 40
+        for i in range(40):
+            self.sprites[i] = Sprite()
 
     def reset(self):
         self.cycles     = constants.MODE_2_TICKS
@@ -521,9 +594,9 @@ class Video(iMemory):
         elif address == constants.WX:
             self.set_window_x(data)
         elif constants.OAM_ADDR <= address < constants.OAM_ADDR + constants.OAM_SIZE:
-                self.oam[address - constants.OAM_ADDR] = data & 0xFF
+            self.set_oam(address, data)
         elif constants.VRAM_ADDR <= address < constants.VRAM_ADDR + constants.VRAM_SIZE:
-                self.vram[address - constants.VRAM_ADDR] = data & 0xFF
+            self.set_vram(address, data)
             
     def read(self, address):
         if address == constants.LCDC:
@@ -551,13 +624,19 @@ class Video(iMemory):
         elif address == constants.WX:
             return self.get_window_x()
         elif constants.OAM_ADDR <= address < constants.OAM_ADDR + constants.OAM_SIZE:
-             return self.oam[address - constants.OAM_ADDR]
+            return self.get_oam(address)
         elif constants.VRAM_ADDR <= address < constants.VRAM_ADDR + constants.VRAM_SIZE:
-             return self.vram[address - constants.VRAM_ADDR]
+            return self.get_vram(address)
         return 0xFF
 
     # Getters and Setters ------------------------------------------------------
     
+    def get_frame_skip(self):
+        return self.frame_skip
+
+    def set_frame_skip(self, frame_skip):
+        self.frame_skip = frame_skip
+        
     def get_cycles(self):
         return self.cycles
 
@@ -676,7 +755,16 @@ class Video(iMemory):
         self.dma = data
         for index in range(constants.OAM_SIZE):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
+        self.update_sprites()
 
+    def update_sprites(self):
+        for i in range(40):
+            address = 1 * 4
+            self.sprites[i].set_data(self.oam[address + 0],
+                                     self.oam[address + 1],
+                                     self.oam[address + 2],
+                                     self.oam[address + 3])
+            
     def get_background_palette(self):
         """ see set_background_palette"""
         return self.background_palette
@@ -747,6 +835,17 @@ class Video(iMemory):
     def set_window_x(self, data):
         self.window_x = data
 
+    def set_oam(self, address, data):
+        self.oam[address - constants.OAM_ADDR] = data & 0xFF
+        
+    def get_oam(self, address):
+        return self.oam[address - constants.OAM_ADDR]
+        
+    def set_vram(self, address, data):
+       self.vram[address - constants.VRAM_ADDR] = data & 0xFF
+    
+    def get_vram(self, address):
+        return self.vram[address - constants.VRAM_ADDR]
     
     # emulation ----------------------------------------------------------------
 
