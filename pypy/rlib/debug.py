@@ -64,7 +64,7 @@ def check_annotation(arg, checker):
     callable which checks if annotation is as expected,
     arguments passed are (current annotation, bookkeeper)
     """
-    pass
+    return arg
 
 class Entry(ExtRegistryEntry):
     _about_ = check_annotation
@@ -84,7 +84,7 @@ def make_sure_not_resized(arg):
     """ Function checking whether annotation of SomeList is never resized,
     useful for debugging. Does nothing when run directly
     """
-    pass
+    return arg
 
 class Entry(ExtRegistryEntry):
     _about_ = make_sure_not_resized
