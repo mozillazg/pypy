@@ -4,7 +4,7 @@ import os, py, sys
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import llmemory
-from pypy.tool.gcc_cache import build_executable_cache, try_compile_cache
+from pypy.tool.gcc_cache import build_executable_cache_read, try_compile_cache
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.tool.cbuild import CompilationError
 from pypy.tool.udir import udir
@@ -83,6 +83,17 @@ def memory_alignment():
     return _memory_alignment
 _memory_alignment = None
 
+def getendianness(eci):
+    if not hasattr(eci, 'endianness'):
+        class CConfig:
+            _compilation_info_ = eci
+            DATA = ConstantString('(unsigned long int)0xFF')
+        if configure(CConfig)['DATA'][0] == '\x00':
+            eci.endianness = 'BE'
+        else:
+            eci.endianness = 'LE'
+    return eci.endianness
+
 # ____________________________________________________________
 #
 # General interface
@@ -98,11 +109,10 @@ class ConfigResult:
         try:
             return self.result[entry]
         except KeyError:
-            pass
-        name = self.entries[entry]
-        info = self.info[name]
-        self.result[entry] = entry.build_result(info, self)
-        return self.result[entry]
+            name = self.entries[entry]
+            info = self.info[name]
+            self.result[entry] = entry.build_result(info, self)
+            return self.result[entry]
 
     def get_result(self):
         return dict([(name, self.result[entry])
@@ -125,18 +135,10 @@ class _CWriter(object):
 
     def write_entry(self, key, entry):
         f = self.f
-        print >> f, 'void dump_section_%s(void) {' % (key,)
+        entry.key = key
         for line in entry.prepare_code():
-            if line and line[0] != '#':
-                line = '\t' + line
             print >> f, line
-        print >> f, '}'
         print >> f
-
-    def write_entry_main(self, key):
-        print >> self.f, '\tprintf("-+- %s\\n");' % (key,)
-        print >> self.f, '\tdump_section_%s();' % (key,)
-        print >> self.f, '\tprintf("---\\n");'
 
     def start_main(self):
         print >> self.f, 'int main(int argc, char *argv[]) {'
@@ -162,29 +164,31 @@ def configure(CConfig):
     """
     for attr in ['_includes_', '_libraries_', '_sources_', '_library_dirs_',
                  '_include_dirs_', '_header_']:
-        assert not hasattr(CConfig, attr), "Found legacy attribut %s on CConfig" % (attr,)
+        assert not hasattr(CConfig, attr), "Found legacy attribute %s on CConfig" % (attr,)
     entries = []
     for key in dir(CConfig):
         value = getattr(CConfig, key)
         if isinstance(value, CConfigEntry):
             entries.append((key, value))            
 
-    if entries:   # can be empty if there are only CConfigSingleEntries
+    if entries: # can be empty if there are only CConfigSingleEntries
+        infolist = []
         writer = _CWriter(CConfig)
         writer.write_header()
         for key, entry in entries:
             writer.write_entry(key, entry)
-
-        f = writer.f
         writer.start_main()
-        for key, entry in entries:
-            writer.write_entry_main(key)
         writer.close()
 
         eci = CConfig._compilation_info_
-        infolist = list(run_example_code(writer.path, eci))
+        info = run_example_code(writer.path, eci)
+        for key, entry in entries:
+            entry.eci = eci
+            if key in info:
+                infolist.append(info[key])
+            else:
+                infolist.append({})
         assert len(infolist) == len(entries)
-
         resultinfo = {}
         resultentries = {}
         for info, (key, entry) in zip(infolist, entries):
@@ -209,9 +213,49 @@ def configure(CConfig):
 
 # ____________________________________________________________
 
+def c_safe_string(string):
+    return string.replace('\\', '\\\\').replace('"', '\\"')
 
 class CConfigEntry(object):
     "Abstract base class."
+    def dump(self, name, expr):
+        beginpad = "__START_PLATCHECK_%s\0%s\0" % (
+            c_safe_string(self.key),
+            c_safe_string(name))
+        return '''
+        struct __attribute__((packed)) {
+            char begin_pad[%(sizeof_beginpad)i];
+            typeof(%(expr)s) contents;
+            char end_pad[];
+        } pypy_test_%(id)s = {
+            .begin_pad = "%(beginpad)s",
+            .contents = %(expr)s,
+            .end_pad = "__END_PLATCHECK__"
+        };
+        ''' % {'expr' : expr, 'beginpad' : beginpad.replace('\0', '\\0'),
+                'sizeof_beginpad' : len(beginpad),
+                'id' : filter(str.isalnum, self.key+'PLATCHECK'+name)}
+    def dumpbool(self, name, expr):
+        return self.dump(name, '((char)((%s)?1:0))' % (expr,))
+    def bool(self, data):
+        return data[0] != '\x00'
+    def dump_by_size(self, name, expr):
+        beginpad = "__START_PLATCHECK_%s\0%s\0" % (
+            c_safe_string(self.key),
+            c_safe_string(name))
+        return '''
+        struct {
+            char begin_pad[%(sizeof_beginpad)i];
+            char contents[%(expr)s];
+            char end_pad[];
+        } pypy_test_%(id)s = {
+            .begin_pad = "%(beginpad)s",
+            .contents = {0},
+            .end_pad = "__END_PLATCHECK__"
+        };
+        ''' % {'expr' : expr, 'beginpad' : beginpad.replace('\0', '\\0'),
+                'sizeof_beginpad' : len(beginpad),
+                'id' : filter(str.isalnum, self.key+'PLATCHECK'+name)}
 
 
 class Struct(CConfigEntry):
@@ -226,48 +270,37 @@ class Struct(CConfigEntry):
     def prepare_code(self):
         if self.ifdef is not None:
             yield '#ifdef %s' % (self.ifdef,)
-        yield 'typedef %s platcheck_t;' % (self.name,)
-        yield 'typedef struct {'
-        yield '    char c;'
-        yield '    platcheck_t s;'
-        yield '} platcheck2_t;'
-        yield ''
-        yield 'platcheck_t s;'
+        platcheck_t = 'struct { char c; %s s; }' % (self.name,)
         if self.ifdef is not None:
-            yield 'dump("defined", 1);'
-        yield 'dump("align", offsetof(platcheck2_t, s));'
-        yield 'dump("size",  sizeof(platcheck_t));'
+            yield self.dumpbool("defined", '1')
+        yield self.dump_by_size("align", 'offsetof(%s, s)' % (platcheck_t,))
+        yield self.dump_by_size("size",  'sizeof(%s)' % (self.name,))
         for fieldname, fieldtype in self.interesting_fields:
-            yield 'dump("fldofs %s", offsetof(platcheck_t, %s));'%(
-                fieldname, fieldname)
-            yield 'dump("fldsize %s",   sizeof(s.%s));' % (
-                fieldname, fieldname)
+            yield self.dump_by_size("fldofs " + fieldname, 'offsetof(%s, %s)' % (self.name, fieldname))
+            yield self.dump_by_size("fldsize " + fieldname, 'sizeof(((%s*)0)->%s)' % (
+                self.name, fieldname))
             if fieldtype in integer_class:
-                yield 's.%s = 0; s.%s = ~s.%s;' % (fieldname,
-                                                   fieldname,
-                                                   fieldname)
-                yield 'dump("fldunsigned %s", s.%s > 0);' % (fieldname,
-                                                             fieldname)
+                yield self.dumpbool("fldunsigned " + fieldname, '((typeof(((%s*)0)->%s))(-1)) > 0' % (self.name, fieldname))
         if self.ifdef is not None:
             yield '#else'
-            yield 'dump("defined", 0);'
+            yield self.dumpbool("defined", '0')
             yield '#endif'
 
     def build_result(self, info, config_result):
         if self.ifdef is not None:
-            if not info['defined']:
+            if not self.bool(info['defined']):
                 return None
-        layout = [None] * info['size']
+        layout = [None] * len(info['size'])
         for fieldname, fieldtype in self.interesting_fields:
             if isinstance(fieldtype, Struct):
-                offset = info['fldofs '  + fieldname]
-                size   = info['fldsize ' + fieldname]
+                offset = len(info['fldofs '  + fieldname])
+                size   = len(info['fldsize ' + fieldname])
                 c_fieldtype = config_result.get_entry_result(fieldtype)
                 layout_addfield(layout, offset, c_fieldtype, fieldname)
             else:
-                offset = info['fldofs '  + fieldname]
-                size   = info['fldsize ' + fieldname]
-                sign   = info.get('fldunsigned ' + fieldname, False)
+                offset = len(info['fldofs '  + fieldname])
+                size   = len(info['fldsize ' + fieldname])
+                sign   = self.bool(info.get('fldunsigned ' + fieldname, '\0'))
                 if (size, sign) != rffi.size_and_sign(fieldtype):
                     fieldtype = fixup_ctype(fieldtype, fieldname, (size, sign))
                 layout_addfield(layout, offset, fieldtype, fieldname)
@@ -294,8 +327,8 @@ class Struct(CConfigEntry):
             seen[cell] = True
 
         name = self.name
-        hints = {'align': info['align'],
-                 'size': info['size'],
+        hints = {'align': len(info['align']),
+                 'size': len(info['size']),
                  'fieldoffsets': tuple(fieldoffsets),
                  'padding': tuple(padfields)}
         if name.startswith('struct '):
@@ -313,34 +346,41 @@ class SimpleType(CConfigEntry):
         self.name = name
         self.ctype_hint = ctype_hint
         self.ifdef = ifdef
-        
+    
     def prepare_code(self):
         if self.ifdef is not None:
             yield '#ifdef %s' % (self.ifdef,)
-        yield 'typedef %s platcheck_t;' % (self.name,)
-        yield ''
-        yield 'platcheck_t x;'
         if self.ifdef is not None:
-            yield 'dump("defined", 1);'
-        yield 'dump("size",  sizeof(platcheck_t));'
+            yield self.dumpbool("defined", '1')
+        yield self.dump("size",  '((%s)0)' % (self.name,))
         if self.ctype_hint in integer_class:
-            yield 'x = 0; x = ~x;'
-            yield 'dump("unsigned", x > 0);'
+            yield self.dumpbool("unsigned", '((%s)(-1)) > 0' % (self.name,))
         if self.ifdef is not None:
             yield '#else'
-            yield 'dump("defined", 0);'
+            yield self.dumpbool("defined", '0')
             yield '#endif'
 
     def build_result(self, info, config_result):
-        if self.ifdef is not None and not info['defined']:
+        if self.ifdef is not None and not self.bool(info['defined']):
             return None
-        size = info['size']
-        sign = info.get('unsigned', False)
+        size = len(info['size'])
+        sign = self.bool(info.get('unsigned', '\0'))
         ctype = self.ctype_hint
         if (size, sign) != rffi.size_and_sign(ctype):
             ctype = fixup_ctype(ctype, self.name, (size, sign))
         return ctype
 
+def _load_int_le(data):
+    result = 0
+    for i in xrange(len(data)):
+        result |= ord(data[i]) << (i*8)
+    return result
+def _load_int_be(data):
+    result = 0
+    for byte in data:
+        result |= ord(byte)
+        result <<= 8
+    return result
 
 class ConstantInteger(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
@@ -350,19 +390,38 @@ class ConstantInteger(CConfigEntry):
         self.name = name
 
     def prepare_code(self):
-        yield 'if ((%s) < 0) {' % (self.name,)
-        yield '    long long x = (long long)(%s);' % (self.name,)
-        yield '    printf("value: %lld\\n", x);'
-        yield '} else {'
-        yield '    unsigned long long x = (unsigned long long)(%s);' % (
-                        self.name,)
-        yield '    printf("value: %llu\\n", x);'
-        yield '}'
+        yield self.dump('value', self.name)
+        yield self.dump('negvalue', '-(%s)' % (self.name,))
+        yield self.dump('positive', '(%s) >= 0' % (self.name,))
+
+    def build_result(self, info, config_result):
+        if self.bool(info['positive']):
+            value = info['value']
+        else:
+            value = info['negvalue']
+        if getendianness(self.eci) is 'BE':
+            magnitude = _load_int_be(value)
+        else:
+            magnitude = _load_int_le(value)
+        if self.bool(info['positive']):
+            return magnitude
+        else:
+            return -magnitude
+
+class ConstantString(CConfigEntry):
+    """An entry in a CConfig class that stands for an externally
+    defined string constant.
+    """
+    def __init__(self, name):
+        self.name = name
+
+    def prepare_code(self):
+        yield self.dump('value', self.name)
 
     def build_result(self, info, config_result):
         return info['value']
 
-class DefinedConstantInteger(CConfigEntry):
+class DefinedConstantInteger(ConstantInteger):
     """An entry in a CConfig class that stands for an externally
     defined integer constant. If not #defined the value will be None.
     """
@@ -371,22 +430,14 @@ class DefinedConstantInteger(CConfigEntry):
 
     def prepare_code(self):
         yield '#ifdef %s' % self.macro
-        yield 'dump("defined", 1);'
-        yield 'if ((%s) < 0) {' % (self.macro,)
-        yield '    long long x = (long long)(%s);' % (self.macro,)
-        yield '    printf("value: %lld\\n", x);'
-        yield '} else {'
-        yield '    unsigned long long x = (unsigned long long)(%s);' % (
-                        self.macro,)
-        yield '    printf("value: %llu\\n", x);'
-        yield '}'
-        yield '#else'
-        yield 'dump("defined", 0);'
+        yield self.dumpbool('defined', '1')
+        for line in ConstantInteger.prepare_code(self):
+            yield line
         yield '#endif'
 
     def build_result(self, info, config_result):
-        if info["defined"]:
-            return info['value']
+        if 'defined' in info:
+            return ConstantInteger.build_result(self, info, config_result)
         return None
 
 class DefinedConstantString(CConfigEntry):
@@ -397,25 +448,13 @@ class DefinedConstantString(CConfigEntry):
         self.name = macro
 
     def prepare_code(self):
-        yield '#ifdef %s' % self.macro
-        yield 'int i;'
-        yield 'char *p = %s;' % self.macro
-        yield 'dump("defined", 1);'
-        yield 'for (i = 0; p[i] != 0; i++ ) {'
-        yield '  printf("value_%d: %d\\n", i, (int)(unsigned char)p[i]);'
-        yield '}'
-        yield '#else'
-        yield 'dump("defined", 0);'
+        yield '#ifdef %s' % (self.macro,)
+        yield self.dump('macro', self.macro)
         yield '#endif'
 
     def build_result(self, info, config_result):
-        if info["defined"]:
-            string = ''
-            d = 0
-            while info.has_key('value_%d' % d):
-                string += chr(info['value_%d' % d])
-                d += 1
-            return string
+        if "macro" in info:
+            return info["macro"]
         return None
 
 
@@ -428,13 +467,13 @@ class Defined(CConfigEntry):
 
     def prepare_code(self):
         yield '#ifdef %s' % (self.macro,)
-        yield 'dump("defined", 1);'
+        yield self.dumpbool("defined", '1')
         yield '#else'
-        yield 'dump("defined", 0);'
+        yield self.dumpbool("defined", '0')
         yield '#endif'
 
     def build_result(self, info, config_result):
-        return bool(info['defined'])
+        return self.bool(info['defined'])
 
 class CConfigSingleEntry(object):
     """ An abstract class of type which requires
@@ -465,10 +504,10 @@ class SizeOf(CConfigEntry):
         self.name = name
 
     def prepare_code(self):
-        yield 'dump("size",  sizeof(%s));' % self.name
+        yield self.dump_by_size("size",  'sizeof(%s)' % (self.name,))
 
     def build_result(self, info, config_result):
-        return info['size']
+        return len(info['size'])
 
 # ____________________________________________________________
 #
@@ -528,31 +567,33 @@ def fixup_ctype(fieldtype, fieldname, expected_size_and_sign):
 
 
 C_HEADER = """
-#include <stdio.h>
 #include <stddef.h>   /* for offsetof() */
-
-void dump(char* key, int value) {
-    printf("%s: %d\\n", key, value);
-}
 """
 
 def run_example_code(filepath, eci):
     eci = eci.convert_sources_to_files(being_main=True)
     files = [filepath] + [py.path.local(f) for f in eci.separate_module_files]
-    output = build_executable_cache(files, eci)
-    section = None
-    for line in output.splitlines():
-        line = line.strip()
-        if line.startswith('-+- '):      # start of a new section
-            section = {}
-        elif line == '---':              # section end
-            assert section is not None
-            yield section
-            section = None
-        elif line:
-            assert section is not None
-            key, value = line.split(': ')
-            section[key] = int(value)
+    data = build_executable_cache_read(files, eci)
+    
+    end = 0
+    section = {}
+    while True:
+        start = data.find('__START_PLATCHECK_', end)
+        if start >= 0:
+            start += len('__START_PLATCHECK_')
+            keyend = data.find('\0', start)
+            key = data[start:keyend]
+            nameend = data.find('\0', keyend+1)
+            name = data[keyend+1:nameend]
+            start = nameend + 1
+            end = data.find('__END_PLATCHECK__', start)
+            if key in section:
+                section[key][name] = data[start:end]
+            else:
+                section[key] = {name : data[start:end]}
+        else:
+            break
+    return section
 
 # ____________________________________________________________
 
