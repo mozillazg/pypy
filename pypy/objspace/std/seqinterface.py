@@ -9,7 +9,7 @@ class W_SeqObject(W_Object):
     """
 
     def getlength(self):
-        return len(self.wrappeditems)
+        raise NotImplementedError
 
     def getitem(self, i):
-        return self.wrappeditems[i]
+        raise NotImplementedError

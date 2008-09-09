@@ -656,13 +656,17 @@ class ObjSpace(object):
                 plural = "s"
             raise UnpackValueError("need more than %d value%s to unpack" %
                                    (i, plural))
+        # XXX remember to kill
+        items.append(None)
+        items.pop()
         return items
 
-    def viewiterable(self, w_iterable):
+    def viewiterable(self, w_iterable, expected_length=-1):
         """ More or less the same as unpackiterable, but does not return
         a copy. Please don't modify the result
         """
-        return make_sure_not_resized(self.unpackiterable(w_iterable)[:])
+        return make_sure_not_resized(self.unpackiterable(w_iterable,
+                                                         expected_length)[:])
 
     def unpacktuple(self, w_tuple, expected_length=-1):
         """Same as unpackiterable(), but only for tuples.

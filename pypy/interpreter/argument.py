@@ -136,9 +136,13 @@ class AbstractArguments:
                 unfiltered_kwds_w[argname] = w_arg
             assert not space.is_true(data_w_stararg)
         else:
-            args_w = data_args_w[:]
-            for w_stararg in space.unpackiterable(data_w_stararg):
-                args_w.append(w_stararg)
+            stararg_w = space.unpackiterable(data_w_stararg)
+            datalen = len(data_args_w)
+            args_w = [None] * (datalen + len(stararg_w))
+            for i in range(0, datalen):
+                args_w[i] = data_args_w[i]
+            for i in range(0, len(stararg_w)):
+                args_w[i + datalen] = stararg_w[i]
             assert len(args_w) == need_cnt
             
         kwds_w = {}
@@ -410,7 +414,7 @@ class Arguments(AbstractArguments):
             raise ValueError, "too many arguments (%d expected)" % argcount
         if self.w_stararg is not None:
             self.arguments_w = (self.arguments_w +
-                                self.space.unpackiterable(self.w_stararg,
+                                self.space.viewiterable(self.w_stararg,
                                          argcount - len(self.arguments_w)))
             self.w_stararg = None
         elif len(self.arguments_w) < argcount:
@@ -534,7 +538,7 @@ class Arguments(AbstractArguments):
                     assert extravarargs is not None
                     starargs_w = extravarargs
                     if num_args:
-                        starargs_w.extend(args_w)
+                        starargs_w = starargs_w + args_w
                 elif num_args > args_left:
                     starargs_w = args_w[args_left:]
                 else:
