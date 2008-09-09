@@ -8,6 +8,7 @@ from pypy.rlib.jit import hint
 from pypy.tool.cache import Cache
 from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import make_sure_not_resized
 import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
@@ -656,6 +657,12 @@ class ObjSpace(object):
             raise UnpackValueError("need more than %d value%s to unpack" %
                                    (i, plural))
         return items
+
+    def immutableiterable(self, w_iterable):
+        """ More or less the same as unpackiterable, but does not return
+        a copy. Please don't modify the result
+        """
+        return make_sure_not_resized(self.unpackiterable(w_iterable)[:])
 
     def unpacktuple(self, w_tuple, expected_length=-1):
         """Same as unpackiterable(), but only for tuples.
