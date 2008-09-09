@@ -81,25 +81,66 @@ class ControlRegister(object):
     
 
 # -----------------------------------------------------------------------------
-
+class InvalidModeOrderException(Exception):
+    def __init__(self, mode, previous_mode):
+        Exception.__init__(self, \
+                           "Wrong Mode order! No valid transition %i => %i" \
+                           % (previous_mode.id(), mode.id()))
+        
+        
 class Mode(object):
+
+    """
+    The two lower STAT bits show the current status of the LCD controller.
+    """
+
+    def __init__(self, video):
+        self.video = video
+        
     def id(self):
         raise Exception()
     
-    def __init__(self, video):
-        self.video = video
+    def activate(self, previous_mode):
+        raise Exception()
+    
+    def emulate(self):
+        raise Exception()
 
     def emulate_hblank_line_y_compare(self, stat_check=False):
         if self.video.line_y == self.video.line_y_compare:
             if not (stat_check and self.video.status.line_y_compare_flag):
-                self.video.line_y_line_y_compare_interrupt_check()
+                self.line_y_line_y_compare_interrupt_check()
         else:
             self.video.status.line_y_compare_flag = False
+            
+    def line_y_line_y_compare_interrupt_check(self):
+        self.video.status.line_y_compare_flag = True
+        if self.video.status.line_y_compare_interrupt:
+            self.video.lcd_interrupt_flag.set_pending()
 
 class Mode0(Mode):
+    """
+     Mode 0: The LCD controller is in the H-Blank period and
+          the CPU can access both the display RAM (8000h-9FFFh)
+          and OAM (FE00h-FE9Fh)
+    """
     def id(self):
         return 0
     
+    def activate(self, previous_mode):
+        #if previous_mode.id() == 3:
+            self.video.cycles += constants.MODE_0_TICKS
+            self.h_blank_interrupt_check()
+        #else:
+            # video.reset_control() can be called in any position
+         #   pass
+            #raise InvalidModeOrderException(self, previous_mode)
+    
+    def h_blank_interrupt_check(self):
+        if self.video.status.mode_0_h_blank_interrupt and \
+        self.video.status.line_y_compare_check():
+            self.video.lcd_interrupt_flag.set_pending()
+            
     def emulate(self):
         #self.video.emulate_hblank()
         self.emulate_hblank()
@@ -108,7 +149,7 @@ class Mode0(Mode):
         self.video.line_y += 1
         self.emulate_hblank_line_y_compare()
         if self.video.line_y < 144:
-            self.video.set_mode_2()
+            self.video.status.set_mode(2)
         else:
             self.emulate_hblank_part_2()
             
@@ -121,13 +162,33 @@ class Mode0(Mode):
             self.video.frames = 0
         else:
             self.video.display = False
-        self.video.set_mode_1_begin()
+        self.video.status.set_mode(1)
         self.video.v_blank  = True
-        
-            
+                 
 class Mode1(Mode):
+    """
+    Mode 1: The LCD contoller is in the V-Blank period (or the
+          display is disabled) and the CPU can access both the
+          display RAM (8000h-9FFFh) and OAM (FE00h-FE9Fh)
+    """
     def id(self):
         return 1
+    
+    def activate(self, previous_mode):
+        #if previous_mode.id() == 0:
+            self.set_begin()
+        #else:
+        #    pass
+            #raise InvalidModeOrderException(self, previous_mode)
+
+    def set_begin(self):
+        self.video.cycles += constants.MODE_1_BEGIN_TICKS
+    
+    def set_between(self):
+        self.video.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
+        
+    def set_end(self):
+        self.video.cycles += constants.MODE_1_END_TICKS
     
     def emulate(self):
         self.emulate_v_blank()
@@ -136,46 +197,88 @@ class Mode1(Mode):
         if self.video.v_blank:
             self.emulate_v_blank_v_blank()
         elif self.video.line_y == 0:
-            self.video.set_mode_2()
+            self.video.status.set_mode(2)
         else:
             self.emulate_v_blank_other()
  
     def emulate_v_blank_v_blank(self):
         self.video.v_blank  = False
-        self.video.set_mode_1_between()
-        self.video.v_blank_interrupt_check()
+        self.set_between()
+        self.v_blank_interrupt_check()
                   
+    def v_blank_interrupt_check(self):
+        if self.video.status.mode_1_v_blank_interrupt:
+            self.video.lcd_interrupt_flag.set_pending()
+        self.video.v_blank_interrupt_flag.set_pending()
+        
     def emulate_v_blank_other(self):
         if self.video.line_y < 153:
             self.emulate_v_blank_mode_1()
         else:
             self.video.line_y        = 0
             self.video.window_line_y = 0
-            self.video.set_mode_1_between()
+            self.set_between()
         self.emulate_hblank_line_y_compare() 
                 
     def emulate_v_blank_mode_1(self):
         self.video.line_y += 1
-        if self.video.line_y == 153:
-            self.video.set_mode_1_end()
+        if self.video.line_y != 153:
+            self.video.cycles += constants.MODE_1_TICKS
         else:
-            self.video.set_mode_1()
+            self.set_end()
             
 class Mode2(Mode):
+    """
+    Mode 2: The LCD controller is reading from OAM memory.
+          The CPU <cannot> access OAM memory (FE00h-FE9Fh)
+          during this period.
+    """
     def id(self):
         return 2
     
+    def activate(self, previous_mode):
+        #if previous_mode.id() == 0 or previous_mode.id() == 1:
+            self.video.cycles += constants.MODE_2_TICKS
+            self.oam_interrupt_check()
+        #else:
+        #    pass
+            #raise InvalidModeOrderException(self, previous_mode)
+     
+    def oam_interrupt_check(self):
+        if self.video.status.mode_2_oam_interrupt and \
+        self.video.status.line_y_compare_check():
+            self.video.lcd_interrupt_flag.set_pending()
+            
     def emulate(self):
         self.emulate_oam()
         
     def emulate_oam(self):
-        self.video.set_mode_3_begin()
+        self.video.status.set_mode(3)
 
 class Mode3(Mode):
-
+    """
+       Mode 3: The LCD controller is reading from both OAM and VRAM,
+          The CPU <cannot> access OAM and VRAM during this period.
+          CGB Mode: Cannot access Palette Data (FF69,FF6B) either.
+    """
     def id(self):
         return 3
     
+    def activate(self, previous_mode):
+        #if previous_mode.id() == 2:
+            self.set_begin()
+    	#else:
+        #    pass
+        #    #raise InvalidModeOrderException(self, previous_mode)
+    
+    def set_begin(self):
+        self.video.cycles  += constants.MODE_3_BEGIN_TICKS
+        self.video.transfer = True
+        
+    def set_end(self):
+        self.video.cycles  += constants.MODE_3_END_TICKS
+        self.video.transfer = False
+        
     def emulate(self):
         self.emulate_transfer()
         
@@ -183,9 +286,10 @@ class Mode3(Mode):
         if self.video.transfer:
             if self.video.display:
                 self.video.draw_line()
-            self.video.set_mode_3_end()
+                print "mode 3 ", self.video.status.get_mode() 
+            self.set_end()
         else:
-            self.video.set_mode_0()
+            self.video.status.set_mode(0)
         
 # -----------------------------------------------------------------------------
 
@@ -213,8 +317,10 @@ class StatusRegister(object):
     	self.mode3 = Mode3(video)
         self.modes   = [self.mode0, self.mode1, self.mode2, self.mode3]
         
+        
+        
     def reset(self):
-        self.set_mode(0x02)
+        self.current_mode               = self.mode2
         self.line_y_compare_flag      = False
         self.mode_0_h_blank_interrupt = False
         self.mode_1_v_blank_interrupt = False
@@ -238,7 +344,7 @@ class StatusRegister(object):
     def write(self, value, write_all=False,
               keep_mode_0_h_blank_interrupt=False):
         if write_all:
-            self.set_mode(value & 0x03)
+            self.current_mode = self.modes[value & 0x03]
             self.line_y_compare_flag    = bool(value & (1 << 2))
             self.status                 = bool(value & (1 << 7))
         self.mode_0_h_blank_interrupt   = bool(value & (1 << 3))
@@ -250,7 +356,9 @@ class StatusRegister(object):
         return self.current_mode.id()
     
     def set_mode(self, mode):
+        old_mode = self.current_mode
         self.current_mode = self.modes[mode & 0x03]
+        self.current_mode.activate(old_mode)
         
     def line_y_compare_check(self):
         return not self.line_y_compare_flag or not self.line_y_compare_interrupt
@@ -617,83 +725,6 @@ class Video(iMemory):
         self.window_x = data
 
     
-    # interrupt checks ---------------------------------------------------
-            
-    def h_blank_interrupt_check(self):
-        if self.status.mode_0_h_blank_interrupt and \
-        self.status.line_y_compare_check():
-            self.lcd_interrupt_flag.set_pending()
-     
-    def oam_interrupt_check(self):
-        if self.status.mode_2_oam_interrupt and \
-        self.status.line_y_compare_check():
-            self.lcd_interrupt_flag.set_pending()
-        
-    def v_blank_interrupt_check(self):
-        if self.status.mode_1_v_blank_interrupt:
-            self.lcd_interrupt_flag.set_pending()
-        self.v_blank_interrupt_flag.set_pending()
-            
-    def line_y_line_y_compare_interrupt_check(self):
-        self.status.line_y_compare_flag = True
-        if self.status.line_y_compare_interrupt:
-            self.lcd_interrupt_flag.set_pending()
-                
-    # mode setting -----------------------------------------------------------
-    """
-    The two lower STAT bits show the current status of the LCD controller.
-    Mode 0: The LCD controller is in the H-Blank period and
-          the CPU can access both the display RAM (8000h-9FFFh)
-          and OAM (FE00h-FE9Fh)
-    
-    Mode 1: The LCD contoller is in the V-Blank period (or the
-          display is disabled) and the CPU can access both the
-          display RAM (8000h-9FFFh) and OAM (FE00h-FE9Fh)
-
-    Mode 2: The LCD controller is reading from OAM memory.
-          The CPU <cannot> access OAM memory (FE00h-FE9Fh)
-          during this period.
-
-    Mode 3: The LCD controller is reading from both OAM and VRAM,
-          The CPU <cannot> access OAM and VRAM during this period.
-          CGB Mode: Cannot access Palette Data (FF69,FF6B) either.
-    """
-    def set_mode_3_begin(self):
-        self.status.set_mode(3)
-        self.cycles  += constants.MODE_3_BEGIN_TICKS
-        self.transfer = True
-        
-    def set_mode_3_end(self):
-        self.status.set_mode(3)
-        self.cycles  += constants.MODE_3_END_TICKS
-        self.transfer = False
-
-    def set_mode_0(self):
-        self.status.set_mode(0)
-        self.cycles += constants.MODE_0_TICKS
-        self.h_blank_interrupt_check()
-       
-    def set_mode_2(self):
-        self.status.set_mode(2)
-        self.cycles += constants.MODE_2_TICKS
-        self.oam_interrupt_check()
-      
-    def set_mode_1_begin(self):
-        self.status.set_mode(1)
-        self.cycles += constants.MODE_1_BEGIN_TICKS
-        
-    def set_mode_1(self):
-        self.status.set_mode(1)
-        self.cycles += constants.MODE_1_TICKS
-        
-    def set_mode_1_between(self):
-        self.status.set_mode(1)
-        self.cycles += constants.MODE_1_TICKS - constants.MODE_1_BEGIN_TICKS
-        
-    def set_mode_1_end(self):
-        self.status.set_mode(1)
-        self.cycles += constants.MODE_1_END_TICKS
-        
     # emulation ----------------------------------------------------------------
 
     def emulate(self, ticks):
