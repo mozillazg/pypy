@@ -53,11 +53,7 @@ if __name__ == '__main__':
     i = 0
     funcs = []
     while i < 10:
-        f = py.code.Source(list_of_instances_with_int, """
-        def f(r, w):
-            list_of_instances_with_int(r, w, %d)
-        """ % coeff)
-        funcs.append((f, 'f'))
+        funcs.append(lambda r, w, coeff=coeff: list_of_instances_with_int(r, w, coeff))
         coeff *= 2
         i += 1
     res = measure(measure_func, funcs)

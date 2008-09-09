@@ -91,22 +91,31 @@ class ChildProcess(object):
 
 SOCK_FILE = '/tmp/bench_mem'
 
-def run_cooperative(f, func_name=None):
+def run_cooperative(func):
     """ The idea is that we fork() and execute the function func in one
     process. In parent process we measure private memory obtained by a process
     when we read anything in pipe. We send back that we did that
     """
-    gw = py.execnet.PopenGateway()
-    if func_name is None:
-        func_name = f.func_name
-    code = py.code.Source(py.code.Source("""
-    import os
-    channel.send(os.getpid())
-    """), py.code.Source(f), py.code.Source(
-    "%s(channel.receive, channel.send)" % func_name))
-    channel = gw.remote_exec(code)
-    pid = channel.receive()
-    return channel.receive, channel.send, pid
+    parentread, childwrite = os.pipe()
+    childread, parentwrite = os.pipe()
+    pid = os.fork()
+    if not pid:
+        os.close(parentread)
+        os.close(parentwrite)
+        try:
+            func(lambda : os.read(childread, 1),
+                 lambda x: os.write(childwrite, x))
+        except (SystemExit, KeyboardInterrupt):
+            pass
+        except:
+            import traceback
+            traceback.print_tb(sys.exc_info()[2])
+        os._exit(1)
+    os.close(childread)
+    os.close(childwrite)
+    return (lambda : os.read(parentread, 1),
+            lambda x: os.write(parentwrite, x),
+            pid)
 
 def smaps_measure_func(pid):
     return parse_smaps_output(open('/proc/%d/smaps' % pid).read())    
@@ -114,10 +123,7 @@ def smaps_measure_func(pid):
 def measure(measure_func, funcs_to_run):
     results = []
     for num, func in enumerate(funcs_to_run):
-        if isinstance(func, tuple):
-            read, write, pid = run_cooperative(*func)
-        else:
-            read, write, pid = run_cooperative(func)
+        read, write, pid = run_cooperative(func)
         elem = []
         while 1:
             res = read()
