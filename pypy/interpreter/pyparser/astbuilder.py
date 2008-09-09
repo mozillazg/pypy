@@ -429,18 +429,12 @@ def build_testlist_gexp(builder, nb):
         genexpr_for[0].is_outmost = True
         builder.push(ast.GenExpr(ast.GenExprInner(expr, genexpr_for, lineno), lineno))
         return
-    isConst = True
-    values = []
     for item in items:
-        if isinstance(item, ast.Const):
-            values.append(item.value)
-        else:
-            isConst = False
-            break
-    if isConst:
-        builder.push(ast.Const(builder.space.newtuple(values), lineno))
-    else:
-        builder.push(ast.Tuple(items, lineno))
+        if not isinstance(item, ast.Const):
+            builder.push(ast.Tuple(items, lineno))
+            return
+    values = [item.value for item in items]
+    builder.push(ast.Const(builder.space.newtuple(values), lineno))
     return
 
 def build_lambdef(builder, nb):
@@ -739,21 +733,16 @@ def build_exprlist(builder, nb):
     if len(atoms) <= 2:
         builder.push(atoms[0])
     else:
-        names = []
-        values = []
         isConst = True
-        for index in range(0, len(atoms), 2):
-            item = atoms[index]
-            names.append(item)
-            if isinstance(item, ast.Const):
-                values.append(item)
-            else:
+        items = [atoms[index] for index in range(0, len(atoms), 2)]
+        for item in items:
+            if not isinstance(item, ast.Const):
                 isConst = False
-        if isConst:
-            builder.push(ast.Const(builder.space.newtuple(values), atoms[0].lineno))
+                break
+        if not isConst:
+            builder.push(ast.Tuple(items, atoms[0].lineno))
         else:
-            builder.push(ast.Tuple(names, atoms[0].lineno))
-
+            builder.push(ast.Const(builder.space.newtuple(items), atoms[0].lineno))
 
 def build_while_stmt(builder, nb):
     """while_stmt: 'while' test ':' suite ['else' ':' suite]"""
