@@ -658,7 +658,7 @@ class ObjSpace(object):
                                    (i, plural))
         return items
 
-    def immutableiterable(self, w_iterable):
+    def viewiterable(self, w_iterable):
         """ More or less the same as unpackiterable, but does not return
         a copy. Please don't modify the result
         """
