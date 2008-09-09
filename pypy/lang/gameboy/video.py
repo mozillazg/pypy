@@ -96,15 +96,19 @@ class Mode(object):
 
     def __init__(self, video):
         self.video = video
+        self.reset()
         
+    def reset(self):
+        raise Exception("unimplemented method")
+                        
     def id(self):
-        raise Exception()
+        raise Exception("unimplemented method")
     
     def activate(self, previous_mode):
-        raise Exception()
+        raise Exception("unimplemented method")
     
     def emulate(self):
-        raise Exception()
+        raise Exception("unimplemented method")
 
     def emulate_hblank_line_y_compare(self, stat_check=False):
         if self.video.line_y == self.video.line_y_compare:
@@ -124,6 +128,10 @@ class Mode0(Mode):
           the CPU can access both the display RAM (8000h-9FFFh)
           and OAM (FE00h-FE9Fh)
     """
+    
+    def reset(self):
+        self.h_blank_interrupt = False
+    
     def id(self):
         return 0
     
@@ -137,7 +145,7 @@ class Mode0(Mode):
             #raise InvalidModeOrderException(self, previous_mode)
     
     def h_blank_interrupt_check(self):
-        if self.video.status.mode_0_h_blank_interrupt and \
+        if self.h_blank_interrupt and \
         self.video.status.line_y_compare_check():
             self.video.lcd_interrupt_flag.set_pending()
             
@@ -171,6 +179,10 @@ class Mode1(Mode):
           display is disabled) and the CPU can access both the
           display RAM (8000h-9FFFh) and OAM (FE00h-FE9Fh)
     """
+    
+    def reset(self):
+        self.v_blank_interrupt = False
+        
     def id(self):
         return 1
     
@@ -207,7 +219,7 @@ class Mode1(Mode):
         self.v_blank_interrupt_check()
                   
     def v_blank_interrupt_check(self):
-        if self.video.status.mode_1_v_blank_interrupt:
+        if self.v_blank_interrupt:
             self.video.lcd_interrupt_flag.set_pending()
         self.video.v_blank_interrupt_flag.set_pending()
         
@@ -233,6 +245,10 @@ class Mode2(Mode):
           The CPU <cannot> access OAM memory (FE00h-FE9Fh)
           during this period.
     """
+    
+    def reset(self):
+        self.oam_interrupt = False
+        
     def id(self):
         return 2
     
@@ -245,7 +261,7 @@ class Mode2(Mode):
             #raise InvalidModeOrderException(self, previous_mode)
      
     def oam_interrupt_check(self):
-        if self.video.status.mode_2_oam_interrupt and \
+        if self.oam_interrupt and \
         self.video.status.line_y_compare_check():
             self.video.lcd_interrupt_flag.set_pending()
             
@@ -255,12 +271,17 @@ class Mode2(Mode):
     def emulate_oam(self):
         self.video.status.set_mode(3)
 
+
 class Mode3(Mode):
     """
        Mode 3: The LCD controller is reading from both OAM and VRAM,
           The CPU <cannot> access OAM and VRAM during this period.
           CGB Mode: Cannot access Palette Data (FF69,FF6B) either.
     """
+    
+    def reset(self):
+        pass
+    
     def id(self):
         return 3
     
@@ -322,19 +343,21 @@ class StatusRegister(object):
     def reset(self):
         self.current_mode               = self.mode2
         self.line_y_compare_flag      = False
-        self.mode_0_h_blank_interrupt = False
-        self.mode_1_v_blank_interrupt = False
-        self.mode_2_oam_interrupt     = False
         self.line_y_compare_interrupt = False
+        for mode in self.modes:
+            mode.reset()
+        #self.mode_0_h_blank_interrupt = False
+        #self.mode_1_v_blank_interrupt = False
+        #self.mode_2_oam_interrupt     = False
         self.status                   = True
         
         
     def read(self, extend=False):
         value =  self.get_mode()
         value += self.line_y_compare_flag      << 2
-        value += self.mode_0_h_blank_interrupt << 3
-        value += self.mode_1_v_blank_interrupt << 4
-        value += self.mode_2_oam_interrupt     << 5
+        value += self.mode0.h_blank_interrupt  << 3
+        value += self.mode1.v_blank_interrupt  << 4
+        value += self.mode2.oam_interrupt      << 5
         value += self.line_y_compare_interrupt << 6
         if extend:
             value += int(self.status) << 7
@@ -344,13 +367,13 @@ class StatusRegister(object):
     def write(self, value, write_all=False,
               keep_mode_0_h_blank_interrupt=False):
         if write_all:
-            self.current_mode = self.modes[value & 0x03]
-            self.line_y_compare_flag    = bool(value & (1 << 2))
-            self.status                 = bool(value & (1 << 7))
-        self.mode_0_h_blank_interrupt   = bool(value & (1 << 3))
-        self.mode_1_v_blank_interrupt   = bool(value & (1 << 4))
-        self.mode_2_oam_interrupt       = bool(value & (1 << 5))
-        self.line_y_compare_interrupt   = bool(value & (1 << 6))
+            self.current_mode          = self.modes[value & 0x03]
+            self.line_y_compare_flag   = bool(value & (1 << 2))
+            self.status                = bool(value & (1 << 7))
+        self.mode0.h_blank_interrupt   = bool(value & (1 << 3))
+        self.mode1.v_blank_interrupt   = bool(value & (1 << 4))
+        self.mode2.oam_interrupt       = bool(value & (1 << 5))
+        self.line_y_compare_interrupt  = bool(value & (1 << 6))
         
     def get_mode(self):
         return self.current_mode.id()
