@@ -19,13 +19,21 @@ class W_AbstractSeqIterObject(W_Object):
 class W_SeqIterObject(W_AbstractSeqIterObject):
     """Sequence iterator implementation for general sequences."""
 
-class W_FastSeqIterObject(W_AbstractSeqIterObject):
-    """Sequence iterator specialized for lists or tuples, accessing
+class W_FastListIterObject(W_AbstractSeqIterObject):
+    """Sequence iterator specialized for lists, accessing
     directly their RPython-level list of wrapped objects.
     """
     def __init__(w_self, w_seq, wrappeditems):
         W_AbstractSeqIterObject.__init__(w_self, w_seq)
-        w_self.wrappeditems = wrappeditems
+        w_self.listitems = wrappeditems
+
+class W_FastTupleIterObject(W_AbstractSeqIterObject):
+   """Sequence iterator specialized for tuples, accessing
+   directly their RPython-level list of wrapped objects.
+   """ 
+   def __init__(w_self, w_seq, wrappeditems):
+        W_AbstractSeqIterObject.__init__(w_self, w_seq)
+        w_self.tupleitems = wrappeditems
 
 class W_ReverseSeqIterObject(W_Object):
     from pypy.objspace.std.itertype import reverse_iter_typedef as typedef
@@ -37,7 +45,8 @@ class W_ReverseSeqIterObject(W_Object):
 
 
 registerimplementation(W_SeqIterObject)
-registerimplementation(W_FastSeqIterObject)
+registerimplementation(W_FastListIterObject)
+registerimplementation(W_FastTupleIterObject)
 registerimplementation(W_ReverseSeqIterObject)
 
 def iter__SeqIter(space, w_seqiter):
@@ -67,26 +76,52 @@ def len__SeqIter(space,  w_seqiter):
     return w_len
 
 
-def iter__FastSeqIter(space, w_seqiter):
+def iter__FastTupleIter(space, w_seqiter):
     return w_seqiter
 
-def next__FastSeqIter(space, w_seqiter):
-    if w_seqiter.wrappeditems is None:
+def next__FastTupleIter(space, w_seqiter):
+    if w_seqiter.tupleitems is None:
         raise OperationError(space.w_StopIteration, space.w_None)
     index = w_seqiter.index
     try:
-        w_item = w_seqiter.wrappeditems[index]
+        w_item = w_seqiter.tupleitems[index]
     except IndexError:
-        w_seqiter.wrappeditems = None
+        w_seqiter.tupleitems = None
         w_seqiter.w_seq = None
         raise OperationError(space.w_StopIteration, space.w_None) 
     w_seqiter.index = index + 1
     return w_item
 
-def len__FastSeqIter(space, w_seqiter):
-    if w_seqiter.wrappeditems is None:
+def len__FastTupleIter(space, w_seqiter):
+    if w_seqiter.tupleitems is None:
         return space.wrap(0)
-    totallength = len(w_seqiter.wrappeditems)
+    totallength = len(w_seqiter.tupleitems)
+    remaining = totallength - w_seqiter.index
+    if remaining < 0:
+        remaining = 0
+    return space.wrap(remaining)
+
+
+def iter__FastListIter(space, w_seqiter):
+    return w_seqiter
+
+def next__FastListIter(space, w_seqiter):
+    if w_seqiter.listitems is None:
+        raise OperationError(space.w_StopIteration, space.w_None)
+    index = w_seqiter.index
+    try:
+        w_item = w_seqiter.listitems[index]
+    except IndexError:
+        w_seqiter.listitems = None
+        w_seqiter.w_seq = None
+        raise OperationError(space.w_StopIteration, space.w_None) 
+    w_seqiter.index = index + 1
+    return w_item
+
+def len__FastListIter(space, w_seqiter):
+    if w_seqiter.listitems is None:
+        return space.wrap(0)
+    totallength = len(w_seqiter.listitems)
     remaining = totallength - w_seqiter.index
     if remaining < 0:
         remaining = 0
