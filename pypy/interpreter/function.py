@@ -213,7 +213,7 @@ class Function(Wrappable):
             w(self.code),
             self.w_func_globals,
             w_closure,
-            nt(self.defs_w),
+            nt(self.defs_w[:]),
             self.w_func_dict,
             self.w_module,
         ]
