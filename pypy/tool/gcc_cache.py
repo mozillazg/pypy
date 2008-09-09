@@ -25,6 +25,15 @@ def build_executable_cache(c_files, eci):
         path.write(result)
         return result
 
+def build_executable_cache_read(c_files, eci):
+    path = cache_file_path(c_files, eci, 'build_executable_cache_read')
+    try:
+        return path.read()
+    except py.error.Error:
+        result = open(build_executable(c_files, eci), 'rb').read()
+        path.write(result)
+        return result
+
 def try_compile_cache(c_files, eci):
     path = cache_file_path(c_files, eci, 'try_compile_cache')
     try:
