@@ -20,7 +20,6 @@ from pypy.annotation.model import read_can_only_throw
 from pypy.annotation.model import add_knowntypedata, merge_knowntypedata
 from pypy.annotation.model import SomeGenericCallable
 from pypy.annotation.model import SomeExternalInstance, SomeUnicodeString
-from pypy.annotation.model import SomeListIterator
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.rlib import rarithmetic
@@ -779,17 +778,6 @@ class __extend__(pairtype(SomeIterator, SomeIterator)):
             raise UnionError("merging incompatible iterators variants")
         return SomeIterator(s_cont, *iter1.variant)
 
-class __extend__(pairtype(SomeListIterator, SomeListIterator)):
-    def union((iter1, iter2)):
-        # merge here s_value of listdefs, but not listdefs themselves
-        # (ie resizable and mergeable parameters)
-        # XXX should we perform some better union???
-        for listdef in iter1.listdefs:
-            listdef.generalize(iter2.listdefs[0].listitem.s_value)
-        for listdef in iter2.listdefs:
-            listdef.generalize(iter1.listdefs[0].listitem.s_value)
-        listdefs = dict.fromkeys(iter1.listdefs + iter2.listdefs).keys()
-        return SomeListIterator(listdefs)
 
 class __extend__(pairtype(SomeBuiltin, SomeBuiltin)):
 

@@ -443,7 +443,7 @@ class TestAnnotateTestCase:
     def test_simple_iter_list(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.simple_iter, [list])
-        assert isinstance(s, annmodel.SomeListIterator)
+        assert isinstance(s, annmodel.SomeIterator)
         
     def test_simple_iter_next(self):
         def f(x):
@@ -3097,19 +3097,7 @@ class TestAnnotateTestCase:
 
         a = self.RPythonAnnotator()
         py.test.raises(TooLateForChange, a.build_types, f, [])
-
-    def test_mixing_iterators(self):
-        def f(i):
-            if i:
-                return iter([1,2,3])
-            else:
-                l = [1,2,3]
-                l.append(4)
-                return iter(l)
-
-        a = self.RPythonAnnotator()
-        s_res = a.build_types(f, [int])
-        assert isinstance(s_res, annmodel.SomeListIterator)
+        
 
 def g(n):
     return [0,1,2,n]

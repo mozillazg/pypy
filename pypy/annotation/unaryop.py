@@ -9,7 +9,7 @@ from pypy.annotation.model import \
      SomeExternalObject, SomeTypedAddressAccess, SomeAddress, \
      s_ImpossibleValue, s_Bool, s_None, \
      unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked, \
-     SomeGenericCallable, SomeWeakRef, SomeUnicodeString, SomeListIterator
+     SomeGenericCallable, SomeWeakRef, SomeUnicodeString
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
@@ -315,7 +315,7 @@ class __extend__(SomeList):
         return SomeObject.len(lst)
 
     def iter(lst):
-        return SomeListIterator([lst.listdef])
+        return SomeIterator(lst)
     iter.can_only_throw = []
 
     def getanyitem(lst):
@@ -529,15 +529,6 @@ class __extend__(SomeIterator):
     next.can_only_throw = _can_only_throw
     method_next = next
 
-class __extend__(SomeListIterator):
-    def iter(itr):
-        return itr
-    iter.can_only_throw = []
-
-    def next(itr):
-        return itr.listdefs[0].read_item()
-    next.can_only_throw = [StopIteration]
-    method_next = next
 
 class __extend__(SomeInstance):
 
