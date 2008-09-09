@@ -87,7 +87,8 @@ put_short(int)              puts a short integer
 put_int(int)                puts an integer
 put_pascal(s)               puts a short string
 put_w_obj(w_obj)            puts a wrapped object
-put_list_w(list_w, lng)     puts a list of lng wrapped objects
+put_list_w(lst_w, lng)      puts a list with lng of wrapped objects
+put_w_seq(w_seq)            puts a w_seqobject subclass
 
 """
 
@@ -315,8 +316,7 @@ register(TYPE_STRINGREF, unmarshal_stringref)
 
 def marshal_w__Tuple(space, w_tuple, m):
     m.start(TYPE_TUPLE)
-    items = w_tuple.wrappeditems
-    m.put_list_w(items, len(items))
+    m.put_w_seq(w_tuple)
 
 def unmarshal_Tuple(space, u, tc):
     items_w = u.get_list_w()
@@ -325,8 +325,7 @@ register(TYPE_TUPLE, unmarshal_Tuple)
 
 def marshal_w__List(space, w_list, m):
     m.start(TYPE_LIST)
-    items = w_list.wrappeditems
-    m.put_list_w(items, len(items))
+    m.put_w_seq(w_list)
 
 def unmarshal_List(space, u, tc):
     items_w = u.get_list_w()

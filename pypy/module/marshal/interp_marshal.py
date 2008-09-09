@@ -244,14 +244,29 @@ class Marshaller(_Base):
             idx += 1
         self.nesting -= 1
 
-    def put_list_w(self, list_w, lng):
+    def put_list_w(self, lst_w, lng):
         self.nesting += 1
         self.put_int(lng)
         idx = 0
         space = self.space
         if self.nesting < MAX_MARSHAL_DEPTH:
             while idx < lng:
-                w_obj = list_w[idx]
+                w_obj = lst_w[idx]
+                self.space.marshal_w(w_obj, self)
+                idx += 1
+        else:
+            self._overflow()
+        self.nesting -= 1
+
+    def put_w_seq(self, w_seq):
+        self.nesting += 1
+        lng = w_seq.getlength()
+        self.put_int(lng)
+        idx = 0
+        space = self.space
+        if self.nesting < MAX_MARSHAL_DEPTH:
+            while idx < lng:
+                w_obj = w_seq.getitem(idx)
                 self.space.marshal_w(w_obj, self)
                 idx += 1
         else:
