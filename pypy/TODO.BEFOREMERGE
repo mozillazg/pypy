@@ -1,0 +1,4 @@
+
+* make sure to kill W_ListObject.__init__ hack
+* avoid duplication in FastSeqIter, if possible
+* add objspace.unpackiterable shortcuts
