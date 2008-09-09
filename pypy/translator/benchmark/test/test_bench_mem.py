@@ -42,7 +42,7 @@ def test_measure_cooperative():
         read()
         write('e')
 
-    def measure(arg):
+    def measure(arg1, arg):
         return 42
 
     measurments = bench_mem.measure(measure, [f1, f1])

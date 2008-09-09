@@ -111,7 +111,7 @@ def smaps_measure_func(pid):
 
 def measure(measure_func, funcs_to_run):
     results = []
-    for func in funcs_to_run:
+    for num, func in enumerate(funcs_to_run):
         if isinstance(func, tuple):
             read, write, pid = run_cooperative(*func)
         else:
@@ -122,7 +122,7 @@ def measure(measure_func, funcs_to_run):
             if res == 'e':
                 break
             else:
-                elem.append(measure_func(pid))
+                elem.append(measure_func(num, pid))
                 write('x')
         results.append(elem)
     return results
