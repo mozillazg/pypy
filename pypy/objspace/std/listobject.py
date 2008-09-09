@@ -2,7 +2,6 @@ from pypy.objspace.std.objspace import *
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.listtype import get_list_index
 from pypy.objspace.std.sliceobject import W_SliceObject
-from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.objspace.std.seqinterface import W_SeqObject
 
 from pypy.objspace.std import slicetype
@@ -14,9 +13,9 @@ class W_ListObject(W_SeqObject):
     from pypy.objspace.std.listtype import list_typedef as typedef
     
     def __init__(w_self, wrappeditems):
-        if len(wrappeditems) > 0:
-            elem = wrappeditems.pop()
-            wrappeditems.append(elem)
+        #if len(wrappeditems) > 0:
+        wrappeditems.append(None)
+        wrappeditems.pop()
         w_self.wrappeditems = wrappeditems
 
     def __repr__(w_self):

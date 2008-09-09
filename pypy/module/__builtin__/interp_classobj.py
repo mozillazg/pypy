@@ -116,7 +116,7 @@ class W_ClassObject(Wrappable):
             elif name == "__name__":
                 return space.wrap(self.name)
             elif name == "__bases__":
-                return space.newtuple(self.bases_w)
+                return space.newtuple(self.bases_w[:])
         w_value = self.lookup(space, w_attr)
         if w_value is None:
             raise OperationError(
