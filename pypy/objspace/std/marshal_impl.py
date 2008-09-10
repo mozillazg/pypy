@@ -379,7 +379,7 @@ def marshal_w_pycode(space, w_pycode, m):
     m.put_int(x.co_flags)
     m.atom_str(TYPE_STRING, x.co_code)
     m.start(TYPE_TUPLE)
-    m.put_list_w(x.co_consts_w, len(x.co_consts_w))
+    m.put_list_w(x.co_consts_w[:], len(x.co_consts_w))
     m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, [space.str_w(w_name) for w_name in x.co_names_w])
     m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, x.co_varnames)
     m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, x.co_freevars)
@@ -422,7 +422,8 @@ def unmarshal_pycode(space, u, tc):
     flags       = u.get_int()
     code        = unmarshal_str(u)
     u.start(TYPE_TUPLE)
-    consts_w    = u.get_list_w()
+    consts_w    = u.get_tuple_w()
+    # copy in order not to merge it with anything else
     names       = unmarshal_strlist(u, TYPE_TUPLE)
     varnames    = unmarshal_strlist(u, TYPE_TUPLE)
     freevars    = unmarshal_strlist(u, TYPE_TUPLE)
