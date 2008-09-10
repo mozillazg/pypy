@@ -103,9 +103,12 @@ class Builder(model.GenBuilder):
     op_int_pop  = make_one_argument_method("POP")
     op_int_sub  = make_two_argument_method("SUB")
 
+    #FIXME: can only jump 32bit
     def jump_if_true(self, gv_condition, args_for_jump_gv):
         targetbuilder = Builder()
         self.mc.CMP(gv_condition, Immediate32(0))
+        displ = self.calc_32bit_displacement(self.mc.tell(),targetbuilder.mc.tell())
+        self.mc.JNE(displ)
         #targetbuilder.come_from(self.mc, 'JNE')
         return targetbuilder
     
@@ -149,12 +152,17 @@ class Builder(model.GenBuilder):
     
     #TODO: Implementation
     def enter_next_block(self, args_gv):
-        print "WriteMe:  enter_next_block"
-        return Label(self.mc.tell(), [], 0)
+        #print "WriteMe:  enter_next_block"
+        L = Label(self.mc.tell(), [], 0)
+        #print "DEBUG2:",L.startaddr
+        return L
     
     def _close(self):
         pass
-        
+    
+    def calc_32bit_displacement(self, curr_addr, want_jump_to):
+        return want_jump_to-curr_addr
+
 
 class RX86_64GenOp(model.AbstractRGenOp):
     

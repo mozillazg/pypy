@@ -66,7 +66,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             self.write_modRM_byte(3, modrm2, modrm1)
             self.write(chr(arg2.value)) 
         elif isinstance(arg2,Register64):
-            rexB, modrm2 = self.get_register_bits(arg2.reg)            
+            rexB, modrm2 = self.get_register_bits(arg2.reg)         
             # FIXME: exchange the two arguments (rexB/rexR)
             self.write_rex_byte(rexW, rexB, rexX, rexR)
             self.write(opcode)
@@ -144,16 +144,16 @@ class X86_64CodeBuilder(object):
     
     # The opcodes differs depending on the operands
     # Params:
-    # W, R, X, B, Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
+    # W (64bit Operands), R, X, B, Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
     
-    # FIXME: rexX,rexB are set
+    # FIXME: rexB is set
     _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 2)  
     _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x00", 3, None, None)
     
     # FIXME: rexB is set
     _CMP_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    1, "\x81", 3, None, 7)
     _CMP_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x39", 3, None, None)
-    # FIXME: rex B is set
+    # FIXME: rexB is set
     _CMP_8REG_IMM8   = make_two_operand_instr(   0,    0,    0,    0, "\x82", 3, None, 7)
     
     _DEC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 1)
@@ -202,6 +202,12 @@ class X86_64CodeBuilder(object):
         #self.write("\xE9")
         #self.writeImm32(displ)
         
+    #  op1 is and 32bit displ
+    def JNE(self,op1):
+        self.write("\x0F")
+        self.write("\x85")
+        self.writeImm32(op1)       
+        
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
         method(op1)
@@ -240,20 +246,24 @@ class X86_64CodeBuilder(object):
     def get_register_bits_8Bit(self, register):
         return REGISTER_MAP_8BIT[register]
     
+    # TODO: sign extention?
     # Parse the integervalue to an charakter
     # and write it
     def writeImm32(self, imm32):
         x = hex(imm32)
+        if x[0]=='-':
+            x = self.cast_to_neg_hex(x)
         # parse to string and cut "0x" off
         # fill with zeros if to short
         y = "0"*(10-len(x))+x[2:len(x)]
-        assert len(y) == 8            
+        assert len(y) == 8           
         self.write(chr(int(y[6:8],16))) 
         self.write(chr(int(y[4:6],16)))
         self.write(chr(int(y[2:4],16)))
         self.write(chr(int(y[0:2],16)))
         
         
+    # TODO: sign extention?
     # Parse the integervalue to an charakter
     # and write it
     def writeImm64(self, imm64):
@@ -280,4 +290,8 @@ class X86_64CodeBuilder(object):
     def write_modRM_byte(self, mod, reg, rm):
         byte = mod << 6 | (reg << 3) | rm
         self.write(chr(byte))
+        
+    # TODO: write me
+    def cast_to_neg_hex(self,a_hex):
+        return a_hex
         

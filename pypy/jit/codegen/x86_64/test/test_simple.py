@@ -38,16 +38,32 @@ class TestSimple():
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_add", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
-        ten = fp(4, 6)
+        ten = fp(4, 6) # 4+6= 10
         assert ten == 10
         print ten
+        
+    def test_add_neg(self):
+        builder, fp, inputargs_gv, token = make_testbuilder(2)
+        genv0 = inputargs_gv[0] #the first argument "place"
+        genv1 = inputargs_gv[1] 
+        genv_result = builder.genop2("int_add", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
+        builder.finish_and_return(token, genv_result)
+        ten = fp(-4, -6)
+        assert ten == -10
+        print ten
+        two = fp(-4, 6)
+        assert two == 2
+        print two
+        two = fp(4, -6)
+        assert two == -2
+        print two
         
     def test_add_imm32(self):
         builder, fp, inputargs_gv, token = make_testbuilder(1)
         genv0 = inputargs_gv[0] #the first argument "place"
         genv_result = builder.genop2("int_add", genv0, rgenop.genconst(1000)) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
-        num = fp(1111)
+        num = fp(1111) # 1111+1000 = 2111
         assert num == 2111
         print num
         
@@ -55,7 +71,7 @@ class TestSimple():
         builder, fp, inputargs_gv, token = make_testbuilder(1)
         builder.finish_and_return(token, inputargs_gv[0])
         print repr("".join(builder.mc._all))
-        four = fp(4)
+        four = fp(4) # return 4
         assert four == 4
         print four
         
@@ -65,7 +81,7 @@ class TestSimple():
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_sub", genv0, genv1) #creates the subtraction and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
-        four = fp(10, 6)
+        four = fp(10, 6) # 10 - 6 = 4
         assert four == 4
         print four
         
@@ -74,7 +90,7 @@ class TestSimple():
         genv0 = inputargs_gv[0] #the first argument "place" 
         genv_result = builder.genop2("int_sub", genv0, rgenop.genconst(2)) #creates the subtraction and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
-        eight = fp(10)
+        eight = fp(10) # 10-2 = 8
         assert eight == 8
         print eight
         
