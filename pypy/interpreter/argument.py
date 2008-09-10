@@ -271,9 +271,9 @@ class ArgumentsFromValuestack(AbstractArguments):
             if has_vararg:
                 if upfront > co_argcount:
                     assert extravarargs is not None                    
-                    stararg_w = extravarargs
+                    stararg_w = extravarargs + [None] * self.nargs
                     for i in range(self.nargs):
-                        stararg_w.append(self.frame.peekvalue(self.nargs - 1 - i))
+                        stararg_w[i + len(extravarargs)] = self.frame.peekvalue(self.nargs - 1 - i)
                 else:
                     args_left = co_argcount - upfront                
                     stararg_w = [None] * (avail - co_argcount)
