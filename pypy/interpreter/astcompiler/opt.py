@@ -234,7 +234,9 @@ else:
             for subnode in node.nodes:
                 if not isinstance(subnode, ast.Const):
                     return node     # not all constants
-            consts_w = [subnode.value for subnode in node.nodes]
+            # this isinstance is only to make annotator happier
+            consts_w = [subnode.value for subnode in node.nodes
+                        if isinstance(subnode, ast.Const)]
             return ast.Const(self.space.newtuple(consts_w))
 
         def visitFor(self, node):
