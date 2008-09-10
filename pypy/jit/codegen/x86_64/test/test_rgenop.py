@@ -125,6 +125,8 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1 
         res = fnptr(4,4)
         assert res == 0
+        res = fnptr(4,0)
+        assert res == 1
         
    # def test_push_and_pop(self):
    #     rgenop = self.RGenOp()
