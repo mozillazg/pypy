@@ -656,9 +656,6 @@ class ObjSpace(object):
                 plural = "s"
             raise UnpackValueError("need more than %d value%s to unpack" %
                                    (i, plural))
-        # XXX remember to kill
-        items.append(None)
-        items.pop()
         return items
 
     def viewiterable(self, w_iterable, expected_length=-1):

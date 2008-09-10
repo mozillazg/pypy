@@ -13,9 +13,6 @@ class W_ListObject(W_SeqObject):
     from pypy.objspace.std.listtype import list_typedef as typedef
     
     def __init__(w_self, wrappeditems):
-        #if len(wrappeditems) > 0:
-        wrappeditems.append(None)
-        wrappeditems.pop()
         w_self.wrappeditems = wrappeditems
 
     def __repr__(w_self):
