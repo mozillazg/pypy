@@ -678,7 +678,7 @@ class __extend__(pyframe.PyFrame):
         f.pushvalue(w_tuple)
 
     def BUILD_LIST(f, itemcount, *ignored):
-        items = f.popvalues(itemcount)
+        items = f.popvalues_mutable(itemcount)
         w_list = f.space.newlist(items)
         f.pushvalue(w_list)
 
@@ -904,7 +904,7 @@ class __extend__(pyframe.PyFrame):
     def MAKE_FUNCTION(f, numdefaults, *ignored):
         w_codeobj = f.popvalue()
         codeobj = f.space.interp_w(PyCode, w_codeobj)
-        defaultarguments = f.popvalues(numdefaults)
+        defaultarguments = f.popvalues_mutable(numdefaults)
         fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)
         f.pushvalue(f.space.wrap(fn))
 
