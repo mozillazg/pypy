@@ -416,9 +416,9 @@ def build_testlist_gexp(builder, nb):
     if l == 1:
         builder.push(atoms[0])
         return
-    items = []
     token = atoms[1]
     if isinstance(token, TokenObject) and token.name == builder.parser.tokens['COMMA']:
+        items = []
         for i in range(0, l, 2): # this is atoms not 1
             items.append(atoms[i])
     else:
@@ -433,7 +433,8 @@ def build_testlist_gexp(builder, nb):
         if not isinstance(item, ast.Const):
             builder.push(ast.Tuple(items, lineno))
             return
-    values = [item.value for item in items]
+    # isinstance as a hint for annotator
+    values = [item.value for item in items if isinstance(item, ast.Const)]
     builder.push(ast.Const(builder.space.newtuple(values), lineno))
     return
 
@@ -740,9 +741,10 @@ def build_exprlist(builder, nb):
                 isConst = False
                 break
         if not isConst:
-            builder.push(ast.Tuple(items, atoms[0].lineno))
+            builder.push(ast.Tuple([i for i in items if isinstance(i, ast.Node)], atoms[0].lineno))
         else:
-            builder.push(ast.Const(builder.space.newtuple(items), atoms[0].lineno))
+            builder.push(ast.Const(builder.space.newtuple(
+                [i for i in items if isinstance(i, ast.Const)]), atoms[0].lineno))
 
 def build_while_stmt(builder, nb):
     """while_stmt: 'while' test ':' suite ['else' ':' suite]"""
