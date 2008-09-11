@@ -29,7 +29,10 @@ option = py.test.config.addoptions("pypy options",
                help="run applevel tests directly on python interpreter (not through PyPy)"),
         Option('--direct', action="store_true",
                default=False, dest="rundirect",
-               help="run pexpect tests directly")
+               help="run pexpect tests directly"),
+        Option('--filelog', action="store",
+               default=None, dest="filelog",
+               help="path for FileLogSession logging")
     )
 
 _SPACECACHE={}
@@ -494,3 +497,5 @@ class Directory(py.test.collect.Directory):
         # disable recursion in symlinked subdirectories
         return (py.test.collect.Directory.recfilter(self, path)
                 and path.check(link=0))
+
+from pypy.tool.pytest.filelog import FileLogSession
