@@ -489,3 +489,13 @@ def test_emulate_v_v_blank_2():
     assert video.status.read(extend=True) == 0xFE
     assert video.cycles == constants.MODE_2_TICKS 
     assert not video.lcd_interrupt_flag.is_pending()
+    
+def test_draw_clean_background():
+    video = get_video()
+    assert video.line == [0] * (8+160+8)
+    
+    video.line = range(8+160+8)
+    video.draw_clean_background()
+    
+    assert video.line == [0] * (8+160+8)
+    

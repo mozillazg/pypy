@@ -43,42 +43,56 @@ class ControlRegister(object):
     Bit 1 - OBJ (Sprite) Display Enable    (0=Off, 1=On)
     Bit 0 - BG Display (for CGB see below) (0=Off, 1=On)
     """
-    def __init__(self):
+    def __init__(self, window, background):
+        self.window     = window
+        self.background = background
         self.reset()
         
     def reset(self):
         self.lcd_enabled                              = True
-        self.window_upper_tile_map_selected           = False
-        self.window_enabled                           = False
+        self.window.upper_tile_map_selected           = False
+        self.window.enabled                           = False
         self.background_and_window_lower_tile_data_selected  = True
-        self.background_upper_tile_map_selected       = False
+        self.background.upper_tile_map_selected       = False
         self.big_sprite_size_selected                 = False
-        self.sprite_display_enabled                   = False
-        self.background_enabled                       = True
+        self.sprites_enabled                           = False
+        self.background.enabled                       = True
         
     def read(self):
         value = 0
         value += int(self.lcd_enabled)                              << 7 
-        value += int(self.window_upper_tile_map_selected)           << 6 
-        value += int(self.window_enabled)                           << 5
+        value += int(self.window.upper_tile_map_selected)           << 6 
+        value += int(self.window.enabled)                           << 5
         value += int(self.background_and_window_lower_tile_data_selected)  << 4
-        value += int(self.background_upper_tile_map_selected)       << 3
+        value += int(self.background.upper_tile_map_selected)       << 3
         value += int(self.big_sprite_size_selected)                 << 2
-        value += int(self.sprite_display_enabled)                   << 1
-        value += int(self.background_enabled)
+        value += int(self.sprites_enabled)                   << 1
+        value += int(self.background.enabled)
         return value
         
     def write(self, value):
         self.lcd_enabled                             = bool(value & (1 << 7))
-        self.window_upper_tile_map_selected          = bool(value & (1 << 6))
-        self.window_enabled                          = bool(value & (1 << 5))
+        self.window.upper_tile_map_selected          = bool(value & (1 << 6))
+        self.window.enabled                          = bool(value & (1 << 5))
         self.background_and_window_lower_tile_data_selected = \
                                                        bool(value & (1 << 4))
-        self.background_upper_tile_map_selected      = bool(value & (1 << 3))
+        self.background.upper_tile_map_selected      = bool(value & (1 << 3))
         self.big_sprite_size_selected                = bool(value & (1 << 2))
-        self.sprite_display_enabled                  = bool(value & (1 << 1))
-        self.background_enabled                      = bool(value & (1 << 0))
+        self.sprites_enabled                         = bool(value & (1 << 1))
+        self.background.enabled                      = bool(value & (1 << 0))
     
+    def get_tile_map_combined(self):
+        #if (self.control.read() & mask) != 0:
+        if self.background_and_window_lower_tile_data_selected:
+            return constants.VRAM_MAP_B
+        else:
+            return constants.VRAM_MAP_A
+        
+    def get_selected_tile_map_space(self):
+        if self.window.upper_tile_map_selected:
+            return constants.VRAM_DATA_A
+        else:
+            return  constants.VRAM_DATA_B
 
 # -----------------------------------------------------------------------------
 class InvalidModeOrderException(Exception):
@@ -86,7 +100,10 @@ class InvalidModeOrderException(Exception):
         Exception.__init__(self, \
                            "Wrong Mode order! No valid transition %i => %i" \
                            % (previous_mode.id(), mode.id()))
-        
+       
+class HandleSubclassException(Exception): 
+    def __init__(self):
+        Exception.__init__(self, "")
         
 class Mode(object):
 
@@ -499,20 +516,28 @@ class Tile(object):
     def set_tile_data(self, data):
         pass
 
-    def get_tile_data(self):
+    def get_selected_tile_map_space(self):
         pass
 # -----------------------------------------------------------------------------
 
 class Window(object):
     
-    def __init__(self):
+    def __init__(self, video):
+        self.video = video
         self.reset()
 
     def reset(self):
         self.x      = 0
         self.y      = 0
         self.line_y = 0
+        self.upper_tile_map_selected  = False
+        self.enabled                  = False
         
+    def update_line_y(self, data):
+         # don't draw window if it was not enabled and not being drawn before
+        if not self.enabled and (data & 0x20) != 0 and \
+        self.line_y == 0 and self.video.line_y > self.y:
+            self.line_y = 144
 
 class Background(object):
     
@@ -524,6 +549,8 @@ class Background(object):
         # be displayed in the left upper corner of the screen.
         self.scroll_x   = 0
         self.scroll_y   = 0
+        self.enabled    = True
+        self.upper_tile_map_selected       = False
         
 # -----------------------------------------------------------------------------
 
@@ -534,10 +561,11 @@ class Video(iMemory):
         self.driver                 = video_driver
         self.v_blank_interrupt_flag = interrupt.v_blank
         self.lcd_interrupt_flag     = interrupt.lcd
-        self.control                = ControlRegister()
-        self.window                 = Window()
-        self.status                 = StatusRegister(self)
+        self.window                 = Window(self)
         self.background             = Background()
+        self.status                 = StatusRegister(self)
+        self.control                = ControlRegister(self.window, 
+                                                      self.background)
         self.memory                 = memory
         self.create_tile_maps()
         self.create_sprites()
@@ -545,8 +573,8 @@ class Video(iMemory):
     
     def create_tile_maps(self):
         # create the maxumal possible sprites
-        self.tile_map_1 = [None]*32*32
-        self.tile_map_2 = [None]*32*32
+        self.tile_map_1 = [None] * 32 * 32
+        self.tile_map_2 = [None] * 32 * 32
     
     def update_tiles(self):
         pass
@@ -563,7 +591,6 @@ class Video(iMemory):
                                      self.oam[address + 1],
                                      self.oam[address + 2],
                                      self.oam[address + 3])
-            
             
     def reset(self):
         self.control.reset()
@@ -625,9 +652,11 @@ class Video(iMemory):
             self.set_window_y(data)
         elif address == constants.WX:
             self.set_window_x(data)
-        elif constants.OAM_ADDR <= address < constants.OAM_ADDR + constants.OAM_SIZE:
+        elif constants.OAM_ADDR <= address < \
+        constants.OAM_ADDR + constants.OAM_SIZE:
             self.set_oam(address, data)
-        elif constants.VRAM_ADDR <= address < constants.VRAM_ADDR + constants.VRAM_SIZE:
+        elif constants.VRAM_ADDR <= address < \
+        constants.VRAM_ADDR + constants.VRAM_SIZE:
             self.set_vram(address, data)
             
     def read(self, address):
@@ -655,9 +684,11 @@ class Video(iMemory):
             return self.get_window_y()
         elif address == constants.WX:
             return self.get_window_x()
-        elif constants.OAM_ADDR <= address < constants.OAM_ADDR + constants.OAM_SIZE:
+        elif constants.OAM_ADDR <= address < \
+        constants.OAM_ADDR + constants.OAM_SIZE:
             return self.get_oam(address)
-        elif constants.VRAM_ADDR <= address < constants.VRAM_ADDR + constants.VRAM_SIZE:
+        elif constants.VRAM_ADDR <= address < \
+        constants.VRAM_ADDR + constants.VRAM_SIZE:
             return self.get_vram(address)
         return 0xFF
 
@@ -678,10 +709,7 @@ class Video(iMemory):
     def set_control(self, data):
         if self.control.lcd_enabled != bool(data & 0x80):
             self.reset_control(data)
-        # don't draw window if it was not enabled and not being drawn before
-        if not self.control.window_enabled and (data & 0x20) != 0 and \
-           self.window.line_y == 0 and self.line_y > self.window.y:
-                self.window.line_y = 144
+        self.window.update_line_y(data)
         self.control.write(data)
 
     def reset_control(self, data):
@@ -861,6 +889,11 @@ class Video(iMemory):
         self.window.x = data
 
     def set_oam(self, address, data):
+        """
+        sets one byte of the object attribute memory.
+        The object attribute memory stores the position and seme other
+        attributes of the sprites
+        """
         self.oam[address - constants.OAM_ADDR] = data & 0xFF
         #self.update_sprites(address)
         self.update_sprites()
@@ -869,6 +902,10 @@ class Video(iMemory):
         return self.oam[address - constants.OAM_ADDR]
         
     def set_vram(self, address, data):
+       """
+       sets one byte of the video memory.
+       The video memroy contains the tiles used to disply.
+       """
        self.vram[address - constants.VRAM_ADDR] = data & 0xFF
        self.update_tiles()
     
@@ -898,14 +935,14 @@ class Video(iMemory):
         self.driver.update_display()
 
     def draw_line(self):
-        if self.control.background_enabled:
+        if self.background.enabled:
             self.draw_background()
         else:
             self.draw_clean_background()
-        if self.control.window_enabled:
+        if self.window.enabled:
             self.draw_window()
-        if self.control.sprite_display_enabled:
-            self.draw_objects()
+        if self.control.sprites_enabled:
+            self.draw_sprites()
         self.draw_pixels()
 
     def draw_clean_background(self):
@@ -919,9 +956,9 @@ class Video(iMemory):
         self.draw_tiles(8 - (x & 7), tile_map, tile_data)
         
     def prepare_background_data(self, x, y):
-        tile_map   = self.get_tile_map(0x08)
+        tile_map   = self.control.get_selected_tile_map_space()
         tile_map  += ((y >> 3) << 5) + (x >> 3)
-        tile_data  = self.get_tile_data(0x10)
+        tile_data  = self.control.get_selected_tile_map_space()
         tile_data += (y & 7) << 1
         return tile_map, tile_data
          
@@ -935,26 +972,15 @@ class Video(iMemory):
             self.window.line_y += 1
 
     def prepare_window_data(self):
-        tile_map   = self.get_tile_map(0x40)
+        tile_map   = self.control.get_tile_map_combined()
         tile_map  += (self.window.line_y >> 3) << 5
-        tile_data  = self.get_tile_data(0x10)
+        tile_data  = self.control.get_selected_tile_map_space()
         tile_data += (self.window.line_y & 7) << 1
         return tile_map, tile_data;
         
-    def get_tile_map(self, mask):
-        if (self.control.read() & mask) != 0:
-            return constants.VRAM_MAP_B
-        else:
-            return constants.VRAM_MAP_A
         
-    def get_tile_data(self, mask):
-        if (self.control.read() & mask) != 0:
-            return constants.VRAM_DATA_A
-        else:
-            return  constants.VRAM_DATA_B
-        
-    def draw_objects(self):
-        count = self.scan_objects()
+    def draw_sprites(self):
+        count = self.scan_sprites()
         lastx = 176
         for index in range(176, count):
             data    = self.objects[index]
@@ -967,7 +993,7 @@ class Video(iMemory):
                 self.draw_overlapped_object_tile(x, address, flags)
             lastx = x
 
-    def scan_objects(self):
+    def scan_sprites(self):
         count = 0
         # search active objects
         for offset in range(0, 4*40, 4):
@@ -998,10 +1024,10 @@ class Video(iMemory):
             count += 1
             if count >= constants.OBJECTS_PER_LINE:
                 break
-        self.sort_scan_object(count)
+        self.sort_scan_sprite(count)
         return count
 
-    def sort_scan_object(self, count):
+    def sort_scan_sprite(self, count):
         # sort objects from lower to higher priority
         for index in range(count):
             rightmost = index
