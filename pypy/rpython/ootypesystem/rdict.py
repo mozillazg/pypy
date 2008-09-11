@@ -166,6 +166,11 @@ class DictRepr(AbstractDictRepr):
         
 
     def convert_const(self, dictobj):
+        def convert_value_if_not_Void(repr, value):
+            if repr.lowleveltype is ootype.Void:
+                return None
+            return repr.convert_const(value)
+
         if dictobj is None:
             return self.DICT._defl()
         if not isinstance(dictobj, dict) and not isinstance(dictobj, objectmodel.r_dict):
@@ -191,14 +196,14 @@ class DictRepr(AbstractDictRepr):
             if self.custom_eq_hash:
                 for dictkeycont, dictvalue in dictobj._dict.items():
                     llkey = r_key.convert_const(dictkeycont.key)
-                    llvalue = r_value.convert_const(dictvalue)
+                    llvalue = convert_value_if_not_Void(r_value, dictvalue)
                     llhash = dictkeycont.hash
                     l_dictkeycont = objectmodel._r_dictkey_with_hash(l_dict._dict, llkey, llhash)
                     l_dict._dict._dict[l_dictkeycont] = llvalue
             else:
                 for dictkey, dictvalue in dictobj.items():
                     llkey = r_key.convert_const(dictkey)
-                    llvalue = r_value.convert_const(dictvalue)
+                    llvalue = convert_value_if_not_Void(r_value, dictvalue)
                     l_dict.ll_set(llkey, llvalue)
             return l_dict
 
