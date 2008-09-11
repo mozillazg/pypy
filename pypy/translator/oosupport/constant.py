@@ -186,6 +186,9 @@ class BaseConstantGenerator(object):
         should be an ootype constant value.  Not generally called
         directly, but it can be if desired. """
         assert not is_primitive(value)
+        if isinstance(value, ootype._object) and value: # leave ootype.NULL as is
+            value = value.obj
+            self.db.cts.lltype_to_cts(value._TYPE) # record const
         if value in self.cache:
             return self.cache[value]
         const = self._create_complex_const(value)
@@ -199,10 +202,6 @@ class BaseConstantGenerator(object):
 
         """ A helper method which creates a Constant wrapper object for
         the given value.  Uses the types defined in the sub-class. """
-
-        if isinstance(value, ootype._object) and value: # leave ootype.NULL as is
-            value = value.obj
-            self.db.cts.lltype_to_cts(value._TYPE) # record const
 
         # Determine if the static type differs from the dynamic type.
         if isinstance(value, ootype._view):
