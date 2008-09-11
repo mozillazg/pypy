@@ -194,6 +194,11 @@ class DictRepr(AbstractDictRepr):
 
 
     def convert_const(self, dictobj):
+        def convert_value_if_not_Void(repr, value):
+            if repr.lowleveltype is lltype.Void:
+                return None
+            return repr.convert_const(value)
+        
         # get object from bound dict methods
         #dictobj = getattr(dictobj, '__self__', dictobj) 
         if dictobj is None:
@@ -219,7 +224,7 @@ class DictRepr(AbstractDictRepr):
 
                 for dictkeycontainer, dictvalue in dictobj._dict.items():
                     llkey = r_key.convert_const(dictkeycontainer.key)
-                    llvalue = r_value.convert_const(dictvalue)
+                    llvalue = convert_value_if_not_Void(r_value, dictvalue)
                     ll_dict_insertclean(l_dict, llkey, llvalue,
                                         dictkeycontainer.hash)
                 return l_dict
@@ -227,7 +232,7 @@ class DictRepr(AbstractDictRepr):
             else:
                 for dictkey, dictvalue in dictobj.items():
                     llkey = r_key.convert_const(dictkey)
-                    llvalue = r_value.convert_const(dictvalue)
+                    llvalue = convert_value_if_not_Void(r_value, dictvalue)
                     ll_dict_insertclean(l_dict, llkey, llvalue,
                                         l_dict.keyhash(llkey))
                 return l_dict

@@ -1594,16 +1594,6 @@ class BaseTestRPBC(BaseRtypingTest):
 
         self.interpret(f, [int])
 
-    def test_specialize_singlefrozenpbc(self):
-        py.test.skip("r57808 makes this test fail, and llgraph tests rely on this")
-        from pypy.rlib.objectmodel import specialize
-        @specialize.arg(0)
-        def revealconst(T, x):
-            return lltype.cast_primitive(T, value)
-        def fn(x):
-            return revealconst(lltype.Signed, x)
-        res = self.interpret(fn, [42], backendopt=False)
-        assert res == 42
 
 class TestLLtype(BaseTestRPBC, LLRtypeMixin):
     pass
