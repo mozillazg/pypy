@@ -100,10 +100,9 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_indirect_gray_call(self):
         py.test.skip('mono 1.2 crashes, try again with a newer version')
         
-    test_indirect_sometimes_residual_pure_red_call = skip
-    test_red_int_add_ovf = skip
-    test_nonzeroness_assert_while_compiling = skip
-    test_segfault_while_compiling = skip
+    def test_red_int_add_ovf(self):
+        py.test.skip("TODO: exceptions")
+
     test_learn_nonzeroness = skip
     test_freeze_booleffects_correctly = skip
     test_ptrequality = skip
