@@ -69,21 +69,29 @@ class CorruptImageError(Exception):
 # ____________________________________________________________
 
 class ImageReader(object):
+    
+
     def __init__(self, space, stream):
         self.space = space
         self.stream = stream
+        # dictionary mapping old address to chunk object
         self.chunks = {}
         self.chunklist = []
+        # cache wrapper integers
+        self.intcache = {}
 
     def initialize(self):
+        # XXX should be called something like read_full_image
         self.read_header()
         self.read_body()
         self.init_compactclassesarray()
+        # until here, the chunks are generated
         self.init_g_objects()
         self.init_w_objects()
         self.fillin_w_objects()
 
     def read_header(self):
+        # 1 word version
         version = self.stream.peek()
         if version != 0x1966:
             self.stream.swap = True
@@ -92,14 +100,20 @@ class ImageReader(object):
                 raise CorruptImageError
         version = self.stream.next()
         #------
+        # 1 word headersize
         headersize = self.stream.next()
+        # 1 word size of the full image
         self.endofmemory = self.stream.next() # endofmemory = bodysize
+        # 1 word old base address
         self.oldbaseaddress = self.stream.next()
+        # 1 word pointer to special objects array
         self.specialobjectspointer = self.stream.next()
+        # 1 word last used hash
         lasthash = self.stream.next()
         savedwindowssize = self.stream.next()
         fullscreenflag = self.stream.next()
         extravmmemory = self.stream.next()
+        # we called 9 times next, 1 word = 4 byte
         self.stream.skipbytes(headersize - (9 * 4))
 
     def read_body(self):
@@ -143,10 +157,11 @@ class ImageReader(object):
             chunk.g_object.fillin_w_object()
 
     def init_compactclassesarray(self):
-        """ (CompiledMethod Symbol Array PseudoContext LargePositiveInteger nil MethodDictionary Association Point Rectangle nil TranslatedMethod BlockContext MethodContext nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil ) """
+        """ from the blue book (CompiledMethod Symbol Array PseudoContext LargePositiveInteger nil MethodDictionary Association Point Rectangle nil TranslatedMethod BlockContext MethodContext nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil ) """
         special = self.chunks[self.specialobjectspointer]
         assert special.size > 24 #at least
         assert special.format == 2
+        # squeak-specific: compact classes array
         chunk = self.chunks[special.data[COMPACT_CLASSES_ARRAY]]
         assert len(chunk.data) == 31
         assert chunk.format == 2
@@ -206,6 +221,9 @@ class SqueakImage(object):
     def special(self, index):
         return self.special_objects[index]
 
+# from the squeak source code:
+# in squeak, the compact classes array can be found at this position
+# in the special objects array
 COMPACT_CLASSES_ARRAY = 28
 
 # ____________________________________________________________
@@ -216,21 +234,27 @@ class GenericObject(object):
         GenericObject from the image chunks, and uses them as starting
         point for the actual create of pypy.lang.smalltalk.model classes.
         """
+
     def __init__(self, space):
         self.space = space
-        self.owner = None
+        self.reader = None
 
     def isinitialized(self):
-        return self.owner is not None
+        return self.reader is not None
 
     def initialize_int(self, value, reader):
-        self.owner = reader
+        self.reader = reader
         self.value = value
         self.size = -1
-        self.w_object = self.space.wrap_int(value)
+        if value in reader.intcache:
+            w_int = reader.intcache[value]
+        else:
+            w_int = self.space.wrap_int(value)
+            reader.intcache[value] = w_int
+        self.w_object = w_int
 
     def initialize(self, chunk, reader):
-        self.owner = reader
+        self.reader = reader
         self.size = chunk.size
         self.hash12 = chunk.hash12
         self.format = chunk.format
@@ -241,10 +265,10 @@ class GenericObject(object):
 
     def init_class(self, chunk):
         if chunk.iscompact():
-            self.g_class = self.owner.compactclasses[chunk.classid
+            self.g_class = self.reader.compactclasses[chunk.classid
                 - 1].g_object # Smalltalk is 1-based indexed
         else:
-            self.g_class = self.owner.chunks[chunk.classid].g_object
+            self.g_class = self.reader.chunks[chunk.classid].g_object
 
     def init_data(self, chunk):
         if not self.ispointers(): return
@@ -255,10 +279,10 @@ class GenericObject(object):
     def decode_pointer(self, pointer):
         if (pointer & 1) == 1:
             small_int = GenericObject(self.space)
-            small_int.initialize_int(pointer >> 1, self.owner)
+            small_int.initialize_int(pointer >> 1, self.reader)
             return small_int
         else:
-            return self.owner.chunks[pointer].g_object
+            return self.reader.chunks[pointer].g_object
 
     def isbytes(self):
         return 8 <= self.format <= 11
@@ -286,6 +310,8 @@ class GenericObject(object):
                        followed by indexable bytes (same interpretation of low 2 bits as above)
         """
         if self.w_object is None:
+            # the instantiate call circumvents the constructors
+            # and makes empty objects
             if self.format < 5:
                 # XXX self.format == 4 is weak
                 self.w_object = objectmodel.instantiate(model.W_PointersObject)
@@ -322,6 +348,7 @@ class GenericObject(object):
 
     def fillin_pointersobject(self, w_pointersobject):
         assert self.pointers is not None
+        # XXX is the following needed?
         if w_pointersobject._shadow is not None:
             w_pointersobject._shadow.detach_shadow()
         w_pointersobject._vars = [g_object.w_object for g_object in self.pointers]
@@ -345,7 +372,7 @@ class GenericObject(object):
         w_bytesobject.hash = self.chunk.hash12 # XXX check this
     def get_bytes(self):
         bytes = []
-        if self.owner.swap:
+        if self.reader.swap:
             for each in self.chunk.data:
                 bytes.append(chr((each >> 0) & 0xff))
                 bytes.append(chr((each >> 8) & 0xff))
@@ -373,11 +400,14 @@ class GenericObject(object):
         w_compiledmethod.bytes = ''.join(bbytes)
 
 class ImageChunk(object):
+    """ A chunk knows the information from the header, but the body of the
+    object is not decoded yet."""
     def __init__(self, space, size, format, classid, hash12):
         self.size = size
         self.format = format
         self.classid = classid
         self.hash12 = hash12
+        # list of integers forming the body of the object
         self.data = None
         self.g_object = GenericObject(space)
 
