@@ -15,10 +15,25 @@ class FileLogSession(Session):
             filelog = config.option.filelog
             self.logfile = open(filelog, 'w') # line buffering ?
 
+    def write_log_entry(self, shortrepr, name, longrepr):
+        print >>self.logfile, "%s %s" % (shortrepr, name)
+        for line in longrepr.splitlines():
+            print >>self.logfile, " %s" % line
+
+    def log_outcome(self, ev):
+        outcome = ev.outcome
+        gpath = generic_path(ev.colitem)
+        self.write_log_entry(outcome.shortrepr, gpath, str(outcome.longrepr))
 
     def log_event_to_file(self, ev):
         if isinstance(ev, event.ItemTestReport):
-            outcome = ev.outcome
-            gpath = generic_path(ev.colitem)
-            print >>self.logfile, "%s %s" % (outcome.shortrepr, gpath)
+            self.log_outcome(ev)
+        elif isinstance(ev, event.CollectionReport):
+            if not ev.passed:
+                self.log_outcome(ev)
+        elif isinstance(ev, event.InternalException):
+            path = ev.repr.reprcrash.path # fishing :(
+            self.write_log_entry('!', path, str(ev.repr))
+        
+
 
