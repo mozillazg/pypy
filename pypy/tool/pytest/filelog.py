@@ -3,8 +3,27 @@ from py.__.test import event
 
 
 def generic_path(item):
-    names = item.listnames()
-    return '.'.join(names).replace('.(', '(')
+    chain = item.listchain()
+    gpath = [chain[0].name]
+    fspath = chain[0].fspath
+    fspart = False
+    for node in chain[1:]:
+        newfspath = node.fspath
+        if newfspath == fspath:
+            if fspart:
+                gpath.append(':')
+                fspart = False
+            else:
+                gpath.append('.')            
+        else:
+            gpath.append('/')
+            fspart = True
+        name = node.name
+        if name[0] in '([':
+            gpath.pop()
+        gpath.append(name)
+        fspath = newfspath
+    return ''.join(gpath)
 
 class FileLogSession(Session):
 

@@ -3,7 +3,7 @@ import py
 from pypy.tool.pytest import filelog
 import os, StringIO
 
-from py.__.test.collect import Node, Item
+from py.__.test.collect import Node, Item, FSCollector
 from py.__.test.event import ItemTestReport, CollectionReport
 from py.__.test.event import InternalException
 from py.__.test.runner import OutcomeRepr
@@ -16,6 +16,7 @@ class Fake(object):
 
 def test_generic_path():
     p1 = Node('a', config='dummy')
+    assert p1.fspath is None
     p2 = Node('B', parent=p1)
     p3 = Node('()', parent = p2)
     item = Item('c', parent = p3)
@@ -23,12 +24,27 @@ def test_generic_path():
     res = filelog.generic_path(item)
     assert res == 'a.B().c'
 
+    p0 = FSCollector('proj/test', config='dummy')
+    p1 = FSCollector('proj/test/a', parent=p0)
+    p2 = Node('B', parent=p1)
+    p3 = Node('()', parent = p2)
+    p4 = Node('c', parent=p3)
+    item = Item('[1]', parent = p4)
+
+    res = filelog.generic_path(item)
+    assert res == 'test/a:B().c[1]'
+
 
 def make_item(*names):
     node = None
     config = "dummy"
     for name in names[:-1]:
-        node = Node(name, parent=node, config=config)
+        if '/' in name:
+            node = FSCollector(name, parent=node, config=config)
+        else:
+            node = Node(name, parent=node, config=config)
+    if names[-1] is None:
+        return node
     return Item(names[-1], parent=node)
 
 class TestFileLogSession(object):
@@ -128,7 +144,7 @@ class TestFileLogSession(object):
         sess = filelog.FileLogSession(config)
         sess.logfile = StringIO.StringIO()
 
-        colitem = make_item('some', 'path', 'a', 'b')
+        colitem = make_item('proj/test', 'proj/test/mod', 'a', 'b')
 
         outcome=OutcomeRepr('execute', '.', '')
         rep_ev = ItemTestReport(colitem, passed=outcome)
@@ -139,7 +155,7 @@ class TestFileLogSession(object):
         assert len(lines) == 1
         line = lines[0]
         assert line.startswith(". ")
-        assert line[2:] == 'some.path.a.b'
+        assert line[2:] == 'test/mod:a.b'
 
     def test_collection_report(self):            
         option = Fake(eventlog=None)
@@ -147,7 +163,7 @@ class TestFileLogSession(object):
         sess = filelog.FileLogSession(config)
         sess.logfile = StringIO.StringIO()
 
-        colitem = make_item('some', 'path')
+        colitem = make_item('proj/test', 'proj/test/mod', 'A', None)
 
         outcome=OutcomeRepr('execute', '', '')
         rep_ev = CollectionReport(colitem, object(), passed=outcome)
@@ -165,7 +181,7 @@ class TestFileLogSession(object):
 
         lines = sess.logfile.getvalue().splitlines()        
         assert len(lines) == 2
-        assert lines[0] == 'F some.path'
+        assert lines[0] == 'F test/mod:A'
 
     def test_internal_exception(self):
         # they are produced for example by a teardown failing
