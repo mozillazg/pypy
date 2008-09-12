@@ -1,6 +1,11 @@
 from py.__.test.session import Session
 from py.__.test import event
 
+
+def generic_path(item):
+    names = item.listnames()
+    return '.'.join(names).replace('.(', '(')
+
 class FileLogSession(Session):
 
     def __init__(self, config):
@@ -14,10 +19,6 @@ class FileLogSession(Session):
     def log_event_to_file(self, ev):
         if isinstance(ev, event.ItemTestReport):
             outcome = ev.outcome
-            metainfo = ev.colitem.repr_metainfo()
-            path = metainfo.fspath
-            modpath = metainfo.modpath
-            if modpath:
-                path += ":%s" % modpath
-            print >>self.logfile, "%s %s" % (outcome.shortrepr, path)
+            gpath = generic_path(ev.colitem)
+            print >>self.logfile, "%s %s" % (outcome.shortrepr, gpath)
 

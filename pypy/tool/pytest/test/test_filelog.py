@@ -1,13 +1,34 @@
+import py
+
 from pypy.tool.pytest import filelog
 import os, StringIO
 
+from py.__.test.collect import Node, Item
 from py.__.test.event import ItemTestReport
+from py.__.test.runner import OutcomeRepr
 
 
 class Fake(object):
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
+
+def test_generic_path():
+    p1 = Node('a', config='dummy')
+    p2 = Node('B', parent=p1)
+    p3 = Node('()', parent = p2)
+    item = Item('c', parent = p3)
+
+    res = filelog.generic_path(item)
+    assert res == 'a.B().c'
+
+
+def make_item(*names):
+    node = None
+    config = "dummy"
+    for name in names[:-1]:
+        node = Node(name, parent=node, config=config)
+    return Item(names[-1], parent=node)
 
 class TestFileLogSession(object):
 
@@ -34,15 +55,15 @@ class TestFileLogSession(object):
         sess.logfile.close()
         os.unlink(logfname)
 
-    def test_item_test_passed_or_skipped(self):            
+    def test_item_test_passed(self):            
         option = Fake(eventlog=None)
         config = Fake(option=option)
         sess = filelog.FileLogSession(config)
         sess.logfile = StringIO.StringIO()
 
-        colitem = Fake(repr_metainfo=lambda: Fake(fspath='some/path',
-                                                  modpath="a.b"))
-        outcome=Fake(shortrepr='.')
+        colitem = make_item('some', 'path', 'a', 'b')
+
+        outcome=OutcomeRepr('execute', '.', '')
         rep_ev = ItemTestReport(colitem, outcome=outcome)
 
         sess.bus.notify(rep_ev)
@@ -51,12 +72,16 @@ class TestFileLogSession(object):
         assert len(lines) == 1
         line = lines[0]
         assert line.startswith(". ")
-        assert line[2:] == 'some/path:a.b'
+        assert line[2:] == 'some.path.a.b'
 
+
+    def test_item_test_skipped(self):
+        py.test.skip("WIP: take the longrepr into account")
+        option = Fake(eventlog=None)
+        config = Fake(option=option)
+        sess = filelog.FileLogSession(config)
         sess.logfile = StringIO.StringIO()
-        colitem = Fake(repr_metainfo=lambda: Fake(fspath='some/path',
-                                                  modpath=None))
-        outcome=Fake(shortrepr='s')
+        outcome=OutcomeRepr('execute', 's', '')
         rep_ev = ItemTestReport(colitem, outcome=outcome)
 
         sess.bus.notify(rep_ev)
@@ -66,7 +91,3 @@ class TestFileLogSession(object):
         line = lines[0]
 
         assert line.startswith("s ")
-        assert line[2:] == 'some/path'        
-        
-
-# XXX integration tests
