@@ -4,7 +4,8 @@ from pypy.tool.pytest import filelog
 import os, StringIO
 
 from py.__.test.collect import Node, Item
-from py.__.test.event import ItemTestReport
+from py.__.test.event import ItemTestReport, CollectionReport
+from py.__.test.event import InternalException
 from py.__.test.runner import OutcomeRepr
 
 
@@ -55,6 +56,72 @@ class TestFileLogSession(object):
         sess.logfile.close()
         os.unlink(logfname)
 
+    def test_write_log_entry(self):
+        option = Fake(eventlog=None)
+        config = Fake(option=option)
+        sess = filelog.FileLogSession(config)
+
+        sess.logfile = StringIO.StringIO()
+        sess.write_log_entry('.', 'name', '')  
+        entry = sess.logfile.getvalue()
+        assert entry[-1] == '\n'        
+        entry_lines = entry.splitlines()
+        assert len(entry_lines) == 1
+        assert entry_lines[0] == '. name'
+
+        sess.logfile = StringIO.StringIO()
+        sess.write_log_entry('s', 'name', 'Skipped')  
+        entry = sess.logfile.getvalue()
+        assert entry[-1] == '\n'        
+        entry_lines = entry.splitlines()
+        assert len(entry_lines) == 2
+        assert entry_lines[0] == 's name'
+        assert entry_lines[1] == ' Skipped'
+
+        sess.logfile = StringIO.StringIO()
+        sess.write_log_entry('s', 'name', 'Skipped\n')  
+        entry = sess.logfile.getvalue()
+        assert entry[-1] == '\n'        
+        entry_lines = entry.splitlines()
+        assert len(entry_lines) == 2
+        assert entry_lines[0] == 's name'
+        assert entry_lines[1] == ' Skipped'
+
+        sess.logfile = StringIO.StringIO()
+        longrepr = ' tb1\n tb 2\nE tb3\nSome Error'
+        sess.write_log_entry('F', 'name', longrepr)
+        entry = sess.logfile.getvalue()
+        assert entry[-1] == '\n'        
+        entry_lines = entry.splitlines()
+        assert len(entry_lines) == 5
+        assert entry_lines[0] == 'F name'
+        assert entry_lines[1:] == [' '+line for line in longrepr.splitlines()]
+    
+    def test_log_outcome(self):
+        option = Fake(eventlog=None)
+        config = Fake(option=option)
+        sess = filelog.FileLogSession(config)
+
+        sess.logfile = StringIO.StringIO()
+        colitem = make_item('some', 'path', 'a', 'b')
+
+        try:
+            raise ValueError
+        except ValueError:
+            the_repr = py.code.ExceptionInfo().getrepr()
+
+        outcome=OutcomeRepr('execute', 'F', the_repr)
+        ev = Fake(colitem=colitem, outcome=outcome)
+
+        sess.log_outcome(ev)
+
+        entry = sess.logfile.getvalue()
+        entry_lines = entry.splitlines()
+
+        assert entry_lines[0] == 'F some.path.a.b'
+        assert entry_lines[-1][0] == ' '
+        assert 'ValueError' in entry
+
     def test_item_test_passed(self):            
         option = Fake(eventlog=None)
         config = Fake(option=option)
@@ -64,7 +131,7 @@ class TestFileLogSession(object):
         colitem = make_item('some', 'path', 'a', 'b')
 
         outcome=OutcomeRepr('execute', '.', '')
-        rep_ev = ItemTestReport(colitem, outcome=outcome)
+        rep_ev = ItemTestReport(colitem, passed=outcome)
 
         sess.bus.notify(rep_ev)
 
@@ -74,20 +141,53 @@ class TestFileLogSession(object):
         assert line.startswith(". ")
         assert line[2:] == 'some.path.a.b'
 
-
-    def test_item_test_skipped(self):
-        py.test.skip("WIP: take the longrepr into account")
+    def test_collection_report(self):            
         option = Fake(eventlog=None)
         config = Fake(option=option)
         sess = filelog.FileLogSession(config)
         sess.logfile = StringIO.StringIO()
-        outcome=OutcomeRepr('execute', 's', '')
-        rep_ev = ItemTestReport(colitem, outcome=outcome)
+
+        colitem = make_item('some', 'path')
+
+        outcome=OutcomeRepr('execute', '', '')
+        rep_ev = CollectionReport(colitem, object(), passed=outcome)
 
         sess.bus.notify(rep_ev)
 
-        lines = sess.logfile.getvalue().splitlines()
-        assert len(lines) == 1
-        line = lines[0]
+        entry = sess.logfile.getvalue()
+        assert not entry
 
-        assert line.startswith("s ")
+        sess.logfile = StringIO.StringIO()
+        outcome=OutcomeRepr('execute', 'F', 'Some Error')
+        rep_ev = CollectionReport(colitem, object(), failed=outcome)        
+
+        sess.bus.notify(rep_ev)
+
+        lines = sess.logfile.getvalue().splitlines()        
+        assert len(lines) == 2
+        assert lines[0] == 'F some.path'
+
+    def test_internal_exception(self):
+        # they are produced for example by a teardown failing
+        # at the end of the run
+        option = Fake(eventlog=None)
+        config = Fake(option=option)
+        sess = filelog.FileLogSession(config)
+        sess.logfile = StringIO.StringIO()
+
+        try:
+            raise ValueError
+        except ValueError:
+            excinfo = py.code.ExceptionInfo()
+
+        internal = InternalException(excinfo)
+
+        sess.bus.notify(internal)
+
+        entry = sess.logfile.getvalue()
+        entry_lines = entry.splitlines()
+
+        assert entry_lines[0].startswith('! ')
+        assert os.path.basename(__file__)[:-1] in entry_lines[0] #.py/.pyc
+        assert entry_lines[-1][0] == ' '
+        assert 'ValueError' in entry  
