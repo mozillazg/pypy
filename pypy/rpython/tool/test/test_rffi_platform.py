@@ -1,4 +1,4 @@
-import py, sys, struct
+import py, sys, struct, os
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
@@ -234,3 +234,17 @@ def test_memory_alignment():
     a = rffi_platform.memory_alignment()
     print a
     assert a % struct.calcsize("P") == 0
+
+def test_extern_string():
+    from tempfile import mkdtemp
+    dir = mkdtemp()
+    srcpath = os.path.join(dir, 'test.c')
+    objpath = os.path.join(dir, 'test.o')
+    src = open(srcpath, 'w')
+    src.write('char stuff[] = "Success!";\n')
+    src.close()
+    os.system('gcc -c -o %s %s' % (objpath, srcpath))
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo(link_extra = [objpath])
+        STRING = rffi_platform.ExternString('stuff')
+    assert rffi_platform.configure(CConfig)['STRING'] == 'Success!\0'

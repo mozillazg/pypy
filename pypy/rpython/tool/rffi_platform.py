@@ -1,6 +1,9 @@
 #! /usr/bin/env python
 
 import os, py, sys
+from subprocess import Popen, PIPE
+from tempfile import NamedTemporaryFile
+from string import atoi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import llmemory
@@ -169,7 +172,7 @@ def configure(CConfig):
     for key in dir(CConfig):
         value = getattr(CConfig, key)
         if isinstance(value, CConfigEntry):
-            entries.append((key, value))            
+            entries.append((key, value))
 
     if entries: # can be empty if there are only CConfigSingleEntries
         infolist = []
@@ -208,6 +211,13 @@ def configure(CConfig):
             writer = _CWriter(CConfig)
             writer.write_header()
             res[key] = value.question(writer.ask_gcc)
+    
+    for key in dir(CConfig):
+        value = getattr(CConfig, key)
+        if isinstance(value, CConfigExternEntry):
+            print (key, value)
+            value.eci = CConfig._compilation_info_
+            res[key] = value.build_result()
 
     return res
 
@@ -235,10 +245,6 @@ class CConfigEntry(object):
         ''' % {'expr' : expr, 'beginpad' : beginpad.replace('\0', '\\0'),
                 'sizeof_beginpad' : len(beginpad),
                 'id' : filter(str.isalnum, self.key+'PLATCHECK'+name)}
-    def dumpbool(self, name, expr):
-        return self.dump(name, '((char)((%s)?1:0))' % (expr,))
-    def bool(self, data):
-        return data[0] != '\x00'
     def dump_by_size(self, name, expr):
         beginpad = "__START_PLATCHECK_%s\0%s\0" % (
             c_safe_string(self.key),
@@ -256,7 +262,52 @@ class CConfigEntry(object):
         ''' % {'expr' : expr, 'beginpad' : beginpad.replace('\0', '\\0'),
                 'sizeof_beginpad' : len(beginpad),
                 'id' : filter(str.isalnum, self.key+'PLATCHECK'+name)}
+    def dumpbool(self, name, expr):
+        return self.dump(name, '((char)((%s)?1:0))' % (expr,))
+    def bool(self, data):
+        return data[0] != '\x00'
 
+class CConfigExternEntry(object):
+    """Abstract base class."""
+    def get(self, name, CC='gcc', NM=None, OBJCOPY=None):
+        if not NM:
+            NM = CC.replace('gcc', 'nm')
+        if not OBJCOPY:
+            OBJCOPY = CC.replace('gcc', 'objcopy')
+        libs = self.eci.link_extra
+        for obj in libs:
+            nm = Popen(NM + ' -f sysv ' + obj, shell=True, stdout=PIPE)
+            nm.wait()
+            nm = nm.stdout.read()
+            for line in nm.splitlines():
+                line = [part.strip() for part in line.split('|')]
+                if len(line) == 7 and line[0] == name and line[2] != 'U':
+                    # only if the symbol is not a 'depends on' symbol ^
+                    offset = atoi(line[1], 16)
+                    minsize = atoi(line[4], 16)
+                    section = line[6]
+                    break
+            else:
+                continue
+            break
+        else:
+            return None
+        sec = NamedTemporaryFile()
+        try:
+            if os.system('%s -O binary -j \'%s\' %s %s' %
+                            (OBJCOPY, section, obj, sec.name)):
+                raise Exception('objcopy error')
+            sec.seek(offset)
+            return sec.read(minsize)
+        finally:
+            sec.close()
+
+class ExternString(CConfigExternEntry):
+    def __init__(self, name):
+        self.name = name
+    
+    def build_result(self, *args, **kw):
+        return self.get(self.name, *args, **kw)
 
 class Struct(CConfigEntry):
     """An entry in a CConfig class that stands for an externally
