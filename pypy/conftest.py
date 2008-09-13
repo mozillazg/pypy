@@ -30,10 +30,12 @@ option = py.test.config.addoptions("pypy options",
         Option('--direct', action="store_true",
                default=False, dest="rundirect",
                help="run pexpect tests directly"),
-#        Option('--filelog', action="store",
-#               default=None, dest="filelog",
-#               help="path for FileLogSession logging")
     )
+
+# glue experimental filelog session
+from pypy.tool.pytest.filelog.session import add_filelog_option, FileLogSession
+add_filelog_option()
+
 
 _SPACECACHE={}
 def gettestobjspace(name=None, **kwds):
@@ -497,5 +499,3 @@ class Directory(py.test.collect.Directory):
         # disable recursion in symlinked subdirectories
         return (py.test.collect.Directory.recfilter(self, path)
                 and path.check(link=0))
-
-#from pypy.tool.pytest.filelog import FileLogSession
