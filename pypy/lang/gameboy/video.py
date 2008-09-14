@@ -400,7 +400,8 @@ class StatusRegister(object):
 
 class Sprite(object):
     
-    def __init__(self):
+    def __init__(self, video):
+        self.video = video
         self.big_size = False
         self.reset()
 
@@ -496,8 +497,17 @@ class Sprite(object):
         else:
             return 8
          
-    def overlaps(self, sprite):
+    def overlaps_on_line(self, sprite, line):
         return False
+    
+    def intersects_line(self, line):
+        return False
+    
+    def draw(self):
+        pass
+    
+    def draw_overlapped(self):
+        pass
     
 # -----------------------------------------------------------------------------
     
@@ -628,7 +638,7 @@ class Video(iMemory):
     def create_sprites(self):
         self.sprites = [None] * 40
         for i in range(40):
-            self.sprites[i] = Sprite()
+            self.sprites[i] = Sprite(self)
 
     def update_all_sprites(self):
         for i in range(40):
@@ -649,7 +659,8 @@ class Video(iMemory):
         attribute[address % 4] = data
         self.sprites[sprite_id].set_data(attribute[0], attribute[1], 
                                          attribute[2], attribute[3])
-        
+       
+         
     def reset(self):
         self.control.reset()
         self.status.reset()
@@ -1003,6 +1014,26 @@ class Video(iMemory):
             self.draw_sprites_line()
         self.draw_pixels_line()
 
+    def draw_sprites_line_new(self):
+        sprites_on_line = self.get_active_sprites_on_line(self.line_y)
+        
+        last_sprite = sprites_on_line[0]
+        last_sprite.draw()
+        
+        for sprite in sprites_on_line[1:]:
+            if sprite.overlaps_on_line(last_sprite, self.line_y):
+                sprite.draw_overlapped()
+            else:
+                sprite.draw()
+            
+    def get_active_sprites_on_line(self, line_y):
+        found = []
+        for i in range(len(self.sprites)):
+            if self.sprites[i].intersects_line(line_y) and \
+            self.sprites[i].enabled:
+                found.append(self.sprites[i])
+        return found
+    
     def draw_sprites_line(self):
         count = self.scan_sprites()
         lastx = 176
