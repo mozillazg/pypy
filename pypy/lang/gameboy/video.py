@@ -60,14 +60,14 @@ class ControlRegister(object):
         
     def read(self):
         value = 0
-        value += int(self.lcd_enabled)                              << 7 
-        value += int(self.window.upper_tile_map_selected)           << 6 
-        value += int(self.window.enabled)                           << 5
+        value += int(self.lcd_enabled)                        << 7 
+        value += int(self.window.upper_tile_map_selected)     << 6 
+        value += int(self.window.enabled)                     << 5
         value += int(self.background_and_window_lower_tile_data_selected)  << 4
-        value += int(self.background.upper_tile_map_selected)       << 3
-        value += int(self.big_sprite_size_selected)                 << 2
-        value += int(self.sprites_enabled)                   << 1
-        value += int(self.background.enabled)
+        value += int(self.background.upper_tile_map_selected) << 3
+        value += int(self.big_sprite_size_selected)           << 2
+        value += int(self.sprites_enabled)                    << 1
+        value += int(self.background.enabled)                 << 0
         return value
         
     def write(self, value):
@@ -81,14 +81,8 @@ class ControlRegister(object):
         self.sprites_enabled                         = bool(value & (1 << 1))
         self.background.enabled                      = bool(value & (1 << 0))
     
-    def get_tile_map_combined(self):
-        #if (self.control.read() & mask) != 0:
-        if self.background_and_window_lower_tile_data_selected:
-            return constants.VRAM_MAP_B
-        else:
-            return constants.VRAM_MAP_A
-        
-    def get_selected_tile_map_space(self):
+    
+    def get_selected_tile_data_space(self):
         if self.window.upper_tile_map_selected:
             return constants.VRAM_DATA_A
         else:
@@ -527,21 +521,47 @@ class Window(object):
         self.reset()
 
     def reset(self):
-        self.x      = 0
-        self.y      = 0
-        self.line_y = 0
+        self.x       = 0
+        self.y       = 0
+        self.line_y  = 0
+        self.enabled = False
         self.upper_tile_map_selected  = False
-        self.enabled                  = False
         
     def update_line_y(self, data):
          # don't draw window if it was not enabled and not being drawn before
         if not self.enabled and (data & 0x20) != 0 and \
         self.line_y == 0 and self.video.line_y > self.y:
-            self.line_y = 144
+            self.line_y = 144    
+    
+    def get_tile_map_space(self):
+        #if (self.control.read() & mask) != 0:
+        if self.upper_tile_map_selected:
+            return constants.VRAM_MAP_B
+        else:
+            return constants.VRAM_MAP_A
+        
+    def draw_line(self, line_y):
+        if line_y  < self.y or self.x >= 167 or \
+           self.line_y >= 144:
+                return
+        else:
+            tile_map, tile_data = self.prepare_window_data()
+            self.video.draw_tiles(self.x + 1, tile_map, tile_data)
+            self.line_y += 1
+
+    def prepare_window_data(self):
+        tile_map   = self.get_tile_map_space()
+        tile_map  += (self.line_y >> 3) << 5
+        tile_data  = self.video.control.get_selected_tile_data_space()
+        tile_data += (self.line_y & 7) << 1
+        return tile_map, tile_data;
+        
+# -----------------------------------------------------------------------------
 
 class Background(object):
     
-    def __init__(self):
+    def __init__(self, video):
+        self.video = video
         self.reset()
         
     def reset(self):
@@ -550,7 +570,32 @@ class Background(object):
         self.scroll_x   = 0
         self.scroll_y   = 0
         self.enabled    = True
-        self.upper_tile_map_selected       = False
+        self.upper_tile_map_selected = False
+      
+    def get_tile_map_space(self):
+        #if (self.control.read() & mask) != 0:
+        if self.upper_tile_map_selected:
+            return constants.VRAM_MAP_B
+        else:
+            return constants.VRAM_MAP_A
+          
+    def draw_clean_line(self, line_y):
+        for x in range(8+160+8):
+            self.video.line[x] = 0x00
+    
+    def draw_line(self, line_y):
+        y          = (self.scroll_y + line_y) & 0xFF
+        x          = self.scroll_x            & 0xFF
+        tile_map, tile_data = self.prepare_background_data(x, y)
+        self.video.draw_tiles(8 - (x & 7), tile_map, tile_data)
+        
+    def prepare_background_data(self, x, y):
+        tile_map   = self.get_tile_map_space()
+        tile_map  += ((y >> 3) << 5) + (x >> 3)
+        tile_data  = self.video.control.get_selected_tile_data_space()
+        tile_data += (y & 7) << 1
+        return tile_map, tile_data
+    
         
 # -----------------------------------------------------------------------------
 
@@ -562,7 +607,7 @@ class Video(iMemory):
         self.v_blank_interrupt_flag = interrupt.v_blank
         self.lcd_interrupt_flag     = interrupt.lcd
         self.window                 = Window(self)
-        self.background             = Background()
+        self.background             = Background(self)
         self.status                 = StatusRegister(self)
         self.control                = ControlRegister(self.window, 
                                                       self.background)
@@ -576,7 +621,8 @@ class Video(iMemory):
         self.tile_map_1 = [None] * 32 * 32
         self.tile_map_2 = [None] * 32 * 32
     
-    def update_tiles(self):
+    def update_tile(self, address, data):
+        # XXX to implement
         pass
     
     def create_sprites(self):
@@ -584,7 +630,7 @@ class Video(iMemory):
         for i in range(40):
             self.sprites[i] = Sprite()
 
-    def update_sprites(self):
+    def update_all_sprites(self):
         for i in range(40):
             address = 1 * 4
             self.sprites[i].set_data(self.oam[address + 0],
@@ -592,6 +638,15 @@ class Video(iMemory):
                                      self.oam[address + 2],
                                      self.oam[address + 3])
             
+    def update_sprite(self, address, data):
+        # address divided by 4 gives the correct sprite, each sprite has 4
+        # bytes of attributes
+        sprite_id = floor(address / 4)
+        data = [None]*4
+        # assign the data to the correct attribute
+        data[address % 4] = data
+        self.sprites[sprite_id].set_data(data[0], data[1], data[2], data[3])
+        
     def reset(self):
         self.control.reset()
         self.status.reset()
@@ -816,7 +871,7 @@ class Video(iMemory):
         self.dma = data
         for index in range(constants.OAM_SIZE):
             self.oam[index] = self.memory.read((self.dma << 8) + index)
-        self.update_sprites()
+        self.update_all_sprites()
 
     def get_background_palette(self):
         """ see set_background_palette"""
@@ -896,7 +951,7 @@ class Video(iMemory):
         """
         self.oam[address - constants.OAM_ADDR] = data & 0xFF
         #self.update_sprites(address)
-        self.update_sprites()
+        self.update_sprite(address, data)
         
     def get_oam(self, address):
         return self.oam[address - constants.OAM_ADDR]
@@ -904,10 +959,10 @@ class Video(iMemory):
     def set_vram(self, address, data):
        """
        sets one byte of the video memory.
-       The video memroy contains the tiles used to disply.
+       The video memroy contains the tiles used to display.
        """
        self.vram[address - constants.VRAM_ADDR] = data & 0xFF
-       self.update_tiles()
+       self.update_tile(address, data)
     
     def get_vram(self, address):
         return self.vram[address - constants.VRAM_ADDR]
@@ -936,50 +991,16 @@ class Video(iMemory):
 
     def draw_line(self):
         if self.background.enabled:
-            self.draw_background()
+            self.background.draw_line(self.line_y)
         else:
-            self.draw_clean_background()
+            self.background.draw_clean_line(self.line_y)
         if self.window.enabled:
-            self.draw_window()
+            self.window.draw_line(self.line_y)
         if self.control.sprites_enabled:
-            self.draw_sprites()
-        self.draw_pixels()
+            self.draw_sprites_line()
+        self.draw_pixels_line()
 
-    def draw_clean_background(self):
-        for x in range(0, 8+160+8):
-            self.line[x] = 0x00
-
-    def draw_background(self):
-        y          = (self.background.scroll_y + self.line_y) & 0xFF
-        x          = self.background.scroll_x                 & 0xFF
-        tile_map, tile_data = self.prepare_background_data(x, y)
-        self.draw_tiles(8 - (x & 7), tile_map, tile_data)
-        
-    def prepare_background_data(self, x, y):
-        tile_map   = self.control.get_selected_tile_map_space()
-        tile_map  += ((y >> 3) << 5) + (x >> 3)
-        tile_data  = self.control.get_selected_tile_map_space()
-        tile_data += (y & 7) << 1
-        return tile_map, tile_data
-         
-    def draw_window(self):
-        if self.line_y  < self.window.y or self.window.x >= 167 or \
-           self.window.line_y >= 144:
-                return
-        else:
-            tile_map, tile_data = self.prepare_window_data()
-            self.draw_tiles(self.window.x + 1, tile_map, tile_data)
-            self.window.line_y += 1
-
-    def prepare_window_data(self):
-        tile_map   = self.control.get_tile_map_combined()
-        tile_map  += (self.window.line_y >> 3) << 5
-        tile_data  = self.control.get_selected_tile_map_space()
-        tile_data += (self.window.line_y & 7) << 1
-        return tile_map, tile_data;
-        
-        
-    def draw_sprites(self):
+    def draw_sprites_line(self):
         count = self.scan_sprites()
         lastx = 176
         for index in range(176, count):
@@ -1104,14 +1125,13 @@ class Video(iMemory):
         if (color & 0x0202) != 0:
             caller.call(x+7, color, mask)
 
-    def draw_pixels(self):
+    def draw_pixels_line(self):
         self.update_palette()
         pixels = self.driver.get_pixels()
         offset = self.line_y * self.driver.get_width()
         for x in range(8, 168, 4):
             for i in range(0,4):
-                pattern            = self.line[x + i]
-                pixels[offset + i] = self.palette[pattern]
+                pixels[offset + i] = self.palette[self.line[x + i]]
             offset += 4
 
     def clear_pixels(self):

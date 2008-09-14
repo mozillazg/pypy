@@ -495,7 +495,7 @@ def test_draw_clean_background():
     assert video.line == [0] * (8+160+8)
     
     video.line = range(8+160+8)
-    video.draw_clean_background()
+    video.background.draw_clean_line(video.line_y)
     
     assert video.line == [0] * (8+160+8)
     
