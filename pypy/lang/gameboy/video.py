@@ -2,7 +2,7 @@
  PyGirl Emulator
  constants.LCD Video Display Processor
 """
-
+import math
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import iMemory
 from pypy.lang.gameboy.cpu import process_2_complement
@@ -317,7 +317,7 @@ class Mode3(Mode):
         if self.video.transfer:
             if self.video.display:
                 self.video.draw_line()
-                print "mode 3 ", self.video.status.get_mode() 
+                #print "mode 3 ", self.video.status.get_mode() 
             self.set_end()
         else:
             self.video.status.set_mode(0)
@@ -415,17 +415,17 @@ class Sprite(object):
         self.hidden         = True
         
         
-    def set_data(self, byte0=None, byte1=None, byte2=None, byte3=None):
+    def set_data(self, byte0=-1, byte1=-1, byte2=-1, byte3=-1):
         """
         extracts the sprite data from an oam entry
         """
-        if byte0 is not None:
+        if byte0 is not -1:
             self.extract_y_position(byte0)
-        if byte0 is not None:
+        if byte0 is not -1:
             self.extract_x_position(byte1)
-        if byte0 is not None:
+        if byte0 is not -1:
             self.extract_tile_number(byte2)
-        if byte0 is not None:
+        if byte0 is not -1:
             self.extract_attributes_and_flags(byte3)
         
     def extract_y_position(self, data):
@@ -639,13 +639,16 @@ class Video(iMemory):
                                      self.oam[address + 3])
             
     def update_sprite(self, address, data):
+        address -= constants.OAM_ADDR
         # address divided by 4 gives the correct sprite, each sprite has 4
         # bytes of attributes
-        sprite_id = floor(address / 4)
-        data = [None]*4
+        sprite_id = int(math.floor(address / 4))
+        # XXX why cant I use None here
+        attribute = [-1] * 4
         # assign the data to the correct attribute
-        data[address % 4] = data
-        self.sprites[sprite_id].set_data(data[0], data[1], data[2], data[3])
+        attribute[address % 4] = data
+        self.sprites[sprite_id].set_data(attribute[0], attribute[1], 
+                                         attribute[2], attribute[3])
         
     def reset(self):
         self.control.reset()
