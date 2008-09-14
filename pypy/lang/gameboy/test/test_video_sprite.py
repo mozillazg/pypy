@@ -65,6 +65,48 @@ def test_size():
     assert sprite.get_height() == 16
 
     
+def test_hiddden_check():
+    sprite = get_sprite()
+    assert sprite.hidden
+    
+    sprite.y = 1
+    sprite.x = 0
+    sprite.hide_check()
+    assert sprite.hidden
+    
+    sprite.y = 0
+    sprite.x = 1
+    sprite.hide_check()
+    assert sprite.hidden
+    
+    sprite.y = 1
+    sprite.x = 1
+    sprite.hide_check()
+    assert not sprite.hidden
+    
+    for y in range(1, 160-1):
+        for x in range(1, 168-1):
+            sprite.y = y
+            sprite.x = x
+            sprite.hide_check()
+            assert not sprite.hidden
+            
+    for x in range(1, 168-1):
+        sprite.y = 160
+        sprite.x = x
+        sprite.hide_check()
+        assert sprite.hidden
+    
+    for y in range(1, 160-1):
+        sprite.y = y
+        sprite.x = 168
+        sprite.hide_check()
+        assert sprite.hidden
+        
+def test_set_data():
+    py.test.skip("test not implemented")
+    sprite = get_sprite()
+    
 def test_intersects_line_normal_size():
     sprite = get_sprite()
     sprite.big_size = False
@@ -82,5 +124,12 @@ def line_intersection_test(sprite, height):
     for i in range(height):
         assert sprite.intersects_line(i+1)
     assert not sprite.intersects_line(height+2)
+    
+def test_intersects_line_normal_size_y_flipped():
+    py.test.skip("not yet implemented")
+    
+    
+def test_intersects_big_normal_size_y_flipped():
+    py.test.skip("not yet implemented")
     
 # test sprite in video ---------------------------------------------------------
