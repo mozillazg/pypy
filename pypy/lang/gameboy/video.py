@@ -468,8 +468,6 @@ class Sprite(object):
         Bit6   Y flip          (0=Normal, 1=Vertically mirrored)
         Bit5   X flip          (0=Normal, 1=Horizontally mirrored)
         Bit4   Palette number  **Non CGB Mode Only** (0=OBP0, 1=OBP1)
-        Bit3   Tile VRAM-Bank  **CGB Mode Only**     (0=Bank 0, 1=Bank 1)
-        Bit2-0 Palette number  **CGB Mode Only**     (OBP0-7)
         """
         self.object_behind_background   = bool(data  & (1 << 7))
         self.x_flipped                  = bool(data  & (1 << 6))
@@ -487,6 +485,9 @@ class Sprite(object):
         
     def get_tile_number(self):
         return self.tile.id
+    
+    def set_tile_number(self, tile_number):
+        self.tile = self.video.tiles[tile_number]
         
     def get_width(self):
         return 8
@@ -501,7 +502,7 @@ class Sprite(object):
         return False
     
     def intersects_line(self, line):
-        return False
+        return line >= self.y and line <= self.y + self.get_height()
     
     def draw(self):
         pass
@@ -628,8 +629,9 @@ class Video(iMemory):
     
     def create_tile_maps(self):
         # create the maxumal possible sprites
+        self.tile_map_0 = [None] * 32 * 32
         self.tile_map_1 = [None] * 32 * 32
-        self.tile_map_2 = [None] * 32 * 32
+        self.tile_maps = [self.tile_map_0, self.tile_map_1]
     
     def update_tile(self, address, data):
         # XXX to implement
