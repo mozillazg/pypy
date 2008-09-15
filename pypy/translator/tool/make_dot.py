@@ -55,12 +55,17 @@ class DotGen:
                   dir="forward",
                   weight="5",
                   constraint="true",
+                  headport="", tailport="",
                   ):
+        # the ports are used to force on which side of the node the
+        # edge should be attached; for example ":s" means south
+        # of (i.e. below) the node box.
         d = locals()
         attrs = [('%s="%s"' % (x, d[x].replace('"', '\\"').replace('\n', '\\n')))
                  for x in ['label', 'style', 'color', 'dir', 'weight', 'constraint']]
         self.emit('edge [%s];' % ", ".join(attrs))
-        self.emit('%s -> %s' % (safename(name1), safename(name2)))
+        self.emit('%s%s -> %s%s' % (safename(name1), tailport,
+                                    safename(name2), headport))
 
     def emit_node(self, name, 
                   shape="diamond", 
