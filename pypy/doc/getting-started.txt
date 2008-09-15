@@ -565,8 +565,8 @@ our translation toolchain can process.)
    over one hour) and extremely RAM-hungry (kill it if it
    starts swapping heavily).  If you have less than 1.5 GB of
    RAM (or a slow machine) you might want to pick the
-   `optimization level`_ `1` in the next step.  The default
-   level `3` gives much better results, though.
+   `optimization level`_ `1` in the next step.  A level of
+   `2` or `3` gives much better results, though.
 
 3. Run::
 
