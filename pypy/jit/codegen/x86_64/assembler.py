@@ -1,6 +1,5 @@
 from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32, Immediate64
 
-
 #Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
                 "rax": (0, 0),
@@ -102,7 +101,7 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         # rexW(1) = 64bitMode 
         self.write_rex_byte(rexW, rexR, rexX, rexB)
         self.write(opcode)
-        if not tttn == None:
+        if not tttn == None: #write 0F9X
             byte = (9 << 4) | tttn
             self.write(chr(byte))
         self.write_modRM_byte(mod, modrm2, modrm1)        
@@ -173,7 +172,12 @@ class X86_64CodeBuilder(object):
     _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", 3, None, 0)
     _PUSH_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 6)
      
+    _SETE_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,4) 
     _SETG_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,15)
+    _SETGE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,13)
+    _SETL_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,12) 
+    _SETLE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,14)   
+    _SETNE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,5)  
      
     _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", 3, None, None)    
     _SUB_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 5)
@@ -206,7 +210,8 @@ class X86_64CodeBuilder(object):
     def JNE(self,op1):
         self.write("\x0F")
         self.write("\x85")
-        self.writeImm32(op1)       
+        self.writeImm32(op1)   
+        print self.tell(),": JNE to",op1
         
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
@@ -236,6 +241,26 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_SETG"+op1.to_string())
         method(op1)
         
+    def SETL(self, op1):
+        method = getattr(self, "_SETL"+op1.to_string())
+        method(op1)
+        
+    def SETGE(self, op1):
+        method = getattr(self, "_SETGE"+op1.to_string())
+        method(op1)
+        
+    def SETLE(self, op1):
+        method = getattr(self, "_SETLE"+op1.to_string())
+        method(op1)
+        
+    def SETE(self, op1):
+        method = getattr(self, "_SETE"+op1.to_string())
+        method(op1)
+        
+    def SETNE(self, op1):
+        method = getattr(self, "_SETNE"+op1.to_string())
+        method(op1)
+        
     def SUB(self, op1, op2):
         method = getattr(self, "_SUB"+op1.to_string()+op2.to_string())
         method(op1, op2)
@@ -252,7 +277,7 @@ class X86_64CodeBuilder(object):
     def writeImm32(self, imm32):
         x = hex(imm32)
         if x[0]=='-':
-            x = self.cast_to_neg_hex(x)
+            x = self.cast_to_neg_hex(int(x,16))
         # parse to string and cut "0x" off
         # fill with zeros if to short
         y = "0"*(10-len(x))+x[2:len(x)]
@@ -263,8 +288,8 @@ class X86_64CodeBuilder(object):
         self.write(chr(int(y[0:2],16)))
         
         
-    # TODO: sign extention?
-    # Parse the integervalue to an charakter
+    # TODO: sign extension?
+    # Parse the integervalue to an character
     # and write it
     def writeImm64(self, imm64):
         x = hex(imm64)
@@ -293,5 +318,8 @@ class X86_64CodeBuilder(object):
         
     # TODO: write me
     def cast_to_neg_hex(self,a_hex):
-        return a_hex
+        #FIXME: segfault to compliment
+        x = hex(18446744073709551616 +a_hex)
+        y = x[16:len(x)-1]
+        return y
         

@@ -10,12 +10,12 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 def skip(self):
     py.test.skip("not implemented yet")
 
-def make_cmp_gt(rgenop):
+def make_cmp(rgenop, which_cmp):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
-    builder, gv_cmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
+    builder, gv_cmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "cmp")
     builder.start_writing()
     
-    gv_result = builder.genop2("int_gt", gv_x, gv_y)
+    gv_result = builder.genop2(which_cmp, gv_x, gv_y)
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_cmp
@@ -117,7 +117,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         
     def test_greater(self):
         rgenop = self.RGenOp()
-        cmp_function = make_cmp_gt(rgenop)
+        cmp_function = make_cmp(rgenop, "int_gt")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3>4?
         assert res == 0  # false
@@ -126,6 +126,83 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fnptr(4,4)
         assert res == 0
         res = fnptr(4,0)
+        assert res == 1        
+        res = fnptr(-4,0)
+        assert res == 0
+        
+    def test_less(self):
+        rgenop = self.RGenOp()
+        cmp_function = make_cmp(rgenop, "int_lt")
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3<4?
+        assert res == 1  # true
+        res = fnptr(4,3)
+        assert res == 0 
+        res = fnptr(4,4)
+        assert res == 0
+        res = fnptr(4,0)
+        assert res == 0
+        res = fnptr(-4,0)
+        assert res == 1
+        
+    def test_less_or_equal(self):
+        rgenop = self.RGenOp()
+        cmp_function = make_cmp(rgenop, "int_le")
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3<=4?
+        assert res == 1  # true
+        res = fnptr(4,3)
+        assert res == 0 
+        res = fnptr(4,4)
+        assert res == 1
+        res = fnptr(4,0)
+        assert res == 0
+        res = fnptr(-4,0)
+        assert res == 1
+        
+    def test_greater_or_equal(self):
+        rgenop = self.RGenOp()
+        cmp_function = make_cmp(rgenop, "int_ge")
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3>=4?
+        assert res == 0  # false
+        res = fnptr(4,3)
+        assert res == 1 
+        res = fnptr(4,4)
+        assert res == 1
+        res = fnptr(4,0)
+        assert res == 1
+        res = fnptr(-4,0)
+        assert res == 0
+        
+    def test__equal(self):
+        rgenop = self.RGenOp()
+        cmp_function = make_cmp(rgenop, "int_eq")
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3==4?
+        assert res == 0  # false
+        res = fnptr(4,3)
+        assert res == 0 
+        res = fnptr(4,4)
+        assert res == 1
+        res = fnptr(4,0)
+        assert res == 0
+        res = fnptr(-4,0)
+        assert res == 0
+        
+    def test_not_equal(self):
+        rgenop = self.RGenOp()
+        cmp_function = make_cmp(rgenop, "int_ne")
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3!=4?
+        assert res == 1  # true
+        res = fnptr(4,3)
+        assert res == 1 
+        res = fnptr(4,4)
+        assert res == 0
+        res = fnptr(4,0)
+        assert res == 1
+        res = fnptr(-4,0)
         assert res == 1
         
    # def test_push_and_pop(self):

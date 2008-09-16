@@ -88,11 +88,13 @@ class Builder(model.GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         genmethod = getattr(self, 'op_' + opname)
+        print self.mc.tell(),":",opname
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         genmethod = getattr(self, 'op_' + opname)
+        print self.mc.tell(),":",opname
         return genmethod(gv_arg1, gv_arg2)
     
     op_int_add  = make_two_argument_method("ADD")
@@ -122,6 +124,36 @@ class Builder(model.GenBuilder):
         self.mc.SETG(Register8("al"))
         return Register64("rax")
     
+    def op_int_lt(self, gv_x, gv_y):
+        self.mc.CMP(gv_x, gv_y)
+        gv_z = self.allocate_register("rax")
+        self.mc.SETL(Register8("al"))
+        return Register64("rax")
+    
+    def op_int_le(self, gv_x, gv_y):
+        self.mc.CMP(gv_x, gv_y)
+        gv_z = self.allocate_register("rax")
+        self.mc.SETLE(Register8("al"))
+        return Register64("rax")
+     
+    def op_int_eq(self, gv_x, gv_y):
+        self.mc.CMP(gv_x, gv_y)
+        gv_z = self.allocate_register("rax")
+        self.mc.SETE(Register8("al"))
+        return Register64("rax")
+    
+    def op_int_ne(self, gv_x, gv_y):
+        self.mc.CMP(gv_x, gv_y)
+        gv_z = self.allocate_register("rax")
+        self.mc.SETNE(Register8("al"))
+        return Register64("rax")
+    
+    def op_int_ge(self, gv_x, gv_y):
+        self.mc.CMP(gv_x, gv_y)
+        gv_z = self.allocate_register("rax")
+        self.mc.SETGE(Register8("al"))
+        return Register64("rax")
+    
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         self._open()
@@ -136,6 +168,7 @@ class Builder(model.GenBuilder):
         gv_x = self.allocate_register()
         self.mc.MOV(gv_x,Immediate64(target.startaddr))
         self.mc.JMP(gv_x)
+        print self.mc.tell(),": JMP to",target.startaddr
         self._close()
     
     def allocate_register(self, register=None):

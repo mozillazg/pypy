@@ -51,6 +51,12 @@ class TestSimple():
         ten = fp(-4, -6)
         assert ten == -10
         print ten
+        four = fp(-4,0)
+        assert four == -4
+        print four
+        four = fp(0,-4)
+        assert four == -4
+        print four
         two = fp(-4, 6)
         assert two == 2
         print two
