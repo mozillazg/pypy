@@ -298,7 +298,7 @@ class Mode3(Mode):
     def activate(self, previous_mode):
         #if previous_mode.id() == 2:
             self.set_begin()
-    	#else:
+        #else:
         #    pass
         #    #raise InvalidModeOrderException(self, previous_mode)
     
@@ -338,14 +338,14 @@ class StatusRegister(object):
             3: During Transfering Data to LCD Driver
     """
     def __init__(self, video):
-    	self.create_modes(video)
+        self.create_modes(video)
         self.reset()
         
     def create_modes(self, video):
-    	self.mode0 = Mode0(video)
-    	self.mode1 = Mode1(video)
-    	self.mode2 = Mode2(video)
-    	self.mode3 = Mode3(video)
+        self.mode0 = Mode0(video)
+        self.mode1 = Mode1(video)
+        self.mode2 = Mode2(video)
+        self.mode3 = Mode3(video)
         self.modes   = [self.mode0, self.mode1, self.mode2, self.mode3]
         
         
