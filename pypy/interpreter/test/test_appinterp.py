@@ -111,9 +111,9 @@ class AppTestMethods:
 
 class TestMixedModule: 
     def test_accesses(self): 
-        space = self.space 
-        import mixedmodule 
-        w_module = mixedmodule.Module(space, space.wrap('mixedmodule'))
+        space = self.space
+        import demomixedmod 
+        w_module = demomixedmod.Module(space, space.wrap('mixedmodule'))
         space.appexec([w_module], """
             (module): 
                 assert module.value is None 
