@@ -57,8 +57,8 @@ far: even though CPython is a simple interpreter, its Java and .NET
 re-implementations are not faster (and cannot run all existing Python
 applications).
 
-Partical results
-----------------
+Practical results
+-----------------
 
 The JIT compilers that we generate use some techniques that are not in
 widespread use so far, but they are not exactly new either.  The point
