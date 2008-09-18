@@ -92,7 +92,7 @@ def g(x):
         return co, f, g
         """)
 
-        w_co, w_f, w_g = space.viewiterable(w_res)
+        w_co, w_f, w_g = space.unpacktuple(w_res)
 
         ec = space.getexecutioncontext()
         fcode = w_f.code.co_code
@@ -151,7 +151,7 @@ def g(a, b, c, d):
         return co, f, g
         """)
 
-        w_co, w_f, w_g = space.viewiterable(w_res)
+        w_co, w_f, w_g = space.unpacktuple(w_res)
 
         ec = space.getexecutioncontext()
         fcode = w_f.code.co_code
@@ -223,7 +223,7 @@ class A(object):
         return co, f, g
         """)
 
-        w_co, w_f, w_g = space.viewiterable(w_res)
+        w_co, w_f, w_g = space.unpacktuple(w_res)
 
         ec = space.getexecutioncontext()
         fcode = w_f.code.co_code
