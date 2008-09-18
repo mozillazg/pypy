@@ -143,7 +143,8 @@ class X86_64CodeBuilder(object):
     
     # The opcodes differs depending on the operands
     # Params:
-    # W (64bit Operands), R, X, B, Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
+    # W (64bit Operands), R (permits R8-R15), X (extend Index field), B (extend r/m field), 
+    # Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
     
     # FIXME: rexB is set
     _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 2)  
