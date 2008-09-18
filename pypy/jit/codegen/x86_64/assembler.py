@@ -149,6 +149,8 @@ class X86_64CodeBuilder(object):
     _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 2)  
     _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x00", 3, None, None)
     
+    _AND_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x21", 3, None, None)
+    
     # FIXME: rexB is set
     _CMP_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    1, "\x81", 3, None, 7)
     _CMP_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x39", 3, None, None)
@@ -167,6 +169,8 @@ class X86_64CodeBuilder(object):
     _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
     
     _JMP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 4)
+    
+    _OR_QWREG_QWREG  = make_two_operand_instr(   1, None,    0, None, "\x09", 3, None, None)
 
     # FIXME: rexW is set 
     _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", 3, None, 0)
@@ -182,9 +186,15 @@ class X86_64CodeBuilder(object):
     _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", 3, None, None)    
     _SUB_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 5)
     
+    _XOR_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x31", 3, None, None)
+    
     # TODO: maybe a problem with more ore less than two arg.
     def ADD(self, op1, op2):
         method = getattr(self, "_ADD"+op1.to_string()+op2.to_string())
+        method(op1, op2)
+        
+    def AND(self, op1, op2):
+        method = getattr(self, "_AND"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
     def CMP(self, op1, op2):
@@ -212,6 +222,10 @@ class X86_64CodeBuilder(object):
         self.write("\x85")
         self.writeImm32(op1)   
         print self.tell(),": JNE to",op1
+        
+    def OR(self, op1, op2):
+        method = getattr(self, "_OR"+op1.to_string()+op2.to_string())
+        method(op1, op2)
         
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
@@ -263,6 +277,10 @@ class X86_64CodeBuilder(object):
         
     def SUB(self, op1, op2):
         method = getattr(self, "_SUB"+op1.to_string()+op2.to_string())
+        method(op1, op2)
+        
+    def XOR(self, op1, op2):
+        method = getattr(self, "_XOR"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
     def get_register_bits(self, register):

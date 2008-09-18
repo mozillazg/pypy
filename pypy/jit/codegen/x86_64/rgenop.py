@@ -98,12 +98,15 @@ class Builder(model.GenBuilder):
         return genmethod(gv_arg1, gv_arg2)
     
     op_int_add  = make_two_argument_method("ADD")
+    op_int_and  = make_two_argument_method("AND")
     op_int_dec  = make_one_argument_method("DEC")
     op_int_inc  = make_one_argument_method("INC")
     op_int_mul  = make_two_argument_method("IMUL")
+    op_int_or   = make_two_argument_method("OR")
     op_int_push = make_one_argument_method("PUSH")
     op_int_pop  = make_one_argument_method("POP")
     op_int_sub  = make_two_argument_method("SUB")
+    op_int_xor   = make_two_argument_method("XOR")
 
     #FIXME: can only jump 32bit
     def jump_if_true(self, gv_condition, args_for_jump_gv):
