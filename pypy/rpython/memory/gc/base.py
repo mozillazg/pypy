@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.debug import ll_assert
 
 class GCBase(object):
@@ -182,11 +182,54 @@ class GCBase(object):
         pass
 
 
+TYPEID_MASK = 0xffff
+first_gcflag = 1 << 16
+GCFLAG_FORWARDED = first_gcflag
+# GCFLAG_EXTERNAL is set on objects not living in the semispace:
+# either immortal objects or (for HybridGC) externally raw_malloc'ed
+GCFLAG_EXTERNAL = first_gcflag << 1
+GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
+
 class MovingGCBase(GCBase):
     moving_gc = True
+    first_unused_gcflag = first_gcflag << 3
 
     def can_move(self, addr):
         return True
+
+    def header(self, addr):
+        addr -= self.gcheaderbuilder.size_gc_header
+        return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+
+    def get_type_id(self, addr):
+        tid = self.header(addr).tid
+        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
+                  "get_type_id on forwarded obj")
+        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
+        # Although calling get_type_id() on a forwarded object works by itself,
+        # we catch it as an error because it's likely that what is then
+        # done with the typeid is bogus.
+        return tid & TYPEID_MASK
+
+    def init_gc_object(self, addr, typeid, flags=0):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = typeid | flags
+
+    def init_gc_object_immortal(self, addr, typeid, flags=0):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = typeid | flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED
+        # immortal objects always have GCFLAG_FORWARDED set;
+        # see get_forwarding_address().
+
+    def get_size(self, obj):
+        typeid = self.get_type_id(obj)
+        size = self.fixed_size(typeid)
+        if self.is_varsize(typeid):
+            lenaddr = obj + self.varsize_offset_to_length(typeid)
+            length = lenaddr.signed[0]
+            size += length * self.varsize_item_sizes(typeid)
+            size = llarena.round_up_for_allocation(size)
+        return size
 
 def choose_gc_from_config(config):
     """Return a (GCClass, GC_PARAMS) from the given config object.

@@ -279,3 +279,7 @@ class TestHybridGC(TestGenerationGC):
                  'large_object_gcptrs': 12,
                  'generation3_collect_threshold': 5,
                  }
+
+class TestMarkCompactGC(DirectGCTest):
+    from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
+
