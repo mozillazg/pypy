@@ -168,6 +168,10 @@ class X86_64CodeBuilder(object):
     _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
     _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
     
+    _NEG_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 3)
+    
+    _NOT_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 2)
+    
     _JMP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 4)
     
     _OR_QWREG_QWREG  = make_two_operand_instr(   1, None,    0, None, "\x09", 3, None, None)
@@ -247,6 +251,14 @@ class X86_64CodeBuilder(object):
             method(op2, op1)
         else:
             method(op1, op2)
+            
+    def NEG(self, op1):
+        method = getattr(self, "_NEG"+op1.to_string())
+        method(op1)
+        
+    def NOT(self, op1):
+        method = getattr(self, "_NOT"+op1.to_string())
+        method(op1)
     
     def RET(self):
         self.write("\xC3")
