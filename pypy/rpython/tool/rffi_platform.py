@@ -2,7 +2,7 @@
 
 import os, py, sys
 from subprocess import Popen, PIPE
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, mkdtemp
 from string import atoi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
@@ -215,9 +215,8 @@ def configure(CConfig):
     for key in dir(CConfig):
         value = getattr(CConfig, key)
         if isinstance(value, CConfigExternEntry):
-            print (key, value)
             value.eci = CConfig._compilation_info_
-            res[key] = value.build_result()
+            res[key] = value.build_result(locals().get('result'))
 
     return res
 
@@ -267,47 +266,120 @@ class CConfigEntry(object):
     def bool(self, data):
         return data[0] != '\x00'
 
+def get_symbol_data(eci, name, NM, OBJCOPY):
+    link_extra = ' '.join(list(eci.link_extra) + ['-static', '-Wl,--trace', '-Wl,--whole-archive'])
+    libraries = ' '.join(['-l' + lib for lib in eci.libraries])
+    libdirs = ' '.join(['-L' + _dir for _dir in eci.library_dirs])
+    dir = mkdtemp()
+    srcpath = os.path.join(dir, 'main.c')
+    objpath = os.path.join(dir, 'main.o')
+    exepath = os.path.join(dir, 'main.exe')
+    src = open(srcpath, 'w')
+    src.write('int main() {}\n')
+    src.close()
+    if os.system('gcc -c -o %s %s' % (objpath, srcpath)):
+        raise CompilationError('gcc does not work')
+    linkcmd = ' '.join(['gcc -o ', exepath, objpath, link_extra, libdirs, libraries])
+    link = Popen(linkcmd, shell=True, stdout=PIPE, stderr=PIPE)
+    
+    linked = []
+    for line in link.stdout.readlines():
+        line = line.strip()
+        if os.path.exists(line):
+            linked.append(line)
+        sub = line.split('(')
+        if len(sub) >= 2:
+            sub = sub[1].split(')')[0].strip()
+            if os.path.exists(sub) and sub not in linked:
+                linked.append(sub)
+
+    for obj in linked:
+        nm = Popen(NM + ' -f sysv ' + obj, shell=True, stdout=PIPE, stderr=PIPE)
+        nm = list(nm.stdout.readlines())
+        is_archive = False
+        for line in nm:
+            if '[' in line and ']' in line:
+                is_archive = True
+                member = line.partition('[')[2].partition(']')[0]
+                continue
+            line = [part.strip() for part in line.split('|')]
+            if len(line) == 7 and line[0] == name and line[2] != 'U':
+                # only if the symbol is a real symbol .....^
+                offset = atoi(line[1], 16)
+                maxsize = atoi(line[4], 16)
+                section = line[6]
+                break
+        else:
+            continue
+        base_offset = offset
+        this_member = None
+        for line in nm:
+            if is_archive:
+                if '[' in line and ']' in line:
+                    this_member = line.partition('[')[2].partition(']')[0]
+                    continue
+            if not is_archive or this_member == member:
+                line = [part.strip() for part in line.split('|')]
+                if len(line) == 7 and line[6] == section and line[2] != 'U':
+                    base_offset = min(base_offset, atoi(line[1], 16))
+        offset = offset - base_offset
+        break
+    else:
+        return None
+    sec = NamedTemporaryFile()
+    if is_archive:
+        obj2 = NamedTemporaryFile()
+        ar = Popen('ar p %s %s' % (obj, member), shell=True, stdout=PIPE)
+        data = ar.stdout.read()
+        obj2.write(data)
+        obj2.flush()
+        obj = obj2.name
+    cmd = '%s -O binary -j \'%s\' %s %s' % (OBJCOPY, section, obj, sec.name)
+    if os.system(cmd):
+        raise CompilationError('objcopy error')
+    sec.seek(offset)
+    return sec.read(maxsize)
+
 class CConfigExternEntry(object):
     """Abstract base class."""
-    def get(self, name, CC='gcc', NM=None, OBJCOPY=None):
-        if not NM:
-            NM = CC.replace('gcc', 'nm')
-        if not OBJCOPY:
-            OBJCOPY = CC.replace('gcc', 'objcopy')
-        libs = self.eci.link_extra
-        for obj in libs:
-            nm = Popen(NM + ' -f sysv ' + obj, shell=True, stdout=PIPE)
-            nm.wait()
-            nm = nm.stdout.read()
-            for line in nm.splitlines():
-                line = [part.strip() for part in line.split('|')]
-                if len(line) == 7 and line[0] == name and line[2] != 'U':
-                    # only if the symbol is not a 'depends on' symbol ^
-                    offset = atoi(line[1], 16)
-                    minsize = atoi(line[4], 16)
-                    section = line[6]
-                    break
-            else:
-                continue
-            break
-        else:
-            return None
-        sec = NamedTemporaryFile()
-        try:
-            if os.system('%s -O binary -j \'%s\' %s %s' %
-                            (OBJCOPY, section, obj, sec.name)):
-                raise Exception('objcopy error')
-            sec.seek(offset)
-            return sec.read(minsize)
-        finally:
-            sec.close()
+    def get(self, name):
+        return get_symbol_data(self.eci, name, 'nm', 'objcopy')
 
 class ExternString(CConfigExternEntry):
     def __init__(self, name):
         self.name = name
     
-    def build_result(self, *args, **kw):
-        return self.get(self.name, *args, **kw)
+    def build_result(self, config_result):
+        data = self.get(self.name)
+        if data:
+            return data.partition('\0')[0]
+        else:
+            return None
+
+class ExternStruct(CConfigExternEntry):
+    def __init__(self, name, cconfig_entry=None, rffi_struct=None):
+        if not (cconfig_entry or rffi_struct):
+            raise TypeError('ExternStruct takes 3 arguments')
+        self.entry = cconfig_entry
+        self.rffi_struct = rffi_struct
+        self.name = name
+    
+    def build_result(self, config_result):
+        if not self.rffi_struct:
+            rffi_struct = config_result.get_entry_result(self.entry)
+        else:
+            rffi_struct = self.rffi_struct
+        data = self.get(self.name)
+        if not data:
+            return None
+        class StructResult(object): pass
+        res = StructResult()
+        for (fld_name, fld_offset) in zip(
+                rffi_struct._names, rffi_struct._hints['fieldoffsets']):
+            fld_type = rffi_struct._flds[fld_name]
+            fld_data = data[fld_offset:fld_offset+rffi.sizeof(fld_type)]
+            setattr(res, fld_name, rffi.cast(fld_type, fld_data[0]))
+        return res
 
 class Struct(CConfigEntry):
     """An entry in a CConfig class that stands for an externally

@@ -245,6 +245,37 @@ def test_extern_string():
     src.close()
     os.system('gcc -c -o %s %s' % (objpath, srcpath))
     class CConfig:
-        _compilation_info_ = ExternalCompilationInfo(link_extra = [objpath])
+        _compilation_info_ = ExternalCompilationInfo(link_extra=[objpath])
         STRING = rffi_platform.ExternString('stuff')
-    assert rffi_platform.configure(CConfig)['STRING'] == 'Success!\0'
+    assert rffi_platform.configure(CConfig)['STRING'] == 'Success!'
+
+def test_extern_fail():
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo()
+        STRING = rffi_platform.ExternString('stuff')
+    assert rffi_platform.configure(CConfig)['STRING'] is None
+
+def test_extern_struct():
+    from tempfile import mkdtemp
+    dir = mkdtemp()
+    srcpath = os.path.join(dir, 'test.c')
+    objpath = os.path.join(dir, 'test.o')
+    hpath = os.path.join(dir, 'test.h')
+    h = open(hpath, 'w')
+    print >> h, 'typedef struct Stuff {'
+    print >> h, ' int a;'
+    print >> h, ' int b;'
+    print >> h, '} Stuff;'
+    h.close()
+    src = open(srcpath, 'w')
+    print >> src, '#include "' + hpath + '"'
+    print >> src, 'struct Stuff stuff = { 1, 2 };'
+    src.close()
+    os.system('gcc -c -o %s %s' % (objpath, srcpath))
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo(link_extra=[objpath], includes=[hpath])
+        STRUCT = rffi_platform.Struct('Stuff', [('a', rffi.INT), ('b', rffi.INT)])
+        STUFF = rffi_platform.ExternStruct('stuff', STRUCT)
+    assert rffi_platform.configure(CConfig)['STUFF'].c_a == 1
+    assert rffi_platform.configure(CConfig)['STUFF'].c_b == 2
+
