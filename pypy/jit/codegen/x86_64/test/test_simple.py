@@ -24,7 +24,7 @@ class TestSimple():
     
     def test_add_big_num(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
-        genv0 = inputargs_gv[0] #the first argument "place"
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_add", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
@@ -32,9 +32,28 @@ class TestSimple():
         assert num == 2280
         print num
         
-    def test_add(self):
+    def test_add_twice(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
         genv0 = inputargs_gv[0] #the first argument "place"
+        genv1 = inputargs_gv[1] 
+        genv2 = builder.genop2("int_add", genv0, genv1) 
+        genv_result = builder.genop2("int_add", genv2, genv1) 
+        builder.finish_and_return(token, genv_result)
+        result = fp(4, 6) # 4+6+6= 16
+        assert result == 16
+        result = fp(2,12) # 2+12+12= 26
+        assert result == 26
+        result = fp(10,-2) # 10+(-2)+(-2) = 6
+        assert result == 6
+        result = fp(-4,0) # -4 +0+0 = -4
+        assert result == -4
+        result = fp(0,-4) # 0+(-4)+(-4) = -8
+        assert result == -8
+
+        
+    def test_add(self):
+        builder, fp, inputargs_gv, token = make_testbuilder(2)
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_add", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
@@ -44,7 +63,7 @@ class TestSimple():
         
     def test_add_neg(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
-        genv0 = inputargs_gv[0] #the first argument "place"
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_add", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
@@ -66,7 +85,7 @@ class TestSimple():
         
     def test_add_imm32(self):
         builder, fp, inputargs_gv, token = make_testbuilder(1)
-        genv0 = inputargs_gv[0] #the first argument "place"
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv_result = builder.genop2("int_add", genv0, rgenop.genconst(1000)) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
         num = fp(1111) # 1111+1000 = 2111
@@ -83,17 +102,21 @@ class TestSimple():
         
     def test_sub(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
-        genv0 = inputargs_gv[0] #the first argument "place"
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_sub", genv0, genv1) #creates the subtraction and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
         four = fp(10, 6) # 10 - 6 = 4
         assert four == 4
+        ten  = fp(-2, 8)
+        assert ten == -10
+        ten  = fp(-2,-12)
+        assert ten == 10
         print four
         
     def test_sub_imm32(self):
         builder, fp, inputargs_gv, token = make_testbuilder(1)
-        genv0 = inputargs_gv[0] #the first argument "place" 
+        genv0 = inputargs_gv[0] #the first argument "location" 
         genv_result = builder.genop2("int_sub", genv0, rgenop.genconst(2)) #creates the subtraction and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
         eight = fp(10) # 10-2 = 8
