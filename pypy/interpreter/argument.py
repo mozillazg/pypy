@@ -136,13 +136,9 @@ class AbstractArguments:
                 unfiltered_kwds_w[argname] = w_arg
             assert not space.is_true(data_w_stararg)
         else:
-            stararg_w = space.unpackiterable(data_w_stararg)
-            datalen = len(data_args_w)
-            args_w = [None] * (datalen + len(stararg_w))
-            for i in range(0, datalen):
-                args_w[i] = data_args_w[i]
-            for i in range(0, len(stararg_w)):
-                args_w[i + datalen] = stararg_w[i]
+            args_w = data_args_w[:]
+            for w_stararg in space.unpackiterable(data_w_stararg):
+                args_w.append(w_stararg)
             assert len(args_w) == need_cnt
             
         kwds_w = {}
@@ -271,9 +267,9 @@ class ArgumentsFromValuestack(AbstractArguments):
             if has_vararg:
                 if upfront > co_argcount:
                     assert extravarargs is not None                    
-                    stararg_w = extravarargs + [None] * self.nargs
+                    stararg_w = extravarargs
                     for i in range(self.nargs):
-                        stararg_w[i + len(extravarargs)] = self.frame.peekvalue(self.nargs - 1 - i)
+                        stararg_w.append(self.frame.peekvalue(self.nargs - 1 - i))
                 else:
                     args_left = co_argcount - upfront                
                     stararg_w = [None] * (avail - co_argcount)
@@ -319,10 +315,7 @@ class Arguments(AbstractArguments):
     def __init__(self, space, args_w, kwds_w=None,
                  w_stararg=None, w_starstararg=None):
         self.space = space
-        assert isinstance(args_w, list)
         self.arguments_w = args_w
-        from pypy.rlib.debug import make_sure_not_resized
-        make_sure_not_resized(self.arguments_w)
         self.kwds_w = kwds_w
         self.w_stararg = w_stararg
         self.w_starstararg = w_starstararg
@@ -367,8 +360,7 @@ class Arguments(AbstractArguments):
         "unpack the *arg and **kwd into w_arguments and kwds_w"
         # --- unpack the * argument now ---
         if self.w_stararg is not None:
-            self.arguments_w = (self.arguments_w +
-                                self.space.unpackiterable(self.w_stararg))
+            self.arguments_w += self.space.unpackiterable(self.w_stararg)
             self.w_stararg = None
         # --- unpack the ** argument now ---
         if self.kwds_w is None:
@@ -413,9 +405,8 @@ class Arguments(AbstractArguments):
         if len(self.arguments_w) > argcount:
             raise ValueError, "too many arguments (%d expected)" % argcount
         if self.w_stararg is not None:
-            self.arguments_w = (self.arguments_w +
-                                self.space.viewiterable(self.w_stararg,
-                                         argcount - len(self.arguments_w)))
+            self.arguments_w += self.space.unpackiterable(self.w_stararg,
+                                             argcount - len(self.arguments_w))
             self.w_stararg = None
         elif len(self.arguments_w) < argcount:
             raise ValueError, "not enough arguments (%d expected)" % argcount
@@ -538,7 +529,7 @@ class Arguments(AbstractArguments):
                     assert extravarargs is not None
                     starargs_w = extravarargs
                     if num_args:
-                        starargs_w = starargs_w + args_w
+                        starargs_w.extend(args_w)
                 elif num_args > args_left:
                     starargs_w = args_w[args_left:]
                 else:

@@ -54,14 +54,14 @@ class TestObjSpace:
         raises(ValueError, self.space.unpackiterable, w_l, 3)
         raises(ValueError, self.space.unpackiterable, w_l, 5)
 
-    def test_viewiterable(self):
+    def test_unpacktuple(self):
         w = self.space.wrap
         l = [w(1), w(2), w(3), w(4)]
         w_l = self.space.newtuple(l)
-        assert self.space.viewiterable(w_l) == l
-        assert self.space.viewiterable(w_l, 4) == l
-        raises(ValueError, self.space.viewiterable, w_l, 3)
-        raises(ValueError, self.space.viewiterable, w_l, 5)
+        assert self.space.unpacktuple(w_l) == l
+        assert self.space.unpacktuple(w_l, 4) == l
+        raises(ValueError, self.space.unpacktuple, w_l, 3)
+        raises(ValueError, self.space.unpacktuple, w_l, 5)
 
     def test_exception_match(self):
         assert self.space.exception_match(self.space.w_ValueError,
@@ -203,7 +203,7 @@ class TestObjSpace:
 
         w_res = space.call_obj_args(w_f, w_9, Arguments(space, [w_1]))
 
-        w_x, w_y = space.viewiterable(w_res, 2)
+        w_x, w_y = space.unpacktuple(w_res, 2)
         assert w_x is w_9
         assert w_y is w_1
 

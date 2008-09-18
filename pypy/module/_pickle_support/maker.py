@@ -88,18 +88,15 @@ def slp_into_tuple_with_nulls(space, seq_w):
     create a tuple with the object and store
     a tuple with the positions of NULLs as first element.
     """
-    tup = [None] * (len(seq_w) + 1)
+    nulls = []
+    tup = [space.w_None]
     w = space.wrap
-    num = 1
-    nulls = [None for i in seq_w if i is None]
-    null_num = 0
+
     for w_obj in seq_w:
         if w_obj is None:
-            nulls[null_num] = w(num - 1)
-            null_num += 1
+            nulls.append(w(len(tup)-1))
             w_obj = space.w_None
-        tup[num] = w_obj
-        num += 1
+        tup.append(w_obj)
     tup[0] = space.newtuple(nulls)
     return space.newtuple(tup)
 
