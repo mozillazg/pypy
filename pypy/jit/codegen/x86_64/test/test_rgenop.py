@@ -10,6 +10,16 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 def skip(self):
     py.test.skip("not implemented yet")
 
+def make_bool_op(rgenop, which_bool_op):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_bool_op, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "bool_op")
+    builder.start_writing()
+    
+    gv_result = builder.genop2(which_bool_op, gv_x, gv_y)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_bool_op
+
 def make_cmp(rgenop, which_cmp):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_cmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "cmp")
@@ -204,6 +214,61 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         res = fnptr(-4,0)
         assert res == 1
+        
+    def test_int_and(self):
+        rgenop = self.RGenOp()
+        bool_function = make_bool_op(rgenop,"int_and")
+        fnptr = self.cast(bool_function,2)
+        result = fnptr(1,1)
+        assert result == 1
+        result = fnptr(1,0)
+        assert result == 0
+        result = fnptr(0,1)
+        assert result == 0
+        result = fnptr(0,0)
+        assert result == 0
+        # AND 010101
+        #     101010
+        #   = 000000
+        result = fnptr(42,21) 
+        assert result == 0
+        
+    def test_int_or(self):
+        rgenop = self.RGenOp()
+        bool_function = make_bool_op(rgenop,"int_or")
+        fnptr = self.cast(bool_function,2)
+        result = fnptr(1,1)
+        assert result == 1
+        result = fnptr(1,0)
+        assert result == 1
+        result = fnptr(0,1)
+        assert result == 1
+        result = fnptr(0,0)
+        assert result == 0
+        # or  010101
+        #     101010
+        #   = 111111
+        result = fnptr(42,21) 
+        assert result == 63
+        
+    def test_int_xor(self):
+        rgenop = self.RGenOp()
+        bool_function = make_bool_op(rgenop,"int_xor")
+        fnptr = self.cast(bool_function,2)
+        result = fnptr(1,1)
+        assert result == 0
+        result = fnptr(1,0)
+        assert result == 1
+        result = fnptr(0,1)
+        assert result == 1
+        result = fnptr(0,0)
+        assert result == 0
+        # xor 010101
+        #     101010
+        #   = 111111
+        result = fnptr(42,21) 
+        assert result == 63
+    
         
    # def test_push_and_pop(self):
    #     rgenop = self.RGenOp()
