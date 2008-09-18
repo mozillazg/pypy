@@ -1,8 +1,8 @@
 import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
 from pypy.rpython.memory.gc.semispace import DEBUG_PRINT
-from pypy.rpython.memory.gc.generation import GenerationGC, GCFLAG_FORWARDED
-from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL
+from pypy.rpython.memory.gc.generation import GenerationGC
+from pypy.rpython.memory.gc.base import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
 from pypy.rpython.memory.gc.generation import GCFLAG_NO_YOUNG_PTRS
 from pypy.rpython.memory.gc.generation import GCFLAG_NO_HEAP_PTRS
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena

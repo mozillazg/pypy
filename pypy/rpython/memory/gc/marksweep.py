@@ -22,8 +22,6 @@ X_CLONE_PTR = lltype.Ptr(X_CLONE)
 DEBUG_PRINT = False
 memoryError = MemoryError()
 class MarkSweepGC(GCBase):
-    _alloc_flavor_ = "raw"
-
     HDR = lltype.ForwardReference()
     HDRPTR = lltype.Ptr(HDR)
     # need to maintain a linked list of malloced objects, since we used the

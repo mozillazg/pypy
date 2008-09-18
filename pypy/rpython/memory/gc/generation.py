@@ -1,6 +1,6 @@
 import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
-from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
+from pypy.rpython.memory.gc.base import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
 from pypy.rpython.memory.gc.semispace import DEBUG_PRINT
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
