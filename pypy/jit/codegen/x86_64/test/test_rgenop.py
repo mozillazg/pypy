@@ -10,6 +10,16 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 def skip(self):
     py.test.skip("not implemented yet")
 
+def make_one_op_instr(rgenop, instr_name):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
+    builder, gv_one_op_instr, [gv_x] = rgenop.newgraph(sigtoken, "one_op_instr")
+    builder.start_writing()
+    
+    gv_result = builder.genop1(instr_name, gv_x)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_one_op_instr
+
 def make_bool_op(rgenop, which_bool_op):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_bool_op, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "bool_op")
@@ -46,58 +56,19 @@ def make_mul_imm(rgenop, num):
     gv_result = builder.genop2("int_mul", gv_x, rgenop.genconst(num))
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
-    return gv_mul
-
-def make_inc(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
-    builder, gv_inc, gv_x = rgenop.newgraph(sigtoken, "inc")
-    builder.start_writing()
-    gv_result = builder.genop1("int_inc", gv_x[0])
-    builder.finish_and_return(sigtoken, gv_result)
-    builder.end()
-    return gv_inc
-
-def make_dec(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
-    builder, gv_dec, gv_x = rgenop.newgraph(sigtoken, "dec")
-    builder.start_writing()
-    gv_result = builder.genop1("int_dec", gv_x[0])
-    builder.finish_and_return(sigtoken, gv_result)
-    builder.end()
-    return gv_dec
-
-def make_push(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
-    builder, gv_push, gv_x = rgenop.newgraph(sigtoken, "push")
-    builder.start_writing()
-    gv_result = builder.genop1("int_push", gv_x[0])
-    builder.finish_and_return(sigtoken, gv_result)
-    builder.end()
-    return gv_push
-
-def make_pop(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
-    builder, gv_pop, gv_x = rgenop.newgraph(sigtoken, "pop")
-    builder.start_writing()
-    gv_result = builder.genop1("int_pop", gv_x[0])
-    builder.finish_and_return(sigtoken, gv_result)
-    builder.end()
-    return gv_pop
-        
+    return gv_mul        
 
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RX86_64GenOp
                         
     def test_inc(self):
-        rgenop = self.RGenOp()
-        inc_function = make_inc(rgenop)
+        inc_function = make_one_op_instr(self.RGenOp(),"int_inc")
         fnptr = self.cast(inc_function,1)
         res = fnptr(0)
         assert res == 1
         
     def test_dec(self):
-        rgenop = self.RGenOp()
-        dec_function = make_dec(rgenop)
+        dec_function = make_one_op_instr(self.RGenOp(),"int_dec")
         fnptr = self.cast(dec_function,1)
         res = fnptr(2)
         assert res == 1
@@ -268,17 +239,33 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         #   = 111111
         result = fnptr(42,21) 
         assert result == 63
-    
         
-   # def test_push_and_pop(self):
-   #     rgenop = self.RGenOp()
-   #     push_result = make_push(rgenop)
-   #     fnptr = self.cast(push_result,1)
-   #     pop_result = make_pop(rgenop)
-   #     fnptr = self.cast(pop_result,1)
-   #     res = fnptr(42)
-        #assert res == 1
+    def test_neg(self):
+        neg_function = make_one_op_instr(self.RGenOp(),"int_neg")
+        fnptr = self.cast(neg_function,1)
+        result = fnptr(1)
+        assert result == -1
+        result = fnptr(-1)
+        assert result == 1  
+        result = fnptr(255)
+        assert result == -255
+        result = fnptr(0)
+        assert result == 0
+        result = fnptr(-123456789)
+        assert result == 123456789
         
+    def test_not(self):
+        not_function = make_one_op_instr(self.RGenOp(),"int_not")
+        fnptr = self.cast(not_function,1)
+        result = fnptr(1)
+        assert result == -2
+        result = fnptr(0)
+        assert result == -1
+        result = fnptr(-43)
+        assert result == 42
+       
+    #TODO: Test push/pop
+       
     test_directtesthelper_direct = skip
     test_dummy_compile = skip
     test_cast_raising = skip

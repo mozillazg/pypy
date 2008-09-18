@@ -88,13 +88,13 @@ class Builder(model.GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         genmethod = getattr(self, 'op_' + opname)
-        print self.mc.tell(),":",opname
+     #   print self.mc.tell(),":",opname
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         genmethod = getattr(self, 'op_' + opname)
-        print self.mc.tell(),":",opname
+      #  print self.mc.tell(),":",opname
         return genmethod(gv_arg1, gv_arg2)
     
     op_int_add  = make_two_argument_method("ADD")
@@ -102,6 +102,8 @@ class Builder(model.GenBuilder):
     op_int_dec  = make_one_argument_method("DEC")
     op_int_inc  = make_one_argument_method("INC")
     op_int_mul  = make_two_argument_method("IMUL")
+    op_int_neg  = make_one_argument_method("NEG")
+    op_int_not  = make_one_argument_method("NOT")
     op_int_or   = make_two_argument_method("OR")
     op_int_push = make_one_argument_method("PUSH")
     op_int_pop  = make_one_argument_method("POP")
