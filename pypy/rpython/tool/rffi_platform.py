@@ -10,6 +10,7 @@ from pypy.rpython.lltypesystem import llmemory
 from pypy.tool.gcc_cache import build_executable_cache_read, try_compile_cache
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.tool.cbuild import CompilationError
+from pypy.translator.tool.cbuild import build_executable
 from pypy.tool.udir import udir
 import distutils
 
@@ -267,31 +268,29 @@ class CConfigEntry(object):
         return data[0] != '\x00'
 
 def get_symbol_data(eci, name, NM, OBJCOPY):
-    link_extra = ' '.join(list(eci.link_extra) + ['-static', '-Wl,--trace', '-Wl,--whole-archive'])
-    libraries = ' '.join(['-l' + lib for lib in eci.libraries])
-    libdirs = ' '.join(['-L' + _dir for _dir in eci.library_dirs])
-    dir = mkdtemp()
-    srcpath = os.path.join(dir, 'main.c')
-    objpath = os.path.join(dir, 'main.o')
-    exepath = os.path.join(dir, 'main.exe')
-    src = open(srcpath, 'w')
-    src.write('int main() {}\n')
-    src.close()
-    if os.system('gcc -c -o %s %s' % (objpath, srcpath)):
-        raise CompilationError('gcc does not work')
-    linkcmd = ' '.join(['gcc -o ', exepath, objpath, link_extra, libdirs, libraries])
-    link = Popen(linkcmd, shell=True, stdout=PIPE, stderr=PIPE)
+    eci = ExternalCompilationInfo(**eci._copy_attributes())
+    eci.link_extra = list(eci.link_extra) + ['-static', '-Wl,--trace', '-Wl,--whole-archive']
+    eci = eci.convert_sources_to_files(being_main=True)
+    root = mkdtemp()
+    srcpath = os.path.join(root, 'main.c')
+    src = open(srcpath, 'w') ; src.close()
+    try:
+        path = build_executable([srcpath], eci) + '.errors'
+        data = open(path, 'r').read()
+    except CompilationError, e:
+        data = e.message
     
-    linked = []
-    for line in link.stdout.readlines():
+    linked = set()
+    for line in data.splitlines():
         line = line.strip()
         if os.path.exists(line):
-            linked.append(line)
-        sub = line.split('(')
-        if len(sub) >= 2:
-            sub = sub[1].split(')')[0].strip()
-            if os.path.exists(sub) and sub not in linked:
-                linked.append(sub)
+            linked.add(line)
+        else:
+            sub = line.split('(')
+            if len(sub) >= 2:
+                sub = sub[1].split(')')[0].strip()
+                if os.path.exists(sub):
+                    linked.add(sub)
 
     for obj in linked:
         nm = Popen(NM + ' -f sysv ' + obj, shell=True, stdout=PIPE, stderr=PIPE)
@@ -312,13 +311,18 @@ def get_symbol_data(eci, name, NM, OBJCOPY):
         else:
             continue
         base_offset = offset
-        this_member = None
-        for line in nm:
-            if is_archive:
+        if is_archive:
+            this_member = None
+            for line in nm:
                 if '[' in line and ']' in line:
                     this_member = line.partition('[')[2].partition(']')[0]
                     continue
-            if not is_archive or this_member == member:
+                if this_member == member:
+                    line = [part.strip() for part in line.split('|')]
+                    if len(line) == 7 and line[6] == section and line[2] != 'U':
+                        base_offset = min(base_offset, atoi(line[1], 16))
+        else:
+            for line in nm:
                 line = [part.strip() for part in line.split('|')]
                 if len(line) == 7 and line[6] == section and line[2] != 'U':
                     base_offset = min(base_offset, atoi(line[1], 16))
