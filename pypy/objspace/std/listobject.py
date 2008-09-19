@@ -29,7 +29,7 @@ class W_ListObject(W_SeqObject):
     def getlength(self):
         return len(self.wrappeditems)
 
-    def getitem(self, i):
+    def getitemfast(self, i):
         return self.wrappeditems[i]
 
 

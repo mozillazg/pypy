@@ -11,5 +11,5 @@ class W_SeqObject(W_Object):
     def getlength(self):
         raise NotImplementedError
 
-    def getitem(self, i):
+    def getitemfast(self, i):
         raise NotImplementedError
