@@ -224,14 +224,15 @@ def configure(CConfig):
 # ____________________________________________________________
 
 def c_safe_string(string):
-    return string.replace('\\', '\\\\').replace('"', '\\"')
+    for (one, two) in [('\\', '\\\\'), ('"', '\\"'),
+                        ('\0', '\\0')]:
+        string = string.replace(one, two)
+    return string
 
 class CConfigEntry(object):
     "Abstract base class."
     def dump(self, name, expr):
-        beginpad = "__START_PLATCHECK_%s\0%s\0" % (
-            c_safe_string(self.key),
-            c_safe_string(name))
+        beginpad = "__START_PLATCHECK_%s\0%s\0" % (self.key, name)
         return '''
         struct __attribute__((packed)) {
             char begin_pad[%(sizeof_beginpad)i];
@@ -242,7 +243,7 @@ class CConfigEntry(object):
             .contents = %(expr)s,
             .end_pad = "__END_PLATCHECK__"
         };
-        ''' % {'expr' : expr, 'beginpad' : beginpad.replace('\0', '\\0'),
+        ''' % {'expr' : expr, 'beginpad' : c_safe_string(beginpad),
                 'sizeof_beginpad' : len(beginpad),
                 'id' : filter(str.isalnum, self.key+'PLATCHECK'+name)}
     def dump_by_size(self, name, expr):
@@ -283,7 +284,7 @@ def get_symbol_data(eci, name, NM, OBJCOPY):
     exe.write(data)
     exe.close()
     
-    nm = Popen(NM + ' -f sysv ' + exepath, shell=True, stdout=PIPE, stderr=PIPE)
+    nm = Popen(NM + ' -f sysv ' + exepath, shell=True, stdout=PIPE)
     nm = list(nm.stdout.readlines())
     for line in nm:
         line = [part.strip() for part in line.split('|')]
@@ -521,7 +522,7 @@ class ConstantString(CConfigEntry):
         yield self.dump('value', self.name)
 
     def build_result(self, info, config_result):
-        return info['value']
+        return info['value'].partition('\0')[0]
 
 class DefinedConstantInteger(ConstantInteger):
     """An entry in a CConfig class that stands for an externally

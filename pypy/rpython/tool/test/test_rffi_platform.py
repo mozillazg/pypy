@@ -235,6 +235,17 @@ def test_memory_alignment():
     print a
     assert a % struct.calcsize("P") == 0
 
+def test_constant_string():
+    class CConfig:
+        _compilation_info_ = ExternalCompilationInfo(
+            pre_include_bits=['#define STR "string"']
+        )
+        STR = rffi_platform.ConstantString('STR')
+        STR2 = rffi_platform.ConstantString('"inline string"')
+    data = rffi_platform.configure(CConfig)
+    assert data['STR'] == 'string'
+    assert data['STR2'] == 'inline string'
+
 def test_extern_string():
     from tempfile import mkdtemp
     dir = mkdtemp()
