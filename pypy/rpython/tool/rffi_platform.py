@@ -269,38 +269,33 @@ class CConfigEntry(object):
 
 def get_symbol_data(eci, name, NM, OBJCOPY):
     eci = ExternalCompilationInfo(**eci._copy_attributes())
-    eci.link_extra = list(eci.link_extra) + ['-static', '-Wl,--trace', '-Wl,--whole-archive']
+    eci.link_extra = ['-static'] + list(eci.link_extra)
     eci = eci.convert_sources_to_files(being_main=True)
     root = mkdtemp()
-    srcpath = os.path.join(root, 'main.c')
-    src = open(srcpath, 'w') ; src.close()
-    try:
-        path = build_executable([srcpath], eci) + '.errors'
-        data = open(path, 'r').read()
-    except CompilationError, e:
-        data = e.message
+    srcpath = uniquefilepath()
+    binpath = os.path.join(root, 'main.bin')
+    exepath = os.path.join(root, 'main')
+    src = open(str(srcpath), 'w')
+    src.write('int main() {}')
+    src.close()
+    data = build_executable_cache_read([srcpath], eci)
+    exe = open(exepath, 'wb')
+    exe.write(data)
+    exe.close()
     
-    linked = set()
-    for line in data.splitlines():
-        line = line.strip()
-        if os.path.exists(line):
-            linked.add(line)
-        else:
-            sub = line.split('(')
-            if len(sub) >= 2:
-                sub = sub[1].split(')')[0].strip()
-                if os.path.exists(sub):
-                    linked.add(sub)
-
-    for obj in linked:
-        nm = Popen(NM + ' -f sysv ' + obj, shell=True, stdout=PIPE, stderr=PIPE)
-        nm = list(nm.stdout.readlines())
-        is_archive = False
+    nm = Popen(NM + ' -f sysv ' + exepath, shell=True, stdout=PIPE, stderr=PIPE)
+    nm = list(nm.stdout.readlines())
+    for line in nm:
+        line = [part.strip() for part in line.split('|')]
+        if len(line) == 7 and line[0] == name and line[2] != 'U':
+            # only if the symbol is a real symbol .....^
+            offset = atoi(line[1], 16)
+            maxsize = atoi(line[4], 16)
+            section = line[6]
+            break
+    else:
+        name = '_' + name
         for line in nm:
-            if '[' in line and ']' in line:
-                is_archive = True
-                member = line.partition('[')[2].partition(']')[0]
-                continue
             line = [part.strip() for part in line.split('|')]
             if len(line) == 7 and line[0] == name and line[2] != 'U':
                 # only if the symbol is a real symbol .....^
@@ -309,40 +304,20 @@ def get_symbol_data(eci, name, NM, OBJCOPY):
                 section = line[6]
                 break
         else:
-            continue
-        base_offset = offset
-        if is_archive:
-            this_member = None
-            for line in nm:
-                if '[' in line and ']' in line:
-                    this_member = line.partition('[')[2].partition(']')[0]
-                    continue
-                if this_member == member:
-                    line = [part.strip() for part in line.split('|')]
-                    if len(line) == 7 and line[6] == section and line[2] != 'U':
-                        base_offset = min(base_offset, atoi(line[1], 16))
-        else:
-            for line in nm:
-                line = [part.strip() for part in line.split('|')]
-                if len(line) == 7 and line[6] == section and line[2] != 'U':
-                    base_offset = min(base_offset, atoi(line[1], 16))
-        offset = offset - base_offset
-        break
-    else:
-        return None
-    sec = NamedTemporaryFile()
-    if is_archive:
-        obj2 = NamedTemporaryFile()
-        ar = Popen('ar p %s %s' % (obj, member), shell=True, stdout=PIPE)
-        data = ar.stdout.read()
-        obj2.write(data)
-        obj2.flush()
-        obj = obj2.name
-    cmd = '%s -O binary -j \'%s\' %s %s' % (OBJCOPY, section, obj, sec.name)
+            return None
+    base_offset = offset
+    for line in nm:
+        line = [part.strip() for part in line.split('|')]
+        if len(line) == 7 and line[6] == section and line[2] != 'U':
+            base_offset = min(base_offset, atoi(line[1], 16))
+    offset -= base_offset
+    
+    cmd = '%s -O binary -j \'%s\' %s %s' % (OBJCOPY, section, exepath, binpath)
     if os.system(cmd):
         raise CompilationError('objcopy error')
-    sec.seek(offset)
-    return sec.read(maxsize)
+    bin = open(binpath, 'rb')
+    bin.seek(offset)
+    return bin.read(maxsize)
 
 class CConfigExternEntry(object):
     """Abstract base class."""
