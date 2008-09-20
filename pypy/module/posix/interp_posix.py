@@ -97,7 +97,7 @@ def build_stat_result(space, st):
         FIELDS = PORTABLE_STAT_FIELDS
     else:
         FIELDS = STAT_FIELDS    # also when not translating at all
-    lst = []
+    lst = [None] * ll_os_stat.N_INDEXABLE_FIELDS
     w_keywords = space.newdict()
     for i, (name, TYPE) in FIELDS:
         value = getattr(st, name)
@@ -105,7 +105,7 @@ def build_stat_result(space, st):
         #    value = int(value)   # rounded to an integer for indexed access
         w_value = space.wrap(value)
         if i < ll_os_stat.N_INDEXABLE_FIELDS:
-            lst.append(w_value)
+            lst[i] = w_value
         else:
             space.setitem(w_keywords, space.wrap(name), w_value)
 

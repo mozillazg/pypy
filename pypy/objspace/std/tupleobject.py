@@ -3,11 +3,13 @@ from pypy.objspace.std.inttype import wrapint
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.interpreter import gateway
+from pypy.rlib.debug import make_sure_not_resized
 
 class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
     
     def __init__(w_self, wrappeditems):
+        make_sure_not_resized(wrappeditems)
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
 
     def __repr__(w_self):
@@ -18,9 +20,6 @@ class W_TupleObject(W_Object):
     def unwrap(w_tuple, space):
         items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems] # XXX generic mixed types unwrap
         return tuple(items)
-
-    def getitems(self):
-        return self.wrappeditems
 
 registerimplementation(W_TupleObject)
 
@@ -62,7 +61,7 @@ def contains__Tuple_ANY(space, w_tuple, w_obj):
 
 def iter__Tuple(space, w_tuple):
     from pypy.objspace.std import iterobject
-    return iterobject.W_FastSeqIterObject(w_tuple, w_tuple.wrappeditems)
+    return iterobject.W_FastTupleIterObject(w_tuple, w_tuple.wrappeditems)
 
 def add__Tuple_Tuple(space, w_tuple1, w_tuple2):
     items1 = w_tuple1.wrappeditems

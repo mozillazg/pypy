@@ -35,7 +35,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
 
     # XXX missing: lengthy and obscure logic about "__module__"
         
-    bases_w = space.unpackiterable(w_bases)
+    bases_w = space.viewiterable(w_bases)
     for w_base in bases_w:
         if not isinstance(w_base, W_ClassObject):
             w_metaclass = space.type(w_base)
@@ -78,7 +78,7 @@ class W_ClassObject(Wrappable):
             raise OperationError(
                     space.w_TypeError,
                     space.wrap("__bases__ must be a tuple object"))
-        bases_w = space.unpackiterable(w_bases)
+        bases_w = space.viewiterable(w_bases)
         for w_base in bases_w:
             if not isinstance(w_base, W_ClassObject):
                 raise OperationError(space.w_TypeError,
@@ -280,7 +280,7 @@ def _coerce_helper(space, w_self, w_other):
         if not e.match(space, space.w_TypeError):
             raise
         return [None, None]
-    return space.unpacktuple(w_tup, 2)
+    return space.viewiterable(w_tup, 2)
 
 def descr_instance_new(space, w_type, w_class, w_dict=None):
     # w_type is not used at all
