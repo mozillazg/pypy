@@ -421,6 +421,7 @@ def build_testlist_gexp(builder, nb):
         items = []
         for i in range(0, l, 2): # this is atoms not 1
             items.append(atoms[i])
+        builder.push(ast.Tuple(items, lineno))
     else:
         # genfor: 'i for i in j'
         # GenExpr(GenExprInner(Name('i'), [GenExprFor(AssName('i', 'OP_ASSIGN'), Name('j'), [])])))]))
@@ -428,15 +429,6 @@ def build_testlist_gexp(builder, nb):
         genexpr_for = parse_genexpr_for(atoms[1:])
         genexpr_for[0].is_outmost = True
         builder.push(ast.GenExpr(ast.GenExprInner(expr, genexpr_for, lineno), lineno))
-        return
-    for item in items:
-        if not isinstance(item, ast.Const):
-            builder.push(ast.Tuple(items, lineno))
-            return
-    # isinstance as a hint for annotator
-    values = [item.value for item in items if isinstance(item, ast.Const)]
-    builder.push(ast.Const(builder.space.newtuple(values), lineno))
-    return
 
 def build_lambdef(builder, nb):
     """lambdef: 'lambda' [varargslist] ':' test"""
