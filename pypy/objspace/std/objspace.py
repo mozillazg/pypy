@@ -379,7 +379,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             space = self
             # too early for unpackiterable as well :-(
             name  = space.unwrap(space.getitem(w_args, space.wrap(0)))
-            bases = space.unpacktuple(space.getitem(w_args, space.wrap(1)))
+            bases = space.viewiterable(space.getitem(w_args, space.wrap(1)))
             dic   = space.unwrap(space.getitem(w_args, space.wrap(2)))
             dic = dict([(key,space.wrap(value)) for (key, value) in dic.items()])
             bases = list(bases)
@@ -629,12 +629,32 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return instance
     allocate_instance._annspecialcase_ = "specialize:arg(1)"
 
-    def unpacktuple(self, w_tuple, expected_length=-1):
-        assert isinstance(w_tuple, self.TupleObjectCls)
-        t = w_tuple.getitems()
-        if expected_length != -1 and expected_length != len(t):
-            raise ValueError, "got a tuple of length %d instead of %d" % (
-                len(t), expected_length)
+    # two following functions are almost identical, but in fact they
+    # have different return type. First one is a resizable list, second
+    # one is not
+
+    def unpackiterable(self, w_obj, expected_length=-1):
+        if isinstance(w_obj, W_TupleObject):
+            t = w_obj.wrappeditems[:]
+        elif isinstance(w_obj, W_ListObject):
+            t = w_obj.wrappeditems[:]
+        else:
+            return ObjSpace.unpackiterable(self, w_obj, expected_length)
+        if expected_length != -1 and len(t) != expected_length:
+            raise ValueError("Expected length %d, got %d" % (expected_length, len(t)))
+        return t
+
+    def viewiterable(self, w_obj, expected_length=-1):
+        """ Fast paths
+        """
+        if isinstance(w_obj, W_TupleObject):
+            t = w_obj.wrappeditems
+        elif isinstance(w_obj, W_ListObject):
+            t = w_obj.wrappeditems[:]
+        else:
+            return ObjSpace.viewiterable(self, w_obj, expected_length)
+        if expected_length != -1 and len(t) != expected_length:
+            raise ValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t
 
     def sliceindices(self, w_slice, w_length):

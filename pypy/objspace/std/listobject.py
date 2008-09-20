@@ -2,14 +2,12 @@ from pypy.objspace.std.objspace import *
 from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.listtype import get_list_index
 from pypy.objspace.std.sliceobject import W_SliceObject
-from pypy.objspace.std.seqinterface import W_SeqObject
 
 from pypy.objspace.std import slicetype
 from pypy.interpreter import gateway, baseobjspace
 from pypy.rlib.listsort import TimSort
 
-
-class W_ListObject(W_SeqObject):
+class W_ListObject(W_Object):
     from pypy.objspace.std.listtype import list_typedef as typedef
     
     def __init__(w_self, wrappeditems):
@@ -25,13 +23,6 @@ class W_ListObject(W_SeqObject):
 
     def append(w_list, w_item):
         w_list.wrappeditems.append(w_item)
-
-    def getlength(self):
-        return len(self.wrappeditems)
-
-    def getitemfast(self, i):
-        return self.wrappeditems[i]
-
 
 registerimplementation(W_ListObject)
 

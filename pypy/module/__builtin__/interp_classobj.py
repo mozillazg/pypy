@@ -280,7 +280,7 @@ def _coerce_helper(space, w_self, w_other):
         if not e.match(space, space.w_TypeError):
             raise
         return [None, None]
-    return space.unpacktuple(w_tup, 2)
+    return space.viewiterable(w_tup, 2)
 
 def descr_instance_new(space, w_type, w_class, w_dict=None):
     # w_type is not used at all

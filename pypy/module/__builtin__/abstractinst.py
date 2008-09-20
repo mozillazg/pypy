@@ -79,7 +79,7 @@ def abstract_isinstance_w(space, w_obj, w_klass_or_tuple):
 
     # -- case (anything, tuple)
     if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
-        for w_klass in space.unpacktuple(w_klass_or_tuple):
+        for w_klass in space.viewiterable(w_klass_or_tuple):
             if abstract_isinstance_w(space, w_obj, w_klass):
                 return True
         return False
@@ -104,7 +104,7 @@ def _issubclass_recurse(space, w_derived, w_top):
         return True
     w_bases = _get_bases(space, w_derived)
     if w_bases is not None:
-        for w_base in space.unpacktuple(w_bases):
+        for w_base in space.viewiterable(w_bases):
             if _issubclass_recurse(space, w_base, w_top):
                 return True
     return False
@@ -134,7 +134,7 @@ def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
 
     # -- case (class-like-object, tuple-of-classes)
     if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
-        for w_klass in space.unpacktuple(w_klass_or_tuple):
+        for w_klass in space.viewiterable(w_klass_or_tuple):
             if abstract_issubclass_w(space, w_derived, w_klass):
                 return True
         return False
