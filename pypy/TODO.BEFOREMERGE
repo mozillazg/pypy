@@ -9,7 +9,3 @@
 * use viewtuple() instead of viewiterable() in pycode.py:descr_code__new__()
 
 * add objspace.unpackiterable shortcuts
-
-* "translate.py --no-listcompr" doesn't annotate any more
-
-* "translate.py -b cli" doesn't annotate any more
