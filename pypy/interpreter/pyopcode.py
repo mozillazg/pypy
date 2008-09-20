@@ -552,7 +552,7 @@ class __extend__(pyframe.PyFrame):
                                      w_compile_flags,
                                      f.space.wrap(f.get_builtin()),
                                      f.space.gettypeobject(PyCode.typedef))
-        w_prog, w_globals, w_locals = f.space.unpacktuple(w_resulttuple, 3)
+        w_prog, w_globals, w_locals = f.space.viewiterable(w_resulttuple, 3)
 
         plain = f.w_locals is not None and f.space.is_w(w_locals, f.w_locals)
         if plain:
@@ -679,7 +679,7 @@ class __extend__(pyframe.PyFrame):
         f.pushvalue(w_tuple)
 
     def BUILD_LIST(f, itemcount, *ignored):
-        items = f.popvalues(itemcount)
+        items = f.popvalues_mutable(itemcount)
         w_list = f.space.newlist(items)
         f.pushvalue(w_list)
 
@@ -905,7 +905,7 @@ class __extend__(pyframe.PyFrame):
     def MAKE_FUNCTION(f, numdefaults, *ignored):
         w_codeobj = f.popvalue()
         codeobj = f.space.interp_w(PyCode, w_codeobj)
-        defaultarguments = f.popvalues(numdefaults)
+        defaultarguments = f.popvalues_mutable(numdefaults)
         fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)
         f.pushvalue(f.space.wrap(fn))
 
