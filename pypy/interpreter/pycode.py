@@ -15,8 +15,12 @@ from pypy.rlib.debug import make_sure_not_resized
 
 # helper
 
-def unpack_str_tuple(space,w_str_tuple):
-    return [space.str_w(w_el) for w_el in space.unpackiterable(w_str_tuple)]
+def unpack_str_tuple(space, w_str_tuple):
+    items_w = space.viewiterable(w_str_tuple)
+    result = [None] * len(items_w)
+    for i in range(len(items_w)):
+        result[i] = space.str_w(items_w[i])
+    return result
 
 # code object contants, for co_flags below
 CO_OPTIMIZED    = 0x0001
