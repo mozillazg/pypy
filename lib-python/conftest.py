@@ -166,12 +166,12 @@ run_testcase_method = app.interphook('run_testcase_method')
 set_argv = app.interphook('set_argv')
 
 def start_intercept(space): 
-    w_suites, w_doctestmodules = space.unpacktuple(intercept_test_support(space))
+    w_suites, w_doctestmodules = space.viewiterable(intercept_test_support(space))
     return w_suites, w_doctestmodules 
 
 def collect_intercept(space, w_suites, w_doctestmodules): 
     w_result = callex(space, collect_intercepted, space, w_suites, w_doctestmodules)
-    w_namemethods, w_doctestlist = space.unpacktuple(w_result) 
+    w_namemethods, w_doctestlist = space.viewiterable(w_result) 
     return w_namemethods, w_doctestlist 
 
 class SimpleRunItem(py.test.collect.Item): 
@@ -240,14 +240,14 @@ class InterceptedRunModule(py.test.collect.Module):
 
         # setup {name -> wrapped testcase method}
         for w_item in space.unpackiterable(w_namemethods): 
-            w_name, w_method = space.unpacktuple(w_item) 
+            w_name, w_method = space.viewiterable(w_item) 
             name = space.str_w(w_name) 
             testitem = AppTestCaseMethod(name, parent=self, w_method=w_method) 
             self.name2item[name] = testitem
 
         # setup {name -> wrapped doctest module}
         for w_item in space.unpackiterable(w_doctestlist): 
-            w_name, w_module = space.unpacktuple(w_item) 
+            w_name, w_module = space.viewiterable(w_item) 
             name = space.str_w(w_name) 
             testitem = AppDocTestModule(name, parent=self, w_module=w_module)
             self.name2item[name] = testitem 
