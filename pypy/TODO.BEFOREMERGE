@@ -10,4 +10,6 @@
 
 * add objspace.unpackiterable shortcuts
 
+* "translate.py --no-listcompr" doesn't annotate any more
+
 * "translate.py -b cli" doesn't annotate any more
