@@ -95,6 +95,9 @@ class __extend__(pyframe.PyFrame):
             operr = self.last_exception
             next_instr = self.handle_operation_error(ec, operr,
                                                      attach_tb=False)
+        except RaiseWithExplicitTraceback, e:
+            next_instr = self.handle_operation_error(ec, e.operr,
+                                                     attach_tb=False)
         except KeyboardInterrupt:
             next_instr = self.handle_asynchronous_error(ec,
                 self.space.w_KeyboardInterrupt)
@@ -122,7 +125,6 @@ class __extend__(pyframe.PyFrame):
         return self.handle_operation_error(ec, operr)
 
     def handle_operation_error(self, ec, operr, attach_tb=True):
-        self.last_exception = operr
         if attach_tb:
             pytraceback.record_application_traceback(
                 self.space, operr, self, self.last_instr)
@@ -533,9 +535,8 @@ class __extend__(pyframe.PyFrame):
                 raise OperationError(space.w_TypeError,
                       space.wrap("raise: arg 3 must be a traceback or None"))
             operror.application_traceback = tb
-            # re-raise, no new traceback obj will be attached
-            f.last_exception = operror
-            raise Reraise
+            # special 3-arguments raise, no new traceback obj will be attached
+            raise RaiseWithExplicitTraceback(operror)
 
     def LOAD_LOCALS(f, *ignored):
         f.pushvalue(f.w_locals)
@@ -979,17 +980,20 @@ class __extend__(pyframe.PyFrame):
 
 ### ____________________________________________________________ ###
 
-class Reraise(Exception):
-    """Signal an application-level OperationError that should not grow
-    a new traceback entry nor trigger the trace hook."""
-
 class ExitFrame(Exception):
     pass
 
 class Return(ExitFrame):
-    """Obscure."""
+    """Raised when exiting a frame via a 'return' statement."""
 class Yield(ExitFrame):
-    """Obscure."""
+    """Raised when exiting a frame via a 'yield' statement."""
+
+class Reraise(Exception):
+    """Raised at interp-level by a bare 'raise' statement."""
+class RaiseWithExplicitTraceback(Exception):
+    """Raised at interp-level by a 3-arguments 'raise' statement."""
+    def __init__(self, operr):
+        self.operr = operr
 
 class BytecodeCorruption(Exception):
     """Detected bytecode corruption.  Never caught; it's an error."""
@@ -1157,6 +1161,7 @@ class ExceptBlock(FrameBlock):
         frame.pushvalue(frame.space.wrap(unroller))
         frame.pushvalue(operationerr.w_value)
         frame.pushvalue(operationerr.w_type)
+        frame.last_exception = operationerr
         return self.handlerposition   # jump to the handler
 
 
