@@ -3081,6 +3081,7 @@ class TestAnnotateTestCase:
             return func()
 
         a = self.RPythonAnnotator()
+        a.translator.config.translation.list_comprehension_operations = True
         py.test.raises(TooLateForChange, a.build_types, fn, [int])
             
 
