@@ -11,7 +11,7 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
 
     w_typetype = _precheck_for_new(space, w_typetype)
     
-    bases_w = space.unpackiterable(w_bases)
+    bases_w = space.viewiterable(w_bases)
 
     w_winner = w_typetype
     for base in bases_w:
@@ -89,7 +89,7 @@ def descr_mro(space, w_type):
 
 def descr_get__bases__(space, w_type):
     w_type = _check(space, w_type)
-    return space.newtuple(w_type.bases_w[:])
+    return space.newtuple(w_type.bases_w)
 
 def mro_subclasses(space, w_type, temp):
     from pypy.objspace.std.typeobject import W_TypeObject, compute_mro
@@ -115,7 +115,7 @@ def descr_set__bases__(space, w_type, w_value):
                                         " to %s.__bases__, not %s"%
                                     (w_type.name,
                                      space.type(w_value).getname(space, '?'))))
-    newbases_w = space.unpackiterable(w_value)
+    newbases_w = space.viewiterable(w_value)
     if len(newbases_w) == 0:
         raise OperationError(space.w_TypeError,
                              space.wrap("can only assign non-empty tuple"
