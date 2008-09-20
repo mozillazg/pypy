@@ -455,6 +455,9 @@ class TestGrowingSemiSpaceGC(TestSemiSpaceGC):
 class TestGenerationalGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.generation import GenerationGC as GCClass
 
+class TestMarkCompactGC(TestSemiSpaceGC):
+    from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
+
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
     GC_CANNOT_MALLOC_NONMOVABLE = False
