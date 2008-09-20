@@ -16,6 +16,16 @@ class W_AbstractSeqIterObject(W_Object):
         w_self.w_seq = w_seq
         w_self.index = index
 
+    def getlength(self, space):
+        if self.w_seq is None:
+            return space.wrap(0)
+        index = self.index
+        w_length = space.len(self.w_seq)
+        w_len = space.sub(w_length, space.wrap(index))
+        if space.is_true(space.lt(w_len,space.wrap(0))):
+            w_len = space.wrap(0)
+        return w_len
+
 class W_SeqIterObject(W_AbstractSeqIterObject):
     """Sequence iterator implementation for general sequences."""
 
@@ -66,14 +76,7 @@ def next__SeqIter(space, w_seqiter):
     return w_item
 
 def len__SeqIter(space,  w_seqiter):
-    if w_seqiter.w_seq is None:
-        return space.wrap(0)
-    index = w_seqiter.index
-    w_length = space.len(w_seqiter.w_seq)
-    w_len = space.sub(w_length, space.wrap(index))
-    if space.is_true(space.lt(w_len,space.wrap(0))):
-        w_len = space.wrap(0)
-    return w_len
+    return w_seqiter.getlength(space)
 
 
 def iter__FastTupleIter(space, w_seqiter):
@@ -93,13 +96,7 @@ def next__FastTupleIter(space, w_seqiter):
     return w_item
 
 def len__FastTupleIter(space, w_seqiter):
-    if w_seqiter.tupleitems is None:
-        return space.wrap(0)
-    totallength = len(w_seqiter.tupleitems)
-    remaining = totallength - w_seqiter.index
-    if remaining < 0:
-        remaining = 0
-    return space.wrap(remaining)
+    return w_seqiter.getlength(space)
 
 
 def iter__FastListIter(space, w_seqiter):
@@ -119,13 +116,7 @@ def next__FastListIter(space, w_seqiter):
     return w_item
 
 def len__FastListIter(space, w_seqiter):
-    if w_seqiter.listitems is None:
-        return space.wrap(0)
-    totallength = len(w_seqiter.listitems)
-    remaining = totallength - w_seqiter.index
-    if remaining < 0:
-        remaining = 0
-    return space.wrap(remaining)
+    return w_seqiter.getlength(space)
 
 
 def iter__ReverseSeqIter(space, w_seqiter):
