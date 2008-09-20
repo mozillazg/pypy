@@ -726,17 +726,8 @@ def build_exprlist(builder, nb):
     if len(atoms) <= 2:
         builder.push(atoms[0])
     else:
-        isConst = True
         items = [atoms[index] for index in range(0, len(atoms), 2)]
-        for item in items:
-            if not isinstance(item, ast.Const):
-                isConst = False
-                break
-        if not isConst:
-            builder.push(ast.Tuple([i for i in items if isinstance(i, ast.Node)], atoms[0].lineno))
-        else:
-            builder.push(ast.Const(builder.space.newtuple(
-                [i for i in items if isinstance(i, ast.Const)]), atoms[0].lineno))
+        builder.push(ast.Tuple(items, atoms[0].lineno))
 
 def build_while_stmt(builder, nb):
     """while_stmt: 'while' test ':' suite ['else' ':' suite]"""
