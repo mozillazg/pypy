@@ -1,3 +1,4 @@
 
 * avoid duplication in FastSeqIter, if possible
+* check if seqinterface.py is still needed or not
 * add objspace.unpackiterable shortcuts
