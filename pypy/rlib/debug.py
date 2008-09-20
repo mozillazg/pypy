@@ -92,7 +92,13 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self, s_arg):
         from pypy.annotation.model import SomeList
         assert isinstance(s_arg, SomeList)
-        s_arg.listdef.never_resize()
+        # the logic behind it is that we try not to propagate
+        # make_sure_not_resized, when list comprehension is not on
+        if self.bookkeeper.annotator.translator.config.translation.list_comprehension_operations:
+            s_arg.listdef.never_resize()
+        else:
+            from pypy.annotation.annrpython import log
+            log.WARNING('make_sure_not_resized called, but has no effect since list_comprehension is off')
         return s_arg
     
     def specialize_call(self, hop):
