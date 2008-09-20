@@ -21,7 +21,8 @@ class Platform(object):
         return not self == other
 
     def __eq__(self, other):
-        return self.__class__.__name__ == other.__class__.__name__
+        return (self.__class__ is other.__class__ and
+                self.__dict__ == other.__dict__)
 
 class Maemo(Platform):
     def get_compiler(self):

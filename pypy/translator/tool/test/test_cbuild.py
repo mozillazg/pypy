@@ -188,6 +188,18 @@ class TestEci:
             py.test.fail("Did not raise")
         assert eci.platform.execute() == 3
 
+    def test_platform_equality(self):
+        from pypy.rlib.pyplatform import Platform
+        class X(Platform):
+            pass
+        class Y(Platform):
+            def __init__(self, x):
+                self.x = x
+
+        assert X() == X()
+        assert Y(3) == Y(3)
+        assert Y(2) != Y(3)
+
     def test_standalone_maemo(self):
         from pypy.rlib.pyplatform import Maemo
         # XXX skip if there is no scratchbox
