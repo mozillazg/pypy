@@ -665,17 +665,6 @@ class ObjSpace(object):
         return make_sure_not_resized(self.unpackiterable(w_iterable,
                                                          expected_length)[:])
 
-    def unpacktuple(self, w_tuple, expected_length=-1):
-        """Same as unpackiterable(), but only for tuples.
-        Only use for bootstrapping or performance reasons."""
-        tuple_length = self.int_w(self.len(w_tuple))
-        if expected_length != -1 and tuple_length != expected_length:
-            raise UnpackValueError("got a tuple of length %d instead of %d" % (
-                tuple_length, expected_length))
-        items = [
-            self.getitem(w_tuple, self.wrap(i)) for i in range(tuple_length)]
-        return items
-
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
         if self.is_w(w_exc_type, w_check_class):

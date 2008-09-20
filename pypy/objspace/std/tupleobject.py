@@ -1,12 +1,11 @@
 from pypy.objspace.std.objspace import *
-from pypy.objspace.std.seqinterface import W_SeqObject
 from pypy.objspace.std.inttype import wrapint
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.interpreter import gateway
 from pypy.rlib.debug import make_sure_not_resized
 
-class W_TupleObject(W_SeqObject):
+class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
     
     def __init__(w_self, wrappeditems):
@@ -21,15 +20,6 @@ class W_TupleObject(W_SeqObject):
     def unwrap(w_tuple, space):
         items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems] # XXX generic mixed types unwrap
         return tuple(items)
-
-    def getitems(self):
-        return self.wrappeditems
-
-    def getlength(self):
-        return len(self.wrappeditems)
-
-    def getitemfast(self, i):
-        return self.wrappeditems[i]
 
 registerimplementation(W_TupleObject)
 

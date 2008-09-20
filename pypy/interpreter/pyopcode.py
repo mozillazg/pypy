@@ -551,7 +551,7 @@ class __extend__(pyframe.PyFrame):
                                      w_compile_flags,
                                      f.space.wrap(f.get_builtin()),
                                      f.space.gettypeobject(PyCode.typedef))
-        w_prog, w_globals, w_locals = f.space.unpacktuple(w_resulttuple, 3)
+        w_prog, w_globals, w_locals = f.space.viewiterable(w_resulttuple, 3)
 
         plain = f.w_locals is not None and f.space.is_w(w_locals, f.w_locals)
         if plain:
