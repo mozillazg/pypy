@@ -80,7 +80,7 @@ def descr_set__name__(space, w_type, w_value):
 
 def descr_get__mro__(space, w_type):
     w_type = _check(space, w_type)
-    return space.newtuple(w_type.mro_w[:])
+    return space.newtuple(w_type.mro_w)
 
 def descr_mro(space, w_type):
     """Return a type's method resolution order."""
