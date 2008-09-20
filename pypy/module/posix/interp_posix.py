@@ -555,7 +555,11 @@ def uname(space):
         r = os.uname()
     except OSError, e:
         raise wrap_oserror(space, e)
-    l_w = [space.wrap(i) for i in [r[0], r[1], r[2], r[3], r[4]]]
+    l_w = [space.wrap(r[0]),
+           space.wrap(r[1]),
+           space.wrap(r[2]),
+           space.wrap(r[3]),
+           space.wrap(r[4])]
     return space.newtuple(l_w)
 uname.unwrap_spec = [ObjSpace]
 
