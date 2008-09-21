@@ -40,7 +40,7 @@ class ExternalCompilationInfo(object):
                  compile_extra           = [],
                  link_extra              = [],
                  frameworks              = [],
-                 platform                = 'host'):
+                 platform                = None):
         """
         pre_include_bits: list of pieces of text that should be put at the top
         of the generated .c files, before any #include.  They shouldn't
@@ -82,13 +82,15 @@ class ExternalCompilationInfo(object):
         link to a framework bundle. Not suitable for unix-like .dylib
         installations.
 
-        platform: an unique identifier of compile platform, useful for
-        caching.
+        platform: an object that can identify the platform
         """
         for name in self._ATTRIBUTES:
             value = locals()[name]
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
+        if platform is None:
+            from pypy.rlib import pyplatform
+            platform = pyplatform.platform
         self.platform = platform
 
     def from_compiler_flags(cls, flags):
@@ -174,6 +176,7 @@ class ExternalCompilationInfo(object):
         for attr in self._ATTRIBUTES:
             val = getattr(self, attr)
             info.append("%s=%s" % (attr, repr(val)))
+        info.append("platform=%s" % self.platform.__class__.__name__)
         return "<ExternalCompilationInfo (%s)>" % ", ".join(info)
 
     def merge(self, *others):
@@ -262,24 +265,6 @@ class ExternalCompilationInfo(object):
         d['separate_module_files'] = ()
         d['separate_module_sources'] = ()
         return ExternalCompilationInfo(**d)
-
-    def get_emulator_for_platform(self):
-        if self.platform == 'host':
-            return ''
-        elif self.platform == 'maemo':
-            # XXX how to do it in better way???
-            return '/scratchbox/login '
-        else:
-            raise NotImplementedError("Platform = %s" % (self.platform,))
-
-    def get_compiler_for_platform(self):
-        if self.platform == 'host':
-            return None
-        elif self.platform == 'maemo':
-            # XXX this should be settable somehow, not sure exactly how
-            return '/scratchbox/compilers/cs2005q3.2-glibc-arm/bin/sbox-arm-linux-gcc'
-        else:
-            raise NotImplementedError("Platform = %s" % (self.platform,))
 
 if sys.platform == 'win32':
     so_ext = '.dll'
@@ -531,7 +516,7 @@ class CCompiler:
         if compiler_exe is not None:
             self.compiler_exe = compiler_exe
         else:
-            self.compiler_exe = eci.get_compiler_for_platform()
+            self.compiler_exe = eci.platform.get_compiler()
         self.profbased = profbased
         if not sys.platform in ('win32', 'darwin'): # xxx
             if 'm' not in self.libraries:

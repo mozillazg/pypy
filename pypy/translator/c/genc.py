@@ -312,7 +312,7 @@ class CStandaloneBuilder(CBuilder):
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
-    def getccompiler(self):            
+    def getccompiler(self):
         cc = self.config.translation.cc
         # Copy extrafiles to target directory, if needed
         extrafiles = []
@@ -399,7 +399,9 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.cc:
             cc = self.config.translation.cc
         else:
-            cc = 'gcc'
+            cc = self.eci.platform.get_compiler()
+            if cc is None:
+                cc = 'gcc'
         make_no_prof = ''
         if self.has_profopt():
             profopt = self.config.translation.profopt

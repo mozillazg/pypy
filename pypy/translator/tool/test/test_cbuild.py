@@ -158,14 +158,50 @@ class TestEci:
                        'dxowqbncpqympqhe-config')
 
     def test_platforms(self):
-        eci = ExternalCompilationInfo(platform='xxx')
+        from pypy.rlib.pyplatform import Maemo
+        eci = ExternalCompilationInfo(platform=Maemo())
         eci2 = ExternalCompilationInfo()
         assert eci != eci2
         assert hash(eci) != hash(eci2)
+        assert repr(eci) != repr(eci2)
         py.test.raises(Exception, eci2.merge, eci)
-        assert eci.merge(eci).platform == 'xxx'
+        assert eci.merge(eci).platform == Maemo()
+
+    def test_platform(self):
+        from pypy.rlib.pyplatform import Platform
+        class Expected(Exception):
+            pass
+        
+        class X(Platform):
+            def get_compiler(self):
+                raise Expected
+
+            def execute(self):
+                return 3
+
+        eci = ExternalCompilationInfo(platform=X())
+        try:
+            build_executable([self.modfile], eci)
+        except Expected:
+            pass
+        else:
+            py.test.fail("Did not raise")
+        assert eci.platform.execute() == 3
+
+    def test_platform_equality(self):
+        from pypy.rlib.pyplatform import Platform
+        class X(Platform):
+            pass
+        class Y(Platform):
+            def __init__(self, x):
+                self.x = x
+
+        assert X() == X()
+        assert Y(3) == Y(3)
+        assert Y(2) != Y(3)
 
     def test_standalone_maemo(self):
+        from pypy.rlib.pyplatform import Maemo
         # XXX skip if there is no scratchbox
         if not py.path.local('/scratchbox/login').check():
             py.test.skip("No scratchbox detected")
@@ -183,9 +219,10 @@ class TestEci:
         if sys.platform == 'win32':
             py.test.skip("No cross-compilation on windows yet")
         else:
-            eci = ExternalCompilationInfo(platform='maemo',
+            eci = ExternalCompilationInfo(platform=Maemo(),
                                           libraries=['m'])
         output = build_executable([c_file], eci)
         py.test.raises(py.process.cmdexec.Error, py.process.cmdexec, output)
-        result = py.process.cmdexec(eci.get_emulator_for_platform() + output)
+        result = eci.platform.execute(output)
         assert result.startswith('4.0')
+

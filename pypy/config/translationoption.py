@@ -346,10 +346,19 @@ PLATFORMS = [
 ]
 
 def set_platform(config, platform):
-    if platform == 'maemo':
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
-        # XXX evil hackery
-        func_defs = list(ExternalCompilationInfo.__init__.func_defaults)
-        func_defs[-1] = 'maemo'
-        ExternalCompilationInfo.__init__.im_func.func_defaults = tuple(func_defs)
-        
+    from pypy.rlib.pyplatform import Platform, Maemo, OverloadCompilerPlatform
+    from pypy.rlib import pyplatform
+    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    if isinstance(platform, str):
+        if platform == 'maemo':
+            platform = Maemo()
+        elif platform == 'host':
+            return
+        else:
+            raise NotImplementedError('Platform = %s' % (platform,))
+    assert isinstance(platform, Platform)
+    pyplatform.platform = platform
+    if config.translation.cc:
+        pyplatform.platform = OverloadCompilerPlatform(platform,
+                                                       config.translation.cc)
+
