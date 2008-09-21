@@ -1,5 +1,5 @@
 import py
-import sys, os
+import sys, os, re
 
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.translator.translator import TranslationContext
@@ -226,3 +226,30 @@ def test_separate_files():
     assert "  ll_strtod.h" in makefile
     assert "  ll_strtod.o" in makefile
 
+def test_cross_compilation():
+    from pypy.rlib.pyplatform import Platform
+    from pypy.config.translationoption import set_platform
+
+    class X(Platform):
+        def get_compiler(self):
+            return 'x'
+
+    def entry_point(argv):
+        return 0
+
+    t = TranslationContext()
+    t.buildannotator().build_types(entry_point, [s_list_of_strings])
+    t.buildrtyper().specialize()
+
+    set_platform(t.config, X())
+    try:
+        eci = ExternalCompilationInfo(platform=X())
+
+        cbuilder = CStandaloneBuilder(t, entry_point, t.config)
+        cbuilder.generate_source()
+
+        makefile = udir.join(cbuilder.modulename, 'Makefile').read()
+
+        m = re.search('^CC\s*=\s*x$', makefile)
+    finally:
+        set_platform(t.config, Platform())
