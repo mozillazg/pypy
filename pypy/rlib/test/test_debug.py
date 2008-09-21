@@ -35,4 +35,5 @@ def test_make_sure_not_resized():
         result.append(4)
         return len(result)
 
-    py.test.raises(TooLateForChange, interpret, f, [])
+    py.test.raises(TooLateForChange, interpret, f, [], 
+                   list_comprehension_operations=True)
