@@ -1,5 +1,5 @@
 from pypy.objspace.std.register_all import register_all
-from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
+from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
 from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
 from pypy.interpreter import argument
@@ -641,7 +641,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             return ObjSpace.unpackiterable(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise ValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t
 
     def viewiterable(self, w_obj, expected_length=-1):
@@ -654,7 +654,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             return ObjSpace.viewiterable(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise ValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
         return t
 
     def sliceindices(self, w_slice, w_length):
