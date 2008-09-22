@@ -10,9 +10,7 @@ import os
 import py
 import time
 import re
-import signal
 import sys
-import socket
 
 class Result(object):
     def __init__(self, priv_map, shared_map, starttime=None):
@@ -57,12 +55,14 @@ class ChildProcess(object):
     realos = os
     
     def __init__(self, name, args):
+        import signal
         self.pid = -1
         signal.signal(signal.SIGCHLD, lambda a,b: self.close())
         self.pid = run_child(name, args)
         self.results = []
 
     def loop(self, logfile, interval):
+        import signal
         if isinstance(logfile, basestring):
             logfile = open(logfile, 'w')
         counter = 0
