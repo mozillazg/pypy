@@ -32,10 +32,6 @@ option = py.test.config.addoptions("pypy options",
                help="run pexpect tests directly"),
     )
 
-# glue experimental filelog session
-from pypy.tool.pytest.filelog.session import add_filelog_option, FileLogSession
-add_filelog_option()
-
 
 _SPACECACHE={}
 def gettestobjspace(name=None, **kwds):
