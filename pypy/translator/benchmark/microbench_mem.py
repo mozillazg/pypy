@@ -8,7 +8,7 @@ import py
 
 def measure_func(num, pid):
     res = smaps_measure_func(pid)
-    print num, res.private
+    print 2**num, res.private
 
 def tuples(read, write, coeff):
     import gc
@@ -48,12 +48,52 @@ def list_of_instances_with_int(read, write, coeff):
     read()
     write('e')
 
+def linked_list_with_floats(read, write, coeff):
+    import gc
+
+    class A(object):
+        def __init__(self, other, i):
+            self.i = float(i)
+            self.other = other
+
+    x = None
+    for i in range(1000 * coeff):
+        x = A(x, i)
+        if i % 1000 == 0:
+            gc.collect()
+    gc.collect()
+    write('x')
+    read()
+    write('e')
+
+def empty_instances(read, write, coeff):
+    import gc
+    class A(object):
+        pass
+
+    x = [A() for i in range(1000*coeff)]
+    gc.collect()
+    write('x')
+    read()
+    write('e')
+
+def lists(read, write, coeff):
+    import gc
+    x = []
+    for i in range(1000 * coeff):
+        x = [x]
+    gc.collect()
+    write('x')
+    read()
+    write('e')
+
 if __name__ == '__main__':
     coeff = 1
     i = 0
     funcs = []
-    while i < 10:
-        funcs.append(lambda r, w, coeff=coeff: list_of_instances_with_int(r, w, coeff))
+    while i < 9:
+        funcs.append(lambda r, w, coeff=coeff:
+                     linked_list_with_floats(r, w, coeff))
         coeff *= 2
         i += 1
     res = measure(measure_func, funcs)
