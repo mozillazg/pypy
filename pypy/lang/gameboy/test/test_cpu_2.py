@@ -662,15 +662,15 @@ def test_conditional_jump():
     assert cpu.flag.get()  == 0xFF
     assert cpu.pc.get() == 0x1234+2
     
-def test_process_2_complement():
-    assert process_2_complement(0x00) == 0
-    assert process_2_complement(0xFF) == -1
+def test_process_2s_complement():
+    assert process_2s_complement(0x00) == 0
+    assert process_2s_complement(0xFF) == -1
     
     for i in range(0x7E):
-        assert process_2_complement(i) == i
+        assert process_2s_complement(i) == i
         
     for i in range(1, 0x7E):
-        assert process_2_complement(0xFF - i+1) == -i
+        assert process_2s_complement(0xFF - i+1) == -i
     
 def test_relative_jump():
     cpu = get_cpu()

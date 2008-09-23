@@ -6,12 +6,13 @@ import pdb
 
 # ---------------------------------------------------------------------------
 
-def process_2_complement(value):
+def process_2s_complement(value):
     # check if the left most bit is set
-    if (value >> 7) == 1:
-        return -((~value) & 0xFF) - 1
-    else :
-        return value
+    #if (value >> 7) == 1:
+    #    return -((~value) & 0xFF) - 1
+    #else :
+    #    return value
+    return (value ^ 0x80) - 128
 # ---------------------------------------------------------------------------
 
 class AbstractRegister(object):
@@ -829,7 +830,7 @@ class CPU(object):
 
     def get_fetchadded_sp(self):
         # 1 cycle
-        offset = process_2_complement(self.fetch()) # 1 cycle
+        offset = process_2s_complement(self.fetch()) # 1 cycle
         s = (self.sp.get() + offset) & 0xFFFF
         self.flag.reset()
         if (offset >= 0):
@@ -869,7 +870,7 @@ class CPU(object):
 
     def relative_jump(self):
         # JR +nn, 3 cycles
-        self.pc.add(process_2_complement(self.fetch())) # 3 + 1 cycles
+        self.pc.add(process_2s_complement(self.fetch())) # 3 + 1 cycles
         self.cycles += 1
 
     def relative_conditional_jump(self, cc):
