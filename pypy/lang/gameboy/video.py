@@ -3,9 +3,10 @@
  constants.LCD Video Display Processor
 """
 import math
+import operator
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.ram import iMemory
-from pypy.lang.gameboy.cpu import process_2_complement
+from pypy.lang.gameboy.cpu import process_2s_complement
 
 # -----------------------------------------------------------------------------
 class VideoCallWraper(object):
@@ -486,9 +487,6 @@ class Sprite(object):
     def get_tile_number(self):
         return self.tile.id
     
-    def set_tile_number(self, tile_number):
-        self.tile = self.video.tiles[tile_number]
-        
     def get_width(self):
         return 8
     
@@ -521,6 +519,9 @@ class Tile(object):
     def set_tile_data(self, data):
         pass
 
+    def get_pixel_data(self):
+        return self.pixel_data
+    
     def get_selected_tile_map_space(self):
         pass
 # -----------------------------------------------------------------------------
@@ -963,7 +964,8 @@ class Video(iMemory):
         """
         sets one byte of the object attribute memory.
         The object attribute memory stores the position and seme other
-        attributes of the sprites
+        attributes of the sprites, this works only during the v-blank and
+        the h-blank period.
         """
         self.oam[address - constants.OAM_ADDR] = data & 0xFF
         #self.update_sprites(address)
@@ -975,7 +977,7 @@ class Video(iMemory):
     def set_vram(self, address, data):
        """
        sets one byte of the video memory.
-       The video memroy contains the tiles used to display.
+       The video memory contains the tiles used to display.
        """
        self.vram[address - constants.VRAM_ADDR] = data & 0xFF
        self.update_tile(address, data)
@@ -1017,7 +1019,7 @@ class Video(iMemory):
         self.draw_pixels_line()
 
     def draw_sprites_line_new(self):
-        sprites_on_line = self.get_active_sprites_on_line(self.line_y)
+        sprites_on_line = self.get_drawable_sprites_on_line(self.line_y)
         
         last_sprite = sprites_on_line[0]
         last_sprite.draw()
@@ -1035,6 +1037,21 @@ class Video(iMemory):
             self.sprites[i].enabled:
                 found.append(self.sprites[i])
         return found
+    
+    def get_drawable_sprites_on_line(self, line_y):
+        sprites_on_line = self.get_active_sprites_on_line(self.line_y)
+        sprites_on_line = self.sort_drawable_sprites(sprites_on_line)
+        # only 10 sprites per line
+        return sprites_on_line[:constants.OBJECTS_PER_LINE]
+    
+    def sort_drawable_sprites(self, sprites):
+        """
+        returns an ordered list of selected sprites. 
+        The order rules are as following:
+        1. order by x -coordinates, lower first
+        2. order by id, lower first
+        """
+        return sprites.sort(key=operator.itemgetter("x"))
     
     def draw_sprites_line(self):
         count = self.scan_sprites()
