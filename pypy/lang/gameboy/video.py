@@ -5,6 +5,7 @@
 import math
 import operator
 from pypy.lang.gameboy import constants
+from pypy.lang.gameboy.constants import SPRITE_SIZE, GAMEBOY_SCREEN_WIDTH, GAMEBOY_SCREEN_HEIGHT
 from pypy.lang.gameboy.ram import iMemory
 from pypy.lang.gameboy.cpu import process_2s_complement
 
@@ -168,7 +169,7 @@ class Mode0(Mode):
     def emulate_hblank(self):
         self.video.line_y += 1
         self.emulate_hblank_line_y_compare()
-        if self.video.line_y < 144:
+        if self.video.line_y < GAMEBOY_SCREEN_HEIGHT:
             self.video.status.set_mode(2)
         else:
             self.emulate_hblank_part_2()
@@ -417,6 +418,9 @@ class Sprite(object):
         self.hidden         = True
         
         
+    def get_data(self):
+        return [self.y, self.x, self.tile_number, self.get_attributes_and_flags()]
+    
     def set_data(self, byte0=-1, byte1=-1, byte2=-1, byte3=-1):
         """
         extracts the sprite data from an oam entry
@@ -475,11 +479,18 @@ class Sprite(object):
         self.y_flipped                  = bool(data  & (1 << 5))
         self.palette_number             = bool(data  & (1 << 3)) 
         
+    def get_attributes_and_flags(self):
+        value = 0
+        value += int(self.object_behind_background) << 7
+        value += int(self.x_flipped)                << 6
+        value += int(self.y_flipped)                << 5
+        value += int(self.palette_number )          << 3
+        return value
         
     def hide_check(self):
-        if self.y <= 0  or self.y >= 160:
+        if self.y <= 0  or self.y >= GAMEBOY_SCREEN_WIDTH:
             self.hidden = True
-        elif self.x <= 0  or self.x >= 168:
+        elif self.x <= 0  or self.x >= GAMEBOY_SCREEN_WIDTH+SPRITE_SIZE:
             self.hidden = True
         else:
             self.hidden = False
@@ -488,13 +499,13 @@ class Sprite(object):
         return self.tile.id
     
     def get_width(self):
-        return 8
+        return SPRITE_SIZE
     
     def get_height(self):
         if self.big_size:
-            return 2*8
+            return 2*SPRITE_SIZE
         else:
-            return 8
+            return SPRITE_SIZE
          
     def overlaps_on_line(self, sprite, line):
         return False
@@ -514,8 +525,11 @@ class Sprite(object):
 class Tile(object):
     
     def __init__(self):
+        self.reset()
+        
+    def reset(self):
         pass
-
+    
     def set_tile_data(self, data):
         pass
 
@@ -543,7 +557,7 @@ class Window(object):
          # don't draw window if it was not enabled and not being drawn before
         if not self.enabled and (data & 0x20) != 0 and \
         self.line_y == 0 and self.video.line_y > self.y:
-            self.line_y = 144    
+            self.line_y = GAMEBOY_SCREEN_HEIGHT    
     
     def get_tile_map_space(self):
         #if (self.control.read() & mask) != 0:
@@ -554,7 +568,7 @@ class Window(object):
         
     def draw_line(self, line_y):
         if line_y  < self.y or self.x >= 167 or \
-           self.line_y >= 144:
+           self.line_y >= GAMEBOY_SCREEN_HEIGHT:
                 return
         else:
             tile_map, tile_data = self.prepare_window_data()
@@ -592,7 +606,7 @@ class Background(object):
             return constants.VRAM_MAP_A
           
     def draw_clean_line(self, line_y):
-        for x in range(8+160+8):
+        for x in range(8+GAMEBOY_SCREEN_WIDTH+8):
             self.video.line[x] = 0x00
     
     def draw_line(self, line_y):
@@ -636,6 +650,18 @@ class Video(iMemory):
     
     def update_tile(self, address, data):
         # XXX to implement
+        #self.get_tile(address).set_data();
+        pass
+    
+    def get_tile(self, address):
+        # XXX to implement
+        pass
+    
+    def reset_all_tiles(self):
+        #for tile in self.tile_map_0:
+        #    tile.reset()
+        #for tile in self.tile_map_1:
+        #    tile.reset()
         pass
     
     def create_sprites(self):
@@ -652,17 +678,23 @@ class Video(iMemory):
                                      self.oam[address + 3])
             
     def update_sprite(self, address, data):
-        address -= constants.OAM_ADDR
-        # address divided by 4 gives the correct sprite, each sprite has 4
-        # bytes of attributes
-        sprite_id = int(math.floor(address / 4))
         # XXX why cant I use None here
         attribute = [-1] * 4
         # assign the data to the correct attribute
         attribute[address % 4] = data
-        self.sprites[sprite_id].set_data(attribute[0], attribute[1], 
-                                         attribute[2], attribute[3])
+        self.get_sprite(address).set_data(attribute[0], attribute[1], 
+                                          attribute[2], attribute[3])
        
+    def get_sprite(self, address):
+        address -= constants.OAM_ADDR
+        # address divided by 4 gives the correct sprite, each sprite has 4
+        # bytes of attributes
+        return self.sprites[ int(math.floor(address / 4)) ]
+        
+    def reset_all_sprites(self):
+        #for sprite in self.sprites:
+        #    sprite.reset()
+        pass
          
     def reset(self):
         self.control.reset()
@@ -684,10 +716,13 @@ class Video(iMemory):
         self.dirty      = True
 
         self.vram       = [0] * constants.VRAM_SIZE
+        self.reset_all_tiles()
         # Object Attribute Memory
         self.oam        = [0] * constants.OAM_SIZE
+        self.reset_all_sprites()
         
-        self.line       = [0] * (8 + 160 + 8)
+        #XXX remove those dumb helper "objects"
+        self.line       = [0] * (SPRITE_SIZE + GAMEBOY_SCREEN_WIDTH + SPRITE_SIZE)
         self.objects    = [0] * constants.OBJECTS_PER_LINE
         self.palette    = [0] * 1024
         
@@ -972,6 +1007,7 @@ class Video(iMemory):
         self.update_sprite(address, data)
         
     def get_oam(self, address):
+        #return self.get_sprite(address).get_data()[address % 4];
         return self.oam[address - constants.OAM_ADDR]
         
     def set_vram(self, address, data):
@@ -983,6 +1019,7 @@ class Video(iMemory):
        self.update_tile(address, data)
     
     def get_vram(self, address):
+        #self.get_tile(address).get_data()[address % 4]
         return self.vram[address - constants.VRAM_ADDR]
     
     # emulation ----------------------------------------------------------------
@@ -1061,7 +1098,7 @@ class Video(iMemory):
             x       = (data >> 24) & 0xFF
             flags   = (data >> 12) & 0xFF
             address = data & 0xFFF
-            if (x + 8 <= lastx):
+            if (x + SPRITE_SIZE <= lastx):
                 self.draw_object_tile(x, address, flags)
             else:
                 self.draw_overlapped_object_tile(x, address, flags)
@@ -1073,7 +1110,8 @@ class Video(iMemory):
         for offset in range(0, 4*40, 4):
             y = self.oam[offset + 0]
             x = self.oam[offset + 1]
-            if (y <= 0 or y >= 144 + 16 or x <= 0 or x >= 168):
+            if (y <= 0 or y >= SPRITE_SIZE + GAMEBOY_SCREEN_HEIGHT + SPRITE_SIZE
+            or x <= 0 or x >= GAMEBOY_SCREEN_WIDTH + SPRITE_SIZE):
                 continue
             tile  = self.oam[offset + 2]
             flags = self.oam[offset + 3]
@@ -1115,14 +1153,14 @@ class Video(iMemory):
                 self.objects[rightmost] = data
 
     def draw_tiles(self, x, tile_map, tile_data):
-        while x < 168:
+        while x < GAMEBOY_SCREEN_WIDTH+SPRITE_SIZE:
             if self.control.background_and_window_lower_tile_data_selected:
                 tile = self.vram[tile_map]
             else:
                 tile = (self.vram[tile_map] ^ 0x80) & 0xFF
             self.draw_tile(x, tile_data + (tile << 4))
             tile_map = (tile_map & 0x1FE0) + ((tile_map + 1) & 0x001F)
-            x += 8
+            x += SPRITE_SIZE
      
     def draw_tile(self, x, address):
         pattern =  self.get_pattern(address)
@@ -1182,7 +1220,7 @@ class Video(iMemory):
         self.update_palette()
         pixels = self.driver.get_pixels()
         offset = self.line_y * self.driver.get_width()
-        for x in range(8, 168, 4):
+        for x in range(SPRITE_SIZE, GAMEBOY_SCREEN_WIDTH+SPRITE_SIZE, 4):
             for i in range(0,4):
                 pixels[offset + i] = self.palette[self.line[x + i]]
             offset += 4
