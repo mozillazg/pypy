@@ -88,19 +88,19 @@ class Builder(model.GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         genmethod = getattr(self, 'op_' + opname)
-     #   print self.mc.tell(),":",opname
+        print hex(self.mc.tell()),":",opname," ",gv_arg.to_string()
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         genmethod = getattr(self, 'op_' + opname)
-      #  print self.mc.tell(),":",opname
+        print hex(self.mc.tell()),":",opname," ",gv_arg1.to_string()," ",gv_arg2.to_string()
         return genmethod(gv_arg1, gv_arg2)
     
     op_int_add  = make_two_argument_method("ADD")
     op_int_and  = make_two_argument_method("AND")
     op_int_dec  = make_one_argument_method("DEC")
-    op_int_inc  = make_one_argument_method("INC")
+    op_int_inc  = make_one_argument_method("INC") #for debuging
     op_int_mul  = make_two_argument_method("IMUL")
     op_int_neg  = make_one_argument_method("NEG")
     op_int_not  = make_one_argument_method("NOT")
@@ -108,15 +108,16 @@ class Builder(model.GenBuilder):
     op_int_push = make_one_argument_method("PUSH")
     op_int_pop  = make_one_argument_method("POP")
     op_int_sub  = make_two_argument_method("SUB")
-    op_int_xor   = make_two_argument_method("XOR")
+    op_int_xor  = make_two_argument_method("XOR")
 
     #FIXME: can only jump 32bit
-    def jump_if_true(self, gv_condition, args_for_jump_gv):
+    #FIXME: -6 displacement: the displ+ rip of next instr
+    def jump_if_true(self, gv_condition, args_for_jump_gv):     
         targetbuilder = Builder()
         self.mc.CMP(gv_condition, Immediate32(0))
         displ = self.calc_32bit_displacement(self.mc.tell(),targetbuilder.mc.tell())
-        self.mc.JNE(displ)
-        #targetbuilder.come_from(self.mc, 'JNE')
+        self.mc.JNE(displ-6)
+        #targetbuilder.come_from(self.mc, 'JNE')      
         return targetbuilder
     
     def op_int_gt(self, gv_x, gv_y):
@@ -161,19 +162,21 @@ class Builder(model.GenBuilder):
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
+        print hex(self.mc.tell()),": RET"
         self._open()
         self.mc.MOV(Register64("rax"), gv_returnvar)
         self.mc.RET()
         self._close()
         
+        
     # if the label is greater than 32bit
     # it must be in a register
     def finish_and_goto(self, outputargs_gv, target):
+        print hex(self.mc.tell()),": JMP to",hex(target.startaddr) 
         self._open()
         gv_x = self.allocate_register()
         self.mc.MOV(gv_x,Immediate64(target.startaddr))
         self.mc.JMP(gv_x)
-        print self.mc.tell(),": JMP to",target.startaddr
         self._close()
     
     def allocate_register(self, register=None):
