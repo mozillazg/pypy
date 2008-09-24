@@ -21,20 +21,24 @@ def make_testbuilder(num_of_args):
     return builder, fp, inputargs_gv, token
     
 class TestSimple():   
-    
+        
     def test_add_big_num(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
         genv0 = inputargs_gv[0] #the first argument "location"
         genv1 = inputargs_gv[1] 
         genv_result = builder.genop2("int_add", genv0, genv1) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
+        num = fp(1280, 20)
+        assert num == 1300
+        num = fp(1280, -80)
+        assert num == 1200
         num = fp(1280, 1000)
         assert num == 2280
         print num
         
     def test_add_twice(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
-        genv0 = inputargs_gv[0] #the first argument "place"
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv1 = inputargs_gv[1] 
         genv2 = builder.genop2("int_add", genv0, genv1) 
         genv_result = builder.genop2("int_add", genv2, genv1) 
@@ -49,7 +53,33 @@ class TestSimple():
         assert result == -4
         result = fp(0,-4) # 0+(-4)+(-4) = -8
         assert result == -8
+        result = fp(1280,500) # 1280+500+500=2280
+        assert result == 2280
+        result = fp(0,252) # 0+252+252= 504
+        assert result == 504 #==0000:0001:1111:1000
 
+    def test_tripple_add(self):
+        builder, fp, inputargs_gv, token = make_testbuilder(2)
+        genv0 = inputargs_gv[0] 
+        genv1 = inputargs_gv[1] 
+        genv2 = builder.genop2("int_add", genv0, genv1) 
+        genv3 = builder.genop2("int_add", genv2, genv1) 
+        genv_result = builder.genop2("int_add", genv3, genv1) 
+        builder.finish_and_return(token, genv_result)
+        result = fp(4, 6) # 4+6+6+6= 22
+        assert result == 22
+        result = fp(2,12) # 2+12+12+12= 38
+        assert result == 38
+        result = fp(10,-2) # 10+(-2)+(-2)+(-2) = 4
+        assert result == 4
+        result = fp(-4,0) # -4 +0+0+0 = -4
+        assert result == -4
+        result = fp(0,-4) # 0+(-4)+(-4)+(-4) = -12
+        assert result == -12
+        result = fp(1280,500) # 1280+500+500+500=2780
+        assert result == 2780
+        result = fp(0,252) # 0+252+252= 756
+        assert result == 756 #==0000:0001:1111:1000
         
     def test_add(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
@@ -69,7 +99,7 @@ class TestSimple():
         builder.finish_and_return(token, genv_result)
         ten = fp(-4, -6)
         assert ten == -10
-        print ten
+        print ten    
         four = fp(-4,0)
         assert four == -4
         print four
@@ -86,11 +116,32 @@ class TestSimple():
     def test_add_imm32(self):
         builder, fp, inputargs_gv, token = make_testbuilder(1)
         genv0 = inputargs_gv[0] #the first argument "location"
+        genv_result = builder.genop2("int_add", genv0, rgenop.genconst(-100000)) #creates the addition and returns the place(register) of the result in genv_result
+        builder.finish_and_return(token, genv_result)
+        num = fp(-1000) # -1000+(-100000) = -101000
+        assert num == -101000
+        print num
+        num = fp(1000) # 1000+(-100000) = -99000
+        assert num == -99000
+        print num
+        num = fp(50) # 50+(-100000) = -99950
+        assert num == -99950
+        print num
+        num = fp(-1024) # -1024+(-100000) = -1124
+        assert num == -101024
+        print num
+        builder, fp, inputargs_gv, token = make_testbuilder(1)
+        genv0 = inputargs_gv[0] #the first argument "location"
         genv_result = builder.genop2("int_add", genv0, rgenop.genconst(1000)) #creates the addition and returns the place(register) of the result in genv_result
         builder.finish_and_return(token, genv_result)
         num = fp(1111) # 1111+1000 = 2111
         assert num == 2111
         print num
+        num = fp(-100) # -100+1000 = 900
+        assert num == 900
+        print num
+
+        
         
     def test_ret(self):
         builder, fp, inputargs_gv, token = make_testbuilder(1)

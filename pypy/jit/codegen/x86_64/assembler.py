@@ -122,14 +122,36 @@ def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         # FIXME: rexB?
         if isinstance(arg1,Register64):
             rexB, modrm1 = self.get_register_bits(arg1.reg)
-            
+              
         # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate64):
+            new_opcode = hex(int(opcode,16)+modrm1)
+            assert len(new_opcode[2:len(new_opcode)]) == 2
             self.write_rex_byte(rexW, rexR, rexX, rexB)
-            self.write(opcode+chr(modrm1))
+            self.write(new_opcode[2:len(new_opcode)])
             self.writeImm64(arg2.value)
     return quadreg_instr
         
+def make_one_operand_instr_with_alternate_encoding(W = None, R = None, X = None, B = None, opcode =None, md1 = None, md2 = None):
+    def quadreg_instr(self, arg1):
+        # move the parameter 
+        # to the inner function
+        modrm1 = md1
+        modrm2 = md2
+        rexW = W
+        rexR = R
+        rexX = X
+        rexB = B
+        # TODO: other cases e.g memory as operand
+        # FIXME: rexB?
+        if isinstance(arg1,Register64):
+            rexB, modrm1 = self.get_register_bits(arg1.reg)
+            new_opcode = hex(int(opcode,16)+modrm1)
+            assert len(new_opcode[2:len(new_opcode)]) == 2
+            self.write_rex_byte(rexW, rexR, rexX, rexB)
+            self.write(new_opcode[2:len(new_opcode)])
+    return quadreg_instr
+
 class X86_64CodeBuilder(object):
     """ creats x86_64 opcodes"""
     def write(self, data):
@@ -143,7 +165,7 @@ class X86_64CodeBuilder(object):
     
     # The opcodes differs depending on the operands
     # Params:
-    # W (64bit Operands), R (permits R8-R15), X (extend Index field), B (extend r/m field), 
+    # W (64bit Operands), R (extends reg field), X (extend Index(SIB) field), B (extends r/m field, Base(SIB) field, opcode reg field), 
     # Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
     
     # FIXME: rexB is set
@@ -153,6 +175,7 @@ class X86_64CodeBuilder(object):
     _AND_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x21", 3, None, None)
     
     # FIXME: rexB is set
+    # maybe a bug
     _CMP_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    1, "\x81", 3, None, 7)
     _CMP_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x39", 3, None, None)
     # FIXME: rexB is set
@@ -164,7 +187,7 @@ class X86_64CodeBuilder(object):
      
     _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", 3, None, 0)
     _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
-    _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"\xB8",None,None)
+    _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"B8",None,None)
         
     _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
     _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
@@ -180,6 +203,9 @@ class X86_64CodeBuilder(object):
     # FIXME: rexW is set 
     _POP_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\x8F", 3, None, 0)
     _PUSH_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 6)
+     
+    #_POP_QWREG  = make_one_operand_instr_with_alternate_encoding(1,0,0,None,"58",None,None)
+    #_PUSH_QWREG = make_one_operand_instr_with_alternate_encoding(1,0,0,None,"50",None,None) 
      
     _SETE_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,4) 
     _SETG_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,15)
@@ -223,21 +249,23 @@ class X86_64CodeBuilder(object):
         
     #  op1 is and 32bit displ
     def JNE(self,op1):
+        print hex(self.tell()),": JNE to",hex(op1)
         self.write("\x0F")
         self.write("\x85")
         self.writeImm32(op1)   
-        print self.tell(),": JNE to",op1
+        
         
     def OR(self, op1, op2):
         method = getattr(self, "_OR"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
+        #fixme:none
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
         method(op1)
         
     def PUSH(self, op1):
-        method = getattr(self, "_POP"+op1.to_string())
+        method = getattr(self, "_PUSH"+op1.to_string())
         method(op1)
         
     def MOV(self, op1, op2):
@@ -302,16 +330,24 @@ class X86_64CodeBuilder(object):
     def get_register_bits_8Bit(self, register):
         return REGISTER_MAP_8BIT[register]
     
-    # TODO: sign extention?
+
     # Parse the integervalue to an charakter
     # and write it
     def writeImm32(self, imm32):
         x = hex(imm32)
         if x[0]=='-':
-            x = self.cast_to_neg_hex(int(x,16))
-        # parse to string and cut "0x" off
-        # fill with zeros if to short
-        y = "0"*(10-len(x))+x[2:len(x)]
+            # parse to string and cut "0x" off
+            # fill with Fs if to short
+            #print "x before:",x
+            x = self.cast_neg_hex32(int(x,16))
+            #print "x after:",x
+            y = "F"*(8-len(x))+x[0:len(x)]
+        else:            
+            # parse to string and cut "0x" off
+            # fill with zeros if to short
+            y = "0"*(10-len(x))+x[2:len(x)]
+        #print "y:",y
+        #y = "00000000"
         assert len(y) == 8           
         self.write(chr(int(y[6:8],16))) 
         self.write(chr(int(y[4:6],16)))
@@ -347,10 +383,9 @@ class X86_64CodeBuilder(object):
         byte = mod << 6 | (reg << 3) | rm
         self.write(chr(byte))
         
-    # TODO: write me
-    def cast_to_neg_hex(self,a_hex):
-        #FIXME: segfault to compliment
-        x = hex(18446744073709551616 +a_hex)
-        y = x[16:len(x)-1]
+    # TODO: write comment
+    def cast_neg_hex32(self,a_int):
+        x = hex(int("FFFFFFFF",16)+1 +a_int)
+        y = x[2:len(x)]
         return y
-        
+

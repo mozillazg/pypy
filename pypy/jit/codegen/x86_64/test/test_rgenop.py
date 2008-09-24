@@ -1,6 +1,6 @@
 import py
 from pypy.rpython.lltypesystem import lltype
-from pypy.jit.codegen.x86_64.rgenop import RX86_64GenOp
+from pypy.jit.codegen.x86_64.rgenop import RX86_64GenOp, Label
 from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 #from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsCompile
 
@@ -9,6 +9,47 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 
 def skip(self):
     py.test.skip("not implemented yet")
+    
+def make_push_pop(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
+    builder, gv_push_pop, [gv_x] = rgenop.newgraph(sigtoken, "push_pop")
+    builder.start_writing()
+    gv_x = builder.genop1("int_push", gv_x)
+    gv_x = builder.genop1("int_inc",  gv_x)
+    gv_x = builder.genop1("int_inc",  gv_x)
+    gv_x = builder.genop1("int_pop",  gv_x)
+    builder.finish_and_return(sigtoken, gv_x)
+    builder.end()
+    return gv_push_pop
+
+#FIXME: Jumps ever
+def make_jne(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_jne, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "jne")
+    builder.start_writing() 
+    gv_z = builder.genop2("int_gt", gv_x, gv_y)
+    builder.mc.CMP(gv_z, rgenop.genconst(1))
+    builder.mc.JNE(6)
+    builder.genop1("int_inc",gv_y)#not executed if x<=y
+    builder.genop1("int_inc",gv_y)#not executed if x<=y
+    builder.genop1("int_inc",gv_y)
+    builder.finish_and_return(sigtoken, gv_y)
+    builder.end()
+    return gv_jne
+
+def make_jmp(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_jmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "jmp")
+    builder.start_writing() 
+    gv_z = builder.genop2("int_add", gv_x, gv_y)
+    builder.finish_and_goto("",Label(builder.mc.tell()+6, [], 0))
+    gv_w = builder.genop2("int_add", gv_z, gv_y)
+    gv_v = builder.genop2("int_sub", gv_w, gv_x)
+    gv_a = builder.genop1("int_inc",gv_v)
+    gv_b = builder.genop1("int_inc",gv_a)
+    builder.finish_and_return(sigtoken, gv_a)
+    builder.end()
+    return gv_jmp
 
 def make_one_op_instr(rgenop, instr_name):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
@@ -30,12 +71,16 @@ def make_bool_op(rgenop, which_bool_op):
     builder.end()
     return gv_bool_op
 
-def make_cmp(rgenop, which_cmp):
+def make_cmp(rgenop, which_cmp, const=None):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_cmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "cmp")
     builder.start_writing()
     
-    gv_result = builder.genop2(which_cmp, gv_x, gv_y)
+    if not const == None:
+        gv_result = builder.genop2(which_cmp, gv_x, rgenop.genconst(const))
+    else:
+        gv_result = builder.genop2(which_cmp, gv_x, gv_y)
+    
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_cmp
@@ -95,6 +140,20 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(mul_function,2)
         res = fnptr(1200,300)
         assert res == 360000
+        res = fnptr(12345,42)
+        assert res == 518490
+        res = fnptr(12345,-42)
+        assert res == -518490
+        res = fnptr(-12345,42)
+        assert res == -518490
+        res = fnptr(-12345,-42)
+        assert res == 518490
+        res = fnptr(-12345,-9876)
+        assert res == 121919220
+        res = fnptr(-12345,9876)
+        assert res == -121919220
+        res = fnptr(12345,-9876)
+        assert res == -121919220
         
     def test_greater(self):
         rgenop = self.RGenOp()
@@ -138,6 +197,8 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         res = fnptr(4,0)
         assert res == 0
+        res = fnptr(0,-4)
+        assert res == 0
         res = fnptr(-4,0)
         assert res == 1
         
@@ -153,11 +214,23 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         res = fnptr(4,0)
         assert res == 1
+        res = fnptr(512,256)
+        assert res == 1
+        res = fnptr(256,512)
+        assert res == 0
+        res = fnptr(-4,253) #-4>=253
+        assert res == 0     # false
         res = fnptr(-4,0)
         assert res == 0
         
     def test__equal(self):
         rgenop = self.RGenOp()
+        cmp_function = make_cmp(rgenop, "int_eq",42)
+        fnptr = self.cast(cmp_function,1)
+        res = fnptr(42)
+        assert res == 1
+        res = fnptr(23)
+        assert res == 0
         cmp_function = make_cmp(rgenop, "int_eq")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3==4?
@@ -169,6 +242,12 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fnptr(4,0)
         assert res == 0
         res = fnptr(-4,0)
+        assert res == 0
+        res = fnptr(252,-4)
+        assert res == 0
+        res = fnptr(-4,252)
+        assert res == 0
+        res = fnptr(244,756)
         assert res == 0
         
     def test_not_equal(self):
@@ -264,7 +343,29 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         result = fnptr(-43)
         assert result == 42
        
-    #TODO: Test push/pop
+    # if x>y:
+    #    return y+1 
+    # else:
+    #    return y+3
+    def test_jne(self):
+        jne_func = make_jne(self.RGenOp())
+        fnptr = self.cast(jne_func,2)
+        result = fnptr(4,1)
+        assert result == 4
+        result = fnptr(1,4)
+        assert result == 5
+       
+    #def test_jmp(self):
+    #    jmp_function = make_jmp(self.RGenOp())
+    #    fnptr = self.cast(jmp_function,2)
+    #    result = fnptr(1,2)
+    #    assert result == 5
+        
+    def test_push_pop(self):
+        pp_func = make_push_pop(self.RGenOp())
+        fnptr = self.cast(pp_func,1)
+        result = fnptr(1)
+        assert result == 1
        
     test_directtesthelper_direct = skip
     test_dummy_compile = skip
@@ -275,7 +376,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_dummy_direct = skip
     test_largedummy_direct = skip
     test_branching_direct = skip
-    ##test_goto_direct = skip##
+    test_goto_direct = skip##
     test_if_direct = skip
     test_switch_direct = skip
     test_large_switch_direct = skip
