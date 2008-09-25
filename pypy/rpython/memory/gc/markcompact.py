@@ -1,7 +1,7 @@
 
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
-from pypy.rpython.memory.gc.base import MovingGCBase, GCFLAG_FORWARDED,\
-     TYPEID_MASK
+from pypy.rpython.memory.gc.base import MovingGCBase, \
+     TYPEID_MASK, GCFLAG_FINALIZATION_ORDERING
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
@@ -13,6 +13,25 @@ from pypy.rpython.lltypesystem.lloperation import llop
 GCFLAG_MARKBIT = MovingGCBase.first_unused_gcflag
 
 memoryError = MemoryError()
+
+# Mark'n'compact garbage collector
+#
+# main point of this GC is to save as much memory as possible
+# (not to be worse than semispace), but avoid having peaks of
+# memory during collection. Inspired, at least partly by squeak's
+# garbage collector
+
+# so, the idea as now is:
+
+# we allocate space (full of zeroes) which is big enough to handle
+# all possible cases. Because it's full of zeroes, we never allocate
+# it really, unless we start using it
+
+# for each collection we mark objects which are alive, also marking all
+# for which we want to run finalizers. we mark them by storing forward
+# pointer, which will be a place to copy them. After that, we copy all
+# using memmove to another view of the same space, hence compacting
+# everything
 
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
@@ -87,35 +106,15 @@ class MarkCompactGC(MovingGCBase):
         if self.run_finalizers.non_empty():
             self.update_run_finalizers()
         if self.objects_with_finalizers.non_empty():
-            self.deal_with_objects_with_finalizers(self.space)
+            self.deal_with_objects_with_finalizers(None)
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
         self.debug_check_consistency()
         toaddr = llarena.arena_new_view(self.space)
-        self.create_forward_pointers(toaddr)
         self.debug_check_consistency()
-        self.update_forward_refs()
         self.compact(toaddr)
         self.space = toaddr
         self.debug_check_consistency()
-
-    def create_forward_pointers(self, toaddr):
-        fromaddr = self.space
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        while fromaddr < self.spaceptr:
-            hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
-            obj = fromaddr + size_gc_header
-            objsize = self.get_size(obj)
-            totalsize = size_gc_header + objsize
-            if hdr.tid & GCFLAG_MARKBIT:
-                # this objects survives, clear MARKBIT
-                if fromaddr.offset != toaddr.offset:
-                    # this object is forwarded, set forward bit and address
-                    hdr.tid |= GCFLAG_FORWARDED
-                    llarena.arena_reserve(toaddr, totalsize)
-                    hdr.forward_ptr = toaddr + size_gc_header
-                toaddr += size_gc_header + objsize
-            fromaddr += size_gc_header + objsize
 
     def get_type_id(self, addr):
         return self.header(addr).tid & TYPEID_MASK
@@ -178,8 +177,7 @@ class MarkCompactGC(MovingGCBase):
         if addr != NULL:
             hdr = llmemory.cast_adr_to_ptr(addr - size_gc_header,
                                             lltype.Ptr(self.HDR))
-            if hdr.tid & GCFLAG_FORWARDED:
-                pointer.address[0] = hdr.forward_ptr
+            pointer.address[0] = hdr.forward_ptr
 
     def mark(self):
         self.root_walker.walk_roots(
@@ -193,6 +191,44 @@ class MarkCompactGC(MovingGCBase):
             self.header(obj).tid |= GCFLAG_MARKBIT
             self.trace(obj, self._mark_object, None)
 
+    def deal_with_objects_with_finalizers(self, ignored):
+        new_with_finalizer = self.AddressDeque()
+        while self.objects_with_finalizers.non_empty():
+            obj = self.objects_with_finalizers.popleft()
+            if self.surviving(obj):
+                new_with_finalizer.append(obj)
+                break
+            finalizers_to_run.append(obj)
+            xxxx
+
     def debug_check_object(self, obj):
         # XXX write it down
         pass
+
+    def surviving(self, obj):
+        hdr = self.header(obj)
+        return hdr.tid & GCFLAG_MARKBIT
+
+    def _finalization_state(self, obj):
+        hdr = self.header(obj)
+        if self.surviving(obj):
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+                return 2
+            else:
+                return 3
+        else:
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+                return 1
+            else:
+                return 0
+
+    def _recursively_bump_finalization_state_from_1_to_2(self, obj, scan):
+        # it's enough to leave mark bit here
+        hdr = self.header(obj)
+        if hdr.tid & GCFLAG_MARKBIT:
+            return # cycle
+        self.header(obj).tid |= GCFLAG_MARKBIT
+        self.trace(obj, self._mark_object, None)
+
+    def get_forwarding_address(self, obj):
+        return obj

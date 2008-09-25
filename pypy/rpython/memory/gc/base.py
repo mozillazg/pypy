@@ -4,6 +4,7 @@ from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict
+from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 
 class GCBase(object):
     _alloc_flavor_ = "raw"
@@ -252,6 +253,7 @@ class MovingGCBase(GCBase):
         return size
 
 
+
     def deal_with_objects_with_finalizers(self, scan):
         # walk over list of objects with finalizers
         # if it is not copied, add it to the list of to-be-called finalizers
@@ -303,7 +305,6 @@ class MovingGCBase(GCBase):
         self.objects_with_finalizers.delete()
         self.objects_with_finalizers = new_with_finalizer
         return scan
-
 
     def _append_if_nonnull(pointer, stack):
         if pointer.address[0] != NULL:
