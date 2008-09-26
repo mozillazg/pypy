@@ -99,17 +99,42 @@ class Builder(model.GenBuilder):
     
     op_int_add  = make_two_argument_method("ADD")
     op_int_and  = make_two_argument_method("AND")
-    op_int_dec  = make_one_argument_method("DEC")
+    op_int_dec  = make_one_argument_method("DEC") #for debuging
     op_int_inc  = make_one_argument_method("INC") #for debuging
     op_int_mul  = make_two_argument_method("IMUL")
     op_int_neg  = make_one_argument_method("NEG")
     op_int_not  = make_one_argument_method("NOT")
     op_int_or   = make_two_argument_method("OR")
-    op_int_push = make_one_argument_method("PUSH")
-    op_int_pop  = make_one_argument_method("POP")
+    op_int_push = make_one_argument_method("PUSH") #for debuging
+    op_int_pop  = make_one_argument_method("POP")  #for debuging
     op_int_sub  = make_two_argument_method("SUB")
     op_int_xor  = make_two_argument_method("XOR")
 
+    # FIXME: uses rcx insted of cl
+    def op_int_lshift(self, gv_x, gv_y):
+        gv_z = self.allocate_register("rcx")
+        #self.mc.XOR(gv_z, gv_z)
+        self.mc.MOV(gv_z, gv_y)
+        self.mc.SHL(gv_x)
+        return gv_x
+    
+    # FIXME: uses rcx insted of cl
+    def op_int_rshift(self, gv_x, gv_y):
+        gv_z = self.allocate_register("rcx")
+        #self.mc.XOR(gv_z, gv_z)
+        self.mc.MOV(gv_z, gv_y)
+        self.mc.SHR(gv_x)
+        return gv_x
+    
+    # IDIV RDX:RAX with QWREG
+    # FIXME: supports only RAX with QWREG
+    def op_int_div(self, gv_x, gv_y):
+        gv_z = self.allocate_register("rax")
+        self.mc.MOV(gv_z, gv_x)
+        self.mc.IDIV(gv_y)
+        return gv_y #FIXME: return gv_x?
+        
+        
     #FIXME: can only jump 32bit
     #FIXME: -6 displacement: the displ+ rip of next instr
     def jump_if_true(self, gv_condition, args_for_jump_gv):     
