@@ -110,10 +110,10 @@ class Builder(model.GenBuilder):
     op_int_sub  = make_two_argument_method("SUB")
     op_int_xor  = make_two_argument_method("XOR")
 
+    # FIXME: is that lshift val?
     # FIXME: uses rcx insted of cl
     def op_int_lshift(self, gv_x, gv_y):
         gv_z = self.allocate_register("rcx")
-        #self.mc.XOR(gv_z, gv_z)
         self.mc.MOV(gv_z, gv_y)
         self.mc.SHL(gv_x)
         return gv_x
@@ -121,7 +121,6 @@ class Builder(model.GenBuilder):
     # FIXME: uses rcx insted of cl
     def op_int_rshift(self, gv_x, gv_y):
         gv_z = self.allocate_register("rcx")
-        #self.mc.XOR(gv_z, gv_z)
         self.mc.MOV(gv_z, gv_y)
         self.mc.SHR(gv_x)
         return gv_x
