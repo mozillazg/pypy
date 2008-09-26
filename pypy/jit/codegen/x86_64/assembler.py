@@ -189,6 +189,8 @@ class X86_64CodeBuilder(object):
     _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
     _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"B8",None,None)
         
+    _IDIV_QWREG      = make_one_operand_instr(  1,    0,    0, None, "\xF7", 3, None, 7)
+    
     _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
     _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
     
@@ -213,6 +215,9 @@ class X86_64CodeBuilder(object):
     _SETL_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,12) 
     _SETLE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,14)   
     _SETNE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,5)  
+     
+    _SHL_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xD3", 3, None, 4)
+    _SHR_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xD3", 3, None, 5) 
      
     _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", 3, None, None)    
     _SUB_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 5)
@@ -272,6 +277,11 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_MOV"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
+        
+    def IDIV(self, op1):
+        method = getattr(self, "_IDIV"+op1.to_string())
+        method(op1)
+            
     def IMUL(self, op1, op2):
         method = getattr(self, "_IMUL"+op1.to_string()+op2.to_string())
         # exchange the two arguments because 
@@ -300,6 +310,10 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_SETL"+op1.to_string())
         method(op1)
         
+    def SETR(self, op1):
+        method = getattr(self, "_SETR"+op1.to_string())
+        method(op1)
+        
     def SETGE(self, op1):
         method = getattr(self, "_SETGE"+op1.to_string())
         method(op1)
@@ -314,6 +328,14 @@ class X86_64CodeBuilder(object):
         
     def SETNE(self, op1):
         method = getattr(self, "_SETNE"+op1.to_string())
+        method(op1)
+        
+    def SHL(self, op1):
+        method = getattr(self, "_SHL"+op1.to_string())
+        method(op1)
+        
+    def SHR(self, op1):
+        method = getattr(self, "_SHR"+op1.to_string())
         method(op1)
         
     def SUB(self, op1, op2):
