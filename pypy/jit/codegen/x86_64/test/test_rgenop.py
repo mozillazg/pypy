@@ -275,6 +275,8 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         res = fnptr(256,512)
         assert res == 0
+        res = fnptr(-4,18446744073709551615)#-4>=18446744073709551615
+        assert res == 0 #false
         res = fnptr(-4,253) #-4>=253
         assert res == 0     # false
         res = fnptr(-4,0)
@@ -284,8 +286,8 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         rgenop = self.RGenOp()
         cmp_function = make_cmp(rgenop, "int_eq",42)
         fnptr = self.cast(cmp_function,1)
-        res = fnptr(42)
-        assert res == 1
+       # res = fnptr(42)
+       # assert res == 1
         res = fnptr(23)
         assert res == 0
         cmp_function = make_cmp(rgenop, "int_eq")
@@ -300,11 +302,15 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 0
         res = fnptr(-4,0)
         assert res == 0
+        res = fnptr(184467440737095516,184467440737095516)
+        assert res == 1
         res = fnptr(252,-4)
         assert res == 0
         res = fnptr(-4,252)
         assert res == 0
         res = fnptr(244,756)
+        assert res == 0
+        res = fnptr(-1,18446744073709551615)
         assert res == 0
         
     def test_not_equal(self):
