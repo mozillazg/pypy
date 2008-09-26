@@ -61,6 +61,16 @@ def make_one_op_instr(rgenop, instr_name):
     builder.end()
     return gv_one_op_instr
 
+def make_two_op_instr(rgenop, instr_name):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_two_op_instr, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "two_op_instr")
+    builder.start_writing()
+    
+    gv_result = builder.genop2(instr_name, gv_x, gv_y)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_two_op_instr
+
 def make_bool_op(rgenop, which_bool_op):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_bool_op, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "bool_op")
@@ -93,6 +103,15 @@ def make_mul(rgenop):
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_mul
+
+def make_div(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_div, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "div")
+    builder.start_writing()
+    gv_result = builder.genop2("int_div", gv_x, gv_y)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_div
     
 def make_mul_imm(rgenop, num):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
@@ -117,6 +136,32 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(dec_function,1)
         res = fnptr(2)
         assert res == 1
+    
+    def test_shift_left(self):
+        shift_func = make_two_op_instr(self.RGenOp(),"int_lshift")
+        fp = self.cast(shift_func, 2)
+        res = fp(128,2)
+        assert res == 512
+        res = fp(16,2)
+        assert res == 64
+        res = fp(21,1)
+        assert res == 42
+        res = fp(16,-1)
+        assert res == 8
+        
+    def test_shift_right(self):
+        shift_func = make_two_op_instr(self.RGenOp(),"int_rshift")
+        fp = self.cast(shift_func, 2)
+        res = fp(16,2)
+        assert res == 4
+        res = fp(64,3)
+        assert res == 8
+        res = fp(-64,2)
+        assert res == -16
+        res = fp(84,1)
+        assert res == 42
+        res = fp(32,-2)
+        assert res == 128
         
     def test_mul_im32(self):
         rgenop = self.RGenOp()
@@ -124,8 +169,12 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(mul_function,1)
         res = fnptr(210)
         assert res == 42000
+        mul_function = make_mul_imm(rgenop,-9876)
+        fnptr = self.cast(mul_function,1)
+        res = fnptr(12345)
+        assert res == -121919220
         
-    # segmentation fault at mov(qwreg,imm64)
+    # Illegal instruction at mov(qwreg,imm64)
     
     #def test_mul_im64(self):
     #    rgenop = self.RGenOp()
@@ -134,7 +183,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     #    res = fnptr(2)
     #    assert res == int("123456789",16)*2
         
-    def test_mul(self):
+    def test_imul(self):
         rgenop = self.RGenOp()
         mul_function = make_mul(rgenop)
         fnptr = self.cast(mul_function,2)
@@ -154,6 +203,14 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == -121919220
         res = fnptr(12345,-9876)
         assert res == -121919220
+        
+    #Floating point exception
+    #def test_idiv(self):
+    #    rgenop = self.RGenOp()
+    #    div_function = make_div(rgenop)
+    #    fnptr = self.cast(div_function,2)
+    #    res = fnptr(100,2)
+    #    assert res == 50
         
     def test_greater(self):
         rgenop = self.RGenOp()
