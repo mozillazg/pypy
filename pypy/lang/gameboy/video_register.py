@@ -1,7 +1,9 @@
 
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.video_mode import Mode0, Mode1, Mode2, Mode3
+
 # -----------------------------------------------------------------------------
+
 class StatusRegister(object):
     """
     Bit 6 - LYC=LY Coincidence Interrupt (1=Enable) (Read/Write)
@@ -26,8 +28,6 @@ class StatusRegister(object):
         self.mode3 = Mode3(video)
         self.modes   = [self.mode0, self.mode1, self.mode2, self.mode3]
         
-        
-        
     def reset(self):
         self.current_mode               = self.mode2
         self.line_y_compare_flag      = False
@@ -38,7 +38,6 @@ class StatusRegister(object):
         #self.mode_1_v_blank_interrupt = False
         #self.mode_2_oam_interrupt     = False
         self.status                   = True
-        
         
     def read(self, extend=False):
         value =  self.get_mode()
@@ -51,9 +50,7 @@ class StatusRegister(object):
             value += int(self.status) << 7
         return value
         
-        
-    def write(self, value, write_all=False,
-              keep_mode_0_h_blank_interrupt=False):
+    def write(self, value, write_all=False):
         if write_all:
             self.current_mode          = self.modes[value & 0x03]
             self.line_y_compare_flag   = bool(value & (1 << 2))
@@ -67,12 +64,11 @@ class StatusRegister(object):
         return self.current_mode.id()
     
     def set_mode(self, mode):
-        old_mode = self.current_mode
         self.current_mode = self.modes[mode & 0x03]
-        self.current_mode.activate(old_mode)
+        self.current_mode.activate()
         
     def line_y_compare_check(self):
-        return not self.line_y_compare_flag or not self.line_y_compare_interrupt
+        return not (self.line_y_compare_flag and self.line_y_compare_interrupt)
 
 # -----------------------------------------------------------------------------
 
