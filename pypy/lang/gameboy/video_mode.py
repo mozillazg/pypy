@@ -48,6 +48,8 @@ class Mode(object):
         if self.video.status.line_y_compare_interrupt:
             self.video.lcd_interrupt_flag.set_pending()
 
+# -----------------------------------------------------------------------------
+
 class Mode0(Mode):
     """
      Mode 0: The LCD controller is in the H-Blank period and
@@ -61,14 +63,9 @@ class Mode0(Mode):
     def id(self):
         return 0
     
-    def activate(self, previous_mode):
-        #if previous_mode.id() == 3:
-            self.video.cycles += constants.MODE_0_TICKS
-            self.h_blank_interrupt_check()
-        #else:
-            # video.reset_control() can be called in any position
-         #   pass
-            #raise InvalidModeOrderException(self, previous_mode)
+    def activate(self):
+        self.video.cycles += constants.MODE_0_TICKS
+        self.h_blank_interrupt_check()
     
     def h_blank_interrupt_check(self):
         if self.h_blank_interrupt and \
@@ -98,7 +95,9 @@ class Mode0(Mode):
             self.video.display = False
         self.video.status.set_mode(1)
         self.video.v_blank  = True
-                 
+  
+# -----------------------------------------------------------------------------
+               
 class Mode1(Mode):
     """
     Mode 1: The LCD contoller is in the V-Blank period (or the
@@ -112,12 +111,8 @@ class Mode1(Mode):
     def id(self):
         return 1
     
-    def activate(self, previous_mode):
-        #if previous_mode.id() == 0:
-            self.set_begin()
-        #else:
-        #    pass
-            #raise InvalidModeOrderException(self, previous_mode)
+    def activate(self):
+        self.set_begin()
 
     def set_begin(self):
         self.video.cycles += constants.MODE_1_BEGIN_TICKS
@@ -164,7 +159,9 @@ class Mode1(Mode):
             self.video.cycles += constants.MODE_1_TICKS
         else:
             self.set_end()
-            
+
+# -----------------------------------------------------------------------------
+     
 class Mode2(Mode):
     """
     Mode 2: The LCD controller is reading from OAM memory.
@@ -178,13 +175,9 @@ class Mode2(Mode):
     def id(self):
         return 2
     
-    def activate(self, previous_mode):
-        #if previous_mode.id() == 0 or previous_mode.id() == 1:
-            self.video.cycles += constants.MODE_2_TICKS
-            self.oam_interrupt_check()
-        #else:
-        #    pass
-            #raise InvalidModeOrderException(self, previous_mode)
+    def activate(self):
+        self.video.cycles += constants.MODE_2_TICKS
+        self.oam_interrupt_check()
      
     def oam_interrupt_check(self):
         if self.oam_interrupt and \
@@ -196,6 +189,8 @@ class Mode2(Mode):
         
     def emulate_oam(self):
         self.video.status.set_mode(3)
+
+# -----------------------------------------------------------------------------
 
 class Mode3(Mode):
     """
@@ -210,12 +205,8 @@ class Mode3(Mode):
     def id(self):
         return 3
     
-    def activate(self, previous_mode):
-        #if previous_mode.id() == 2:
-            self.set_begin()
-        #else:
-        #    pass
-        #    #raise InvalidModeOrderException(self, previous_mode)
+    def activate(self):
+        self.set_begin()
     
     def set_begin(self):
         self.video.cycles  += constants.MODE_3_BEGIN_TICKS
