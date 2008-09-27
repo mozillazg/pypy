@@ -1,5 +1,5 @@
 from pypy.lang.gameboy import constants
-from pypy.lang.gameboy.video import Sprite
+from pypy.lang.gameboy.video_sprite import Sprite
 from pypy.lang.gameboy.video import Video
 from pypy.lang.gameboy.test.test_video import get_video
 import py
