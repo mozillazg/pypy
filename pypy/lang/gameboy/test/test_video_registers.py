@@ -1,8 +1,8 @@
 from pypy.lang.gameboy import constants
-from pypy.lang.gameboy.video import ControlRegister
-from pypy.lang.gameboy.video import StatusRegister
-from pypy.lang.gameboy.video import Window
-from pypy.lang.gameboy.video import Background
+from pypy.lang.gameboy.video_register import ControlRegister
+from pypy.lang.gameboy.video_register import StatusRegister
+from pypy.lang.gameboy.video_sprite import Window
+from pypy.lang.gameboy.video_sprite import Background
 from pypy.lang.gameboy.test.test_video import get_video
 import py
 
@@ -22,7 +22,7 @@ def test_video_control_reset():
     control.write(0xFF)
     assert control.read() == 0xFF
     control.reset()
-    assert control.read() == 0x91
+    assert control.read() ==                                            0x91
     
     
 def test_video_control_read_write_properties():
