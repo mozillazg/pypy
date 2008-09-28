@@ -22,7 +22,7 @@ def make_push_pop(rgenop):
     builder.end()
     return gv_push_pop
 
-#FIXME: Jumps ever
+#FIXME: Jumps ever (CMP BUG)
 def make_jne(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_jne, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "jne")
@@ -94,24 +94,6 @@ def make_cmp(rgenop, which_cmp, const=None):
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
     return gv_cmp
-
-def make_mul(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
-    builder, gv_mul, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
-    builder.start_writing()
-    gv_result = builder.genop2("int_mul", gv_x, gv_y)
-    builder.finish_and_return(sigtoken, gv_result)
-    builder.end()
-    return gv_mul
-
-def make_div(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
-    builder, gv_div, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "div")
-    builder.start_writing()
-    gv_result = builder.genop2("int_div", gv_x, gv_y)
-    builder.finish_and_return(sigtoken, gv_result)
-    builder.end()
-    return gv_div
     
 def make_mul_imm(rgenop, num):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
@@ -179,9 +161,8 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     #    res = fnptr(2)
     #    assert res == int("123456789",16)*2
         
-    def test_imul(self):
-        rgenop = self.RGenOp()
-        mul_function = make_mul(rgenop)
+    def test_imul(self):      
+        mul_function = make_two_op_instr(self.RGenOp(), "int_mul")
         fnptr = self.cast(mul_function,2)
         res = fnptr(1200,300)
         assert res == 360000
@@ -200,17 +181,35 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fnptr(12345,-9876)
         assert res == -121919220
         
-    #BUG ignores rdx
+    #FIXME: ignores rdx and signs
     def test_idiv(self):
-        rgenop = self.RGenOp()
-        div_function = make_div(rgenop)
+        div_function = make_two_op_instr(self.RGenOp(), "int_div")
         fnptr = self.cast(div_function,2)
+        res = fnptr(100,3)
+        assert res == 33 # integer div
         res = fnptr(100,2)
         assert res == 50
         res = fnptr(168,4)
         assert res == 42
         res = fnptr(72057594037927935,5)
         assert res == 14411518807585587
+        res = fnptr(-50,-5)
+        assert res == 10
+        
+    #FIXME: ignores rdx and signs
+    def test_mod(self):
+        mod_function = make_two_op_instr(self.RGenOp(), "int_mod")
+        fnptr = self.cast(mod_function,2)
+        res = fnptr(100,3)
+        assert res == 1 
+        res = fnptr(4321,3)
+        assert res == 1 
+        res = fnptr(12345,7)
+        assert res == 4 
+        res = fnptr(-42,2)
+        assert res == 0
+        res = fnptr(-12345,2)
+        assert res == 1
         
     def test_greater(self):
         rgenop = self.RGenOp()

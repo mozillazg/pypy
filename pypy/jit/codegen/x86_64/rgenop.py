@@ -133,7 +133,17 @@ class Builder(model.GenBuilder):
         self.mc.MOV(gv_z, gv_x)
         self.mc.XOR(gv_w, gv_w)
         self.mc.IDIV(gv_y)
-        return gv_z #FIXME: return gv_x?
+        return gv_z 
+    
+    # IDIV RDX:RAX with QWREG
+    # FIXME: supports only RAX with QWREG
+    def op_int_mod(self, gv_x, gv_y):
+        gv_z = self.allocate_register("rax")
+        gv_w = self.allocate_register("rdx")
+        self.mc.MOV(gv_z, gv_x)
+        self.mc.XOR(gv_w, gv_w)
+        self.mc.IDIV(gv_y)
+        return gv_w 
         
         
     #FIXME: can only jump 32bit
