@@ -29,7 +29,7 @@ REGISTER_MAP_8BIT = {
                     
 # This method wirtes the bitencodings into
 # the memory. The parameters are overwritten
-# if one of the operands is an register
+# if one of the operands is an register.
 # tttn isn't used yet
 # extra is an extra byte for long opcodes like IMUL
 def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None, m = None, md1 = None, md2 = None, tttn = None, extra = None):
@@ -78,7 +78,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
         
 # This method wirtes the bitencodings into
 # the memory. The parameters are overwritten
-# if one of the operands is an register
+# if one of the operands is an register.
 # tttn codes the flags and is only used by SETcc
 def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None, m = None, md1 = None, md2 = None, tttn=None, extra = None):
     def quadreg_instr(self, arg1):       
@@ -240,6 +240,19 @@ class X86_64CodeBuilder(object):
     def DEC(self, op1):
         method = getattr(self, "_DEC"+op1.to_string())
         method(op1)
+                
+    def IDIV(self, op1):
+        method = getattr(self, "_IDIV"+op1.to_string())
+        method(op1)
+            
+    def IMUL(self, op1, op2):
+        method = getattr(self, "_IMUL"+op1.to_string()+op2.to_string())
+        # exchange the two arguments because 
+        # the result is in the first register 
+        if(op1.to_string()=="_QWREG" and op2.to_string()=="_QWREG"):
+            method(op2, op1)
+        else:
+            method(op1, op2)
         
     def INC(self, op1):
         method = getattr(self, "_INC"+op1.to_string())
@@ -276,20 +289,6 @@ class X86_64CodeBuilder(object):
     def MOV(self, op1, op2):
         method = getattr(self, "_MOV"+op1.to_string()+op2.to_string())
         method(op1, op2)
-        
-        
-    def IDIV(self, op1):
-        method = getattr(self, "_IDIV"+op1.to_string())
-        method(op1)
-            
-    def IMUL(self, op1, op2):
-        method = getattr(self, "_IMUL"+op1.to_string()+op2.to_string())
-        # exchange the two arguments because 
-        # the result is in the first register 
-        if(op1.to_string()=="_QWREG" and op2.to_string()=="_QWREG"):
-            method(op2, op1)
-        else:
-            method(op1, op2)
             
     def NEG(self, op1):
         method = getattr(self, "_NEG"+op1.to_string())
