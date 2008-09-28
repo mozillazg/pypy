@@ -200,13 +200,17 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fnptr(12345,-9876)
         assert res == -121919220
         
-    #Floating point exception
-    #def test_idiv(self):
-    #    rgenop = self.RGenOp()
-    #    div_function = make_div(rgenop)
-    #    fnptr = self.cast(div_function,2)
-    #    res = fnptr(100,2)
-    #    assert res == 50
+    #BUG ignores rdx
+    def test_idiv(self):
+        rgenop = self.RGenOp()
+        div_function = make_div(rgenop)
+        fnptr = self.cast(div_function,2)
+        res = fnptr(100,2)
+        assert res == 50
+        res = fnptr(168,4)
+        assert res == 42
+        res = fnptr(72057594037927935,5)
+        assert res == 14411518807585587
         
     def test_greater(self):
         rgenop = self.RGenOp()
@@ -282,8 +286,8 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         rgenop = self.RGenOp()
         cmp_function = make_cmp(rgenop, "int_eq",42)
         fnptr = self.cast(cmp_function,1)
-       # res = fnptr(42)
-       # assert res == 1
+        res = fnptr(42)
+        assert res == 1
         res = fnptr(23)
         assert res == 0
         cmp_function = make_cmp(rgenop, "int_eq")
@@ -306,7 +310,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 0
         res = fnptr(244,756)
         assert res == 0
-        res = fnptr(-1,9223372036854775807)
+        res = fnptr(-1,9223372036854775807) #FFFF.... != 7FFF...
         assert res == 0
         
     def test_not_equal(self):

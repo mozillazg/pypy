@@ -30,11 +30,10 @@ class TestSimple():
         builder.finish_and_return(token, genv_result)
         num = fp(1280, 20)
         assert num == 1300
-        num = fp(1280, -80)
-        assert num == 1200
         num = fp(1280, 1000)
         assert num == 2280
-        print num
+        num = fp(1280, -80)
+        assert num == 1200
         
     def test_add_twice(self):
         builder, fp, inputargs_gv, token = make_testbuilder(2)
