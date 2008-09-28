@@ -414,12 +414,10 @@ class Video(iMemory):
         the h-blank period.
         """
         self.oam[address - constants.OAM_ADDR] = data & 0xFF
-        #self.update_sprites(address)
         self.update_sprite(address, data)
         
     def get_oam(self, address):
-        #return self.get_sprite(address).get_data()[address % 4];
-        return self.oam[address - constants.OAM_ADDR]
+        return self.get_sprite(address).get_data_at(address);
         
     def set_vram(self, address, data):
        """
