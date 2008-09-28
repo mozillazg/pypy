@@ -5,7 +5,6 @@ from pypy.lang.gameboy.constants import SPRITE_SIZE, GAMEBOY_SCREEN_WIDTH, \
 
 # -----------------------------------------------------------------------------
 
-
 class Sprite(object):
     
     def __init__(self, video):
@@ -20,10 +19,13 @@ class Sprite(object):
         self.object_behind_background = False
         self.x_flipped      = False
         self.y_flipped      = False
-        self.palette_number = 0
+        self.tile_number    = 0
         self.hidden         = True
+        self.rest_attributes_and_flags = 0
         
-        
+    def get_data_at(self, address):
+        return self.get_data()[address % 4]
+    
     def get_data(self):
         return [self.y, self.x, self.tile_number, self.get_attributes_and_flags()]
     
@@ -33,11 +35,11 @@ class Sprite(object):
         """
         if byte0 is not -1:
             self.extract_y_position(byte0)
-        if byte0 is not -1:
+        if byte1 is not -1:
             self.extract_x_position(byte1)
-        if byte0 is not -1:
+        if byte2 is not -1:
             self.extract_tile_number(byte2)
-        if byte0 is not -1:
+        if byte3 is not -1:
             self.extract_attributes_and_flags(byte3)
         
     def extract_y_position(self, data):
@@ -83,14 +85,16 @@ class Sprite(object):
         self.object_behind_background   = bool(data  & (1 << 7))
         self.x_flipped                  = bool(data  & (1 << 6))
         self.y_flipped                  = bool(data  & (1 << 5))
-        self.palette_number             = bool(data  & (1 << 3)) 
+        self.tile_number                = bool(data  & (1 << 4)) 
+        self.rest_attributes_and_flags  = data  & (1+2+4+8)
         
     def get_attributes_and_flags(self):
         value = 0
         value += int(self.object_behind_background) << 7
         value += int(self.x_flipped)                << 6
         value += int(self.y_flipped)                << 5
-        value += int(self.palette_number )          << 3
+        value += int(self.tile_number)              << 4
+        value += self.rest_attributes_and_flags
         return value
         
     def hide_check(self):
@@ -144,6 +148,16 @@ class Tile(object):
     
     def get_selected_tile_map_space(self):
         pass
+    
+    def get_data_at(self, address):
+        return self.get_data()[address % self.byte_size()]
+    
+    def get_data():
+        return []
+    
+    def byte_size(self):
+        return 0
+    
 # -----------------------------------------------------------------------------
 
 class Window(object):
