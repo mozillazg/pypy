@@ -106,10 +106,6 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_freeze_booleffects_correctly(self):
         py.test.skip("replay: NotImplementedError")
 
-    test_simple_array = skip
-    test_arraysize = skip
-    test_setarrayitem = skip
-    test_red_array = skip
     test_degenerated_before_return = skip
     test_degenerated_before_return_2 = skip
     test_degenerated_at_return = skip
