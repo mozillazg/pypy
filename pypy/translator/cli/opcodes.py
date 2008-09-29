@@ -106,7 +106,6 @@ unary_ops = {
     'ullong_is_true':            [PushAllArgs, 'ldc.i8 0', 'cgt.un'],
     'ullong_invert':             'not',
 
-    'oois':                     'ceq',
     'ooisnull':                 [PushAllArgs, 'nop', 'nop', 'nop', 'ldnull', 'ceq'],
     'oononnull':                [PushAllArgs, 'nop', 'nop', 'nop', 'nop', 'ldnull', 'ceq']+Not,
 
@@ -251,6 +250,8 @@ binary_ops = {
     'ullong_ge':                _not('clt.un'),
     'ullong_lshift':            [PushAllArgs, 'conv.u4', 'shl'],
     'ullong_rshift':            [PushAllArgs, 'conv.i4', 'shr'],
+
+    'oois':                     'ceq',
 }
 
 opcodes = misc_ops.copy()

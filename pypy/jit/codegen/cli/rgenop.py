@@ -424,6 +424,7 @@ class RCliGenOp(AbstractRGenOp):
         return builder, graph.gv_entrypoint, graph.inputargs_gv[:]
 
     def replay(self, label):
+        print 'Replay!'
         raise NotImplementedError
 
 

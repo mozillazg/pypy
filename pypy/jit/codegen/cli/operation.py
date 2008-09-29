@@ -317,7 +317,7 @@ def opcode2attrname(opcode):
     return '_'.join(parts)
 
 def is_comparison(opname):
-    if opname in ('ooisnull', 'oononnull'):
+    if opname in ('ooisnull', 'oononnull', 'oois'):
         return True
     suffixes = '_lt _le _eq _ne _gt _ge'.split()
     for suffix in suffixes:

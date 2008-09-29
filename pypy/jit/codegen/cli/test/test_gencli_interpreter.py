@@ -97,16 +97,15 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_indirect_red_call_with_exc(self):
         py.test.skip("replay: NotImplementedError")
 
-    def test_indirect_gray_call(self):
-        py.test.skip('mono 1.2 crashes, try again with a newer version')
-        
     def test_red_int_add_ovf(self):
         py.test.skip("TODO: exceptions")
 
-    test_learn_nonzeroness = skip
-    test_freeze_booleffects_correctly = skip
-    test_ptrequality = skip
-    test_void_args = skip
+    def test_learn_nonzeroness(self):
+        py.test.skip("replay: NotImplementedError")
+
+    def test_freeze_booleffects_correctly(self):
+        py.test.skip("replay: NotImplementedError")
+
     test_red_isinstance = skip
     test_red_isinstance_degenerated = skip
     test_simple_array = skip
