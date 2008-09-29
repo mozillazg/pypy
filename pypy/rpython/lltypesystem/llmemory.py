@@ -736,6 +736,11 @@ def raw_memcopy(source, dest, size):
     assert lltype.typeOf(dest)   == Address
     size.raw_memcopy(source, dest)
 
+def raw_memmove(source, dest, size):
+    # for now let's assume that raw_memmove is the same as raw_memcopy,
+    # when run on top of fake addresses
+    raw_memcopy(source, dest, size)
+
 def cast_any_ptr(EXPECTED_TYPE, ptr):
     # this is a generalization of the various cast_xxx_ptr() functions.
     PTRTYPE = lltype.typeOf(ptr)
