@@ -488,6 +488,7 @@ def choose_gc_from_config(config):
                "semispace": "semispace.SemiSpaceGC",
                "generation": "generation.GenerationGC",
                "hybrid": "hybrid.HybridGC",
+               "markcompact" : "markcompact.MarkCompactGC",
                }
     try:
         modulename, classname = classes[config.translation.gc].split('.')

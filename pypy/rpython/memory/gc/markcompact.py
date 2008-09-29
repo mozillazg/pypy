@@ -1,7 +1,7 @@
 
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.gc.base import MovingGCBase, \
-     TYPEID_MASK, GCFLAG_FINALIZATION_ORDERING
+     TYPEID_MASK, GCFLAG_FINALIZATION_ORDERING, GCFLAG_EXTERNAL
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
@@ -33,9 +33,13 @@ memoryError = MemoryError()
 # using memmove to another view of the same space, hence compacting
 # everything
 
+# before compacting, we update forward references to pointers
+
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
                         ('forward_ptr', llmemory.Address))
+
+    TRANSLATION_PARAMS = {'space_size': 16*1024*1024} # XXX adjust
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=16*(1024**2)):
         # space_size should be maximal available virtual memory.
@@ -49,11 +53,14 @@ class MarkCompactGC(MovingGCBase):
         self.space = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.space), "couldn't allocate arena")
         self.spaceptr = self.space
+        self.toaddr = self.space
         MovingGCBase.setup(self)
+        self.finalizers_to_run = self.AddressDeque()
 
     def init_gc_object(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = typeid | flags
+        hdr.forward_ptr = NULL
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
@@ -102,24 +109,63 @@ class MarkCompactGC(MovingGCBase):
 
     def collect(self):
         self.debug_check_consistency()
-        self.mark()
-        if self.run_finalizers.non_empty():
-            self.update_run_finalizers()
+        toaddr = llarena.arena_new_view(self.space)
+        self.mark_roots_recursively()
+        self.debug_check_consistency()
+        #if self.run_finalizers.non_empty():
+        #    self.update_run_finalizers()
         if self.objects_with_finalizers.non_empty():
-            self.deal_with_objects_with_finalizers(None)
+            self.mark_objects_with_finalizers()
+        if self.finalizers_to_run.non_empty():
+            self.execute_finalizers()
+        self.debug_check_consistency()
+        finaladdr = self.update_forward_pointers(toaddr)
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
-        self.debug_check_consistency()
-        toaddr = llarena.arena_new_view(self.space)
-        self.debug_check_consistency()
-        self.compact(toaddr)
+        self.update_objects_with_id()
+        self.compact()
         self.space = toaddr
+        self.spaceptr = finaladdr
         self.debug_check_consistency()
 
     def get_type_id(self, addr):
         return self.header(addr).tid & TYPEID_MASK
 
-    def compact(self, toaddr):
+    def mark_roots_recursively(self):
+        self.root_walker.walk_roots(
+            MarkCompactGC._mark_root_recursively,  # stack roots
+            MarkCompactGC._mark_root_recursively,  # static in prebuilt non-gc structures
+            MarkCompactGC._mark_root_recursively)  # static in prebuilt gc objects
+
+    def _mark_root_recursively(self, root):
+        self.trace_and_mark(root.address[0])
+
+    def mark(self, obj):
+        self.header(obj).tid |= GCFLAG_MARKBIT
+
+    def marked(self, obj):
+        return self.header(obj).tid & GCFLAG_MARKBIT
+
+    def trace_and_mark(self, obj):
+        if self.marked(obj):
+            return
+        self.mark(obj)
+        to_see = self.AddressStack()
+        to_see.append(obj)
+        while to_see.non_empty():
+            obj = to_see.pop()
+            self.trace(obj, self._mark_obj, to_see)
+        to_see.delete()
+
+    def _mark_obj(self, pointer, to_see):
+        obj = pointer.address[0]
+        if obj != NULL:
+            if self.marked(obj):
+                return
+            self.mark(obj)
+            to_see.append(obj)
+
+    def update_forward_pointers(self, toaddr):
         fromaddr = self.space
         size_gc_header = self.gcheaderbuilder.size_gc_header
         while fromaddr < self.spaceptr:
@@ -127,108 +173,198 @@ class MarkCompactGC(MovingGCBase):
             obj = fromaddr + size_gc_header
             objsize = self.get_size(obj)
             totalsize = size_gc_header + objsize
-            if not hdr.tid & GCFLAG_MARKBIT: 
+            if not self.marked(obj):
+                pass
+            else:
+                llarena.arena_reserve(toaddr, totalsize)
+                self.set_forwarding_address(obj, toaddr)
+                toaddr += totalsize
+            fromaddr += totalsize
+
+        # now update references
+        self.root_walker.walk_roots(
+            MarkCompactGC._update_root,  # stack roots
+            MarkCompactGC._update_root,  # static in prebuilt non-gc structures
+            MarkCompactGC._update_root)  # static in prebuilt gc objects
+        fromaddr = self.space
+        while fromaddr < self.spaceptr:
+            hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
+            obj = fromaddr + size_gc_header
+            objsize = self.get_size(obj)
+            totalsize = size_gc_header + objsize
+            if not self.marked(obj):
+                pass
+            else:
+                self.trace(obj, self._update_ref, None)
+            fromaddr += totalsize
+        return toaddr
+
+    def _update_root(self, pointer):
+        if pointer.address[0] != NULL:
+            pointer.address[0] = self.get_forwarding_address(pointer.address[0])
+
+    def _update_ref(self, pointer, ignore):
+        if pointer.address[0] != NULL:
+            pointer.address[0] = self.get_forwarding_address(pointer.address[0])
+
+    def is_forwarded(self, addr):
+        return self.header(addr).forward_ptr != NULL
+
+    def _is_external(self, obj):
+        # XXX might change
+        return self.header(obj).tid & GCFLAG_EXTERNAL
+
+    def get_forwarding_address(self, obj):
+        if self._is_external(obj):
+            return obj
+        else:
+            return self.header(obj).forward_ptr + self.size_gc_header()
+
+    def set_forwarding_address(self, obj, newaddr):
+        self.header(obj).forward_ptr = newaddr
+
+    def surviving(self, obj):
+        return self.header(obj).forward_ptr != NULL
+
+    def compact(self):
+        fromaddr = self.space
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        while fromaddr < self.spaceptr:
+            hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
+            obj = fromaddr + size_gc_header
+            objsize = self.get_size(obj)
+            totalsize = size_gc_header + objsize
+            if not self.surviving(obj): 
                 # this object dies, clear arena                
                 llarena.arena_reset(fromaddr, totalsize, True)
             else:
-                if hdr.tid & GCFLAG_FORWARDED:
-                    # this object needs to be copied somewhere
-                    # first approach - copy object if possible, otherwise
-                    # copy it somewhere else and keep track of that
-                    if toaddr + totalsize > fromaddr:
-                        # this is the worst possible scenario: object does
-                        # not fit inside space to copy
-                        xxx
-                    else:
-                        # object fits there: copy
-                        hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FORWARDED)
-                        #llop.debug_print(lltype.Void, fromaddr, "copied to", toaddr,
-                        #                 "tid", self.header(obj).tid,
-                        #                 "size", totalsize)
-                        llmemory.raw_memcopy(obj - size_gc_header, toaddr, totalsize)
-                        llarena.arena_reset(fromaddr, totalsize, True)
-                else:
-                    hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FORWARDED)
-                    # XXX this is here only to make llarena happier, makes no
-                    #     sense whatsoever, need to disable it when translated
-                    llarena.arena_reserve(toaddr, totalsize)
-                    llmemory.raw_memcopy(obj - size_gc_header, toaddr, totalsize)
-                toaddr += size_gc_header + objsize
-            fromaddr += size_gc_header + objsize
-        self.spaceptr = toaddr
-
-    def update_forward_refs(self):
-        self.root_walker.walk_roots(
-            MarkCompactGC._trace_copy,  # stack roots
-            MarkCompactGC._trace_copy,  # static in prebuilt non-gc structures
-            MarkCompactGC._trace_copy)  # static in prebuilt gc objects
-        ptr = self.space
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        while ptr < self.spaceptr:
-            obj = ptr + size_gc_header
-            objsize = self.get_size(obj)
-            totalsize = size_gc_header + objsize
-            self.trace(obj, self._trace_copy, None)
-            ptr += totalsize
-
-    def _trace_copy(self, pointer, ignored=None):
-        addr = pointer.address[0]
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        if addr != NULL:
-            hdr = llmemory.cast_adr_to_ptr(addr - size_gc_header,
-                                            lltype.Ptr(self.HDR))
-            pointer.address[0] = hdr.forward_ptr
-
-    def mark(self):
-        self.root_walker.walk_roots(
-            MarkCompactGC._mark_object,  # stack roots
-            MarkCompactGC._mark_object,  # static in prebuilt non-gc structures
-            MarkCompactGC._mark_object)  # static in prebuilt gc objects
-
-    def _mark_object(self, pointer, ignored=None):
-        obj = pointer.address[0]
-        if obj != NULL:
-            self.header(obj).tid |= GCFLAG_MARKBIT
-            self.trace(obj, self._mark_object, None)
-
-    def deal_with_objects_with_finalizers(self, ignored):
-        new_with_finalizer = self.AddressDeque()
-        while self.objects_with_finalizers.non_empty():
-            obj = self.objects_with_finalizers.popleft()
-            if self.surviving(obj):
-                new_with_finalizer.append(obj)
-                break
-            finalizers_to_run.append(obj)
-            xxxx
+                ll_assert(self.is_forwarded(obj), "not forwarded, surviving obj")
+                forward_ptr = hdr.forward_ptr
+                hdr.forward_ptr = NULL
+                hdr.tid &= ~(GCFLAG_MARKBIT&GCFLAG_FINALIZATION_ORDERING)
+                #llop.debug_print(lltype.Void, fromaddr, "copied to", forward_ptr,
+                #                 "\ntid", self.header(obj).tid,
+                #                 "\nsize", totalsize)
+                llmemory.raw_memmove(fromaddr, forward_ptr, totalsize)
+                llarena.arena_reset(fromaddr, totalsize, False)
+                assert llmemory.cast_adr_to_ptr(forward_ptr, lltype.Ptr(self.HDR)).tid
+            fromaddr += totalsize
 
     def debug_check_object(self, obj):
-        # XXX write it down
+        # not sure what to check here
         pass
 
-    def surviving(self, obj):
-        hdr = self.header(obj)
-        return hdr.tid & GCFLAG_MARKBIT
+
+    def id(self, ptr):
+        obj = llmemory.cast_ptr_to_adr(ptr)
+        if self.header(obj).tid & GCFLAG_EXTERNAL:
+            result = self._compute_id_for_external(obj)
+        else:
+            result = self._compute_id(obj)
+        return llmemory.cast_adr_to_int(result)
+
+    def _next_id(self):
+        # return an id not currently in use (as an address instead of an int)
+        if self.id_free_list.non_empty():
+            result = self.id_free_list.pop()    # reuse a dead id
+        else:
+            # make up a fresh id number
+            result = llmemory.cast_int_to_adr(self.next_free_id)
+            self.next_free_id += 2    # only odd numbers, to make lltype
+                                      # and llmemory happy and to avoid
+                                      # clashes with real addresses
+        return result
+
+    def _compute_id(self, obj):
+        # look if the object is listed in objects_with_id
+        result = self.objects_with_id.get(obj)
+        if not result:
+            result = self._next_id()
+            self.objects_with_id.setitem(obj, result)
+        return result
+
+    def _compute_id_for_external(self, obj):
+        # For prebuilt objects, we can simply return their address.
+        # This method is overriden by the HybridGC.
+        return obj
+
+    def update_objects_with_id(self):
+        old = self.objects_with_id
+        new_objects_with_id = self.AddressDict(old.length())
+        old.foreach(self._update_object_id_FAST, new_objects_with_id)
+        old.delete()
+        self.objects_with_id = new_objects_with_id
+
+    def _update_object_id(self, obj, id, new_objects_with_id):
+        # safe version (used by subclasses)
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.setitem(newobj, id)
+        else:
+            self.id_free_list.append(id)
+
+    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
+        # unsafe version, assumes that the new_objects_with_id is large enough
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.insertclean(newobj, id)
+        else:
+            self.id_free_list.append(id)
 
     def _finalization_state(self, obj):
-        hdr = self.header(obj)
         if self.surviving(obj):
+            hdr = self.header(obj)
             if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
                 return 2
             else:
                 return 3
         else:
+            hdr = self.header(obj)
             if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
                 return 1
             else:
                 return 0
 
-    def _recursively_bump_finalization_state_from_1_to_2(self, obj, scan):
-        # it's enough to leave mark bit here
-        hdr = self.header(obj)
-        if hdr.tid & GCFLAG_MARKBIT:
-            return # cycle
-        self.header(obj).tid |= GCFLAG_MARKBIT
-        self.trace(obj, self._mark_object, None)
+    def mark_objects_with_finalizers(self):
+        new_with_finalizers = self.AddressDeque()
+        finalizers_to_run = self.finalizers_to_run
+        while self.objects_with_finalizers.non_empty():
+            x = self.objects_with_finalizers.popleft()
+            if self.marked(x):
+                new_with_finalizers.append(x)
+            else:
+                finalizers_to_run.append(x)
+                self.trace_and_mark(x)
+        self.objects_with_finalizers.delete()
+        self.objects_with_finalizers = new_with_finalizers
 
-    def get_forwarding_address(self, obj):
-        return obj
+    def execute_finalizers(self):
+        while self.finalizers_to_run.non_empty():
+            obj = self.finalizers_to_run.popleft()
+            finalizer = self.getfinalizer(self.get_type_id(obj))
+            finalizer(obj)
+        self.finalizers_to_run.delete()
+        self.finalizers_to_run = self.AddressDeque()
+
+    def invalidate_weakrefs(self):
+        # walk over list of objects that contain weakrefs
+        # if the object it references survives then update the weakref
+        # otherwise invalidate the weakref
+        new_with_weakref = self.AddressStack()
+        while self.objects_with_weakrefs.non_empty():
+            obj = self.objects_with_weakrefs.pop()
+            if not self.surviving(obj):
+                continue # weakref itself dies
+            newobj = self.get_forwarding_address(obj)
+            offset = self.weakpointer_offset(self.get_type_id(obj))
+            pointing_to = (obj + offset).address[0]
+            # XXX I think that pointing_to cannot be NULL here
+            if pointing_to:
+                if self.surviving(pointing_to):
+                    (obj + offset).address[0] = self.get_forwarding_address(
+                        pointing_to)
+                    new_with_weakref.append(newobj)
+                else:
+                    (obj + offset).address[0] = NULL
+        self.objects_with_weakrefs.delete()
+        self.objects_with_weakrefs = new_with_weakref

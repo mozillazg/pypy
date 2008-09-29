@@ -798,6 +798,14 @@ class TestSemiSpaceGC(GenericMovingGCTests):
             GC_PARAMS = {'space_size': 2048}
             root_stack_depth = 200
 
+class TestMarkCompactGC(GenericMovingGCTests):
+    gcname = 'markcompact'
+
+    class gcpolicy(gc.FrameworkGcPolicy):
+        class transformerclass(framework.FrameworkGCTransformer):
+            from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
+            root_stack_depth = 200    
+
 class TestGenerationGC(GenericMovingGCTests):
     gcname = "generation"
 

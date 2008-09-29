@@ -458,6 +458,19 @@ class TestGenerationalGC(TestSemiSpaceGC):
 class TestMarkCompactGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
 
+    def test_finalizer_order(self):
+        py.test.skip("Not implemented yet")
+
+    def test_finalizer_calls_malloc(self):
+        py.test.skip("Not implemented yet")
+
+    def test_finalizer_calls_malloc_during_minor_collect(self):
+        py.test.skip("Not implemented yet")
+
+    def test_weakref_to_object_with_finalizer(self):
+        py.test.skip("Not implemented yet")
+        
+
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
     GC_CANNOT_MALLOC_NONMOVABLE = False
