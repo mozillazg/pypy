@@ -106,6 +106,5 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_freeze_booleffects_correctly(self):
         py.test.skip("replay: NotImplementedError")
 
-    test_degenerated_at_return = skip
-    test_degenerated_via_substructure = skip
-    test_red_subclass = skip
+    def test_degenerated_at_return(self):
+        py.test.skip('test framework does not support getattr on returned instances')

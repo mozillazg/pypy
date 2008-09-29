@@ -398,7 +398,7 @@ class RCliGenOp(AbstractRGenOp):
         elif T is ootype.Char:
             return cChar
         elif isinstance(T, ootype.OOType):
-            return cObject # XXX?
+            return ootype.runtimeClass(T)
         else:
             assert False
 
