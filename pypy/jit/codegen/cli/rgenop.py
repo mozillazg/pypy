@@ -206,6 +206,8 @@ class FloatConst(GenConst):
     def revealconst(self, T):
         if T is ootype.Object:
             return ootype.NULL # XXX?
+        elif isinstance(T, ootype.OOType):
+            return ootype.null(T) # XXX
         return lltype.cast_primitive(T, self.value)
 
     def getCliType(self):
