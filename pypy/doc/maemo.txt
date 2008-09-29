@@ -18,18 +18,18 @@ method (qemu-arm), devkits (debian-lenny, cpu-transparency) and install files
 (and not a rootstrap).
 
 I had to manually edit /scratchbox/devkits/debian-etch/etc/environment 
-to add ARCH=armel, otherwise things did not work
-
-XXX things don't work for me (arigo); I cannot get a Python
-more recent than 2.3.  I edited /etc/apt/sources.list to contain::
+to add ARCH=armel, otherwise apt-get did not work.  I also edited
+/etc/apt/sources.list to contain::
     
     deb     ftp://ftp.fi.debian.org/debian/ lenny  main contrib non-free
     deb-src ftp://ftp.fi.debian.org/debian/ lenny  main contrib non-free
 
-Then apt-get update gives a minor error (possibly just a warning),
-but sb-install-base-packages crashes with no more explanation than::
-    
-    E: Internal Error, Could not perform immediate configuration (2) on libc6
+Then run ``apt-get update``, get an error, ignore it, and run
+``fakeroot apt-get install python-dev``.  Doesn't work out of
+the box for me; I have actually to install a few pieces at a
+time, starting from libc6, sometimes with and sometimes
+without the ``fakeroot``.  It's quite a mess but in the end I
+get a ``python2.5``.
 
 
 Translating pypy
