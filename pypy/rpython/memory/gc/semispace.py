@@ -371,5 +371,229 @@ class SemiSpaceGC(MovingGCBase):
         stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
         stub.forw = newobj
 
+    def deal_with_objects_with_finalizers(self, scan):
+        # walk over list of objects with finalizers
+        # if it is not copied, add it to the list of to-be-called finalizers
+        # and copy it, to me make the finalizer runnable
+        # We try to run the finalizers in a "reasonable" order, like
+        # CPython does.  The details of this algorithm are in
+        # pypy/doc/discussion/finalizer-order.txt.
+        new_with_finalizer = self.AddressDeque()
+        marked = self.AddressDeque()
+        pending = self.AddressStack()
+        self.tmpstack = self.AddressStack()
+        while self.objects_with_finalizers.non_empty():
+            x = self.objects_with_finalizers.popleft()
+            ll_assert(self._finalization_state(x) != 1, 
+                      "bad finalization state 1")
+            if self.surviving(x):
+                new_with_finalizer.append(self.get_forwarding_address(x))
+                continue
+            marked.append(x)
+            pending.append(x)
+            while pending.non_empty():
+                y = pending.pop()
+                state = self._finalization_state(y)
+                if state == 0:
+                    self._bump_finalization_state_from_0_to_1(y)
+                    self.trace(y, self._append_if_nonnull, pending)
+                elif state == 2:
+                    self._recursively_bump_finalization_state_from_2_to_3(y)
+            scan = self._recursively_bump_finalization_state_from_1_to_2(
+                       x, scan)
+
+        while marked.non_empty():
+            x = marked.popleft()
+            state = self._finalization_state(x)
+            ll_assert(state >= 2, "unexpected finalization state < 2")
+            newx = self.get_forwarding_address(x)
+            if state == 2:
+                self.run_finalizers.append(newx)
+                # we must also fix the state from 2 to 3 here, otherwise
+                # we leave the GCFLAG_FINALIZATION_ORDERING bit behind
+                # which will confuse the next collection
+                self._recursively_bump_finalization_state_from_2_to_3(x)
+            else:
+                new_with_finalizer.append(newx)
+
+        self.tmpstack.delete()
+        pending.delete()
+        marked.delete()
+        self.objects_with_finalizers.delete()
+        self.objects_with_finalizers = new_with_finalizer
+        return scan
+
+    def _append_if_nonnull(pointer, stack):
+        if pointer.address[0] != NULL:
+            stack.append(pointer.address[0])
+    _append_if_nonnull = staticmethod(_append_if_nonnull)
+
+    def _finalization_state(self, obj):
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            hdr = self.header(newobj)
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+                return 2
+            else:
+                return 3
+        else:
+            hdr = self.header(obj)
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+                return 1
+            else:
+                return 0
+
+    def _bump_finalization_state_from_0_to_1(self, obj):
+        ll_assert(self._finalization_state(obj) == 0,
+                  "unexpected finalization state != 0")
+        hdr = self.header(obj)
+        hdr.tid |= GCFLAG_FINALIZATION_ORDERING
+
+    def _recursively_bump_finalization_state_from_2_to_3(self, obj):
+        ll_assert(self._finalization_state(obj) == 2,
+                  "unexpected finalization state != 2")
+        newobj = self.get_forwarding_address(obj)
+        pending = self.tmpstack
+        ll_assert(not pending.non_empty(), "tmpstack not empty")
+        pending.append(newobj)
+        while pending.non_empty():
+            y = pending.pop()
+            hdr = self.header(y)
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
+                hdr.tid &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
+                self.trace(y, self._append_if_nonnull, pending)
+
+    def _recursively_bump_finalization_state_from_1_to_2(self, obj, scan):
+        # recursively convert objects from state 1 to state 2.
+        # Note that copy() copies all bits, including the
+        # GCFLAG_FINALIZATION_ORDERING.  The mapping between
+        # state numbers and the presence of this bit was designed
+        # for the following to work :-)
+        self.copy(obj)
+        return self.scan_copied(scan)
+
+    def invalidate_weakrefs(self):
+        # walk over list of objects that contain weakrefs
+        # if the object it references survives then update the weakref
+        # otherwise invalidate the weakref
+        new_with_weakref = self.AddressStack()
+        while self.objects_with_weakrefs.non_empty():
+            obj = self.objects_with_weakrefs.pop()
+            if not self.surviving(obj):
+                continue # weakref itself dies
+            obj = self.get_forwarding_address(obj)
+            offset = self.weakpointer_offset(self.get_type_id(obj))
+            pointing_to = (obj + offset).address[0]
+            # XXX I think that pointing_to cannot be NULL here
+            if pointing_to:
+                if self.surviving(pointing_to):
+                    (obj + offset).address[0] = self.get_forwarding_address(
+                        pointing_to)
+                    new_with_weakref.append(obj)
+                else:
+                    (obj + offset).address[0] = NULL
+        self.objects_with_weakrefs.delete()
+        self.objects_with_weakrefs = new_with_weakref
+
+    def update_run_finalizers(self):
+        # we are in an inner collection, caused by a finalizer
+        # the run_finalizers objects need to be copied
+        new_run_finalizer = self.AddressDeque()
+        while self.run_finalizers.non_empty():
+            obj = self.run_finalizers.popleft()
+            new_run_finalizer.append(self.copy(obj))
+        self.run_finalizers.delete()
+        self.run_finalizers = new_run_finalizer
+
+    def execute_finalizers(self):
+        self.finalizer_lock_count += 1
+        try:
+            while self.run_finalizers.non_empty():
+                #print "finalizer"
+                if self.finalizer_lock_count > 1:
+                    # the outer invocation of execute_finalizers() will do it
+                    break
+                obj = self.run_finalizers.popleft()
+                finalizer = self.getfinalizer(self.get_type_id(obj))
+                finalizer(obj)
+        finally:
+            self.finalizer_lock_count -= 1
+
+    def id(self, ptr):
+        obj = llmemory.cast_ptr_to_adr(ptr)
+        if self.header(obj).tid & GCFLAG_EXTERNAL:
+            result = self._compute_id_for_external(obj)
+        else:
+            result = self._compute_id(obj)
+        return llmemory.cast_adr_to_int(result)
+
+    def _next_id(self):
+        # return an id not currently in use (as an address instead of an int)
+        if self.id_free_list.non_empty():
+            result = self.id_free_list.pop()    # reuse a dead id
+        else:
+            # make up a fresh id number
+            result = llmemory.cast_int_to_adr(self.next_free_id)
+            self.next_free_id += 2    # only odd numbers, to make lltype
+                                      # and llmemory happy and to avoid
+                                      # clashes with real addresses
+        return result
+
+    def _compute_id(self, obj):
+        # look if the object is listed in objects_with_id
+        result = self.objects_with_id.get(obj)
+        if not result:
+            result = self._next_id()
+            self.objects_with_id.setitem(obj, result)
+        return result
+
+    def _compute_id_for_external(self, obj):
+        # For prebuilt objects, we can simply return their address.
+        # This method is overriden by the HybridGC.
+        return obj
+
+    def update_objects_with_id(self):
+        old = self.objects_with_id
+        new_objects_with_id = self.AddressDict(old.length())
+        old.foreach(self._update_object_id_FAST, new_objects_with_id)
+        old.delete()
+        self.objects_with_id = new_objects_with_id
+
+    def _update_object_id(self, obj, id, new_objects_with_id):
+        # safe version (used by subclasses)
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.setitem(newobj, id)
+        else:
+            self.id_free_list.append(id)
+
+    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
+        # unsafe version, assumes that the new_objects_with_id is large enough
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.insertclean(newobj, id)
+        else:
+            self.id_free_list.append(id)
+
+    def debug_check_object(self, obj):
+        """Check the invariants about 'obj' that should be true
+        between collections."""
+        tid = self.header(obj).tid
+        if tid & GCFLAG_EXTERNAL:
+            ll_assert(tid & GCFLAG_FORWARDED, "bug: external+!forwarded")
+            ll_assert(not (self.tospace <= obj < self.free),
+                      "external flag but object inside the semispaces")
+        else:
+            ll_assert(not (tid & GCFLAG_FORWARDED), "bug: !external+forwarded")
+            ll_assert(self.tospace <= obj < self.free,
+                      "!external flag but object outside the semispaces")
+        ll_assert(not (tid & GCFLAG_FINALIZATION_ORDERING),
+                  "unexpected GCFLAG_FINALIZATION_ORDERING")
+
+    def debug_check_can_copy(self, obj):
+        ll_assert(not (self.tospace <= obj < self.free),
+                  "copy() on already-copied object")
+
     STATISTICS_NUMBERS = 0
+
 
