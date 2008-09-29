@@ -1105,6 +1105,7 @@ class OOTypeJitInterpreter(JitInterpreter):
 
     @arguments("red", "structtypedesc", returns="red")
     def opimpl_red_instanceof(self, objbox, typedesc):
+        assert isinstance(objbox, rvalue.AbstractPtrRedBox)
         if objbox.content is None:
             return rtimeshift.geninstanceof(self.jitstate, objbox,
                                             typedesc)

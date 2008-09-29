@@ -732,6 +732,11 @@ class BranchBuilder(GenBuilder):
         self.appendop(op)
         return op.gv_res()
 
+    def genop_instanceof(self, gv_obj, alloctoken):
+        op = ops.InstanceOf(self.meth, gv_obj, alloctoken)
+        self.appendop(op)
+        return op.gv_res()
+
     def enter_next_block(self, args_gv):
         seen = {}
         for i in range(len(args_gv)):
