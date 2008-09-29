@@ -130,7 +130,7 @@ class LowLevelDatabase(OODatabase):
         return name
 
     def class_or_record_name(self, TYPE):
-        if isinstance(TYPE, ootype.Instance):
+        if TYPE is not ootype.ROOT and isinstance(TYPE, ootype.Instance):
             return self.class_name(TYPE)
         elif isinstance(TYPE, ootype.Record):
             return self.get_record_name(TYPE)

@@ -260,6 +260,23 @@ class OOSend(Operation):
         if self.restype() is not None:
             self.storeResult()
 
+class InstanceOf(Operation):
+
+    def __init__(self, meth, gv_obj, alloctoken):
+        self.meth = meth
+        self.gv_obj = gv_obj
+        self.clitype = alloctoken.getCliType()
+
+    def restype(self):
+        return typeof(System.Boolean)
+
+    def emit(self):
+        self.gv_obj.load(self.meth)
+        self.meth.il.Emit(OpCodes.Isinst, self.clitype)
+        self.meth.il.Emit(OpCodes.Ldnull)
+        self.meth.il.Emit(OpCodes.Cgt_Un)
+        self.storeResult()
+
 def mark(il, s):
     il.Emit(OpCodes.Ldstr, s)
     il.Emit(OpCodes.Pop)
