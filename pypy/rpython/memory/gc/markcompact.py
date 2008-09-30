@@ -39,6 +39,10 @@ class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
                         ('forward_ptr', llmemory.Address))
 
+    # XXX probably we need infinite (ie 4G) amount of memory here
+    # and we'll keep all pages shared. The question is what we do
+    # with tests which create all llarenas
+
     TRANSLATION_PARAMS = {'space_size': 16*1024*1024} # XXX adjust
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=16*(1024**2)):
