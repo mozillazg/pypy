@@ -790,3 +790,19 @@ def _reccopy(source, dest):
                 setattr(dest._obj, name, llvalue)
     else:
         raise TypeError(T)
+
+from pypy.rpython.extregistry import ExtRegistryEntry
+
+class RawMemmoveEntry(ExtRegistryEntry):
+    _about_ = raw_memmove
+
+    def compute_result_annotation(self, s_from, s_to, s_size):
+        from pypy.annotation.model import SomeAddress, SomeInteger
+        assert isinstance(s_from, SomeAddress)
+        assert isinstance(s_to, SomeAddress)
+        assert isinstance(s_size, SomeInteger)
+    
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        v_list = hop.inputargs(Address, Address, lltype.Signed)
+        return hop.genop('raw_memmove', v_list)
