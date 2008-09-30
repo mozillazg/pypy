@@ -112,6 +112,7 @@ def get_class_desc(name):
         desc.AssemblyQualifiedName = name # XXX
         desc.BaseType = 'System.Array'
         desc.ElementType = itemdesc.FullName
+        desc.IsValueType = itemdesc.IsValueType
         desc.IsArray = True
         desc.Methods = [
             ('Get', ['ootype.Signed', ], itemdesc.FullName),
