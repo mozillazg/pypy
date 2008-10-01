@@ -164,10 +164,8 @@ class MarkCompactGC(MovingGCBase):
         if self.objects_with_finalizers.non_empty():
             self.mark_objects_with_finalizers()
         self.mark_roots_recursively()
-        self.debug_check_consistency()
         #if self.run_finalizers.non_empty():
         #    self.update_run_finalizers()
-        self.debug_check_consistency()
         finaladdr = self.update_forward_pointers(toaddr)
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
@@ -297,21 +295,19 @@ class MarkCompactGC(MovingGCBase):
                 ll_assert(self.is_forwarded(obj), "not forwarded, surviving obj")
                 forward_ptr = hdr.forward_ptr
                 hdr.forward_ptr = NULL
-                hdr.tid &= ~(GCFLAG_MARKBIT&GCFLAG_FINALIZATION_ORDERING)
+                hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FINALIZATION_ORDERING)
                 #llop.debug_print(lltype.Void, fromaddr, "copied to", forward_ptr,
                 #                 "\ntid", self.header(obj).tid,
                 #                 "\nsize", totalsize)
                 llmemory.raw_memmove(fromaddr, forward_ptr, totalsize)
                 llarena.arena_reset(fromaddr, totalsize, False)
-                assert llmemory.cast_adr_to_ptr(forward_ptr, lltype.Ptr(self.HDR)).tid
             fromaddr += totalsize
 
     def debug_check_object(self, obj):
         # not sure what to check here
-        return
-        if self._is_external(obj):
-            assert not self.marked(self.header(obj)) and not self.surviving(obj)
-
+        ll_assert(not self.marked(obj), "Marked")
+        ll_assert(not self.surviving(obj), "forward_ptr set")
+        
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
         if self.header(obj).tid & GCFLAG_EXTERNAL:
