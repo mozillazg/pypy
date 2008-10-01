@@ -461,15 +461,6 @@ class TestMarkCompactGC(TestSemiSpaceGC):
     def test_finalizer_order(self):
         py.test.skip("Not implemented yet")
 
-    def test_finalizer_calls_malloc(self):
-        py.test.skip("Not implemented yet")
-
-    def test_finalizer_calls_malloc_during_minor_collect(self):
-        py.test.skip("Not implemented yet")
-
-    def test_weakref_to_object_with_finalizer(self):
-        py.test.skip("Not implemented yet")
-
 class TestMarkCompactGCGrowing(TestMarkCompactGC):
     GC_PARAMS = {'space_size': 64}
 
