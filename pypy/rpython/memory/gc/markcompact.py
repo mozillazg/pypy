@@ -353,8 +353,6 @@ class MarkCompactGC(MovingGCBase):
             obj = self.finalizers_to_run.popleft()
             finalizer = self.getfinalizer(self.get_type_id(obj))
             finalizer(obj)
-        self.finalizers_to_run.delete()
-        self.finalizers_to_run = self.AddressDeque()
 
     def invalidate_weakrefs(self):
         # walk over list of objects that contain weakrefs
