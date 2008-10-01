@@ -23,17 +23,23 @@ memoryError = MemoryError()
 
 # so, the idea as now is:
 
-# we allocate space (full of zeroes) which is big enough to handle
-# all possible cases. Because it's full of zeroes, we never allocate
-# it really, unless we start using it
+# this gc works more or less like semispace, but has some essential
+# differencies. The main difference is that we have separate phases of
+# marking and assigning pointers, hence order of objects is preserved.
+# This means we can reuse the same space if it did not grow enough.
+# More importantly, in case we need to resize space we can copy it bit by
+# bit, hence avoiding double memory consumption at peak times
 
-# for each collection we mark objects which are alive, also marking all
-# for which we want to run finalizers. we mark them by storing forward
-# pointer, which will be a place to copy them. After that, we copy all
-# using memmove to another view of the same space, hence compacting
-# everything
+# so the algorithm itself is performed in 3 stages (module weakrefs and
+# finalizers)
 
-# before compacting, we update forward references to pointers
+# 1. We mark alive objects
+# 2. We walk all objects and assign forward pointers in the same order,
+#    also updating all references
+# 3. We compact the space by moving. In case we move to the same space,
+#    we use arena_new_view trick, which looks like new space to tests,
+#    but compiles to the same pointer. Also we use raw_memmove in case
+#    objects overlap.
 
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
