@@ -41,7 +41,6 @@ class SemiSpaceGC(MovingGCBase):
         MovingGCBase.__init__(self, chunk_size)
         self.space_size = space_size
         self.max_space_size = max_space_size
-        self.red_zone = 0
 
     def setup(self):
         if DEBUG_PRINT:

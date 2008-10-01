@@ -41,29 +41,26 @@ memoryError = MemoryError()
 #    but compiles to the same pointer. Also we use raw_memmove in case
 #    objects overlap.
 
+# in case we need to grow space, we use
+# current_space_size * FREE_SPACE_MULTIPLIER / FREE_SPACE_DIVIDER + needed
+FREE_SPACE_MULTIPLIER = 3
+FREE_SPACE_DIVIDER = 2
+
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
                         ('forward_ptr', llmemory.Address))
 
-    # XXX probably we need infinite (ie 4G) amount of memory here
-    # and we'll keep all pages shared. The question is what we do
-    # with tests which create all llarenas
+    TRANSLATION_PARAMS = {'space_size': 2*1024*1024} # XXX adjust
 
-    TRANSLATION_PARAMS = {'space_size': 16*1024*1024} # XXX adjust
-
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=16*(1024**2)):
-        # space_size should be maximal available virtual memory.
-        # this way we'll never need to copy anything nor implement
-        # paging on our own
+    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=2*(1024**2)):
         self.space_size = space_size
         MovingGCBase.__init__(self, chunk_size)
-        self.counter = 0
 
     def setup(self):
         self.space = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.space), "couldn't allocate arena")
-        self.spaceptr = self.space
-        self.toaddr = self.space
+        self.free = self.space
+        self.top_of_space = self.space + self.space_size
         MovingGCBase.setup(self)
         self.finalizers_to_run = self.AddressDeque()
 
@@ -77,11 +74,14 @@ class MarkCompactGC(MovingGCBase):
         assert can_collect
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
-        self.eventually_collect()
-        result = self.spaceptr
+        result = self.free
+        if raw_malloc_usage(totalsize) > self.top_of_space - result:
+            if not can_collect:
+                raise memoryError
+            result = self.obtain_free_space(totalsize)
         llarena.arena_reserve(result, totalsize)
         self.init_gc_object(result, typeid)
-        self.spaceptr += totalsize
+        self.free += totalsize
         if has_finalizer:
             self.objects_with_finalizers.append(result + size_gc_header)
         if contains_weakptr:
@@ -99,44 +99,96 @@ class MarkCompactGC(MovingGCBase):
             totalsize = ovfcheck(nonvarsize + varsize)
         except OverflowError:
             raise memoryError
-        self.eventually_collect()
-        result = self.spaceptr
+        result = self.free
+        if raw_malloc_usage(totalsize) > self.top_of_space - result:
+            if not can_collect:
+                raise memoryError
+            result = self.obtain_free_space(totalsize)
         llarena.arena_reserve(result, totalsize)
         self.init_gc_object(result, typeid)
         (result + size_gc_header + offset_to_length).signed[0] = length
-        self.spaceptr = result + llarena.round_up_for_allocation(totalsize)
+        self.free = result + llarena.round_up_for_allocation(totalsize)
         if has_finalizer:
             self.objects_with_finalizers.append(result + size_gc_header)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
-    def eventually_collect(self):
-        # XXX this is a very bad idea, come up with better heuristics
-        # XXX it also does not check can_collect flag
-        self.counter += 1
-        if self.counter == 1000:
-            self.collect()
-            self.counter = 0
+    def obtain_free_space(self, totalsize):
+        # a bit of tweaking to maximize the performance and minimize the
+        # amount of code in an inlined version of malloc_fixedsize_clear()
+        if not self.try_obtain_free_space(totalsize):
+            raise memoryError
+        return self.free
+    obtain_free_space._dont_inline_ = True
+
+    def try_obtain_free_space(self, needed):
+        needed = raw_malloc_usage(needed)
+        missing = needed - (self.top_of_space - self.free)
+        if (self.red_zone >= 2 and self.increase_space_size(needed)):
+            return True
+        else:
+            self.markcompactcollect()
+        missing = needed - (self.top_of_space - self.free)
+        if missing <= 0:
+            return True      # success
+        else:
+            # first check if the object could possibly fit
+            if not self.increase_space_size(needed):
+                return False
+        return True
+
+    def new_space_size(self, incr):
+        return (self.space_size * FREE_SPACE_MULTIPLIER /
+                FREE_SPACE_DIVIDER + incr)
+
+    def increase_space_size(self, needed):
+        self.red_zone = 0
+        new_size = self.new_space_size(needed)
+        newspace = llarena.arena_malloc(new_size, True)
+        if not newspace:
+            return False
+        self.tospace = newspace
+        self.space_size = new_size
+        self.markcompactcollect(resizing=True)
+        return True
 
     def collect(self):
+        self.markcompactcollect()
+
+    def markcompactcollect(self, resizing=False):
         self.debug_check_consistency()
-        toaddr = llarena.arena_new_view(self.space)
+        if resizing:
+            toaddr = self.tospace
+        else:
+            toaddr = llarena.arena_new_view(self.space)
+        self.to_see = self.AddressStack()
+        if self.objects_with_finalizers.non_empty():
+            self.mark_objects_with_finalizers()
         self.mark_roots_recursively()
         self.debug_check_consistency()
         #if self.run_finalizers.non_empty():
         #    self.update_run_finalizers()
-        if self.objects_with_finalizers.non_empty():
-            self.mark_objects_with_finalizers()
-        if self.finalizers_to_run.non_empty():
-            self.execute_finalizers()
         self.debug_check_consistency()
         finaladdr = self.update_forward_pointers(toaddr)
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
         self.update_objects_with_id()
-        self.compact()
-        self.space = toaddr
-        self.spaceptr = finaladdr
+        self.update_finalizers_to_run()
+        self.compact(resizing)
+        self.space        = toaddr
+        self.free         = finaladdr
+        self.top_of_space = toaddr + self.space_size
         self.debug_check_consistency()
+        if not resizing:
+            self.record_red_zone()
+        if self.finalizers_to_run.non_empty():
+            self.execute_finalizers()
+
+    def update_finalizers_to_run(self):
+        finalizers_to_run = self.AddressDeque()
+        while self.finalizers_to_run.non_empty():
+            obj = self.finalizers_to_run.popleft()
+            finalizers_to_run.append(self.get_forwarding_address(obj))
+        self.finalizers_to_run = finalizers_to_run
 
     def get_type_id(self, addr):
         return self.header(addr).tid & TYPEID_MASK
@@ -146,9 +198,21 @@ class MarkCompactGC(MovingGCBase):
             MarkCompactGC._mark_root_recursively,  # stack roots
             MarkCompactGC._mark_root_recursively,  # static in prebuilt non-gc structures
             MarkCompactGC._mark_root_recursively)  # static in prebuilt gc objects
+        while self.to_see.non_empty():
+            obj = self.to_see.pop()
+            self.trace(obj, self._mark_obj, None)
+        self.to_see.delete()
+
+    def _mark_obj(self, pointer, ignored):
+        obj = pointer.address[0]
+        if obj != NULL:
+            if self.marked(obj):
+                return
+            self.mark(obj)
+            self.to_see.append(obj)        
 
     def _mark_root_recursively(self, root):
-        self.trace_and_mark(root.address[0])
+        self.to_see.append(root.address[0])
 
     def mark(self, obj):
         self.header(obj).tid |= GCFLAG_MARKBIT
@@ -156,29 +220,10 @@ class MarkCompactGC(MovingGCBase):
     def marked(self, obj):
         return self.header(obj).tid & GCFLAG_MARKBIT
 
-    def trace_and_mark(self, obj):
-        if self.marked(obj):
-            return
-        self.mark(obj)
-        to_see = self.AddressStack()
-        to_see.append(obj)
-        while to_see.non_empty():
-            obj = to_see.pop()
-            self.trace(obj, self._mark_obj, to_see)
-        to_see.delete()
-
-    def _mark_obj(self, pointer, to_see):
-        obj = pointer.address[0]
-        if obj != NULL:
-            if self.marked(obj):
-                return
-            self.mark(obj)
-            to_see.append(obj)
-
     def update_forward_pointers(self, toaddr):
         fromaddr = self.space
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        while fromaddr < self.spaceptr:
+        while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
             objsize = self.get_size(obj)
@@ -197,7 +242,7 @@ class MarkCompactGC(MovingGCBase):
             MarkCompactGC._update_root,  # static in prebuilt non-gc structures
             MarkCompactGC._update_root)  # static in prebuilt gc objects
         fromaddr = self.space
-        while fromaddr < self.spaceptr:
+        while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
             objsize = self.get_size(obj)
@@ -236,10 +281,10 @@ class MarkCompactGC(MovingGCBase):
     def surviving(self, obj):
         return self.header(obj).forward_ptr != NULL
 
-    def compact(self):
+    def compact(self, resizing):
         fromaddr = self.space
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        while fromaddr < self.spaceptr:
+        while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
             objsize = self.get_size(obj)
@@ -263,7 +308,6 @@ class MarkCompactGC(MovingGCBase):
     def debug_check_object(self, obj):
         # not sure what to check here
         pass
-
 
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
@@ -344,7 +388,8 @@ class MarkCompactGC(MovingGCBase):
                 new_with_finalizers.append(x)
             else:
                 finalizers_to_run.append(x)
-                self.trace_and_mark(x)
+                self.mark(x)
+                self.to_see.append(x)
         self.objects_with_finalizers.delete()
         self.objects_with_finalizers = new_with_finalizers
 

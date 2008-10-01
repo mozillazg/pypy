@@ -469,7 +469,9 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 
     def test_weakref_to_object_with_finalizer(self):
         py.test.skip("Not implemented yet")
-        
+
+class TestMarkCompactGCGrowing(TestMarkCompactGC):
+    GC_PARAMS = {'space_size': 64}
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
