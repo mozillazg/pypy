@@ -738,8 +738,9 @@ def raw_memcopy(source, dest, size):
 
 def raw_memmove(source, dest, size):
     # for now let's assume that raw_memmove is the same as raw_memcopy,
-    # when run on top of fake addresses
+    # when run on top of fake addresses, but we _free the source object
     raw_memcopy(source, dest, size)
+    source.ptr._as_obj()._free()
 
 def cast_any_ptr(EXPECTED_TYPE, ptr):
     # this is a generalization of the various cast_xxx_ptr() functions.
