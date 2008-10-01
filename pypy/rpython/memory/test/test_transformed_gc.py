@@ -804,7 +804,17 @@ class TestMarkCompactGC(GenericMovingGCTests):
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
-            root_stack_depth = 200    
+            root_stack_depth = 200
+
+class TestMarkCompactGCGrowing(GenericMovingGCTests):
+    gcname = 'markcompact'
+
+    class gcpolicy(gc.FrameworkGcPolicy):
+        class transformerclass(framework.FrameworkGCTransformer):
+            from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
+            root_stack_depth = 200
+            GC_PARAMS = {'space_size' : 128}
+
 
 class TestGenerationGC(GenericMovingGCTests):
     gcname = "generation"

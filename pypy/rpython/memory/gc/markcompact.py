@@ -294,8 +294,8 @@ class MarkCompactGC(MovingGCBase):
             objsize = self.get_size(obj)
             totalsize = size_gc_header + objsize
             if not self.surviving(obj): 
-                # this object dies, clear arena                
-                llarena.arena_reset(fromaddr, totalsize, True)
+                # this object dies
+                pass
             else:
                 ll_assert(self.is_forwarded(obj), "not forwarded, surviving obj")
                 forward_ptr = hdr.forward_ptr
