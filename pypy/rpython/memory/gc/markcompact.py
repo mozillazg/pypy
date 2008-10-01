@@ -45,6 +45,7 @@ memoryError = MemoryError()
 # current_space_size * FREE_SPACE_MULTIPLIER / FREE_SPACE_DIVIDER + needed
 FREE_SPACE_MULTIPLIER = 3
 FREE_SPACE_DIVIDER = 2
+FREE_SPACE_ADD = 256
 
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
@@ -62,7 +63,7 @@ class MarkCompactGC(MovingGCBase):
         self.free = self.space
         self.top_of_space = self.space + self.space_size
         MovingGCBase.setup(self)
-        self.finalizers_to_run = self.AddressDeque()
+        self.run_finalizers = self.AddressDeque()
 
     def init_gc_object(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
@@ -138,7 +139,7 @@ class MarkCompactGC(MovingGCBase):
 
     def new_space_size(self, incr):
         return (self.space_size * FREE_SPACE_MULTIPLIER /
-                FREE_SPACE_DIVIDER + incr)
+                FREE_SPACE_DIVIDER + incr + FREE_SPACE_ADD)
 
     def increase_space_size(self, needed):
         self.red_zone = 0
@@ -161,16 +162,16 @@ class MarkCompactGC(MovingGCBase):
         else:
             toaddr = llarena.arena_new_view(self.space)
         self.to_see = self.AddressStack()
-        if self.objects_with_finalizers.non_empty():
+        if (self.objects_with_finalizers.non_empty() or
+            self.run_finalizers.non_empty()):
             self.mark_objects_with_finalizers()
         self.mark_roots_recursively()
-        #if self.run_finalizers.non_empty():
-        #    self.update_run_finalizers()
         finaladdr = self.update_forward_pointers(toaddr)
+        if self.run_finalizers.non_empty():
+            self.update_run_finalizers()
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
         self.update_objects_with_id()
-        self.update_finalizers_to_run()
         self.compact(resizing)
         self.space        = toaddr
         self.free         = finaladdr
@@ -178,15 +179,15 @@ class MarkCompactGC(MovingGCBase):
         self.debug_check_consistency()
         if not resizing:
             self.record_red_zone()
-        if self.finalizers_to_run.non_empty():
+        if self.run_finalizers.non_empty():
             self.execute_finalizers()
 
-    def update_finalizers_to_run(self):
-        finalizers_to_run = self.AddressDeque()
-        while self.finalizers_to_run.non_empty():
-            obj = self.finalizers_to_run.popleft()
-            finalizers_to_run.append(self.get_forwarding_address(obj))
-        self.finalizers_to_run = finalizers_to_run
+    def update_run_finalizers(self):
+        run_finalizers = self.AddressDeque()
+        while self.run_finalizers.non_empty():
+            obj = self.run_finalizers.popleft()
+            run_finalizers.append(self.get_forwarding_address(obj))
+        self.run_finalizers = run_finalizers
 
     def get_type_id(self, addr):
         return self.header(addr).tid & TYPEID_MASK
@@ -305,8 +306,9 @@ class MarkCompactGC(MovingGCBase):
 
     def debug_check_object(self, obj):
         # not sure what to check here
-        ll_assert(not self.marked(obj), "Marked")
-        ll_assert(not self.surviving(obj), "forward_ptr set")
+        if not self._is_external(obj):
+            ll_assert(not self.marked(obj), "Marked")
+            ll_assert(not self.surviving(obj), "forward_ptr set")
         
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
@@ -364,39 +366,40 @@ class MarkCompactGC(MovingGCBase):
         else:
             self.id_free_list.append(id)
 
-    def _finalization_state(self, obj):
-        if self.surviving(obj):
-            hdr = self.header(obj)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
-                return 2
-            else:
-                return 3
-        else:
-            hdr = self.header(obj)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
-                return 1
-            else:
-                return 0
-
     def mark_objects_with_finalizers(self):
         new_with_finalizers = self.AddressDeque()
-        finalizers_to_run = self.finalizers_to_run
+        run_finalizers = self.run_finalizers
+        new_run_finalizers = self.AddressDeque()
+        while run_finalizers.non_empty():
+            x = run_finalizers.popleft()
+            self.mark(x)
+            self.to_see.append(x)
+            new_run_finalizers.append(x)
+        run_finalizers.delete()
+        self.run_finalizers = new_run_finalizers
         while self.objects_with_finalizers.non_empty():
             x = self.objects_with_finalizers.popleft()
             if self.marked(x):
                 new_with_finalizers.append(x)
             else:
-                finalizers_to_run.append(x)
+                new_run_finalizers.append(x)
                 self.mark(x)
                 self.to_see.append(x)
         self.objects_with_finalizers.delete()
         self.objects_with_finalizers = new_with_finalizers
 
     def execute_finalizers(self):
-        while self.finalizers_to_run.non_empty():
-            obj = self.finalizers_to_run.popleft()
-            finalizer = self.getfinalizer(self.get_type_id(obj))
-            finalizer(obj)
+        self.finalizer_lock_count += 1
+        try:
+            while self.run_finalizers.non_empty():
+                if self.finalizer_lock_count > 1:
+                    # the outer invocation of execute_finalizers() will do it
+                    break
+                obj = self.run_finalizers.popleft()
+                finalizer = self.getfinalizer(self.get_type_id(obj))
+                finalizer(obj)
+        finally:
+            self.finalizer_lock_count -= 1
 
     def invalidate_weakrefs(self):
         # walk over list of objects that contain weakrefs
