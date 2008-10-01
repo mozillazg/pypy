@@ -209,9 +209,10 @@ class MarkCompactGC(MovingGCBase):
             if self.marked(obj):
                 return
             self.mark(obj)
-            self.to_see.append(obj)        
+            self.to_see.append(obj)
 
     def _mark_root_recursively(self, root):
+        self.mark(root.address[0])
         self.to_see.append(root.address[0])
 
     def mark(self, obj):
@@ -307,7 +308,9 @@ class MarkCompactGC(MovingGCBase):
 
     def debug_check_object(self, obj):
         # not sure what to check here
-        pass
+        return
+        if self._is_external(obj):
+            assert not self.marked(self.header(obj)) and not self.surviving(obj)
 
     def id(self, ptr):
         obj = llmemory.cast_ptr_to_adr(ptr)
