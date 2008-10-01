@@ -364,6 +364,7 @@ class GenericGCTests(GCTest):
             persistent_a4 = A()
             llop.gc__collect(lltype.Void)
             llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
             b.bla = persistent_a1.id + persistent_a2.id + persistent_a3.id + persistent_a4.id
             return b.num_deleted
         run = self.runner(f, nbargs=2)
