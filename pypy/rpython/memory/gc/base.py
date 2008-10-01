@@ -208,6 +208,7 @@ class MovingGCBase(GCBase):
         self.finalizer_lock_count = 0
         self.id_free_list = self.AddressStack()
         self.next_free_id = 1
+        self.red_zone = 0
 
     def setup(self):
         self.objects_with_finalizers = self.AddressDeque()
@@ -251,6 +252,22 @@ class MovingGCBase(GCBase):
             size += length * self.varsize_item_sizes(typeid)
             size = llarena.round_up_for_allocation(size)
         return size
+
+    def record_red_zone(self):
+        # red zone: if the space is more than 80% full, the next collection
+        # should double its size.  If it is more than 66% full twice in a row,
+        # then it should double its size too.  (XXX adjust)
+        # The goal is to avoid many repeated collection that don't free a lot
+        # of memory each, if the size of the live object set is just below the
+        # size of the space.
+        free_after_collection = self.top_of_space - self.free
+        if free_after_collection > self.space_size // 3:
+            self.red_zone = 0
+        else:
+            self.red_zone += 1
+            if free_after_collection < self.space_size // 5:
+                self.red_zone += 1
+
 
 def choose_gc_from_config(config):
     """Return a (GCClass, GC_PARAMS) from the given config object.
