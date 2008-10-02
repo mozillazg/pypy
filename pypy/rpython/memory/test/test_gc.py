@@ -318,6 +318,44 @@ class GCTest(object):
         res = self.interpret(f, [500])
         assert res == 1 + 500
 
+
+    def test_collect_during_collect(self):
+        class B(object):
+            pass
+        b = B()
+        b.nextid = 1
+        b.num_deleted = 0
+        b.num_deleted_c = 0
+        class A(object):
+            def __init__(self):
+                self.id = b.nextid
+                b.nextid += 1
+            def __del__(self):
+                llop.gc__collect(lltype.Void)
+                b.num_deleted += 1
+                C()
+                C()
+        class C(A):
+            def __del__(self):
+                b.num_deleted += 1
+                b.num_deleted_c += 1
+        def f(x, y):
+            persistent_a1 = A()
+            persistent_a2 = A()
+            i = 0
+            while i < x:
+                i += 1
+                a = A()
+            persistent_a3 = A()
+            persistent_a4 = A()
+            llop.gc__collect(lltype.Void)
+            llop.gc__collect(lltype.Void)
+            b.bla = persistent_a1.id + persistent_a2.id + persistent_a3.id + persistent_a4.id
+            print b.num_deleted_c
+            return b.num_deleted
+        res = self.interpret(f, [4, 42])
+        assert res == 12
+
     def test_weakref_across_minor_collection(self):
         import weakref
         class A:
