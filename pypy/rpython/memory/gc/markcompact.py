@@ -57,7 +57,7 @@ class MarkCompactGC(MovingGCBase):
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=2*(1024**2)):
+    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
         self.space_size = space_size
         MovingGCBase.__init__(self, chunk_size)
 
@@ -301,11 +301,7 @@ class MarkCompactGC(MovingGCBase):
                 forward_ptr = hdr.forward_ptr
                 hdr.forward_ptr = NULL
                 hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FINALIZATION_ORDERING)
-                #llop.debug_print(lltype.Void, fromaddr, "copied to", forward_ptr,
-                #                 "\ntid", self.header(obj).tid,
-                #                 "\nsize", totalsize)
                 llmemory.raw_memmove(fromaddr, forward_ptr, totalsize)
-                #llarena.arena_reset(fromaddr, totalsize, False)
             fromaddr += totalsize
 
     def debug_check_object(self, obj):
