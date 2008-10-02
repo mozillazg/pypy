@@ -300,7 +300,7 @@ OPT_TABLE = {
     '0':    'boehm       nobackendopt',
     '1':    'boehm       lowinline',
     'size': 'boehm       lowinline     remove_asserts',
-    'mem':  'marksweep   lowinline     remove_asserts',
+    'mem':  'markcompact lowinline     remove_asserts',
     '2':    'hybrid      extraopts',
     '3':    'hybrid      extraopts     remove_asserts',
     }
