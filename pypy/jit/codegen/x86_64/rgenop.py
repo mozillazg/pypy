@@ -144,11 +144,14 @@ class Builder(model.GenBuilder):
         self.mc.XOR(gv_w, gv_w)
         self.mc.IDIV(gv_y)
         return gv_w 
+    
+#    def op_int_invert(self, gv_x):
+#       return self.mc.NOT(gv_x)
         
         
     #FIXME: can only jump 32bit
     #FIXME: -6 displacement: the displ+ rip of next instr
-    def jump_if_true(self, gv_condition, args_for_jump_gv):     
+    def jump_if_true(self, gv_condition, args_for_jump_gv):   
         targetbuilder = Builder()
         self.mc.CMP(gv_condition, Immediate32(0))
         displ = self.calc_32bit_displacement(self.mc.tell(),targetbuilder.mc.tell())
@@ -200,19 +203,25 @@ class Builder(model.GenBuilder):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         print hex(self.mc.tell()),": RET"
         self._open()
-        self.mc.MOV(Register64("rax"), gv_returnvar)
+        if not gv_returnvar == None:#check void return
+            self.mc.MOV(Register64("rax"), gv_returnvar)
         self.mc.RET()
         self._close()
         
-        
+    #FIXME: uses 32bit displ    
     # if the label is greater than 32bit
     # it must be in a register
-    def finish_and_goto(self, outputargs_gv, target):
-        print hex(self.mc.tell()),": JMP to",hex(target.startaddr) 
+    def finish_and_goto(self, outputargs_gv, target): 
         self._open()
-        gv_x = self.allocate_register()
-        self.mc.MOV(gv_x,Immediate64(target.startaddr))
-        self.mc.JMP(gv_x)
+        #gv_x = self.allocate_register()
+        #self.mc.MOV(gv_x,Immediate64(target.startaddr))
+        #self.mc.JMP(gv_x)
+        
+        displ = self.calc_32bit_displacement(self.mc.tell(),target.startaddr)
+        self.mc.JMP(displ)
+
+        #self.mc.RET()
+        
         self._close()
     
     def allocate_register(self, register=None):
@@ -261,6 +270,7 @@ class RX86_64GenOp(model.AbstractRGenOp):
         
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
+        #print "arg_tokens:",arg_tokens
         inputargs_gv = []
         builder = Builder()
         # TODO: Builder._open()
@@ -270,5 +280,5 @@ class RX86_64GenOp(model.AbstractRGenOp):
         # fill the list with the correct registers
         inputargs_gv = [builder.allocate_register(register_list[i])
                                 for i in range(len(arg_tokens))]
-        return builder,Immediate32(entrypoint), inputargs_gv
+        return builder,Immediate64(entrypoint), inputargs_gv
     

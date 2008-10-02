@@ -23,12 +23,13 @@ def make_push_pop(rgenop):
     return gv_push_pop
 
 #FIXME: Jumps ever (CMP BUG)
+#TODO: result of ops
 def make_jne(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_jne, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "jne")
     builder.start_writing() 
     gv_z = builder.genop2("int_gt", gv_x, gv_y)
-    builder.mc.CMP(gv_z, rgenop.genconst(1))
+    builder.mc.CMP(gv_z, rgenop.genconst(1)) 
     builder.mc.JNE(6)
     builder.genop1("int_inc",gv_y)#not executed if x<=y
     builder.genop1("int_inc",gv_y)#not executed if x<=y
@@ -37,17 +38,17 @@ def make_jne(rgenop):
     builder.end()
     return gv_jne
 
-def make_jmp(rgenop):
-    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
-    builder, gv_jmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "jmp")
+# x= x+ y-1
+def make_jmp(rgenop,a):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
+    builder, gv_jmp, [gv_x] = rgenop.newgraph(sigtoken, "jmp")
     builder.start_writing() 
-    gv_z = builder.genop2("int_add", gv_x, gv_y)
+    builder.genop1("int_inc",gv_x)
     builder.finish_and_goto("",Label(builder.mc.tell()+6, [], 0))
-    gv_w = builder.genop2("int_add", gv_z, gv_y)
-    gv_v = builder.genop2("int_sub", gv_w, gv_x)
-    gv_a = builder.genop1("int_inc",gv_v)
-    gv_b = builder.genop1("int_inc",gv_a)
-    builder.finish_and_return(sigtoken, gv_a)
+    b=0
+    for b in range(a):
+        builder.genop1("int_inc",gv_x)
+    builder.finish_and_return(sigtoken, gv_x)
     builder.end()
     return gv_jmp
 
@@ -212,8 +213,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         
     def test_greater(self):
-        rgenop = self.RGenOp()
-        cmp_function = make_cmp(rgenop, "int_gt")
+        cmp_function = make_cmp(self.RGenOp(), "int_gt")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3>4?
         assert res == 0  # false
@@ -227,8 +227,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 0
         
     def test_less(self):
-        rgenop = self.RGenOp()
-        cmp_function = make_cmp(rgenop, "int_lt")
+        cmp_function = make_cmp(self.RGenOp(), "int_lt")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3<4?
         assert res == 1  # true
@@ -242,8 +241,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         
     def test_less_or_equal(self):
-        rgenop = self.RGenOp()
-        cmp_function = make_cmp(rgenop, "int_le")
+        cmp_function = make_cmp(self.RGenOp(), "int_le")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3<=4?
         assert res == 1  # true
@@ -259,8 +257,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         
     def test_greater_or_equal(self):
-        rgenop = self.RGenOp()
-        cmp_function = make_cmp(rgenop, "int_ge")
+        cmp_function = make_cmp(self.RGenOp(), "int_ge")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3>=4?
         assert res == 0  # false
@@ -282,14 +279,13 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 0
         
     def test__equal(self):
-        rgenop = self.RGenOp()
-        cmp_function = make_cmp(rgenop, "int_eq",42)
+        cmp_function = make_cmp(self.RGenOp(), "int_eq",42)
         fnptr = self.cast(cmp_function,1)
         res = fnptr(42)
         assert res == 1
         res = fnptr(23)
         assert res == 0
-        cmp_function = make_cmp(rgenop, "int_eq")
+        cmp_function = make_cmp(self.RGenOp(), "int_eq")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3==4?
         assert res == 0  # false
@@ -313,8 +309,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 0
         
     def test_not_equal(self):
-        rgenop = self.RGenOp()
-        cmp_function = make_cmp(rgenop, "int_ne")
+        cmp_function = make_cmp(self.RGenOp(), "int_ne")
         fnptr = self.cast(cmp_function,2)
         res = fnptr(3,4) # 3!=4?
         assert res == 1  # true
@@ -328,8 +323,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         
     def test_int_and(self):
-        rgenop = self.RGenOp()
-        bool_function = make_bool_op(rgenop,"int_and")
+        bool_function = make_bool_op(self.RGenOp(),"int_and")
         fnptr = self.cast(bool_function,2)
         result = fnptr(1,1)
         assert result == 1
@@ -346,8 +340,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert result == 0
         
     def test_int_or(self):
-        rgenop = self.RGenOp()
-        bool_function = make_bool_op(rgenop,"int_or")
+        bool_function = make_bool_op(self.RGenOp(),"int_or")
         fnptr = self.cast(bool_function,2)
         result = fnptr(1,1)
         assert result == 1
@@ -364,8 +357,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert result == 63
         
     def test_int_xor(self):
-        rgenop = self.RGenOp()
-        bool_function = make_bool_op(rgenop,"int_xor")
+        bool_function = make_bool_op(self.RGenOp(),"int_xor")
         fnptr = self.cast(bool_function,2)
         result = fnptr(1,1)
         assert result == 0
@@ -406,9 +398,9 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert result == 42
        
     # if x>y:
-    #    return y+1 
+    #    return y+3 
     # else:
-    #    return y+3
+    #    return y+1
     def test_jne(self):
         jne_func = make_jne(self.RGenOp())
         fnptr = self.cast(jne_func,2)
@@ -416,18 +408,37 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert result == 4
         result = fnptr(1,4)
         assert result == 5
+        result = fnptr(12,14)
+        assert result == 15
        
-    #def test_jmp(self):
-    #    jmp_function = make_jmp(self.RGenOp())
-    #    fnptr = self.cast(jmp_function,2)
-    #    result = fnptr(1,2)
-    #    assert result == 5
+    def test_jmp(self):
+        jmp_function = make_jmp(self.RGenOp(),3)
+        fnptr = self.cast(jmp_function,1)
+        result = fnptr(0)
+        assert result == 2
+        result = fnptr(-2)
+        assert result == 0
+        jmp_function = make_jmp(self.RGenOp(),20)
+        fnptr = self.cast(jmp_function,1)
+        result = fnptr(4)
+        assert result == 23
+        result = fnptr(23)
+        assert result == 42
         
     def test_push_pop(self):
         pp_func = make_push_pop(self.RGenOp())
         fnptr = self.cast(pp_func,1)
         result = fnptr(1)
         assert result == 1
+        
+#    def test_invert(self):
+#        inv_function = make_one_op_instr(self.RGenOp(),"int_invert")
+#        fnptr = self.cast(inv_function,1)
+#        result = fnptr(0)
+#        assert result == 0
+#        result = fnptr(1)
+#        assert result == -1
+        
        
     test_switch_many_args_direct = skip
     test_directtesthelper_direct = skip
@@ -482,6 +493,5 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_fieldaccess = skip
     test_interior_access = skip
     test_interior_access_float = skip
-    test_void_return = skip
     test_demo_f1_direct = skip
     test_red_switch = skip
