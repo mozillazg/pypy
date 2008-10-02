@@ -182,6 +182,8 @@ class MarkCompactGC(MovingGCBase):
         self.space        = toaddr
         self.free         = finaladdr
         self.top_of_space = toaddr + self.space_size
+        if not resizing:
+            llarena.arena_reset(self.free, self.top_of_space - self.free, True)
         self.debug_check_consistency()
         if not resizing:
             self.record_red_zone()
@@ -312,6 +314,7 @@ class MarkCompactGC(MovingGCBase):
                 forward_ptr = hdr.forward_ptr
                 hdr.forward_ptr = NULL
                 hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FINALIZATION_ORDERING)
+                #if fromaddr != forward_ptr:
                 llmemory.raw_memmove(fromaddr, forward_ptr, totalsize)
             fromaddr += totalsize
 
