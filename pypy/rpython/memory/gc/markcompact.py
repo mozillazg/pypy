@@ -174,7 +174,8 @@ class MarkCompactGC(MovingGCBase):
             self._trace_and_mark()
         self.to_see.delete()
         finaladdr = self.update_forward_pointers(toaddr)
-        if self.run_finalizers.non_empty():
+        if (self.run_finalizers.non_empty() or
+            self.objects_with_finalizers.non_empty()):
             self.update_run_finalizers()
         if self.objects_with_weakrefs.non_empty():
             self.invalidate_weakrefs()
