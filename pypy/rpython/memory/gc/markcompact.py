@@ -9,6 +9,7 @@ from pypy.rpython.memory.support import AddressDict
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rlib.objectmodel import we_are_translated
 
 GCFLAG_MARKBIT = MovingGCBase.first_unused_gcflag
 
@@ -180,9 +181,13 @@ class MarkCompactGC(MovingGCBase):
         self.update_objects_with_id()
         self.compact(resizing)
         if not resizing:
-            llarena.arena_reset(finaladdr, self.space_size, True)
+            size = toaddr + self.space_size - finaladdr
+            llarena.arena_reset(finaladdr, size, True)
         else:
-            llarena.arena_free(self.space)
+            if we_are_translated():
+                # because we free stuff already in raw_memmove, we
+                # would get double free here. Let's free it anyway
+                llarena.arena_free(self.space)
         self.space        = toaddr
         self.free         = finaladdr
         self.top_of_space = toaddr + self.space_size
