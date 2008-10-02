@@ -171,5 +171,7 @@ class TestSimple():
         builder.finish_and_return(token, genv_result)
         eight = fp(10) # 10-2 = 8
         assert eight == 8
-        print eight
+        num = fp(-2)
+        assert num == -4
+
         

@@ -31,7 +31,7 @@ REGISTER_MAP_8BIT = {
 # the memory. The parameters are overwritten
 # if one of the operands is an register.
 # tttn isn't used yet
-# extra is an extra byte for long opcodes like IMUL
+# extra is an extra byte for long opcodes(starting with 0F) like IMUL
 def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None, m = None, md1 = None, md2 = None, tttn = None, extra = None):
     def quadreg_instr(self, arg1, arg2):
         # move the parameter 
@@ -45,7 +45,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
         rexB = B
         # TODO: other cases e.g memory as operand
         if isinstance(arg1,Register64):
-            rexR, modrm1 = self.get_register_bits(arg1.reg)
+            rexB, modrm1 = self.get_register_bits(arg1.reg)
         elif isinstance(arg1,Register8):
             modrm1 = self.get_register_bits_8Bit(arg1.reg)
             
@@ -54,7 +54,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             # e.g: IMUL (source==dest)
             if(modrm2=="sameReg"):
                 modrm2 = modrm1
-                rexB = rexR
+                rexR = rexB
             self.write_rex_byte(rexW, rexR, rexX, rexB)
             self.write(opcode)
             self.write_modRM_byte(3, modrm2, modrm1)
@@ -65,9 +65,9 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             self.write_modRM_byte(3, modrm2, modrm1)
             self.write(chr(arg2.value)) 
         elif isinstance(arg2,Register64):
-            rexB, modrm2 = self.get_register_bits(arg2.reg)         
+            rexR, modrm2 = self.get_register_bits(arg2.reg)         
             # FIXME: exchange the two arguments (rexB/rexR)
-            self.write_rex_byte(rexW, rexB, rexX, rexR)
+            self.write_rex_byte(rexW, rexR, rexX, rexB)
             self.write(opcode)
             # used in imul (extra long opcode)
             if not extra == None:
@@ -123,7 +123,6 @@ def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         if isinstance(arg1,Register64):
             rexB, modrm1 = self.get_register_bits(arg1.reg)
               
-        # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate64):
             new_opcode = hex(int(opcode,16)+modrm1)
             assert len(new_opcode[2:len(new_opcode)]) == 2
@@ -260,14 +259,15 @@ class X86_64CodeBuilder(object):
         
     # op1 must be a register
     def JMP(self,op1):
-        method = getattr(self, "_JMP"+op1.to_string())
-        method(op1)
-        #self.write("\xE9")
-        #self.writeImm32(displ)
+        #method = getattr(self, "_JMP"+op1.to_string())
+        #method(op1)
+        print hex(self.tell()),": JMP to",hex(self.tell()+op1)
+        self.write("\xE9")
+        self.writeImm32(op1)
         
     #  op1 is and 32bit displ
     def JNE(self,op1):
-        print hex(self.tell()),": JNE to",hex(op1)
+        print hex(self.tell()),": JNE to",hex(self.tell()+op1)
         self.write("\x0F")
         self.write("\x85")
         self.writeImm32(op1)   
