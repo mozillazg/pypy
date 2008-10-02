@@ -508,7 +508,6 @@ class SemiSpaceGC(MovingGCBase):
         self.finalizer_lock_count += 1
         try:
             while self.run_finalizers.non_empty():
-                #print "finalizer"
                 if self.finalizer_lock_count > 1:
                     # the outer invocation of execute_finalizers() will do it
                     break
