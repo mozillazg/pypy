@@ -1,15 +1,20 @@
 How to run PyPy on top of maemo platform
 ========================================
 
+XXX this document needs cleanup, contains duplicate information, will need cleanup 
+    after experiments yielded the best way to do pypy-c translations. 
+
 This is a short introduction how to install correct environment and
 cross-compile pypy to maemo platform emulator under qemu. Note that this
 is work-in-progress.
 
-Installing `scratchbox`_
-------------------------
+variant 1: Installing `scratchbox`_
+-------------------------------------------
 
 I had no success with installing scratchbox 2.0, but theoretically it
-should work. Follow these `installation instructions`_,
+should work. 
+
+Follow these `installation instructions`_ for 1.0,
 make sure that you install cpu-transparency modules, otherwise emulation will
 not be available. Preferred toolchain is cs2005q3.2-glibc2.5-arm.
 
@@ -31,9 +36,8 @@ time, starting from libc6, sometimes with and sometimes
 without the ``fakeroot``.  It's quite a mess but in the end I
 get a ``python2.5``.
 
-
-Translating pypy
-----------------
+cross-compiling pypy 
++++++++++++++++++++++++++++
 
 Run::
   ./translate.py --platform=maemo --opt=mem targetpypystandalone --no-allworkingmodules
@@ -42,6 +46,68 @@ This should create pypy-c which is able to run on top of scratchbox. To run it
 you need to copy pypy-c, together with libraries to a place accessible
 from inside scratchbox. Default is /scratchbox/users/<user>/home/<user> where
 <user> is your user id.
+
+
+variant 2: using official maemo-installs 
+----------------------------------------------------------------
+
+the following taken mostly from 
+
+    http://yankandpaste.blogspot.com/2008/08/maemo-diablo-sdk-install-on-ubuntu-804.html
+
+1. On ubuntu linux edit sysctl.conf to contain::
+
+    vm.vdso_enabled = 0
+    vm.mmap_min_addr = 4096
+
+   and activate via "sysctl -p".  (on some linuxes this might crash your computer) 
+   This step is neccessary for getting a working scratchbox installation. 
+
+2. Grab http://repository.maemo.org/stable/diablo/maemo-scratchbox-install_4.1.1.sh
+   and run it as root with "sh maemo-scratchbox-install_4.1.1.sh -u USERNAME"
+   so that you automatically get an account created within the virtual scratchbox 
+   environment.  After this step you should be able to perform ``/scratchbox/login``
+   and get a funny prompt. 
+
+3. Grab http://repository.maemo.org/stable/diablo/maemo-sdk-install_4.1.1.sh
+   and run it.  For me only selecting "[x] runtime environment" worked whereas 
+   installing the dev packages failed but that might have been a (reproducible 
+   though) local download problem. After this step you should be able 
+   to perform ``/scratchbox/login`` and land in a DIABLO_ARM target environment, 
+   the code name for current Maemo. You should be able to execute "python2.5"
+   within the scratchbox environment. 
+
+4. It might not be neccessary in your installation but in order to get 
+   the scratchbox and python to work without strange warnings i found 
+   a note that it helps to setup the newest qemu-arm compiler. 
+   For this you need to svn-checkout 
+
+    http://qemu-arm-eabi.svn.sourceforge.net/svnroot/qemu-arm-eabi/trunk
+
+   and follow the README. (a number of steps). 
+
+Compiling within scratchbox
+++++++++++++++++++++++++++++++++
+
+After switching to the virtual environment via ``/scratchbox/login`` 
+and commands like this::
+
+    svn co http://codespeak.net/svn/pypy/dist pypy-dist 
+    cd pypy-dist/pypy/translator/goal
+    python translate.py --batch --opt=mem targetpypystandalone.py --no-allworkingmodules
+
+one will get (after around 10 hours on a medium intel machine) a working pypy-c. 
+You can transfer this binary to a real device an compile it there. 
+
+cross-compiling (using scratchbox)
+++++++++++++++++++++++++++++++++++++++++++++
+
+XXX under investigation.  might turn out that a different installation
+method suffices.  the above is still good for getting a maemo simulation
+environment - not much missing to also get a simulated graphical environment
+from it. 
+
+
 
 .. _`installation instructions`: http://www.scratchbox.org/documentation/user/scratchbox-1.0/html/installdoc.html
 .. _`scratchbox`: http://scratchbox.org
