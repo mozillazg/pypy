@@ -160,16 +160,19 @@ class MarkCompactGC(MovingGCBase):
         self.markcompactcollect()
 
     def markcompactcollect(self, resizing=False):
+        llop.debug_print(lltype.Void, "Collecting")
         self.debug_check_consistency()
         if resizing:
             toaddr = self.tospace
         else:
             toaddr = llarena.arena_new_view(self.space)
         self.to_see = self.AddressStack()
+        self.mark_roots_recursively()
         if (self.objects_with_finalizers.non_empty() or
             self.run_finalizers.non_empty()):
             self.mark_objects_with_finalizers()
-        self.mark_roots_recursively()
+            self._trace_and_mark()
+        self.to_see.delete()
         finaladdr = self.update_forward_pointers(toaddr)
         if self.run_finalizers.non_empty():
             self.update_run_finalizers()
@@ -191,7 +194,14 @@ class MarkCompactGC(MovingGCBase):
         while self.run_finalizers.non_empty():
             obj = self.run_finalizers.popleft()
             run_finalizers.append(self.get_forwarding_address(obj))
+        self.run_finalizers.delete()
         self.run_finalizers = run_finalizers
+        objects_with_finalizers = self.AddressDeque()
+        while self.objects_with_finalizers.non_empty():
+            obj = self.objects_with_finalizers.popleft()
+            objects_with_finalizers.append(self.get_forwarding_address(obj))
+        self.objects_with_finalizers.delete()
+        self.objects_with_finalizers = objects_with_finalizers
 
     def get_type_id(self, addr):
         return self.header(addr).tid & TYPEID_MASK
@@ -201,10 +211,12 @@ class MarkCompactGC(MovingGCBase):
             MarkCompactGC._mark_root_recursively,  # stack roots
             MarkCompactGC._mark_root_recursively,  # static in prebuilt non-gc structures
             MarkCompactGC._mark_root_recursively)  # static in prebuilt gc objects
+        self._trace_and_mark()
+
+    def _trace_and_mark(self):
         while self.to_see.non_empty():
             obj = self.to_see.pop()
             self.trace(obj, self._mark_obj, None)
-        self.to_see.delete()
 
     def _mark_obj(self, pointer, ignored):
         obj = pointer.address[0]
