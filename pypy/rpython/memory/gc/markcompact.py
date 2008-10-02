@@ -160,7 +160,6 @@ class MarkCompactGC(MovingGCBase):
         self.markcompactcollect()
 
     def markcompactcollect(self, resizing=False):
-        llop.debug_print(lltype.Void, "Collecting")
         self.debug_check_consistency()
         if resizing:
             toaddr = self.tospace
