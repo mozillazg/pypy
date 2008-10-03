@@ -27,7 +27,13 @@ class Platform(object):
 class Maemo(Platform):
     def get_compiler(self):
         # XXX how to make this reliable???
-        return '/scratchbox/compilers/cs2005q3.2-glibc-arm/bin/sbox-arm-linux-gcc'
+        for x in (
+            '/scratchbox/compilers/cs2007q3-glibc2.5-arm7/bin/arm-none-linux-gnueabi-gcc',
+            '/scratchbox/compilers/cs2005q3.2-glibc-arm/bin/sbox-arm-linux-gcc',
+        ):
+            if py.path.local(x).check():
+                return x
+        raise ValueError("could not find scratchbox cross-compiler")
     
     def execute(self, cmd):
         return py.process.cmdexec('/scratchbox/login ' + cmd)
