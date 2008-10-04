@@ -461,6 +461,7 @@ class Video(iMemory):
         if self.window.enabled:
             self.window.draw_line(self.line_y)
         if self.control.sprites_enabled:
+            #self.draw_sprites_line_new()
             self.draw_sprites_line()
         self.draw_pixels_line()
 
@@ -498,6 +499,9 @@ class Video(iMemory):
         2. order by id, lower first
         """
         return sprites.sort(key=operator.itemgetter("x"))
+    
+    
+    # -----------------------------------------------
     
     def draw_sprites_line(self):
         count = self.scan_sprites()
