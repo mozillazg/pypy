@@ -30,7 +30,7 @@ class Mode(object):
     def id(self):
         raise Exception("unimplemented method")
     
-    def activate(self, previous_mode):
+    def activate(self):
         raise Exception("unimplemented method")
     
     def emulate(self):
