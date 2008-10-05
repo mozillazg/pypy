@@ -10,7 +10,7 @@ import py
 
 class Platform(object):
     def __init__(self, cc=None):
-        self.cc = None
+        self.cc = cc
 
     def get_compiler(self):
         return self.cc 
@@ -30,6 +30,9 @@ class Platform(object):
         return (self.__class__ is other.__class__ and
                 self.__dict__ == other.__dict__)
 
+    def __repr__(self):
+        return '<Platform %s (%s)>' % (self.__class__.__name__, self.cc)
+
 class Maemo(Platform):
     def __init__(self, cc=None):
         if cc is None:
@@ -39,9 +42,10 @@ class Maemo(Platform):
             ):
                 if py.path.local(x).check():
                     cc = x
+                    break
             else:
                 raise ValueError("could not find scratchbox cross-compiler")
-        super(Platform, self).__init__(cc=cc)
+        Platform.__init__(self, cc=cc)
         
     def execute(self, cmd):
         return py.process.cmdexec('/scratchbox/login ' + cmd)
