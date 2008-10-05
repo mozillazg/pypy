@@ -228,5 +228,7 @@ class TestEci:
         assert repr(eci) != repr(eci2)
         py.test.raises(Exception, eci2.merge, eci)
         assert eci.merge(eci).platform == Maemo()
-
-
+        assert (ExternalCompilationInfo(platform=Maemo(cc='xxx')) !=
+                ExternalCompilationInfo(platform=Maemo(cc='yyy')))
+        assert (repr(ExternalCompilationInfo(platform=Maemo(cc='xxx'))) !=
+                repr(ExternalCompilationInfo(platform=Maemo(cc='yyy'))))
