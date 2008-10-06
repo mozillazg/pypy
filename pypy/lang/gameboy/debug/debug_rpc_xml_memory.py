@@ -74,6 +74,7 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
     # RPC ===================================================================
         
     def close(self):
+    	pdb.set_trace()
         if not self.is_closed:
             print "python: called close"
             self.server_close()
@@ -146,7 +147,7 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
         
     @printframe("comparing registers")
     def compare_registers(self, registers):
-        for reg in [("a",  self.cpu.a.get()),  ("f",  self.cpu.f.get()),
+        for reg in [("a",  self.cpu.a.get()),  ("f",  self.cpu.flag.get()),
                     ("b",  self.cpu.b.get()),  ("c",  self.cpu.c.get()),
                     ("d",  self.cpu.d.get()),  ("e",  self.cpu.e.get()),
                     ("h",  self.cpu.h.get()),  ("l",  self.cpu.l.get()),
@@ -227,21 +228,21 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
                          self.gameboy_debug.video.object_palette_1, \
                          video["obp1"])
         self.print_check("video scx", \
-                         self.gameboy_debug.video.scroll_x, video["scx"])
+                         self.gameboy_debug.video.background.scroll_x, video["scx"])
         self.print_check("video scy", \
-                         self.gameboy_debug.video.scroll_y, video["scy"])
+                         self.gameboy_debug.video.background.scroll_y, video["scy"])
         self.print_check("video stat", \
                          self.gameboy_debug.video.status.read(), video["stat"])
         self.print_check("video transfer", \
                            self.gameboy_debug.video.transfer, video["transfer"])
         self.print_check("video vblank", \
-                         self.gameboy_debug.video.vblank, video["vblank"])
+                         self.gameboy_debug.video.v_blank, video["vblank"])
         self.print_check("video wly", \
-                         self.gameboy_debug.video.window_line_y, video["wly"])
+                         self.gameboy_debug.video.window.line_y, video["wly"])
         self.print_check("video wx", \
-                         self.gameboy_debug.video.window_x, video["wx"])
+                         self.gameboy_debug.video.window.x, video["wx"])
         self.print_check("video wy", \
-                         self.gameboy_debug.video.window_y, video["wy"])
+                         self.gameboy_debug.video.window.y, video["wy"])
      
     @printframe("comparing timer")   
     def compare_timer(self, data):
@@ -326,8 +327,6 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
             self.pending_steps -= 1
             return
         #self.prompt_for_user_input()
-        
-    
         
     def prompt_for_user_input(self):
         if self.showed_skip_message_count < 2:
