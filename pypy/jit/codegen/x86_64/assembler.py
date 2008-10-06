@@ -178,7 +178,7 @@ class X86_64CodeBuilder(object):
     _CMP_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    1, "\x81", 3, None, 7)
     _CMP_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x39", 3, None, None)
     # FIXME: rexB is set
-    _CMP_8REG_IMM8   = make_two_operand_instr(   0,    0,    0,    0, "\x82", 3, None, 7)
+    _CMP_8REG_IMM8   = make_two_operand_instr(   0,    0,    0, None, "\x80", 3, None, 7)
     
     _DEC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 1)
     _INC_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xFF", 3, None, 0)
@@ -233,6 +233,7 @@ class X86_64CodeBuilder(object):
         method(op1, op2)
         
     def CMP(self, op1, op2):
+        #import pdb;pdb.set_trace()
         method = getattr(self, "_CMP"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
