@@ -1,6 +1,8 @@
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
-from pypy.objspace.flow.model import SpaceOperation
+from pypy.objspace.flow.model import SpaceOperation, FunctionGraph
 from pypy.translator.backendopt.support import log
+from pypy.rpython.typesystem import getfunctionptr
+from pypy.rpython.lltypesystem import lltype
 
 
 # ____________________________________________________________
@@ -13,7 +15,8 @@ class CannotVirtualize(Exception):
 class MallocVirtualizer(object):
 
     def __init__(self, graphs):
-        self.graphs = list(graphs)
+        self.graphs = graphs
+        self.new_graphs = {}
         self.cache = BlockSpecCache()
         self.count_virtualized = 0
 
@@ -42,6 +45,7 @@ class MallocVirtualizer(object):
                 except CannotVirtualize, e:
                     if verbose:
                         log.mallocv('%s failed: %s' % (op.result, e))
+        self.put_new_graphs_back_in_translator()
         progress = self.report_result() - prev
         return progress
 
@@ -53,12 +57,19 @@ class MallocVirtualizer(object):
         mallocspec.commit()
         self.count_virtualized += 1
 
+    def put_new_graphs_back_in_translator(self):
+        for graph in self.cache.graph_starting_at.values():
+            if graph not in self.new_graphs:
+                self.new_graphs[graph] = True
+                self.graphs.append(graph)
+
 
 class BlockSpecCache(object):
 
     def __init__(self, fallback=None):
         self.specialized_blocks = {}
         self.block_keys = {}
+        self.graph_starting_at = {}
         self.fallback = fallback
 
     def lookup_spec_block(self, block, extra_key):
@@ -78,9 +89,22 @@ class BlockSpecCache(object):
         self.specialized_blocks[key] = specblock
         self.block_keys[specblock] = key
 
+    def lookup_graph_starting_at(self, startblock):
+        try:
+            return self.graph_starting_at[startblock]
+        except KeyError:
+            if self.fallback is None:
+                return None
+            else:
+                return self.fallback.graph_starting_at.get(startblock)
+
+    def remember_graph_starting_at(self, startblock, graph):
+        self.graph_starting_at[startblock] = graph
+
     def push_changes(self):
         self.fallback.specialized_blocks.update(self.specialized_blocks)
         self.fallback.block_keys.update(self.block_keys)
+        self.fallback.graph_starting_at.update(self.graph_starting_at)
 
 
 class MallocSpecializer(object):
@@ -138,6 +162,15 @@ class MallocSpecializer(object):
                                            specblock)
         return specblock
 
+    def get_specialized_graph(self, graph, v):
+        block = graph.startblock
+        specblock = self.get_specialized_block(block, v)
+        specgraph = self.cache.lookup_graph_starting_at(specblock)
+        if specgraph is None:
+            specgraph = FunctionGraph(graph.name + '_spec', specblock)
+            self.cache.remember_graph_starting_at(specblock, specgraph)
+        return specgraph
+
     def propagate_specializations(self):
         while self.pending_specializations:
             spec, block, specblock = self.pending_specializations.pop()
@@ -172,6 +205,8 @@ class BlockSpecializer(object):
             self.expanded_v.append(c)
 
     def rename_nonvirtual(self, v, where=None):
+        if isinstance(v, Constant):
+            return v
         if v in self.curvars:
             raise CannotVirtualize(where)
         [v2] = self.renamings[v]
@@ -232,5 +267,36 @@ class BlockSpecializer(object):
             self.make_expanded_zero_constants()
             self.renamings[op.result] = self.expanded_v
             return []
+        else:
+            return self.handle_default(op)
+
+    def handle_op_direct_call(self, op):
+        fobj = op.args[0].value._obj
+        if hasattr(fobj, 'graph'):
+            graph = fobj.graph
+            nb_args = len(op.args) - 1
+            assert nb_args == len(graph.getargs())
+            newargs = []
+            for i in range(nb_args):
+                v1 = op.args[1+i]
+                if v1 not in self.curvars:
+                    newargs.append(v1)
+                else:
+                    inputarg_index_in_specgraph = len(newargs)
+                    v2 = graph.getargs()[inputarg_index_in_specgraph]
+                    assert v1.concretetype == v2.concretetype
+                    specgraph = self.mallocspec.get_specialized_graph(graph,
+                                                                      v2)
+                    newargs.extend(self.expanded_v)
+                    graph = specgraph
+            assert len(newargs) == len(graph.getargs())
+            fspecptr = getfunctionptr(graph)
+            newargs.insert(0, Constant(fspecptr,
+                                       concretetype=lltype.typeOf(fspecptr)))
+            newresult = Variable(op.result)
+            newresult.concretetype = op.result.concretetype
+            self.renamings[op.result] = [newresult]
+            newop = SpaceOperation('direct_call', newargs, newresult)
+            return [newop]
         else:
             return self.handle_default(op)

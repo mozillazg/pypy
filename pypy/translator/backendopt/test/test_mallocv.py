@@ -23,18 +23,15 @@ class BaseMallocRemovalTest(object):
     def check_malloc_removed(cls, graph):
         #remover = cls.MallocRemover()
         checkgraph(graph)
-        count1 = count2 = 0
+        count = 0
         for node in flatten(graph):
             if isinstance(node, Block):
                 for op in node.operations:
                     if op.opname == 'malloc': #cls.MallocRemover.MALLOC_OP:
                         S = op.args[0].value
                         #if not remover.union_wrapper(S):   # union wrappers are fine
-                        count1 += 1
-                    if op.opname in ('direct_call', 'indirect_call'):
-                        count2 += 1
-        assert count1 == 0   # number of mallocs left
-        assert count2 == 0   # number of calls left
+                        count += 1
+        assert count == 0   # number of mallocs left
     check_malloc_removed = classmethod(check_malloc_removed)
 
     def check(self, fn, signature, args, expected_result, must_be_removed=True):
@@ -74,6 +71,14 @@ class BaseMallocRemovalTest(object):
         graph = self.check(fn1, [int, int], [15, 10], 125)
         insns = summary(graph)
         assert insns['int_mul'] == 1
+
+    def test_direct_call(self):
+        def g(t):
+            a, b = t
+            return a * b
+        def f(x):
+            return g((x+1, x-1))
+        graph = self.check(f, [int], [10], 99)
 
     def test_fn2(self):
         py.test.skip("redo me")
