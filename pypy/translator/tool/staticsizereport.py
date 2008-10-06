@@ -12,23 +12,31 @@ def guess_size(obj):
         if arrayfld:
             length = len(getattr(ptr, arrayfld))
         else:
-            length = len(ptr)
-        return convert_offset_to_int(llmemory.sizeof(TYPE, length))
-    return convert_offset_to_int(llmemory.sizeof(TYPE))
+            try:
+                length = len(ptr)
+            except TypeError:
+                print "couldn't find size of", ptr
+                return 0
+    else:
+        length = None
+    return convert_offset_to_int(llmemory.sizeof(TYPE, length))
 
 
-def group_static_size_by_lltype(database):
+def by_lltype(obj):
+    return typeOf(obj)
+
+def group_static_size(database, grouper=by_lltype):
     totalsize = {}
     numobjects = {}
     for node in database.globalcontainers():
         obj = node.obj
-        group = typeOf(obj)
+        group = grouper(obj)
         totalsize[group] = totalsize.get(group, 0) + guess_size(obj)
         numobjects[group] = numobjects.get(group, 0) + 1
     return totalsize, numobjects
 
-def print_static_size_by_lltype(database):
-    totalsize, numobjects = group_static_size_by_lltype(database)
+def print_static_size(database, grouper=by_lltype):
+    totalsize, numobjects = group_static_size(database, grouper)
     l = [(size, key) for key, size in totalsize.iteritems()]
     l.sort()
     l.reverse()
