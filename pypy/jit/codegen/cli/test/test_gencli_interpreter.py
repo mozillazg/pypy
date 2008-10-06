@@ -101,10 +101,10 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
         py.test.skip("TODO: exceptions")
 
     def test_learn_nonzeroness(self):
-        py.test.skip("replay: NotImplementedError")
+        py.test.skip("something wrong with promotion")
 
     def test_freeze_booleffects_correctly(self):
-        py.test.skip("replay: NotImplementedError")
+        py.test.skip("something wrong with promotion")
 
     def test_degenerated_at_return(self):
         py.test.skip('test framework does not support getattr on returned instances')
