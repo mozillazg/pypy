@@ -484,12 +484,11 @@ class ExpectClassCollector(py.test.collect.Class):
 
 
 class Directory(py.test.collect.Directory):
-    def run(self):
-        # hack to exclude lib/ctypes/
-        if self.fspath == rootdir.join('lib', 'ctypes', 'test'):
+    def consider_dir(self, path, usefilters=True):
+        if path == rootdir.join("lib", "ctypes", "test"):
             py.test.skip("These are the original ctypes tests.\n"
                          "You can try to run them with 'pypy-c runtests.py'.")
-        return py.test.collect.Directory.run(self)
+        return super(Directory, self).consider_dir(path, usefilters=usefilters)
 
     def recfilter(self, path):
         # disable recursion in symlinked subdirectories
