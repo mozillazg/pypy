@@ -45,9 +45,9 @@ option = py.test.config.addoptions("compliance testing options",
            default=str(pypyexecpath),
            help="to use together with -C to specify the path to the "
                 "compiled version of pypy, by default expected in pypy/bin/pypy-c"),
-    Option('-E', '--extracttests', action="store_true", 
-           default=False, dest="extracttests", 
-           help="try to extract single tests and run them via py.test/PyPy"), 
+    #Option('-E', '--extracttests', action="store_true", 
+    #       default=False, dest="extracttests", 
+    #       help="try to extract single tests and run them via py.test/PyPy"), 
     Option('-T', '--timeout', action="store", type="string", 
            default="100mp", dest="timeout", 
            help="fail a test module after the given timeout. "
@@ -193,7 +193,7 @@ class SimpleRunItem(py.test.collect.Item):
         finally: 
             sys.stdout = oldsysout 
         
-    def run(self): 
+    def runtest(self): 
         # XXX integrate this into InterceptedRunModule
         #     but we want a py.test refactoring towards
         #     more autonomy of colitems regarding 
@@ -215,7 +215,7 @@ class SimpleRunItem(py.test.collect.Item):
             print output, 
 
 #
-class InterceptedRunModule(py.test.collect.Module): 
+class XXXInterceptedRunModule(py.test.collect.Module): 
     """ special handling for tests with a proper 'def test_main(): '
         definition invoking test_support.run_suite or run_unittest 
         (XXX add support for test_support.run_doctest). 
@@ -252,25 +252,18 @@ class InterceptedRunModule(py.test.collect.Module):
             testitem = AppDocTestModule(name, parent=self, w_module=w_module)
             self.name2item[name] = testitem 
        
-    def run(self): 
+    def collect(self): 
         self._prepare() 
-        keys = self.name2item.keys()
-        keys.sort(lambda x,y: cmp(x.lower(), y.lower()))
-        return keys 
-
-    def join(self, name): 
-        self._prepare() 
-        try: 
-            return self.name2item[name]
-        except KeyError: 
-            pass
+        items = self.name2item.items()
+        items.sort()
+        return items 
 
 class AppDocTestModule(py.test.collect.Item): 
     def __init__(self, name, parent, w_module): 
         super(AppDocTestModule, self).__init__(name, parent) 
         self.w_module = w_module 
 
-    def run(self): 
+    def runtest(self): 
         py.test.skip("application level doctest modules not supported yet.")
     
 class AppTestCaseMethod(py.test.collect.Item): 
@@ -279,7 +272,7 @@ class AppTestCaseMethod(py.test.collect.Item):
         self.space = gettestobjspace() 
         self.w_method = w_method 
 
-    def run(self):      
+    def runtest(self):      
         space = self.space
         filename = str(self.fspath) 
         callex(space, set_argv, space, space.wrap(filename))
@@ -766,16 +759,17 @@ class RegrDirectory(py.test.collect.Directory):
                 cache[x.basename] = x
         return cache.get(name, None)
         
-    def run(self): 
-        return [x.basename for x in testmap]
-
-    def join(self, name): 
-        regrtest = self.get(name) 
-        if regrtest is not None: 
-            if not option.extracttests:  
-                return RunFileExternal(name, parent=self, regrtest=regrtest) 
-            else: 
-                return InterceptedRunModule(name, self, regrtest) 
+    def collect(self): 
+        l = []
+        for x in testmap:
+            name = x.basename
+            regrtest = self.get(name)
+            if regrtest is not None: 
+                #if option.extracttests:  
+                #    l.append(InterceptedRunModule(name, self, regrtest))
+                #else:
+                l.append(RunFileExternal(name, parent=self, regrtest=regrtest))
+        return l 
 
 Directory = RegrDirectory
 
@@ -923,7 +917,7 @@ class ReallyRunFileExternal(py.test.collect.Item):
                 regrrun, regrrun_verbosity, fspath.purebasename)
         return cmd 
 
-    def run(self): 
+    def runtest(self): 
         """ invoke a subprocess running the test file via PyPy. 
             record its output into the 'result/user@host' subdirectory. 
             (we might want to create subdirectories for 
