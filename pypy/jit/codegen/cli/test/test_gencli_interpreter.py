@@ -89,7 +89,7 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     check_count_depth = False # see test_self_referential_structures
     
     def test_known_nonzero(self):
-        py.test.skip("replay: NotImplementedError")
+        py.test.skip("something wrong with promotion")
 
     def test_debug_assert_ptr_nonzero(self):
         py.test.skip("replay: NotImplementedError")

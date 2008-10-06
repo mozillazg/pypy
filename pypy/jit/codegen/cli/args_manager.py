@@ -46,6 +46,9 @@ class ArgsManager:
         return self.clitype
 
     def register_types(self, types):
+        if not self.is_open():
+            return # XXX
+        
         assert self.is_open()
         newcounter = {}
         for clitype in types:

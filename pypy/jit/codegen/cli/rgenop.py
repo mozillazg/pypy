@@ -6,11 +6,13 @@ from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
 from pypy.jit.codegen.model import CodeGenSwitch
+from pypy.jit.codegen.model import ReplayBuilder, dummy_var
 from pypy.jit.codegen.cli import operation as ops
 from pypy.jit.codegen.cli.methodfactory import get_method_wrapper
 from pypy.jit.codegen.cli.args_manager import ArgsManager
 from pypy.translator.cli.dotnet import CLR, typeof, new_array, init_array
 from pypy.translator.cli.dotnet import box, unbox, clidowncast, classof
+from pypy.translator.cli.dotnet import class2type, type2class
 from pypy.translator.cli import dotnet
 System = CLR.System
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
@@ -114,19 +116,15 @@ class AllocToken:
     def getCliType(self):
         return class2type(self.ooclass)
 
-def class2type(cls):
-    'Cast a PBC of type ootype.Class into a System.Type instance'
-    if cls is cVoid:
-        return None
-    else:
-        return clidowncast(box(cls), System.Type)
-
 class __extend__(GenVarOrConst):
     __metaclass__ = extendabletype
 
     def getCliType(self):
         raise NotImplementedError
-    
+
+    def getkind(self):
+        return type2class(self.getCliType())
+
     def load(self, builder):
         raise NotImplementedError
 
@@ -426,8 +424,7 @@ class RCliGenOp(AbstractRGenOp):
         return builder, graph.gv_entrypoint, graph.inputargs_gv[:]
 
     def replay(self, label):
-        print 'Replay!'
-        raise NotImplementedError
+        return ReplayBuilder(self), [dummy_var] * len(label.inputargs_gv)
 
 
 class GraphInfo:
