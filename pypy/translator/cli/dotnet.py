@@ -723,3 +723,16 @@ known_delegates = {
     }
 
 known_delegates_class = {}
+
+cVoid = classof(CLR.System.Void)
+def class2type(cls):
+    'Cast a PBC of type ootype.Class into a System.Type instance'
+    if cls is cVoid:
+        return None
+    return clidowncast(box(cls), CLR.System.Type)
+
+def type2class(clitype):
+    'Cast a System.Type instance to a PBC of type ootype.Class'
+##     if clitype is None:
+##         return cVoid
+    return unbox(clitype, ootype.Class)
