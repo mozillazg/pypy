@@ -148,13 +148,14 @@ class Builder(model.GenBuilder):
 #    def op_int_invert(self, gv_x):
 #       return self.mc.NOT(gv_x)
         
-        
+         
     #FIXME: can only jump 32bit
+    # -6 : length of the jne instruction
     def jump_if_true(self, gv_condition, args_for_jump_gv):   
         targetbuilder = Builder()
         self.mc.CMP(gv_condition, Immediate32(0))
         displ = self.calc_32bit_displacement(self.mc.tell(),targetbuilder.mc.tell())
-        self.mc.JNE(displ)
+        self.mc.JNE(displ-6)
         #targetbuilder.come_from(self.mc, 'JNE')      
         return targetbuilder
     
@@ -210,14 +211,16 @@ class Builder(model.GenBuilder):
     #FIXME: uses 32bit displ    
     # if the label is greater than 32bit
     # it must be in a register
-    def finish_and_goto(self, outputargs_gv, target): 
+    # -5 length of the jmp instruction
+    def finish_and_goto(self, outputargs_gv, target):
+        import pdb;pdb.set_trace() 
         self._open()
         #gv_x = self.allocate_register()
         #self.mc.MOV(gv_x,Immediate64(target.startaddr))
         #self.mc.JMP(gv_x)
         
         displ = self.calc_32bit_displacement(self.mc.tell(),target.startaddr)
-        self.mc.JMP(displ)
+        self.mc.JMP(displ-5)
 
         #self.mc.RET()
         
@@ -235,11 +238,15 @@ class Builder(model.GenBuilder):
     def end(self):
         pass
     
-    #TODO: Implementation
+    #TODO: args_gv muste be a list of unique GenVars
     def enter_next_block(self, args_gv):
-        #print "WriteMe:  enter_next_block"
-        L = Label(self.mc.tell(), [], 0)
-        #print "DEBUG2:",L.startaddr
+        # move constants into an register
+        for i in range(len(args_gv)):
+            if isinstance(args_gv[i],model.GenConst):
+                gv_x = self.allocate_register()
+                self.mc.MOV(gv_x, argsv_gv[i])
+                args_gv[i] = gv_x
+        L = Label(self.mc.tell(), args_gv, 0)
         return L
     
     def _close(self):

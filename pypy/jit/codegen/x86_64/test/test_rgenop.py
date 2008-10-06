@@ -142,7 +142,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fp(84,1)
         assert res == 42
         
-    def test_mul_im32(self):
+    def test_mul_imm32(self):
         rgenop = self.RGenOp()
         mul_function = make_mul_imm(rgenop,200)
         fnptr = self.cast(mul_function,1)
@@ -278,35 +278,35 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fnptr(-4,0)
         assert res == 0
         
-    def test__equal(self):
+    def test_equal(self):
         cmp_function = make_cmp(self.RGenOp(), "int_eq",42)
         fnptr = self.cast(cmp_function,1)
         res = fnptr(42)
         assert res == 1
         res = fnptr(23)
         assert res == 0
-        cmp_function = make_cmp(self.RGenOp(), "int_eq")
-        fnptr = self.cast(cmp_function,2)
-        res = fnptr(3,4) # 3==4?
-        assert res == 0  # false
-        res = fnptr(4,3)
-        assert res == 0 
-        res = fnptr(4,4)
-        assert res == 1
-        res = fnptr(4,0)
-        assert res == 0
-        res = fnptr(-4,0)
-        assert res == 0
-        res = fnptr(184467440737095516,184467440737095516)
-        assert res == 1
-        res = fnptr(252,-4)
-        assert res == 0
-        res = fnptr(-4,252)
-        assert res == 0
-        res = fnptr(244,756)
-        assert res == 0
-        res = fnptr(-1,9223372036854775807) #FFFF.... != 7FFF...
-        assert res == 0
+        #cmp_function = make_cmp(self.RGenOp(), "int_eq")
+        #fnptr = self.cast(cmp_function,2)
+        #res = fnptr(3,4) # 3==4?
+        #assert res == 0  # false
+        #res = fnptr(4,3)
+        #assert res == 0 
+        #res = fnptr(4,4)
+        #assert res == 1
+        #res = fnptr(4,0)
+        #assert res == 0
+        #res = fnptr(-4,0)
+        #assert res == 0
+        #res = fnptr(184467440737095516,184467440737095516)
+        #assert res == 1
+        #res = fnptr(252,-4)
+        #assert res == 0
+        #res = fnptr(-4,252)
+        #assert res == 0
+        #res = fnptr(244,756)
+        #assert res == 0
+        #res = fnptr(-1,9223372036854775807) #FFFF.... != 7FFF...
+        #assert res == 0
         
     def test_not_equal(self):
         cmp_function = make_cmp(self.RGenOp(), "int_ne")
@@ -450,7 +450,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_dummy_direct = skip
     test_largedummy_direct = skip
     test_branching_direct = skip
-    test_goto_direct = skip##
+    ##test_goto_direct = skip##
     test_if_direct = skip
     test_switch_direct = skip
     test_large_switch_direct = skip
