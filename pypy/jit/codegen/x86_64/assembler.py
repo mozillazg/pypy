@@ -168,8 +168,8 @@ class X86_64CodeBuilder(object):
     # Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
     
     # FIXME: rexB is set
-    _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 2)  
-    _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x00", 3, None, None)
+    _ADD_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 0)  
+    _ADD_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x01", 3, None, None)
     
     _AND_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x21", 3, None, None)
     
@@ -218,7 +218,7 @@ class X86_64CodeBuilder(object):
     _SHL_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xD3", 3, None, 4)
     _SHR_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xD3", 3, None, 5) 
      
-    _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x28", 3, None, None)    
+    _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x29", 3, None, None)    
     _SUB_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 5)
     
     _XOR_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x31", 3, None, None)
