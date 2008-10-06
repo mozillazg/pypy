@@ -8,7 +8,8 @@ from pypy.translator.cli.test.runtest import CliTest
 from pypy.translator.cli.dotnet import SomeCliClass, SomeCliStaticMethod,\
      NativeInstance, CLR, box, unbox, OverloadingResolver, NativeException,\
      native_exc, new_array, init_array, typeof, eventhandler, clidowncast,\
-     cliupcast, classof, cast_to_native_object, cast_from_native_object
+     cliupcast, classof, cast_to_native_object, cast_from_native_object,\
+     class2type, type2class
 
 System = CLR.System
 ArrayList = CLR.System.Collections.ArrayList
@@ -483,6 +484,31 @@ class TestDotnetRtyping(CliTest):
         res = self.interpret(fn, [True])
         assert res == 42
 
+    def test_class2type(self):
+        cInt32 = classof(System.Int32)
+        cString = classof(System.String)
+        def fn(flag):
+            if flag:
+                cls = cInt32
+            else:
+                cls = cString
+            clitype = class2type(cls)
+            return clitype.get_FullName()
+        res = self.interpret(fn, [True])
+        assert res == 'System.Int32'
+
+    def test_type2class(self):
+        cInt32 = classof(System.Int32)
+        def fn(flag):
+            if flag:
+                clitype = typeof(System.Int32)
+            else:
+                clitype = typeof(System.String)
+            cls = type2class(clitype)
+            return cls is cInt32
+        res = self.interpret(fn, [True])
+        assert res
+
     def test_instance_wrapping(self):
         class Foo:
             pass
@@ -694,4 +720,7 @@ class TestPythonnet(TestDotnetRtyping):
         assert res == 'DelegateType_int__int_2'
 
     def test_cast_native_object(self):
+        pass # it works only when translated
+
+    def test_type2class(self):
         pass # it works only when translated

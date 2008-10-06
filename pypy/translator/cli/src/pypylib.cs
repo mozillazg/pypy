@@ -283,6 +283,9 @@ namespace pypy.runtime
 
         public static string OOString(object obj, int base_)
         {
+          if (obj == null)
+            return "<null object>";
+          else
             return string.Format("<{0} object>", obj.GetType().FullName);
         }
 
