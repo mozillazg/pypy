@@ -590,7 +590,9 @@ class ReallyRunFileExternal(py.test.collect.Item):
         
         TIMEOUT = gettimeout()
         if option.pypy:
-            execpath = py.path.local.sysfind(option.pypy)
+            execpath = py.path.local(option.pypy)
+            if not execpath.check():
+                execpath = py.path.local.sysfind(option.pypy)
             if not execpath:
                 raise LookupError("could not find executable %r" %(option.pypy,))
             cmd = "%s %s %s %s" %(
