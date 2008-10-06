@@ -47,6 +47,8 @@ memoryError = MemoryError()
 FREE_SPACE_MULTIPLIER = 3
 FREE_SPACE_DIVIDER = 2
 FREE_SPACE_ADD = 256
+# XXX adjust
+GC_CLEARANCE = 32*1024
 
 class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
@@ -309,6 +311,8 @@ class MarkCompactGC(MovingGCBase):
     def compact(self, resizing):
         fromaddr = self.space
         size_gc_header = self.gcheaderbuilder.size_gc_header
+        start = fromaddr
+        end = fromaddr
         while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
@@ -320,10 +324,26 @@ class MarkCompactGC(MovingGCBase):
             else:
                 ll_assert(self.is_forwarded(obj), "not forwarded, surviving obj")
                 forward_ptr = hdr.forward_ptr
+                if resizing:
+                    end = fromaddr
                 hdr.forward_ptr = NULL
                 hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FINALIZATION_ORDERING)
-                #if fromaddr != forward_ptr:
-                llmemory.raw_memmove(fromaddr, forward_ptr, totalsize)
+                if fromaddr != forward_ptr:
+                    #llop.debug_print(lltype.Void, "Copying from to",
+                    #                 fromaddr, forward_ptr, totalsize)
+                    llmemory.raw_memmove(fromaddr, forward_ptr, totalsize)
+                if resizing and end - start > GC_CLEARANCE:
+                    diff = end - start
+                    #llop.debug_print(lltype.Void, "Cleaning", start, diff)
+                    diff = (diff / GC_CLEARANCE) * GC_CLEARANCE
+                    #llop.debug_print(lltype.Void, "Cleaning", start, diff)
+                    end = start + diff
+                    if we_are_translated():
+                        # XXX wuaaaaa.... those objects are freed incorrectly
+                        #                 here in case of test_gc
+                        llarena.arena_reset(start, diff, True)
+                    start += diff
+
             fromaddr += totalsize
 
     def debug_check_object(self, obj):
