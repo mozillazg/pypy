@@ -8,8 +8,9 @@ import pdb
 
 # ------------------------------------------------------------------------------
 
-from AppKit import NSApplication
-NSApplication.sharedApplication()
+if sys.platform == 'darwin':
+	from AppKit import NSApplication
+    NSApplication.sharedApplication()
 # ------------------------------------------------------------------------------
 
 ROM_PATH    = str(py.magic.autopath().dirpath().dirpath())+"/rom"
