@@ -6,6 +6,7 @@ from pypy.lang.gameboy.debug.debug_cpu import DebugCPU
 from pypy.lang.gameboy.debug import debug
 from pypy.lang.gameboy.debug.debug_socket_memory import *
 import time
+import pdb
 
 # GAMEBOY ----------------------------------------------------------------------
 
@@ -26,8 +27,10 @@ class GameBoyDebugImplementation(GameBoyImplementation):
         self.sound_driver  = SoundDriverImplementation()
    
    
-    def handle_execution_error(self):
+    def handle_execution_error(self, error):
+    	print error
         print "closing socket connections"
+        pdb.set_trace()
         self.is_running = False
         debug.print_results()
         self.memory.close()
@@ -54,6 +57,7 @@ class VideoDriverDebugImplementation(VideoDriver):
     def update_display(self):
         # dont update the display, we're here only for testing
         pass
+    
              
         
 # JOYPAD DRIVER ----------------------------------------------------------------
@@ -62,6 +66,9 @@ class JoypadDriverDebugImplementation(JoypadDriver):
     
     def __init__(self):
         JoypadDriver.__init__(self)
+      
+    def update(self, event):
+      	pass;  
         
         
 # SOUND DRIVER -----------------------------------------------------------------
