@@ -150,12 +150,11 @@ class Builder(model.GenBuilder):
         
         
     #FIXME: can only jump 32bit
-    #FIXME: -6 displacement: the displ+ rip of next instr
     def jump_if_true(self, gv_condition, args_for_jump_gv):   
         targetbuilder = Builder()
         self.mc.CMP(gv_condition, Immediate32(0))
         displ = self.calc_32bit_displacement(self.mc.tell(),targetbuilder.mc.tell())
-        self.mc.JNE(displ-6)
+        self.mc.JNE(displ)
         #targetbuilder.come_from(self.mc, 'JNE')      
         return targetbuilder
     
@@ -244,7 +243,7 @@ class Builder(model.GenBuilder):
         return L
     
     def _close(self):
-        pass
+        self.mc.done()
     
     def calc_32bit_displacement(self, curr_addr, want_jump_to):
         return want_jump_to-curr_addr
