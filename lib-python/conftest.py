@@ -20,9 +20,6 @@ from test import pystone
 from pypy.tool.pytest import appsupport 
 from pypy.tool.pytest.confpath import pypydir, libpythondir, \
                                       regrtestdir, modregrtestdir, testresultdir
-from pypy.tool.pytest.result import Result, ResultFromMime
-
-pypyexecpath = pypydir.join('bin', 'pypy-c')
 
 dist_rsync_roots = ['.', '../pypy', '../py']
     
@@ -30,32 +27,15 @@ dist_rsync_roots = ['.', '../pypy', '../py']
 # Interfacing/Integrating with py.test's collection process 
 #
 
-# XXX no nice way to implement a --listpassing py.test option?! 
-#option = py.test.addoptions("compliance testing options", 
-#    py.test.Option('-L', '--listpassing', action="store", default=None, 
-#                   type="string", dest="listpassing", 
-#                   help="just display the list of expected-to-pass tests.")
-
 Option = py.test.config.Option 
 option = py.test.config.addoptions("compliance testing options", 
-    Option('-C', '--compiled', action="store_true", 
-           default=False, dest="use_compiled", 
-           help="use a compiled version of pypy"),
-    Option('--compiled-pypy', action="store", type="string", dest="pypy_executable",
-           default=str(pypyexecpath),
-           help="to use together with -C to specify the path to the "
-                "compiled version of pypy, by default expected in pypy/bin/pypy-c"),
-    #Option('-E', '--extracttests', action="store_true", 
-    #       default=False, dest="extracttests", 
-    #       help="try to extract single tests and run them via py.test/PyPy"), 
     Option('-T', '--timeout', action="store", type="string", 
            default="100mp", dest="timeout", 
            help="fail a test module after the given timeout. "
                 "specify in seconds or 'NUMmp' aka Mega-Pystones"),
-    Option('--resultdir', action="store", type="string", 
-           default=None, dest="resultdir", 
-           help="directory under which to store results in USER@HOST subdirs",
-           ),
+    Option('--pypy', action="store", type="string",
+           dest="pypy",  help="use given pypy executable to run lib-python tests. "
+                              "This will run the tests directly (i.e. not through py.py)")
     )
 
 def gettimeout(): 
@@ -496,7 +476,7 @@ testmap = [
 
     RegrTest('test_gl.py', enabled=False, dumbtest=1),
     RegrTest('test_glob.py', enabled=True, core=True),
-    RegrTest('test_global.py', enabled=True, core=True, compiler='ast'),
+    RegrTest('test_global.py', enabled=True, core=True),
     RegrTest('test_grammar.py', enabled=True, core=True),
     RegrTest('test_grp.py', enabled=False),
         #rev 10840: ImportError: grp
@@ -786,23 +766,6 @@ def getrev(path):
         # "unknown" for them
         return 'unknown'  
 
-def getexecutable(_cache={}):
-    execpath = py.path.local(option.pypy_executable)
-    if not _cache:
-        text = execpath.sysexec('-c', 
-            'import sys; '
-            'print sys.version; '
-            'print sys.pypy_svn_url; '
-            'print sys.pypy_translation_info; ')
-        lines = [line.strip() for line in text.split('\n')]
-        assert len(lines) == 4 and lines[3] == ''
-        assert lines[2].startswith('{') and lines[2].endswith('}')
-        info = eval(lines[2])
-        info['version'] = lines[0]
-        info['rev'] = eval(lines[1])[1]
-        _cache.update(info)
-    return execpath, _cache
-
 class RunFileExternal(py.test.collect.Module): 
     def __init__(self, name, parent, regrtest): 
         super(RunFileExternal, self).__init__(name, parent) 
@@ -822,28 +785,6 @@ class RunFileExternal(py.test.collect.Module):
         return ReallyRunFileExternal(name, parent=self) 
 
 
-def ensuretestresultdir():
-    resultdir = option.resultdir
-    default_place = False
-    if resultdir is not None:
-        resultdir = py.path.local(option.resultdir)
-    else:
-        if option.use_compiled:
-            return None
-        default_place = True
-        resultdir = testresultdir
-        
-    if not resultdir.check(dir=1):
-        if default_place:
-            py.test.skip("""'testresult' directory not found.
-                 To run tests in reporting mode (without -E), you first have to
-                 check it out as follows: 
-                 svn co http://codespeak.net/svn/pypy/testresult %s""" % (
-                testresultdir, ))
-        else:
-            py.test.skip("'%s' test result dir not found" % resultdir)
-    return resultdir 
-
 #
 # testmethod: 
 # invoking in a seprate process: py.py TESTFILE
@@ -854,23 +795,6 @@ import socket
 import getpass
 
 class ReallyRunFileExternal(py.test.collect.Item): 
-    _resultcache = None
-    def _haskeyword(self, keyword): 
-        if keyword == 'core': 
-            return self.parent.regrtest.core 
-        if keyword not in ('error', 'ok', 'timeout'): 
-            return super(ReallyRunFileExternal, self).haskeyword(keyword)
-        if self._resultcache is None: 
-            from pypy.tool.pytest.overview import ResultCache
-            self.__class__._resultcache = rc = ResultCache() 
-            rc.parselatest()
-        result = self._resultcache.getlatestrelevant(self.fspath.purebasename)
-        if not result: return False
-        if keyword == 'timeout': return result.istimeout()
-        if keyword == 'error': return result.iserror()
-        if keyword == 'ok': return result.isok()
-        assert False, "should not be there" 
-
     def getinvocation(self, regrtest): 
         fspath = regrtest.getfspath() 
         python = sys.executable 
@@ -881,11 +805,7 @@ class ReallyRunFileExternal(py.test.collect.Item):
         regr_script = pypydir.join('tool', 'pytest', 
                                    'run-script', 'regrverbose.py')
         
-        if option.use_compiled:
-            execpath, info = getexecutable()        
         pypy_options = []
-        if regrtest.compiler:
-            pypy_options.append('--compiler=%s' % regrtest.compiler)
         pypy_options.extend(
             ['--withmod-%s' % mod for mod in regrtest.usemodules])
         sopt = " ".join(pypy_options) 
@@ -902,7 +822,10 @@ class ReallyRunFileExternal(py.test.collect.Item):
             regrrun_verbosity = '0'
         
         TIMEOUT = gettimeout()
-        if option.use_compiled:
+        if option.pypy:
+            execpath = py.path.local.sysfind(option.pypy)
+            if not execpath:
+                raise LookupError("could not find executable %r" %(option.pypy,))
             cmd = "%s %s %s %s" %(
                 execpath, 
                 regrrun, regrrun_verbosity, fspath.purebasename)
@@ -926,84 +849,37 @@ class ReallyRunFileExternal(py.test.collect.Item):
             i am afraid. 
         """ 
         regrtest = self.parent.regrtest
-        result = self.getresult(regrtest) 
-        testresultdir = ensuretestresultdir()
-        if testresultdir is not None:
-            resultdir = testresultdir.join(result['userhost'])
-            assert resultdir.ensure(dir=1)
-
-            fn = resultdir.join(regrtest.basename).new(ext='.txt') 
-            if result.istimeout(): 
-                if fn.check(file=1): 
-                    try: 
-                        oldresult = ResultFromMime(fn)
-                    except TypeError: 
-                        pass
-                    else: 
-                        if not oldresult.istimeout(): 
-                            py.test.skip("timed out, not overwriting "
-                                         "more interesting non-timeout outcome")
-            
-            fn.write(result.repr_mimemessage().as_string(unixfrom=False))
-            
-        if result['exit-status']:  
+        exit_status, test_stdout, test_stderr = self.getresult(regrtest) 
+        if exit_status:
              time.sleep(0.5)   # time for a Ctrl-C to reach us :-)
-             print >>sys.stdout, result.getnamedtext('stdout') 
-             print >>sys.stderr, result.getnamedtext('stderr') 
+             print >>sys.stdout, test_stdout
+             print >>sys.stderr, test_stderr
              py.test.fail("running test failed, see stderr output below") 
 
     def getstatusouterr(self, cmd): 
-        tempdir = py.path.local.mkdtemp() 
-        try: 
-            stdout = tempdir.join(self.fspath.basename) + '.out'
-            stderr = tempdir.join(self.fspath.basename) + '.err'
-            if sys.platform == 'win32':
-                status = os.system("%s >%s 2>%s" %(cmd, stdout, stderr))
-                if status>=0:
-                    status = status
-                else:
-                    status = 'abnormal termination 0x%x' % status
+        tempdir = py.test.ensuretemp(self.fspath.basename)
+        stdout = tempdir.join(self.fspath.basename) + '.out'
+        stderr = tempdir.join(self.fspath.basename) + '.err'
+        if sys.platform == 'win32':
+            status = os.system("%s >%s 2>%s" %(cmd, stdout, stderr))
+            if status>=0:
+                status = status
             else:
-                status = os.system("%s >>%s 2>>%s" %(cmd, stdout, stderr))
-                if os.WIFEXITED(status):
-                    status = os.WEXITSTATUS(status)
-                else:
-                    status = 'abnormal termination 0x%x' % status
-            return status, stdout.read(mode='rU'), stderr.read(mode='rU')
-        finally: 
-            tempdir.remove()
+                status = 'abnormal termination 0x%x' % status
+        else:
+            status = os.system("%s >>%s 2>>%s" %(cmd, stdout, stderr))
+            if os.WIFEXITED(status):
+                status = os.WEXITSTATUS(status)
+            else:
+                status = 'abnormal termination 0x%x' % status
+        return status, stdout.read(mode='rU'), stderr.read(mode='rU')
 
     def getresult(self, regrtest): 
         cmd = self.getinvocation(regrtest) 
-        result = Result()
-        fspath = regrtest.getfspath() 
-        result['fspath'] = str(fspath) 
-        result['pypy-revision'] = getrev(pypydir) 
-        if option.use_compiled:
-            execpath, info = getexecutable()
-            result['pypy-revision'] = info['rev']
-            result['executable'] = execpath.basename
-            for key, value in info.items():
-                if key == 'rev':
-                    continue
-                result['executable-%s' % key] = str(value)
-        else:
-            result['executable'] = 'py.py'
-        result['options'] = regrtest.getoptions() 
-        result['timeout'] = gettimeout()
-        result['startdate'] = time.ctime()
-        starttime = time.time() 
-
-        # really run the test in a sub process
         exit_status, test_stdout, test_stderr = self.getstatusouterr(cmd) 
-
         timedout = test_stderr.rfind(26*"=" + "timedout" + 26*"=") != -1 
         if not timedout: 
             timedout = test_stderr.rfind("KeyboardInterrupt") != -1
-        result['execution-time'] = time.time() - starttime
-        result.addnamedtext('stdout', test_stdout)
-        result.addnamedtext('stderr', test_stderr)
-
         outcome = 'OK'
         expectedpath = regrtest.getoutputpath()
         if not exit_status: 
@@ -1014,19 +890,17 @@ class ReallyRunFileExternal(py.test.collect.Item):
                     exit_status = 2  
                     res, out, err = py.io.StdCapture.call(reportdiff, expected, test_stdout)
                     outcome = 'ERROUT' 
-                    result.addnamedtext('reportdiff', out)
+                    test_stderr += ("-" * 80 + "\n") + out
             else:
                 if 'FAIL' in test_stdout or 'ERROR' in test_stderr:
                     outcome = 'FAIL'
+                    exit_status = 2  
         elif timedout: 
             outcome = "T/O"    
         else: 
             outcome = "ERR"
         
-        result['exit-status'] = exit_status 
-        result['outcome'] = outcome 
-        return result
-
+        return exit_status, test_stdout, test_stderr
 
 #
 # Sanity check  (could be done more nicely too)
