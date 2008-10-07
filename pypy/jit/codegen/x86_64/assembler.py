@@ -127,7 +127,7 @@ def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
             new_opcode = hex(int(opcode,16)+modrm1)
             assert len(new_opcode[2:len(new_opcode)]) == 2
             self.write_rex_byte(rexW, rexR, rexX, rexB)
-            self.write(new_opcode[2:len(new_opcode)])
+            self.write(chr(int(new_opcode[2:len(new_opcode)],16)))
             self.writeImm64(arg2.value)
     return quadreg_instr
         
@@ -148,7 +148,7 @@ def make_one_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
             new_opcode = hex(int(opcode,16)+modrm1)
             assert len(new_opcode[2:len(new_opcode)]) == 2
             self.write_rex_byte(rexW, rexR, rexX, rexB)
-            self.write(new_opcode[2:len(new_opcode)])
+            self.write(chr(int(new_opcode[2:len(new_opcode)],16)))
     return quadreg_instr
 
 class X86_64CodeBuilder(object):
@@ -221,6 +221,7 @@ class X86_64CodeBuilder(object):
     _SUB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x29", 3, None, None)    
     _SUB_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0,    0, "\x81", 3, None, 5)
     
+    _XOR_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\x81", 3, None, 6)
     _XOR_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x31", 3, None, None)
     
     # TODO: maybe a problem with more ore less than two arg.

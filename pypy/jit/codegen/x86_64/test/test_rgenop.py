@@ -102,7 +102,7 @@ def make_cmp(rgenop, which_cmp, const=None):
     
 def make_one_op_imm_instr(rgenop,  instr_name, num):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
-    builder, gv_op_imm, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
+    builder, gv_op_imm, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "one_op_imm_instr")
     builder.start_writing()
     gv_result = builder.genop2(instr_name, gv_x, rgenop.genconst(num))
     builder.finish_and_return(sigtoken, gv_result)
@@ -166,12 +166,12 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         
     # Illegal instruction at mov(qwreg,imm64)
     
-    #def test_mul_im64(self):
-    #    rgenop = self.RGenOp()
-    #    mul_function = make_mul_imm(rgenop,int("123456789",16))
-    #    fnptr = self.cast(mul_function,1)
-    #    res = fnptr(2)
-    #    assert res == int("123456789",16)*2
+    def test_mul_imm64(self):
+        rgenop = self.RGenOp()
+        mul_function = make_one_op_imm_instr(rgenop, "int_mul", int("123456789",16))
+        fnptr = self.cast(mul_function,1)
+        res = fnptr(2)
+        assert res == int("123456789",16)*2
         
     def test_imul(self):      
         mul_function = make_two_op_instr(self.RGenOp(), "int_mul")
@@ -467,7 +467,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_calling_pause_direct = skip
     test_longwinded_and_direct = skip
     test_condition_result_cross_link_direct = skip
-    test_multiple_cmps = skip##
+    test_multiple_cmps = skip
     test_flipped_cmp_with_immediate = skip
     test_jump_to_block_with_many_vars = skip
     test_same_as = skip
@@ -475,7 +475,6 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_like_residual_red_call_with_exc_direct = skip
     test_call_functions_with_different_signatures_direct = skip
     test_defaultonly_switch = skip
-   ## test_bool_not_direct = skip
     test_read_frame_var_direct = skip
     test_read_frame_var_float_direct = skip
     test_genconst_from_frame_var_direct = skip
