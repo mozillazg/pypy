@@ -288,7 +288,7 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
         self.print_check(name+" length", len(expected), len(new))
         if len(expected) != len(new): return
         # only check every 3rd in order to speed things up
-        for address in range(len(expected), 3):
+        for address in range(0, len(expected), 3):
            self.print_check(name+" value at "+hex(address), \
                             expected[address], new[address])
     
@@ -327,7 +327,7 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
         if self.pending_steps > 0:
             self.pending_steps -= 1
             return
-        #self.prompt_for_user_input()
+        self.prompt_for_user_input()
         
     def prompt_for_user_input(self):
         if self.showed_skip_message_count < 2:

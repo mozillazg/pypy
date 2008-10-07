@@ -42,11 +42,11 @@ def start_python_version():
         gameBoy.load_cartridge_file(str(filename), verify=False)
         print "Cartridge is Corrupted!"
     try:
-    	pdb.set_trace()
         gameBoy.mainLoop()
     except Exception, error:
         print "stopped"
         print error
+        pdb.set_trace()
 
 # ------------------------------------------------------------------------------ 
     
