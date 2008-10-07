@@ -34,7 +34,7 @@ def make_jne(rgenop):
     builder.start_writing() 
     gv_z = builder.genop2("int_gt", gv_x, gv_y)
     builder.mc.CMP(gv_z, rgenop.genconst(1)) 
-    builder.mc.JNE(6)
+    builder.mc.JNE(builder.mc.tell()+6+6) #length of the jne(6 byte) + length of tow incs(3 byte)
     builder.genop1("int_inc",gv_y)#not executed if x<=y
     builder.genop1("int_inc",gv_y)#not executed if x<=y
     builder.genop1("int_inc",gv_y)

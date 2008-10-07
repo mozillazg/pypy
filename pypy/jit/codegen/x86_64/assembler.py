@@ -231,7 +231,11 @@ class X86_64CodeBuilder(object):
     def AND(self, op1, op2):
         method = getattr(self, "_AND"+op1.to_string()+op2.to_string())
         method(op1, op2)
-        
+     
+    def CDQ(self):
+        self.write("\x48")
+        self.write("\x99")
+    
     def CMP(self, op1, op2):
         #import pdb;pdb.set_trace()
         method = getattr(self, "_CMP"+op1.to_string()+op2.to_string())

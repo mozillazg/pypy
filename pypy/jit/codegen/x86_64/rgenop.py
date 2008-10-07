@@ -137,12 +137,11 @@ class Builder(model.GenBuilder):
         return gv_x
     
     # IDIV RDX:RAX with QWREG
-    # FIXME: supports only RAX with QWREG
+    # supports only RAX (64bit) with QWREG
     def op_int_div(self, gv_x, gv_y):
         gv_z = self.allocate_register("rax")
-        gv_w = self.allocate_register("rdx")
         self.mc.MOV(gv_z, gv_x)
-        self.mc.XOR(gv_w, gv_w)
+        self.mc.CDQ() #sign extention
         self.mc.IDIV(gv_y)
         return gv_z 
     
