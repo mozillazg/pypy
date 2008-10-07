@@ -92,6 +92,7 @@ class Builder(model.GenBuilder):
               # "r14":None,
               # "r15":None,
                }
+        self.known_gv = []
         for reg in used_registers:
             self.allocate_register(reg.reg)
                
@@ -138,11 +139,17 @@ class Builder(model.GenBuilder):
     
     # IDIV RDX:RAX with QWREG
     # supports only RAX (64bit) with QWREG
-    def op_int_div(self, gv_x, gv_y):
+    def op_int_floordiv(self, gv_x, gv_y):
         gv_z = self.allocate_register("rax")
+        gv_w = self.allocate_register("rdx")
         self.mc.MOV(gv_z, gv_x)
-        self.mc.CDQ() #sign extention
-        self.mc.IDIV(gv_y)
+        self.mc.CDQ() #sign extention of rdx:rax
+        if isinstance(gv_y, Immediate32):
+            gv_u = self.allocate_register()
+            self.mc.MOV(gv_u,gv_y)
+            self.mc.IDIV(gv_u)
+        else:
+            self.mc.IDIV(gv_y)
         return gv_z 
     
     # IDIV RDX:RAX with QWREG
@@ -198,7 +205,7 @@ class Builder(model.GenBuilder):
         self.mc.SETGE(Register8("al"))
         return Register64("rax")
     
-    
+    # moves to pass arg. when making a jump to a block
     def _compute_moves(self, outputargs_gv, targetargs_gv):
         tar2src = {}
         tar2loc = {}
@@ -217,16 +224,17 @@ class Builder(model.GenBuilder):
     
     #FIXME: can only jump 32bit
     #FIXME: imm8 insted of imm32?
-    def jump_if_true(self, gv_condition, args_for_jump_gv):   
-        targetbuilder = Builder(args_for_jump_gv)
-        self.mc.CMP(gv_condition, Immediate32(0))
-        self.mc.JNE(targetbuilder.mc.tell())
-        # args_for_jump contain the registers which are used
-        # from the caller block. These registers cant be used by
-        # the targetbuilder
-
-        #targetbuilder.come_from(self.mc, 'JNE')      
-        return targetbuilder
+    def _new_jump(name, value):
+        from pypy.tool.sourcetools import func_with_new_name
+        def jump(self, gv_condition, args_for_jump_gv):   
+            targetbuilder = Builder(args_for_jump_gv)
+            self.mc.CMP(gv_condition, Immediate32(value))
+            self.mc.JNE(targetbuilder.mc.tell())
+            return targetbuilder
+        return func_with_new_name(jump, name)
+    
+    jump_if_false = _new_jump("jump_if_false", 1)
+    jump_if_true  = _new_jump('jump_if_true', 0)
     
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
@@ -237,9 +245,8 @@ class Builder(model.GenBuilder):
         self._close()
         
     #FIXME: uses 32bit displ  
-    #FIXME: neg. displacement???  
     # if the label is greater than 32bit
-    # it must be in a register
+    # it must be in a register (not supported)
     def finish_and_goto(self, outputargs_gv, target):
         #import pdb;pdb.set_trace() 
         self._open()
@@ -255,12 +262,30 @@ class Builder(model.GenBuilder):
     
     def allocate_register(self, register=None):
         if register is None:
-            return Register64(self.freeregisters.popitem()[0])
-        else:
             if not self.freeregisters:
                 raise NotImplementedError("spilling not implemented")
+            
+            new_gv = Register64(self.freeregisters.popitem()[0])
+            self.known_gv.append(new_gv)
+            return new_gv
+        else:
+            if register not in self.freeregisters:
+                # the register must be in the list!
+                for i in range(len(self.known_gv)):
+                    if register == self.known_gv[i].reg:
+                        # move the values from the requiered register
+                        # to an other one and return the
+                        # requested one.
+                        gv = self.allocate_register()
+                        self.mc.MOV(gv,self.known_gv[i])
+                        new_gv = Register64(register)
+                        self.known_gv.append(new_gv)
+                        return new_gv
+                raise NotImplementedError("register moves")           
             del self.freeregisters[register]
-            return Register64(register)
+            new_gv = Register64(register)
+            self.known_gv.append(new_gv)
+            return new_gv
         
     def end(self):
         pass
