@@ -96,11 +96,10 @@ def print_report_static_size(database, grouper=by_lltype):
 
 
 def get_unknown_graphs(database):
-    funcnodes = [node for node in database.globalcontainers()
-                     if node.nodekind == "func"]
+    funcnodes = [node for node in database.globalcontainers() if node.nodekind == "func"]
     for node in funcnodes:
         graph = getattr(node.obj, 'graph', None)
-        if not graph:
+        if not graph or not getattr(graph, 'func', None):
             continue
         if not guess_module(graph):
             yield graph

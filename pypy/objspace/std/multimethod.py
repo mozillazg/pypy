@@ -932,6 +932,7 @@ class InstallerVersion2(object):
 
         from pypy.rlib.jit import hint
         miniglobals['hint'] = hint
+        miniglobals['__name__'] = __name__
         entry = FuncEntry(bodylines, miniglobals, fallback)
         key = entry.key()
         try:
