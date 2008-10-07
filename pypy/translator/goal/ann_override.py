@@ -121,7 +121,7 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
             def builder(translator, func):
                 #print "LOOKUP", attr
                 pol.consider_lookup(funcdesc.bookkeeper, attr)
-                d = {'__name__': '<ann_override.lookup>'}
+                d = {'__name__': '<ann_override_lookup>'}
                 exec CACHED_LOOKUP % {'attr': attr} in d
                 return translator.buildflowgraph(d['lookup_'+attr])
             return funcdesc.cachedgraph(attr, builder=builder)
@@ -136,7 +136,7 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
             def builder(translator, func):
                 #print "LOOKUP_IN_TYPE_WHERE", attr
                 pol.consider_lookup_in_type_where(funcdesc.bookkeeper, attr)
-                d = {'__name__': '<ann_override.lookup>'}
+                d = {'__name__': '<ann_override_lookup>'}
                 exec CACHED_LOOKUP_IN_TYPE_WHERE % {'attr': attr} in d
                 return translator.buildflowgraph(d['lookup_in_type_where_'+attr])
             return funcdesc.cachedgraph(attr, builder=builder)
