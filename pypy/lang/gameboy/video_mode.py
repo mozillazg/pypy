@@ -15,11 +15,9 @@ class HandleSubclassException(Exception):
         Exception.__init__(self, "")
         
 class Mode(object):
-
     """
     The two lower STAT bits show the current status of the LCD controller.
     """
-
     def __init__(self, video):
         self.video = video
         self.reset()
@@ -56,7 +54,6 @@ class Mode0(Mode):
           the CPU can access both the display RAM (8000h-9FFFh)
           and OAM (FE00h-FE9Fh)
     """
-    
     def reset(self):
         self.h_blank_interrupt = False
     
@@ -104,7 +101,6 @@ class Mode1(Mode):
           display is disabled) and the CPU can access both the
           display RAM (8000h-9FFFh) and OAM (FE00h-FE9Fh)
     """
-    
     def reset(self):
         self.v_blank_interrupt = False
         
@@ -168,7 +164,6 @@ class Mode2(Mode):
           The CPU <cannot> access OAM memory (FE00h-FE9Fh)
           during this period.
     """
-    
     def reset(self):
         self.oam_interrupt = False
         
@@ -198,7 +193,6 @@ class Mode3(Mode):
           The CPU <cannot> access OAM and VRAM during this period.
           CGB Mode: Cannot access Palette Data (FF69,FF6B) either.
     """
-    
     def reset(self):
         pass
     
