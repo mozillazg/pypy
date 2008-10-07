@@ -6,6 +6,7 @@ from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
 from pypy.rpython.lltypesystem import llmemory, lltype 
 from pypy.jit.codegen.ia32.objmodel import LL_TO_GENVAR
 from pypy.jit.codegen.model import GenLabel
+from pypy.jit.codegen.emit_moves import emit_moves, emit_moves_safe
 
 
 
@@ -55,14 +56,24 @@ class Label(GenLabel):
         self.startaddr = startaddr
         self.arg_positions = arg_positions
         self.stackdepth = stackdepth
+
+class MoveEmitter(object):
+    def __init__(self, builder):
+        self.builder = builder
+        self.moves = []
+       
+    def create_fresh_location(self):
+        return self.builder.allocate_register().reg
     
+    def emit_move(self, source, target):
+        self.moves.append((source, target))
 
 class Builder(model.GenBuilder):
 
     MC_SIZE = 65536
 
     #FIXME: The MemCodeBuild. is not opend in an _open method
-    def __init__(self):
+    def __init__(self, used_registers=[]):
         self.mc = InMemoryCodeBuilder(self.MC_SIZE)
         #callee-saved registers are commented out
         self.freeregisters ={        
@@ -81,6 +92,8 @@ class Builder(model.GenBuilder):
               # "r14":None,
               # "r15":None,
                }
+        for reg in used_registers:
+            self.allocate_register(reg.reg)
                
     def _open(self):
         pass
@@ -88,13 +101,11 @@ class Builder(model.GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         genmethod = getattr(self, 'op_' + opname)
-        print hex(self.mc.tell()),":",opname," ",gv_arg.to_string()
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         genmethod = getattr(self, 'op_' + opname)
-        print hex(self.mc.tell()),":",opname," ",gv_arg1.to_string()," ",gv_arg2.to_string()
         return genmethod(gv_arg1, gv_arg2)
     
     op_int_add  = make_two_argument_method("ADD")
@@ -147,24 +158,13 @@ class Builder(model.GenBuilder):
     
 #    def op_int_invert(self, gv_x):
 #       return self.mc.NOT(gv_x)
-        
-         
-    #FIXME: can only jump 32bit
-    # -6 : length of the jne instruction
-    def jump_if_true(self, gv_condition, args_for_jump_gv):   
-        targetbuilder = Builder()
-        self.mc.CMP(gv_condition, Immediate32(0))
-        displ = self.calc_32bit_displacement(self.mc.tell(),targetbuilder.mc.tell())
-        self.mc.JNE(displ-6)
-        #targetbuilder.come_from(self.mc, 'JNE')      
-        return targetbuilder
     
     def op_int_gt(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         # You can not use every register for
         # 8 bit operations, so you have to
         # choose rax,rcx or rdx 
-        # TODO: rcx rdx
+        # TODO: use also rcx rdx
         gv_z = self.allocate_register("rax")
         self.mc.SETG(Register8("al"))
         return Register64("rax")
@@ -199,32 +199,60 @@ class Builder(model.GenBuilder):
         self.mc.SETGE(Register8("al"))
         return Register64("rax")
     
+    
+    def _compute_moves(self, outputargs_gv, targetargs_gv):
+        tar2src = {}
+        tar2loc = {}
+        src2loc = {}
+        for i in range(len(outputargs_gv)):
+           target_gv = targetargs_gv[i].reg
+           source_gv = outputargs_gv[i].reg
+           tar2src[target_gv] = source_gv
+           tar2loc[target_gv] = target_gv
+           src2loc[source_gv] = source_gv
+        movegen = MoveEmitter(self)
+        emit_moves(movegen, [target_gv.reg for target_gv in targetargs_gv],
+                    tar2src, tar2loc, src2loc)
+        return movegen.moves
+    
+    
+    #FIXME: can only jump 32bit
+    #FIXME: imm8 insted of imm32?
+    def jump_if_true(self, gv_condition, args_for_jump_gv):   
+        targetbuilder = Builder(args_for_jump_gv)
+        self.mc.CMP(gv_condition, Immediate32(0))
+        self.mc.JNE(targetbuilder.mc.tell())
+        # args_for_jump contain the registers which are used
+        # from the caller block. These registers cant be used by
+        # the targetbuilder
+
+        #targetbuilder.come_from(self.mc, 'JNE')      
+        return targetbuilder
+    
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
-        print hex(self.mc.tell()),": RET"
         self._open()
         if not gv_returnvar == None:#check void return
             self.mc.MOV(Register64("rax"), gv_returnvar)
         self.mc.RET()
         self._close()
         
-    #FIXME: uses 32bit displ    
+    #FIXME: uses 32bit displ  
+    #FIXME: neg. displacement???  
     # if the label is greater than 32bit
     # it must be in a register
-    # -5 length of the jmp instruction
     def finish_and_goto(self, outputargs_gv, target):
-        import pdb;pdb.set_trace() 
+        #import pdb;pdb.set_trace() 
         self._open()
         #gv_x = self.allocate_register()
         #self.mc.MOV(gv_x,Immediate64(target.startaddr))
-        #self.mc.JMP(gv_x)
-        
-        displ = self.calc_32bit_displacement(self.mc.tell(),target.startaddr)
-        self.mc.JMP(displ-5)
-
-        #self.mc.RET()
-        
+        #self.mc.JMP(gv_x)    
+        moves = self._compute_moves(outputargs_gv, target.arg_positions)
+        for source_gv, target_gv in moves:
+            self.mc.MOV(Register64(source_gv), Register64(target_gv))   
+        self.mc.JMP(target.startaddr)
         self._close()
+        
     
     def allocate_register(self, register=None):
         if register is None:
@@ -244,16 +272,13 @@ class Builder(model.GenBuilder):
         for i in range(len(args_gv)):
             if isinstance(args_gv[i],model.GenConst):
                 gv_x = self.allocate_register()
-                self.mc.MOV(gv_x, argsv_gv[i])
+                self.mc.MOV(gv_x, args_gv[i])
                 args_gv[i] = gv_x
         L = Label(self.mc.tell(), args_gv, 0)
         return L
     
     def _close(self):
         self.mc.done()
-    
-    def calc_32bit_displacement(self, curr_addr, want_jump_to):
-        return want_jump_to-curr_addr
 
 
 class RX86_64GenOp(model.AbstractRGenOp):

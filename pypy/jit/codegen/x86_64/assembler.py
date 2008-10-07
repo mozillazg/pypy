@@ -258,20 +258,18 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_INC"+op1.to_string())
         method(op1)
         
-    # op1 must be a register
-    def JMP(self,op1):
+    # 4 length of the immediate
+    def JMP(self,want_jump_to):
         #method = getattr(self, "_JMP"+op1.to_string())
-        #method(op1)
-        print hex(self.tell()),": JMP to",hex(self.tell()+op1)
+        #method(op1)  
         self.write("\xE9")
-        self.writeImm32(op1)
+        self.writeImm32(want_jump_to-self.tell()-4)
         
-    #  op1 is and 32bit displ
-    def JNE(self,op1):
-        print hex(self.tell()),": JNE to",hex(self.tell()+op1)
+    # 4 length of the immediate
+    def JNE(self,want_jump_to):
         self.write("\x0F")
         self.write("\x85")
-        self.writeImm32(op1)   
+        self.writeImm32(want_jump_to-self.tell()-4)   
         
         
     def OR(self, op1, op2):
@@ -368,8 +366,6 @@ class X86_64CodeBuilder(object):
             # parse to string and cut "0x" off
             # fill with zeros if to short
             y = "0"*(10-len(x))+x[2:len(x)]
-        #print "y:",y
-        #y = "00000000"
         assert len(y) == 8           
         self.write(chr(int(y[6:8],16))) 
         self.write(chr(int(y[4:6],16)))

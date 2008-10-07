@@ -22,8 +22,12 @@ def make_push_pop(rgenop):
     builder.end()
     return gv_push_pop
 
-#FIXME: Jumps ever (CMP BUG)
+
 #TODO: result of ops
+# if x>y:
+#    return y+3 
+# else:
+#    return y+1
 def make_jne(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_jne, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "jne")
@@ -44,7 +48,7 @@ def make_jmp(rgenop,a):
     builder, gv_jmp, [gv_x] = rgenop.newgraph(sigtoken, "jmp")
     builder.start_writing() 
     builder.genop1("int_inc",gv_x)
-    builder.finish_and_goto("",Label(builder.mc.tell()+6, [], 0))
+    builder.finish_and_goto("",Label(builder.mc.tell()+11, [], 0))
     b=0
     for b in range(a):
         builder.genop1("int_inc",gv_x)
@@ -285,28 +289,28 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 1
         res = fnptr(23)
         assert res == 0
-        #cmp_function = make_cmp(self.RGenOp(), "int_eq")
-        #fnptr = self.cast(cmp_function,2)
-        #res = fnptr(3,4) # 3==4?
-        #assert res == 0  # false
-        #res = fnptr(4,3)
-        #assert res == 0 
-        #res = fnptr(4,4)
-        #assert res == 1
-        #res = fnptr(4,0)
-        #assert res == 0
-        #res = fnptr(-4,0)
-        #assert res == 0
-        #res = fnptr(184467440737095516,184467440737095516)
-        #assert res == 1
-        #res = fnptr(252,-4)
-        #assert res == 0
-        #res = fnptr(-4,252)
-        #assert res == 0
-        #res = fnptr(244,756)
-        #assert res == 0
-        #res = fnptr(-1,9223372036854775807) #FFFF.... != 7FFF...
-        #assert res == 0
+        cmp_function = make_cmp(self.RGenOp(), "int_eq")
+        fnptr = self.cast(cmp_function,2)
+        res = fnptr(3,4) # 3==4?
+        assert res == 0  # false
+        res = fnptr(4,3)
+        assert res == 0 
+        res = fnptr(4,4)
+        assert res == 1
+        res = fnptr(4,0)
+        assert res == 0
+        res = fnptr(-4,0)
+        assert res == 0
+        res = fnptr(184467440737095516,184467440737095516)
+        assert res == 1
+        res = fnptr(252,-4)
+        assert res == 0
+        res = fnptr(-4,252)
+        assert res == 0
+        res = fnptr(244,756)
+        assert res == 0
+        res = fnptr(-1,9223372036854775807) #FFFF.... != 7FFF...
+        assert res == 0
         
     def test_not_equal(self):
         cmp_function = make_cmp(self.RGenOp(), "int_ne")
@@ -411,6 +415,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         result = fnptr(12,14)
         assert result == 15
        
+    # x = x+y-1
     def test_jmp(self):
         jmp_function = make_jmp(self.RGenOp(),3)
         fnptr = self.cast(jmp_function,1)
