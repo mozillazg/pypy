@@ -108,19 +108,26 @@ class Builder(model.GenBuilder):
     def genop2(self, opname, gv_arg1, gv_arg2):
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
-    
+ 
     op_int_add  = make_two_argument_method("ADD")
     op_int_and  = make_two_argument_method("AND")
-    op_int_dec  = make_one_argument_method("DEC") #for debuging
-    op_int_inc  = make_one_argument_method("INC") #for debuging
+    op_int_dec  = make_one_argument_method("DEC")  #for debuging
+    op_int_inc  = make_one_argument_method("INC")  #for debuging
     op_int_mul  = make_two_argument_method("IMUL")
     op_int_neg  = make_one_argument_method("NEG")
-    op_int_not  = make_one_argument_method("NOT")
+    op_int_not  = make_one_argument_method("NOT")  #for debuging
     op_int_or   = make_two_argument_method("OR")
     op_int_push = make_one_argument_method("PUSH") #for debuging
     op_int_pop  = make_one_argument_method("POP")  #for debuging
     op_int_sub  = make_two_argument_method("SUB")
     op_int_xor  = make_two_argument_method("XOR")
+
+    def op_bool_not(self, gv_x):
+          gv_y = self.allocate_register()
+          self.mc.MOV(gv_y, Immediate32(1))
+          self.mc.XOR(gv_x, gv_y)
+          return gv_x
+
 
     # FIXME: is that lshift val?
     # FIXME: uses rcx insted of cl
