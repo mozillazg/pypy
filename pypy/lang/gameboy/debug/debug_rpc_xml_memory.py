@@ -287,7 +287,8 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
     def compare_memory(self, name, expected, new):
         self.print_check(name+" length", len(expected), len(new))
         if len(expected) != len(new): return
-        for address in range(len(expected)):
+        # only check every 3rd in order to speed things up
+        for address in range(len(expected), 3):
            self.print_check(name+" value at "+hex(address), \
                             expected[address], new[address])
     
