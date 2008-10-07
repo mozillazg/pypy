@@ -91,7 +91,7 @@ def format_report_line(line):
 
 def print_report_static_size(database, grouper=by_lltype):
     " Reports all objects with a specified grouper. "
-    _, report = report_static_size(database.globalcontainers(), grouper)
+    _, report = make_report_static_size(database.globalcontainers(), grouper)
     for line in report:
         print format_report_line(line)
 
