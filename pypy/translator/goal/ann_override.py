@@ -65,7 +65,8 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
                             return space.new_interned_str(x)
                         else:
                             return space.wrap(x)
-                    builder = specialize.make_constgraphbuilder(2, factory=fold)
+                    builder = specialize.make_constgraphbuilder(2, factory=fold,
+                                                                srcmodule='<ann_override.wrap>')
                     return funcdesc.cachedgraph((typ, x), builder=builder)
         return funcdesc.cachedgraph(typ)
     
