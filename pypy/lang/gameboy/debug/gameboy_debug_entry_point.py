@@ -53,7 +53,7 @@ def start_python_version():
 JMARIO_DIR =  str(py.magic.autopath().dirpath().dirpath()\
                         .dirpath().dirpath()\
                         .dirpath().dirpath()) + "/jmario"
-JAVA_CLASSPATH =[JMARIO_DIR+"/bin/", 
+JAVA_CLASSPATH =[JMARIO_DIR+"/bin/", JMARIO_DIR+"/build/", 
                 JMARIO_DIR+"/lib/xmlrpc-client-3.1.jar",
                 JMARIO_DIR+"/lib/xmlrpc-common-3.1.jar",
                 JMARIO_DIR+"/lib/ws-commons-util-1.0.2.jar",
