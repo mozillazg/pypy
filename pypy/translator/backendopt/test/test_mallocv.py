@@ -80,6 +80,20 @@ class BaseMallocRemovalTest(object):
             return g((x+1, x-1))
         graph = self.check(f, [int], [10], 99)
 
+    def test_direct_call_mutable_simple(self):
+        py.test.skip("later")
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        def g(a):
+            a.x += 1
+        def f(x):
+            a = lltype.malloc(A)
+            a.x = x
+            g(a)
+            return a.x
+        graph = self.check(f, [int], [41], 42)
+        insns = summary(graph)
+        assert insns.get('direct_call', 0) == 0     # no more call, inlined
+
     def test_fn2(self):
         py.test.skip("redo me")
         class T:
