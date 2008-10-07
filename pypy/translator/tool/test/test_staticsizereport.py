@@ -35,5 +35,4 @@ class TestStaticSizeReport(CompilationTestCase):
         gcontainers = self.builder.db.globalcontainers()
         dictvalnode = [node for node in gcontainers if "struct dicttable" in repr(node.obj)][0]
         assert guess_size(self.builder.db, dictvalnode, set()) > 100
-        size, num = group_static_size(self.builder.db, gcontainers)
-        1/0
+        #size, num = group_static_size(self.builder.db, gcontainers)

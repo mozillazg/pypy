@@ -55,7 +55,6 @@ def guess_size(database, node, recursive=None):
         return 0
     recursive.add(node)
     for dep in values_to_nodes(database, node.enum_dependencies()):
-        recursive.add(dep)
         size += guess_size(database, dep, recursive)
     return size
 
