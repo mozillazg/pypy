@@ -83,15 +83,16 @@ the 'yes' means that the USER gets added to the sbox unix group, neccessary to l
 Creating an target emulating N810/Maemo environment
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Now we instruct scratchbox to define a target suitable for emulating the N810/Maemo device::
-    
-Login to the virtual environment and invoke :
+Now we instruct scratchbox to define a target suitable for emulating the
+N810/Maemo device:
+
+Login to the virtual environment and invoke::
 
     /scratchbox/login 
     sb-menu 
 
 this brings up an interactive menu, you need to *setup* a new target,
-you may name it "ARMEL" and then you need to select 
+you may name it "ARMEL" and then you need to select::
 
     compiler:  cs2007q3-glibc2.5-arm7
     devkits:   cputransp, perl, svn 
