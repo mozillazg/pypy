@@ -146,7 +146,7 @@ translation_optiondescription = OptionDescription(
                "When true, look for and special-case the sequence of "
                "operations that results from a list comprehension and "
                "attempt to pre-allocate the list",
-               default=True,
+               default=False,
                cmdline='--listcompr'),
     IntOption("withsmallfuncsets",
               "Represent groups of less funtions than this as indices into an array",
@@ -327,7 +327,6 @@ def set_opt_level(config, level):
     for word in words:
         if word == 'nobackendopt':
             config.translation.backendopt.suggest(none=True)
-            config.translation.suggest(list_comprehension_operations=False)
         elif word == 'lowinline':
             config.translation.backendopt.suggest(inline_threshold=
                                                 DEFL_LOW_INLINE_THRESHOLD)
@@ -337,6 +336,9 @@ def set_opt_level(config, level):
             config.translation.suggest(withsmallfuncsets=5)
         else:
             raise ValueError(word)
+
+    hasbackendopts = 'nobackendopt' not in words
+    config.translation.suggest(list_comprehension_operations=hasbackendopts)
 
 # ----------------------------------------------------------------
 
