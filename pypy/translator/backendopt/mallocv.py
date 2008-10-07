@@ -115,6 +115,7 @@ class MallocSpecializer(object):
         self.names_and_types = []
         self.name2index = {}
         self.initialize_type(MALLOCTYPE)
+        self.immutable_struct = MALLOCTYPE._hints.get('immutable')
         self.pending_specializations = []
         self.cache = BlockSpecCache(fallback=mallocv.cache)
 
@@ -215,7 +216,10 @@ class BlockSpecializer(object):
     def expand_vars(self, vars):
         result_v = []
         for v in vars:
-            result_v += self.renamings[v]
+            if isinstance(v, Variable):
+                result_v += self.renamings[v]
+            else:
+                result_v.append(v)
         return result_v
 
     def initialize_renamings(self, inputargs):
@@ -274,29 +278,37 @@ class BlockSpecializer(object):
         fobj = op.args[0].value._obj
         if hasattr(fobj, 'graph'):
             graph = fobj.graph
-            nb_args = len(op.args) - 1
-            assert nb_args == len(graph.getargs())
-            newargs = []
-            for i in range(nb_args):
-                v1 = op.args[1+i]
-                if v1 not in self.curvars:
-                    newargs.append(v1)
-                else:
-                    inputarg_index_in_specgraph = len(newargs)
-                    v2 = graph.getargs()[inputarg_index_in_specgraph]
-                    assert v1.concretetype == v2.concretetype
-                    specgraph = self.mallocspec.get_specialized_graph(graph,
-                                                                      v2)
-                    newargs.extend(self.expanded_v)
-                    graph = specgraph
-            assert len(newargs) == len(graph.getargs())
-            fspecptr = getfunctionptr(graph)
-            newargs.insert(0, Constant(fspecptr,
-                                       concretetype=lltype.typeOf(fspecptr)))
-            newresult = Variable(op.result)
-            newresult.concretetype = op.result.concretetype
-            self.renamings[op.result] = [newresult]
-            newop = SpaceOperation('direct_call', newargs, newresult)
-            return [newop]
+            if self.mallocspec.immutable_struct:
+                return self.handle_call_with_immutable(op, graph)
+            else:
+                return self.handle_call_with_mutable(op, graph)
         else:
             return self.handle_default(op)
+
+    def handle_call_with_immutable(self, op, graph):
+        nb_args = len(op.args) - 1
+        assert nb_args == len(graph.getargs())
+        newargs = []
+        for i in range(nb_args):
+            v1 = op.args[1+i]
+            if v1 not in self.curvars:
+                newargs.append(v1)
+            else:
+                inputarg_index_in_specgraph = len(newargs)
+                v2 = graph.getargs()[inputarg_index_in_specgraph]
+                assert v1.concretetype == v2.concretetype
+                specgraph = self.mallocspec.get_specialized_graph(graph, v2)
+                newargs.extend(self.expanded_v)
+                graph = specgraph
+        assert len(newargs) == len(graph.getargs())
+        fspecptr = getfunctionptr(graph)
+        newargs.insert(0, Constant(fspecptr,
+                                   concretetype=lltype.typeOf(fspecptr)))
+        newresult = Variable(op.result)
+        newresult.concretetype = op.result.concretetype
+        self.renamings[op.result] = [newresult]
+        newop = SpaceOperation('direct_call', newargs, newresult)
+        return [newop]
+
+    def handle_call_with_mutable(self, op, graph):
+        return self.handle_default(op)
