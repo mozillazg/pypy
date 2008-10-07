@@ -122,12 +122,16 @@ class Builder(model.GenBuilder):
     op_int_sub  = make_two_argument_method("SUB")
     op_int_xor  = make_two_argument_method("XOR")
 
+    # TODO: support reg8
+    def op_cast_bool_to_int(self, gv_x):
+        assert isinstance(gv_x, Register64)
+        return gv_x
+    
+    # 0 xor 1 == 1
+    # 1 xor 1 == 0
     def op_bool_not(self, gv_x):
-          gv_y = self.allocate_register()
-          self.mc.MOV(gv_y, Immediate32(1))
-          self.mc.XOR(gv_x, gv_y)
-          return gv_x
-
+        self.mc.XOR(gv_x, Immediate32(1))
+        return gv_x
 
     # FIXME: is that lshift val?
     # FIXME: uses rcx insted of cl
@@ -151,7 +155,7 @@ class Builder(model.GenBuilder):
         gv_w = self.allocate_register("rdx")
         self.mc.MOV(gv_z, gv_x)
         self.mc.CDQ() #sign extention of rdx:rax
-        if isinstance(gv_y, Immediate32):
+        if isinstance(gv_y, Immediate32): #support imm32
             gv_u = self.allocate_register()
             self.mc.MOV(gv_u,gv_y)
             self.mc.IDIV(gv_u)
@@ -212,7 +216,7 @@ class Builder(model.GenBuilder):
         self.mc.SETGE(Register8("al"))
         return Register64("rax")
     
-    # moves to pass arg. when making a jump to a block
+    # the moves to pass arg. when making a jump to a block
     def _compute_moves(self, outputargs_gv, targetargs_gv):
         tar2src = {}
         tar2loc = {}
@@ -337,8 +341,8 @@ class RX86_64GenOp(model.AbstractRGenOp):
         builder = Builder()
         # TODO: Builder._open()
         entrypoint = builder.mc.tell()
-        # TODO: support more than two reg
-        register_list = ["rdi","rsi"]
+        # from http://www.x86-64.org/documentation/abi.pdf
+        register_list = ["rdi","rsi","rdx","rcx","r8","r9"]
         # fill the list with the correct registers
         inputargs_gv = [builder.allocate_register(register_list[i])
                                 for i in range(len(arg_tokens))]
