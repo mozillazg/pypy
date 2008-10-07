@@ -100,14 +100,14 @@ def make_cmp(rgenop, which_cmp, const=None):
     builder.end()
     return gv_cmp
     
-def make_mul_imm(rgenop, num):
+def make_one_op_imm_instr(rgenop,  instr_name, num):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
-    builder, gv_mul, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
+    builder, gv_op_imm, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mul")
     builder.start_writing()
-    gv_result = builder.genop2("int_mul", gv_x, rgenop.genconst(num))
+    gv_result = builder.genop2(instr_name, gv_x, rgenop.genconst(num))
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
-    return gv_mul        
+    return gv_op_imm        
 
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
     RGenOp = RX86_64GenOp
@@ -148,14 +148,21 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         
     def test_mul_imm32(self):
         rgenop = self.RGenOp()
-        mul_function = make_mul_imm(rgenop,200)
+        mul_function = make_one_op_imm_instr(rgenop, "int_mul", 200)
         fnptr = self.cast(mul_function,1)
         res = fnptr(210)
         assert res == 42000
-        mul_function = make_mul_imm(rgenop,-9876)
+        mul_function = make_one_op_imm_instr(rgenop, "int_mul", -9876)
         fnptr = self.cast(mul_function,1)
         res = fnptr(12345)
         assert res == -121919220
+        
+    def test_idiv_imm32(self):
+        rgenop = self.RGenOp()
+        mul_function = make_one_op_imm_instr(rgenop, "int_floordiv", 7)
+        fnptr = self.cast(mul_function,1)
+        res = fnptr(77)
+        assert res == 11
         
     # Illegal instruction at mov(qwreg,imm64)
     
@@ -188,7 +195,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         
     #FIXME: ignores rdx and signs
     def test_idiv(self):
-        div_function = make_two_op_instr(self.RGenOp(), "int_div")
+        div_function = make_two_op_instr(self.RGenOp(), "int_floordiv")
         fnptr = self.cast(div_function,2)
         res = fnptr(100,3)
         assert res == 33 # integer div
@@ -455,8 +462,6 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_dummy_direct = skip
     test_largedummy_direct = skip
     test_branching_direct = skip
-    ##test_goto_direct = skip##
-    test_if_direct = skip
     test_switch_direct = skip
     test_large_switch_direct = skip
     test_fact_direct = skip

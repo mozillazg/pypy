@@ -161,7 +161,7 @@ class X86_64CodeBuilder(object):
         """ tells the current position in memory"""
         raise NotImplementedError
     
-    
+    #TODO: support all combinations
     # The opcodes differs depending on the operands
     # Params:
     # W (64bit Operands), R (extends reg field), X (extend Index(SIB) field), B (extends r/m field, Base(SIB) field, opcode reg field), 
