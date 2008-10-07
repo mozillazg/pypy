@@ -7,7 +7,7 @@ from pypy.rpython.memory.lltypelayout import convert_offset_to_int
 
 def guess_module(graph):
     func = getattr(graph, 'func', None)
-    name = '<unknown>'
+    name = None
     if func is not None:
         newname = func.func_globals.get('__name__',  None)
         if newname is not None:
@@ -95,6 +95,16 @@ def print_report_static_size(database, grouper=by_lltype):
         print format_report_line(line)
 
 
+def get_unknown_graphs(database):
+    funcnodes = [node for node in database.globalcontainers()
+                     if node.nodekind == "func"]
+    for node in funcnodes:
+        graph = getattr(node.obj, 'graph', None)
+        if not graph:
+            continue
+        if not guess_module(graph):
+            yield graph
+
 def print_aggregated_values_by_module_and_type(database, count_modules_separately=False):
     " Reports all objects by module and by lltype. "
     modules = {}
@@ -106,7 +116,7 @@ def print_aggregated_values_by_module_and_type(database, count_modules_separatel
         graph = getattr(node.obj, 'graph', None)
         if not graph:
             continue
-        nodes_set = modules.setdefault(guess_module(graph), set())
+        nodes_set = modules.setdefault(guess_module(graph) or '<unknown>', set())
         assert len(node.funcgens) == 1
         nodes_set.update(values_to_nodes(database, node.funcgens[0].all_cached_consts))
     modules = modules.items()
