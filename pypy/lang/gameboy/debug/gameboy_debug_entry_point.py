@@ -17,7 +17,7 @@ if sys.platform == 'darwin':
 ROM_PATH    = str(py.magic.autopath().dirpath().dirpath())+"/rom"
 filename    = "/Users/cami/Ausbildung/08_UNIBE_FS/bachelor/docs/roms/DieMaus.gb"
 filename    = ROM_PATH + "/rom9/rom9.gb"
-SOCKET_PORT = 55686
+SOCKET_PORT = 55687
 skipExecs   = 22545
 skipExecs   = 0
 
@@ -38,13 +38,15 @@ def start_python_version():
     gameBoy = GameBoyDebugImplementation(SOCKET_PORT, skipExecs, DebugRpcXmlMemory)
     try:
         gameBoy.load_cartridge_file(str(filename))
-    except:
+    except Exception, error:
         gameBoy.load_cartridge_file(str(filename), verify=False)
         print "Cartridge is Corrupted!"
     try:
+    	pdb.set_trace()
         gameBoy.mainLoop()
-    except:
+    except Exception, error:
         print "stopped"
+        print error
 
 # ------------------------------------------------------------------------------ 
     

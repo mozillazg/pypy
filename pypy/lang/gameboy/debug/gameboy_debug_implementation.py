@@ -13,11 +13,13 @@ import pdb
 class GameBoyDebugImplementation(GameBoyImplementation):
     
     def __init__(self, debuggerPort, skipExecs=0, memory_class=DebugSocketMemory):
-        GameBoy.__init__(self)
+        GameBoyImplementation.__init__(self)
         self.cpu = DebugCPU(self.interrupt, self)
         self.init_sdl()
         self.memory = memory_class(self, debuggerPort, skipExecs)
         
+    def init_sdl(self):
+        pass;
     
     def create_drivers(self):
         # make sure only the debug drivers are implemented
@@ -25,9 +27,12 @@ class GameBoyDebugImplementation(GameBoyImplementation):
         self.joypad_driver = JoypadDriverDebugImplementation()
         self.video_driver  = VideoDriverDebugImplementation()
         self.sound_driver  = SoundDriverImplementation()
-   
+        
+    def emulate_cycle(self):
+       	self.emulate(constants.GAMEBOY_CLOCK >> 2)
    
     def handle_execution_error(self, error):
+    	GameBoyImplementation.handle_execution_error(self, error)
     	print error
         print "closing socket connections"
         pdb.set_trace()
