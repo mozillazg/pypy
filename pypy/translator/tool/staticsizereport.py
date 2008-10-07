@@ -104,7 +104,7 @@ def get_unknown_graphs(database):
         if not guess_module(graph):
             yield graph
 
-def print_aggregated_values_by_module_and_type(database, count_modules_separately=False):
+def print_aggregated_values_by_module_and_type(database, count_modules_separately=False, verbose=False):
     " Reports all objects by module and by lltype. "
     modules = {}
     reports = []
@@ -140,8 +140,11 @@ def print_aggregated_values_by_module_and_type(database, count_modules_separatel
     for size, modulename, report in reports:
         if not size:
             continue
-        print "########### %i %s ####################################" % (size, modulename)
-        for line in report:
-            print " " * 4 + format_report_line(line)
-        print
+        if verbose:
+            print "########### %i %s ####################################" % (size, modulename)
+            for line in report:
+                print " " * 4 + format_report_line(line)
+            print
+        else:
+            print "%i\%s" % (size, modulename)
 
