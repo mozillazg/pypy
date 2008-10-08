@@ -1,7 +1,6 @@
 
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
-from pypy.rpython.memory.gc.base import MovingGCBase, \
-     TYPEID_MASK, GCFLAG_FINALIZATION_ORDERING, GCFLAG_EXTERNAL
+from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
@@ -10,8 +9,11 @@ from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.memory.gc.base import first_gcflag
 
-GCFLAG_MARKBIT = MovingGCBase.first_unused_gcflag
+TYPEID_MASK = 0xffff
+GCFLAG_MARKBIT = first_gcflag << 3
+GCFLAG_EXTERNAL = GCFLAG_MARKBIT << 4
 
 memoryError = MemoryError()
 
@@ -327,7 +329,7 @@ class MarkCompactGC(MovingGCBase):
                 if resizing:
                     end = fromaddr
                 hdr.forward_ptr = NULL
-                hdr.tid &= ~(GCFLAG_MARKBIT|GCFLAG_FINALIZATION_ORDERING)
+                hdr.tid &= ~GCFLAG_MARKBIT
                 if fromaddr != forward_ptr:
                     #llop.debug_print(lltype.Void, "Copying from to",
                     #                 fromaddr, forward_ptr, totalsize)
