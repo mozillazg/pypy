@@ -13,8 +13,6 @@ from pypy.rpython.memory.gc.base import MovingGCBase
 
 import sys, os
 
-DEBUG_PRINT = False
-memoryError = MemoryError()
 TYPEID_MASK = 0xffff
 first_gcflag = 1 << 16
 GCFLAG_FORWARDED = first_gcflag
@@ -23,13 +21,15 @@ GCFLAG_FORWARDED = first_gcflag
 GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
+DEBUG_PRINT = False
+memoryError = MemoryError()
+
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     malloc_zero_filled = True
     first_unused_gcflag = first_gcflag << 3
-
     total_collection_time = 0.0
     total_collection_count = 0
 
@@ -62,22 +62,6 @@ class SemiSpaceGC(MovingGCBase):
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
         self.objects_with_weakrefs = self.AddressStack()
-
-    def init_gc_object_immortal(self, addr, typeid, flags=0):
-        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED
-        # immortal objects always have GCFLAG_FORWARDED set;
-        # see get_forwarding_address().
-
-    def get_type_id(self, addr):
-        tid = self.header(addr).tid
-        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
-                  "get_type_id on forwarded obj")
-        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
-        # Although calling get_type_id() on a forwarded object works by itself,
-        # we catch it as an error because it's likely that what is then
-        # done with the typeid is bogus.
-        return tid & TYPEID_MASK
 
     # This class only defines the malloc_{fixed,var}size_clear() methods
     # because the spaces are filled with zeroes in advance.
@@ -395,6 +379,26 @@ class SemiSpaceGC(MovingGCBase):
         stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
         stub.forw = newobj
 
+    def get_type_id(self, addr):
+        tid = self.header(addr).tid
+        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
+                  "get_type_id on forwarded obj")
+        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
+        # Although calling get_type_id() on a forwarded object works by itself,
+        # we catch it as an error because it's likely that what is then
+        # done with the typeid is bogus.
+        return tid & TYPEID_MASK
+
+    def init_gc_object(self, addr, typeid, flags=0):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = typeid | flags
+
+    def init_gc_object_immortal(self, addr, typeid, flags=0):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = typeid | flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED
+        # immortal objects always have GCFLAG_FORWARDED set;
+        # see get_forwarding_address().
+
     def deal_with_objects_with_finalizers(self, scan):
         # walk over list of objects with finalizers
         # if it is not copied, add it to the list of to-be-called finalizers
@@ -552,5 +556,4 @@ class SemiSpaceGC(MovingGCBase):
                   "copy() on already-copied object")
 
     STATISTICS_NUMBERS = 0
-
 
