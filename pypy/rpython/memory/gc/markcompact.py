@@ -64,8 +64,8 @@ class MarkCompactGC(MovingGCBase):
     first_unused_gcflag = first_gcflag << 2
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
-        self.space_size = space_size
         MovingGCBase.__init__(self, chunk_size)
+        self.space_size = space_size
         self.red_zone = 0
 
     def setup(self):

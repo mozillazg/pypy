@@ -66,6 +66,23 @@ class GCBase(object):
     def size_gc_header(self, typeid=0):
         return self.gcheaderbuilder.size_gc_header
 
+    def header(self, addr):
+        addr -= self.gcheaderbuilder.size_gc_header
+        return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+
+    def get_size(self, obj):
+        typeid = self.get_type_id(obj)
+        size = self.fixed_size(typeid)
+        if self.is_varsize(typeid):
+            lenaddr = obj + self.varsize_offset_to_length(typeid)
+            length = lenaddr.signed[0]
+            size += length * self.varsize_item_sizes(typeid)
+            size = llarena.round_up_for_allocation(size)
+            # XXX maybe we should parametrize round_up_for_allocation()
+            # per GC; if we do, we also need to fix the call in
+            # gctypelayout.encode_type_shape()
+        return size
+
     def malloc(self, typeid, length=0, zero=False):
         """For testing.  The interface used by the gctransformer is
         the four malloc_[fixed,var]size[_clear]() functions.
@@ -193,19 +210,6 @@ class GCBase(object):
     def debug_check_object(self, obj):
         pass
 
-    def get_size(self, obj):
-        typeid = self.get_type_id(obj)
-        size = self.fixed_size(typeid)
-        if self.is_varsize(typeid):
-            lenaddr = obj + self.varsize_offset_to_length(typeid)
-            length = lenaddr.signed[0]
-            size += length * self.varsize_item_sizes(typeid)
-            size = llarena.round_up_for_allocation(size)
-            # XXX maybe we should parametrize round_up_for_allocation()
-            # per GC; if we do, we also need to fix the call in
-            # gctypelayout.encode_type_shape()
-        return size
-
     def execute_finalizers(self):
         self.finalizer_lock_count += 1
         try:
@@ -219,6 +223,7 @@ class GCBase(object):
         finally:
             self.finalizer_lock_count -= 1
 
+
 class MovingGCBase(GCBase):
     moving_gc = True
 
@@ -230,14 +235,6 @@ class MovingGCBase(GCBase):
 
     def can_move(self, addr):
         return True
-
-    def header(self, addr):
-        addr -= self.gcheaderbuilder.size_gc_header
-        return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-
-    def init_gc_object(self, addr, typeid, flags=0):
-        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags
 
     def id(self, ptr):
         # Default implementation for id(), assuming that "external" objects
