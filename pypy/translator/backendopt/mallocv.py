@@ -277,12 +277,13 @@ class MallocSpecializer(object):
         trivialframe = VirtualFrame(block, 0, nodes)
         self.newinputargs = spec.initialize_renamings(trivialframe)
         self.newoperations = spec.specialize_operations()
-        self.newexitswitch = spec.rename_nonvirtual(block.exitswitch,
-                                                    'exitswitch')
-        self.newexits = self.follow_exits(block, spec)
+        self.newexitswitch, self.newexits = self.follow_exits(spec)
 
-    def follow_exits(self, block, spec):
+    def follow_exits(self, spec):
         currentframe = spec.virtualframe
+        block = currentframe.sourceblock
+        v_exitswitch = spec.rename_nonvirtual(block.exitswitch,
+                                              'exitswitch')
         newlinks = []
         for link in block.exits:
             targetnodes = {}
@@ -310,14 +311,17 @@ class MallocSpecializer(object):
             newlink.exitcase = link.exitcase
             newlink.llexitcase = link.llexitcase
             newlinks.append(newlink)
-        return newlinks
+        return v_exitswitch, newlinks
 
     def get_specialized_block(self, virtualframe):
         specblock = self.cache.lookup_spec_block(virtualframe)
         if specblock is None:
             orgblock = virtualframe.sourceblock
-            if orgblock.operations == ():
-                raise CannotVirtualize("return or except block")
+            if len(orgblock.exits) == 0:
+                if virtualframe.callerframe is None:
+                    raise CannotVirtualize("return or except block")
+                else:
+                    return self.get_specialized_block(virtualframe.callerframe)
             spec = BlockSpecializer(self)
             specinputargs = spec.initialize_renamings(virtualframe.copy({}))
             specblock = Block(specinputargs)
@@ -342,11 +346,9 @@ class MallocSpecializer(object):
     def propagate_specializations(self):
         while self.pending_specializations:
             spec, specblock = self.pending_specializations.pop()
-            sourceblock = spec.virtualframe.sourceblock
             specblock.operations = spec.specialize_operations()
-            specblock.exitswitch = spec.rename_nonvirtual(
-                sourceblock.exitswitch, 'exitswitch')
-            specblock.closeblock(*self.follow_exits(sourceblock, spec))
+            specblock.exitswitch, newlinks = self.follow_exits(spec)
+            specblock.closeblock(*newlinks)
 
     def commit(self):
         self.startblock.inputargs = self.newinputargs
@@ -404,9 +406,16 @@ class BlockSpecializer(object):
         return [self.renamings[rtnode] for rtnode in rtnodes]
 
     def specialize_operations(self):
-        operations = self.virtualframe.sourceblock.operations
         newoperations = []
-        for op in operations:
+        # note that 'self.virtualframe' can be changed during the loop!
+        while True:
+            operations = self.virtualframe.sourceblock.operations
+            try:
+                op = operations[self.virtualframe.nextopindex]
+                self.virtualframe.nextopindex += 1
+            except IndexError:
+                break
+
             meth = getattr(self, 'handle_op_' + op.opname,
                            self.handle_default)
             newoperations += meth(op)
@@ -468,8 +477,11 @@ class BlockSpecializer(object):
         assert nb_args == len(graph.getargs())
         newnodes = [self.getnode(v) for v in op.args[1:]]
         if contains_mutable(newnodes):
-            xxx
-            return self.handle_default(op)
+            return self.handle_mutable_call(op, graph, newnodes)
+        else:
+            return self.handle_immutable_call(op, graph, newnodes)
+
+    def handle_immutable_call(self, op, graph, newnodes):
         newgraph = self.mallocspec.get_specialized_graph(graph, newnodes)
         if newgraph is graph:
             return self.handle_default(op)
@@ -480,6 +492,20 @@ class BlockSpecializer(object):
         newresult = self.make_rt_result(op.result)
         newop = SpaceOperation('direct_call', newargs, newresult)
         return [newop]
+
+    def handle_mutable_call(self, op, graph, newnodes):
+        sourceblock = self.virtualframe.sourceblock
+        nextopindex = self.virtualframe.nextopindex
+        myframe = VirtualFrame(sourceblock, nextopindex,
+                               self.nodes,
+                               self.virtualframe.callerframe)
+        assert len(graph.getargs()) == len(newnodes)
+        targetnodes = dict(zip(graph.getargs(), newnodes))
+        calleeframe = VirtualFrame(graph.startblock, 0,
+                                   targetnodes, myframe)
+        self.virtualframe = calleeframe
+        self.nodes = calleeframe.get_nodes_in_use()
+        return []
 
 # ____________________________________________________________
 # helpers

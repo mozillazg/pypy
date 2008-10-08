@@ -96,7 +96,6 @@ class BaseMallocRemovalTest(object):
         graph = self.check(f, [int], [10], 99)
 
     def test_direct_call_mutable_simple(self):
-        py.test.skip("later")
         A = lltype.GcStruct('A', ('x', lltype.Signed))
         def g(a):
             a.x += 1
