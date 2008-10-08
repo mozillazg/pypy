@@ -301,8 +301,14 @@ class MallocSpecializer(object):
                 # so we can stop specializing.
                 specblock = link.target
             else:
-                newframe = VirtualFrame(link.target, 0, targetnodes,
-                                        callerframe=currentframe.callerframe)
+                if len(link.target.exits) == 0:    # return or except block
+                    if currentframe.callerframe is None:
+                        raise CannotVirtualize("return or except block")
+                    newframe = self.return_to_caller(currentframe,
+                                                     link.target, targetnodes)
+                else:
+                    newframe = VirtualFrame(link.target, 0, targetnodes,
+                                          callerframe=currentframe.callerframe)
                 rtnodes = newframe.find_rt_nodes()
                 specblock = self.get_specialized_block(newframe)
 
@@ -313,15 +319,20 @@ class MallocSpecializer(object):
             newlinks.append(newlink)
         return v_exitswitch, newlinks
 
+    def return_to_caller(self, currentframe, returnblock, targetnodes):
+        [v_ret] = returnblock.inputargs
+        retnode = targetnodes[v_ret]
+        callerframe = currentframe.callerframe
+        for i in range(len(callerframe.nodelist)):
+            if isinstance(callerframe.nodelist[i], FutureReturnValue):
+                callerframe.nodelist[i] = retnode
+        return callerframe
+
     def get_specialized_block(self, virtualframe):
         specblock = self.cache.lookup_spec_block(virtualframe)
         if specblock is None:
             orgblock = virtualframe.sourceblock
-            if len(orgblock.exits) == 0:
-                if virtualframe.callerframe is None:
-                    raise CannotVirtualize("return or except block")
-                else:
-                    return self.get_specialized_block(virtualframe.callerframe)
+            assert len(orgblock.exits) != 0
             spec = BlockSpecializer(self)
             specinputargs = spec.initialize_renamings(virtualframe.copy({}))
             specblock = Block(specinputargs)
@@ -496,6 +507,7 @@ class BlockSpecializer(object):
     def handle_mutable_call(self, op, graph, newnodes):
         sourceblock = self.virtualframe.sourceblock
         nextopindex = self.virtualframe.nextopindex
+        self.nodes[op.result] = FutureReturnValue(op)
         myframe = VirtualFrame(sourceblock, nextopindex,
                                self.nodes,
                                self.virtualframe.callerframe)
@@ -507,11 +519,24 @@ class BlockSpecializer(object):
         self.nodes = calleeframe.get_nodes_in_use()
         return []
 
+
+class FutureReturnValue(object):
+    def __init__(self, op):
+        self.op = op    # for debugging
+    def getfrozenkey(self, memo):
+        return None
+    def accumulate_rt_nodes(self, memo, result):
+        pass
+    def copy(self, memo):
+        return self
+
 # ____________________________________________________________
 # helpers
 
 def vars_alive_through_op(block, index):
     # NB. make sure this always returns the variables in the same order
+    if len(block.exits) == 0:
+        return block.inputargs   # return or except block
     result = []
     seen = {}
     def see(v):

@@ -108,6 +108,34 @@ class BaseMallocRemovalTest(object):
         insns = summary(graph)
         assert insns.get('direct_call', 0) == 0     # no more call, inlined
 
+    def test_direct_call_mutable_retval(self):
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        def g(a):
+            a.x += 1
+            return a.x * 100
+        def f(x):
+            a = lltype.malloc(A)
+            a.x = x
+            y = g(a)
+            return a.x + y
+        graph = self.check(f, [int], [41], 4242)
+        insns = summary(graph)
+        assert insns.get('direct_call', 0) == 0     # no more call, inlined
+
+    def test_direct_call_mutable_ret_virtual(self):
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        def g(a):
+            a.x += 1
+            return a
+        def f(x):
+            a = lltype.malloc(A)
+            a.x = x
+            b = g(a)
+            return a.x + b.x
+        graph = self.check(f, [int], [41], 84)
+        insns = summary(graph)
+        assert insns.get('direct_call', 0) == 0     # no more call, inlined
+
     def test_fn2(self):
         py.test.skip("redo me")
         class T:
