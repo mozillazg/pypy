@@ -79,6 +79,13 @@ class MarkCompactGC(MovingGCBase):
         hdr.tid = typeid | flags
         hdr.forward_ptr = NULL
 
+    def init_gc_object_immortal(self, addr, typeid, flags=0):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = typeid | flags | GCFLAG_EXTERNAL
+        hdr.forward_ptr = NULL
+        # immortal objects always have GCFLAG_FORWARDED set;
+        # see get_forwarding_address().    
+
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
         assert can_collect
