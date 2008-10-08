@@ -1,4 +1,4 @@
-from pypy.jit.codegen.x86_64.objmodel import IntVar, Immediate8, Immediate32, Immediate64
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Register8, Register64, Immediate8, Immediate32, Immediate64
 
 # Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
@@ -45,10 +45,10 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
         rexB = B
         # TODO: other cases e.g memory as operand
         if isinstance(arg1,IntVar):
-            if arg1.location_type == "Register64":
-                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
-            elif arg1.location_type == "Register8":
-                modrm1 = self.get_register_bits_8Bit(arg1.pos_str)
+            if isinstance(arg1.location, Register64):
+                rexB, modrm1 = self.get_register_bits(arg1.location.reg)
+            elif isinstance(arg1.location, Register8):
+                modrm1 = self.get_register_bits_8Bit(arg1.location.reg)
             
         # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate32):
@@ -66,8 +66,8 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             self.write_modRM_byte(3, modrm2, modrm1)
             self.write(chr(arg2.value)) 
         elif isinstance(arg2, IntVar):
-            if arg2.location_type == "Register64":
-                rexR, modrm2 = self.get_register_bits(arg2.pos_str)         
+            if isinstance(arg2.location, Register64):
+                rexR, modrm2 = self.get_register_bits(arg2.location.reg)         
                 # FIXME: exchange the two arguments (rexB/rexR)
                 self.write_rex_byte(rexW, rexR, rexX, rexB)
                 self.write(opcode)
@@ -96,10 +96,10 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         
         # TODO: other cases e.g memory as operand
         if isinstance(arg1, IntVar):
-            if arg1.location_type == "Register64":
-                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
-            elif arg1.location_type == "Register8":
-                modrm1 = self.get_register_bits_8Bit(arg1.pos_str)
+            if isinstance(arg1.location, Register64):
+                rexB, modrm1 = self.get_register_bits(arg1.location.reg)
+            elif isinstance(arg1.location, Register8):
+                modrm1 = self.get_register_bits_8Bit(arg1.location.reg)
             
         # rexW(1) = 64bitMode 
         self.write_rex_byte(rexW, rexR, rexX, rexB)
@@ -125,8 +125,8 @@ def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         # TODO: other cases e.g memory as operand
         # FIXME: rexB?
         if isinstance(arg1, IntVar):
-            if arg1.location_type == "Register64":
-                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
+            if isinstance(arg1.location, Register64):
+                rexB, modrm1 = self.get_register_bits(arg1.location.reg)
               
         if isinstance(arg2, Immediate64):
             new_opcode = hex(int(opcode,16)+modrm1)
@@ -149,8 +149,8 @@ def make_one_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         # TODO: other cases e.g memory as operand
         # FIXME: rexB?
         if isinstance(arg1, IntVar):
-            if arg1.location_type == "Register64":
-                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
+            if isinstance(arg1.location, Register64):
+                rexB, modrm1 = self.get_register_bits(arg1.location.reg)
                 new_opcode = hex(int(opcode,16)+modrm1)
                 assert len(new_opcode[2:len(new_opcode)]) == 2
                 self.write_rex_byte(rexW, rexR, rexX, rexB)
