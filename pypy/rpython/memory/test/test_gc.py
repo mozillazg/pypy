@@ -263,10 +263,6 @@ class GCTest(object):
         assert res
 
     def test_id(self):
-        py.test.skip("the MovingGCBase.id() logic can't be directly run")
-        # XXX ^^^ the problem is that the MovingGCBase instance holds
-        # references to GC objects - a list of weakrefs and a dict - and
-        # there is no way we can return these from get_roots_from_llinterp().
         class A(object):
             pass
         a1 = A()
