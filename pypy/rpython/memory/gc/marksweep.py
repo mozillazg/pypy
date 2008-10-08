@@ -22,8 +22,6 @@ X_CLONE_PTR = lltype.Ptr(X_CLONE)
 DEBUG_PRINT = False
 memoryError = MemoryError()
 class MarkSweepGC(GCBase):
-    _alloc_flavor_ = "raw"
-
     HDR = lltype.ForwardReference()
     HDRPTR = lltype.Ptr(HDR)
     # need to maintain a linked list of malloced objects, since we used the
@@ -44,17 +42,16 @@ class MarkSweepGC(GCBase):
     TRANSLATION_PARAMS = {'start_heap_size': 8*1024*1024} # XXX adjust
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, start_heap_size=4096):
+        GCBase.__init__(self, chunk_size)
         self.heap_usage = 0          # at the end of the latest collection
         self.bytes_malloced = 0      # since the latest collection
         self.bytes_malloced_threshold = start_heap_size
         self.total_collection_time = 0.0
-        self.AddressStack = get_address_stack(chunk_size)
         self.malloced_objects = lltype.nullptr(self.HDR)
         self.malloced_objects_with_finalizer = lltype.nullptr(self.HDR)
         # these are usually only the small bits of memory that make a
         # weakref object
         self.objects_with_weak_pointers = lltype.nullptr(self.HDR)
-        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
         # pools, for x_swap_pool():
         #   'curpool' is the current pool, lazily allocated (i.e. NULL means
         #   the current POOL object is not yet malloc'ed).  POOL objects are

@@ -45,7 +45,7 @@ translation_optiondescription = OptionDescription(
     # gc
     ChoiceOption("gc", "Garbage Collection Strategy",
                  ["boehm", "ref", "marksweep", "semispace", "statistics",
-                  "generation", "hybrid", "none"],
+                  "generation", "hybrid", "markcompact", "none"],
                   "ref", requires={
                      "ref": [("translation.rweakref", False), # XXX
                              ("translation.gctransformer", "ref")],
@@ -57,6 +57,7 @@ translation_optiondescription = OptionDescription(
                      "generation": [("translation.gctransformer", "framework")],
                      "hybrid": [("translation.gctransformer", "framework")],
                      "boehm": [("translation.gctransformer", "boehm")],
+                     "markcompact": [("translation.gctransformer", "framework")],
                      },
                   cmdline="--gc"),
     ChoiceOption("gctransformer", "GC transformer that is used - internal",
@@ -299,7 +300,7 @@ OPT_TABLE = {
     '0':    'boehm       nobackendopt',
     '1':    'boehm       lowinline',
     'size': 'boehm       lowinline     remove_asserts',
-    'mem':  'generation  lowinline     remove_asserts',
+    'mem':  'markcompact lowinline     remove_asserts',
     '2':    'hybrid      extraopts',
     '3':    'hybrid      extraopts     remove_asserts',
     }

@@ -90,6 +90,7 @@ extern char __gcnoreorderhack;
     if (r != NULL) memset((void*) r, 0, size);
     
 #define OP_RAW_MEMCOPY(x,y,size,r) memcpy(y,x,size);
+#define OP_RAW_MEMMOVE(x,y,size,r) memmove(y,x,size);
 
 /************************************************************/
 

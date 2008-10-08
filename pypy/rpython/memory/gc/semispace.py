@@ -4,7 +4,6 @@ from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict
-from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
@@ -45,17 +44,10 @@ class SemiSpaceGC(MovingGCBase):
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
                  max_space_size=sys.maxint//2+1):
-        MovingGCBase.__init__(self)
+        MovingGCBase.__init__(self, chunk_size)
         self.space_size = space_size
         self.max_space_size = max_space_size
-        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
-        self.AddressStack = get_address_stack(chunk_size)
-        self.AddressDeque = get_address_deque(chunk_size)
-        self.AddressDict = AddressDict
-        self.finalizer_lock_count = 0
         self.red_zone = 0
-        self.id_free_list = self.AddressStack()
-        self.next_free_id = 1
 
     def setup(self):
         if DEBUG_PRINT:
@@ -67,10 +59,9 @@ class SemiSpaceGC(MovingGCBase):
         self.fromspace = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
+        MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
-        self.run_finalizers = self.AddressDeque()
         self.objects_with_weakrefs = self.AddressStack()
-        self.objects_with_id = self.AddressDict()
 
     # This class only defines the malloc_{fixed,var}size_clear() methods
     # because the spaces are filled with zeroes in advance.
@@ -388,20 +379,6 @@ class SemiSpaceGC(MovingGCBase):
         stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
         stub.forw = newobj
 
-    def get_size(self, obj):
-        typeid = self.get_type_id(obj)
-        size = self.fixed_size(typeid)
-        if self.is_varsize(typeid):
-            lenaddr = obj + self.varsize_offset_to_length(typeid)
-            length = lenaddr.signed[0]
-            size += length * self.varsize_item_sizes(typeid)
-            size = llarena.round_up_for_allocation(size)
-        return size
-
-    def header(self, addr):
-        addr -= self.gcheaderbuilder.size_gc_header
-        return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-
     def get_type_id(self, addr):
         tid = self.header(addr).tid
         ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
@@ -556,75 +533,8 @@ class SemiSpaceGC(MovingGCBase):
         self.run_finalizers.delete()
         self.run_finalizers = new_run_finalizer
 
-    def execute_finalizers(self):
-        self.finalizer_lock_count += 1
-        try:
-            while self.run_finalizers.non_empty():
-                #print "finalizer"
-                if self.finalizer_lock_count > 1:
-                    # the outer invocation of execute_finalizers() will do it
-                    break
-                obj = self.run_finalizers.popleft()
-                finalizer = self.getfinalizer(self.get_type_id(obj))
-                finalizer(obj)
-        finally:
-            self.finalizer_lock_count -= 1
-
-    def id(self, ptr):
-        obj = llmemory.cast_ptr_to_adr(ptr)
-        if self.header(obj).tid & GCFLAG_EXTERNAL:
-            result = self._compute_id_for_external(obj)
-        else:
-            result = self._compute_id(obj)
-        return llmemory.cast_adr_to_int(result)
-
-    def _next_id(self):
-        # return an id not currently in use (as an address instead of an int)
-        if self.id_free_list.non_empty():
-            result = self.id_free_list.pop()    # reuse a dead id
-        else:
-            # make up a fresh id number
-            result = llmemory.cast_int_to_adr(self.next_free_id)
-            self.next_free_id += 2    # only odd numbers, to make lltype
-                                      # and llmemory happy and to avoid
-                                      # clashes with real addresses
-        return result
-
-    def _compute_id(self, obj):
-        # look if the object is listed in objects_with_id
-        result = self.objects_with_id.get(obj)
-        if not result:
-            result = self._next_id()
-            self.objects_with_id.setitem(obj, result)
-        return result
-
-    def _compute_id_for_external(self, obj):
-        # For prebuilt objects, we can simply return their address.
-        # This method is overriden by the HybridGC.
-        return obj
-
-    def update_objects_with_id(self):
-        old = self.objects_with_id
-        new_objects_with_id = self.AddressDict(old.length())
-        old.foreach(self._update_object_id_FAST, new_objects_with_id)
-        old.delete()
-        self.objects_with_id = new_objects_with_id
-
-    def _update_object_id(self, obj, id, new_objects_with_id):
-        # safe version (used by subclasses)
-        if self.surviving(obj):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.setitem(newobj, id)
-        else:
-            self.id_free_list.append(id)
-
-    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
-        # unsafe version, assumes that the new_objects_with_id is large enough
-        if self.surviving(obj):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.insertclean(newobj, id)
-        else:
-            self.id_free_list.append(id)
+    def _is_external(self, obj):
+        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true
