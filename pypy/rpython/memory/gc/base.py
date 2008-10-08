@@ -227,8 +227,8 @@ class GCBase(object):
 class MovingGCBase(GCBase):
     moving_gc = True
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE):
-        GCBase.__init__(self, chunk_size)
+    def setup(self):
+        GCBase.setup(self)
         self.objects_with_id = self.AddressDict()
         self.id_free_list = self.AddressStack()
         self.next_free_id = 1
