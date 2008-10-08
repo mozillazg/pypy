@@ -8,6 +8,113 @@ from pypy.rpython.lltypesystem import lltype
 # ____________________________________________________________
 
 
+class MallocTypeDesc(object):
+
+    def __init__(self, MALLOCTYPE):
+        self.MALLOCTYPE = MALLOCTYPE
+        self.names_and_types = []
+        self.name2index = {}
+        self.initialize_type(MALLOCTYPE)
+        self.immutable_struct = MALLOCTYPE._hints.get('immutable')
+
+    def initialize_type(self, TYPE):
+        fieldnames = TYPE._names
+        firstname, FIRSTTYPE = TYPE._first_struct()
+        if FIRSTTYPE is not None:
+            self.initialize_type(FIRSTTYPE)
+            fieldnames = fieldnames[1:]
+        for name in fieldnames:
+            FIELDTYPE = TYPE._flds[name]
+            self.name2index[name] = len(self.names_and_types)
+            self.names_and_types.append((name, FIELDTYPE))
+
+
+class SpecNode(object):
+    pass
+
+
+class RuntimeSpecNode(SpecNode):
+
+    def getfrozenkey(self, memo):
+        return 'R'
+
+    def find_rt_nodes(self, memo, result):
+        result.append(self)
+
+    def copy(self, function, name, TYPE, memo):
+        return function(name, TYPE)
+
+    def contains_mutable(self):
+        return False
+
+
+class VirtualSpecNode(SpecNode):
+
+    def __init__(self, typedesc, fields):
+        self.typedesc = typedesc
+        self.fields = fields     # list of SpecNodes
+
+    def getfrozenkey(self, memo):
+        if self in memo:
+            return memo[self]
+        else:
+            memo[self] = len(memo)
+            result = [self.typedesc]
+            for subnode in self.fields:
+                result.append(subnode.getfrozenkey(memo))
+            return tuple(result)
+
+    def find_rt_nodes(self, memo, result):
+        if self in memo:
+            return
+        memo[self] = True
+        for subnode in self.fields:
+            subnode.find_rt_nodes(memo, result)
+
+    def copy(self, function, _name, _TYPE, memo):
+        if self in memo:
+            return memo[self]
+        newnode = VirtualSpecNode(self.typedesc, [])
+        memo[self] = newnode
+        for (name, FIELDTYPE), subnode in zip(self.typedesc.names_and_types,
+                                              self.fields):
+            newsubnode = subnode.copy(function, name, FIELDTYPE, memo)
+            newnode.fields.append(newsubnode)
+        return newnode
+
+    def contains_mutable(self):
+        if not self.typedesc.immutable_struct:
+            return True
+        for subnode in self.fields:
+            if subnode.contains_mutable():
+                return True
+        return False
+
+
+def getfrozenkey(nodelist):
+    memo = {}
+    return tuple([node.getfrozenkey(memo) for node in nodelist])
+
+def find_rt_nodes(nodelist):
+    result = []
+    memo = {}
+    for node in nodelist:
+        node.find_rt_nodes(memo, result)
+    return result
+
+def is_trivial_nodelist(nodelist):
+    for node in nodelist:
+        if not isinstance(node, RuntimeSpecNode):
+            return False
+    return True
+
+def contains_mutable(nodelist):
+    for node in nodelist:
+        if node.contains_mutable():
+            return True
+    return False
+
+
 class CannotVirtualize(Exception):
     pass
 
@@ -18,6 +125,7 @@ class MallocVirtualizer(object):
         self.graphs = graphs
         self.new_graphs = {}
         self.cache = BlockSpecCache()
+        self.malloctypedescs = {}
         self.count_virtualized = 0
 
     def report_result(self):
@@ -50,7 +158,12 @@ class MallocVirtualizer(object):
         return progress
 
     def try_remove_malloc(self, block, op):
-        mallocspec = MallocSpecializer(self, op.result.concretetype.TO)
+        MALLOCTYPE = op.result.concretetype.TO
+        try:
+            dsc = self.malloctypedescs[MALLOCTYPE]
+        except KeyError:
+            dsc = self.malloctypedescs[MALLOCTYPE] = MallocTypeDesc(MALLOCTYPE)
+        mallocspec = MallocSpecializer(self, dsc)
         mallocspec.remove_malloc(block, op.result)
         mallocspec.propagate_specializations()
         # if we read this point without a CannotVirtualize, success
@@ -67,14 +180,14 @@ class MallocVirtualizer(object):
 class BlockSpecCache(object):
 
     def __init__(self, fallback=None):
-        self.specialized_blocks = {}
-        self.block_keys = {}
-        self.graph_starting_at = {}
+        self.specialized_blocks = {}  # {(org Block, frozenkey): spec Block}
+        self.graph_starting_at = {}   # {spec Block: spec Graph}
         self.fallback = fallback
 
-    def lookup_spec_block(self, block, extra_key):
-        key = self.block_keys.get(block, frozenset())
-        key = key.union([extra_key])
+    def lookup_spec_block(self, orgblock, nodelist):
+        if is_trivial_nodelist(nodelist):
+            return orgblock
+        key = orgblock, getfrozenkey(nodelist)
         try:
             return self.specialized_blocks[key]
         except KeyError:
@@ -83,11 +196,10 @@ class BlockSpecCache(object):
             else:
                 return self.fallback.specialized_blocks.get(key)
 
-    def remember_spec_block(self, block, extra_key, specblock):
-        key = self.block_keys.get(block, frozenset())
-        key = key.union([extra_key])
+    def remember_spec_block(self, orgblock, nodelist, specblock):
+        assert len(nodelist) == len(orgblock.inputargs)
+        key = orgblock, getfrozenkey(nodelist)
         self.specialized_blocks[key] = specblock
-        self.block_keys[specblock] = key
 
     def lookup_graph_starting_at(self, startblock):
         try:
@@ -103,69 +215,56 @@ class BlockSpecCache(object):
 
     def push_changes(self):
         self.fallback.specialized_blocks.update(self.specialized_blocks)
-        self.fallback.block_keys.update(self.block_keys)
         self.fallback.graph_starting_at.update(self.graph_starting_at)
 
 
 class MallocSpecializer(object):
 
-    def __init__(self, mallocv, MALLOCTYPE):
+    def __init__(self, mallocv, malloctypedesc):
         self.mallocv = mallocv
-        self.MALLOCTYPE = MALLOCTYPE
-        self.names_and_types = []
-        self.name2index = {}
-        self.initialize_type(MALLOCTYPE)
-        self.immutable_struct = MALLOCTYPE._hints.get('immutable')
+        self.malloctypedesc = malloctypedesc
         self.pending_specializations = []
         self.cache = BlockSpecCache(fallback=mallocv.cache)
-
-    def initialize_type(self, TYPE):
-        fieldnames = TYPE._names
-        firstname, FIRSTTYPE = TYPE._first_struct()
-        if FIRSTTYPE is not None:
-            self.initialize_type(FIRSTTYPE)
-            fieldnames = fieldnames[1:]
-        for name in fieldnames:
-            FIELDTYPE = TYPE._flds[name]
-            self.name2index[name] = len(self.names_and_types)
-            self.names_and_types.append((name, FIELDTYPE))
 
     def remove_malloc(self, block, v_result):
         self.startblock = block
         spec = BlockSpecializer(self, v_result)
-        spec.initialize_renamings(block.inputargs)
+        trivialnodelist = [RuntimeSpecNode() for v in block.inputargs]
+        spec.initialize_renamings(block.inputargs, trivialnodelist)
         self.newinputargs = spec.expand_vars(block.inputargs)
         self.newoperations = spec.specialize_operations(block.operations)
+        self.newexitswitch = spec.rename_nonvirtual(block.exitswitch,
+                                                    'exitswitch')
         self.newexits = self.follow_exits(block, spec)
 
     def follow_exits(self, block, spec):
         newlinks = []
         for link in block.exits:
-            targetblock = link.target
-            for v1, v2 in zip(link.args, link.target.inputargs):
-                if v1 in spec.curvars:
-                    targetblock = self.get_specialized_block(targetblock, v2)
-            newlink = Link(spec.expand_vars(link.args), targetblock)
+            targetnodes = [spec.getnode(v) for v in link.args]
+            specblock = self.get_specialized_block(link.target, targetnodes)
+            newlink = Link(spec.expand_vars(link.args), specblock)
+            newlink.exitcase = link.exitcase
+            newlink.llexitcase = link.llexitcase
             newlinks.append(newlink)
         return newlinks
 
-    def get_specialized_block(self, block, v):
-        specblock = self.cache.lookup_spec_block(block, (self.MALLOCTYPE, v))
+    def get_specialized_block(self, orgblock, nodelist):
+        specblock = self.cache.lookup_spec_block(orgblock, nodelist)
         if specblock is None:
-            if block.operations == ():
+            if orgblock.operations == ():
                 raise CannotVirtualize("return or except block")
-            spec = BlockSpecializer(self, v)
-            spec.make_expanded_vars()
-            spec.initialize_renamings(block.inputargs)
-            specblock = Block(spec.expand_vars(block.inputargs))
-            self.pending_specializations.append((spec, block, specblock))
-            self.cache.remember_spec_block(block, (self.MALLOCTYPE, v),
-                                           specblock)
+            spec = BlockSpecializer(self)
+            spec.initialize_renamings(orgblock.inputargs, nodelist)
+            specblock = Block(spec.expand_vars(orgblock.inputargs))
+            self.pending_specializations.append((spec, orgblock, specblock))
+            self.cache.remember_spec_block(orgblock, nodelist, specblock)
         return specblock
 
     def get_specialized_graph(self, graph, v):
         block = graph.startblock
         specblock = self.get_specialized_block(block, v)
+        if specblock is block:
+            return graph
         specgraph = self.cache.lookup_graph_starting_at(specblock)
         if specgraph is None:
             specgraph = FunctionGraph(graph.name + '_spec', specblock)
@@ -176,61 +275,57 @@ class MallocSpecializer(object):
         while self.pending_specializations:
             spec, block, specblock = self.pending_specializations.pop()
             specblock.operations = spec.specialize_operations(block.operations)
+            specblock.exitswitch = spec.rename_nonvirtual(block.exitswitch,
+                                                          'exitswitch')
             specblock.closeblock(*self.follow_exits(block, spec))
 
     def commit(self):
         self.startblock.inputargs = self.newinputargs
         self.startblock.operations = self.newoperations
+        self.startblock.exitswitch = self.newexitswitch
         self.startblock.recloseblock(*self.newexits)
         self.cache.push_changes()
 
 
 class BlockSpecializer(object):
 
-    def __init__(self, mallocspec, v):
+    def __init__(self, mallocspec, v_expand_malloc=None):
         self.mallocspec = mallocspec
-        self.curvars = set([v])
+        self.v_expand_malloc = v_expand_malloc
 
-    def make_expanded_vars(self):
-        self.expanded_v = []
-        for name, FIELDTYPE in self.mallocspec.names_and_types:
-            v = Variable(name)
-            v.concretetype = FIELDTYPE
-            self.expanded_v.append(v)
+    def initialize_renamings(self, inputargs, inputnodes):
+        assert len(inputargs) == len(inputnodes)
+        self.nodes = {}
+        self.renamings = {}    # {RuntimeSpecNode(): Variable()}
+        memo = {}
+        for v, node in zip(inputargs, inputnodes):
+            newnode = node.copy(self.fresh_rtnode, v, v.concretetype, memo)
+            self.setnode(v, newnode)
 
-    def make_expanded_zero_constants(self):
-        self.expanded_v = []
-        for name, FIELDTYPE in self.mallocspec.names_and_types:
-            c = Constant(FIELDTYPE._defl())
-            c.concretetype = FIELDTYPE
-            self.expanded_v.append(c)
+    def setnode(self, v, node):
+        assert v not in self.nodes
+        self.nodes[v] = node
+
+    def getnode(self, v):
+        if isinstance(v, Variable):
+            return self.nodes[v]
+        else:
+            rtnode = RuntimeSpecNode()
+            self.renamings[rtnode] = v
+            return rtnode
 
     def rename_nonvirtual(self, v, where=None):
-        if isinstance(v, Constant):
+        if not isinstance(v, Variable):
             return v
-        if v in self.curvars:
+        node = self.nodes[v]
+        if not isinstance(node, RuntimeSpecNode):
             raise CannotVirtualize(where)
-        [v2] = self.renamings[v]
-        return v2
+        return self.renamings[node]
 
     def expand_vars(self, vars):
-        result_v = []
-        for v in vars:
-            if isinstance(v, Variable):
-                result_v += self.renamings[v]
-            else:
-                result_v.append(v)
-        return result_v
-
-    def initialize_renamings(self, inputargs):
-        self.renamings = {}
-        for v in inputargs:
-            if v in self.curvars:
-                self.renamings[v] = self.expanded_v
-            else:
-                v2 = Variable(v)
-                v2.concretetype = v.concretetype
-                self.renamings[v] = [v2]
+        nodelist = [self.getnode(v) for v in vars]
+        rtnodes = find_rt_nodes(nodelist)
+        return [self.renamings[rtnode] for rtnode in rtnodes]
 
     def specialize_operations(self, operations):
         newoperations = []
@@ -240,75 +335,75 @@ class BlockSpecializer(object):
             newoperations += meth(op)
         return newoperations
 
+    def fresh_rtnode(self, name, TYPE):
+        newvar = Variable(name)
+        newvar.concretetype = TYPE
+        newrtnode = RuntimeSpecNode()
+        self.renamings[newrtnode] = newvar
+        return newrtnode
+
+    def make_rt_result(self, v_result):
+        rtnode = self.fresh_rtnode(v_result, v_result.concretetype)
+        self.setnode(v_result, rtnode)
+        return self.renamings[rtnode]
+
     def handle_default(self, op):
         newargs = [self.rename_nonvirtual(v, op) for v in op.args]
-        newresult = Variable(op.result)
-        newresult.concretetype = op.result.concretetype
-        self.renamings[op.result] = [newresult]
+        newresult = self.make_rt_result(op.result)
         return [SpaceOperation(op.opname, newargs, newresult)]
 
     def handle_op_getfield(self, op):
-        if op.args[0] in self.curvars:
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
             fieldname = op.args[1].value
-            index = self.mallocspec.name2index[fieldname]
-            v_field = self.expanded_v[index]
-            self.renamings[op.result] = [v_field]
+            index = node.typedesc.name2index[fieldname]
+            self.setnode(op.result, node.fields[index])
             return []
         else:
             return self.handle_default(op)
 
     def handle_op_setfield(self, op):
-        if op.args[0] in self.curvars:
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
             fieldname = op.args[1].value
-            index = self.mallocspec.name2index[fieldname]
-            self.expanded_v[index] = self.rename_nonvirtual(op.args[2], op)
+            index = node.typedesc.name2index[fieldname]
+            node.fields[index] = self.getnode(op.args[2])
             return []
         else:
             return self.handle_default(op)
 
     def handle_op_malloc(self, op):
-        if op.result in self.curvars:
-            self.make_expanded_zero_constants()
-            self.renamings[op.result] = self.expanded_v
+        if op.result is self.v_expand_malloc:
+            typedesc = self.mallocspec.malloctypedesc
+            virtualnode = VirtualSpecNode(typedesc, [])
+            self.setnode(op.result, virtualnode)
+            for name, FIELDTYPE in typedesc.names_and_types:
+                fieldnode = RuntimeSpecNode()
+                virtualnode.fields.append(fieldnode)
+                c = Constant(FIELDTYPE._defl())
+                c.concretetype = FIELDTYPE
+                self.renamings[fieldnode] = c
             return []
         else:
             return self.handle_default(op)
 
     def handle_op_direct_call(self, op):
         fobj = op.args[0].value._obj
-        if hasattr(fobj, 'graph'):
-            graph = fobj.graph
-            if self.mallocspec.immutable_struct:
-                return self.handle_call_with_immutable(op, graph)
-            else:
-                return self.handle_call_with_mutable(op, graph)
-        else:
+        if not hasattr(fobj, 'graph'):
             return self.handle_default(op)
-
-    def handle_call_with_immutable(self, op, graph):
+        graph = fobj.graph
         nb_args = len(op.args) - 1
         assert nb_args == len(graph.getargs())
-        newargs = []
-        for i in range(nb_args):
-            v1 = op.args[1+i]
-            if v1 not in self.curvars:
-                newargs.append(v1)
-            else:
-                inputarg_index_in_specgraph = len(newargs)
-                v2 = graph.getargs()[inputarg_index_in_specgraph]
-                assert v1.concretetype == v2.concretetype
-                specgraph = self.mallocspec.get_specialized_graph(graph, v2)
-                newargs.extend(self.expanded_v)
-                graph = specgraph
-        assert len(newargs) == len(graph.getargs())
-        fspecptr = getfunctionptr(graph)
-        newargs.insert(0, Constant(fspecptr,
-                                   concretetype=lltype.typeOf(fspecptr)))
-        newresult = Variable(op.result)
-        newresult.concretetype = op.result.concretetype
-        self.renamings[op.result] = [newresult]
+        newnodes = [self.getnode(v) for v in op.args[1:]]
+        if contains_mutable(newnodes):
+            return self.handle_default(op)
+        newgraph = self.mallocspec.get_specialized_graph(graph, newnodes)
+        if newgraph is graph:
+            return self.handle_default(op)
+        fspecptr = getfunctionptr(newgraph)
+        newargs = [Constant(fspecptr,
+                            concretetype=lltype.typeOf(fspecptr))]
+        newargs += self.expand_vars(op.args[1:])
+        newresult = self.make_rt_result(op.result)
         newop = SpaceOperation('direct_call', newargs, newresult)
         return [newop]
-
-    def handle_call_with_mutable(self, op, graph):
-        return self.handle_default(op)
