@@ -72,6 +72,21 @@ class BaseMallocRemovalTest(object):
         insns = summary(graph)
         assert insns['int_mul'] == 1
 
+    def test_aliasing1(self):
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        def fn1(x):
+            a1 = lltype.malloc(A)
+            a1.x = 123
+            if x > 0:
+                a2 = a1
+            else:
+                a2 = lltype.malloc(A)
+                a2.x = 456
+            a1.x += 1
+            return a2.x
+        self.check(fn1, [int], [3], 124)
+        self.check(fn1, [int], [-3], 456)
+
     def test_direct_call(self):
         def g(t):
             a, b = t
