@@ -9,13 +9,14 @@ from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rpython.memory.gc.base import MovingGCBase, first_gcflag
+from pypy.rpython.memory.gc.base import MovingGCBase
 
 import sys, os
 
 DEBUG_PRINT = False
 memoryError = MemoryError()
 TYPEID_MASK = 0xffff
+first_gcflag = 1 << 16
 GCFLAG_FORWARDED = first_gcflag
 # GCFLAG_EXTERNAL is set on objects not living in the semispace:
 # either immortal objects or (for HybridGC) externally raw_malloc'ed
@@ -46,6 +47,7 @@ class SemiSpaceGC(MovingGCBase):
         MovingGCBase.__init__(self, chunk_size)
         self.space_size = space_size
         self.max_space_size = max_space_size
+        self.red_zone = 0
 
     def setup(self):
         if DEBUG_PRINT:
@@ -58,6 +60,8 @@ class SemiSpaceGC(MovingGCBase):
         ll_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
         MovingGCBase.setup(self)
+        self.objects_with_finalizers = self.AddressDeque()
+        self.objects_with_weakrefs = self.AddressStack()
 
     def init_gc_object_immortal(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
@@ -525,74 +529,8 @@ class SemiSpaceGC(MovingGCBase):
         self.run_finalizers.delete()
         self.run_finalizers = new_run_finalizer
 
-    def execute_finalizers(self):
-        self.finalizer_lock_count += 1
-        try:
-            while self.run_finalizers.non_empty():
-                if self.finalizer_lock_count > 1:
-                    # the outer invocation of execute_finalizers() will do it
-                    break
-                obj = self.run_finalizers.popleft()
-                finalizer = self.getfinalizer(self.get_type_id(obj))
-                finalizer(obj)
-        finally:
-            self.finalizer_lock_count -= 1
-
-    def id(self, ptr):
-        obj = llmemory.cast_ptr_to_adr(ptr)
-        if self.header(obj).tid & GCFLAG_EXTERNAL:
-            result = self._compute_id_for_external(obj)
-        else:
-            result = self._compute_id(obj)
-        return llmemory.cast_adr_to_int(result)
-
-    def _next_id(self):
-        # return an id not currently in use (as an address instead of an int)
-        if self.id_free_list.non_empty():
-            result = self.id_free_list.pop()    # reuse a dead id
-        else:
-            # make up a fresh id number
-            result = llmemory.cast_int_to_adr(self.next_free_id)
-            self.next_free_id += 2    # only odd numbers, to make lltype
-                                      # and llmemory happy and to avoid
-                                      # clashes with real addresses
-        return result
-
-    def _compute_id(self, obj):
-        # look if the object is listed in objects_with_id
-        result = self.objects_with_id.get(obj)
-        if not result:
-            result = self._next_id()
-            self.objects_with_id.setitem(obj, result)
-        return result
-
-    def _compute_id_for_external(self, obj):
-        # For prebuilt objects, we can simply return their address.
-        # This method is overriden by the HybridGC.
-        return obj
-
-    def update_objects_with_id(self):
-        old = self.objects_with_id
-        new_objects_with_id = self.AddressDict(old.length())
-        old.foreach(self._update_object_id_FAST, new_objects_with_id)
-        old.delete()
-        self.objects_with_id = new_objects_with_id
-
-    def _update_object_id(self, obj, id, new_objects_with_id):
-        # safe version (used by subclasses)
-        if self.surviving(obj):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.setitem(newobj, id)
-        else:
-            self.id_free_list.append(id)
-
-    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
-        # unsafe version, assumes that the new_objects_with_id is large enough
-        if self.surviving(obj):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.insertclean(newobj, id)
-        else:
-            self.id_free_list.append(id)
+    def _is_external(self, obj):
+        return (self.header(obj).tid & GCFLAG_EXTERNAL) != 0
 
     def debug_check_object(self, obj):
         """Check the invariants about 'obj' that should be true

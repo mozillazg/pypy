@@ -9,11 +9,11 @@ from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rpython.memory.gc.base import first_gcflag
 
 TYPEID_MASK = 0xffff
-GCFLAG_MARKBIT = first_gcflag << 3
-GCFLAG_EXTERNAL = GCFLAG_MARKBIT << 4
+first_gcflag = 1 << 16
+GCFLAG_MARKBIT = first_gcflag << 0
+GCFLAG_EXTERNAL = first_gcflag << 1
 
 memoryError = MemoryError()
 
@@ -61,10 +61,12 @@ class MarkCompactGC(MovingGCBase):
     malloc_zero_filled = True
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
+    first_unused_gcflag = first_gcflag << 2
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
         self.space_size = space_size
         MovingGCBase.__init__(self, chunk_size)
+        self.red_zone = 0
 
     def setup(self):
         self.space = llarena.arena_malloc(self.space_size, True)
@@ -72,7 +74,8 @@ class MarkCompactGC(MovingGCBase):
         self.free = self.space
         self.top_of_space = self.space + self.space_size
         MovingGCBase.setup(self)
-        self.run_finalizers = self.AddressDeque()
+        self.objects_with_finalizers = self.AddressDeque()
+        self.objects_with_weakrefs = self.AddressStack()
 
     def init_gc_object(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
@@ -360,62 +363,6 @@ class MarkCompactGC(MovingGCBase):
         if not self._is_external(obj):
             ll_assert(not self.marked(obj), "Marked")
             ll_assert(not self.surviving(obj), "forward_ptr set")
-        
-    def id(self, ptr):
-        obj = llmemory.cast_ptr_to_adr(ptr)
-        if self.header(obj).tid & GCFLAG_EXTERNAL:
-            result = self._compute_id_for_external(obj)
-        else:
-            result = self._compute_id(obj)
-        return llmemory.cast_adr_to_int(result)
-
-    def _next_id(self):
-        # return an id not currently in use (as an address instead of an int)
-        if self.id_free_list.non_empty():
-            result = self.id_free_list.pop()    # reuse a dead id
-        else:
-            # make up a fresh id number
-            result = llmemory.cast_int_to_adr(self.next_free_id)
-            self.next_free_id += 2    # only odd numbers, to make lltype
-                                      # and llmemory happy and to avoid
-                                      # clashes with real addresses
-        return result
-
-    def _compute_id(self, obj):
-        # look if the object is listed in objects_with_id
-        result = self.objects_with_id.get(obj)
-        if not result:
-            result = self._next_id()
-            self.objects_with_id.setitem(obj, result)
-        return result
-
-    def _compute_id_for_external(self, obj):
-        # For prebuilt objects, we can simply return their address.
-        # This method is overriden by the HybridGC.
-        return obj
-
-    def update_objects_with_id(self):
-        old = self.objects_with_id
-        new_objects_with_id = self.AddressDict(old.length())
-        old.foreach(self._update_object_id_FAST, new_objects_with_id)
-        old.delete()
-        self.objects_with_id = new_objects_with_id
-
-    def _update_object_id(self, obj, id, new_objects_with_id):
-        # safe version (used by subclasses)
-        if self.surviving(obj):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.setitem(newobj, id)
-        else:
-            self.id_free_list.append(id)
-
-    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
-        # unsafe version, assumes that the new_objects_with_id is large enough
-        if self.surviving(obj):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.insertclean(newobj, id)
-        else:
-            self.id_free_list.append(id)
 
     def mark_objects_with_finalizers(self):
         new_with_finalizers = self.AddressDeque()
@@ -439,19 +386,6 @@ class MarkCompactGC(MovingGCBase):
         self.objects_with_finalizers.delete()
         self.objects_with_finalizers = new_with_finalizers
 
-    def execute_finalizers(self):
-        self.finalizer_lock_count += 1
-        try:
-            while self.run_finalizers.non_empty():
-                if self.finalizer_lock_count > 1:
-                    # the outer invocation of execute_finalizers() will do it
-                    break
-                obj = self.run_finalizers.popleft()
-                finalizer = self.getfinalizer(self.get_type_id(obj))
-                finalizer(obj)
-        finally:
-            self.finalizer_lock_count -= 1
-
     def invalidate_weakrefs(self):
         # walk over list of objects that contain weakrefs
         # if the object it references survives then update the weakref
@@ -474,3 +408,13 @@ class MarkCompactGC(MovingGCBase):
                     (obj + offset).address[0] = NULL
         self.objects_with_weakrefs.delete()
         self.objects_with_weakrefs = new_with_weakref
+
+    def record_red_zone(self):
+        # XXX KILL ME
+        free_after_collection = self.top_of_space - self.free
+        if free_after_collection > self.space_size // 3:
+            self.red_zone = 0
+        else:
+            self.red_zone += 1
+            if free_after_collection < self.space_size // 5:
+                self.red_zone += 1
