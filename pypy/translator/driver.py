@@ -491,6 +491,11 @@ class TranslationDriver(SimpleTaskEngine):
         database = self.database
         c_source_filename = cbuilder.generate_source(database)
         self.log.info("written: %s" % (c_source_filename,))
+        if self.config.translation.dump_static_data_info:
+            from pypy.translator.tool.staticsizereport import dump_static_data_info
+            targetdir = cbuilder.targetdir
+            dump_static_data_info(self.log, database, targetdir)
+
     #
     task_source_c = taskdef(task_source_c, ['database_c'], "Generating c source")
 

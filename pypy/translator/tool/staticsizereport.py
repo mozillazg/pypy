@@ -1,10 +1,40 @@
 from __future__ import division
+import cPickle as pickle
 
+from pypy.tool.ansicolor import red, yellow, green
 from pypy.rpython.lltypesystem.lltype import typeOf, _ptr, Ptr, ContainerType
 from pypy.rpython.lltypesystem import llmemory
 from pypy.rpython.memory.lltypelayout import convert_offset_to_int
 
+class Info:
+    pass
 
+class ModuleReport:
+    def __init__(self, modulename, totalsize, typereports):
+        self.modulename = modulename
+        self.totalsize = totalsize
+        self.typereports = typereports
+
+    def __repr__(self):
+        return 'ModuleReport(%s, %d, ...)' % (self.modulename, self.totalsize)
+
+    def __cmp__(self, other):
+        return cmp((self.totalsize, self.modulename), (other.totalsize, other.modulename))
+
+class TypeReport:
+    def __init__(self, typename, size, numobjects):
+        self.typename = typename
+        self.size = size
+        self.numobjects = numobjects
+
+    def __repr__(self):
+        return 'TypeReport(%s, %d, %d)' % (self.typename, self.size, self.numobjects)
+
+    def __cmp__(self, other):
+        return cmp((self.size, self.typename), (other.size, other.typename))
+
+
+## Functions used by translate.py
 def guess_module(graph):
     func = getattr(graph, 'func', None)
     name = None
@@ -60,7 +90,7 @@ def guess_size(database, node, recursive=None):
 
 
 def by_lltype(obj):
-    return typeOf(obj)
+    return repr(typeOf(obj))
 
 def group_static_size(database, nodes, grouper=by_lltype, recursive=None):
     totalsize = {}
@@ -78,22 +108,11 @@ def make_report_static_size(database, nodes, grouper, recursive=None):
     l.sort()
     l.reverse()
     sizesum = 0
-    report = []
+    typereports = []
     for size, key in l:
         sizesum += size
-        report.append((key, size, numobjects[key], size / numobjects[key]))
-    return sizesum, report
-
-def format_report_line(line):
-    return str(line[0])[:50] + " " + " ".join([str(x) for x in line[1:]])
-
-
-def print_report_static_size(database, grouper=by_lltype):
-    " Reports all objects with a specified grouper. "
-    _, report = make_report_static_size(database.globalcontainers(), grouper)
-    for line in report:
-        print format_report_line(line)
-
+        typereports.append(TypeReport(key, size, numobjects[key]))
+    return sizesum, typereports
 
 def get_unknown_graphs(database):
     funcnodes = [node for node in database.globalcontainers() if node.nodekind == "func"]
@@ -104,7 +123,14 @@ def get_unknown_graphs(database):
         if not guess_module(graph):
             yield graph
 
-def print_aggregated_values_by_module_and_type(database, count_modules_separately=False, verbose=False):
+def get_unknown_graphs_names(database):
+    return [getattr(graph, 'name', '???') for graph in get_unknown_graphs(database)]
+
+def aggregate_values_by_type(database):
+    size, typereports = make_report_static_size(database, database.globalcontainers(), by_lltype)
+    return [ModuleReport('<global>', size, typereports)]
+
+def aggregate_values_by_module_and_type(database, count_modules_separately=False):
     " Reports all objects by module and by lltype. "
     modules = {}
     reports = []
@@ -133,18 +159,69 @@ def print_aggregated_values_by_module_and_type(database, count_modules_separatel
             seen = set()
         if not nodes:
             continue
-        size, report = make_report_static_size(database, nodes, by_lltype, seen)
-        reports.append((size, modulename, report))
+        size, typereports = make_report_static_size(database, nodes, by_lltype, seen)
+        reports.append(ModuleReport(modulename, size, typereports))
     reports.sort()
     reports.reverse()
-    for size, modulename, report in reports:
-        if not size:
-            continue
-        if verbose:
-            print "########### %i %s ####################################" % (size, modulename)
-            for line in report:
-                print " " * 4 + format_report_line(line)
-            print
-        else:
-            print "%i\%s" % (size, modulename)
+    return reports
 
+def dump_static_data_info(log, database, targetdir):
+    info = Info()
+    info.by_module_with_duplicates = aggregate_values_by_module_and_type(database, False)
+    info.by_module_without_duplicates = aggregate_values_by_module_and_type(database, True)
+    info.by_type = aggregate_values_by_type(database)
+    info.unknown_graphs = get_unknown_graphs_names(database)
+    infofile = targetdir.join('staticdata.info')
+    f = infofile.open('w')
+    pickle.dump(info, f)
+    f.close()
+    log.info('static data informations dumped to %s' % infofile)
+
+
+## Functions used by the reportstaticdata.py script
+def format_typereport(rep, human_readable=True):
+    size = format_size(rep.size, human_readable)
+    return format_line(rep.typename[:50], size, rep.numobjects)
+
+def format_line(a, b, c):
+    return '    %50s %10s %6s' % (a, b, c)
+
+def format_size(size, human_readable=False):
+    KB = 1024.0
+    MB = KB*KB
+    if human_readable:
+        if size >= MB:
+            return '%.2fM' % (size/MB)
+        if size >= KB:
+            return '%.2fK' % (size/KB)
+        return '%d' % size
+    return size
+
+def print_report(filename,
+                 kind='by_module_with_duplicates',
+                 summary=False,
+                 show_unknown_graphs=False,
+                 human_readable=True):
+    f = open(filename)
+    info = pickle.load(f)
+    f.close()
+    reports = getattr(info, kind)
+
+    for report in reports:
+        if report.totalsize == 0:
+            continue
+        size = format_size(report.totalsize, human_readable)
+        if summary:
+            print "%d\t%s" % (size, report.modulename)
+        else:
+            print '%s: %s' % (red(report.modulename), yellow(size))
+            print green(format_line('Typename', 'Size', 'Num'))
+            for typereport in report.typereports:
+                print format_typereport(typereport, human_readable)
+            print
+
+    if show_unknown_graphs:
+        print
+        print green('Unknown graphs:')
+        for graphname in info.unknown_graphs:
+            print graphname

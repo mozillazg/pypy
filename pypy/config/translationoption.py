@@ -122,6 +122,10 @@ translation_optiondescription = OptionDescription(
                default=None),
     StrOption("output", "Output file name", cmdline="--output"),
 
+    BoolOption("dump_static_data_info", "Dump static data info",
+               cmdline="--dump_static_data_info",
+               default=False, requires=[("translation.backend", "c")]),
+
     # portability options
     BoolOption("vanilla",
                "Try to be as portable as possible, which is not much",
