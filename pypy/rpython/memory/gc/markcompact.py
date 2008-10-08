@@ -85,12 +85,14 @@ class MarkCompactGC(MovingGCBase):
     def init_gc_object_immortal(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = typeid | flags | GCFLAG_EXTERNAL
-        hdr.forward_ptr = addr   # so that get_forwarding_address(obj) returns
-                                 # obj itself if obj is a prebuilt object
+        hdr.forward_ptr = NULL
+        # XXX we can store forward_ptr to itself, if we fix C backend
+        # so that get_forwarding_address(obj) returns
+        # obj itself if obj is a prebuilt object
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
-        assert can_collect
+        ll_assert(can_collect, "can collect is False")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         result = self.free
@@ -110,7 +112,7 @@ class MarkCompactGC(MovingGCBase):
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
                              offset_to_length, can_collect,
                              has_finalizer=False):
-        assert can_collect
+        ll_assert(can_collect, "can collect is False")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
         try:
@@ -308,6 +310,8 @@ class MarkCompactGC(MovingGCBase):
         return self.header(obj).tid & GCFLAG_EXTERNAL
 
     def get_forwarding_address(self, obj):
+        if self._is_external(obj):
+            return obj
         return self.header(obj).forward_ptr + self.size_gc_header()
 
     def set_forwarding_address(self, obj, newaddr):
