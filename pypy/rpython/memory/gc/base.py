@@ -14,6 +14,13 @@ class GCBase(object):
     prebuilt_gc_objects_are_static_roots = True
     can_realloc = False
 
+    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE):
+        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
+        self.AddressStack = get_address_stack(chunk_size)
+        self.AddressDeque = get_address_deque(chunk_size)
+        self.AddressDict = AddressDict
+        self.finalizer_lock_count = 0
+
     def can_malloc_nonmovable(self):
         return not self.moving_gc
 
@@ -51,7 +58,7 @@ class GCBase(object):
         pass
 
     def setup(self):
-        pass
+        self.run_finalizers = self.AddressDeque()
 
     def statistics(self, index):
         return -1
@@ -186,27 +193,40 @@ class GCBase(object):
     def debug_check_object(self, obj):
         pass
 
-first_gcflag = 1 << 16
+    def get_size(self, obj):
+        typeid = self.get_type_id(obj)
+        size = self.fixed_size(typeid)
+        if self.is_varsize(typeid):
+            lenaddr = obj + self.varsize_offset_to_length(typeid)
+            length = lenaddr.signed[0]
+            size += length * self.varsize_item_sizes(typeid)
+            size = llarena.round_up_for_allocation(size)
+            # XXX maybe we should parametrize round_up_for_allocation()
+            # per GC; if we do, we also need to fix the call in
+            # gctypelayout.encode_type_shape()
+        return size
+
+    def execute_finalizers(self):
+        self.finalizer_lock_count += 1
+        try:
+            while self.run_finalizers.non_empty():
+                if self.finalizer_lock_count > 1:
+                    # the outer invocation of execute_finalizers() will do it
+                    break
+                obj = self.run_finalizers.popleft()
+                finalizer = self.getfinalizer(self.get_type_id(obj))
+                finalizer(obj)
+        finally:
+            self.finalizer_lock_count -= 1
 
 class MovingGCBase(GCBase):
     moving_gc = True
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE):
-        GCBase.__init__(self)
-        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
-        self.AddressStack = get_address_stack(chunk_size)
-        self.AddressDeque = get_address_deque(chunk_size)
-        self.AddressDict = AddressDict
-        self.finalizer_lock_count = 0
+        GCBase.__init__(self, chunk_size)
+        self.objects_with_id = self.AddressDict()
         self.id_free_list = self.AddressStack()
         self.next_free_id = 1
-        self.red_zone = 0
-
-    def setup(self):
-        self.objects_with_finalizers = self.AddressDeque()
-        self.run_finalizers = self.AddressDeque()
-        self.objects_with_weakrefs = self.AddressStack()
-        self.objects_with_id = self.AddressDict()
 
     def can_move(self, addr):
         return True
@@ -219,30 +239,59 @@ class MovingGCBase(GCBase):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = typeid | flags
 
-    def get_size(self, obj):
-        typeid = self.get_type_id(obj)
-        size = self.fixed_size(typeid)
-        if self.is_varsize(typeid):
-            lenaddr = obj + self.varsize_offset_to_length(typeid)
-            length = lenaddr.signed[0]
-            size += length * self.varsize_item_sizes(typeid)
-            size = llarena.round_up_for_allocation(size)
-        return size
-
-    def record_red_zone(self):
-        # red zone: if the space is more than 80% full, the next collection
-        # should double its size.  If it is more than 66% full twice in a row,
-        # then it should double its size too.  (XXX adjust)
-        # The goal is to avoid many repeated collection that don't free a lot
-        # of memory each, if the size of the live object set is just below the
-        # size of the space.
-        free_after_collection = self.top_of_space - self.free
-        if free_after_collection > self.space_size // 3:
-            self.red_zone = 0
+    def id(self, ptr):
+        # Default implementation for id(), assuming that "external" objects
+        # never move.  Overriden in the HybridGC.
+        obj = llmemory.cast_ptr_to_adr(ptr)
+        if self._is_external(obj):
+            result = obj
         else:
-            self.red_zone += 1
-            if free_after_collection < self.space_size // 5:
-                self.red_zone += 1
+            result = self._compute_id(obj)
+        return llmemory.cast_adr_to_int(result)
+
+    def _next_id(self):
+        # return an id not currently in use (as an address instead of an int)
+        if self.id_free_list.non_empty():
+            result = self.id_free_list.pop()    # reuse a dead id
+        else:
+            # make up a fresh id number
+            result = llmemory.cast_int_to_adr(self.next_free_id)
+            self.next_free_id += 2    # only odd numbers, to make lltype
+                                      # and llmemory happy and to avoid
+                                      # clashes with real addresses
+        return result
+
+    def _compute_id(self, obj):
+        # look if the object is listed in objects_with_id
+        result = self.objects_with_id.get(obj)
+        if not result:
+            result = self._next_id()
+            self.objects_with_id.setitem(obj, result)
+        return result
+
+    def update_objects_with_id(self):
+        old = self.objects_with_id
+        new_objects_with_id = self.AddressDict(old.length())
+        old.foreach(self._update_object_id_FAST, new_objects_with_id)
+        old.delete()
+        self.objects_with_id = new_objects_with_id
+
+    def _update_object_id(self, obj, id, new_objects_with_id):
+        # safe version (used by subclasses)
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.setitem(newobj, id)
+        else:
+            self.id_free_list.append(id)
+
+    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
+        # unsafe version, assumes that the new_objects_with_id is large enough
+        if self.surviving(obj):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.insertclean(newobj, id)
+        else:
+            self.id_free_list.append(id)
+
 
 def choose_gc_from_config(config):
     """Return a (GCClass, GC_PARAMS) from the given config object.
