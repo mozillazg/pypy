@@ -85,9 +85,8 @@ class MarkCompactGC(MovingGCBase):
     def init_gc_object_immortal(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = typeid | flags | GCFLAG_EXTERNAL
-        hdr.forward_ptr = NULL
-        # immortal objects always have GCFLAG_FORWARDED set;
-        # see get_forwarding_address().    
+        hdr.forward_ptr = addr   # so that get_forwarding_address(obj) returns
+                                 # obj itself if obj is a prebuilt object
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
@@ -309,10 +308,7 @@ class MarkCompactGC(MovingGCBase):
         return self.header(obj).tid & GCFLAG_EXTERNAL
 
     def get_forwarding_address(self, obj):
-        if self._is_external(obj):
-            return obj
-        else:
-            return self.header(obj).forward_ptr + self.size_gc_header()
+        return self.header(obj).forward_ptr + self.size_gc_header()
 
     def set_forwarding_address(self, obj, newaddr):
         self.header(obj).forward_ptr = newaddr
