@@ -1,6 +1,6 @@
 from pypy.jit.codegen import model
 from pypy.rlib.objectmodel import specialize
-from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32, Immediate64
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Immediate8, Immediate32, Immediate64
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
 #TODO: understand llTypesystem
 from pypy.rpython.lltypesystem import llmemory, lltype 
@@ -63,7 +63,7 @@ class MoveEmitter(object):
         self.moves = []
        
     def create_fresh_location(self):
-        return self.builder.allocate_register().reg
+        return self.builder.allocate_register().pos_str
     
     def emit_move(self, source, target):
         self.moves.append((source, target))
@@ -94,7 +94,7 @@ class Builder(model.GenBuilder):
                }
         self.known_gv = []
         for reg in used_registers:
-            self.allocate_register(reg.reg)
+            self.allocate_register(reg.pos_str)
                
     def _open(self):
         pass
@@ -124,7 +124,7 @@ class Builder(model.GenBuilder):
 
     # TODO: support reg8
     def op_cast_bool_to_int(self, gv_x):
-        assert isinstance(gv_x, Register64)
+        assert isinstance(gv_x, IntVar) and gv_x.location_type == "Register64"
         return gv_x
     
     # 0 xor 1 == 1
@@ -183,38 +183,38 @@ class Builder(model.GenBuilder):
         # choose rax,rcx or rdx 
         # TODO: use also rcx rdx
         gv_z = self.allocate_register("rax")
-        self.mc.SETG(Register8("al"))
-        return Register64("rax")
+        self.mc.SETG(IntVar("al","Register8"))
+        return IntVar("rax", "Register64")
     
     def op_int_lt(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
-        self.mc.SETL(Register8("al"))
-        return Register64("rax")
+        self.mc.SETL(IntVar("al","Register8"))
+        return IntVar("rax", "Register64")
     
     def op_int_le(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
-        self.mc.SETLE(Register8("al"))
-        return Register64("rax")
+        self.mc.SETLE(IntVar("al","Register8"))
+        return IntVar("rax", "Register64")
      
     def op_int_eq(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
-        self.mc.SETE(Register8("al"))
-        return Register64("rax")
+        self.mc.SETE(IntVar("al","Register8"))
+        return IntVar("rax", "Register64")
     
     def op_int_ne(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
-        self.mc.SETNE(Register8("al"))
-        return Register64("rax")
+        self.mc.SETNE(IntVar("al","Register8"))
+        return IntVar("rax", "Register64")
     
     def op_int_ge(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
-        self.mc.SETGE(Register8("al"))
-        return Register64("rax")
+        self.mc.SETGE(IntVar("al","Register8"))
+        return IntVar("rax", "Register64")
     
     # the moves to pass arg. when making a jump to a block
     def _compute_moves(self, outputargs_gv, targetargs_gv):
@@ -222,13 +222,13 @@ class Builder(model.GenBuilder):
         tar2loc = {}
         src2loc = {}
         for i in range(len(outputargs_gv)):
-           target_gv = targetargs_gv[i].reg
-           source_gv = outputargs_gv[i].reg
+           target_gv = targetargs_gv[i].pos_str
+           source_gv = outputargs_gv[i].pos_str
            tar2src[target_gv] = source_gv
            tar2loc[target_gv] = target_gv
            src2loc[source_gv] = source_gv
         movegen = MoveEmitter(self)
-        emit_moves(movegen, [target_gv.reg for target_gv in targetargs_gv],
+        emit_moves(movegen, [target_gv.pos_str for target_gv in targetargs_gv],
                     tar2src, tar2loc, src2loc)
         return movegen.moves
     
@@ -237,7 +237,9 @@ class Builder(model.GenBuilder):
     #FIXME: imm8 insted of imm32?
     def _new_jump(name, value):
         from pypy.tool.sourcetools import func_with_new_name
-        def jump(self, gv_condition, args_for_jump_gv):   
+        def jump(self, gv_condition, args_for_jump_gv): 
+            # the targetbuilder must know the registers(live vars) 
+            # of the calling block  
             targetbuilder = Builder(args_for_jump_gv)
             self.mc.CMP(gv_condition, Immediate32(value))
             self.mc.JNE(targetbuilder.mc.tell())
@@ -251,7 +253,7 @@ class Builder(model.GenBuilder):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         self._open()
         if not gv_returnvar == None:#check void return
-            self.mc.MOV(Register64("rax"), gv_returnvar)
+            self.mc.MOV(IntVar("rax", "Register64"), gv_returnvar)
         self.mc.RET()
         self._close()
         
@@ -266,7 +268,7 @@ class Builder(model.GenBuilder):
         #self.mc.JMP(gv_x)    
         moves = self._compute_moves(outputargs_gv, target.arg_positions)
         for source_gv, target_gv in moves:
-            self.mc.MOV(Register64(source_gv), Register64(target_gv))   
+            self.mc.MOV(IntVar(source_gv, "Register64"), IntVar(target_gv, "Register64"))   
         self.mc.JMP(target.startaddr)
         self._close()
         
@@ -276,25 +278,25 @@ class Builder(model.GenBuilder):
             if not self.freeregisters:
                 raise NotImplementedError("spilling not implemented")
             
-            new_gv = Register64(self.freeregisters.popitem()[0])
+            new_gv = IntVar((self.freeregisters.popitem()[0]), "Register64")
             self.known_gv.append(new_gv)
             return new_gv
         else:
             if register not in self.freeregisters:
                 # the register must be in the list!
                 for i in range(len(self.known_gv)):
-                    if register == self.known_gv[i].reg:
+                    if register == self.known_gv[i].pos_str:
                         # move the values from the requiered register
                         # to an other one and return the
                         # requested one.
                         gv = self.allocate_register()
                         self.mc.MOV(gv,self.known_gv[i])
-                        new_gv = Register64(register)
+                        new_gv = IntVar(register, "Register64")
                         self.known_gv.append(new_gv)
                         return new_gv
                 raise NotImplementedError("register moves")           
             del self.freeregisters[register]
-            new_gv = Register64(register)
+            new_gv = IntVar(register, "Register64")
             self.known_gv.append(new_gv)
             return new_gv
         
@@ -325,6 +327,8 @@ class RX86_64GenOp(model.AbstractRGenOp):
                 is not lltype.Void], map_arg(FUNCTYPE.RESULT))
 
     # wrappes a integer value
+    # many 64-bit operations only 
+    # support 32-bit immediates
     def genconst(self, llvalue):
         T = lltype.typeOf(llvalue)
         # TODO: other cases(?),imm64

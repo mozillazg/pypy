@@ -1,23 +1,22 @@
 from pypy.jit.codegen import model
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
-# Wrapper Classes
-# The opcaodes differ from the type of
-# the operand. So every wrapper is necessary
-# The to string method is used to choose the right
+# Wrapper Classes:
+# The opcodes(assemble.py) differ from the type of
+# the operand(eg. Register, Immediate...). 
+# The to_string method is used to choose the right
 # method inside the assembler
-class Register8(model.GenVar):
-    def __init__(self, reg):
-        self.reg = reg
-        
-    def to_string(self):
-        return "_8REG"
 
-class Register64(model.GenVar):
-    def __init__(self, reg):
-        self.reg = reg
-        
+class IntVar(model.GenVar):
+    def __init__(self, pos_str, location_type):
+        self.pos_str = pos_str
+        self.location_type = location_type
+        assert location_type == "Register64" or location_type == "Register8"
+    
     def to_string(self):
-        return "_QWREG"
+        if self.location_type=="Register8":
+            return "_8REG"
+        elif self.location_type=="Register64":
+            return "_QWREG"
 
 class Immediate8(model.GenConst):
     def __init__(self, value):

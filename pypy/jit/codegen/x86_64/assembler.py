@@ -1,6 +1,6 @@
-from pypy.jit.codegen.x86_64.objmodel import Register8, Register64, Immediate8, Immediate32, Immediate64
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Immediate8, Immediate32, Immediate64
 
-#Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
+# Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
                 "rax": (0, 0),
                 "rcx": (0, 1),
@@ -44,10 +44,11 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
         rexX = X
         rexB = B
         # TODO: other cases e.g memory as operand
-        if isinstance(arg1,Register64):
-            rexB, modrm1 = self.get_register_bits(arg1.reg)
-        elif isinstance(arg1,Register8):
-            modrm1 = self.get_register_bits_8Bit(arg1.reg)
+        if isinstance(arg1,IntVar):
+            if arg1.location_type == "Register64":
+                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
+            elif arg1.location_type == "Register8":
+                modrm1 = self.get_register_bits_8Bit(arg1.pos_str)
             
         # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate32):
@@ -64,15 +65,16 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
             self.write(opcode)
             self.write_modRM_byte(3, modrm2, modrm1)
             self.write(chr(arg2.value)) 
-        elif isinstance(arg2,Register64):
-            rexR, modrm2 = self.get_register_bits(arg2.reg)         
-            # FIXME: exchange the two arguments (rexB/rexR)
-            self.write_rex_byte(rexW, rexR, rexX, rexB)
-            self.write(opcode)
-            # used in imul (extra long opcode)
-            if not extra == None:
-                self.write(extra)
-            self.write_modRM_byte(mod, modrm2, modrm1)        
+        elif isinstance(arg2, IntVar):
+            if arg2.location_type == "Register64":
+                rexR, modrm2 = self.get_register_bits(arg2.pos_str)         
+                # FIXME: exchange the two arguments (rexB/rexR)
+                self.write_rex_byte(rexW, rexR, rexX, rexB)
+                self.write(opcode)
+                # used in imul (extra long opcode)
+                if not extra == None:
+                    self.write(extra)
+                self.write_modRM_byte(mod, modrm2, modrm1)        
     return quadreg_instr
         
         
@@ -93,10 +95,11 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         rexB = B
         
         # TODO: other cases e.g memory as operand
-        if isinstance(arg1,Register64):
-            rexB, modrm1 = self.get_register_bits(arg1.reg)
-        if isinstance(arg1,Register8):
-            modrm1 = self.get_register_bits_8Bit(arg1.reg)
+        if isinstance(arg1, IntVar):
+            if arg1.location_type == "Register64":
+                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
+            elif arg1.location_type == "Register8":
+                modrm1 = self.get_register_bits_8Bit(arg1.pos_str)
             
         # rexW(1) = 64bitMode 
         self.write_rex_byte(rexW, rexR, rexX, rexB)
@@ -107,7 +110,8 @@ def make_one_operand_instr(W = None, R = None, X = None, B = None, opcode = None
         self.write_modRM_byte(mod, modrm2, modrm1)        
     return quadreg_instr
         
-# TODO: comment        
+# When using an alternate encoding the opcode
+# depends on the used register X0 to XF.     
 def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None, B = None, opcode =None, md1 = None, md2 = None):
     def quadreg_instr(self, arg1, arg2):
         # move the parameter 
@@ -120,10 +124,11 @@ def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         rexB = B
         # TODO: other cases e.g memory as operand
         # FIXME: rexB?
-        if isinstance(arg1,Register64):
-            rexB, modrm1 = self.get_register_bits(arg1.reg)
+        if isinstance(arg1, IntVar):
+            if arg1.location_type == "Register64":
+                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
               
-        if isinstance(arg2,Immediate64):
+        if isinstance(arg2, Immediate64):
             new_opcode = hex(int(opcode,16)+modrm1)
             assert len(new_opcode[2:len(new_opcode)]) == 2
             self.write_rex_byte(rexW, rexR, rexX, rexB)
@@ -143,12 +148,13 @@ def make_one_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         rexB = B
         # TODO: other cases e.g memory as operand
         # FIXME: rexB?
-        if isinstance(arg1,Register64):
-            rexB, modrm1 = self.get_register_bits(arg1.reg)
-            new_opcode = hex(int(opcode,16)+modrm1)
-            assert len(new_opcode[2:len(new_opcode)]) == 2
-            self.write_rex_byte(rexW, rexR, rexX, rexB)
-            self.write(chr(int(new_opcode[2:len(new_opcode)],16)))
+        if isinstance(arg1, IntVar):
+            if arg1.location_type == "Register64":
+                rexB, modrm1 = self.get_register_bits(arg1.pos_str)
+                new_opcode = hex(int(opcode,16)+modrm1)
+                assert len(new_opcode[2:len(new_opcode)]) == 2
+                self.write_rex_byte(rexW, rexR, rexX, rexB)
+                self.write(chr(int(new_opcode[2:len(new_opcode)],16)))
     return quadreg_instr
 
 class X86_64CodeBuilder(object):
@@ -266,7 +272,7 @@ class X86_64CodeBuilder(object):
     # 4 length of the immediate
     def JMP(self,want_jump_to):
         #method = getattr(self, "_JMP"+op1.to_string())
-        #method(op1)  
+        #method(want_jump_to)  
         self.write("\xE9")
         self.writeImm32(want_jump_to-self.tell()-4)
         
@@ -281,7 +287,7 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_OR"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
-        #fixme:none
+    #FIXME: "POP/PUSH NONE" BUG
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
         method(op1)
@@ -406,7 +412,9 @@ class X86_64CodeBuilder(object):
         byte = mod << 6 | (reg << 3) | rm
         self.write(chr(byte))
         
-    # TODO: write comment
+    # calc. the "Two's complement"
+    # and return as pos. hex value.
+    # This method is used to calc jump displ.
     def cast_neg_hex32(self,a_int):
         x = hex(int("FFFFFFFF",16)+1 +a_int)
         y = x[2:len(x)]

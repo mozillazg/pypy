@@ -1,5 +1,5 @@
 from pypy.jit.codegen.x86_64 import assembler
-from pypy.jit.codegen.x86_64.objmodel import Register64, Immediate32
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Immediate32
 
 class AsmTest(assembler.X86_64CodeBuilder):
     def __init__(self):
@@ -13,12 +13,12 @@ class AsmTest(assembler.X86_64CodeBuilder):
 
 def test_add():
     mc = AsmTest()
-    mc.ADD(Register64("rax"), Register64("r11"))
+    mc.ADD(IntVar("rax", "Register64"), IntVar("r11", "Register64"))
     assert mc.get_as_string() == "\x4C\x01\xD8"
-    mc.ADD(Register64("rbx"), Register64("rbx"))
+    mc.ADD(IntVar("rbx", "Register64"), IntVar("rbx", "Register64"))
     assert mc.get_as_string() == "\x4C\x01\xD8\x48\x01\xDB"
     
 def test_mov():
     mc = AsmTest()
-    mc.MOV(Register64("r15"),Register64("rsp"))
+    mc.MOV(IntVar("r15", "Register64"), IntVar("rsp", "Register64"))
     assert mc.get_as_string() == "\x49\x89\xE7"
