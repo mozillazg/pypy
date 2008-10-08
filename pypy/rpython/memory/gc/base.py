@@ -186,18 +186,10 @@ class GCBase(object):
     def debug_check_object(self, obj):
         pass
 
-
-TYPEID_MASK = 0xffff
 first_gcflag = 1 << 16
-GCFLAG_FORWARDED = first_gcflag
-# GCFLAG_EXTERNAL is set on objects not living in the semispace:
-# either immortal objects or (for HybridGC) externally raw_malloc'ed
-GCFLAG_EXTERNAL = first_gcflag << 1
-GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
 class MovingGCBase(GCBase):
     moving_gc = True
-    first_unused_gcflag = first_gcflag << 3
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE):
         GCBase.__init__(self)
@@ -223,25 +215,9 @@ class MovingGCBase(GCBase):
         addr -= self.gcheaderbuilder.size_gc_header
         return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
 
-    def get_type_id(self, addr):
-        tid = self.header(addr).tid
-        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
-                  "get_type_id on forwarded obj")
-        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
-        # Although calling get_type_id() on a forwarded object works by itself,
-        # we catch it as an error because it's likely that what is then
-        # done with the typeid is bogus.
-        return tid & TYPEID_MASK
-
     def init_gc_object(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         hdr.tid = typeid | flags
-
-    def init_gc_object_immortal(self, addr, typeid, flags=0):
-        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED
-        # immortal objects always have GCFLAG_FORWARDED set;
-        # see get_forwarding_address().
 
     def get_size(self, obj):
         typeid = self.get_type_id(obj)
@@ -267,7 +243,6 @@ class MovingGCBase(GCBase):
             self.red_zone += 1
             if free_after_collection < self.space_size // 5:
                 self.red_zone += 1
-
 
 def choose_gc_from_config(config):
     """Return a (GCClass, GC_PARAMS) from the given config object.

@@ -9,20 +9,25 @@ from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rpython.memory.gc.base import MovingGCBase, GCFLAG_EXTERNAL
-from pypy.rpython.memory.gc.base import GCFLAG_FORWARDED
-from pypy.rpython.memory.gc.base import GCFLAG_FINALIZATION_ORDERING
+from pypy.rpython.memory.gc.base import MovingGCBase, first_gcflag
 
 import sys, os
 
 DEBUG_PRINT = False
 memoryError = MemoryError()
+TYPEID_MASK = 0xffff
+GCFLAG_FORWARDED = first_gcflag
+# GCFLAG_EXTERNAL is set on objects not living in the semispace:
+# either immortal objects or (for HybridGC) externally raw_malloc'ed
+GCFLAG_EXTERNAL = first_gcflag << 1
+GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     malloc_zero_filled = True
+    first_unused_gcflag = first_gcflag << 3
 
     total_collection_time = 0.0
     total_collection_count = 0
@@ -53,6 +58,22 @@ class SemiSpaceGC(MovingGCBase):
         ll_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
         MovingGCBase.setup(self)
+
+    def init_gc_object_immortal(self, addr, typeid, flags=0):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = typeid | flags | GCFLAG_EXTERNAL | GCFLAG_FORWARDED
+        # immortal objects always have GCFLAG_FORWARDED set;
+        # see get_forwarding_address().
+
+    def get_type_id(self, addr):
+        tid = self.header(addr).tid
+        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_EXTERNAL) != GCFLAG_FORWARDED,
+                  "get_type_id on forwarded obj")
+        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
+        # Although calling get_type_id() on a forwarded object works by itself,
+        # we catch it as an error because it's likely that what is then
+        # done with the typeid is bogus.
+        return tid & TYPEID_MASK
 
     # This class only defines the malloc_{fixed,var}size_clear() methods
     # because the spaces are filled with zeroes in advance.
