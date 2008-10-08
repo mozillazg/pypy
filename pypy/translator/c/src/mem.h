@@ -178,7 +178,7 @@ void boehm_gc_finalizer_notifier(void)
 	boehm_gc_finalizer_lock--;
 }
 
-void ignore(char *msg, GC_word arg)
+static void mem_boehm_ignore(char *msg, GC_word arg)
 {
 }
 
@@ -187,7 +187,7 @@ void boehm_gc_startup_code(void)
 	GC_init();
 	GC_finalizer_notifier = &boehm_gc_finalizer_notifier;
 	GC_finalize_on_demand = 1;
-  GC_set_warn_proc(ignore);
+  GC_set_warn_proc(mem_boehm_ignore);
 }
 #endif /* PYPY_NOT_MAIN_FILE */
 
