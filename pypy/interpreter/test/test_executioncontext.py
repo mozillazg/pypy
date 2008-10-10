@@ -140,7 +140,37 @@ class TestExecutionContext:
             max(1, 2)
 
         bar()
+        sys.setprofile(None)
         return l
         """)
         events = space.unwrap(w_events)
-        assert events == ['return', 'c_call', 'c_return', 'return', 'return']
+        assert events == ['return', 'c_call', 'c_return', 'return', 'c_call']
+
+    def test_c_call_setprofile_strange_method(self):
+        space = self.space
+        w_events = space.appexec([], """():
+        import sys
+        class A(object):
+            def __init__(self, value):
+                self.value = value
+            def meth(self):
+                pass
+        MethodType = type(A.meth)
+        strangemeth = MethodType(A, 42, int)
+        l = []
+        def profile(frame, event, arg):
+            l.append(event)
+
+        def foo():
+            sys.setprofile(profile)
+
+        def bar():
+            foo()
+            strangemeth()
+
+        bar()
+        sys.setprofile(None)
+        return l
+        """)
+        events = space.unwrap(w_events)
+        assert events == ['return', 'call', 'return', 'return', 'c_call']
