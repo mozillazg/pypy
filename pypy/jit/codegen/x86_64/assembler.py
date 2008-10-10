@@ -1,4 +1,4 @@
-from pypy.jit.codegen.x86_64.objmodel import IntVar, Register8, Register64, Immediate8, Immediate32, Immediate64
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Register8, Register64, Immediate8, Immediate32, Immediate64, Stack64
 
 # Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
 REGISTER_MAP = {
@@ -74,7 +74,15 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
                 # used in imul (extra long opcode)
                 if not extra == None:
                     self.write(extra)
-                self.write_modRM_byte(mod, modrm2, modrm1)        
+                self.write_modRM_byte(mod, modrm2, modrm1)
+            elif isinstance(arg2.location, Stack64):
+                self.write_rex_byte(rexW, rexR, rexX, rexB) 
+                self.write(opcode)
+                # exchanged mod1,mod2, dont know why :)
+                self.write_modRM_byte(mod, modrm1, modrm2)
+                # no scale, no index, base = rsp
+                self.write_SIB(0, 4, 4) 
+                self.writeImm32(arg2.location.offset)  
     return quadreg_instr
         
         
@@ -119,8 +127,8 @@ def make_two_operand_instr_with_alternate_encoding(W = None, R = None, X = None,
         modrm1 = md1
         modrm2 = md2
         rexW = W
-        rexR = R
-        rexX = X
+        rexR = R #not used?
+        rexX = X #not used?
         rexB = B
         # TODO: other cases e.g memory as operand
         # FIXME: rexB?
@@ -170,7 +178,7 @@ class X86_64CodeBuilder(object):
     #TODO: support all combinations
     # The opcodes differs depending on the operands
     # Params:
-    # W (64bit Operands), R (extends reg field), X (extend Index(SIB) field), B (extends r/m field, Base(SIB) field, opcode reg field), 
+    # W (Width, 64bit Operands), R (Register, extends reg field), X (IndeX, extend Index(SIB) field), B (Base, extends r/m field, Base(SIB) field, opcode reg field), 
     # Opcode, mod, modrm1, modrm2, tttn(JUMPS), extraopcode 
     
     # FIXME: rexB is set
@@ -193,8 +201,9 @@ class X86_64CodeBuilder(object):
     _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", 3, None, 0)
     _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
     _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"B8",None,None)
+    _MOV_QWREG_STACK = make_two_operand_instr(   1,    0,    0, None, "\x8B", 2, None, 4)#4 =RSP    
         
-    _IDIV_QWREG      = make_one_operand_instr(  1,    0,    0, None, "\xF7", 3, None, 7)
+    _IDIV_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 7)
     
     _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
     _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
@@ -410,6 +419,10 @@ class X86_64CodeBuilder(object):
         
     def write_modRM_byte(self, mod, reg, rm):
         byte = mod << 6 | (reg << 3) | rm
+        self.write(chr(byte))
+        
+    def write_SIB(self, scale, index, base):
+        byte = scale << 6 | (index << 3) | base
         self.write(chr(byte))
         
     # calc. the "Two's complement"

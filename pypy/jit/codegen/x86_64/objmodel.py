@@ -6,22 +6,25 @@ from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 # The to_string method is used to choose the right
 # method inside the assembler
 
-class Register64(object):
+class Location(object):
+    pass
+
+class Register64(Location):
     def __init__(self, reg):
         self.reg = reg
         
-class Register8(object):
+class Register8(Location):
     def __init__(self, reg):
         self.reg = reg
         
-class Stack64(object):
+class Stack64(Location):
     def __init__(self, offset):
         self.offset = offset
 
 class IntVar(model.GenVar):
     def __init__(self, location):
         self.location = location
-        assert isinstance(location, Register64) or isinstance(location, Register8) or isinstance(location, Stack64)
+        assert isinstance(location, Location) 
     
     def to_string(self):
         if isinstance(self.location, Stack64): 

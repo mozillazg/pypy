@@ -2,6 +2,7 @@ import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.codegen.x86_64.rgenop import RX86_64GenOp, Label
 from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Stack64
 #from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsCompile
 
 # for the individual tests see
@@ -10,14 +11,32 @@ from pypy.jit.codegen.test.rgenop_tests import AbstractRGenOpTestsDirect
 def skip(self):
     py.test.skip("not implemented yet")
     
+# pushes/pos some values and than uses a mem access to access the stack
+def make_mem_func(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_mem_func, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "mem_op")
+    builder.start_writing()
+    builder.genop1("int_inc",  gv_y) 
+    builder.genop1("int_inc",  gv_y) 
+    builder.genop1("int_inc",  gv_y)  
+    builder.genop1("int_push", gv_y)
+    builder.genop1("int_inc",  gv_y)     
+    builder.genop1("int_push", gv_y)
+    builder.mc.MOV(gv_x, IntVar(Stack64(8))) # rsp+8(bytes) (stack position of the first push)
+    builder.genop1("int_pop",  gv_y)
+    builder.genop1("int_pop",  gv_y)
+    builder.finish_and_return(sigtoken, gv_x)
+    builder.end()
+    return gv_mem_func
+
 def make_push_pop(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
     builder, gv_push_pop, [gv_x] = rgenop.newgraph(sigtoken, "push_pop")
     builder.start_writing()
-    gv_x = builder.genop1("int_push", gv_x)
-    gv_x = builder.genop1("int_inc",  gv_x)
-    gv_x = builder.genop1("int_inc",  gv_x)
-    gv_x = builder.genop1("int_pop",  gv_x)
+    builder.genop1("int_push", gv_x)
+    builder.genop1("int_inc",  gv_x)
+    builder.genop1("int_inc",  gv_x)
+    builder.genop1("int_pop",  gv_x)
     builder.finish_and_return(sigtoken, gv_x)
     builder.end()
     return gv_push_pop
@@ -442,6 +461,17 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(pp_func,1)
         result = fnptr(1)
         assert result == 1
+        result = fnptr(42)
+        assert result == 42
+        
+    # return 
+    def test_memory_access(self):
+        mem_func = make_mem_func(self.RGenOp())
+        fnptr = self.cast(mem_func,2)
+        result = fnptr(0,0)
+        assert result == 3
+        result = fnptr(-1,2)
+        assert result == 5
         
 #    def test_invert(self):
 #        inv_function = make_one_op_instr(self.RGenOp(),"int_invert")
