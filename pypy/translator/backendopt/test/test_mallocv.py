@@ -50,6 +50,7 @@ class BaseMallocRemovalTest(object):
             #simplify.transform_dead_op_vars_in_blocks(list(graph.iterblocks()))
             if progress and option.view:
                 t.view()
+            t.checkgraphs()
             if expected_result is not Ellipsis:
                 interp = LLInterpreter(t.rtyper)
                 res = interp.eval_graph(graph, args)
