@@ -32,7 +32,15 @@ class CBuilder(object):
         self.gcpolicy = gcpolicy    # for tests only, e.g. rpython/memory/
         if gcpolicy is not None and gcpolicy.requires_stackless:
             config.translation.stackless = True
-        self.eci = ExternalCompilationInfo()
+        self.eci = self.get_eci()
+
+    def get_eci(self):
+        from distutils import sysconfig
+        python_inc = sysconfig.get_python_inc()
+        pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
+        return ExternalCompilationInfo(
+            include_dirs=[python_inc, pypy_include_dir]
+        )
 
     def build_database(self):
         translator = self.translator
@@ -206,9 +214,8 @@ class CExtModuleBuilder(CBuilder):
             export_symbols.append('malloc_counters')
         extsymeci = ExternalCompilationInfo(export_symbols=export_symbols)
         self.eci = self.eci.merge(extsymeci)
-        compile_c_module([self.c_source_filename] + self.extrafiles,
-                         self.c_source_filename.purebasename, self.eci,
-                         tmpdir=self.c_source_filename.dirpath())
+        files = [self.c_source_filename] + self.extrafiles
+        self.translator.platform.compile(files, self.eci, standalone=False)
         self._compiled = True
 
     def _make_wrapper_module(self):

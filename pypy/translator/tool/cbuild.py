@@ -378,13 +378,6 @@ class CCompiler:
 
     def __init__(self, cfilenames, eci, outputfilename=None,
                  compiler_exe=None, profbased=None, standalone=True):
-        from distutils import sysconfig
-        python_inc = sysconfig.get_python_inc()
-        pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
-        eci = eci.merge(ExternalCompilationInfo(
-            include_dirs=[python_inc, pypy_include_dir],
-            platform=eci.platform,
-        ))
         self.cfilenames = cfilenames
         if standalone:
             ext = ''
