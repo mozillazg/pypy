@@ -150,6 +150,22 @@ class BaseMallocRemovalTest(object):
         insns = summary(graph)
         assert insns.get('direct_call', 0) == 1     # not inlined
 
+    def test_direct_call_ret_virtual(self):
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        prebuilt_a = lltype.malloc(A)
+        def g(a):
+            prebuilt_a.x += a.x
+            return a
+        def f(n):
+            prebuilt_a.x = n
+            a = lltype.malloc(A)
+            a.x = 2
+            a = g(a)
+            return prebuilt_a.x * a.x
+        graph = self.check(f, [int], [19], 42)
+        insns = summary(graph)
+        assert insns.get('direct_call', 0) == 0     # inlined
+
     def test_fn2(self):
         py.test.skip("redo me")
         class T:
