@@ -19,8 +19,6 @@ GCFLAG_EXTERNAL = first_gcflag << 1
 
 memoryError = MemoryError()
 
-DEBUG_PRINT = True
-
 # Mark'n'compact garbage collector
 #
 # main point of this GC is to save as much memory as possible
@@ -69,13 +67,13 @@ class MarkCompactGC(MovingGCBase):
     total_collection_time = 0.0
     total_collection_count = 0
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
-        MovingGCBase.__init__(self, chunk_size)
+    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
+        MovingGCBase.__init__(self, config, chunk_size)
         self.space_size = space_size
         self.red_zone = 0
 
     def setup(self):
-        if DEBUG_PRINT:
+        if self.config.gcconfig.debugprint:
             self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.space), "couldn't allocate arena")
@@ -223,7 +221,7 @@ class MarkCompactGC(MovingGCBase):
         self.debug_collect_finish(start_time)
 
     def debug_collect_start(self):
-        if DEBUG_PRINT:
+        if self.config.gcconfig.debugprint:
             llop.debug_print(lltype.Void)
             llop.debug_print(lltype.Void,
                              ".----------- Full collection ------------------")
@@ -231,7 +229,7 @@ class MarkCompactGC(MovingGCBase):
             return start_time 
 
     def debug_collect_finish(self, start_time):
-        if DEBUG_PRINT:
+        if self.config.gcconfig.debugprint:
             end_time = time.time()
             elapsed_time = end_time - start_time
             self.total_collection_time += elapsed_time

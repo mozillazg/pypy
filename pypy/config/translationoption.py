@@ -68,6 +68,10 @@ translation_optiondescription = OptionDescription(
                      "ref": [("translation.gcrootfinder", "n/a")],
                      "none": [("translation.gcrootfinder", "n/a")],
                  }),
+    OptionDescription("gcconfig", "Configure garbage collectors", [
+        BoolOption("debugprint", "Turn on debug printing for the GC",
+                   default=False)
+        ]),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
                  ["n/a", "shadowstack", "llvmgc", "asmgcc"],
