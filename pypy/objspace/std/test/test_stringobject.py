@@ -714,6 +714,20 @@ class AppTestStringObject:
                 assert x.rstrip(y) == ''
                 assert x.lstrip(y) == ''
 
+    def test_getslice(self):
+        assert "foobar".__getslice__(4, 4321) == "ar"
+        s = "abc"
+        assert s[:] == "abc"
+        assert s[1:] == "bc"
+        assert s[:2] == "ab"
+        assert s[1:2] == "b"
+        assert s[-2:] == "bc"
+        assert s[:-1] == "ab"
+        assert s[-2:2] == "b"
+        assert s[1:-1] == "b"
+        assert s[-2:-1] == "b"
+
+
 class AppTestPrebuilt(AppTestStringObject):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withprebuiltchar": True})
