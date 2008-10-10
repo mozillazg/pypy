@@ -3,6 +3,7 @@ import autopath
 import os, sys, inspect, re, imp
 from pypy.translator.tool import stdoutcapture
 from pypy.tool.autopath import pypydir
+from pypy.translator.platform import host
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -259,7 +260,8 @@ class ExternalCompilationInfo(object):
         self = self.convert_sources_to_files()
         if not self.separate_module_files:
             return self
-        lib = compile_c_module([], 'externmod', self)
+        lib = str(host.compile([], self, outputfilename='externmod',
+                               standalone=False))
         d = self._copy_attributes()
         d['libraries'] += (lib,)
         d['separate_module_files'] = ()
