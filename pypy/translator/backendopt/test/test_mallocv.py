@@ -43,7 +43,6 @@ class BaseMallocRemovalTest(object):
             t.view()
         # to detect missing keepalives and broken intermediate graphs,
         # we do the loop ourselves instead of calling remove_simple_mallocs()
-        maxiter = 100
         mallocv = MallocVirtualizer(t.graphs, verbose=True)
         while True:
             progress = mallocv.remove_mallocs_once()
@@ -168,7 +167,6 @@ class BaseMallocRemovalTest(object):
         assert insns.get('direct_call', 0) == 0     # inlined
 
     def test_fn2(self):
-        py.test.skip("redo me")
         class T:
             pass
         def fn2(x, y):
@@ -501,6 +499,18 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             u[0].s.x = x
             return u[0].s.x
         graph = self.check(f, [int], [42], 42)
+
+    def test_bogus_cast_pointer(self):
+        S = lltype.GcStruct("S", ('x', lltype.Signed))
+        T = lltype.GcStruct("T", ('s', S), ('y', lltype.Signed))
+        def f(x):
+            s = lltype.malloc(S)
+            s.x = 123
+            if x < 0:
+                t = lltype.cast_pointer(lltype.Ptr(T), s)
+                t.y += 1
+            return s.x
+        graph = self.check(f, [int], [5], 123)
 
 
 class DISABLED_TestOOTypeMallocRemoval(BaseMallocRemovalTest):

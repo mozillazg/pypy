@@ -476,6 +476,14 @@ class BlockSpecializer(object):
         newresult = self.make_rt_result(op.result)
         return [SpaceOperation(op.opname, newargs, newresult)]
 
+    def handle_unreachable(self, op):
+        from pypy.rpython.lltypesystem.rstr import string_repr
+        msg = 'unreachable: %s' % (op,)
+        ll_msg = string_repr.convert_const(msg)
+        c_msg = Constant(ll_msg, lltype.typeOf(ll_msg))
+        newresult = self.make_rt_result(op.result)
+        return [SpaceOperation('debug_fatalerror', [c_msg], newresult)]
+
     def handle_op_getfield(self, op):
         node = self.getnode(op.args[0])
         if isinstance(node, VirtualSpecNode):
@@ -494,6 +502,31 @@ class BlockSpecializer(object):
             fieldname = op.args[1].value
             index = node.typedesc.name2index[fieldname]
             node.fields[index] = self.getnode(op.args[2])
+            return []
+        else:
+            return self.handle_default(op)
+
+    def handle_op_same_as(self, op):
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
+            node = self.getnode(op.args[0])
+            self.setnode(op.result, node)
+            return []
+        else:
+            return self.handle_default(op)
+
+    def handle_op_cast_pointer(self, op):
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
+            node = self.getnode(op.args[0])
+            SOURCEPTR = lltype.Ptr(node.typedesc.MALLOCTYPE)
+            TARGETPTR = op.result.concretetype
+            try:
+                if lltype.castable(TARGETPTR, SOURCEPTR) < 0:
+                    raise lltype.InvalidCast
+            except lltype.InvalidCast:
+                return self.handle_unreachable(op)
+            self.setnode(op.result, node)
             return []
         else:
             return self.handle_default(op)
