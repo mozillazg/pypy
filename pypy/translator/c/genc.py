@@ -135,14 +135,6 @@ class CBuilder(object):
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
-            # explicitely include python.h and exceptions.h
-            # XXX for now, we always include Python.h
-            from distutils import sysconfig
-            python_inc = sysconfig.get_python_inc()
-            pypy_include_dir = autopath.this_dir
-            self.eci = self.eci.merge(ExternalCompilationInfo(
-                include_dirs=[python_inc, pypy_include_dir],
-            ))
             cfile, extra = gen_source_standalone(db, modulename, targetdir,
                                                  self.eci,
                                                  entrypointname = pfname,

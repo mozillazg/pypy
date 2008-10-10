@@ -300,150 +300,21 @@ def ensure_correct_math():
         opt += '/Op'
     gcv['OPT'] = opt
 
-def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
-    #try:
-    #    from distutils.log import set_threshold
-    #    set_threshold(10000)
-    #except ImportError:
-    #    print "ERROR IMPORTING"
-    #    pass
-    cfiles = [py.path.local(f) for f in cfiles]
-    if tmpdir is None:
-        tmpdir = udir.join("module_cache").ensure(dir=1)
-    num = 0
-    cfiles += eci.separate_module_files
-    include_dirs = list(eci.include_dirs)
-    include_dirs.append(py.path.local(pypydir).join('translator', 'c'))
-    library_dirs = list(eci.library_dirs)
-    if sys.platform == 'darwin':    # support Fink & Darwinports
-        for s in ('/sw/', '/opt/local/'):
-            if s + 'include' not in include_dirs and \
-               os.path.exists(s + 'include'):
-                include_dirs.append(s + 'include')
-            if s + 'lib' not in library_dirs and \
-               os.path.exists(s + 'lib'):
-                library_dirs.append(s + 'lib')
-
-    export_symbols = list(eci.export_symbols)
-
-    num = 0
+def next_unique_name(modbasename, tmpdir):
     modname = modbasename
     while 1:
         if not tmpdir.join(modname + so_ext).check():
             break
         num += 1
         modname = '%s_%d' % (modbasename, num)
+    return modname
 
-    lastdir = tmpdir.chdir()
-    libraries = eci.libraries
-    ensure_correct_math()
-    try:
-        if debug: print "modname", modname
-        c = stdoutcapture.Capture(mixed_out_err = True)
-        try:
-            try:
-                if compiler_command():
-                    # GCC-ish options only
-                    from distutils import sysconfig
-                    gcv = sysconfig.get_config_vars()
-                    cmd = compiler_command().replace('%s',
-                                                     str(tmpdir.join(modname)))
-                    for dir in [gcv['INCLUDEPY']] + list(include_dirs):
-                        cmd += ' -I%s' % dir
-                    for dir in library_dirs:
-                        cmd += ' -L%s' % dir
-                    os.system(cmd)
-                else:
-                    from distutils.dist import Distribution
-                    from distutils.extension import Extension
-                    from distutils.ccompiler import get_default_compiler
-                    from distutils.command.build_ext import build_ext
-
-                    class build_shared_library(build_ext):
-                        """ We build shared libraries, not python modules.
-                            On windows, avoid to export the initXXX function,
-                            and don't use a .pyd extension. """
-                        def get_export_symbols(self, ext):
-                            return ext.export_symbols
-                        def get_ext_filename (self, ext_name):
-                            if sys.platform == 'win32':
-                                return ext_name + ".dll"
-                            else:
-                                return ext_name + ".so"
-
-                    saved_environ = os.environ.items()
-                    try:
-                        # distutils.core.setup() is really meant for end-user
-                        # interactive usage, because it eats most exceptions and
-                        # turn them into SystemExits.  Instead, we directly
-                        # instantiate a Distribution, which also allows us to
-                        # ignore unwanted features like config files.
-                        extra_compile_args = []
-                        # ensure correct math on windows
-                        if sys.platform == 'win32':
-                            extra_compile_args.append('/Op') # get extra precision
-                        if get_default_compiler() == 'unix':
-                            old_version = False
-                            try:
-                                g = os.popen('gcc --version', 'r')
-                                verinfo = g.read()
-                                g.close()
-                            except (OSError, IOError):
-                                pass
-                            else:
-                                old_version = verinfo.startswith('2')
-                            if not old_version:
-                                extra_compile_args.extend(["-Wno-unused-label",
-                                                        "-Wno-unused-variable"])
-                        attrs = {
-                            'name': "testmodule",
-                            'ext_modules': [
-                                Extension(modname, [str(cfile) for cfile in cfiles],
-                                    include_dirs=include_dirs,
-                                    library_dirs=library_dirs,
-                                    extra_compile_args=extra_compile_args,
-                                    libraries=list(libraries),
-                                    export_symbols=export_symbols,
-                                          )
-                                ],
-                            'script_name': 'setup.py',
-                            'script_args': ['-q', 'build_ext'], # don't remove 'build_ext' here
-                            }
-                        dist = Distribution(attrs)
-                        # patch our own command obj into distutils
-                        # because it does not have a facility to accept
-                        # custom objects
-                        cmdobj = build_shared_library(dist)
-                        cmdobj.inplace = True
-                        cmdobj.force = True
-                        if (sys.platform == 'win32'
-                            and sys.executable.lower().endswith('_d.exe')):
-                            cmdobj.debug = True
-                        dist.command_obj["build_ext"] = cmdobj
-                        dist.have_run["build_ext"] = 0
-
-                        if not dist.parse_command_line():
-                            raise ValueError, "distutils cmdline parse error"
-                        dist.run_commands()
-                    finally:
-                        for key, value in saved_environ:
-                            if os.environ.get(key) != value:
-                                os.environ[key] = value
-            finally:
-                foutput, foutput = c.done()
-                data = foutput.read()
-                if data:
-                    fdump = open("%s.errors" % modname, "w")
-                    fdump.write(data)
-                    fdump.close()
-            # XXX do we need to do some check on fout/ferr?
-            # XXX not a nice way to import a module
-        except:
-            print >>sys.stderr, data
-            raise
-    finally:
-        lastdir.chdir()
-    return str(tmpdir.join(modname) + so_ext)
+def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
+    eci = eci.convert_sources_to_files()
+    cfiles.extend(eci.separate_module_files)
+    compiler = CCompiler(cfiles, eci, standalone=False)
+    compiler.build()
+    return str(compiler.outputfilename)
 
 def make_module_from_c(cfile, eci):
     cfile = py.path.local(cfile)
@@ -504,9 +375,20 @@ class CCompiler:
     fix_gcc_random_seed = False
 
     def __init__(self, cfilenames, eci, outputfilename=None,
-                 compiler_exe=None, profbased=None):
+                 compiler_exe=None, profbased=None, standalone=True):
+        from distutils import sysconfig
+        python_inc = sysconfig.get_python_inc()
+        pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
+        eci = eci.merge(ExternalCompilationInfo(
+            include_dirs=[python_inc, pypy_include_dir],
+            platform=eci.platform,
+        ))
         self.cfilenames = cfilenames
-        ext = ''
+        if standalone:
+            ext = ''
+        else:
+            ext = so_ext
+        self.standalone = standalone
         self.libraries = list(eci.libraries)
         self.include_dirs = list(eci.include_dirs)
         self.library_dirs = list(eci.library_dirs)
@@ -628,10 +510,14 @@ class CCompiler:
             finally:
                 old.chdir()
 
-        compiler.link_executable(objects, str(self.outputfilename),
-                                 libraries=self.eci.libraries,
-                                 extra_preargs=self.link_extra,
-                                 library_dirs=self.eci.library_dirs)
+        if self.standalone:
+            cmd = compiler.link_executable
+        else:
+            cmd = compiler.link_shared_object
+        cmd(objects, str(self.outputfilename),
+            libraries=self.eci.libraries,
+            extra_preargs=self.link_extra,
+            library_dirs=self.eci.library_dirs)
 
 def build_executable(*args, **kwds):
     noerr = kwds.pop('noerr', False)
