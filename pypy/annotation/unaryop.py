@@ -290,9 +290,11 @@ class __extend__(SomeList):
 
     def method_extend(lst, s_iterable):
         lst.listdef.resize()
-        if not isinstance(s_iterable, SomeList):
-            raise Exception("list.extend(x): x must be a list")
-        lst.listdef.agree(s_iterable.listdef)
+        if isinstance(s_iterable, SomeList):   # unify the two lists
+            lst.listdef.agree(s_iterable.listdef)
+        else:
+            s_iter = s_iterable.iter()
+            lst.method_append(s_iter.next())
 
     def method_reverse(lst):
         lst.listdef.mutate()

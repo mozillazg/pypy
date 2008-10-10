@@ -851,6 +851,13 @@ class TestFlowObjSpace(Base):
             return foolist[0]
         py.test.raises(RuntimeError, "self.codetest(f)")
 
+    def test_getslice_constfold(self):
+        def f():
+            s = 'hello'
+            return s[:3]
+        graph = self.codetest(f)
+        assert not self.all_operations(graph)
+
 class TestFlowObjSpaceDelay(Base):
     def setup_class(cls):
         cls.space = FlowObjSpace()

@@ -578,7 +578,7 @@ class RPythonTyper(object):
 
     def translate_op_extend_with_str_slice(self, hop):
         r_arg1 = hop.args_r[0]
-        r_arg2 = hop.args_r[1]
+        r_arg2 = hop.args_r[3]
         return pair(r_arg1, r_arg2).rtype_extend_with_str_slice(hop)
 
     def translate_op_extend_with_char_count(self, hop):
@@ -588,9 +588,6 @@ class RPythonTyper(object):
 
     def translate_op_newtuple(self, hop):
         return self.type_system.rtuple.rtype_newtuple(hop)
-
-    def translate_op_newslice(self, hop):
-        return rslice.rtype_newslice(hop)
 
     def translate_op_instantiate1(self, hop):
         from pypy.rpython.lltypesystem import rclass

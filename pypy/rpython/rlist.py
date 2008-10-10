@@ -370,24 +370,14 @@ class __extend__(pairtype(AbstractListRepr, AbstractStringRepr)):
         if r_lst1.item_repr.lowleveltype not in (Char, UniChar):
             raise TyperError('"lst += string" only supported with a list '
                              'of chars or unichars')
-        rs = r_lst1.rtyper.type_system.rslice
         string_repr = r_lst1.rtyper.type_system.rstr.string_repr
+        v_lst1 = hop.inputarg(r_lst1, arg=0)
+        v_str2 = hop.inputarg(string_repr, arg=3)
+        kind, vlist = hop.decompose_slice_args()
         c_strlen  = hop.inputconst(Void, string_repr.ll.ll_strlen)
         c_stritem = hop.inputconst(Void, string_repr.ll.ll_stritem_nonneg)
-        r_slic = hop.args_r[2]
-        v_lst1, v_str2, v_slice = hop.inputargs(r_lst1, string_repr, r_slic)
-        if r_slic == rs.startonly_slice_repr:
-            hop.gendirectcall(ll_extend_with_str_slice_startonly,
-                              v_lst1, v_str2, c_strlen, c_stritem, v_slice)
-        elif r_slic == rs.startstop_slice_repr:
-            hop.gendirectcall(ll_extend_with_str_slice,
-                              v_lst1, v_str2, c_strlen, c_stritem, v_slice)
-        elif r_slic == rs.minusone_slice_repr:
-            hop.gendirectcall(ll_extend_with_str_slice_minusone,
-                              v_lst1, v_str2, c_strlen, c_stritem)
-        else:
-            raise TyperError('lst += str[:] does not support slices with %r' %
-                             (r_slic,))
+        ll_fn = globals()['ll_extend_with_str_slice_%s' % kind]
+        hop.gendirectcall(ll_fn, v_lst1, v_str2, c_strlen, c_stritem, *vlist)
         return v_lst1
 
 class __extend__(pairtype(AbstractListRepr, AbstractCharRepr)):
@@ -775,9 +765,8 @@ def ll_extend_with_str_slice_startonly(lst, s, getstrlen, getstritem, start):
         i += 1
         j += 1
 
-def ll_extend_with_str_slice(lst, s, getstrlen, getstritem, slice):
-    start = slice.start
-    stop = slice.stop
+def ll_extend_with_str_slice_startstop(lst, s, getstrlen, getstritem,
+                                       start, stop):
     len1 = lst.ll_length()
     len2 = getstrlen(s)
     ll_assert(start >= 0, "unexpectedly negative str slice start")
