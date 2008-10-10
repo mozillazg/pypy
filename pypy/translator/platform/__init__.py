@@ -20,7 +20,7 @@ class Platform(object):
     def __init__(self, cc):
         self.cc = cc
     
-    def compile(self, cfiles, eci):
+    def compile(self, cfiles, eci, outputfilename=None, standalone=True):
         raise NotImplementedError("Pure abstract baseclass")
 
     def execute(self, file_to_exec):

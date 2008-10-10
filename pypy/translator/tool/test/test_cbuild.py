@@ -6,22 +6,6 @@ from pypy.translator.tool.cbuild import build_executable, \
 from subprocess import Popen, PIPE, STDOUT
 from pypy.rlib.pyplatform import Maemo
 
-def test_simple_executable(): 
-    print udir
-    testpath = udir.join('testbuildexec')
-    t = testpath.ensure("test.c")
-    t.write(r"""
-        #include <stdio.h>
-        int main() {
-            printf("hello world\n");
-            return 0;
-        }
-""")
-    eci = ExternalCompilationInfo()
-    testexec = build_executable([t], eci)
-    out = py.process.cmdexec(testexec)
-    assert out.startswith('hello world')
-
 class TestEci:
     def setup_class(cls):
         tmpdir = udir.ensure('testeci', dir=1)
@@ -34,28 +18,6 @@ class TestEci:
         '''))
         cls.modfile = c_file
         cls.tmpdir = tmpdir
-
-    def test_standalone(self):
-        tmpdir = self.tmpdir
-        c_file = tmpdir.join('stand1.c')
-        c_file.write('''
-        #include <math.h>
-        #include <stdio.h>
-        
-        int main()
-        {
-            printf("%f\\n", pow(2.0, 2.0));
-        }''')
-        if sys.platform != 'win32':
-            eci = ExternalCompilationInfo(
-                libraries = ['m'],
-                )
-        else:
-            eci = ExternalCompilationInfo()
-        output = build_executable([c_file], eci)
-        p = Popen(output, stdout=PIPE, stderr=STDOUT)
-        p.wait()
-        assert p.stdout.readline().startswith('4.0')
     
     def test_merge(self):
         e1 = ExternalCompilationInfo(
@@ -158,6 +120,11 @@ class TestEci:
                        ExternalCompilationInfo.from_config_tool,
                        'dxowqbncpqympqhe-config')
 
+
+
+
+
+class Stuff:
     def test_platform(self):
         from pypy.rlib.pyplatform import Platform
         class Expected(Exception):

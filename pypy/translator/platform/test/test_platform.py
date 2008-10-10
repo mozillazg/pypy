@@ -1,5 +1,5 @@
 
-import py
+import py, sys
 from pypy.tool.udir import udir
 from pypy.translator.platform import host, CompilationError
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -51,3 +51,24 @@ def test_use_eci():
     assert res.out == '42\n'
     assert res.err == ''
     assert res.returncode == 0
+
+def test_standalone_library():
+    tmpdir = udir.join('standalone_library').ensure(dir=1)
+    c_file = tmpdir.join('stand1.c')
+    c_file.write('''
+    #include <math.h>
+    #include <stdio.h>
+
+    int main()
+    {
+        printf("%f\\n", pow(2.0, 2.0));
+    }''')
+    if sys.platform != 'win32':
+        eci = ExternalCompilationInfo(
+            libraries = ['m'],
+            )
+    else:
+        eci = ExternalCompilationInfo()
+    executable = host.compile([c_file], eci)
+    res = host.execute(executable)
+    assert res.out.startswith('4.0')
