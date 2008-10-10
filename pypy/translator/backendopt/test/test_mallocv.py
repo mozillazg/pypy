@@ -180,14 +180,12 @@ class BaseMallocRemovalTest(object):
         self.check(fn2, [int, int], [-6, 7], -13)
 
     def test_fn3(self):
-        py.test.skip("redo me")
         def fn3(x):
             a, ((b, c), d, e) = x+1, ((x+2, x+3), x+4, x+5)
             return a+b+c+d+e
         self.check(fn3, [int], [10], 65)
 
     def test_fn4(self):
-        py.test.skip("redo me")
         class A:
             pass
         class B(A):
@@ -201,7 +199,6 @@ class BaseMallocRemovalTest(object):
         self.check(fn4, [int], [42], 42)
 
     def test_fn5(self):
-        py.test.skip("redo me")
         class A:
             attr = 666
         class B(A):
@@ -212,7 +209,6 @@ class BaseMallocRemovalTest(object):
         self.check(fn5, [], [], 42)
 
     def test_aliasing(self):
-        py.test.skip("redo me")
         class A:
             pass
         def fn6(n):
@@ -226,7 +222,7 @@ class BaseMallocRemovalTest(object):
                 a = a2
             a.x = 12
             return a1.x
-        self.check(fn6, [int], [1], 12, must_be_removed=False)
+        self.check(fn6, [int], [1], 12)
 
 
 
@@ -235,7 +231,6 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
     #MallocRemover = LLTypeMallocRemover
 
     def test_with_keepalive(self):
-        py.test.skip("redo me")
         from pypy.rlib.objectmodel import keepalive_until_here
         def fn1(x, y):
             if x > 0:

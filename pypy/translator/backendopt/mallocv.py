@@ -531,6 +531,13 @@ class BlockSpecializer(object):
         else:
             return self.handle_default(op)
 
+    def handle_op_keepalive(self, op):
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
+            return []
+        else:
+            return self.handle_default(op)
+
     def handle_op_malloc(self, op):
         if op.result is self.v_expand_malloc:
             MALLOCTYPE = op.result.concretetype.TO
