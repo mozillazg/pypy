@@ -7,8 +7,6 @@ from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import so_ext, ExternalCompilationInfo
-from pypy.translator.tool.cbuild import compile_c_module
-from pypy.translator.tool.cbuild import CCompiler, ProfOpt
 from pypy.translator.tool.cbuild import import_module_from_directory
 from pypy.translator.tool.cbuild import check_under_under_thread
 from pypy.rpython.lltypesystem import lltype
@@ -18,6 +16,60 @@ from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.translator.c import gc
 
+class ProfOpt(object):
+    #XXX assuming gcc style flags for now
+    name = "profopt"
+
+    def __init__(self, compiler):
+        self.compiler = compiler
+
+    def first(self):
+        return self.build('-fprofile-generate')
+
+    def probe(self, exe, args):
+        # 'args' is a single string typically containing spaces
+        # and quotes, which represents several arguments.
+        self.compiler.platform.execute(exe, args)
+
+    def after(self):
+        return self.build('-fprofile-use')
+
+    def build(self, option):
+        eci = ExternalCompilationInfo(compile_extra=[option],
+                                      link_extra=[option])
+        # XXX
+        #compiler.fix_gcc_random_seed = True
+        return self.compiler._build(eci)
+
+class CCompilerDriver(object):
+    def __init__(self, platform, cfiles, eci, outputfilename=None,
+                 profbased=False):
+        self.platform = platform
+        self.cfiles = cfiles
+        self.eci = eci
+        self.outputfilename = outputfilename
+        self.profbased = profbased
+
+    def _build(self, eci=ExternalCompilationInfo()):
+        return self.platform.compile(self.cfiles, self.eci.merge(eci),
+                                     outputfilename=self.outputfilename)
+
+    def build(self):
+        if self.profbased:
+            return self._do_profbased()
+        return self._build()
+
+    def _do_profbased(self):
+        ProfDriver, args = self.profbased
+        profdrv = ProfDriver(self)
+        dolog = getattr(log, profdrv.name)
+        dolog(args)
+        exename = profdrv.first()
+        dolog('Gathering profile data from: %s %s' % (
+            str(exename), args))
+        profdrv.probe(exename, args)
+        return profdrv.after()
+    
 class CBuilder(object):
     c_source_filename = None
     _compiled = False
@@ -132,7 +184,7 @@ class CBuilder(object):
         if self.config.translation.sandbox:
             defines['RPY_SANDBOXED'] = 1
         if CBuilder.have___thread is None:
-            CBuilder.have___thread = check_under_under_thread()
+            CBuilder.have___thread = self.translator.platform.check___thread()
         if not self.standalone:
             assert not self.config.translation.instrument
             cfile, extra = gen_source(db, modulename, targetdir, self.eci,
@@ -330,19 +382,20 @@ class CStandaloneBuilder(CBuilder):
     def compile(self):
         assert self.c_source_filename
         assert not self._compiled
-        compiler = self.getccompiler()
+        compiler = CCompilerDriver(self.translator.platform,
+                                   [self.c_source_filename] + self.extrafiles,
+                                   self.eci, profbased=self.getprofbased())
         if self.config.translation.gcrootfinder == "asmgcc":
+            xxx
             # as we are gcc-only anyway, let's just use the Makefile.
             cmdline = "make -C '%s'" % (self.targetdir,)
             err = os.system(cmdline)
             if err != 0:
                 raise OSError("failed (see output): " + cmdline)
         else:
-            eci = self.eci.merge(ExternalCompilationInfo(includes=
-                                                         [str(self.targetdir)]))
-            self.adaptflags(compiler)
-            compiler.build()
-        self.executable_name = str(compiler.outputfilename)
+            #self.adaptflags(compiler)
+            self.executable_name = compiler.build()
+            assert self.executable_name
         self._compiled = True
         return self.executable_name
 
@@ -361,6 +414,7 @@ class CStandaloneBuilder(CBuilder):
             compiler.link_extra.append(self.config.translation.linkerflags)
 
     def gen_makefile(self, targetdir):
+        return # XXX
         def write_list(lst, prefix):
             for i, fn in enumerate(lst):
                 print >> f, prefix, fn,

@@ -341,35 +341,6 @@ def log_spawned_cmd(spawn):
     return spawn_and_log
 
 
-class ProfOpt(object):
-    #XXX assuming gcc style flags for now
-    name = "profopt"
-
-    def __init__(self, compiler):
-        self.compiler = compiler
-
-    def first(self):
-        self.build('-fprofile-generate')
-
-    def probe(self, exe, args):
-        # 'args' is a single string typically containing spaces
-        # and quotes, which represents several arguments.
-        os.system("'%s' %s" % (exe, args))
-
-    def after(self):
-        self.build('-fprofile-use')
-
-    def build(self, option):
-        compiler = self.compiler
-        compiler.fix_gcc_random_seed = True
-        compiler.compile_extra.append(option)
-        compiler.link_extra.append(option)
-        try:
-            compiler._build()
-        finally:
-            compiler.compile_extra.pop()
-            compiler.link_extra.pop()
-
 class CompilationError(Exception):
     pass
 
@@ -378,6 +349,7 @@ class CCompiler:
 
     def __init__(self, cfilenames, eci, outputfilename=None,
                  compiler_exe=None, profbased=None, standalone=True):
+        XXX
         self.cfilenames = cfilenames
         if standalone:
             ext = ''
