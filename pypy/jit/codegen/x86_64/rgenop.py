@@ -1,6 +1,6 @@
 from pypy.jit.codegen import model
 from pypy.rlib.objectmodel import specialize
-from pypy.jit.codegen.x86_64.objmodel import IntVar, Register64, Register8, Immediate8, Immediate32, Immediate64
+from pypy.jit.codegen.x86_64.objmodel import IntVar, Register64, Register8, Immediate8, Immediate32, Immediate64, Stack64
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
 #TODO: understand llTypesystem
 from pypy.rpython.lltypesystem import llmemory, lltype 
@@ -73,7 +73,8 @@ class Builder(model.GenBuilder):
     MC_SIZE = 65536
 
     #FIXME: The MemCodeBuild. is not opend in an _open method
-    def __init__(self, used_registers=[]):
+    def __init__(self, stackdepth, used_registers=[]):
+        self.stackdepth = stackdepth 
         self.mc = InMemoryCodeBuilder(self.MC_SIZE)
         #callee-saved registers are commented out
         self.freeregisters ={        
@@ -101,15 +102,21 @@ class Builder(model.GenBuilder):
                    
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
+        if isinstance(gv_arg, model.GenVar) and isinstance(gv_arg.location, Stack64):
+            move_back_to_register(gv_arg)
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
+        if isinstance(gv_arg1, model.GenVar) and isinstance(gv_arg1.location, Stack64):
+            move_back_to_register(gv_arg1)
+        if isinstance(gv_arg2, model.GenVar) and isinstance(gv_arg2.location, Stack64):
+            move_back_to_register(gv_arg2)
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
  
-    op_int_add  = make_two_argument_method("ADD")
+    op_int_add  = make_two_argument_method("ADD") #TODO: use inc
     op_int_and  = make_two_argument_method("AND")
     op_int_dec  = make_one_argument_method("DEC")  #for debuging
     op_int_inc  = make_one_argument_method("INC")  #for debuging
@@ -119,7 +126,7 @@ class Builder(model.GenBuilder):
     op_int_or   = make_two_argument_method("OR")
     op_int_push = make_one_argument_method("PUSH") #for debuging
     op_int_pop  = make_one_argument_method("POP")  #for debuging
-    op_int_sub  = make_two_argument_method("SUB")
+    op_int_sub  = make_two_argument_method("SUB") # TODO: use DEC
     op_int_xor  = make_two_argument_method("XOR")
 
     # TODO: support reg8
@@ -241,7 +248,7 @@ class Builder(model.GenBuilder):
         def jump(self, gv_condition, args_for_jump_gv): 
             # the targetbuilder must know the registers(live vars) 
             # of the calling block  
-            targetbuilder = Builder(args_for_jump_gv)
+            targetbuilder = Builder(self.stackdepth, args_for_jump_gv)
             self.mc.CMP(gv_condition, Immediate32(value))
             self.mc.JNE(targetbuilder.mc.tell())
             return targetbuilder
@@ -257,6 +264,7 @@ class Builder(model.GenBuilder):
             self.mc.MOV(IntVar(Register64("rax")), gv_returnvar)
         self.mc.RET()
         self._close()
+        assert self.stackdepth == 0
         
     #FIXME: uses 32bit displ  
     # if the label is greater than 32bit
@@ -320,26 +328,44 @@ class Builder(model.GenBuilder):
         
     # TODO: alloc strategy
     # TODO: support 8bit reg. alloc
-    # just greddy
+    # just greddy spilling
     def spill_register(self):
         # take the first gv which is not
         # on the stack
         gv_to_spill = None
         for i in range(len(known_gv)):
-           if not known_gv[i].location_type == "Stack64":
+           if not isinstance(known_gv[i].location, Stack64):
                 gv_to_spill = self.known_gv[i]
                 break
         # there must be genVars which are 
         # inside an register so:
-        assert not gv_to_spill==None 
+        assert isinstance(gv_to_spill.location, Register64) 
         
-        #TODO: update Stackposition
-        
+        self.stackdepth = self.stackdepth +1 
         self.mc.PUSH(gv_to_spill)      
         new_gv = IntVar(Register64(gv_to_spill.location.reg))
-        gv_to_spill.location = Stack64(42) #XXX
+        gv_to_spill.location = Stack64(self.stackdepth) 
         return new_gv
-
+        
+    def move_back_to_register(a_spilled_gv):
+        # if top of stack
+        if a_spilled_gv.location.offset ==  self.stackdepth:
+            gv_new = self.allocate_register()
+            self.mc.POP(gv_new)
+            self.stackdepth = self.stackdepth -1
+            assert self.stackdepth >= 0 
+            #update all offsets
+            for i in range(len(known_gv)):
+               if isinstance(known_gv[i].location, Stack64):
+                    known_gv[i].location.offset = known_gv[i].location.offset -1
+            a_spilled_gv = gv_new
+            # TODO: free gv_new (no double values in known_gv
+        # else access the memory
+        # FIXME: if this genVar becomes the top of stack it will never be pushed
+        else:
+            pass
+            
+            
 
 class RX86_64GenOp(model.AbstractRGenOp):
     
@@ -365,7 +391,7 @@ class RX86_64GenOp(model.AbstractRGenOp):
         arg_tokens, res_token = sigtoken
         #print "arg_tokens:",arg_tokens
         inputargs_gv = []
-        builder = Builder()
+        builder = Builder(0) # stackdepth = 0
         # TODO: Builder._open()
         entrypoint = builder.mc.tell()
         # from http://www.x86-64.org/documentation/abi.pdf
