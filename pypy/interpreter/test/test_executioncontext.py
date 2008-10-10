@@ -174,3 +174,22 @@ class TestExecutionContext:
         """)
         events = space.unwrap(w_events)
         assert events == ['return', 'call', 'return', 'return', 'c_call']
+
+    def test_c_call_profiles_immediately(self):
+        space = self.space
+        w_events = space.appexec([], """():
+        import sys
+        l = []
+        def profile(frame, event, arg):
+            l.append(event)
+
+        def bar():
+            sys.setprofile(profile)
+            max(3, 4)
+
+        bar()
+        sys.setprofile(None)
+        return l
+        """)
+        events = space.unwrap(w_events)
+        assert events == ['c_call', 'c_return', 'return', 'c_call']
