@@ -57,10 +57,10 @@ def transform_allocate(self, block_subset):
 
 # lst += string[x:y]
 # -->
-# b = getitem(string, slice)
+# b = getslice(string, x, y)
 # c = inplace_add(lst, b)
 # -->
-# c = extend_with_str_slice(lst, string, slice)
+# c = extend_with_str_slice(lst, x, y, string)
 
 def transform_extend_with_str_slice(self, block_subset):
     """Transforms lst += string[x:y] to extend_with_str_slice"""
@@ -68,16 +68,15 @@ def transform_extend_with_str_slice(self, block_subset):
         slice_sources = {}    # maps b to [string, slice] in the above notation
         for i in range(len(block.operations)):
             op = block.operations[i]
-            if (op.opname == 'getitem' and
-                self.gettype(op.args[0]) is str and
-                self.gettype(op.args[1]) is slice):
+            if (op.opname == 'getslice' and
+                self.gettype(op.args[0]) is str):
                 slice_sources[op.result] = op.args
             elif (op.opname == 'inplace_add' and
                   op.args[1] in slice_sources and
                   self.gettype(op.args[0]) is list):
-                v_string, v_slice = slice_sources[op.args[1]]
+                v_string, v_x, v_y = slice_sources[op.args[1]]
                 new_op = SpaceOperation('extend_with_str_slice',
-                                        [op.args[0], v_string, v_slice],
+                                        [op.args[0], v_x, v_y, v_string],
                                         op.result)
                 block.operations[i] = new_op
 
