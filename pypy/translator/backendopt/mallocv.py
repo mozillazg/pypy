@@ -204,6 +204,7 @@ class MallocVirtualizer(object):
         return result
 
     def remove_mallocs_once(self):
+        self.flush_failed_specializations()
         prev = self.count_virtualized
         for graph in self.graphs:
             all_blocks = None
@@ -214,17 +215,16 @@ class MallocVirtualizer(object):
                 if block not in all_blocks:
                     continue   # this block was removed from the graph
                                # by a previous try_remove_malloc()
-                try:
-                    self.try_remove_malloc(graph, block, op)
-                except CannotVirtualize, e:
-                    if self.verbose:
-                        log.mallocv('%s failed: %s' % (op.result, e))
-                else:
-                    if self.verbose:
-                        log.mallocv('%s removed' % (op.result,))
-                    all_blocks = None
+                if self.try_remove_malloc(graph, block, op):
+                    all_blocks = None   # graph mutated
         progress = self.report_result() - prev
         return progress
+
+    def flush_failed_specializations(self):
+        cache = self.specialized_graphs.content
+        for key, (mode, specgraph) in cache.items():
+            if mode == 'fail':
+                del cache[key]
 
     def getmalloctypedesc(self, MALLOCTYPE):
         try:
@@ -238,11 +238,19 @@ class MallocVirtualizer(object):
         if graph in self.graphbuilders:
             graphbuilder.initialize_from_old_builder(self.graphbuilders[graph])
         graphbuilder.start_from_a_malloc(block, op.result)
-        graphbuilder.propagate_specializations()
-        # if we reach this point without a CannotVirtualize, success
-        graphbuilder.finished_removing_malloc()
-        self.graphbuilders[graph] = graphbuilder
-        self.count_virtualized += 1
+        try:
+            graphbuilder.propagate_specializations()
+        except (CannotVirtualize, ForcedInline), e:
+            if self.verbose:
+                log.mallocv('%s %s: %s' % (op.result, e.__class__.__name__, e))
+            return False
+        else:
+            if self.verbose:
+                log.mallocv('%s removed' % (op.result,))
+            graphbuilder.finished_removing_malloc()
+            self.graphbuilders[graph] = graphbuilder
+            self.count_virtualized += 1
+            return True
 
     def get_specialized_graph(self, graph, nodelist):
         assert len(graph.getargs()) == len(nodelist)
@@ -434,7 +442,7 @@ class BlockSpecializer(object):
             else:
                 if len(link.target.exits) == 0:    # return or except block
                     if currentframe.callerframe is None:
-                        raise CannotVirtualize("return or except block")
+                        raise ForcedInline("return or except block")
                     newframe = currentframe.return_to_caller(link.target,
                                                              targetnodes)
                 else:
