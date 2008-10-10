@@ -7,9 +7,17 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("cbuild")
 py.log.setconsumer("cbuild", ansi_log)
 
-def _run_subprocess(args):
-    pipe = Popen(args, executable=args[0],
-                 stdout=PIPE, stderr=PIPE, shell=False)
+def _run_subprocess(executable, args, env=None):
+    if isinstance(args, str):
+        args = str(executable) + ' ' + args
+        shell = True
+    else:
+        if args is None:
+            args = [str(executable)]
+        else:
+            args = [str(executable)] + args
+        shell = False
+    pipe = Popen(args, stdout=PIPE, stderr=PIPE, shell=shell, env=env)
     stdout, stderr = pipe.communicate()
     return pipe.returncode, stdout, stderr
 
@@ -42,9 +50,8 @@ class Linux(Platform):
         args += ['-o', str(exe_name)]
         if not standalone:
             args = self._args_for_shared(args)
-        args = [self.cc] + args
-        log.execute(' '.join(args))
-        returncode, stdout, stderr = _run_subprocess(args)
+        log.execute(self.cc + ' ' + ' '.join(args))
+        returncode, stdout, stderr = _run_subprocess(self.cc, args)
         if returncode != 0:
             errorfile = exe_name.new(ext='errors')
             errorfile.write(stderr)
@@ -56,6 +63,7 @@ class Linux(Platform):
             raise CompilationError(stdout, stderr)
         return exe_name
 
-    def execute(self, executable):
-        returncode, stdout, stderr = _run_subprocess([str(executable)])
+    def execute(self, executable, args=None, env=None):
+        returncode, stdout, stderr = _run_subprocess(str(executable), args,
+                                                     env)
         return ExecutionResult(returncode, stdout, stderr)

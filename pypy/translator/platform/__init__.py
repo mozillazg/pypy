@@ -16,6 +16,9 @@ class ExecutionResult(object):
         self.out = out
         self.err = err
 
+    def __repr__(self):
+        return "<ExecutionResult retcode=%d>" % (self.returncode,)
+
 class Platform(object):
     def __init__(self, cc):
         self.cc = cc
@@ -23,11 +26,14 @@ class Platform(object):
     def compile(self, cfiles, eci, outputfilename=None, standalone=True):
         raise NotImplementedError("Pure abstract baseclass")
 
-    def execute(self, file_to_exec):
+    def execute(self, file_to_exec, args=None, env=None):
         raise NotImplementedError("Pure abstract baseclass")
 
     def __repr__(self):
         return '<%s cc=%s>' % (self.__class__.__name__, self.cc)
+
+    def check___thread(self):
+        return True
 
 if sys.platform == 'linux2':
     from pypy.translator.platform.linux import Linux

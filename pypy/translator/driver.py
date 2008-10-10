@@ -53,13 +53,12 @@ class ProfInstrument(object):
         self.compiler = compiler
 
     def first(self):
-        self.compiler._build()
+        return self.compiler._build()
 
     def probe(self, exe, args):
-        from py.compat import subprocess
         env = os.environ.copy()
         env['_INSTRUMENT_COUNTERS'] = str(self.datafile)
-        subprocess.call("'%s' %s" % (exe, args), env=env, shell=True)
+        self.compiler.platform.execute(exe, args, env=env)
         
     def after(self):
         # xxx

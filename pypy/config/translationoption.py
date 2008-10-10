@@ -352,16 +352,6 @@ PLATFORMS = [
     'maemo',
 ]
 
-def set_platform(config, platform):
-    from pypy.rlib.pyplatform import Platform, Maemo
-    from pypy.rlib import pyplatform
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
-    if isinstance(platform, str):
-        if platform == 'maemo':
-            platform = Maemo(cc=config.translation.cc or None)
-        elif platform == 'host':
-            return
-        else:
-            raise NotImplementedError('Platform = %s' % (platform,))
-    assert isinstance(platform, Platform)
-    pyplatform.platform = platform
+def get_platform(config):
+    from pypy.translator.platform import host
+    return host
