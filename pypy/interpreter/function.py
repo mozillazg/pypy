@@ -506,10 +506,8 @@ class BuiltinFunction(Function):
 def is_builtin_code(w_func):
     from pypy.interpreter.gateway import BuiltinCode
     if isinstance(w_func, Method):
-        w_f = w_func.w_function
-        assert isinstance(w_f, Function)
-        code = w_f.getcode()
-    elif isinstance(w_func, Function):
+        w_func = w_func.w_function
+    if isinstance(w_func, Function):
         code = w_func.getcode()
     else:
         code = None
