@@ -20,21 +20,22 @@ class BaseMallocRemovalTest(object):
         if self.type_system == 'ootype':
             py.test.skip(msg)
 
-    def check_malloc_removed(cls, graph):
-        #remover = cls.MallocRemover()
-        checkgraph(graph)
-        count = 0
+    def check_malloc_removed(cls, graph, expected_mallocs, expected_calls):
+        count_mallocs = 0
+        count_calls = 0
         for node in flatten(graph):
             if isinstance(node, Block):
                 for op in node.operations:
-                    if op.opname == 'malloc': #cls.MallocRemover.MALLOC_OP:
-                        S = op.args[0].value
-                        #if not remover.union_wrapper(S):   # union wrappers are fine
-                        count += 1
-        assert count == 0   # number of mallocs left
+                    if op.opname == 'malloc':
+                        count_mallocs += 1
+                    if op.opname == 'direct_call':
+                        count_calls += 1
+        assert count_mallocs == expected_mallocs
+        assert count_calls == expected_calls
     check_malloc_removed = classmethod(check_malloc_removed)
 
-    def check(self, fn, signature, args, expected_result, must_be_removed=True):
+    def check(self, fn, signature, args, expected_result,
+              expected_mallocs=0, expected_calls=0):
         t = TranslationContext()
         t.buildannotator().build_types(fn, signature)
         t.buildrtyper(type_system=self.type_system).specialize()
@@ -56,8 +57,7 @@ class BaseMallocRemovalTest(object):
                 assert res == expected_result
             if not progress:
                 break
-        if must_be_removed:
-            self.check_malloc_removed(graph)
+        self.check_malloc_removed(graph, expected_mallocs, expected_calls)
         return graph
 
     def test_fn1(self):
@@ -93,7 +93,8 @@ class BaseMallocRemovalTest(object):
             return a * b
         def f(x):
             return g((x+1, x-1))
-        graph = self.check(f, [int], [10], 99)
+        graph = self.check(f, [int], [10], 99,
+                           expected_calls=1)     # not inlined
 
     def test_direct_call_mutable_simple(self):
         A = lltype.GcStruct('A', ('x', lltype.Signed))
@@ -104,9 +105,8 @@ class BaseMallocRemovalTest(object):
             a.x = x
             g(a)
             return a.x
-        graph = self.check(f, [int], [41], 42)
-        insns = summary(graph)
-        assert insns.get('direct_call', 0) == 0     # no more call, inlined
+        graph = self.check(f, [int], [41], 42,
+                           expected_calls=0)     # no more call, inlined
 
     def test_direct_call_mutable_retval(self):
         A = lltype.GcStruct('A', ('x', lltype.Signed))
@@ -118,9 +118,8 @@ class BaseMallocRemovalTest(object):
             a.x = x
             y = g(a)
             return a.x + y
-        graph = self.check(f, [int], [41], 4242)
-        insns = summary(graph)
-        assert insns.get('direct_call', 0) == 0     # no more call, inlined
+        graph = self.check(f, [int], [41], 4242,
+                           expected_calls=0)     # no more call, inlined
 
     def test_direct_call_mutable_ret_virtual(self):
         A = lltype.GcStruct('A', ('x', lltype.Signed))
@@ -132,9 +131,8 @@ class BaseMallocRemovalTest(object):
             a.x = x
             b = g(a)
             return a.x + b.x
-        graph = self.check(f, [int], [41], 84)
-        insns = summary(graph)
-        assert insns.get('direct_call', 0) == 0     # no more call, inlined
+        graph = self.check(f, [int], [41], 84,
+                           expected_calls=0)     # no more call, inlined
 
     def test_direct_call_mutable_lastref(self):
         A = lltype.GcStruct('A', ('x', lltype.Signed))
@@ -146,9 +144,8 @@ class BaseMallocRemovalTest(object):
             a.x = x
             y = g(a)
             return x - y
-        graph = self.check(f, [int], [5], -45)
-        insns = summary(graph)
-        assert insns.get('direct_call', 0) == 1     # not inlined
+        graph = self.check(f, [int], [5], -45,
+                           expected_calls=1)     # not inlined
 
     def test_direct_call_ret_virtual(self):
         A = lltype.GcStruct('A', ('x', lltype.Signed))
@@ -162,9 +159,8 @@ class BaseMallocRemovalTest(object):
             a.x = 2
             a = g(a)
             return prebuilt_a.x * a.x
-        graph = self.check(f, [int], [19], 42)
-        insns = summary(graph)
-        assert insns.get('direct_call', 0) == 0     # inlined
+        graph = self.check(f, [int], [19], 42,
+                           expected_calls=0)     # inlined
 
     def test_fn2(self):
         class T:
@@ -224,6 +220,13 @@ class BaseMallocRemovalTest(object):
             return a1.x
         self.check(fn6, [int], [1], 12)
 
+    def test_with__del__(self):
+        class A(object):
+            def __del__(self):
+                pass
+        def fn7():
+            A()
+        self.check(fn7, [], [], None, expected_mallocs=1)  # don't remove
 
 
 class TestLLTypeMallocRemoval(BaseMallocRemovalTest):

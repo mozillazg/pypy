@@ -11,11 +11,24 @@ from pypy.rpython.lltypesystem import lltype
 class MallocTypeDesc(object):
 
     def __init__(self, MALLOCTYPE):
+        if not isinstance(MALLOCTYPE, lltype.GcStruct):
+            raise CannotRemoveThisType
         self.MALLOCTYPE = MALLOCTYPE
         self.names_and_types = []
         self.name2index = {}
         self.initialize_type(MALLOCTYPE)
         #self.immutable_struct = MALLOCTYPE._hints.get('immutable')
+        self.check_no_destructor()
+
+    def check_no_destructor(self):
+        STRUCT = self.MALLOCTYPE
+        try:
+            rttiptr = lltype.getRuntimeTypeInfo(STRUCT)
+        except ValueError:
+            return    # ok
+        destr_ptr = getattr(rttiptr._obj, 'destructor_funcptr', None)
+        if destr_ptr:
+            raise CannotRemoveThisType
 
     def initialize_type(self, TYPE):
         fieldnames = TYPE._names
@@ -180,6 +193,9 @@ class CannotVirtualize(Exception):
 class ForcedInline(Exception):
     pass
 
+class CannotRemoveThisType(Exception):
+    pass
+
 
 class MallocVirtualizer(object):
 
@@ -200,7 +216,13 @@ class MallocVirtualizer(object):
         for block in graph.iterblocks():
             for op in block.operations:
                 if op.opname == 'malloc':
-                    result.append((block, op))
+                    MALLOCTYPE = op.result.concretetype.TO
+                    try:
+                        self.getmalloctypedesc(MALLOCTYPE)
+                    except CannotRemoveThisType:
+                        pass
+                    else:
+                        result.append((block, op))
         return result
 
     def remove_mallocs_once(self):
