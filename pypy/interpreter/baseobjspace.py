@@ -695,32 +695,16 @@ class ObjSpace(object):
 
     def call_valuestack(self, w_func, nargs, frame):
         from pypy.interpreter.function import Function, Method, is_builtin_code
-        if frame.is_being_profiled:
-            ec = self.getexecutioncontext()
-            is_c_call = is_builtin_code(w_func)
-
-            # XXX: this code is copied&pasted :-( from the slow path
-            # below. The profiling info could be not very accurate
-            # because by doing this we disable fast paths when calling
-            # the function
+        if frame.is_being_profiled and is_builtin_code(w_func):
+            # XXX: this code is copied&pasted :-( from the slow path below
+            # call_valuestack().
             args = frame.make_arguments(nargs)
             try:
-                try:
-                    if is_c_call:
-                        ec.c_call_trace(frame, w_func)
-                    w_res = self.call_args(w_func, args)
-                    if is_c_call:
-                        ec.c_return_trace(frame, w_res)
-                    return w_res
-                except OperationError, e:
-                    if is_c_call:
-                        ec.c_exception_trace(frame, e.w_value)
-                    raise
+                return self.call_args_and_c_profile(frame, w_func, args)
             finally:
                 if isinstance(args, ArgumentsFromValuestack):
                     args.frame = None
 
-        
         if not self.config.objspace.disable_call_speedhacks:
             # XXX start of hack for performance
             hint(w_func.__class__, promote=True)
@@ -745,6 +729,17 @@ class ObjSpace(object):
         finally:
             if isinstance(args, ArgumentsFromValuestack):
                 args.frame = None
+
+    def call_args_and_c_profile(self, frame, w_func, args):
+        ec = self.getexecutioncontext()
+        ec.c_call_trace(frame, w_func)
+        try:
+            w_res = self.call_args(w_func, args)
+        except OperationError, e:
+            ec.c_exception_trace(frame, e.w_value)
+            raise
+        ec.c_return_trace(frame, w_res)
+        return w_res
 
     def call_method(self, w_obj, methname, *arg_w):
         w_meth = self.getattr(w_obj, self.wrap(methname))
