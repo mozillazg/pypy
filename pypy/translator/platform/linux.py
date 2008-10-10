@@ -18,10 +18,16 @@ class Linux(Platform):
     def __init__(self, cc='gcc'):
         self.cc = cc
 
+    def _args_from_eci(self, cc, cfiles, eci):
+        include_dirs = ['-I%s' % (idir,) for idir in eci.include_dirs]
+        library_dirs = ['-L%s' % (ldir,) for ldir in eci.library_dirs]
+        libraries = ['-l%s' % (lib,) for lib in eci.libraries]
+        return ([self.cc] + include_dirs + [str(f) for f in cfiles] +
+                library_dirs + libraries)
+
     def compile(self, cfiles, eci):
         cfiles = [py.path.local(f) for f in cfiles]
-        # XXX ignore eci
-        args = [self.cc] + [str(f) for f in cfiles]
+        args = self._args_from_eci(self.cc, cfiles, eci)
         exe_name = cfiles[0].dirpath().join(cfiles[0].purebasename)
         args += ['-o', str(exe_name)]
         log.execute(' '.join(args))
