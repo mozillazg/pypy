@@ -38,6 +38,7 @@ class Maemo(Platform):
         if cc is None:
             for x in (
                 '/scratchbox/compilers/cs2007q3-glibc2.5-arm7/bin/arm-none-linux-gnueabi-gcc',
+                '/scratchbox/compilers/cs2007q3-glibc2.5-arm6/bin/arm-none-linux-gnueabi-gcc',
                 '/scratchbox/compilers/cs2005q3.2-glibc-arm/bin/sbox-arm-linux-gcc',
             ):
                 if py.path.local(x).check():
