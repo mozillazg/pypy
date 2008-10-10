@@ -176,6 +176,7 @@ def dump_static_data_info(log, database, targetdir):
     pickle.dump(info, f)
     f.close()
     log.info('static data informations dumped to %s' % infofile)
+    return infofile
 
 
 ## Functions used by the reportstaticdata.py script
