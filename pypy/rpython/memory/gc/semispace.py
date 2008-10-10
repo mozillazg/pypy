@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.memory.gc.base import MovingGCBase
 
-import sys, os
+import sys, os, time
 
 TYPEID_MASK = 0xffff
 first_gcflag = 1 << 16
@@ -21,7 +21,6 @@ GCFLAG_FORWARDED = first_gcflag
 GCFLAG_EXTERNAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
 
-DEBUG_PRINT = False
 memoryError = MemoryError()
 
 class SemiSpaceGC(MovingGCBase):
@@ -42,16 +41,15 @@ class SemiSpaceGC(MovingGCBase):
     # translating to a real backend.
     TRANSLATION_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
+    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
                  max_space_size=sys.maxint//2+1):
-        MovingGCBase.__init__(self, chunk_size)
+        MovingGCBase.__init__(self, config, chunk_size)
         self.space_size = space_size
         self.max_space_size = max_space_size
         self.red_zone = 0
 
     def setup(self):
-        if DEBUG_PRINT:
-            import time
+        if self.config.gcconfig.debugprint:
             self.program_start_time = time.time()
         self.tospace = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.tospace), "couldn't allocate tospace")
@@ -197,8 +195,7 @@ class SemiSpaceGC(MovingGCBase):
         # (this is also a hook for the HybridGC)
 
     def semispace_collect(self, size_changing=False):
-        if DEBUG_PRINT:
-            import time
+        if self.config.gcconfig.debugprint:
             llop.debug_print(lltype.Void)
             llop.debug_print(lltype.Void,
                              ".----------- Full collection ------------------")
@@ -210,6 +207,8 @@ class SemiSpaceGC(MovingGCBase):
         #llop.debug_print(lltype.Void, 'semispace_collect', int(size_changing))
         tospace = self.fromspace
         fromspace = self.tospace
+        start_time = 0 # Help the flow space
+        start_usage = 0 # Help the flow space
         self.fromspace = fromspace
         self.tospace = tospace
         self.top_of_space = tospace + self.space_size
@@ -231,7 +230,7 @@ class SemiSpaceGC(MovingGCBase):
             self.record_red_zone()
             self.execute_finalizers()
         #llop.debug_print(lltype.Void, 'collected', self.space_size, size_changing, self.top_of_space - self.free)
-        if DEBUG_PRINT:
+        if self.config.gcconfig.debugprint:
             end_time = time.time()
             elapsed_time = end_time - start_time
             self.total_collection_time += elapsed_time

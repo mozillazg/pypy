@@ -14,12 +14,13 @@ class GCBase(object):
     prebuilt_gc_objects_are_static_roots = True
     can_realloc = False
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE):
+    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE):
         self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
         self.AddressStack = get_address_stack(chunk_size)
         self.AddressDeque = get_address_deque(chunk_size)
         self.AddressDict = AddressDict
         self.finalizer_lock_count = 0
+        self.config = config
 
     def can_malloc_nonmovable(self):
         return not self.moving_gc
