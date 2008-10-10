@@ -276,7 +276,12 @@ class TranslationDriver(SimpleTaskEngine):
                 self.proceed('compile')
                 assert False, 'we should not get here'
         finally:
-            self.timer.end_event(goal)
+            try:
+                self.timer.end_event(goal)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                pass
         return res
 
     def task_annotate(self):
