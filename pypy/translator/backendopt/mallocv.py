@@ -15,7 +15,7 @@ class MallocTypeDesc(object):
         self.names_and_types = []
         self.name2index = {}
         self.initialize_type(MALLOCTYPE)
-        self.immutable_struct = MALLOCTYPE._hints.get('immutable')
+        #self.immutable_struct = MALLOCTYPE._hints.get('immutable')
 
     def initialize_type(self, TYPE):
         fieldnames = TYPE._names
@@ -47,53 +47,46 @@ class RuntimeSpecNode(SpecNode):
     def getfrozenkey(self, memo):
         return 'R'
 
-    def accumulate_rt_nodes(self, memo, result):
-        result.append(self)
+    def accumulate_nodes(self, rtnodes, vtnodes):
+        rtnodes.append(self)
 
-    def copy(self, memo):
+    def copy(self, memo, flagreadonly):
         return RuntimeSpecNode(self.name, self.TYPE)
-
-    def accumulate_mutable_nodes(self, result):
-        pass
 
 
 class VirtualSpecNode(SpecNode):
 
-    def __init__(self, typedesc, fields):
+    def __init__(self, typedesc, fields, readonly=False):
         self.typedesc = typedesc
         self.fields = fields     # list of SpecNodes
+        self.readonly = readonly
 
     def getfrozenkey(self, memo):
         if self in memo:
             return memo[self]
         else:
             memo[self] = len(memo)
-            result = [self.typedesc]
+            result = [self.typedesc, self.readonly]
             for subnode in self.fields:
                 result.append(subnode.getfrozenkey(memo))
             return tuple(result)
 
-    def accumulate_rt_nodes(self, memo, result):
-        if self in memo:
+    def accumulate_nodes(self, rtnodes, vtnodes):
+        if self in vtnodes:
             return
-        memo[self] = True
+        vtnodes[self] = True
         for subnode in self.fields:
-            subnode.accumulate_rt_nodes(memo, result)
+            subnode.accumulate_nodes(rtnodes, vtnodes)
 
-    def copy(self, memo):
+    def copy(self, memo, flagreadonly):
         if self in memo:
             return memo[self]
-        newnode = VirtualSpecNode(self.typedesc, [])
+        readonly = self.readonly or self in flagreadonly
+        newnode = VirtualSpecNode(self.typedesc, [], readonly)
         memo[self] = newnode
         for subnode in self.fields:
-            newnode.fields.append(subnode.copy(memo))
+            newnode.fields.append(subnode.copy(memo, flagreadonly))
         return newnode
-
-    def accumulate_mutable_nodes(self, result):
-        if not self.typedesc.immutable_struct:
-            result.add(self)
-        for subnode in self.fields:
-            subnode.accumulate_mutable_nodes(result)
 
 
 class VirtualFrame(object):
@@ -108,16 +101,17 @@ class VirtualFrame(object):
     def get_nodes_in_use(self):
         return dict(zip(self.varlist, self.nodelist))
 
-    def copy(self, memo):
+    def copy(self, memo, flagreadonly={}):
         newframe = VirtualFrame.__new__(VirtualFrame)
         newframe.varlist = self.varlist
-        newframe.nodelist = [node.copy(memo) for node in self.nodelist]
+        newframe.nodelist = [node.copy(memo, flagreadonly)
+                             for node in self.nodelist]
         newframe.sourceblock = self.sourceblock
         newframe.nextopindex = self.nextopindex
         if self.callerframe is None:
             newframe.callerframe = None
         else:
-            newframe.callerframe = self.callerframe.copy(memo)
+            newframe.callerframe = self.callerframe.copy(memo, flagreadonly)
         return newframe
 
     def enum_call_stack(self):
@@ -136,24 +130,42 @@ class VirtualFrame(object):
                 key.append(node.getfrozenkey(memo))
         return tuple(key)
 
+    def find_all_nodes(self):
+        rtnodes = []
+        vtnodes = {}
+        for frame in self.enum_call_stack():
+            for node in frame.nodelist:
+                node.accumulate_nodes(rtnodes, vtnodes)
+        return rtnodes, vtnodes
+
     def find_rt_nodes(self):
-        result = []
-        memo = {}
-        for frame in self.enum_call_stack():
-            for node in frame.nodelist:
-                node.accumulate_rt_nodes(memo, result)
-        return result
+        rtnodes, vtnodes = self.find_all_nodes()
+        return rtnodes
 
-    def share_mutable_nodes_with(self, nodelist):
-        set1 = set()
-        for node in nodelist:
-            node.accumulate_mutable_nodes(set1)
-        set2 = set()
-        for frame in self.enum_call_stack():
-            for node in frame.nodelist:
-                node.accumulate_mutable_nodes(set2)
-        return len(set1 & set2) > 0
+    def find_vt_nodes(self):
+        rtnodes, vtnodes = self.find_all_nodes()
+        return vtnodes
 
+    def return_to_caller(self, returnblock, targetnodes):
+        [v_ret] = returnblock.inputargs
+        retnode = targetnodes[v_ret]
+        callerframe = self.callerframe
+        for i in range(len(callerframe.nodelist)):
+            if isinstance(callerframe.nodelist[i], FutureReturnValue):
+                callerframe.nodelist[i] = retnode
+        return callerframe
+
+
+def copynodes(nodelist, flagreadonly={}):
+    memo = {}
+    return [node.copy(memo, flagreadonly) for node in nodelist]
+
+def find_all_nodes(nodelist):
+    rtnodes = []
+    vtnodes = {}
+    for node in nodelist:
+        node.accumulate_nodes(rtnodes, vtnodes)
+    return rtnodes, vtnodes
 
 def is_trivial_nodelist(nodelist):
     for node in nodelist:
@@ -165,15 +177,19 @@ def is_trivial_nodelist(nodelist):
 class CannotVirtualize(Exception):
     pass
 
+class ForcedInline(Exception):
+    pass
+
 
 class MallocVirtualizer(object):
 
-    def __init__(self, graphs):
+    def __init__(self, graphs, verbose=False):
         self.graphs = graphs
-        self.new_graphs = {}
-        self.cache = BlockSpecCache()
+        self.graphbuilders = {}
+        self.specialized_graphs = FrameKeyCache()
         self.malloctypedescs = {}
         self.count_virtualized = 0
+        self.verbose = verbose
 
     def report_result(self):
         log.mallocv('removed %d mallocs so far' % (self.count_virtualized,))
@@ -187,209 +203,172 @@ class MallocVirtualizer(object):
                     result.append((block, op))
         return result
 
-    def remove_mallocs_once(self, verbose=False):
+    def remove_mallocs_once(self):
         prev = self.count_virtualized
         for graph in self.graphs:
+            all_blocks = None
             all_mallocs = self.find_all_mallocs(graph)
             for block, op in all_mallocs:
+                if all_blocks is None:
+                    all_blocks = set(graph.iterblocks())
+                if block not in all_blocks:
+                    continue   # this block was removed from the graph
+                               # by a previous try_remove_malloc()
                 try:
-                    self.try_remove_malloc(block, op)
-                    if verbose:
-                        log.mallocv('%s removed' % (op.result,))
-                    break    # don't continue on this graph, which was mutated
+                    self.try_remove_malloc(graph, block, op)
                 except CannotVirtualize, e:
-                    if verbose:
+                    if self.verbose:
                         log.mallocv('%s failed: %s' % (op.result, e))
-        self.put_new_graphs_back_in_translator()
+                else:
+                    if self.verbose:
+                        log.mallocv('%s removed' % (op.result,))
+                    all_blocks = None
         progress = self.report_result() - prev
         return progress
 
-    def try_remove_malloc(self, block, op):
-        MALLOCTYPE = op.result.concretetype.TO
+    def getmalloctypedesc(self, MALLOCTYPE):
         try:
             dsc = self.malloctypedescs[MALLOCTYPE]
         except KeyError:
             dsc = self.malloctypedescs[MALLOCTYPE] = MallocTypeDesc(MALLOCTYPE)
-        mallocspec = MallocSpecializer(self, dsc)
-        mallocspec.remove_malloc(block, op.result)
-        mallocspec.propagate_specializations()
-        # if we read this point without a CannotVirtualize, success
-        mallocspec.commit()
+        return dsc
+
+    def try_remove_malloc(self, graph, block, op):
+        graphbuilder = GraphBuilder(self)
+        if graph in self.graphbuilders:
+            graphbuilder.initialize_from_old_builder(self.graphbuilders[graph])
+        graphbuilder.start_from_a_malloc(block, op.result)
+        graphbuilder.propagate_specializations()
+        # if we reach this point without a CannotVirtualize, success
+        graphbuilder.finished_removing_malloc()
+        self.graphbuilders[graph] = graphbuilder
         self.count_virtualized += 1
 
-    def put_new_graphs_back_in_translator(self):
-        for graph in self.cache.graph_starting_at.values():
-            if graph not in self.new_graphs:
-                self.new_graphs[graph] = True
-                self.graphs.append(graph)
-
-
-class BlockSpecCache(object):
-
-    def __init__(self, fallback=None):
-        self.specialized_blocks = {}  # {frame_frozen_key: spec Block}
-        self.graph_starting_at = {}   # {spec Block: spec Graph}
-        self.fallback = fallback
-
-    def lookup_spec_block(self, virtualframe):
-        key = virtualframe.getfrozenkey()
+    def get_specialized_graph(self, graph, nodelist):
+        assert len(graph.getargs()) == len(nodelist)
+        if is_trivial_nodelist(nodelist):
+            return 'trivial', graph
+        nodes = dict(zip(graph.getargs(), nodelist))
+        virtualframe = VirtualFrame(graph.startblock, 0, nodes)
         try:
-            return self.specialized_blocks[key]
+            return self.specialized_graphs.getitem(virtualframe)
         except KeyError:
-            if self.fallback is None:
-                return None
-            else:
-                return self.fallback.specialized_blocks.get(key)
+            self.build_specialized_graph(graph, virtualframe)
+            return self.specialized_graphs.getitem(virtualframe)
 
-    def remember_spec_block(self, virtualframe, specblock):
-        key = virtualframe.getfrozenkey()
-        self.specialized_blocks[key] = specblock
-
-    def lookup_graph_starting_at(self, startblock):
+    def build_specialized_graph(self, graph, virtualframe):
+        graphbuilder = GraphBuilder(self)
+        specblock = graphbuilder.start_from_virtualframe(virtualframe)
+        specgraph = FunctionGraph(graph.name + '_mallocv', specblock)
+        self.specialized_graphs.setitem(virtualframe, ('call', specgraph))
         try:
-            return self.graph_starting_at[startblock]
-        except KeyError:
-            if self.fallback is None:
-                return None
-            else:
-                return self.fallback.graph_starting_at.get(startblock)
+            graphbuilder.propagate_specializations()
+        except ForcedInline, e:
+            if self.verbose:
+                log.mallocv('%s inlined: %s' % (graph.name, e))
+            self.specialized_graphs.setitem(virtualframe, ('inline', None))
+        except CannotVirtualize, e:
+            if self.verbose:
+                log.mallocv('%s failing: %s' % (graph.name, e))
+            self.specialized_graphs.setitem(virtualframe, ('fail', None))
+        else:
+            self.graphbuilders[specgraph] = graphbuilder
+            self.graphs.append(specgraph)
 
-    def remember_graph_starting_at(self, startblock, graph):
-        self.graph_starting_at[startblock] = graph
 
-    def push_changes(self):
-        self.fallback.specialized_blocks.update(self.specialized_blocks)
-        self.fallback.graph_starting_at.update(self.graph_starting_at)
+class FrameKeyCache(object):
+
+    def __init__(self):
+        self.content = {}
+
+    def get(self, virtualframe):
+        key = virtualframe.getfrozenkey()
+        return self.content.get(key)
+
+    def getitem(self, virtualframe):
+        key = virtualframe.getfrozenkey()
+        return self.content[key]
+
+    def setitem(self, virtualframe, value):
+        key = virtualframe.getfrozenkey()
+        self.content[key] = value
+
+    def update(self, other):
+        self.content.update(other.content)
 
 
-class MallocSpecializer(object):
+class GraphBuilder(object):
 
-    def __init__(self, mallocv, malloctypedesc):
+    def __init__(self, mallocv):
         self.mallocv = mallocv
-        self.malloctypedesc = malloctypedesc
+        self.specialized_blocks = FrameKeyCache()
         self.pending_specializations = []
-        self.cache = BlockSpecCache(fallback=mallocv.cache)
 
-    def remove_malloc(self, block, v_result):
-        self.startblock = block
-        spec = BlockSpecializer(self, v_result)
+    def initialize_from_old_builder(self, oldbuilder):
+        self.specialized_blocks.update(oldbuilder.specialized_blocks)
+
+    def start_from_virtualframe(self, startframe):
+        spec = BlockSpecializer(self)
+        spec.initialize_renamings(startframe)
+        self.pending_specializations.append(spec)
+        return spec.specblock
+
+    def start_from_a_malloc(self, block, v_result):
         nodes = {}
         for v in block.inputargs:
             nodes[v] = RuntimeSpecNode(v, v.concretetype)
         trivialframe = VirtualFrame(block, 0, nodes)
-        self.newinputargs = spec.initialize_renamings(trivialframe)
-        self.newoperations = spec.specialize_operations()
-        self.newexitswitch, self.newexits = self.follow_exits(spec)
+        spec = BlockSpecializer(self, v_result)
+        spec.initialize_renamings(trivialframe)
+        self.pending_specializations.append(spec)
+        self.pending_patch = (block, spec.specblock)
 
-    def follow_exits(self, spec):
-        currentframe = spec.virtualframe
-        block = currentframe.sourceblock
-        v_exitswitch = spec.rename_nonvirtual(block.exitswitch,
-                                              'exitswitch')
-        newlinks = []
-        for link in block.exits:
-            targetnodes = {}
-
-            rtnodes = []
-            for v1, v2 in zip(link.args, link.target.inputargs):
-                node = spec.getnode(v1)
-                if isinstance(node, RuntimeSpecNode):
-                    rtnodes.append(node)
-                targetnodes[v2] = node
-
-            if (len(rtnodes) == len(link.args) and
-                currentframe.callerframe is None):
-                # there is no more VirtualSpecNodes being passed around,
-                # so we can stop specializing.
-                specblock = link.target
-            else:
-                if len(link.target.exits) == 0:    # return or except block
-                    if currentframe.callerframe is None:
-                        raise CannotVirtualize("return or except block")
-                    newframe = self.return_to_caller(currentframe,
-                                                     link.target, targetnodes)
-                else:
-                    newframe = VirtualFrame(link.target, 0, targetnodes,
-                                          callerframe=currentframe.callerframe)
-                rtnodes = newframe.find_rt_nodes()
-                specblock = self.get_specialized_block(newframe)
-
-            linkargs = [spec.renamings[rtnode] for rtnode in rtnodes]
-            newlink = Link(linkargs, specblock)
-            newlink.exitcase = link.exitcase
-            newlink.llexitcase = link.llexitcase
-            newlinks.append(newlink)
-        return v_exitswitch, newlinks
-
-    def return_to_caller(self, currentframe, returnblock, targetnodes):
-        [v_ret] = returnblock.inputargs
-        retnode = targetnodes[v_ret]
-        callerframe = currentframe.callerframe
-        for i in range(len(callerframe.nodelist)):
-            if isinstance(callerframe.nodelist[i], FutureReturnValue):
-                callerframe.nodelist[i] = retnode
-        return callerframe
+    def finished_removing_malloc(self):
+        (srcblock, specblock) = self.pending_patch
+        srcblock.inputargs = specblock.inputargs
+        srcblock.operations = specblock.operations
+        srcblock.exitswitch = specblock.exitswitch
+        srcblock.recloseblock(*specblock.exits)
 
     def get_specialized_block(self, virtualframe):
-        specblock = self.cache.lookup_spec_block(virtualframe)
+        specblock = self.specialized_blocks.get(virtualframe)
         if specblock is None:
             orgblock = virtualframe.sourceblock
             assert len(orgblock.exits) != 0
             spec = BlockSpecializer(self)
-            specinputargs = spec.initialize_renamings(virtualframe.copy({}))
-            specblock = Block(specinputargs)
-            self.pending_specializations.append((spec, specblock))
-            self.cache.remember_spec_block(virtualframe, specblock)
+            spec.initialize_renamings(virtualframe)
+            self.pending_specializations.append(spec)
+            specblock = spec.specblock
+            self.specialized_blocks.setitem(virtualframe, specblock)
         return specblock
-
-    def get_specialized_graph(self, graph, nodelist):
-        if is_trivial_nodelist(nodelist):
-            return graph
-        block = graph.startblock
-        assert len(graph.getargs()) == len(nodelist)
-        nodes = dict(zip(graph.getargs(), nodelist))
-        virtualframe = VirtualFrame(block, 0, nodes)
-        specblock = self.get_specialized_block(virtualframe)
-        specgraph = self.cache.lookup_graph_starting_at(specblock)
-        if specgraph is None:
-            specgraph = FunctionGraph(graph.name + '_mallocv', specblock)
-            self.cache.remember_graph_starting_at(specblock, specgraph)
-        return specgraph
 
     def propagate_specializations(self):
         while self.pending_specializations:
-            spec, specblock = self.pending_specializations.pop()
-            specblock.operations = spec.specialize_operations()
-            specblock.exitswitch, newlinks = self.follow_exits(spec)
-            specblock.closeblock(*newlinks)
-
-    def commit(self):
-        self.startblock.inputargs = self.newinputargs
-        self.startblock.operations = self.newoperations
-        self.startblock.exitswitch = self.newexitswitch
-        self.startblock.recloseblock(*self.newexits)
-        self.cache.push_changes()
+            spec = self.pending_specializations.pop()
+            spec.specialize_operations()
+            spec.follow_exits()
 
 
 class BlockSpecializer(object):
 
-    def __init__(self, mallocspec, v_expand_malloc=None):
-        self.mallocspec = mallocspec
+    def __init__(self, graphbuilder, v_expand_malloc=None):
+        self.graphbuilder = graphbuilder
         self.v_expand_malloc = v_expand_malloc
+        self.specblock = Block([])
 
     def initialize_renamings(self, virtualframe):
-        # the caller is responsible for making a copy of 'virtualframe'
-        # if needed, because the BlockSpecializer will mutate some of its
-        # content.
+        # we make a copy of the original 'virtualframe' because the
+        # specialize_operations() will mutate some of its content.
+        virtualframe = virtualframe.copy({})
         self.virtualframe = virtualframe
         self.nodes = virtualframe.get_nodes_in_use()
         self.renamings = {}    # {RuntimeSpecNode(): Variable()}
-        result = []
+        specinputargs = []
         for rtnode in virtualframe.find_rt_nodes():
             v = rtnode.newvar()
             self.renamings[rtnode] = v
-            result.append(v)
-        return result
+            specinputargs.append(v)
+        self.specblock.inputargs = specinputargs
 
     def setnode(self, v, node):
         assert v not in self.nodes
@@ -412,10 +391,7 @@ class BlockSpecializer(object):
         return self.renamings[node]
 
     def expand_nodes(self, nodelist):
-        memo = {}
-        rtnodes = []
-        for node in nodelist:
-            node.accumulate_rt_nodes(memo, rtnodes)
+        rtnodes, vtnodes = find_all_nodes(nodelist)
         return [self.renamings[rtnode] for rtnode in rtnodes]
 
     def specialize_operations(self):
@@ -432,7 +408,47 @@ class BlockSpecializer(object):
             meth = getattr(self, 'handle_op_' + op.opname,
                            self.handle_default)
             newoperations += meth(op)
-        return newoperations
+        self.specblock.operations = newoperations
+
+    def follow_exits(self):
+        currentframe = self.virtualframe
+        block = currentframe.sourceblock
+        self.specblock.exitswitch = self.rename_nonvirtual(block.exitswitch,
+                                                           'exitswitch')
+        newlinks = []
+        for link in block.exits:
+            targetnodes = {}
+
+            rtnodes = []
+            for v1, v2 in zip(link.args, link.target.inputargs):
+                node = self.getnode(v1)
+                if isinstance(node, RuntimeSpecNode):
+                    rtnodes.append(node)
+                targetnodes[v2] = node
+
+            if (len(rtnodes) == len(link.args) and
+                currentframe.callerframe is None):
+                # there is no more VirtualSpecNodes being passed around,
+                # so we can stop specializing.
+                specblock = link.target
+            else:
+                if len(link.target.exits) == 0:    # return or except block
+                    if currentframe.callerframe is None:
+                        raise CannotVirtualize("return or except block")
+                    newframe = currentframe.return_to_caller(link.target,
+                                                             targetnodes)
+                else:
+                    newframe = VirtualFrame(link.target, 0, targetnodes,
+                                          callerframe=currentframe.callerframe)
+                rtnodes = newframe.find_rt_nodes()
+                specblock = self.graphbuilder.get_specialized_block(newframe)
+
+            linkargs = [self.renamings[rtnode] for rtnode in rtnodes]
+            newlink = Link(linkargs, specblock)
+            newlink.exitcase = link.exitcase
+            newlink.llexitcase = link.llexitcase
+            newlinks.append(newlink)
+        self.specblock.closeblock(*newlinks)
 
     def make_rt_result(self, v_result):
         newrtnode = RuntimeSpecNode(v_result, v_result.concretetype)
@@ -459,6 +475,8 @@ class BlockSpecializer(object):
     def handle_op_setfield(self, op):
         node = self.getnode(op.args[0])
         if isinstance(node, VirtualSpecNode):
+            if node.readonly:
+                raise ForcedInline(op)
             fieldname = op.args[1].value
             index = node.typedesc.name2index[fieldname]
             node.fields[index] = self.getnode(op.args[2])
@@ -468,7 +486,8 @@ class BlockSpecializer(object):
 
     def handle_op_malloc(self, op):
         if op.result is self.v_expand_malloc:
-            typedesc = self.mallocspec.malloctypedesc
+            MALLOCTYPE = op.result.concretetype.TO
+            typedesc = self.graphbuilder.mallocv.getmalloctypedesc(MALLOCTYPE)
             virtualnode = VirtualSpecNode(typedesc, [])
             self.setnode(op.result, virtualnode)
             for name, FIELDTYPE in typedesc.names_and_types:
@@ -490,10 +509,19 @@ class BlockSpecializer(object):
         assert nb_args == len(graph.getargs())
         newnodes = [self.getnode(v) for v in op.args[1:]]
         myframe = self.get_updated_frame(op)
-        if myframe.share_mutable_nodes_with(newnodes):
+        argnodes = copynodes(newnodes, flagreadonly=myframe.find_vt_nodes())
+        mallocv = self.graphbuilder.mallocv
+        kind, newgraph = mallocv.get_specialized_graph(graph, argnodes)
+        if kind == 'trivial':
+            return self.handle_default(op)
+        elif kind == 'inline':
             return self.handle_inlined_call(myframe, graph, newnodes)
+        elif kind == 'call':
+            return self.handle_residual_call(op, newgraph, newnodes)
+        elif kind == 'fail':
+            raise CannotVirtualize(op)
         else:
-            return self.handle_residual_call(op, graph, newnodes)
+            raise ValueError(kind)
 
     def get_updated_frame(self, op):
         sourceblock = self.virtualframe.sourceblock
@@ -505,10 +533,7 @@ class BlockSpecializer(object):
         del self.nodes[op.result]
         return myframe
 
-    def handle_residual_call(self, op, graph, newnodes):
-        newgraph = self.mallocspec.get_specialized_graph(graph, newnodes)
-        if newgraph is graph:
-            return self.handle_default(op)
+    def handle_residual_call(self, op, newgraph, newnodes):
         fspecptr = getfunctionptr(newgraph)
         newargs = [Constant(fspecptr,
                             concretetype=lltype.typeOf(fspecptr))]
@@ -532,12 +557,10 @@ class FutureReturnValue(object):
         self.op = op    # for debugging
     def getfrozenkey(self, memo):
         return None
-    def accumulate_rt_nodes(self, memo, result):
+    def accumulate_nodes(self, rtnodes, vtnodes):
         pass
-    def copy(self, memo):
+    def copy(self, memo, flagreadonly):
         return self
-    def accumulate_mutable_nodes(self, result):
-        pass
 
 # ____________________________________________________________
 # helpers

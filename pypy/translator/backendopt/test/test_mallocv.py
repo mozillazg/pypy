@@ -44,9 +44,9 @@ class BaseMallocRemovalTest(object):
         # to detect missing keepalives and broken intermediate graphs,
         # we do the loop ourselves instead of calling remove_simple_mallocs()
         maxiter = 100
-        mallocv = MallocVirtualizer(t.graphs)
+        mallocv = MallocVirtualizer(t.graphs, verbose=True)
         while True:
-            progress = mallocv.remove_mallocs_once(verbose=True)
+            progress = mallocv.remove_mallocs_once()
             #simplify.transform_dead_op_vars_in_blocks(list(graph.iterblocks()))
             if progress and option.view:
                 t.view()
