@@ -112,30 +112,6 @@ def transform_extend_with_char_count(self, block_subset):
                                         op.result)
                 block.operations[i] = new_op
 
-# a[b:c]
-# -->
-# d = newslice(b, c, None)
-# e = getitem(a, d)
-# -->
-# e = getslice(a, b, c)
-
-##def transform_slice(self, block_subset):              -- not used any more --
-##    """Transforms a[b:c] to getslice(a, b, c)."""
-##    for block in block_subset:
-##        operations = block.operations[:]
-##        n_op = len(operations)
-##        for i in range(0, n_op-1):
-##            op1 = operations[i]
-##            op2 = operations[i+1]
-##            if (op1.opname == 'newslice' and
-##                self.gettype(op1.args[2]) is types.NoneType and
-##                op2.opname == 'getitem' and
-##                op1.result is op2.args[1]):
-##                new_op = SpaceOperation('getslice',
-##                                        (op2.args[0], op1.args[0], op1.args[1]),
-##                                        op2.result)
-##                block.operations[i+1:i+2] = [new_op]
-
 
 def transform_dead_op_vars(self, block_subset):
     # we redo the same simplification from simplify.py,

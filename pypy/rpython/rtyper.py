@@ -811,6 +811,32 @@ class HighLevelOp(object):
             return # ignored for high-level ops before the last one in the block
         self.llops.llop_raising_exceptions = "removed"
 
+    def decompose_slice_args(self):
+        # Select which kind of slicing is needed.  We support:
+        #   * [start:]
+        #   * [start:stop]
+        #   * [:-1]
+        s_start = self.args_s[1]
+        s_stop = self.args_s[2]
+        if (s_start.is_constant() and s_start.const in (None, 0) and
+            s_stop.is_constant() and s_stop.const == -1):
+            return "minusone", []
+        if isinstance(s_start, annmodel.SomeInteger):
+            if not s_start.nonneg:
+                raise TyperError("slice start must be proved non-negative")
+        if isinstance(s_stop, annmodel.SomeInteger):
+            if not s_stop.nonneg:
+                raise TyperError("slice stop must be proved non-negative")
+        if s_start.is_constant() and s_start.const is None:
+            v_start = inputconst(Signed, 0)
+        else:
+            v_start = self.inputarg(Signed, arg=1)
+        if s_stop.is_constant() and s_stop.const is None:
+            return "startonly", [v_start]
+        else:
+            v_stop = self.inputarg(Signed, arg=2)
+            return "startstop", [v_start, v_stop]
+
 # ____________________________________________________________
 
 class LowLevelOpList(list):
@@ -935,7 +961,7 @@ class LowLevelOpList(list):
 # and the rtyper_chooserepr() methods
 from pypy.rpython import robject
 from pypy.rpython import rint, rbool, rfloat
-from pypy.rpython import rslice, rrange
+from pypy.rpython import rrange
 from pypy.rpython import rstr, rdict, rlist
 from pypy.rpython import rclass, rbuiltin, rpbc, rspecialcase
 from pypy.rpython import rexternalobj

@@ -103,7 +103,7 @@ class FlowObjSpace(ObjSpace):
             return Constant(slice(self.unwrap(w_start),
                                   self.unwrap(w_stop),
                                   self.unwrap(w_step)))
-        return self.do_operation('newslice', w_start, w_stop, w_step)
+        raise Exception("not supported in RPython: extended slicing")
 
     def wrap(self, obj):
         if isinstance(obj, (Variable, Constant)):
