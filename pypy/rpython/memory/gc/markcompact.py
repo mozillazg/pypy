@@ -1,6 +1,4 @@
 
-import time
-
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rlib.debug import ll_assert
@@ -46,11 +44,6 @@ memoryError = MemoryError()
 #    but compiles to the same pointer. Also we use raw_memmove in case
 #    objects overlap.
 
-# Exact algorithm for space resizing: we keep allocated more space than needed
-# (2x, can be even more), but it's full of zeroes. After each collection,
-# we bump next_collect_after which is a marker where to start each collection.
-# It should be exponential (but less than 2) from the size occupied by objects
-
 # in case we need to grow space, we use
 # current_space_size * FREE_SPACE_MULTIPLIER / FREE_SPACE_DIVIDER + needed
 FREE_SPACE_MULTIPLIER = 3
@@ -63,27 +56,23 @@ class MarkCompactGC(MovingGCBase):
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
                         ('forward_ptr', llmemory.Address))
 
-    TRANSLATION_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
+    TRANSLATION_PARAMS = {'space_size': 2*1024*1024} # XXX adjust
 
     malloc_zero_filled = True
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     first_unused_gcflag = first_gcflag << 2
-    total_collection_time = 0.0
-    total_collection_count = 0
 
-    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
-        MovingGCBase.__init__(self, config, chunk_size)
+    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
+        MovingGCBase.__init__(self, chunk_size)
         self.space_size = space_size
-        self.next_collect_after = space_size/2 # whatever...
+        self.red_zone = 0
 
     def setup(self):
-        if self.config.gcconfig.debugprint:
-            self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.space), "couldn't allocate arena")
         self.free = self.space
-        self.top_of_space = self.space + self.next_collect_after
+        self.top_of_space = self.space + self.space_size
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
         self.objects_with_weakrefs = self.AddressStack()
@@ -154,41 +143,44 @@ class MarkCompactGC(MovingGCBase):
 
     def try_obtain_free_space(self, needed):
         needed = raw_malloc_usage(needed)
-        while 1:
-            self.markcompactcollect(needed)
-            missing = needed - (self.top_of_space - self.free)
-            if missing < 0:
-                return True
+        missing = needed - (self.top_of_space - self.free)
+        if (self.red_zone >= 2 and self.increase_space_size(needed)):
+            return True
+        else:
+            self.markcompactcollect()
+        missing = needed - (self.top_of_space - self.free)
+        if missing <= 0:
+            return True      # success
+        else:
+            # first check if the object could possibly fit
+            if not self.increase_space_size(needed):
+                return False
+        return True
 
-    def new_space_size(self, occupied, needed):
-        return (occupied * FREE_SPACE_MULTIPLIER /
-                FREE_SPACE_DIVIDER + FREE_SPACE_ADD + needed)
+    def new_space_size(self, incr):
+        return (self.space_size * FREE_SPACE_MULTIPLIER /
+                FREE_SPACE_DIVIDER + incr + FREE_SPACE_ADD)
 
-    def double_space_size(self, minimal_size):
-        while self.space_size <= minimal_size:
-            self.space_size *= 2
-        toaddr = llarena.arena_malloc(self.space_size, True)
-        return toaddr
-
-    def compute_size_of_alive_objects(self):
-        fromaddr = self.space
-        totalsize = 0
-        while fromaddr < self.free:
-            size_gc_header = self.gcheaderbuilder.size_gc_header
-            hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
-            obj = fromaddr + size_gc_header
-            objsize = self.get_size(obj)
-            objtotalsize = size_gc_header + objsize
-            if self.marked(obj):
-                totalsize += raw_malloc_usage(objtotalsize)
-            fromaddr += objtotalsize
-        return totalsize
+    def increase_space_size(self, needed):
+        self.red_zone = 0
+        new_size = self.new_space_size(needed)
+        newspace = llarena.arena_malloc(new_size, True)
+        if not newspace:
+            return False
+        self.tospace = newspace
+        self.space_size = new_size
+        self.markcompactcollect(resizing=True)
+        return True
 
     def collect(self):
         self.markcompactcollect()
-    def markcompactcollect(self, needed=0):
-        start_time = self.debug_collect_start()
+
+    def markcompactcollect(self, resizing=False):
         self.debug_check_consistency()
+        if resizing:
+            toaddr = self.tospace
+        else:
+            toaddr = llarena.arena_new_view(self.space)
         self.to_see = self.AddressStack()
         self.mark_roots_recursively()
         if (self.objects_with_finalizers.non_empty() or
@@ -196,15 +188,6 @@ class MarkCompactGC(MovingGCBase):
             self.mark_objects_with_finalizers()
             self._trace_and_mark()
         self.to_see.delete()
-        totalsize = self.new_space_size(self.compute_size_of_alive_objects(),
-                                        needed)
-        if totalsize >= self.space_size:
-            toaddr = self.double_space_size(totalsize)
-            resizing = True
-        else:
-            toaddr = llarena.arena_new_view(self.space)
-            resizing = False
-        self.next_collect_after = totalsize
         finaladdr = self.update_forward_pointers(toaddr)
         if (self.run_finalizers.non_empty() or
             self.objects_with_finalizers.non_empty()):
@@ -223,44 +206,12 @@ class MarkCompactGC(MovingGCBase):
                 llarena.arena_free(self.space)
         self.space        = toaddr
         self.free         = finaladdr
-        self.top_of_space = toaddr + self.next_collect_after
+        self.top_of_space = toaddr + self.space_size
         self.debug_check_consistency()
+        if not resizing:
+            self.record_red_zone()
         if self.run_finalizers.non_empty():
             self.execute_finalizers()
-        self.debug_collect_finish(start_time)
-
-    def debug_collect_start(self):
-        if self.config.gcconfig.debugprint:
-            llop.debug_print(lltype.Void)
-            llop.debug_print(lltype.Void,
-                             ".----------- Full collection ------------------")
-            start_time = time.time()
-            return start_time 
-
-    def debug_collect_finish(self, start_time):
-        if self.config.gcconfig.debugprint:
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            self.total_collection_time += elapsed_time
-            self.total_collection_count += 1
-            total_program_time = end_time - self.program_start_time
-            ct = self.total_collection_time
-            cc = self.total_collection_count
-            llop.debug_print(lltype.Void,
-                             "| number of collections so far       ", 
-                             cc)
-            llop.debug_print(lltype.Void,
-                             "| total collections per second:      ",
-                             cc / total_program_time)
-            llop.debug_print(lltype.Void,
-                             "| total time in markcompact-collect: ",
-                             ct, "seconds")
-            llop.debug_print(lltype.Void,
-                             "| percentage collection<->total time:",
-                             ct * 100.0 / total_program_time, "%")
-            llop.debug_print(lltype.Void,
-                             "`----------------------------------------------")
-
 
     def update_run_finalizers(self):
         run_finalizers = self.AddressDeque()
@@ -458,3 +409,13 @@ class MarkCompactGC(MovingGCBase):
                     (obj + offset).address[0] = NULL
         self.objects_with_weakrefs.delete()
         self.objects_with_weakrefs = new_with_weakref
+
+    def record_red_zone(self):
+        # XXX KILL ME
+        free_after_collection = self.top_of_space - self.free
+        if free_after_collection > self.space_size // 3:
+            self.red_zone = 0
+        else:
+            self.red_zone += 1
+            if free_after_collection < self.space_size // 5:
+                self.red_zone += 1
