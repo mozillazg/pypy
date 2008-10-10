@@ -1,4 +1,6 @@
 
+import time
+
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rlib.debug import ll_assert
@@ -16,6 +18,8 @@ GCFLAG_MARKBIT = first_gcflag << 0
 GCFLAG_EXTERNAL = first_gcflag << 1
 
 memoryError = MemoryError()
+
+DEBUG_PRINT = True
 
 # Mark'n'compact garbage collector
 #
@@ -62,6 +66,8 @@ class MarkCompactGC(MovingGCBase):
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
     first_unused_gcflag = first_gcflag << 2
+    total_collection_time = 0.0
+    total_collection_count = 0
 
     def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
         MovingGCBase.__init__(self, chunk_size)
@@ -69,6 +75,8 @@ class MarkCompactGC(MovingGCBase):
         self.red_zone = 0
 
     def setup(self):
+        if DEBUG_PRINT:
+            self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.space), "couldn't allocate arena")
         self.free = self.space
@@ -174,8 +182,8 @@ class MarkCompactGC(MovingGCBase):
 
     def collect(self):
         self.markcompactcollect()
-
     def markcompactcollect(self, resizing=False):
+        start_time = self.debug_collect_start()
         self.debug_check_consistency()
         if resizing:
             toaddr = self.tospace
@@ -212,6 +220,40 @@ class MarkCompactGC(MovingGCBase):
             self.record_red_zone()
         if self.run_finalizers.non_empty():
             self.execute_finalizers()
+        self.debug_collect_finish(start_time)
+
+    def debug_collect_start(self):
+        if DEBUG_PRINT:
+            llop.debug_print(lltype.Void)
+            llop.debug_print(lltype.Void,
+                             ".----------- Full collection ------------------")
+            start_time = time.time()
+            return start_time 
+
+    def debug_collect_finish(self, start_time):
+        if DEBUG_PRINT:
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            self.total_collection_time += elapsed_time
+            self.total_collection_count += 1
+            total_program_time = end_time - self.program_start_time
+            ct = self.total_collection_time
+            cc = self.total_collection_count
+            llop.debug_print(lltype.Void,
+                             "| number of collections so far       ", 
+                             cc)
+            llop.debug_print(lltype.Void,
+                             "| total collections per second:      ",
+                             cc / total_program_time)
+            llop.debug_print(lltype.Void,
+                             "| total time in markcompact-collect: ",
+                             ct, "seconds")
+            llop.debug_print(lltype.Void,
+                             "| percentage collection<->total time:",
+                             ct * 100.0 / total_program_time, "%")
+            llop.debug_print(lltype.Void,
+                             "`----------------------------------------------")
+
 
     def update_run_finalizers(self):
         run_finalizers = self.AddressDeque()
