@@ -136,6 +136,20 @@ class BaseMallocRemovalTest(object):
         insns = summary(graph)
         assert insns.get('direct_call', 0) == 0     # no more call, inlined
 
+    def test_direct_call_mutable_lastref(self):
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        def g(a):
+            a.x *= 10
+            return a.x
+        def f(x):
+            a = lltype.malloc(A)
+            a.x = x
+            y = g(a)
+            return x - y
+        graph = self.check(f, [int], [5], -45)
+        insns = summary(graph)
+        assert insns.get('direct_call', 0) == 1     # not inlined
+
     def test_fn2(self):
         py.test.skip("redo me")
         class T:

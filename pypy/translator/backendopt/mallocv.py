@@ -53,8 +53,8 @@ class RuntimeSpecNode(SpecNode):
     def copy(self, memo):
         return RuntimeSpecNode(self.name, self.TYPE)
 
-    def contains_mutable(self):
-        return False
+    def accumulate_mutable_nodes(self, result):
+        pass
 
 
 class VirtualSpecNode(SpecNode):
@@ -89,13 +89,11 @@ class VirtualSpecNode(SpecNode):
             newnode.fields.append(subnode.copy(memo))
         return newnode
 
-    def contains_mutable(self):
+    def accumulate_mutable_nodes(self, result):
         if not self.typedesc.immutable_struct:
-            return True
+            result.add(self)
         for subnode in self.fields:
-            if subnode.contains_mutable():
-                return True
-        return False
+            subnode.accumulate_mutable_nodes(result)
 
 
 class VirtualFrame(object):
@@ -146,18 +144,22 @@ class VirtualFrame(object):
                 node.accumulate_rt_nodes(memo, result)
         return result
 
+    def share_mutable_nodes_with(self, nodelist):
+        set1 = set()
+        for node in nodelist:
+            node.accumulate_mutable_nodes(set1)
+        set2 = set()
+        for frame in self.enum_call_stack():
+            for node in frame.nodelist:
+                node.accumulate_mutable_nodes(set2)
+        return len(set1 & set2) > 0
+
 
 def is_trivial_nodelist(nodelist):
     for node in nodelist:
         if not isinstance(node, RuntimeSpecNode):
             return False
     return True
-
-def contains_mutable(nodelist):
-    for node in nodelist:
-        if node.contains_mutable():
-            return True
-    return False
 
 
 class CannotVirtualize(Exception):
@@ -487,12 +489,23 @@ class BlockSpecializer(object):
         nb_args = len(op.args) - 1
         assert nb_args == len(graph.getargs())
         newnodes = [self.getnode(v) for v in op.args[1:]]
-        if contains_mutable(newnodes):
-            return self.handle_mutable_call(op, graph, newnodes)
+        myframe = self.get_updated_frame(op)
+        if myframe.share_mutable_nodes_with(newnodes):
+            return self.handle_inlined_call(myframe, graph, newnodes)
         else:
-            return self.handle_immutable_call(op, graph, newnodes)
+            return self.handle_residual_call(op, graph, newnodes)
 
-    def handle_immutable_call(self, op, graph, newnodes):
+    def get_updated_frame(self, op):
+        sourceblock = self.virtualframe.sourceblock
+        nextopindex = self.virtualframe.nextopindex
+        self.nodes[op.result] = FutureReturnValue(op)
+        myframe = VirtualFrame(sourceblock, nextopindex,
+                               self.nodes,
+                               self.virtualframe.callerframe)
+        del self.nodes[op.result]
+        return myframe
+
+    def handle_residual_call(self, op, graph, newnodes):
         newgraph = self.mallocspec.get_specialized_graph(graph, newnodes)
         if newgraph is graph:
             return self.handle_default(op)
@@ -504,13 +517,7 @@ class BlockSpecializer(object):
         newop = SpaceOperation('direct_call', newargs, newresult)
         return [newop]
 
-    def handle_mutable_call(self, op, graph, newnodes):
-        sourceblock = self.virtualframe.sourceblock
-        nextopindex = self.virtualframe.nextopindex
-        self.nodes[op.result] = FutureReturnValue(op)
-        myframe = VirtualFrame(sourceblock, nextopindex,
-                               self.nodes,
-                               self.virtualframe.callerframe)
+    def handle_inlined_call(self, myframe, graph, newnodes):
         assert len(graph.getargs()) == len(newnodes)
         targetnodes = dict(zip(graph.getargs(), newnodes))
         calleeframe = VirtualFrame(graph.startblock, 0,
@@ -529,6 +536,8 @@ class FutureReturnValue(object):
         pass
     def copy(self, memo):
         return self
+    def accumulate_mutable_nodes(self, result):
+        pass
 
 # ____________________________________________________________
 # helpers
