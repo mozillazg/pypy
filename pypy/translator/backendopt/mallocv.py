@@ -1,5 +1,5 @@
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
-from pypy.objspace.flow.model import SpaceOperation, FunctionGraph
+from pypy.objspace.flow.model import SpaceOperation, FunctionGraph, copygraph
 from pypy.translator.backendopt.support import log
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
@@ -261,24 +261,30 @@ class MallocVirtualizer(object):
         try:
             return self.specialized_graphs.getitem(virtualframe)
         except KeyError:
-            self.build_specialized_graph(graph, virtualframe)
+            self.build_specialized_graph(graph, virtualframe, nodelist)
             return self.specialized_graphs.getitem(virtualframe)
 
-    def build_specialized_graph(self, graph, virtualframe):
+    def build_specialized_graph(self, graph, key, nodelist):
+        graph2 = copygraph(graph)
+        nodes = dict(zip(graph2.getargs(), nodelist))
+        virtualframe = VirtualFrame(graph2.startblock, 0, nodes)
         graphbuilder = GraphBuilder(self)
         specblock = graphbuilder.start_from_virtualframe(virtualframe)
-        specgraph = FunctionGraph(graph.name + '_mallocv', specblock)
-        self.specialized_graphs.setitem(virtualframe, ('call', specgraph))
+        specblock.isstartblock = True
+        specgraph = graph2
+        specgraph.name += '_mallocv'
+        specgraph.startblock = specblock
+        self.specialized_graphs.setitem(key, ('call', specgraph))
         try:
             graphbuilder.propagate_specializations()
         except ForcedInline, e:
             if self.verbose:
                 log.mallocv('%s inlined: %s' % (graph.name, e))
-            self.specialized_graphs.setitem(virtualframe, ('inline', None))
+            self.specialized_graphs.setitem(key, ('inline', None))
         except CannotVirtualize, e:
             if self.verbose:
                 log.mallocv('%s failing: %s' % (graph.name, e))
-            self.specialized_graphs.setitem(virtualframe, ('fail', None))
+            self.specialized_graphs.setitem(key, ('fail', None))
         else:
             self.graphbuilders[specgraph] = graphbuilder
             self.graphs.append(specgraph)
