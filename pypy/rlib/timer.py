@@ -11,9 +11,15 @@ def _create_name(name, generation):
 
 class Timer:
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.timings = {}
         self.levels = {}
         self.timingorder = []
+
+    def _freeze_(self):
+        self.reset()
 
     def start(self, timer):
         level = self.levels.setdefault(timer, -1)
