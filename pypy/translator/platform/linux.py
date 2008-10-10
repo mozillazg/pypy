@@ -14,6 +14,8 @@ def _run_subprocess(args):
     return pipe.returncode, stdout, stderr
 
 class Linux(Platform):
+    link_extra = ['-lpthread']
+    
     def __init__(self, cc='gcc'):
         self.cc = cc
 
@@ -22,7 +24,7 @@ class Linux(Platform):
         library_dirs = ['-L%s' % (ldir,) for ldir in eci.library_dirs]
         libraries = ['-l%s' % (lib,) for lib in eci.libraries]
         return (include_dirs + [str(f) for f in cfiles] +
-                library_dirs + libraries)
+                library_dirs + libraries + self.link_extra)
 
     def _args_for_shared(self, args):
         return ['-shared'] + args
