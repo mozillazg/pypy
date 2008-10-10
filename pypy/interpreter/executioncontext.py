@@ -246,7 +246,8 @@ class ExecutionContext:
 
         # Profile cases
         if self.profilefunc is not None:
-            if event not in ['leaveframe', 'call', 'c_call', 'c_return', 'c_exception']:
+            if event not in ['leaveframe', 'call', 'c_call',
+                             'c_return', 'c_exception']:
                 return
 
             last_exception = None
