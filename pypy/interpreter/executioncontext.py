@@ -216,7 +216,7 @@ class ExecutionContext:
         space = self.space
         
         # Tracing cases
-        if event in ['call']:
+        if event == 'call':
             w_callback = self.w_tracefunc
         else:
             w_callback = frame.w_f_trace
