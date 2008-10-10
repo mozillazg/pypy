@@ -867,18 +867,7 @@ class __extend__(pyframe.PyFrame):
         args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
         w_function  = f.popvalue()
         if f.is_being_profiled and is_builtin_code(w_function):
-            is_c_call = is_builtin_code(w_function)
-            ec = f.space.getexecutioncontext()
-            if is_c_call:
-                ec.c_call_trace(f, w_function)
-            try:
-                w_result = f.space.call_args(w_function, args)
-            except OperationError, e:
-                if is_c_call:
-                    ec.c_exception_trace(f, e.w_value)
-                raise
-            if is_c_call:
-                ec.c_return_trace(f, w_function)
+            w_result = f.space.call_args_and_c_profile(f, w_function, args)
         else:
             w_result = f.space.call_args(w_function, args)
         rstack.resume_point("call_function", f, returns=w_result)
