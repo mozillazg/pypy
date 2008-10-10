@@ -113,8 +113,6 @@ Congrats!  If all worked well you should now be able to cross-compile C programs
 and copy the binary result to the N810/Maemo device. You can also login to
 the virtual environment and execute the ARM binary there. 
 
-XXX [fijal] remember to update that it uses inside gcc these days
-
 PyPy's translation tool chain tries to use this cross-compiler when 
 you specify ``--platform=maemo`` to the translate.py script. 
 
@@ -174,14 +172,7 @@ the following taken mostly from
 
     http://yankandpaste.blogspot.com/2008/08/maemo-diablo-sdk-install-on-ubuntu-804.html
 
-1. On ubuntu linux edit /etc/sysctl.conf to contain::
-
-    XXX [fijal] since it might freeze your machine, I suggest to add a
-        non-permanent way of doing it (echo 0 > /proc/sys/vm/vdso_enabled)
-
-    XXX [fijal] on my machine vdso_enbled = 0 freezed machine and made in
-        unbootable without editing file first. It seems not to be needed
-        though.
+1. On ubuntu linux edit sysctl.conf to contain::
 
     vm.vdso_enabled = 0
     vm.mmap_min_addr = 4096
@@ -237,35 +228,3 @@ from it.
 
 .. _`installation instructions`: http://www.scratchbox.org/documentation/user/scratchbox-1.0/html/installdoc.html
 .. _`scratchbox`: http://scratchbox.org
-
-debian
-++++++
-
-in theory we don't need to install debian under scratchbox. in practice though,
-if we want to run pypy-c with allworkingmodules we need to a way to install
-correct libraries and include files. For example we should use etch and not
-lenny, since libffi is in correct version there (4 vs 5). On the other
-hand I had no luck installing python on etch..
-
-To be able to run debian correctly you need to:
-
-1. Manually edit /scratchbox/devkits/debian-etch/etc/environment 
-   to add ARCH=arm (instead of ARCH=...),
-   otherwise apt-get did not work.
-
-2. Go inside scratchbox and make /etc/apt/sources.list to contain:
-    
-    deb     ftp://ftp.fi.debian.org/debian/ lenny  main contrib non-free
-    deb-src ftp://ftp.fi.debian.org/debian/ lenny  main contrib non-free
-
-3. Run apt-get update && fakeroot apt-get install libc6 && fakeroot apt-get install python2.5-dev
-
-5. In order to have pypy-c with all working modules you also need following
-   packages:
-
-   * libffi-dev
-
-   * zlib1g-dev
-
-   * libbz2-dev
-
