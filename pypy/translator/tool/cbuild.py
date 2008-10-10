@@ -479,11 +479,14 @@ class CCompiler:
 
     def _build(self):
         from distutils.ccompiler import new_compiler
+        from distutils import sysconfig
         compiler = new_compiler(force=1)
         if self.compiler_exe is not None:
             for c in '''compiler compiler_so compiler_cxx
                         linker_exe linker_so'''.split():
                 compiler.executables[c][0] = self.compiler_exe
+        if not self.standalone:
+            sysconfig.customize_compiler(compiler) # XXX
         compiler.spawn = log_spawned_cmd(compiler.spawn)
         objects = []
         for cfile in self.cfilenames:
