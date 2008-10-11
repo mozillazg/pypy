@@ -146,6 +146,9 @@ class Linux(Platform):
     def _execute_c_compiler(self, cc, args, outname):
         log.execute(cc + ' ' + ' '.join(args))
         returncode, stdout, stderr = _run_subprocess(cc, args)
+        self._handle_error(returncode, stderr, stdout, outname)
+
+    def _handle_error(self, returncode, stderr, stdout, outname):
         if returncode != 0:
             errorfile = outname.new(ext='errors')
             errorfile.write(stderr)
