@@ -14,11 +14,11 @@ class MallocTypeDesc(object):
         if not isinstance(MALLOCTYPE, lltype.GcStruct):
             raise CannotRemoveThisType
         self.MALLOCTYPE = MALLOCTYPE
+        self.check_no_destructor()
         self.names_and_types = []
         self.name2index = {}
         self.initialize_type(MALLOCTYPE)
         #self.immutable_struct = MALLOCTYPE._hints.get('immutable')
-        self.check_no_destructor()
 
     def check_no_destructor(self):
         STRUCT = self.MALLOCTYPE
@@ -202,7 +202,9 @@ class MallocVirtualizer(object):
     def __init__(self, graphs, verbose=False):
         self.graphs = graphs
         self.graphbuilders = {}
-        self.specialized_graphs = FrameKeyCache()
+        self.specialized_graphs = {}
+        self.inline_and_remove = {}    # {graph: op_to_remove}
+        self.inline_and_remove_seen = {}   # set of (graph, op_to_remove)
         self.malloctypedescs = {}
         self.count_virtualized = 0
         self.verbose = verbose
@@ -211,8 +213,7 @@ class MallocVirtualizer(object):
         log.mallocv('removed %d mallocs so far' % (self.count_virtualized,))
         return self.count_virtualized
 
-    def find_all_mallocs(self, graph):
-        result = []
+    def enum_all_mallocs(self, graph):
         for block in graph.iterblocks():
             for op in block.operations:
                 if op.opname == 'malloc':
@@ -222,31 +223,35 @@ class MallocVirtualizer(object):
                     except CannotRemoveThisType:
                         pass
                     else:
-                        result.append((block, op))
-        return result
+                        yield (block, op)
+                elif op.opname == 'direct_call':
+                    fobj = op.args[0].value._obj
+                    graph = getattr(fobj, 'graph', None)
+                    if graph in self.inline_and_remove:
+                        yield (block, op)
 
     def remove_mallocs_once(self):
         self.flush_failed_specializations()
         prev = self.count_virtualized
+        count_inline_and_remove = len(self.inline_and_remove)
         for graph in self.graphs:
-            all_blocks = None
-            all_mallocs = self.find_all_mallocs(graph)
-            for block, op in all_mallocs:
-                if all_blocks is None:
-                    all_blocks = set(graph.iterblocks())
-                if block not in all_blocks:
-                    continue   # this block was removed from the graph
-                               # by a previous try_remove_malloc()
-                if self.try_remove_malloc(graph, block, op):
-                    all_blocks = None   # graph mutated
-        progress = self.report_result() - prev
-        return progress
+            seen = {}
+            while True:
+                for block, op in self.enum_all_mallocs(graph):
+                    if op.result not in seen:
+                        seen[op.result] = True
+                        if self.try_remove_malloc(graph, block, op):
+                            break   # graph mutated, restart enum_all_mallocs()
+                else:
+                    break   # enum_all_mallocs() exhausted, graph finished
+        progress1 = self.report_result() - prev
+        progress2 = len(self.inline_and_remove) - count_inline_and_remove
+        return progress1 or bool(progress2)
 
     def flush_failed_specializations(self):
-        cache = self.specialized_graphs.content
-        for key, (mode, specgraph) in cache.items():
+        for key, (mode, specgraph) in self.specialized_graphs.items():
             if mode == 'fail':
-                del cache[key]
+                del self.specialized_graphs[key]
 
     def getmalloctypedesc(self, MALLOCTYPE):
         try:
@@ -256,23 +261,43 @@ class MallocVirtualizer(object):
         return dsc
 
     def try_remove_malloc(self, graph, block, op):
+        if (graph, op) in self.inline_and_remove_seen:
+            return False      # no point in trying again
         graphbuilder = GraphBuilder(self)
         if graph in self.graphbuilders:
             graphbuilder.initialize_from_old_builder(self.graphbuilders[graph])
         graphbuilder.start_from_a_malloc(block, op.result)
         try:
             graphbuilder.propagate_specializations()
-        except (CannotVirtualize, ForcedInline), e:
-            if self.verbose:
-                log.mallocv('%s %s: %s' % (op.result, e.__class__.__name__, e))
+        except CannotVirtualize, e:
+            self.logresult(op, 'failed', e)
+            return False
+        except ForcedInline, e:
+            self.logresult(op, 'forces inlining', e)
+            self.inline_and_remove[graph] = op
+            self.inline_and_remove_seen[graph, op] = True
             return False
         else:
-            if self.verbose:
-                log.mallocv('%s removed' % (op.result,))
+            self.logresult(op, 'removed')
             graphbuilder.finished_removing_malloc()
             self.graphbuilders[graph] = graphbuilder
             self.count_virtualized += 1
             return True
+
+    def logresult(self, op, msg, exc=None):    # only for nice log outputs
+        if self.verbose:
+            if exc is None:
+                exc = ''
+            else:
+                exc = ': %s' % (exc,)
+            chain = []
+            while True:
+                chain.append(str(op.result))
+                if op.opname != 'direct_call':
+                    break
+                fobj = op.args[0].value._obj
+                op = self.inline_and_remove[fobj.graph]
+            log.mallocv('%s %s%s' % ('->'.join(chain), msg, exc))
 
     def get_specialized_graph(self, graph, nodelist):
         assert len(graph.getargs()) == len(nodelist)
@@ -280,11 +305,12 @@ class MallocVirtualizer(object):
             return 'trivial', graph
         nodes = dict(zip(graph.getargs(), nodelist))
         virtualframe = VirtualFrame(graph.startblock, 0, nodes)
+        key = virtualframe.getfrozenkey()
         try:
-            return self.specialized_graphs.getitem(virtualframe)
+            return self.specialized_graphs[key]
         except KeyError:
-            self.build_specialized_graph(graph, virtualframe, nodelist)
-            return self.specialized_graphs.getitem(virtualframe)
+            self.build_specialized_graph(graph, key, nodelist)
+            return self.specialized_graphs[key]
 
     def build_specialized_graph(self, graph, key, nodelist):
         graph2 = copygraph(graph)
@@ -296,48 +322,27 @@ class MallocVirtualizer(object):
         specgraph = graph2
         specgraph.name += '_mallocv'
         specgraph.startblock = specblock
-        self.specialized_graphs.setitem(key, ('call', specgraph))
+        self.specialized_graphs[key] = ('call', specgraph)
         try:
             graphbuilder.propagate_specializations()
         except ForcedInline, e:
             if self.verbose:
                 log.mallocv('%s inlined: %s' % (graph.name, e))
-            self.specialized_graphs.setitem(key, ('inline', None))
+            self.specialized_graphs[key] = ('inline', None)
         except CannotVirtualize, e:
             if self.verbose:
                 log.mallocv('%s failing: %s' % (graph.name, e))
-            self.specialized_graphs.setitem(key, ('fail', None))
+            self.specialized_graphs[key] = ('fail', None)
         else:
             self.graphbuilders[specgraph] = graphbuilder
             self.graphs.append(specgraph)
-
-
-class FrameKeyCache(object):
-
-    def __init__(self):
-        self.content = {}
-
-    def get(self, virtualframe):
-        key = virtualframe.getfrozenkey()
-        return self.content.get(key)
-
-    def getitem(self, virtualframe):
-        key = virtualframe.getfrozenkey()
-        return self.content[key]
-
-    def setitem(self, virtualframe, value):
-        key = virtualframe.getfrozenkey()
-        self.content[key] = value
-
-    def update(self, other):
-        self.content.update(other.content)
 
 
 class GraphBuilder(object):
 
     def __init__(self, mallocv):
         self.mallocv = mallocv
-        self.specialized_blocks = FrameKeyCache()
+        self.specialized_blocks = {}
         self.pending_specializations = []
 
     def initialize_from_old_builder(self, oldbuilder):
@@ -350,6 +355,7 @@ class GraphBuilder(object):
         return spec.specblock
 
     def start_from_a_malloc(self, block, v_result):
+        assert v_result in [op.result for op in block.operations]
         nodes = {}
         for v in block.inputargs:
             nodes[v] = RuntimeSpecNode(v, v.concretetype)
@@ -366,16 +372,17 @@ class GraphBuilder(object):
         srcblock.exitswitch = specblock.exitswitch
         srcblock.recloseblock(*specblock.exits)
 
-    def get_specialized_block(self, virtualframe):
-        specblock = self.specialized_blocks.get(virtualframe)
+    def get_specialized_block(self, virtualframe, v_expand_malloc=None):
+        key = virtualframe.getfrozenkey()
+        specblock = self.specialized_blocks.get(key)
         if specblock is None:
             orgblock = virtualframe.sourceblock
             assert len(orgblock.exits) != 0
-            spec = BlockSpecializer(self)
+            spec = BlockSpecializer(self, v_expand_malloc)
             spec.initialize_renamings(virtualframe)
             self.pending_specializations.append(spec)
             specblock = spec.specblock
-            self.specialized_blocks.setitem(virtualframe, specblock)
+            self.specialized_blocks[key] = specblock
         return specblock
 
     def propagate_specializations(self):
@@ -469,15 +476,20 @@ class BlockSpecializer(object):
                 specblock = link.target
             else:
                 if len(link.target.exits) == 0:    # return or except block
+                    if len(link.target.inputargs) != 1:
+                        raise CannotVirtualize("except block")
                     if currentframe.callerframe is None:
-                        raise ForcedInline("return or except block")
+                        raise ForcedInline("return block")
                     newframe = currentframe.return_to_caller(link.target,
                                                              targetnodes)
+                    v_expand_malloc = None
                 else:
                     newframe = VirtualFrame(link.target, 0, targetnodes,
                                           callerframe=currentframe.callerframe)
+                    v_expand_malloc = self.v_expand_malloc
                 rtnodes = newframe.find_rt_nodes()
-                specblock = self.graphbuilder.get_specialized_block(newframe)
+                specblock = self.graphbuilder.get_specialized_block(newframe,
+                                                               v_expand_malloc)
 
             linkargs = [self.renamings[rtnode] for rtnode in rtnodes]
             newlink = Link(linkargs, specblock)
@@ -572,6 +584,7 @@ class BlockSpecializer(object):
                 c = Constant(FIELDTYPE._defl())
                 c.concretetype = FIELDTYPE
                 self.renamings[fieldnode] = c
+            self.v_expand_malloc = None      # done
             return []
         else:
             return self.handle_default(op)
@@ -585,8 +598,16 @@ class BlockSpecializer(object):
         assert nb_args == len(graph.getargs())
         newnodes = [self.getnode(v) for v in op.args[1:]]
         myframe = self.get_updated_frame(op)
-        argnodes = copynodes(newnodes, flagreadonly=myframe.find_vt_nodes())
         mallocv = self.graphbuilder.mallocv
+
+        if op.result is self.v_expand_malloc:
+            # move to inlining the callee, and continue looking for the
+            # malloc to expand in the callee's graph
+            op_to_remove = mallocv.inline_and_remove[graph]
+            self.v_expand_malloc = op_to_remove.result
+            return self.handle_inlined_call(myframe, graph, newnodes)
+
+        argnodes = copynodes(newnodes, flagreadonly=myframe.find_vt_nodes())
         kind, newgraph = mallocv.get_specialized_graph(graph, argnodes)
         if kind == 'trivial':
             return self.handle_default(op)
