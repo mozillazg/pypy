@@ -96,7 +96,9 @@ class Linux(Platform):
     link_flags = ['-pthread']
     cflags = ['-O3', '-pthread', '-fomit-frame-pointer']
     
-    def __init__(self, cc='gcc'):
+    def __init__(self, cc=None):
+        if cc is None:
+            cc = 'gcc'
         self.cc = cc
 
     def _libs(self, libraries):

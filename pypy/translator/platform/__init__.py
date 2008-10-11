@@ -67,8 +67,13 @@ platform = host
 
 def set_platform(new_platform, cc):
     global platform
-    assert new_platform == 'host'
     log.msg("Setting platform to %r cc=%s" % (new_platform,cc))
-    # XXX fix
-    platform = host
+    if new_platform == 'host':
+        platform = host.__class__(cc)
+    elif new_platform == 'maemo':
+        from pypy.translator.platform.maemo import Maemo
+        platform = Maemo(cc)
+    else:
+        raise NotImplementedError("platform = %s" % (new_platform,))
+        
 
