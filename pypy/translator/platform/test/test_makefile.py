@@ -19,3 +19,4 @@ def test_simple_makefile():
         r'^y: z\n\ta\n\tb\n\tced\n']
     for i in expected_lines:
         assert re.search(i, val, re.M)
+

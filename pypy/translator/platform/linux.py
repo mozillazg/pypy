@@ -38,6 +38,8 @@ class Definition(object):
             f.write('%s = %s\n' % (name, value))
         else:
             write_list('%s =' % (name,), value)
+        if value:
+            f.write('\n')
         
 class Rule(object):
     def __init__(self, target, deps, body):
@@ -47,11 +49,14 @@ class Rule(object):
 
     def write(self, f):
         target, deps, body = self.target, self.deps, self.body
-        dep_s = ' '.join(deps)
+        if isinstance(deps, str):
+            dep_s = deps
+        else:
+            dep_s = ' '.join(deps)
         f.write('%s: %s\n' % (target, dep_s))
         if isinstance(body, str):
             f.write('\t%s\n' % body)
-        else:
+        elif body:
             f.write('\t%s\n' % '\n\t'.join(body))
         f.write('\n')
 
@@ -168,6 +173,9 @@ class Linux(Platform):
 
         pypypath = py.path.local(autopath.pypydir)
 
+        if exe_name is None:
+            exe_name = cfiles[0].new(ext='')
+
         def pathrel(fpath):
             if fpath.dirpath() == path:
                 return fpath.basename
@@ -191,7 +199,7 @@ class Linux(Platform):
         m = GnuMakefile()
         m.comment('automatically generated makefile')
         definitions = [
-            ('PYPYDIR', str(autopath.pypy_dir)),
+            ('PYPYDIR', autopath.pypydir),
             ('TARGET', exe_name.basename),
             ('DEFAULT_TARGET', '$(TARGET)'),
             ('SOURCES', rel_cfiles),
@@ -206,3 +214,26 @@ class Linux(Platform):
         for args in definitions:
             m.definition(*args)
 
+        rules = [
+            ('all', '$(DEFAULT_TARGET)', []),
+            ('$(TARGET)', '$(OBJECTS)', '$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)'),
+            ('%.o', '%.c', '$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)'),
+            ]
+
+        for rule in rules:
+            m.rule(*rule)
+
+        return m
+
+    def execute_makefile(self, path):
+        log.execute('make in %s' % (path,))
+        returncode, stdout, stderr = _run_subprocess('make', ['-C', str(path)])
+        if returncode != 0:
+            errorfile = path.join('make.errors')
+            errorfile.write(stderr)
+            stderrlines = stderr.splitlines()
+            for line in stderrlines[:5]:
+                log.ERROR(line)
+            if len(stderrlines) > 5:
+                log.ERROR('...')
+            raise CompilationError(stdout, stderr)
