@@ -1,8 +1,7 @@
 import py, sys
 
 from pypy.tool.udir import udir 
-from pypy.translator.tool.cbuild import build_executable, \
-     ExternalCompilationInfo, compile_c_module
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from subprocess import Popen, PIPE, STDOUT
 from pypy.rlib.pyplatform import Maemo
 
@@ -120,42 +119,13 @@ class TestEci:
                        ExternalCompilationInfo.from_config_tool,
                        'dxowqbncpqympqhe-config')
 
-
-
-
-
-class Stuff:
-
-    def checkscratchbox(self):
-        if not py.path.local('/scratchbox/login').check():
-            py.test.skip("No scratchbox detected")
-
-    def test_standalone_maemo(self):
-        self.checkscratchbox()
-        # XXX skip if there is no scratchbox
-        tmpdir = self.tmpdir
-        c_file = tmpdir.join('stand1.c')
-        c_file.write('''
-        #include <math.h>
-        #include <stdio.h>
-        
-        int main()
-        {
-            printf("%f\\n", pow(2.0, 2.0));
-            return 0;
-        }''')
-        if sys.platform == 'win32':
-            py.test.skip("No cross-compilation on windows yet")
-        else:
-            eci = ExternalCompilationInfo(platform=Maemo(),
-                                          libraries=['m'])
-        output = build_executable([c_file], eci)
-        py.test.raises(py.process.cmdexec.Error, py.process.cmdexec, output)
-        result = eci.platform.execute(output)
-        assert result.startswith('4.0')
-
     def test_platforms(self):
-        self.checkscratchbox()
+        from pypy.translator.platform import Platform
+
+        class Maemo(Platform):
+            def __init__(self, cc=None):
+                self.cc = cc
+        
         eci = ExternalCompilationInfo(platform=Maemo())
         eci2 = ExternalCompilationInfo()
         assert eci != eci2
