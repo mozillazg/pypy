@@ -69,10 +69,17 @@ class Comment(object):
 
 class GnuMakefile(object):
     def __init__(self):
+        self.defs = {}
         self.lines = []
 
     def definition(self, name, value):
-        self.lines.append(Definition(name, value))
+        defs = self.defs
+        defn = Definition(name, value)
+        if name in defs:
+            self.lines[defs[name]] = defn
+        else:
+            defs[name] = len(self.lines)
+            self.lines.append(defn)
 
     def rule(self, target, deps, body):
         self.lines.append(Rule(target, deps, body))
