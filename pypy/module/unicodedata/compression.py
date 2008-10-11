@@ -14,11 +14,14 @@ def build_compression_table(stringlist):
     while len(finalcodes) < 2 ** BITS and stringlist:
         codes = {}
         for string in stringlist:
-            for stop in range(1, len(string)):
-                codes[string[:stop]] = codes.get(string[:stop], 0) + 1
+            for stop in range(1, len(string) + 1):
+                if string[:stop] not in finalcodes:
+                    codes[string[:stop]] = codes.get(string[:stop], 0) + 1
 
         s = [(freq * (len(code) - 1), code) for (code, freq) in codes.iteritems()]
         s.sort()
+        if not s:
+            break
         newcode = s[-1][1]
         print repr(newcode)
         newstringlist = []
@@ -32,28 +35,23 @@ def build_compression_table(stringlist):
         assert newstringlist != stringlist
         stringlist = newstringlist
         finalcodes.append(newcode)
+    finalcodes.sort(key=len)
+    finalcodes.reverse()
 
-    codetable = {}
-    for code in finalcodes:
-        codetable[code] = len(codetable)
-    return codetable, finalcodes
+    return finalcodes
 
-def compress(codetable, s):
+def compress(codelist, s):
     start = 0
     result = ""
     while start < len(s):
-        stop = start + 1
-        while stop <= len(s):
-            if s[start:stop + 1] not in codetable:
-                result += chr(codetable[s[start:stop]])
+        for i in range(len(codelist)):
+            code = codelist[i]
+            if s.startswith(code, start):
+                result += chr(i)
+                start = start + len(code)
                 break
-            else:
-                stop += 1
         else:
-            # true only for last symbol
-            result += chr(codetable[s[start:]])
-        start = stop
-    
+            assert 0, "bogus codelist"
     return result
 
 def uncompress(codelist, s):
