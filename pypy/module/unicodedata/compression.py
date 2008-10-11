@@ -18,7 +18,7 @@ def build_compression_table(stringlist):
                 if string[:stop] not in finalcodes:
                     codes[string[:stop]] = codes.get(string[:stop], 0) + 1
 
-        s = [(freq * (len(code) - 1), code) for (code, freq) in codes.iteritems()]
+        s = [((freq - 1) * (len(code) - 1), code) for (code, freq) in codes.iteritems()]
         s.sort()
         if not s:
             break
@@ -41,14 +41,13 @@ def build_compression_table(stringlist):
     return finalcodes
 
 def compress(codelist, s):
-    start = 0
     result = ""
-    while start < len(s):
+    while s:
         for i in range(len(codelist)):
             code = codelist[i]
-            if s.startswith(code, start):
+            if s.startswith(code):
                 result += chr(i)
-                start = start + len(code)
+                s = s[len(code):]
                 break
         else:
             assert 0, "bogus codelist"
