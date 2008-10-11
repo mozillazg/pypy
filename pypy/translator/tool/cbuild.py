@@ -90,8 +90,7 @@ class ExternalCompilationInfo(object):
             assert isinstance(value, (list, tuple))
             setattr(self, name, tuple(value))
         if platform is None:
-            from pypy.rlib import pyplatform
-            platform = pyplatform.platform
+            from pypy.translator.platform import platform
         self.platform = platform
 
     def from_compiler_flags(cls, flags):
@@ -489,40 +488,8 @@ class CCompiler:
             extra_preargs=self.link_extra,
             library_dirs=self.eci.library_dirs)
 
-def build_executable(*args, **kwds):
-    noerr = kwds.pop('noerr', False)
-    compiler = CCompiler(*args, **kwds)
-    compiler.build(noerr=noerr)
-    return str(compiler.outputfilename)
-
-def check_boehm_presence(noerr=True):
-    from pypy.tool.udir import udir
-    try:
-        cfile = udir.join('check_boehm.c')
-        cfname = str(cfile)
-        cfile = cfile.open('w')
-        cfile.write("""
-#include <gc/gc.h>
-
-int main() {
-  return 0;
-}
-""")
-        cfile.close()
-        if sys.platform == 'win32':
-            eci = ExternalCompilationInfo(libraries=['gc_pypy'])
-        else:
-            eci = ExternalCompilationInfo(libraries=['gc'])
-        build_executable([cfname], eci, noerr=noerr)
-    except CompilationError:
-        if noerr:
-            return False
-        else:
-            raise
-    else:
-        return True
-
 def check_under_under_thread():
+    xxx
     from pypy.tool.udir import udir
     cfile = py.path.local(autopath.this_dir).join('__thread_test.c')
     fsource = cfile.open('r')

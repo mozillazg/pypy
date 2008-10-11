@@ -125,38 +125,6 @@ class TestEci:
 
 
 class Stuff:
-    def test_platform(self):
-        from pypy.rlib.pyplatform import Platform
-        class Expected(Exception):
-            pass
-        
-        class X(Platform):
-            def get_compiler(self):
-                raise Expected
-
-            def execute(self):
-                return 3
-
-        eci = ExternalCompilationInfo(platform=X())
-        try:
-            build_executable([self.modfile], eci)
-        except Expected:
-            pass
-        else:
-            py.test.fail("Did not raise")
-        assert eci.platform.execute() == 3
-
-    def test_platform_equality(self):
-        from pypy.rlib.pyplatform import Platform
-        class X(Platform):
-            pass
-        class Y(Platform):
-            def __init__(self, x):
-                self.x = x
-
-        assert X() == X()
-        assert Y(3) == Y(3)
-        assert Y(2) != Y(3)
 
     def checkscratchbox(self):
         if not py.path.local('/scratchbox/login').check():

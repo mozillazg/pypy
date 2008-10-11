@@ -1,7 +1,7 @@
 
 import py, sys
 from pypy.tool.udir import udir
-from pypy.translator.platform import host, CompilationError
+from pypy.translator.platform import host, CompilationError, Platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 def test_simple_enough():
@@ -15,6 +15,30 @@ def test_simple_enough():
     }
     ''')
     executable = host.compile([cfile], ExternalCompilationInfo())
+    res = host.execute(executable)
+    assert res.out == '42\n'
+    assert res.err == ''
+    assert res.returncode == 0
+
+def test_two_files():
+    cfile = udir.join('test_two_files.c')
+    cfile.write('''
+    #include <stdio.h>
+    int func();
+    int main()
+    {
+        printf("%d\\n", func());
+        return 0;
+    }
+    ''')
+    cfile2 = udir.join('implement1.c')
+    cfile2.write('''
+    int func()
+    {
+        return 42;
+    }
+    ''')
+    executable = host.compile([cfile, cfile2], ExternalCompilationInfo())
     res = host.execute(executable)
     assert res.out == '42\n'
     assert res.err == ''
@@ -72,3 +96,16 @@ def test_standalone_library():
     executable = host.compile([c_file], eci)
     res = host.execute(executable)
     assert res.out.startswith('4.0')
+
+
+def test_equality():
+    class X(Platform):
+        def __init__(self):
+            pass
+    class Y(Platform):
+        def __init__(self, x):
+            self.x = x
+
+    assert X() == X()
+    assert Y(3) == Y(3)
+    assert Y(2) != Y(3)

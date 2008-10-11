@@ -163,7 +163,7 @@ def parse_options_and_load_target():
                 translating=True)
 
     # apply the platform settings
-    set_platform(config, translateconfig.platform)
+    set_platform(translateconfig, config)
 
     # apply the optimization level settings
     set_opt_level(config, translateconfig.opt)
