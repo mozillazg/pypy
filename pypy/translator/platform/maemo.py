@@ -1,8 +1,8 @@
-
+import py
 from pypy.translator.platform.linux import Linux, _run_subprocess
 from pypy.translator.platform import ExecutionResult, log
 
-def check_scratchbox(self):
+def check_scratchbox():
     if not py.path.local('/scratchbox/login').check():
         py.test.skip("No scratchbox detected")
 

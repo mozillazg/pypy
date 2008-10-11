@@ -8,3 +8,6 @@ from pypy.translator.platform.test.test_platform import TestPlatform as BasicTes
 class TestMaemo(BasicTest):
     platform = Maemo()
     strict_on_stderr = False
+
+    def setup_class(cls):
+        check_scratchbox()
