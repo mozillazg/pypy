@@ -3,8 +3,24 @@ from pypy.conftest import gettestobjspace
 
 class AppTestUnicodeData:
     def setup_class(cls):
+        import random, unicodedata
+        seed = random.getrandbits(32)
+        print "random seed: ", seed
+        random.seed(seed)
         space = gettestobjspace(usemodules=('unicodedata',))
         cls.space = space
+        charlist_w = []
+        for i in range(2000):
+            chr = unichr(random.randrange(65536))
+            try:
+                w_tup = space.newtuple([
+                    space.wrap(chr), 
+                    space.wrap(unicodedata.name(chr))
+                    ])
+                charlist_w.append(w_tup)
+            except ValueError:
+                pass
+        cls.w_charlist = space.newlist(charlist_w)
 
     def test_hangul_syllables(self):
         import unicodedata
@@ -70,3 +86,10 @@ class AppTestUnicodeData:
                 except ValueError:
                     pass
                 raises(KeyError, unicodedata.lookup, charname)
+
+    def test_random_charnames(self):
+        import unicodedata
+        for chr, name in self.charlist:
+            assert unicodedata.name(chr) == name
+            assert unicodedata.lookup(name) == chr
+
