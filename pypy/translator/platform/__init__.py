@@ -53,8 +53,12 @@ class Platform(object):
 if sys.platform == 'linux2':
     from pypy.translator.platform.linux import Linux
     host = Linux()
+elif sys.platform == 'darwin':
+    from pypy.translator.platform.darwin import Darwin
+    host = Darwin()
 else:
     xxx
+    
 
 platform = host
 
