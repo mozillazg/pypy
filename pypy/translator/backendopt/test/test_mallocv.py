@@ -44,6 +44,7 @@ class BaseMallocRemovalTest(object):
             t.view()
         # to detect missing keepalives and broken intermediate graphs,
         # we do the loop ourselves instead of calling remove_simple_mallocs()
+        maxiter = 100
         mallocv = MallocVirtualizer(t.graphs, verbose=True)
         while True:
             progress = mallocv.remove_mallocs_once()
@@ -57,6 +58,8 @@ class BaseMallocRemovalTest(object):
                 assert res == expected_result
             if not progress:
                 break
+            maxiter -= 1
+            assert maxiter > 0, "infinite loop?"
         self.check_malloc_removed(graph, expected_mallocs, expected_calls)
         return graph
 
@@ -227,6 +230,39 @@ class BaseMallocRemovalTest(object):
         def fn7():
             A()
         self.check(fn7, [], [], None, expected_mallocs=1)  # don't remove
+
+    def test_call_to_allocating(self):
+        class A:
+            pass
+        def g(n):
+            a = A()
+            a.x = n
+            a.y = n + 1
+            return a
+        def fn8(n):
+            a = g(n)
+            return a.x * a.y
+        self.check(fn8, [int], [6], 42, expected_calls=0)  # inlined
+
+    def test_many_calls_to_allocating(self):
+        class A:
+            pass
+        def g(n):
+            a = A()
+            a.x = n
+            return a
+        def h(n):
+            a = g(n)
+            a.y = n
+            return a
+        def i(n):
+            a = h(n)
+            a.y += 1
+            return a
+        def fn9(n):
+            a = i(n)
+            return a.x * a.y
+        self.check(fn9, [int], [6], 42, expected_calls=0)  # inlined
 
 
 class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
