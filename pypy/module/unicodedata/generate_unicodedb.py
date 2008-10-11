@@ -315,16 +315,14 @@ def _get_record(code):
 def write_character_names(outfile, table):
     # Compressed Character names
     names = [table[code].name for code in range(len(table)) if table[code].name]
-    codetable, codelist = compression.build_compression_table(names)
+    codelist = compression.build_compression_table(names)
     print >> outfile, '_charnames = {'
     for code in range(len(table)):
         name = table[code].name
         if name:
             print >> outfile, '%r: %r,' % (
-                code, compression.compress(codetable, name))
+                code, compression.compress(codelist, name))
     print >> outfile, "}\n"
-    print >> outfile, "_codetable =", 
-    pprint.pprint(codetable, outfile)
     print >> outfile, "_codelist =", 
     pprint.pprint(codelist, outfile)
 
@@ -401,13 +399,15 @@ def _lookup_cjk(cjk_code):
     raise KeyError
 
 def lookup(name):
+    from pypy.module.unicodedata import compression
     if name[:len(_cjk_prefix)] == _cjk_prefix:
         return _lookup_cjk(name[len(_cjk_prefix):])
     if name[:len(_hangul_prefix)] == _hangul_prefix:
         return _lookup_hangul(name[len(_hangul_prefix):])
-    return _code_by_name[compression.compress(_codetable, name)]
+    return _code_by_name[compression.compress(_codelist, name)]
 
 def name(code):
+    from pypy.module.unicodedata import compression
     if (0x3400 <= code <= 0x4DB5 or
         0x4E00 <= code <= 0x%X or
         0x20000 <= code <= 0x2A6D6):
@@ -563,6 +563,5 @@ if __name__ == '__main__':
     print >> outfile, '# This file was generated with the command:'
     print >> outfile, '#    ', ' '.join(sys.argv)
     print >> outfile
-    print >> outfile, 'from pypy.module.unicodedata import compression'
     print >> outfile
     writeUnicodedata(unidata_version, table, outfile)
