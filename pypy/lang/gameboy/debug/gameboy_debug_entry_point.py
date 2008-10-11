@@ -78,6 +78,6 @@ def start_java_version():
 # START ========================================================================
 parse_file_name()
 threading.Timer(1, start_java_version).start()
-start_python_version()
+threading.Timer(0.001, start_python_version()).start()
 
 

@@ -337,6 +337,8 @@ class DebugRpcXmlMemory(SimpleXMLRPCServer, threading.Thread):
         try:
             if int(read) > 0:
                 self.pending_steps = int(read)
+            if read == "pdb":
+            	pdb.set_trace()
         except Exception:
             if ("stop" in read) or ("exit" in read) or (read is "Q"):
                 raise Exception("Debug mode Stopped by User")
