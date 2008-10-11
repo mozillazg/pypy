@@ -219,110 +219,6 @@ class CBuilder(object):
         if self.standalone:
             self.gen_makefile(targetdir)
         return cfile
-    
-    def gen_makefile(self, targetdir):
-        def write_list(lst, prefix):
-            for i, fn in enumerate(lst):
-                print >> f, prefix, fn,
-                if i < len(lst)-1:
-                    print >> f, '\\'
-                else:
-                    print >> f
-                prefix = ' ' * len(prefix)
-
-        self.eci = self.eci.merge(ExternalCompilationInfo(
-            includes=['.', str(self.targetdir)]))
-        compiler = self.getccompiler()
-       
-        #self.adaptflags(compiler)
-        assert self.config.translation.gcrootfinder != "llvmgc"
-        cfiles = []
-        ofiles = []
-        gcmapfiles = []
-        for fn in compiler.cfilenames:
-            fn = py.path.local(fn)
-            if fn.dirpath() == targetdir:
-                name = fn.basename
-            else:
-                assert fn.dirpath().dirpath() == udir
-                name = '../' + fn.relto(udir)
-                
-            name = name.replace("\\", "/")
-            cfiles.append(name)
-            if self.config.translation.gcrootfinder == "asmgcc":
-                ofiles.append(name[:-2] + '.s')
-                gcmapfiles.append(name[:-2] + '.gcmap')
-            else:
-                ofiles.append(name[:-2] + '.o')
-
-        if self.config.translation.cc:
-            cc = self.config.translation.cc
-        else:
-            cc = self.eci.platform.get_compiler()
-            if cc is None:
-                cc = 'gcc'
-        make_no_prof = ''
-        if self.has_profopt():
-            profopt = self.config.translation.profopt
-            default_target = 'profopt'
-            # XXX horrible workaround for a bug of profiling in gcc on
-            # OS X with functions containing a direct call to fork()
-            non_profilable = []
-            assert len(compiler.cfilenames) == len(ofiles)
-            for fn, oname in zip(compiler.cfilenames, ofiles):
-                fn = py.path.local(fn)
-                if '/*--no-profiling-for-this-file!--*/' in fn.read():
-                    non_profilable.append(oname)
-            if non_profilable:
-                make_no_prof = '$(MAKE) %s' % (' '.join(non_profilable),)
-        else:
-            profopt = ''
-            default_target = '$(TARGET)'
-
-        f = targetdir.join('Makefile').open('w')
-        print >> f, '# automatically generated Makefile'
-        print >> f
-        print >> f, 'PYPYDIR =', autopath.pypydir
-        print >> f
-        print >> f, 'TARGET =', py.path.local(compiler.outputfilename).basename
-        print >> f
-        print >> f, 'DEFAULT_TARGET =', default_target
-        print >> f
-        write_list(cfiles, 'SOURCES =')
-        print >> f
-        if self.config.translation.gcrootfinder == "asmgcc":
-            write_list(ofiles, 'ASMFILES =')
-            write_list(gcmapfiles, 'GCMAPFILES =')
-            print >> f, 'OBJECTS = $(ASMFILES) gcmaptable.s'
-        else:
-            print >> f, 'GCMAPFILES ='
-            write_list(ofiles, 'OBJECTS =')
-        print >> f
-        def makerel(path):
-            rel = py.path.local(path).relto(py.path.local(autopath.pypydir))
-            if rel:
-                return os.path.join('$(PYPYDIR)', rel)
-            else:
-                return path
-        args = ['-l'+libname for libname in self.eci.libraries]
-        print >> f, 'LIBS =', ' '.join(args)
-        args = ['-L'+makerel(path) for path in self.eci.library_dirs]
-        print >> f, 'LIBDIRS =', ' '.join(args)
-        args = ['-I'+makerel(path) for path in self.eci.include_dirs]
-        write_list(args, 'INCLUDEDIRS =')
-        print >> f
-        print >> f, 'CFLAGS  =', ' '.join(compiler.compile_extra)
-        print >> f, 'LDFLAGS =', ' '.join(compiler.link_extra)
-        if self.config.translation.thread:
-            print >> f, 'TFLAGS  = ' + '-pthread'
-        else:
-            print >> f, 'TFLAGS  = ' + ''
-        print >> f, 'PROFOPT = ' + profopt
-        print >> f, 'MAKENOPROF = ' + make_no_prof
-        print >> f, 'CC      = ' + cc
-        print >> f
-        print >> f, MAKEFILE.strip()
-        f.close()
 
 class ModuleWithCleanup(object):
     def __init__(self, mod):
@@ -519,6 +415,7 @@ class CStandaloneBuilder(CBuilder):
             compiler.link_extra.append(self.config.translation.linkerflags)
 
     def gen_makefile(self, targetdir):
+        return
         def write_list(lst, prefix):
             for i, fn in enumerate(lst):
                 print >> f, prefix, fn,
