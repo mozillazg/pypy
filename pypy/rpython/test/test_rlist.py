@@ -324,6 +324,19 @@ class BaseTestRlist(BaseRtypingTest):
         assert self.ll_to_list(res.item1) == [6, 7, 8]
         assert self.ll_to_list(res.item2) == [8, 9]
 
+    def test_getslice_not_constant_folded(self):
+        l = list('abcdef')
+
+        def dummyfn():
+            result = []
+            for i in range(3):
+                l2 = l[2:]
+                result.append(l2.pop())
+            return result
+
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res) == ['f', 'f', 'f']
+
     def test_set_del_item(self):
         def dummyfn():
             l = [5, 6, 7]
