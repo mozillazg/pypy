@@ -357,5 +357,6 @@ def set_platform(translateconfig, config):
     set_platform(translateconfig.platform, config.translation.cc)
 
 def get_platform(config):
-    from pypy.translator.platform import host
-    return host
+    # XXX use config
+    from pypy.translator.platform import platform
+    return platform
