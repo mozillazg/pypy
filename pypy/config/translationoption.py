@@ -352,6 +352,10 @@ PLATFORMS = [
     'maemo',
 ]
 
+def set_platform(translateconfig, config):
+    from pypy.translator.platform import set_platform
+    set_platform(translateconfig.platform, config.translation.cc)
+
 def get_platform(config):
     from pypy.translator.platform import host
     return host

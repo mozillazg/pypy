@@ -33,6 +33,9 @@ class Platform(object):
     def execute(self, file_to_exec, args=None, env=None):
         raise NotImplementedError("Pure abstract baseclass")
 
+    def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+        raise NotImplementedError("Pure abstract baseclass")
+
     def __repr__(self):
         return '<%s cc=%s>' % (self.__class__.__name__, self.cc)
 

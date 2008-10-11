@@ -3,6 +3,7 @@ import py, os
 from pypy.translator.platform import Platform, CompilationError, ExecutionResult
 from pypy.translator.platform import log
 from subprocess import PIPE, Popen
+from pypy.tool import autopath
 
 def _run_subprocess(executable, args, env=None):
     if isinstance(args, str):
@@ -17,6 +18,67 @@ def _run_subprocess(executable, args, env=None):
     pipe = Popen(args, stdout=PIPE, stderr=PIPE, shell=shell, env=env)
     stdout, stderr = pipe.communicate()
     return pipe.returncode, stdout, stderr
+
+class Definition(object):
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def write(self, f):
+        def write_list(prefix, lst):
+            for i, fn in enumerate(lst):
+                print >> f, prefix, fn,
+                if i < len(lst)-1:
+                    print >> f, '\\'
+                else:
+                    print >> f
+                prefix = ' ' * len(prefix)
+        name, value = self.name, self.value
+        if isinstance(value, str):
+            f.write('%s = %s\n' % (name, value))
+        else:
+            write_list('%s =' % (name,), value)
+        
+class Rule(object):
+    def __init__(self, target, deps, body):
+        self.target = target
+        self.deps   = deps
+        self.body   = body
+
+    def write(self, f):
+        target, deps, body = self.target, self.deps, self.body
+        dep_s = ' '.join(deps)
+        f.write('%s: %s\n' % (target, dep_s))
+        if isinstance(body, str):
+            f.write('\t%s\n' % body)
+        else:
+            f.write('\t%s\n' % '\n\t'.join(body))
+        f.write('\n')
+
+class Comment(object):
+    def __init__(self, body):
+        self.body = body
+
+    def write(self, f):
+        f.write('# %s\n' % (self.body,))
+
+class GnuMakefile(object):
+    def __init__(self):
+        self.lines = []
+
+    def definition(self, name, value):
+        self.lines.append(Definition(name, value))
+
+    def rule(self, target, deps, body):
+        self.lines.append(Rule(target, deps, body))
+
+    def comment(self, body):
+        self.lines.append(Comment(body))
+
+    def write(self, f):
+        for line in self.lines:
+            line.write(f)
+        f.flush()
 
 class Linux(Platform):
     link_extra = ['-pthread']
@@ -85,3 +147,22 @@ class Linux(Platform):
         returncode, stdout, stderr = _run_subprocess(str(executable), args,
                                                      env)
         return ExecutionResult(returncode, stdout, stderr)
+
+    def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+        m = GnuMakefile()
+        # XXX cfiles relative to path
+        m.comment('automatically generated makefile')
+        definitions = [
+            ('PYPYDIR', str(autopath.pypy_dir)),
+            ('TARGET', exe_name.basename),
+            ('DEFAULT_TARGET', '$(TARGET)'),
+            ('SOURCES', whacked_cfiles),
+            ('OBJECTS', whacked_ofiles),
+            ('LIBS', whacked_libs),
+            ]
+        for args in definitions:
+            m.definition(*args)
+        # <hack>
+        #for includedir in eci.include_dirs:
+        #    if includedir.relto
+        # </hack>
