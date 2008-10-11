@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import pprint
+import compression
+
 MAXUNICODE = 0x10FFFF     # the value of sys.maxunicode of wide Python builds
 
 class Fraction:
@@ -309,6 +312,23 @@ def _get_record(code):
     print >> outfile, 'def mirrored(code): return _get_record(code)[3] & %d != 0'% IS_MIRRORED
     print >> outfile, 'def combining(code): return _get_record(code)[4]'
 
+def write_character_names(outfile, table):
+    # Compressed Character names
+    names = [table[code].name for code in range(len(table)) if table[code].name]
+    codetable, codelist = compression.build_compression_table(names)
+    print >> outfile, '_charnames = {'
+    for code in range(len(table)):
+        name = table[code].name
+        if name:
+            print >> outfile, '%r: %r,' % (
+                code, compression.compress(codetable, name))
+    print >> outfile, "}\n"
+    print >> outfile, "_codetable =", 
+    pprint.pprint(codetable, outfile)
+    print >> outfile, "_codelist =", 
+    pprint.pprint(codelist, outfile)
+
+
 def writeUnicodedata(version, table, outfile):
     # Version
     print >> outfile, 'version = %r' % version
@@ -318,13 +338,9 @@ def writeUnicodedata(version, table, outfile):
     if version >= "4.1":
         cjk_end = 0x9FBB
 
-    # Character names
-    print >> outfile, '_charnames = {'
-    for code in range(len(table)):
-        if table[code].name:
-            print >> outfile, '%r: %r,'%(code, table[code].name)
-    print >> outfile, '''}
+    write_character_names(outfile, table)
     
+    print >> outfile, '''
 _code_by_name = dict(map(lambda x:(x[1],x[0]), _charnames.iteritems()))
 
 _cjk_prefix = "CJK UNIFIED IDEOGRAPH-"
@@ -389,7 +405,7 @@ def lookup(name):
         return _lookup_cjk(name[len(_cjk_prefix):])
     if name[:len(_hangul_prefix)] == _hangul_prefix:
         return _lookup_hangul(name[len(_hangul_prefix):])
-    return _code_by_name[name]
+    return _code_by_name[compression.compress(_codetable, name)]
 
 def name(code):
     if (0x3400 <= code <= 0x4DB5 or
@@ -406,7 +422,7 @@ def name(code):
         return ("HANGUL SYLLABLE " + _hangul_L[l_code] +
                 _hangul_V[v_code] + _hangul_T[t_code])
     
-    return _charnames[code]
+    return compression.uncompress(_codelist, _charnames[code])
 ''' % (cjk_end, cjk_end)
 
     # Categories
@@ -546,5 +562,7 @@ if __name__ == '__main__':
     print >> outfile, '# UNICODE CHARACTER DATABASE'
     print >> outfile, '# This file was generated with the command:'
     print >> outfile, '#    ', ' '.join(sys.argv)
+    print >> outfile
+    print >> outfile, 'from pypy.module.unicodedata import compression'
     print >> outfile
     writeUnicodedata(unidata_version, table, outfile)
