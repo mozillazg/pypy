@@ -561,6 +561,21 @@ def get_python_include_dir():
     gcv = sysconfig.get_config_vars()
     return gcv['INCLUDEPY']
 
+def check_boehm(platform=None, cache={}):
+    if platform is None:
+        from pypy.translator.platform import platform
+    try:
+        return cache[platform]
+    except KeyError:
+        class CConfig:
+            _compilation_info_ = ExternalCompilationInfo(
+                includes=['gc/gc.h'],
+                platform=platform,
+                )
+            HAS = Has('GC_init')
+        cache[platform] = configure(CConfig)['HAS']
+        return cache[platform]
+
 if __name__ == '__main__':
     doc = """Example:
     

@@ -457,13 +457,10 @@ class TranslationDriver(SimpleTaskEngine):
 
     def possibly_check_for_boehm(self):
         if self.config.translation.gc == "boehm":
-            from pypy.translator.tool.cbuild import check_boehm_presence
-            from pypy.translator.tool.cbuild import CompilationError
-            try:
-                check_boehm_presence(noerr=False)
-            except CompilationError, e:
+            from pypy.rpython.tool.rffi_platform import check_boehm
+            if not check_boehm(self.translator.platform):
                 i = 'Boehm GC not installed.  Try e.g. "translate.py --gc=hybrid"'
-                raise CompilationError('%s\n--------------------\n%s' % (e, i))
+                raise Exception(i)
 
     def task_database_c(self):
         translator = self.translator
@@ -516,7 +513,7 @@ class TranslationDriver(SimpleTaskEngine):
         if self.exe_name is not None:
             exename = mkexename(self.c_entryp)
             newexename = self.compute_exe_name()
-            shutil.copy(exename, newexename)
+            shutil.copy(str(exename), str(newexename))
             self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
 
