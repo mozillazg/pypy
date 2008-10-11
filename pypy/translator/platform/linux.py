@@ -81,20 +81,29 @@ class GnuMakefile(object):
         f.flush()
 
 class Linux(Platform):
-    link_extra = ['-pthread']
+    link_flags = ['-pthread']
     cflags = ['-O3', '-pthread', '-fomit-frame-pointer']
     
     def __init__(self, cc='gcc'):
         self.cc = cc
 
+    def _libs(self, libraries):
+        return ['-l%s' % (lib,) for lib in libraries]
+
+    def _libdirs(self, library_dirs):
+        return ['-L%s' % (ldir,) for ldir in library_dirs]
+
+    def _includedirs(self, include_dirs):
+        return ['-I%s' % (idir,) for idir in include_dirs]
+
     def _compile_args_from_eci(self, eci):
-        include_dirs = ['-I%s' % (idir,) for idir in eci.include_dirs]
+        include_dirs = self._includedirs(eci.include_dirs)
         return (self.cflags + list(eci.compile_extra) + include_dirs)
 
     def _link_args_from_eci(self, eci):
-        library_dirs = ['-L%s' % (ldir,) for ldir in eci.library_dirs]
-        libraries = ['-l%s' % (lib,) for lib in eci.libraries]
-        return (library_dirs + libraries + self.link_extra +
+        library_dirs = self._libdirs(eci.library_dirs)
+        libraries = self._libs(eci.libraries)
+        return (library_dirs + libraries + self.link_flags +
                 list(eci.link_extra))
 
     def _args_for_shared(self, args):
@@ -149,20 +158,51 @@ class Linux(Platform):
         return ExecutionResult(returncode, stdout, stderr)
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+        cfiles = [py.path.local(f) for f in cfiles]
+        cfiles += [py.path.local(f) for f in eci.separate_module_files]
+
+        if path is None:
+            path = cfiles[0].dirpath()
+        else:
+            path = py.path.local(path)
+
+        pypypath = py.path.local(autopath.pypydir)
+
+        def pathrel(fpath):
+            if fpath.dirpath() == path:
+                return fpath.basename
+            elif fpath.dirpath().dirpath() == path.dirpath():
+                return '../' + fpath.relto(path.dirpath())
+            else:
+                return str(fpath)
+
+        def pypyrel(fpath):
+            rel = py.path.local(fpath).relto(pypypath)
+            if rel:
+                return os.path.join('$(PYPYDIR)', rel)
+            else:
+                return fpath
+
+        rel_cfiles = [pathrel(cfile) for cfile in cfiles]
+        rel_ofiles = [rel_cfile[:-2]+'.o' for rel_cfile in rel_cfiles]
+
+        rel_includedirs = [pypyrel(incldir) for incldir in eci.include_dirs]
+
         m = GnuMakefile()
-        # XXX cfiles relative to path
         m.comment('automatically generated makefile')
         definitions = [
             ('PYPYDIR', str(autopath.pypy_dir)),
             ('TARGET', exe_name.basename),
             ('DEFAULT_TARGET', '$(TARGET)'),
-            ('SOURCES', whacked_cfiles),
-            ('OBJECTS', whacked_ofiles),
-            ('LIBS', whacked_libs),
+            ('SOURCES', rel_cfiles),
+            ('OBJECTS', rel_ofiles),
+            ('LIBS', self._libs(eci.libraries)),
+            ('LIBDIRS', self._libdirs(eci.library_dirs)),
+            ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
+            ('CFLAGS', self.cflags + list(eci.compile_extra)),
+            ('LDFLAGS', self.link_flags + list(eci.link_extra)),
+            ('CC', self.cc)
             ]
         for args in definitions:
             m.definition(*args)
-        # <hack>
-        #for includedir in eci.include_dirs:
-        #    if includedir.relto
-        # </hack>
+
