@@ -1,34 +1,42 @@
+BITS = 8
 
 def build_compression_table(stringlist):
-    # build compression code table
-    BITS = 8
-    codes = {}
     chars = {}
-    # put all characters into code
+    # put all used characters
     for value in stringlist:
         for char in value:
             chars.setdefault(char, len(chars))
 
+    finalcodes = chars.keys()
+
+    stringlist = [s for s in stringlist if len(s) > 1]
     # fill code with larger strings
-    for value in stringlist:
-        start = 0
-        for start in range(len(value)):
-            for stop in range(start + 1, len(value)):
-                codes[value[start:stop]] = codes.get(value[start:stop], 0) + 1
+    while len(finalcodes) < 2 ** BITS and stringlist:
+        codes = {}
+        for string in stringlist:
+            for stop in range(1, len(string)):
+                codes[string[:stop]] = codes.get(string[:stop], 0) + 1
 
-    # take most common strings
-    s = [(freq, code) for (code, freq) in codes.iteritems() if len(code) > 1]
-    s.sort()
-    s.reverse()
-    common =  chars.keys() + [code for freq, code in s[:2 ** BITS - len(chars)]]
-    assert len(common) <= 2 ** BITS
+        s = [(freq * (len(code) - 1), code) for (code, freq) in codes.iteritems()]
+        s.sort()
+        newcode = s[-1][1]
+        print repr(newcode)
+        newstringlist = []
+        for string in stringlist:
+            if string.startswith(newcode):
+                newstring = string[len(newcode):]
+                if len(newstring) > 1:
+                    newstringlist.append(newstring)
+            else:
+                newstringlist.append(string)
+        assert newstringlist != stringlist
+        stringlist = newstringlist
+        finalcodes.append(newcode)
 
-    finalcodes = {}
-    for code in common:
-        assert code not in finalcodes
-        finalcodes[code] = len(finalcodes)
-    return finalcodes, common
-
+    codetable = {}
+    for code in finalcodes:
+        codetable[code] = len(codetable)
+    return codetable, finalcodes
 
 def compress(codetable, s):
     start = 0
