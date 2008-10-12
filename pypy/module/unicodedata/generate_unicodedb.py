@@ -357,9 +357,12 @@ def write_character_names(outfile, table):
         function.append(
             "    if %d <= code <= %d: res = _charnames_%d[code-%d]" % (
             low, high, low, low))
-        f_reverse_dict.append(
-            "    for i in range(%d, %d): res[_charnames_%d[i-%d]] = i" % (
-            low, high+1, low, low))
+        f_reverse_dict.extend([
+            "    for i in range(%d, %d):" % (low, high+1),
+            "        name = _charnames_%d[i-%d]" % (low, low),
+            "        if name is not None:",
+            "            res[name] = i",
+            ])
         print >> outfile, "_charnames_%d = [" % (low,)
         for code in range(low, high + 1):
             name = table[code].name
