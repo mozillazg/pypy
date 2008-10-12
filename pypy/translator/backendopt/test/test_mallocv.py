@@ -667,7 +667,6 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         assert link.prevblock.operations[-1].opname == 'keepalive'
 
     def test_nested_struct(self):
-        py.test.skip("redo me")
         S = lltype.GcStruct("S", ('x', lltype.Signed))
         T = lltype.GcStruct("T", ('s', S))
         def f(x):
@@ -680,7 +679,6 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
 
     def test_interior_ptr(self):
         py.test.skip("redo me")
-        py.test.skip("fails")
         S = lltype.Struct("S", ('x', lltype.Signed))
         T = lltype.GcStruct("T", ('s', S))
         def f(x):
