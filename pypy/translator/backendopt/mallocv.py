@@ -1,5 +1,6 @@
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, FunctionGraph, copygraph
+from pypy.objspace.flow.model import c_last_exception
 from pypy.translator.backendopt.support import log
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
@@ -458,10 +459,21 @@ class BlockSpecializer(object):
         block = currentframe.sourceblock
         self.specblock.exitswitch = self.rename_nonvirtual(block.exitswitch,
                                                            'exitswitch')
+        catch_exc = self.specblock.exitswitch == c_last_exception
         newlinks = []
         for link in block.exits:
-            targetnodes = {}
+            is_exc_link = catch_exc and link.exitcase is not None
+            if is_exc_link:
+                extravars = []
+                for attr in ['last_exception', 'last_exc_value']:
+                    v = getattr(link, attr)
+                    if isinstance(v, Variable):
+                        rtnode = RuntimeSpecNode(v, v.concretetype)
+                        self.setnode(v, rtnode)
+                        self.renamings[rtnode] = v = rtnode.newvar()
+                    extravars.append(v)
 
+            targetnodes = {}
             rtnodes = []
             for v1, v2 in zip(link.args, link.target.inputargs):
                 node = self.getnode(v1)
@@ -494,7 +506,10 @@ class BlockSpecializer(object):
             linkargs = [self.renamings[rtnode] for rtnode in rtnodes]
             newlink = Link(linkargs, specblock)
             newlink.exitcase = link.exitcase
-            newlink.llexitcase = link.llexitcase
+            if hasattr(link, 'llexitcase'):
+                newlink.llexitcase = link.llexitcase
+            if is_exc_link:
+                newlink.extravars(*extravars)
             newlinks.append(newlink)
         self.specblock.closeblock(*newlinks)
 
@@ -675,6 +690,10 @@ def vars_alive_through_op(block, index):
     # don't include the variables produced by the current or future operations
     for op in block.operations[index:]:
         seen[op.result] = True
+    # don't include the extra vars produced by exception-catching links
+    for link in block.exits:
+        for v in link.getextravars():
+            seen[v] = True
     # but include the variables consumed by the current or any future operation
     for op in block.operations[index:]:
         for v in op.args:
