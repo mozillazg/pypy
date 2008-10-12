@@ -450,8 +450,19 @@ class GraphBuilder(object):
             if excdata.fn_exception_match(exc_type, catchlink.llexitcase):
                 # Match found.  Follow this link.
                 mynodes = catchingframe.get_nodes_in_use()
-                # XXX Constants
-                nodelist = [mynodes[v] for v in catchlink.args]
+                for node, attr in zip(nodelist,
+                                      ['last_exception', 'last_exc_value']):
+                    v = getattr(catchlink, attr)
+                    if isinstance(v, Variable):
+                        mynodes[v] = node
+                #
+                nodelist = []
+                for v in catchlink.args:
+                    if isinstance(v, Variable):
+                        node = mynodes[v]
+                    else:
+                        node = getconstnode(v, renamings)
+                    nodelist.append(node)
                 return self.create_outgoing_link(catchingframe,
                                                  catchlink.target,
                                                  nodelist, renamings)
@@ -589,9 +600,7 @@ class BlockSpecializer(object):
         if isinstance(v, Variable):
             return self.nodes[v]
         else:
-            rtnode = RuntimeSpecNode(None, v.concretetype)
-            self.renamings[rtnode] = v
-            return rtnode
+            return getconstnode(v, self.renamings)
 
     def rename_nonvirtual(self, v, where=None):
         if not isinstance(v, Variable):
@@ -906,3 +915,8 @@ def try_fold_operation(opname, args_v, RESTYPE):
         log.WARNING('  %s: %s' % (e.__class__.__name__, e))
     else:
         return (result,)
+
+def getconstnode(v, renamings):
+    rtnode = RuntimeSpecNode(None, v.concretetype)
+    renamings[rtnode] = v
+    return rtnode
