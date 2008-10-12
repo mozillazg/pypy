@@ -273,7 +273,6 @@ class BaseMallocRemovalTest(object):
         self.check(f, [int], [-19], CHECK_RAISES("ValueError"))
 
     def test_call_raise_catch(self):
-        #py.test.skip("in-progress")
         class A:
             pass
         def g(a):
@@ -293,6 +292,28 @@ class BaseMallocRemovalTest(object):
             return total
         graph = self.check(f, [int], [11], 550,
                            expected_calls=0)     # inlined
+
+    def test_call_raise_catch_inspect(self):
+        py.test.skip("in-progress")
+        class A:
+            pass
+        class E(Exception):
+            def __init__(self, n):
+                self.n = n
+        def g(a):
+            a.n -= 1
+            if a.n < 0:
+                raise E(a.n * 10)
+        def f(n):
+            a = A()
+            a.n = n
+            try:
+                g(a)       # this call should be inlined
+            except E, e:
+                a.n = e.n
+            return a.n
+        self.check(f, [int], [15], 14, expected_calls=0)
+        self.check(f, [int], [-15], -160, expected_calls=0)
 
     def test_fn2(self):
         class T:

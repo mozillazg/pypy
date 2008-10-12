@@ -2,6 +2,7 @@ from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, FunctionGraph, copygraph
 from pypy.objspace.flow.model import c_last_exception
 from pypy.translator.backendopt.support import log
+from pypy.translator.unsimplify import varoftype
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -19,6 +20,7 @@ class MallocTypeDesc(object):
         self.check_no_destructor()
         self.names_and_types = []
         self.name2index = {}
+        self.name2subtype = {}
         self.initialize_type(MALLOCTYPE)
         #self.immutable_struct = MALLOCTYPE._hints.get('immutable')
 
@@ -42,6 +44,7 @@ class MallocTypeDesc(object):
             FIELDTYPE = TYPE._flds[name]
             self.name2index[name] = len(self.names_and_types)
             self.names_and_types.append((name, FIELDTYPE))
+            self.name2subtype[name] = TYPE
 
 
 class SpecNode(object):
@@ -206,6 +209,13 @@ class MallocVirtualizer(object):
         self.malloctypedescs = {}
         self.count_virtualized = 0
         self.verbose = verbose
+        self.EXCTYPE_to_vtable = self.build_obscure_mapping()
+
+    def build_obscure_mapping(self):
+        result = {}
+        for rinstance in self.rtyper.instance_reprs.values():
+            result[rinstance.lowleveltype.TO] = rinstance.rclass.getvtable()
+        return result
 
     def report_result(self):
         log.mallocv('removed %d mallocs so far' % (self.count_virtualized,))
@@ -383,15 +393,13 @@ class GraphBuilder(object):
         #
         if is_except(targetblock):
             v_expand_malloc = None
-            v_exc_type = renamings.get(nodelist[0])
             while currentframe.callerframe is not None:
                 currentframe = currentframe.callerframe
-                newlink = self.handle_catch(currentframe, v_exc_type,
-                                            renamings)
+                newlink = self.handle_catch(currentframe, nodelist, renamings)
                 if newlink:
                     return newlink
             else:
-                targetblock = self.exception_escapes(nodelist)
+                targetblock = self.exception_escapes(nodelist, renamings)
                 assert len(nodelist) == len(targetblock.inputargs)
 
         if (currentframe.callerframe is None and
@@ -424,16 +432,22 @@ class GraphBuilder(object):
                 callerframe.nodelist[i] = retnode
         return callerframe
 
-    def handle_catch(self, catchingframe, v_exc_type, renamings):
+    def handle_catch(self, catchingframe, nodelist, renamings):
         if not self.has_exception_catching(catchingframe):
             return None
-        if not isinstance(v_exc_type, Constant):
+        [exc_node, exc_value_node] = nodelist
+        v_exc_type = renamings.get(exc_node)
+        if isinstance(v_exc_type, Constant):
+            exc_type = v_exc_type.value
+        elif isinstance(exc_value_node, VirtualSpecNode):
+            EXCTYPE = exc_value_node.typedesc.MALLOCTYPE
+            exc_type = self.mallocv.EXCTYPE_to_vtable[EXCTYPE]
+        else:
             raise CannotVirtualize("raising non-constant exc type")
         excdata = self.mallocv.excdata
         assert catchingframe.sourceblock.exits[0].exitcase is None
         for catchlink in catchingframe.sourceblock.exits[1:]:
-            if excdata.fn_exception_match(v_exc_type.value,
-                                          catchlink.llexitcase):
+            if excdata.fn_exception_match(exc_type, catchlink.llexitcase):
                 # Match found.  Follow this link.
                 mynodes = catchingframe.get_nodes_in_use()
                 # XXX Constants
@@ -453,16 +467,78 @@ class GraphBuilder(object):
             assert 1 <= catchingframe.nextopindex <= len(operations)
             return catchingframe.nextopindex == len(operations)
 
-    def exception_escapes(self, nodelist):
+    def exception_escapes(self, nodelist, renamings):
         # the exception escapes
         if not is_trivial_nodelist(nodelist):
+            # start of hacks to help handle_catch()
+            [exc_node, exc_value_node] = nodelist
+            v_exc_type = renamings.get(exc_node)
+            if isinstance(v_exc_type, Constant):
+                # cannot improve: handle_catch() would already be happy
+                # by seeing the exc_type as a constant
+                pass
+            elif isinstance(exc_value_node, VirtualSpecNode):
+                # can improve with a strange hack: we pretend that
+                # the source code jumps to a block that itself allocates
+                # the exception, sets all fields, and raises it by
+                # passing a constant type.
+                typedesc = exc_value_node.typedesc
+                return self.get_exc_reconstruction_block(typedesc)
+            else:
+                # cannot improve: handle_catch() will have no clue about
+                # the exception type
+                pass
             raise CannotVirtualize("except block")
-            # ^^^ this could also be a ForcedInline, to try to match the
-            # exception raising and catching globally.  But it looks
-            # overkill for now.
         targetblock = self.graph.exceptblock
         self.mallocv.fixup_except_block(targetblock)
         return targetblock
+
+    def get_exc_reconstruction_block(self, typedesc):
+        exceptblock = self.graph.exceptblock
+        self.mallocv.fixup_except_block(exceptblock)
+        TEXC = exceptblock.inputargs[0].concretetype
+        TVAL = exceptblock.inputargs[1].concretetype
+        #
+        v_ignored_type = varoftype(TEXC)
+        v_incoming_value = varoftype(TVAL)
+        block = Block([v_ignored_type, v_incoming_value])
+        #
+        c_EXCTYPE = Constant(typedesc.MALLOCTYPE, lltype.Void)
+        v = varoftype(lltype.Ptr(typedesc.MALLOCTYPE))
+        c_flavor = Constant({'flavor': 'gc'}, lltype.Void)
+        op = SpaceOperation('malloc', [c_EXCTYPE, c_flavor], v)
+        block.operations.append(op)
+        #
+        for name, FIELDTYPE in typedesc.names_and_types:
+            EXACTPTR = lltype.Ptr(typedesc.name2subtype[name])
+            c_name = Constant(name)
+            c_name.concretetype = lltype.Void
+            #
+            v_in = varoftype(EXACTPTR)
+            op = SpaceOperation('cast_pointer', [v_incoming_value], v_in)
+            block.operations.append(op)
+            #
+            v_field = varoftype(FIELDTYPE)
+            op = SpaceOperation('getfield', [v_in, c_name], v_field)
+            block.operations.append(op)
+            #
+            v_out = varoftype(EXACTPTR)
+            op = SpaceOperation('cast_pointer', [v], v_out)
+            block.operations.append(op)
+            #
+            v0 = Variable()
+            v0.concretetype = lltype.Void
+            op = SpaceOperation('setfield', [v_out, c_name, v_field], v0)
+            block.operations.append(op)
+        #
+        v_exc_value = varoftype(TVAL)
+        op = SpaceOperation('cast_pointer', [v], v_exc_value)
+        block.operations.append(op)
+        #
+        exc_type = self.mallocv.EXCTYPE_to_vtable[typedesc.MALLOCTYPE]
+        c_exc_type = Constant(exc_type, TEXC)
+        block.closeblock(Link([c_exc_type, v_exc_value], exceptblock))
+        return block
 
     def get_specialized_block(self, virtualframe, v_expand_malloc=None):
         key = virtualframe.getfrozenkey()
