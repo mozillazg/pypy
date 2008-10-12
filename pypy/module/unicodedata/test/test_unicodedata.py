@@ -10,7 +10,8 @@ class AppTestUnicodeData:
         space = gettestobjspace(usemodules=('unicodedata',))
         cls.space = space
         charlist_w = []
-        for i in range(2000):
+        nocharlist_w = []
+        while len(charlist_w) < 1000 or len(nocharlist_w) < 1000:
             chr = unichr(random.randrange(65536))
             try:
                 w_tup = space.newtuple([
@@ -19,8 +20,9 @@ class AppTestUnicodeData:
                     ])
                 charlist_w.append(w_tup)
             except ValueError:
-                pass
+                nocharlist_w.append(space.wrap(chr))
         cls.w_charlist = space.newlist(charlist_w)
+        cls.w_nocharlist = space.newlist(nocharlist_w)
 
     def test_hangul_syllables(self):
         import unicodedata
@@ -93,3 +95,7 @@ class AppTestUnicodeData:
             assert unicodedata.name(chr) == name
             assert unicodedata.lookup(name) == chr
 
+    def test_random_missing_chars(self):
+        import unicodedata
+        for chr in self.nocharlist:
+            raises(ValueError, unicodedata.name, chr)
