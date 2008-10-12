@@ -179,7 +179,16 @@ class VirtualFrame(object):
         topframe = self
         while topframe.callerframe is not None:
             topframe = topframe.callerframe
-        return topframe, topframe.sourcegraph.exceptblock
+        targetblock = topframe.sourcegraph.exceptblock
+        self.fixup_except_block(targetblock)
+        return topframe, targetblock
+
+    def fixup_except_block(self, block):
+        # hack: this block's inputargs may be missing concretetypes...
+        e1, v1 = block.inputargs
+        e2, v2 = self.sourcegraph.exceptblock.inputargs
+        e1.concretetype = e2.concretetype
+        v1.concretetype = v2.concretetype
 
 
 def copynodes(nodelist, flagreadonly={}):
