@@ -382,141 +382,62 @@ class CStandaloneBuilder(CBuilder):
     def compile(self):
         assert self.c_source_filename
         assert not self._compiled
-        compiler = CCompilerDriver(self.translator.platform,
-                                   [self.c_source_filename] + self.extrafiles,
-                                   self.eci, profbased=self.getprofbased())
         if self.config.translation.gcrootfinder == "asmgcc":
-            xxx
-            # as we are gcc-only anyway, let's just use the Makefile.
-            cmdline = "make -C '%s'" % (self.targetdir,)
-            err = os.system(cmdline)
-            if err != 0:
-                raise OSError("failed (see output): " + cmdline)
+            self.translator.platform.execute_makefile(self.targetdir)
         else:
-            #self.adaptflags(compiler)
+            compiler = CCompilerDriver(self.translator.platform,
+                                       [self.c_source_filename] + self.extrafiles,
+                                       self.eci, profbased=self.getprofbased())
             self.executable_name = compiler.build()
             assert self.executable_name
         self._compiled = True
         return self.executable_name
 
-    def cmdexec(self, args=''):
-        assert self._compiled
-        return py.process.cmdexec('"%s" %s' % (self.executable_name, args))
-
-    def adaptflags(self, compiler):
-        if sys.platform == 'darwin':
-            compiler.compile_extra.append('-mdynamic-no-pic')
-        if sys.platform == 'sunos5':
-            compiler.link_extra.append("-lrt")
-        if self.config.translation.compilerflags:
-            compiler.compile_extra.append(self.config.translation.compilerflags)
-        if self.config.translation.linkerflags:
-            compiler.link_extra.append(self.config.translation.linkerflags)
-
     def gen_makefile(self, targetdir):
         cfiles = [self.c_source_filename] + self.extrafiles
         mk = self.translator.platform.gen_makefile(cfiles, self.eci,
                                                    path=targetdir)
+        mk.definition('ABS_TARGET', '$(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))')
+        if self.has_profopt():
+            profopt = self.config.translation.profopt
+            mk.definition('DEFAULT_TARGET', 'profopt')
+            mk.definition('PROFOPT', profopt)
+
+        rules = [
+            ('clean', '', 'rm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) *.gc?? ../module_cache/*.gc??'),
+            ('clean_noprof', '', 'rm -f $(OBJECTS) $(TARGET) $(GCMAPFILES)'),
+            ('debug', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT" $(TARGET)'),
+            ('debug_exc', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT -DDO_LOG_EXC" $(TARGET)'),
+            ('debug_mem', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT -DTRIVIAL_MALLOC_DEBUG" $(TARGET)'),
+            ('no_obmalloc', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT -DNO_OBMALLOC" $(TARGET)'),
+            ('linuxmemchk', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT -DLINUXMEMCHK" $(TARGET)'),
+            ('llsafer', '', '$(MAKE) CFLAGS="-O2 -DRPY_LL_ASSERT" $(TARGET)'),
+            ('lldebug', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT -DRPY_LL_ASSERT" $(TARGET)'),
+            ('profile', '', '$(MAKE) CFLAGS="-g -pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)" $(TARGET)'),
+            ('profopt', '', [
+            '$(MAKENOPROF)',
+            '$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)',
+            'cd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)',
+            '$(MAKE) clean_noprof',
+            '$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)" $(TARGET)'])]
+        for rule in rules:
+            mk.rule(*rule)
+
+        if self.config.translation.gcrootfinder == 'asmgcc':
+            ofiles = ['%s.s' % (cfile[:-2],) for cfile in mk.cfiles]
+            gcmapfiles = ['%s.gcmap' % (cfile[:-2],) for cfile in mk.cfiles]
+            mk.definition('ASMFILES', ofiles)
+            mk.definition('GCMAPFILES', gcmapfiles)
+            mk.definition('OBJECTS', '$(ASMFILES) gcmaptable.s')
+            mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
+            mk.rule('%.gcmap', '%.s', '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $@ || (rm -f $@ && exit 1)')
+            mk.rule('gcmaptable.s', '$(GCMAPFILES)', '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@ || (rm -f $@ && exit 1)')
+
         mk.write()
         #self.translator.platform,
         #                           ,
         #                           self.eci, profbased=self.getprofbased()
-        return
-
-        self.eci = self.eci.merge(ExternalCompilationInfo(
-            includes=['.', str(self.targetdir)]))
-        compiler = self.getccompiler()
-       
-        self.adaptflags(compiler)
-        assert self.config.translation.gcrootfinder != "llvmgc"
-        cfiles = []
-        ofiles = []
-        gcmapfiles = []
-        for fn in compiler.cfilenames:
-            fn = py.path.local(fn)
-            if fn.dirpath() == targetdir:
-                name = fn.basename
-            else:
-                assert fn.dirpath().dirpath() == udir
-                name = '../' + fn.relto(udir)
-                
-            name = name.replace("\\", "/")
-            cfiles.append(name)
-            if self.config.translation.gcrootfinder == "asmgcc":
-                ofiles.append(name[:-2] + '.s')
-                gcmapfiles.append(name[:-2] + '.gcmap')
-            else:
-                ofiles.append(name[:-2] + '.o')
-
-        if self.config.translation.cc:
-            cc = self.config.translation.cc
-        else:
-            cc = self.eci.platform.get_compiler()
-            if cc is None:
-                cc = 'gcc'
-        make_no_prof = ''
-        if self.has_profopt():
-            profopt = self.config.translation.profopt
-            default_target = 'profopt'
-            # XXX horrible workaround for a bug of profiling in gcc on
-            # OS X with functions containing a direct call to fork()
-            non_profilable = []
-            assert len(compiler.cfilenames) == len(ofiles)
-            for fn, oname in zip(compiler.cfilenames, ofiles):
-                fn = py.path.local(fn)
-                if '/*--no-profiling-for-this-file!--*/' in fn.read():
-                    non_profilable.append(oname)
-            if non_profilable:
-                make_no_prof = '$(MAKE) %s' % (' '.join(non_profilable),)
-        else:
-            profopt = ''
-            default_target = '$(TARGET)'
-
-        f = targetdir.join('Makefile').open('w')
-        print >> f, '# automatically generated Makefile'
-        print >> f
-        print >> f, 'PYPYDIR =', autopath.pypydir
-        print >> f
-        print >> f, 'TARGET =', py.path.local(compiler.outputfilename).basename
-        print >> f
-        print >> f, 'DEFAULT_TARGET =', default_target
-        print >> f
-        write_list(cfiles, 'SOURCES =')
-        print >> f
-        if self.config.translation.gcrootfinder == "asmgcc":
-            write_list(ofiles, 'ASMFILES =')
-            write_list(gcmapfiles, 'GCMAPFILES =')
-            print >> f, 'OBJECTS = $(ASMFILES) gcmaptable.s'
-        else:
-            print >> f, 'GCMAPFILES ='
-            write_list(ofiles, 'OBJECTS =')
-        print >> f
-        def makerel(path):
-            rel = py.path.local(path).relto(py.path.local(autopath.pypydir))
-            if rel:
-                return os.path.join('$(PYPYDIR)', rel)
-            else:
-                return path
-        args = ['-l'+libname for libname in self.eci.libraries]
-        print >> f, 'LIBS =', ' '.join(args)
-        args = ['-L'+makerel(path) for path in self.eci.library_dirs]
-        print >> f, 'LIBDIRS =', ' '.join(args)
-        args = ['-I'+makerel(path) for path in self.eci.include_dirs]
-        write_list(args, 'INCLUDEDIRS =')
-        print >> f
-        print >> f, 'CFLAGS  =', ' '.join(compiler.compile_extra)
-        print >> f, 'LDFLAGS =', ' '.join(compiler.link_extra)
-        if self.config.translation.thread:
-            print >> f, 'TFLAGS  = ' + '-pthread'
-        else:
-            print >> f, 'TFLAGS  = ' + ''
-        print >> f, 'PROFOPT = ' + profopt
-        print >> f, 'MAKENOPROF = ' + make_no_prof
-        print >> f, 'CC      = ' + cc
-        print >> f
-        print >> f, MAKEFILE.strip()
-        f.close()
-
+        self.executable_name = mk.exe_name
 
 # ____________________________________________________________
 
@@ -889,99 +810,6 @@ def gen_source(database, modulename, targetdir, eci, defines={}):
     gen_startupcode(f, database)
     f.close()
 
-    #
-    # Generate a setup.py while we're at it
-    #
-    pypy_include_dir = autopath.this_dir
-    f = targetdir.join('setup.py').open('w')
-    include_dirs = eci.include_dirs
-    library_dirs = eci.library_dirs
-    libraries = eci.libraries
-    f.write(SETUP_PY % locals())
-    f.close()
     eci = eci.convert_sources_to_files(being_main=True)
     files, eci = eci.get_module_files()
     return eci, filename, sg.getextrafiles() + list(files)
-
-SETUP_PY = '''
-from distutils.core import setup
-from distutils.extension import Extension
-from distutils.ccompiler import get_default_compiler
-
-PYPY_INCLUDE_DIR = %(pypy_include_dir)r
-
-extra_compile_args = []
-if get_default_compiler() == "unix":
-    extra_compile_args.extend(["-Wno-unused-label",
-                               "-Wno-unused-variable"])
-
-setup(name="%(modulename)s",
-      ext_modules = [Extension(name = "%(modulename)s",
-                            sources = ["%(modulename)s.c"],
-                 extra_compile_args = extra_compile_args,
-                       include_dirs = (PYPY_INCLUDE_DIR,) + %(include_dirs)r,
-                       library_dirs = %(library_dirs)r,
-                          libraries = %(libraries)r)])
-'''
-
-MAKEFILE = '''
-
-all: $(DEFAULT_TARGET)
-
-$(TARGET): $(OBJECTS)
-\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
-
-# -frandom-seed is only to try to be as reproducable as possible
-
-%.o: %.c
-\t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -c $< $(INCLUDEDIRS)
-
-%.s: %.c
-\t$(CC) $(CFLAGS) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)
-
-%.gcmap: %.s
-\t$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $@ || (rm -f $@ && exit 1)
-
-gcmaptable.s: $(GCMAPFILES)
-\t$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@ || (rm -f $@ && exit 1)
-
-clean:
-\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES) *.gc?? ../module_cache/*.gc??
-
-clean_noprof:
-\trm -f $(OBJECTS) $(TARGET) $(GCMAPFILES)
-
-debug:
-\t$(MAKE) CFLAGS="-g -DRPY_ASSERT" $(TARGET)
-
-debug_exc:
-\t$(MAKE) CFLAGS="-g -DRPY_ASSERT -DDO_LOG_EXC" $(TARGET)
-
-debug_mem:
-\t$(MAKE) CFLAGS="-g -DRPY_ASSERT -DTRIVIAL_MALLOC_DEBUG" $(TARGET)
-
-no_obmalloc:
-\t$(MAKE) CFLAGS="-g -DRPY_ASSERT -DNO_OBMALLOC" $(TARGET)
-
-linuxmemchk:
-\t$(MAKE) CFLAGS="-g -DRPY_ASSERT -DLINUXMEMCHK" $(TARGET)
-
-llsafer:
-\t$(MAKE) CFLAGS="-O2 -DRPY_LL_ASSERT" $(TARGET)
-
-lldebug:
-\t$(MAKE) CFLAGS="-g -DRPY_ASSERT -DRPY_LL_ASSERT" $(TARGET)
-
-profile:
-\t$(MAKE) CFLAGS="-g -pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)" $(TARGET)
-
-# it seems that GNU Make < 3.81 has no function $(abspath)
-ABS_TARGET = $(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))
-
-profopt:
-\t$(MAKENOPROF)    # these files must be compiled without profiling
-\t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)
-\tcd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)
-\t$(MAKE) clean_noprof
-\t$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)" $(TARGET)
-'''
