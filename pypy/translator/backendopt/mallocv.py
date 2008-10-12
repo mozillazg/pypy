@@ -4,6 +4,7 @@ from pypy.objspace.flow.model import c_last_exception
 from pypy.translator.backendopt.support import log
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem.lloperation import llop
 
 
 # ____________________________________________________________
@@ -163,37 +164,6 @@ class VirtualFrame(object):
         rtnodes, vtnodes = self.find_all_nodes()
         return vtnodes
 
-    def return_to_caller(self, retnode):
-        callerframe = self.callerframe
-        if callerframe is None:
-            raise ForcedInline("return block")
-        for i in range(len(callerframe.nodelist)):
-            if isinstance(callerframe.nodelist[i], FutureReturnValue):
-                callerframe.nodelist[i] = retnode
-        return callerframe
-
-    def handle_raise(self, linkargsnodes):
-        if not is_trivial_nodelist(linkargsnodes):
-            raise CannotVirtualize("except block")
-            # ^^^ this could also be a ForcedInline, to try to match the
-            # exception raising and catching globally.  But it looks
-            # overkill for now.
-
-        # XXX this assumes no exception handler in the callerframes
-        topframe = self
-        while topframe.callerframe is not None:
-            topframe = topframe.callerframe
-        targetblock = topframe.sourcegraph.exceptblock
-        self.fixup_except_block(targetblock)
-        return topframe, targetblock
-
-    def fixup_except_block(self, block):
-        # hack: this block's inputargs may be missing concretetypes...
-        e1, v1 = block.inputargs
-        e2, v2 = self.sourcegraph.exceptblock.inputargs
-        e1.concretetype = e2.concretetype
-        v1.concretetype = v2.concretetype
-
 
 def copynodes(nodelist, flagreadonly={}):
     memo = {}
@@ -225,8 +195,10 @@ class CannotRemoveThisType(Exception):
 
 class MallocVirtualizer(object):
 
-    def __init__(self, graphs, verbose=False):
+    def __init__(self, graphs, rtyper, verbose=False):
         self.graphs = graphs
+        self.rtyper = rtyper
+        self.excdata = rtyper.getexceptiondata()
         self.graphbuilders = {}
         self.specialized_graphs = {}
         self.inline_and_remove = {}    # {graph: op_to_remove}
@@ -278,6 +250,12 @@ class MallocVirtualizer(object):
         for key, (mode, specgraph) in self.specialized_graphs.items():
             if mode == 'fail':
                 del self.specialized_graphs[key]
+
+    def fixup_except_block(self, exceptblock):
+        # hack: this block's inputargs may be missing concretetypes...
+        e1, v1 = exceptblock.inputargs
+        e1.concretetype = self.excdata.lltype_of_exception_type
+        v1.concretetype = self.excdata.lltype_of_exception_value
 
     def getmalloctypedesc(self, MALLOCTYPE):
         try:
@@ -399,6 +377,93 @@ class GraphBuilder(object):
         srcblock.exitswitch = specblock.exitswitch
         srcblock.recloseblock(*specblock.exits)
 
+    def create_outgoing_link(self, currentframe, targetblock,
+                             nodelist, renamings, v_expand_malloc=None):
+        assert len(nodelist) == len(targetblock.inputargs)
+        #
+        if is_except(targetblock):
+            v_expand_malloc = None
+            v_exc_type = renamings.get(nodelist[0])
+            while currentframe.callerframe is not None:
+                currentframe = currentframe.callerframe
+                newlink = self.handle_catch(currentframe, v_exc_type,
+                                            renamings)
+                if newlink:
+                    return newlink
+            else:
+                targetblock = self.exception_escapes(nodelist)
+                assert len(nodelist) == len(targetblock.inputargs)
+
+        if (currentframe.callerframe is None and
+              is_trivial_nodelist(nodelist)):
+            # there is no more VirtualSpecNodes being passed around,
+            # so we can stop specializing
+            rtnodes = nodelist
+            specblock = targetblock
+        else:
+            if is_return(targetblock):
+                v_expand_malloc = None
+                newframe = self.return_to_caller(currentframe, nodelist[0])
+            else:
+                targetnodes = dict(zip(targetblock.inputargs, nodelist))
+                newframe = VirtualFrame(currentframe.sourcegraph,
+                                        targetblock, 0, targetnodes,
+                                        callerframe=currentframe.callerframe)
+            rtnodes = newframe.find_rt_nodes()
+            specblock = self.get_specialized_block(newframe, v_expand_malloc)
+
+        linkargs = [renamings[rtnode] for rtnode in rtnodes]
+        return Link(linkargs, specblock)
+
+    def return_to_caller(self, currentframe, retnode):
+        callerframe = currentframe.callerframe
+        if callerframe is None:
+            raise ForcedInline("return block")
+        for i in range(len(callerframe.nodelist)):
+            if isinstance(callerframe.nodelist[i], FutureReturnValue):
+                callerframe.nodelist[i] = retnode
+        return callerframe
+
+    def handle_catch(self, catchingframe, v_exc_type, renamings):
+        if not self.has_exception_catching(catchingframe):
+            return None
+        if not isinstance(v_exc_type, Constant):
+            raise CannotVirtualize("raising non-constant exc type")
+        excdata = self.mallocv.excdata
+        assert catchingframe.sourceblock.exits[0].exitcase is None
+        for catchlink in catchingframe.sourceblock.exits[1:]:
+            if excdata.fn_exception_match(v_exc_type.value,
+                                          catchlink.llexitcase):
+                # Match found.  Follow this link.
+                mynodes = catchingframe.get_nodes_in_use()
+                # XXX Constants
+                nodelist = [mynodes[v] for v in catchlink.args]
+                return self.create_outgoing_link(catchingframe,
+                                                 catchlink.target,
+                                                 nodelist, renamings)
+        else:
+            # No match at all, propagate the exception to the caller
+            return None
+
+    def has_exception_catching(self, catchingframe):
+        if catchingframe.sourceblock.exitswitch != c_last_exception:
+            return False
+        else:
+            operations = catchingframe.sourceblock.operations
+            assert 1 <= catchingframe.nextopindex <= len(operations)
+            return catchingframe.nextopindex == len(operations)
+
+    def exception_escapes(self, nodelist):
+        # the exception escapes
+        if not is_trivial_nodelist(nodelist):
+            raise CannotVirtualize("except block")
+            # ^^^ this could also be a ForcedInline, to try to match the
+            # exception raising and catching globally.  But it looks
+            # overkill for now.
+        targetblock = self.graph.exceptblock
+        self.mallocv.fixup_except_block(targetblock)
+        return targetblock
+
     def get_specialized_block(self, virtualframe, v_expand_malloc=None):
         key = virtualframe.getfrozenkey()
         specblock = self.specialized_blocks.get(key)
@@ -448,7 +513,7 @@ class BlockSpecializer(object):
         if isinstance(v, Variable):
             return self.nodes[v]
         else:
-            rtnode = RuntimeSpecNode('const', v.concretetype)
+            rtnode = RuntimeSpecNode(None, v.concretetype)
             self.renamings[rtnode] = v
             return rtnode
 
@@ -466,6 +531,7 @@ class BlockSpecializer(object):
 
     def specialize_operations(self):
         newoperations = []
+        self.ops_produced_by_last_op = 0
         # note that 'self.virtualframe' can be changed during the loop!
         while True:
             operations = self.virtualframe.sourceblock.operations
@@ -477,18 +543,30 @@ class BlockSpecializer(object):
 
             meth = getattr(self, 'handle_op_' + op.opname,
                            self.handle_default)
-            newoperations += meth(op)
+            newops_for_this_op = meth(op)
+            newoperations += newops_for_this_op
+            self.ops_produced_by_last_op = len(newops_for_this_op)
         self.specblock.operations = newoperations
 
     def follow_exits(self):
         block = self.virtualframe.sourceblock
         self.specblock.exitswitch = self.rename_nonvirtual(block.exitswitch,
                                                            'exitswitch')
+        links = block.exits
         catch_exc = self.specblock.exitswitch == c_last_exception
+        if catch_exc and self.ops_produced_by_last_op == 0:
+            # the last op of the sourceblock did not produce any
+            # operation in specblock, so we need to discard the
+            # exception-catching.
+            catch_exc = False
+            links = links[:1]
+            assert links[0].exitcase is None  # the non-exception-catching case
+            self.specblock.exitswitch = None
+
         newlinks = []
-        for link in block.exits:
-            is_exc_link = catch_exc and link.exitcase is not None
-            if is_exc_link:
+        for link in links:
+            is_catch_link = catch_exc and link.exitcase is not None
+            if is_catch_link:
                 extravars = []
                 for attr in ['last_exception', 'last_exc_value']:
                     v = getattr(link, attr)
@@ -498,44 +576,19 @@ class BlockSpecializer(object):
                         self.renamings[rtnode] = v = rtnode.newvar()
                     extravars.append(v)
 
-            currentframe = self.virtualframe
             linkargsnodes = [self.getnode(v1) for v1 in link.args]
-            targetblock = link.target
-
-            if is_except(targetblock):
-                currentframe, targetblock = currentframe.handle_raise(
-                    linkargsnodes)
-
-            assert len(targetblock.inputargs) == len(linkargsnodes)
-            targetnodes = dict(zip(targetblock.inputargs, linkargsnodes))
-
-            if (currentframe.callerframe is None and
-                  is_trivial_nodelist(linkargsnodes)):
-                # there is no more VirtualSpecNodes being passed around,
-                # so we can stop specializing
-                rtnodes = linkargsnodes
-                specblock = targetblock
-            else:
-                if is_return(targetblock):
-                    newframe = currentframe.return_to_caller(linkargsnodes[0])
-                    v_expand_malloc = None
-                else:
-                    newframe = VirtualFrame(currentframe.sourcegraph,
-                                            targetblock, 0, targetnodes,
-                                          callerframe=currentframe.callerframe)
-                    v_expand_malloc = self.v_expand_malloc
-                rtnodes = newframe.find_rt_nodes()
-                specblock = self.graphbuilder.get_specialized_block(newframe,
-                                                               v_expand_malloc)
-
-            linkargs = [self.renamings[rtnode] for rtnode in rtnodes]
-            newlink = Link(linkargs, specblock)
+            #
+            newlink = self.graphbuilder.create_outgoing_link(
+                self.virtualframe, link.target, linkargsnodes,
+                self.renamings, self.v_expand_malloc)
+            #
             newlink.exitcase = link.exitcase
             if hasattr(link, 'llexitcase'):
                 newlink.llexitcase = link.llexitcase
-            if is_exc_link:
+            if is_catch_link:
                 newlink.extravars(*extravars)
             newlinks.append(newlink)
+
         self.specblock.closeblock(*newlinks)
 
     def make_rt_result(self, v_result):
@@ -545,10 +598,25 @@ class BlockSpecializer(object):
         self.renamings[newrtnode] = v_new
         return v_new
 
+    def make_const_rt_result(self, v_result, value):
+        newrtnode = RuntimeSpecNode(v_result, v_result.concretetype)
+        self.setnode(v_result, newrtnode)
+        if v_result.concretetype is not lltype.Void:
+            assert v_result.concretetype == lltype.typeOf(value)
+        c_value = Constant(value)
+        c_value.concretetype = v_result.concretetype
+        self.renamings[newrtnode] = c_value
+
     def handle_default(self, op):
         newargs = [self.rename_nonvirtual(v, op) for v in op.args]
-        newresult = self.make_rt_result(op.result)
-        return [SpaceOperation(op.opname, newargs, newresult)]
+        constresult = try_fold_operation(op.opname, newargs,
+                                         op.result.concretetype)
+        if constresult:
+            self.make_const_rt_result(op.result, constresult[0])
+            return []
+        else:
+            newresult = self.make_rt_result(op.result)
+            return [SpaceOperation(op.opname, newargs, newresult)]
 
     def handle_unreachable(self, op):
         from pypy.rpython.lltypesystem.rstr import string_repr
@@ -735,3 +803,30 @@ def is_return(block):
 
 def is_except(block):
     return len(block.exits) == 0 and len(block.inputargs) == 2
+
+class CannotConstFold(Exception):
+    pass
+
+def try_fold_operation(opname, args_v, RESTYPE):
+    args = []
+    for c in args_v:
+        if not isinstance(c, Constant):
+            return
+        args.append(c.value)
+    try:
+        op = getattr(llop, opname)
+    except AttributeError:
+        return
+    if not op.is_pure(*[v.concretetype for v in args_v]):
+        return
+    try:
+        result = op(RESTYPE, *args)
+    except TypeError:
+        pass
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception, e:
+        log.WARNING('constant-folding %s%r:' % (opname, args_v))
+        log.WARNING('  %s: %s' % (e.__class__.__name__, e))
+    else:
+        return (result,)
