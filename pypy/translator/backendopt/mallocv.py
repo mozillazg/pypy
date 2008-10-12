@@ -42,6 +42,8 @@ class MallocTypeDesc(object):
             fieldnames = fieldnames[1:]
         for name in fieldnames:
             FIELDTYPE = TYPE._flds[name]
+            if isinstance(FIELDTYPE, lltype.ContainerType):
+                raise CannotRemoveThisType("inlined substructure")
             self.name2index[name] = len(self.names_and_types)
             self.names_and_types.append((name, FIELDTYPE))
             self.name2subtype[name] = TYPE
