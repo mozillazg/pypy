@@ -313,20 +313,68 @@ def _get_record(code):
     print >> outfile, 'def combining(code): return _get_record(code)[4]'
 
 def write_character_names(outfile, table):
-    # Compressed Character names
+    def findranges(d):
+        ranges = []
+        for i in range(max(d)+1):
+            if i in d:
+                if not ranges:
+                    ranges.append((i,i))
+                    last = i
+                    continue
+                if last + 1 == i:
+                    ranges[-1] = (ranges[-1][0], i)
+                else:
+                    ranges.append((i,i))
+                last = i
+        return ranges
+
+    def collapse_ranges(ranges):
+        collapsed = [ranges[0]]
+        for i in range(1,len(ranges)):
+            lows, lowe = collapsed[-1]
+            highs, highe = ranges[i]
+            if highs - lowe < max([lowe - lows, highe - highs]):
+                collapsed[-1] = (lows, highe)
+            else:
+                collapsed.append(ranges[i])
+
+        return collapsed
+
     names = [table[code].name for code in range(len(table)) if table[code].name]
     codelist = compression.build_compression_table(names)
-    print >> outfile, '_charnames = {'
-    for code in range(len(table)):
-        name = table[code].name
-        if name:
-            print >> outfile, '%r: %r,' % (
-                code, compression.compress(codelist, name))
-    print >> outfile, "}\n"
     print >> outfile, "_codelist =", 
     pprint.pprint(codelist, outfile)
 
+    codes = set(code for code in range(len(table)) if table[code].name)
+    ranges = collapse_ranges(findranges(codes))
 
+    f_reverse_dict = ["def _gen_reverse_dict():",
+                      "    res = {}"]
+    function = ["def lookup_charcode(code):",
+                "    from pypy.module.unicodedata import compression",
+                "    res = None"]
+    for low, high in ranges:
+        function.append(
+            "    if %d <= code <= %d: res = _charnames_%d[code-%d]" % (
+            low, high, low, low))
+        f_reverse_dict.append(
+            "    for i in range(%d, %d): res[_charnames_%d[i-%d]] = i" % (
+            low, high+1, low, low))
+        print >> outfile, "_charnames_%d = [" % (low,)
+        for code in range(low, high + 1):
+            name = table[code].name
+            if name:
+                print >> outfile, '%r,' % (
+                    compression.compress(codelist, name))
+            else:
+                print >> outfile, 'None,'
+        print >> outfile, "]\n"
+    function.extend(["    if res is None: raise KeyError, code",
+                     "    return compression.uncompress(_codelist, res)\n"])
+    print >> outfile, '\n'.join(function)
+    f_reverse_dict.append("    return res\n")
+    print >> outfile, '\n'.join(f_reverse_dict)
+    
 def writeUnicodedata(version, table, outfile):
     # Version
     print >> outfile, 'version = %r' % version
@@ -339,7 +387,7 @@ def writeUnicodedata(version, table, outfile):
     write_character_names(outfile, table)
     
     print >> outfile, '''
-_code_by_name = dict(map(lambda x:(x[1],x[0]), _charnames.iteritems()))
+_code_by_name = _gen_reverse_dict()
 
 _cjk_prefix = "CJK UNIFIED IDEOGRAPH-"
 _hangul_prefix = 'HANGUL SYLLABLE '
@@ -407,7 +455,6 @@ def lookup(name):
     return _code_by_name[compression.compress(_codelist, name)]
 
 def name(code):
-    from pypy.module.unicodedata import compression
     if (0x3400 <= code <= 0x4DB5 or
         0x4E00 <= code <= 0x%X or
         0x20000 <= code <= 0x2A6D6):
@@ -422,7 +469,7 @@ def name(code):
         return ("HANGUL SYLLABLE " + _hangul_L[l_code] +
                 _hangul_V[v_code] + _hangul_T[t_code])
     
-    return compression.uncompress(_codelist, _charnames[code])
+    return lookup_charcode(code)
 ''' % (cjk_end, cjk_end)
 
     # Categories
