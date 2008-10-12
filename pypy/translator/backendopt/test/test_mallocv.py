@@ -179,6 +179,18 @@ class BaseMallocRemovalTest(object):
         graph = self.check(f, [int], [19], 42,
                            expected_calls=0)     # inlined
 
+    def test_raises_simple(self):
+        class MyExc(Exception):
+            pass
+        def f(n):
+            if n < 3:
+                e = MyExc()
+                e.n = n
+                raise e
+            return n
+        self.check(f, [int], [5], 5, expected_mallocs=1)
+        self.check(f, [int], [-5], CHECK_RAISES("MyExc"), expected_mallocs=1)
+
     def test_catch_simple(self):
         class A:
             pass
@@ -192,7 +204,7 @@ class BaseMallocRemovalTest(object):
             a = A()
             a.n = 10
             try:
-                g(n)
+                g(n)       # this call should not be inlined
             except E, e:
                 a.n = e.n
             return a.n
