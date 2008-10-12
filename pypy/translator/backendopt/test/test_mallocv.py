@@ -258,7 +258,6 @@ class BaseMallocRemovalTest(object):
                    expected_calls=1)
 
     def test_raises_through_inlining(self):
-        py.test.skip("in-progress")
         class A:
             pass
         def g(a):
