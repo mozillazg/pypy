@@ -76,11 +76,11 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
                     self.write(extra)
                 self.write_modRM_byte(mod, modrm2, modrm1)
             elif isinstance(arg2.location, Stack64):
-                self.write_rex_byte(rexW, rexR, rexX, rexB) 
+                self.write_rex_byte(rexW, rexB, rexX, rexR) 
                 self.write(opcode)
                 # exchanged mod1,mod2, dont know why :)
                 self.write_modRM_byte(mod, modrm1, modrm2)
-                # no scale, no index, base = rsp
+                # no scale(has no effect on rsp), no index, base = rsp
                 self.write_SIB(0, 4, 4) 
                 self.writeImm32(arg2.location.offset)  
     return quadreg_instr
@@ -206,7 +206,7 @@ class X86_64CodeBuilder(object):
     _IDIV_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 7)
     
     _IMUL_QWREG_QWREG = make_two_operand_instr(  1, None,    0, None, "\x0F", 3, None, None, None, "\xAF")
-    _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")
+    _IMUL_QWREG_IMM32 = make_two_operand_instr(  1, None,    0, None, "\x69", 3, None, "sameReg")#3 op instr
     
     _NEG_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 3)
     

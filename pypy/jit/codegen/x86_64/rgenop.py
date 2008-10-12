@@ -103,16 +103,16 @@ class Builder(model.GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         if isinstance(gv_arg, model.GenVar) and isinstance(gv_arg.location, Stack64):
-            move_back_to_register(gv_arg)
+            gv_arg = self.move_back_to_register(gv_arg)
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         if isinstance(gv_arg1, model.GenVar) and isinstance(gv_arg1.location, Stack64):
-            move_back_to_register(gv_arg1)
+            gv_arg1 = self.move_back_to_register(gv_arg1)
         if isinstance(gv_arg2, model.GenVar) and isinstance(gv_arg2.location, Stack64):
-            move_back_to_register(gv_arg2)
+            gv_arg2 = self.move_back_to_register(gv_arg2)
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
  
@@ -191,39 +191,40 @@ class Builder(model.GenBuilder):
         # TODO: use also rcx rdx
         gv_z = self.allocate_register("rax")
         self.mc.SETG(IntVar(Register8("al")))
-        return IntVar(Register64("rax"))
+        return gv_z
     
     def op_int_lt(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
         self.mc.SETL(IntVar(Register8("al")))
-        return IntVar(Register64("rax"))
+        return gv_z
     
     def op_int_le(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
         self.mc.SETLE(IntVar(Register8("al")))
-        return IntVar(Register64("rax"))
+        return gv_z
      
     def op_int_eq(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
         self.mc.SETE(IntVar(Register8("al")))
-        return IntVar(Register64("rax"))
+        return gv_z
     
     def op_int_ne(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
         self.mc.SETNE(IntVar(Register8("al")))
-        return IntVar(Register64("rax"))
+        return gv_z
     
     def op_int_ge(self, gv_x, gv_y):
         self.mc.CMP(gv_x, gv_y)
         gv_z = self.allocate_register("rax")
         self.mc.SETGE(IntVar(Register8("al")))
-        return IntVar(Register64("rax"))
+        return gv_z
     
     # the moves to pass arg. when making a jump to a block
+    # the targetvars are only copys
     #FIXME: problem with mapping of stackpositions
     def _compute_moves(self, outputargs_gv, targetargs_gv):
         tar2src = {}
@@ -260,8 +261,14 @@ class Builder(model.GenBuilder):
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         self._open()
+        gv_return = self.allocate_register("rax")
+        # if there unused genVars on the stack
+        # pop them away
+        while not self.stackdepth == 0:
+            self.mc.POP(gv_return)
+            self.stackdepth = self.stackdepth -1
         if not gv_returnvar == None:#check void return
-            self.mc.MOV(IntVar(Register64("rax")), gv_returnvar)
+            self.mc.MOV(gv_return, gv_returnvar)
         self.mc.RET()
         self._close()
         assert self.stackdepth == 0
@@ -281,29 +288,39 @@ class Builder(model.GenBuilder):
         self.mc.JMP(target.startaddr)
         self._close()
         
+    # FIXME: returns only ints
+    # FIXME: Double values in known_gv??    
     # TODO: support the allocation of 8bit Reg
     def allocate_register(self, register=None):
         if register is None:
             if not self.freeregisters:
-                #raise NotImplementedError("spilling not implemented")
-                return self.spill_register()
+                new_gv = self.spill_register()
+                self.known_gv.append(new_gv)
+                return new_gv
+            
             new_gv = IntVar(Register64(self.freeregisters.popitem()[0]))
             self.known_gv.append(new_gv)
             return new_gv
+        
         else:
             if register not in self.freeregisters:
                 # the register must be in the list!
                 for i in range(len(self.known_gv)):
-                    if register == self.known_gv[i].location.reg:
-                        # move the values from the requiered register
-                        # to an other one and return the
-                        # requested one.
-                        gv = self.allocate_register()
-                        self.mc.MOV(gv,self.known_gv[i])
+                    if isinstance(self.known_gv[i].location, Register64) and register == self.known_gv[i].location.reg:
+                        # move the values from the requiered 
+                        # register to an other one and 
+                        # return the requested one.
+                        gv_temp = self.allocate_register()
+                        self.mc.MOV(gv_temp, self.known_gv[i])
                         new_gv = IntVar(Register64(register))
                         self.known_gv.append(new_gv)
+                        self.known_gv[i].location.reg = gv_temp.location.reg
+                        self.known_gv.remove(gv_temp)
                         return new_gv
-                raise NotImplementedError("register moves")           
+                    
+                # raised when the register is not in freereg. and not
+                # used by a gen_var 
+                raise Exception("error while register moves")           
             del self.freeregisters[register]
             new_gv = IntVar(Register64(register))
             self.known_gv.append(new_gv)
@@ -312,15 +329,22 @@ class Builder(model.GenBuilder):
     def end(self):
         pass
     
-    #TODO: args_gv muste be a list of unique GenVars
+    # TODO: args_gv muste be a list of unique GenVars
+    # Spilling could change the location of a
+    # genVar after this Label. That will result in
+    # wrong a mapping in _compute_moves when leaving this block.
+    # So the parameters must be inmutable(copy them)
     def enter_next_block(self, args_gv):
         # move constants into an register
+        copy_args = []
         for i in range(len(args_gv)):
             if isinstance(args_gv[i],model.GenConst):
                 gv_x = self.allocate_register()
                 self.mc.MOV(gv_x, args_gv[i])
                 args_gv[i] = gv_x
-        L = Label(self.mc.tell(), args_gv, 0)
+            # copy the gv
+            copy_args.append(IntVar(Register64(args_gv[i].location.reg)))
+        L = Label(self.mc.tell(), copy_args, 0)
         return L
     
     def _close(self):
@@ -333,37 +357,44 @@ class Builder(model.GenBuilder):
         # take the first gv which is not
         # on the stack
         gv_to_spill = None
-        for i in range(len(known_gv)):
-           if not isinstance(known_gv[i].location, Stack64):
+        for i in range(len(self.known_gv)):
+           if not isinstance(self.known_gv[i].location, Stack64):
                 gv_to_spill = self.known_gv[i]
                 break
         # there must be genVars which are 
         # inside an register so:
         assert isinstance(gv_to_spill.location, Register64) 
-        
         self.stackdepth = self.stackdepth +1 
         self.mc.PUSH(gv_to_spill)      
         new_gv = IntVar(Register64(gv_to_spill.location.reg))
-        gv_to_spill.location = Stack64(self.stackdepth) 
+        gv_to_spill.location = Stack64(self.stackdepth)         
         return new_gv
         
-    def move_back_to_register(a_spilled_gv):
-        # if top of stack
+    # FIXME: pushed values are not allways poped (if not TOS)
+    def move_back_to_register(self, a_spilled_gv):
+        # if a_spilled_gv is the top of stack
         if a_spilled_gv.location.offset ==  self.stackdepth:
             gv_new = self.allocate_register()
             self.mc.POP(gv_new)
             self.stackdepth = self.stackdepth -1
             assert self.stackdepth >= 0 
             #update all offsets
-            for i in range(len(known_gv)):
-               if isinstance(known_gv[i].location, Stack64):
+            for i in range(len(self.known_gv)):
+               if isinstance(self.known_gv[i].location, Stack64):
                     known_gv[i].location.offset = known_gv[i].location.offset -1
             a_spilled_gv = gv_new
-            # TODO: free gv_new (no double values in known_gv
+            # TODO: free gv_new (no double values in known_gv)
+            # TODO: look if there is a genVar with stackdepth
+            #       if not it has already been moved to a reg. 
+            #       pop it or change the stackpointer
+            return a_spilled_gv
+        else:
         # else access the memory
         # FIXME: if this genVar becomes the top of stack it will never be pushed
-        else:
-            pass
+            gv_new = self.allocate_register()
+            self.mc.MOV(gv_new, IntVar(Stack64(8*(self.stackdepth-a_spilled_gv.location.offset))))
+            a_spilled_gv = gv_new 
+            return a_spilled_gv
             
             
 
