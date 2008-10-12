@@ -767,6 +767,42 @@ class BlockSpecializer(object):
         else:
             return self.handle_default(op)
 
+    def handle_op_ptr_nonzero(self, op):
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
+            self.make_const_rt_result(op.result, True)
+            return []
+        else:
+            return self.handle_default(op)
+
+    def handle_op_ptr_iszero(self, op):
+        node = self.getnode(op.args[0])
+        if isinstance(node, VirtualSpecNode):
+            self.make_const_rt_result(op.result, False)
+            return []
+        else:
+            return self.handle_default(op)
+
+    def handle_op_ptr_eq(self, op):
+        node0 = self.getnode(op.args[0])
+        node1 = self.getnode(op.args[1])
+        if (isinstance(node0, VirtualSpecNode) or
+            isinstance(node1, VirtualSpecNode)):
+            self.make_const_rt_result(op.result, node0 is node1)
+            return []
+        else:
+            return self.handle_default(op)
+
+    def handle_op_ptr_ne(self, op):
+        node0 = self.getnode(op.args[0])
+        node1 = self.getnode(op.args[1])
+        if (isinstance(node0, VirtualSpecNode) or
+            isinstance(node1, VirtualSpecNode)):
+            self.make_const_rt_result(op.result, node0 is not node1)
+            return []
+        else:
+            return self.handle_default(op)
+
     def handle_op_malloc(self, op):
         if op.result is self.v_expand_malloc:
             MALLOCTYPE = op.result.concretetype.TO

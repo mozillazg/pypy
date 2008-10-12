@@ -8,7 +8,7 @@ from pypy.translator import simplify
 from pypy.objspace.flow.model import checkgraph, flatten, Block, mkentrymap
 from pypy.objspace.flow.model import summary
 from pypy.rpython.llinterp import LLInterpreter, LLException
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib import objectmodel
 from pypy.rlib.rarithmetic import ovfcheck
@@ -476,7 +476,6 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
                    expected_mallocs=1)   # no support for interior arrays
 
     def test_wrapper_cannot_be_removed(self):
-        py.test.skip("redo me")
         SMALL = lltype.OpaqueType('SMALL')
         BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
 
@@ -486,7 +485,9 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             b = lltype.malloc(BIG)
             g(b.s)
 
-        self.check(fn, [], [], None, must_be_removed=False)
+        self.check(fn, [], [], None,
+                   expected_mallocs=1,   # no support for interior opaques
+                   expected_calls=1)
 
     def test_direct_fieldptr(self):
         py.test.skip("redo me")
@@ -533,12 +534,80 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
                 self.check(fn, [], [], 12)
 
     def test_ptr_nonzero(self):
-        py.test.skip("redo me")
         S = lltype.GcStruct('S')
         def fn():
             s = lltype.malloc(S)
-            return bool(s)
-        self.check(fn, [], [], True)
+            return lloperation.llop.ptr_nonzero(lltype.Bool, s)
+        self.check(fn, [], [], True, expected_mallocs=0)
+
+    def test_ptr_iszero(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s = lltype.malloc(S)
+            return lloperation.llop.ptr_iszero(lltype.Bool, s)
+        self.check(fn, [], [], False, expected_mallocs=0)
+
+    def test_ptr_eq_null_left(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s = lltype.malloc(S)
+            null = lltype.nullptr(S)
+            return lloperation.llop.ptr_eq(lltype.Bool, s, null)
+        self.check(fn, [], [], False, expected_mallocs=0)
+
+    def test_ptr_ne_null_left(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s = lltype.malloc(S)
+            null = lltype.nullptr(S)
+            return lloperation.llop.ptr_ne(lltype.Bool, s, null)
+        self.check(fn, [], [], True, expected_mallocs=0)
+
+    def test_ptr_eq_null_right(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s = lltype.malloc(S)
+            null = lltype.nullptr(S)
+            return lloperation.llop.ptr_eq(lltype.Bool, null, s)
+        self.check(fn, [], [], False, expected_mallocs=0)
+
+    def test_ptr_ne_null_right(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s = lltype.malloc(S)
+            null = lltype.nullptr(S)
+            return lloperation.llop.ptr_ne(lltype.Bool, null, s)
+        self.check(fn, [], [], True, expected_mallocs=0)
+
+    def test_ptr_eq_same_struct(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s1 = lltype.malloc(S)
+            return lloperation.llop.ptr_eq(lltype.Bool, s1, s1)
+        self.check(fn, [], [], True, expected_mallocs=0)
+
+    def test_ptr_ne_same_struct(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s1 = lltype.malloc(S)
+            return lloperation.llop.ptr_ne(lltype.Bool, s1, s1)
+        self.check(fn, [], [], False, expected_mallocs=0)
+
+    def test_ptr_eq_diff_struct(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s1 = lltype.malloc(S)
+            s2 = lltype.malloc(S)
+            return lloperation.llop.ptr_eq(lltype.Bool, s1, s2)
+        self.check(fn, [], [], False, expected_mallocs=0)
+
+    def test_ptr_ne_diff_struct(self):
+        S = lltype.GcStruct('S')
+        def fn():
+            s1 = lltype.malloc(S)
+            s2 = lltype.malloc(S)
+            return lloperation.llop.ptr_ne(lltype.Bool, s1, s2)
+        self.check(fn, [], [], True, expected_mallocs=0)
 
     def test_substruct_not_accessed(self):
         py.test.skip("redo me")
