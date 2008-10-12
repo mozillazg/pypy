@@ -214,6 +214,7 @@ class Linux(Platform):
 
         rel_cfiles = [m.pathrel(cfile) for cfile in cfiles]
         rel_ofiles = [rel_cfile[:-2]+'.o' for rel_cfile in rel_cfiles]
+        m.cfiles = rel_cfiles
 
         rel_includedirs = [pypyrel(incldir) for incldir in eci.include_dirs]
 
