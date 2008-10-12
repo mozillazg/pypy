@@ -1,4 +1,5 @@
 import py
+import sys
 from pypy.translator.backendopt.mallocv import MallocVirtualizer
 from pypy.translator.backendopt.inline import inline_function
 from pypy.translator.backendopt.all import backend_optimizations
@@ -6,11 +7,19 @@ from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator import simplify
 from pypy.objspace.flow.model import checkgraph, flatten, Block, mkentrymap
 from pypy.objspace.flow.model import summary
-from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib import objectmodel
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.conftest import option
+
+DONT_CHECK_RESULT = object()
+class CHECK_RAISES:
+    def __init__(self, excname):
+        assert isinstance(excname, str)
+        self.excname = excname
+
 
 class BaseMallocRemovalTest(object):
     type_system = None
@@ -52,10 +61,15 @@ class BaseMallocRemovalTest(object):
             if progress and option.view:
                 t.view()
             t.checkgraphs()
-            if expected_result is not Ellipsis:
+            if expected_result is not DONT_CHECK_RESULT:
                 interp = LLInterpreter(t.rtyper)
-                res = interp.eval_graph(graph, args)
-                assert res == expected_result
+                if not isinstance(expected_result, CHECK_RAISES):
+                    res = interp.eval_graph(graph, args)
+                    assert res == expected_result
+                else:
+                    excinfo = py.test.raises(LLException,
+                                             interp.eval_graph, graph, args)
+                    assert expected_result.excname in str(excinfo.value)
             if not progress:
                 break
             maxiter -= 1
@@ -163,6 +177,110 @@ class BaseMallocRemovalTest(object):
             a = g(a)
             return prebuilt_a.x * a.x
         graph = self.check(f, [int], [19], 42,
+                           expected_calls=0)     # inlined
+
+    def test_catch_simple(self):
+        class A:
+            pass
+        class E(Exception):
+            def __init__(self, n):
+                self.n = n
+        def g(n):
+            if n < 0:
+                raise E(n)
+        def f(n):
+            a = A()
+            a.n = 10
+            try:
+                g(n)
+            except E, e:
+                a.n = e.n
+            return a.n
+        self.check(f, [int], [15], 10, expected_calls=1)
+        self.check(f, [int], [-15], -15, expected_calls=1)
+
+    def test_raise_catch(self):
+        class A:
+            pass
+        class E(Exception):
+            def __init__(self, n):
+                self.n = n
+        def f(n):
+            a = A()
+            e1 = E(n)
+            try:
+                raise e1
+            except E, e:
+                a.n = e.n
+            return a.n
+        self.check(f, [int], [15], 15)
+
+    def test_raising_op(self):
+        class A:
+            pass
+        def f(n):
+            a = A()
+            a.n = n
+            try:
+                a.n = ovfcheck(a.n + 1)
+            except OverflowError:
+                return -42
+            return a.n
+        self.check(f, [int], [19], 20)
+        self.check(f, [int], [sys.maxint], -42)
+
+    def test_raises_through_spec_graph(self):
+        class A:
+            pass
+        def g(a):
+            if a.n < 0:
+                raise ValueError
+        def f(n):
+            a = A()
+            a.n = n
+            g(a)
+            return a.n
+        self.check(f, [int], [19], 19,
+                   expected_calls=1)
+        self.check(f, [int], [-19], CHECK_RAISES("ValueError"),
+                   expected_calls=1)
+
+    def test_raises_through_inlining(self):
+        py.test.skip("in-progress")
+        class A:
+            pass
+        def g(a):
+            a.n -= 1
+            if a.n < 0:
+                raise ValueError
+        def f(n):
+            a = A()
+            a.n = n
+            g(a)
+            return a.n
+        self.check(f, [int], [19], 18)
+        self.check(f, [int], [-19], CHECK_RAISES("ValueError"))
+
+    def test_call_raise_catch(self):
+        py.test.skip("in-progress")
+        class A:
+            pass
+        def g(a):
+            a.n -= 1
+            if a.n <= 0:
+                raise StopIteration
+            return a.n * 10
+        def f(n):
+            a = A()
+            a.n = n
+            total = 0
+            try:
+                while True:
+                    total += g(a)
+            except StopIteration:
+                pass
+            return total
+        graph = self.check(f, [int], [11], 550,
                            expected_calls=0)     # inlined
 
     def test_fn2(self):
@@ -445,7 +563,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             x.u1.a = 3
             x.u2.b = 6
             return x.u1.b * x.u2.a
-        self.check(fn, [], [], Ellipsis)
+        self.check(fn, [], [], DONT_CHECK_RESULT)
 
     def test_keep_all_keepalives(self):
         py.test.skip("redo me")
