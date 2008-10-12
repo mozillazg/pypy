@@ -126,6 +126,15 @@ def make_one_op_imm_instr(rgenop,  instr_name, num):
     gv_result = builder.genop2(instr_name, gv_x, rgenop.genconst(num))
     builder.finish_and_return(sigtoken, gv_result)
     builder.end()
+    return gv_op_imm  
+      
+def make_one_op_imm_instr_args_inv(rgenop,  instr_name, num):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
+    builder, gv_op_imm, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "one_op_imm_instr_args_inv")
+    builder.start_writing()
+    gv_result = builder.genop2(instr_name, rgenop.genconst(num), gv_x)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
     return gv_op_imm        
 
 class TestRGenopDirect(AbstractRGenOpTestsDirect):
@@ -172,6 +181,14 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         res = fnptr(210)
         assert res == 42000
         mul_function = make_one_op_imm_instr(rgenop, "int_mul", -9876)
+        fnptr = self.cast(mul_function,1)
+        res = fnptr(12345)
+        assert res == -121919220   
+        mul_function =make_one_op_imm_instr_args_inv(rgenop, "int_mul", 200)
+        fnptr = self.cast(mul_function,1)
+        res = fnptr(210)
+        assert res == 42000
+        mul_function = make_one_op_imm_instr_args_inv(rgenop, "int_mul", -9876)
         fnptr = self.cast(mul_function,1)
         res = fnptr(12345)
         assert res == -121919220
@@ -497,7 +514,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_calling_pause_direct = skip
     test_longwinded_and_direct = skip
     test_condition_result_cross_link_direct = skip
-    test_multiple_cmps = skip
+    ##test_multiple_cmps = skip##
     test_flipped_cmp_with_immediate = skip
     test_jump_to_block_with_many_vars = skip
     test_same_as = skip
