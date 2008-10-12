@@ -23,9 +23,7 @@ def test_simple_makefile():
     ''')
     mk = host.gen_makefile([cfile], ExternalCompilationInfo(),
                            path=tmpdir)
-    f = tmpdir.join('Makefile').open('w')
-    mk.write(f)
-    f.close()
+    mk.write()
     host.execute_makefile(tmpdir)
     res = host.execute(tmpdir.join('test_simple_enough'))
     assert res.out == '42\n'
