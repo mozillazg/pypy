@@ -71,13 +71,13 @@ class GnuMakefile(object):
     def __init__(self, path=None):
         self.defs = {}
         self.lines = []
-        self._path = py.path.local(path)
+        self.makefile_dir = py.path.local(path)
         
     def pathrel(self, fpath):
-        if fpath.dirpath() == self._path:
+        if fpath.dirpath() == self.makefile_dir:
             return fpath.basename
-        elif fpath.dirpath().dirpath() == self._path.dirpath():
-            return '../' + fpath.relto(self._path.dirpath())
+        elif fpath.dirpath().dirpath() == self.makefile_dir.dirpath():
+            return '../' + fpath.relto(self.makefile_dir.dirpath())
         else:
             return str(fpath)
 
@@ -98,7 +98,7 @@ class GnuMakefile(object):
 
     def write(self, out=None):
         if out is None:
-            f = self._path.join('Makefile').open('w')
+            f = self.makefile_dir.join('Makefile').open('w')
         else:
             f = out
         for line in self.lines:
@@ -245,7 +245,11 @@ class Linux(Platform):
 
         return m
 
-    def execute_makefile(self, path):
+    def execute_makefile(self, path_to_makefile):
+        if isinstance(path_to_makefile, GnuMakefile):
+            path = path_to_makefile.makefile_dir
+        else:
+            path = path_to_makefile
         log.execute('make in %s' % (path,))
         returncode, stdout, stderr = _run_subprocess('make', ['-C', str(path)])
         if returncode != 0:
