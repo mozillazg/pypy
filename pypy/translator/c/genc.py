@@ -379,6 +379,13 @@ class CStandaloneBuilder(CBuilder):
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
+    def cmdexec(self, args=''):
+        assert self._compiled
+        res = self.translator.platform.execute(self.executable_name, args)
+        if res.returncode != 0:
+            raise Exception("Returned %d" % (res.returncode,))
+        return res.out
+
     def compile(self):
         assert self.c_source_filename
         assert not self._compiled
