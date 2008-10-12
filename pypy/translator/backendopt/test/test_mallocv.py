@@ -430,38 +430,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             return s*d
         self.check(fn1, [int, int], [15, 10], 125)
 
-    def test_dont_remove_with__del__(self):
-        py.test.skip("redo me")
-        import os
-        delcalls = [0]
-        class A(object):
-            nextid = 0
-            def __init__(self):
-                self.id = self.nextid
-                self.nextid += 1
-
-            def __del__(self):
-                delcalls[0] += 1
-                os.write(1, "__del__\n")
-
-        def f(x=int):
-            a = A()
-            i = 0
-            while i < x:
-                a = A()
-                os.write(1, str(delcalls[0]) + "\n")
-                i += 1
-            return 1
-        t = TranslationContext()
-        t.buildannotator().build_types(f, [int])
-        t.buildrtyper().specialize()
-        graph = graphof(t, f)
-        backend_optimizations(t)
-        op = graph.startblock.exits[0].target.exits[1].target.operations[0]
-        assert op.opname == "malloc"
-
     def test_add_keepalives(self):
-        py.test.skip("redo me")
         class A:
             pass
         SMALL = lltype.Struct('SMALL', ('x', lltype.Signed))
@@ -476,11 +445,10 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
                 a.small.x += i
                 i -= 1
             return a.small.x
-        self.check(fn7, [int], [10], 55, must_be_removed=False)
+        self.check(fn7, [int], [10], 55,
+                   expected_mallocs=1)   # no support for interior structs
 
     def test_getsubstruct(self):
-        py.test.skip("redo me")
-        py.test.skip("fails because of the interior structure changes")
         SMALL = lltype.Struct('SMALL', ('x', lltype.Signed))
         BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
 
@@ -490,11 +458,10 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             b.s.x = n2
             return b.z - b.s.x
 
-        self.check(fn, [int, int], [100, 58], 42)
+        self.check(fn, [int, int], [100, 58], 42,
+                   expected_mallocs=1)   # no support for interior structs
 
     def test_fixedsizearray(self):
-        py.test.skip("redo me")
-        py.test.skip("fails because of the interior structure changes")
         A = lltype.FixedSizeArray(lltype.Signed, 3)
         S = lltype.GcStruct('S', ('a', A))
 
@@ -505,7 +472,8 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             a[2] = n2
             return a[0]-a[2]
 
-        self.check(fn, [int, int], [100, 42], 58)
+        self.check(fn, [int, int], [100, 42], 58,
+                   expected_mallocs=1)   # no support for interior arrays
 
     def test_wrapper_cannot_be_removed(self):
         py.test.skip("redo me")
