@@ -96,10 +96,16 @@ class GnuMakefile(object):
     def comment(self, body):
         self.lines.append(Comment(body))
 
-    def write(self, f):
+    def write(self, out=None):
+        if out is None:
+            f = self._path.join('Makefile').open('w')
+        else:
+            f = out
         for line in self.lines:
             line.write(f)
         f.flush()
+        if out is None:
+            f.close()
 
 class Linux(Platform):
     link_flags = ['-pthread']
