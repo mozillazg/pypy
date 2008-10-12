@@ -634,7 +634,6 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         self.check(fn, [], [], DONT_CHECK_RESULT)
 
     def test_keep_all_keepalives(self):
-        py.test.skip("redo me")
         SIZE = llmemory.sizeof(lltype.Signed)
         PARRAY = lltype.Ptr(lltype.FixedSizeArray(lltype.Signed, 1))
         class A:
@@ -657,7 +656,8 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
             objectmodel.keepalive_until_here(b)
             return res
         graph = self.check(myfunc, [], [], 42,
-                           must_be_removed=False)    # 'A' instance left
+                           expected_mallocs=1,    # 'A' instance left
+                           expected_calls=1)      # to A.__init__()
 
         # there is a getarrayitem near the end of the graph of myfunc.
         # However, the memory it accesses must still be protected by the

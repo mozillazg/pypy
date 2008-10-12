@@ -539,8 +539,7 @@ class GraphBuilder(object):
             op = SpaceOperation('cast_pointer', [v], v_out)
             block.operations.append(op)
             #
-            v0 = Variable()
-            v0.concretetype = lltype.Void
+            v0 = varoftype(lltype.Void)
             op = SpaceOperation('setfield', [v_out, c_name, v_field], v0)
             block.operations.append(op)
         #
@@ -763,7 +762,16 @@ class BlockSpecializer(object):
     def handle_op_keepalive(self, op):
         node = self.getnode(op.args[0])
         if isinstance(node, VirtualSpecNode):
-            return []
+            rtnodes, vtnodes = find_all_nodes([node])
+            newops = []
+            for rtnode in rtnodes:
+                v = self.renamings[rtnode]
+                if isinstance(v, Variable):
+                    T = v.concretetype
+                    if isinstance(T, lltype.Ptr) and T._needsgc():
+                        v0 = varoftype(lltype.Void)
+                        newops.append(SpaceOperation('keepalive', [v], v0))
+            return newops
         else:
             return self.handle_default(op)
 
