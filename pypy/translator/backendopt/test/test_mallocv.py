@@ -294,7 +294,6 @@ class BaseMallocRemovalTest(object):
                            expected_calls=0)     # inlined
 
     def test_call_raise_catch_inspect(self):
-        py.test.skip("in-progress")
         class A:
             pass
         class E(Exception):
