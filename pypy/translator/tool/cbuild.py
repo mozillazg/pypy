@@ -255,6 +255,12 @@ class ExternalCompilationInfo(object):
         d['separate_module_files'] += tuple(files)
         return ExternalCompilationInfo(**d)
 
+    def get_module_files(self):
+        d = self._copy_attributes()
+        files = d['separate_module_files']
+        d['separate_module_files'] = ()
+        return files, ExternalCompilationInfo(**d)
+
     def compile_shared_lib(self):
         self = self.convert_sources_to_files()
         if not self.separate_module_files:

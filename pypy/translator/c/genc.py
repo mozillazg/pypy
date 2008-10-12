@@ -202,23 +202,35 @@ class CBuilder(object):
             CBuilder.have___thread = self.translator.platform.check___thread()
         if not self.standalone:
             assert not self.config.translation.instrument
-            cfile, extra = gen_source(db, modulename, targetdir, self.eci,
-                                      defines = defines)
+            self.eci, cfile, extra = gen_source(db, modulename, targetdir,
+                                                self.eci,
+                                                defines = defines)
         else:
             if self.config.translation.instrument:
                 defines['INSTRUMENT'] = 1
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
-            cfile, extra = gen_source_standalone(db, modulename, targetdir,
+            self.eci, cfile, extra = gen_source_standalone(db, modulename,
+                                                 targetdir,
                                                  self.eci,
                                                  entrypointname = pfname,
                                                  defines = defines)
         self.c_source_filename = py.path.local(cfile)
-        self.extrafiles = extra
-        if self.standalone:
-            self.gen_makefile(targetdir)
+        self.extrafiles = self.eventually_copy(extra)
+        self.gen_makefile(targetdir)
         return cfile
+
+    def eventually_copy(self, cfiles):
+        extrafiles = []
+        for fn in cfiles:
+            fn = py.path.local(fn)
+            if not fn.relto(udir):
+                newname = self.targetdir.join(fn.basename)
+                fn.copy(newname)
+                fn = newname
+            extrafiles.append(fn)
+        return extrafiles
 
 class ModuleWithCleanup(object):
     def __init__(self, mod):
@@ -336,6 +348,9 @@ _rpython_startup()
         if isinstance(self._module, isolate.Isolate):
             isolate.close_isolate(self._module)
 
+    def gen_makefile(self, targetdir):
+        pass
+
 class CStandaloneBuilder(CBuilder):
     standalone = True
     executable_name = None
@@ -363,22 +378,6 @@ class CStandaloneBuilder(CBuilder):
         # signature:  list-of-strings -> int
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
-
-    def getccompiler(self):
-        cc = self.config.translation.cc
-        # Copy extrafiles to target directory, if needed
-        extrafiles = []
-        for fn in self.extrafiles:
-            fn = py.path.local(fn)
-            if not fn.relto(udir):
-                newname = self.targetdir.join(fn.basename)
-                fn.copy(newname)
-                fn = newname
-            extrafiles.append(fn)
-
-        return CCompiler(
-            [self.c_source_filename] + extrafiles,
-            self.eci, compiler_exe = cc, profbased = self.getprofbased())
 
     def compile(self):
         assert self.c_source_filename
@@ -415,15 +414,14 @@ class CStandaloneBuilder(CBuilder):
             compiler.link_extra.append(self.config.translation.linkerflags)
 
     def gen_makefile(self, targetdir):
+        cfiles = [self.c_source_filename] + self.extrafiles
+        mk = self.translator.platform.gen_makefile(cfiles, self.eci,
+                                                   path=targetdir)
+        mk.write()
+        #self.translator.platform,
+        #                           ,
+        #                           self.eci, profbased=self.getprofbased()
         return
-        def write_list(lst, prefix):
-            for i, fn in enumerate(lst):
-                print >> f, prefix, fn,
-                if i < len(lst)-1:
-                    print >> f, '\\'
-                else:
-                    print >> f
-                prefix = ' ' * len(prefix)
 
         self.eci = self.eci.merge(ExternalCompilationInfo(
             includes=['.', str(self.targetdir)]))
@@ -842,8 +840,8 @@ def gen_source_standalone(database, modulename, targetdir, eci,
         fi.close()
 
     eci = eci.convert_sources_to_files(being_main=True)
-    return filename, sg.getextrafiles() + list(eci.separate_module_files)
-
+    files, eci = eci.get_module_files()
+    return eci, filename, sg.getextrafiles() + list(files)
 
 def gen_source(database, modulename, targetdir, eci, defines={}):
     assert not database.standalone
@@ -902,9 +900,8 @@ def gen_source(database, modulename, targetdir, eci, defines={}):
     f.write(SETUP_PY % locals())
     f.close()
     eci = eci.convert_sources_to_files(being_main=True)
-
-    return filename, sg.getextrafiles() + list(eci.separate_module_files)
-
+    files, eci = eci.get_module_files()
+    return eci, filename, sg.getextrafiles() + list(files)
 
 SETUP_PY = '''
 from distutils.core import setup
