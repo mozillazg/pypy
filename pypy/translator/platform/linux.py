@@ -68,9 +68,18 @@ class Comment(object):
         f.write('# %s\n' % (self.body,))
 
 class GnuMakefile(object):
-    def __init__(self):
+    def __init__(self, path=None):
         self.defs = {}
         self.lines = []
+        self._path = py.path.local(path)
+        
+    def pathrel(self, fpath):
+        if fpath.dirpath() == self._path:
+            return fpath.basename
+        elif fpath.dirpath().dirpath() == self._path.dirpath():
+            return '../' + fpath.relto(self._path.dirpath())
+        else:
+            return str(fpath)
 
     def definition(self, name, value):
         defs = self.defs
@@ -180,21 +189,15 @@ class Linux(Platform):
 
         if path is None:
             path = cfiles[0].dirpath()
-        else:
-            path = py.path.local(path)
 
         pypypath = py.path.local(autopath.pypydir)
 
         if exe_name is None:
             exe_name = cfiles[0].new(ext='')
 
-        def pathrel(fpath):
-            if fpath.dirpath() == path:
-                return fpath.basename
-            elif fpath.dirpath().dirpath() == path.dirpath():
-                return '../' + fpath.relto(path.dirpath())
-            else:
-                return str(fpath)
+        m = GnuMakefile(path)
+        m.exe_name = exe_name
+        m.eci = eci
 
         def pypyrel(fpath):
             rel = py.path.local(fpath).relto(pypypath)
@@ -203,12 +206,11 @@ class Linux(Platform):
             else:
                 return fpath
 
-        rel_cfiles = [pathrel(cfile) for cfile in cfiles]
+        rel_cfiles = [m.pathrel(cfile) for cfile in cfiles]
         rel_ofiles = [rel_cfile[:-2]+'.o' for rel_cfile in rel_cfiles]
 
         rel_includedirs = [pypyrel(incldir) for incldir in eci.include_dirs]
 
-        m = GnuMakefile()
         m.comment('automatically generated makefile')
         definitions = [
             ('PYPYDIR', autopath.pypydir),
