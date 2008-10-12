@@ -174,7 +174,11 @@ class VirtualFrame(object):
 
     def handle_raise(self, linkargsnodes):
         if not is_trivial_nodelist(linkargsnodes):
-            raise ForcedInline("except block")
+            raise CannotVirtualize("except block")
+            # ^^^ this could also be a ForcedInline, to try to match the
+            # exception raising and catching globally.  But it looks
+            # overkill for now.
+
         # XXX this assumes no exception handler in the callerframes
         topframe = self
         while topframe.callerframe is not None:
