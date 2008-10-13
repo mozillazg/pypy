@@ -1,12 +1,45 @@
 import py
 from pypy.translator.platform.linux import Linux, _run_subprocess
 from pypy.translator.platform import ExecutionResult, log
+from pypy.tool.udir import udir
 
 def check_scratchbox():
     if not py.path.local('/scratchbox/login').check():
         py.test.skip("No scratchbox detected")
 
 class Maemo(Linux):
+    available_includedirs = ['/usr/include', '/tmp']
+
+    def _invent_new_name(self, basepath, base):
+        pth = basepath.join(base)
+        num = 0
+        while pth.check():
+            pth = basepath.join('%s_%d' % (base,num))
+            num += 1
+        return pth.ensure(dir=1)
+
+    def _copy_files_to_new_dir(self, dir_from, pattern='*.h'):
+        new_dirpath = self._invent_new_name(udir, 'copied_includes')
+        files = py.path.local(dir_from).listdir(pattern)
+        for f in files:
+            f.copy(new_dirpath)
+        return new_dirpath
+    
+    def _includedirs(self, include_dirs):
+        """ Tweak includedirs so they'll be available through scratchbox
+        """
+        res_incl_dirs = []
+        for incl_dir in include_dirs:
+            incl_dir = py.path.local(incl_dir)
+            for available in self.available_includedirs:
+                if incl_dir.relto(available):
+                    res_incl_dirs.append(str(incl_dir))
+                    break
+            else:
+                # we need to copy files to a place where it's accessible
+                res_incl_dirs.append(self._copy_files_to_new_dir(incl_dir))
+        return ['-I%s' % (incl_dir,) for incl_dir in res_incl_dirs]
+    
     def _execute_c_compiler(self, cc, args, outname):
         log.execute('/scratchbox/login ' + cc + ' ' + ' '.join(args))
         args = [cc] + args
