@@ -10,6 +10,7 @@ from pypy.objspace.flow.model import summary
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import objectmodel
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.conftest import option
@@ -480,7 +481,18 @@ class BaseMallocRemovalTest(object):
         self.check(fn13, [int], [10], 4)
 
     def test_constfold_indirect_call(self):
-        skip("write me")
+        F = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
+        class A:
+            pass
+        def h1(n):
+            return n - 1
+        def fn16(n):
+            a = A()
+            a.n = n
+            h = llhelper(F, h1)
+            h2 = lloperation.llop.same_as(F, h)
+            return h2(a.n)
+        self.check(fn16, [int], [10], 9, expected_calls=1)
 
     def test_bug_on_links_to_return(self):
         class A:
