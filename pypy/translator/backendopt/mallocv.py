@@ -399,7 +399,7 @@ class GraphBuilder(object):
             nodelist.append(RuntimeSpecNode(v, v.concretetype))
         trivialframe = VirtualFrame(block, 0, nodelist)
         spec = BlockSpecializer(self, v_result)
-        spec.initialize_renamings(trivialframe)
+        spec.initialize_renamings(trivialframe, keep_inputargs=True)
         self.pending_specializations.append(spec)
         self.pending_patch = (block, spec.specblock)
 
@@ -600,16 +600,22 @@ class BlockSpecializer(object):
         self.v_expand_malloc = v_expand_malloc
         self.specblock = Block([])
 
-    def initialize_renamings(self, virtualframe):
+    def initialize_renamings(self, virtualframe, keep_inputargs=False):
         # we make a copy of the original 'virtualframe' because the
         # specialize_operations() will mutate some of its content.
         virtualframe = virtualframe.copy({})
         self.virtualframe = virtualframe
         self.nodes = virtualframe.get_nodes_in_use()
         self.renamings = {}    # {RuntimeSpecNode(): Variable()}
+        if keep_inputargs:
+            assert virtualframe.varlist == virtualframe.sourceblock.inputargs
         specinputargs = []
-        for rtnode in virtualframe.find_rt_nodes():
-            v = rtnode.newvar()
+        for i, rtnode in enumerate(virtualframe.find_rt_nodes()):
+            if keep_inputargs:
+                v = virtualframe.varlist[i]
+                assert v.concretetype == rtnode.TYPE
+            else:
+                v = rtnode.newvar()
             self.renamings[rtnode] = v
             specinputargs.append(v)
         self.specblock.inputargs = specinputargs
