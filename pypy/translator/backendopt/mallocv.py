@@ -2,11 +2,20 @@ from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, FunctionGraph, copygraph
 from pypy.objspace.flow.model import c_last_exception
 from pypy.translator.backendopt.support import log
+from pypy.translator.simplify import join_blocks
 from pypy.translator.unsimplify import varoftype
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
 
+
+def virtualize_mallocs(translator, verbose=True):
+    mallocv = MallocVirtualizer(translator.graphs, translator.rtyper, verbose)
+    while mallocv.remove_mallocs_once():
+        pass
+    translator.checkgraphs()
+    for graph in translator.graphs:
+        join_blocks(graph)
 
 # ____________________________________________________________
 
@@ -113,8 +122,13 @@ class VirtualFrame(object):
 
     def __init__(self, sourcegraph, sourceblock, nextopindex,
                  allnodes, callerframe=None):
-        self.varlist = vars_alive_through_op(sourceblock, nextopindex)
-        self.nodelist = [allnodes[v] for v in self.varlist]
+        if isinstance(allnodes, dict):
+            self.varlist = vars_alive_through_op(sourceblock, nextopindex)
+            self.nodelist = [allnodes[v] for v in self.varlist]
+        else:
+            assert nextopindex == 0
+            self.varlist = sourceblock.inputargs
+            self.nodelist = allnodes[:]
         self.sourcegraph = sourcegraph
         self.sourceblock = sourceblock
         self.nextopindex = nextopindex
@@ -219,9 +233,11 @@ class MallocVirtualizer(object):
             result[rinstance.lowleveltype.TO] = rinstance.rclass.getvtable()
         return result
 
-    def report_result(self):
-        log.mallocv('removed %d mallocs so far' % (self.count_virtualized,))
-        return self.count_virtualized
+    def report_result(self, progress):
+        if progress:
+            log.mallocv('removed %d mallocs so far' % self.count_virtualized)
+        else:
+            log.mallocv('done')
 
     def enum_all_mallocs(self, graph):
         for block in graph.iterblocks():
@@ -254,9 +270,11 @@ class MallocVirtualizer(object):
                             break   # graph mutated, restart enum_all_mallocs()
                 else:
                     break   # enum_all_mallocs() exhausted, graph finished
-        progress1 = self.report_result() - prev
+        progress1 = self.count_virtualized - prev
         progress2 = len(self.inline_and_remove) - count_inline_and_remove
-        return progress1 or bool(progress2)
+        progress = progress1 or bool(progress2)
+        self.report_result(progress)
+        return progress
 
     def flush_failed_specializations(self):
         for key, (mode, specgraph) in self.specialized_graphs.items():
@@ -314,13 +332,14 @@ class MallocVirtualizer(object):
                 fobj = op.args[0].value._obj
                 op = self.inline_and_remove[fobj.graph]
             log.mallocv('%s %s%s' % ('->'.join(chain), msg, exc))
+        elif exc is None:
+            log.dot()
 
     def get_specialized_graph(self, graph, nodelist):
         assert len(graph.getargs()) == len(nodelist)
         if is_trivial_nodelist(nodelist):
             return 'trivial', graph
-        nodes = dict(zip(graph.getargs(), nodelist))
-        virtualframe = VirtualFrame(graph, graph.startblock, 0, nodes)
+        virtualframe = VirtualFrame(graph, graph.startblock, 0, nodelist)
         key = virtualframe.getfrozenkey()
         try:
             return self.specialized_graphs[key]
@@ -330,8 +349,7 @@ class MallocVirtualizer(object):
 
     def build_specialized_graph(self, graph, key, nodelist):
         graph2 = copygraph(graph)
-        nodes = dict(zip(graph2.getargs(), nodelist))
-        virtualframe = VirtualFrame(graph2, graph2.startblock, 0, nodes)
+        virtualframe = VirtualFrame(graph2, graph2.startblock, 0, nodelist)
         graphbuilder = GraphBuilder(self, graph2)
         specblock = graphbuilder.start_from_virtualframe(virtualframe)
         specblock.isstartblock = True
@@ -373,10 +391,10 @@ class GraphBuilder(object):
 
     def start_from_a_malloc(self, graph, block, v_result):
         assert v_result in [op.result for op in block.operations]
-        nodes = {}
+        nodelist = []
         for v in block.inputargs:
-            nodes[v] = RuntimeSpecNode(v, v.concretetype)
-        trivialframe = VirtualFrame(graph, block, 0, nodes)
+            nodelist.append(RuntimeSpecNode(v, v.concretetype))
+        trivialframe = VirtualFrame(graph, block, 0, nodelist)
         spec = BlockSpecializer(self, v_result)
         spec.initialize_renamings(trivialframe)
         self.pending_specializations.append(spec)
@@ -957,8 +975,9 @@ def try_fold_operation(opname, args_v, RESTYPE):
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception, e:
-        log.WARNING('constant-folding %s%r:' % (opname, args_v))
-        log.WARNING('  %s: %s' % (e.__class__.__name__, e))
+        pass
+        #log.WARNING('constant-folding %s%r:' % (opname, args_v))
+        #log.WARNING('  %s: %s' % (e.__class__.__name__, e))
     else:
         return (result,)
 
