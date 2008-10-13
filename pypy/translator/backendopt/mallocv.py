@@ -9,10 +9,14 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
 
 
-def virtualize_mallocs(translator, verbose=True):
-    mallocv = MallocVirtualizer(translator.graphs, translator.rtyper, verbose)
+def virtualize_mallocs(translator, graphs, verbose=True):
+    newgraphs = graphs[:]
+    mallocv = MallocVirtualizer(newgraphs, translator.rtyper, verbose)
     while mallocv.remove_mallocs_once():
         pass
+    assert newgraphs[:len(graphs)] == graphs
+    del newgraphs[:len(graphs)]
+    translator.graphs.extend(newgraphs)
     translator.checkgraphs()
     for graph in translator.graphs:
         join_blocks(graph)
@@ -662,6 +666,19 @@ class BlockSpecializer(object):
                                                            'exitswitch')
         links = block.exits
         catch_exc = self.specblock.exitswitch == c_last_exception
+
+        if not catch_exc and isinstance(self.specblock.exitswitch, Constant):
+            # constant-fold the switch
+            for exit in links:
+                if exit.exitcase == 'default':
+                    break
+                if exit.llexitcase == self.specblock.exitswitch.value:
+                    break
+            else:
+                raise Exception("exit case not found?")
+            links = (exit,)
+            self.specblock.exitswitch = None
+
         if catch_exc and self.ops_produced_by_last_op == 0:
             # the last op of the sourceblock did not produce any
             # operation in specblock, so we need to discard the
@@ -690,11 +707,12 @@ class BlockSpecializer(object):
                 self.virtualframe, link.target, linkargsnodes,
                 self.renamings, self.v_expand_malloc)
             #
-            newlink.exitcase = link.exitcase
-            if hasattr(link, 'llexitcase'):
-                newlink.llexitcase = link.llexitcase
-            if is_catch_link:
-                newlink.extravars(*extravars)
+            if self.specblock.exitswitch is not None:
+                newlink.exitcase = link.exitcase
+                if hasattr(link, 'llexitcase'):
+                    newlink.llexitcase = link.llexitcase
+                if is_catch_link:
+                    newlink.extravars(*extravars)
             newlinks.append(newlink)
 
         self.specblock.closeblock(*newlinks)
