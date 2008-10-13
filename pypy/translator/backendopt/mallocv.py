@@ -1,5 +1,6 @@
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, FunctionGraph, copygraph
+from pypy.objspace.flow.model import checkgraph
 from pypy.objspace.flow.model import c_last_exception
 from pypy.translator.backendopt.support import log
 from pypy.translator.simplify import join_blocks
@@ -14,12 +15,12 @@ def virtualize_mallocs(translator, graphs, verbose=False):
     mallocv = MallocVirtualizer(newgraphs, translator.rtyper, verbose)
     while mallocv.remove_mallocs_once():
         pass
+    for graph in newgraphs:
+        checkgraph(graph)
+        join_blocks(graph)
     assert newgraphs[:len(graphs)] == graphs
     del newgraphs[:len(graphs)]
     translator.graphs.extend(newgraphs)
-    translator.checkgraphs()
-    for graph in translator.graphs:
-        join_blocks(graph)
 
 # ____________________________________________________________
 
