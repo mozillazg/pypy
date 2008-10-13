@@ -110,6 +110,7 @@ class GnuMakefile(object):
 class Linux(Platform):
     link_flags = ['-pthread']
     cflags = ['-O3', '-pthread', '-fomit-frame-pointer']
+    so_ext = 'so'
     
     def __init__(self, cc=None):
         if cc is None:
@@ -147,7 +148,7 @@ class Linux(Platform):
         exe_name = py.path.local(os.path.join(str(cfiles[0].dirpath()),
                                               outputfilename))
         if not standalone:
-            exe_name += '.so'
+            exe_name += '.' + self.so_ext
         ofiles = []
         for cfile in cfiles:
             ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
