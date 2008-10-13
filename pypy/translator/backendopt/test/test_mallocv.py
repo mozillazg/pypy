@@ -179,6 +179,18 @@ class BaseMallocRemovalTest(object):
         graph = self.check(f, [int], [19], 42,
                            expected_calls=0)     # inlined
 
+    def test_direct_call_unused_arg(self):
+        A = lltype.GcStruct('A', ('x', lltype.Signed))
+        prebuilt_a = lltype.malloc(A)
+        def g(a, unused):
+            return a.x
+        def f(n):
+            a = lltype.malloc(A)
+            a.x = 15
+            return g(a, n)
+        graph = self.check(f, [int], [42], 15,
+                           expected_calls=1)     # not inlined
+
     def test_raises_simple(self):
         class MyExc(Exception):
             pass
