@@ -6,7 +6,7 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import llmemory
 from pypy.tool.gcc_cache import build_executable_cache, try_compile_cache
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.translator.tool.cbuild import CompilationError
+from pypy.translator.platform import CompilationError
 from pypy.tool.udir import udir
 import distutils
 
@@ -538,7 +538,7 @@ void dump(char* key, int value) {
 
 def run_example_code(filepath, eci):
     eci = eci.convert_sources_to_files(being_main=True)
-    files = [filepath] + [py.path.local(f) for f in eci.separate_module_files]
+    files = [filepath]
     output = build_executable_cache(files, eci)
     section = None
     for line in output.splitlines():
