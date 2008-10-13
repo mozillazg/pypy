@@ -425,6 +425,59 @@ class BaseMallocRemovalTest(object):
             return a.x * a.y
         self.check(fn9, [int], [6], 42, expected_calls=0)  # inlined
 
+    def test_remove_for_in_range(self):
+        def fn10(n):
+            total = 0
+            for i in range(n):
+                total += i
+            return total
+        self.check(fn10, [int], [10], 45)
+
+    def test_recursion_spec(self):
+        class A:
+            pass
+        def make_chain(n):
+            a = A()
+            if n >= 0:
+                a.next = make_chain(n-1)
+                a.value = a.next.value + n
+            else:
+                a.value = 0
+            return a
+        def fn11(n):
+            return make_chain(n).value
+        self.check(fn11, [int], [10], 55,
+                   expected_calls=1)
+
+    def test_recursion_inlining(self):
+        class A:
+            pass
+        def make_chain(a, n):
+            if n >= 0:
+                a.next = A()
+                make_chain(a.next, n-1)
+                a.value = a.next.value + n
+            else:
+                a.value = 0
+        def fn12(n):
+            a = A()
+            make_chain(a, n)
+            return a.value
+        self.check(fn12, [int], [10], 55,
+                   expected_mallocs=1, expected_calls=1)
+
+    def test_constfold_exitswitch(self):
+        class A:
+            pass
+        def fn13(n):
+            a = A()
+            if lloperation.llop.same_as(lltype.Bool, True):
+                a.n = 4
+            else:
+                a.n = -13
+            return a.n
+        self.check(fn13, [int], [10], 4)
+
 
 class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
     type_system = 'lltype'
