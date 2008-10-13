@@ -46,6 +46,7 @@ class BaseMallocRemovalTest(object):
     def check(self, fn, signature, args, expected_result,
               expected_mallocs=0, expected_calls=0):
         t = TranslationContext()
+        self.translator = t
         t.buildannotator().build_types(fn, signature)
         t.buildrtyper(type_system=self.type_system).specialize()
         graph = graphof(t, fn)
@@ -477,6 +478,18 @@ class BaseMallocRemovalTest(object):
                 a.n = -13
             return a.n
         self.check(fn13, [int], [10], 4)
+
+    def test_preserve_annotations_on_graph(self):
+        class A:
+            pass
+        def fn14(n):
+            a = A()
+            a.n = n + 1
+            return a.n
+        graph = self.check(fn14, [int], [10], 11)
+        annotator = self.translator.annotator
+        assert annotator.binding(graph.getargs()[0]).knowntype is int
+        assert annotator.binding(graph.getreturnvar()).knowntype is int
 
 
 class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
