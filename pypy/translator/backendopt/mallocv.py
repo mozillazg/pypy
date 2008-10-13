@@ -9,7 +9,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
 
 
-def virtualize_mallocs(translator, graphs, verbose=True):
+def virtualize_mallocs(translator, graphs, verbose=False):
     newgraphs = graphs[:]
     mallocv = MallocVirtualizer(newgraphs, translator.rtyper, verbose)
     while mallocv.remove_mallocs_once():
@@ -141,18 +141,23 @@ class VirtualFrame(object):
     def get_nodes_in_use(self):
         return dict(zip(self.varlist, self.nodelist))
 
-    def copy(self, memo, flagreadonly={}):
+    def shallowcopy(self):
         newframe = VirtualFrame.__new__(VirtualFrame)
         newframe.varlist = self.varlist
-        newframe.nodelist = [node.copy(memo, flagreadonly)
-                             for node in self.nodelist]
+        newframe.nodelist = self.nodelist
         newframe.sourceblock = self.sourceblock
         newframe.nextopindex = self.nextopindex
-        if self.callerframe is None:
-            newframe.callerframe = None
-        else:
-            newframe.callerframe = self.callerframe.copy(memo, flagreadonly)
+        newframe.callerframe = self.callerframe
         newframe.calledgraphs = self.calledgraphs
+        return newframe
+
+    def copy(self, memo, flagreadonly={}):
+        newframe = self.shallowcopy()
+        newframe.nodelist = [node.copy(memo, flagreadonly)
+                             for node in newframe.nodelist]
+        if newframe.callerframe is not None:
+            newframe.callerframe = newframe.callerframe.copy(memo,
+                                                             flagreadonly)
         return newframe
 
     def enum_call_stack(self):
@@ -450,9 +455,13 @@ class GraphBuilder(object):
         callerframe = currentframe.callerframe
         if callerframe is None:
             raise ForcedInline("return block")
-        for i in range(len(callerframe.nodelist)):
-            if isinstance(callerframe.nodelist[i], FutureReturnValue):
-                callerframe.nodelist[i] = retnode
+        nodelist = callerframe.nodelist
+        callerframe = callerframe.shallowcopy()
+        callerframe.nodelist = []
+        for node in nodelist:
+            if isinstance(node, FutureReturnValue):
+                node = retnode
+            callerframe.nodelist.append(node)
         return callerframe
 
     def handle_catch(self, catchingframe, nodelist, renamings):
@@ -675,14 +684,14 @@ class BlockSpecializer(object):
 
         if not catch_exc and isinstance(self.specblock.exitswitch, Constant):
             # constant-fold the switch
-            for exit in links:
-                if exit.exitcase == 'default':
+            for link in links:
+                if link.exitcase == 'default':
                     break
-                if exit.llexitcase == self.specblock.exitswitch.value:
+                if link.llexitcase == self.specblock.exitswitch.value:
                     break
             else:
                 raise Exception("exit case not found?")
-            links = (exit,)
+            links = (link,)
             self.specblock.exitswitch = None
 
         if catch_exc and self.ops_produced_by_last_op == 0:
