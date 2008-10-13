@@ -14,7 +14,7 @@ def debug(msg):
 
 # __________  Entry point  __________
 
-test_dict = dict(map(lambda x: (x, hex(x)), range(5000)))
+test_dict = dict(map(lambda x: (x, hex(x)), range(256, 4096)))
 reverse_dict = dict(map(lambda (x,y): (y,x), test_dict.items()))
 
 def entry_point(argv):
