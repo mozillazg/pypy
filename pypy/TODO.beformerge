@@ -1,0 +1,3 @@
+* Move distutils support into distutils platform
+* Make sure ctypes_configure is working
+* Check why socket test is hanging (and if it's handing on dist/trunk as well)
