@@ -479,6 +479,30 @@ class BaseMallocRemovalTest(object):
             return a.n
         self.check(fn13, [int], [10], 4)
 
+    def test_constfold_indirect_call(self):
+        skip("write me")
+
+    def test_bug_on_links_to_return(self):
+        class A:
+            pass
+        def h1(n):
+            return n - 1
+        def h2(n):
+            return n - 2
+        def g(a):
+            a.n += 1
+            if a.n > 5:
+                return h1
+            else:
+                return h2
+        def fn15(n):
+            a = A()
+            a.n = n
+            m = g(a)(n)
+            return a.n * m
+        assert fn15(10) == 99
+        self.check(fn15, [int], [10], 99)
+
     def test_preserve_annotations_on_graph(self):
         class A:
             pass
