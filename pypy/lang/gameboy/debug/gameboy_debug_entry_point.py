@@ -53,11 +53,12 @@ def start_python_version():
 JMARIO_DIR =  str(py.magic.autopath().dirpath().dirpath()\
                         .dirpath().dirpath()\
                         .dirpath().dirpath()) + "/jmario"
-JAVA_CLASSPATH =[JMARIO_DIR+"/bin/", JMARIO_DIR+"/build/", 
-                JMARIO_DIR+"/lib/xmlrpc-client-3.1.jar",
-                JMARIO_DIR+"/lib/xmlrpc-common-3.1.jar",
-                JMARIO_DIR+"/lib/ws-commons-util-1.0.2.jar",
-                JMARIO_DIR+"/lib/commons-logging-1.1.jar"];
+
+JAVA_CLASSPATH =[ JMARIO_DIR + "/bin/", JMARIO_DIR+"/build/", 
+                  JMARIO_DIR + "/lib/xmlrpc-client-3.1.jar",
+                  JMARIO_DIR + "/lib/xmlrpc-common-3.1.jar",
+                  JMARIO_DIR + "/lib/ws-commons-util-1.0.2.jar",
+                  JMARIO_DIR + "/lib/commons-logging-1.1.jar"];
                         
 def start_java_version():
     global filename
@@ -77,7 +78,7 @@ def start_java_version():
     
 # START ========================================================================
 parse_file_name()
-threading.Timer(1, start_java_version).start()
-threading.Timer(0.001, start_python_version()).start()
+threading.Timer(1, start_java_version    ).start()
+threading.Timer(0, start_python_version()).start()
 
 

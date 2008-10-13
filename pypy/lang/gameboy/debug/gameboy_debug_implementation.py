@@ -32,7 +32,6 @@ class GameBoyDebugImplementation(GameBoyImplementation):
        	self.emulate(constants.GAMEBOY_CLOCK >> 2)
    
     def handle_execution_error(self, error):
-    	GameBoyImplementation.handle_execution_error(self, error)
     	print error
         print "closing socket connections"
         pdb.set_trace()
