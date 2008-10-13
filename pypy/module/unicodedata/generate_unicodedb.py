@@ -333,7 +333,7 @@ def write_character_names(outfile, table):
         for i in range(1,len(ranges)):
             lows, lowe = collapsed[-1]
             highs, highe = ranges[i]
-            if highs - lowe < max([lowe - lows, highe - highs]):
+            if highs - lowe < 8:
                 collapsed[-1] = (lows, highe)
             else:
                 collapsed.append(ranges[i])
@@ -354,6 +354,19 @@ def write_character_names(outfile, table):
                 "    from pypy.module.unicodedata import compression",
                 "    res = None"]
     for low, high in ranges:
+        if high - low <= 5:
+            # Too short for list
+            for code in range(low, high + 1):
+                name = table[code].name
+                if name:
+                    function.append(
+                        "    if code == %d: res = %r" % (
+                        code, compression.compress(codelist, name)))
+                    f_reverse_dict.append(
+                        "    res[%r] = %d" % (
+                        compression.compress(codelist, name), code))
+            continue
+
         function.append(
             "    if %d <= code <= %d: res = _charnames_%d[code-%d]" % (
             low, high, low, low))
