@@ -514,8 +514,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_calling_pause_direct = skip
     test_longwinded_and_direct = skip
     test_condition_result_cross_link_direct = skip
-    ##test_multiple_cmps = skip##
-    test_flipped_cmp_with_immediate = skip
+    #test_flipped_cmp_with_immediate = skip
     test_jump_to_block_with_many_vars = skip
     test_same_as = skip
     test_pause_and_resume_direct = skip

@@ -27,6 +27,7 @@ class IntVar(model.GenVar):
         assert isinstance(location, Location) 
     
     def to_string(self):
+        #return self.location.to_string()
         if isinstance(self.location, Stack64): 
             return "_STACK"
         if isinstance(self.location, Register8): 
