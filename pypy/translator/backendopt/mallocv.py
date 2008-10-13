@@ -120,8 +120,8 @@ class VirtualSpecNode(SpecNode):
 
 class VirtualFrame(object):
 
-    def __init__(self, sourcegraph, sourceblock, nextopindex,
-                 allnodes, callerframe=None):
+    def __init__(self, sourceblock, nextopindex,
+                 allnodes, callerframe=None, calledgraphs={}):
         if isinstance(allnodes, dict):
             self.varlist = vars_alive_through_op(sourceblock, nextopindex)
             self.nodelist = [allnodes[v] for v in self.varlist]
@@ -129,10 +129,10 @@ class VirtualFrame(object):
             assert nextopindex == 0
             self.varlist = sourceblock.inputargs
             self.nodelist = allnodes[:]
-        self.sourcegraph = sourcegraph
         self.sourceblock = sourceblock
         self.nextopindex = nextopindex
         self.callerframe = callerframe
+        self.calledgraphs = calledgraphs
 
     def get_nodes_in_use(self):
         return dict(zip(self.varlist, self.nodelist))
@@ -142,13 +142,13 @@ class VirtualFrame(object):
         newframe.varlist = self.varlist
         newframe.nodelist = [node.copy(memo, flagreadonly)
                              for node in self.nodelist]
-        newframe.sourcegraph = self.sourcegraph
         newframe.sourceblock = self.sourceblock
         newframe.nextopindex = self.nextopindex
         if self.callerframe is None:
             newframe.callerframe = None
         else:
             newframe.callerframe = self.callerframe.copy(memo, flagreadonly)
+        newframe.calledgraphs = self.calledgraphs
         return newframe
 
     def enum_call_stack(self):
@@ -251,8 +251,7 @@ class MallocVirtualizer(object):
                     else:
                         yield (block, op)
                 elif op.opname == 'direct_call':
-                    fobj = op.args[0].value._obj
-                    graph = getattr(fobj, 'graph', None)
+                    graph = graph_called_by(op)
                     if graph in self.inline_and_remove:
                         yield (block, op)
 
@@ -339,7 +338,7 @@ class MallocVirtualizer(object):
         assert len(graph.getargs()) == len(nodelist)
         if is_trivial_nodelist(nodelist):
             return 'trivial', graph
-        virtualframe = VirtualFrame(graph, graph.startblock, 0, nodelist)
+        virtualframe = VirtualFrame(graph.startblock, 0, nodelist)
         key = virtualframe.getfrozenkey()
         try:
             return self.specialized_graphs[key]
@@ -349,7 +348,7 @@ class MallocVirtualizer(object):
 
     def build_specialized_graph(self, graph, key, nodelist):
         graph2 = copygraph(graph)
-        virtualframe = VirtualFrame(graph2, graph2.startblock, 0, nodelist)
+        virtualframe = VirtualFrame(graph2.startblock, 0, nodelist)
         graphbuilder = GraphBuilder(self, graph2)
         specblock = graphbuilder.start_from_virtualframe(virtualframe)
         specblock.isstartblock = True
@@ -394,7 +393,7 @@ class GraphBuilder(object):
         nodelist = []
         for v in block.inputargs:
             nodelist.append(RuntimeSpecNode(v, v.concretetype))
-        trivialframe = VirtualFrame(graph, block, 0, nodelist)
+        trivialframe = VirtualFrame(block, 0, nodelist)
         spec = BlockSpecializer(self, v_result)
         spec.initialize_renamings(trivialframe)
         self.pending_specializations.append(spec)
@@ -434,9 +433,9 @@ class GraphBuilder(object):
                 newframe = self.return_to_caller(currentframe, nodelist[0])
             else:
                 targetnodes = dict(zip(targetblock.inputargs, nodelist))
-                newframe = VirtualFrame(currentframe.sourcegraph,
-                                        targetblock, 0, targetnodes,
-                                        callerframe=currentframe.callerframe)
+                newframe = VirtualFrame(targetblock, 0, targetnodes,
+                                        callerframe=currentframe.callerframe,
+                                        calledgraphs=currentframe.calledgraphs)
             rtnodes = newframe.find_rt_nodes()
             specblock = self.get_specialized_block(newframe, v_expand_malloc)
 
@@ -650,6 +649,11 @@ class BlockSpecializer(object):
             newops_for_this_op = meth(op)
             newoperations += newops_for_this_op
             self.ops_produced_by_last_op = len(newops_for_this_op)
+        for op in newoperations:
+            if op.opname == 'direct_call':
+                graph = graph_called_by(op)
+                if graph in self.virtualframe.calledgraphs:
+                    raise CannotVirtualize("recursion in residual call")
         self.specblock.operations = newoperations
 
     def follow_exits(self):
@@ -847,10 +851,9 @@ class BlockSpecializer(object):
             return self.handle_default(op)
 
     def handle_op_direct_call(self, op):
-        fobj = op.args[0].value._obj
-        if not hasattr(fobj, 'graph'):
+        graph = graph_called_by(op)
+        if graph is None:
             return self.handle_default(op)
-        graph = fobj.graph
         nb_args = len(op.args) - 1
         assert nb_args == len(graph.getargs())
         newnodes = [self.getnode(v) for v in op.args[1:]]
@@ -878,13 +881,12 @@ class BlockSpecializer(object):
             raise ValueError(kind)
 
     def get_updated_frame(self, op):
-        sourcegraph = self.virtualframe.sourcegraph
         sourceblock = self.virtualframe.sourceblock
         nextopindex = self.virtualframe.nextopindex
         self.nodes[op.result] = FutureReturnValue(op)
-        myframe = VirtualFrame(sourcegraph, sourceblock, nextopindex,
-                               self.nodes,
-                               self.virtualframe.callerframe)
+        myframe = VirtualFrame(sourceblock, nextopindex, self.nodes,
+                               self.virtualframe.callerframe,
+                               self.virtualframe.calledgraphs)
         del self.nodes[op.result]
         return myframe
 
@@ -900,8 +902,12 @@ class BlockSpecializer(object):
     def handle_inlined_call(self, myframe, graph, newnodes):
         assert len(graph.getargs()) == len(newnodes)
         targetnodes = dict(zip(graph.getargs(), newnodes))
-        calleeframe = VirtualFrame(graph, graph.startblock, 0,
-                                   targetnodes, myframe)
+        calledgraphs = myframe.calledgraphs.copy()
+        if graph in calledgraphs:
+            raise CannotVirtualize("recursion during inlining")
+        calledgraphs[graph] = True
+        calleeframe = VirtualFrame(graph.startblock, 0,
+                                   targetnodes, myframe, calledgraphs)
         self.virtualframe = calleeframe
         self.nodes = calleeframe.get_nodes_in_use()
         return []
@@ -985,3 +991,9 @@ def getconstnode(v, renamings):
     rtnode = RuntimeSpecNode(None, v.concretetype)
     renamings[rtnode] = v
     return rtnode
+
+def graph_called_by(op):
+    assert op.opname == 'direct_call'
+    fobj = op.args[0].value._obj
+    graph = getattr(fobj, 'graph', None)
+    return graph
