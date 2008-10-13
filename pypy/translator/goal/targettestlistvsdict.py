@@ -14,8 +14,9 @@ def debug(msg):
 
 # __________  Entry point  __________
 
-test_list = map(hex, range(5000))
-test_dict = dict(map(lambda x: (x, hex(x)), range(5000)))
+numbers = range(1000, 5000)
+test_list = map(str, numbers)
+test_dict = dict(map(lambda x: (x, str(x)), numbers))
 
 def entry_point(argv):
     if argv[1] == 'd':

@@ -51,10 +51,14 @@ def guess_module(graph):
 def values_to_nodes(database, values):
     nodes = []
     for value in values:
-        if isinstance(typeOf(value), Ptr) and isinstance(typeOf(value._obj), ContainerType):
-            node = database.getcontainernode(value._obj)
-            if node.nodekind != 'func':
-                nodes.append(node)
+        if isinstance(typeOf(value), Ptr):
+            container = value._obj
+            if isinstance(typeOf(container), ContainerType):
+                node = database.getcontainernode(container)
+                if node.nodekind != 'func':
+                    nodes.append(node)
+        elif isinstance(typeOf(value), ContainerType): # inlined container
+            nodes.extend(values_to_nodes(database, database.getcontainernode(value).enum_dependencies()))
     return nodes
 
 
