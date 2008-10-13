@@ -1,4 +1,6 @@
 import operator
+from pypy.lang.gameboy import cpu
+import pdb
 
 DEBUG = True
 DEBUG_PRINT_LOGS = True
@@ -86,16 +88,17 @@ CHECKED_OP_CODES += [
 
 CHECKED_OP_CODES       = [0x00]
 CHECKED_FETCH_OP_CODES = []
+BAR_WIDTH = 79
 
 def log(opCode, is_fetch_execute=False):
     global COUNT, op_codes, fetch_execute_op_codes
     if DEBUG_PRINT_LOGS:
-        print "="*40
+        print "=" * BAR_WIDTH
         if is_fetch_execute:
-            print COUNT[0], "  FETCH EXEC: %i | %s" % (opCode, hex(opCode))
+            print COUNT[0], "  FETCH EXEC: %i | %s  | %s" % (opCode, hex(opCode), resolve_fetch_opcode_name(opCode))
         else:
-            print COUNT[0], "  EXEC: %i | %s" % (opCode, hex(opCode))
-        print "-"*40
+            print COUNT[0], "  EXEC: %i | %s | %s" % (opCode, hex(opCode), resolve_opcode_name(opCode))
+        print "-" * BAR_WIDTH
     
     if is_fetch_execute:
         fetch_execute_op_codes[opCode ]+= 1
@@ -105,7 +108,27 @@ def log(opCode, is_fetch_execute=False):
     #if COUNT % 1000 == 0:
     #    print "."
         
-        
+def resolve_opcode_name(opcode):
+    method = cpu.OP_CODES[opcode].__name__
+    if method == "<lambda>":
+        try:
+            functions = "[ "
+            for func_closure in cpu.OP_CODES[opcode].func_closure:
+                functions += func_closure.cell_contents.im_func.__name__+ ", ";
+            return functions + "]";
+        except:
+            return cpu.OP_CODES[opcode].func_code.co_names;
+    else:
+        return method;
+	
+def resolve_fetch_opcode_name(opcode):
+    method = cpu.OP_CODES[opcode].__name__
+    if method == "<lambda>":
+        pdb.set_trace()
+    else:
+        return method;
+    
+
 def print_results():
     global COUNT, op_codes, fetch_execute_op_codes
     
