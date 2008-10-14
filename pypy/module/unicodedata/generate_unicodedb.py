@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import pprint
-import compression
 
 MAXUNICODE = 0x10FFFF     # the value of sys.maxunicode of wide Python builds
 
@@ -314,11 +313,11 @@ def _get_record(code):
 
 def write_character_names(outfile, table):
 
-    import btreecompress
+    import triegenerator
 
     names = dict((table[code].name,code) for code in range(len(table)) if table[code].name)
 
-    btreecompress.build_compression_tree(outfile, names)
+    triegenerator.build_compression_tree(outfile, names)
     
 def writeUnicodedata(version, table, outfile):
     # Version
@@ -394,7 +393,7 @@ def lookup(name):
         return _lookup_cjk(name[len(_cjk_prefix):])
     if name[:len(_hangul_prefix)] == _hangul_prefix:
         return _lookup_hangul(name[len(_hangul_prefix):])
-    return btree_lookup(name)
+    return trie_lookup(name)
 
 def name(code):
     if (0x3400 <= code <= 0x4DB5 or
