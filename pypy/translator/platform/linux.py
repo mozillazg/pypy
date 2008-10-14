@@ -127,14 +127,19 @@ class Linux(Platform):
         return ['-I%s' % (idir,) for idir in include_dirs]
 
     def _compile_args_from_eci(self, eci):
-        include_dirs = self._includedirs(eci.include_dirs)
-        return (self.cflags + list(eci.compile_extra) + include_dirs)
+        include_dirs = self._preprocess_dirs(eci.include_dirs)
+        args = self._includedirs(include_dirs)
+        return (self.cflags + list(eci.compile_extra) + args)
 
     def _link_args_from_eci(self, eci):
         library_dirs = self._libdirs(eci.library_dirs)
         libraries = self._libs(eci.libraries)
         return (library_dirs + libraries + self.link_flags +
                 list(eci.link_extra))
+
+    def _preprocess_dirs(self, include_dirs):
+        # hook for maemo
+        return include_dirs
 
     def _args_for_shared(self, args):
         return ['-shared'] + args
@@ -217,7 +222,8 @@ class Linux(Platform):
         rel_ofiles = [rel_cfile[:-2]+'.o' for rel_cfile in rel_cfiles]
         m.cfiles = rel_cfiles
 
-        rel_includedirs = [pypyrel(incldir) for incldir in eci.include_dirs]
+        rel_includedirs = [pypyrel(incldir) for incldir in
+                           self._preprocess_dirs(eci.include_dirs)]
 
         m.comment('automatically generated makefile')
         definitions = [
