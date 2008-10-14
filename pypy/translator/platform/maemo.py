@@ -9,6 +9,7 @@ def check_scratchbox():
 
 class Maemo(Linux):
     available_includedirs = ['/usr/include', '/tmp']
+    copied_cache = {}
 
     def _invent_new_name(self, basepath, base):
         pth = basepath.join(base)
@@ -19,11 +20,22 @@ class Maemo(Linux):
         return pth.ensure(dir=1)
 
     def _copy_files_to_new_dir(self, dir_from, pattern='*.h'):
-        new_dirpath = self._invent_new_name(udir, 'copied_includes')
-        files = py.path.local(dir_from).listdir(pattern)
-        for f in files:
-            f.copy(new_dirpath)
-        return new_dirpath
+        try:
+            return self.copied_cache[dir_from]
+        except KeyError:
+            new_dirpath = self._invent_new_name(udir, 'copied_includes')
+            files = py.path.local(dir_from).listdir(pattern)
+            for f in files:
+                f.copy(new_dirpath)
+            # XXX <hack for pypy>
+            srcdir = py.path.local(dir_from).join('src')
+            if srcdir.check(dir=1):
+                target = new_dirpath.join('src').ensure(dir=1)
+                for f in srcdir.listdir(pattern):
+                    f.copy(target)
+            # XXX </hack for pypy>
+            self.copied_cache[dir_from] = new_dirpath
+            return new_dirpath
     
     def _preprocess_dirs(self, include_dirs):
         """ Tweak includedirs so they'll be available through scratchbox
