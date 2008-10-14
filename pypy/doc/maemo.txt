@@ -172,7 +172,11 @@ the following taken mostly from
 
     http://yankandpaste.blogspot.com/2008/08/maemo-diablo-sdk-install-on-ubuntu-804.html
 
-1. On ubuntu linux edit sysctl.conf to contain::
+1. On ubuntu linux edit /etc/sysctl.conf to contain::
+
+    XXX [fijal] on my machine vdso_enbled = 0 freezed machine and made in
+        unbootable without editing file first. It seems not to be needed
+        though.
 
     vm.vdso_enabled = 0
     vm.mmap_min_addr = 4096
