@@ -492,6 +492,16 @@ class MethodGenerator:
     def get_op_Return(self, gv_returnvar):
         raise NotImplementedError
 
+    def branch_closed(self):
+        # XXX: it's not needed to iterate over all branches
+        allclosed = True
+        for branchbuilder in self.branches:
+            if branchbuilder.is_open:
+                allclosed = False
+                break
+        if allclosed:
+            self.emit_code()
+
     def emit_code(self):
         # emit initialization code
         self.emit_preamble()
@@ -540,14 +550,6 @@ class GraphGenerator(MethodGenerator):
 
     def get_op_Return(self, gv_returnvar):
         return ops.Return(self, gv_returnvar)
-
-    def emit_code(self):
-        MethodGenerator.emit_code(self)
-        self.emit_flexswitches()
-
-    def emit_flexswitches(self):
-        for meth in self.graphinfo.flexswitch_meths:
-            meth.emit_code()
 
     def emit_preamble(self):
         if not self.graphinfo.has_flexswitches:
@@ -646,16 +648,21 @@ class BranchBuilder(GenBuilder):
         self.rgenop = meth.rgenop
         self.il_label = il_label
         self.operations = []
-        self.is_open = False
+        self.is_open = True
         self.genconsts = meth.genconsts
 
     def start_writing(self):
         self.is_open = True
 
+    def close(self):
+        assert self.is_open
+        self.is_open = False
+        self.meth.branch_closed()
+
     def finish_and_return(self, sigtoken, gv_returnvar):
         op = self.meth.get_op_Return(gv_returnvar)
         self.appendop(op)
-        self.is_open = False
+        self.close()
 
     def finish_and_goto(self, outputargs_gv, label):
         inputargs_gv = label.inputargs_gv
@@ -663,7 +670,8 @@ class BranchBuilder(GenBuilder):
         op = ops.FollowLink(self.meth, outputargs_gv,
                             inputargs_gv, label.il_label)
         self.appendop(op)
-        self.is_open = False
+        self.close()
+
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
@@ -773,14 +781,14 @@ class BranchBuilder(GenBuilder):
         op = ops.DoFlexSwitch(self.meth, gv_flexswitch,
                               gv_exitswitch, args_gv)
         self.appendop(op)
-        self.is_open = False
+        self.close()
         return flexswitch, default_branch
 
     def appendop(self, op):
         self.operations.append(op)
 
     def end(self):
-        self.meth.emit_code()
+         pass
 
     def replayops(self):
         assert not self.is_open

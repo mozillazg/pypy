@@ -365,6 +365,8 @@ def box(x):
             TYPE = x._FUNC
             assert isinstance(TYPE, ootype.StaticMethod)
             return typeof(TYPE)
+        elif x is ootype.nullruntimeclass:
+            return None
         else:
             name = x._INSTANCE._assembly_qualified_name
             t = CLR.System.Type.GetType(name)
