@@ -313,83 +313,12 @@ def _get_record(code):
     print >> outfile, 'def combining(code): return _get_record(code)[4]'
 
 def write_character_names(outfile, table):
-    def findranges(d):
-        ranges = []
-        for i in range(max(d)+1):
-            if i in d:
-                if not ranges:
-                    ranges.append((i,i))
-                    last = i
-                    continue
-                if last + 1 == i:
-                    ranges[-1] = (ranges[-1][0], i)
-                else:
-                    ranges.append((i,i))
-                last = i
-        return ranges
 
-    def collapse_ranges(ranges):
-        collapsed = [ranges[0]]
-        for i in range(1,len(ranges)):
-            lows, lowe = collapsed[-1]
-            highs, highe = ranges[i]
-            if highs - lowe < 8:
-                collapsed[-1] = (lows, highe)
-            else:
-                collapsed.append(ranges[i])
+    import btreecompress
 
-        return collapsed
+    names = dict((table[code].name,code) for code in range(len(table)) if table[code].name)
 
-    names = [table[code].name for code in range(len(table)) if table[code].name]
-    codelist = compression.build_compression_table(names)
-    print >> outfile, "_codelist =", 
-    pprint.pprint(codelist, outfile)
-
-    codes = set(code for code in range(len(table)) if table[code].name)
-    ranges = collapse_ranges(findranges(codes))
-
-    f_reverse_dict = ["def _gen_reverse_dict():",
-                      "    res = {}"]
-    function = ["def lookup_charcode(code):",
-                "    from pypy.module.unicodedata import compression",
-                "    res = None"]
-    for low, high in ranges:
-        if high - low <= 5:
-            # Too short for list
-            for code in range(low, high + 1):
-                name = table[code].name
-                if name:
-                    function.append(
-                        "    if code == %d: res = %r" % (
-                        code, compression.compress(codelist, name)))
-                    f_reverse_dict.append(
-                        "    res[%r] = %d" % (
-                        compression.compress(codelist, name), code))
-            continue
-
-        function.append(
-            "    if %d <= code <= %d: res = _charnames_%d[code-%d]" % (
-            low, high, low, low))
-        f_reverse_dict.extend([
-            "    for i in range(%d, %d):" % (low, high+1),
-            "        name = _charnames_%d[i-%d]" % (low, low),
-            "        if name is not None:",
-            "            res[name] = i",
-            ])
-        print >> outfile, "_charnames_%d = [" % (low,)
-        for code in range(low, high + 1):
-            name = table[code].name
-            if name:
-                print >> outfile, '%r,' % (
-                    compression.compress(codelist, name))
-            else:
-                print >> outfile, 'None,'
-        print >> outfile, "]\n"
-    function.extend(["    if res is None: raise KeyError, code",
-                     "    return compression.uncompress(_codelist, res)\n"])
-    print >> outfile, '\n'.join(function)
-    f_reverse_dict.append("    return res\n")
-    print >> outfile, '\n'.join(f_reverse_dict)
+    btreecompress.build_compression_tree(outfile, names)
     
 def writeUnicodedata(version, table, outfile):
     # Version
@@ -403,8 +332,6 @@ def writeUnicodedata(version, table, outfile):
     write_character_names(outfile, table)
     
     print >> outfile, '''
-_code_by_name = _gen_reverse_dict()
-
 _cjk_prefix = "CJK UNIFIED IDEOGRAPH-"
 _hangul_prefix = 'HANGUL SYLLABLE '
 
@@ -463,12 +390,11 @@ def _lookup_cjk(cjk_code):
     raise KeyError
 
 def lookup(name):
-    from pypy.module.unicodedata import compression
     if name[:len(_cjk_prefix)] == _cjk_prefix:
         return _lookup_cjk(name[len(_cjk_prefix):])
     if name[:len(_hangul_prefix)] == _hangul_prefix:
         return _lookup_hangul(name[len(_hangul_prefix):])
-    return _code_by_name[compression.compress(_codelist, name)]
+    return btree_lookup(name)
 
 def name(code):
     if (0x3400 <= code <= 0x4DB5 or
