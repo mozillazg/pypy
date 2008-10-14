@@ -25,7 +25,7 @@ class Maemo(Linux):
             f.copy(new_dirpath)
         return new_dirpath
     
-    def _includedirs(self, include_dirs):
+    def _preprocess_dirs(self, include_dirs):
         """ Tweak includedirs so they'll be available through scratchbox
         """
         res_incl_dirs = []
@@ -38,7 +38,7 @@ class Maemo(Linux):
             else:
                 # we need to copy files to a place where it's accessible
                 res_incl_dirs.append(self._copy_files_to_new_dir(incl_dir))
-        return ['-I%s' % (incl_dir,) for incl_dir in res_incl_dirs]
+        return res_incl_dirs
     
     def _execute_c_compiler(self, cc, args, outname):
         log.execute('/scratchbox/login ' + cc + ' ' + ' '.join(args))

@@ -11,6 +11,10 @@ DEFL_PROF_BASED_INLINE_THRESHOLD = 32.4
 DEFL_CLEVER_MALLOC_REMOVAL_INLINE_THRESHOLD = 32.4
 DEFL_LOW_INLINE_THRESHOLD = DEFL_INLINE_THRESHOLD / 2.0
 
+PLATFORMS = [
+    'maemo',
+]
+
 translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
     BoolOption("stackless", "enable stackless features during compilation",
@@ -251,6 +255,10 @@ translation_optiondescription = OptionDescription(
                    cmdline="--cli-trace-calls"),
         BoolOption("exception_transformer", "Use exception transformer", default=False),
     ]),
+    ChoiceOption("platform",
+                 "target platform", ['host'] + PLATFORMS, default='host',
+                 cmdline='--platform'),
+
 ])
 
 def get_combined_translation_config(other_optdescr=None,
@@ -347,16 +355,18 @@ def set_opt_level(config, level):
 
 # ----------------------------------------------------------------
 
-PLATFORMS = [
-    'host',
-    'maemo',
-]
-
-def set_platform(translateconfig, config):
+def set_platform(config):
     from pypy.translator.platform import set_platform
-    set_platform(translateconfig.platform, config.translation.cc)
+    set_platform(config.translation.platform, config.translation.cc)
 
 def get_platform(config):
     # XXX use config
-    from pypy.translator.platform import platform
-    return platform
+    opt = config.translation.platform
+    if opt == 'maemo':
+        from pypy.translator.platform.maemo import Maemo
+        return Maemo(config.translation.cc)
+    elif opt == 'host':
+        from pypy.translator.platform import host
+        return host
+    else:
+        raise ValueError(opt)
