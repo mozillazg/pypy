@@ -33,7 +33,7 @@ class ProfOpt(object):
 
     def first(self, compiler_driver):
         platform = compiler_driver.cfiles
-        if 0 and platform.name == 'darwin2xxx':
+        if platform.name == 'darwin':
             # XXX incredible hack for darwin
             cfiles = compiler_driver.cfiles
             STR = '/*--no-profiling-for-this-file!--*/'
