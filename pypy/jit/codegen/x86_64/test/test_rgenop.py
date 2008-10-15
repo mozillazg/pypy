@@ -105,13 +105,16 @@ def make_bool_op(rgenop, which_bool_op):
     builder.end()
     return gv_bool_op
 
-def make_cmp(rgenop, which_cmp, const=None):
+def make_cmp(rgenop, which_cmp, const=None, switch_arg = False):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
     builder, gv_cmp, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "cmp")
     builder.start_writing()
     
     if not const == None:
-        gv_result = builder.genop2(which_cmp, gv_x, rgenop.genconst(const))
+        if switch_arg:
+            gv_result = builder.genop2(which_cmp, rgenop.genconst(const), gv_x)
+        else:
+            gv_result = builder.genop2(which_cmp, gv_x, rgenop.genconst(const))
     else:
         gv_result = builder.genop2(which_cmp, gv_x, gv_y)
     
@@ -286,6 +289,22 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert res == 0
         res = fnptr(-4,0)
         assert res == 1
+        cmp_function = make_cmp(self.RGenOp(), "int_lt", 4)
+        fnptr = self.cast(cmp_function,1)
+        res = fnptr(3)  # 3<4
+        assert res == 1
+        res = fnptr(4)  # 4<4
+        assert res == 0 # False
+        cmp_function = make_cmp(self.RGenOp(), "int_lt", 3, switch_arg=True)
+        fnptr = self.cast(cmp_function,1)
+        res = fnptr(4)  # 3<4
+        assert res == 1
+        res = fnptr(3)  # 3<3
+        assert res == 0 # False
+        cmp_function = make_cmp(self.RGenOp(), "int_lt", 1, switch_arg=True)
+        fnptr = self.cast(cmp_function,1)
+        res = fnptr(0)  # 1<0
+        assert res == 0
         
     def test_less_or_equal(self):
         cmp_function = make_cmp(self.RGenOp(), "int_le")

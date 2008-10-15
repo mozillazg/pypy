@@ -1,3 +1,4 @@
+from pypy.jit.codegen import model
 from pypy.jit.codegen.x86_64.objmodel import IntVar, Register8, Register64, Immediate8, Immediate32, Immediate64, Stack64
 
 # Mapping from 64Bit-Register to coding (Rex.W or Rex.B , ModRM)
@@ -270,6 +271,10 @@ class X86_64CodeBuilder(object):
         # exchange the two arguments because 
         # the result is in the first register 
         if(op1.to_string()=="_QWREG" and op2.to_string()=="_QWREG"):
+            # after this operation, op2 contains 
+            # the genVar/result, dont throw is away
+            op1.location.contains_genConst = False
+            op1.location.dont_spill(False)
             method(op2, op1)
         else:
             method(op1, op2)
@@ -305,6 +310,7 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_PUSH"+op1.to_string())
         method(op1)
         
+    # TODO: support Register8
     def MOV(self, op1, op2):
         method = getattr(self, "_MOV"+op1.to_string()+op2.to_string())
         method(op1, op2)
