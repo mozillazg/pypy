@@ -238,9 +238,6 @@ class TestMaemo(TestStandalone):
         config.translation.platform = 'maemo'
         cls.config = config
 
-    def test_separate_files(self):
-        py.test.skip("Unsupported")
-
     def test_profopt(self):
         py.test.skip("Unsupported")
 
