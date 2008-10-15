@@ -24,6 +24,8 @@ class ExecutionResult(object):
         return "<ExecutionResult retcode=%d>" % (self.returncode,)
 
 class Platform(object):
+    name = "abstract platform"
+    
     def __init__(self, cc):
         self.cc = cc
     
@@ -48,6 +50,14 @@ class Platform(object):
     def __eq__(self, other):
         return (self.__class__ is other.__class__ and
                 self.__dict__ == other.__dict__)
+
+    # below are some detailed informations for platforms
+
+    def include_dirs_for_libffi(self):
+        raise NotImplementedError("Needs to be overwritten")
+
+    def library_dirs_for_libffi(self):
+        raise NotImplementedError("Needs to be overwritten")        
 
     def check___thread(self):
         return True
