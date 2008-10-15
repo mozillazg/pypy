@@ -181,13 +181,13 @@ class TestStandalone(object):
         # no counters
         t.backendopt()
         exe = t.compile()
-        py.process.cmdexec(exe)
+        #py.process.cmdexec(exe)
         t = Translation(entry_point, backend='c', standalone=True, profopt="",
                         noprofopt=True)
         # no counters
         t.backendopt()
         exe = t.compile()
-        py.process.cmdexec(exe)
+        #py.process.cmdexec(exe)
 
     def test_standalone_large_files(self):
         from pypy.module.posix.test.test_posix2 import need_sparse_files
