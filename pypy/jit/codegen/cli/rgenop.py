@@ -125,10 +125,18 @@ class __extend__(GenVarOrConst):
     def getkind(self):
         return type2class(self.getCliType())
 
-    def load(self, builder):
+    def load(self, meth):
+        gv = meth.map_genvar(self)
+        gv._do_load(meth)
+
+    def store(self, meth):
+        gv = meth.map_genvar(self)
+        gv._do_store(meth)
+
+    def _do_load(self, meth):
         raise NotImplementedError
 
-    def store(self, builder):
+    def _do_store(self, meth):
         raise NotImplementedError
 
 class GenArgVar(GenVar):
@@ -139,7 +147,7 @@ class GenArgVar(GenVar):
     def getCliType(self):
         return self.cliType
 
-    def load(self, meth):
+    def _do_load(self, meth):
         if self.index == 0:
             meth.il.Emit(OpCodes.Ldarg_0)
         elif self.index == 1:
@@ -151,23 +159,23 @@ class GenArgVar(GenVar):
         else:
             meth.il.Emit(OpCodes.Ldarg, self.index)
 
-    def store(self, meth):
+    def _do_store(self, meth):
         meth.il.Emit(OpCodes.Starg, self.index)
 
     def __repr__(self):
         return "GenArgVar(%d)" % self.index
 
 class GenLocalVar(GenVar):
-    def __init__(self, v):
+    def __init__(self, meth, v):
         self.v = v
 
     def getCliType(self):
         return self.v.get_LocalType()
 
-    def load(self, meth):
+    def _do_load(self, meth):
         meth.il.Emit(OpCodes.Ldloc, self.v)
 
-    def store(self, meth):
+    def _do_store(self, meth):
         meth.il.Emit(OpCodes.Stloc, self.v)
 
 
@@ -484,7 +492,7 @@ class MethodGenerator:
         return result
 
     def newlocalvar(self, clitype):
-        return GenLocalVar(self.il.DeclareLocal(clitype))
+        return GenLocalVar(self, self.il.DeclareLocal(clitype))
 
     def map_genvar(self, gv_var):
         return gv_var
@@ -683,10 +691,6 @@ class BranchBuilder(GenBuilder):
     
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
-        # XXX: also other ops
-        gv_arg1 = self.meth.map_genvar(gv_arg1)
-        gv_arg2 = self.meth.map_genvar(gv_arg2)
-        
         opcls = ops.getopclass2(opname)
         op = opcls(self.meth, gv_arg1, gv_arg2)
         self.appendop(op)
@@ -777,6 +781,7 @@ class BranchBuilder(GenBuilder):
         gv_flexswitch = flexswitch.gv_flexswitch
         default_branch = self.meth.newbranch()
         label = default_branch.enter_next_block(args_gv)
+
         flexswitch.llflexswitch.set_default_blockid(label.blockid)
         op = ops.DoFlexSwitch(self.meth, gv_flexswitch,
                               gv_exitswitch, args_gv)

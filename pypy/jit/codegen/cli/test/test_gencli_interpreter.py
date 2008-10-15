@@ -91,9 +91,6 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_known_nonzero(self):
         py.test.skip("something wrong with promotion")
 
-    def test_debug_assert_ptr_nonzero(self):
-        py.test.skip("something wrong with promotion")
-
     def test_indirect_red_call_with_exc(self):
         py.test.skip("replay: NotImplementedError")
 
