@@ -9,7 +9,9 @@ class Darwin(linux.Linux): # xxx
     cflags = ['-O3', '-fomit-frame-pointer']
     # -mdynamic-no-pic for standalone
     
-    def __init__(self, cc='gcc'):
+    def __init__(self, cc=None):
+        if cc is None:
+            cc = 'gcc'
         self.cc = cc
 
     def _args_for_shared(self, args):
