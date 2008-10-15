@@ -6,8 +6,7 @@ from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
-from pypy.translator.tool.cbuild import so_ext, ExternalCompilationInfo
-from pypy.translator.tool.cbuild import import_module_from_directory
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.tool.cbuild import check_under_under_thread
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
@@ -15,6 +14,15 @@ from pypy.tool import isolate
 from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.translator.c import gc
+
+def import_module_from_directory(dir, modname):
+    file, pathname, description = imp.find_module(modname, [str(dir)])
+    try:
+        mod = imp.load_module(modname, file, pathname, description)
+    finally:
+        if file:
+            file.close()
+    return mod
 
 class ProfOpt(object):
     #XXX assuming gcc style flags for now
@@ -315,7 +323,7 @@ else:
 
 _rpython_startup = _lib.RPython_StartupCode
 _rpython_startup()
-""" % {'so_name': self.c_source_filename.new(ext=so_ext),
+""" % {'so_name': self.c_source_filename.new(ext=self.translator.platform.so_ext),
        'c_entrypoint_name': wrapped_entrypoint_c_name,
        'nargs': len(lltype.typeOf(entrypoint_ptr).TO.ARGS)}
         modfile.write(CODE)

@@ -1,23 +1,8 @@
 
 import py, os
 from pypy.translator.platform import Platform, CompilationError, ExecutionResult
-from pypy.translator.platform import log
-from subprocess import PIPE, Popen
+from pypy.translator.platform import log, _run_subprocess
 from pypy.tool import autopath
-
-def _run_subprocess(executable, args, env=None):
-    if isinstance(args, str):
-        args = str(executable) + ' ' + args
-        shell = True
-    else:
-        if args is None:
-            args = [str(executable)]
-        else:
-            args = [str(executable)] + args
-        shell = False
-    pipe = Popen(args, stdout=PIPE, stderr=PIPE, shell=shell, env=env)
-    stdout, stderr = pipe.communicate()
-    return pipe.returncode, stdout, stderr
 
 class Definition(object):
     def __init__(self, name, value):
@@ -191,11 +176,6 @@ class Linux(Platform):
             args = self._args_for_shared(args)
         self._execute_c_compiler(cc, args, exe_name)
         return exe_name
-
-    def execute(self, executable, args=None, env=None):
-        returncode, stdout, stderr = _run_subprocess(str(executable), args,
-                                                     env)
-        return ExecutionResult(returncode, stdout, stderr)
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         cfiles = [py.path.local(f) for f in cfiles]
