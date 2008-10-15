@@ -31,8 +31,28 @@ class ProfOpt(object):
     def __init__(self, compiler):
         self.compiler = compiler
 
-    def first(self):
-        return self.build('-fprofile-generate')
+    def first(self, compiler_driver):
+        platform = compiler_driver.cfiles
+        if 0 and platform.name == 'darwin2xxx':
+            # XXX incredible hack for darwin
+            cfiles = compiler_driver.cfiles
+            STR = '/*--no-profiling-for-this-file!--*/'
+            no_prof = []
+            prof = []
+            for cfile in compiler_driver.cfiles:
+                if STR in cfile.read():
+                    no_prof.append(cfile)
+                else:
+                    prof.append(cfile)
+            p_eci = compiler_driver.eci.merge(
+                ExternalCompilationInfo(compile_extra=['-fprofile-generate'],
+                                        link_extra=['-fprofile-generate']))
+            ofiles = platform._compile_o_files(prof, p_eci)
+            _, eci = compiler_driver.eci.get_module_files()
+            ofiles += platform._compile_o_files(no_prof, eci)
+            return platform._finish_linking(ofiles, p_eci, None, True)
+        else:
+            return self.build('-fprofile-generate')
 
     def probe(self, exe, args):
         # 'args' is a single string typically containing spaces
@@ -45,8 +65,6 @@ class ProfOpt(object):
     def build(self, option):
         eci = ExternalCompilationInfo(compile_extra=[option],
                                       link_extra=[option])
-        # XXX
-        #compiler.fix_gcc_random_seed = True
         return self.compiler._build(eci)
 
 class CCompilerDriver(object):
@@ -74,7 +92,7 @@ class CCompilerDriver(object):
         profdrv = ProfDriver(self)
         dolog = getattr(log, profdrv.name)
         dolog(args)
-        exename = profdrv.first()
+        exename = profdrv.first(self)
         dolog('Gathering profile data from: %s %s' % (
             str(exename), args))
         profdrv.probe(exename, args)
