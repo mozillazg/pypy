@@ -12,10 +12,26 @@ class Location(object):
 class Register64(Location):
     def __init__(self, reg):
         self.reg = reg
+        self.throw_away = False
+        self.contains_genConst = False
+        
+    def dont_spill(self, throw_away):
+        self.throw_away = throw_away # this value is not needed anymore
+    
+    def contains_Const(self):
+        self.contains_genConst = True
         
 class Register8(Location):
     def __init__(self, reg):
         self.reg = reg
+        self.throw_away = False
+        self.contains_genConst = False
+ 
+    def dont_spill(self, throw_away):
+        self.throw_away = throw_away # this value is not needed anymore
+        
+    def contains_Const(self):
+        self.contains_genConst = True
         
 class Stack64(Location):
     def __init__(self, offset):
