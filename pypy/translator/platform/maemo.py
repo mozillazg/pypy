@@ -19,7 +19,7 @@ class Maemo(Linux):
             num += 1
         return pth.ensure(dir=1)
 
-    def _copy_files_to_new_dir(self, dir_from, pattern='*.h'):
+    def _copy_files_to_new_dir(self, dir_from, pattern='*.[ch]'):
         try:
             return self.copied_cache[dir_from]
         except KeyError:
