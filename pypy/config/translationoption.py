@@ -13,6 +13,8 @@ DEFL_LOW_INLINE_THRESHOLD = DEFL_INLINE_THRESHOLD / 2.0
 
 PLATFORMS = [
     'maemo',
+    'host',
+    'distutils',
 ]
 
 translation_optiondescription = OptionDescription(
@@ -360,13 +362,15 @@ def set_platform(config):
     set_platform(config.translation.platform, config.translation.cc)
 
 def get_platform(config):
-    # XXX use config
     opt = config.translation.platform
     if opt == 'maemo':
         from pypy.translator.platform.maemo import Maemo
         return Maemo(config.translation.cc)
     elif opt == 'host':
         from pypy.translator.platform import host
-        return host
+        return host.__class__(config.translation.cc)
+    elif opt == 'distutils':
+        from pypy.translator.platform.distutils_platform import DistutilsPlatform
+        return DistutilsPlatform(config.translation.cc)
     else:
         raise ValueError(opt)

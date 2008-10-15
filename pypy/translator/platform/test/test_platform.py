@@ -1,7 +1,8 @@
 
 import py, sys
 from pypy.tool.udir import udir
-from pypy.translator.platform import host, CompilationError, Platform
+from pypy.translator.platform import CompilationError, Platform
+from pypy.translator.platform import host
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 class TestPlatform(object):

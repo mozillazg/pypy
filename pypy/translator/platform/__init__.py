@@ -3,11 +3,27 @@
 platform.
 """
 
-import sys, py
+import sys, py, os
 
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("platform")
 py.log.setconsumer("platform", ansi_log)
+
+from subprocess import PIPE, Popen
+
+def _run_subprocess(executable, args, env=None):
+    if isinstance(args, str):
+        args = str(executable) + ' ' + args
+        shell = True
+    else:
+        if args is None:
+            args = [str(executable)]
+        else:
+            args = [str(executable)] + args
+        shell = False
+    pipe = Popen(args, stdout=PIPE, stderr=PIPE, shell=shell, env=env)
+    stdout, stderr = pipe.communicate()
+    return pipe.returncode, stdout, stderr
 
 class CompilationError(Exception):
     def __init__(self, out, err):
@@ -32,8 +48,10 @@ class Platform(object):
     def compile(self, cfiles, eci, outputfilename=None, standalone=True):
         raise NotImplementedError("Pure abstract baseclass")
 
-    def execute(self, file_to_exec, args=None, env=None):
-        raise NotImplementedError("Pure abstract baseclass")
+    def execute(self, executable, args=None, env=None):
+        returncode, stdout, stderr = _run_subprocess(str(executable), args,
+                                                     env)
+        return ExecutionResult(returncode, stdout, stderr)
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         raise NotImplementedError("Pure abstract baseclass")
@@ -69,9 +87,13 @@ if sys.platform == 'linux2':
 elif sys.platform == 'darwin':
     from pypy.translator.platform.darwin import Darwin
     host = Darwin()
+elif os.name == 'nt':
+    from pypy.translator.platform.windows import Windows
+    host = Windows()
 else:
-    xxx
-    
+    # pray
+    from pypy.translator.platform.distutils_platform import DistutilsPlatform
+    host = DistutilsPlatform()
 
 platform = host
 
@@ -83,6 +105,9 @@ def set_platform(new_platform, cc):
     elif new_platform == 'maemo':
         from pypy.translator.platform.maemo import Maemo
         platform = Maemo(cc)
+    elif new_platform == 'distutils':
+        from pypy.translator.platform.distutils_platform import DistutilsPlatform
+        platform = DistutilsPlatform()
     else:
         raise NotImplementedError("platform = %s" % (new_platform,))
         
