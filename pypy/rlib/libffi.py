@@ -16,6 +16,8 @@ import sys
 import ctypes.util
 
 DEBUG = False # writes dlerror() messages to stderr
+# XXX this need solving rather than hacking. We need to raise something else
+#     than OSError, something capable of delivering a message
 
 _MS_WINDOWS = os.name == "nt"
 _MAC_OS = sys.platform == "darwin"
