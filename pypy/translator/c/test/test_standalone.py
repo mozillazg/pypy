@@ -166,6 +166,29 @@ class TestStandalone(object):
         out = py.process.cmdexec("%s 500" % exe)
         assert int(out) == 500*501/2
 
+    def test_profopt_mac_osx_bug(self):
+        def entry_point(argv):
+            import os
+            pid = os.fork()
+            if pid:
+                os.waitpid(pid, 0)
+            else:
+                os._exit(0)
+            return 0
+        from pypy.translator.interactive import Translation
+        # XXX this is mostly a "does not crash option"
+        t = Translation(entry_point, backend='c', standalone=True, profopt="")
+        # no counters
+        t.backendopt()
+        exe = t.compile()
+        py.process.cmdexec(exe)
+        t = Translation(entry_point, backend='c', standalone=True, profopt="",
+                        noprofopt=True)
+        # no counters
+        t.backendopt()
+        exe = t.compile()
+        py.process.cmdexec(exe)
+
     def test_standalone_large_files(self):
         from pypy.module.posix.test.test_posix2 import need_sparse_files
         need_sparse_files()

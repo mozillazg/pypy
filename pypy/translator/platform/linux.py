@@ -131,19 +131,26 @@ class Linux(Platform):
     def _args_for_shared(self, args):
         return ['-shared'] + args
 
-    def compile(self, cfiles, eci, outputfilename=None, standalone=True):
+    def _compile_o_files(self, cfiles, eci):
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
         compile_args = self._compile_args_from_eci(eci)
-        if outputfilename is None:
-            outputfilename = cfiles[0].purebasename
-        exe_name = py.path.local(os.path.join(str(cfiles[0].dirpath()),
-                                              outputfilename))
-        if not standalone:
-            exe_name += '.' + self.so_ext
         ofiles = []
         for cfile in cfiles:
             ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
+        return ofiles
+
+    def compile(self, cfiles, eci, outputfilename=None, standalone=True):
+        ofiles = self._compile_o_files(cfiles, eci)
+        return self._finish_linking(ofiles, eci, outputfilename, standalone)
+
+    def _finish_linking(self, ofiles, eci, outputfilename, standalone):
+        if outputfilename is None:
+            outputfilename = ofiles[0].purebasename
+        exe_name = py.path.local(os.path.join(str(ofiles[0].dirpath()),
+                                              outputfilename))
+        if not standalone:
+            exe_name += '.' + self.so_ext
         return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
                           standalone, exe_name)
 
