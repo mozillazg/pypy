@@ -31,24 +31,24 @@ class ProfOpt(object):
     def __init__(self, compiler):
         self.compiler = compiler
 
-    def first(self, compiler_driver):
-        platform = compiler_driver.cfiles
+    def first(self):
+        platform = self.compiler.platform
         if platform.name == 'darwin':
             # XXX incredible hack for darwin
-            cfiles = compiler_driver.cfiles
+            cfiles = self.compiler.cfiles
             STR = '/*--no-profiling-for-this-file!--*/'
             no_prof = []
             prof = []
-            for cfile in compiler_driver.cfiles:
+            for cfile in self.compiler.cfiles:
                 if STR in cfile.read():
                     no_prof.append(cfile)
                 else:
                     prof.append(cfile)
-            p_eci = compiler_driver.eci.merge(
+            p_eci = self.compiler.eci.merge(
                 ExternalCompilationInfo(compile_extra=['-fprofile-generate'],
                                         link_extra=['-fprofile-generate']))
             ofiles = platform._compile_o_files(prof, p_eci)
-            _, eci = compiler_driver.eci.get_module_files()
+            _, eci = self.compiler.eci.get_module_files()
             ofiles += platform._compile_o_files(no_prof, eci)
             return platform._finish_linking(ofiles, p_eci, None, True)
         else:
@@ -92,7 +92,7 @@ class CCompilerDriver(object):
         profdrv = ProfDriver(self)
         dolog = getattr(log, profdrv.name)
         dolog(args)
-        exename = profdrv.first(self)
+        exename = profdrv.first()
         dolog('Gathering profile data from: %s %s' % (
             str(exename), args))
         profdrv.probe(exename, args)
