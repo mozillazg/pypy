@@ -88,9 +88,6 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
 
     check_count_depth = False # see test_self_referential_structures
     
-    def test_known_nonzero(self):
-        py.test.skip("something wrong with promotion")
-
     def test_indirect_red_call_with_exc(self):
         py.test.skip("replay: NotImplementedError")
 
@@ -98,9 +95,6 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
         py.test.skip("TODO: exceptions")
 
     def test_learn_nonzeroness(self):
-        py.test.skip("something wrong with promotion")
-
-    def test_freeze_booleffects_correctly(self):
         py.test.skip("something wrong with promotion")
 
     def test_degenerated_at_return(self):
