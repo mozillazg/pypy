@@ -8,6 +8,8 @@ def check_scratchbox():
         py.test.skip("No scratchbox detected")
 
 class Maemo(Linux):
+    name = "maemo"
+    
     available_includedirs = ['/usr/include', '/tmp']
     copied_cache = {}
 
@@ -65,3 +67,10 @@ class Maemo(Linux):
                                                      env)
         return ExecutionResult(returncode, stdout, stderr)
 
+    def include_dirs_for_libffi(self):
+        # insanely obscure dir
+        return ['/usr/include/arm-linux-gnueabi/']
+
+    def library_dirs_for_libffi(self):
+        # on the other hand, library lands in usual place...
+        return []

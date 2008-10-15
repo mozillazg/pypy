@@ -108,6 +108,8 @@ class GnuMakefile(object):
             f.close()
 
 class Linux(Platform):
+    name = "linux"
+    
     link_flags = ['-pthread']
     cflags = ['-O3', '-pthread', '-fomit-frame-pointer']
     so_ext = 'so'
@@ -269,3 +271,9 @@ class Linux(Platform):
             if len(stderrlines) > 5:
                 log.ERROR('...')
             raise CompilationError(stdout, stderr)
+
+    def include_dirs_for_libffi(self):
+        return ['/usr/include/libffi']
+
+    def library_dirs_for_libffi(self):
+        return ['/usr/lib/libffi']
