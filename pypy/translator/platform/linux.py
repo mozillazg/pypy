@@ -242,15 +242,7 @@ class Linux(Platform):
             path = path_to_makefile
         log.execute('make in %s' % (path,))
         returncode, stdout, stderr = _run_subprocess('make', ['-C', str(path)])
-        if returncode != 0:
-            errorfile = path.join('make.errors')
-            errorfile.write(stderr)
-            stderrlines = stderr.splitlines()
-            for line in stderrlines[:5]:
-                log.ERROR(line)
-            if len(stderrlines) > 5:
-                log.ERROR('...')
-            raise CompilationError(stdout, stderr)
+        self._handle_error(returncode, stdout, stderr, path.join('make'))
 
     def include_dirs_for_libffi(self):
         return ['/usr/include/libffi']
