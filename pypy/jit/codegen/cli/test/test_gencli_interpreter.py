@@ -94,8 +94,5 @@ class TestRainbowCli(CompiledCliMixin, RainbowTest):
     def test_red_int_add_ovf(self):
         py.test.skip("TODO: exceptions")
 
-    def test_learn_nonzeroness(self):
-        py.test.skip("something wrong with promotion")
-
     def test_degenerated_at_return(self):
         py.test.skip('test framework does not support getattr on returned instances')
