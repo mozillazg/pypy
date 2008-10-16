@@ -1,7 +1,125 @@
 
-from pypy.translator.platform.distutils_platform import DistutilsPlatform
+import py, os
+from pypy.translator.platform import linux # xxx
+from pypy.translator.platform import CompilationError, ExecutionResult
+from pypy.translator.platform import log, _run_subprocess
+from pypy.tool import autopath
 
-class Windows(DistutilsPlatform):
+class Windows(linux.Linux): # xxx
     name = "win32"
     so_ext = 'dll'
+    exe_ext = 'exe'
 
+    cc = 'cl.exe'
+    link = 'link.exe'
+
+    cflags = ['/MDd', '/Z7']
+    link_flags = ['/debug']
+
+    def __init__(self, cc=None):
+        self.cc = 'cl.exe'
+
+    def _compile_c_file(self, cc, cfile, compile_args):
+        oname = cfile.new(ext='obj')
+        args = ['/nologo', '/c'] + compile_args + [str(cfile), '/Fo%s' % (oname,)]
+        self._execute_c_compiler(cc, args, oname)
+        return oname
+
+    def _link(self, cc, ofiles, link_args, standalone, exe_name):
+        args = ['/nologo'] + [str(ofile) for ofile in ofiles] + link_args
+        args += ['/out:%s' % (exe_name,)]
+        if not standalone:
+            args = self._args_for_shared(args)
+        self._execute_c_compiler(self.link, args, exe_name)
+        return exe_name
+
+    def _handle_error(self, returncode, stderr, stdout, outname):
+        if returncode != 0:
+            # Microsoft compilers write compilation errors to stdout
+            stderr = stdout + stderr
+            errorfile = outname.new(ext='errors')
+            errorfile.write(stderr)
+            stderrlines = stderr.splitlines()
+            for line in stderrlines[:5]:
+                log.ERROR(line)
+            if len(stderrlines) > 5:
+                log.ERROR('...')
+            raise CompilationError(stdout, stderr)
+        
+
+    def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+        cfiles = [py.path.local(f) for f in cfiles]
+        cfiles += [py.path.local(f) for f in eci.separate_module_files]
+
+        if path is None:
+            path = cfiles[0].dirpath()
+
+        pypypath = py.path.local(autopath.pypydir)
+
+        if exe_name is None:
+            exe_name = cfiles[0].new(ext=self.exe_ext)
+
+        m = NMakefile(path)
+        m.exe_name = exe_name
+        m.eci = eci
+
+        def pypyrel(fpath):
+            rel = py.path.local(fpath).relto(pypypath)
+            if rel:
+                return os.path.join('$(PYPYDIR)', rel)
+            else:
+                return fpath
+
+        rel_cfiles = [m.pathrel(cfile) for cfile in cfiles]
+        rel_ofiles = [rel_cfile[:-2]+'.obj' for rel_cfile in rel_cfiles]
+        m.cfiles = rel_cfiles
+
+        rel_includedirs = [pypyrel(incldir) for incldir in
+                           self._preprocess_dirs(eci.include_dirs)]
+
+        m.comment('automatically generated makefile')
+        definitions = [
+            ('PYPYDIR', autopath.pypydir),
+            ('TARGET', exe_name.basename),
+            ('DEFAULT_TARGET', '$(TARGET)'),
+            ('SOURCES', rel_cfiles),
+            ('OBJECTS', rel_ofiles),
+            ('LIBS', self._libs(eci.libraries)),
+            ('LIBDIRS', self._libdirs(eci.library_dirs)),
+            ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
+            ('CFLAGS', self.cflags + list(eci.compile_extra)),
+            ('LDFLAGS', self.link_flags + list(eci.link_extra)),
+            ('CC', self.cc)
+            ]
+        for args in definitions:
+            m.definition(*args)
+
+        rules = [
+            ('all', '$(DEFAULT_TARGET)', []),
+            ('$(TARGET)', '$(OBJECTS)', '$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)'),
+            ('%.obj', '%.c', '$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)'),
+            ]
+
+        for rule in rules:
+            m.rule(*rule)
+
+        return m
+
+    def execute_makefile(self, path_to_makefile):
+        if isinstance(path_to_makefile, NMakefile):
+            path = path_to_makefile.makefile_dir
+        else:
+            path = path_to_makefile
+        log.execute('make in %s' % (path,))
+        oldcwd = path.chdir()
+        try:
+            returncode, stdout, stderr = _run_subprocess(
+                'nmake',
+                ['/f', str(path.join('Makefile'))])
+        finally:
+            oldcwd.chdir()
+            
+        self._handle_error(returncode, stdout, stderr, path.join('make'))
+
+class NMakefile(linux.GnuMakefile):
+    pass # for the moment
