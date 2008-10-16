@@ -87,6 +87,9 @@ class RuntimeSpecNode(SpecNode):
     def copy(self, memo, flagreadonly):
         return RuntimeSpecNode(self.name, self.TYPE)
 
+    def bind_rt_nodes(self, memo, newnodes_iter):
+        return newnodes_iter.next()
+
 
 class VirtualSpecNode(SpecNode):
 
@@ -120,6 +123,15 @@ class VirtualSpecNode(SpecNode):
         memo[self] = newnode
         for subnode in self.fields:
             newnode.fields.append(subnode.copy(memo, flagreadonly))
+        return newnode
+
+    def bind_rt_nodes(self, memo, newnodes_iter):
+        if self in memo:
+            return memo[self]
+        newnode = VirtualSpecNode(self.typedesc, [], self.readonly)
+        memo[self] = newnode
+        for subnode in self.fields:
+            newnode.fields.append(subnode.bind_rt_nodes(memo, newnodes_iter))
         return newnode
 
 
@@ -211,6 +223,17 @@ def is_trivial_nodelist(nodelist):
             return False
     return True
 
+def bind_rt_nodes(srcnodelist, newnodes_list):
+    """Return srcnodelist with all RuntimeNodes replaced by nodes
+    coming from newnodes_list.
+    """
+    memo = {}
+    newnodes_iter = iter(newnodes_list)
+    result = [node.bind_rt_nodes(memo, newnodes_iter) for node in srcnodelist]
+    rest = list(newnodes_iter)
+    assert rest == [], "too many nodes in newnodes_list"
+    return result
+
 
 class CannotVirtualize(Exception):
     pass
@@ -221,6 +244,8 @@ class ForcedInline(Exception):
 class CannotRemoveThisType(Exception):
     pass
 
+# ____________________________________________________________
+
 
 class MallocVirtualizer(object):
 
@@ -230,6 +255,7 @@ class MallocVirtualizer(object):
         self.excdata = rtyper.getexceptiondata()
         self.graphbuilders = {}
         self.specialized_graphs = {}
+        self.specgraphorigin = {}
         self.inline_and_remove = {}    # {graph: op_to_remove}
         self.inline_and_remove_seen = {}   # set of (graph, op_to_remove)
         self.malloctypedescs = {}
@@ -348,6 +374,10 @@ class MallocVirtualizer(object):
         assert len(graph.getargs()) == len(nodelist)
         if is_trivial_nodelist(nodelist):
             return 'trivial', graph
+        if graph in self.specgraphorigin:
+            orggraph, orgnodelist = self.specgraphorigin[graph]
+            nodelist = bind_rt_nodes(orgnodelist, nodelist)
+            graph = orggraph
         virtualframe = VirtualFrame(graph.startblock, 0, nodelist)
         key = virtualframe.getfrozenkey()
         try:
@@ -378,6 +408,7 @@ class MallocVirtualizer(object):
             self.specialized_graphs[key] = ('fail', None)
         else:
             self.graphbuilders[specgraph] = graphbuilder
+            self.specgraphorigin[specgraph] = graph, nodelist
             self.graphs.append(specgraph)
 
 
