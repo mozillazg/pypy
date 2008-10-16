@@ -98,6 +98,7 @@ class Linux(Platform):
     link_flags = ['-pthread']
     cflags = ['-O3', '-pthread', '-fomit-frame-pointer']
     so_ext = 'so'
+    exe_ext = ''
     
     def __init__(self, cc=None):
         if cc is None:
@@ -149,7 +150,9 @@ class Linux(Platform):
             outputfilename = ofiles[0].purebasename
         exe_name = py.path.local(os.path.join(str(ofiles[0].dirpath()),
                                               outputfilename))
-        if not standalone:
+        if standalone:
+            exe_name += '.' + self.exe_ext
+        else:
             exe_name += '.' + self.so_ext
         return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
                           standalone, exe_name)
@@ -194,7 +197,7 @@ class Linux(Platform):
         pypypath = py.path.local(autopath.pypydir)
 
         if exe_name is None:
-            exe_name = cfiles[0].new(ext='')
+            exe_name = cfiles[0].new(ext=self.exe_ext)
 
         m = GnuMakefile(path)
         m.exe_name = exe_name
