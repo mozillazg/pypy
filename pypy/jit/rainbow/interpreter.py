@@ -315,6 +315,7 @@ class JitInterpreter(object):
 
     def bytecode_loop(self):
         while 1:
+            #print 'pc = (%s)  \t (%s)' % (self.frame.pc, self.frame.bytecode.name)
             bytecode = self.load_int()
             assert bytecode >= 0
             result = self.opcode_implementations[bytecode](self)
