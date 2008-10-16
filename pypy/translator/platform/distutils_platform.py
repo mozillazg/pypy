@@ -11,6 +11,11 @@ def log_spawned_cmd(spawn):
 
 CFLAGS = ['-O3']
 
+if os.name != 'nt':
+    so_ext = '.so'
+else:
+    so_ext = '.dll'
+
 class DistutilsPlatform(Platform):
     """ This is a generic distutils platform. I hope it'll go away at some
     point soon completely
