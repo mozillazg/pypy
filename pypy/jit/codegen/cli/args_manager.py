@@ -10,11 +10,7 @@ def new_type_array(types):
         array[i] = types[i]
     return array
 
-def MakeGenericType(clitype, paramtypes):
-    array = new_type_array(paramtypes)
-    return clitype.MakeGenericType(array)
-
-class ArgsManager:
+class BaseArgsManager:
     
     def __init__(self):
         self.type_counter = {}
@@ -22,21 +18,19 @@ class ArgsManager:
         self.clitype = None
         self._init_types()
 
-    def _load_pypylib(self):
-        from pypy.translator.cli.query import pypylib, pypylib2
-        assembly = None
-        for name in [pypylib, pypylib2]:
-            assembly = Assembly.LoadWithPartialName(name)
-            if assembly:
-                break
-        assert assembly is not None
-        return assembly
-
     def _init_types(self):
-        pypylib = self._load_pypylib()
-        self.clitype_InputArgs = pypylib.GetType('pypy.runtime.InputArgs`1')
-        self.clitype_Void = pypylib.GetType('pypy.runtime.Void')
-        self.clitype_Pair = pypylib.GetType('pypy.runtime.Pair`2')
+        self.clitype_InputArgs = None
+        self.clitype_Void = None
+        self.clitype_Pair = None
+
+    def _make_generic_type(self, clitype, paramtypes):
+        raise NotImplementedError
+
+    def _store_by_index(self, meth, gv_arg, i):
+        raise NotImplementedError
+    
+    def _load_by_index(self, meth, i):
+        raise NotImplementedError
 
     def is_open(self):
         return self.clitype is None
@@ -70,43 +64,17 @@ class ArgsManager:
         for clitype, count in self.type_counter.iteritems():
             self.type_index[clitype] = len(fieldtypes)
             fieldtypes += [clitype] * count
-
         pairtype = self.clitype_Void
+        
         # iterate over reversed(fieldtypes)
         i = len(fieldtypes)-1
         while True:
             if i < 0:
                 break
             fieldtype = fieldtypes[i]
-            pairtype = MakeGenericType(self.clitype_Pair, [fieldtype, pairtype])
+            pairtype = self._make_generic_type(self.clitype_Pair, [fieldtype, pairtype])
             i-=1
-
-##         for fieldtype in fieldtypes[::-1]:
-##             pairtype = MakeGenericType(self.clitype_Pair, [fieldtype, pairtype])
-        self.clitype = MakeGenericType(self.clitype_InputArgs, [pairtype])
-
-    def _store_by_index(self, meth, gv_arg, i):
-        head_info = self._load_nth_head(meth, i)
-        gv_arg.load(meth)
-        meth.il.Emit(OpCodes.Stfld, head_info)
-
-    def _load_by_index(self, meth, i):
-        head_info = self._load_nth_head(meth, i)
-        meth.il.Emit(OpCodes.Ldfld, head_info)
-
-    def _load_nth_head(self, meth, n):
-        il = meth.il
-        fields_info = self.clitype.GetField("fields")
-        meth.gv_inputargs.load(meth)
-        il.Emit(OpCodes.Ldflda, fields_info)
-
-        lastfield_info = fields_info
-        for _ in range(n):
-            fieldtype = lastfield_info.get_FieldType()
-            lastfield_info = fieldtype.GetField("tail")
-            il.Emit(OpCodes.Ldflda, lastfield_info)
-        fieldtype = lastfield_info.get_FieldType()
-        return fieldtype.GetField("head")
+        self.clitype = self._make_generic_type(self.clitype_InputArgs, [pairtype])
 
     def copy_to_inputargs(self, meth, args_gv):
         "copy args_gv into the appropriate fields of inputargs"
@@ -143,3 +111,49 @@ class ArgsManager:
                 curidx += 1
             indexes.append(curidx)
         return indexes
+
+
+class ArgsManager(BaseArgsManager):
+
+    def _load_pypylib(self):
+        from pypy.translator.cli.query import pypylib, pypylib2
+        assembly = None
+        for name in [pypylib, pypylib2]:
+            assembly = Assembly.LoadWithPartialName(name)
+            if assembly:
+                break
+        assert assembly is not None
+        return assembly
+
+    def _init_types(self):
+        pypylib = self._load_pypylib()
+        self.clitype_InputArgs = pypylib.GetType('pypy.runtime.InputArgs`1')
+        self.clitype_Void = pypylib.GetType('pypy.runtime.Void')
+        self.clitype_Pair = pypylib.GetType('pypy.runtime.Pair`2')
+
+    def _make_generic_type(self, clitype, paramtypes):
+        array = new_type_array(paramtypes)
+        return clitype.MakeGenericType(array)
+
+    def _store_by_index(self, meth, gv_arg, i):
+        head_info = self._load_nth_head(meth, i)
+        gv_arg.load(meth)
+        meth.il.Emit(OpCodes.Stfld, head_info)
+
+    def _load_by_index(self, meth, i):
+        head_info = self._load_nth_head(meth, i)
+        meth.il.Emit(OpCodes.Ldfld, head_info)
+
+    def _load_nth_head(self, meth, n):
+        il = meth.il
+        fields_info = self.clitype.GetField("fields")
+        meth.gv_inputargs.load(meth)
+        il.Emit(OpCodes.Ldflda, fields_info)
+
+        lastfield_info = fields_info
+        for _ in range(n):
+            fieldtype = lastfield_info.get_FieldType()
+            lastfield_info = fieldtype.GetField("tail")
+            il.Emit(OpCodes.Ldflda, lastfield_info)
+        fieldtype = lastfield_info.get_FieldType()
+        return fieldtype.GetField("head")
