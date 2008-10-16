@@ -66,12 +66,11 @@ def test_close():
     assert m.type_index['float'] == 2
 
 def test__get_indexes():
-    py.test.skip('fixme')
     m = MyArgsManager()
     m.register_types(['int', 'float', 'int'])
     m.close()
     indexes = m._get_indexes(['int', 'float', 'int'])
-    assert indexes == [0, 1, 2]
+    assert indexes == [0, 2, 1]
 
 def test_copy_to_inputargs():
     meth = FakeMethod()
