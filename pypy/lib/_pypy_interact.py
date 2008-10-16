@@ -17,14 +17,10 @@ def interactive_console(mainmodule=None):
         pass
     try:
         from pyrepl.simple_interact import run_multiline_interactive_console
-        from pyrepl.curses._curses import error
     except ImportError:
         run_simple_interactive_console(mainmodule)
     else:
-        try:
-            run_multiline_interactive_console(mainmodule)
-        except error:
-            run_simple_interactive_console(mainmodule)            
+        run_multiline_interactive_console(mainmodule)
 
 def run_simple_interactive_console(mainmodule):
     import code
