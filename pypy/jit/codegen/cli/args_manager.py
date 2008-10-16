@@ -101,15 +101,12 @@ class BaseArgsManager:
 
     def _get_indexes(self, fieldtypes):
         indexes = []
-        curtype = None
-        curidx = -1
+        next_idx_by_type = {}
         for fieldtype in fieldtypes:
-            if fieldtype != curtype:
-                curidx = self.type_index[fieldtype]
-                curtype = fieldtype
-            else:
-                curidx += 1
-            indexes.append(curidx)
+            startidx = self.type_index[fieldtype]
+            index = next_idx_by_type.get(fieldtype, startidx)
+            indexes.append(index)
+            next_idx_by_type[fieldtype] = index+1
         return indexes
 
 
