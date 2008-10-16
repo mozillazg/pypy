@@ -113,6 +113,8 @@ Congrats!  If all worked well you should now be able to cross-compile C programs
 and copy the binary result to the N810/Maemo device. You can also login to
 the virtual environment and execute the ARM binary there. 
 
+XXX [fijal] remember to update that it uses inside gcc these days
+
 PyPy's translation tool chain tries to use this cross-compiler when 
 you specify ``--platform=maemo`` to the translate.py script. 
 
@@ -174,6 +176,9 @@ the following taken mostly from
 
 1. On ubuntu linux edit /etc/sysctl.conf to contain::
 
+    XXX [fijal] since it might freeze your machine, I suggest to add a
+        non-permanent way of doing it (echo 0 > /proc/sys/vm/vdso_enabled)
+
     XXX [fijal] on my machine vdso_enbled = 0 freezed machine and made in
         unbootable without editing file first. It seems not to be needed
         though.
@@ -232,3 +237,10 @@ from it.
 
 .. _`installation instructions`: http://www.scratchbox.org/documentation/user/scratchbox-1.0/html/installdoc.html
 .. _`scratchbox`: http://scratchbox.org
+
+debian
+++++++
+
+in theory we don't need to install debian under scratchbox. in practice though,
+if we want to run pypy-c with allworkingmodules we need to a way to install
+correct libraries and include files. 
