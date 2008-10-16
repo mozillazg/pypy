@@ -58,7 +58,7 @@ class TestPlatform(object):
             executable = self.platform.compile([cfile], ExternalCompilationInfo())
         except CompilationError, e:
             filename = cfile.dirpath().join(cfile.purebasename + '.errors')
-            assert filename.read() == e.err
+            assert filename.read('r') == e.err
         else:
             py.test.fail("Did not raise")
 

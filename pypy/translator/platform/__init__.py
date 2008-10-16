@@ -27,8 +27,8 @@ def _run_subprocess(executable, args, env=None):
 
 class CompilationError(Exception):
     def __init__(self, out, err):
-        self.out = out
-        self.err = err
+        self.out = out.replace('\r\n', '\n')
+        self.err = err.replace('\r\n', '\n')
 
     def __repr__(self):
         return "<CompilationError instance>"
@@ -38,8 +38,8 @@ class CompilationError(Exception):
 class ExecutionResult(object):
     def __init__(self, returncode, out, err):
         self.returncode = returncode
-        self.out = out
-        self.err = err
+        self.out = out.replace('\r\n', '\n')
+        self.err = err.replace('\r\n', '\n')
 
     def __repr__(self):
         return "<ExecutionResult retcode=%d>" % (self.returncode,)
