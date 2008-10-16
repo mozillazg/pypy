@@ -12,9 +12,9 @@ def log_spawned_cmd(spawn):
 CFLAGS = ['-O3']
 
 if os.name != 'nt':
-    so_ext = '.so'
+    so_ext = 'so'
 else:
-    so_ext = '.dll'
+    so_ext = 'dll'
 
 class DistutilsPlatform(Platform):
     """ This is a generic distutils platform. I hope it'll go away at some
@@ -155,4 +155,10 @@ class DistutilsPlatform(Platform):
             libraries=self.eci.libraries,
             extra_preargs=self.link_extra,
             library_dirs=self.eci.library_dirs)
+
+    def include_dirs_for_libffi(self):
+        return ['/usr/include/libffi']
+
+    def library_dirs_for_libffi(self):
+        return ['/usr/lib/libffi']
 
