@@ -84,8 +84,8 @@ class DistutilsPlatform(Platform):
         data = ''
         try:
             saved_environ = os.environ.copy()
+            c = stdoutcapture.Capture(mixed_out_err = True)
             try:
-                c = stdoutcapture.Capture(mixed_out_err = True)
                 self._build()
             finally:
                 # workaround for a distutils bugs where some env vars can
@@ -96,15 +96,11 @@ class DistutilsPlatform(Platform):
                 foutput, foutput = c.done()
                 data = foutput.read()
                 if data:
-                    fdump = basename.new(ext='errors').open("w")
+                    fdump = basename.new(ext='errors').open("wb")
                     fdump.write(data)
                     fdump.close()
         except (distutils.errors.CompileError,
                 distutils.errors.LinkError), e:
-            data = data.rstrip()
-            if data:
-                data += '\n'
-            data += str(e)
             raise CompilationError('', data)
         except:
             print >>sys.stderr, data
