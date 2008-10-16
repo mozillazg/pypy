@@ -243,4 +243,29 @@ debian
 
 in theory we don't need to install debian under scratchbox. in practice though,
 if we want to run pypy-c with allworkingmodules we need to a way to install
-correct libraries and include files. 
+correct libraries and include files. For example we should use etch and not
+lenny, since libffi is in correct version there (4 vs 5). On the other
+hand I had no luck installing python on etch..
+
+To be able to run debian correctly you need to:
+
+1. Manually edit /scratchbox/devkits/debian-etch/etc/environment 
+   to add ARCH=arm (instead of ARCH=...),
+   otherwise apt-get did not work.
+
+2. Go inside scratchbox and make /etc/apt/sources.list to contain:
+    
+    deb     ftp://ftp.fi.debian.org/debian/ lenny  main contrib non-free
+    deb-src ftp://ftp.fi.debian.org/debian/ lenny  main contrib non-free
+
+3. Run apt-get update && fakeroot apt-get install libc6 && fakeroot apt-get install python2.5-dev
+
+5. In order to have pypy-c with all working modules you also need following
+   packages:
+
+   * libffi-dev
+
+   * zlib1g-dev
+
+   * libbz2-dev
+
