@@ -53,6 +53,7 @@ class BaseMallocRemovalTest(object):
         graph = graphof(t, fn)
         if option.view:
             t.view()
+        self.original_graph_count = len(t.graphs)
         # to detect missing keepalives and broken intermediate graphs,
         # we do the loop ourselves instead of calling remove_simple_mallocs()
         maxiter = 100
@@ -527,6 +528,30 @@ class BaseMallocRemovalTest(object):
         assert annotator.binding(graph.getargs()[0]).knowntype is int
         assert annotator.binding(graph.getreturnvar()).knowntype is int
 
+    def test_double_spec_order(self):
+        class A:
+            pass
+        def g(a1, a2):
+            return a1.x - a2.y
+        #
+        def fn17():
+            a1 = A(); a2 = A()
+            a1.x = 5; a1.y = 6; a2.x = 7; a2.y = 8
+            n1 = g(a1, a2)
+            #
+            a1 = A(); a2 = A()
+            a1.x = 50; a1.y = 60; a2.x = 70; a2.y = 80
+            n2 = g(a2, a1)
+            #
+            return n1 * n2
+        #
+        assert fn17() == -30
+        self.check(fn17, [], [], -30, expected_calls=2)
+        extra_graphs = len(self.translator.graphs) - self.original_graph_count
+        assert extra_graphs <= 3     # g(Virtual, Runtime)
+                                     # g(Runtime, Virtual)
+                                     # g(Virtual, Virtual)
+
 
 class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
     type_system = 'lltype'
@@ -604,7 +629,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
                    expected_calls=1)
 
     def test_direct_fieldptr(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         S = lltype.GcStruct('S', ('x', lltype.Signed))
 
         def fn():
@@ -616,7 +641,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         self.check(fn, [], [], 11)
 
     def test_direct_fieldptr_2(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         T = lltype.GcStruct('T', ('z', lltype.Signed))
         S = lltype.GcStruct('S', ('t', T),
                                  ('x', lltype.Signed),
@@ -634,8 +659,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         self.check(fn, [], [], 42)
 
     def test_getarraysubstruct(self):
-        py.test.skip("redo me")
-        py.test.skip("fails because of the interior structure changes")
+        py.test.skip("llptr support not really useful any more")
         U = lltype.Struct('U', ('n', lltype.Signed))
         for length in [1, 2]:
             S = lltype.GcStruct('S', ('a', lltype.FixedSizeArray(U, length)))
@@ -724,7 +748,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         self.check(fn, [], [], True, expected_mallocs=0)
 
     def test_substruct_not_accessed(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         SMALL = lltype.Struct('SMALL', ('x', lltype.Signed))
         BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
         def fn():
@@ -735,8 +759,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         self.check(fn, [], [], 12)
 
     def test_union(self):
-        py.test.skip("redo me")
-        py.test.skip("fails because of the interior structure changes")
+        py.test.skip("llptr support not really useful any more")
         UNION = lltype.Struct('UNION', ('a', lltype.Signed), ('b', lltype.Signed),
                               hints = {'union': True})
         BIG = lltype.GcStruct('BIG', ('u1', UNION), ('u2', UNION))
@@ -792,7 +815,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         graph = self.check(f, [int], [42], 2 * 42)
 
     def test_interior_ptr(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         S = lltype.Struct("S", ('x', lltype.Signed))
         T = lltype.GcStruct("T", ('s', S))
         def f(x):
@@ -802,7 +825,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         graph = self.check(f, [int], [42], 42)
 
     def test_interior_ptr_with_index(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         S = lltype.Struct("S", ('x', lltype.Signed))
         T = lltype.GcArray(S)
         def f(x):
@@ -812,7 +835,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         graph = self.check(f, [int], [42], 42)
 
     def test_interior_ptr_with_field_and_index(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         S = lltype.Struct("S", ('x', lltype.Signed))
         T = lltype.GcStruct("T", ('items', lltype.Array(S)))
         def f(x):
@@ -822,7 +845,7 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         graph = self.check(f, [int], [42], 42)
 
     def test_interior_ptr_with_index_and_field(self):
-        py.test.skip("redo me")
+        py.test.skip("llptr support not really useful any more")
         S = lltype.Struct("S", ('x', lltype.Signed))
         T = lltype.Struct("T", ('s', S))
         U = lltype.GcArray(T)
