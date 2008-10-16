@@ -33,6 +33,8 @@ class CompilationError(Exception):
     def __repr__(self):
         return "<CompilationError instance>"
 
+    __str__ = __repr__
+
 class ExecutionResult(object):
     def __init__(self, returncode, out, err):
         self.returncode = returncode
