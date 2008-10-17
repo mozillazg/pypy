@@ -118,8 +118,20 @@ class CBuilder(object):
         from distutils import sysconfig
         python_inc = sysconfig.get_python_inc()
         pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
+        include_dirs = [python_inc, pypy_include_dir]
+        library_dirs = []
+
+        if sys.platform == 'win32':
+            library_dirs.append(py.path.local(sys.exec_prefix).join('libs'))
+            
+            # Append the source distribution include and library directories,
+            # this allows genc on windows to work in the source tree
+            include_dirs.append(py.path.local(sys.exec_prefix).join('PC'))
+            library_dirs.append(py.path.local(sys.executable).dirpath())
+            
         return ExternalCompilationInfo(
-            include_dirs=[python_inc, pypy_include_dir]
+            include_dirs=include_dirs,
+            library_dirs=library_dirs,
         )
 
     def build_database(self):
@@ -430,9 +442,9 @@ class CStandaloneBuilder(CBuilder):
         cfiles = [self.c_source_filename] + self.extrafiles
         mk = self.translator.platform.gen_makefile(cfiles, self.eci,
                                                    path=targetdir)
-        mk.definition('ABS_TARGET', '$(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))')
         if self.has_profopt():
             profopt = self.config.translation.profopt
+            mk.definition('ABS_TARGET', '$(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))')
             mk.definition('DEFAULT_TARGET', 'profopt')
             mk.definition('PROFOPT', profopt)
 
@@ -447,12 +459,15 @@ class CStandaloneBuilder(CBuilder):
             ('llsafer', '', '$(MAKE) CFLAGS="-O2 -DRPY_LL_ASSERT" $(TARGET)'),
             ('lldebug', '', '$(MAKE) CFLAGS="-g -DRPY_ASSERT -DRPY_LL_ASSERT" $(TARGET)'),
             ('profile', '', '$(MAKE) CFLAGS="-g -pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)" $(TARGET)'),
-            ('profopt', '', [
-            '$(MAKENOPROF)',
-            '$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)',
-            'cd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)',
-            '$(MAKE) clean_noprof',
-            '$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)" $(TARGET)'])]
+            ]
+        if self.has_profopt():
+            rules.append(
+                ('profopt', '', [
+                '$(MAKENOPROF)',
+                '$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)" $(TARGET)',
+                'cd $(PYPYDIR)/translator/goal && $(ABS_TARGET) $(PROFOPT)',
+                '$(MAKE) clean_noprof',
+                '$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)" $(TARGET)']))
         for rule in rules:
             mk.rule(*rule)
 
