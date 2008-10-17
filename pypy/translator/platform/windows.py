@@ -56,14 +56,19 @@ class Windows(linux.Linux): # xxx
     cc = 'cl.exe'
     link = 'link.exe'
 
-    cflags = ['/MDd', '/Z7']
-    link_flags = ['/debug']
+    cflags = ['/MD']
+    link_flags = []
 
     def __init__(self, cc=None):
         self.cc = 'cl.exe'
 
+        # Install debug options only when interpreter is in debug mode
+        if sys.executable.lower().endswith('_d.exe'):
+            self.cflags = ['/MDd', '/Z7']
+            self.link_flags = ['/debug']
+
     def _libs(self, libraries):
-        return ['%s' % (lib,) for lib in libraries]
+        return ['%s.lib' % (lib,) for lib in libraries]
 
     def _libdirs(self, library_dirs):
         return ['/LIBPATH:%s' % (ldir,) for ldir in library_dirs]
