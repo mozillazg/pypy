@@ -276,7 +276,18 @@ class ModuleWithCleanup(object):
 
     def __getattr__(self, name):
         mod = self.__dict__['mod']
-        return getattr(mod, name)
+        obj = getattr(mod, name)
+        if callable(obj) and getattr(obj, '__module__', None) == mod.__name__:
+            # The module must be kept alive with the function.
+            # This wrapper avoids creating a cycle.
+            class Wrapper:
+                def __init__(self):
+                    self.mod = mod
+                    self.func = obj
+                def __call__(self, *args, **kwargs):
+                    return self.func(*args, **kwargs)
+            obj = Wrapper(obj)
+        return obj
 
     def __setattr__(self, name, val):
         mod = self.__dict__['mod']
