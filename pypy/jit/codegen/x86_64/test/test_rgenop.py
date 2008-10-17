@@ -11,6 +11,22 @@ from pypy.jit.codegen.x86_64.objmodel import IntVar, Stack64
 def skip(self):
     py.test.skip("not implemented yet")
     
+    
+# pushes/pos some values and than uses a mem access to access the stack
+def make_mem_func2(rgenop):
+    sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
+    builder, gv_mem_func, [gv_x] = rgenop.newgraph(sigtoken, "mem_op")
+    builder.start_writing()
+    builder.genop1("int_push", gv_x)  
+    builder.genop1("int_push", gv_x)
+    builder.mc.MOV(gv_x,  rgenop.genconst(42))
+    builder.mc.MOV(IntVar(Stack64(8)), gv_x)
+    builder.genop1("int_pop",  gv_x)
+    builder.genop1("int_pop",  gv_x)
+    builder.finish_and_return(sigtoken, gv_x)
+    builder.end()
+    return gv_mem_func
+
 # pushes/pos some values and than uses a mem access to access the stack
 def make_mem_func(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed))
@@ -508,6 +524,13 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         assert result == 3
         result = fnptr(-1,2)
         assert result == 5
+        
+    def test_memory_access2(self):
+        mem_func = make_mem_func2(self.RGenOp())
+        fnptr = self.cast(mem_func,1)
+        result = fnptr(0)
+        assert result == 42
+
         
 #    def test_invert(self):
 #        inv_function = make_one_op_instr(self.RGenOp(),"int_invert")

@@ -106,6 +106,7 @@ class Builder(model.GenBuilder):
         self.known_gv = [] # contains the live genvars (used for spilling and allocation)
         for reg in used_registers:
             del self.freeregisters[reg.location.reg]
+        self.free_stack_pos = {}
                
     def _open(self):
         pass
@@ -304,15 +305,14 @@ class Builder(model.GenBuilder):
         self._open()
         gv_return = self.allocate_register("rax")
         # if there unused genVars on the stack
-        # pop them away
-        while not self.stackdepth == 0:
-            self.mc.POP(gv_return)
-            self.stackdepth = self.stackdepth -1
+        # throw them away
+        if not self.stackdepth == 0:
+            self.mc.ADD(IntVar(Register64("rsp")), Immediate32(self.stackdepth*8))
         if not gv_returnvar == None:#check void return      
             self.mc.MOV(gv_return, gv_returnvar)
         self.mc.RET()
         self._close()
-        assert self.stackdepth == 0
+        #assert self.stackdepth == 0
         
     # FIXME: uses 32bit displ 
     # TODO: return also stackdepth or pop! 
@@ -439,8 +439,14 @@ class Builder(model.GenBuilder):
         if gv_to_spill.location.throw_away:
             return gv_to_spill
         else:
+            #search for free stack position
+            for i in range(self.stackdepth):
+                if i in self.free_stack_pos.keys():
+                    pass
+                    # TODO: move gv_to_spill, stack(i)
             self.stackdepth = self.stackdepth +1 
-            self.mc.PUSH(gv_to_spill)    
+            self.mc.PUSH(gv_to_spill) 
+            self.free_stack_pos[self.stackdepth] = None # remember as used   
             new_gv = IntVar(Register64(gv_to_spill.location.reg))
             gv_to_spill.location = Stack64(self.stackdepth)         
             return new_gv
@@ -451,6 +457,7 @@ class Builder(model.GenBuilder):
         gv_new = self.allocate_register(None, dont_alloc)
         if a_spilled_gv.location.offset ==  self.stackdepth:
             self.mc.POP(gv_new)
+            del self.free_stack_pos[self.stackdepth]
             self.stackdepth = self.stackdepth -1
             assert self.stackdepth >= 0 
             a_spilled_gv.location = Register64(gv_new.location.reg)
@@ -463,8 +470,7 @@ class Builder(model.GenBuilder):
         # else access the memory
         # FIXME: if this genVar becomes the top of stack it will never be pushed
             self.mc.MOV(gv_new, IntVar(Stack64(8*(self.stackdepth-a_spilled_gv.location.offset))))#8=scale
-            #print "debug:",self.stackdepth
-            #print a_spilled_gv.location.offset
+            del self.free_stack_pos[a_spilled_gv.location.offset]
             a_spilled_gv.location = Register64(gv_new.location.reg)
             self.known_gv.remove(gv_new) 
             return a_spilled_gv

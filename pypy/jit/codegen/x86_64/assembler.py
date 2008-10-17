@@ -50,6 +50,17 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
                 rexB, modrm1 = self.get_register_bits(arg1.location.reg)
             elif isinstance(arg1.location, Register8):
                 modrm1 = self.get_register_bits_8Bit(arg1.location.reg)
+            # special case: Stack and Register exchanged
+            elif isinstance(arg1.location, Stack64) and isinstance(arg2.location, Register64):
+                rexB, modrm1 = self.get_register_bits(arg2.location.reg)
+                self.write_rex_byte(rexW, rexB, rexX, rexR) 
+                self.write(opcode)
+                # exchanged mod1,mod2, dont know why :)
+                self.write_modRM_byte(mod, modrm1, modrm2)
+                # no scale(has no effect on rsp), no index, base = rsp
+                self.write_SIB(0, 4, 4) 
+                self.writeImm32(arg1.location.offset) 
+                return quadreg_instr 
             
         # exchange the two arguments (modrm2/modrm1)
         if isinstance(arg2,Immediate32):
@@ -202,7 +213,8 @@ class X86_64CodeBuilder(object):
     _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", 3, None, 0)
     _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
     _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"B8",None,None)
-    _MOV_QWREG_STACK = make_two_operand_instr(   1,    0,    0, None, "\x8B", 2, None, 4)#4 =RSP    
+    _MOV_QWREG_STACK = make_two_operand_instr(   1,    0,    0, None, "\x8B", 2, None, 4)#4 =RSP
+    _MOV_STACK_QWREG = make_two_operand_instr(   1,    0,    0, None, "\x89", 2, None, 4)    
         
     _IDIV_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 7)
     
