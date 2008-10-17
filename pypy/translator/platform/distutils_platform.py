@@ -20,8 +20,12 @@ class DistutilsPlatform(Platform):
     """ This is a generic distutils platform. I hope it'll go away at some
     point soon completely
     """
+    name = "distutils"
+    
     def __init__(self, cc=None):
         self.cc = cc
+        if self.name == "distutils":
+            self.name = sys.platform
     
     def _ensure_correct_math(self):
         if self.name != 'win32':
