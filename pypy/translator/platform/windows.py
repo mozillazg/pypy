@@ -1,9 +1,51 @@
 
-import py, os
+import py, os, sys
 from pypy.translator.platform import linux # xxx
 from pypy.translator.platform import CompilationError, ExecutionResult
 from pypy.translator.platform import log, _run_subprocess
 from pypy.tool import autopath
+
+def _get_msvc_tools():
+    # The same compiler must be used for the python interpreter
+    # and extension modules
+    msc_pos = sys.version.find('MSC v.')
+    if msc_pos == -1:
+        # Not a windows platform...
+        return None
+
+    msc_ver = int(sys.version[msc_pos+6:msc_pos+10])
+    # 1300 -> 70, 1310 -> 71, 1400 -> 80, 1500 -> 90
+    vsver = (msc_ver / 10) - 60
+    return os.environ['VS%sCOMNTOOLS' % vsver]
+
+def _install_msvc_env():
+
+    vcvars = os.path.join(_get_msvc_tools(), 'vsvars32.bat')
+    if not vcvars:
+        return
+    
+    import subprocess
+    popen = subprocess.Popen('"%s" & set' % (vcvars,),
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+
+    stdout, stderr = popen.communicate()
+    if popen.wait() != 0:
+        raise IOError(stderr)
+    for line in stdout.split("\n"):
+        if '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        if key.upper() in ['PATH', 'INCLUDE', 'LIB']:
+            os.environ[key] = value
+
+try:
+    _install_msvc_env()
+except Exception, e:
+    print >>sys.stderr, "Could not find a suitable Microsoft Compiler"
+    import traceback
+    traceback.print_exc()
+    # Assume that the compiler is already part of the environment
 
 class Windows(linux.Linux): # xxx
     name = "win32"
