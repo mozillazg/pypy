@@ -2,7 +2,6 @@
 Support for an automatically compiled Run Time Environment.
 The source of the RTE is in the src/ directory.
 """
-
 import os
 import os.path
 import shutil
@@ -123,4 +122,6 @@ def remove_cache_for_assembly(ass):
         cache.remove()
 
 if __name__ == '__main__':
-    get_pypy_dll()
+    import shutil
+    pypylib = get_pypy_dll()
+    shutil.copy(pypylib, '.')
