@@ -62,6 +62,19 @@ class Windows(linux.Linux): # xxx
     def __init__(self, cc=None):
         self.cc = 'cl.exe'
 
+    def _libs(self, libraries):
+        return ['%s' % (lib,) for lib in libraries]
+
+    def _libdirs(self, library_dirs):
+        return ['/LIBPATH:%s' % (ldir,) for ldir in library_dirs]
+
+    def _args_for_shared(self, args):
+        return ['/dll'] + args
+
+    def _link_args_from_eci(self, eci):
+        args = super(Windows, self)._link_args_from_eci(eci)
+        return args + ['/EXPORT:%s' % symbol for symbol in eci.export_symbols]
+        
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='obj')
         args = ['/nologo', '/c'] + compile_args + [str(cfile), '/Fo%s' % (oname,)]
