@@ -10,5 +10,5 @@ class TestVListCli(CompiledCliMixin, VListTest):
     def skip(self):
         py.test.skip('in progress')
 
-    test_force_fixed = skip
-    
+    def test_force_fixed(self):
+        py.test.skip("very strange bug, crashes both mono and .NET")
