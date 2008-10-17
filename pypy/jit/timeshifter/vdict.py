@@ -208,7 +208,13 @@ class OOTypeDictTypeDesc(AbstractDictTypeDesc):
         self.tok_ll_set = RGenOp.methToken(DICT, 'll_set')
 
     def _get_eq_hash(self, DICT):
-        return operator.eq, hash
+        KEY = DICT.KEY
+        eq = operator.eq
+        if KEY in (ootype.String, ootype.Unicode):
+            return eq, ootype.oohash
+        elif KEY in (ootype.Instance, ootype.Record):
+            return eq, ootype.ooidentityhash
+        return eq, hash # work at least for primitive types
 
     def gen_newdict(self, builder, args_gv):
         raise NotImplementedError
