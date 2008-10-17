@@ -38,6 +38,7 @@ def _install_msvc_env():
         key, value = line.split('=', 1)
         if key.upper() in ['PATH', 'INCLUDE', 'LIB']:
             os.environ[key] = value
+    log.msg("Updated environment with %s" % (vcvars,))
 
 try:
     _install_msvc_env()
