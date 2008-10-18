@@ -281,7 +281,7 @@ class ModuleWithCleanup(object):
             # The module must be kept alive with the function.
             # This wrapper avoids creating a cycle.
             class Wrapper:
-                def __init__(self):
+                def __init__(self, obj):
                     self.mod = mod
                     self.func = obj
                 def __call__(self, *args, **kwargs):
