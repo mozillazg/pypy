@@ -89,6 +89,7 @@ CHECKED_OP_CODES += [
 CHECKED_OP_CODES       = [0x00]
 CHECKED_FETCH_OP_CODES = []
 BAR_WIDTH = 79
+PRINT_OPCODE=True
 
 def log(opCode, is_fetch_execute=False):
     global COUNT, op_codes, fetch_execute_op_codes
@@ -132,17 +133,19 @@ def resolve_fetch_opcode_name(opcode):
 def print_results():
     global COUNT, op_codes, fetch_execute_op_codes
     
-    codes = zip(map(lambda x: "%4s" % hex(x), range(len(op_codes))), op_codes)
+    print_function = (lambda x: "%4s" % hex(x))
+    codes = zip(map( print_function, range(len(op_codes))), op_codes)
     
-    fetch_exec_keys = map(lambda x: "%4s %4s" % (hex(x[0]), hex(x[1])), 
-                            zip([0x83]*len(fetch_execute_op_codes),
-                                range(len(fetch_execute_op_codes))))
-    
+    print_function = (lambda x:  "%4s %4s" % (hex(x[0]), hex(x[1])))
+    opcode_range = range(len(fetch_execute_op_codes))
+    arguments = zip([0x83]  * len(fetch_execute_op_codes), opcode_range)
+    fetch_exec_keys = map( print_function, opcode_range, arguments )
+	# Append the fetchexecuted opcodes to the list
     codes.extend(zip(fetch_exec_keys, fetch_execute_op_codes))
     
     codes = sorted(codes, key=operator.itemgetter(1))
     for code in codes:
         if code[1] != 0:
-            print "%8s : %s" % (code[0], code[1])
+            print "%8s \t %s" % (code[0], code[1])
 
     
