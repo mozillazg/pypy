@@ -501,6 +501,69 @@ def get_large_switch_runner(T, RGenOp):
         return res
     return large_switch_runner
 
+
+def make_switch_goto_parent_block(T, rgenop):
+    """
+    def f(v0, v1):
+      firstblock:   # label
+        if v0 == 0: # switch
+            return 21*v1
+        elif v0 == 1:
+            return 21+v1
+        elif v0 == 2:
+            v0 = v0-1
+            v1 = v1*2
+            goto firstblock
+        else:
+            return v1
+    """
+    sigtoken = rgenop.sigToken(T.FUNC2)
+    builder, gv_switch, [gv0, gv1] = rgenop.newgraph(sigtoken, "switch")
+    builder.start_writing()
+
+    args_gv = [gv0, gv1]
+    firstblock = builder.enter_next_block(args_gv)
+    gv0, gv1 = args_gv
+
+    args_gv = [gv0, gv1]
+    flexswitch, default_builder = builder.flexswitch(gv0, args_gv)
+    gv0, gv1 = args_gv
+    
+    const21 = rgenop.genconst(21)
+
+    # default
+    default_builder.finish_and_return(sigtoken, gv1)
+    # case == 0
+    const0 = rgenop.genconst(0)
+    case_builder = flexswitch.add_case(const0)
+    gv_res_case0 = case_builder.genop2('int_mul', const21, gv1)
+    case_builder.finish_and_return(sigtoken, gv_res_case0)
+    # case == 1
+    const1 = rgenop.genconst(1)
+    case_builder = flexswitch.add_case(const1)
+    gv_res_case1 = case_builder.genop2('int_add', const21, gv1)
+    case_builder.finish_and_return(sigtoken, gv_res_case1)
+    # case == 2
+    const2 = rgenop.genconst(2)
+    case_builder = flexswitch.add_case(const2)
+    gv0_new = case_builder.genop2('int_sub', gv0, const1)
+    gv1_new = case_builder.genop2('int_mul', gv1, const2)
+    case_builder.finish_and_goto([gv0_new, gv1_new], firstblock)
+
+    builder.end()
+    return gv_switch
+
+def get_switch_goto_parent_block_runner(T, RGenOp):
+    def switch_goto_parent_block_runner(x, y):
+        rgenop = RGenOp()
+        gv_switchfn = make_switch_goto_parent_block(T, rgenop)
+        switchfn = gv_switchfn.revealconst(T.Ptr(T.FUNC2))
+        res = switchfn(x, y)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return switch_goto_parent_block_runner
+
+
 def make_fact(T, rgenop):
     # def fact(x):
     #     if x:
@@ -1167,6 +1230,18 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         res = fn(42, 18)
         assert res == 18
 
+    def test_switch_goto_parent_block_compile(self):
+        fn = self.compile(get_switch_goto_parent_block_runner(self.T, self.RGenOp), [int, int])
+        res = fn(0, 2)
+        assert res == 42
+        res = fn(1, 16)
+        assert res == 37
+        res = fn(2, 15)
+        assert res == 51
+        res = fn(42, 16)
+        assert res == 16
+
+
     def test_fact_compile(self):
         fn = self.compile(get_fact_runner(self.T, self.RGenOp), [int])
         res = fn(2)
@@ -1405,6 +1480,19 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         res = fnptr(1, 4, 5, 6, 6)
         assert res == 42
         res = fnptr(42, 16, 3, 4, 5)
+        assert res == 16
+
+    def test_switch_goto_parent_block_direct(self):
+        rgenop = self.RGenOp()
+        gv_switchfn = make_switch_goto_parent_block(self.T, rgenop)
+        fnptr = self.cast(gv_switchfn, 2)
+        res = fnptr(0, 2)
+        assert res == 42
+        res = fnptr(1, 16)
+        assert res == 37
+        res = fnptr(2, 15)
+        assert res == 51
+        res = fnptr(42, 16)
         assert res == 16
 
     def test_large_switch_direct(self):
