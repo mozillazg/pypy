@@ -8,8 +8,7 @@ from pypy.lang.gameboy.ram import iMemory
 from pypy.lang.gameboy.interrupt import Interrupt
 from pypy.lang.gameboy.profiling.profiling_cpu import ProfilingCPU
 
-
-
+PRINT_OPCODE_LABEL=False
 
 def entry_point(argv=None):
     typical = False
@@ -48,13 +47,19 @@ def run_each_first_order(count):
     for i in range(0xFF):
         if i not in forbidden and OP_CODES[i] is not None:
             op_codes[0] = i
-            print i, ":", run(op_codes, count)
+            if PRINT_OPCODE_LABEL:
+                print i, ":", run(op_codes, count)
+            else:
+                print  run(op_codes, count)
     
 def run_each_second_order(count):
     op_codes = [0xCB]*2
     for i in range(0xFF):
         op_codes[1] = i
-        print  "0xCB :", i, ":" , run(op_codes, count)
+        if PRINT_OPCODE_LABEL:
+            print  "0xCB :", i, ":" , run(op_codes, count)
+        else:
+            print  run(op_codes, count)
     
 def run_all_first_order(count):
     print run(FIRST_ORDER_LIST, count)
