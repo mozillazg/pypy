@@ -97,6 +97,8 @@ class Linux(Platform):
     
     link_flags = ['-pthread']
     cflags = ['-O3', '-pthread', '-fomit-frame-pointer']
+    standalone_only = []
+    shared_only = []
     so_ext = 'so'
     exe_ext = ''
     
@@ -114,10 +116,15 @@ class Linux(Platform):
     def _includedirs(self, include_dirs):
         return ['-I%s' % (idir,) for idir in include_dirs]
 
-    def _compile_args_from_eci(self, eci):
+    def _compile_args_from_eci(self, eci, standalone):
         include_dirs = self._preprocess_dirs(eci.include_dirs)
         args = self._includedirs(include_dirs)
-        return (self.cflags + list(eci.compile_extra) + args)
+        if standalone:
+            extra = self.standalone_only
+        else:
+            extra = self.shared_only
+        cflags = self.cflags + extra
+        return (cflags + list(eci.compile_extra) + args)
 
     def _link_args_from_eci(self, eci):
         library_dirs = self._libdirs(eci.library_dirs)
@@ -132,17 +139,17 @@ class Linux(Platform):
     def _args_for_shared(self, args):
         return ['-shared'] + args
 
-    def _compile_o_files(self, cfiles, eci):
+    def _compile_o_files(self, cfiles, eci, standalone=True):
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
-        compile_args = self._compile_args_from_eci(eci)
+        compile_args = self._compile_args_from_eci(eci, standalone)
         ofiles = []
         for cfile in cfiles:
             ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
         return ofiles
 
     def compile(self, cfiles, eci, outputfilename=None, standalone=True):
-        ofiles = self._compile_o_files(cfiles, eci)
+        ofiles = self._compile_o_files(cfiles, eci, standalone)
         return self._finish_linking(ofiles, eci, outputfilename, standalone)
 
     def _finish_linking(self, ofiles, eci, outputfilename, standalone):
