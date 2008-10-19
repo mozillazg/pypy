@@ -7,7 +7,8 @@ class Darwin(linux.Linux): # xxx
     
     link_flags = []
     cflags = ['-O3', '-fomit-frame-pointer']
-    # -mdynamic-no-pic for standalone
+    standalone_only = ['-mdynamic-no-pic']
+    shared_only = ['-mmacosx-version-min=10.4']
     
     def __init__(self, cc=None):
         if cc is None:
@@ -15,7 +16,8 @@ class Darwin(linux.Linux): # xxx
         self.cc = cc
 
     def _args_for_shared(self, args):
-        return ['-bundle', '-undefined', 'dynamic_lookup'] + args
+        return (self.shared_only + ['-bundle', '-undefined', 'dynamic_lookup']
+                                 + args)
 
     def include_dirs_for_libffi(self):
         return ['/usr/include/ffi']
