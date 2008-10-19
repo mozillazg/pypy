@@ -5,25 +5,20 @@ from pypy.translator.platform import CompilationError, ExecutionResult
 from pypy.translator.platform import log, _run_subprocess
 from pypy.tool import autopath
 
-def _get_msvc_tools():
+def _install_msvc_env():
     # The same compiler must be used for the python interpreter
     # and extension modules
     msc_pos = sys.version.find('MSC v.')
     if msc_pos == -1:
         # Not a windows platform...
-        return None
+        return
 
     msc_ver = int(sys.version[msc_pos+6:msc_pos+10])
     # 1300 -> 70, 1310 -> 71, 1400 -> 80, 1500 -> 90
     vsver = (msc_ver / 10) - 60
-    return os.environ['VS%sCOMNTOOLS' % vsver]
+    toolsdir = os.environ['VS%sCOMNTOOLS' % vsver]
+    vcvars = os.path.join(toolsdir, 'vsvars32.bat')
 
-def _install_msvc_env():
-
-    vcvars = os.path.join(_get_msvc_tools(), 'vsvars32.bat')
-    if not vcvars:
-        return
-    
     import subprocess
     popen = subprocess.Popen('"%s" & set' % (vcvars,),
                              stdout=subprocess.PIPE,
@@ -38,6 +33,7 @@ def _install_msvc_env():
         key, value = line.split('=', 1)
         if key.upper() in ['PATH', 'INCLUDE', 'LIB']:
             os.environ[key] = value
+            log.msg(line)
     log.msg("Updated environment with %s" % (vcvars,))
 
 try:
