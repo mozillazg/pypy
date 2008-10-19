@@ -24,3 +24,8 @@ class Darwin(linux.Linux): # xxx
 
     def library_dirs_for_libffi(self):
         return []
+
+    def check___thread(self):
+        # currently __thread is not supported by Darwin gccs
+        return False
+
