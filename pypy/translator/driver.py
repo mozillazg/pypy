@@ -507,7 +507,7 @@ class TranslationDriver(SimpleTaskEngine):
         newexename = self.exe_name % self.get_info()
         if '/' not in newexename and '\\' not in newexename:
             newexename = './' + newexename
-        return mkexename(newexename)
+        return mkexename(py.path.local(newexename))
 
     def create_exe(self):
         if self.exe_name is not None:
