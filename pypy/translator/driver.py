@@ -859,5 +859,5 @@ $LEDIT java -Xmx256m -jar $EXE.jar "$@"
 
 def mkexename(name):
     if sys.platform == 'win32':
-        name = os.path.normpath(str(name) + '.exe')
+        name = name.new(ext='exe')
     return name
