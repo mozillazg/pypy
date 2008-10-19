@@ -1,1 +1,2 @@
 * Check why socket test is hanging (and if it's handing on dist/trunk as well)
+* Change inheritance hierarchy, so Linux is not a base class
