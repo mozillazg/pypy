@@ -103,18 +103,21 @@ else:
 
 platform = host
 
+def pick_platform(new_platform, cc):
+    if new_platform == 'host':
+        return host.__class__(cc)
+    elif new_platform == 'maemo':
+        from pypy.translator.platform.maemo import Maemo
+        return Maemo(cc)
+    elif new_platform == 'distutils':
+        from pypy.translator.platform.distutils_platform import DistutilsPlatform
+        return DistutilsPlatform()
+    else:
+        raise ValueError("platform = %s" % (new_platform,))
+    
 def set_platform(new_platform, cc):
     global platform
     log.msg("Setting platform to %r cc=%s" % (new_platform,cc))
-    if new_platform == 'host':
-        platform = host.__class__(cc)
-    elif new_platform == 'maemo':
-        from pypy.translator.platform.maemo import Maemo
-        platform = Maemo(cc)
-    elif new_platform == 'distutils':
-        from pypy.translator.platform.distutils_platform import DistutilsPlatform
-        platform = DistutilsPlatform()
-    else:
-        raise NotImplementedError("platform = %s" % (new_platform,))
+    platform = pick_platform(new_platform, cc)
         
 

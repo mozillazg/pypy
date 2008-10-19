@@ -362,15 +362,7 @@ def set_platform(config):
     set_platform(config.translation.platform, config.translation.cc)
 
 def get_platform(config):
+    from pypy.translator.platform import pick_platform    
     opt = config.translation.platform
-    if opt == 'maemo':
-        from pypy.translator.platform.maemo import Maemo
-        return Maemo(config.translation.cc)
-    elif opt == 'host':
-        from pypy.translator.platform import host
-        return host.__class__(config.translation.cc)
-    elif opt == 'distutils':
-        from pypy.translator.platform.distutils_platform import DistutilsPlatform
-        return DistutilsPlatform(config.translation.cc)
-    else:
-        raise ValueError(opt)
+    cc = config.translation.cc
+    return pick_platform(opt, cc)
