@@ -1,22 +1,16 @@
-import autopath
-
 import os, sys, inspect, re, imp
-from pypy.tool.autopath import pypydir
-from pypy.translator.platform import host
 
 import py
+
+from pypy.tool.autopath import pypydir
+from pypy.translator.platform import host
 from pypy.tool.ansi_print import ansi_log
-log = py.log.Producer("cbuild")
-py.log.setconsumer("cbuild", ansi_log)
 from pypy.tool.udir import udir
 
-debug = 0
 
-CFLAGS = os.getenv("CFLAGS")
-if CFLAGS:
-    CFLAGS = CFLAGS.split()
-else:
-    CFLAGS = ['-O3']
+log = py.log.Producer("cbuild")
+py.log.setconsumer("cbuild", ansi_log)
+
 
 class ExternalCompilationInfo(object):
 
