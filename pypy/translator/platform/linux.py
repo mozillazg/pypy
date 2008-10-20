@@ -24,22 +24,6 @@ class Linux(BasePosix):
     def _includedirs(self, include_dirs):
         return ['-I%s' % (idir,) for idir in include_dirs]
 
-    def _compile_args_from_eci(self, eci, standalone):
-        include_dirs = self._preprocess_dirs(eci.include_dirs)
-        args = self._includedirs(include_dirs)
-        if standalone:
-            extra = self.standalone_only
-        else:
-            extra = self.shared_only
-        cflags = self.cflags + extra
-        return (cflags + list(eci.compile_extra) + args)
-
-    def _link_args_from_eci(self, eci):
-        library_dirs = self._libdirs(eci.library_dirs)
-        libraries = self._libs(eci.libraries)
-        return (library_dirs + libraries + self.link_flags +
-                list(eci.link_extra))
-
     def _preprocess_dirs(self, include_dirs):
         # hook for maemo
         return include_dirs
@@ -144,3 +128,7 @@ class Linux(BasePosix):
 
     def library_dirs_for_libffi(self):
         return ['/usr/lib/libffi']
+
+
+class Linux64(Linux):
+    shared_only = ['-fPIC']
