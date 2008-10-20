@@ -116,23 +116,12 @@ class CBuilder(object):
 
     def get_eci(self):
         from distutils import sysconfig
-        python_inc = sysconfig.get_python_inc()
+        python_inc = sysconfig.get_python_inc() # XXX refactor remaining dependencies
+                                                # like obmalloc into separately compilable
+                                                # modules etc.
         pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
         include_dirs = [python_inc, pypy_include_dir]
-        library_dirs = []
-
-        if sys.platform == 'win32':
-            library_dirs.append(py.path.local(sys.exec_prefix).join('libs'))
-            
-            # Append the source distribution include and library directories,
-            # this allows genc on windows to work in the source tree
-            include_dirs.append(py.path.local(sys.exec_prefix).join('PC'))
-            library_dirs.append(py.path.local(sys.executable).dirpath())
-            
-        return ExternalCompilationInfo(
-            include_dirs=include_dirs,
-            library_dirs=library_dirs,
-        )
+        return ExternalCompilationInfo(include_dirs=include_dirs)
 
     def build_database(self):
         translator = self.translator
