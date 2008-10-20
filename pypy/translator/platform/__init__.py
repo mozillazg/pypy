@@ -57,6 +57,15 @@ class Platform(object):
         ofiles = self._compile_o_files(cfiles, eci, standalone)
         return self._finish_linking(ofiles, eci, outputfilename, standalone)
 
+    def _compile_o_files(self, cfiles, eci, standalone=True):
+        cfiles = [py.path.local(f) for f in cfiles]
+        cfiles += [py.path.local(f) for f in eci.separate_module_files]
+        compile_args = self._compile_args_from_eci(eci, standalone)
+        ofiles = []
+        for cfile in cfiles:
+            ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
+        return ofiles
+
     def execute(self, executable, args=None, env=None):
         returncode, stdout, stderr = _run_subprocess(str(executable), args,
                                                      env)

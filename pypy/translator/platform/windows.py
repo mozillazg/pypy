@@ -82,15 +82,6 @@ class Windows(Platform):
         self._execute_c_compiler(cc, args, oname)
         return oname
 
-    def _compile_o_files(self, cfiles, eci, standalone=True):
-        cfiles = [py.path.local(f) for f in cfiles]
-        cfiles += [py.path.local(f) for f in eci.separate_module_files]
-        compile_args = self._compile_args_from_eci(eci, standalone)
-        ofiles = []
-        for cfile in cfiles:
-            ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
-        return ofiles
-
     def _link(self, cc, ofiles, link_args, standalone, exe_name):
         args = ['/nologo'] + [str(ofile) for ofile in ofiles] + link_args
         args += ['/out:%s' % (exe_name,)]
