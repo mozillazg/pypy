@@ -1,8 +1,8 @@
 
 import py, os, sys
-from pypy.translator.platform import linux # xxx
 from pypy.translator.platform import CompilationError, ExecutionResult
 from pypy.translator.platform import log, _run_subprocess
+from pypy.translator.platform import Platform, posix
 from pypy.tool import autopath
 
 def _install_msvc_env():
@@ -44,7 +44,7 @@ except Exception, e:
     traceback.print_exc()
     # Assume that the compiler is already part of the environment
 
-class Windows(linux.Linux): # xxx
+class Windows(Platform):
     name = "win32"
     so_ext = 'dll'
     exe_ext = 'exe'
@@ -82,6 +82,15 @@ class Windows(linux.Linux): # xxx
         self._execute_c_compiler(cc, args, oname)
         return oname
 
+    def _compile_o_files(self, cfiles, eci, standalone=True):
+        cfiles = [py.path.local(f) for f in cfiles]
+        cfiles += [py.path.local(f) for f in eci.separate_module_files]
+        compile_args = self._compile_args_from_eci(eci, standalone)
+        ofiles = []
+        for cfile in cfiles:
+            ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
+        return ofiles
+
     def _link(self, cc, ofiles, link_args, standalone, exe_name):
         args = ['/nologo'] + [str(ofile) for ofile in ofiles] + link_args
         args += ['/out:%s' % (exe_name,)]
@@ -89,6 +98,18 @@ class Windows(linux.Linux): # xxx
             args = self._args_for_shared(args)
         self._execute_c_compiler(self.link, args, exe_name)
         return exe_name
+
+    def _finish_linking(self, ofiles, eci, outputfilename, standalone):
+        if outputfilename is None:
+            outputfilename = ofiles[0].purebasename
+        exe_name = py.path.local(os.path.join(str(ofiles[0].dirpath()),
+                                              outputfilename))
+        if standalone:
+            exe_name += '.' + self.exe_ext
+        else:
+            exe_name += '.' + self.so_ext
+        return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
+                          standalone, exe_name)
 
     def _handle_error(self, returncode, stderr, stdout, outname):
         if returncode != 0:
@@ -178,5 +199,5 @@ class Windows(linux.Linux): # xxx
             
         self._handle_error(returncode, stdout, stderr, path.join('make'))
 
-class NMakefile(linux.GnuMakefile):
+class NMakefile(posix.GnuMakefile):
     pass # for the moment
