@@ -4,7 +4,7 @@
 
 from pypy.translator.platform import Platform, log, _run_subprocess
 from pypy.tool import autopath
-import py
+import py, os
 
 class BasePosix(Platform):
     exe_ext = ''

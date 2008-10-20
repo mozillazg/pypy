@@ -9,6 +9,8 @@ class Darwin(posix.BasePosix):
     cflags = ['-O3', '-fomit-frame-pointer']
     standalone_only = ['-mdynamic-no-pic']
     shared_only = ['-mmacosx-version-min=10.4']
+
+    so_ext = 'so'
     
     def __init__(self, cc=None):
         if cc is None:
