@@ -13,21 +13,7 @@ class Linux(BasePosix):
     standalone_only = []
     shared_only = []
     so_ext = 'so'
-    exe_ext = ''
     
-    def _libs(self, libraries):
-        return ['-l%s' % (lib,) for lib in libraries]
-
-    def _libdirs(self, library_dirs):
-        return ['-L%s' % (ldir,) for ldir in library_dirs]
-
-    def _includedirs(self, include_dirs):
-        return ['-I%s' % (idir,) for idir in include_dirs]
-
-    def _preprocess_dirs(self, include_dirs):
-        # hook for maemo
-        return include_dirs
-
     def _args_for_shared(self, args):
         return ['-shared'] + args
 
@@ -39,22 +25,6 @@ class Linux(BasePosix):
         for cfile in cfiles:
             ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
         return ofiles
-
-    def compile(self, cfiles, eci, outputfilename=None, standalone=True):
-        ofiles = self._compile_o_files(cfiles, eci, standalone)
-        return self._finish_linking(ofiles, eci, outputfilename, standalone)
-
-    def _finish_linking(self, ofiles, eci, outputfilename, standalone):
-        if outputfilename is None:
-            outputfilename = ofiles[0].purebasename
-        exe_name = py.path.local(os.path.join(str(ofiles[0].dirpath()),
-                                              outputfilename))
-        if standalone:
-            exe_name += '.' + self.exe_ext
-        else:
-            exe_name += '.' + self.so_ext
-        return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
-                          standalone, exe_name)
         
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         cfiles = [py.path.local(f) for f in cfiles]
