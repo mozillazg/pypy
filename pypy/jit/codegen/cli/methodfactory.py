@@ -58,6 +58,7 @@ class AssemblyMethodWrapper(AbstractMethodWrapper):
     def __init__(self, name, res, args):
         module = assemblyData.module
         name = '%s_%d' % (name, assemblyData.methcount)
+        #self.name = name
         assemblyData.methcount += 1
         self.typeBuilder = AutoSaveAssembly.DefineType(module, name)
         self.meth = AutoSaveAssembly.DefineMethod(self.typeBuilder,
@@ -70,7 +71,8 @@ class AssemblyMethodWrapper(AbstractMethodWrapper):
     def create_delegate(self, delegatetype, consts):
         t = self.typeBuilder.CreateType()
         methinfo = t.GetMethod("invoke")
-        #assemblyData.auto_save_assembly.Save()
+##         if self.name == 'generated_case_1':
+##             assemblyData.auto_save_assembly.Save()
         return System.Delegate.CreateDelegate(delegatetype,
                                               consts,
                                               methinfo)

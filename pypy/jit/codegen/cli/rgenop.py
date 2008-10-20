@@ -313,10 +313,11 @@ class FlexSwitchConst(BaseConst):
 
 
 class Label(GenLabel):
-    def __init__(self, blockid, il, inputargs_gv):
+    def __init__(self, meth, blockid, inputargs_gv):
+        self.meth = meth
         self.blockid = blockid
-        self.il_label = il.DefineLabel()
-        self.il_trampoline_label = il.DefineLabel()
+        self.il_label = meth.il.DefineLabel()
+        self.il_trampoline_label = meth.il.DefineLabel()
         self.inputargs_gv = inputargs_gv
 
     def emit_trampoline(self, meth):
@@ -486,7 +487,7 @@ class MethodGenerator:
     def newblock(self, args_gv):
         blocks = self.graphinfo.blocks
         blockid = len(blocks)
-        result = Label(blockid, self.il, args_gv)
+        result = Label(self, blockid, args_gv)
         blocks.append((self, result))
         self.graphinfo.args_manager.register(args_gv)
         return result
@@ -626,7 +627,8 @@ class FlexSwitchCaseGenerator(MethodGenerator):
         return self.linkargs_gv_map.get(gv_var, gv_var)
 
     def get_op_Return(self, gv_returnvar):
-        return ops.ReturnFromFlexSwitch(self, gv_returnvar)
+        target = self.graphinfo.graph_retlabel
+        return ops.JumpFromFlexSwitch(self, target, [gv_returnvar])
 
     def emit_code(self):
         MethodGenerator.emit_code(self)
@@ -675,8 +677,14 @@ class BranchBuilder(GenBuilder):
     def finish_and_goto(self, outputargs_gv, label):
         inputargs_gv = label.inputargs_gv
         assert len(inputargs_gv) == len(outputargs_gv)
-        op = ops.FollowLink(self.meth, outputargs_gv,
-                            inputargs_gv, label.il_label)
+        if self.meth is label.meth:
+            # jump inside the same method, easy
+            op = ops.FollowLink(self.meth, outputargs_gv,
+                                inputargs_gv, label.il_label)
+        else:
+            # jump from a flexswitch to the parent method
+            op = ops.JumpFromFlexSwitch(self.meth, label,
+                                        outputargs_gv)
         self.appendop(op)
         self.close()
 
