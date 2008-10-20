@@ -127,8 +127,12 @@ class Platform(object):
 
     
 if sys.platform == 'linux2':
-    from pypy.translator.platform.linux import Linux
-    host = Linux()
+    from pypy.translator.platform.linux import Linux, Linux64
+    import platform
+    if platform.architecture()[0] == '32bit':
+        host = Linux()
+    else:
+        host = Linux64()
 elif sys.platform == 'darwin':
     from pypy.translator.platform.darwin import Darwin
     host = Darwin()
