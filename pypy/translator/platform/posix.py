@@ -24,7 +24,16 @@ class BasePosix(Platform):
             args = self._args_for_shared(args)
         self._execute_c_compiler(cc, args, exe_name)
         return exe_name
-        
+
+    def _compile_o_files(self, cfiles, eci, standalone=True):
+        cfiles = [py.path.local(f) for f in cfiles]
+        cfiles += [py.path.local(f) for f in eci.separate_module_files]
+        compile_args = self._compile_args_from_eci(eci, standalone)
+        ofiles = []
+        for cfile in cfiles:
+            ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
+        return ofiles
+
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
