@@ -54,6 +54,8 @@ class Windows(Platform):
 
     cflags = ['/MD']
     link_flags = []
+    standalone_only = []
+    shared_only = []
 
     def __init__(self, cc=None):
         self.cc = 'cl.exe'
@@ -63,10 +65,25 @@ class Windows(Platform):
             self.cflags = ['/MDd', '/Z7']
             self.link_flags = ['/debug']
 
+        self.add_cpython_dirs = True
+
+    def _preprocess_dirs(self, include_dirs):
+        if self.add_cpython_dirs:
+            return include_dirs + (py.path.local(sys.exec_prefix).join('PC'),)
+        return include_dirs
+
+    def _includedirs(self, include_dirs):
+        return ['/I%s' % (idir,) for idir in include_dirs]
+
     def _libs(self, libraries):
         return ['%s.lib' % (lib,) for lib in libraries]
 
     def _libdirs(self, library_dirs):
+        if self.add_cpython_dirs:
+            library_dirs = library_dirs + (
+                py.path.local(sys.exec_prefix).join('libs'),
+                py.path.local(sys.executable).dirpath(),
+                )
         return ['/LIBPATH:%s' % (ldir,) for ldir in library_dirs]
 
     def _args_for_shared(self, args):
@@ -75,7 +92,7 @@ class Windows(Platform):
     def _link_args_from_eci(self, eci):
         args = super(Windows, self)._link_args_from_eci(eci)
         return args + ['/EXPORT:%s' % symbol for symbol in eci.export_symbols]
-        
+
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='obj')
         args = ['/nologo', '/c'] + compile_args + [str(cfile), '/Fo%s' % (oname,)]
@@ -102,7 +119,7 @@ class Windows(Platform):
             if len(stderrlines) > 5:
                 log.ERROR('...')
             raise CompilationError(stdout, stderr)
-        
+
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         cfiles = [py.path.local(f) for f in cfiles]
@@ -174,7 +191,7 @@ class Windows(Platform):
                 ['/f', str(path.join('Makefile'))])
         finally:
             oldcwd.chdir()
-            
+
         self._handle_error(returncode, stdout, stderr, path.join('make'))
 
 class NMakefile(posix.GnuMakefile):
