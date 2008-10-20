@@ -49,10 +49,13 @@ class Platform(object):
     name = "abstract platform"
     
     def __init__(self, cc):
+        if self.__class__ is Platform:
+            raise TypeError("You should not instantiate Platform class directly")
         self.cc = cc
-    
+
     def compile(self, cfiles, eci, outputfilename=None, standalone=True):
-        raise NotImplementedError("Pure abstract baseclass")
+        ofiles = self._compile_o_files(cfiles, eci, standalone)
+        return self._finish_linking(ofiles, eci, outputfilename, standalone)
 
     def execute(self, executable, args=None, env=None):
         returncode, stdout, stderr = _run_subprocess(str(executable), args,
@@ -74,6 +77,42 @@ class Platform(object):
     def __eq__(self, other):
         return (self.__class__ is other.__class__ and
                 self.__dict__ == other.__dict__)
+
+    # some helpers which seem to be cross-platform enough
+
+    def _execute_c_compiler(self, cc, args, outname):
+        log.execute(cc + ' ' + ' '.join(args))
+        returncode, stdout, stderr = _run_subprocess(cc, args)
+        self._handle_error(returncode, stderr, stdout, outname)
+
+    def _handle_error(self, returncode, stderr, stdout, outname):
+        if returncode != 0:
+            errorfile = outname.new(ext='errors')
+            errorfile.write(stderr)
+            stderrlines = stderr.splitlines()
+            for line in stderrlines[:5]:
+                log.ERROR(line)
+            if len(stderrlines) > 5:
+                log.ERROR('...')
+            raise CompilationError(stdout, stderr)
+
+    
+    def _compile_args_from_eci(self, eci, standalone):
+        include_dirs = self._preprocess_dirs(eci.include_dirs)
+        args = self._includedirs(include_dirs)
+        if standalone:
+            extra = self.standalone_only
+        else:
+            extra = self.shared_only
+        cflags = self.cflags + extra
+        return (cflags + list(eci.compile_extra) + args)
+
+    def _link_args_from_eci(self, eci):
+        library_dirs = self._libdirs(eci.library_dirs)
+        libraries = self._libs(eci.libraries)
+        return (library_dirs + libraries + self.link_flags +
+                list(eci.link_extra))
+
 
     # below are some detailed informations for platforms
 

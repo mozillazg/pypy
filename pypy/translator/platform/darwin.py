@@ -1,8 +1,8 @@
 
 import py, os
-from pypy.translator.platform import linux # xxx
+from pypy.translator.platform import posix
 
-class Darwin(linux.Linux): # xxx
+class Darwin(posix.BasePosix):
     name = "darwin"
     
     link_flags = []
