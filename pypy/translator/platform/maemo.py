@@ -62,8 +62,12 @@ class Maemo(Linux):
         self._handle_error(returncode, stderr, stdout, outname)
     
     def execute(self, executable, args=[], env=None):
-        args = [str(executable)] + args
-        log.message('executing /scratchbox/login ' + ' '.join(args))
+        if isinstance(args, str):
+            args = str(executable) + ' ' + args
+            log.message('executing /scratchbox/login ' + args)
+        else:
+            args = [str(executable)] + args
+            log.message('executing /scratchbox/login ' + ' '.join(args))
         returncode, stdout, stderr = _run_subprocess('/scratchbox/login', args,
                                                      env)
         return ExecutionResult(returncode, stdout, stderr)
