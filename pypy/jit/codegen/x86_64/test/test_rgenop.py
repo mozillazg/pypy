@@ -12,7 +12,8 @@ def skip(self):
     py.test.skip("not implemented yet")
     
     
-# pushes/pos some values and than uses a mem access to access the stack
+# pushes/pos some values and moves a value into the stack
+# always returns 42
 def make_mem_func2(rgenop):
     sigtoken = rgenop.sigToken(lltype.FuncType([lltype.Signed], lltype.Signed))
     builder, gv_mem_func, [gv_x] = rgenop.newgraph(sigtoken, "mem_op")
@@ -516,7 +517,6 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         result = fnptr(42)
         assert result == 42
         
-    # return 
     def test_memory_access(self):
         mem_func = make_mem_func(self.RGenOp())
         fnptr = self.cast(mem_func,2)
@@ -525,6 +525,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         result = fnptr(-1,2)
         assert result == 5
         
+    # return 42
     def test_memory_access2(self):
         mem_func = make_mem_func2(self.RGenOp())
         fnptr = self.cast(mem_func,1)

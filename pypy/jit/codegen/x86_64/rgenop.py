@@ -83,7 +83,7 @@ class Builder(model.GenBuilder):
     MC_SIZE = 65536
 
     #FIXME: The MemCodeBuild. is not opend in an _open method
-    def __init__(self, stackdepth, used_registers=[]):
+    def __init__(self, stackdepth, used_registers=[], used_stack_pos = None):
         self.stackdepth = stackdepth 
         self.mc = InMemoryCodeBuilder(self.MC_SIZE)
         #callee-saved registers are commented out
@@ -106,7 +106,10 @@ class Builder(model.GenBuilder):
         self.known_gv = [] # contains the live genvars (used for spilling and allocation)
         for reg in used_registers:
             del self.freeregisters[reg.location.reg]
-        self.free_stack_pos = {}
+        if used_stack_pos == None:
+            self.used_stack_pos = {}
+        else:
+            self.used_stack_pos = used_stack_pos
                
     def _open(self):
         pass
@@ -290,7 +293,7 @@ class Builder(model.GenBuilder):
         def jump(self, gv_condition, args_for_jump_gv): 
             # the targetbuilder must know the registers(live vars) 
             # of the calling block  
-            targetbuilder = Builder(self.stackdepth, args_for_jump_gv)
+            targetbuilder = Builder(self.stackdepth, args_for_jump_gv, self.used_stack_pos)
             self.mc.CMP(gv_condition, Immediate32(value))
             self.mc.JNE(targetbuilder.mc.tell())
             return targetbuilder
@@ -439,14 +442,18 @@ class Builder(model.GenBuilder):
         if gv_to_spill.location.throw_away:
             return gv_to_spill
         else:
-            #search for free stack position
-            for i in range(self.stackdepth):
-                if i in self.free_stack_pos.keys():
-                    pass
-                    # TODO: move gv_to_spill, stack(i)
+            #search for free stack position/location
+            for location in range(self.stackdepth):
+                if location not in self.used_stack_pos.keys():
+                    self.mc.MOV(IntVar(Stack64(8*(self.stackdepth-location))), gv_to_spill)#8=scale
+                    self.used_stack_pos[location] = None
+                    new_gv = IntVar(Register64(gv_to_spill.location.reg))  
+                    gv_to_spill.location = Stack64(location)     
+                    return new_gv
+            # no free stack pos    
+            self.used_stack_pos[self.stackdepth] = None # remember as used   
             self.stackdepth = self.stackdepth +1 
             self.mc.PUSH(gv_to_spill) 
-            self.free_stack_pos[self.stackdepth] = None # remember as used   
             new_gv = IntVar(Register64(gv_to_spill.location.reg))
             gv_to_spill.location = Stack64(self.stackdepth)         
             return new_gv
@@ -457,8 +464,8 @@ class Builder(model.GenBuilder):
         gv_new = self.allocate_register(None, dont_alloc)
         if a_spilled_gv.location.offset ==  self.stackdepth:
             self.mc.POP(gv_new)
-            del self.free_stack_pos[self.stackdepth]
             self.stackdepth = self.stackdepth -1
+            del self.used_stack_pos[self.stackdepth]
             assert self.stackdepth >= 0 
             a_spilled_gv.location = Register64(gv_new.location.reg)
             self.known_gv.remove(gv_new)
@@ -468,9 +475,8 @@ class Builder(model.GenBuilder):
             return a_spilled_gv
         else:
         # else access the memory
-        # FIXME: if this genVar becomes the top of stack it will never be pushed
             self.mc.MOV(gv_new, IntVar(Stack64(8*(self.stackdepth-a_spilled_gv.location.offset))))#8=scale
-            del self.free_stack_pos[a_spilled_gv.location.offset]
+            del self.used_stack_pos[a_spilled_gv.location.offset]
             a_spilled_gv.location = Register64(gv_new.location.reg)
             self.known_gv.remove(gv_new) 
             return a_spilled_gv
@@ -501,7 +507,7 @@ class RX86_64GenOp(model.AbstractRGenOp):
         arg_tokens, res_token = sigtoken
         #print "arg_tokens:",arg_tokens
         inputargs_gv = []
-        builder = Builder(0) # stackdepth = 0
+        builder = Builder(0) # stackdepth = 0, no used regs/mem_pos
         # TODO: Builder._open()
         entrypoint = builder.mc.tell()
         # from http://www.x86-64.org/documentation/abi.pdf
