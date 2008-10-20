@@ -132,11 +132,13 @@ class Return(Operation):
             gv_retvar.store(self.meth)
         self.meth.il.Emit(OpCodes.Br, retlabel.il_label)
 
-class ReturnFromFlexSwitch(Operation):
 
-    def __init__(self, meth, gv_x):
+class JumpFromFlexSwitch(Operation):
+
+    def __init__(self, meth, target, args_gv):
         self.meth = meth
-        self.gv_x = gv_x
+        self.target = target
+        self.args_gv = args_gv
 
     def restype(self):
         return None
@@ -144,10 +146,11 @@ class ReturnFromFlexSwitch(Operation):
     def emit(self):
         il = self.meth.il
         graphinfo = self.meth.graphinfo
-        graphinfo.args_manager.copy_to_inputargs(self.meth, [self.gv_x])
-        blockid = graphinfo.graph_retlabel.blockid
+        graphinfo.args_manager.copy_to_inputargs(self.meth, self.args_gv)
+        blockid = self.target.blockid
         il.Emit(OpCodes.Ldc_I4, blockid)
         il.Emit(OpCodes.Ret)
+
 
 class Call(Operation):
 

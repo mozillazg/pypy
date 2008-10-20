@@ -10,7 +10,6 @@ class TestPromotionCli(CompiledCliMixin, PromotionTest):
     def skip(self):
         py.test.skip('in progress')
 
-    test_many_promotions = skip
     test_two_promotions = skip
     more_promotes = skip
     mixed_merges = skip
