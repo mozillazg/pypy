@@ -2,14 +2,26 @@
 """ Base class for all posixish platforms
 """
 
-from pypy.translator.platform import Platform
+from pypy.translator.platform import Platform, log, _run_subprocess
+from pypy.tool import autopath
 import py
 
 class BasePosix(Platform):
+    exe_ext = ''
+
     def __init__(self, cc=None):
         if cc is None:
             cc = 'gcc'
         self.cc = cc
+
+    def _libs(self, libraries):
+        return ['-l%s' % (lib,) for lib in libraries]
+
+    def _libdirs(self, library_dirs):
+        return ['-L%s' % (ldir,) for ldir in library_dirs]
+
+    def _includedirs(self, include_dirs):
+        return ['-I%s' % (idir,) for idir in include_dirs]
 
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='o')
@@ -33,6 +45,10 @@ class BasePosix(Platform):
         for cfile in cfiles:
             ofiles.append(self._compile_c_file(self.cc, cfile, compile_args))
         return ofiles
+
+    def _preprocess_dirs(self, include_dirs):
+        # hook for maemo
+        return include_dirs
 
     def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
         cfiles = [py.path.local(f) for f in cfiles]

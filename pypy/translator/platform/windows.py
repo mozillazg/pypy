@@ -99,18 +99,6 @@ class Windows(Platform):
         self._execute_c_compiler(self.link, args, exe_name)
         return exe_name
 
-    def _finish_linking(self, ofiles, eci, outputfilename, standalone):
-        if outputfilename is None:
-            outputfilename = ofiles[0].purebasename
-        exe_name = py.path.local(os.path.join(str(ofiles[0].dirpath()),
-                                              outputfilename))
-        if standalone:
-            exe_name += '.' + self.exe_ext
-        else:
-            exe_name += '.' + self.so_ext
-        return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
-                          standalone, exe_name)
-
     def _handle_error(self, returncode, stderr, stdout, outname):
         if returncode != 0:
             # Microsoft compilers write compilation errors to stdout

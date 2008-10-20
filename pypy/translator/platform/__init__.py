@@ -113,6 +113,17 @@ class Platform(object):
         return (library_dirs + libraries + self.link_flags +
                 list(eci.link_extra))
 
+    def _finish_linking(self, ofiles, eci, outputfilename, standalone):
+        if outputfilename is None:
+            outputfilename = ofiles[0].purebasename
+        exe_name = py.path.local(os.path.join(str(ofiles[0].dirpath()),
+                                              outputfilename))
+        if standalone:
+            exe_name += '.' + self.exe_ext
+        else:
+            exe_name += '.' + self.so_ext
+        return self._link(self.cc, ofiles, self._link_args_from_eci(eci),
+                          standalone, exe_name)
 
     # below are some detailed informations for platforms
 
