@@ -131,8 +131,7 @@ class Windows(Platform):
         rel_ofiles = [rel_cfile[:-2]+'.obj' for rel_cfile in rel_cfiles]
         m.cfiles = rel_cfiles
 
-        rel_includedirs = [pypyrel(incldir) for incldir in
-                           self._preprocess_dirs(eci.include_dirs)]
+        rel_includedirs = [pypyrel(incldir) for incldir in eci.include_dirs]
 
         m.comment('automatically generated makefile')
         definitions = [
