@@ -2,7 +2,6 @@ from pypy.jit.codegen import model
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codegen.x86_64.objmodel import IntVar, Register64, Register8, Immediate8, Immediate32, Immediate64, Stack64
 from pypy.jit.codegen.x86_64.codebuf import InMemoryCodeBuilder
-#TODO: understand llTypesystem
 from pypy.rpython.lltypesystem import llmemory, lltype 
 from pypy.jit.codegen.ia32.objmodel import LL_TO_GENVAR
 from pypy.jit.codegen.model import GenLabel
@@ -82,7 +81,6 @@ class Builder(model.GenBuilder):
 
     MC_SIZE = 65536
 
-    #FIXME: The MemCodeBuild. is not opend in an _open method
     def __init__(self, stackdepth, used_registers=[], used_stack_pos = None):
         self.stackdepth = stackdepth 
         self.mc = InMemoryCodeBuilder(self.MC_SIZE)
@@ -103,9 +101,12 @@ class Builder(model.GenBuilder):
               # "r14":None,
               # "r15":None,
                }
+        self._orig_location={}
         self.known_gv = [] # contains the live genvars (used for spilling and allocation)
         for reg in used_registers:
             del self.freeregisters[reg.location.reg]
+            self._orig_location[reg] = reg.location
+            self.known_gv.append(reg)
         if used_stack_pos == None:
             self.used_stack_pos = {}
         else:
@@ -176,6 +177,7 @@ class Builder(model.GenBuilder):
                 registers[i] = self.move_back_to_register(registers[i], dont_alloc)
                 dont_alloc.append(registers[i].location.reg)
             # some operations dont suppoert immediateoperands
+            # but only registers
             if move_imm_too and isinstance(registers[i], Immediate32): 
                 gv_new = self.allocate_register(None, dont_alloc)
                 self.mc.MOV(gv_new, registers[i])
@@ -267,21 +269,26 @@ class Builder(model.GenBuilder):
         self.mc.SETGE(IntVar(Register8("al")))
         return gv_z
     
+    # move back the gv to orig. positions
+    # (this pos. could be changed here which 
+    # could result in wrong locations of the gv)
+    def start_writing(self):
+        for i in range(len(self.known_gv)):
+            if self.known_gv[i] in self._orig_location:
+                self.known_gv[i].location = self._orig_location[self.known_gv[i]]
+        
     # the moves to pass arg. when making a jump to a block
     # the targetvars are only copys
-    # FIXME: problem with mapping of stackpositions
     def _compute_moves(self, outputargs_gv, targetargs_gv):
         tar2src = {}
         tar2loc = {}
-        src2loc = {}
+        src2loc = {} 
         for i in range(len(outputargs_gv)):
-           target_gv = targetargs_gv[i].location.reg
-           source_gv = outputargs_gv[i].location.reg
-           tar2src[target_gv] = source_gv
-           tar2loc[target_gv] = target_gv
-           src2loc[source_gv] = source_gv
+            tar2src[targetargs_gv[i].location] = outputargs_gv[i].location
+            tar2loc[targetargs_gv[i].location] = targetargs_gv[i].location
+            src2loc[outputargs_gv[i].location] = outputargs_gv[i].location
         movegen = MoveEmitter(self)
-        emit_moves(movegen, [target_gv.location.reg for target_gv in targetargs_gv],
+        emit_moves(movegen, [target_gv.location for target_gv in targetargs_gv],
                     tar2src, tar2loc, src2loc)
         return movegen.moves
     
@@ -302,7 +309,9 @@ class Builder(model.GenBuilder):
     jump_if_false = _new_jump("jump_if_false", 1)
     jump_if_true  = _new_jump('jump_if_true', 0)
     
-    # TODO: move stackpointer
+    # moves stackpointer if there are
+    # gv on the stack which are not 
+    # need anymore
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         self._open()
@@ -311,31 +320,32 @@ class Builder(model.GenBuilder):
         # throw them away
         if not self.stackdepth == 0:
             self.mc.ADD(IntVar(Register64("rsp")), Immediate32(self.stackdepth*8))
+            self.stackdepth == 0
         if not gv_returnvar == None:#check void return      
             self.mc.MOV(gv_return, gv_returnvar)
         self.mc.RET()
         self._close()
-        #assert self.stackdepth == 0
         
     # FIXME: uses 32bit displ 
     # TODO: return also stackdepth or pop! 
     # if the label is greater than 32bit
     # it must be in a register (not supported)
     def finish_and_goto(self, outputargs_gv, target):
-        #import pdb;pdb.set_trace() 
         self._open()
         #gv_x = self.allocate_register()
         #self.mc.MOV(gv_x,Immediate64(target.startaddr))
-        #self.mc.JMP(gv_x)    
+        #self.mc.JMP(gv_x) 
         moves = self._compute_moves(outputargs_gv, target.arg_positions)
         for source_gv, target_gv in moves:
-            self.mc.MOV(IntVar(Register64(source_gv)),IntVar(Register64(target_gv)))   
+            # TODO: check for MOV(STACK,STACK)
+            self.mc.MOV(IntVar(source_gv), IntVar(target_gv)) 
         self.mc.JMP(target.startaddr)
         self._close()
         
     # FIXME: returns only IntVars    
     # TODO: support the allocation of 8bit Reg
-    # TODO: (Optimization)Don't remember genVars which contain konstants
+    # Don't remember genVars which contain constants(Optimization)
+    # An allocation could have spilling as sideeffect(stack mov)
     def allocate_register(self, register=None, dontalloc = None):
         if dontalloc is None:
             dontalloc = []
@@ -397,7 +407,7 @@ class Builder(model.GenBuilder):
     def end(self):
         pass
     
-    # TODO: args_gv muste be a list of unique GenVars
+    # TODO: args_gv muste be a list of unique GenVars, dont searchs for double gv
     # Spilling could change the location of a
     # genVar after this Label. That will result in a
     # wrong mapping in _compute_moves when leaving this block.
@@ -410,17 +420,21 @@ class Builder(model.GenBuilder):
                 gv_x = self.allocate_register()
                 self.mc.MOV(gv_x, args_gv[i])
                 args_gv[i] = gv_x
-            # copy the gv
+            # copy the genvars:
+            # without copying the references could be changed
+            # which can result in wrong locations of the gv 
             copy_args.append(IntVar(Register64(args_gv[i].location.reg)))
         L = Label(self.mc.tell(), copy_args, 0)
         return L
     
     def _close(self):
-        self.mc.done()
+        self.mc.done() # used for dump code (debugging)
         
     # TODO: alloc strategy
     # TODO: support 8bit reg. alloc
-    # just greddy spilling
+    # just greedy spilling.
+    # moves GenVar locations on the stack
+    # to free an register
     def spill_register(self, dont_spill=None):
         if dont_spill is None:
             dont_spill = []
@@ -438,19 +452,21 @@ class Builder(model.GenBuilder):
             raise WrongArgException("to many dont_spill/dont_alloc registers")
         assert isinstance(gv_to_spill.location, Register64)
         # if the register contains a genCons
-        # it has not to be saved 
+        # it has not to be saved on the stack
         if gv_to_spill.location.throw_away:
             return gv_to_spill
         else:
-            #search for free stack position/location
+            # search for free stack position/location
             for location in range(self.stackdepth):
                 if location not in self.used_stack_pos.keys():
-                    self.mc.MOV(IntVar(Stack64(8*(self.stackdepth-location))), gv_to_spill)#8=scale
+                    # a location has been found which is not the tos.
+                    self.mc.MOV(IntVar(Stack64(self.stackdepth-location)), gv_to_spill)
                     self.used_stack_pos[location] = None
                     new_gv = IntVar(Register64(gv_to_spill.location.reg))  
                     gv_to_spill.location = Stack64(location)     
                     return new_gv
-            # no free stack pos    
+            # no free stack pos found
+            # use the top of stack ->push   
             self.used_stack_pos[self.stackdepth] = None # remember as used   
             self.stackdepth = self.stackdepth +1 
             self.mc.PUSH(gv_to_spill) 
@@ -458,7 +474,9 @@ class Builder(model.GenBuilder):
             gv_to_spill.location = Stack64(self.stackdepth)         
             return new_gv
         
-    # FIXME: pushed values are not allways poped (if not TOS)
+    # A GenVar which location is on the stack
+    # will be moved back to make operations posible
+    # and faster
     def move_back_to_register(self, a_spilled_gv, dont_alloc):
         # if a_spilled_gv is the top of stack
         gv_new = self.allocate_register(None, dont_alloc)
@@ -475,7 +493,7 @@ class Builder(model.GenBuilder):
             return a_spilled_gv
         else:
         # else access the memory
-            self.mc.MOV(gv_new, IntVar(Stack64(8*(self.stackdepth-a_spilled_gv.location.offset))))#8=scale
+            self.mc.MOV(gv_new, IntVar(Stack64(self.stackdepth-a_spilled_gv.location.offset)))
             del self.used_stack_pos[a_spilled_gv.location.offset]
             a_spilled_gv.location = Register64(gv_new.location.reg)
             self.known_gv.remove(gv_new) 
@@ -505,7 +523,6 @@ class RX86_64GenOp(model.AbstractRGenOp):
         
     def newgraph(self, sigtoken, name):
         arg_tokens, res_token = sigtoken
-        #print "arg_tokens:",arg_tokens
         inputargs_gv = []
         builder = Builder(0) # stackdepth = 0, no used regs/mem_pos
         # TODO: Builder._open()

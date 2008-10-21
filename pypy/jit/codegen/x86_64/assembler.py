@@ -59,7 +59,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
                 self.write_modRM_byte(mod, modrm1, modrm2)
                 # no scale(has no effect on rsp), no index, base = rsp
                 self.write_SIB(0, 4, 4) 
-                self.writeImm32(arg1.location.offset) 
+                self.writeImm32(8*arg1.location.offset) #8 == scale
                 return quadreg_instr 
             
         # exchange the two arguments (modrm2/modrm1)
@@ -94,7 +94,7 @@ def make_two_operand_instr(W = None, R = None, X = None, B = None, opcode =None,
                 self.write_modRM_byte(mod, modrm1, modrm2)
                 # no scale(has no effect on rsp), no index, base = rsp
                 self.write_SIB(0, 4, 4) 
-                self.writeImm32(arg2.location.offset)  
+                self.writeImm32(8*arg2.location.offset) #8==scale
     return quadreg_instr
         
         
@@ -213,7 +213,7 @@ class X86_64CodeBuilder(object):
     _MOV_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\xC7", 3, None, 0)
     _MOV_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x89", 3, None, None)
     _MOV_QWREG_IMM64 = make_two_operand_instr_with_alternate_encoding(1,0,0,None,"B8",None,None)
-    _MOV_QWREG_STACK = make_two_operand_instr(   1,    0,    0, None, "\x8B", 2, None, 4)#4 =RSP
+    _MOV_QWREG_STACK = make_two_operand_instr(   1,    0,    0, None, "\x8B", 2, None, 4)#4==RSP
     _MOV_STACK_QWREG = make_two_operand_instr(   1,    0,    0, None, "\x89", 2, None, 4)    
         
     _IDIV_QWREG      = make_one_operand_instr(   1,    0,    0, None, "\xF7", 3, None, 7)
@@ -252,7 +252,7 @@ class X86_64CodeBuilder(object):
     _XOR_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\x81", 3, None, 6)
     _XOR_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x31", 3, None, None)
     
-    # TODO: maybe a problem with more ore less than two arg.
+    # TODO(all ops): maybe a problem with more ore less than two arg.
     def ADD(self, op1, op2):
         method = getattr(self, "_ADD"+op1.to_string()+op2.to_string())
         method(op1, op2)
@@ -296,6 +296,7 @@ class X86_64CodeBuilder(object):
         method(op1)
         
     # 4 length of the immediate
+    # want_jump_to is an 32bit(!) adress
     def JMP(self,want_jump_to):
         #method = getattr(self, "_JMP"+op1.to_string())
         #method(want_jump_to)  
@@ -313,7 +314,7 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_OR"+op1.to_string()+op2.to_string())
         method(op1, op2)
         
-    #FIXME: "POP/PUSH NONE" BUG
+    #FIXME: "POP/PUSH NONE" BUG- (maybe fixed)
     def POP(self, op1):
         method = getattr(self, "_POP"+op1.to_string())
         method(op1)
@@ -396,9 +397,7 @@ class X86_64CodeBuilder(object):
         if x[0]=='-':
             # parse to string and cut "0x" off
             # fill with Fs if to short
-            #print "x before:",x
             x = self.cast_neg_hex32(int(x,16))
-            #print "x after:",x
             y = "F"*(8-len(x))+x[0:len(x)]
         else:            
             # parse to string and cut "0x" off
