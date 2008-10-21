@@ -138,6 +138,20 @@ class Builder(model.GenBuilder):
     op_int_sub  = make_two_argument_method("SUB")  # TODO: use DEC
     op_int_xor  = make_two_argument_method("XOR")
 
+    # must return a genvar
+    def genop_same_as(self, imm):
+        gv_x = self.allocate_register()
+        self.mc.MOV(gv_x, imm)
+        return gv_x
+        
+    def op_int_is_true(self, gv_x):
+        [gv_x, gv_y] = self.move_to_registers([gv_x, Immediate32(1)], None, move_imm_too=True)  
+        self.mc.CMP(gv_x, gv_y)
+        [gv_x, gv_y] = self.throw_away_if_const([gv_x,gv_y])
+        gv_z = self.allocate_register("rax")
+        self.mc.SETE(IntVar(Register8("al")))
+        return gv_z
+
     # TODO: support reg8
     def op_cast_bool_to_int(self, gv_x):
         [gv_x] = self.move_to_registers([gv_x]) 
