@@ -19,7 +19,9 @@ class HintAnnotator(RPythonAnnotator):
         bookkeeper = HintBookkeeper(self)        
         RPythonAnnotator.__init__(self, translator, policy=policy,
                                   bookkeeper=bookkeeper)
-        self.exceptiontransformer = base_translator.getexceptiontransformer()
+        if policy.exceptiontransform:
+            etrafo = base_translator.getexceptiontransformer()
+            self.exceptiontransformer = etrafo
         
     def build_types(self, origgraph, input_args_hs):
         desc = self.bookkeeper.getdesc(origgraph)

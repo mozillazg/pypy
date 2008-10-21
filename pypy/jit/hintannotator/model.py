@@ -381,6 +381,9 @@ class __extend__(SomeLLAbstractValue):
         return SomeLLAbstractConstant(lltype.Bool, {})
 
     def getfield(hs_v1, hs_fieldname):
+        hs_res = handle_getfield_typeptr(hs_v1, hs_fieldname)
+        if hs_res is not None:
+            return hs_res
         S = hs_v1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
         return variableoftype(FIELD_TYPE, hs_v1.deepfrozen, cause=hs_v1)
@@ -558,6 +561,9 @@ class __extend__(SomeLLAbstractConstant):
         return hs_f1._call_single_graph(fnobj.graph, lltype.typeOf(fnobj).RESULT, *args_hs)
 
     def getfield(hs_c1, hs_fieldname):
+        hs_res = handle_getfield_typeptr(hs_c1, hs_fieldname)
+        if hs_res is not None:
+            return hs_res
         S = hs_c1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
         return hs_c1.getfield_impl(S, FIELD_TYPE)
@@ -850,6 +856,17 @@ def cannot_follow_call(bookkeeper, graph, args_hs, RESTYPE):
         h_res = variableoftype(RESTYPE,
                                cause="non-pure residual call to %s" % graph)
     return h_res
+
+def handle_getfield_typeptr(hs_struct, hs_fieldname):
+    if hs_fieldname.const == 'typeptr':
+        S = originalconcretetype(hs_struct).TO
+        if S._hints.get('typeptr'):
+            bookkeeper = getbookkeeper()
+            if bookkeeper.annotator.policy.pyjitpl:
+                RESTYPE = getattr(S, 'typeptr')
+                hs_concrete = SomeLLAbstractConstant(RESTYPE, {})
+                return hs_concrete
+    return None
 
 # ____________________________________________________________
 #

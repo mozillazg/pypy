@@ -393,6 +393,7 @@ class BuiltinADTType(BuiltinType):
 
 class AbstractString(BuiltinADTType):
 
+    oopspec_name = 'str'
     immutable = True
 
     def __init__(self):
