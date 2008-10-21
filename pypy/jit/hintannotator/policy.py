@@ -8,19 +8,13 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
     oopspec                = False
     entrypoint_returns_red = True
     hotpath                = False
+    pyjitpl                = False
+    exceptiontransform     = True
 
-    def __init__(self, novirtualcontainer     = None,
-                       oopspec                = None,
-                       entrypoint_returns_red = None,
-                       hotpath                = None):
-        if novirtualcontainer is not None:
-            self.novirtualcontainer = novirtualcontainer
-        if oopspec is not None:
-            self.oopspec = oopspec
-        if entrypoint_returns_red is not None:
-            self.entrypoint_returns_red = entrypoint_returns_red
-        if hotpath is not None:
-            self.hotpath = hotpath
+    def __init__(self, **kwds):
+        for key, value in kwds.items():
+            assert hasattr(self, key), "no such option: %r" % (key,)
+            setattr(self, key, value)
 
     def copy(self, **kwds):
         new = instantiate(self.__class__)
