@@ -40,6 +40,7 @@ class Stack64(Location):
 class IntVar(model.GenVar):
     def __init__(self, location):
         self.location = location
+        self.is_const = False
         assert isinstance(location, Location) 
     
     def to_string(self):

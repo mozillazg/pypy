@@ -531,6 +531,16 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         fnptr = self.cast(mem_func,1)
         result = fnptr(0)
         assert result == 42
+        
+    def test_is_true(self):    
+        test_function = make_one_op_instr(self.RGenOp(),"int_is_true")
+        fnptr = self.cast(test_function,1)
+        result = fnptr(1)
+        assert result == 1
+        result = fnptr(0)
+        assert result == 0
+        result = fnptr(42)
+        assert result == 0
 
         
 #    def test_invert(self):
@@ -544,23 +554,17 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
        
     test_switch_many_args_direct = skip
     test_directtesthelper_direct = skip
-    test_dummy_compile = skip
     test_cast_raising = skip
     test_float_adder = skip
     test_float_call = skip
     test_float_loop_direct = skip
-    test_dummy_direct = skip
     test_largedummy_direct = skip
     test_switch_direct = skip
     test_large_switch_direct = skip
     test_fact_direct = skip
     test_calling_pause_direct = skip
-    test_longwinded_and_direct = skip
     test_condition_result_cross_link_direct = skip
-    #test_flipped_cmp_with_immediate = skip
     test_jump_to_block_with_many_vars = skip
-    test_same_as = skip
-    test_pause_and_resume_direct = skip
     test_like_residual_red_call_with_exc_direct = skip
     test_call_functions_with_different_signatures_direct = skip
     test_defaultonly_switch = skip
@@ -590,4 +594,3 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_interior_access = skip
     test_interior_access_float = skip
     test_demo_f1_direct = skip
-    test_red_switch = skip
