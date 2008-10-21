@@ -147,8 +147,9 @@ class JumpFromFlexSwitch(Operation):
         il = self.meth.il
         graphinfo = self.meth.graphinfo
         graphinfo.args_manager.copy_to_inputargs(self.meth, self.args_gv)
-        blockid = self.target.blockid
-        il.Emit(OpCodes.Ldc_I4, blockid)
+        block_id = self.target.block_id
+        #import pdb;pdb.set_trace()
+        il.Emit(OpCodes.Ldc_I4, block_id)
         il.Emit(OpCodes.Ret)
 
 
@@ -312,8 +313,13 @@ class DoFlexSwitch(Operation):
         self.gv_exitswitch.load(graph)
         graph.gv_inputargs.load(graph)
         il.Emit(OpCodes.Callvirt, meth_execute)
-        il.Emit(OpCodes.Stloc, graph.jumpto_var)
-        il.Emit(OpCodes.Br, graph.il_dispatch_jump_label)
+        if graph.jumpto_var is None:
+            # we are inside a nested flexswitch, just return to parent
+            il.Emit(OpCodes.Ret)
+        else:
+            # we are in the main method, do the dispatching
+            il.Emit(OpCodes.Stloc, graph.jumpto_var)
+            il.Emit(OpCodes.Br, graph.il_dispatch_jump_label)
 
 
 class WriteLine(Operation):
