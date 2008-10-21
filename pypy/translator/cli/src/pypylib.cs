@@ -156,7 +156,9 @@ namespace pypy.runtime
         {
             for(int i=0; i<numcases; i++)
                 if (values[i] == v) {
-                    return cases[i](-1, args); // -1 stands for "the first block of the function"
+                  // 0 stands for "the first block of the function", see the comment
+                  // in rgenop.FlexCaseMethod.emit_preamble
+                  return cases[i](0, args); 
                 }
             return default_blockid;
         }        
