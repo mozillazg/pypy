@@ -308,18 +308,13 @@ class DoFlexSwitch(Operation):
         args_manager.copy_to_inputargs(graph, self.args_gv)
         
         # jumpto = flexswitch.execute(exitswitch, inputargs);
-        # goto dispatch_jump;
+        # goto dispatch_block;
         self.gv_flexswitch.load(graph)
         self.gv_exitswitch.load(graph)
         graph.gv_inputargs.load(graph)
         il.Emit(OpCodes.Callvirt, meth_execute)
-        if graph.jumpto_var is None:
-            # we are inside a nested flexswitch, just return to parent
-            il.Emit(OpCodes.Ret)
-        else:
-            # we are in the main method, do the dispatching
-            il.Emit(OpCodes.Stloc, graph.jumpto_var)
-            il.Emit(OpCodes.Br, graph.il_dispatch_jump_label)
+        il.Emit(OpCodes.Stloc, graph.jumpto_var)
+        il.Emit(OpCodes.Br, graph.il_dispatch_block_label)
 
 
 class WriteLine(Operation):

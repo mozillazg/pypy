@@ -450,11 +450,11 @@ Glossary:
   - MainMethod: the method containing the first block of the graph, and all
     the blocks reachable without passing throgh a flexswitch
 
-  - CaseMethod: a method containing the blocks for a specific case of a
+  - FlexCaseMethod: a method containing the blocks for a specific case of a
     flexswitch
 
   - method_id: unique 16 bit number that identifies a method (either MainMethod or
-    CaseMethod) inside a graph. MainMethod.method_id == 0
+    FlexCaseMethod) inside a graph. MainMethod.method_id == 0
 
   - block_num: unique 16 bit number that identifies a block inside a method
 
@@ -552,7 +552,7 @@ class MethodGenerator:
         for branchbuilder in self.branches:
             branchbuilder.replayops()
 
-        # emit dispatch_jump, if there are flexswitches
+        # emit dispatch_block, if there are flexswitches
         self.emit_before_returnblock()
 
         # emit the return block at last, else the verifier complains
@@ -577,8 +577,34 @@ class MethodGenerator:
         pass
 
     def setup_dispatch_block(self):
-        self.il_dispatch_jump_label = self.il.DefineLabel()
+        self.il_dispatch_block_label = self.il.DefineLabel()
         self.jumpto_var = self.il.DeclareLocal(class2type(cInt32))
+
+    def emit_dispatch_block(self):
+        # make sure we don't enter dispatch_block by mistake
+        self.il.Emit(OpCodes.Br, self.retlabel.il_label)
+        self.il.MarkLabel(self.il_dispatch_block_label)
+
+        blocks = self.blocks
+        il_labels = new_array(System.Reflection.Emit.Label, len(blocks))
+        for block_num in range(len(blocks)):
+            label = blocks[block_num]
+            il_labels[block_num] = label.il_trampoline_label
+        
+        # XXX: do the right thing if no block was found
+        # (depends if we are in the MainMethod or in a FlexCaseMethod)
+
+        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        self.il.Emit(OpCodes.Switch, il_labels)
+        # default: Utils.throwInvalidBlockId(jumpto)
+        clitype = class2type(cUtils)
+        meth = clitype.GetMethod("throwInvalidBlockId")
+        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        self.il.Emit(OpCodes.Call, meth)
+
+        # emit all the trampolines to the blocks
+        for label in blocks:
+            label.emit_trampoline(self)
 
 
 class MainMethod(MethodGenerator):
@@ -603,11 +629,9 @@ class MainMethod(MethodGenerator):
     def emit_preamble(self):
         if not self.has_flexswitches:
             return
-
         # compute the shape of InputArgs
         args_manager = self.graphinfo.args_manager
         args_manager.close()
-
         # InputArgs inputargs = new InputArgs()
         self.gv_inputargs = self.newlocalvar(args_manager.getCliType())
         clitype = self.gv_inputargs.getCliType()
@@ -618,33 +642,11 @@ class MainMethod(MethodGenerator):
     def emit_before_returnblock(self):
         if not self.has_flexswitches:
             return
-        # make sure we don't enter dispatch_jump by mistake
-        self.il.Emit(OpCodes.Br, self.retlabel.il_label)
-        self.il.MarkLabel(self.il_dispatch_jump_label)
-
-        blocks = self.blocks
-        il_labels = new_array(System.Reflection.Emit.Label, len(blocks))
-        for block_num in range(len(blocks)):
-            label = blocks[block_num]
-            il_labels[block_num] = label.il_trampoline_label
-        # XXX: call the right case if no block was found
-
-        #print 'Emitting dispatch switch'
-        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        self.il.Emit(OpCodes.Switch, il_labels)
-        # XXX: handle block_ids that are inside flexswitch cases
-        # default: Utils.throwInvalidBlockId(jumpto)
-        clitype = class2type(cUtils)
-        meth = clitype.GetMethod("throwInvalidBlockId")
-        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        self.il.Emit(OpCodes.Call, meth)
-
-        # emit all the trampolines to the blocks
-        for label in blocks:
-            label.emit_trampoline(self)
+        self.emit_dispatch_block()
 
 
-class FlexSwitchCaseGenerator(MethodGenerator):
+
+class FlexCaseMethod(MethodGenerator):
     flexswitch = None
     value = -1
     linkargs_gv = None
@@ -655,6 +657,7 @@ class FlexSwitchCaseGenerator(MethodGenerator):
     def set_parent_flexswitch(self, flexswitch, value):
         self.parent_flexswitch = flexswitch
         self.value = value
+        self.setup_dispatch_block()
 
     def set_linkargs_gv(self, linkargs_gv):
         self.linkargs_gv = linkargs_gv
@@ -678,7 +681,10 @@ class FlexSwitchCaseGenerator(MethodGenerator):
         self.parent_flexswitch.llflexswitch.add_case(self.value, func2)
 
     def emit_preamble(self):
-        # InputArgs inputargs = (InputArgs)obj // obj is the 2nd arg
+        # the signature of the method is
+        # int case_0(int jumpto, object args)
+        
+        # InputArgs inputargs = (InputArgs)obj
         args_manager = self.graphinfo.args_manager
         clitype = args_manager.getCliType()
         self.gv_inputargs = self.newlocalvar(clitype)
@@ -686,11 +692,26 @@ class FlexSwitchCaseGenerator(MethodGenerator):
         self.il.Emit(OpCodes.Castclass, clitype)
         self.gv_inputargs.store(self)
 
+        # 0 is a special value that means "first block of the function",
+        # i.e. don't go through the dispatch block. 0 can never passed as
+        # blockid, because it's used as the returnblock of the MainMethod, and
+        # it's handled by its dispatch block
+
+        # if (jumpto != 0) goto dispatch_block
+        self.inputargs_gv[0].load(self)
+        self.il.Emit(OpCodes.Ldc_I4_0)
+        self.il.Emit(OpCodes.Bne_Un, self.il_dispatch_block_label)
+
         linkargs_out_gv = []
         for gv_linkarg in self.linkargs_gv:
             gv_var = self.linkargs_gv_map[gv_linkarg]
             linkargs_out_gv.append(gv_var)
         args_manager.copy_from_inputargs(self, linkargs_out_gv)
+
+
+    def emit_before_returnblock(self):
+        self.emit_dispatch_block()
+
 
 
 class BranchBuilder(GenBuilder):
@@ -868,8 +889,8 @@ class IntFlexSwitch(CodeGenSwitch):
         arglist = [class2type(cInt32), class2type(cObject)]
         delegatetype = class2type(cFlexSwitchCase)
         graphinfo = graph.graphinfo
-        meth = FlexSwitchCaseGenerator(graph.rgenop, name, restype,
-                                       arglist, delegatetype, graphinfo)
+        meth = FlexCaseMethod(graph.rgenop, name, restype,
+                              arglist, delegatetype, graphinfo)
         value = gv_case.revealconst(ootype.Signed)
         meth.set_parent_flexswitch(self, value)
         meth.set_linkargs_gv(self.linkargs_gv)
