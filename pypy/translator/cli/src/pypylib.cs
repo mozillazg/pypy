@@ -117,16 +117,16 @@ namespace pypy.runtime
       public T fields;
     }
 
-    public delegate int FlexSwitchCase(int block, object args);
+    public delegate uint FlexSwitchCase(uint block, object args);
 
     public class LowLevelFlexSwitch
     {
-        public int default_blockid = -1;
+        public uint default_blockid = 0xFFFFFFFF;
         public int numcases = 0;
         public int[] values = new int[4];
         public FlexSwitchCase[] cases = new FlexSwitchCase[4];
 
-        public void set_default_blockid(int blockid)
+        public void set_default_blockid(uint blockid)
         {
             this.default_blockid = blockid;
         }
@@ -152,7 +152,7 @@ namespace pypy.runtime
             cases = newcases;
         }
         
-        public int execute(int v, object args)
+        public uint execute(int v, object args)
         {
             for(int i=0; i<numcases; i++)
                 if (values[i] == v) {
@@ -350,7 +350,7 @@ namespace pypy.runtime
             return obj.GetHashCode();
         }
 
-        public static void throwInvalidBlockId(int blockid)
+        public static void throwInvalidBlockId(uint blockid)
         {
             throw new Exception(string.Format("Invalid block id: {0}", blockid));
         }

@@ -3,6 +3,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.objectmodel import specialize
+from pypy.rlib.rarithmetic import r_uint
 from pypy.jit.codegen.model import AbstractRGenOp, GenBuilder, GenLabel
 from pypy.jit.codegen.model import GenVarOrConst, GenVar, GenConst
 from pypy.jit.codegen.model import CodeGenSwitch
@@ -464,8 +465,12 @@ Glossary:
 
 class GraphInfo:
     def __init__(self):        
-        #self.blocks = [] # block_id -> (meth, label)
         self.args_manager = ArgsManager()
+        
+        # allocate space for the return variable of FlexCaseMethod
+        # XXX: it should be handled automatically :-(
+        self.args_manager.register_types([typeof(System.UInt32)])
+
 
 class MethodGenerator:
 
@@ -511,15 +516,10 @@ class MethodGenerator:
         return branch
 
     def newblock(self, args_gv):
-##         blocks = self.graphinfo.blocks
-##         block_id = len(blocks)
-##         result = Label(self, block_id, args_gv)
-##         blocks.append((self, result))
-        
         block_num = len(self.blocks)
         assert block_num < 2**16
         assert self.method_id >= 0
-        block_id = self.method_id << 16 | block_num
+        block_id = r_uint(self.method_id) << 16 | block_num
         lbl = Label(self, block_id, args_gv)
         self.blocks.append(lbl)
         self.graphinfo.args_manager.register(args_gv)
@@ -578,7 +578,7 @@ class MethodGenerator:
 
     def setup_dispatch_block(self):
         self.il_dispatch_block_label = self.il.DefineLabel()
-        self.jumpto_var = self.il.DeclareLocal(class2type(cInt32))
+        self.jumpto_var = self.il.DeclareLocal(typeof(System.UInt32))
 
     def emit_dispatch_block(self):
         # make sure we don't enter dispatch_block by mistake
@@ -885,8 +885,8 @@ class IntFlexSwitch(CodeGenSwitch):
     def add_case(self, gv_case):
         graph = self.graph
         name = graph.name + '_case'
-        restype = class2type(cInt32)
-        arglist = [class2type(cInt32), class2type(cObject)]
+        restype = typeof(System.UInt32)
+        arglist = [typeof(System.UInt32), class2type(cObject)]
         delegatetype = class2type(cFlexSwitchCase)
         graphinfo = graph.graphinfo
         meth = FlexCaseMethod(graph.rgenop, name, restype,

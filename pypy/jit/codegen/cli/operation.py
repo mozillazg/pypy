@@ -1,5 +1,6 @@
 import py
 from pypy.rlib.objectmodel import specialize
+from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.dotnet import CLR, typeof, new_array
 from pypy.translator.cli import opcodes as cli_opcodes
@@ -149,7 +150,7 @@ class JumpFromFlexSwitch(Operation):
         graphinfo.args_manager.copy_to_inputargs(self.meth, self.args_gv)
         block_id = self.target.block_id
         #import pdb;pdb.set_trace()
-        il.Emit(OpCodes.Ldc_I4, block_id)
+        il.Emit(OpCodes.Ldc_I4, intmask(block_id))
         il.Emit(OpCodes.Ret)
 
 
