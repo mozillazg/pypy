@@ -8,7 +8,7 @@ from pypy.rpython.rstr import AbstractStringRepr, AbstractCharRepr
 from pypy.rpython.lltypesystem.lltype import typeOf, Ptr, Void, Signed, Bool
 from pypy.rpython.lltypesystem.lltype import nullptr, Char, UniChar
 from pypy.rpython import robject
-from pypy.rlib.objectmodel import malloc_zero_filled
+from pypy.rlib.objectmodel import malloc_zero_filled, we_are_translated
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.annlowlevel import ADTInterface
@@ -495,7 +495,8 @@ def ll_alloc_and_set(LIST, count, item):
         check = ord(item)
     else:
         check = item
-    if (not malloc_zero_filled) or check: # as long as malloc it is known to zero the allocated memory avoid zeroing twice
+    zero_filled = we_are_translated() and malloc_zero_filled
+    if (not zero_filled) or check: # as long as malloc it is known to zero the allocated memory avoid zeroing twice
     
         i = 0
         while i < count:
