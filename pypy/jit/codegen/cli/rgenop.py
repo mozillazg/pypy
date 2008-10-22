@@ -582,8 +582,9 @@ class MethodGenerator:
 
     def emit_dispatch_block(self):
         # make sure we don't enter dispatch_block by mistake
-        self.il.Emit(OpCodes.Br, self.retlabel.il_label)
-        self.il.MarkLabel(self.il_dispatch_block_label)
+        il = self.il
+        il.Emit(OpCodes.Br, self.retlabel.il_label)
+        il.MarkLabel(self.il_dispatch_block_label)
 
         blocks = self.blocks
         il_labels = new_array(System.Reflection.Emit.Label, len(blocks))
@@ -594,17 +595,33 @@ class MethodGenerator:
         # XXX: do the right thing if no block was found
         # (depends if we are in the MainMethod or in a FlexCaseMethod)
 
-        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        self.il.Emit(OpCodes.Switch, il_labels)
+        # if (((jumpto & 0xFFFF0000) >> 16) != method_id)
+        #    goto jump_to_unknown
+        il_jump_to_unknown_label = il.DefineLabel()
+        il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        il.Emit(OpCodes.Ldc_I4, intmask(0xFFF0000))
+        il.Emit(OpCodes.And)
+        il.Emit(OpCodes.Ldc_I4, 16)
+        il.Emit(OpCodes.Shr_Un)
+        il.Emit(OpCodes.Ldc_I4, self.method_id)
+        il.Emit(OpCodes.Bne_Un, il_jump_to_unknown_label)
+
+        # switch(jumpto && 0x0000FFFF)
+        il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        il.Emit(OpCodes.Ldc_I4, 0x0000FFFF)
+        il.Emit(OpCodes.And)
+        il.Emit(OpCodes.Switch, il_labels)
         # default: Utils.throwInvalidBlockId(jumpto)
         clitype = class2type(cUtils)
         meth = clitype.GetMethod("throwInvalidBlockId")
-        self.il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        self.il.Emit(OpCodes.Call, meth)
+        il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        il.Emit(OpCodes.Call, meth)
 
         # emit all the trampolines to the blocks
         for label in blocks:
             label.emit_trampoline(self)
+
+        self.emit_jump_to_unknown_block(il_jump_to_unknown_label)
 
 
 class MainMethod(MethodGenerator):
@@ -644,6 +661,15 @@ class MainMethod(MethodGenerator):
             return
         self.emit_dispatch_block()
 
+    def emit_jump_to_unknown_block(self, il_label):
+        # just throw an exception for now
+        il = self.il
+        il.MarkLabel(il_label)
+        clitype = class2type(cUtils)
+        meth = clitype.GetMethod("throwInvalidBlockId")
+        #il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        il.Emit(OpCodes.Ldc_I4, 4242)
+        il.Emit(OpCodes.Call, meth)
 
 
 class FlexCaseMethod(MethodGenerator):
@@ -654,6 +680,9 @@ class FlexCaseMethod(MethodGenerator):
 
     method_id = 10 # XXX
 
+    def setup_flexswitches(self):
+        pass
+    
     def set_parent_flexswitch(self, flexswitch, value):
         self.parent_flexswitch = flexswitch
         self.value = value
@@ -712,7 +741,12 @@ class FlexCaseMethod(MethodGenerator):
     def emit_before_returnblock(self):
         self.emit_dispatch_block()
 
-
+    def emit_jump_to_unknown_block(self, il_label):
+        # delegate to parent
+        il = self.il
+        il.MarkLabel(il_label)
+        il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        il.Emit(OpCodes.Ret)
 
 class BranchBuilder(GenBuilder):
 

@@ -84,9 +84,6 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
     def test_interior_access(self):
         py.test.skip('fixme')
 
-    def test_switch_goto_between_flexswitches_direct(self):
-        py.test.skip('fixme')
-
 
 class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
     RGenOp = RCliGenOp
@@ -144,7 +141,4 @@ class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
         py.test.skip('fixme')
 
     def test_ovfcheck1_compile(self):
-        py.test.skip('fixme')
-
-    def test_switch_goto_between_flexswitches_compile(self):
         py.test.skip('fixme')
