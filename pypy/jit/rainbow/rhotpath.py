@@ -2,7 +2,6 @@
 RPython support code for the hotpath policy.
 """
 
-from pypy.jit.codegen.i386.rgenop import cast_whatever_to_int
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
@@ -74,6 +73,15 @@ def hp_return(interp, gv_result):
     interp.jitstate.curbuilder.genop_call(desc.tok_raise_done,
                                           gv_exitfnptr, args_gv)
     leave_graph(interp)
+
+@specialize.arg(0)
+def cast_whatever_to_int(T, value):
+    if isinstance(T, lltype.Ptr):
+        return lltype.cast_ptr_to_int(value)
+    elif T is llmemory.Address:
+        return llmemory.cast_adr_to_int(value)
+    else:
+        return lltype.cast_primitive(lltype.Signed, value)
 
 # ____________________________________________________________
 
