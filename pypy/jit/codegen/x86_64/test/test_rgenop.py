@@ -551,6 +551,21 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         result = fnptr(-43)
         assert result == 42 
         
+    def test_abs(self):
+        abs_func = make_one_op_instr(self.RGenOp(), "int_abs")
+        fnptr = self.cast(abs_func, 1)
+        result = fnptr(1)
+        assert result == 1
+        result = fnptr(123)
+        assert result == 123
+        result = fnptr(-1)
+        assert result == 1
+        result = fnptr(-123)
+        assert result == 123
+        result = fnptr(0)
+        assert result == 0
+        
+        
        
     test_switch_many_args_direct = skip
     test_directtesthelper_direct = skip
@@ -585,7 +600,6 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_from_random_5_direct = skip
     test_genzeroconst = skip
     test_ovfcheck1_direct = skip
-    test_ovfcheck2_direct = skip
     test_cast_direct = skip
     test_array_of_ints = skip
     test_interior_access = skip

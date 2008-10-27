@@ -236,6 +236,7 @@ class X86_64CodeBuilder(object):
     #_POP_QWREG  = make_one_operand_instr_with_alternate_encoding(1,0,0,None,"58",None,None)
     #_PUSH_QWREG = make_one_operand_instr_with_alternate_encoding(1,0,0,None,"50",None,None) 
      
+    _SBB_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x19", 3, None, None)
     _SETE_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 4) 
     _SETG_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 15)
     _SETGE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 13)
@@ -341,6 +342,10 @@ class X86_64CodeBuilder(object):
     
     def RET(self):
         self.write("\xC3")
+        
+    def SBB(self, op1, op2):
+        method = getattr(self, "_SBB"+op1.to_string()+op2.to_string())
+        method(op1, op2)
         
     def SETG(self, op1):
         method = getattr(self, "_SETG"+op1.to_string())
