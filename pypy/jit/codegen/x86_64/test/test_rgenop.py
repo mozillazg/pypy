@@ -542,14 +542,14 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
         result = fnptr(42)
         assert result == 0
 
-        
-#    def test_invert(self):
-#        inv_function = make_one_op_instr(self.RGenOp(),"int_invert")
-#        fnptr = self.cast(inv_function,1)
-#        result = fnptr(0)
-#        assert result == 0
-#        result = fnptr(1)
-#        assert result == -1
+    # does the same as not    
+    def test_invert(self):
+        inv_function = make_one_op_instr(self.RGenOp(),"int_invert")
+        fnptr = self.cast(inv_function,1)
+        result = fnptr(0)
+        assert result == -1
+        result = fnptr(-43)
+        assert result == 42 
         
        
     test_switch_many_args_direct = skip
@@ -584,7 +584,6 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_from_random_4_direct = skip
     test_from_random_5_direct = skip
     test_genzeroconst = skip
-   # test_ovfcheck_adder_direct = skip
     test_ovfcheck1_direct = skip
     test_ovfcheck2_direct = skip
     test_cast_direct = skip

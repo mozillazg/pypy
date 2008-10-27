@@ -249,8 +249,7 @@ class Builder(model.GenBuilder):
         self.mc.IDIV(gv_y)
         return gv_w 
     
-#    def op_int_invert(self, gv_x):
-#       return self.mc.NOT(gv_x)
+    op_int_invert = op_int_not
     
     # if a register contains a constant
     # it will be marked to be don't spilled
