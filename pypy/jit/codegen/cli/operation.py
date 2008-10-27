@@ -145,11 +145,11 @@ class JumpFromFlexSwitch(Operation):
         return None
 
     def emit(self):
+        assert self.meth.gv_inputargs is not None # to make the annotator happy
         il = self.meth.il
         graphinfo = self.meth.graphinfo
         graphinfo.args_manager.copy_to_inputargs(self.meth, self.args_gv)
         block_id = self.target.block_id
-        #import pdb;pdb.set_trace()
         il.Emit(OpCodes.Ldc_I4, intmask(block_id))
         il.Emit(OpCodes.Ret)
 
