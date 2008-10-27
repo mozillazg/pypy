@@ -251,6 +251,18 @@ class Builder(model.GenBuilder):
     
     op_int_invert = op_int_not
     
+    # stolen from the ia32 backend :)
+    def op_int_abs(self, gv_x):
+        gv_y = self.allocate_register()
+        gv_z = self.allocate_register(None, [gv_y])
+        [gv_x] = self.move_to_registers([gv_x], [gv_y, gv_z], move_imm_too=True)
+        self.mc.MOV(gv_z, gv_x)
+        self.mc.ADD(gv_x, gv_x)
+        self.mc.SBB(gv_x, gv_z)
+        self.mc.SBB(gv_y, gv_y)
+        self.mc.XOR(gv_x, gv_y)
+        return gv_x
+    
     # if a register contains a constant
     # it will be marked to be don't spilled
     def throw_away_if_const(self, registers):
