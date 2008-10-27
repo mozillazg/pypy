@@ -20,6 +20,7 @@ DelegateHolder = CLR.pypy.runtime.DelegateHolder
 LowLevelFlexSwitch = CLR.pypy.runtime.LowLevelFlexSwitch
 FlexSwitchCase = CLR.pypy.runtime.FlexSwitchCase
 OpCodes = System.Reflection.Emit.OpCodes
+InputArgs = CLR.pypy.runtime.InputArgs
 
 cVoid = ootype.nullruntimeclass
 cInt32 = classof(System.Int32)
@@ -466,10 +467,6 @@ Glossary:
 class GraphInfo:
     def __init__(self):        
         self.args_manager = ArgsManager()
-        
-        # allocate space for the return variable of FlexCaseMethod
-        # XXX: it should be handled automatically :-(
-        self.args_manager.register_types([typeof(System.UInt32)])
 
 
 class MethodGenerator:
@@ -522,7 +519,6 @@ class MethodGenerator:
         block_id = r_uint(self.method_id) << 16 | block_num
         lbl = Label(self, block_id, args_gv)
         self.blocks.append(lbl)
-        self.graphinfo.args_manager.register(args_gv)
         return lbl
 
     def newlocalvar(self, clitype):
@@ -646,10 +642,8 @@ class MainMethod(MethodGenerator):
     def emit_preamble(self):
         if not self.has_flexswitches:
             return
-        # compute the shape of InputArgs
-        args_manager = self.graphinfo.args_manager
-        args_manager.close()
         # InputArgs inputargs = new InputArgs()
+        args_manager = self.graphinfo.args_manager
         self.gv_inputargs = self.newlocalvar(args_manager.getCliType())
         clitype = self.gv_inputargs.getCliType()
         ctor = clitype.GetConstructor(new_array(System.Type, 0))
@@ -694,7 +688,6 @@ class FlexCaseMethod(MethodGenerator):
         for gv_arg in linkargs_gv:
             gv_local = self.newlocalvar(gv_arg.getCliType())
             self.linkargs_gv_map[gv_arg] = gv_local
-        self.graphinfo.args_manager.register(linkargs_gv)
 
     def map_genvar(self, gv_var):
         return self.linkargs_gv_map.get(gv_var, gv_var)
@@ -711,15 +704,9 @@ class FlexCaseMethod(MethodGenerator):
 
     def emit_preamble(self):
         # the signature of the method is
-        # int case_0(int jumpto, object args)
-        
-        # InputArgs inputargs = (InputArgs)obj
+        # int case_0(int jumpto, InputArgs args)
+        self.gv_inputargs = self.inputargs_gv[1]        
         args_manager = self.graphinfo.args_manager
-        clitype = args_manager.getCliType()
-        self.gv_inputargs = self.newlocalvar(clitype)
-        self.inputargs_gv[1].load(self)
-        self.il.Emit(OpCodes.Castclass, clitype)
-        self.gv_inputargs.store(self)
 
         # 0 is a special value that means "first block of the function",
         # i.e. don't go through the dispatch block. 0 can never passed as
@@ -920,7 +907,7 @@ class IntFlexSwitch(CodeGenSwitch):
         graph = self.graph
         name = graph.name + '_case'
         restype = typeof(System.UInt32)
-        arglist = [typeof(System.UInt32), class2type(cObject)]
+        arglist = [typeof(System.UInt32), typeof(InputArgs)]
         delegatetype = class2type(cFlexSwitchCase)
         graphinfo = graph.graphinfo
         meth = FlexCaseMethod(graph.rgenop, name, restype,

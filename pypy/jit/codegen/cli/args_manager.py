@@ -1,156 +1,67 @@
 from pypy.translator.cli.dotnet import CLR
-from pypy.translator.cli import dotnet
+from pypy.translator.cli.dotnet import typeof
 System = CLR.System
-Assembly = System.Reflection.Assembly
 OpCodes = System.Reflection.Emit.OpCodes
-
-def new_type_array(types):
-    array = dotnet.new_array(System.Type, len(types))
-    for i in range(len(types)):
-        array[i] = types[i]
-    return array
+InputArgs = CLR.pypy.runtime.InputArgs
 
 class BaseArgsManager:
-    
-    def __init__(self):
-        self.type_counter = {}
-        self.type_index = {}
-        self.clitype = None
-        self._init_types()
-
-    def _init_types(self):
-        self.clitype_InputArgs = None
-        self.clitype_Void = None
-        self.clitype_Pair = None
-
-    def _make_generic_type(self, clitype, paramtypes):
-        raise NotImplementedError
-
-    def _store_by_index(self, meth, gv_arg, i):
-        raise NotImplementedError
-    
-    def _load_by_index(self, meth, i):
-        raise NotImplementedError
-
-    def is_open(self):
-        return self.clitype is None
 
     def getCliType(self):
-        assert not self.is_open()
-        return self.clitype
+        return typeof(InputArgs)
 
-    def register_types(self, types):
-        if not self.is_open():
-            return # XXX
-        
-        assert self.is_open()
-        newcounter = {}
-        for clitype in types:
-            newcount = newcounter.get(clitype, 0)
-            newcounter[clitype] = newcount+1
-
-        for clitype, newcount in newcounter.iteritems():
-            oldcount = self.type_counter.get(clitype, 0)
-            maxcount = max(oldcount, newcount)
-            self.type_counter[clitype] = maxcount
-
-    def register(self, args_gv):
-        types = [gv_arg.getCliType() for gv_arg in args_gv]
-        self.register_types(types)
-
-    def close(self):
-        assert self.is_open()
-        fieldtypes = []
-        for clitype, count in self.type_counter.iteritems():
-            self.type_index[clitype] = len(fieldtypes)
-            fieldtypes += [clitype] * count
-        pairtype = self.clitype_Void
-        
-        # iterate over reversed(fieldtypes)
-        i = len(fieldtypes)-1
-        while True:
-            if i < 0:
-                break
-            fieldtype = fieldtypes[i]
-            pairtype = self._make_generic_type(self.clitype_Pair, [fieldtype, pairtype])
-            i-=1
-        self.clitype = self._make_generic_type(self.clitype_InputArgs, [pairtype])
-
+    def _group_args_by_type(self, args_gv):
+        clitype2gv = {}
+        for gv_arg in args_gv:
+            clitype = self._normalize_type(gv_arg.getCliType())
+            clitype2gv.setdefault(clitype, []).append(gv_arg)
+        return clitype2gv
+    
     def copy_to_inputargs(self, meth, args_gv):
-        "copy args_gv into the appropriate fields of inputargs"
-        assert not self.is_open()
-        fieldtypes = [gv_arg.getCliType() for gv_arg in args_gv]
-        indexes = self._get_indexes(fieldtypes)
-        assert len(indexes) == len(fieldtypes)
-        for i in range(len(indexes)):
-            n = indexes[i]
-            gv_arg = args_gv[i]
-            self._store_by_index(meth, gv_arg, n)
+        clitype2gv = self._group_args_by_type(args_gv)
+        for clitype, args_gv in clitype2gv.iteritems():
+            # XXX: ensure that we have enough items in the array
+            field, elemtype = self._get_array(clitype)
+            i = 0
+            for gv_arg in args_gv:
+                self.stelem(meth, i, gv_arg, field, elemtype)
+                i+=1
 
     def copy_from_inputargs(self, meth, args_gv):
-        "copy the appropriate fields of inputargs into args_gv"
-        assert not self.is_open()
-        fieldtypes = [gv_arg.getCliType() for gv_arg in args_gv]
-        indexes = self._get_indexes(fieldtypes)
-        assert len(indexes) == len(fieldtypes)
-        for i in range(len(indexes)):
-            n = indexes[i]
-            gv_arg = args_gv[i]
-            self._load_by_index(meth, n)
-            gv_arg.store(meth)
-
-    def _get_indexes(self, fieldtypes):
-        indexes = []
-        next_idx_by_type = {}
-        for fieldtype in fieldtypes:
-            startidx = self.type_index[fieldtype]
-            index = next_idx_by_type.get(fieldtype, startidx)
-            indexes.append(index)
-            next_idx_by_type[fieldtype] = index+1
-        return indexes
+        clitype2gv = self._group_args_by_type(args_gv)
+        for clitype, args_gv in clitype2gv.iteritems():
+            field, elemtype = self._get_array(clitype)
+            i = 0
+            for gv_arg in args_gv:
+                self.ldelem(meth, i, field, elemtype)
+                gv_arg.store(meth)
+                i+=1
 
 
 class ArgsManager(BaseArgsManager):
 
-    def _load_pypylib(self):
-        from pypy.translator.cli.query import pypylib, pypylib2
-        assembly = None
-        for name in [pypylib, pypylib2]:
-            assembly = Assembly.LoadWithPartialName(name)
-            if assembly:
-                break
-        assert assembly is not None
-        return assembly
-
-    def _init_types(self):
-        pypylib = self._load_pypylib()
-        self.clitype_InputArgs = pypylib.GetType('pypy.runtime.InputArgs`1')
-        self.clitype_Void = pypylib.GetType('pypy.runtime.Void')
-        self.clitype_Pair = pypylib.GetType('pypy.runtime.Pair`2')
-
-    def _make_generic_type(self, clitype, paramtypes):
-        array = new_type_array(paramtypes)
-        return clitype.MakeGenericType(array)
-
-    def _store_by_index(self, meth, gv_arg, i):
-        head_info = self._load_nth_head(meth, i)
-        gv_arg.load(meth)
-        meth.il.Emit(OpCodes.Stfld, head_info)
-
-    def _load_by_index(self, meth, i):
-        head_info = self._load_nth_head(meth, i)
-        meth.il.Emit(OpCodes.Ldfld, head_info)
-
-    def _load_nth_head(self, meth, n):
-        il = meth.il
-        fields_info = self.clitype.GetField("fields")
+    def stelem(self, meth, i, gv_arg, field, elemtype):
         meth.gv_inputargs.load(meth)
-        il.Emit(OpCodes.Ldflda, fields_info)
+        meth.il.Emit(OpCodes.Ldfld, field)
+        meth.il.Emit(OpCodes.Ldc_I4, i)
+        gv_arg.load(meth)
+        meth.il.Emit(OpCodes.Stelem, elemtype)
 
-        lastfield_info = fields_info
-        for _ in range(n):
-            fieldtype = lastfield_info.get_FieldType()
-            lastfield_info = fieldtype.GetField("tail")
-            il.Emit(OpCodes.Ldflda, lastfield_info)
-        fieldtype = lastfield_info.get_FieldType()
-        return fieldtype.GetField("head")
+    def ldelem(self, meth, i, field, elemtype):
+        meth.gv_inputargs.load(meth)
+        meth.il.Emit(OpCodes.Ldfld, field)
+        meth.il.Emit(OpCodes.Ldc_I4, i)
+        meth.il.Emit(OpCodes.Ldelem, elemtype)
+
+    def _normalize_type(self, clitype):
+        # XXX: generalize!
+        if clitype == typeof(System.UInt32):
+            return typeof(System.Int32)
+        return clitype
+
+    def _get_array(self, clitype):
+        if clitype == typeof(System.Int32):
+            field = typeof(InputArgs).GetField('ints')
+        else:
+            assert False
+        ftype = field.get_FieldType()
+        return field, ftype.GetElementType()

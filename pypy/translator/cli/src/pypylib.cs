@@ -105,19 +105,32 @@ namespace pypy.test
 namespace pypy.runtime
 {
 
-    public struct Void {
+    public class InputArgs {
+      public int[] ints = new int[32];
+      public float[] floats = new float[32];
+      public object[] objs = new object[32];
+
+      public void ensure_ints(int n)
+      {
+        if (ints.Length < n)
+          ints = new int[n];
+      }
+
+      public void ensure_floats(int n)
+      {
+        if (floats.Length < n)
+          floats = new float[n];
+      }
+
+      public void ensure_objs(int n)
+      {
+        if (objs.Length < n)
+          objs = new object[n];
+
+      }
     }
 
-    public struct Pair<T0, T1> {
-      public T0 head;
-      public T1 tail;
-    }
-
-    public class InputArgs<T> {
-      public T fields;
-    }
-
-    public delegate uint FlexSwitchCase(uint block, object args);
+    public delegate uint FlexSwitchCase(uint block, InputArgs args);
 
     public class LowLevelFlexSwitch
     {
@@ -152,7 +165,7 @@ namespace pypy.runtime
             cases = newcases;
         }
         
-        public uint execute(int v, object args)
+        public uint execute(int v, InputArgs args)
         {
             for(int i=0; i<numcases; i++)
                 if (values[i] == v) {
