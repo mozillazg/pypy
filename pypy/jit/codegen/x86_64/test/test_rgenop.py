@@ -584,7 +584,7 @@ class TestRGenopDirect(AbstractRGenOpTestsDirect):
     test_from_random_4_direct = skip
     test_from_random_5_direct = skip
     test_genzeroconst = skip
-    test_ovfcheck_adder_direct = skip
+   # test_ovfcheck_adder_direct = skip
     test_ovfcheck1_direct = skip
     test_ovfcheck2_direct = skip
     test_cast_direct = skip

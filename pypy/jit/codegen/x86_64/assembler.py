@@ -236,12 +236,13 @@ class X86_64CodeBuilder(object):
     #_POP_QWREG  = make_one_operand_instr_with_alternate_encoding(1,0,0,None,"58",None,None)
     #_PUSH_QWREG = make_one_operand_instr_with_alternate_encoding(1,0,0,None,"50",None,None) 
      
-    _SETE_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,4) 
-    _SETG_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,15)
-    _SETGE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,13)
-    _SETL_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,12) 
-    _SETLE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,14)   
-    _SETNE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0,5)  
+    _SETE_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 4) 
+    _SETG_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 15)
+    _SETGE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 13)
+    _SETL_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 12) 
+    _SETLE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 14)
+    _SETO_8REG       = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 0)   
+    _SETNE_8REG      = make_one_operand_instr(   0,    0,    0,    0, "\x0F", 3, None, 0, 5)  
      
     _SHL_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xD3", 3, None, 4)
     _SHR_QWREG       = make_one_operand_instr(   1,    0,    0, None, "\xD3", 3, None, 5) 
@@ -252,7 +253,7 @@ class X86_64CodeBuilder(object):
     _XOR_QWREG_IMM32 = make_two_operand_instr(   1,    0,    0, None, "\x81", 3, None, 6)
     _XOR_QWREG_QWREG = make_two_operand_instr(   1, None,    0, None, "\x31", 3, None, None)
     
-    # TODO(all ops): maybe a problem with more ore less than two arg.
+    # TODO(all ops): maybe a problem with more or less than two arg.
     def ADD(self, op1, op2):
         method = getattr(self, "_ADD"+op1.to_string()+op2.to_string())
         method(op1, op2)
@@ -295,6 +296,7 @@ class X86_64CodeBuilder(object):
         method = getattr(self, "_INC"+op1.to_string())
         method(op1)
         
+    # near jump (only the same codeseg.)
     # 4 length of the immediate
     # want_jump_to is an 32bit(!) adress
     def JMP(self,want_jump_to):
@@ -304,6 +306,7 @@ class X86_64CodeBuilder(object):
         self.writeImm32(want_jump_to-self.tell()-4)
         
     # 4 length of the immediate
+    # want_jump_to is an 32bit(!) adress
     def JNE(self,want_jump_to):
         self.write("\x0F")
         self.write("\x85")
@@ -345,6 +348,10 @@ class X86_64CodeBuilder(object):
         
     def SETL(self, op1):
         method = getattr(self, "_SETL"+op1.to_string())
+        method(op1)
+        
+    def SETO(self, op1):
+        method = getattr(self, "_SETO"+op1.to_string())
         method(op1)
         
     def SETR(self, op1):
@@ -429,22 +436,24 @@ class X86_64CodeBuilder(object):
         self.write(chr(int(y[0:2],16)))
             
     
-    # Rex-Prefix 4WRXB see AMD vol3 page 45
+    # Rex-Prefix 4WRXB see AMD vol3 page 11
     def write_rex_byte(self, rexW, rexR, rexX, rexB):
         byte = (4 << 4) | (rexW << 3) | (rexR << 2) | (rexX << 1) | rexB
         self.write(chr(byte))
-        
+    
+    # modRM see AMD vol3 page 17  
     def write_modRM_byte(self, mod, reg, rm):
         byte = mod << 6 | (reg << 3) | rm
         self.write(chr(byte))
         
+    # SIB see AMD vol3 page 17    
     def write_SIB(self, scale, index, base):
         byte = scale << 6 | (index << 3) | base
         self.write(chr(byte))
         
     # calc. the "Two's complement"
     # and return as pos. hex value.
-    # This method is used to calc jump displ.
+    # This method is used to calc. a (neg.) jump displ.
     def cast_neg_hex32(self,a_int):
         x = hex(int("FFFFFFFF",16)+1 +a_int)
         y = x[2:len(x)]
