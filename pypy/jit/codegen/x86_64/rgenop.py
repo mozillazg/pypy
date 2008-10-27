@@ -13,7 +13,7 @@ from pypy.jit.codegen.emit_moves import emit_moves, emit_moves_safe
 
 # This method calls the assembler to generate code.
 # It saves the operands in the helpregister gv_z
-# and determine the Type of the operands,
+# and determine the type of the operands,
 # to choose the right method in assembler.py
 def make_two_argument_method(name):
     def op_int(self, gv_x, gv_y):
@@ -66,6 +66,7 @@ class Label(GenLabel):
         self.arg_positions = arg_positions
         self.stackdepth = stackdepth
 
+# used by emit_moves
 class MoveEmitter(object):
     def __init__(self, builder):
         self.builder = builder
@@ -101,7 +102,7 @@ class Builder(model.GenBuilder):
               # "r14":None,
               # "r15":None,
                }
-        self._orig_location={}
+        self._orig_location={}# used to restore the location of a gv
         self.known_gv = [] # contains the live genvars (used for spilling and allocation)
         for reg in used_registers:
             del self.freeregisters[reg.location.reg]
@@ -124,19 +125,41 @@ class Builder(model.GenBuilder):
     def genop2(self, opname, gv_arg1, gv_arg2): 
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
+    
+    def genraisingop1(self, opname, gv_arg1):
+        assert opname[len(opname)-4:len(opname)] == "_ovf"
+        
+        genmethod = getattr(self, 'op_' + opname[0:len(opname)-4])
+        gv_result = genmethod(gv_arg1)
+        gv_bool = self.allocate_register("rax", gv_result)
+        self.mc.SETO(IntVar(Register8("al")))
+        return gv_result, gv_bool
+    
+    # This Method creates an overflow method which
+    # return the operations result and a flag(BoolVar)
+    # flag= True if there was an overflow
+    # it works like genop2
+    def genraisingop2(self, opname, gv_arg1, gv_arg2):
+        assert opname[len(opname)-4:len(opname)] == "_ovf"
+        
+        genmethod = getattr(self, 'op_' + opname[0:len(opname)-4])
+        gv_result = genmethod(gv_arg1, gv_arg2)
+        gv_bool = self.allocate_register("rax", gv_result)
+        self.mc.SETO(IntVar(Register8("al")))
+        return gv_result, gv_bool
  
-    op_int_add  = make_two_argument_method("ADD")  # TODO: use inc
-    op_int_and  = make_two_argument_method("AND")
-    op_int_dec  = make_one_argument_method("DEC")  # for debuging
-    op_int_inc  = make_one_argument_method("INC")  # for debuging
-    op_int_mul  = make_two_argument_method("IMUL")
-    op_int_neg  = make_one_argument_method("NEG")
-    op_int_not  = make_one_argument_method("NOT")  # for debuging
-    op_int_or   = make_two_argument_method("OR")
-    op_int_push = make_one_argument_method("PUSH") # for debuging
-    op_int_pop  = make_one_argument_method("POP")  # for debuging
-    op_int_sub  = make_two_argument_method("SUB")  # TODO: use DEC
-    op_int_xor  = make_two_argument_method("XOR")
+    op_int_add     = make_two_argument_method("ADD")  # TODO: use inc
+    op_int_and     = make_two_argument_method("AND")
+    op_int_dec     = make_one_argument_method("DEC")  # for debuging
+    op_int_inc     = make_one_argument_method("INC")  # for debuging
+    op_int_mul     = make_two_argument_method("IMUL")
+    op_int_neg     = make_one_argument_method("NEG")
+    op_int_not     = make_one_argument_method("NOT")  # for debuging
+    op_int_or      = make_two_argument_method("OR")
+    op_int_push    = make_one_argument_method("PUSH") # for debuging
+    op_int_pop     = make_one_argument_method("POP")  # for debuging
+    op_int_sub     = make_two_argument_method("SUB")  # TODO: use DEC
+    op_int_xor     = make_two_argument_method("XOR")
 
     # must return a genvar
     def genop_same_as(self, imm):
@@ -144,6 +167,7 @@ class Builder(model.GenBuilder):
         self.mc.MOV(gv_x, imm)
         return gv_x
         
+    # returns 1 if gv_x is true
     def op_int_is_true(self, gv_x):
         [gv_x, gv_y] = self.move_to_registers([gv_x, Immediate32(1)], None, move_imm_too=True)  
         self.mc.CMP(gv_x, gv_y)
@@ -182,6 +206,9 @@ class Builder(model.GenBuilder):
         self.mc.SHR(gv_x)
         return gv_x
     
+    # called before an assembler operation
+    # ensures that every genVar is
+    # inside of a register
     def move_to_registers(self, registers, dont_alloc = None, move_imm_too = False):
         if dont_alloc is None:
             dont_alloc = []
@@ -212,7 +239,7 @@ class Builder(model.GenBuilder):
         return gv_z 
     
     # IDIV RDX:RAX with QWREG
-    # FIXME: supports only RAX with QWREG
+    # supports only RAX with QWREG
     def op_int_mod(self, gv_x, gv_y):
         gv_z = self.allocate_register("rax")
         gv_w = self.allocate_register("rdx")
@@ -225,6 +252,8 @@ class Builder(model.GenBuilder):
 #    def op_int_invert(self, gv_x):
 #       return self.mc.NOT(gv_x)
     
+    # if a register contains a constant
+    # it will be marked to be don't spilled
     def throw_away_if_const(self, registers):
         for i in range(len(registers)):
             if registers[i].location.contains_genConst:
@@ -313,7 +342,8 @@ class Builder(model.GenBuilder):
         from pypy.tool.sourcetools import func_with_new_name
         def jump(self, gv_condition, args_for_jump_gv): 
             # the targetbuilder must know the registers(live vars) 
-            # of the calling block  
+            # of the calling block and the used stack_pos
+            # to ensure a correct register allocation 
             targetbuilder = Builder(self.stackdepth, args_for_jump_gv, self.used_stack_pos)
             self.mc.CMP(gv_condition, Immediate32(value))
             self.mc.JNE(targetbuilder.mc.tell())
@@ -324,8 +354,8 @@ class Builder(model.GenBuilder):
     jump_if_true  = _new_jump('jump_if_true', 0)
     
     # moves stackpointer if there are
-    # gv on the stack which are not 
-    # need anymore
+    # gv on the stack (which are not 
+    # need anymore)
     def finish_and_return(self, sigtoken, gv_returnvar):
         #self.mc.write("\xB8\x0F\x00\x00\x00")
         self._open()
@@ -542,6 +572,8 @@ class RX86_64GenOp(model.AbstractRGenOp):
         # TODO: Builder._open()
         entrypoint = builder.mc.tell()
         # from http://www.x86-64.org/documentation/abi.pdf
+        # TODO: also return Stackpositions and let the
+        #       builder know 
         register_list = ["rdi","rsi","rdx","rcx","r8","r9"]
         # fill the list with the correct registers
         inputargs_gv = [builder.allocate_register(register_list[i])
