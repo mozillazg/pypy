@@ -134,7 +134,7 @@ class Return(Operation):
         self.meth.il.Emit(OpCodes.Br, retlabel.il_label)
 
 
-class JumpFromFlexSwitch(Operation):
+class NonLocalJump(Operation):
 
     def __init__(self, meth, target, args_gv):
         self.meth = meth
@@ -151,7 +151,8 @@ class JumpFromFlexSwitch(Operation):
         graphinfo.args_manager.copy_to_inputargs(self.meth, self.args_gv)
         block_id = self.target.block_id
         il.Emit(OpCodes.Ldc_I4, intmask(block_id))
-        il.Emit(OpCodes.Ret)
+        il.Emit(OpCodes.Stloc, self.meth.jumpto_var)
+        il.Emit(OpCodes.Br, self.meth.il_dispatch_block_label)
 
 
 class Call(Operation):

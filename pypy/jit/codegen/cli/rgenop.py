@@ -694,7 +694,7 @@ class FlexCaseMethod(MethodGenerator):
 
     def get_op_Return(self, gv_returnvar):
         target = self.graphinfo.graph_retlabel
-        return ops.JumpFromFlexSwitch(self, target, [gv_returnvar])
+        return ops.NonLocalJump(self, target, [gv_returnvar])
 
     def emit_code(self):
         MethodGenerator.emit_code(self)
@@ -735,6 +735,7 @@ class FlexCaseMethod(MethodGenerator):
         il.Emit(OpCodes.Ldloc, self.jumpto_var)
         il.Emit(OpCodes.Ret)
 
+
 class BranchBuilder(GenBuilder):
 
     def __init__(self, meth, il_label):
@@ -767,8 +768,8 @@ class BranchBuilder(GenBuilder):
                                 inputargs_gv, label.il_label)
         else:
             # jump from a flexswitch to the parent method
-            op = ops.JumpFromFlexSwitch(self.meth, label,
-                                        outputargs_gv)
+            op = ops.NonLocalJump(self.meth, label,
+                                  outputargs_gv)
         self.appendop(op)
         self.close()
 
