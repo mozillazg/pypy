@@ -132,6 +132,32 @@ namespace pypy.runtime
 
     public delegate uint FlexSwitchCase(uint block, InputArgs args);
 
+    public class MethodIdMap
+    { 
+      public FlexSwitchCase[] cases = new FlexSwitchCase[4];
+
+      public void add_case(int method_id, FlexSwitchCase c)
+      {
+        if (cases.Length <= method_id)
+          grow();
+        cases[method_id] = c;
+      }
+
+      public uint jumpto(uint blockid, InputArgs args)
+      {
+        uint method_id = (blockid & 0xFFFF0000) >> 16;
+        return cases[method_id](blockid, args);
+      }
+
+      private void grow()
+      {
+        int newsize = cases.Length * 2;
+        FlexSwitchCase[] newcases = new FlexSwitchCase[newsize];
+        Array.Copy(cases, newcases, cases.Length);
+        cases = newcases;
+      }
+    }
+
     public class LowLevelFlexSwitch
     {
         public uint default_blockid = 0xFFFFFFFF;
@@ -174,7 +200,7 @@ namespace pypy.runtime
                   return cases[i](0, args); 
                 }
             return default_blockid;
-        }        
+        }
     }
 
         
@@ -365,7 +391,11 @@ namespace pypy.runtime
 
         public static void throwInvalidBlockId(uint blockid)
         {
-            throw new Exception(string.Format("Invalid block id: {0}", blockid));
+            uint method_id = (blockid & 0xFFFF0000) >> 16;
+            uint block_num = (blockid & 0x0000FFFF);
+            string msg = string.Format("Invalid block id: 0x{0:X} ({1}, {2})", 
+                                       blockid, method_id, block_num);
+            throw new Exception(msg);
         }
 
         public static void Serialize(object obj, string filename)

@@ -564,7 +564,7 @@ def get_switch_goto_parent_block_runner(T, RGenOp):
     return switch_goto_parent_block_runner
 
 
-def make_switch_goto_between_flexswitches(T, rgenop):
+def make_switch_two_switches(T, rgenop):
     """
     def f(v0, v1):
         if v0 == 1: # switch
@@ -604,15 +604,66 @@ def make_switch_goto_between_flexswitches(T, rgenop):
     builder.end()
     return gv_switch
 
-def get_switch_goto_between_flexswitches_runner(T, RGenOp):
-    def switch_goto_between_flexswitches_runner(x, y):
+def get_switch_two_switches_runner(T, RGenOp):
+    def switch_two_switches_runner(x, y):
         rgenop = RGenOp()
-        gv_switchfn = make_switch_goto_between_flexswitches(T, rgenop)
+        gv_switchfn = make_switch_two_switches(T, rgenop)
         switchfn = gv_switchfn.revealconst(T.Ptr(T.FUNC2))
         res = switchfn(x, y)
         keepalive_until_here(rgenop)    # to keep the code blocks alive
         return res
-    return switch_goto_between_flexswitches_runner
+    return switch_two_switches_runner
+
+
+def make_switch_goto_between_cases(T, rgenop):
+    """
+    def f(v0, v1):
+        if v0 == 1: # switch
+          firstblock: # label
+            return v1
+        elif v0 == 2:
+            v1 = 42
+            goto firstblock
+        else:
+            return 200
+    """
+    sigtoken = rgenop.sigToken(T.FUNC2)
+    builder, gv_switch, [gv0, gv1] = rgenop.newgraph(sigtoken, "switch")
+    builder.start_writing()
+
+    const1 = rgenop.genconst(1)
+    const2 = rgenop.genconst(2)
+    const42 = rgenop.genconst(42)
+    const200 = rgenop.genconst(200)
+    
+    flexswitch, default_builder = builder.flexswitch(gv0, [gv1])
+
+    # outer default branch
+    default_builder.finish_and_return(sigtoken, const200)
+
+    # case v0 == 1
+    case_builder = flexswitch.add_case(const1)
+    args_gv = [gv1]
+    firstblock = case_builder.enter_next_block(args_gv)
+    [gv_x] = args_gv
+    case_builder.finish_and_return(sigtoken, gv_x)
+
+    # case v0 == 2
+    case_builder = flexswitch.add_case(const2)
+    case_builder.finish_and_goto([const42], firstblock)
+
+    builder.end()
+    return gv_switch
+
+def get_switch_goto_between_cases_runner(T, RGenOp):
+    def switch_goto_between_cases_runner(x, y):
+        rgenop = RGenOp()
+        gv_switchfn = make_switch_goto_between_cases(T, rgenop)
+        switchfn = gv_switchfn.revealconst(T.Ptr(T.FUNC2))
+        res = switchfn(x, y)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return switch_goto_between_cases_runner
 
 
 def make_fact(T, rgenop):
@@ -1292,13 +1343,22 @@ class AbstractRGenOpTestsCompile(AbstractTestBase):
         res = fn(42, 16)
         assert res == 16
 
-    def test_switch_goto_between_flexswitches_compile(self):
-        fn = self.compile(get_switch_goto_between_flexswitches_runner(self.T, self.RGenOp), [int, int])
+    def test_switch_two_switches_compile(self):
+        fn = self.compile(get_switch_two_switches_runner(self.T, self.RGenOp), [int, int])
         res = fn(1, 2)
         assert res == 42
         res = fn(1, 3)
         assert res == 100
         res = fn(2, 3)
+        assert res == 200
+
+    def test_switch_goto_between_cases_compile(self):
+        fn = self.compile(get_switch_goto_between_cases_runner(self.T, self.RGenOp), [int, int])
+        res = fn(1, 2)
+        assert res == 2
+        res = fn(2, 3)
+        assert res == 42
+        res = fn(3, 4)
         assert res == 200
 
     def test_fact_compile(self):
@@ -1554,15 +1614,26 @@ class AbstractRGenOpTestsDirect(AbstractTestBase):
         res = fnptr(42, 16)
         assert res == 16
 
-    def test_switch_goto_between_flexswitches_direct(self):
+    def test_switch_two_switches_direct(self):
         rgenop = self.RGenOp()
-        gv_switchfn = make_switch_goto_between_flexswitches(self.T, rgenop)
+        gv_switchfn = make_switch_two_switches(self.T, rgenop)
         fnptr = self.cast(gv_switchfn, 2)
         res = fnptr(1, 2)
         assert res == 42
         res = fnptr(1, 3)
         assert res == 100
         res = fnptr(2, 3)
+        assert res == 200
+
+    def test_switch_goto_between_cases_direct(self):
+        rgenop = self.RGenOp()
+        gv_switchfn = make_switch_goto_between_cases(self.T, rgenop)
+        fnptr = self.cast(gv_switchfn, 2)
+        res = fnptr(1, 2)
+        assert res == 2
+        res = fnptr(2, 3)
+        assert res == 42
+        res = fnptr(3, 4)
         assert res == 200
 
     def test_large_switch_direct(self):

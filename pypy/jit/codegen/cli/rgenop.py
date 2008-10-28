@@ -19,6 +19,7 @@ System = CLR.System
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
 LowLevelFlexSwitch = CLR.pypy.runtime.LowLevelFlexSwitch
 FlexSwitchCase = CLR.pypy.runtime.FlexSwitchCase
+MethodIdMap = CLR.pypy.runtime.MethodIdMap
 OpCodes = System.Reflection.Emit.OpCodes
 InputArgs = CLR.pypy.runtime.InputArgs
 
@@ -301,17 +302,22 @@ class FunctionConst(BaseConst):
             assert T is ootype.Object
             return ootype.cast_to_object(self.holder.GetFunc())
 
-class FlexSwitchConst(BaseConst):
+class NativeObjectConst(BaseConst):
+    "GenConst for .NET objects"
 
-    def __init__(self, llflexswitch):
-        self.llflexswitch = llflexswitch
+    def __init__(self, obj):
+        "obj must casted to System.Object with dotnet.cliupcast"
+        self.obj = obj
+
+    def getCliType(self):
+        return self.obj.GetType()
 
     def getobj(self):
-        return dotnet.cliupcast(self.llflexswitch, System.Object)
+        return self.obj
 
     def load(self, meth):
         index = self._get_index(meth)
-        self._load_from_array(meth, index, self.llflexswitch.GetType())
+        self._load_from_array(meth, index, self.obj.GetType())
 
 
 class Label(GenLabel):
@@ -467,7 +473,18 @@ Glossary:
 class GraphInfo:
     def __init__(self):        
         self.args_manager = ArgsManager()
+        self.methods = []
+        self.method_id_map = MethodIdMap()
+        obj = dotnet.cliupcast(self.method_id_map, System.Object)
+        self.gv_method_id_map = NativeObjectConst(obj)
 
+    def register_method(self, meth):
+        meth.method_id = len(self.methods)
+        self.methods.append(meth)
+
+    def register_case(self, method_id, case):
+        self.method_id_map.add_case(method_id, case)
+            
 
 class MethodGenerator:
 
@@ -486,7 +503,7 @@ class MethodGenerator:
             self.inputargs_gv.append(GenArgVar(i, args[i]))
         self.delegatetype = delegatetype
         self.graphinfo = graphinfo
-
+        graphinfo.register_method(self)
         self.gv_entrypoint = FunctionConst(delegatetype)
         self.gv_inputargs = None
         self.genconsts = {}
@@ -499,6 +516,7 @@ class MethodGenerator:
         else:
             self.gv_retvar = self.newlocalvar(restype)
             self.retlabel = self.newblock([self.gv_retvar])
+
 
     def _get_args_array(self, arglist):
         array = new_array(System.Type, len(arglist)+1)
@@ -622,8 +640,6 @@ class MethodGenerator:
 
 class MainMethod(MethodGenerator):
 
-    method_id = 0
-    
     def __init__(self, rgenop, name, restype, args, delegatetype):
         graphinfo = GraphInfo()
         MethodGenerator.__init__(self, rgenop, name, restype, args, delegatetype, graphinfo)
@@ -656,14 +672,19 @@ class MainMethod(MethodGenerator):
         self.emit_dispatch_block()
 
     def emit_jump_to_unknown_block(self, il_label):
-        # just throw an exception for now
         il = self.il
+        gv_method_id_map = self.graphinfo.gv_method_id_map
+        clitype = gv_method_id_map.getCliType()
+        meth_jumpto = clitype.GetMethod('jumpto')
+
+        # jumpto = method_id_map.jumpto(jumpto, args)
         il.MarkLabel(il_label)
-        clitype = class2type(cUtils)
-        meth = clitype.GetMethod("throwInvalidBlockId")
-        #il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        il.Emit(OpCodes.Ldc_I4, 4242)
-        il.Emit(OpCodes.Call, meth)
+        gv_method_id_map.load(self)
+        il.Emit(OpCodes.Ldloc, self.jumpto_var)
+        self.gv_inputargs.load(self)
+        il.Emit(OpCodes.Callvirt, meth_jumpto)
+        il.Emit(OpCodes.Stloc, self.jumpto_var)
+        il.Emit(OpCodes.Br, self.il_dispatch_block_label)
 
 
 class FlexCaseMethod(MethodGenerator):
@@ -671,8 +692,6 @@ class FlexCaseMethod(MethodGenerator):
     value = -1
     linkargs_gv = None
     linkargs_gv_map = None
-
-    method_id = 10 # XXX
 
     def setup_flexswitches(self):
         pass
@@ -701,6 +720,7 @@ class FlexCaseMethod(MethodGenerator):
         func = self.gv_entrypoint.holder.GetFunc()
         func2 = clidowncast(func, FlexSwitchCase)
         self.parent_flexswitch.llflexswitch.add_case(self.value, func2)
+        self.graphinfo.register_case(self.method_id, func2)
 
     def emit_preamble(self):
         # the signature of the method is
@@ -902,7 +922,8 @@ class IntFlexSwitch(CodeGenSwitch):
         self.graph = graph
         self.linkargs_gv = linkargs_gv
         self.llflexswitch = LowLevelFlexSwitch()
-        self.gv_flexswitch = FlexSwitchConst(self.llflexswitch)
+        obj = dotnet.cliupcast(self.llflexswitch, System.Object)
+        self.gv_flexswitch = NativeObjectConst(obj)
 
     def add_case(self, gv_case):
         graph = self.graph
