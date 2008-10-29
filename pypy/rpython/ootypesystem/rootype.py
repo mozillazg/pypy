@@ -54,12 +54,21 @@ class OOInstanceRepr(Repr):
         self.lowleveltype = ootype
 
     def rtype_getattr(self, hop):
+        from pypy.rpython.ootypesystem.rclass import CLASSTYPE
         attr = hop.args_s[1].const
         s_inst = hop.args_s[0]
         _, meth = self.lowleveltype._lookup(attr)
         if meth is not None:
             # just return instance - will be handled by simple_call
             return hop.inputarg(hop.r_result, arg=0)
+        if attr == '__class__':
+            v_inst = hop.inputarg(hop.args_r[0], arg=0)
+            # this will work as soon as we merge the less-meta-instances branch
+            #return hop.genop('classof', [v_obj], resulttype = hop.r_result.lowleveltype)
+            cmeta = hop.inputconst(ootype.Void, "meta")
+            return hop.genop('oogetfield', [v_inst, cmeta],
+                             resulttype=CLASSTYPE)
+
         self.lowleveltype._check_field(attr)
         vlist = hop.inputargs(self, Void)
         return hop.genop("oogetfield", vlist,

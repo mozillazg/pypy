@@ -658,6 +658,7 @@ class __extend__(SomeExternalObject):
 # annotation of low-level types
 from pypy.annotation.model import SomePtr, SomeLLADTMeth
 from pypy.annotation.model import SomeOOInstance, SomeOOBoundMeth, SomeOOStaticMeth
+from pypy.annotation.model import SomeOOClass
 from pypy.annotation.model import ll_to_annotation, lltype_to_annotation, annotation_to_lltype
 
 class __extend__(SomePtr):
@@ -704,7 +705,10 @@ class __extend__(SomeLLADTMeth):
 from pypy.rpython.ootypesystem import ootype
 class __extend__(SomeOOInstance):
     def getattr(r, s_attr):
+        from pypy.rpython.ootypesystem.rclass import CLASSTYPE
         assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % r.ootype
+        if s_attr.const == '__class__':
+            return SomeOOInstance(CLASSTYPE)
         v = getattr(r.ootype._example(), s_attr.const)
         if isinstance(v, ootype._bound_meth):
             return SomeOOBoundMeth(r.ootype, s_attr.const)
