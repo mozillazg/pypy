@@ -529,3 +529,27 @@ class ReplayBuilder(GenBuilder):
 
     def genop_absorb_place(self, place):
         return dummy_var
+
+    def genop_cast_int_to_ptr(self, kind, gv_int):
+        return dummy_var
+    
+    def genop_instanceof(self, gv_obj, alloctoken):
+        return dummy_var
+    
+    def genop_new(self, alloctoken):
+        return dummy_var
+    
+    def genop_oogetfield(self, fieldtoken, gv_obj):
+        return dummy_var
+    
+    def genop_ooisnull(self, gv_obj):
+        return dummy_var
+    
+    def genop_oonewarray(self, alloctoken, gv_length):
+        return dummy_var
+    
+    def genop_oononnull(self, gv_obj):
+        return dummy_var
+    
+    def genop_oosetfield(self, fieldtoken, gv_obj, gv_value):
+        return None
