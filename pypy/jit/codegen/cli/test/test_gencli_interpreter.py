@@ -42,8 +42,10 @@ class CompiledCliMixin(object):
         func = compile_graph(graph, translator, nowrap=True)
         return func(*values)
 
-
     def check_insns(self, expected=None, **counts):
+        "Cannot check instructions in the generated assembler."
+
+    def check_flexswitches(self, expected_count):
         "Cannot check instructions in the generated assembler."
 
 class TestRainbowCli(CompiledCliMixin, RainbowTest):
