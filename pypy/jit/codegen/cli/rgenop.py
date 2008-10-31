@@ -1,3 +1,4 @@
+import py
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.ootypesystem import ootype
@@ -17,7 +18,8 @@ from pypy.translator.cli.dotnet import class2type, type2class
 from pypy.translator.cli import dotnet
 System = CLR.System
 DelegateHolder = CLR.pypy.runtime.DelegateHolder
-LowLevelFlexSwitch = CLR.pypy.runtime.LowLevelFlexSwitch
+IntLowLevelFlexSwitch = CLR.pypy.runtime.IntLowLevelFlexSwitch
+ObjectLowLevelFlexSwitch = CLR.pypy.runtime.ObjectLowLevelFlexSwitch
 FlexSwitchCase = CLR.pypy.runtime.FlexSwitchCase
 MethodIdMap = CLR.pypy.runtime.MethodIdMap
 OpCodes = System.Reflection.Emit.OpCodes
@@ -689,16 +691,16 @@ class MainMethod(MethodGenerator):
 
 class FlexCaseMethod(MethodGenerator):
     flexswitch = None
-    value = -1
+    gv_value = None
     linkargs_gv = None
     linkargs_gv_map = None
 
     def setup_flexswitches(self):
         pass
     
-    def set_parent_flexswitch(self, flexswitch, value):
+    def set_parent_flexswitch(self, flexswitch, gv_value):
         self.parent_flexswitch = flexswitch
-        self.value = value
+        self.gv_value = gv_value
         self.setup_dispatch_block()
 
     def set_linkargs_gv(self, linkargs_gv):
@@ -719,7 +721,7 @@ class FlexCaseMethod(MethodGenerator):
         MethodGenerator.emit_code(self)
         func = self.gv_entrypoint.holder.GetFunc()
         func2 = clidowncast(func, FlexSwitchCase)
-        self.parent_flexswitch.llflexswitch.add_case(self.value, func2)
+        self.parent_flexswitch.set_link(self.gv_value, func2)
         self.graphinfo.register_case(self.method_id, func2)
 
     def emit_preamble(self):
@@ -888,14 +890,17 @@ class BranchBuilder(GenBuilder):
         return self._jump_if(gv_condition, OpCodes.Brtrue)
 
     def flexswitch(self, gv_exitswitch, args_gv):
-        # XXX: this code is valid only for MainMethod
         self.meth.setup_flexswitches()
-        flexswitch = IntFlexSwitch(self.meth, args_gv)
+        clitype = gv_exitswitch.getCliType()
+        if clitype.get_IsPrimitive():
+            flexswitch = IntFlexSwitch(self.meth, args_gv)
+        else:
+            flexswitch = ObjectFlexSwitch(self.meth, args_gv)
         gv_flexswitch = flexswitch.gv_flexswitch
         default_branch = self.meth.newbranch()
         label = default_branch.enter_next_block(args_gv)
 
-        flexswitch.llflexswitch.set_default_blockid(label.block_id)
+        flexswitch.set_defaul_link(label)
         op = ops.DoFlexSwitch(self.meth, gv_flexswitch,
                               gv_exitswitch, args_gv)
         self.appendop(op)
@@ -915,8 +920,8 @@ class BranchBuilder(GenBuilder):
         for op in self.operations:
             op.emit()
 
-
-class IntFlexSwitch(CodeGenSwitch):
+template = """
+class %(classname)s(CodeGenSwitch):
 
     def __init__(self, graph, linkargs_gv):
         self.graph = graph
@@ -924,6 +929,13 @@ class IntFlexSwitch(CodeGenSwitch):
         self.llflexswitch = LowLevelFlexSwitch()
         obj = dotnet.cliupcast(self.llflexswitch, System.Object)
         self.gv_flexswitch = NativeObjectConst(obj)
+
+    def set_defaul_link(self, label):
+        self.llflexswitch.set_default_blockid(label.block_id)
+
+    def set_link(self, gv_value, func):
+        value = revealconst(gv_value)
+        self.llflexswitch.add_case(value, func)
 
     def add_case(self, gv_case):
         graph = self.graph
@@ -934,10 +946,34 @@ class IntFlexSwitch(CodeGenSwitch):
         graphinfo = graph.graphinfo
         meth = FlexCaseMethod(graph.rgenop, name, restype,
                               arglist, delegatetype, graphinfo)
-        value = gv_case.revealconst(ootype.Signed)
-        meth.set_parent_flexswitch(self, value)
+        meth.set_parent_flexswitch(self, gv_case)
         meth.set_linkargs_gv(self.linkargs_gv)
         return meth.branches[0]
+"""
+
+def revealconst_int(gv_value):
+    return gv_value.revealconst(ootype.Signed)
+
+def revealconst_obj(gv_value):
+    obj = gv_value.revealconst(ootype.Object)
+    return dotnet.cast_to_native_object(obj)
+
+def build_flexswitch_class(classname, LowLevelFlexSwitch, revealconst):
+    src = py.code.Source(template % locals())
+    mydict = globals().copy()
+    mydict['LowLevelFlexSwitch'] = LowLevelFlexSwitch
+    mydict['revealconst'] = revealconst
+    exec src.compile() in mydict
+    globals()[classname] = mydict[classname]
+
+build_flexswitch_class('IntFlexSwitch',
+                       IntLowLevelFlexSwitch,
+                       revealconst_int)
+
+build_flexswitch_class('ObjectFlexSwitch',
+                       ObjectLowLevelFlexSwitch,
+                       revealconst_obj)
+
 
 global_rgenop = RCliGenOp()
 RCliGenOp.constPrebuiltGlobal = global_rgenop.genconst

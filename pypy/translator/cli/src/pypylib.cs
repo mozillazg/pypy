@@ -132,6 +132,9 @@ namespace pypy.runtime
 
     public delegate uint FlexSwitchCase(uint block, InputArgs args);
 
+    // XXX: there is a lot of code duplication between the next three classes,
+    // but it's hard to share the code in a way that it's both efficient and
+    // supported by gencli
     public class MethodIdMap
     { 
       public FlexSwitchCase[] cases = new FlexSwitchCase[4];
@@ -158,23 +161,26 @@ namespace pypy.runtime
       }
     }
 
-    public class LowLevelFlexSwitch
+    public class BaseLowLevelFlexSwitch
     {
         public uint default_blockid = 0xFFFFFFFF;
-        public int numcases = 0;
-        public int[] values = new int[4];
-        public FlexSwitchCase[] cases = new FlexSwitchCase[4];
-
         public void set_default_blockid(uint blockid)
         {
             this.default_blockid = blockid;
         }
+    }
 
-        public void add_case(int v, FlexSwitchCase c)
+    public class IntLowLevelFlexSwitch: BaseLowLevelFlexSwitch
+    {
+        public int numcases = 0;
+        public int[] values = new int[4];
+        public FlexSwitchCase[] cases = new FlexSwitchCase[4];
+
+        public void add_case(int value, FlexSwitchCase c)
         {
             if (numcases >= values.Length)
                 grow();
-            values[numcases] = v;
+            values[numcases] = value;
             cases[numcases] = c;
             numcases++;
         }
@@ -191,10 +197,10 @@ namespace pypy.runtime
             cases = newcases;
         }
         
-        public uint execute(int v, InputArgs args)
+        public uint execute(int value, InputArgs args)
         {
             for(int i=0; i<numcases; i++)
-                if (values[i] == v) {
+              if (values[i] == value) {
                   // 0 stands for "the first block of the function", see the comment
                   // in rgenop.FlexCaseMethod.emit_preamble
                   return cases[i](0, args); 
@@ -203,6 +209,44 @@ namespace pypy.runtime
         }
     }
 
+    public class ObjectLowLevelFlexSwitch: BaseLowLevelFlexSwitch
+    {
+        public int numcases = 0;
+        public object[] values = new object[4];
+        public FlexSwitchCase[] cases = new FlexSwitchCase[4];
+
+        public void add_case(object value, FlexSwitchCase c)
+        {
+            if (numcases >= values.Length)
+                grow();
+            values[numcases] = value;
+            cases[numcases] = c;
+            numcases++;
+        }
+
+        private void grow()
+        {
+            int newsize = values.Length * 2;
+            object[] newvalues = new object[newsize];
+            Array.Copy(values, newvalues, values.Length);
+            values = newvalues;
+            
+            FlexSwitchCase[] newcases = new FlexSwitchCase[newsize];
+            Array.Copy(cases, newcases, cases.Length);
+            cases = newcases;
+        }
+        
+        public uint execute(object value, InputArgs args)
+        {
+            for(int i=0; i<numcases; i++)
+              if (values[i] == value) {
+                  // 0 stands for "the first block of the function", see the comment
+                  // in rgenop.FlexCaseMethod.emit_preamble
+                  return cases[i](0, args); 
+                }
+            return default_blockid;
+        }
+    }
         
     public class DelegateHolder
     {
