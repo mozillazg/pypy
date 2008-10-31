@@ -1112,7 +1112,9 @@ class OOTypeJitInterpreter(JitInterpreter):
             return rtimeshift.geninstanceof(self.jitstate, objbox,
                                             typedesc)
         # else it's a vstruct
-        objtypedesc = objbox.content.typedesc
+        content = objbox.content
+        assert isinstance(content, rcontainer.VirtualStruct)
+        objtypedesc = content.typedesc
         result = objtypedesc.issubtype(typedesc)
         return rvalue.ll_fromvalue(self.jitstate, result)
 

@@ -1,5 +1,6 @@
 '''Toy Language with Cons Cells'''
 
+import autopath
 import py
 from pypy.jit.tl.tlopcode import *
 from pypy.jit.tl import tlopcode
@@ -240,7 +241,7 @@ def make_interp(supports_call):
 
             elif opcode == BR_COND:
                 cond = stack.pop()
-                hint(cond.__class__, promote=True)
+                hint(cond, promote_class=True)
                 if cond.t():
                     pc += char2int(code[pc])
                 pc += 1
@@ -272,3 +273,12 @@ def make_interp(supports_call):
 
 interp             , interp_eval               = make_interp(supports_call = True)
 interp_without_call, interp_eval_without_call  = make_interp(supports_call = False)
+
+if __name__ == '__main__':
+    import sys
+    from pypy.jit.tl.test.test_tl import FACTORIAL_SOURCE
+    bytecode = compile(FACTORIAL_SOURCE)
+    if len(sys.argv) >= 2 and sys.argv[1] == 'assemble':
+        print bytecode
+    else:
+        print ','.join([str(ord(n)) for n in bytecode])
