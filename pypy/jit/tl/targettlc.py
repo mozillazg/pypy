@@ -1,6 +1,7 @@
+import time
 import py
 py.magic.autopath()
-from pypy.jit.tl.tlc import interp, interp_eval
+from pypy.jit.tl.tlc import interp, interp_eval, interp_nonjit
 from pypy.jit.codegen.hlinfo import highleveljitinfo
 
 
@@ -10,15 +11,38 @@ def entry_point(args):
     """
     # store args[0] in a place where the JIT log can find it (used by
     # viewcode.py to know the executable whose symbols it should display)
-    highleveljitinfo.sys_executable = args[0]
-    if len(args) < 3:
-        print "Usage: %s filename x" % (args[0],)
+    exe = args[0]
+    args = args[1:]
+    highleveljitinfo.sys_executable = exe
+    if len(args) < 2:
+        print "Usage: %s [--onlyjit] filename x" % (exe,)
         return 2
-    filename = args[1]
-    x = int(args[2])
+
+    onlyjit = False
+    if args[0] == '--onlyjit':
+        onlyjit = True
+        args = args[1:]
+        
+    filename = args[0]
+    x = int(args[1])
     bytecode = load_bytecode(filename)
+
+    if not onlyjit:
+        start = time.clock()
+        res = interp_nonjit(bytecode, inputarg=x)
+        stop = time.clock()
+        print 'Non jitted:    %d (%f seconds)' % (res, stop-start)
+
+    start = time.clock()
     res = interp(bytecode, inputarg=x)
-    print res
+    stop = time.clock()
+    print 'Warmup jitted: %d (%f seconds)' % (res, stop-start)
+
+    start = time.clock()
+    res = interp(bytecode, inputarg=x)
+    stop = time.clock()
+    print 'Warmed jitted: %d (%f seconds)' % (res, stop-start)
+
     return 0
 
 def load_bytecode(filename):
