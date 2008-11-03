@@ -615,7 +615,7 @@ class MethodGenerator:
         #    goto jump_to_unknown
         il_jump_to_unknown_label = il.DefineLabel()
         il.Emit(OpCodes.Ldloc, self.jumpto_var)
-        il.Emit(OpCodes.Ldc_I4, intmask(0xFFF0000))
+        il.Emit(OpCodes.Ldc_I4, intmask(0xFFFF0000))
         il.Emit(OpCodes.And)
         il.Emit(OpCodes.Ldc_I4, 16)
         il.Emit(OpCodes.Shr_Un)
