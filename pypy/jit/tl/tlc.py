@@ -2,9 +2,9 @@
 
 import autopath
 import py
+from pypy.rlib.objectmodel import specialize
 from pypy.jit.tl.tlopcode import *
 from pypy.jit.tl import tlopcode
-from pypy.rlib.jit import hint
 
 class Obj(object):
 
@@ -110,7 +110,16 @@ def char2int(c):
         t = -(-ord(c) & 0xff)
     return t
 
-def make_interp(supports_call):
+def make_interp(supports_call, jitted=True):
+    if jitted:
+        from pypy.rlib.jit import hint
+    else:
+        @specialize.argtype(0)
+        def hint(x, global_merge_point=False,
+                 promote_class=False,
+                 forget=False,
+                 concrete=False):
+            return x
 
     def interp(code='', pc=0, inputarg=0):
         if not isinstance(code,str):
@@ -273,6 +282,7 @@ def make_interp(supports_call):
 
 interp             , interp_eval               = make_interp(supports_call = True)
 interp_without_call, interp_eval_without_call  = make_interp(supports_call = False)
+interp_nonjit      , interp_eval_nonjit        = make_interp(supports_call = True, jitted=False)
 
 if __name__ == '__main__':
     import sys
