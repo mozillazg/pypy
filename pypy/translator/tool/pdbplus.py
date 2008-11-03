@@ -1,4 +1,5 @@
 import pdb
+import bdb
 import types
 import code
 import sys
@@ -407,7 +408,7 @@ show class hierarchy graph"""
             locals().update(self.exposed)
             fn(*args)
             pass # for debugger to land
-        except pdb.bdb.BdbQuit:
+        except bdb.BdbQuit:
             pass    
 
 
