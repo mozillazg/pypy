@@ -381,7 +381,7 @@ class _array_of_unknown_length(_parentable_mixin, lltype._parentable):
 # additionally, this adds mess to __del__ "semantics"
 _all_callbacks = []
 
-def lltype2ctypes(llobj, normalize=True):
+def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
     """Convert the lltype object 'llobj' to its ctypes equivalent.
     'normalize' should only be False in tests, where we want to
     inspect the resulting ctypes object manually.
@@ -415,7 +415,8 @@ def lltype2ctypes(llobj, normalize=True):
                 _all_callbacks.append(res)
                 return res
 
-        if T.TO._gckind != 'raw' and not T.TO._hints.get('callback', None):
+        if (T.TO._gckind != 'raw' and not T.TO._hints.get('callback', None)
+            and not acceptgckind):
             raise Exception("can only pass 'raw' data structures to C, not %r"
                             % (T.TO._gckind,))
         if container._storage is None:
