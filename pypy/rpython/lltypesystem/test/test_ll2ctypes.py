@@ -789,3 +789,21 @@ class TestLL2Ctypes(object):
         c1 = lltype2ctypes(a1)
         c2 = lltype2ctypes(a2)
         assert type(c1) is type(c2)
+
+    def test_varsized_struct(self):
+        S = lltype.Struct('S', ('x', lltype.Signed),
+                               ('a', lltype.Array(lltype.Char)))
+        s1 = lltype.malloc(S, 6, flavor='raw')
+        s1.x = 5
+        s1.a[2] = 'F'
+        sc = lltype2ctypes(s1, normalize=False)
+        assert isinstance(sc.contents, ctypes.Structure)
+        assert sc.contents.x == 5
+        assert sc.contents.a.length == 6
+        assert sc.contents.a.items[2] == ord('F')
+        sc.contents.a.items[3] = ord('P')
+        assert s1.a[3] == 'P'
+        s1.a[1] = 'y'
+        assert sc.contents.a.items[1] == ord('y')
+        lltype.free(s1, flavor='raw')
+        assert not ALLOCATED     # detects memory leaks in the test
