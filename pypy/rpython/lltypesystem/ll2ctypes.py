@@ -206,7 +206,11 @@ def convert_struct(container, cstruct=None):
             return
         # regular case: allocate a new ctypes Structure of the proper type
         cls = get_ctypes_type(STRUCT)
-        cstruct = cls._malloc()
+        if STRUCT._arrayfld is not None:
+            n = getattr(container, STRUCT._arrayfld).getlength()
+        else:
+            n = None
+        cstruct = cls._malloc(n)
     add_storage(container, _struct_mixin, cstruct)
     for field_name in STRUCT._names:
         FIELDTYPE = getattr(STRUCT, field_name)
@@ -219,6 +223,9 @@ def convert_struct(container, cstruct=None):
             if isinstance(FIELDTYPE, lltype.Struct):
                 csubstruct = getattr(cstruct, field_name)
                 convert_struct(field_value, csubstruct)
+            elif field_name == STRUCT._arrayfld:    # inlined var-sized part
+                csubarray = getattr(cstruct, field_name)
+                convert_array(field_value, csubarray)
             else:
                 raise NotImplementedError('inlined field', FIELDTYPE)
     remove_regular_struct_content(container)
@@ -230,10 +237,18 @@ def remove_regular_struct_content(container):
         if not isinstance(FIELDTYPE, lltype.ContainerType):
             delattr(container, field_name)
 
-def convert_array(container):
+def convert_array(container, carray=None):
     ARRAY = container._TYPE
-    cls = get_ctypes_type(ARRAY)
-    carray = cls._malloc(container.getlength())
+    if carray is None:
+        # if 'container' is an inlined substructure, convert the whole
+        # bigger structure at once
+        parent, parentindex = lltype.parentlink(container)
+        if parent is not None:
+            convert_struct(parent)
+            return
+        # regular case: allocate a new ctypes array of the proper type
+        cls = get_ctypes_type(ARRAY)
+        carray = cls._malloc(container.getlength())
     add_storage(container, _array_mixin, carray)
     if not isinstance(ARRAY.OF, lltype.ContainerType):
         for i in range(container.getlength()):
