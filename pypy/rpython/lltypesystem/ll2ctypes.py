@@ -179,6 +179,8 @@ def build_new_ctypes_type(T, delayed_builders):
     elif isinstance(T, lltype.Array):
         return build_ctypes_array(T, delayed_builders)
     elif isinstance(T, lltype.OpaqueType):
+        if T is lltype.RuntimeTypeInfo:
+            return ctypes.c_char   # the exact type is hopefully not important
         if T.hints.get('external', None) != 'C':
             raise TypeError("%s is not external" % T)
         return ctypes.c_char * T.hints['getsize']()
