@@ -250,6 +250,7 @@ class ArrayItemsOffset(AddressOffset):
 class ArrayLengthOffset(AddressOffset):
 
     def __init__(self, TYPE):
+        assert isinstance(TYPE, lltype.Array)
         self.TYPE = TYPE
 
     def __repr__(self):
