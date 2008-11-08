@@ -176,6 +176,8 @@ class World(object):
                 pieces = line.split()
                 assert pieces[1].startswith('@')
                 assert pieces[2].startswith('+')
+                if len(pieces) == 3:
+                    continue     # empty line
                 baseaddr = long(pieces[1][1:], 16) & 0xFFFFFFFFL
                 offset = int(pieces[2][1:])
                 addr = baseaddr + offset
