@@ -808,6 +808,11 @@ class TestLL2Ctypes(object):
         assert s1.a[3] == 'P'
         s1.a[1] = 'y'
         assert sc.contents.a.items[1] == ord('y')
+        # now go back to lltype...
+        res = ctypes2lltype(lltype.Ptr(S), sc)
+        assert res == s1
+        assert res.x == 5
+        assert len(res.a) == 6
         lltype.free(s1, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
@@ -819,6 +824,7 @@ class TestLL2Ctypes(object):
         assert c1.contents.length == 5
         assert c1.contents.items[0] == 42
         res = ctypes2lltype(lltype.Ptr(A), c1)
+        assert res == a1
         assert len(res) == 5
         assert res[0] == 42
         res[0] += 1
