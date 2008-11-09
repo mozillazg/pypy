@@ -273,8 +273,17 @@ def struct_use_ctypes_storage(container, ctypes_storage):
     for field_name in STRUCT._names:
         FIELDTYPE = getattr(STRUCT, field_name)
         if isinstance(FIELDTYPE, lltype.ContainerType):
-            struct_use_ctypes_storage(getattr(container, field_name),
-                                      getattr(ctypes_storage, field_name))
+            if isinstance(FIELDTYPE, lltype.Struct):
+                struct_use_ctypes_storage(getattr(container, field_name),
+                                          getattr(ctypes_storage, field_name))
+            elif isinstance(FIELDTYPE, lltype.Array):
+                assert FIELDTYPE._hints.get('nolength', False) == False
+                arraycontainer = _array_of_known_length(FIELDTYPE)
+                arraycontainer._storage = getattr(ctypes_storage, field_name)
+                arraycontainer._setparentstructure(container, field_name)
+                object.__setattr__(container, field_name, arraycontainer)
+            else:
+                raise NotImplementedError(FIELDTYPE)
 
 # ____________________________________________________________
 # Ctypes-aware subclasses of the _parentable classes
@@ -488,8 +497,10 @@ def ctypes2lltype(T, cobj):
             return lltype.nullptr(T.TO)
         if isinstance(T.TO, lltype.Struct):
             if T.TO._arrayfld is not None:
-                raise NotImplementedError("XXX var-sized structs")
-            container = lltype._struct(T.TO)
+                carray = getattr(cobj.contents, T.TO._arrayfld)
+                container = lltype._struct(T.TO, carray.length)
+            else:
+                container = lltype._struct(T.TO)
             struct_use_ctypes_storage(container, cobj.contents)
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):
