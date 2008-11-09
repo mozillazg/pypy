@@ -789,6 +789,9 @@ class TestLL2Ctypes(object):
         c1 = lltype2ctypes(a1)
         c2 = lltype2ctypes(a2)
         assert type(c1) is type(c2)
+        lltype.free(a1, flavor='raw')
+        lltype.free(a2, flavor='raw')
+        assert not ALLOCATED     # detects memory leaks in the test
 
     def test_varsized_struct(self):
         S = lltype.Struct('S', ('x', lltype.Signed),
@@ -806,4 +809,26 @@ class TestLL2Ctypes(object):
         s1.a[1] = 'y'
         assert sc.contents.a.items[1] == ord('y')
         lltype.free(s1, flavor='raw')
+        assert not ALLOCATED     # detects memory leaks in the test
+
+    def test_with_explicit_length(self):
+        A = lltype.Array(lltype.Signed)
+        a1 = lltype.malloc(A, 5, flavor='raw')
+        a1[0] = 42
+        c1 = lltype2ctypes(a1, normalize=False)
+        assert c1.contents.length == 5
+        assert c1.contents.items[0] == 42
+        res = ctypes2lltype(lltype.Ptr(A), c1)
+        assert len(res) == 5
+        assert res[0] == 42
+        res[0] += 1
+        assert c1.contents.items[0] == 43
+        assert a1[0] == 43
+        a1[0] += 2
+        assert c1.contents.items[0] == 45
+        assert a1[0] == 45
+        c1.contents.items[0] += 3
+        assert res[0] == 48
+        assert a1[0] == 48
+        lltype.free(a1, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
