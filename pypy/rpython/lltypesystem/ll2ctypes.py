@@ -390,6 +390,15 @@ class _array_of_unknown_length(_parentable_mixin, lltype._parentable):
     def setitem(self, index, value):
         self._storage._setitem(index, value, boundscheck=False)
 
+class _array_of_known_length(_array_of_unknown_length):
+    __slots__ = ()
+
+    def getlength(self):
+        return self._storage.length
+
+    def getbounds(self):
+        return 0, self.getlength()
+
 # ____________________________________________________________
 
 # XXX THIS IS A HACK XXX
@@ -487,7 +496,8 @@ def ctypes2lltype(T, cobj):
                 container = _array_of_unknown_length(T.TO)
                 container._storage = cobj.contents
             else:
-                raise NotImplementedError("array with an explicit length")
+                container = _array_of_known_length(T.TO)
+                container._storage = cobj.contents
         elif isinstance(T.TO, lltype.FuncType):
             _callable = get_ctypes_trampoline(T.TO, cobj)
             return lltype.functionptr(T.TO, getattr(cobj, '__name__', '?'),
