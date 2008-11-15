@@ -543,7 +543,10 @@ def ctypes2lltype(T, cobj):
             cobj = cobj.value
         llobj = r_singlefloat(cobj)
     elif T is lltype.Void:
-        return _void_const_cache[cobj]
+        if cobj is None:
+            llobj = cobj
+        else:
+            return _void_const_cache[cobj]
     else:
         from pypy.rpython.lltypesystem import rffi
         try:
