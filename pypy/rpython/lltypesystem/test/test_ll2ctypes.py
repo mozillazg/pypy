@@ -6,7 +6,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
 from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
-from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
+from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED, register_void_value
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -758,6 +758,32 @@ class TestLL2Ctypes(object):
             return eating_callback(3, g)
 
         assert f() == 6
+
+    def test_c_callback_with_void_arg(self):
+        class Stuff(object):
+            def __init__(self, x):
+                self.x = x
+
+        c_source = py.code.Source("""
+        int eating_callback(int arg, int voidarg, int(*call)(int, int))
+        {
+            return call(arg, voidarg);
+        }
+        """)
+
+        eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+
+        args = [rffi.INT, rffi.INT,
+                rffi.CCallback([rffi.INT, lltype.Void], rffi.INT)]
+
+        def callback(x, stuff):
+            return x + stuff.x
+        
+        eating_callback = rffi.llexternal('eating_callback', args, rffi.INT,
+                                          compilation_info=eci)
+
+        v = register_void_value(Stuff(2))
+        assert eating_callback(3, v, callback) == 3+2
 
     def test_qsort(self):
         TP = rffi.CArrayPtr(rffi.INT)
