@@ -1084,7 +1084,7 @@ class _abstract_ptr(object):
             if len(args) != len(self._T.ARGS):
                 raise TypeError,"calling %r with wrong argument number: %r" % (self._T, args)
             for a, ARG in zip(args, self._T.ARGS):
-                if typeOf(a) != ARG:
+                if typeOf(a) != ARG and ARG != Void:
                     # special case: ARG can be a container type, in which
                     # case a should be a pointer to it.  This must also be
                     # special-cased in the backends.
