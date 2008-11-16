@@ -169,7 +169,8 @@ def get_ctypes_type(T, delayed_builders=None):
 def build_new_ctypes_type(T, delayed_builders):
     if isinstance(T, lltype.Ptr):
         if isinstance(T.TO, lltype.FuncType):
-            argtypes = [get_ctypes_type(ARG) for ARG in T.TO.ARGS]
+            argtypes = [get_ctypes_type(ARG) for ARG in T.TO.ARGS
+                                             if ARG is not lltype.Void]
             if T.TO.RESULT is lltype.Void:
                 restype = None
             else:
@@ -441,8 +442,13 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
                 raise NotImplementedError("ctypes wrapper for ll function "
                                           "without a _callable")
             else:
+                v1list = [i for i in range(len(T.TO.ARGS))
+                            if T.TO.ARGS[i] is lltype.Void]
                 ctypes_func_type = get_ctypes_type(T)
                 def callback(*cargs):
+                    cargs = list(cargs)
+                    for v1 in v1list:
+                        cargs.insert(v1, None)
                     assert len(cargs) == len(T.TO.ARGS)
                     llargs = [ctypes2lltype(ARG, carg)
                               for ARG, carg in zip(T.TO.ARGS, cargs)]
@@ -494,14 +500,6 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
 
     return llobj
 
-_void_const_cache = {}
-
-def register_void_value(value):
-    res = len(_void_const_cache) + 1
-    # we start at one to avoid nasty bugs passing unregistered 0es around
-    _void_const_cache[res] = value
-    return res
-
 def ctypes2lltype(T, cobj):
     """Convert the ctypes object 'cobj' to its lltype equivalent.
     'T' is the expected lltype type.
@@ -543,10 +541,7 @@ def ctypes2lltype(T, cobj):
             cobj = cobj.value
         llobj = r_singlefloat(cobj)
     elif T is lltype.Void:
-        if cobj is None:
-            llobj = cobj
-        else:
-            return _void_const_cache[cobj]
+        llobj = cobj
     else:
         from pypy.rpython.lltypesystem import rffi
         try:
@@ -644,7 +639,8 @@ def get_ctypes_callable(funcptr, calling_conv):
             funcname, place))
 
     # get_ctypes_type() can raise NotImplementedError too
-    cfunc.argtypes = [get_ctypes_type(T) for T in FUNCTYPE.ARGS]
+    cfunc.argtypes = [get_ctypes_type(T) for T in FUNCTYPE.ARGS
+                                         if T is not lltype.Void]
     if FUNCTYPE.RESULT is lltype.Void:
         cfunc.restype = None
     else:
@@ -674,10 +670,18 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
     for i in range(len(FUNCTYPE.ARGS)):
         if isinstance(FUNCTYPE.ARGS[i], lltype.ContainerType):
             container_arguments.append(i)
+    void_arguments = []
+    for i in range(len(FUNCTYPE.ARGS)):
+        if FUNCTYPE.ARGS[i] == lltype.Void:
+            void_arguments.append(i)
     def invoke_via_ctypes(*argvalues):
-        cargs = [lltype2ctypes(value) for value in argvalues]
-        for i in container_arguments:
-            cargs[i] = cargs[i].contents
+        cargs = []
+        for i in range(len(FUNCTYPE.ARGS)):
+            if i not in void_arguments:
+                cvalue = lltype2ctypes(argvalues[i])
+                for i in container_arguments:
+                    cvalue = cvalue.contents
+                cargs.append(cvalue)
         _restore_c_errno()
         cres = cfunc(*cargs)
         _save_c_errno()

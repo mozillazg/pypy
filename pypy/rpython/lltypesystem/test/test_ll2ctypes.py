@@ -6,7 +6,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
 from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
-from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED, register_void_value
+from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -759,31 +759,31 @@ class TestLL2Ctypes(object):
 
         assert f() == 6
 
-    def test_c_callback_with_void_arg(self):
-        class Stuff(object):
-            def __init__(self, x):
-                self.x = x
+##    def test_c_callback_with_void_arg(self):
+##        class Stuff(object):
+##            def __init__(self, x):
+##                self.x = x
 
-        c_source = py.code.Source("""
-        int eating_callback(int arg, int voidarg, int(*call)(int, int))
-        {
-            return call(arg, voidarg);
-        }
-        """)
+##        c_source = py.code.Source("""
+##        int eating_callback(int arg, int voidarg, int(*call)(int, int))
+##        {
+##            return call(arg, voidarg);
+##        }
+##        """)
 
-        eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+##        eci = ExternalCompilationInfo(separate_module_sources=[c_source])
 
-        args = [rffi.INT, rffi.INT,
-                rffi.CCallback([rffi.INT, lltype.Void], rffi.INT)]
+##        args = [rffi.INT, rffi.INT,
+##                rffi.CCallback([rffi.INT, lltype.Void], rffi.INT)]
 
-        def callback(x, stuff):
-            return x + stuff.x
+##        def callback(x, stuff):
+##            return x + stuff.x
         
-        eating_callback = rffi.llexternal('eating_callback', args, rffi.INT,
-                                          compilation_info=eci)
+##        eating_callback = rffi.llexternal('eating_callback', args, rffi.INT,
+##                                          compilation_info=eci)
 
-        v = register_void_value(Stuff(2))
-        assert eating_callback(3, v, callback) == 3+2
+##        v = register_void_value(Stuff(2))
+##        assert eating_callback(3, v, callback) == 3+2
 
     def test_qsort(self):
         TP = rffi.CArrayPtr(rffi.INT)
@@ -864,3 +864,15 @@ class TestLL2Ctypes(object):
         assert a1[0] == 48
         lltype.free(a1, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
+
+    def test_c_callback_with_void_arg_2(self):
+        ftest = []
+        def f(x):
+            ftest.append(x)
+        F = lltype.FuncType([lltype.Void], lltype.Void)
+        fn = lltype.functionptr(F, 'askjh', _callable=f)
+        fn(None)
+        assert ftest == [None]
+        fn2 = lltype2ctypes(fn)
+        fn2()
+        assert ftest == [None, None]
