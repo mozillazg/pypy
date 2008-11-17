@@ -442,16 +442,21 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
                 raise NotImplementedError("ctypes wrapper for ll function "
                                           "without a _callable")
             else:
-                v1list = [i for i in range(len(T.TO.ARGS))
-                            if T.TO.ARGS[i] is lltype.Void]
+                v1voidlist = [(i, getattr(container, '_void' + str(i), None))
+                                 for i in range(len(T.TO.ARGS))
+                                     if T.TO.ARGS[i] is lltype.Void]
                 ctypes_func_type = get_ctypes_type(T)
                 def callback(*cargs):
                     cargs = list(cargs)
-                    for v1 in v1list:
-                        cargs.insert(v1, None)
+                    for v1 in v1voidlist:
+                        cargs.insert(v1[0], v1[1])
                     assert len(cargs) == len(T.TO.ARGS)
-                    llargs = [ctypes2lltype(ARG, carg)
-                              for ARG, carg in zip(T.TO.ARGS, cargs)]
+                    llargs = []
+                    for ARG, carg in zip(T.TO.ARGS, cargs):
+                        if ARG is lltype.Void:
+                            llargs.append(carg)
+                        else:
+                            llargs.append(ctypes2lltype(ARG, carg))
                     llres = container._callable(*llargs)
                     assert lltype.typeOf(llres) == T.TO.RESULT
                     if T.TO.RESULT is lltype.Void:
@@ -672,7 +677,7 @@ def get_ctypes_trampoline(FUNCTYPE, cfunc):
             container_arguments.append(i)
     void_arguments = []
     for i in range(len(FUNCTYPE.ARGS)):
-        if FUNCTYPE.ARGS[i] == lltype.Void:
+        if FUNCTYPE.ARGS[i] is lltype.Void:
             void_arguments.append(i)
     def invoke_via_ctypes(*argvalues):
         cargs = []

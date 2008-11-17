@@ -1083,12 +1083,20 @@ class _abstract_ptr(object):
         if isinstance(self._T, FuncType):
             if len(args) != len(self._T.ARGS):
                 raise TypeError,"calling %r with wrong argument number: %r" % (self._T, args)
-            for a, ARG in zip(args, self._T.ARGS):
-                if typeOf(a) != ARG and ARG != Void:
+            for i, a, ARG in zip(range(len(self._T.ARGS)), args, self._T.ARGS):
+                if typeOf(a) != ARG:
+                    # ARG could be Void
+                    if ARG == Void:
+                        try:
+                            value = getattr(self._obj, '_void' + str(i))
+                        except AttributeError:
+                            pass
+                        else:
+                            assert a == value
                     # special case: ARG can be a container type, in which
                     # case a should be a pointer to it.  This must also be
                     # special-cased in the backends.
-                    if not (isinstance(ARG, ContainerType)
+                    elif not (isinstance(ARG, ContainerType)
                             and typeOf(a) == Ptr(ARG)):
                         args_repr = [typeOf(arg) for arg in args]
                         raise TypeError, ("calling %r with wrong argument "

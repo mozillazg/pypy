@@ -870,9 +870,12 @@ class TestLL2Ctypes(object):
         def f(x):
             ftest.append(x)
         F = lltype.FuncType([lltype.Void], lltype.Void)
-        fn = lltype.functionptr(F, 'askjh', _callable=f)
+        fn = lltype.functionptr(F, 'askjh', _callable=f, _void0=-5)
         fn(-5)
         assert ftest == [-5]
         fn2 = lltype2ctypes(fn)
         fn2()
-        assert ftest == [-5, None]
+        assert ftest == [-5, -5]
+        fn3 = ctypes2lltype(lltype.Ptr(F), fn2)
+        fn3(-5)
+        assert ftest == [-5, -5, -5]
