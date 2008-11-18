@@ -9,7 +9,7 @@ except ImportError:
 import os
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.extfunc import ExtRegistryEntry
-from pypy.rlib.objectmodel import Symbolic
+from pypy.rlib.objectmodel import Symbolic, ComputedIntSymbolic
 from pypy.tool.uid import fixid
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
@@ -186,7 +186,7 @@ def build_new_ctypes_type(T, delayed_builders):
         return build_ctypes_array(T, delayed_builders)
     elif isinstance(T, lltype.OpaqueType):
         if T is lltype.RuntimeTypeInfo:
-            return ctypes.c_char   # the exact type is hopefully not important
+            return ctypes.c_char * 2
         if T.hints.get('external', None) != 'C':
             raise TypeError("%s is not external" % T)
         return ctypes.c_char * T.hints['getsize']()
@@ -480,7 +480,10 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
             elif isinstance(T.TO, lltype.Array):
                 convert_array(container, acceptgckind=acceptgckind)
             elif isinstance(T.TO, lltype.OpaqueType):
-                cbuf = ctypes.create_string_buffer(T.TO.hints['getsize']())
+                if T.TO != lltype.RuntimeTypeInfo:
+                    cbuf = ctypes.create_string_buffer(T.TO.hints['getsize']())
+                else:
+                    cbuf = ctypes.create_string_buffer("\x00")
                 add_storage(container, _parentable_mixin, cbuf)
             else:
                 raise NotImplementedError(T)
@@ -494,6 +497,8 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
     if isinstance(llobj, Symbolic):
         if isinstance(llobj, llmemory.ItemOffset):
             llobj = ctypes.sizeof(get_ctypes_type(llobj.TYPE)) * llobj.repeat
+        elif isinstance(llobj, ComputedIntSymbolic):
+            llobj = llobj.compute_fn()
         else:
             raise NotImplementedError(llobj)  # don't know about symbolic value
 
