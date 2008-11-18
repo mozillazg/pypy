@@ -50,7 +50,7 @@ class TypeSystem(object):
         cls = self.callable_trait[0]
         return cls(ARGS, RESTYPE)
         
-    def getcallable(self, graph, getconcretetype=None):
+    def getcallable(self, graph, getconcretetype=None, setup=None):
         """Return callable given a Python function."""
         if getconcretetype is None:
             getconcretetype = self.getconcretetype
@@ -58,7 +58,7 @@ class TypeSystem(object):
         lloutput = getconcretetype(graph.getreturnvar())
 
         typ, constr = self.callable_trait
-        
+
         FT = typ(llinputs, lloutput)
         name = graph.name
         if hasattr(graph, 'func') and callable(graph.func):
@@ -75,11 +75,19 @@ class TypeSystem(object):
                 fnobjattrs = {}
             # _callable is normally graph.func, but can be overridden:
             # see fakeimpl in extfunc.py
-            _callable = fnobjattrs.pop('_callable', graph.func)
-            return constr(FT, name, graph = graph, _callable = _callable,
-                          **fnobjattrs)
+            if '_callable' not in fnobjattrs:
+                fnobjattrs['_callable'] = graph.func
         else:
-            return constr(FT, name, graph = graph)
+            fnobjattrs = {}
+        if setup is not None:
+            setup_data = {}
+            for i, setup_i in enumerate(setup):
+                if setup_i is not None:
+                    setup_data[i] = setup_i
+            for i, ARGTYPE in enumerate(FT.ARGS):
+                if ARGTYPE is lltype.Void and i in setup_data:
+                    fnobjattrs['_void' + str(i)] = setup_data[i]
+        return constr(FT, name, graph = graph, **fnobjattrs)
 
     def getexternalcallable(self, ll_args, ll_result, name, **kwds):
         typ, constr = self.callable_trait

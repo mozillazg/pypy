@@ -616,11 +616,11 @@ class RPythonTyper(object):
         cls = clsdef.classdesc.pyobj
         return self.classes_with_wrapper[cls], self.wrapper_context
 
-    def getcallable(self, graph):
+    def getcallable(self, graph, setup=None):
         def getconcretetype(v):
             return self.bindingrepr(v).lowleveltype
 
-        return self.type_system.getcallable(graph, getconcretetype)
+        return self.type_system.getcallable(graph, getconcretetype, setup)
 
     def annotate_helper(self, ll_function, argtypes):
         """Annotate the given low-level helper function and return its graph
@@ -879,6 +879,7 @@ class LowLevelOpList(list):
         rtyper = self.rtyper
         args_s = []
         newargs_v = []
+        setup = []
         for v in args_v:
             if v.concretetype is Void:
                 s_value = rtyper.binding(v, default=annmodel.s_None)
@@ -887,8 +888,10 @@ class LowLevelOpList(list):
                 if not isinstance(s_value, annmodel.SomePBC):
                     raise TyperError("non-PBC Void argument: %r", (s_value,))
                 args_s.append(s_value)
+                setup.append(s_value.const)
             else:
                 args_s.append(annmodel.lltype_to_annotation(v.concretetype))
+                setup.append(None)
             newargs_v.append(v)
         
         self.rtyper.call_all_setups()  # compute ForwardReferences now
@@ -898,6 +901,7 @@ class LowLevelOpList(list):
             bk = rtyper.annotator.bookkeeper
             args_s.insert(0, bk.immutablevalue(ll_function.im_self))
             newargs_v.insert(0, inputconst(Void, ll_function.im_self))
+            setup.insert(0, ll_function.im_self)
             ll_function = ll_function.im_func
 
         graph = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s,
@@ -905,7 +909,7 @@ class LowLevelOpList(list):
         self.record_extra_call(graph)
 
         # build the 'direct_call' operation
-        f = self.rtyper.getcallable(graph)
+        f = self.rtyper.getcallable(graph, setup)
         c = inputconst(typeOf(f), f)
         fobj = self.rtyper.type_system_deref(f)
         return self.genop('direct_call', [c]+newargs_v,

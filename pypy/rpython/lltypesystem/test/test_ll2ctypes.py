@@ -11,6 +11,8 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
+from pypy.annotation.annrpython import RPythonAnnotator
+from pypy.rpython.rtyper import RPythonTyper
 
 class TestLL2Ctypes(object):
 
@@ -879,3 +881,20 @@ class TestLL2Ctypes(object):
         fn3 = ctypes2lltype(lltype.Ptr(F), fn2)
         fn3(-5)
         assert ftest == [-5, -5, -5]
+
+    def test_c_callback_with_void_arg_3(self):
+        import pypy
+        def f(i):
+            x = 'X' * i
+            return x[-2]
+        a = RPythonAnnotator()
+        r = a.build_types(f, [int])
+        rtyper = RPythonTyper(a)
+        rtyper.specialize()
+        a.translator.rtyper = rtyper
+        graph = a.translator.graphs[0]
+        op = graph.startblock.operations[-1]
+        assert op.opname == 'direct_call'
+        assert op.args[0].value._obj._callable == pypy.rpython.lltypesystem.rstr.LLHelpers.ll_stritem.im_func
+        assert op.args[1].value == pypy.rpython.lltypesystem.rstr.LLHelpers
+        assert op.args[3].value == -2
