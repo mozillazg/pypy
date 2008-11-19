@@ -7,6 +7,7 @@ except ImportError:
     ctypes = None
 
 import os
+from pypy import conftest
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.extfunc import ExtRegistryEntry
 from pypy.rlib.objectmodel import Symbolic, ComputedIntSymbolic
@@ -231,8 +232,9 @@ def convert_struct(rtyper, container, cstruct=None, acceptgckind=False):
         field_value = getattr(container, field_name)
         if not isinstance(FIELDTYPE, lltype.ContainerType):
             # regular field
-            setattr(cstruct, field_name, lltype2ctypes(field_value, rtyper,
-                                acceptgckind=acceptgckind))
+            if FIELDTYPE != lltype.Void:
+                setattr(cstruct, field_name, lltype2ctypes(field_value, rtyper,
+                                                    acceptgckind=acceptgckind))
         else:
             # inlined substructure/subarray
             if isinstance(FIELDTYPE, lltype.Struct):
@@ -478,6 +480,16 @@ def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
                     _all_callbacks.append(res)
                     res = ctypes.cast(res, ctypes.c_void_p).value
                 return res
+
+            if conftest.option.usepdb:
+                callback_original = callback
+                def callback(*cargs):
+                    try:
+                        return callback_original(*cargs)
+                    except:
+                        import pdb, sys; pdb.post_mortem(sys.exc_traceback)
+                        raise
+
             if isinstance(T.TO.RESULT, lltype.Ptr):
                 TMod = lltype.Ptr(lltype.FuncType(T.TO.ARGS,
                                                   lltype.Signed))
