@@ -260,7 +260,8 @@ def convert_array(container, carray=None, acceptgckind=False):
     if not isinstance(ARRAY.OF, lltype.ContainerType):
         for i in range(container.getlength()):
             item_value = container.items[i]    # fish fish
-            carray.items[i] = lltype2ctypes(item_value)
+            carray.items[i] = lltype2ctypes(item_value,
+                                            acceptgckind=acceptgckind)
         remove_regular_array_content(container)
     else:
         assert isinstance(ARRAY.OF, lltype.Struct)
@@ -445,7 +446,6 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
                 v1voidlist = [(i, getattr(container, '_void' + str(i), None))
                                  for i in range(len(T.TO.ARGS))
                                      if T.TO.ARGS[i] is lltype.Void]
-                ctypes_func_type = get_ctypes_type(T)
                 def callback(*cargs):
                     cargs = list(cargs)
                     for v1 in v1voidlist:
@@ -461,8 +461,17 @@ def lltype2ctypes(llobj, normalize=True, acceptgckind=False):
                     assert lltype.typeOf(llres) == T.TO.RESULT
                     if T.TO.RESULT is lltype.Void:
                         return None
-                    else:
-                        return lltype2ctypes(llres)
+                    res = lltype2ctypes(llres, acceptgckind=acceptgckind)
+                    if isinstance(T.TO.RESULT, lltype.Ptr):
+                        _all_callbacks.append(res)
+                        res = ctypes.cast(res, ctypes.c_void_p).value
+                    return res
+                if isinstance(T.TO.RESULT, lltype.Ptr):
+                    TMod = lltype.Ptr(lltype.FuncType(T.TO.ARGS,
+                                                      lltype.Signed))
+                    ctypes_func_type = get_ctypes_type(TMod)
+                else:
+                    ctypes_func_type = get_ctypes_type(T)
                 res = ctypes_func_type(callback)
                 _all_callbacks.append(res)
                 return res
