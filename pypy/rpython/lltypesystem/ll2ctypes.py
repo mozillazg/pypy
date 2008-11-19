@@ -82,6 +82,8 @@ def build_ctypes_struct(rtyper, S, delayed_builders, max_n=None):
                 return bigstruct
         _malloc = classmethod(_malloc)
 
+        _rtyper = rtyper
+
     CStruct.__name__ = 'ctypes_%s' % (S,)
     if max_n is not None:
         CStruct._normalized_ctype = get_ctypes_type(rtyper, S)
@@ -382,13 +384,13 @@ class _struct_mixin(_parentable_mixin):
     def __getattr__(self, field_name):
         T = getattr(self._TYPE, field_name)
         cobj = getattr(self._storage, field_name)
-        return ctypes2lltype(T, cobj)
+        return ctypes2lltype(T, cobj, self._storage._rtyper)
 
     def __setattr__(self, field_name, value):
         if field_name.startswith('_'):
             object.__setattr__(self, field_name, value)  # '_xxx' attributes
         else:
-            cobj = lltype2ctypes(value)
+            cobj = lltype2ctypes(value, self._storage._rtyper)
             setattr(self._storage, field_name, cobj)
 
 class _array_mixin(_parentable_mixin):
@@ -432,7 +434,7 @@ class _array_of_known_length(_array_of_unknown_length):
 # additionally, this adds mess to __del__ "semantics"
 _all_callbacks = []
 
-def lltype2ctypes(llobj, rtyper=None, normalize=True, acceptgckind=False):
+def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
     """Convert the lltype object 'llobj' to its ctypes equivalent.
     'normalize' should only be False in tests, where we want to
     inspect the resulting ctypes object manually.
@@ -530,7 +532,7 @@ def lltype2ctypes(llobj, rtyper=None, normalize=True, acceptgckind=False):
 
     return llobj
 
-def ctypes2lltype(T, cobj, rtyper=None):
+def ctypes2lltype(T, cobj, rtyper):
     """Convert the ctypes object 'cobj' to its lltype equivalent.
     'T' is the expected lltype type.
     """
@@ -584,7 +586,7 @@ def ctypes2lltype(T, cobj, rtyper=None):
     assert lltype.typeOf(llobj) == T
     return llobj
 
-def uninitialized2ctypes(T, rtyper=None):
+def uninitialized2ctypes(T, rtyper):
     "For debugging, create a ctypes object filled with 0xDD."
     ctype = get_ctypes_type(rtyper, T)
     cobj = ctype()
@@ -615,7 +617,7 @@ if ctypes:
 # ____________________________________________
 
 
-def get_ctypes_callable(funcptr, calling_conv):
+def get_ctypes_callable(rtyper, funcptr, calling_conv):
     if not ctypes:
         raise ImportError("ctypes is needed to use ll2ctypes")
 
@@ -669,28 +671,31 @@ def get_ctypes_callable(funcptr, calling_conv):
             funcname, place))
 
     # get_ctypes_type() can raise NotImplementedError too
-    cfunc.argtypes = [get_ctypes_type(None, T) for T in FUNCTYPE.ARGS
-                                               if T is not lltype.Void]
+    cfunc.argtypes = [get_ctypes_type(rtyper, T) for T in FUNCTYPE.ARGS
+                                                 if T is not lltype.Void]
     if FUNCTYPE.RESULT is lltype.Void:
         cfunc.restype = None
     else:
-        cfunc.restype = get_ctypes_type(None, FUNCTYPE.RESULT)
+        cfunc.restype = get_ctypes_type(rtyper, FUNCTYPE.RESULT)
     return cfunc
 
 class LL2CtypesCallable(object):
     # a special '_callable' object that invokes ctypes
 
-    def __init__(self, FUNCTYPE, calling_conv):
+    def __init__(self, FUNCTYPE, calling_conv, rtyper=None):
         self.FUNCTYPE = FUNCTYPE
         self.calling_conv = calling_conv
         self.trampoline = None
+        self.rtyper = rtyper
         #self.funcptr = ...  set later
 
     def __call__(self, *argvalues):
         if self.trampoline is None:
             # lazily build the corresponding ctypes function object
-            cfunc = get_ctypes_callable(self.funcptr, self.calling_conv)
-            self.trampoline = get_ctypes_trampoline(None, self.FUNCTYPE, cfunc)
+            cfunc = get_ctypes_callable(self.rtyper, self.funcptr,
+                                        self.calling_conv)
+            self.trampoline = get_ctypes_trampoline(self.rtyper, self.FUNCTYPE,
+                                                    cfunc)
         # perform the call
         return self.trampoline(*argvalues)
 
@@ -718,18 +723,18 @@ def get_ctypes_trampoline(rtyper, FUNCTYPE, cfunc):
         return ctypes2lltype(RESULT, cres, rtyper)
     return invoke_via_ctypes
 
-def force_cast(RESTYPE, value):
+def force_cast(RESTYPE, value, rtyper=None):
     """Cast a value to a result type, trying to use the same rules as C."""
     if not isinstance(RESTYPE, lltype.LowLevelType):
         raise TypeError("rffi.cast() first arg should be a TYPE")
     TYPE1 = lltype.typeOf(value)
-    cvalue = lltype2ctypes(value)
-    cresulttype = get_ctypes_type(None, RESTYPE)
+    cvalue = lltype2ctypes(value, rtyper)
+    cresulttype = get_ctypes_type(rtyper, RESTYPE)
     if isinstance(TYPE1, lltype.Ptr):
         if isinstance(RESTYPE, lltype.Ptr):
             # shortcut: ptr->ptr cast
             cptr = ctypes.cast(cvalue, cresulttype)
-            return ctypes2lltype(RESTYPE, cptr)
+            return ctypes2lltype(RESTYPE, cptr, rtyper)
         # first cast the input pointer to an integer
         cvalue = ctypes.cast(cvalue, ctypes.c_void_p).value
         if cvalue is None:
@@ -746,7 +751,7 @@ def force_cast(RESTYPE, value):
         cvalue = ctypes.cast(ctypes.c_void_p(cvalue), cresulttype)
     else:
         cvalue = cresulttype(cvalue).value   # mask high bits off if needed
-    return ctypes2lltype(RESTYPE, cvalue)
+    return ctypes2lltype(RESTYPE, cvalue, rtyper)
 
 class ForceCastEntry(ExtRegistryEntry):
     _about_ = force_cast
@@ -772,7 +777,7 @@ def typecheck_ptradd(T):
     assert isinstance(T.TO, lltype.Array)
     assert T.TO._hints.get('nolength')
 
-def force_ptradd(ptr, n):
+def force_ptradd(ptr, n, rtyper=None):
     """'ptr' must be a pointer to an array.  Equivalent of 'ptr + n' in
     C, i.e. gives a pointer to the n'th item of the array.  The type of
     the result is again a pointer to an array, the same as the type of
@@ -780,13 +785,13 @@ def force_ptradd(ptr, n):
     """
     T = lltype.typeOf(ptr)
     typecheck_ptradd(T)
-    ctypes_item_type = get_ctypes_type(None, T.TO.OF)
-    ctypes_arrayptr_type = get_ctypes_type(None, T)
-    cptr = lltype2ctypes(ptr)
+    ctypes_item_type = get_ctypes_type(rtyper, T.TO.OF)
+    ctypes_arrayptr_type = get_ctypes_type(rtyper, T)
+    cptr = lltype2ctypes(ptr, rtyper)
     baseaddr = ctypes.addressof(cptr.contents.items)
     addr = baseaddr + n * ctypes.sizeof(ctypes_item_type)
     cptr = ctypes.cast(ctypes.c_void_p(addr), ctypes_arrayptr_type)
-    return ctypes2lltype(T, cptr)
+    return ctypes2lltype(T, cptr, rtyper)
 
 class ForcePtrAddEntry(ExtRegistryEntry):
     _about_ = force_ptradd
