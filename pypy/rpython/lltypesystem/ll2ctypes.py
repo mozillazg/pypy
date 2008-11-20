@@ -495,9 +495,12 @@ def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
                 TMod = lltype.Ptr(lltype.FuncType(T.TO.ARGS,
                                                   lltype.Signed))
                 ctypes_func_type = get_ctypes_type(rtyper, TMod)
+                res = ctypes_func_type(callback)
+                ctypes_func_type = get_ctypes_type(rtyper, T)
+                res = ctypes.cast(res, ctypes_func_type)
             else:
                 ctypes_func_type = get_ctypes_type(rtyper, T)
-            res = ctypes_func_type(callback)
+                res = ctypes_func_type(callback)
             _all_callbacks.append(res)
             _callback2obj[ctypes.cast(res, ctypes.c_void_p).value] = container
             return res
