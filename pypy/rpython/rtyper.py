@@ -131,6 +131,12 @@ class RPythonTyper(object):
             result[repr.lowleveltype] = classdef
         return result
 
+    def lltype_to_vtable_mapping(self):
+        result = {}
+        for repr in self.instance_reprs.itervalues():
+            result[repr.lowleveltype.TO] = repr.rclass.getvtable()
+        return result
+
     def makekey(self, s_obj):
         return pair(self.type_system, s_obj).rtyper_makekey(self)
 
