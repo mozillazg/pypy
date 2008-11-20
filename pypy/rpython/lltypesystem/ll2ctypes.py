@@ -435,6 +435,7 @@ class _array_of_known_length(_array_of_unknown_length):
 # we need to think deeper how to approach this problem
 # additionally, this adds mess to __del__ "semantics"
 _all_callbacks = []
+_callback2obj = {}
 
 def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
     """Convert the lltype object 'llobj' to its ctypes equivalent.
@@ -498,6 +499,7 @@ def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
                 ctypes_func_type = get_ctypes_type(rtyper, T)
             res = ctypes_func_type(callback)
             _all_callbacks.append(res)
+            _callback2obj[ctypes.cast(res, ctypes.c_void_p).value] = container
             return res
 
         if (T.TO._gckind != 'raw' and not T.TO._hints.get('callback', None)
@@ -566,9 +568,13 @@ def ctypes2lltype(T, cobj, rtyper):
                 container = _array_of_known_length(T.TO)
                 container._storage = cobj.contents
         elif isinstance(T.TO, lltype.FuncType):
-            _callable = get_ctypes_trampoline(rtyper, T.TO, cobj)
-            return lltype.functionptr(T.TO, getattr(cobj, '__name__', '?'),
-                                      _callable=_callable)
+            cobjkey = ctypes.cast(cobj, ctypes.c_void_p).value
+            if cobjkey in _callback2obj:
+                container = _callback2obj[cobjkey]
+            else:
+                _callable = get_ctypes_trampoline(rtyper, T.TO, cobj)
+                return lltype.functionptr(T.TO, getattr(cobj, '__name__', '?'),
+                                          _callable=_callable)
         elif isinstance(T.TO, lltype.OpaqueType):
             container = lltype._opaque(T.TO)
         else:
