@@ -382,6 +382,9 @@ class InstanceRepr(AbstractInstanceRepr):
             self.rtyper.attachRuntimeTypeInfoFunc(self.object_type,
                                                   ll_runtime_type_info,
                                                   OBJECT, destrptr)
+            vtable = self.rclass.getvtable()
+            self.rtyper.type_for_typeptr[vtable._obj] = self.lowleveltype.TO
+
     def common_repr(self): # -> object or nongcobject reprs
         return getinstancerepr(self.rtyper, None, self.gcflavor)
 
