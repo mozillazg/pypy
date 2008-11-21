@@ -744,12 +744,12 @@ def get_ctypes_trampoline(rtyper, FUNCTYPE, cfunc):
         return ctypes2lltype(RESULT, cres, rtyper)
     return invoke_via_ctypes
 
-def force_cast(RESTYPE, value, rtyper=None):
+def force_cast(RESTYPE, value, rtyper=None, acceptgckind=False):
     """Cast a value to a result type, trying to use the same rules as C."""
     if not isinstance(RESTYPE, lltype.LowLevelType):
         raise TypeError("rffi.cast() first arg should be a TYPE")
     TYPE1 = lltype.typeOf(value)
-    cvalue = lltype2ctypes(value, rtyper)
+    cvalue = lltype2ctypes(value, rtyper, acceptgckind=acceptgckind)
     cresulttype = get_ctypes_type(rtyper, RESTYPE)
     if isinstance(TYPE1, lltype.Ptr):
         if isinstance(RESTYPE, lltype.Ptr):
