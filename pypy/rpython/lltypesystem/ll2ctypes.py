@@ -16,6 +16,7 @@ from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.lltypesystem.rclass import OBJECT
 
 def uaddressof(obj):
     return fixid(ctypes.addressof(obj))
@@ -369,6 +370,12 @@ class _parentable_mixin(object):
     def __ne__(self, other):
         return not (self == other)
 
+    def __hash__(self):
+        if self._storage is not None:
+            return ctypes.addressof(self._storage)
+        else:
+            return object.__hash__(self)
+
     def __repr__(self):
         if self._storage is None:
             return '<freed C object %s>' % (self._TYPE,)
@@ -561,6 +568,21 @@ def ctypes2lltype(T, cobj, rtyper):
                 carray = getattr(cobj.contents, T.TO._arrayfld)
                 container = lltype._struct(T.TO, carray.length)
             else:
+                # special treatment of 'OBJECT' subclasses
+                if rtyper and lltype._castdepth(T.TO, OBJECT) > 0:
+                    ctypes_object = get_ctypes_type(rtyper,
+                                                    lltype.Ptr(OBJECT))
+                    as_obj = ctypes2lltype(lltype.Ptr(OBJECT),
+                                           ctypes.cast(cobj, ctypes_object),
+                                           rtyper)
+                    TObj = rtyper.get_type_for_typeptr(as_obj.typeptr)
+                    if TObj != T.TO:
+                        ctypes_instance = get_ctypes_type(rtyper,
+                                                          lltype.Ptr(TObj))
+                        return lltype.cast_pointer(T,
+                            ctypes2lltype(lltype.Ptr(TObj),
+                                          ctypes.cast(cobj, ctypes_instance),
+                                          rtyper))
                 container = lltype._struct(T.TO)
             struct_use_ctypes_storage(container, cobj.contents)
         elif isinstance(T.TO, lltype.Array):
