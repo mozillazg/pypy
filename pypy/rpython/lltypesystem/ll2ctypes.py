@@ -211,7 +211,7 @@ def complete_builders(delayed_builders):
         delayed_builders.pop()()
 
 
-def convert_struct(rtyper, container, cstruct=None, acceptgckind=False):
+def convert_struct(rtyper, container, cstruct=None):
     STRUCT = container._TYPE
     if cstruct is None:
         # if 'container' is an inlined substructure, convert the whole
@@ -234,8 +234,7 @@ def convert_struct(rtyper, container, cstruct=None, acceptgckind=False):
         if not isinstance(FIELDTYPE, lltype.ContainerType):
             # regular field
             if FIELDTYPE != lltype.Void:
-                setattr(cstruct, field_name, lltype2ctypes(field_value, rtyper,
-                                                    acceptgckind=acceptgckind))
+                setattr(cstruct, field_name, lltype2ctypes(field_value, rtyper))
         else:
             # inlined substructure/subarray
             if isinstance(FIELDTYPE, lltype.Struct):
@@ -243,8 +242,7 @@ def convert_struct(rtyper, container, cstruct=None, acceptgckind=False):
                 convert_struct(rtyper, field_value, csubstruct)
             elif field_name == STRUCT._arrayfld:    # inlined var-sized part
                 csubarray = getattr(cstruct, field_name)
-                convert_array(rtyper, field_value, csubarray,
-                              acceptgckind=acceptgckind)
+                convert_array(rtyper, field_value, csubarray)
             else:
                 raise NotImplementedError('inlined field', FIELDTYPE)
     remove_regular_struct_content(container)
@@ -256,7 +254,7 @@ def remove_regular_struct_content(container):
         if not isinstance(FIELDTYPE, lltype.ContainerType):
             delattr(container, field_name)
 
-def convert_array(rtyper, container, carray=None, acceptgckind=False):
+def convert_array(rtyper, container, carray=None):
     ARRAY = container._TYPE
     if carray is None:
         # if 'container' is an inlined substructure, convert the whole
@@ -272,15 +270,13 @@ def convert_array(rtyper, container, carray=None, acceptgckind=False):
     if not isinstance(ARRAY.OF, lltype.ContainerType):
         for i in range(container.getlength()):
             item_value = container.items[i]    # fish fish
-            carray.items[i] = lltype2ctypes(item_value, rtyper,
-                                            acceptgckind=acceptgckind)
+            carray.items[i] = lltype2ctypes(item_value, rtyper)
         remove_regular_array_content(container)
     else:
         assert isinstance(ARRAY.OF, lltype.Struct)
         for i in range(container.getlength()):
             item_ptr = container.items[i]    # fish fish
-            convert_struct(rtyper, item_ptr, carray.items[i],
-                           acceptgckind=acceptgckind)
+            convert_struct(rtyper, item_ptr, carray.items[i])
 
 def remove_regular_array_content(container):
     for i in range(container.getlength()):
@@ -444,7 +440,7 @@ class _array_of_known_length(_array_of_unknown_length):
 _all_callbacks = []
 _callback2obj = {}
 
-def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
+def lltype2ctypes(llobj, rtyper, normalize=True):
     """Convert the lltype object 'llobj' to its ctypes equivalent.
     'normalize' should only be False in tests, where we want to
     inspect the resulting ctypes object manually.
@@ -483,7 +479,7 @@ def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
                 assert lltype.typeOf(llres) == T.TO.RESULT
                 if T.TO.RESULT is lltype.Void:
                     return None
-                res = lltype2ctypes(llres, rtyper, acceptgckind=acceptgckind)
+                res = lltype2ctypes(llres, rtyper)
                 if isinstance(T.TO.RESULT, lltype.Ptr):
                     _all_callbacks.append(res)
                     res = ctypes.cast(res, ctypes.c_void_p).value
@@ -512,18 +508,14 @@ def lltype2ctypes(llobj, rtyper, normalize=True, acceptgckind=False):
             _callback2obj[ctypes.cast(res, ctypes.c_void_p).value] = container
             return res
 
-        if (T.TO._gckind != 'raw' and not T.TO._hints.get('callback', None)
-            and not acceptgckind):
-            raise Exception("can only pass 'raw' data structures to C, not %r"
-                            % (T.TO._gckind,))
         if container._storage is None:
             raise RuntimeError("attempting to pass a freed structure to C")
         if container._storage is True:
             # container has regular lltype storage, convert it to ctypes
             if isinstance(T.TO, lltype.Struct):
-                convert_struct(rtyper, container, acceptgckind=acceptgckind)
+                convert_struct(rtyper, container)
             elif isinstance(T.TO, lltype.Array):
-                convert_array(rtyper, container, acceptgckind=acceptgckind)
+                convert_array(rtyper, container)
             elif isinstance(T.TO, lltype.OpaqueType):
                 if T.TO != lltype.RuntimeTypeInfo:
                     cbuf = ctypes.create_string_buffer(T.TO.hints['getsize']())
@@ -766,12 +758,12 @@ def get_ctypes_trampoline(rtyper, FUNCTYPE, cfunc):
         return ctypes2lltype(RESULT, cres, rtyper)
     return invoke_via_ctypes
 
-def force_cast(RESTYPE, value, rtyper=None, acceptgckind=False):
+def force_cast(RESTYPE, value, rtyper=None):
     """Cast a value to a result type, trying to use the same rules as C."""
     if not isinstance(RESTYPE, lltype.LowLevelType):
         raise TypeError("rffi.cast() first arg should be a TYPE")
     TYPE1 = lltype.typeOf(value)
-    cvalue = lltype2ctypes(value, rtyper, acceptgckind=acceptgckind)
+    cvalue = lltype2ctypes(value, rtyper)
     cresulttype = get_ctypes_type(rtyper, RESTYPE)
     if isinstance(TYPE1, lltype.Ptr):
         if isinstance(RESTYPE, lltype.Ptr):
