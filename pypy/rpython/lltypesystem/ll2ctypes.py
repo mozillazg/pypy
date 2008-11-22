@@ -46,6 +46,7 @@ def _setup_ctypes_cache():
         rffi.SIZE_T:     ctypes.c_size_t,
         lltype.UniChar:  ctypes.c_uint,
         lltype.Bool:     ctypes.c_long, # XXX
+        llmemory.Address:  ctypes.c_void_p,
         })
 
 
@@ -597,6 +598,11 @@ def ctypes2lltype(T, cobj, rtyper):
         else:
             raise NotImplementedError(T)
         llobj = lltype._ptr(T, container, solid=True)
+    elif T is llmemory.Address:
+        if cobj is None:
+            llobj = llmemory.NULL
+        else:
+            xxx
     elif T is lltype.Char:
         llobj = chr(cobj)
     elif T is lltype.UniChar:
