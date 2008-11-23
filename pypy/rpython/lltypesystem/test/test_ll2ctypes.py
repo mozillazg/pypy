@@ -784,32 +784,6 @@ class TestLL2Ctypes(object):
 
         assert f() == 6
 
-##    def test_c_callback_with_void_arg(self):
-##        class Stuff(object):
-##            def __init__(self, x):
-##                self.x = x
-
-##        c_source = py.code.Source("""
-##        int eating_callback(int arg, int voidarg, int(*call)(int, int))
-##        {
-##            return call(arg, voidarg);
-##        }
-##        """)
-
-##        eci = ExternalCompilationInfo(separate_module_sources=[c_source])
-
-##        args = [rffi.INT, rffi.INT,
-##                rffi.CCallback([rffi.INT, lltype.Void], rffi.INT)]
-
-##        def callback(x, stuff):
-##            return x + stuff.x
-        
-##        eating_callback = rffi.llexternal('eating_callback', args, rffi.INT,
-##                                          compilation_info=eci)
-
-##        v = register_void_value(Stuff(2))
-##        assert eating_callback(3, v, callback) == 3+2
-
     def test_qsort(self):
         TP = rffi.CArrayPtr(rffi.INT)
         a = lltype.malloc(TP.TO, 5, flavor='raw')
@@ -925,3 +899,30 @@ class TestLL2Ctypes(object):
         assert op.args[0].value._obj._callable == pypy.rpython.lltypesystem.rstr.LLHelpers.ll_stritem.im_func
         assert op.args[1].value == pypy.rpython.lltypesystem.rstr.LLHelpers
         assert op.args[3].value == -2
+
+    def test_pass_around_t_object(self):
+        from pypy.rpython.annlowlevel import base_ptr_lltype
+        T = base_ptr_lltype()
+        
+        class X(object):
+            _TYPE = T
+            x = 10
+
+        def callback(x):
+            return x.x
+
+        c_source = py.code.Source("""
+        int eating_callback(void *arg, int(*call)(int))
+        {
+            return call(arg);
+        }
+        """)
+
+        eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+
+        args = [T, rffi.CCallback([T], rffi.INT)]
+        eating_callback = rffi.llexternal('eating_callback', args, rffi.INT,
+                                          compilation_info=eci)
+
+        res = eating_callback(X(), callback)
+        assert res == 10
