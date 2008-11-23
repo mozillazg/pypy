@@ -17,6 +17,7 @@ from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem.rclass import OBJECT
+from pypy.rpython.annlowlevel import base_ptr_lltype
 
 def uaddressof(obj):
     return fixid(ctypes.addressof(obj))
@@ -177,6 +178,8 @@ def get_ctypes_type(rtyper, T, delayed_builders=None):
             return cls
 
 def build_new_ctypes_type(rtyper, T, delayed_builders):
+    if T is base_ptr_lltype():
+        return ctypes.c_void_p
     if isinstance(T, lltype.Ptr):
         if isinstance(T.TO, lltype.FuncType):
             argtypes = [get_ctypes_type(rtyper, ARG) for ARG in T.TO.ARGS
@@ -441,6 +444,24 @@ class _array_of_known_length(_array_of_unknown_length):
 _all_callbacks = []
 _callback2obj = {}
 
+# this is just another hack that passes around references to applevel types
+# disguised as base_ptr_lltype
+class Dummy(object):
+    pass
+
+_opaque_cache = {Dummy():0}
+_opaque_list = [Dummy()]
+
+def new_opaque_object(llobj):
+    try:
+        return _opaque_cache[llobj]
+    except KeyError:
+        assert len(_opaque_cache) == len(_opaque_list)
+        val = ctypes.cast(len(_opaque_cache), ctypes.c_void_p)
+        _opaque_list.append(llobj)
+        _opaque_cache[llobj] = val
+        return val
+
 def lltype2ctypes(llobj, rtyper, normalize=True):
     """Convert the lltype object 'llobj' to its ctypes equivalent.
     'normalize' should only be False in tests, where we want to
@@ -454,6 +475,8 @@ def lltype2ctypes(llobj, rtyper, normalize=True):
         if not llobj:   # NULL pointer
             return get_ctypes_type(rtyper, T)()
 
+        if T is base_ptr_lltype():
+            return new_opaque_object(llobj)
         container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
             if hasattr(container, 'graph'):
@@ -556,6 +579,8 @@ def ctypes2lltype(T, cobj, rtyper):
     if isinstance(T, lltype.Ptr):
         if not cobj:   # NULL pointer
             return lltype.nullptr(T.TO)
+        if T is base_ptr_lltype():
+            return _opaque_list[cobj]
         if isinstance(T.TO, lltype.Struct):
             if T.TO._arrayfld is not None:
                 carray = getattr(cobj.contents, T.TO._arrayfld)
