@@ -602,7 +602,7 @@ def ctypes2lltype(T, cobj, rtyper):
         if cobj is None:
             llobj = llmemory.NULL
         else:
-            xxx
+            llobj = _lladdress(cobj)
     elif T is lltype.Char:
         llobj = chr(cobj)
     elif T is lltype.UniChar:
@@ -848,6 +848,22 @@ class ForcePtrAddEntry(ExtRegistryEntry):
         v_ptr, v_n = hop.inputargs(hop.args_r[0], lltype.Signed)
         return hop.genop('direct_ptradd', [v_ptr, v_n],
                          resulttype = v_ptr.concretetype)
+
+# ____________________________________________________________
+
+class _lladdress(long):
+    _TYPE = llmemory.Address
+
+    def __new__(cls, void_p):
+        self = long.__new__(cls, void_p.value)
+        self.void_p = void_p
+        return self
+
+    def __repr__(self):
+        return '<_lladdress %s>' % (self.void_p,)
+
+    def _cast_to_int(self):
+        return ctypes.cast(self.void_p, ctypes.c_long)
 
 # ____________________________________________________________
 # errno
