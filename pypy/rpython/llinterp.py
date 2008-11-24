@@ -40,6 +40,8 @@ def type_name(etype):
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
 
+    current_interpreter = None
+
     def __init__(self, typer, tracing=True, exc_data_ptr=None,
                  malloc_check=True):
         self.bindings = {}
@@ -64,6 +66,8 @@ class LLInterpreter(object):
         retval = None
         self.traceback_frames = []
         old_frame_stack = self.frame_stack[:]
+        prev_interpreter = LLInterpreter.current_interpreter
+        LLInterpreter.current_interpreter = self
         try:
             try:
                 retval = llframe.eval()
@@ -86,6 +90,7 @@ class LLInterpreter(object):
                     self.tracer.dump(line + '\n')
                 raise
         finally:
+            LLInterpreter.current_interpreter = prev_interpreter
             assert old_frame_stack == self.frame_stack
             if self.tracer:
                 if retval is not None:
