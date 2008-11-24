@@ -455,7 +455,8 @@ def new_opaque_object(llobj):
         return _opaque_cache[llobj]
     except KeyError:
         assert len(_opaque_cache) == len(_opaque_list)
-        val = ctypes.cast(len(_opaque_cache), ctypes.c_void_p)
+        ctypes_type = get_ctypes_type(None, base_ptr_lltype())
+        val = ctypes.cast(len(_opaque_cache), ctypes_type)
         _opaque_list.append(llobj)
         _opaque_cache[llobj] = val
         return val
@@ -578,7 +579,7 @@ def ctypes2lltype(T, cobj, rtyper):
         if not cobj:   # NULL pointer
             return lltype.nullptr(T.TO)
         if T is base_ptr_lltype():
-            return _opaque_list[cobj]
+            return _opaque_list[ctypes.cast(cobj, ctypes.c_void_p).value]
         if isinstance(T.TO, lltype.Struct):
             if T.TO._arrayfld is not None:
                 carray = getattr(cobj.contents, T.TO._arrayfld)
