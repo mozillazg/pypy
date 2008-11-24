@@ -178,8 +178,6 @@ def get_ctypes_type(rtyper, T, delayed_builders=None):
             return cls
 
 def build_new_ctypes_type(rtyper, T, delayed_builders):
-    if T is base_ptr_lltype():
-        return ctypes.c_void_p
     if isinstance(T, lltype.Ptr):
         if isinstance(T.TO, lltype.FuncType):
             argtypes = [get_ctypes_type(rtyper, ARG) for ARG in T.TO.ARGS
