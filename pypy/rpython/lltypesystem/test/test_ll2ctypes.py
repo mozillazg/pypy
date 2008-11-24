@@ -18,51 +18,48 @@ class TestLL2Ctypes(object):
 
     def setup_method(self, meth):
         ALLOCATED.clear()
-        self.rtyper = RPythonTyper(RPythonAnnotator())
 
     def test_primitive(self):
-        rtyper = self.rtyper
-        assert lltype2ctypes(5, rtyper) == 5
-        assert lltype2ctypes('?', rtyper) == ord('?')
-        assert lltype2ctypes('\xE0', rtyper) == 0xE0
-        assert lltype2ctypes(unichr(1234), rtyper) == 1234
-        assert ctypes2lltype(lltype.Signed, 5, rtyper) == 5
-        assert ctypes2lltype(lltype.Char, ord('a'), rtyper) == 'a'
-        assert ctypes2lltype(lltype.UniChar, ord(u'x'), rtyper) == u'x'
-        assert ctypes2lltype(lltype.Char, 0xFF, rtyper) == '\xFF'
-        assert lltype2ctypes(5.25, rtyper) == 5.25
-        assert ctypes2lltype(lltype.Float, 5.25, rtyper) == 5.25
-        assert lltype2ctypes(u'x', rtyper) == ord(u'x')
-        res = lltype2ctypes(rffi.r_singlefloat(-3.5), rtyper)
+        assert lltype2ctypes(5) == 5
+        assert lltype2ctypes('?') == ord('?')
+        assert lltype2ctypes('\xE0') == 0xE0
+        assert lltype2ctypes(unichr(1234)) == 1234
+        assert ctypes2lltype(lltype.Signed, 5) == 5
+        assert ctypes2lltype(lltype.Char, ord('a')) == 'a'
+        assert ctypes2lltype(lltype.UniChar, ord(u'x')) == u'x'
+        assert ctypes2lltype(lltype.Char, 0xFF) == '\xFF'
+        assert lltype2ctypes(5.25) == 5.25
+        assert ctypes2lltype(lltype.Float, 5.25) == 5.25
+        assert lltype2ctypes(u'x') == ord(u'x')
+        res = lltype2ctypes(rffi.r_singlefloat(-3.5))
         assert isinstance(res, ctypes.c_float)
         assert res.value == -3.5
-        res = ctypes2lltype(lltype.SingleFloat, ctypes.c_float(-3.5), rtyper)
+        res = ctypes2lltype(lltype.SingleFloat, ctypes.c_float(-3.5))
         assert isinstance(res, rffi.r_singlefloat)
         assert float(res) == -3.5
-        assert lltype2ctypes(rffi.r_ulong(-1), rtyper) == sys.maxint * 2 + 1
-        res = ctypes2lltype(lltype.Unsigned, sys.maxint * 2 + 1, rtyper)
+        assert lltype2ctypes(rffi.r_ulong(-1)) == sys.maxint * 2 + 1
+        res = ctypes2lltype(lltype.Unsigned, sys.maxint * 2 + 1)
         assert (res, type(res)) == (rffi.r_ulong(-1), rffi.r_ulong)
 
-        res = lltype2ctypes(llmemory.sizeof(lltype.Signed), rtyper)
+        res = lltype2ctypes(llmemory.sizeof(lltype.Signed))
         assert res == struct.calcsize("l")
         S = lltype.Struct('S', ('x', lltype.Signed), ('y', lltype.Signed))
-        res = lltype2ctypes(llmemory.sizeof(S), rtyper)
+        res = lltype2ctypes(llmemory.sizeof(S))
         assert res == struct.calcsize("ll")
 
         p = lltype.nullptr(S)
-        cptr = lltype2ctypes(p, rtyper)
+        cptr = lltype2ctypes(p)
         assert not cptr
         py.test.raises(ValueError, 'cptr.contents')   # NULL pointer access
-        res = ctypes2lltype(lltype.Ptr(S), cptr, rtyper)
+        res = ctypes2lltype(lltype.Ptr(S), cptr)
         assert res == p
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_simple_struct(self):
-        rtyper = self.rtyper
         S = lltype.Struct('S', ('x', lltype.Signed), ('y', lltype.Signed))
         s = lltype.malloc(S, flavor='raw')
         s.x = 123
-        sc = lltype2ctypes(s, rtyper)
+        sc = lltype2ctypes(s)
         assert isinstance(sc.contents, ctypes.Structure)
         assert sc.contents.x == 123
         sc.contents.x = 456
@@ -75,7 +72,6 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_struct_ptrs(self):
-        rtyper = self.rtyper
         S2 = lltype.Struct('S2', ('y', lltype.Signed))
         S1 = lltype.Struct('S', ('x', lltype.Signed), ('p', lltype.Ptr(S2)))
         s1 = lltype.malloc(S1, flavor='raw')
@@ -83,10 +79,10 @@ class TestLL2Ctypes(object):
         s2b = lltype.malloc(S2, flavor='raw')
         s2a.y = ord('a')
         s2b.y = ord('b')
-        sc1 = lltype2ctypes(s1, rtyper)
+        sc1 = lltype2ctypes(s1)
         sc1.contents.x = 50
         assert s1.x == 50
-        sc1.contents.p = lltype2ctypes(s2a, rtyper)
+        sc1.contents.p = lltype2ctypes(s2a)
         assert s1.p == s2a
         s1.p.y -= 32
         assert sc1.contents.p.contents.y == ord('A')
@@ -99,13 +95,12 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_simple_array(self):
-        rtyper = self.rtyper
         A = lltype.Array(lltype.Signed)
         a = lltype.malloc(A, 10, flavor='raw')
         a[0] = 100
         a[1] = 101
         a[2] = 102
-        ac = lltype2ctypes(a, rtyper, normalize=False)
+        ac = lltype2ctypes(a, normalize=False)
         assert isinstance(ac.contents, ctypes.Structure)
         assert ac.contents.length == 10
         assert ac.contents.items[1] == 101
@@ -117,13 +112,12 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_array_nolength(self):
-        rtyper = self.rtyper
         A = lltype.Array(lltype.Signed, hints={'nolength': True})
         a = lltype.malloc(A, 10, flavor='raw')
         a[0] = 100
         a[1] = 101
         a[2] = 102
-        ac = lltype2ctypes(a, rtyper, normalize=False)
+        ac = lltype2ctypes(a, normalize=False)
         assert isinstance(ac.contents, ctypes.Structure)
         assert ac.contents.items[1] == 101
         ac.contents.items[2] = 456
@@ -135,9 +129,8 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_charp(self):
-        rtyper = self.rtyper
         s = rffi.str2charp("hello")
-        sc = lltype2ctypes(s, rtyper, normalize=False)
+        sc = lltype2ctypes(s, normalize=False)
         assert sc.contents.items[0] == ord('h')
         assert sc.contents.items[1] == ord('e')
         assert sc.contents.items[2] == ord('l')
@@ -153,14 +146,13 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_unicharp(self):
-        rtyper = self.rtyper
         SP = rffi.CArrayPtr(lltype.UniChar)
         s = lltype.malloc(SP.TO, 4, flavor='raw')
         s[0] = u'x'
         s[1] = u'y'
         s[2] = u'z'
         s[3] = u'\x00'
-        sc = lltype2ctypes(s, rtyper, normalize=False)
+        sc = lltype2ctypes(s, normalize=False)
         assert sc.contents.items[0] == ord(u'x')
         assert sc.contents.items[1] == ord(u'y')
         assert sc.contents.items[2] == ord(u'z')
@@ -203,13 +195,12 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_cstruct_to_ll(self):
-        rtyper = self.rtyper
         S = lltype.Struct('S', ('x', lltype.Signed), ('y', lltype.Signed))
         s = lltype.malloc(S, flavor='raw')
         s2 = lltype.malloc(S, flavor='raw')
         s.x = 123
-        sc = lltype2ctypes(s, rtyper)
-        t = ctypes2lltype(lltype.Ptr(S), sc, rtyper)
+        sc = lltype2ctypes(s)
+        t = ctypes2lltype(lltype.Ptr(S), sc)
         assert lltype.typeOf(t) == lltype.Ptr(S)
         assert s == t
         assert not (s != t)
@@ -233,15 +224,14 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_carray_to_ll(self):
-        rtyper = self.rtyper
         A = lltype.Array(lltype.Signed, hints={'nolength': True})
         a = lltype.malloc(A, 10, flavor='raw')
         a2 = lltype.malloc(A, 10, flavor='raw')
         a[0] = 100
         a[1] = 101
         a[2] = 110
-        ac = lltype2ctypes(a, rtyper)
-        b = ctypes2lltype(lltype.Ptr(A), ac, rtyper)
+        ac = lltype2ctypes(a)
+        b = ctypes2lltype(lltype.Ptr(A), ac)
         assert lltype.typeOf(b) == lltype.Ptr(A)
         assert b == a
         assert not (b != a)
@@ -327,24 +317,22 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_simple_cast(self):
-        rtyper = self.rtyper
-        assert rffi.cast(rffi.SIGNEDCHAR, 0x123456, rtyper) == 0x56
-        assert rffi.cast(rffi.SIGNEDCHAR, 0x123481, rtyper) == -127
-        assert rffi.cast(rffi.CHAR, 0x123456, rtyper) == '\x56'
-        assert rffi.cast(rffi.CHAR, 0x123481, rtyper) == '\x81'
-        assert rffi.cast(rffi.UCHAR, 0x123481, rtyper) == 0x81
+        assert rffi.cast(rffi.SIGNEDCHAR, 0x123456) == 0x56
+        assert rffi.cast(rffi.SIGNEDCHAR, 0x123481) == -127
+        assert rffi.cast(rffi.CHAR, 0x123456) == '\x56'
+        assert rffi.cast(rffi.CHAR, 0x123481) == '\x81'
+        assert rffi.cast(rffi.UCHAR, 0x123481) == 0x81
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_forced_ptr_cast(self):
         import array
-        rtyper = self.rtyper
         A = lltype.Array(lltype.Signed, hints={'nolength': True})
         B = lltype.Array(lltype.Char, hints={'nolength': True})
         a = lltype.malloc(A, 10, flavor='raw')
         for i in range(10):
             a[i] = i*i
 
-        b = rffi.cast(lltype.Ptr(B), a, rtyper)
+        b = rffi.cast(lltype.Ptr(B), a)
 
         checker = array.array('l')
         for i in range(10):
@@ -354,52 +342,49 @@ class TestLL2Ctypes(object):
         for i in range(len(expected)):
             assert b[i] == expected[i]
 
-        c = rffi.cast(rffi.VOIDP, a, rtyper)
-        addr = lltype2ctypes(c, rtyper)
+        c = rffi.cast(rffi.VOIDP, a)
+        addr = lltype2ctypes(c)
         #assert addr == ctypes.addressof(a._obj._ctypes_storage)
-        d = ctypes2lltype(rffi.VOIDP, addr, rtyper)
+        d = ctypes2lltype(rffi.VOIDP, addr)
         assert lltype.typeOf(d) == rffi.VOIDP
         assert c == d
-        e = rffi.cast(lltype.Ptr(A), d, rtyper)
+        e = rffi.cast(lltype.Ptr(A), d)
         for i in range(10):
             assert e[i] == i*i
 
         c = lltype.nullptr(rffi.VOIDP.TO)
-        addr = rffi.cast(lltype.Signed, c, rtyper)
+        addr = rffi.cast(lltype.Signed, c)
         assert addr == 0
 
         lltype.free(a, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_funcptr1(self):
-        rtyper = self.rtyper
         def dummy(n):
             return n+1
 
         FUNCTYPE = lltype.FuncType([lltype.Signed], lltype.Signed)
-        cdummy = lltype2ctypes(llhelper(lltype.Ptr(FUNCTYPE), dummy),
-                               rtyper)
+        cdummy = lltype2ctypes(llhelper(lltype.Ptr(FUNCTYPE), dummy))
         assert isinstance(cdummy,
                           ctypes.CFUNCTYPE(ctypes.c_long, ctypes.c_long))
         res = cdummy(41)
         assert res == 42
-        lldummy = ctypes2lltype(lltype.Ptr(FUNCTYPE), cdummy, rtyper)
+        lldummy = ctypes2lltype(lltype.Ptr(FUNCTYPE), cdummy)
         assert lltype.typeOf(lldummy) == lltype.Ptr(FUNCTYPE)
         res = lldummy(41)
         assert res == 42
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_funcptr2(self):
-        rtyper = self.rtyper
         FUNCTYPE = lltype.FuncType([rffi.CCHARP], lltype.Signed)
         cstrlen = standard_c_lib.strlen
-        llstrlen = ctypes2lltype(lltype.Ptr(FUNCTYPE), cstrlen, rtyper)
+        llstrlen = ctypes2lltype(lltype.Ptr(FUNCTYPE), cstrlen)
         assert lltype.typeOf(llstrlen) == lltype.Ptr(FUNCTYPE)
         p = rffi.str2charp("hi there")
         res = llstrlen(p)
         assert res == 8
-        cstrlen2 = lltype2ctypes(llstrlen, rtyper)
-        cp = lltype2ctypes(p, rtyper)
+        cstrlen2 = lltype2ctypes(llstrlen)
+        cp = lltype2ctypes(p)
         assert cstrlen2.restype == ctypes.c_long
         res = cstrlen2(cp)
         assert res == 8
@@ -445,7 +430,6 @@ class TestLL2Ctypes(object):
     # def test_signal(self):...
 
     def test_uninitialized2ctypes(self):
-        rtyper = self.rtyper
         # for now, uninitialized fields are filled with 0xDD in the ctypes data
         def checkobj(o, size):
             p = ctypes.cast(ctypes.c_void_p(ctypes.addressof(o)),
@@ -457,33 +441,32 @@ class TestLL2Ctypes(object):
             res = struct.pack(fmt, v)
             assert res == "\xDD" * len(res)
 
-        checkval(uninitialized2ctypes(rffi.CHAR, rtyper), 'B')
-        checkval(uninitialized2ctypes(rffi.SHORT, rtyper), 'h')
-        checkval(uninitialized2ctypes(rffi.INT, rtyper), 'i')
-        checkval(uninitialized2ctypes(rffi.UINT, rtyper), 'I')
-        checkval(uninitialized2ctypes(rffi.LONGLONG, rtyper), 'q')
-        checkval(uninitialized2ctypes(rffi.DOUBLE, rtyper), 'd')
-        checkobj(uninitialized2ctypes(rffi.INTP, rtyper),
+        checkval(uninitialized2ctypes(rffi.CHAR), 'B')
+        checkval(uninitialized2ctypes(rffi.SHORT), 'h')
+        checkval(uninitialized2ctypes(rffi.INT), 'i')
+        checkval(uninitialized2ctypes(rffi.UINT), 'I')
+        checkval(uninitialized2ctypes(rffi.LONGLONG), 'q')
+        checkval(uninitialized2ctypes(rffi.DOUBLE), 'd')
+        checkobj(uninitialized2ctypes(rffi.INTP),
                  ctypes.sizeof(ctypes.c_void_p))
-        checkobj(uninitialized2ctypes(rffi.CCHARP, rtyper),
+        checkobj(uninitialized2ctypes(rffi.CCHARP),
                  ctypes.sizeof(ctypes.c_void_p))
 
         S = lltype.Struct('S', ('x', lltype.Signed), ('y', lltype.Signed))
         s = lltype.malloc(S, flavor='raw')
-        sc = lltype2ctypes(s, rtyper)
+        sc = lltype2ctypes(s)
         checkval(sc.contents.x, 'l')
         checkval(sc.contents.y, 'l')
         lltype.free(s, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_substructures(self):
-        rtyper = self.rtyper
         S1  = lltype.Struct('S1', ('x', lltype.Signed))
         BIG = lltype.Struct('BIG', ('s1a', S1), ('s1b', S1))
         s = lltype.malloc(BIG, flavor='raw')
         s.s1a.x = 123
         s.s1b.x = 456
-        sc = lltype2ctypes(s, rtyper)
+        sc = lltype2ctypes(s)
         assert sc.contents.s1a.x == 123
         assert sc.contents.s1b.x == 456
         sc.contents.s1a.x += 1
@@ -497,9 +480,9 @@ class TestLL2Ctypes(object):
         lltype.free(s, flavor='raw')
 
         s = lltype.malloc(BIG, flavor='raw')
-        s1ac = lltype2ctypes(s.s1a, rtyper)
+        s1ac = lltype2ctypes(s.s1a)
         s1ac.contents.x = 53
-        sc = lltype2ctypes(s, rtyper)
+        sc = lltype2ctypes(s)
         assert sc.contents.s1a.x == 53
         sc.contents.s1a.x += 1
         assert s1ac.contents.x == 54
@@ -511,14 +494,14 @@ class TestLL2Ctypes(object):
         assert s1ac.contents.x == 59
         assert s.s1a.x == 59
 
-        t = ctypes2lltype(lltype.Ptr(BIG), sc, rtyper)
+        t = ctypes2lltype(lltype.Ptr(BIG), sc)
         assert t == s
         assert t.s1a == s.s1a
         assert t.s1a.x == 59
         s.s1b.x = 8888
         assert t.s1b == s.s1b
         assert t.s1b.x == 8888
-        t1 = ctypes2lltype(lltype.Ptr(S1), s1ac, rtyper)
+        t1 = ctypes2lltype(lltype.Ptr(S1), s1ac)
         assert t.s1a == t1
         assert t1.x == 59
         t1.x += 1
@@ -527,7 +510,6 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_recursive_struct(self):
-        rtyper = self.rtyper
         SX = lltype.ForwardReference()
         S1 = lltype.Struct('S1', ('p', lltype.Ptr(SX)), ('x', lltype.Signed))
         SX.become(S1)
@@ -541,7 +523,7 @@ class TestLL2Ctypes(object):
         s1.p = s2
         s2.p = s3
         s3.p = lltype.nullptr(S1)
-        sc1 = lltype2ctypes(s1, rtyper)
+        sc1 = lltype2ctypes(s1)
         sc2 = sc1.contents.p
         sc3 = sc2.contents.p
         assert not sc3.contents.p
@@ -559,7 +541,7 @@ class TestLL2Ctypes(object):
         s1 = lltype.malloc(S1, flavor='raw')
         s1.x = 12
         s1.p = s1
-        sc1 = lltype2ctypes(s1, rtyper)
+        sc1 = lltype2ctypes(s1)
         assert sc1.contents.x == 12
         assert (ctypes.addressof(sc1.contents.p.contents) ==
                 ctypes.addressof(sc1.contents))
@@ -573,7 +555,7 @@ class TestLL2Ctypes(object):
         s1.p = s2
         s2.x = 222
         s2.p = s1
-        sc1 = lltype2ctypes(s1, rtyper)
+        sc1 = lltype2ctypes(s1)
         assert sc1.contents.x == 111
         assert sc1.contents.p.contents.x == 222
         assert (ctypes.addressof(sc1.contents.p.contents) !=
@@ -585,7 +567,6 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_indirect_recursive_struct(self):
-        rtyper = self.rtyper
         S2Forward = lltype.ForwardReference()
         S1 = lltype.Struct('S1', ('p', lltype.Ptr(S2Forward)))
         A2 = lltype.Array(lltype.Ptr(S1), hints={'nolength': True})
@@ -597,7 +578,7 @@ class TestLL2Ctypes(object):
         s2.a = a2
         a2[5] = s1
         s1.p = s2
-        ac2 = lltype2ctypes(a2, rtyper, normalize=False)
+        ac2 = lltype2ctypes(a2, normalize=False)
         sc1 = ac2.contents.items[5]
         sc2 = sc1.contents.p
         assert (ctypes.addressof(sc2.contents.a.contents) ==
@@ -608,7 +589,6 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_arrayofstruct(self):
-        rtyper = self.rtyper
         S1 = lltype.Struct('S1', ('x', lltype.Signed))
         A = lltype.Array(S1, hints={'nolength': True})
         a = lltype.malloc(A, 5, flavor='raw')
@@ -617,19 +597,18 @@ class TestLL2Ctypes(object):
         a[2].x = 102
         a[3].x = 103
         a[4].x = 104
-        ac = lltype2ctypes(a, rtyper, normalize=False)
+        ac = lltype2ctypes(a, normalize=False)
         assert ac.contents.items[0].x == 100
         assert ac.contents.items[2].x == 102
         ac.contents.items[3].x += 500
         assert a[3].x == 603
         a[4].x += 600
         assert ac.contents.items[4].x == 704
-        a1 = ctypes2lltype(lltype.Ptr(A), ac, rtyper)
+        a1 = ctypes2lltype(lltype.Ptr(A), ac)
         assert a1 == a
         assert a1[2].x == 102
         aitem1 = ctypes2lltype(lltype.Ptr(S1),
-                               ctypes.pointer(ac.contents.items[1]),
-                               rtyper)
+                               ctypes.pointer(ac.contents.items[1]))
         assert aitem1.x == 101
         assert aitem1 == a1[1]
         lltype.free(a, flavor='raw')
@@ -672,12 +651,11 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_storage_stays_around(self):
-        rtyper = self.rtyper
         data = "hello, world!" * 100
         A = lltype.Array(rffi.CHAR, hints={'nolength': True})
         S = lltype.Struct('S', ('a', lltype.Ptr(A)))
         s = lltype.malloc(S, flavor='raw')
-        lltype2ctypes(s, rtyper)     # force it to escape
+        lltype2ctypes(s)     # force it to escape
         s.a = lltype.malloc(A, len(data), flavor='raw')
         # the storage for the array should not be freed by lltype even
         # though the _ptr object appears to go away here
@@ -690,16 +668,15 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_arrayoffloat(self):
-        rtyper = self.rtyper
         a = lltype.malloc(rffi.FLOATP.TO, 3, flavor='raw')
         a[0] = rffi.r_singlefloat(0.0)
         a[1] = rffi.r_singlefloat(1.1)
         a[2] = rffi.r_singlefloat(2.2)
-        ac = lltype2ctypes(a, rtyper, normalize=False)
+        ac = lltype2ctypes(a, normalize=False)
         assert ac.contents.items[0] == 0.0
         assert abs(ac.contents.items[1] - 1.1) < 1E-6
         assert abs(ac.contents.items[2] - 2.2) < 1E-6
-        b = ctypes2lltype(rffi.FLOATP, ac, rtyper)
+        b = ctypes2lltype(rffi.FLOATP, ac)
         assert isinstance(b[0], rffi.r_singlefloat)
         assert float(b[0]) == 0.0
         assert isinstance(b[1], rffi.r_singlefloat)
@@ -808,25 +785,23 @@ class TestLL2Ctypes(object):
             assert a[i] == i + 1
 
     def test_array_type_bug(self):
-        rtyper = self.rtyper
         A = lltype.Array(lltype.Signed)
         a1 = lltype.malloc(A, 0, flavor='raw')
         a2 = lltype.malloc(A, 0, flavor='raw')
-        c1 = lltype2ctypes(a1, rtyper)
-        c2 = lltype2ctypes(a2, rtyper)
+        c1 = lltype2ctypes(a1)
+        c2 = lltype2ctypes(a2)
         assert type(c1) is type(c2)
         lltype.free(a1, flavor='raw')
         lltype.free(a2, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_varsized_struct(self):
-        rtyper = self.rtyper
         S = lltype.Struct('S', ('x', lltype.Signed),
                                ('a', lltype.Array(lltype.Char)))
         s1 = lltype.malloc(S, 6, flavor='raw')
         s1.x = 5
         s1.a[2] = 'F'
-        sc = lltype2ctypes(s1, rtyper, normalize=False)
+        sc = lltype2ctypes(s1, normalize=False)
         assert isinstance(sc.contents, ctypes.Structure)
         assert sc.contents.x == 5
         assert sc.contents.a.length == 6
@@ -836,7 +811,7 @@ class TestLL2Ctypes(object):
         s1.a[1] = 'y'
         assert sc.contents.a.items[1] == ord('y')
         # now go back to lltype...
-        res = ctypes2lltype(lltype.Ptr(S), sc, rtyper)
+        res = ctypes2lltype(lltype.Ptr(S), sc)
         assert res == s1
         assert res.x == 5
         assert len(res.a) == 6
@@ -844,14 +819,13 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_with_explicit_length(self):
-        rtyper = self.rtyper
         A = lltype.Array(lltype.Signed)
         a1 = lltype.malloc(A, 5, flavor='raw')
         a1[0] = 42
-        c1 = lltype2ctypes(a1, rtyper, normalize=False)
+        c1 = lltype2ctypes(a1, normalize=False)
         assert c1.contents.length == 5
         assert c1.contents.items[0] == 42
-        res = ctypes2lltype(lltype.Ptr(A), c1, rtyper)
+        res = ctypes2lltype(lltype.Ptr(A), c1)
         assert res == a1
         assert len(res) == 5
         assert res[0] == 42
@@ -868,7 +842,6 @@ class TestLL2Ctypes(object):
         assert not ALLOCATED     # detects memory leaks in the test
 
     def test_c_callback_with_void_arg_2(self):
-        rtyper = self.rtyper
         ftest = []
         def f(x):
             ftest.append(x)
@@ -876,10 +849,10 @@ class TestLL2Ctypes(object):
         fn = lltype.functionptr(F, 'askjh', _callable=f, _void0=-5)
         fn(-5)
         assert ftest == [-5]
-        fn2 = lltype2ctypes(fn, rtyper)
+        fn2 = lltype2ctypes(fn)
         fn2()
         assert ftest == [-5, -5]
-        fn3 = ctypes2lltype(lltype.Ptr(F), fn2, rtyper)
+        fn3 = ctypes2lltype(lltype.Ptr(F), fn2)
         fn3(-5)
         assert ftest == [-5, -5, -5]
 
