@@ -450,12 +450,12 @@ class Dummy(object):
 _opaque_cache = {Dummy():0}
 _opaque_list = [Dummy()]
 
-def new_opaque_object(llobj):
+def new_opaque_object(rtyper, llobj):
     try:
         return _opaque_cache[llobj]
     except KeyError:
         assert len(_opaque_cache) == len(_opaque_list)
-        ctypes_type = get_ctypes_type(None, base_ptr_lltype())
+        ctypes_type = get_ctypes_type(rtyper, base_ptr_lltype())
         val = ctypes.cast(len(_opaque_cache), ctypes_type)
         _opaque_list.append(llobj)
         _opaque_cache[llobj] = val
@@ -475,7 +475,7 @@ def lltype2ctypes(llobj, rtyper, normalize=True):
             return get_ctypes_type(rtyper, T)()
 
         if T is base_ptr_lltype():
-            return new_opaque_object(llobj)
+            return new_opaque_object(rtyper, llobj)
         container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
             if hasattr(container, 'graph'):
