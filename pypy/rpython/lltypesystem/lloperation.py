@@ -476,6 +476,7 @@ LL_OPERATIONS = {
     'oononnull':            LLOp(oo=True, canfold=True),
     'ooisnull':             LLOp(oo=True, canfold=True),
     'oois':                 LLOp(oo=True, canfold=True),
+    'ooisnot':              LLOp(oo=True, canfold=True),
     'instanceof':           LLOp(oo=True, canfold=True),
     'classof':              LLOp(oo=True, canfold=True),
     'subclassof':           LLOp(oo=True, canfold=True),

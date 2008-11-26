@@ -40,6 +40,9 @@ def op_oois(obj1, obj2):
     else:
         assert False, "oois on something silly"
 
+def op_ooisnot(obj1, obj2):
+    return not op_oois(obj1, obj2)
+
 def op_instanceof(inst, INST):
     return ootype.instanceof(inst, INST)
 
