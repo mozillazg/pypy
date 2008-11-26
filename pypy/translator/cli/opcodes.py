@@ -252,6 +252,7 @@ binary_ops = {
     'ullong_rshift':            [PushAllArgs, 'conv.i4', 'shr'],
 
     'oois':                     'ceq',
+    'ooisnot':                  _not('ceq'),
 }
 
 opcodes = misc_ops.copy()

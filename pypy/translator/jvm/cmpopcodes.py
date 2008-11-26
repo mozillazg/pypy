@@ -1,6 +1,6 @@
 from pypy.translator.jvm.typesystem import \
      IFLT, IFLE, IFEQ, IFNE, IFGT, IFGE, \
-     IFNULL, IFNONNULL, IF_ACMPEQ, GOTO, ICONST, \
+     IFNULL, IFNONNULL, IF_ACMPEQ, IF_ACMPNE, GOTO, ICONST, \
      DCONST_0, DCMPG, LCONST_0, LCMP, \
      IF_ICMPLT, IF_ICMPLE, IF_ICMPEQ, IF_ICMPNE, IF_ICMPGT, IF_ICMPGE, \
      PYPYUINTCMP, PYPYULONGCMP
@@ -54,6 +54,7 @@ cmp_opname = {
     'oononnull': [IFNONNULL],
     'ooisnull': [IFNULL],
     'oois': [IF_ACMPEQ],
+    'ooisnot': [IF_ACMPNE],
 
     'unichar_eq': [IF_ICMPEQ],
     'unichar_ne': [IF_ICMPNE],

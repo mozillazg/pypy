@@ -101,9 +101,9 @@ class __extend__(pairtype(OOInstanceRepr, OOInstanceRepr)):
 
     rtype_eq = rtype_is_
 
-    def rtype_ne(rpair, hop):
-        v = rpair.rtype_eq(hop)
-        return hop.genop("bool_not", [v], resulttype=ootype.Bool)
+    def rtype_ne((r_ins1, r_ins2), hop):
+        vlist = hop.inputargs(r_ins1, r_ins2)
+        return hop.genop('ooisnot', vlist, resulttype=ootype.Bool)
 
 
 class __extend__(pairtype(OOObjectRepr, OOObjectRepr)):
@@ -113,9 +113,9 @@ class __extend__(pairtype(OOObjectRepr, OOObjectRepr)):
 
     rtype_eq = rtype_is_
 
-    def rtype_ne(rpair, hop):
-        v = rpair.rtype_eq(hop)
-        return hop.genop("bool_not", [v], resulttype=ootype.Bool)
+    def rtype_ne((r_ins1, r_ins2), hop):
+        vlist = hop.inputargs(r_ins1, r_ins2)
+        return hop.genop('ooisnot', vlist, resulttype=ootype.Bool)
 
 class OOBoundMethRepr(Repr):
     def __init__(self, ootype, name):
