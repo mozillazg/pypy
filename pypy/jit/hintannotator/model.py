@@ -39,6 +39,7 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       subclassof
                       instanceof
                       oostring
+                      promote_virtualizable
                       """.split()
 
 BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift
@@ -521,6 +522,9 @@ class __extend__(SomeLLAbstractValue):
             return hs_c1._call_multiple_graphs(graph_list, METH.RESULT, hs_c1, *args_hs) # prepend hs_c1 to the args
 
     def jit_marker(*args_hs):
+        pass
+
+    def promote_virtualizable(*args_hs):
         pass
 
 class __extend__(SomeLLAbstractConstant):
