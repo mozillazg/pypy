@@ -74,7 +74,8 @@ class GraphDesc(object):
                 pass
             else:
                 # except transform the copied graph before its hint-annotation
-                etrafo.create_exception_handling(graph, always_exc_clear=True)
+                etrafo.create_exception_handling(graph, always_exc_clear =
+                    bk.annotator.policy.exceptiontransformclear)
             if alt_name is not None:
                 graph.name = alt_name
             self._cache[key] = graph

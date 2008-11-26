@@ -10,6 +10,7 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
     hotpath                = False
     pyjitpl                = False
     exceptiontransform     = True
+    exceptiontransformclear= True
 
     def __init__(self, **kwds):
         for key, value in kwds.items():
