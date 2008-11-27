@@ -770,6 +770,7 @@ def ll_extend(l1, l2):
         l1.ll_setitem_fast(j, l2.ll_getitem_fast(i))
         i += 1
         j += 1
+ll_extend.oopspec = 'list.extend(l1, l2)'
 
 def ll_extend_with_str(lst, s, getstrlen, getstritem):
     return ll_extend_with_str_slice_startonly(lst, s, getstrlen, getstritem, 0)
