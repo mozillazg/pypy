@@ -57,6 +57,11 @@ class InMemoryCodeBuilder(I386CodeBuilder):
                                            self._pos)
             self._last_dump_start = self._pos
 
+    def redone(self, frm, to):
+        if machine_code_dumper.enabled:
+            baseaddr = rffi.cast(lltype.Signed, self._data)
+            machine_code_dumper.dump_range(self, frm - baseaddr, to - baseaddr)
+
     def log(self, msg):
         if machine_code_dumper.enabled:
             machine_code_dumper.dump(self, 'LOG', self._pos, msg)
