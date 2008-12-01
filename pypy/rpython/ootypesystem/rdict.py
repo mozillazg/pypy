@@ -5,7 +5,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.rpython.rdict import AbstractDictRepr, AbstractDictIteratorRepr,\
      rtype_newdict, dum_variant, dum_keys, dum_values, dum_items
 from pypy.rpython.rpbc import MethodOfFrozenPBCRepr,\
-     AbstractFunctionsPBCRepr, AbstractMethodsPBCRepr
+     AbstractFunctionsPBCRepr, AbstractMethodsPBCRepr, SingleFrozenPBCRepr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.rlist import ll_newlist
 from pypy.rlib.rarithmetic import r_uint
@@ -181,7 +181,8 @@ class DictRepr(AbstractDictRepr):
         except KeyError:
             self.setup()
             l_dict = ll_newdict(self.DICT)
-            if self.custom_eq_hash:
+            if (self.custom_eq_hash and
+                    self.dictkey.s_value != annmodel.s_ImpossibleValue):
                 interp = llinterp.LLInterpreter(self.rtyper)
                 EQ_FUNC = ootype.StaticMethod([self.DICT._KEYTYPE, self.DICT._KEYTYPE], ootype.Bool)
                 sm_eq = self.__get_func(interp, self.r_rdict_eqfn, dictobj.key_eq, EQ_FUNC)
@@ -251,6 +252,8 @@ def _get_call_vars(hop, r_func, arg, params_annotation):
         v_fn = r_impl.get_unique_llfn()
         v_obj = hop.inputarg(r_func, arg=arg)
         c_method_name = hop.inputconst(ootype.Void, None)
+    elif isinstance(r_func, SingleFrozenPBCRepr):
+        v_fn = v_obj = c_method_name = hop.inputconst(ootype.Void, None)
 
     return v_fn, v_obj, c_method_name
 
@@ -262,7 +265,7 @@ def rtype_r_dict(hop):
     hop.exception_cannot_occur()
 
     # the signature of oonewcustomdict is a bit complicated because we
-    # can have three different ways to pass the equal (and hash)
+    # can have four different ways to pass the equal (and hash)
     # callables:    
     #   1. pass a plain function: v_eqfn is a StaticMethod, v_eqobj
     #      and c_eq_method_name are None
@@ -271,6 +274,8 @@ def rtype_r_dict(hop):
     #   3. pass a method of a frozen PBC: v_eqfn is a StaticMethod,
     #      v_eqobj is the PBC to be pushed in front of the StaticMethod,
     #      c_eq_method_name is None
+    #   4. pass nothing (for always-empty r_dict's, whose keys and hash
+    #      function are never called).
 
     s_key = r_dict.dictkey.s_value
     v_eqfn, v_eqobj, c_eq_method_name =\

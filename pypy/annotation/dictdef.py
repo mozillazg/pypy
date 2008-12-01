@@ -59,6 +59,8 @@ class DictKey(ListItem):
             replace_othereq = replace_otherhash = ()
 
         s_key = self.s_value
+        if s_key == s_ImpossibleValue:
+            return
 
         def check_eqfn(annotator, graph):
             s = annotator.binding(graph.getreturnvar())

@@ -1,5 +1,6 @@
 import py
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
+from pypy.rlib.objectmodel import r_dict
 
 class BaseTestRemptydict(BaseRtypingTest):
     def test_empty_dict(self):
@@ -26,6 +27,21 @@ class BaseTestRemptydict(BaseRtypingTest):
             return n
         res = self.interpret(f, [])
         assert res == 0
+
+    def test_empty_r_dict(self):
+        class A:
+            pass
+        def key_eq(a, b):
+            return len(a) == len(b)
+        def key_hash(a):
+            return len(a)
+        a = A()
+        a.d1 = r_dict(key_eq, key_hash)
+        def func():
+            a.d2 = r_dict(key_eq, key_hash)
+            return bool(a.d1) or bool(a.d2)
+        res = self.interpret(func, [])
+        assert res is False
 
 class TestLLtype(BaseTestRemptydict, LLRtypeMixin):
     pass
