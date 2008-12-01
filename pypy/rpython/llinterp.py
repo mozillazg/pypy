@@ -1135,6 +1135,12 @@ class Tracer(object):
 
 def wrap_callable(llinterpreter, fn, obj, method_name):
     if method_name is None:
+        if fn is None:
+            # case "fn is None and method_name is None": no key supplied at
+            # all, for empty r_dict's.
+            def not_callable(*args):
+                assert False, "I should not be called"
+            return 'not_callable', not_callable
         # fn is a StaticMethod
         if obj is not None:
             self_arg = [obj]
