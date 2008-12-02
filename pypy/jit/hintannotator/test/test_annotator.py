@@ -979,6 +979,31 @@ class BaseAnnotatorTest(AbstractAnnotatorTest):
         hs = self.hannotate(f, [int], policy=P)
         assert hs.is_green()
 
+    def test_getitem_deepfrozen_dict(self):
+        d = {1: 2, 2: 4, 3: 9}
+        def f(k):
+            d1 = hint(d, deepfreeze=True)
+            k1 = hint(k, concrete=True)
+            return d1[k1]
+        hs = self.hannotate(f, [int], policy=P_OOPSPEC_NOVIRTUAL)
+        assert hs.myorigin
+        assert hs.is_green()
+
+    def test_missing_myorigin(self):
+        py.test.skip('do we want this to pass?')
+        def g(k):
+            if k:
+                return k
+            else:
+                raise KeyError
+        def f(k):
+            k1 = hint(k, concrete=True)
+            return g(k)
+        hs = self.hannotate(f, [int], policy=P_OOPSPEC_NOVIRTUAL)
+        assert hs.myorigin
+        assert hs.is_green()
+
+
 class TestLLType(BaseAnnotatorTest):
     type_system = 'lltype'
 
@@ -1105,12 +1130,6 @@ class TestLLType(BaseAnnotatorTest):
 class TestOOType(BaseAnnotatorTest):
     type_system = 'ootype'
     malloc = property(lambda self: ootype.new)
-
-    def fixpolicy(self, policy):
-        import copy
-        newpolicy = copy.copy(policy)
-        newpolicy.oopspec = False
-        return newpolicy
     
     def make_struct(self, name, *fields, **kwds):
         fields = dict(fields)

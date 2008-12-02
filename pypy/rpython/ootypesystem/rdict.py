@@ -307,12 +307,13 @@ def ll_dict_update(d1, d2):
         value = it.ll_current_value()
         d1.ll_set(key, value)
 
-
 def ll_dict_getitem(d, key):
     if d.ll_contains(key):
         return d.ll_get(key)
     else:
         raise KeyError
+ll_dict_getitem.oopspec = 'dict.getitem(d, key)'
+ll_dict_getitem.oopargcheck = lambda d, key: bool(d)
 
 def ll_dict_delitem(d, key):
     if not d.ll_remove(key):
