@@ -96,7 +96,7 @@ class BaseTestTLC(PortalTest):
                                          [bytecode, 0, 0, pool.strlists],
                                          policy=P_OOPSPEC)
         assert res == 42
-        self.check_insns(malloc=1)        
+        self.check_insns(malloc=1, direct_call=0)
 
 
 

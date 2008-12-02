@@ -59,15 +59,14 @@ class Class(object):
         attributes = {} # attrname -> index
         for name in attrlist:
             attributes[name] = len(attributes)
-        self.attributes = hint(attributes, deepfreeze=True)
-        self.length = len(attributes)
+        self.attributes = attributes
     
 class InstanceObj(Obj):
 
     def __init__(self, cls):
         self.cls = cls
-        cls2 = hint(cls, deepfreeze=True)
-        self.values = [nil] * cls2.length
+        frozenclass = hint(cls, deepfreeze=True)
+        self.values = [nil] * len(frozenclass.attributes)
 
     def getclass(self):
         # promote and deepfreeze the class
@@ -188,8 +187,7 @@ def make_interp(supports_call, jitted=True):
     def interp_eval(code, pc, inputarg, pool2=ConstantPool()):
         code_len = len(code)
         stack = []
-        pool3 = hint(pool2, concrete=True)
-        pool = hint(pool3, deepfreeze=True)
+        pool = hint(hint(pool2, concrete=True), deepfreeze=True)
 
         while pc < code_len:
             hint(None, global_merge_point=True)
