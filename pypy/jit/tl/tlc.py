@@ -5,6 +5,7 @@ import py
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.tl.tlopcode import *
 from pypy.jit.tl import tlopcode
+from pypy.rlib.jit import hint
 
 class Obj(object):
 
@@ -24,6 +25,63 @@ class Obj(object):
     def cdr(self): raise TypeError
 
     def _concat(self, other): raise TypeError
+
+    # object oriented features
+    def getattr(self, name): raise TypeError
+    def setattr(self, name, value): raise TypeError
+
+
+class ConstantPool(object):
+
+    def __init__(self):
+        self.strlists = []
+
+    def add_strlist(self, items):
+        idx = len(self.strlists)
+        self.strlists.append(items)
+        return idx
+
+class Class(object):
+
+    classes = [] # [(attributes, cls), ...]
+
+    def get(key):
+        for attributes, cls in Class.classes:
+            if attributes == key:
+                return cls
+        result = Class(key)
+        Class.classes.append((key, result))
+        return result
+    get._pure_function_ = True
+    get = staticmethod(get)
+
+    def __init__(self, attrlist):
+        attributes = {} # attrname -> index
+        for name in attrlist:
+            attributes[name] = len(attributes)
+        self.attributes = hint(attributes, deepfreeze=True)
+        self.length = len(attributes)
+    
+class InstanceObj(Obj):
+
+    def __init__(self, cls):
+        self.cls = cls
+        cls2 = hint(cls, deepfreeze=True)
+        self.values = [nil] * cls2.length
+
+    def getclass(self):
+        # promote and deepfreeze the class
+        cls = hint(self.cls, promote=True)
+        return hint(cls, deepfreeze=True)
+
+    def getattr(self, name):
+        i = self.getclass().attributes[name]
+        return self.values[i]
+
+    def setattr(self, name, value):
+        i = self.getclass().attributes[name]
+        self.values[i] = value
+        return value
 
 class IntObj(Obj):
 
@@ -126,10 +184,12 @@ def make_interp(supports_call, jitted=True):
             raise TypeError("code '%s' should be a string" % str(code))
         
         return interp_eval(code, pc, IntObj(inputarg)).int_o()
-    
-    def interp_eval(code, pc, inputarg):
+
+    def interp_eval(code, pc, inputarg, pool2=ConstantPool()):
         code_len = len(code)
         stack = []
+        pool3 = hint(pool2, concrete=True)
+        pool = hint(pool3, deepfreeze=True)
 
         while pc < code_len:
             hint(None, global_merge_point=True)
@@ -272,11 +332,37 @@ def make_interp(supports_call, jitted=True):
             elif opcode == PUSHARG:
                 stack.append(inputarg)
 
+            elif opcode == NEW:
+                idx = char2int(code[pc])
+                pc += 1
+                attributes = pool.strlists[idx]
+                cls = Class.get(attributes)
+                stack.append(InstanceObj(cls))
+
+            elif opcode == GETATTR:
+                idx = char2int(code[pc])
+                pc += 1
+                attributes = pool.strlists[idx]
+                name = attributes[0]
+                a = stack.pop()
+                hint(a, promote_class=True)
+                stack.append(a.getattr(name))
+
+            elif opcode == SETATTR:
+                idx = char2int(code[pc])
+                pc += 1
+                attributes = pool.strlists[idx]
+                name = attributes[0]
+                a, b = stack.pop(), stack.pop()
+                hint(a, promote_class=True)
+                hint(b, promote_class=True)
+                b.setattr(name, a)
+
             else:
                 raise RuntimeError("unknown opcode: " + str(opcode))
 
         return stack[-1]
-
+    
     return interp, interp_eval
 
 

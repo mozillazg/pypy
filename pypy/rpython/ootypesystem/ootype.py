@@ -1526,6 +1526,8 @@ class _list(_builtin_type):
     def ll_length(self):
         # NOT_RPYTHON
         return len(self._list)
+    ll_length.oopargcheck = lambda a: bool(a)
+    ll_length.foldable = True
 
     def _ll_resize_ge(self, length):
         # NOT_RPYTHON        
@@ -1553,6 +1555,8 @@ class _list(_builtin_type):
         assert typeOf(index) == Signed
         assert index >= 0
         return self._list[index]
+    ll_getitem_fast.oopargcheck = lambda l, k: bool(l)
+    ll_getitem_fast.couldfold = True # XXX?
 
     def ll_setitem_fast(self, index, item):
         # NOT_RPYTHON
@@ -1607,6 +1611,8 @@ class _dict(_builtin_type):
     def ll_length(self):
         # NOT_RPYTHON
         return len(self._dict)
+    ll_length.oopargcheck = lambda a: bool(a)
+    ll_length.foldable = True
 
     def ll_get(self, key):
         # NOT_RPYTHON

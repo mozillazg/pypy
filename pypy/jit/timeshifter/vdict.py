@@ -217,7 +217,8 @@ class OOTypeDictTypeDesc(AbstractDictTypeDesc):
         return eq, hash # work at least for primitive types
 
     def gen_newdict(self, builder, args_gv):
-        raise NotImplementedError
+        assert len(args_gv) == 0
+        return builder.genop_new(self.alloctoken)
 
     def gen_insertclean(self, builder, args_gv):
         raise NotImplementedError
@@ -387,3 +388,12 @@ oop_dict_contains.couldfold = True
 oop_dict_method_set = oop_dict_setitem
 oop_dict_method_get = oop_dict_getitem
 oop_dict_method_contains = oop_dict_contains
+
+def oop_dict_method_length(jitstate, oopspecdesc, deepfrozen, selfbox):
+    content = selfbox.content
+    if isinstance(content, AbstractVirtualDict):
+        return rvalue.ll_fromvalue(jitstate, len(content.item_boxes))
+    else:
+        return oopspecdesc.residual_call(jitstate, [selfbox],
+                                         deepfrozen=deepfrozen)
+oop_dict_getitem.couldfold = True

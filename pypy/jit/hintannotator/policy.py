@@ -24,6 +24,13 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
         return new
 
     def look_inside_graph(self, graph):
+        try:
+            func = graph.func
+        except AttributeError:
+            return True
+        # explicitly pure functions are always opaque
+        if getattr(func, '_pure_function_', False):
+            return False
         return True
 
 
