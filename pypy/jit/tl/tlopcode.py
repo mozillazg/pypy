@@ -44,11 +44,15 @@ opcode(25, "CONS")
 opcode(26, "CAR")
 opcode(27, "CDR")
 
+# object oriented features of tlc
+opcode(28, "NEW")
+opcode(29, "GETATTR")
+opcode(30, "SETATTR")
 
 del opcode
 
 
-def compile(code=''):
+def compile(code='', pool=None):
     bytecode = []
     labels   = {}       #[key] = pc
     label_usage = []    #(name, pc)
@@ -60,15 +64,27 @@ def compile(code=''):
             continue
         t = s.split()
         if t[0].endswith(':'):
+            assert ',' not in t[0]
             labels[ t[0][:-1] ] = len(bytecode)
             continue
         bytecode.append(names[t[0]])
         if len(t) > 1:
+            arg = t[1]
             try:
-                bytecode.append( int(t[1]) )
+                bytecode.append( int(arg) )
             except ValueError:
-                label_usage.append( (t[1], len(bytecode)) )
-                bytecode.append( 0 )
+                if ',' in arg:
+                    # it's a list of strings
+                    items = arg.split(',')
+                    items = map(str.strip, items)
+                    items = [x for x in items if x]
+                    assert pool is not None
+                    idx = pool.add_strlist(items)
+                    bytecode.append(idx)
+                else:
+                    # it's a label
+                    label_usage.append( (arg, len(bytecode)) )
+                    bytecode.append( 0 )
     for label, pc in label_usage:
         bytecode[pc] = labels[label] - pc - 1
     return ''.join([chr(i & 0xff) for i in bytecode])  

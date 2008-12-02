@@ -1,7 +1,16 @@
 import py
-from pypy.jit.tl.tlopcode import compile
+from pypy.jit.tl.tlopcode import compile, NEW
 from pypy.jit.tl.test import test_tl
-
+from pypy.jit.tl.tlc import ConstantPool
+    
+def test_constant_pool():
+    pool = ConstantPool()
+    bytecode = compile("""
+        NEW foo,bar
+    """, pool)
+    expected = test_tl.list2bytecode([NEW, 0])
+    assert expected == bytecode
+    assert pool.strlists == [['foo', 'bar']]
 
 class TestTLC(test_tl.TestTL):
     from pypy.jit.tl.tlc import interp
@@ -110,3 +119,39 @@ class TestTLC(test_tl.TestTL):
         """)
         py.test.raises(TypeError, self.interp, bytecode, 0, 0)
 
+    def test_new_obj(self):
+        from pypy.jit.tl.tlc import interp_eval, InstanceObj
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,bar
+        """, pool)
+        obj = interp_eval(bytecode, 0, None, pool)
+        assert isinstance(obj, InstanceObj)
+        assert len(obj.values) == 2
+        assert sorted(obj.cls.attributes.keys()) == ['bar', 'foo']
+
+    def test_setattr(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,bar
+            PICK 0
+            PUSH 42
+            SETATTR foo,
+        """, pool)
+        obj = interp_eval(bytecode, 0, None, pool)
+        assert obj.values[0].int_o() == 42
+        assert obj.values[1] is nil
+
+    def test_getattr(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,bar
+            PICK 0
+            PUSH 42
+            SETATTR bar,
+            GETATTR bar,
+        """, pool)
+        res = interp_eval(bytecode, 0, nil, pool)
+        assert res.int_o() == 42

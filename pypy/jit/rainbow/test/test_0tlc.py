@@ -14,16 +14,30 @@ class BaseTestTLC(PortalTest):
     small = False
 
     def _get_interp(self):
-        def interp(llbytecode, pc, inputarg):
+        def decode_strlist(s):
+            lists = s.split('|')
+            return [lst.split(',') for lst in lists]
+        
+        def interp(llbytecode, pc, inputarg, llstrlists):
             from pypy.rpython.annlowlevel import hlstr
             bytecode = hlstr(llbytecode)
-            return tlc.interp_without_call(bytecode, pc, inputarg)
+            strlists = hlstr(llstrlists)
+            pool = tlc.ConstantPool()
+            pool.strlists = decode_strlist(strlists)
+            obj = tlc.interp_eval_without_call(bytecode,
+                                               pc,
+                                               tlc.IntObj(inputarg),
+                                               pool)
+            return obj.int_o()
         
         to_rstr = self.to_rstr
         def build_bytecode(s):
             result = ''.join([chr(int(t)) for t in s.split(',')])
             return to_rstr(result)
-        interp.convert_arguments = [build_bytecode, int, int]
+        def build_strlist(items):
+            lists = [','.join(lst) for lst in items]
+            return to_rstr('|'.join(lists))
+        interp.convert_arguments = [build_bytecode, int, int, build_strlist]
         
         return interp
 
@@ -38,7 +52,7 @@ class BaseTestTLC(PortalTest):
         interp = self._get_interp()
         res = self.timeshift_from_portal(interp,
                                          tlc.interp_eval_without_call,
-                                         [bytecode, 0, n],
+                                         [bytecode, 0, n, []],
                                          policy=P_OOPSPEC)#, backendoptimize=True)
         assert res == expected
         self.check_insns(malloc=1)
@@ -61,9 +75,29 @@ class BaseTestTLC(PortalTest):
         interp = self._get_interp()
         res = self.timeshift_from_portal(interp,
                                          tlc.interp_eval_without_call,
-                                         [bytecode, 0, 1],
+                                         [bytecode, 0, 1, []],
                                          policy=P_OOPSPEC)#, backendoptimize=True)
         assert res == 20
+
+    def test_getattr(self):
+        from pypy.jit.tl.tlc import interp_eval, nil, ConstantPool
+        pool = ConstantPool()
+        code = tlc.compile("""
+            NEW foo,bar
+            PICK 0
+            PUSH 42
+            SETATTR bar,
+            GETATTR bar,
+        """, pool)
+        bytecode = ','.join([str(ord(c)) for c in code])
+        interp = self._get_interp()
+        res = self.timeshift_from_portal(interp,
+                                         tlc.interp_eval_without_call,
+                                         [bytecode, 0, 0, pool.strlists],
+                                         policy=P_OOPSPEC)
+        assert res == 42
+        self.check_insns(malloc=1)        
+
 
 
 class TestLLType(BaseTestTLC):
