@@ -174,17 +174,21 @@ def make_interp(supports_call, jitted=True):
         @specialize.argtype(0)
         def hint(x, global_merge_point=False,
                  promote_class=False,
+                 promote=False,
+                 deepfreeze=False,
                  forget=False,
                  concrete=False):
             return x
 
-    def interp(code='', pc=0, inputarg=0):
+    def interp(code='', pc=0, inputarg=0, pool=None):
         if not isinstance(code,str):
             raise TypeError("code '%s' should be a string" % str(code))
         
-        return interp_eval(code, pc, IntObj(inputarg)).int_o()
+        if pool is None:
+            pool = ConstantPool()
+        return interp_eval(code, pc, IntObj(inputarg), pool).int_o()
 
-    def interp_eval(code, pc, inputarg, pool2=ConstantPool()):
+    def interp_eval(code, pc, inputarg, pool2):
         code_len = len(code)
         stack = []
         pool = hint(hint(pool2, concrete=True), deepfreeze=True)
@@ -321,7 +325,7 @@ def make_interp(supports_call, jitted=True):
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
                 pc += 1
-                res = interp_eval(code, pc + offset, zero)
+                res = interp_eval(code, pc + offset, zero, pool2)
                 stack.append( res )
 
             elif opcode == RETURN:
@@ -371,8 +375,15 @@ interp_nonjit      , interp_eval_nonjit        = make_interp(supports_call = Tru
 if __name__ == '__main__':
     import sys
     from pypy.jit.tl.test.test_tl import FACTORIAL_SOURCE
-    bytecode = compile(FACTORIAL_SOURCE)
-    if len(sys.argv) >= 2 and sys.argv[1] == 'assemble':
-        print bytecode
+    if len(sys.argv) == 1:
+        src = FACTORIAL_SOURCE
+    elif len(sys.argv) == 2:
+        src = file(sys.argv[1]).read()
     else:
-        print ','.join([str(ord(n)) for n in bytecode])
+        print >> sys.stderr, 'Usage: python tlc.py [sourcefile]'
+        sys.exit(2)
+
+    pool = ConstantPool()
+    bytecode = compile(src, pool)
+    print serialize_pool(pool)
+    print bytecode
