@@ -1,7 +1,7 @@
 import time
 import py
 py.magic.autopath()
-from pypy.jit.tl.tlc import interp, interp_eval, interp_nonjit
+from pypy.jit.tl.tlc import interp, interp_eval, interp_nonjit, ConstantPool
 from pypy.jit.codegen.hlinfo import highleveljitinfo
 
 
@@ -25,32 +25,40 @@ def entry_point(args):
         
     filename = args[0]
     x = int(args[1])
-    bytecode = load_bytecode(filename)
+    bytecode, pool = load_bytecode(filename)
 
     if not onlyjit:
         start = time.clock()
-        res = interp_nonjit(bytecode, inputarg=x)
+        res = interp_nonjit(bytecode, inputarg=x, pool=pool)
         stop = time.clock()
         print 'Non jitted:    %d (%f seconds)' % (res, stop-start)
 
     start = time.clock()
-    res = interp(bytecode, inputarg=x)
+    res = interp(bytecode, inputarg=x, pool=pool)
     stop = time.clock()
     print 'Warmup jitted: %d (%f seconds)' % (res, stop-start)
 
     start = time.clock()
-    res = interp(bytecode, inputarg=x)
+    res = interp(bytecode, inputarg=x, pool=pool)
     stop = time.clock()
     print 'Warmed jitted: %d (%f seconds)' % (res, stop-start)
 
     return 0
 
+def decode_poolcode(s):
+    pool = ConstantPool()
+    lists = s.split('|')
+    pool.strlists = [lst.split(',') for lst in lists]
+    return pool
+
 def load_bytecode(filename):
     from pypy.rlib.streamio import open_file_as_stream
     f = open_file_as_stream(filename)
-    bytecode = f.readall()
+    poolcode = f.readline()[:-1]
+    bytecode = f.readall()[:-1]
     f.close()
-    return bytecode
+    pool = decode_poolcode(poolcode)
+    return bytecode, pool
 
 def target(driver, args):
     return entry_point, None

@@ -88,3 +88,7 @@ def compile(code='', pool=None):
     for label, pc in label_usage:
         bytecode[pc] = labels[label] - pc - 1
     return ''.join([chr(i & 0xff) for i in bytecode])  
+
+def serialize_pool(pool):
+    lists = [','.join(lst) for lst in pool.strlists]
+    return '|'.join(lists)

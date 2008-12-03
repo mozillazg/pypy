@@ -13,9 +13,11 @@ def test_constant_pool():
     assert pool.strlists == [['foo', 'bar']]
 
 class TestTLC(test_tl.TestTL):
-    from pypy.jit.tl.tlc import interp
-    interp = staticmethod(interp)
-
+    @staticmethod
+    def interp(code='', pc=0, inputarg=0):
+        from pypy.jit.tl.tlc import interp
+        return interp(code, pc, inputarg)
+ 
     def test_basic_cons_cell(self):
         bytecode = compile("""
             NIL
