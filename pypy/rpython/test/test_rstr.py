@@ -151,58 +151,49 @@ class AbstractTestRstr(BaseRtypingTest):
 
     def test_str_compare(self):
         const = self.const
+        s1 = [const('one'), const('two'), None]
+        s2 = [const('one'), const('two'), const('o'),
+              const('on'), const('twos'), const('foobar'), None]
+
         def fn(i, j):
-            s1 = [const('one'), const('two'), None]
-            s2 = [const('one'), const('two'), const('o'),
-                  const('on'), const('twos'), const('foobar'), None]
             return s1[i] == s2[j]
-        for i in range(3):
-            for j in range(7):
+        for i in range(len(s1)):
+            for j in range(len(s2)):
                 res = self.interpret(fn, [i,j])
                 assert res is fn(i, j)
 
         def fn(i, j):
-            s1 = [const('one'), const('two')]
-            s2 = [const('one'), const('two'), const('o'), const('on'), const('twos'), const('foobar')]
             return s1[i] != s2[j]
-        for i in range(2):
-            for j in range(6):
+        for i in range(len(s1)):
+            for j in range(len(s2)):
                 res = self.interpret(fn, [i, j])
                 assert res is fn(i, j)
 
         def fn(i, j):
-            s1 = [const('one'), const('two')]
-            s2 = [const('one'), const('two'), const('o'), const('on'), const('twos'), const('foobar')]
             return s1[i] < s2[j]
-        for i in range(2):
-            for j in range(6):
+        for i in range(len(s1)):
+            for j in range(len(s2)):
                 res = self.interpret(fn, [i,j])
                 assert res is fn(i, j)
 
         def fn(i, j):
-            s1 = [const('one'), const('two')]
-            s2 = [const('one'), const('two'), const('o'), const('on'), const('twos'), const('foobar')]
             return s1[i] <= s2[j]
-        for i in range(2):
-            for j in range(6):
+        for i in range(len(s1)):
+            for j in range(len(s2)):
                 res = self.interpret(fn, [i,j])
                 assert res is fn(i, j)
 
         def fn(i, j):
-            s1 = [const('one'), const('two')]
-            s2 = [const('one'), const('two'), const('o'), const('on'), const('twos'), const('foobar')]
             return s1[i] >= s2[j]
-        for i in range(2):
-            for j in range(6):
+        for i in range(len(s1)):
+            for j in range(len(s2)):
                 res = self.interpret(fn, [i,j])
                 assert res is fn(i, j)
 
         def fn(i, j):
-            s1 = [const('one'), const('two')]
-            s2 = [const('one'), const('two'), const('o'), const('on'), const('twos'), const('foobar')]
             return s1[i] > s2[j]
-        for i in range(2):
-            for j in range(6):
+        for i in range(len(s1)):
+            for j in range(len(s2)):
                 res = self.interpret(fn, [i,j])
                 assert res is fn(i, j)
 
