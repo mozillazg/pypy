@@ -372,10 +372,13 @@ class LLHelpers(AbstractLLHelpers):
         return result
 
     def ll_strcmp(s1, s2):
-        if not s1 and not s2:
-            return True
-        if not s1 or not s2:
-            return False
+        if not s1:
+            if not s2:
+                return 0
+            else:
+                return -1
+        elif not s2:
+            return 1
         chars1 = s1.chars
         chars2 = s2.chars
         len1 = len(chars1)

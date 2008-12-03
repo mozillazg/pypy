@@ -138,10 +138,13 @@ class LLHelpers(AbstractLLHelpers):
         return s1.ll_streq(s2)
 
     def ll_strcmp(s1, s2):
-        if not s1 and not s2:
-            return True
-        if not s1 or not s2:
-            return False
+        if not s1:
+            if not s2:
+                return 0
+            else:
+                return -1
+        elif not s2:
+            return 1
         return s1.ll_strcmp(s2)
 
     def ll_join(s, length_dummy, lst):
