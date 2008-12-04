@@ -157,3 +157,31 @@ class TestTLC(test_tl.TestTL):
         """, pool)
         res = interp_eval(bytecode, 0, nil, pool)
         assert res.int_o() == 42
+
+    def test_obj_truth(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,bar
+            BR_COND true
+            PUSH 12
+            PUSH 1
+            BR_COND exit
+        true:
+            PUSH 42
+        exit:
+            RETURN
+        """, pool)
+        res = interp_eval(bytecode, 0, nil, pool)
+        assert res.int_o() == 42
+
+    def test_obj_equality(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,bar
+            NEW foo,bar
+            EQ
+        """, pool)
+        res = interp_eval(bytecode, 0, nil, pool)
+        assert res.int_o() == 0

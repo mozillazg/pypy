@@ -73,6 +73,12 @@ class InstanceObj(Obj):
         cls = hint(self.cls, promote=True)
         return hint(cls, deepfreeze=True)
 
+    def t(self):
+        return True
+
+    def eq(self, other):
+        return self is other
+
     def getattr(self, name):
         i = self.getclass().attributes[name]
         return self.values[i]
