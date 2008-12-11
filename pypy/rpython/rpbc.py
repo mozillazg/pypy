@@ -621,6 +621,13 @@ class __extend__(pairtype(MethodOfFrozenPBCRepr, MethodOfFrozenPBCRepr)):
         return pair(r_from.r_im_self, r_to.r_im_self).convert_from_to(v, llops)
 
 # __ None ____________________________________________________
+def null_hash(x):
+    assert x is None
+    return 0
+def null_eq(x, y):
+    assert x is y is None
+    return True
+
 class NoneFrozenPBCRepr(Repr):
     lowleveltype = Void
 
@@ -629,6 +636,12 @@ class NoneFrozenPBCRepr(Repr):
 
     def none_call(self, hop):
         raise TyperError("attempt to call constant None")
+
+    def get_ll_hash_function(self):
+        return null_hash
+
+    def get_ll_eq_function(self):
+        return null_eq
 
     rtype_simple_call = none_call
     rtype_call_args = none_call

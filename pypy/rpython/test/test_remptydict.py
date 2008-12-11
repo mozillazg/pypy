@@ -43,6 +43,15 @@ class BaseTestRemptydict(BaseRtypingTest):
         res = self.interpret(func, [])
         assert res is False
 
+    def test_none_key_dict(self):
+        def g(x):
+            return x + 17
+        def func(x):
+            d = {None: g}
+            return d[None](x)
+        res = self.interpret(func, [25])
+        assert res == 42
+
 class TestLLtype(BaseTestRemptydict, LLRtypeMixin):
     pass
 
