@@ -200,11 +200,32 @@ class TestTLC(test_tl.TestTL):
             PICK 0
             PUSH 42
             SETATTR foo
-            SEND meth
+            SEND meth/0
             RETURN
         meth:
             PUSHARG
             GETATTR foo
+            RETURN
+        """, pool)
+        res = interp_eval(bytecode, 0, nil, pool)
+        assert res.int_o() == 42
+
+    def test_method_arg(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,meth=meth
+            PICK 0
+            PUSH 40
+            SETATTR foo
+            PUSH 2
+            SEND meth/1
+            RETURN
+        meth:
+            PUSHARG
+            GETATTR foo
+            PUSHARGN 1
+            ADD
             RETURN
         """, pool)
         res = interp_eval(bytecode, 0, nil, pool)
