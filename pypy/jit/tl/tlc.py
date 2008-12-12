@@ -29,6 +29,7 @@ class Obj(object):
     # object oriented features
     def getattr(self, name): raise TypeError
     def setattr(self, name, value): raise TypeError
+    def send(self, name): raise TypeError # return the bytecode position where the method starts
 
 
 class ClassDescr(object):
@@ -59,11 +60,12 @@ class ConstantPool(object):
 
 class Class(object):
 
-    classes = [] # [(attributes, cls), ...]
+    classes = [] # [(descr, cls), ...]
 
     def get(key):
-        for attributes, cls in Class.classes:
-            if attributes == key:
+        for descr, cls in Class.classes:
+            if key.attributes == descr.attributes and\
+               key.methods == descr.methods:
                 return cls
         result = Class(key)
         Class.classes.append((key, result))
@@ -71,11 +73,14 @@ class Class(object):
     get._pure_function_ = True
     get = staticmethod(get)
 
-    def __init__(self, attrlist):
+    def __init__(self, descr):
         attributes = {} # attrname -> index
-        for name in attrlist:
+        for name in descr.attributes:
             attributes[name] = len(attributes)
         self.attributes = attributes
+        self.methods = {}
+        for methname, pc in descr.methods:
+            self.methods[methname] = pc
     
 class InstanceObj(Obj):
 
@@ -103,6 +108,10 @@ class InstanceObj(Obj):
         i = self.getclass().attributes[name]
         self.values[i] = value
         return value
+
+    def send(self, name):
+        return self.getclass().methods[name]
+
 
 class IntObj(Obj):
 
@@ -360,7 +369,7 @@ def make_interp(supports_call, jitted=True):
                 idx = char2int(code[pc])
                 pc += 1
                 descr = pool.classdescrs[idx]
-                cls = Class.get(descr.attributes)
+                cls = Class.get(descr)
                 stack.append(InstanceObj(cls))
 
             elif opcode == GETATTR:
@@ -379,6 +388,16 @@ def make_interp(supports_call, jitted=True):
                 hint(a, promote_class=True)
                 hint(b, promote_class=True)
                 b.setattr(name, a)
+
+            elif supports_call and opcode == SEND:
+                idx = char2int(code[pc])
+                pc += 1
+                name = pool.strings[idx]
+                a = stack.pop()
+                hint(a, promote_class=True)
+                method_pc = a.send(name)
+                res = interp_eval(code, method_pc, a, pool2)
+                stack.append( res )
 
             else:
                 raise RuntimeError("unknown opcode: " + str(opcode))
