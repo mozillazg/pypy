@@ -49,6 +49,7 @@ opcode(28, "NEW")
 opcode(29, "GETATTR")
 opcode(30, "SETATTR")
 opcode(31, "SEND")
+opcode(32, "PUSHARGN")
 
 del opcode
 
@@ -91,10 +92,16 @@ def compile(code='', pool=None):
                     idx = pool.add_classdescr(attributes, methods)
                     method_usage.append(methods)
                     bytecode.append(idx)
-                elif t[0] in ('GETATTR', 'SETATTR', 'SEND'):
+                elif t[0] in ('GETATTR', 'SETATTR'):
                     # it's a string
                     idx = pool.add_string(arg)
                     bytecode.append(idx)
+                elif t[0] == 'SEND':
+                    # 'methodname/num_args'
+                    methname, num_args = arg.split('/')
+                    idx = pool.add_string(methname)
+                    bytecode.append(idx)
+                    bytecode.append(int(num_args))
                 else:
                     # it's a label
                     label_usage.append( (arg, len(bytecode)) )

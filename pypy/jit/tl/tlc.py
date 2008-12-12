@@ -217,9 +217,10 @@ def make_interp(supports_call, jitted=True):
         
         if pool is None:
             pool = ConstantPool()
-        return interp_eval(code, pc, IntObj(inputarg), pool).int_o()
+        args = [IntObj(inputarg)]
+        return interp_eval(code, pc, args, pool).int_o()
 
-    def interp_eval(code, pc, inputarg, pool2):
+    def interp_eval(code, pc, args, pool2):
         code_len = len(code)
         stack = []
         pool = hint(hint(pool2, concrete=True), deepfreeze=True)
@@ -356,14 +357,19 @@ def make_interp(supports_call, jitted=True):
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
                 pc += 1
-                res = interp_eval(code, pc + offset, zero, pool2)
+                res = interp_eval(code, pc + offset, [zero], pool2)
                 stack.append( res )
 
             elif opcode == RETURN:
                 break
 
             elif opcode == PUSHARG:
-                stack.append(inputarg)
+                stack.append(args[0])
+
+            elif opcode == PUSHARGN:
+                idx = char2int(code[pc])
+                pc += 1
+                stack.append(args[idx])
 
             elif opcode == NEW:
                 idx = char2int(code[pc])
@@ -392,11 +398,16 @@ def make_interp(supports_call, jitted=True):
             elif supports_call and opcode == SEND:
                 idx = char2int(code[pc])
                 pc += 1
+                num_args = char2int(code[pc])
+                pc += 1
+                num_args += 1 # include self
                 name = pool.strings[idx]
-                a = stack.pop()
+                meth_args = stack[-num_args:]
+                del stack[-num_args:]
+                a = meth_args[0]
                 hint(a, promote_class=True)
-                method_pc = a.send(name)
-                res = interp_eval(code, method_pc, a, pool2)
+                meth_pc = a.send(name)
+                res = interp_eval(code, meth_pc, meth_args, pool2)
                 stack.append( res )
 
             else:
