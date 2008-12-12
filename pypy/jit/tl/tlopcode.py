@@ -48,6 +48,7 @@ opcode(27, "CDR")
 opcode(28, "NEW")
 opcode(29, "GETATTR")
 opcode(30, "SETATTR")
+opcode(31, "SEND")
 
 del opcode
 
@@ -90,9 +91,8 @@ def compile(code='', pool=None):
                     idx = pool.add_classdescr(attributes, methods)
                     method_usage.append(methods)
                     bytecode.append(idx)
-                elif t[0] in ('GETATTR', 'SETATTR'):
+                elif t[0] in ('GETATTR', 'SETATTR', 'SEND'):
                     # it's a string
-                    assert pool is not None
                     idx = pool.add_string(arg)
                     bytecode.append(idx)
                 else:

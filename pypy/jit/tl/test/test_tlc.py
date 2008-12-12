@@ -191,3 +191,21 @@ class TestTLC(test_tl.TestTL):
         """, pool)
         res = interp_eval(bytecode, 0, nil, pool)
         assert res.int_o() == 0
+
+    def test_method(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            NEW foo,meth=meth
+            PICK 0
+            PUSH 42
+            SETATTR foo
+            SEND meth
+            RETURN
+        meth:
+            PUSHARG
+            GETATTR foo
+            RETURN
+        """, pool)
+        res = interp_eval(bytecode, 0, nil, pool)
+        assert res.int_o() == 42
