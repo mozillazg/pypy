@@ -1,16 +1,22 @@
 import py
-from pypy.jit.tl.tlopcode import compile, NEW
+from pypy.jit.tl.tlopcode import compile, NEW, RETURN
 from pypy.jit.tl.test import test_tl
 from pypy.jit.tl.tlc import ConstantPool
     
 def test_constant_pool():
     pool = ConstantPool()
     bytecode = compile("""
-        NEW foo,bar
+        NEW foo,bar,meth=f
+      f:
+        RETURN
     """, pool)
-    expected = test_tl.list2bytecode([NEW, 0])
+    expected = test_tl.list2bytecode([NEW, 0, RETURN])
     assert expected == bytecode
-    assert pool.strlists == [['foo', 'bar']]
+    assert len(pool.classdescrs) == 1
+    descr = pool.classdescrs[0]
+    assert descr.attributes == ['foo', 'bar']
+    assert descr.methods == [('meth', 2)]
+
 
 class TestTLC(test_tl.TestTL):
     @staticmethod
@@ -139,7 +145,7 @@ class TestTLC(test_tl.TestTL):
             NEW foo,bar
             PICK 0
             PUSH 42
-            SETATTR foo,
+            SETATTR foo
         """, pool)
         obj = interp_eval(bytecode, 0, None, pool)
         assert obj.values[0].int_o() == 42
@@ -152,8 +158,8 @@ class TestTLC(test_tl.TestTL):
             NEW foo,bar
             PICK 0
             PUSH 42
-            SETATTR bar,
-            GETATTR bar,
+            SETATTR bar
+            GETATTR bar
         """, pool)
         res = interp_eval(bytecode, 0, nil, pool)
         assert res.int_o() == 42

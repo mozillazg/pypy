@@ -14,16 +14,55 @@ class BaseTestTLC(PortalTest):
     small = False
 
     def _get_interp(self):
-        def decode_strlist(s):
-            lists = s.split('|')
-            return [lst.split(',') for lst in lists]
+        def decode_descr(encdescr):
+            items = encdescr.split(',')
+            attributes = []
+            methods = []
+            for item in items:
+                if '=' in item:
+                    methname, pc = item.split('=')
+                    methods.append((methname, int(pc)))
+                else:
+                    attributes.append(item)
+            return tlc.ClassDescr(attributes, methods)
+
+        def encode_descr(descr):
+            parts = []
+            parts += descr.attributes
+            parts += ['%s=%s' % item for item in descr.methods]
+            return ','.join(parts)
         
-        def interp(llbytecode, pc, inputarg, llstrlists):
+        def decode_pool(encpool):
+            """
+            encpool is encoded in this way:
+
+            attr1,attr2,foo=3|attr1,bar=5|...
+            attr1,attr2,foo,bar,hello,world,...
+            """
+            if encpool == '':
+                return None
+            lines = encpool.split('\n')
+            assert len(lines) == 2
+            encdescrs = lines[0].split('|')
+            classdescrs = [decode_descr(enc) for enc in encdescrs]
+            strings = lines[1].split(',')
+            pool = tlc.ConstantPool()
+            pool.classdescrs = classdescrs
+            pool.strings = strings
+            return pool
+
+        def encode_pool(pool):
+            if pool is None:
+                return ''
+            encdescrs = '|'.join([encode_descr(descr) for descr in pool.classdescrs])
+            encstrings = ','.join(pool.strings)
+            return '%s\n%s' % (encdescrs, encstrings)
+            
+        def interp(llbytecode, pc, inputarg, llencpool):
             from pypy.rpython.annlowlevel import hlstr
             bytecode = hlstr(llbytecode)
-            strlists = hlstr(llstrlists)
-            pool = tlc.ConstantPool()
-            pool.strlists = decode_strlist(strlists)
+            encpool = hlstr(llencpool)
+            pool = decode_pool(encpool)
             obj = tlc.interp_eval_without_call(bytecode,
                                                pc,
                                                tlc.IntObj(inputarg),
@@ -34,13 +73,10 @@ class BaseTestTLC(PortalTest):
         def build_bytecode(s):
             result = ''.join([chr(int(t)) for t in s.split(',')])
             return to_rstr(result)
-        def build_strlist(items):
-            lists = [','.join(lst) for lst in items]
-            return to_rstr('|'.join(lists))
-        interp.convert_arguments = [build_bytecode, int, int, build_strlist]
-        
+        def build_pool(pool):
+            return to_rstr(encode_pool(pool))
+        interp.convert_arguments = [build_bytecode, int, int, build_pool]
         return interp
-
 
     def test_factorial(self):
         code = tlc.compile(FACTORIAL_SOURCE)
@@ -52,7 +88,7 @@ class BaseTestTLC(PortalTest):
         interp = self._get_interp()
         res = self.timeshift_from_portal(interp,
                                          tlc.interp_eval_without_call,
-                                         [bytecode, 0, n, []],
+                                         [bytecode, 0, n, None],
                                          policy=P_OOPSPEC)#, backendoptimize=True)
         assert res == expected
         self.check_insns(malloc=1)
@@ -75,7 +111,7 @@ class BaseTestTLC(PortalTest):
         interp = self._get_interp()
         res = self.timeshift_from_portal(interp,
                                          tlc.interp_eval_without_call,
-                                         [bytecode, 0, 1, []],
+                                         [bytecode, 0, 1, None],
                                          policy=P_OOPSPEC)#, backendoptimize=True)
         assert res == 20
 
@@ -93,11 +129,10 @@ class BaseTestTLC(PortalTest):
         interp = self._get_interp()
         res = self.timeshift_from_portal(interp,
                                          tlc.interp_eval_without_call,
-                                         [bytecode, 0, 0, pool.strlists],
+                                         [bytecode, 0, 0, pool],
                                          policy=P_OOPSPEC)
         assert res == 42
         self.check_insns(malloc=1, direct_call=0)
-
 
 
 class TestLLType(BaseTestTLC):
