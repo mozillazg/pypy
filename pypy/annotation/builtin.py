@@ -248,6 +248,9 @@ def builtin_max(*s_values):
                 s = SomeInteger(nonneg=True, knowntype=s.knowntype)
         return s
 
+def builtin_enumerate(*stuff):
+    raise Exception("'enumerate()' is not RPython so far")
+
 def builtin_apply(*stuff):
     getbookkeeper().warning("ignoring apply%r" % (stuff,))
     return SomeObject()
