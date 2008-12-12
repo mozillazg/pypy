@@ -54,8 +54,9 @@ del opcode
 
 def compile(code='', pool=None):
     bytecode = []
-    labels   = {}       #[key] = pc
-    label_usage = []    #(name, pc)
+    labels   = {}        #[key] = pc
+    label_usage = []     #(name, pc)
+    method_usage = []    #[methods]
     for s in code.split('\n'):
         for comment in '; # //'.split():
             s = s.split(comment, 1)[0]
@@ -73,13 +74,26 @@ def compile(code='', pool=None):
             try:
                 bytecode.append( int(arg) )
             except ValueError:
-                if ',' in arg:
-                    # it's a list of strings
+                if t[0] == 'NEW':
+                    # it's a class descr
                     items = arg.split(',')
-                    items = map(str.strip, items)
-                    items = [x for x in items if x]
+                    items = [x.strip() for x in items if x]
+                    attributes = []
+                    methods = []
+                    for item in items:
+                        if '=' in item:
+                            methname, label = item.split('=')
+                            methods.append((methname, label))
+                        else:
+                            attributes.append(item)
                     assert pool is not None
-                    idx = pool.add_strlist(items)
+                    idx = pool.add_classdescr(attributes, methods)
+                    method_usage.append(methods)
+                    bytecode.append(idx)
+                elif t[0] in ('GETATTR', 'SETATTR'):
+                    # it's a string
+                    assert pool is not None
+                    idx = pool.add_string(arg)
                     bytecode.append(idx)
                 else:
                     # it's a label
@@ -87,6 +101,10 @@ def compile(code='', pool=None):
                     bytecode.append( 0 )
     for label, pc in label_usage:
         bytecode[pc] = labels[label] - pc - 1
+    for methods in method_usage:
+        for i, (methname, label) in enumerate(methods):
+            pc = labels[label]
+            methods[i] = (methname, pc)
     return ''.join([chr(i & 0xff) for i in bytecode])  
 
 def serialize_pool(pool):

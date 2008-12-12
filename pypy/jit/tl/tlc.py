@@ -31,15 +31,31 @@ class Obj(object):
     def setattr(self, name, value): raise TypeError
 
 
+class ClassDescr(object):
+
+    def __init__(self, attributes, methods):
+        self.attributes = attributes
+        self.methods = methods
+
 class ConstantPool(object):
 
     def __init__(self):
-        self.strlists = []
+        self.classdescrs = []
+        self.strings = []
 
-    def add_strlist(self, items):
-        idx = len(self.strlists)
-        self.strlists.append(items)
+    def add_classdescr(self, attributes, methods):
+        idx = len(self.classdescrs)
+        descr = ClassDescr(attributes, methods)
+        self.classdescrs.append(descr)
         return idx
+
+    def add_string(self, s):
+        try:
+            return self.strings.index(s)
+        except ValueError:
+            idx = len(self.strings)
+            self.strings.append(s)
+            return idx
 
 class Class(object):
 
@@ -343,15 +359,14 @@ def make_interp(supports_call, jitted=True):
             elif opcode == NEW:
                 idx = char2int(code[pc])
                 pc += 1
-                attributes = pool.strlists[idx]
-                cls = Class.get(attributes)
+                descr = pool.classdescrs[idx]
+                cls = Class.get(descr.attributes)
                 stack.append(InstanceObj(cls))
 
             elif opcode == GETATTR:
                 idx = char2int(code[pc])
                 pc += 1
-                attributes = pool.strlists[idx]
-                name = attributes[0]
+                name = pool.strings[idx]
                 a = stack.pop()
                 hint(a, promote_class=True)
                 stack.append(a.getattr(name))
@@ -359,8 +374,7 @@ def make_interp(supports_call, jitted=True):
             elif opcode == SETATTR:
                 idx = char2int(code[pc])
                 pc += 1
-                attributes = pool.strlists[idx]
-                name = attributes[0]
+                name = pool.strings[idx]
                 a, b = stack.pop(), stack.pop()
                 hint(a, promote_class=True)
                 hint(b, promote_class=True)
