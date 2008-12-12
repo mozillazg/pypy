@@ -164,7 +164,10 @@ class LLInterpreter(object):
         self.mallocs[ptr._obj] = llframe
 
     def remember_free(self, ptr):
-        del self.mallocs[ptr._obj]
+        try:
+            del self.mallocs[ptr._obj]
+        except KeyError:
+            pass
 
 def checkptr(ptr):
     assert isinstance(lltype.typeOf(ptr), lltype.Ptr)
