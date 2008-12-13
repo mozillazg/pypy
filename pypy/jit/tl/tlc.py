@@ -220,6 +220,14 @@ def make_interp(supports_call, jitted=True):
         args = [IntObj(inputarg)]
         return interp_eval(code, pc, args, pool).int_o()
 
+    def call_interp_eval(code2, pc2, args2, pool2):
+        # recursive calls to portal need to go through an helper
+        code = hint(code2, promote=True)
+        pc = hint(pc2, promote=True)
+        args = hint(args2, promote=True)
+        return interp_eval(code, pc, args, pool2)
+        
+
     def interp_eval(code, pc, args, pool2):
         code_len = len(code)
         stack = []
@@ -357,7 +365,7 @@ def make_interp(supports_call, jitted=True):
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
                 pc += 1
-                res = interp_eval(code, pc + offset, [zero], pool2)
+                res = call_interp_eval(code, pc + offset, [zero], pool2)
                 stack.append( res )
 
             elif opcode == RETURN:
@@ -402,12 +410,17 @@ def make_interp(supports_call, jitted=True):
                 pc += 1
                 num_args += 1 # include self
                 name = pool.strings[idx]
-                meth_args = stack[-num_args:]
-                del stack[-num_args:]
+                start = len(stack)-num_args
+                assert start >= 0
+                meth_args = stack[start:]
+                # we can't use del because vlist.py doesn't support list_method_resize_le
+                #del stack[start:]
+                for i in range(num_args):
+                    stack.pop()
                 a = meth_args[0]
                 hint(a, promote_class=True)
                 meth_pc = a.send(name)
-                res = interp_eval(code, meth_pc, meth_args, pool2)
+                res = call_interp_eval(code, meth_pc, meth_args, pool2)
                 stack.append( res )
 
             else:

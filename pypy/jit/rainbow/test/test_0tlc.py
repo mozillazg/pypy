@@ -63,10 +63,10 @@ class BaseTestTLC(PortalTest):
             bytecode = hlstr(llbytecode)
             encpool = hlstr(llencpool)
             pool = decode_pool(encpool)
-            obj = tlc.interp_eval_without_call(bytecode,
-                                               pc,
-                                               tlc.IntObj(inputarg),
-                                               pool)
+            obj = tlc.interp_eval(bytecode,
+                                  pc,
+                                  [tlc.IntObj(inputarg)],
+                                  pool)
             return obj.int_o()
         
         to_rstr = self.to_rstr
@@ -78,18 +78,20 @@ class BaseTestTLC(PortalTest):
         interp.convert_arguments = [build_bytecode, int, int, build_pool]
         return interp
 
-    def test_factorial(self):
-        code = tlc.compile(FACTORIAL_SOURCE)
+    def exec_code(self, code, inputarg, pool=None):
         bytecode = ','.join([str(ord(c)) for c in code])
-
-        n = 5
-        expected = 120
-        
         interp = self._get_interp()
         res = self.timeshift_from_portal(interp,
-                                         tlc.interp_eval_without_call,
-                                         [bytecode, 0, n, None],
-                                         policy=P_OOPSPEC)#, backendoptimize=True)
+                                         tlc.interp_eval,
+                                         [bytecode, 0, inputarg, pool],
+                                         policy=P_OOPSPEC)
+        return res
+
+    def test_factorial(self):
+        code = tlc.compile(FACTORIAL_SOURCE)
+        n = 5
+        expected = 120
+        res = self.exec_code(code, n)
         assert res == expected
         self.check_insns(malloc=1)
 
@@ -106,18 +108,11 @@ class BaseTestTLC(PortalTest):
             PUSHARG
             DIV
         """)
-        bytecode = ','.join([str(ord(c)) for c in code])
-
-        interp = self._get_interp()
-        res = self.timeshift_from_portal(interp,
-                                         tlc.interp_eval_without_call,
-                                         [bytecode, 0, 1, None],
-                                         policy=P_OOPSPEC)#, backendoptimize=True)
+        res = self.exec_code(code, 1)
         assert res == 20
 
     def test_getattr(self):
-        from pypy.jit.tl.tlc import interp_eval, nil, ConstantPool
-        pool = ConstantPool()
+        pool = tlc.ConstantPool()
         code = tlc.compile("""
             NEW foo,bar
             PICK 0
@@ -125,12 +120,7 @@ class BaseTestTLC(PortalTest):
             SETATTR bar,
             GETATTR bar,
         """, pool)
-        bytecode = ','.join([str(ord(c)) for c in code])
-        interp = self._get_interp()
-        res = self.timeshift_from_portal(interp,
-                                         tlc.interp_eval_without_call,
-                                         [bytecode, 0, 0, pool],
-                                         policy=P_OOPSPEC)
+        res = self.exec_code(code, 0, pool)
         assert res == 42
         self.check_insns(malloc=1, direct_call=0)
 
