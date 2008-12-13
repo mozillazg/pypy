@@ -38,6 +38,10 @@ class ClassDescr(object):
         self.attributes = attributes
         self.methods = methods
 
+    def __eq__(self, other):
+        "NOT_RPYTHON"
+        return self.__dict__ == other.__dict__
+
 class ConstantPool(object):
 
     def __init__(self):
@@ -57,6 +61,10 @@ class ConstantPool(object):
             idx = len(self.strings)
             self.strings.append(s)
             return idx
+
+    def __eq__(self, other):
+        "NOT_RPYTHON"
+        return self.__dict__ == other.__dict__
 
 class Class(object):
 
@@ -467,5 +475,4 @@ if __name__ == '__main__':
 
     pool = ConstantPool()
     bytecode = compile(src, pool)
-    print serialize_pool(pool)
-    print bytecode
+    sys.stdout.write(serialize_program(bytecode, pool))

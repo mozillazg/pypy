@@ -45,20 +45,12 @@ def entry_point(args):
 
     return 0
 
-def decode_poolcode(s):
-    pool = ConstantPool()
-    lists = s.split('|')
-    pool.strlists = [lst.split(',') for lst in lists]
-    return pool
 
 def load_bytecode(filename):
     from pypy.rlib.streamio import open_file_as_stream
+    from pypy.jit.tl.tlopcode import decode_program
     f = open_file_as_stream(filename)
-    poolcode = f.readline()[:-1]
-    bytecode = f.readall()[:-1]
-    f.close()
-    pool = decode_poolcode(poolcode)
-    return bytecode, pool
+    return decode_program(f.readall())
 
 def target(driver, args):
     return entry_point, None
