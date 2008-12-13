@@ -198,6 +198,27 @@ def char2int(c):
         t = -(-ord(c) & 0xff)
     return t
 
+class FrameStack:
+    def __init__(self):
+        self.pc_stack = []
+        self.args_stack = []
+        self.stack_stack = []
+
+    def push(self, pc, args, stack):
+        self.pc_stack.append(pc)
+        self.args_stack.append(args)
+        self.stack_stack.append(stack)
+        return self
+
+    def pop(self):
+        pc = self.pc_stack.pop()
+        args = self.args_stack.pop()
+        stack = self.stack_stack.pop()
+        return pc, args, stack
+
+    def isempty(self):
+        return len(self.pc_stack) == 0
+        
 def make_interp(supports_call, jitted=True):
     if jitted:
         from pypy.rlib.jit import hint
@@ -220,18 +241,11 @@ def make_interp(supports_call, jitted=True):
         args = [IntObj(inputarg)]
         return interp_eval(code, pc, args, pool).int_o()
 
-    def call_interp_eval(code2, pc2, args2, pool2):
-        # recursive calls to portal need to go through an helper
-        code = hint(code2, promote=True)
-        pc = hint(pc2, promote=True)
-        args = hint(args2, promote=True)
-        return interp_eval(code, pc, args, pool2)
-        
-
     def interp_eval(code, pc, args, pool2):
         code_len = len(code)
-        stack = []
         pool = hint(hint(pool2, concrete=True), deepfreeze=True)
+        stack = []
+        framestack = FrameStack()
 
         while pc < code_len:
             hint(None, global_merge_point=True)
@@ -365,11 +379,18 @@ def make_interp(supports_call, jitted=True):
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
                 pc += 1
-                res = call_interp_eval(code, pc + offset, [zero], pool2)
-                stack.append( res )
+                framestack.push(pc, args, stack)
+                pc = pc + offset
+                args = [zero]
+                stack = []
 
             elif opcode == RETURN:
-                break
+                if framestack.isempty():                    
+                    break
+                res = stack.pop()
+                pc2, args, stack = framestack.pop()
+                pc = hint(pc2, promote=True)
+                stack.append(res)
 
             elif opcode == PUSHARG:
                 stack.append(args[0])
@@ -410,18 +431,16 @@ def make_interp(supports_call, jitted=True):
                 pc += 1
                 num_args += 1 # include self
                 name = pool.strings[idx]
-                start = len(stack)-num_args
-                assert start >= 0
-                meth_args = stack[start:]
-                # we can't use del because vlist.py doesn't support list_method_resize_le
-                #del stack[start:]
+                meth_args = [None] * num_args
                 for i in range(num_args):
-                    stack.pop()
+                    meth_args[-i-1] = stack.pop()
                 a = meth_args[0]
                 hint(a, promote_class=True)
-                meth_pc = a.send(name)
-                res = call_interp_eval(code, meth_pc, meth_args, pool2)
-                stack.append( res )
+                meth_pc = hint(a.send(name), promote=True)
+                framestack.push(pc, args, stack)
+                pc = meth_pc
+                args = meth_args
+                stack = []
 
             else:
                 raise RuntimeError("unknown opcode: " + str(opcode))
