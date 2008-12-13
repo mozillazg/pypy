@@ -17,6 +17,19 @@ def test_constant_pool():
     assert descr.attributes == ['foo', 'bar']
     assert descr.methods == [('meth', 2)]
 
+def test_serialization():
+    from pypy.jit.tl.tlopcode import serialize_program, decode_program
+    pool = ConstantPool()
+    bytecode = compile("""
+        NEW foo,bar,meth=f
+        SETATTR foobar
+      f:
+        RETURN
+    """, pool)
+    s = serialize_program(bytecode, pool)
+    bytecode2, pool2 = decode_program(s)
+    assert bytecode == bytecode2
+    assert pool == pool2
 
 class TestTLC(test_tl.TestTL):
     @staticmethod

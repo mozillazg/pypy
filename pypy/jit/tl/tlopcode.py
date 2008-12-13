@@ -114,6 +114,63 @@ def compile(code='', pool=None):
             methods[i] = (methname, pc)
     return ''.join([chr(i & 0xff) for i in bytecode])  
 
+
+def decode_descr(encdescr):
+    from pypy.jit.tl.tlc import ClassDescr
+    items = encdescr.split(',')
+    attributes = []
+    methods = []
+    for item in items:
+        if '=' in item:
+            methname, pc = item.split('=')
+            methods.append((methname, int(pc)))
+        else:
+            attributes.append(item)
+    return ClassDescr(attributes, methods)
+
+def decode_pool(encpool):
+    """
+    encpool is encoded in this way:
+
+    attr1,attr2,foo=3|attr1,bar=5|...
+    attr1,attr2,foo,bar,hello,world,...
+    """
+    from pypy.jit.tl.tlc import ConstantPool
+    if encpool == '':
+        return None
+    lines = encpool.split('\n')
+    assert len(lines) == 2
+    encdescrs = lines[0].split('|')
+    classdescrs = [decode_descr(enc) for enc in encdescrs]
+    strings = lines[1].split(',')
+    pool = ConstantPool()
+    pool.classdescrs = classdescrs
+    pool.strings = strings
+    return pool
+
+def serialize_descr(descr):
+    parts = []
+    parts += descr.attributes
+    parts += ['%s=%s' % item for item in descr.methods]
+    return ','.join(parts)
+
 def serialize_pool(pool):
-    lists = [','.join(lst) for lst in pool.strlists]
-    return '|'.join(lists)
+    if pool is None:
+        return ''
+    encdescrs = '|'.join([serialize_descr(descr) for descr in pool.classdescrs])
+    encstrings = ','.join(pool.strings)
+    return '%s\n%s' % (encdescrs, encstrings)
+
+def serialize_program(bytecode, pool):
+    poolcode = serialize_pool(pool)
+    return '%s\n%s' % (poolcode, bytecode)
+
+def decode_program(s):
+    idx1 = s.find('\n')
+    assert idx1 >= 0
+    idx2 = s.find('\n', idx1+1)
+    assert idx2 >= 0
+    poolcode = s[:idx2]
+    bytecode = s[idx2+1:] # remove the 2nd newline
+    pool = decode_pool(poolcode)
+    return bytecode, pool
