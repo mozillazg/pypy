@@ -124,6 +124,25 @@ class BaseTestTLC(PortalTest):
         assert res == 42
         self.check_insns(malloc=1, direct_call=0)
 
+    def test_method(self):
+        pool = tlc.ConstantPool()
+        code = tlc.compile("""
+            NEW foo,meth=meth
+            PICK 0
+            PUSH 40
+            SETATTR foo
+            PUSH 2
+            SEND meth/1
+            RETURN
+        meth:
+            PUSHARG
+            GETATTR foo
+            PUSHARGN 1
+            ADD
+            RETURN
+        """, pool)
+        res = self.exec_code(code, 0, pool)
+        assert res == 42
 
 class TestLLType(BaseTestTLC):
     type_system = "lltype"
