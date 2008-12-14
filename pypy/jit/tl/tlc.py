@@ -395,10 +395,14 @@ def make_interp(supports_call, jitted=True):
             elif opcode == RETURN:
                 if framestack.isempty():                    
                     break
-                res = stack.pop()
+                if stack:
+                    res = stack.pop()
+                else:
+                    res = None
                 pc2, args, stack = framestack.pop()
                 pc = hint(pc2, promote=True)
-                stack.append(res)
+                if res:
+                    stack.append(res)
 
             elif opcode == PUSHARG:
                 stack.append(args[0])
