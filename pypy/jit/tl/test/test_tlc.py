@@ -141,12 +141,12 @@ class TestTLC(test_tl.TestTL):
         py.test.raises(TypeError, self.interp, bytecode, 0, 0)
 
     def test_new_obj(self):
-        from pypy.jit.tl.tlc import interp_eval, InstanceObj
+        from pypy.jit.tl.tlc import interp_eval, InstanceObj, nil
         pool = ConstantPool()
         bytecode = compile("""
             NEW foo,bar
         """, pool)
-        obj = interp_eval(bytecode, 0, None, pool)
+        obj = interp_eval(bytecode, 0, [nil], pool)
         assert isinstance(obj, InstanceObj)
         assert len(obj.values) == 2
         assert sorted(obj.cls.attributes.keys()) == ['bar', 'foo']
@@ -160,7 +160,7 @@ class TestTLC(test_tl.TestTL):
             PUSH 42
             SETATTR foo
         """, pool)
-        obj = interp_eval(bytecode, 0, None, pool)
+        obj = interp_eval(bytecode, 0, [nil], pool)
         assert obj.values[0].int_o() == 42
         assert obj.values[1] is nil
 
@@ -174,7 +174,7 @@ class TestTLC(test_tl.TestTL):
             SETATTR bar
             GETATTR bar
         """, pool)
-        res = interp_eval(bytecode, 0, nil, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
 
     def test_obj_truth(self):
@@ -191,7 +191,7 @@ class TestTLC(test_tl.TestTL):
         exit:
             RETURN
         """, pool)
-        res = interp_eval(bytecode, 0, nil, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
 
     def test_obj_equality(self):
@@ -202,7 +202,7 @@ class TestTLC(test_tl.TestTL):
             NEW foo,bar
             EQ
         """, pool)
-        res = interp_eval(bytecode, 0, nil, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 0
 
     def test_method(self):
@@ -220,7 +220,7 @@ class TestTLC(test_tl.TestTL):
             GETATTR foo
             RETURN
         """, pool)
-        res = interp_eval(bytecode, 0, nil, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
 
     def test_method_arg(self):
@@ -241,7 +241,7 @@ class TestTLC(test_tl.TestTL):
             ADD
             RETURN
         """, pool)
-        res = interp_eval(bytecode, 0, nil, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
 
     def test_call_without_return_value(self):
@@ -254,5 +254,24 @@ class TestTLC(test_tl.TestTL):
         foo:
             RETURN
         """, pool)
-        res = interp_eval(bytecode, 0, nil, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
+
+    def test_binarytree(self):
+        from pypy.jit.tl.tlc import interp_eval, IntObj
+        pool = ConstantPool()
+        path = py.path.local(__file__).join('../../binarytree.tlc.src')
+        src = path.read()
+        bytecode = compile(src, pool)
+        def search(n):
+            obj = IntObj(n)
+            res = interp_eval(bytecode, 0, [obj], pool)
+            return res.int_o()
+        assert search(20)
+        assert search(10)
+        assert search(15)
+        assert search(30)
+        assert not search(1)
+        assert not search(40)
+        assert not search(12)
+        assert not search(27)
