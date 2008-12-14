@@ -243,3 +243,16 @@ class TestTLC(test_tl.TestTL):
         """, pool)
         res = interp_eval(bytecode, 0, nil, pool)
         assert res.int_o() == 42
+
+    def test_call_without_return_value(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            CALL foo
+            PUSH 42
+            RETURN
+        foo:
+            RETURN
+        """, pool)
+        res = interp_eval(bytecode, 0, nil, pool)
+        assert res.int_o() == 42
