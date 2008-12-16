@@ -257,16 +257,20 @@ class TestTLC(test_tl.TestTL):
         res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
 
-    def test_binarytree(self):
+    def compile(self, filename):
         from pypy.jit.tl.tlc import interp_eval, IntObj
         pool = ConstantPool()
-        path = py.path.local(__file__).join('../../binarytree.tlc.src')
+        path = py.path.local(__file__).join(filename)
         src = path.read()
         bytecode = compile(src, pool)
-        def search(n):
+        def fn(n):
             obj = IntObj(n)
             res = interp_eval(bytecode, 0, [obj], pool)
             return res.int_o()
+        return fn
+
+    def test_binarytree(self):
+        search = self.compile('../../binarytree.tlc.src')
         assert search(20)
         assert search(10)
         assert search(15)
@@ -275,3 +279,10 @@ class TestTLC(test_tl.TestTL):
         assert not search(40)
         assert not search(12)
         assert not search(27)
+
+    def test_fibo(self):
+        fibo = self.compile('../../fibo.tlc.src')
+        assert fibo(1) == 1
+        assert fibo(2) == 1
+        assert fibo(3) == 2
+        assert fibo(7) == 13
