@@ -51,6 +51,9 @@ opcode(30, "SETATTR")
 opcode(31, "SEND")
 opcode(32, "PUSHARGN")
 
+opcode(33, "PRINT")
+opcode(34, "DUMP")
+
 del opcode
 
 

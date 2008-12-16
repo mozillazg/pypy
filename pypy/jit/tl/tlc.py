@@ -2,7 +2,7 @@
 
 import autopath
 import py
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.jit.tl.tlopcode import *
 from pypy.jit.tl import tlopcode
 from pypy.rlib.jit import hint
@@ -12,6 +12,7 @@ class Obj(object):
     def t(self): raise TypeError
 
     def int_o(self): raise TypeError
+    def to_string(self): raise TypeError
     
     def add(self, other): raise TypeError
     def sub(self, other): raise TypeError
@@ -102,6 +103,9 @@ class InstanceObj(Obj):
         cls = hint(self.cls, promote=True)
         return hint(cls, deepfreeze=True)
 
+    def to_string(self):
+        return '<Object>'
+
     def t(self):
         return True
 
@@ -132,6 +136,9 @@ class IntObj(Obj):
     def int_o(self):
         return self.value
 
+    def to_string(self):
+        return str(self.value)
+
     def add(self, other): return IntObj(self.value + other.int_o())
     def sub(self, other): return IntObj(self.value - other.int_o())
     def mul(self, other): return IntObj(self.value * other.int_o())
@@ -159,6 +166,9 @@ class LispObj(Obj):
 
 class NilObj(LispObj):
 
+    def to_string(self):
+        return 'nil'
+
     def t(self):
         return False
 
@@ -177,6 +187,9 @@ class ConsObj(LispObj):
     def __init__(self, car, cdr):
         self._car = car
         self._cdr = cdr
+
+    def to_string(self):
+        return '<ConsObj>'
 
     def t(self):
         return True
@@ -453,6 +466,19 @@ def make_interp(supports_call, jitted=True):
                 pc = meth_pc
                 args = meth_args
                 stack = []
+
+            elif opcode == PRINT:
+                if not we_are_translated():
+                    a = stack.pop()
+                    hint(a, promote_class=True)
+
+            elif opcode == DUMP:
+                if not we_are_translated():
+                    parts = []
+                    for obj in stack:
+                        hint(obj, promote_class=True)
+                        parts.append(obj.to_string())
+                    print '[%s]' % ', '.join(parts)
 
             else:
                 raise RuntimeError("unknown opcode: " + str(opcode))
