@@ -531,6 +531,26 @@ class BaseTestPromotion(InterpretationTest):
         res = self.interpret(ll_function, [True], [], policy=StopAtXPolicy(make_obj))
         self.check_flexswitches(2)
 
+    def test_isinstance_after_promotion(self):
+        class A:
+            pass
+        class B(A):
+            pass
+
+        def make_obj(flag):
+            return flag and A() or B()
+
+        def ll_function(flag):
+            hint(None, global_merge_point=True)
+            obj = make_obj(flag)
+            promoted_obj = hint(obj, promote_class=True)
+            return isinstance(promoted_obj, B)
+
+        res = self.interpret(ll_function, [False], [], policy=StopAtXPolicy(make_obj))
+        assert res
+        self.check_flexswitches(2)
+        
+
 class TestLLType(BaseTestPromotion):
     type_system = "lltype"
     to_rstr = staticmethod(LLSupport.to_rstr)
