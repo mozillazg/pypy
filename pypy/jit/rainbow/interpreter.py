@@ -1113,8 +1113,11 @@ class OOTypeJitInterpreter(JitInterpreter):
                                             typedesc)
         # else it's a vstruct
         content = objbox.content
-        assert isinstance(content, rcontainer.VirtualStruct)
-        objtypedesc = content.typedesc
+        if isinstance(content, rcontainer.PartialDataStruct):
+            objtypedesc = self.typedesc_from_partial_struct(content)
+        else:
+            assert isinstance(content, rcontainer.VirtualStruct)
+            objtypedesc = content.typedesc
         result = objtypedesc.issubtype(typedesc)
         return rvalue.ll_fromvalue(self.jitstate, result)
 
@@ -1133,20 +1136,24 @@ class OOTypeJitInterpreter(JitInterpreter):
         if known_class:
             self.frame.pc = target
 
+    def typedesc_from_partial_struct(self, vstruct):
+        from pypy.rpython.ootypesystem.rclass import CLASSTYPE
+        classbox = vstruct.op_getfield(self.jitstate, self.class_fielddesc)
+        assert classbox.is_constant()
+        gv_meta = classbox.getgenvar(self.jitstate)
+        meta = gv_meta.revealconst(CLASSTYPE)
+        cls = meta.class_ # to be removed after the merging of the less-meta-instances branch
+        typedesc = self.class2typedesc[cls]
+        return typedesc
+
     @arguments("green_varargs", "red_varargs", "string")
     def opimpl_const_oosend(self, greenargs, redargs, methname):
-        from pypy.rpython.ootypesystem.rclass import CLASSTYPE
         selfbox = redargs[0]
         assert isinstance(selfbox, rvalue.AbstractPtrRedBox)
         vstruct = selfbox.content
         assert vstruct is not None
         if isinstance(vstruct, rcontainer.PartialDataStruct):
-            classbox = vstruct.op_getfield(self.jitstate, self.class_fielddesc)
-            assert classbox.is_constant()
-            gv_meta = classbox.getgenvar(self.jitstate)
-            meta = gv_meta.revealconst(CLASSTYPE)
-            cls = meta.class_ # to be removed after the merging of the less-meta-instances branch
-            typedesc = self.class2typedesc[cls]
+            typedesc = self.typedesc_from_partial_struct(vstruct)
         else:
             assert isinstance(vstruct, rcontainer.VirtualStruct)
             typedesc = vstruct.typedesc

@@ -1787,6 +1787,10 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             # serialize_op, since it works just fine
             raise NotImplementedError
         assert color == 'red', 'unknown color %s' % color
+        INSTANCE = op.args[0].concretetype
+        TYPES = INSTANCE._all_subclasses()
+        for T in TYPES:
+            self.register_typedesc_for_type(T)
         v1, cType = op.args
         arg1 = self.serialize_oparg('red', v1)
         index = self.structtypedesc_position(cType.value)
@@ -1946,14 +1950,17 @@ class OOTypeBytecodeWriter(BytecodeWriter):
             self.register_redvar(op.result)
 
 
+    def register_typedesc_for_type(self, T):
+        descindex = self.structtypedesc_position(T)
+        desc = self.structtypedescs[descindex]
+        ooclass = ootype.runtimeClass(T)
+        self.interpreter.class2typedesc[ooclass] = desc
+        return desc
+
     def fill_methodcodes(self, INSTANCE, methname, graph2tsgraph):
-        class2typedesc = self.interpreter.class2typedesc
         TYPES = INSTANCE._all_subclasses()
         for T in TYPES:
-            descindex = self.structtypedesc_position(T)
-            desc = self.structtypedescs[descindex]
-            ooclass = ootype.runtimeClass(T)
-            class2typedesc[ooclass] = desc
+            desc = self.register_typedesc_for_type(T)
             if methname in desc.methodcodes:
                 break # we already filled the codes for this type
             _, meth = T._lookup(methname)
