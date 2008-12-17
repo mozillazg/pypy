@@ -110,7 +110,9 @@ def compile(code='', pool=None):
                     label_usage.append( (arg, len(bytecode)) )
                     bytecode.append( 0 )
     for label, pc in label_usage:
-        bytecode[pc] = labels[label] - pc - 1
+        offset = labels[label] - pc - 1
+        assert -128 <= offset <= 127
+        bytecode[pc] = offset
     for methods in method_usage:
         for i, (methname, label) in enumerate(methods):
             pc = labels[label]
