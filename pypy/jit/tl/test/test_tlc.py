@@ -289,6 +289,10 @@ class TestTLC(test_tl.TestTL):
 
     def test_accumulator(self):
         acc = self.compile('../../accumulator.tlc.src')
+        assert acc(0) == 0
         assert acc(1) == 0
         assert acc(10) == sum(range(10))
         assert acc(20) == sum(range(20))
+        assert acc(-1) == 1
+        assert acc(-2) == 2
+        assert acc(-10) == 10
