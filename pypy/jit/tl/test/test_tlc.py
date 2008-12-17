@@ -36,7 +36,20 @@ class TestTLC(test_tl.TestTL):
     def interp(code='', pc=0, inputarg=0):
         from pypy.jit.tl.tlc import interp
         return interp(code, pc, inputarg)
- 
+
+    def test_unconditional_branch(self):
+        bytecode = compile("""
+    main:
+        BR target
+        PUSH 123
+        RETURN
+    target:
+        PUSH 42
+        RETURN
+    """)
+        res = self.interp(bytecode, 0, 0)
+        assert res == 42
+
     def test_basic_cons_cell(self):
         bytecode = compile("""
             NIL

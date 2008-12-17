@@ -385,6 +385,10 @@ def make_interp(supports_call, jitted=True):
                 hint(b, promote_class=True)
                 stack.append(IntObj(not b.lt(a)))
 
+            elif opcode == BR:
+                pc += char2int(code[pc])
+                pc += 1
+                
             elif opcode == BR_COND:
                 cond = stack.pop()
                 hint(cond, promote_class=True)
