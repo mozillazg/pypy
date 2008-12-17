@@ -286,3 +286,9 @@ class TestTLC(test_tl.TestTL):
         assert fibo(2) == 1
         assert fibo(3) == 2
         assert fibo(7) == 13
+
+    def test_accumulator(self):
+        acc = self.compile('../../accumulator.tlc.src')
+        assert acc(1) == 0
+        assert acc(10) == sum(range(10))
+        assert acc(20) == sum(range(20))
