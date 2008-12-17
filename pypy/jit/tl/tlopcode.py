@@ -53,6 +53,7 @@ opcode(32, "PUSHARGN")
 
 opcode(33, "PRINT")
 opcode(34, "DUMP")
+opcode(35, "BR")
 
 del opcode
 
