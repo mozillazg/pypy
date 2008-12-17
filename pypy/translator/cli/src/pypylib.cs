@@ -1005,10 +1005,9 @@ namespace pypy.builtin
             return t.TotalSeconds;
         }
 
-        static DateTime ClockStart = DateTime.UtcNow;
         public static double ll_time_clock()
         {
-            return (DateTime.UtcNow - ClockStart).TotalSeconds;
+          return DateTime.UtcNow.Ticks * 1e-7;
         }
 
         public static void ll_time_sleep(double seconds)
