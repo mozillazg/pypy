@@ -74,7 +74,7 @@ class BaseTestTLC(PortalTest):
         code = """
             NEW foo,meth=meth
             PICK 0
-            PUSH 40
+            PUSHARG
             SETATTR foo
             PUSH 2
             SEND meth/1
@@ -86,8 +86,39 @@ class BaseTestTLC(PortalTest):
             ADD
             RETURN
         """
-        res = self.exec_code(code, 0)
+        res = self.exec_code(code, 40)
         assert res == 42
+        self.check_insns(malloc=1)
+
+    def test_method_loop(self):
+        path = py.path.local(__file__).join('../../../tl/accumulator.tlc.src')
+        code = path.read()
+        res = self.exec_code(code, 10)
+        assert res == sum(range(10))
+        self.check_insns(malloc=1)
+
+    def test_binarytree(self):
+        py.test.skip('fix me')
+        path = py.path.local(__file__).join('../../../tl/binarytree.tlc.src')
+        code = path.read()
+        res = self.exec_code(code, 15)
+        assert res == 1
+        #self.check_insns(...)
+
+    def test_bug(self):
+        py.test.skip('fix me')
+        code = """
+            NEW foo,meth=meth
+            PUSHARG           # if we use PUSH <constant> it works
+            SEND meth/1
+            RETURN
+        meth:
+            PUSH 1
+            RETURN
+        """
+        res = self.exec_code(code, -1)
+        assert res == 1
+        self.check_insns(malloc=1)
 
 class TestLLType(BaseTestTLC):
     type_system = "lltype"

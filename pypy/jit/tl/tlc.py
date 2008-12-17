@@ -471,6 +471,7 @@ def make_interp(supports_call, jitted=True):
                 if not we_are_translated():
                     a = stack.pop()
                     hint(a, promote_class=True)
+                    print a.to_string()
 
             elif opcode == DUMP:
                 if not we_are_translated():
