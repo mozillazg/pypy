@@ -214,6 +214,20 @@ class VListTest(InterpretationTest):
         res = self.interpret(f, [2], [0], policy=P_OOPSPEC)
         assert res == -7
 
+    def test_vlist_of_vlist(self):
+        py.test.skip('infinite loop')
+        def fn(n):
+            stack = []
+            for i in range(n):
+                mylist = []
+                for j in range(i, n):
+                    mylist.append(j)
+                stack.append(mylist)
+            mylist = stack.pop()
+            return mylist[0]
+        res = self.interpret(fn, [10], [], policy=P_OOPSPEC)
+        assert res == 9
+        self.check_insns({})
 
 class TestOOType(OOTypeMixin, OORtypeMixin, VListTest):
     type_system = "ootype"
