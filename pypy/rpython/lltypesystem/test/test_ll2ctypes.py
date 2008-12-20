@@ -4,7 +4,7 @@ import ctypes
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
-from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib
+from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib, get_ctypes_type
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
 from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.annlowlevel import llhelper
@@ -899,3 +899,18 @@ class TestLL2Ctypes(object):
 
         res = eating_callback(X(), callback)
         assert res == 10
+
+    def test_recursive_struct_more(self):
+        NODE = lltype.ForwardReference()
+        NODE.become(lltype.Struct('NODE', ('value', lltype.Signed),
+                                          ('next', lltype.Ptr(NODE))))
+        CNODEPTR = get_ctypes_type(NODE)
+        pc = CNODEPTR()
+        pc.value = 42
+        pc.next = ctypes.pointer(pc)
+        p = ctypes2lltype(lltype.Ptr(NODE), ctypes.pointer(pc))
+        assert p.value == 42
+        assert p.next == p
+        pc2 = lltype2ctypes(p)
+        assert pc2.contents.value == 42
+        assert pc2.contents.next.contents.value == 42
