@@ -16,6 +16,7 @@ from pypy.rpython.llinterp import LLException
 log = log.runtest
 
 class AVM1Exception(object):
+    pass
 
 class compile_function(object):
     def __init__(self, function, annotations, stackless=False, view=False, root=None, policy=None):

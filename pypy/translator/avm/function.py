@@ -77,7 +77,7 @@ class BaseGenerator(object):
         #self.ilasm.set_field(self.field_name(obj,name))
 
     def get_field(self, useless_stuff, name):
-        self.ilasm.get_field(name)
+        self.ilasm.get_member(name)
         
     def call_method(self, obj, name):
         func_name, signature = self.cts.method_signature(obj, name)
@@ -107,8 +107,8 @@ class BaseGenerator(object):
     def cast_function(self, name, num):
         self.ilasm.cast_function(name, num)
 
-    def prefix_op(self, st):
-        self.ilasm.prefix_op(st)
+#    def prefix_op(self, st):
+#        self.ilasm.prefix_op(st)
     
     def push_const(self, s):
         self.ilasm.push_const(s)
