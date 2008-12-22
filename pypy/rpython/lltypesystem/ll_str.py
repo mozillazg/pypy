@@ -5,6 +5,7 @@ CHAR_ARRAY = GcArray(Char)
 
 def ll_int_str(repr, i):
     return ll_int2dec(i)
+ll_int_str._pure_function_ = True
 
 def ll_int2dec(i):
     from pypy.rpython.lltypesystem.rstr import mallocstr
@@ -36,6 +37,7 @@ def ll_int2dec(i):
         result.chars[j] = temp[len-j-1]
         j += 1
     return result
+ll_int2dec._pure_function_ = True
 
 hex_chars = malloc(Array(Char), 16, immortal=True)
 
@@ -77,6 +79,7 @@ def ll_int2hex(i, addPrefix):
         result.chars[j] = temp[len-j-1]
         j += 1
     return result
+ll_int2hex._pure_function_ = True
 
 def ll_int2oct(i, addPrefix):
     from pypy.rpython.lltypesystem.rstr import mallocstr
@@ -113,7 +116,8 @@ def ll_int2oct(i, addPrefix):
         result.chars[j] = temp[len-j-1]
         j += 1
     return result
+ll_int2oct._pure_function_ = True
 
 def ll_float_str(repr, f):
     return formatd("%f", f)
-
+ll_float_str._pure_function_ = True
