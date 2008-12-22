@@ -221,6 +221,7 @@ class LLHelpers(AbstractLLHelpers):
             newstr.chars[j] = ch
             j += 1
         return newstr
+    ll_char_mul._pure_function_ = True
 
     def ll_strlen(s):
         return len(s.chars)
@@ -240,6 +241,7 @@ class LLHelpers(AbstractLLHelpers):
         s = malloc(1)
         s.chars[0] = ch
         return s
+    ll_chr2str._pure_function_ = True
 
     def ll_str2unicode(str):
         lgt = len(str.chars)
@@ -249,6 +251,7 @@ class LLHelpers(AbstractLLHelpers):
                 raise UnicodeDecodeError
             s.chars[i] = cast_primitive(UniChar, str.chars[i])
         return s
+    ll_str2unicode._pure_function_ = True
 
     def ll_strhash(s):
         # unlike CPython, there is no reason to avoid to return -1
@@ -278,6 +281,7 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
             j += 1
         return newstr
+    ll_strconcat._pure_function_ = True
 
     def ll_strip(s, ch, left, right):
         s_len = len(s.chars)
@@ -300,6 +304,7 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
             j += 1
         return result
+    ll_strip._pure_function_ = True
 
     def ll_upper(s):
         s_chars = s.chars
@@ -315,6 +320,7 @@ class LLHelpers(AbstractLLHelpers):
             result.chars[i] = ch
             i += 1
         return result
+    ll_upper._pure_function_ = True
 
     def ll_lower(s):
         s_chars = s.chars
@@ -330,6 +336,7 @@ class LLHelpers(AbstractLLHelpers):
             result.chars[i] = ch
             i += 1
         return result
+    ll_lower._pure_function_ = True
 
     def ll_join(s, length, items):
         s_chars = s.chars
@@ -370,6 +377,7 @@ class LLHelpers(AbstractLLHelpers):
                 res_index += 1
             i += 1
         return result
+    ll_join._look_inside_me_ = False
 
     def ll_strcmp(s1, s2):
         if not s1:
@@ -395,6 +403,7 @@ class LLHelpers(AbstractLLHelpers):
                 return diff
             i += 1
         return len1 - len2
+    ll_strcmp._pure_function_ = True
 
     def ll_streq(s1, s2):
         if s1 == s2:       # also if both are NULLs
@@ -414,6 +423,7 @@ class LLHelpers(AbstractLLHelpers):
             j += 1
 
         return True
+    ll_streq._pure_function_ = True
 
     def ll_startswith(s1, s2):
         len1 = len(s1.chars)
@@ -429,6 +439,7 @@ class LLHelpers(AbstractLLHelpers):
             j += 1
 
         return True
+    ll_startswith._pure_function_ = True
 
     def ll_endswith(s1, s2):
         len1 = len(s1.chars)
@@ -445,6 +456,7 @@ class LLHelpers(AbstractLLHelpers):
             j += 1
 
         return True
+    ll_endswith._pure_function_ = True
 
     def ll_find_char(s, ch, start, end):
         i = start
@@ -455,6 +467,7 @@ class LLHelpers(AbstractLLHelpers):
                 return i
             i += 1
         return -1
+    ll_find_char._pure_function_ = True
 
     def ll_rfind_char(s, ch, start, end):
         if end > len(s.chars):
@@ -465,6 +478,7 @@ class LLHelpers(AbstractLLHelpers):
             if s.chars[i] == ch:
                 return i
         return -1
+    ll_rfind_char._pure_function_ = True
 
     def ll_count_char(s, ch, start, end):
         count = 0
@@ -476,6 +490,7 @@ class LLHelpers(AbstractLLHelpers):
                 count += 1
             i += 1
         return count
+    ll_count_char._pure_function_ = True
 
     def ll_find(cls, s1, s2, start, end):
         """Knuth Morris Prath algorithm for substring match"""
@@ -509,6 +524,7 @@ class LLHelpers(AbstractLLHelpers):
                     m = m + i - e
                     i = e
         return -1
+    ll_find._pure_function_ = True
     ll_find = classmethod(ll_find)
 
     def ll_rfind(cls, s1, s2, start, end):
@@ -554,6 +570,7 @@ class LLHelpers(AbstractLLHelpers):
                     m = m - i + e
                     i = e
         return -1
+    ll_rfind._pure_function_ = True
     ll_rfind = classmethod(ll_rfind)
 
     def ll_count(cls, s1, s2, start, end):
@@ -591,6 +608,7 @@ class LLHelpers(AbstractLLHelpers):
                 m = m + i - e
                 i = e
         return result
+    ll_count._pure_function_ = True
     ll_count = classmethod(ll_count)
 
     def ll_join_strs(length, items):
@@ -618,6 +636,7 @@ class LLHelpers(AbstractLLHelpers):
                 res_index += 1
             i += 1
         return result
+    ll_join_strs._look_inside_me_ = False
 
     def ll_join_chars(length, chars):
         num_chars = length
@@ -632,6 +651,7 @@ class LLHelpers(AbstractLLHelpers):
             res_chars[i] = chars[i]
             i += 1
         return result
+    ll_join_chars._look_inside_me_ = False
 
     def ll_stringslice_startonly(s1, start):
         len1 = len(s1.chars)
@@ -642,6 +662,7 @@ class LLHelpers(AbstractLLHelpers):
             start += 1
             j += 1
         return newstr
+    ll_stringslice_startonly._pure_function_ = True
 
     def ll_stringslice(s1, slice):
         start = slice.start
@@ -657,6 +678,7 @@ class LLHelpers(AbstractLLHelpers):
             start += 1
             j += 1
         return newstr
+    ll_stringslice._pure_function_ = True
 
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
@@ -666,6 +688,7 @@ class LLHelpers(AbstractLLHelpers):
             newstr.chars[j] = s1.chars[j]
             j += 1
         return newstr
+    ll_stringslice_minusone._pure_function_ = True
 
     def ll_split_chr(LIST, s, c):
         chars = s.chars
@@ -701,6 +724,7 @@ class LLHelpers(AbstractLLHelpers):
         resindex += 1
 
         return res
+    ll_split_chr._pure_function_ = True
 
     def ll_replace_chr_chr(s, c1, c2):
         length = len(s.chars)
@@ -715,6 +739,7 @@ class LLHelpers(AbstractLLHelpers):
             dst[j] = c
             j += 1
         return newstr
+    ll_replace_chr_chr._pure_function_ = True
 
     def ll_contains(s, c):
         chars = s.chars
@@ -725,6 +750,7 @@ class LLHelpers(AbstractLLHelpers):
                 return True
             i += 1
         return False
+    ll_contains._pure_function_ = True
 
     def ll_int(s, base):
         if not 2 <= base <= 36:
@@ -772,6 +798,7 @@ class LLHelpers(AbstractLLHelpers):
         if not i == strlen:
             raise ValueError
         return sign * val
+    ll_int._pure_function_ = True
 
     # interface to build strings:
     #   x = ll_build_start(n)
