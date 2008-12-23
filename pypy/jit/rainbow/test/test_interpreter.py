@@ -48,7 +48,7 @@ def annotation(a, x):
 
 
 def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
-              portal=None, type_system="lltype"):
+              portal=None, type_system="lltype", view="auto"):
     # build the normal ll graphs for ll_function
     t = TranslationContext()
     annpolicy = AnnotatorPolicy()
@@ -80,7 +80,7 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
             [SomeLLAbstractConstant(v.concretetype, {OriginFlags(): True})
              for v in graph1.getargs()])
     hannotator.simplify()
-    if conftest.option.view:
+    if (view == "auto" and conftest.option.view) or view == True:
         hannotator.translator.view()
     return hs, hannotator, rtyper
 
