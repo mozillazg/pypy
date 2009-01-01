@@ -514,9 +514,6 @@ def op_cast_float_to_int(f):
     assert type(f) is float
     return ovfcheck(int(f))
 
-def op_promote_virtualizable(object, fieldname):
-    pass
-
 # ____________________________________________________________
 
 def get_op_impl(opname):
