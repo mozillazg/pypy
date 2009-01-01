@@ -461,8 +461,10 @@ def make_interp(supports_call, jitted=True):
                 num_args += 1 # include self
                 name = pool.strings[idx]
                 meth_args = [None] * num_args
-                for i in range(num_args):
-                    meth_args[-i-1] = stack.pop()
+                while num_args > 0:
+                    num_args -= 1
+                    meth_args[num_args] = stack.pop()
+                    hint(num_args, concrete=True)
                 a = meth_args[0]
                 hint(a, promote_class=True)
                 meth_pc = hint(a.send(name), promote=True)
