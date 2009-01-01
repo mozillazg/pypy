@@ -1171,14 +1171,12 @@ class _ptr(_abstract_ptr):
         obj = self._obj
         if isinstance(obj, int):
             return obj     # special case for cast_int_to_ptr() results
-        # use ll2ctypes to obtain a real ctypes-based representation of
-        # the memory, and cast that address as an integer
-        import ctypes
-        from pypy.rpython.lltypesystem import ll2ctypes
-        c = ll2ctypes.lltype2ctypes(self)
-        c = ctypes.cast(c, ctypes.c_void_p)
-        assert c.value
-        return c.value
+        obj = normalizeptr(self)._obj
+        result = intmask(obj._getid())
+        # assume that id() returns an addressish value which is
+        # not zero and aligned to at least a multiple of 4
+        assert result != 0 and (result & 3) == 0
+        return result
 
     def _cast_to_adr(self):
         from pypy.rpython.lltypesystem import llmemory
