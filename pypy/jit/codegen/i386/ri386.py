@@ -259,6 +259,9 @@ def mem(basereg, offset=0):
 def heap(offset):
     return memSIB(None, None, 0, offset)
 
+def heap8(offset):
+    return memSIB8(None, None, 0, offset)
+
 def heap64(offset):
     return memSIB64(None, None, 0, offset)
 
