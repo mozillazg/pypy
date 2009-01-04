@@ -886,14 +886,19 @@ def cast_adr_to_int(addr):
         # use ll2ctypes to obtain a real ctypes-based representation of
         # the memory, and cast that address as an integer
         if addr.ptr is None:
-            return 0
+            res = 0
         else:
             c = lltype2ctypes(addr.ptr)
             c = ctypes.cast(c, ctypes.c_void_p)
             assert c.value
-            return c.value
+            res = c.value
     else:
-        return addr._cast_to_int()
+        res = addr._cast_to_int()
+    if res > sys.maxint:
+        res = res - 2*sys.maxint
+        assert int(res) == res
+        return int(res)
+    return res
 
 # ____________________________________________________________
 # errno
