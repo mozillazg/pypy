@@ -6,7 +6,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
 from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib, get_ctypes_type
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
-from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
+from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED, cast_adr_to_int
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -914,3 +914,12 @@ class TestLL2Ctypes(object):
         pc2 = lltype2ctypes(p)
         assert pc2.contents.value == 42
         assert pc2.contents.next.contents.value == 42
+
+    def test_cast_adr_to_int(self):
+        class someaddr(object):
+            def _cast_to_int(self):
+                return sys.maxint/2 * 3
+
+        res = cast_adr_to_int(someaddr())
+        assert isinstance(res, int)
+        assert res == -sys.maxint/2 - 1
