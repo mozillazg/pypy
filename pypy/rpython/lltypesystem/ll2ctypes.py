@@ -506,6 +506,8 @@ def lltype2ctypes(llobj, normalize=True):
                 if isinstance(T.TO.RESULT, lltype.Ptr):
                     _all_callbacks.append(res)
                     res = ctypes.cast(res, ctypes.c_void_p).value
+                    if res is None:
+                        return 0
                 return res
 
             if conftest.option.usepdb:
