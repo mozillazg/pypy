@@ -144,6 +144,8 @@ def builtin_isinstance(s_obj, s_type, variables=None):
     r = SomeBool() 
     if s_type.is_constant():
         typ = s_type.const
+        if isinstance(typ, tuple):
+            raise AnnotatorError("isinstance(..., tuple) is not RPython")
         if issubclass(typ, pypy.rlib.rarithmetic.base_int):
             r.const = issubclass(s_obj.knowntype, typ)
         else:
