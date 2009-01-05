@@ -902,6 +902,20 @@ def cast_adr_to_int(addr):
         return int(res)
     return res
 
+class CastAdrToIntEntry(ExtRegistryEntry):
+    _about_ = cast_adr_to_int
+
+    def compute_result_annotation(self, s_addr):
+        return annmodel.SomeInteger()
+
+    def specialize_call(self, hop):
+        assert isinstance(hop.args_r[0], raddress.AddressRepr)
+        adr, = hop.inputargs(hop.args_r[0])
+        hop.exception_cannot_occur()
+        return hop.genop('cast_adr_to_int', [adr],
+                         resulttype = lltype.Signed)
+    
+
 # ____________________________________________________________
 # errno
 
