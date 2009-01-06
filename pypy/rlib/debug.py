@@ -1,5 +1,6 @@
 import sys
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.tool.error import AnnotatorError
 
 def ll_assert(x, msg):
     """After translation to C, this becomes an RPyAssert."""
@@ -98,3 +99,11 @@ class Entry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.inputarg(hop.args_r[0], arg=0)
 
+def make_sure_not_translated(func):
+    class Entry(ExtRegistryEntry):
+        _about_ = func
+
+        def compute_result_annotation(self, *args):
+            raise AnnotatorError("Should not be here")
+
+    return func
