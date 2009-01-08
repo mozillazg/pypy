@@ -18,6 +18,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.annlowlevel import base_ptr_lltype
+from pypy.rpython import raddress
 
 def uaddressof(obj):
     return fixid(ctypes.addressof(obj))
