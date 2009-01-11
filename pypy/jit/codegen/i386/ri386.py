@@ -1,5 +1,5 @@
 from pypy.rlib.rarithmetic import intmask
-
+from pypy.rlib.objectmodel import ComputedIntSymbolic
 
 class OPERAND(object):
     _attrs_ = []
@@ -244,6 +244,9 @@ imm16 = IMM16
 rel32 = REL32
 
 def imm(value):
+    if isinstance(value, ComputedIntSymbolic):
+        value = value.compute_fn()
+    assert isinstance(value, int)
     if single_byte(value):
         return imm8(value)
     else:
