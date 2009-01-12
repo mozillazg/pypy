@@ -714,7 +714,7 @@ class FunctionCodeGenerator(object):
                     format.append(''.join(arg.value.chars).replace('%', '%%'))
                 else:
                     format.append('%s')
-                    argv.append('RPyString_AsString(%s)' % self.expr(arg))
+                    argv.append('RPyString_AsCharP(%s)' % self.expr(arg))
                 continue
             elif T == Signed:
                 format.append('%ld')
@@ -747,7 +747,7 @@ class FunctionCodeGenerator(object):
                 format.append(msg.replace('%', '%%'))
                 continue
             argv.append(self.expr(arg))
-        return "fprintf(stderr, %s%s);" % (
+        return "fprintf(stderr, %s%s); RPyString_FreeCache();" % (
             c_string_constant(' '.join(format) + '\n\000'),
             ''.join([', ' + s for s in argv]))
 
