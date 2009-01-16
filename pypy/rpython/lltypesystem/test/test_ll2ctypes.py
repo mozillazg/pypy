@@ -925,3 +925,10 @@ class TestLL2Ctypes(object):
         res = cast_adr_to_int(someaddr())
         assert isinstance(res, int)
         assert res == -sys.maxint/2 - 1
+
+    def test_cast_gcref_back_and_forth(self):
+        NODE = lltype.GcStruct('NODE')
+        node = lltype.malloc(NODE)
+        ref = lltype.cast_opaque_ptr(llmemory.GCREF, node)
+        back = rffi.cast(llmemory.GCREF, rffi.cast(lltype.Signed, ref))
+        assert lltype.cast_opaque_ptr(lltype.Ptr(NODE), ref) == node
