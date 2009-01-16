@@ -364,11 +364,12 @@ class _parentable_mixin(object):
     def __ne__(self, other):
         return not (self == other)
 
-    def __hash__(self):
-        if self._storage is not None:
-            return ctypes.addressof(self._storage)
-        else:
-            return object.__hash__(self)
+## XXX the following hash method breaks stuff! Look at r60058 more carefully
+##    def __hash__(self):
+##        if self._storage is not None:
+##            return ctypes.addressof(self._storage)
+##        else:
+##            return object.__hash__(self)
 
     def __repr__(self):
         if self._storage is None:
