@@ -932,3 +932,12 @@ class TestLL2Ctypes(object):
         ref = lltype.cast_opaque_ptr(llmemory.GCREF, node)
         back = rffi.cast(llmemory.GCREF, rffi.cast(lltype.Signed, ref))
         assert lltype.cast_opaque_ptr(lltype.Ptr(NODE), ref) == node
+
+    def test_runtimetypeinfo_change(self):
+        p = lltype.opaqueptr(lltype.RuntimeTypeInfo, 'foo')
+        hash1 = hash(p._obj)
+        print repr(p)
+        lltype2ctypes(p)
+        print repr(p)
+        hash2 = hash(p._obj)
+        assert hash1 == hash2
