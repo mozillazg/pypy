@@ -436,7 +436,7 @@ class _array_of_known_length(_array_of_unknown_length):
 # we need to think deeper how to approach this problem
 # additionally, this adds mess to __del__ "semantics"
 _all_callbacks = {}
-_all_callback_results = []
+_all_callbacks_results = []
 _callback2obj = {}
 
 # this is just another hack that passes around references to applevel types
