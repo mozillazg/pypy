@@ -363,12 +363,11 @@ class _parentable_mixin(object):
     def __ne__(self, other):
         return not (self == other)
 
-## XXX the following hash method breaks stuff! Look at r60058 more carefully
-##    def __hash__(self):
-##        if self._storage is not None:
-##            return ctypes.addressof(self._storage)
-##        else:
-##            return object.__hash__(self)
+    def __hash__(self):
+        if self._storage is not None:
+            return ctypes.addressof(self._storage)
+        else:
+            return object.__hash__(self)
 
     def __repr__(self):
         if self._storage is None:
@@ -487,8 +486,14 @@ def lltype2ctypes(llobj, normalize=True):
         else:
             container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
-            if llobj._obj in _all_callbacks:
-                return _all_callbacks[llobj._obj]
+            # XXX a temporary workaround for comparison of lltype.FuncType
+            key = llobj._obj.__dict__.copy()
+            key['_TYPE'] = repr(key['_TYPE'])
+            items = key.items()
+            items.sort()
+            key = tuple(items)
+            if key in _all_callbacks:
+                return _all_callbacks[key]
             v1voidlist = [(i, getattr(container, '_void' + str(i), None))
                              for i in range(len(T.TO.ARGS))
                                  if T.TO.ARGS[i] is lltype.Void]
@@ -541,7 +546,7 @@ def lltype2ctypes(llobj, normalize=True):
                 ctypes_func_type = get_ctypes_type(T)
                 res = ctypes_func_type(callback)
             _callback2obj[ctypes.cast(res, ctypes.c_void_p).value] = container
-            _all_callbacks[llobj._obj] = res
+            _all_callbacks[key] = res
             return res
 
         if container._storage is None:
