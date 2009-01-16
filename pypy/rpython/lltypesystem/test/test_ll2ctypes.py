@@ -364,7 +364,9 @@ class TestLL2Ctypes(object):
             return n+1
 
         FUNCTYPE = lltype.FuncType([lltype.Signed], lltype.Signed)
-        cdummy = lltype2ctypes(llhelper(lltype.Ptr(FUNCTYPE), dummy))
+        helper = llhelper(lltype.Ptr(FUNCTYPE), dummy)
+        cdummy = lltype2ctypes(helper)
+        cdummy2 = lltype2ctypes(helper)
         assert isinstance(cdummy,
                           ctypes.CFUNCTYPE(ctypes.c_long, ctypes.c_long))
         res = cdummy(41)

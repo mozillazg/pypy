@@ -433,7 +433,8 @@ class _array_of_known_length(_array_of_unknown_length):
 # ctypes does not keep callback arguments alive. So we do. Forever
 # we need to think deeper how to approach this problem
 # additionally, this adds mess to __del__ "semantics"
-_all_callbacks = []
+_all_callbacks = {}
+_all_callback_results = []
 _callback2obj = {}
 
 # this is just another hack that passes around references to applevel types
@@ -479,6 +480,8 @@ def lltype2ctypes(llobj, normalize=True):
             return new_opaque_object(llobj)
         container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
+            if llobj._obj in _all_callbacks:
+                return _all_callbacks[llobj._obj]
             v1voidlist = [(i, getattr(container, '_void' + str(i), None))
                              for i in range(len(T.TO.ARGS))
                                  if T.TO.ARGS[i] is lltype.Void]
@@ -505,7 +508,7 @@ def lltype2ctypes(llobj, normalize=True):
                     return None
                 res = lltype2ctypes(llres)
                 if isinstance(T.TO.RESULT, lltype.Ptr):
-                    _all_callbacks.append(res)
+                    _all_callbacks_results.append(res)
                     res = ctypes.cast(res, ctypes.c_void_p).value
                     if res is None:
                         return 0
@@ -530,8 +533,8 @@ def lltype2ctypes(llobj, normalize=True):
             else:
                 ctypes_func_type = get_ctypes_type(T)
                 res = ctypes_func_type(callback)
-            _all_callbacks.append(res)
             _callback2obj[ctypes.cast(res, ctypes.c_void_p).value] = container
+            _all_callbacks[llobj._obj] = res
             return res
 
         if container._storage is None:
