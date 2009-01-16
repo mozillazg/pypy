@@ -193,6 +193,8 @@ def build_new_ctypes_type(T, delayed_builders):
     elif isinstance(T, lltype.OpaqueType):
         if T is lltype.RuntimeTypeInfo:
             return ctypes.c_char * 2
+        if T == llmemory.GCREF.TO:
+            return ctypes.c_void_p
         if T.hints.get('external', None) != 'C':
             raise TypeError("%s is not external" % T)
         return ctypes.c_char * T.hints['getsize']()
@@ -472,12 +474,15 @@ def lltype2ctypes(llobj, normalize=True):
         return uninitialized2ctypes(llobj.TYPE)
 
     T = lltype.typeOf(llobj)
+
     if isinstance(T, lltype.Ptr):
         if not llobj:   # NULL pointer
             return get_ctypes_type(T)()
 
         if T is base_ptr_lltype():
             return new_opaque_object(llobj)
+        if T == llmemory.GCREF:
+            return new_opaque_object(llobj._obj)
         container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
             # XXX a temporary workaround for comparison of lltype.FuncType
@@ -589,7 +594,7 @@ def ctypes2lltype(T, cobj):
     if isinstance(T, lltype.Ptr):
         if not cobj:   # NULL pointer
             return lltype.nullptr(T.TO)
-        if T is base_ptr_lltype():
+        if T is base_ptr_lltype() or T == llmemory.GCREF:
             return _opaque_list[ctypes.cast(cobj, ctypes.c_void_p).value]
         if isinstance(T.TO, lltype.Struct):
             if T.TO._arrayfld is not None:
