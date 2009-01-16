@@ -486,14 +486,8 @@ def lltype2ctypes(llobj, normalize=True):
             return new_opaque_object(llobj._obj)
         container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
-            # XXX a temporary workaround for comparison of lltype.FuncType
-            key = llobj._obj.__dict__.copy()
-            key['_TYPE'] = repr(key['_TYPE'])
-            items = key.items()
-            items.sort()
-            key = tuple(items)
-            if key in _all_callbacks:
-                return _all_callbacks[key]
+            if llobj._obj in _all_callbacks:
+                return _all_callbacks[llobj._obj]
             v1voidlist = [(i, getattr(container, '_void' + str(i), None))
                              for i in range(len(T.TO.ARGS))
                                  if T.TO.ARGS[i] is lltype.Void]
@@ -546,7 +540,7 @@ def lltype2ctypes(llobj, normalize=True):
                 ctypes_func_type = get_ctypes_type(T)
                 res = ctypes_func_type(callback)
             _callback2obj[ctypes.cast(res, ctypes.c_void_p).value] = container
-            _all_callbacks[key] = res
+            _all_callbacks[llobj._obj] = res
             return res
 
         if container._storage is None:
