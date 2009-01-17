@@ -481,8 +481,12 @@ def lltype2ctypes(llobj, normalize=True):
         if T is base_ptr_lltype():
             return new_opaque_object(llobj)
         if T == llmemory.GCREF:
+            if isinstance(llobj, _llgcref):
+                return ctypes.c_void_p(llobj.intval)
             container = llobj._obj.container
             T = lltype.Ptr(lltype.typeOf(container))
+            # otherwise it came from integer and we want a c_void_p with
+            # the same valu
         else:
             container = llobj._obj
         if isinstance(T.TO, lltype.FuncType):
@@ -631,7 +635,11 @@ def ctypes2lltype(T, cobj):
                 return lltype.functionptr(T.TO, getattr(cobj, '__name__', '?'),
                                           _callable=_callable)
         elif isinstance(T.TO, lltype.OpaqueType):
-            container = lltype._opaque(T.TO)
+            if T == llmemory.GCREF:
+                # XXX obscure hack
+                return _llgcref(cobj)
+            else:
+                container = lltype._opaque(T.TO)
         else:
             raise NotImplementedError(T)
         llobj = lltype._ptr(T, container, solid=True)
@@ -898,6 +906,23 @@ class _lladdress(long):
 
     def _cast_to_int(self):
         return ctypes.cast(self.void_p, ctypes.c_long)
+
+class _llgcref(object):
+    _TYPE = llmemory.GCREF
+
+    def __init__(self, void_p):
+        self.intval = void_p.value
+
+    def __eq__(self, other):
+        if isinstance(other, _llgcref):
+            return self.intval == other.intval
+        return force_cast(lltype.Signed, other) == self.intval
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __nonzero__(self):
+        return bool(self.intval)
 
 def cast_adr_to_int(addr):
     if isinstance(addr, llmemory.fakeaddress):
