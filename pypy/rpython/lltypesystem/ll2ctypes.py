@@ -924,6 +924,9 @@ class _llgcref(object):
     def __nonzero__(self):
         return bool(self.intval)
 
+    def _cast_to_ptr(self, PTRTYPE):
+        return force_cast(PTRTYPE, self.intval)
+
 def cast_adr_to_int(addr):
     if isinstance(addr, llmemory.fakeaddress):
         # use ll2ctypes to obtain a real ctypes-based representation of

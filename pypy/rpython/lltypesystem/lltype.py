@@ -798,6 +798,8 @@ def cast_opaque_ptr(PTRTYPE, ptr):
                         "%s to %s" % (CURTYPE, PTRTYPE))
     if (isinstance(CURTYPE.TO, OpaqueType)
         and not isinstance(PTRTYPE.TO, OpaqueType)):
+        if hasattr(ptr, '_cast_to_ptr'):
+            return ptr._cast_to_ptr(PTRTYPE)
         if not ptr:
             return nullptr(PTRTYPE.TO)
         try:
