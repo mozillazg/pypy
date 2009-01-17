@@ -935,4 +935,10 @@ class TestLL2Ctypes(object):
 
     def test_gcref_forth_and_back(self):
         cp = ctypes.c_void_p(1234)
-        assert lltype2ctypes(ctypes2lltype(llmemory.GCREF, cp)).value == cp.value
+        v = ctypes2lltype(llmemory.GCREF, cp)
+        assert lltype2ctypes(v).value == cp.value
+        v1 = ctypes2lltype(llmemory.GCREF, cp)
+        assert v == v1
+        assert v
+        v2 = ctypes2lltype(llmemory.GCREF, ctypes.c_void_p(1235))
+        assert v2 != v
