@@ -811,6 +811,8 @@ def cast_opaque_ptr(PTRTYPE, ptr):
         return cast_pointer(PTRTYPE, p)
     elif (not isinstance(CURTYPE.TO, OpaqueType)
           and isinstance(PTRTYPE.TO, OpaqueType)):
+        if hasattr(ptr, '_cast_to_opaque'):
+            return ptr._cast_to_opaque(PTRTYPE)
         if not ptr:
             return nullptr(PTRTYPE.TO)
         return opaqueptr(PTRTYPE.TO, 'hidden', container = ptr._obj,
