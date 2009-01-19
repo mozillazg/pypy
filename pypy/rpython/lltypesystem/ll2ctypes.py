@@ -899,13 +899,22 @@ class _lladdress(long):
     def __new__(cls, void_p):
         self = long.__new__(cls, void_p.value)
         self.void_p = void_p
+        self.intval = void_p.value
+        if self.intval > sys.maxint:
+            self.intval = int(self.intval - 2*(sys.maxint + 1))
         return self
+
+    def _cast_to_ptr(self, TP):
+        return force_cast(TP, self.intval)
 
     def __repr__(self):
         return '<_lladdress %s>' % (self.void_p,)
 
-    def _cast_to_int(self):
-        return ctypes.cast(self.void_p, ctypes.c_long)
+    def __eq__(self, other):
+        return cast_adr_to_int(other) == self.intval
+
+    def __ne__(self, other):
+        return not self == other
 
 class _llgcref(object):
     _TYPE = llmemory.GCREF
@@ -930,6 +939,9 @@ class _llgcref(object):
     def _cast_to_int(self):
         return self.intval
 
+    def _cast_to_adr(self):
+        return _lladdress(ctypes.c_void_p(self.intval))
+
 def cast_adr_to_int(addr):
     if isinstance(addr, llmemory.fakeaddress):
         # use ll2ctypes to obtain a real ctypes-based representation of
@@ -941,7 +953,7 @@ def cast_adr_to_int(addr):
     else:
         res = addr._cast_to_int()
     if res > sys.maxint:
-        res = res - 2*sys.maxint
+        res = res - 2*(sys.maxint + 1)
         assert int(res) == res
         return int(res)
     return res
