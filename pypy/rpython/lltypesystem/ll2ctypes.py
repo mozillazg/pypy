@@ -937,10 +937,7 @@ def cast_adr_to_int(addr):
         if addr.ptr is None:
             res = 0
         else:
-            c = lltype2ctypes(addr.ptr)
-            c = ctypes.cast(c, ctypes.c_void_p)
-            assert c.value
-            res = c.value
+            res = force_cast(lltype.Signed, addr.ptr)
     else:
         res = addr._cast_to_int()
     if res > sys.maxint:
