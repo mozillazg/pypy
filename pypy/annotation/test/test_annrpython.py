@@ -3059,6 +3059,48 @@ class TestAnnotateTestCase:
         assert s.const == 42
 
 
+    def test_list_of_pbcs(self):
+        class X:
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+
+            def m(self):
+                return self.a
+
+        class Y(X):
+            def __init__(self, a, b):
+                self.a = 10
+
+            def m(self):
+                return self.a
+
+        class Z(X):
+            pass
+
+        class XX(X):
+            def __init__(self, c):
+                self.c = c
+            
+            def m(self):
+                return self.c
+
+        l = [Z(1, 2), Z(3, 4), Y("a", "b"), X(5, 6), X(1, 2)]
+        def f(n):
+            elem = l[n]
+            if isinstance(elem, Y):
+                return elem.m()
+            elif isinstance(elem, Z):
+                return elem.m()
+            elif isinstance(elem, XX):
+                return elem.m()
+            else:
+                return 3
+
+        a = self.RPythonAnnotator()
+        a.build_types(f, [int])
+        # assert did not explode
+
 def g(n):
     return [0,1,2,n]
 
