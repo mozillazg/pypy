@@ -3,7 +3,8 @@ from pypy.rpython.lltypesystem.lltype import \
      Struct, Array, FuncType, PyObject, Void, \
      ContainerType, OpaqueType, FixedSizeArray, _uninitialized
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.lltypesystem.llmemory import Address, WeakRef, _WeakRefType
+from pypy.rpython.lltypesystem.llmemory import Address, WeakRef, _WeakRefType,\
+     GCREF
 from pypy.rpython.lltypesystem.rffi import CConstant
 from pypy.tool.sourcetools import valid_identifier
 from pypy.translator.c.primitive import PrimitiveName, PrimitiveType
@@ -145,6 +146,8 @@ class LowLevelDatabase(object):
             raise Exception("don't know about type %r" % (T,))
 
     def getcontainernode(self, container, _dont_write_c_code=True, **buildkwds):
+        if typeOf(container) == GCREF.TO:
+            container = container.container
         try:
             node = self.containernodes[container]
         except KeyError:
