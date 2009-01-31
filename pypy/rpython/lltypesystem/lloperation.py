@@ -381,6 +381,7 @@ LL_OPERATIONS = {
     'call_boehm_gc_alloc':  LLOp(canraise=(MemoryError,)),
     'jit_marker':           LLOp(),
     'promote_virtualizable':LLOp(canrun=True),
+    'can_enter_jit':        LLOp(),
 
     # __________ GC operations __________
 
