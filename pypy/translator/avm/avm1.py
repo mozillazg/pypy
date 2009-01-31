@@ -45,13 +45,12 @@ Null.type = DataTypes.Null
 Undefined = object()
 Undefined.type = DataTypes.UNDEFINED
 
+class ConstantIndexDescriptor(object):
+    def __get__(self, obj, objtype):
+        return DataTypes.CONSTANT8 if obj.index < 256 else DataTypes.CONSTANT16
+
 class Constant(Index):
-    def __getattr__(self, name):
-        if name == "type":
-            if self.index < 256:
-                return DataTypes.CONSTANT8
-            return DataTypes.CONSTANT16
-        return Index.__getattr__(self, name)
+    type = ConstantIndexDescriptor()
 
 class RegisterByIndex(Index):
     type = DataTypes.REGISTER
@@ -541,7 +540,7 @@ class ShortAction(Action):
     def __len__(self):
         return 1 # 1 (Action ID)
 
-    def serialize(self)
+    def serialize(self):
         return chr(self.ACTION_ID)
 
 ActionNextFrame           = ShortAction(0x04, "ActionNextFrame")
