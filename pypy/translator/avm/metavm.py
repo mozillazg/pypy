@@ -49,29 +49,29 @@ class _Call(MicroInstruction):
 
     def _render_builtin(self, generator, builtin, args):
         for func_arg in args[1:]: # push parameters
-            generator.load(func_arg)
+            generator.push(func_arg)
         generator.call_external(builtin, args[1:])
 
     def _render_builtin_prepared_args(self, generator, builtin, args):
         for func_arg in args:
-            generator.load_str(func_arg)
+            generator.push(func_arg)
         generator.call_external(builtin, args)
     
     def _render_builtin_method(self, generator, builtin, args):
         for func_arg in args:
-            generator.load_special(func_arg)
+            generator.push(func_arg)
         generator.call_external_method(builtin, len(args)-1)
 
     def _render_function(self, generator, graph, args):
         for func_arg in args[1:]: # push parameters
             if func_arg.concretetype is not ootype.Void:
-                generator.load(func_arg)
+                generator.push(func_arg)
         generator.call_graph(graph)
     
     def _render_method(self, generator, method_name, args):
         this = args[0]
-        for arg in args: # push parametes
-            generator.load(arg)
+        for arg in args: # push parameters
+            generator.push(arg)
         generator.call_method(this.concretetype, method_name)
 
 Call = _Call()

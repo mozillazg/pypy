@@ -24,10 +24,8 @@ class BaseGenerator(object):
                 self.ilasm.push_local(v)
         elif isinstance(v, flowmodel.Constant):
             self.db.push_const(v.concretetype, v.value, self.ilasm)
-        elif isinstance(v, str):
+        else: # Assume a primitive or special type
             self.ilasm.push_const(v)
-        else:
-            assert False
 
     def store(self, v):
         assert isinstance(v, flowmodel.Variable)
