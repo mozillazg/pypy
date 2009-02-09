@@ -9,6 +9,7 @@ OpCodes = System.Reflection.Emit.OpCodes
 
 class Operation(object):
     _gv_res = None
+    _gv_excflag = None
 
     def restype(self):
         return self.gv_x.getCliType()
@@ -20,6 +21,11 @@ class Operation(object):
                 self._gv_res = self.meth.newlocalvar(restype)
         return self._gv_res
 
+    def gv_excflag(self):
+        if self._gv_excflag is None:
+            self._gv_excflag = self.meth.newlocalvar(typeof(System.Int32))
+        return self._gv_excflag
+
     def emit(self):
         raise NotImplementedError
 
@@ -28,6 +34,9 @@ class Operation(object):
 
     def storeResult(self):
         self.gv_res().store(self.meth)
+
+    def storeExcFlag(self):
+        self.gv_excflag().store(self.meth)
 
 
 class UnaryOp(Operation):
@@ -330,6 +339,25 @@ class WriteLine(Operation):
 
     def emit(self):
         self.meth.il.EmitWriteLine(self.message)
+
+class IntAddOvf(BinaryOp):
+
+    def getOpCode(self):
+        return OpCodes.Add_Ovf
+
+    def emit(self):
+        il = self.meth.il
+        lbl = il.BeginExceptionBlock()
+        self.pushAllArgs()
+        il.Emit(self.getOpCode())
+        self.storeResult()
+        il.Emit(OpCodes.Leave, lbl)
+        
+        il.BeginCatchBlock(typeof(System.OverflowException))
+        il.Emit(OpCodes.Ldc_I4, 1)
+        self.storeExcFlag()
+        il.EndExceptionBlock()
+
 
 def opcode2attrname(opcode):
     if opcode == 'ldc.r8 0':
