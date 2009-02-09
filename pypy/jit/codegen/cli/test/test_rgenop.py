@@ -66,9 +66,6 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
     def test_from_random_5_direct(self):
         py.test.skip('mono crash')
 
-    def test_ovfcheck_adder_direct(self):
-        py.test.skip('fixme')
-
     def test_ovfcheck1_direct(self):
         py.test.skip('fixme')
 
@@ -136,9 +133,6 @@ class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
         
     def test_genconst_from_frame_float_var_compile(self):
         py.test.skip('fixme: add support for frames')
-
-    def test_ovfcheck_adder_compile(self):
-        py.test.skip('fixme')
 
     def test_ovfcheck1_compile(self):
         py.test.skip('fixme')
