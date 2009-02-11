@@ -285,49 +285,6 @@ class SendTests:
         self.check_loop_count(1)
         self.check_loops(int_add=0, int_mul=1, guard_class=0)
 
-    def test_example(self):
-        myjitdriver = JitDriver(greens = ['i'],
-                                reds = ['res', 'a'])
-        CO_INCREASE = 0
-        CO_JUMP_BACK_3 = 1
-        CO_DECREASE = 2
-        
-        code = [CO_INCREASE, CO_INCREASE, CO_INCREASE,
-                CO_JUMP_BACK_3, CO_INCREASE, CO_DECREASE]
-        
-        def add(res, a):
-            return res + a
-
-        def sub(res, a):
-            return res - a
-        
-        def main_interpreter_loop(a):
-            i = 0
-            res = 0
-            c = len(code)
-            while i < c:
-                myjitdriver.jit_merge_point(res=res, i=i, a=a)
-                elem = code[i]
-                if elem == CO_INCREASE:
-                    res = add(res, a)
-                elif elem == CO_DECREASE:
-                    res = sub(res, a)
-                else:
-                    if res > 100:
-                        pass
-                    else:
-                        i = i - 3
-                        myjitdriver.can_enter_jit(res=res, i=i, a=a)
-                        continue
-                i = i + 1
-            return res
-
-        res = self.meta_interp(main_interpreter_loop, [1])
-        assert res == 102
-        self.check_loop_count(1)
-        self.check_loops({'merge_point' : 1, 'int_add' : 3, 'int_gt' : 1,
-                          'guard_false' : 1, 'jump' : 1})
-
 class TestOOtype(SendTests, OOJitMixin):
     pass
 
