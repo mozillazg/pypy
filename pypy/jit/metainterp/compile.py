@@ -4,8 +4,8 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.conftest import option
 
-from history import Graph, Jump, log, Box
-import optimize
+from pypy.jit.metainterp.history import Graph, Jump, log, Box
+from pypy.jit.metainterp import optimize
 
 
 def compile_new_loop(metainterp, old_loops, endliveboxes):

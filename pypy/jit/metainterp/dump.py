@@ -1,4 +1,4 @@
-import codewriter
+from pypy.jit.metainterp import codewriter
 
 
 class SourceIterator:

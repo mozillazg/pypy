@@ -1,7 +1,7 @@
 
 from pypy.translator.tool.graphpage import GraphPage
 from pypy.translator.tool.make_dot import DotGen
-from history import Box
+from pypy.jit.metainterp.history import Box
 
 
 class ResOpGraphPage(GraphPage):
