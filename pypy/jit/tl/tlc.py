@@ -5,7 +5,7 @@ import py
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.jit.tl.tlopcode import *
 from pypy.jit.tl import tlopcode
-from pypy.rlib.jit import hint
+from pypy.rlib.jit import JitDriver
 
 class Obj(object):
 
@@ -95,13 +95,10 @@ class InstanceObj(Obj):
 
     def __init__(self, cls):
         self.cls = cls
-        frozenclass = hint(cls, deepfreeze=True)
-        self.values = [nil] * len(frozenclass.attributes)
+        self.values = [nil] * len(cls.attributes)
 
     def getclass(self):
-        # promote and deepfreeze the class
-        cls = hint(self.cls, promote=True)
-        return hint(cls, deepfreeze=True)
+        return self.cls
 
     def to_string(self):
         return '<Object>'
@@ -241,18 +238,8 @@ class FrameStack:
         return len(self.pc_stack) == 0
         
 def make_interp(supports_call, jitted=True):
-    if jitted:
-        from pypy.rlib.jit import hint
-    else:
-        @specialize.argtype(0)
-        def hint(x, global_merge_point=False,
-                 promote_class=False,
-                 promote=False,
-                 deepfreeze=False,
-                 forget=False,
-                 concrete=False):
-            return x
-
+    myjitdriver = JitDriver(greens = ['code', 'pc'],
+                            reds = ['pool', 'args', 'stack', 'framestack'])
     def interp(code='', pc=0, inputarg=0, pool=None):
         if not isinstance(code,str):
             raise TypeError("code '%s' should be a string" % str(code))
@@ -262,16 +249,14 @@ def make_interp(supports_call, jitted=True):
         args = [IntObj(inputarg)]
         return interp_eval(code, pc, args, pool).int_o()
 
-    def interp_eval(code, pc, args, pool2):
-        code_len = len(code)
-        pool = hint(hint(pool2, concrete=True), deepfreeze=True)
+    def interp_eval(code, pc, args, pool):
         stack = []
         framestack = FrameStack()
 
-        while pc < code_len:
-            hint(None, global_merge_point=True)
+        while pc < len(code):
+            myjitdriver.jit_merge_point(code=code, pc=pc, pool=pool, args=args,
+                                        stack=stack, framestack=framestack)
             opcode = ord(code[pc])
-            opcode = hint(opcode, concrete=True)
             pc += 1
 
             if opcode == NOP:
@@ -327,79 +312,78 @@ def make_interp(supports_call, jitted=True):
 
             elif opcode == ADD:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(b.add(a))
 
             elif opcode == SUB:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(b.sub(a))
 
             elif opcode == MUL:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(b.mul(a))
 
             elif opcode == DIV:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(b.div(a))
 
             elif opcode == EQ:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(IntObj(b.eq(a)))
 
             elif opcode == NE:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(IntObj(not b.eq(a)))
 
             elif opcode == LT:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(IntObj(b.lt(a)))
 
             elif opcode == LE:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(IntObj(not a.lt(b)))
 
             elif opcode == GT:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(IntObj(a.lt(b)))
 
             elif opcode == GE:
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 stack.append(IntObj(not b.lt(a)))
 
             elif opcode == BR:
+                old_pc = pc
                 pc += char2int(code[pc])
                 pc += 1
+                if old_pc > pc:
+                    myjitdriver.can_enter_jit(code=code, pc=pc, pool=pool,
+                                              args=args,
+                                              stack=stack,
+                                              framestack=framestack)
                 
             elif opcode == BR_COND:
                 cond = stack.pop()
-                hint(cond, promote_class=True)
                 if cond.t():
-                    pc += char2int(code[pc])
-                pc += 1
-
+                    old_pc = pc
+                    pc += char2int(code[pc]) + 1
+                    if old_pc > pc:
+                        myjitdriver.can_enter_jit(code=code, pc=pc, pool=pool,
+                                                  args=args,
+                                                  stack=stack,
+                                                  framestack=framestack)
+                else:
+                    pc += 1
+                
             elif opcode == BR_COND_STK:
                 offset = stack.pop().int_o()
                 if stack.pop().t():
-                    pc += hint(offset, forget=True)
+                    old_pc = pc
+                    pc += offset
+                    if old_pc > pc:
+                        myjitdriver.can_enter_jit(code=code, pc=pc, pool=pool,
+                                                  args=args,
+                                                  stack=stack,
+                                                  framestack=framestack)
+                        
 
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
@@ -416,8 +400,7 @@ def make_interp(supports_call, jitted=True):
                     res = stack.pop()
                 else:
                     res = None
-                pc2, args, stack = framestack.pop()
-                pc = hint(pc2, promote=True)
+                pc, args, stack = framestack.pop()
                 if res:
                     stack.append(res)
 
@@ -441,7 +424,6 @@ def make_interp(supports_call, jitted=True):
                 pc += 1
                 name = pool.strings[idx]
                 a = stack.pop()
-                hint(a, promote_class=True)
                 stack.append(a.getattr(name))
 
             elif opcode == SETATTR:
@@ -449,8 +431,6 @@ def make_interp(supports_call, jitted=True):
                 pc += 1
                 name = pool.strings[idx]
                 a, b = stack.pop(), stack.pop()
-                hint(a, promote_class=True)
-                hint(b, promote_class=True)
                 b.setattr(name, a)
 
             elif supports_call and opcode == SEND:
@@ -464,10 +444,8 @@ def make_interp(supports_call, jitted=True):
                 while num_args > 0:
                     num_args -= 1
                     meth_args[num_args] = stack.pop()
-                    hint(num_args, concrete=True)
                 a = meth_args[0]
-                hint(a, promote_class=True)
-                meth_pc = hint(a.send(name), promote=True)
+                meth_pc = a.send(name)
                 framestack.push(pc, args, stack)
                 pc = meth_pc
                 args = meth_args
@@ -476,14 +454,12 @@ def make_interp(supports_call, jitted=True):
             elif opcode == PRINT:
                 if not we_are_translated():
                     a = stack.pop()
-                    hint(a, promote_class=True)
                     print a.to_string()
 
             elif opcode == DUMP:
                 if not we_are_translated():
                     parts = []
                     for obj in stack:
-                        hint(obj, promote_class=True)
                         parts.append(obj.to_string())
                     print '[%s]' % ', '.join(parts)
 
