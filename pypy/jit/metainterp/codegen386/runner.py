@@ -1,0 +1,356 @@
+import sys
+import ctypes
+import py
+from pypy.rpython.lltypesystem import lltype, llmemory, ll2ctypes, rffi
+from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+from pypy.rlib.objectmodel import CDefinedIntSymbolic, specialize
+from pypy.rlib.objectmodel import we_are_translated, keepalive_until_here
+from pypy.annotation import model as annmodel
+
+import history
+from history import MergePoint, ResOperation, Box, Const, ConstInt, ConstPtr,\
+     BoxInt, BoxPtr, ConstAddr
+from codegen386.assembler import Assembler386
+from codegen386 import symbolic
+
+class CPU386(object):
+    debug = True
+
+    BOOTSTRAP_TP = lltype.FuncType([lltype.Signed,
+                                    lltype.Ptr(rffi.CArray(lltype.Signed))],
+                                   lltype.Signed)
+
+    def __init__(self, rtyper, stats, translate_support_code=False):
+        self.rtyper = rtyper
+        self.stats = stats
+        self.translate_support_code = translate_support_code
+        if translate_support_code:
+            self.mixlevelann = MixLevelHelperAnnotator(rtyper)
+        else:
+            self.current_interpreter = LLInterpreter(self.rtyper)
+        self.keepalives = []
+        self.keepalives_index = 0
+        self._bootstrap_cache = {}
+        self._guard_list = []
+        self._compiled_ops = {}
+        self._builtin_implementations = {}
+        self.setup()
+        self.caught_exception = None
+        if rtyper is not None: # for tests
+            self.lltype2vtable = rtyper.lltype_to_vtable_mapping()
+
+    def setup(self):
+        self.assembler = Assembler386(self)
+        # the generic assembler stub that just performs a return
+        if self.translate_support_code:
+            mixlevelann = self.mixlevelann
+            s_int = annmodel.SomeInteger()
+
+            def failure_recovery_callback(guard_index, frame_addr):
+                return self.failure_recovery_callback(guard_index, frame_addr)
+
+            fn = mixlevelann.delayedfunction(failure_recovery_callback,
+                                             [s_int, s_int], s_int)
+            self.cfunc_failure_recovery = fn
+        else:
+            import ctypes
+            # the ctypes callback function that handles guard failures
+            fntype = ctypes.CFUNCTYPE(ctypes.c_long,
+                                      ctypes.c_long, ctypes.c_void_p)
+            self.cfunc_failure_recovery = fntype(self.failure_recovery_callback)
+            self.failure_recovery_func_addr = ctypes.cast(
+                        self.cfunc_failure_recovery, ctypes.c_void_p).value
+
+    def get_failure_recovery_func_addr(self):
+        if self.translate_support_code:
+            fn = self.cfunc_failure_recovery
+            return lltype.cast_ptr_to_int(fn)
+        else:
+            return self.failure_recovery_func_addr
+
+    def failure_recovery_callback(self, guard_index, frame_addr):
+        """This function is called back from the assembler code when
+        a not-yet-implemented path is followed.  It can either compile
+        the extra path and ask the assembler to jump to it, or ask
+        the assembler to exit the current function.
+        """
+        self.assembler.make_sure_mc_exists()
+        try:
+            del self.keepalives[self.keepalives_index:]
+            guard_op = self._guard_list[guard_index]
+            if self.debug:
+                llop.debug_print(lltype.Void, '.. calling back from',
+                                 guard_op, 'to the jit')
+            gf = GuardFailed(self, frame_addr, guard_op)
+            self.metainterp.handle_guard_failure(gf)
+            if self.debug:
+                if gf.return_addr == self.assembler.generic_return_addr:
+                    llop.debug_print(lltype.Void, 'continuing at generic return address')
+                else:
+                    llop.debug_print(lltype.Void, 'continuing at',
+                                     uhex(gf.return_addr))
+            return gf.return_addr
+        except Exception, e:
+            if not we_are_translated():
+                self.caught_exception = sys.exc_info()
+            else:
+                self.caught_exception = e
+            return self.assembler.generic_return_addr
+
+    def set_meta_interp(self, metainterp):
+        self.metainterp = metainterp
+
+    def execute_operation(self, opname, valueboxes, result_type):
+        # mostly a hack: fall back to compiling and executing the single
+        # operation.
+        if opname.startswith('#'):
+            return None
+        key = [opname, result_type]
+        for valuebox in valueboxes:
+            key.append(valuebox.type)
+        mp = self.get_compiled_single_operation(key)
+        res = self.execute_operations_in_new_frame(opname, mp, valueboxes,
+                                                   result_type)
+        return res
+
+    def get_compiled_single_operation(self, key):
+        real_key = ','.join([str(k) for k in key])
+        try:
+            return self._compiled_ops[real_key]
+        except KeyError:
+            opname = key[0]
+            result_type = key[1]
+            livevarlist = []
+            for type in key[2:]:
+                if type == 'int':
+                    box = history.BoxInt()
+                elif type == 'ptr':
+                    box = history.BoxPtr()
+                else:
+                    raise ValueError(type)
+                livevarlist.append(box)
+            mp = MergePoint('merge_point', livevarlist, [])
+            if result_type == 'void':
+                results = []
+            elif result_type == 'int':
+                results = [history.BoxInt()]
+            elif result_type == 'ptr':
+                results = [history.BoxPtr()]
+            else:
+                raise ValueError(result_type)
+            operations = [mp,
+                          ResOperation(opname, livevarlist, results),
+                          ResOperation('return', results, [])]
+            self.compile_operations(operations, verbose=False)
+            self._compiled_ops[real_key] = mp
+            return mp
+
+    def compile_operations(self, operations, guard_op=None, verbose=True):
+        self.assembler.assemble(operations, guard_op, verbose=verbose)
+
+    def get_bootstrap_code(self, startmp):
+        # key is locations of arguments
+        key = ','.join([str(i) for i in startmp.arglocs])
+        try:
+            func = self._bootstrap_cache[key]
+        except KeyError:
+            arglocs = startmp.arglocs
+            addr = self.assembler.assemble_bootstrap_code(arglocs)
+            # arguments are as follows - address to jump to,
+            # and a list of args
+            func = rffi.cast(lltype.Ptr(self.BOOTSTRAP_TP), addr)
+            self._bootstrap_cache[key] = func
+        return func
+
+    def get_box_value_as_int(self, box):
+        if isinstance(box, BoxInt):
+            return box.value
+        elif isinstance(box, ConstInt):
+            return box.value
+        elif isinstance(box, BoxPtr):
+            self.keepalives.append(box.value)
+            return self.cast_gcref_to_int(box.value)
+        elif isinstance(box, ConstPtr): 
+            self.keepalives.append(box.value)
+            return self.cast_gcref_to_int(box.value)
+        elif ConstAddr.ever_seen and isinstance(box, ConstAddr):
+            return self.cast_adr_to_int(box.value)
+        else:
+            raise ValueError('get_box_value_as_int, wrong arg')
+
+    def get_valuebox_from_int(self, type, x):
+        if type == 'int':
+            return history.BoxInt(x)
+        elif type == 'ptr':
+            return history.BoxPtr(self.cast_int_to_gcref(x))
+        else:
+            raise ValueError('get_valuebox_from_int: %s' % (type,))
+
+    def execute_operations_in_new_frame(self, name, startmp, valueboxes,
+                                        result_type):
+        func = self.get_bootstrap_code(startmp)
+        # turn all the values into integers
+        TP = rffi.CArray(lltype.Signed)
+        oldindex = self.keepalives_index
+        values_as_int = lltype.malloc(TP, len(valueboxes), flavor='raw')
+        for i in range(len(valueboxes)):
+            box = valueboxes[i]
+            v = self.get_box_value_as_int(box)
+            values_as_int[i] = v
+        # debug info
+        values_repr = ", ".join([str(values_as_int[i]) for i in
+                                 range(len(valueboxes))])
+        if self.debug:
+            llop.debug_print(lltype.Void, 'exec:', name, values_repr)
+        self.keepalives_index = len(self.keepalives)
+        res = self.execute_call(startmp, func, values_as_int)
+        if result_type == 'void':
+            if self.debug:
+                llop.debug_print(lltype.Void, " => void result")
+            res = None
+        else:
+            if self.debug:
+                llop.debug_print(lltype.Void, " => ", res)
+            res = self.get_valuebox_from_int(result_type, res)
+        keepalive_until_here(valueboxes)
+        self.keepalives_index = oldindex
+        del self.keepalives[oldindex:]
+        return res
+
+    def execute_call(self, startmp, func, values_as_int):
+        # help flow objspace
+        prev_interpreter = None
+        if not self.translate_support_code:
+            prev_interpreter = LLInterpreter.current_interpreter
+            LLInterpreter.current_interpreter = self.current_interpreter
+        res = 0
+        try:
+            self.caught_exception = None
+            res = func(startmp.position, values_as_int)
+            self.reraise_caught_exception()
+        finally:
+            if not self.translate_support_code:
+                LLInterpreter.current_interpreter = prev_interpreter
+            lltype.free(values_as_int, flavor='raw')
+        return res
+
+    def reraise_caught_exception(self):
+        # this helper is in its own function so that the call to it
+        # shows up in traceback -- useful to avoid confusing tracebacks,
+        # which are typical when using the 3-arguments raise.
+        if self.caught_exception is not None:
+            if not we_are_translated():
+                exc, val, tb = self.caught_exception
+                raise exc, val, tb
+            else:
+                exc = self.caught_exception
+                raise exc
+
+    def make_guard_index(self, guard_op):
+        index = len(self._guard_list)
+        self._guard_list.append(guard_op)
+        return index
+
+    def convert_box_to_int(self, valuebox):
+        if isinstance(valuebox, ConstInt):
+            return valuebox.value
+        elif isinstance(valuebox, BoxInt):
+            return valuebox.value
+        elif isinstance(valuebox, BoxPtr):
+            x = self.cast_gcref_to_int(valuebox.value)
+            self.keepalives.append(valuebox.value)
+            return x
+        elif isinstance(valuebox, ConstPtr):
+            x = self.cast_gcref_to_int(valuebox.value)
+            self.keepalives.append(valuebox.value)
+            return x
+        else:
+            raise ValueError(valuebox.type)
+
+    def getvaluebox(self, frameadr, mp, argindex):
+        frame = getframe(frameadr)
+        intvalue = frame[mp.stacklocs[argindex]]
+        box = mp.args[argindex]
+        if isinstance(box, history.BoxInt):
+            return history.BoxInt(intvalue)
+        elif isinstance(box, history.BoxPtr):
+            return history.BoxPtr(self.cast_int_to_gcref(intvalue))
+        else:
+            raise AssertionError('getvalue: box = %s' % (box,))
+
+    def setvaluebox(self, frameadr, mp, argindex, valuebox):
+        frame = getframe(frameadr)
+        frame[mp.stacklocs[argindex]] = self.convert_box_to_int(valuebox)
+
+    def sizeof(self, S):
+        return symbolic.get_size(S)
+
+    numof = sizeof
+    addresssuffix = str(symbolic.get_size(llmemory.Address))
+
+    def offsetof(self, S, fieldname):
+        ofs, size = symbolic.get_field_token(S, fieldname)
+        return ofs
+
+    def itemoffsetof(self, A):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
+        return basesize
+
+    def arraylengthoffset(self, A):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
+        return ofs_length
+
+    @staticmethod
+    def cast_adr_to_int(x):
+        res = ll2ctypes.cast_adr_to_int(x)
+        return res
+
+    @staticmethod
+    def cast_int_to_adr(x):
+        return llmemory.cast_ptr_to_adr(rffi.cast(llmemory.GCREF, x))
+
+    def cast_gcref_to_int(self, x):
+        return rffi.cast(lltype.Signed, x)
+
+    def cast_int_to_gcref(self, x):
+        return rffi.cast(llmemory.GCREF, x)
+
+DEFINED_INT_VALUE = {
+    'MALLOC_ZERO_FILLED': 1,   # using Boehm for now
+    }
+
+def uhex(x):
+    if we_are_translated():
+        return hex(x)
+    else:
+        if x < 0:
+            x += 0x100000000
+        return hex(x)
+
+class GuardFailed(object):
+    def __init__(self, cpu, frame, guard_op):
+        self.cpu = cpu
+        self.frame = frame
+        self.guard_op = guard_op
+        self.merge_point = guard_op.most_recent_mp
+
+    def make_ready_for_return(self, return_value_box):
+        self.cpu.assembler.make_sure_mc_exists()
+        if return_value_box is not None:
+            frame = getframe(self.frame)
+            frame[0] = self.cpu.convert_box_to_int(return_value_box)
+        self.return_addr = self.cpu.assembler.generic_return_addr
+
+    def make_ready_for_continuing_at(self, merge_point):
+        # we need to make sure here that return_addr points to a code
+        # that is ready to grab coorect values
+        self.merge_point = merge_point
+        self.return_addr = merge_point.comeback_bootstrap_addr
+
+def getframe(frameadr):
+    return rffi.cast(rffi.CArrayPtr(lltype.Signed), frameadr)
+
+CPU = CPU386
+

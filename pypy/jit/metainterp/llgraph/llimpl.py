@@ -1,0 +1,860 @@
+"""
+The non-RPythonic part of the llgraph backend.
+This contains all the code that is directly run
+when executing on top of the llinterpreter.
+"""
+
+from pypy.objspace.flow.model import Variable, Constant
+from pypy.annotation import model as annmodel
+from history import ConstInt, ConstPtr, ConstAddr, BoxInt, BoxPtr
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
+from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.module.support import LLSupport, OOSupport
+from pypy.rpython.llinterp import LLInterpreter, LLFrame, LLException
+from pypy.rpython.extregistry import ExtRegistryEntry
+
+import heaptracker
+from llgraph import symbolic
+
+import py
+from pypy.tool.ansi_print import ansi_log
+log = py.log.Producer('runner')
+py.log.setconsumer('runner', ansi_log)
+
+
+def _from_opaque(opq):
+    return opq._obj.externalobj
+
+_TO_OPAQUE = {}
+
+def _to_opaque(value):
+    return lltype.opaqueptr(_TO_OPAQUE[value.__class__], 'opaque',
+                            externalobj=value)
+
+def from_opaque_string(s):
+    if isinstance(s, str):
+        return s
+    elif isinstance(s, ootype._string):
+        return OOSupport.from_rstr(s)
+    else:
+        return LLSupport.from_rstr(s)
+
+# a list of argtypes of all operations - couldn't find any and it's
+# very useful
+TYPES = {
+    'int_add'         : (('int', 'int'), 'int'),
+    'int_mod'         : (('int', 'int'), 'int'),
+    'int_rshift'      : (('int', 'int'), 'int'),
+    'int_and'         : (('int', 'int'), 'int'),
+    'int_sub'         : (('int', 'int'), 'int'),
+    'int_mul'         : (('int', 'int'), 'int'),
+    'int_lt'          : (('int', 'int'), 'bool'),
+    'int_gt'          : (('int', 'int'), 'bool'),
+    'int_ge'          : (('int', 'int'), 'bool'),
+    'int_le'          : (('int', 'int'), 'bool'),
+    'int_eq'          : (('int', 'int'), 'bool'),
+    'int_ne'          : (('int', 'int'), 'bool'),
+    'int_is_true'     : (('int',), 'bool'),
+    'int_neg'         : (('int',), 'int'),
+    'bool_not'        : (('bool',), 'bool'),
+    'new_with_vtable' : (('int', 'ptr'), 'ptr'),
+    'new'             : (('int',), 'ptr'),
+    'oononnull'       : (('ptr',), 'bool'),
+    'ooisnull'        : (('ptr',), 'bool'),
+    'oois'            : (('ptr', 'ptr'), 'bool'),
+    'ooisnot'         : (('ptr', 'ptr'), 'bool'),
+    'setfield_gc__4'  : (('ptr', 'fieldname', 'int'), None),
+    'getfield_gc__4'  : (('ptr', 'fieldname'), 'int'),
+    'setfield_raw__4' : (('ptr', 'fieldname', 'int'), None),
+    'getfield_raw__4' : (('ptr', 'fieldname'), 'int'),
+    'setfield_gc_ptr' : (('ptr', 'fieldname', 'ptr'), None),
+    'getfield_gc_ptr' : (('ptr', 'fieldname'), 'ptr'),
+    'setfield_raw_ptr': (('ptr', 'fieldname', 'ptr'), None),
+    'getfield_raw_ptr': (('ptr', 'fieldname'), 'ptr'),
+    'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
+    'call__4'         : (('ptr', 'varargs'), 'int'),
+    'call_void'       : (('ptr', 'varargs'), None),
+    'guard_true'      : (('bool',), None),
+    'guard_false'     : (('bool',), None),
+    'guard_value'     : (('int', 'int'), None),
+    'guard_class'     : (('ptr', 'ptr'), None),
+    'guard_exception' : (('ptr',), None),
+    'newstr'          : (('int',), 'ptr'),
+    'strlen'          : (('ptr',), 'int'),
+    'strgetitem'      : (('ptr', 'int'), 'int'),
+    'strsetitem'      : (('ptr', 'int', 'int'), None),
+}
+
+# ____________________________________________________________
+
+
+class LoopOrBridge(object):
+    def __init__(self):
+        self.operations = []
+
+    def __repr__(self):
+        lines = ['\t' + repr(op) for op in self.operations]
+        lines.insert(0, 'LoopOrBridge:')
+        return '\n'.join(lines)
+
+class Operation(object):
+    def __init__(self, opname):
+        self.opname = opname
+        self.args = []
+        self.results = []
+        self.livevars = []   # for guards only
+
+    def __repr__(self):
+        results = self.results
+        if len(results) == 1:
+            sres = repr0(results[0])
+        else:
+            sres = repr0(results)
+        return '{%s = %s(%s)}' % (sres, self.opname,
+                                  ', '.join(map(repr0, self.args)))
+
+def repr0(x):
+    if isinstance(x, list):
+        return '[' + ', '.join(repr0(y) for y in x) + ']'
+    elif isinstance(x, Constant):
+        return '(' + repr0(x.value) + ')'
+    elif isinstance(x, lltype._ptr):
+        x = llmemory.cast_ptr_to_adr(x)
+        if x.ptr:
+            try:
+                container = x.ptr._obj._normalizedcontainer()
+                return '* %s' % (container._TYPE._short_name(),)
+            except AttributeError:
+                return repr(x)
+        else:
+            return 'NULL'
+    else:
+        return repr(x)
+
+def repr_list(lst, types, cpu):
+    res_l = []
+    if types[-1] == 'varargs':
+        types = types[:-1] + ('int',) * (len(lst) - len(types) + 1)
+    assert len(types) == len(lst)
+    for elem, tp in zip(lst, types):
+        if isinstance(elem, Constant):
+            res_l.append('(%s)' % repr1(elem, tp, cpu))
+        else:
+            res_l.append(repr1(elem, tp, cpu))
+    return '[%s]' % (', '.join(res_l))
+
+def repr1(x, tp, cpu):
+    if tp == 'int':
+        return str(x)
+    elif tp == 'ptr':
+        if not x:
+            return '(* None)'
+        if isinstance(x, int):
+            # XXX normalize?
+            ptr = str(cpu.cast_int_to_adr(x))
+        else:
+            if getattr(x, '_fake', None):
+                return repr(x)
+            if lltype.typeOf(x) == llmemory.GCREF:
+                TP = lltype.Ptr(lltype.typeOf(x._obj.container))
+                ptr = lltype.cast_opaque_ptr(TP, x)
+            else:
+                ptr = x
+        try:
+            container = ptr._obj._normalizedcontainer()
+            return '(* %s)' % (container._TYPE._short_name(),)
+        except AttributeError:
+            return '(%r)' % (ptr,)
+    elif tp == 'bool':
+        assert x == 0 or x == 1
+        return str(bool(x))
+    elif tp == 'fieldname':
+        return str(symbolic.TokenToField[x][1])
+    else:
+        raise NotImplementedError("tp = %s" % tp)
+
+_variables = []
+
+def compile_start():
+    del _variables[:]
+    return _to_opaque(LoopOrBridge())
+
+def compile_start_int_var(loop):
+    loop = _from_opaque(loop)
+    assert not loop.operations
+    v = Variable()
+    v.concretetype = lltype.Signed
+    r = len(_variables)
+    _variables.append(v)
+    return r
+
+def compile_start_ptr_var(loop):
+    loop = _from_opaque(loop)
+    assert not loop.operations
+    v = Variable()
+    v.concretetype = llmemory.GCREF
+    r = len(_variables)
+    _variables.append(v)
+    return r
+
+def compile_add(loop, opname):
+    loop = _from_opaque(loop)
+    opname = from_opaque_string(opname)
+    loop.operations.append(Operation(opname))
+
+def compile_add_var(loop, intvar):
+    loop = _from_opaque(loop)
+    op = loop.operations[-1]
+    op.args.append(_variables[intvar])
+
+def compile_add_int_const(loop, value):
+    loop = _from_opaque(loop)
+    const = Constant(value)
+    const.concretetype = lltype.Signed
+    op = loop.operations[-1]
+    op.args.append(const)
+
+def compile_add_ptr_const(loop, value):
+    loop = _from_opaque(loop)
+    const = Constant(value)
+    const.concretetype = llmemory.GCREF
+    op = loop.operations[-1]
+    op.args.append(const)
+
+def compile_add_int_result(loop):
+    loop = _from_opaque(loop)
+    v = Variable()
+    v.concretetype = lltype.Signed
+    op = loop.operations[-1]
+    op.results.append(v)
+    r = len(_variables)
+    _variables.append(v)
+    return r
+
+def compile_add_ptr_result(loop):
+    loop = _from_opaque(loop)
+    v = Variable()
+    v.concretetype = llmemory.GCREF
+    op = loop.operations[-1]
+    op.results.append(v)
+    r = len(_variables)
+    _variables.append(v)
+    return r
+
+def compile_add_jump_target(loop, loop_target, loop_target_index):
+    loop = _from_opaque(loop)
+    loop_target = _from_opaque(loop_target)
+    op = loop.operations[-1]
+    op.jump_target = loop_target
+    op.jump_target_index = loop_target_index
+    if op.opname == 'jump':
+        if loop_target == loop and loop_target_index == 0:
+            log.trace("compiling new loop")
+        else:
+            log.trace("compiling new bridge")
+
+def compile_add_failnum(loop, failnum):
+    loop = _from_opaque(loop)
+    op = loop.operations[-1]
+    op.failnum = failnum
+
+def compile_add_livebox(loop, intvar):
+    loop = _from_opaque(loop)
+    op = loop.operations[-1]
+    op.livevars.append(_variables[intvar])
+
+def compile_from_guard(loop, guard_loop, guard_opindex):
+    loop = _from_opaque(loop)
+    guard_loop = _from_opaque(guard_loop)
+    op = guard_loop.operations[guard_opindex]
+    assert op.opname.startswith('guard_')
+    op.jump_target = loop
+    op.jump_target_index = 0
+
+# ------------------------------
+
+class Frame(object):
+
+    def __init__(self, cpu):
+        assert cpu
+        llinterp = LLInterpreter(_rtyper)    # '_rtyper' set by CPU
+        llinterp.traceback_frames = []
+        self.llframe = ExtendedLLFrame(None, None, llinterp)
+        self.llframe.cpu = cpu
+        self.llframe.last_exception = None
+        self.llframe.last_exception_handled = True
+        self.verbose = False # cpu is not None
+        self.cpu = cpu
+
+    def getenv(self, v):
+        if isinstance(v, Constant):
+            return v.value
+        else:
+            return self.env[v]
+
+    def go_to_merge_point(self, loop, opindex, args):
+        mp = loop.operations[opindex]
+        assert len(mp.args) == len(args)
+        self.loop = loop
+        self.opindex = opindex
+        self.env = dict(zip(mp.args, args))
+
+    def execute(self):
+        """Execute all operations in a loop,
+        possibly following to other loops as well.
+        """
+        verbose = True
+        while True:
+            self.opindex += 1
+            op = self.loop.operations[self.opindex]
+            args = [self.getenv(v) for v in op.args]
+            if op.opname == 'merge_point':
+                self.go_to_merge_point(self.loop, self.opindex, args)
+                continue
+            if op.opname == 'jump':
+                self.go_to_merge_point(op.jump_target,
+                                       op.jump_target_index,
+                                       args)
+                _stats.exec_jumps += 1
+                continue
+            try:
+                results = self.execute_operation(op.opname, args, verbose)
+                #verbose = self.verbose
+                assert len(results) == len(op.results)
+                assert len(op.results) <= 1
+                if len(op.results) > 0:
+                    RESTYPE = op.results[0].concretetype
+                    if RESTYPE is lltype.Signed:
+                        x = self.as_int(results[0])
+                    elif RESTYPE is llmemory.GCREF:
+                        x = self.as_ptr(results[0])
+                    else:
+                        raise Exception("op.results[0].concretetype is %r"
+                                        % (RESTYPE,))
+                    self.env[op.results[0]] = x
+            except GuardFailed:
+                assert self.llframe.last_exception_handled
+                if hasattr(op, 'jump_target'):
+                    # the guard already failed once, go to the
+                    # already-generated code
+                    catch_op = op.jump_target.operations[0]
+                    assert catch_op.opname == 'catch'
+                    args = []
+                    it = iter(op.livevars)
+                    for v in catch_op.args:
+                        if isinstance(v, Variable):
+                            args.append(self.getenv(it.next()))
+                        else:
+                            args.append(v)
+                    assert list(it) == []
+                    self.go_to_merge_point(op.jump_target,
+                                           op.jump_target_index,
+                                           args)
+                else:
+                    if self.verbose:
+                        log.trace('failed: %s(%s)' % (
+                            op.opname, ', '.join(map(str, args))))
+                    self.failed_guard_op = op
+                    return op.failnum
+
+    def execute_operation(self, opname, values, verbose):
+        """Execute a single operation.
+        """
+        ophandler = self.llframe.getoperationhandler(opname)
+        assert not getattr(ophandler, 'specialform', False)
+        if getattr(ophandler, 'need_result_type', False):
+            assert result_type is not None
+            values = list(values)
+            values.insert(0, result_type)
+        exec_counters = _stats.exec_counters
+        exec_counters[opname] = exec_counters.get(opname, 0) + 1
+        res = ophandler(*values)
+        if verbose:
+            argtypes, restype = TYPES[opname]
+            if res is None:
+                resdata = ''
+            else:
+                resdata = '-> ' + repr1(res, restype, self.cpu)
+            # fish the types
+            log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
+                                                      self.cpu), resdata))
+        if res is None:
+            return []
+        elif isinstance(res, list):
+            return res
+        else:
+            return [res]
+
+    def as_int(self, x):
+        TP = lltype.typeOf(x)
+        if isinstance(TP, lltype.Ptr):
+            assert TP.TO._gckind == 'raw'
+            return self.cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        if TP == llmemory.Address:
+            return self.cpu.cast_adr_to_int(x)
+        return lltype.cast_primitive(lltype.Signed, x)
+    
+    def as_ptr(self, x):
+        if isinstance(lltype.typeOf(x), lltype.Ptr):
+            return lltype.cast_opaque_ptr(llmemory.GCREF, x)
+        else:
+            return x
+
+    def log_progress(self):
+        count = sum(_stats.exec_counters.values())
+        count_jumps = _stats.exec_jumps
+        log.trace('ran %d operations, %d jumps' % (count, count_jumps))
+
+
+def new_frame(cpu):
+    frame = Frame(cpu)
+    return _to_opaque(frame)
+
+def frame_clear(frame, loop, opindex):
+    frame = _from_opaque(frame)
+    loop = _from_opaque(loop)
+    frame.loop = loop
+    frame.opindex = opindex
+    frame.env = {}
+
+def frame_add_int(frame, value):
+    frame = _from_opaque(frame)
+    i = len(frame.env)
+    mp = frame.loop.operations[0]
+    frame.env[mp.args[i]] = value
+
+def frame_add_ptr(frame, value):
+    frame = _from_opaque(frame)
+    i = len(frame.env)
+    mp = frame.loop.operations[0]
+    frame.env[mp.args[i]] = value
+
+def frame_execute(frame):
+    frame = _from_opaque(frame)
+    if frame.verbose:
+        mp = frame.loop.operations[0]
+        values = [frame.env[v] for v in mp.args]
+        log.trace('Entering CPU frame <- %r' % (values,))
+    try:
+        result = frame.execute()
+        if frame.verbose:
+            log.trace('Leaving CPU frame -> #%d' % (result,))
+            frame.log_progress()
+    except ExecutionReturned, e:
+        frame.returned_value = e.args[0]
+        return -1
+    except ExecutionRaised, e:
+        raise e.args[0]
+    except Exception, e:
+        log.ERROR('%s in CPU frame: %s' % (e.__class__.__name__, e))
+        raise
+    return result
+
+def frame_int_getvalue(frame, num):
+    frame = _from_opaque(frame)
+    return frame.env[frame.failed_guard_op.livevars[num]]
+
+def frame_ptr_getvalue(frame, num):
+    frame = _from_opaque(frame)
+    return frame.env[frame.failed_guard_op.livevars[num]]
+
+def frame_int_setvalue(frame, num, value):
+    frame = _from_opaque(frame)
+    frame.env[frame.loop.operations[0].args[num]] = value
+
+def frame_ptr_setvalue(frame, num, value):
+    frame = _from_opaque(frame)
+    frame.env[frame.loop.operations[0].args[num]] = value
+
+def frame_int_getresult(frame):
+    frame = _from_opaque(frame)
+    return frame.returned_value
+
+def frame_ptr_getresult(frame):
+    frame = _from_opaque(frame)
+    return frame.returned_value
+
+def frame_exception(frame):
+    frame = _from_opaque(frame)
+    assert frame.llframe.last_exception_handled
+    last_exception = frame.llframe.last_exception
+    if last_exception:
+        return llmemory.cast_ptr_to_adr(last_exception.args[0])
+    else:
+        return llmemory.NULL
+
+def frame_exc_value(frame):
+    frame = _from_opaque(frame)
+    last_exception = frame.llframe.last_exception
+    if last_exception:
+        return lltype.cast_opaque_ptr(llmemory.GCREF, last_exception.args[1])
+    else:
+        return lltype.nullptr(llmemory.GCREF.TO)
+
+class MemoCast(object):
+    def __init__(self):
+        self.addresses = [llmemory.NULL]
+        self.rev_cache = {}
+
+def new_memo_cast():
+    memocast = MemoCast()
+    return _to_opaque(memocast)
+
+def cast_adr_to_int(memocast, adr):
+    # xxx slow
+    assert lltype.typeOf(adr) == llmemory.Address
+    memocast = _from_opaque(memocast)
+    addresses = memocast.addresses
+    for i in xrange(len(addresses)-1, -1, -1):
+        if addresses[i] == adr:
+            return i
+    i = len(addresses)
+    addresses.append(adr)
+    return i
+
+def cast_int_to_adr(memocast, int):
+    memocast = _from_opaque(memocast)
+    assert 0 <= int < len(memocast.addresses)
+    return memocast.addresses[int]
+
+class GuardFailed(Exception):
+    pass
+
+class ExecutionReturned(Exception):
+    pass
+
+class ExecutionRaised(Exception):
+    pass
+
+class ExtendedLLFrame(LLFrame):
+
+    def op_return(self, value=None):
+        if self.last_exception is None:
+            raise ExecutionReturned(value)
+        else:
+            raise ExecutionRaised(self.last_exception)
+
+    def op_guard_pause(self):
+        raise GuardFailed
+
+    def op_guard_true(self, value, *livevars):
+        if not value:
+            raise GuardFailed
+
+    def op_guard_false(self, value, *livevars):
+        if value:
+            raise GuardFailed
+
+    op_guard_nonzero = op_guard_true
+    op_guard_iszero  = op_guard_false
+
+    def op_guard_nonnull(self, ptr):
+        if lltype.typeOf(ptr) != llmemory.GCREF:
+            ptr = self.cpu.cast_int_to_adr(ptr)
+        if not ptr:
+            raise GuardFailed
+
+    def op_guard_isnull(self, ptr):
+        if lltype.typeOf(ptr) != llmemory.GCREF:
+            ptr = self.cpu.cast_int_to_adr(ptr)
+        if ptr:
+            raise GuardFailed
+
+    def op_guard_lt(self, value1, value2):
+        if value1 >= value2:
+            raise GuardFailed
+
+    def op_guard_le(self, value1, value2):
+        if value1 > value2:
+            raise GuardFailed
+
+    def op_guard_eq(self, value1, value2):
+        if value1 != value2:
+            raise GuardFailed
+
+    def op_guard_ne(self, value1, value2):
+        if value1 == value2:
+            raise GuardFailed
+
+    def op_guard_gt(self, value1, value2):
+        if value1 <= value2:
+            raise GuardFailed
+
+    def op_guard_ge(self, value1, value2):
+        if value1 < value2:
+            raise GuardFailed
+
+    op_guard_is    = op_guard_eq
+    op_guard_isnot = op_guard_ne
+
+    def op_guard_class(self, value, expected_class, *livevars):
+        value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, value)
+        expected_class = llmemory.cast_adr_to_ptr(
+            self.cpu.cast_int_to_adr(expected_class),
+            rclass.CLASSTYPE)
+        if value.typeptr != expected_class:
+            raise GuardFailed
+
+    def op_guard_value(self, value, expected_value):
+        if value != expected_value:
+            raise GuardFailed
+
+    def op_guard_nonvirtualized_int(self, value, for_accessing_field):
+        if heaptracker.cast_vable(value).vable_rti:
+            raise GuardFailed    # some other code is already in control
+
+    op_guard_nonvirtualized_ptr = op_guard_nonvirtualized_int
+
+    def op_guard_exception(self, expected_exception):
+        expected_exception = llmemory.cast_adr_to_ptr(
+            self.cpu.cast_int_to_adr(expected_exception),
+            rclass.CLASSTYPE)
+        if self.last_exception:
+            got = self.last_exception.args[0]
+            self.last_exception_handled = True
+            if not expected_exception:
+                raise GuardFailed
+            if not rclass.ll_issubclass(got, expected_exception):
+                raise GuardFailed
+        else:
+            if expected_exception:
+                raise GuardFailed
+
+    def op_new(self, typesize):
+        TYPE = symbolic.Size2Type[typesize]
+        return lltype.malloc(TYPE)
+
+    def op_new_with_vtable(self, typesize, vtable):
+        TYPE = symbolic.Size2Type[typesize]
+        ptr = lltype.malloc(TYPE)
+        ptr = lltype.cast_opaque_ptr(llmemory.GCREF, ptr)
+        self.op_setfield_gc__4(ptr, 1, vtable)
+        return ptr
+
+    def op_getfield_gc__4(self, ptr, offset):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
+        return getattr(ptr, fieldname)
+
+    def op_getfield_raw__4(self, intval, offset):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
+                                       lltype.Ptr(STRUCT))
+        return getattr(ptr, fieldname)
+
+    def op_getfield_raw_ptr(self, intval, offset):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
+                                       lltype.Ptr(STRUCT))
+        return getattr(ptr, fieldname)
+
+    def op_getfield_gc_ptr(self, ptr, offset):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
+        return getattr(ptr, fieldname)
+
+    def op_setfield_gc__4(self, ptr, offset, newintvalue):
+        STRUCT, fieldname = symbolic.TokenToField[offset] 
+        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
+        FIELDTYPE = getattr(STRUCT, fieldname)
+        if isinstance(FIELDTYPE, lltype.Ptr):
+            assert FIELDTYPE.TO._gckind == 'raw'
+            newvalue = llmemory.cast_adr_to_ptr(
+                self.cpu.cast_int_to_adr(newintvalue),
+                FIELDTYPE)
+        elif FIELDTYPE == llmemory.Address:
+            newvalue = self.cpu.cast_int_to_adr(newintvalue)
+        else:
+            newvalue = newintvalue
+        setattr(ptr, fieldname, newvalue)
+
+    def op_setfield_raw__4(self, intval, offset, newintvalue):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
+                                       lltype.Ptr(STRUCT))
+        FIELDTYPE = getattr(STRUCT, fieldname)
+        if isinstance(FIELDTYPE, lltype.Ptr):
+            assert FIELDTYPE.TO._gckind == 'raw'
+            newvalue = llmemory.cast_adr_to_ptr(
+                self.cpu.cast_int_to_adr(newintvalue),
+                FIELDTYPE)
+        elif FIELDTYPE == llmemory.Address:
+            newvalue = self.cpu.cast_int_to_adr(newintvalue)
+        else:
+            newvalue = newintvalue
+        setattr(ptr, fieldname, newvalue)
+
+    def op_setfield_gc_ptr(self, ptr, offset, newvalue):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
+        FIELDTYPE = getattr(STRUCT, fieldname)
+        newvalue = lltype.cast_opaque_ptr(FIELDTYPE, newvalue)
+        setattr(ptr, fieldname, newvalue)
+
+    def op_setfield_raw_ptr(self, intval, offset, newvalue):
+        STRUCT, fieldname = symbolic.TokenToField[offset]
+        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
+                                       lltype.Ptr(STRUCT))
+        FIELDTYPE = getattr(STRUCT, fieldname)
+        newvalue = lltype.cast_opaque_ptr(FIELDTYPE, newvalue)
+        setattr(ptr, fieldname, newvalue)        
+
+    def op_ooisnull(self, ptr):
+        if lltype.typeOf(ptr) != llmemory.GCREF:
+            ptr = self.cpu.cast_int_to_adr(ptr)
+        return not ptr
+
+    def op_oononnull(self, ptr):
+        if lltype.typeOf(ptr) != llmemory.GCREF:
+            ptr = self.cpu.cast_int_to_adr(ptr)
+        return bool(ptr)
+
+    def op_oois(self, ptr1, ptr2):
+        return ptr1 == ptr2
+
+    def op_ooisnot(self, ptr1, ptr2):
+        return ptr1 != ptr2
+
+    def op_bool_not(self, b):
+        assert isinstance(b, int)
+        return not b
+
+    def op_strlen(self, str):
+        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
+        return len(str.chars)
+
+    def op_strgetitem(self, str, index):
+        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
+        return ord(str.chars[index])
+
+    def op_strsetitem(self, str, index, newchar):
+        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
+        str.chars[index] = chr(newchar)
+
+    def op_newstr(self, length):
+        return rstr.mallocstr(length)
+
+    def catch_exception(self, e):
+        assert self.last_exception_handled
+        self.last_exception = e
+        self.last_exception_handled = False
+
+    def clear_exception(self):
+        assert self.last_exception_handled
+        self.last_exception = None
+
+    def do_call(self, f, *args):
+        ptr = self.cpu.cast_int_to_adr(f).ptr
+        FUNC = lltype.typeOf(ptr).TO
+        ARGS = FUNC.ARGS
+        args = list(args)
+        for i in range(len(ARGS)):
+            if ARGS[i] is lltype.Void:
+                args.insert(i, lltype.Void)
+        assert len(ARGS) == len(args)
+        fixedargs = [heaptracker.fixupobj(TYPE, x)
+                     for TYPE, x in zip(ARGS, args)]
+        try:
+            x = self.perform_call(ptr, ARGS, fixedargs)
+        except LLException, e:
+            self.catch_exception(e)
+            x = FUNC.RESULT._defl()
+        else:
+            self.clear_exception()
+        return x
+
+    op_call__4 = do_call
+    op_call_ptr = do_call
+    op_call_void = do_call
+
+    def op_cast_int_to_ptr(self, i):
+        if i == 0:
+            return dummy_null
+        elif i == 1:
+            return dummy_nonnull
+        else:
+            raise Exception("cast_int_to_ptr: got %d" % (i,))
+
+DUMMY = lltype.GcStruct('DUMMY')
+dummy_null = lltype.nullptr(DUMMY)
+dummy_nonnull = lltype.malloc(DUMMY, immortal=True)
+
+# ____________________________________________________________
+
+
+def setannotation(func, annotation, specialize_as_constant=False):
+
+    class Entry(ExtRegistryEntry):
+        "Annotation and specialization for calls to 'func'."
+        _about_ = func
+
+        if annotation is None or isinstance(annotation, annmodel.SomeObject):
+            s_result_annotation = annotation
+        else:
+            def compute_result_annotation(self, *args_s):
+                return annotation(*args_s)
+
+        if specialize_as_constant:
+            def specialize_call(self, hop):
+                llvalue = func(hop.args_s[0].const)
+                return hop.inputconst(lltype.typeOf(llvalue), llvalue)
+        else:
+            # specialize as direct_call
+            def specialize_call(self, hop):
+                ARGS = [r.lowleveltype for r in hop.args_r]
+                RESULT = hop.r_result.lowleveltype
+                if hop.rtyper.type_system.name == 'lltypesystem':
+                    FUNCTYPE = lltype.FuncType(ARGS, RESULT)
+                    funcptr = lltype.functionptr(FUNCTYPE, func.__name__,
+                                                 _callable=func, _debugexc=True)
+                    cfunc = hop.inputconst(lltype.Ptr(FUNCTYPE), funcptr)
+                else:
+                    FUNCTYPE = ootype.StaticMethod(ARGS, RESULT)
+                    sm = ootype._static_meth(FUNCTYPE, _name=func.__name__, _callable=func)
+                    cfunc = hop.inputconst(FUNCTYPE, sm)
+                args_v = hop.inputargs(*hop.args_r)
+                return hop.genop('direct_call', [cfunc] + args_v, hop.r_result)
+
+
+LOOPORBRIDGE = lltype.Ptr(lltype.OpaqueType("LoopOrBridge"))
+FRAME = lltype.Ptr(lltype.OpaqueType("Frame"))
+MEMOCAST = lltype.Ptr(lltype.OpaqueType("MemoCast"))
+
+_TO_OPAQUE[LoopOrBridge] = LOOPORBRIDGE.TO
+_TO_OPAQUE[Frame] = FRAME.TO
+_TO_OPAQUE[MemoCast] = MEMOCAST.TO
+
+s_LoopOrBridge = annmodel.SomePtr(LOOPORBRIDGE)
+s_Frame = annmodel.SomePtr(FRAME)
+s_MemoCast = annmodel.SomePtr(MEMOCAST)
+
+setannotation(compile_start, s_LoopOrBridge)
+setannotation(compile_start_int_var, annmodel.SomeInteger())
+setannotation(compile_start_ptr_var, annmodel.SomeInteger())
+setannotation(compile_add, annmodel.s_None)
+setannotation(compile_add_var, annmodel.s_None)
+setannotation(compile_add_int_const, annmodel.s_None)
+setannotation(compile_add_ptr_const, annmodel.s_None)
+setannotation(compile_add_int_result, annmodel.SomeInteger())
+setannotation(compile_add_ptr_result, annmodel.SomeInteger())
+setannotation(compile_add_jump_target, annmodel.s_None)
+setannotation(compile_add_failnum, annmodel.s_None)
+setannotation(compile_from_guard, annmodel.s_None)
+
+setannotation(new_frame, s_Frame)
+setannotation(frame_clear, annmodel.s_None)
+setannotation(frame_add_int, annmodel.s_None)
+setannotation(frame_add_ptr, annmodel.s_None)
+setannotation(frame_execute, annmodel.SomeInteger())
+setannotation(frame_int_getvalue, annmodel.SomeInteger())
+setannotation(frame_ptr_getvalue, annmodel.SomePtr(llmemory.GCREF))
+setannotation(frame_int_setvalue, annmodel.s_None)
+setannotation(frame_ptr_setvalue, annmodel.s_None)
+setannotation(frame_int_getresult, annmodel.SomeInteger())
+setannotation(frame_ptr_getresult, annmodel.SomePtr(llmemory.GCREF))
+setannotation(frame_exception, annmodel.SomeAddress())
+setannotation(frame_exc_value, annmodel.SomePtr(llmemory.GCREF))
+
+setannotation(new_memo_cast, s_MemoCast)
+setannotation(cast_adr_to_int, annmodel.SomeInteger())
+setannotation(cast_int_to_adr, annmodel.SomeAddress())
