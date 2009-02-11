@@ -6,15 +6,16 @@ when executing on top of the llinterpreter.
 
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.annotation import model as annmodel
-from history import ConstInt, ConstPtr, ConstAddr, BoxInt, BoxPtr
+from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr,
+                                         BoxInt, BoxPtr)
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLInterpreter, LLFrame, LLException
 from pypy.rpython.extregistry import ExtRegistryEntry
 
-import heaptracker
-from llgraph import symbolic
+from pypy.jit.metainterp import heaptracker
+from pypy.jit.backend.llgraph import symbolic
 
 import py
 from pypy.tool.ansi_print import ansi_log

@@ -6,12 +6,12 @@ from pypy.rlib.objectmodel import we_are_translated, r_dict
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_print
 
-import history, support
-from history import Const, ConstInt, ConstPtr, Box, BoxInt, BoxPtr, GuardOp
-from compile import compile_new_loop, compile_new_bridge
-from heaptracker import get_vtable_for_gcstruct
-import codewriter, optimize
-from llgraph import runner
+from pypy.jit.metainterp import history, support
+from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
+                                         BoxInt, BoxPtr, GuardOp)
+from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
+from pypy.jit.metainterp.heaptracker import get_vtable_for_gcstruct
+from pypy.jit.metainterp import codewriter, optimize
 
 # ____________________________________________________________
 

@@ -3,8 +3,8 @@ Minimal-API wrapper around the llinterpreter to run operations.
 """
 
 from pypy.rpython.lltypesystem import lltype, llmemory
-import history
-from llgraph import llimpl, symbolic
+from pypy.jit.metainterp import history
+from pypy.jit.backend.llgraph import llimpl, symbolic
 
 
 class MiniStats:
