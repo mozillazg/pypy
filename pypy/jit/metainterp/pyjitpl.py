@@ -486,18 +486,21 @@ class MIFrame(object):
     def opimpl_keepalive(self, box):
         pass     # xxx?
 
-    def _check_for_black_hole(self, varargs):
+    def generate_merge_point(self, pc, varargs):
         if isinstance(self.metainterp.history, history.BlackHole):
-            raise self.metainterp.ContinueRunningNormally(varargs)        
+            raise self.metainterp.ContinueRunningNormally(varargs)
+        num_green_args = self.metainterp.warmrunnerdesc.num_green_args
+        for i in range(num_green_args):
+            varargs[i] = self.implement_guard_value(pc, varargs[i])
 
-    @arguments("varargs")
-    def opimpl_can_enter_jit(self, varargs):
-        self._check_for_black_hole(varargs)
+    @arguments("orgpc", "varargs")
+    def opimpl_can_enter_jit(self, pc, varargs):
+        self.generate_merge_point(pc, varargs)
         raise GenerateMergePoint(varargs)
 
-    @arguments("varargs")
-    def opimpl_jit_merge_point(self, varargs):
-        self._check_for_black_hole(varargs)
+    @arguments("orgpc")
+    def opimpl_jit_merge_point(self, pc):
+        self.generate_merge_point(pc, self.env)
 
     @arguments("jumptarget")
     def opimpl_setup_exception_block(self, exception_target):

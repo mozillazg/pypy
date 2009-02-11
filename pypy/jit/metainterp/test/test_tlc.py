@@ -10,9 +10,11 @@ from pypy.jit.metainterp.test.test_basic import OOJitMixin, LLJitMixin
 class TLCTests:
 
     def _get_interp(self, bytecode, pool):
-        def interp(inputarg):
+        codes = [bytecode, '']
+        pools = [pool, None]
+        def interp(i, inputarg):
             args = [tlc.IntObj(inputarg)]
-            obj = tlc.interp_eval(bytecode, 0, args, pool)
+            obj = tlc.interp_eval(codes[i], 0, args, pools[i])
             return obj.int_o()
         return interp
 
@@ -20,7 +22,7 @@ class TLCTests:
         pool = tlc.ConstantPool()
         bytecode = tlc.compile(src, pool)
         interp = self._get_interp(bytecode, pool)
-        return self.meta_interp(interp, [inputarg], view=False)
+        return self.meta_interp(interp, [0, inputarg], view=False)
 
     def test_method(self):
         code = """
@@ -42,7 +44,6 @@ class TLCTests:
         assert res == 42
 
     def test_accumulator(self):
-        py.test.skip("takes too long and does not optimize :-(")
         path = py.path.local(tlc.__file__).dirpath('accumulator.tlc.src')
         code = path.read()
         res = self.exec_code(code, 20)
