@@ -35,21 +35,23 @@ class VirtualInstanceSpecNode(FixedClassSpecNode):
         elif len(self.fields) != len(other.fields):
             return False
         else:
-            for key, value in self.fields.items():
-                if key not in other.fields:
+            for i in range(len(self.fields)):
+                key, value = self.fields[i]
+                otherkey, othervalue = other.fields[i]
+                if key != otherkey:
                     return False
                 if value is None:
-                    if other.fields[key] is not None:
+                    if othervalue is not None:
                         return False
                 else:
-                    if not value.equals(other.fields[key]):
+                    if not value.equals(othervalue):
                         return False
             return True
 
     def matches(self, instnode):
         if not FixedClassSpecNode.matches(self, instnode):
             return False
-        for key, value in self.fields.items():
+        for key, value in self.fields:
             if key not in instnode.curfields:
                 return False
             if value is not None and not value.matches(instnode.curfields[key]):
@@ -99,9 +101,7 @@ def extract_runtime_data(cpu, specnode, valuebox, resultlist):
     if not isinstance(specnode, VirtualInstanceSpecNode):
         resultlist.append(valuebox)
         return
-    lst = specnode.fields.items()
-    lst.sort()
-    for ofs, subspecnode in lst:
+    for ofs, subspecnode in specnode.fields:
         cls = specnode.known_class.getint()
         typemarker = type_cache.field_type[cls, ofs]
         if typemarker.startswith('_'):
@@ -156,28 +156,23 @@ class InstanceNode(object):
             if self.cls is None:
                 return None
             return FixedClassSpecNode(known_class)
-        fields = {}
-        for ofs, node in other.curfields.items():
+        fields = []
+        lst = other.curfields.items()
+        lst.sort()
+        for ofs, node in lst:
             if ofs in self.origfields:
                 specnode = self.origfields[ofs].intersect(node)
-                fields[ofs] = specnode
             else:
-                fields[ofs] = None
                 self.origfields[ofs] = InstanceNode(node.source.clonebox())
-        
-#         for ofs, node in self.origfields.items():
-#             if ofs in other.curfields:
-#                 specnode = node.intersect(other.curfields[ofs])
-#                 fields[ofs] = specnode
-#             else:
-#                fields[ofs] = None
+                specnode = None
+            fields.append((ofs, specnode))
         return VirtualInstanceSpecNode(known_class, fields)
 
     def adapt_to(self, specnode):
         if not isinstance(specnode, VirtualInstanceSpecNode):
             self.escaped = True
             return
-        for ofs, subspecnode in specnode.fields.items():
+        for ofs, subspecnode in specnode.fields:
             self.curfields[ofs].adapt_to(subspecnode)
 
 
@@ -306,7 +301,7 @@ class PerfectSpecializer(object):
                 assert instnode.cls.source.equals(specnode.known_class)
             if isinstance(specnode, VirtualInstanceSpecNode):
                 curfields = {}
-                for ofs, subspecnode in specnode.fields.items():
+                for ofs, subspecnode in specnode.fields:
                     subinstnode = instnode.origfields[ofs]
                     # should really be there
                     self.mutate_nodes(subinstnode, subspecnode)
@@ -327,9 +322,7 @@ class PerfectSpecializer(object):
         if not isinstance(specnode, VirtualInstanceSpecNode):
             newboxlist.append(instnode.source)
         else:
-            lst = specnode.fields.items()
-            lst.sort()
-            for ofs, subspecnode in lst:
+            for ofs, subspecnode in specnode.fields:
                 subinstnode = instnode.curfields[ofs]  # should really be there
                 self.expanded_version_of_rec(subspecnode, subinstnode,
                                              newboxlist)

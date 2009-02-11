@@ -112,7 +112,7 @@ def test_A_intersect_input_and_output():
     assert spec_sum is None      # for now
     assert isinstance(spec_n, VirtualInstanceSpecNode)
     assert spec_n.known_class.value == node_vtable_adr
-    assert spec_n.fields == {A.ofs_value: None}
+    assert spec_n.fields == [(A.ofs_value, None)]
 
 def test_A_optimize_loop():
     operations = A.ops[:]
