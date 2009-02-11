@@ -772,4 +772,8 @@ class FunctionCodeGenerator(object):
     def OP_IS_EARLY_CONSTANT(self, op):
         return self.expr(op.result)  + ' = 0;' # Allways false
 
+    def OP_JIT_MARKER(self, op):
+        return '/* JIT_MARKER %s */' % op
+
+
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)
