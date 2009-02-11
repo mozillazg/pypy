@@ -34,12 +34,12 @@ class ToyLanguageTests:
         assert res == 120
 
     def test_tlr(self):
-        from pypy.jit.tl.tlr import hp_interpret, SQUARE
+        from pypy.jit.tl.tlr import interpret, SQUARE
 
         codes = ["", SQUARE]
         def main(n, a):
-            code = hint(codes, deepfreeze=True)[n]
-            return hp_interpret(code, a)
+            code = codes[n]
+            return interpret(code, a)
 
         res = self.meta_interp(main, [1, 10])
         assert res == 100

@@ -1,5 +1,5 @@
 import autopath
-from pypy.rlib.jit import hint, JitDriver
+from pypy.rlib.jit import JitDriver
 
 
 MOV_A_R    = 1
@@ -11,72 +11,18 @@ RETURN_A   = 6
 ALLOCATE   = 7
 NEG_A      = 8
 
-
-def interpret(bytecode, a):
-    """Another Toy Language interpreter, this one register-based."""
-    regs = []
-    pc = 0
-    while True:
-        hint(None, global_merge_point=True)
-        opcode = hint(ord(bytecode[pc]), concrete=True)
-        pc += 1
-        if opcode == MOV_A_R:
-            n = ord(bytecode[pc])
-            pc += 1
-            regs[n] = a
-        elif opcode == MOV_R_A:
-            n = ord(bytecode[pc])
-            pc += 1
-            a = regs[n]
-        elif opcode == JUMP_IF_A:
-            target = ord(bytecode[pc])
-            pc += 1
-            if a:
-                pc = target
-        elif opcode == SET_A:
-            a = ord(bytecode[pc])
-            pc += 1
-        elif opcode == ADD_R_TO_A:
-            n = ord(bytecode[pc])
-            pc += 1
-            a += regs[n]
-        elif opcode == RETURN_A:
-            return a
-        elif opcode == ALLOCATE:
-            n = ord(bytecode[pc])
-            pc += 1
-            regs = [0] * n
-        elif opcode == NEG_A:
-            a = -a
-
-
 class TLRJitDriver(JitDriver):
     greens = ['bytecode', 'pc']
     reds   = ['a', 'regs']
 
-    def compute_invariants(self, reds, bytecode, pc):
-        return len(reds.regs)
-
-    def on_enter_jit(self, invariant, reds, bytecode, pc):
-        # make a copy of the 'regs' list to make it a VirtualList for the JIT
-        length = invariant
-        newregs = [0] * length
-        i = 0
-        while i < length:
-            i = hint(i, concrete=True)
-            newregs[i] = reds.regs[i]
-            i += 1
-        reds.regs = newregs
-
 tlrjitdriver = TLRJitDriver()
 
-def hp_interpret(bytecode, a):
-    """A copy of interpret() with the hints required by the hotpath policy."""
+def interpret(bytecode, a):
     regs = []
     pc = 0
     while True:
         tlrjitdriver.jit_merge_point(bytecode=bytecode, pc=pc, a=a, regs=regs)
-        opcode = hint(ord(bytecode[pc]), concrete=True)
+        opcode = ord(bytecode[pc])
         pc += 1
         if opcode == MOV_A_R:
             n = ord(bytecode[pc])
