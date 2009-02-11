@@ -2,7 +2,11 @@
 class JitPolicy:
     def graphs_from(self, op):
         if op.opname == 'direct_call':
-            return [op.args[0].value._obj.graph]
+            graph = op.args[0].value._obj.graph
+            # explicitly pure functions are always opaque
+            if getattr(getattr(graph, 'func', None), '_pure_function_', False):
+                return None
+            return [graph]
         assert op.opname == 'indirect_call'
         return op.args[-1].value
 
@@ -24,7 +28,7 @@ class StopAtXPolicy(JitPolicy):
 
     def graphs_from(self, op):
         graphs = JitPolicy.graphs_from(self, op)
-        if len(graphs) > 1: # XXX a hack
+        if graphs is None or len(graphs) > 1: # XXX a hack
             return graphs
         [graph] = graphs
         if getattr(graph, 'func', None) in self.funcs:
