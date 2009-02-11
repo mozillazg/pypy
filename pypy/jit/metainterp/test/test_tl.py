@@ -74,7 +74,7 @@ class ToyLanguageTests:
         
         codes = ["", code]
         def main(n):
-            code = hint(codes, deepfreeze=True)[n]
+            code = codes[n]
             return interp(code)
 
         res = self.meta_interp(main, [1])

@@ -52,7 +52,7 @@ class arguments(object):
                     args += (self.load_3byte(), )
                 elif argspec == "jumptargets":
                     num = self.load_int()
-                    args += ([self.load_4byte() for i in range(num)], )
+                    args += ([self.load_3byte() for i in range(num)], )
                 elif argspec == "bool":
                     args += (self.load_bool(), )
                 elif argspec == "2byte":
@@ -269,6 +269,17 @@ class MIFrame(object):
         self.generate_guard(targetpc, opname, box, ignore_box=switchcase)
         self.pc = currentpc
 
+    @arguments("orgpc", "box", "intargs", "jumptargets")
+    def opimpl_switch(self, pc, valuebox, intargs, jumptargets):
+        box = self.implement_guard_value(pc, valuebox)
+        switchcase = box.getint()
+        # XXX implement dictionary for speedups at some point
+        for i in range(len(intargs)):
+            value = intargs[i]
+            if switchcase == value:
+                self.pc = jumptargets[i]
+                break
+
     @arguments("int")
     def opimpl_new(self, size):
         self.execute('new', [ConstInt(size)], 'ptr')
@@ -433,12 +444,7 @@ class MIFrame(object):
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_value(self, pc, box):
-        if isinstance(box, Box):
-            promoted_box = box.constbox()
-            self.generate_guard(pc, 'guard_value', box, [promoted_box])
-            return promoted_box
-        else:
-            return box     # no promotion needed, already a Const
+        return self.implement_guard_value(pc, box)
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_class(self, pc, box):
@@ -581,6 +587,14 @@ class MIFrame(object):
         self.pc = pc
         guard_op.key = self.metainterp.record_state()
         self.pc = saved_pc
+
+    def implement_guard_value(self, pc, box):
+        if isinstance(box, Box):
+            promoted_box = box.constbox()
+            self.generate_guard(pc, 'guard_value', box, [promoted_box])
+            return promoted_box
+        else:
+            return box     # no promotion needed, already a Const
 
     def follow_jump(self):
         self.pc -= 3

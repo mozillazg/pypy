@@ -1,4 +1,4 @@
-from warmspot import ll_meta_interp
+from pypy.jit.metainterp.warmspot import ll_meta_interp
 from pypy.rlib.jit import hint, JitDriver
 
 class Exit(Exception):
