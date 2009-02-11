@@ -4,7 +4,7 @@ from pypy.rlib.jit import hint
 
 from pypy.jit.tl import tlc
 
-from test.test_basic import OOJitMixin, LLJitMixin
+from pypy.jit.metainterp.test.test_basic import OOJitMixin, LLJitMixin
 
 
 class TLCTests:

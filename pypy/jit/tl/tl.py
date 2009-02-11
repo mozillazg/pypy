@@ -2,7 +2,7 @@
 
 import py
 from pypy.jit.tl.tlopcode import *
-from pypy.rlib.jit import hint
+from pypy.rlib.jit import JitDriver
 
 def char2int(c):
     t = ord(c)
@@ -11,6 +11,8 @@ def char2int(c):
     return t
 
 def make_interp(supports_call):
+    myjitdriver = JitDriver(greens = ['pc', 'code', 'code_len'],
+                            reds = ['stack', 'inputarg'])
     def interp(code='', pc=0, inputarg=0):
         if not isinstance(code,str):
             raise TypeError("code '%s' should be a string" % str(code))
@@ -19,8 +21,9 @@ def make_interp(supports_call):
         stack = []
 
         while pc < code_len:
+            myjitdriver.jit_merge_point(pc=pc, code=code, code_len=code_len,
+                                        stack=stack, inputarg=inputarg)
             opcode = ord(code[pc])
-            opcode = hint(opcode, concrete=True)
             pc += 1
 
             if opcode == NOP:
@@ -103,13 +106,20 @@ def make_interp(supports_call):
 
             elif opcode == BR_COND:
                 if stack.pop():
-                    pc += char2int(code[pc])
-                pc += 1
+                    pc += char2int(code[pc]) + 1
+                    myjitdriver.can_enter_jit(pc=pc, code=code,
+                                              code_len=code_len,
+                                              stack=stack, inputarg=inputarg)
+                else:
+                    pc += 1
 
             elif opcode == BR_COND_STK:
                 offset = stack.pop()
                 if stack.pop():
-                    pc += hint(offset, forget=True)
+                    pc += offset
+                    myjitdriver.can_enter_jit(pc=pc, code=code,
+                                              code_len=code_len,
+                                              stack=stack, inputarg=inputarg)
 
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
