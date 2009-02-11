@@ -25,6 +25,32 @@ class Stack(object):
             raise IndexError
         return self.stack[self.stackpos]
 
+    def pick(self, i):
+        self.append(self.stack[self.stackpos - i - 1])
+
+    def put(self, i):
+        elem = self.pop()
+        self.stack[self.stackpos - i - 1] = elem
+
+    def roll(self, r):
+        if r < -1:
+            i = self.stackpos + r
+            if i < 0:
+                raise IndexError
+            elem = self.stack[self.stackpos - 1]
+            for j in range(self.stackpos - 2, i - 1, -1):
+                self.stack[j + 1] = self.stack[j]
+            self.stack[i] = elem
+        elif r > 1:
+            i = self.stackpos - r
+            if i < 0:
+                raise IndexError
+            elem = self.stack[i]
+            for j in range(i, self.stackpos - 1):
+                self.stack[j] = self.stack[j + 1]
+            self.stack[self.stackpos - 1] = elem
+
+
 def make_interp(supports_call):
     myjitdriver = JitDriver(greens = ['pc', 'code'],
                             reds = ['stack', 'inputarg'])
@@ -56,29 +82,16 @@ def make_interp(supports_call):
                 stack.append(b)
 
             elif opcode == ROLL: #rotate stack top to somewhere below
-                raise NotImplementedError("ROLL")
                 r = char2int(code[pc])
-                if r < -1:
-                    i = len(stack) + r
-                    if i < 0:
-                        raise IndexError
-                    stack.insert( i, stack.pop() )
-                elif r > 1:
-                    i = len(stack) - r
-                    if i < 0:
-                        raise IndexError
-                    stack.roll(i)
-
+                stack.roll(r)
                 pc += 1
 
             elif opcode == PICK:
-                raise NotImplementedError("PICK")
-                stack.append( stack[-1 - char2int(code[pc])] )
+                stack.pick(char2int(code[pc]))
                 pc += 1
 
             elif opcode == PUT:
-                raise NotImplementedError("PUT")
-                stack[-1 - char2int(code[pc])] = stack.pop()
+                stack.put(char2int(code[pc]))
                 pc += 1
 
             elif opcode == ADD:

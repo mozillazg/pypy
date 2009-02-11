@@ -101,6 +101,7 @@ class TestTL(test_boehm.AbstractGCTestClass):
         assert self.interp(list2bytecode([PUSH,7, RETURN, PUSH,5])) == 7
 
     def test_rot(self):
+
         code = [PUSH,1, PUSH,2, PUSH,3, ROLL, 3] 
         assert self.interp(list2bytecode(code)) == 1
         assert self.interp(list2bytecode(code + [POP])) == 3
