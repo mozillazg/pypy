@@ -80,6 +80,7 @@ TYPES = {
     'guard_value'     : (('int', 'int'), None),
     'guard_class'     : (('ptr', 'ptr'), None),
     'guard_exception' : (('ptr',), None),
+    'guard_nonvirtualized__4' : (('ptr', 'int'), None),
     'newstr'          : (('int',), 'ptr'),
     'strlen'          : (('ptr',), 'int'),
     'strgetitem'      : (('ptr', 'int'), 'int'),
@@ -600,11 +601,11 @@ class ExtendedLLFrame(LLFrame):
         if value != expected_value:
             raise GuardFailed
 
-    def op_guard_nonvirtualized_int(self, value, for_accessing_field):
+    def op_guard_nonvirtualized__4(self, value, for_accessing_field):
         if heaptracker.cast_vable(value).vable_rti:
             raise GuardFailed    # some other code is already in control
 
-    op_guard_nonvirtualized_ptr = op_guard_nonvirtualized_int
+    op_guard_nonvirtualized_ptr = op_guard_nonvirtualized__4
 
     def op_guard_exception(self, expected_exception):
         expected_exception = llmemory.cast_adr_to_ptr(
