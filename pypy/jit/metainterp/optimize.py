@@ -326,7 +326,9 @@ class PerfectSpecializer(object):
         if not instnode.virtual:
             newboxlist.append(instnode.source)
             return
-        for subinstnode in instnode.curfields.values():
+        lst = instnode.curfields.items()
+        lst.sort()
+        for _, subinstnode in lst:
             self.expanded_version_of_rec(subinstnode, newboxlist, memo)
 
     def optimize_guard(self, op):
