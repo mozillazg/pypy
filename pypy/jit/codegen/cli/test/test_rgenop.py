@@ -66,6 +66,9 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
     def test_from_random_5_direct(self):
         py.test.skip('mono crash')
 
+    def test_longwinded_and_direct(self):
+        py.test.skip('mono 2.2 crashes')
+
     def test_ovfcheck1_direct(self):
         py.test.skip('fixme')
 
