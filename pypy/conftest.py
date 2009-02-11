@@ -516,3 +516,8 @@ class Directory(py.test.collect.Directory):
         # disable recursion in symlinked subdirectories
         return (py.test.collect.Directory.recfilter(self, path)
                 and path.check(link=0))
+
+
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning,
+                        module='.*ansi_print')
