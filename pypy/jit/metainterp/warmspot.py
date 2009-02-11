@@ -96,6 +96,9 @@ class WarmRunnerDesc:
         graph = copygraph(graph)
         graph.startblock = support.split_before_jit_merge_point(
             *find_jit_merge_point([graph]))
+        for v in graph.getargs():
+            assert isinstance(v, Variable)
+        assert len(dict.fromkeys(graph.getargs())) == len(graph.getargs())
         self.translator.graphs.append(graph)
         self.portal_graph = graph
         self.jitdriver = block.operations[pos].args[1].value

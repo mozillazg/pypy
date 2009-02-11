@@ -45,7 +45,7 @@ class ToyLanguageTests:
         assert res == 100
 
     def test_tl_base(self):
-        from pypy.jit.tl.tl import interp
+        from pypy.jit.tl.tl import interp_without_call
         from pypy.jit.tl.tlopcode import compile
 
         code = compile('''
@@ -73,11 +73,11 @@ class ToyLanguageTests:
         ''')
         
         codes = ["", code]
-        def main(n):
+        def main(n, inputarg):
             code = codes[n]
-            return interp(code)
+            return interp_without_call(code, inputarg=inputarg)
 
-        res = self.meta_interp(main, [1])
+        res = self.meta_interp(main, [1, 6])
         assert res == 5040
 
 
