@@ -1,0 +1,4 @@
+
+* Kill hack for malloc_varsize by splitting it into two ops (load and set lgt)
+
+* Kill hack for .position attr of modrm
