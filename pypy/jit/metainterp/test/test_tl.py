@@ -1,7 +1,7 @@
 import py
 from pypy.rlib.jit import JitDriver, hint
-from policy import StopAtXPolicy
-from test.test_basic import OOJitMixin, LLJitMixin
+from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.metainterp.test.test_basic import OOJitMixin, LLJitMixin
 
 
 class ToyLanguageTests:

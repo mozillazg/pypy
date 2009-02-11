@@ -4,13 +4,13 @@ import copy
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
-from llgraph import runner
-from history import BoxInt, BoxPtr, ConstInt, ConstPtr, ConstAddr
-from history import ResOperation, MergePoint, Jump, GuardOp
-from optimize import PerfectSpecializer, CancelInefficientLoop
-from optimize import VirtualInstanceSpecNode, FixedClassSpecNode
-from optimize import rebuild_boxes_from_guard_failure, type_cache
-from optimize import AllocationStorage
+from pypy.jit.backend.llgraph import runner
+from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
+                                         ConstAddr, ResOperation, MergePoint,
+                                         Jump, GuardOp)
+from pypy.jit.metainterp.optimize import (PerfectSpecializer,
+    CancelInefficientLoop, VirtualInstanceSpecNode, FixedClassSpecNode,
+    rebuild_boxes_from_guard_failure, type_cache, AllocationStorage)
 
 cpu = runner.CPU(None)
 

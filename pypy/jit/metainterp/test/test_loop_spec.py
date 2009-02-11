@@ -1,5 +1,5 @@
 import py
-import test_loop
+from pypy.jit.metainterp.test import test_loop
 
 
 class TestLoopSpec(test_loop.TestLoop):
