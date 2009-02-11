@@ -10,10 +10,10 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import PARAMETERS
 from pypy.rlib.rarithmetic import r_uint
 
-import support, history, pyjitpl
-from pyjitpl import OOMetaInterp
-from llgraph import runner
-from policy import JitPolicy
+from pypy.jit.metainterp import support, history, pyjitpl
+from pypy.jit.metainterp.pyjitpl import OOMetaInterp
+from pypy.jit.backend.llgraph import runner
+from pypy.jit.metainterp.policy import JitPolicy
 
 # ____________________________________________________________
 # Bootstrapping

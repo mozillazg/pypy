@@ -1,13 +1,9 @@
 import py
 from pypy.rlib.jit import JitDriver, hint
-from warmspot import ll_meta_interp, get_stats
-import history
-from pyjitpl import OOMetaInterp
-import pyjitpl
-from llgraph import runner
-import codewriter
-import support
-from policy import JitPolicy, StopAtXPolicy
+from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
+from pypy.jit.backend.llgraph import runner
+from pypy.jit.metainterp import support, codewriter, pyjitpl, history
+from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
 
 def get_metainterp(func, values, CPUClass, type_system, policy):
     from pypy.annotation.policy import AnnotatorPolicy
@@ -20,7 +16,7 @@ def get_metainterp(func, values, CPUClass, type_system, policy):
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, False)
     graph = rtyper.annotator.translator.graphs[0]
-    return OOMetaInterp(graph, cpu, stats, False), rtyper
+    return pyjitpl.OOMetaInterp(graph, cpu, stats, False), rtyper
 
 class JitMixin:
     basic = True
