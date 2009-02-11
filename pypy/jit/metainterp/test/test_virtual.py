@@ -196,6 +196,10 @@ NODE = lltype.GcStruct('NODE', ('value', lltype.Signed),
 
 class TestLLtype_NotObject(VirtualTests, LLJitMixin):
     _new_op = 'new'
+
+    def setup_class(cls):
+        py.test.skip("not supported yet")
+    
     @staticmethod
     def _new():
         return lltype.malloc(NODE)
