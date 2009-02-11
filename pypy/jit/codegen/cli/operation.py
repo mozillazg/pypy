@@ -340,10 +340,12 @@ class WriteLine(Operation):
     def emit(self):
         self.meth.il.EmitWriteLine(self.message)
 
-class IntAddOvf(BinaryOp):
+class CatchAndRaiseMixin(object):
 
-    def getOpCode(self):
-        return OpCodes.Add_Ovf
+    _mixin_ = True
+
+    def getExceptionType(self):
+        raise NotImplementedError
 
     def emit(self):
         il = self.meth.il
@@ -352,11 +354,26 @@ class IntAddOvf(BinaryOp):
         il.Emit(self.getOpCode())
         self.storeResult()
         il.Emit(OpCodes.Leave, lbl)
-        
-        il.BeginCatchBlock(typeof(System.OverflowException))
+        il.BeginCatchBlock(self.getExceptionType())
         il.Emit(OpCodes.Ldc_I4, 1)
         self.storeExcFlag()
         il.EndExceptionBlock()
+
+
+class RaisingBinaryOp(CatchAndRaiseMixin, BinaryOp):
+    pass
+
+class RaisingUnaryOp(CatchAndRaiseMixin, UnaryOp):
+    pass
+
+
+class IntAddOvf(RaisingBinaryOp):
+
+    def getOpCode(self):
+        return OpCodes.Add_Ovf
+
+    def getExceptionType(self):
+        return typeof(System.OverflowException)
 
 
 def opcode2attrname(opcode):
@@ -387,33 +404,68 @@ def restype_longlong(self): return typeof(System.Int64)
 def fillops(ops, baseclass):
     out = {}
     for opname, value in ops.iteritems():
-        if isinstance(value, str):
-            attrname = opcode2attrname(value)
-            source = py.code.Source("""
-            class %(opname)s (%(baseclass)s):
-                def getOpCode(self):
-                    return OpCodes.%(attrname)s
-            """ % locals())
-            code = source.compile()
-            exec code in globals(), out
-        elif value is cli_opcodes.DoNothing:
-            # create a new subclass of SameAs; we can't use SameAs directly
-            # because its restype could be patched later
-            out[opname] = type(opname, (SameAs,), {})
-        else:
-            renderCustomOp(opname, baseclass, value, out)
-
-        # fix the restype for comparison ops and casts
-        if is_comparison(opname):
-            out[opname].restype = restype_bool
-        elif opname != 'cast_primitive' and opname.startswith('cast_'):
-            _, _, _, to = opname.split('_')
-            funcname = 'restype_%s' % to
-            out[opname].restype = globals()[funcname]
+        renderOp(baseclass, opname, value, out)
 
     return out
 
-def renderCustomOp(opname, baseclass, steps, out):
+def renderOp(baseclass, opname, value, out, optional_lines=''):
+    if isinstance(value, str):
+        renderSimpleOp(baseclass, opname, value, out, optional_lines)
+    elif value is cli_opcodes.DoNothing:
+        # create a new subclass of SameAs; we can't use SameAs directly
+        # because its restype could be patched later
+        out[opname] = type(opname, (SameAs,), {})
+    else:
+        assert isinstance(value, list)
+        steps = value
+        if len(steps) == 1 and isinstance(steps[0], cli_opcodes.MapException):
+            #renderRaisingOp(baseclass, opname, steps[0], out)
+            return # XXX
+        renderCustomOp(baseclass, opname, value, out)
+
+    # fix the restype for comparison ops and casts
+    if is_comparison(opname):
+        out[opname].restype = restype_bool
+    elif opname != 'cast_primitive' and opname.startswith('cast_'):
+        _, _, _, to = opname.split('_')
+        funcname = 'restype_%s' % to
+        out[opname].restype = globals()[funcname]
+
+def renderSimpleOp(baseclass, opname, value, out, optional_lines=''):
+    attrname = opcode2attrname(value)
+    source = py.code.Source("""
+    class %(opname)s (%(baseclass)s):
+        def getOpCode(self):
+            return OpCodes.%(attrname)s
+
+%(optional_lines)s
+    """ % locals())
+    code = source.compile()
+    exec code in globals(), out
+
+## def get_exctype(exctype_str):
+##     if exctype_str == '[mscorlib]System.OverflowException':
+##         return typeof(System.OverflowException)
+##     elif exctype_str == '[mscorlib]System.DivideByZeroException':
+##         return typeof(System.DivideByZeroException)
+##     else:
+##         assert False, 'Unknown exception type'
+
+## def renderRaisingOp(baseclass, opname, value, out):
+##     mapping = value.mapping
+##     assert len(mapping) == 1, 'Catching more than one exception is not supported'
+##     exctype = mapping[0][0]
+##     assert exctype.startswith('[mscorlib]')
+##     exctype = exctype[len('[mscorlib]'):]
+##     source = """
+##         def getExceptionType(self):
+##             return typeof(%(exctype)s)
+##     """ % locals()
+##     baseclass = 'Raising' + baseclass
+##     renderOp(baseclass, opname, value.instr, out, source)
+
+
+def renderCustomOp(baseclass, opname, steps, out):
     assert steps
     body = []
     for step in steps:
