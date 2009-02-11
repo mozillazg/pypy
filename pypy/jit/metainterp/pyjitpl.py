@@ -666,6 +666,8 @@ class OOMetaInterp(object):
         self.builtins_keys = []
         self.builtins_values = []
         self.builtins_seen = {}
+        
+        self._virtualizabledescs = {}
 
     def generate_bytecode(self, policy):
         self._codewriter = codewriter.CodeWriter(self, policy)
