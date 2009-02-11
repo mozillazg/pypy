@@ -313,23 +313,24 @@ class PerfectSpecializer(object):
                 instnode.virtual = True
 
     def expanded_version_of(self, boxlist):
-        memo = {}
         newboxlist = []
-        for box in boxlist:
-            self.expanded_version_of_rec(self.nodes[box], newboxlist, memo)
+        assert len(boxlist) == len(self.specnodes)
+        for i in range(len(boxlist)):
+            box = boxlist[i]
+            specnode = self.specnodes[i]
+            self.expanded_version_of_rec(specnode, self.nodes[box], newboxlist)
         return newboxlist
 
-    def expanded_version_of_rec(self, instnode, newboxlist, memo):
-        if instnode in memo:
-            return
-        memo[instnode] = None
-        if not instnode.virtual:
+    def expanded_version_of_rec(self, specnode, instnode, newboxlist):
+        if not isinstance(specnode, VirtualInstanceSpecNode):
             newboxlist.append(instnode.source)
-            return
-        lst = instnode.curfields.items()
-        lst.sort()
-        for _, subinstnode in lst:
-            self.expanded_version_of_rec(subinstnode, newboxlist, memo)
+        else:
+            lst = specnode.fields.items()
+            lst.sort()
+            for ofs, subspecnode in lst:
+                subinstnode = instnode.curfields[ofs]  # should really be there
+                self.expanded_version_of_rec(subspecnode, subinstnode,
+                                             newboxlist)
 
     def optimize_guard(self, op):
         liveboxes = []
