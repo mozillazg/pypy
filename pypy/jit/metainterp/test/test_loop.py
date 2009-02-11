@@ -1,9 +1,9 @@
 import py
 from pypy.rlib.jit import JitDriver
-from warmspot import ll_meta_interp, get_stats
+from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.rpython.lltypesystem import lltype
-from test.test_basic import LLJitMixin
-from policy import StopAtXPolicy
+from pypy.jit.metainterp.test.test_basic import LLJitMixin
+from pypy.jit.metainterp.policy import StopAtXPolicy
 
 class TestLoop(LLJitMixin):
     specialize = False
