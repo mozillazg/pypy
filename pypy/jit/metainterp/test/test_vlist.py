@@ -1,4 +1,5 @@
 import py
+py.test.skip("XXX")
 from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.hintannotator.policy import StopAtXPolicy
 from pyjitpl import get_stats

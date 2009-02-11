@@ -248,7 +248,23 @@ class BytecodeMaker(object):
             self.emit(*falserenaming)
             self.make_bytecode_block(linkfalse.target)
         else:
-            xxx
+            self.minimize_variables()
+            switches = [link for link in block.exits
+                        if link.exitcase != 'default']
+            renamings = [self.insert_renaming(link.args)
+                         for link in switches]
+            self.emit("switch",
+                      self.var_position(block.exitswitch))
+            self.emit_list([link.llexitcase for link in switches])
+            self.emit_list([tlabel(link) for link in switches])
+            if block.exits[-1].exitcase == 'default':
+                link = block.exits[-1]
+                self.emit(*self.insert_renaming(link.args))
+                self.make_bytecode_block(link.target)
+            for renaming, link in zip(renamings, switches):
+                self.emit(label(link))
+                self.emit(*renaming)
+                self.make_bytecode_block(link.target)
 
     def serialize_setup_exception_block(self, exception_exits):
         self.minimize_variables()
@@ -647,8 +663,11 @@ class BytecodeMaker(object):
         self.assembler.extend(stuff)
 
     def emit_varargs(self, varargs):
-        self.emit(len(varargs))
-        self.emit(*map(self.var_position, varargs))
+        self.emit_list(map(self.var_position, varargs))
+
+    def emit_list(self, l):
+        self.emit(len(l))
+        self.emit(*l)
 
 # ____________________________________________________________
 

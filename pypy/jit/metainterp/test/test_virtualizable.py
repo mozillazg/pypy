@@ -1,4 +1,5 @@
 import py
+py.test.skip("XXX")
 from pypy.rpython.lltypesystem.rvirtualizable import VABLERTIPTR
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.rpython.annlowlevel import llhelper
