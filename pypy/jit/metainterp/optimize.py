@@ -38,8 +38,12 @@ class VirtualInstanceSpecNode(FixedClassSpecNode):
             for key, value in self.fields.items():
                 if key not in other.fields:
                     return False
-                if not value.equals(other.fields[key]):
-                    return False
+                if value is None:
+                    if other.fields[key] is not None:
+                        return False
+                else:
+                    if not value.equals(other.fields[key]):
+                        return False
             return True
 
     def matches(self, instnode):
@@ -48,7 +52,7 @@ class VirtualInstanceSpecNode(FixedClassSpecNode):
         for key, value in self.fields.items():
             if key not in instnode.curfields:
                 return False
-            if not value.matches(instnode.curfields[key]):
+            if value is not None and not value.matches(instnode.curfields[key]):
                 return False
         return True
 
@@ -151,10 +155,20 @@ class InstanceNode(object):
                 return None
             return FixedClassSpecNode(known_class)
         fields = {}
-        for ofs, node in self.origfields.items():
-            if ofs in other.curfields:
-                specnode = node.intersect(other.curfields[ofs])
+        for ofs, node in other.curfields.items():
+            if ofs in self.origfields:
+                specnode = self.origfields[ofs].intersect(node)
                 fields[ofs] = specnode
+            else:
+                fields[ofs] = None
+                self.origfields[ofs] = InstanceNode(node.source.clonebox())
+        
+#         for ofs, node in self.origfields.items():
+#             if ofs in other.curfields:
+#                 specnode = node.intersect(other.curfields[ofs])
+#                 fields[ofs] = specnode
+#             else:
+#                fields[ofs] = None
         return VirtualInstanceSpecNode(known_class, fields)
 
     def adapt_to(self, specnode):
@@ -291,7 +305,8 @@ class PerfectSpecializer(object):
             if isinstance(specnode, VirtualInstanceSpecNode):
                 curfields = {}
                 for ofs, subspecnode in specnode.fields.items():
-                    subinstnode = instnode.origfields[ofs]   # should be there
+                    subinstnode = instnode.origfields[ofs]
+                    # should really be there
                     self.mutate_nodes(subinstnode, subspecnode)
                     curfields[ofs] = subinstnode
                 instnode.curfields = curfields
