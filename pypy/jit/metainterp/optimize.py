@@ -99,7 +99,9 @@ def extract_runtime_data(cpu, specnode, valuebox, resultlist):
     if not isinstance(specnode, VirtualInstanceSpecNode):
         resultlist.append(valuebox)
         return
-    for ofs, subspecnode in specnode.fields.items():
+    lst = specnode.fields.items()
+    lst.sort()
+    for ofs, subspecnode in lst:
         cls = specnode.known_class.getint()
         typemarker = type_cache.field_type[cls, ofs]
         if typemarker.startswith('_'):
