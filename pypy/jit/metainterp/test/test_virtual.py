@@ -99,7 +99,7 @@ class VirtualTests:
                 n -= 1
             return node.value
         res = self.meta_interp(f, [10])
-        assert res == 255
+        assert res == f(10)
         self.check_loop_count(2)
         self.check_loops(new=0, new_with_vtable=0,
                                 getfield_gc__4=0, getfield_gc_ptr=0,
