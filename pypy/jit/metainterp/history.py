@@ -356,7 +356,7 @@ class Graph(object):
 
     def show(self, in_stats=None, errmsg=None, highlightops={}):
         if in_stats is None:
-            from graphpage import ResOpGraphPage
+            from pypy.jit.metainterp.graphpage import ResOpGraphPage
             ResOpGraphPage([self], errmsg, highlightops).display()
         else:
             h = dict.fromkeys(self.operations)
@@ -507,7 +507,7 @@ class Stats(object):
             self.view()
 
     def view(self, errmsg=None, extragraphs=[], highlightops={}):
-        from graphpage import ResOpGraphPage
+        from pypy.jit.metainterp.graphpage import ResOpGraphPage
         graphs = self.get_all_graphs()
         for graph in extragraphs:
             if graph in graphs:

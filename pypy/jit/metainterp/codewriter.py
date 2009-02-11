@@ -4,8 +4,8 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
 from pypy.rlib import objectmodel
 from pypy.rlib.objectmodel import we_are_translated
-from history import Const, getkind, getkind_num
-import heaptracker, support, history, optimize
+from pypy.jit.metainterp.history import Const, getkind, getkind_num
+from pypy.jit.metainterp import heaptracker, support, history, optimize
 
 import py
 from pypy.tool.ansi_print import ansi_log

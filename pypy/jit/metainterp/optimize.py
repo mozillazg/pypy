@@ -1,7 +1,6 @@
-from history import Box, Const, ConstInt
-from history import MergePoint, ResOperation, Jump
-from heaptracker import always_pure_operations
-
+from pypy.jit.metainterp.history import (Box, Const, ConstInt,
+                                         MergePoint, ResOperation, Jump)
+from pypy.jit.metainterp.heaptracker import always_pure_operations
 
 class CancelInefficientLoop(Exception):
     pass

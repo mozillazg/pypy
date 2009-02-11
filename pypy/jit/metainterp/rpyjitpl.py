@@ -4,10 +4,10 @@ from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython import annlowlevel
 from pypy.annotation import model as annmodel
 
-from pyjitpl import build_meta_interp, generate_bootstrapping_code, MIFrame
-from pyjitpl import debug_checks
-from history import ResOperation, Const, Box, BoxInt, log
-import history, specnode
+from pypy.jit.metainterp.pyjitpl import (build_meta_interp, debug_checks,
+                                         generate_bootstrapping_code, MIFrame)
+from pypy.jit.metainterp.history import ResOperation, Const, Box, BoxInt, log
+from pypy.jit.metainterp import history, specnode
 
 
 def rpython_ll_meta_interp(function, args, loops=None, **kwds):
