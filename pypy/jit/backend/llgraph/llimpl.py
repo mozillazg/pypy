@@ -75,7 +75,8 @@ TYPES = {
     'guard_false'     : (('bool',), None),
     'guard_value'     : (('int', 'int'), None),
     'guard_class'     : (('ptr', 'ptr'), None),
-    'guard_exception' : (('ptr',), None),
+    'guard_no_exception'      : ((), None),
+    'guard_exception'         : (('ptr',), 'ptr'),
     'guard_nonvirtualized__4' : (('ptr', 'int'), None),
     'newstr'          : (('int',), 'ptr'),
     'strlen'          : (('ptr',), 'int'),
@@ -616,20 +617,24 @@ class ExtendedLLFrame(LLFrame):
 
     op_guard_nonvirtualized_ptr = op_guard_nonvirtualized__4
 
+    def op_guard_no_exception(self):
+        if self.last_exception:
+            self.last_exception_handled = True
+            raise GuardFailed
+
     def op_guard_exception(self, expected_exception):
         expected_exception = llmemory.cast_adr_to_ptr(
             self.cpu.cast_int_to_adr(expected_exception),
             rclass.CLASSTYPE)
+        assert expected_exception
         if self.last_exception:
             got = self.last_exception.args[0]
             self.last_exception_handled = True
-            if not expected_exception:
-                raise GuardFailed
             if not rclass.ll_issubclass(got, expected_exception):
                 raise GuardFailed
+            return self.last_exception.args[1]
         else:
-            if expected_exception:
-                raise GuardFailed
+            raise GuardFailed
 
     def op_new(self, typesize):
         TYPE = symbolic.Size2Type[typesize]

@@ -9,17 +9,17 @@ class ExceptionTests:
     def test_simple(self):
         def g(n):
             if n <= 0:
-                raise IndexError
+                raise MyError(n)
             return n - 1
         def f(n):
             try:
                 return g(n)
-            except IndexError:
-                return 5
+            except MyError, e:
+                return e.n + 10
         res = self.interp_operations(f, [9])
         assert res == 8
         res = self.interp_operations(f, [-99])
-        assert res == 5
+        assert res == -89
 
     def test_no_exception(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
@@ -81,16 +81,17 @@ class ExceptionTests:
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         def check(n):
             if n > -100:
-                raise IndexError
+                raise MyError(n)
         def f(n):
             while n > 0:
                 myjitdriver.can_enter_jit(n=n)
                 myjitdriver.jit_merge_point(n=n)
                 try:
                     check(n)
-                except IndexError:
-                    n = n - 5
+                except MyError, e:
+                    n = e.n - 5
             return n
+        assert f(53) == -2
         res = self.meta_interp(f, [53], policy=StopAtXPolicy(check))
         assert res == -2
 
@@ -177,7 +178,7 @@ class ExceptionTests:
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         def check(n):
             if n < 0:
-                raise IndexError
+                raise MyError(n)
             return 5
         def f(n):
             try:
@@ -185,8 +186,9 @@ class ExceptionTests:
                     myjitdriver.can_enter_jit(n=n)
                     myjitdriver.jit_merge_point(n=n)
                     n = n - check(n)
-            except IndexError:
-                return n
+            except MyError, e:
+                return e.n
+        assert f(53) == -2
         res = self.meta_interp(f, [53], policy=StopAtXPolicy(check))
         assert res == -2
 
