@@ -221,6 +221,7 @@ class InstanceNode(object):
         if self.startbox:    flags += 's'
         if self.const:       flags += 'c'
         if self.virtual:     flags += 'v'
+        if self.virtualized: flags += 'V'
         return "<InstanceNode %s (%s)>" % (self.source, flags)
 
 
@@ -316,7 +317,8 @@ class PerfectSpecializer(object):
                 continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.getnode(op.args[0])
-                instnode.virtualized = True
+                if instnode.startbox:
+                    instnode.virtualized = True
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
