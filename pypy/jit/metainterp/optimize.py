@@ -71,9 +71,14 @@ class AllocationStorage(object):
     def __init__(self):
         # allocations: list of vtables to allocate
         # setfields: list of triples
-        #                 (index_in_allocations, ofs, index_in_arglist)
+        #                 (index_in_allocations, ofs, ~index_in_arglist)
         #                  -or-
-        #                 (index_in_allocations, ofs, ~index_in_allocations)
+        #                 (index_in_allocations, ofs, index_in_allocations)
+        #                  -or-
+        #                 (~index_in_arglist, ofs, index_in_allocations)
+        #                  -or-
+        #                 (~index_in_arglist, ofs, ~index_in_arglist)
+        # last two cases are for virtualizables only
         self.allocations = []
         self.setfields = []
 
@@ -82,19 +87,28 @@ class AllocationStorage(object):
             return memo[box]
         if isinstance(box, Const):
             virtual = False
+            virtualized = False
         else:
             instnode = nodes[box]
             virtual = instnode.virtual
+            virtualized = instnode.virtualized
         if virtual:
             alloc_offset = len(self.allocations)
             self.allocations.append(instnode.cls.source.getint())
-            res = ~alloc_offset
+            res = alloc_offset
             memo[box] = res
             for ofs, node in instnode.curfields.items():
                 num = self.deal_with_box(node.source, nodes, liveboxes, memo)
                 self.setfields.append((alloc_offset, ofs, num))
+        elif virtualized:
+            res = ~len(liveboxes)
+            memo[box] = res
+            liveboxes.append(box)
+            for ofs, node in instnode.curfields.items():
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
+                self.setfields.append((res, ofs, num))
         else:
-            res = len(liveboxes)
+            res = ~len(liveboxes)
             memo[box] = res
             liveboxes.append(box)
         return res
@@ -546,18 +560,20 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
         allocated_boxes.append(instbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
         if index_in_arglist < 0:
-            fieldbox = allocated_boxes[~index_in_arglist]
+            fieldbox = boxes_from_frame[~index_in_arglist]
         else:
-            fieldbox = boxes_from_frame[index_in_arglist]
-        vtable = storage.allocations[index_in_alloc]
-        box = allocated_boxes[index_in_alloc]
+            fieldbox = allocated_boxes[index_in_arglist]
+        if index_in_alloc < 0:
+            box = boxes_from_frame[~index_in_alloc]
+        else:
+            box = allocated_boxes[index_in_alloc]
         history.execute_and_record('setfield_gc',
                                    [box, ConstInt(ofs), fieldbox],
                                    'void', False)
     newboxes = []
     for index in storage.indices:
         if index < 0:
-            newboxes.append(allocated_boxes[~index])
+            newboxes.append(boxes_from_frame[~index])
         else:
-            newboxes.append(boxes_from_frame[index])
+            newboxes.append(allocated_boxes[index])
     return newboxes
