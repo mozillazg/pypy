@@ -99,7 +99,6 @@ def test_A_find_nodes():
     assert spec.nodes[A.sum] is not spec.nodes[A.sum2]
     assert spec.nodes[A.n1] is not spec.nodes[A.n2]
     assert spec.nodes[A.n1].cls.source.value == node_vtable_adr
-    assert spec.nodes[A.n1].cls.star
     assert not spec.nodes[A.n1].escaped
     assert spec.nodes[A.n2].cls.source.value == node_vtable_adr
     assert not spec.nodes[A.n2].escaped
