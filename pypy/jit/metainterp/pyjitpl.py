@@ -304,74 +304,30 @@ class MIFrame(object):
     def opimpl_ptr_ne(self, box1, box2):
         self.execute('ooisnot', [box1, box2], 'int', True)
 
-    @arguments("box", "int")
-    def opimpl_getfield__1(self, box, offset):
-        self.execute('getfield__1', [box, ConstInt(offset)], 'int')
-    @arguments("box", "int")
-    def opimpl_getfield_pure__1(self, box, offset):
-        self.execute('getfield__1', [box, ConstInt(offset)], 'int', True)
-    @arguments("box", "int", "box")
-    def opimpl_setfield__1(self, box, offset, valuebox):
-        self.execute('setfield__1', [box, ConstInt(offset), valuebox], 'void')
 
     @arguments("box", "int")
-    def opimpl_getfield__2(self, box, offset):
-        self.execute('getfield__2', [box, ConstInt(offset)], 'int')
+    def opimpl_getfield_gc(self, box, fielddesc):
+        tp = self.metainterp.cpu.typefor(fielddesc)
+        self.execute('getfield_gc', [box, ConstInt(fielddesc)], tp)
     @arguments("box", "int")
-    def opimpl_getfield_pure__2(self, box, offset):
-        self.execute('getfield__2', [box, ConstInt(offset)], 'int', True)
+    def opimpl_getfield_pure_gc(self, box, fielddesc):
+        tp = self.metainterp.cpu.typefor(fielddesc)
+        self.execute('getfield_gc', [box, ConstInt(fielddesc)], tp, True)
     @arguments("box", "int", "box")
-    def opimpl_setfield__2(self, box, offset, valuebox):
-        self.execute('setfield__2', [box, ConstInt(offset), valuebox], 'void')
+    def opimpl_setfield_gc(self, box, offset, valuebox):
+        self.execute('setfield_gc', [box, ConstInt(offset), valuebox], 'void')
 
     @arguments("box", "int")
-    def opimpl_getfield_gc__4(self, box, offset):
-        self.execute('getfield_gc__4', [box, ConstInt(offset)], 'int')
+    def opimpl_getfield_raw(self, box, fielddesc):
+        tp = self.metainterp.cpu.typefor(fielddesc)
+        self.execute('getfield_raw', [box, ConstInt(fielddesc)], tp)
     @arguments("box", "int")
-    def opimpl_getfield_pure_gc__4(self, box, offset):
-        self.execute('getfield_gc__4', [box, ConstInt(offset)], 'int', True)
+    def opimpl_getfield_pure_raw(self, box, fielddesc):
+        tp = self.metainterp.cpu.typefor(fielddesc)
+        self.execute('getfield_raw', [box, ConstInt(offset)], tp, True)
     @arguments("box", "int", "box")
-    def opimpl_setfield_gc__4(self, box, offset, valuebox):
-        self.execute('setfield_gc__4', [box, ConstInt(offset), valuebox], 'void')
-
-    @arguments("box", "int")
-    def opimpl_getfield_raw__4(self, box, offset):
-        self.execute('getfield_raw__4', [box, ConstInt(offset)], 'int')
-    @arguments("box", "int")
-    def opimpl_getfield_pure_raw__4(self, box, offset):
-        self.execute('getfield_raw__4', [box, ConstInt(offset)], 'int', True)
-    @arguments("box", "int", "box")
-    def opimpl_setfield_raw__4(self, box, offset, valuebox):
-        self.execute('setfield_raw__4', [box, ConstInt(offset), valuebox], 'void')    
-
-    @arguments("box", "int")
-    def opimpl_getfield__8(self, box, offset):
-        self.execute('getfield__8', [box, ConstInt(offset)], 'int')
-    @arguments("box", "int")
-    def opimpl_getfield_pure__8(self, box, offset):
-        self.execute('getfield__8', [box, ConstInt(offset)], 'int', True)
-    @arguments("box", "int", "box")
-    def opimpl_setfield__8(self, box, offset, valuebox):
-        self.execute('setfield__8', [box, ConstInt(offset), valuebox], 'void')
-
-    @arguments("box", "int")
-    def opimpl_getfield_gc_ptr(self, box, offset):
-        self.execute('getfield_gc_ptr', [box, ConstInt(offset)], 'ptr')
-    @arguments("box", "int")
-    def opimpl_getfield_pure_gc_ptr(self, box, offset):
-        self.execute('getfield_gc_ptr', [box, ConstInt(offset)], 'ptr', True)
-    @arguments("box", "int", "box")
-    def opimpl_setfield_gc_ptr(self, box, offset, valuebox):
-        self.execute('setfield_gc_ptr', [box, ConstInt(offset), valuebox], 'void')
-    @arguments("box", "int")
-    def opimpl_getfield_raw_ptr(self, box, offset):
-        self.execute('getfield_raw_ptr', [box, ConstInt(offset)], 'ptr')
-    @arguments("box", "int")
-    def opimpl_getfield_pure_raw_ptr(self, box, offset):
-        self.execute('getfield_raw_ptr', [box, ConstInt(offset)], 'ptr', True)
-    @arguments("box", "int", "box")
-    def opimpl_setfield_raw_ptr(self, box, offset, valuebox):
-        self.execute('setfield_raw_ptr', [box, ConstInt(offset), valuebox], 'void')
+    def opimpl_setfield_raw(self, box, offset, valuebox):
+        self.execute('setfield_raw', [box, ConstInt(offset), valuebox], 'void')
 
     @arguments("bytecode", "varargs")
     def opimpl_call(self, callee, varargs):

@@ -64,14 +64,10 @@ TYPES = {
     'ooisnull'        : (('ptr',), 'bool'),
     'oois'            : (('ptr', 'ptr'), 'bool'),
     'ooisnot'         : (('ptr', 'ptr'), 'bool'),
-    'setfield_gc__4'  : (('ptr', 'fieldname', 'int'), None),
-    'getfield_gc__4'  : (('ptr', 'fieldname'), 'int'),
-    'setfield_raw__4' : (('ptr', 'fieldname', 'int'), None),
-    'getfield_raw__4' : (('ptr', 'fieldname'), 'int'),
-    'setfield_gc_ptr' : (('ptr', 'fieldname', 'ptr'), None),
-    'getfield_gc_ptr' : (('ptr', 'fieldname'), 'ptr'),
-    'setfield_raw_ptr': (('ptr', 'fieldname', 'ptr'), None),
-    'getfield_raw_ptr': (('ptr', 'fieldname'), 'ptr'),
+    'setfield_gc'     : (('ptr', 'fieldname', 'intorptr'), None),
+    'getfield_gc'     : (('ptr', 'fieldname'), 'intorptr'),
+    'setfield_raw'    : (('ptr', 'fieldname', 'intorptr'), None),
+    'getfield_raw'    : (('ptr', 'fieldname'), 'intotptr'),
     'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
     'call__4'         : (('ptr', 'varargs'), 'int'),
     'call_void'       : (('ptr', 'varargs'), None),
@@ -139,13 +135,22 @@ def repr_list(lst, types, cpu):
         types = types[:-1] + ('int',) * (len(lst) - len(types) + 1)
     assert len(types) == len(lst)
     for elem, tp in zip(lst, types):
-        if isinstance(elem, Constant):
-            res_l.append('(%s)' % repr1(elem, tp, cpu))
+        if len(lst) >= 2:
+            extraarg = lst[1]
         else:
-            res_l.append(repr1(elem, tp, cpu))
+            extraarg = None
+        if isinstance(elem, Constant):
+            res_l.append('(%s)' % repr1(elem, tp, cpu, extraarg))
+        else:
+            res_l.append(repr1(elem, tp, cpu, extraarg))
     return '[%s]' % (', '.join(res_l))
 
-def repr1(x, tp, cpu):
+def repr1(x, tp, cpu, extraarg):
+    if tp == "intorptr":
+        if extraarg % 2:
+            tp = "ptr"
+        else:
+            tp = "int"
     if tp == 'int':
         return str(x)
     elif tp == 'ptr':
@@ -171,7 +176,7 @@ def repr1(x, tp, cpu):
         assert x == 0 or x == 1
         return str(bool(x))
     elif tp == 'fieldname':
-        return str(symbolic.TokenToField[x][1])
+        return str(symbolic.TokenToField[x/2][1])
     else:
         raise NotImplementedError("tp = %s" % tp)
 
@@ -376,7 +381,11 @@ class Frame(object):
             if res is None:
                 resdata = ''
             else:
-                resdata = '-> ' + repr1(res, restype, self.cpu)
+                if len(values) >= 2:
+                    extraarg = values[1]
+                else:
+                    extraarg = None
+                resdata = '-> ' + repr1(res, restype, self.cpu, extraarg)
             # fish the types
             log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
                                                       self.cpu), resdata))
@@ -630,76 +639,42 @@ class ExtendedLLFrame(LLFrame):
         TYPE = symbolic.Size2Type[typesize]
         ptr = lltype.malloc(TYPE)
         ptr = lltype.cast_opaque_ptr(llmemory.GCREF, ptr)
-        self.op_setfield_gc__4(ptr, 1, vtable)
+        self.op_setfield_gc(ptr, 2, vtable)
         return ptr
 
-    def op_getfield_gc__4(self, ptr, offset):
-        STRUCT, fieldname = symbolic.TokenToField[offset]
+    def op_getfield_gc(self, ptr, fielddesc):
+        STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
         ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
         return getattr(ptr, fieldname)
 
-    def op_getfield_raw__4(self, intval, offset):
-        STRUCT, fieldname = symbolic.TokenToField[offset]
+    def op_getfield_raw(self, intval, fielddesc):
+        STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
         ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
                                        lltype.Ptr(STRUCT))
         return getattr(ptr, fieldname)
 
-    def op_getfield_raw_ptr(self, intval, offset):
+    def op_setfield_gc(self, ptr, fielddesc, newvalue):
+        offset = fielddesc/2
         STRUCT, fieldname = symbolic.TokenToField[offset]
-        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
-                                       lltype.Ptr(STRUCT))
-        return getattr(ptr, fieldname)
-
-    def op_getfield_gc_ptr(self, ptr, offset):
-        STRUCT, fieldname = symbolic.TokenToField[offset]
-        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
-        return getattr(ptr, fieldname)
-
-    def op_setfield_gc__4(self, ptr, offset, newintvalue):
-        STRUCT, fieldname = symbolic.TokenToField[offset] 
-        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
+        if lltype.typeOf(ptr) == llmemory.GCREF:
+            ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
         FIELDTYPE = getattr(STRUCT, fieldname)
-        if isinstance(FIELDTYPE, lltype.Ptr):
-            assert FIELDTYPE.TO._gckind == 'raw'
-            newvalue = llmemory.cast_adr_to_ptr(
-                self.cpu.cast_int_to_adr(newintvalue),
-                FIELDTYPE)
-        elif FIELDTYPE == llmemory.Address:
-            newvalue = self.cpu.cast_int_to_adr(newintvalue)
+        if fielddesc % 2:
+            newvalue = lltype.cast_opaque_ptr(FIELDTYPE, newvalue)
         else:
-            newvalue = newintvalue
+            if isinstance(FIELDTYPE, lltype.Ptr):
+                assert FIELDTYPE.TO._gckind == 'raw'
+                newvalue = llmemory.cast_adr_to_ptr(
+                    self.cpu.cast_int_to_adr(newvalue),
+                    FIELDTYPE)
+            elif FIELDTYPE == llmemory.Address:
+                newvalue = self.cpu.cast_int_to_adr(newvalue)
         setattr(ptr, fieldname, newvalue)
 
-    def op_setfield_raw__4(self, intval, offset, newintvalue):
-        STRUCT, fieldname = symbolic.TokenToField[offset]
+    def op_setfield_raw(self, intval, fielddesc, newvalue):
         ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
                                        lltype.Ptr(STRUCT))
-        FIELDTYPE = getattr(STRUCT, fieldname)
-        if isinstance(FIELDTYPE, lltype.Ptr):
-            assert FIELDTYPE.TO._gckind == 'raw'
-            newvalue = llmemory.cast_adr_to_ptr(
-                self.cpu.cast_int_to_adr(newintvalue),
-                FIELDTYPE)
-        elif FIELDTYPE == llmemory.Address:
-            newvalue = self.cpu.cast_int_to_adr(newintvalue)
-        else:
-            newvalue = newintvalue
-        setattr(ptr, fieldname, newvalue)
-
-    def op_setfield_gc_ptr(self, ptr, offset, newvalue):
-        STRUCT, fieldname = symbolic.TokenToField[offset]
-        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
-        FIELDTYPE = getattr(STRUCT, fieldname)
-        newvalue = lltype.cast_opaque_ptr(FIELDTYPE, newvalue)
-        setattr(ptr, fieldname, newvalue)
-
-    def op_setfield_raw_ptr(self, intval, offset, newvalue):
-        STRUCT, fieldname = symbolic.TokenToField[offset]
-        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
-                                       lltype.Ptr(STRUCT))
-        FIELDTYPE = getattr(STRUCT, fieldname)
-        newvalue = lltype.cast_opaque_ptr(FIELDTYPE, newvalue)
-        setattr(ptr, fieldname, newvalue)        
+        self.op_setfield_gc(ptr, fielddesc, newvalue)
 
     def op_ooisnull(self, ptr):
         if lltype.typeOf(ptr) != llmemory.GCREF:

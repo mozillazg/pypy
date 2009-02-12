@@ -244,9 +244,20 @@ class CPU(object):
     addresssuffix = '4'
 
     @staticmethod
-    def offsetof(S, fieldname):
+    def fielddescrof(S, fieldname):
         ofs, size = symbolic.get_field_token(S, fieldname)
-        return ofs
+        token = history.getkind(getattr(S, fieldname))
+        if token == 'ptr':
+            bit = 1
+        else:
+            bit = 0
+        return ofs*2 + bit
+
+    @staticmethod
+    def typefor(fielddesc):
+        if fielddesc % 2:
+            return 'ptr'
+        return 'int'
 
     @staticmethod
     def itemoffsetof(A):
