@@ -154,3 +154,39 @@ def test_B_intersect_input_and_output():
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == B.ofs_node
     assert spec.specnodes[0].fields[0][1] is None
+
+# ____________________________________________________________
+
+class C:
+    locals().update(B.__dict__)
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    v2 = BoxInt(13)
+    ops = [
+        MergePoint('merge_point', [fr], []),
+        ResOperation('guard_nonvirtualized', [fr, ConstAddr(xy_vtable, cpu),
+                                              ConstInt(ofs_node)], []),
+        #
+        ResOperation('getfield_gc', [fr, ConstInt(ofs_node)], [n1]),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
+        #
+        ResOperation('getfield_gc', [fr, ConstInt(ofs_node)], [n2]),
+        ResOperation('guard_class', [n2, ConstAddr(node_vtable, cpu)], []),
+        ResOperation('getfield_gc', [n2, ConstInt(ofs_value)], [v2]),
+        #
+        Jump('jump', [fr], []),
+        ]
+    ops[1].vdesc = xy_desc
+
+def test_C_intersect_input_and_output():
+    spec = PerfectSpecializer(C.ops)
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    assert spec.nodes[C.fr].escaped
+    assert spec.nodes[C.fr].virtualized
+    assert not spec.nodes[C.n1].escaped
+    assert not spec.nodes[C.n2].escaped
+    assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
+    assert len(spec.specnodes[0].fields) == 1
+    assert spec.specnodes[0].fields[0][0] == C.ofs_node
+    assert spec.specnodes[0].fields[0][1] is None
