@@ -2,7 +2,7 @@
 
 import py
 from pypy.jit.tl.tlopcode import *
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, hint
 
 def char2int(c):
     t = ord(c)
@@ -66,6 +66,7 @@ def make_interp(supports_call):
             myjitdriver.jit_merge_point(pc=pc, code=code,
                                         stack=stack, inputarg=inputarg)
             opcode = ord(code[pc])
+            stack.stackpos = hint(stack.stackpos, promote=True)
             pc += 1
 
             if opcode == NOP:

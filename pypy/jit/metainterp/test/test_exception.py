@@ -37,7 +37,7 @@ class ExceptionTests:
         self.check_loops({'merge_point': 1, 'jump': 1,
                           'int_gt': 1, 'guard_true': 1,
                           'int_sub': 1})
-        
+
     def test_loop(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         def check(n):

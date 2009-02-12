@@ -387,14 +387,14 @@ class BytecodeMaker(object):
     serialize_op_unichar_eq = serialize_op_char_eq
     serialize_op_unichar_ne = serialize_op_char_ne
 
-##    def serialize_op_hint(self, op):
-##        hints = op.args[1].value
-##        if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
-##            self.minimize_variables()
-##            self.emit('guard_value', self.var_position(op.args[0]))
-##            self.register_var(op.result)
-##        else:
-##            self.serialize_op_same_as(op)
+    def serialize_op_hint(self, op):
+        hints = op.args[1].value
+        if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
+            self.minimize_variables()
+            self.emit('guard_value', self.var_position(op.args[0]))
+            self.register_var(op.result)
+        else:
+            xxx
 
     def serialize_op_int_is_true(self, op):
         if isinstance(op.args[0], Constant):

@@ -402,7 +402,7 @@ class MIFrame(object):
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_value(self, pc, box):
-        self.implement_guard_value(pc, box)
+        return self.implement_guard_value(pc, box)
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_class(self, pc, box):
