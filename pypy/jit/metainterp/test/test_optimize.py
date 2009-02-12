@@ -462,3 +462,62 @@ def test_H_intersect_input_and_output():
     assert spec.nodes[H.n0].escaped
     assert spec.nodes[H.n1].escaped
     assert spec.nodes[H.n2].escaped
+
+# ____________________________________________________________
+
+class I:
+    locals().update(A.__dict__)    # :-)
+    #
+    containernode = lltype.malloc(NODE)
+    containernode.next = lltype.malloc(NODE)
+    containernode.next.value = 20
+    n0 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, containernode))
+    nextnode = lltype.malloc(NODE)
+    nextnode.value = 19
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
+    ops = [
+        MergePoint('merge_point', [n0], []),
+        ResOperation('new_with_vtable', [ConstInt(size_of_node),
+                                         ConstAddr(node_vtable, cpu)], [n2]),
+        ResOperation('setfield_gc_ptr', [n2, ConstInt(ofs_next), n0], []),
+        Jump('jump', [n2], []),
+        ]
+
+def test_I_intersect_input_and_output():
+    spec = PerfectSpecializer(I.ops)
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    assert spec.nodes[I.n0].escaped
+    assert spec.nodes[I.n2].escaped
+
+
+# ____________________________________________________________
+
+class J:
+    locals().update(A.__dict__)    # :-)
+    #
+    containernode = lltype.malloc(NODE)
+    containernode.next = lltype.malloc(NODE)
+    containernode.next.value = 20
+    n0 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, containernode))
+    nextnode = lltype.malloc(NODE)
+    nextnode.value = 19
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
+    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
+    ops = [
+        MergePoint('merge_point', [n0], []),
+        ResOperation('getfield_gc_ptr', [n0, ConstInt(ofs_next)], [n1]),
+        ResOperation('new_with_vtable', [ConstInt(size_of_node),
+                                         ConstAddr(node_vtable, cpu)], [n2]),
+        ResOperation('setfield_gc_ptr', [n2, ConstInt(ofs_next), n1], []),
+        Jump('jump', [n2], []),
+        ]
+
+def test_J_intersect_input_and_output():
+    spec = PerfectSpecializer(J.ops)
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    assert not spec.nodes[J.n0].escaped
+    assert spec.nodes[J.n1].escaped
+    assert not spec.nodes[J.n2].escaped
+
