@@ -314,8 +314,9 @@ class MIFrame(object):
         tp = self.metainterp.cpu.typefor(fielddesc)
         self.execute('getfield_gc', [box, ConstInt(fielddesc)], tp, True)
     @arguments("box", "int", "box")
-    def opimpl_setfield_gc(self, box, offset, valuebox):
-        self.execute('setfield_gc', [box, ConstInt(offset), valuebox], 'void')
+    def opimpl_setfield_gc(self, box, fielddesc, valuebox):
+        self.execute('setfield_gc', [box, ConstInt(fielddesc), valuebox],
+                     'void')
 
     @arguments("box", "int")
     def opimpl_getfield_raw(self, box, fielddesc):
@@ -324,10 +325,11 @@ class MIFrame(object):
     @arguments("box", "int")
     def opimpl_getfield_pure_raw(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc)
-        self.execute('getfield_raw', [box, ConstInt(offset)], tp, True)
+        self.execute('getfield_raw', [box, ConstInt(fielddesc)], tp, True)
     @arguments("box", "int", "box")
-    def opimpl_setfield_raw(self, box, offset, valuebox):
-        self.execute('setfield_raw', [box, ConstInt(offset), valuebox], 'void')
+    def opimpl_setfield_raw(self, box, fielddesc, valuebox):
+        self.execute('setfield_raw', [box, ConstInt(fielddesc), valuebox],
+                     'void')
 
     @arguments("bytecode", "varargs")
     def opimpl_call(self, callee, varargs):

@@ -47,8 +47,8 @@ class SendTests:
             self.check_loops(call_ptr=1, builtin=1) # 'len' remains
         else:
             # 'len' becomes a getfield('num_items') for now in lltype,
-            # which is itself encoded as a 'getfield__4'
-            self.check_loops(call_ptr=1, getfield_gc__4=1)
+            # which is itself encoded as a 'getfield_gc'
+            self.check_loops(call_ptr=1, getfield_gc=1)
 
     def test_send_to_single_target_method(self):
         myjitdriver = JitDriver(greens = [], reds = ['i', 'counter'])
@@ -73,7 +73,7 @@ class SendTests:
                                backendopt=True)
         assert res == 43
         self.check_loops({'call_ptr': 1, 'guard_exception': 1,
-                          'getfield_gc__4': 1,
+                          'getfield_gc': 1,
                           'int_add': 1, 'merge_point' : 1,
                           'jump': 1, 'int_gt' : 1, 'guard_true' : 1,
                           'int_sub' : 1})
