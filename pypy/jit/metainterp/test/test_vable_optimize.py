@@ -88,7 +88,7 @@ class A:
         ResOperation('setfield_gc', [fr, ConstInt(ofs_node), n2], []),
         Jump('jump', [sum2, fr], []),
         ]
-    ops[1].desc = xy_desc
+    ops[1].vdesc = xy_desc
 
 def test_A_find_nodes():
     spec = PerfectSpecializer(A.ops)

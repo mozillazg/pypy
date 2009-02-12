@@ -5,6 +5,7 @@ from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
+from pypy.jit.metainterp.test.test_vable_optimize import XY, xy_vtable
 
 promote_virtualizable = lloperation.llop.promote_virtualizable
 debug_print = lloperation.llop.debug_print
@@ -19,6 +20,7 @@ class ExplicitVirtualizableTests:
         def setup():
             xy = lltype.malloc(XY)
             xy.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
+            xy.parent.typeptr = xy_vtable
             return xy
         def f(n):
             xy = setup()

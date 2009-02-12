@@ -21,10 +21,12 @@ class FixedClassSpecNode(object):
             return False
         return instnode.cls.source.equals(self.known_class)
 
-class VirtualizableSpecNode(FixedClassSpecNode):
+class SpecNodeWithFields(FixedClassSpecNode):
     def __init__(self, known_class, fields):
         FixedClassSpecNode.__init__(self, known_class)
         self.fields = fields
+
+class VirtualizableSpecNode(SpecNodeWithFields):
 
     def equals(self, other):
         xxx
@@ -32,10 +34,7 @@ class VirtualizableSpecNode(FixedClassSpecNode):
     def matches(self, instnode):
         xxx
 
-class VirtualInstanceSpecNode(FixedClassSpecNode):
-    def __init__(self, known_class, fields):
-        FixedClassSpecNode.__init__(self, known_class)
-        self.fields = fields
+class VirtualInstanceSpecNode(SpecNodeWithFields):
 
     def equals(self, other):
         if not isinstance(other, VirtualInstanceSpecNode):
@@ -108,14 +107,14 @@ type_cache.class_size = {}
 def extract_runtime_data(cpu, specnode, valuebox, resultlist):
     if not isinstance(specnode, VirtualInstanceSpecNode):
         resultlist.append(valuebox)
-        return
-    for ofs, subspecnode in specnode.fields:
-        cls = specnode.known_class.getint()
-        tp = cpu.typefor(ofs)
-        fieldbox = cpu.execute_operation('getfield_gc',
-                                         [valuebox, ConstInt(ofs)],
-                                         tp)
-        extract_runtime_data(cpu, subspecnode, fieldbox, resultlist)
+    if isinstance(specnode, SpecNodeWithFields):
+        for ofs, subspecnode in specnode.fields:
+            cls = specnode.known_class.getint()
+            tp = cpu.typefor(ofs)
+            fieldbox = cpu.execute_operation('getfield_gc',
+                                             [valuebox, ConstInt(ofs)],
+                                             tp)
+            extract_runtime_data(cpu, subspecnode, fieldbox, resultlist)
 
 
 class InstanceNode(object):
@@ -332,8 +331,7 @@ class PerfectSpecializer(object):
                 instnode.cls = InstanceNode(specnode.known_class)
             else:
                 assert instnode.cls.source.equals(specnode.known_class)
-            if isinstance(specnode, (VirtualInstanceSpecNode,
-                                     VirtualizableSpecNode)):
+            if isinstance(specnode, SpecNodeWithFields):
                 curfields = {}
                 for ofs, subspecnode in specnode.fields:
                     subinstnode = instnode.origfields[ofs]
@@ -356,8 +354,7 @@ class PerfectSpecializer(object):
     def expanded_version_of_rec(self, specnode, instnode, newboxlist):
         if not isinstance(specnode, VirtualInstanceSpecNode):
             newboxlist.append(instnode.source)
-        if isinstance(specnode, (VirtualInstanceSpecNode,
-                                 VirtualizableSpecNode)):
+        if isinstance(specnode, SpecNodeWithFields):
             for ofs, subspecnode in specnode.fields:
                 subinstnode = instnode.curfields[ofs]  # should really be there
                 self.expanded_version_of_rec(subspecnode, subinstnode,
