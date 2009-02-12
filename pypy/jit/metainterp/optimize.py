@@ -26,20 +26,8 @@ class SpecNodeWithFields(FixedClassSpecNode):
         FixedClassSpecNode.__init__(self, known_class)
         self.fields = fields
 
-class VirtualizableSpecNode(SpecNodeWithFields):
-
     def equals(self, other):
-        xxx
-
-    def matches(self, instnode):
-        xxx
-
-class VirtualInstanceSpecNode(SpecNodeWithFields):
-
-    def equals(self, other):
-        if not isinstance(other, VirtualInstanceSpecNode):
-            return False
-        elif not self.known_class.equals(other.known_class):
+        if not self.known_class.equals(other.known_class):
             return False
         elif len(self.fields) != len(other.fields):
             return False
@@ -58,6 +46,7 @@ class VirtualInstanceSpecNode(SpecNodeWithFields):
             return True
 
     def matches(self, instnode):
+        # XXX think about details of virtual vs virtualizable
         if not FixedClassSpecNode.matches(self, instnode):
             return False
         for key, value in self.fields:
@@ -66,6 +55,20 @@ class VirtualInstanceSpecNode(SpecNodeWithFields):
             if value is not None and not value.matches(instnode.curfields[key]):
                 return False
         return True
+
+class VirtualizableSpecNode(SpecNodeWithFields):
+
+    def equals(self, other):
+        if not isinstance(other, VirtualizableSpecNode):
+            return False
+        return SpecNodeWithFields.equals(self, other)
+
+class VirtualInstanceSpecNode(SpecNodeWithFields):
+
+    def equals(self, other):
+        if not isinstance(other, VirtualInstanceSpecNode):
+            return False
+        return SpecNodeWithFields.equals(self, other)
 
 class AllocationStorage(object):
     def __init__(self):
