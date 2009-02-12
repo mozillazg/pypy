@@ -70,10 +70,16 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
         py.test.skip('mono 2.2 crashes')
 
     def test_ovfcheck1_direct(self):
-        py.test.skip('fixme')
+        import sys
+        # XXX: this test is partly copied from rgenop_tests, because
+        # int_abs_ovf is not yet supported. Delete this method as soon as it
+        # is
+        yield self.ovfcheck1_direct, "int_neg_ovf", [(18, -18),
+                                                     (-18, 18),
+                                                     (sys.maxint, -sys.maxint),
+                                                     (-sys.maxint, sys.maxint),
+                                                     (-sys.maxint-1, None)]
 
-    def test_ovfcheck2_direct(self):
-        py.test.skip('fixme')
 
     def test_cast_direct(self):
         py.test.skip('fixme')
@@ -136,6 +142,3 @@ class TestRCliGenopCompile(AbstractRGenOpTestsCompile):
         
     def test_genconst_from_frame_float_var_compile(self):
         py.test.skip('fixme: add support for frames')
-
-    def test_ovfcheck1_compile(self):
-        py.test.skip('fixme')
