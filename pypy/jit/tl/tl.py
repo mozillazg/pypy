@@ -11,6 +11,8 @@ def char2int(c):
     return t
 
 class Stack(object):
+    _virtualizable2_ = True
+    
     def __init__(self, size):
         self.stack = [0] * size
         self.stackpos = 0
