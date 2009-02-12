@@ -121,7 +121,6 @@ class InstanceNode(object):
         self.startbox = startbox
         self.const = const
         self.virtual = False
-        self.star = False
         self.cls = None
         self.origfields = {}
         self.curfields = {}
@@ -135,13 +134,11 @@ class InstanceNode(object):
         for node in self.curfields.values():
             node.escape_if_startbox(memo)
 
-    def set_escaping_flag(self, other):
-        if not self.escaped:
-            for ofs, node in self.origfields.items():
-                if ofs in other.curfields:
-                    node.set_escaping_flag(other.curfields[ofs])
-        else:
-            other.escaped = True
+    def add_to_dependency_graph(self, other, dep_graph):
+        dep_graph.append((self, other))
+        for ofs, node in self.origfields.items():
+            if ofs in other.curfields:
+                node.add_to_dependency_graph(other.curfields[ofs], dep_graph)
 
     def intersect(self, other):
         if not other.cls:
@@ -174,6 +171,14 @@ class InstanceNode(object):
             return
         for ofs, subspecnode in specnode.fields:
             self.curfields[ofs].adapt_to(subspecnode)
+
+    def __repr__(self):
+        flags = ''
+        if self.escaped:     flags += 'e'
+        if self.startbox:    flags += 's'
+        if self.const:       flags += 'c'
+        if self.virtual:     flags += 'v'
+        return "<InstanceNode %s (%s)>" % (self.source, flags)
 
 
 def optimize_loop(metainterp, old_loops, operations):
@@ -211,6 +216,7 @@ class PerfectSpecializer(object):
     def __init__(self, operations):
         self.operations = operations
         self.nodes = {}
+        self.dependency_graph = []
 
     def getnode(self, box):
         try:
@@ -240,6 +246,8 @@ class PerfectSpecializer(object):
                 field = fieldbox.getint()
                 fieldnode = self.getnode(op.args[2])
                 instnode.curfields[field] = fieldnode
+                if opname == 'setfield_gc_ptr':
+                    self.dependency_graph.append((instnode, fieldnode))
                 continue
             elif opname.startswith('getfield_gc_'):
                 instnode = self.getnode(op.args[0])
@@ -255,6 +263,7 @@ class PerfectSpecializer(object):
                     fieldnode = InstanceNode(box, escaped=False)
                     if instnode.startbox:
                         fieldnode.startbox = True
+                    self.dependency_graph.append((instnode, fieldnode))
                     instnode.origfields[field] = fieldnode
                 self.nodes[box] = fieldnode
                 continue
@@ -262,7 +271,6 @@ class PerfectSpecializer(object):
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
-                instnode.cls.star = True
                 continue
             elif opname not in ('oois', 'ooisnot',
                                 'ooisnull', 'oononnull'):
@@ -282,7 +290,17 @@ class PerfectSpecializer(object):
         for i in range(len(end_args)):
             box = self.operations[0].args[i]
             other_box = end_args[i]
-            self.nodes[box].set_escaping_flag(self.nodes[other_box])
+            self.nodes[box].add_to_dependency_graph(self.nodes[other_box],
+                                                    self.dependency_graph)
+        # XXX find efficient algorithm, we're too fried for that by now
+        done = False
+        while not done:
+            done = True
+            for instnode, fieldnode in self.dependency_graph:
+                if instnode.escaped:
+                    if not fieldnode.escaped:
+                        fieldnode.escaped = True
+                        done = False
 
     def intersect_input_and_output(self):
         # Step (3)
