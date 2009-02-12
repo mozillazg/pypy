@@ -14,16 +14,21 @@ debug_print = lloperation.llop.debug_print
 
 class ExplicitVirtualizableTests:
 
+    def _freeze_(self):
+        return True
+
+    @staticmethod
+    def setup():
+        xy = lltype.malloc(XY)
+        xy.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
+        xy.parent.typeptr = xy_vtable
+        return xy
+
     def test_preexisting_access(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'xy'],
                                 virtualizables = ['xy'])
-        def setup():
-            xy = lltype.malloc(XY)
-            xy.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
-            xy.parent.typeptr = xy_vtable
-            return xy
         def f(n):
-            xy = setup()
+            xy = self.setup()
             xy.x = 10
             while n > 0:
                 myjitdriver.can_enter_jit(xy=xy, n=n)
@@ -32,26 +37,28 @@ class ExplicitVirtualizableTests:
                 x = xy.x
                 xy.x = x + 1
                 n -= 1
-        self.meta_interp(f, [5])
+            return xy.x
+        res = self.meta_interp(f, [20])
+        assert res == 30
         self.check_loops(getfield_gc=0, setfield_gc=0)
 
     def test_preexisting_access_2(self):
-        def setup():
-            xy = lltype.malloc(XY)
-            xy.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
-            return xy
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'xy'],
+                                virtualizables = ['xy'])
         def f(n):
-            xy = setup()
+            xy = self.setup()
             xy.x = 100
-            while n > 0:
-                promote_virtualizable(lltype.Void, xy, 'x')
-                x = xy.x
-                xy.x = x + 1
-                n -= 1
             while n > -8:
-                promote_virtualizable(lltype.Void, xy, 'x')
-                x = xy.x
-                xy.x = x + 10
+                myjitdriver.can_enter_jit(xy=xy, n=n)
+                myjitdriver.jit_merge_point(xy=xy, n=n)
+                if n > 0:
+                    promote_virtualizable(lltype.Void, xy, 'x')
+                    x = xy.x
+                    xy.x = x + 1
+                else:
+                    promote_virtualizable(lltype.Void, xy, 'x')
+                    x = xy.x
+                    xy.x = x + 10
                 n -= 1
             return xy.x
         res = self.meta_interp(f, [5])

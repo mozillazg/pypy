@@ -415,7 +415,8 @@ class MIFrame(object):
         clsbox = self.cls_of_box(box)
         op = self.generate_guard(pc, 'guard_nonvirtualized', box,
                                  [clsbox, ConstInt(guard_field)])
-        op.desc = vdesc
+        if op:
+            op.desc = vdesc
         
     @arguments("box")
     def opimpl_keepalive(self, box):
