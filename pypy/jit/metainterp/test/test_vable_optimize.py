@@ -5,9 +5,11 @@ from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import heaptracker
 from pypy.jit.metainterp.history import (ResOperation, MergePoint, Jump,
                                          ConstInt, ConstAddr, BoxInt, BoxPtr)
-from pypy.jit.metainterp.optimize import PerfectSpecializer
+from pypy.jit.metainterp.optimize import (PerfectSpecializer,
+                                          VirtualizableSpecNode)
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
-from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable)
+from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
+                                                    equaloplists)
 
 # ____________________________________________________________
 
@@ -55,8 +57,8 @@ xy_desc = VirtualizableDesc(cpu, XY)
 # ____________________________________________________________
 
 class A:
-    ofs_node = runner.CPU.offsetof(XY, 'node')
-    ofs_value = runner.CPU.offsetof(NODE, 'value')
+    ofs_node = runner.CPU.fielddescrof(XY, 'node')
+    ofs_value = runner.CPU.fielddescrof(NODE, 'value')
     size_of_node = runner.CPU.sizeof(NODE)
     #
     frame = lltype.malloc(XY)
@@ -74,7 +76,8 @@ class A:
     sum2 = BoxInt(0 + frame.node.value)
     ops = [
         MergePoint('merge_point', [sum, fr], []),
-        ResOperation('guard_nonvirtualized__4', [fr, ConstInt(ofs_node)], []),
+        ResOperation('guard_nonvirtualized', [fr, ConstAddr(xy_vtable, cpu),
+                                              ConstInt(ofs_node)], []),
         ResOperation('getfield_gc', [fr, ConstInt(ofs_node)], [n1]),
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
@@ -100,6 +103,7 @@ def test_A_intersect_input_and_output():
     assert spec.nodes[A.fr].virtualized
     assert not spec.nodes[A.n1].escaped
     assert not spec.nodes[A.n2].escaped
+    assert isinstance(spec.specnodes[1], VirtualizableSpecNode)
 
 def test_A_optimize_loop():
     operations = A.ops[:]
@@ -108,8 +112,8 @@ def test_A_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     assert equaloplists(operations, [
-            MergePoint('merge_point', [A.sum, A.n1, A.v], []),
+            MergePoint('merge_point', [A.sum, A.fr, A.v], []),
             ResOperation('int_sub', [A.v, ConstInt(1)], [A.v2]),
             ResOperation('int_add', [A.sum, A.v], [A.sum2]),
-            Jump('jump', [A.sum2, A.n1, A.v2], []),
+            Jump('jump', [A.sum2, A.fr, A.v2], []),
         ])
