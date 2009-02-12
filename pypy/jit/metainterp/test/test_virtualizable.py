@@ -66,14 +66,14 @@ class ExplicitVirtualizableTests:
         self.check_loops(getfield_gc=0, setfield_gc=0)
 
     def test_two_paths_access(self):
-        def setup():
-            xy = lltype.malloc(XY)
-            xy.vable_rti = lltype.nullptr(VABLERTIPTR.TO)
-            return xy
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'xy'],
+                                virtualizables = ['xy'])
         def f(n):
-            xy = setup()
+            xy = self.setup()
             xy.x = 100
             while n > 0:
+                myjitdriver.can_enter_jit(xy=xy, n=n)
+                myjitdriver.jit_merge_point(xy=xy, n=n)
                 promote_virtualizable(lltype.Void, xy, 'x')
                 x = xy.x
                 if n <= 10:
@@ -89,6 +89,9 @@ class ExplicitVirtualizableTests:
 class ImplicitVirtualizableTests:
 
     def test_simple_implicit(self):
+        myjitdriver = JitDriver(greens = [], reds = ['frame'],
+                                virtualizables = ['frame'])
+
         class Frame(object):
             _virtualizable2_ = True
             def __init__(self, x, y):
@@ -103,11 +106,13 @@ class ImplicitVirtualizableTests:
             frame = Frame(n, 0)
             somewhere_else.top_frame = frame        # escapes
             while frame.x > 0:
+                myjitdriver.can_enter_jit(frame=frame)
+                myjitdriver.jit_merge_point(frame=frame)
                 frame.y += frame.x
                 frame.x -= 1
             return somewhere_else.top_frame.y
 
-        res = self.meta_interp(f, [10], exceptions=False)
+        res = self.meta_interp(f, [10])
         assert res == 55
         self.check_loops(getfield_gc=0, setfield_gc=0)
 
@@ -168,6 +173,7 @@ class ImplicitVirtualizableTests:
         self.check_loops(getfield_gc=0, setfield_gc=0)
 
     def test_list_implicit(self):
+        py.test.skip("in-progress")
         class Frame(object):
             _virtualizable2_ = True
 
