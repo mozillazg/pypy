@@ -2,7 +2,7 @@ import py
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.dotnet import CLR, typeof, new_array
+from pypy.translator.cli.dotnet import CLR, typeof, new_array, init_array
 from pypy.translator.cli import opcodes as cli_opcodes
 System = CLR.System
 OpCodes = System.Reflection.Emit.OpCodes
@@ -453,10 +453,12 @@ def renderCustomOp(baseclass, opname, steps, out, emitName='emit', optional_line
         elif step is cli_opcodes.StoreResult:
             body.append('self.storeResult()')
         elif isinstance(step, str):
-            if 'call' in step:
-                return # XXX, fix this
-            attrname = opcode2attrname(step)
-            body.append('self.meth.il.Emit(OpCodes.%s)' % attrname)
+            if step.startswith('call '):
+                signature = step[len('call '):]
+                renderCall(body, signature)
+            else:
+                attrname = opcode2attrname(step)
+                body.append('self.meth.il.Emit(OpCodes.%s)' % attrname)
         elif isinstance(step, cli_opcodes.MapException):
             # MapException is supported only if it's the only element of the
             # instr list, look inside RenderOp
@@ -500,6 +502,32 @@ def get_exctype(exctype_str):
     else:
         assert False, 'Unknown exception type'
 
+def renderCall(body, signature):
+    # signature is like this:
+    # int64 class [mscorlib]System.Foo::Bar(int64, int32)
+
+    typenames = {
+        'int32': 'System.Int32',
+        'int64': 'System.Int64',
+        'float64': 'System.Double',
+        }
+    
+    restype, _, signature = signature.split(' ', 3)
+    assert signature.startswith('[mscorlib]'), 'external assemblies '\
+                                               'not supported'
+    signature = signature[len('[mscorlib]'):]
+    typename, signature = signature.split('::')
+    methname, signature = signature.split('(')
+    assert signature.endswith(')')
+    params = signature[:-1].split(',')
+    params = map(str.strip, params)
+    params = [typenames.get(p, p) for p in params]
+    params = ['typeof(%s)' % p for p in params]
+
+    body.append("t = System.Type.GetType('%s')" % typename)
+    body.append("params = init_array(System.Type, %s)" % ', '.join(params))
+    body.append("methinfo = t.GetMethod('%s', params)" % methname)
+    body.append("self.meth.il.Emit(OpCodes.Call, methinfo)")
 
 UNARYOPS = fillops(cli_opcodes.unary_ops, "UnaryOp")
 BINARYOPS = fillops(cli_opcodes.binary_ops, "BinaryOp")
