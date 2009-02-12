@@ -532,9 +532,6 @@ class LLFrame(object):
     def op_jit_marker(self, *args):
         pass
 
-    def op_promote_virtualizable(self, object, fieldname):
-        pass # XXX should do something
-
     def op_instrument_count(self, ll_tag, ll_label):
         pass # xxx for now
 
