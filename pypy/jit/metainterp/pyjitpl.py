@@ -693,7 +693,8 @@ class OOMetaInterp(object):
     def handle_guard_failure(self, guard_failure):
         orig_boxes = self.initialize_state_from_guard_failure(guard_failure)
         try:
-            if guard_failure.guard_op.opname == 'guard_exception':
+            if guard_failure.guard_op.opname in ['guard_exception',
+                                                 'guard_no_exception']:
                 self.raise_exception_upon_guard_failure(guard_failure)
             self.interpret()
             assert False, "should always raise"
@@ -816,14 +817,17 @@ class OOMetaInterp(object):
         self.handle_exception(etype, evalue)
 
     def handle_exception(self, etype, evalue):
-        exception_box = ConstInt(etype)
         frame = self.framestack[-1]
-        frame.generate_guard(frame.pc, 'guard_exception',
-                             None, [exception_box])
         if etype:
+            exception_box = ConstInt(etype)
             exc_value_box = BoxPtr(evalue)
+            op = frame.generate_guard(frame.pc, 'guard_exception',
+                                      None, [exception_box])
+            if op:
+                op.results = [exc_value_box]
             return self.finishframe_exception(exception_box, exc_value_box)
         else:
+            frame.generate_guard(frame.pc, 'guard_no_exception', None, [])
             return False
 
 ##    def forced_vars_after_guard_failure(self, guard_failure):
