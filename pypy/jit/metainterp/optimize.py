@@ -86,13 +86,14 @@ class AllocationStorage(object):
         self.setfields = []
 
     def deal_with_box(self, box, nodes, liveboxes, memo):
-        if box in memo:
-            return memo[box]
         if isinstance(box, Const):
             virtual = False
             virtualized = False
         else:
             instnode = nodes[box]
+            box = instnode.source
+            if box in memo:
+                return memo[box]
             virtual = instnode.virtual
             virtualized = instnode.virtualized
         if virtual:
