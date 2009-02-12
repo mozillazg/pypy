@@ -132,7 +132,7 @@ def repr0(x):
 
 def repr_list(lst, types, cpu):
     res_l = []
-    if types[-1] == 'varargs':
+    if types and types[-1] == 'varargs':
         types = types[:-1] + ('int',) * (len(lst) - len(types) + 1)
     assert len(types) == len(lst)
     for elem, tp in zip(lst, types):
