@@ -121,6 +121,7 @@ class InstanceNode(object):
         self.startbox = startbox
         self.const = const
         self.virtual = False
+        self.virtualized = False
         self.cls = None
         self.origfields = {}
         self.curfields = {}
@@ -272,6 +273,10 @@ class PerfectSpecializer(object):
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
+            elif opname.startswith('guard_nonvirtualized_'):
+                instnode = self.getnode(op.args[0])
+                instnode.virtualized = True
+                continue
             elif opname not in ('oois', 'ooisnot',
                                 'ooisnull', 'oononnull'):
                 # default case
@@ -297,7 +302,7 @@ class PerfectSpecializer(object):
         while not done:
             done = True
             for instnode, fieldnode in self.dependency_graph:
-                if instnode.escaped:
+                if instnode.escaped and not instnode.virtualized:
                     if not fieldnode.escaped:
                         fieldnode.escaped = True
                         done = False
@@ -412,6 +417,13 @@ class PerfectSpecializer(object):
                 op = self.optimize_guard(op)
                 newoperations.append(op)
                 continue
+            elif opname.startswith('guard_nonvirtualized_'):
+                instnode = self.nodes[op.args[0]]
+                if instnode.virtualized:
+                    continue
+                op = self.optimize_guard(op)
+                newoperations.append(op)
+                continue
             elif opname.startswith('guard_'):
                 if opname == 'guard_true' or opname == 'guard_false':
                     if self.nodes[op.args[0]].const:
@@ -421,7 +433,7 @@ class PerfectSpecializer(object):
                 continue
             elif opname.startswith('getfield_gc_'):
                 instnode = self.nodes[op.args[0]]
-                if instnode.virtual:
+                if instnode.virtual or instnode.virtualized:
                     ofs = op.args[1].getint()
                     assert ofs in instnode.curfields    # xxx
                     self.nodes[op.results[0]] = instnode.curfields[ofs]
@@ -439,7 +451,7 @@ class PerfectSpecializer(object):
             elif opname.startswith('setfield_gc_'):
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
-                if instnode.virtual:
+                if instnode.virtual or instnode.virtualized:
                     ofs = op.args[1].getint()
                     instnode.curfields[ofs] = valuenode
                     # XXX hack

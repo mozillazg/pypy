@@ -1,56 +1,13 @@
 import py
-from pypy.rpython.lltypesystem.rvirtualizable import VABLERTIPTR
 from pypy.rpython.lltypesystem import lltype, lloperation, rclass, llmemory
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.jit.metainterp import heaptracker
 from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
-from pypy.rpython.lltypesystem.rvirtualizable2 import VirtualizableAccessor
 
 promote_virtualizable = lloperation.llop.promote_virtualizable
 debug_print = lloperation.llop.debug_print
-
-
-# ____________________________________________________________
-
-XY = lltype.GcStruct(
-    'XY',
-    ('parent', rclass.OBJECT),
-    ('vable_base', llmemory.Address),
-    ('vable_rti', VABLERTIPTR),
-    ('x', lltype.Signed),
-    ('y', lltype.Signed),
-    hints = {'virtualizable2': True},
-    adtmeths = {'access': VirtualizableAccessor()})
-XY._adtmeths['access'].initialize(XY, ['x', 'y'])
-
-xy_vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
-xy_vtable.name = lltype.malloc(rclass.OBJECT_VTABLE.name.TO, 3, immortal=True)
-xy_vtable.name[0] = 'X'
-xy_vtable.name[1] = 'Y'
-xy_vtable.name[2] = '\x00'
-heaptracker.set_testing_vtable_for_gcstruct(XY, xy_vtable)
-
-XYSUB = lltype.GcStruct(
-    'XYSUB',
-    ('parent', XY),
-    ('z', lltype.Signed),
-    hints = {'virtualizable2': True},
-    adtmeths = {'access': VirtualizableAccessor()})
-XYSUB._adtmeths['access'].initialize(XYSUB, ['z'], PARENT=XY)
-
-xysub_vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
-xysub_vtable.name = lltype.malloc(rclass.OBJECT_VTABLE.name.TO, 6,
-                                  immortal=True)
-xysub_vtable.name[0] = 'X'
-xysub_vtable.name[1] = 'Y'
-xysub_vtable.name[2] = 'S'
-xysub_vtable.name[3] = 'U'
-xysub_vtable.name[4] = 'B'
-xysub_vtable.name[5] = '\x00'
-heaptracker.set_testing_vtable_for_gcstruct(XYSUB, xysub_vtable)
 
 # ____________________________________________________________
 
