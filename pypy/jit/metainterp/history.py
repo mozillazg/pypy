@@ -329,6 +329,12 @@ class GuardOp(ResOperation):
         op.key = self.key
         return op
 
+    def __repr__(self):
+        result = ResOperation.__repr__(self)
+        if hasattr(self, 'liveboxes'):
+            result = '%s [%s]' % (result, ', '.join(map(repr, self.liveboxes)))
+        return result
+
 # ____________________________________________________________
 
 # The Graph class is to store a loop or a bridge.
