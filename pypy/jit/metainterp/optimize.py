@@ -5,7 +5,6 @@ from pypy.jit.metainterp.heaptracker import always_pure_operations
 class CancelInefficientLoop(Exception):
     pass
 
-
 class FixedClassSpecNode(object):
     def __init__(self, known_class):
         self.known_class = known_class
@@ -21,6 +20,17 @@ class FixedClassSpecNode(object):
         if instnode.cls is None:
             return False
         return instnode.cls.source.equals(self.known_class)
+
+class VirtualizableSpecNode(FixedClassSpecNode):
+    def __init__(self, known_class, fields):
+        FixedClassSpecNode.__init__(self, known_class)
+        self.fields = fields
+
+    def equals(self, other):
+        xxx
+
+    def matches(self, instnode):
+        xxx
 
 class VirtualInstanceSpecNode(FixedClassSpecNode):
     def __init__(self, known_class, fields):
@@ -57,7 +67,6 @@ class VirtualInstanceSpecNode(FixedClassSpecNode):
             if value is not None and not value.matches(instnode.curfields[key]):
                 return False
         return True
-
 
 class AllocationStorage(object):
     def __init__(self):
@@ -145,7 +154,7 @@ class InstanceNode(object):
             known_class = self.cls.source
         else:
             known_class = other.cls.source
-        if other.escaped:
+        if other.escaped and not other.virtualized:
             if self.cls is None:
                 return None
             return FixedClassSpecNode(known_class)
@@ -159,6 +168,8 @@ class InstanceNode(object):
                 self.origfields[ofs] = InstanceNode(node.source.clonebox())
                 specnode = None
             fields.append((ofs, specnode))
+        if other.escaped:
+            return VirtualizableSpecNode(known_class, fields)
         return VirtualInstanceSpecNode(known_class, fields)
 
     def adapt_to(self, specnode):
@@ -267,9 +278,11 @@ class PerfectSpecializer(object):
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
-            elif opname.startswith('guard_nonvirtualized_'):
+            elif opname == 'guard_nonvirtualized':
                 instnode = self.getnode(op.args[0])
                 instnode.virtualized = True
+                if instnode.cls is None:
+                    instnode.cls = InstanceNode(op.args[1])
                 continue
             elif opname not in ('oois', 'ooisnot',
                                 'ooisnull', 'oononnull'):
@@ -319,7 +332,8 @@ class PerfectSpecializer(object):
                 instnode.cls = InstanceNode(specnode.known_class)
             else:
                 assert instnode.cls.source.equals(specnode.known_class)
-            if isinstance(specnode, VirtualInstanceSpecNode):
+            if isinstance(specnode, (VirtualInstanceSpecNode,
+                                     VirtualizableSpecNode)):
                 curfields = {}
                 for ofs, subspecnode in specnode.fields:
                     subinstnode = instnode.origfields[ofs]
@@ -327,7 +341,8 @@ class PerfectSpecializer(object):
                     self.mutate_nodes(subinstnode, subspecnode)
                     curfields[ofs] = subinstnode
                 instnode.curfields = curfields
-                instnode.virtual = True
+                if isinstance(specnode, VirtualInstanceSpecNode):
+                    instnode.virtual = True
 
     def expanded_version_of(self, boxlist):
         newboxlist = []
@@ -341,7 +356,8 @@ class PerfectSpecializer(object):
     def expanded_version_of_rec(self, specnode, instnode, newboxlist):
         if not isinstance(specnode, VirtualInstanceSpecNode):
             newboxlist.append(instnode.source)
-        else:
+        if isinstance(specnode, (VirtualInstanceSpecNode,
+                                 VirtualizableSpecNode)):
             for ofs, subspecnode in specnode.fields:
                 subinstnode = instnode.curfields[ofs]  # should really be there
                 self.expanded_version_of_rec(subspecnode, subinstnode,
@@ -411,7 +427,7 @@ class PerfectSpecializer(object):
                 op = self.optimize_guard(op)
                 newoperations.append(op)
                 continue
-            elif opname.startswith('guard_nonvirtualized_'):
+            elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtualized:
                     continue

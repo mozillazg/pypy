@@ -9,8 +9,8 @@ class VirtualizableDesc(history.AbstractValue):
     def __init__(self, cpu, TOPSTRUCT):
         "NOT_RPYTHON"
         initialize_virtualizable(cpu, TOPSTRUCT.access)
-        self.vable_base = cpu.offsetof(TOPSTRUCT, 'vable_base')
-        self.vable_rti  = cpu.offsetof(TOPSTRUCT, 'vable_rti')
+        self.vable_base = cpu.fielddescrof(TOPSTRUCT, 'vable_base')
+        self.vable_rti  = cpu.fielddescrof(TOPSTRUCT, 'vable_rti')
         self.c_vable_base = history.ConstInt(self.vable_base)
         self.c_vable_rti  = history.ConstInt(self.vable_rti)
 
@@ -32,7 +32,7 @@ def initialize_vable_field(cpu, access, fieldname):
     if FIELDTYPE is lltype.Void:
         return
     type = history.getkind_num(cpu, FIELDTYPE)
-    ofs = cpu.offsetof(access.STRUCT, fieldname)
+    ofs = cpu.fielddescrof(access.STRUCT, fieldname)
     getset = access.getsets[fieldname]
 
     def getter(instanceptr):
