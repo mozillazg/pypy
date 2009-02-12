@@ -66,6 +66,7 @@ def equaloplists(oplist1, oplist2):
 # ____________________________________________________________
 
 class A:
+    ofs_next = runner.CPU.offsetof(NODE, 'next')
     ofs_value = runner.CPU.offsetof(NODE, 'value')
     size_of_node = runner.CPU.sizeof(NODE)
     #
@@ -426,3 +427,38 @@ def test_G_optimize_loop():
     vt = cpu.cast_adr_to_int(node_vtable_adr)
     assert guard_op.storage_info.allocations == [vt]
     assert guard_op.storage_info.setfields == [(0, G.ofs_value, 1)]
+
+# ____________________________________________________________
+
+class H:
+    locals().update(A.__dict__)    # :-)
+    #
+    containernode = lltype.malloc(NODE)
+    containernode.next = lltype.malloc(NODE)
+    containernode.next.value = 20
+    n0 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, containernode))
+    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, containernode.next))
+    nextnode = lltype.malloc(NODE)
+    nextnode.value = 19
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
+    v = BoxInt(containernode.next.value)
+    v2 = BoxInt(nextnode.value)
+    ops = [
+        MergePoint('merge_point', [n0], []),
+        ResOperation('getfield_gc_ptr', [n0, ConstInt(ofs_next)], [n1]),
+        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
+        ResOperation('new_with_vtable', [ConstInt(size_of_node),
+                                         ConstAddr(node_vtable, cpu)], [n2]),
+        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc_ptr', [n0, ConstInt(ofs_next), n2], []),
+        Jump('jump', [n0], []),
+        ]
+
+def test_H_intersect_input_and_output():
+    spec = PerfectSpecializer(H.ops)
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    assert spec.nodes[H.n0].escaped
+    assert spec.nodes[H.n1].escaped
+    assert spec.nodes[H.n2].escaped
