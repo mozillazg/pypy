@@ -406,9 +406,10 @@ class MIFrame(object):
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_class(self, pc, box):
+        clsbox = self.cls_of_box(box)
         if isinstance(box, Box):
-            clsbox = self.cls_of_box(box)
             self.generate_guard(pc, 'guard_class', box, [clsbox])
+        return clsbox
 
     @arguments("orgpc", "box", "virtualizabledesc", "int")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):

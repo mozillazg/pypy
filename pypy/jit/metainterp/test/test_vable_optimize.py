@@ -6,7 +6,8 @@ from pypy.jit.metainterp import heaptracker
 from pypy.jit.metainterp.history import (ResOperation, MergePoint, Jump,
                                          ConstInt, ConstAddr, BoxInt, BoxPtr)
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
-                                          VirtualizableSpecNode)
+                                          VirtualizableSpecNode,
+                                          VirtualInstanceSpecNode)
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
                                                     equaloplists)
@@ -117,3 +118,39 @@ def test_A_optimize_loop():
             ResOperation('int_add', [A.sum, A.v], [A.sum2]),
             Jump('jump', [A.sum2, A.fr, A.v2], []),
         ])
+
+# ____________________________________________________________
+
+class B:
+    ofs_node = runner.CPU.fielddescrof(XY, 'node')
+    ofs_value = runner.CPU.fielddescrof(NODE, 'value')
+    size_of_node = runner.CPU.sizeof(NODE)
+    #
+    frame = lltype.malloc(XY)
+    frame.vable_rti = lltype.nullptr(XY.vable_rti.TO)
+    frame.node = lltype.malloc(NODE)
+    frame.node.value = 20
+    fr = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame))
+    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    v = BoxInt(13)
+    ops = [
+        MergePoint('merge_point', [fr], []),
+        ResOperation('guard_nonvirtualized', [fr, ConstAddr(xy_vtable, cpu),
+                                              ConstInt(ofs_node)], []),
+        ResOperation('getfield_gc', [fr, ConstInt(ofs_node)], [n1]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
+        Jump('jump', [fr], []),
+        ]
+    ops[1].vdesc = xy_desc
+
+def test_B_intersect_input_and_output():
+    spec = PerfectSpecializer(B.ops)
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    assert spec.nodes[B.fr].escaped
+    assert spec.nodes[B.fr].virtualized
+    assert not spec.nodes[B.n1].escaped
+    assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
+    assert len(spec.specnodes[0].fields) == 1
+    assert spec.specnodes[0].fields[0][0] == B.ofs_node
+    assert spec.specnodes[0].fields[0][1] is None

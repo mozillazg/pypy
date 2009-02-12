@@ -174,19 +174,39 @@ class InstanceNode(object):
             if self.cls is None:
                 return None
             return FixedClassSpecNode(known_class)
-        fields = []
-        lst = other.curfields.items()
-        lst.sort()
-        for ofs, node in lst:
-            if ofs in self.origfields:
-                specnode = self.origfields[ofs].intersect(node)
-            else:
-                self.origfields[ofs] = InstanceNode(node.source.clonebox())
-                specnode = None
-            fields.append((ofs, specnode))
-        if other.escaped:
+        if not other.escaped:
+            fields = []
+            lst = other.curfields.items()
+            lst.sort()
+            for ofs, node in lst:
+                if ofs in self.origfields:
+                    specnode = self.origfields[ofs].intersect(node)
+                else:
+                    self.origfields[ofs] = InstanceNode(node.source.clonebox())
+                    specnode = None
+                fields.append((ofs, specnode))
+            return VirtualInstanceSpecNode(known_class, fields)
+        else:
+            assert self is other
+            d = self.origfields.copy()
+            d.update(other.curfields)
+            offsets = d.keys()
+            offsets.sort()
+            fields = []
+            for ofs in offsets:
+                if ofs in self.origfields and ofs in other.curfields:
+                    node = other.curfields[ofs]
+                    specnode = self.origfields[ofs].intersect(node)
+                elif ofs in self.origfields:
+                    specnode = None
+                else:
+                    # ofs in other.curfields
+                    node = other.curfields[ofs]
+                    self.origfields[ofs] = InstanceNode(node.source.clonebox())
+                    specnode = None
+                fields.append((ofs, specnode))
+                    
             return VirtualizableSpecNode(known_class, fields)
-        return VirtualInstanceSpecNode(known_class, fields)
 
     def adapt_to(self, specnode):
         if not isinstance(specnode, VirtualInstanceSpecNode):
