@@ -347,17 +347,19 @@ class CatchAndRaiseMixin(object):
     def getExceptionType(self):
         raise NotImplementedError
 
+    def emit_op(self):
+        raise NotImplementedError
+
     def emit(self):
         il = self.meth.il
         lbl = il.BeginExceptionBlock()
-        self.pushAllArgs()
-        il.Emit(self.getOpCode())
-        self.storeResult()
+        self.emit_op()
         il.Emit(OpCodes.Leave, lbl)
         il.BeginCatchBlock(self.getExceptionType())
         il.Emit(OpCodes.Ldc_I4, 1)
         self.storeExcFlag()
         il.EndExceptionBlock()
+
 
 
 class RaisingBinaryOp(CatchAndRaiseMixin, BinaryOp):
@@ -405,12 +407,11 @@ def fillops(ops, baseclass):
     out = {}
     for opname, value in ops.iteritems():
         renderOp(baseclass, opname, value, out)
-
     return out
 
-def renderOp(baseclass, opname, value, out, optional_lines=''):
+def renderOp(baseclass, opname, value, out):
     if isinstance(value, str):
-        renderSimpleOp(baseclass, opname, value, out, optional_lines)
+        renderSimpleOp(baseclass, opname, value, out)
     elif value is cli_opcodes.DoNothing:
         # create a new subclass of SameAs; we can't use SameAs directly
         # because its restype could be patched later
@@ -419,9 +420,9 @@ def renderOp(baseclass, opname, value, out, optional_lines=''):
         assert isinstance(value, list)
         steps = value
         if len(steps) == 1 and isinstance(steps[0], cli_opcodes.MapException):
-            #renderRaisingOp(baseclass, opname, steps[0], out)
-            return # XXX
-        renderCustomOp(baseclass, opname, value, out)
+            renderRaisingOp(baseclass, opname, steps[0], out)
+        else:
+            renderCustomOp(baseclass, opname, value, out)
 
     # fix the restype for comparison ops and casts
     if is_comparison(opname):
@@ -431,41 +432,19 @@ def renderOp(baseclass, opname, value, out, optional_lines=''):
         funcname = 'restype_%s' % to
         out[opname].restype = globals()[funcname]
 
-def renderSimpleOp(baseclass, opname, value, out, optional_lines=''):
+
+def renderSimpleOp(baseclass, opname, value, out):
     attrname = opcode2attrname(value)
     source = py.code.Source("""
     class %(opname)s (%(baseclass)s):
         def getOpCode(self):
             return OpCodes.%(attrname)s
-
-%(optional_lines)s
     """ % locals())
     code = source.compile()
     exec code in globals(), out
 
-## def get_exctype(exctype_str):
-##     if exctype_str == '[mscorlib]System.OverflowException':
-##         return typeof(System.OverflowException)
-##     elif exctype_str == '[mscorlib]System.DivideByZeroException':
-##         return typeof(System.DivideByZeroException)
-##     else:
-##         assert False, 'Unknown exception type'
 
-## def renderRaisingOp(baseclass, opname, value, out):
-##     mapping = value.mapping
-##     assert len(mapping) == 1, 'Catching more than one exception is not supported'
-##     exctype = mapping[0][0]
-##     assert exctype.startswith('[mscorlib]')
-##     exctype = exctype[len('[mscorlib]'):]
-##     source = """
-##         def getExceptionType(self):
-##             return typeof(%(exctype)s)
-##     """ % locals()
-##     baseclass = 'Raising' + baseclass
-##     renderOp(baseclass, opname, value.instr, out, source)
-
-
-def renderCustomOp(baseclass, opname, steps, out):
+def renderCustomOp(baseclass, opname, steps, out, emitName='emit', optional_lines=''):
     assert steps
     body = []
     for step in steps:
@@ -479,7 +458,9 @@ def renderCustomOp(baseclass, opname, steps, out):
             attrname = opcode2attrname(step)
             body.append('self.meth.il.Emit(OpCodes.%s)' % attrname)
         elif isinstance(step, cli_opcodes.MapException):
-            return # XXX, TODO
+            # MapException is supported only if it's the only element of the
+            # instr list, look inside RenderOp
+            assert False, 'MapException not supported here'
         else:
             return # ignore it for now
 
@@ -487,10 +468,37 @@ def renderCustomOp(baseclass, opname, steps, out):
         body.append('self.storeResult()')
 
     emit = py.code.Source('\n'.join(body))
-    emit = emit.putaround('def emit(self):')
-    source = emit.putaround('class %(opname)s (%(baseclass)s):' % locals())
+    emit = emit.putaround('def %s(self):' % emitName).indent(' '*8)
+    source = py.code.Source("""
+    class %(opname)s (%(baseclass)s):
+%(emit)s
+%(optional_lines)s
+    """ % locals())
+
     code = source.compile()
     exec code in globals(), out
+
+
+def renderRaisingOp(baseclass, opname, value, out):
+    mapping = value.mapping
+    assert len(mapping) == 1, 'Catching more than one exception is not supported'
+    exctype = mapping[0][0]
+    assert exctype.startswith('[mscorlib]')
+    exctype = exctype[len('[mscorlib]'):]
+    source = """
+        def getExceptionType(self):
+            return typeof(%(exctype)s)
+    """ % locals()
+    baseclass = 'Raising' + baseclass
+    renderCustomOp(baseclass, opname, value.instr, out, 'emit_op', source)
+
+def get_exctype(exctype_str):
+    if exctype_str == '[mscorlib]System.OverflowException':
+        return typeof(System.OverflowException)
+    elif exctype_str == '[mscorlib]System.DivideByZeroException':
+        return typeof(System.DivideByZeroException)
+    else:
+        assert False, 'Unknown exception type'
 
 
 UNARYOPS = fillops(cli_opcodes.unary_ops, "UnaryOp")
