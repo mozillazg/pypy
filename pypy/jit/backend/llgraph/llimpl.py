@@ -67,7 +67,7 @@ TYPES = {
     'setfield_gc'     : (('ptr', 'fieldname', 'intorptr'), None),
     'getfield_gc'     : (('ptr', 'fieldname'), 'intorptr'),
     'setfield_raw'    : (('ptr', 'fieldname', 'intorptr'), None),
-    'getfield_raw'    : (('ptr', 'fieldname'), 'intotptr'),
+    'getfield_raw'    : (('ptr', 'fieldname'), 'intorptr'),
     'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
     'call__4'         : (('ptr', 'varargs'), 'int'),
     'call_void'       : (('ptr', 'varargs'), None),

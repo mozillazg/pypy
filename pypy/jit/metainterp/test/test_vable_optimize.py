@@ -75,14 +75,14 @@ class A:
     ops = [
         MergePoint('merge_point', [sum, fr], []),
         ResOperation('guard_nonvirtualized__4', [fr, ConstInt(ofs_node)], []),
-        ResOperation('getfield_gc_ptr', [fr, ConstInt(ofs_node)], [n1]),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [fr, ConstInt(ofs_node)], [n1]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
-        ResOperation('setfield_gc_ptr', [fr, ConstInt(ofs_node), n2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [fr, ConstInt(ofs_node), n2], []),
         Jump('jump', [sum2, fr], []),
         ]
     ops[1].desc = xy_desc

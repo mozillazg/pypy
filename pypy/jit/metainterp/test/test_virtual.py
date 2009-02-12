@@ -29,8 +29,7 @@ class VirtualTests:
         assert res == 55 * 10
         self.check_loop_count(1)
         self.check_loops(new=0, new_with_vtable=0,
-                                getfield_gc__4=0, getfield_gc_ptr=0,
-                                setfield_gc__4=0, setfield_gc_ptr=0)
+                                getfield_gc=0, setfield_gc=0)
 
     def test_virtualized_2(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
@@ -55,8 +54,7 @@ class VirtualTests:
         assert res == 55 * 30
         self.check_loop_count(1)
         self.check_loops(new=0, new_with_vtable=0,
-                                getfield_gc__4=0, getfield_gc_ptr=0,
-                                setfield_gc__4=0, setfield_gc_ptr=0)
+                                getfield_gc=0, setfield_gc=0)
 
     def test_nonvirtual_obj_delays_loop(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
@@ -77,8 +75,7 @@ class VirtualTests:
         assert res == 640
         self.check_loop_count(1)
         self.check_loops(new=0, new_with_vtable=0,
-                                getfield_gc__4=0, getfield_gc_ptr=0,
-                                setfield_gc__4=0, setfield_gc_ptr=0)
+                                getfield_gc=0, setfield_gc=0)
 
     def test_two_loops_with_virtual(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
@@ -102,8 +99,7 @@ class VirtualTests:
         assert res == f(10)
         self.check_loop_count(2)
         self.check_loops(new=0, new_with_vtable=0,
-                                getfield_gc__4=0, getfield_gc_ptr=0,
-                                setfield_gc__4=0, setfield_gc_ptr=0)
+                                getfield_gc=0, setfield_gc=0)
 
     def test_two_loops_with_escaping_virtual(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
