@@ -444,9 +444,10 @@ class BytecodeMaker(object):
         if RESULT is lltype.Void:
             return
         argname = v_inst.concretetype.TO._gckind
-        self.emit('%s_%s_%s' % (opname, argname, getkind_num(self.cpu, RESULT)))
+        self.emit('%s_%s' % (opname, argname))
         self.emit(self.var_position(v_inst))
-        offset = self.cpu.offsetof(v_inst.concretetype.TO, c_fieldname.value)
+        offset = self.cpu.fielddescrof(v_inst.concretetype.TO,
+                                       c_fieldname.value)
         self.emit(offset)
         self.register_var(op.result)
 
@@ -460,9 +461,10 @@ class BytecodeMaker(object):
         if RESULT is lltype.Void:
             return
         argname = v_inst.concretetype.TO._gckind
-        self.emit('setfield_%s_%s' % (argname, getkind_num(self.cpu, RESULT)))
+        self.emit('setfield_%s' % (argname,))
         self.emit(self.var_position(v_inst))
-        offset = self.cpu.offsetof(v_inst.concretetype.TO, c_fieldname.value)
+        offset = self.cpu.fielddescrof(v_inst.concretetype.TO,
+                                       c_fieldname.value)
         self.emit(offset)
         self.emit(self.var_position(v_value))
 
@@ -629,9 +631,8 @@ class BytecodeMaker(object):
                 metainterp._virtualizabledescs[TOPSTRUCT] = virtualizabledesc
                 metainterp._can_have_virtualizables = virtualizabledesc
                 #             ^^^ stays None if this code is never seen
-            guard_field = self.cpu.offsetof(STRUCTTYPE, argname)
-            self.emit('guard_nonvirtualized_%s' % getkind_num(self.cpu,
-                                                              FIELDTYPE))
+            guard_field = self.cpu.fielddescrof(STRUCTTYPE, argname)
+            self.emit('guard_nonvirtualized')
             self.emit(self.var_position(op.args[0]))
             self.emit(self.get_position(virtualizabledesc))
             self.emit(guard_field)

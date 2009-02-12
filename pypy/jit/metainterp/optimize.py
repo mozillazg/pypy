@@ -94,7 +94,6 @@ class AllocationStorage(object):
 class TypeCache(object):
     pass
 type_cache = TypeCache()   # XXX remove me later
-type_cache.field_type = {}
 type_cache.class_size = {}
 
 def extract_runtime_data(cpu, specnode, valuebox, resultlist):
@@ -103,14 +102,10 @@ def extract_runtime_data(cpu, specnode, valuebox, resultlist):
         return
     for ofs, subspecnode in specnode.fields:
         cls = specnode.known_class.getint()
-        typemarker = type_cache.field_type[cls, ofs]
-        if typemarker.startswith('_'):
-            simpletypemarker = 'int'
-        else:
-            simpletypemarker = typemarker
-        fieldbox = cpu.execute_operation('getfield_gc_' + typemarker,
+        tp = cpu.typefor(ofs)
+        fieldbox = cpu.execute_operation('getfield_gc',
                                          [valuebox, ConstInt(ofs)],
-                                         simpletypemarker)
+                                         tp)
         extract_runtime_data(cpu, subspecnode, fieldbox, resultlist)
 
 
@@ -240,17 +235,16 @@ class PerfectSpecializer(object):
                 instnode.cls = InstanceNode(op.args[1])
                 self.nodes[box] = instnode
                 continue
-            elif opname.startswith('setfield_gc_'):
+            elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
                 field = fieldbox.getint()
                 fieldnode = self.getnode(op.args[2])
                 instnode.curfields[field] = fieldnode
-                if opname == 'setfield_gc_ptr':
-                    self.dependency_graph.append((instnode, fieldnode))
+                self.dependency_graph.append((instnode, fieldnode))
                 continue
-            elif opname.startswith('getfield_gc_'):
+            elif opname == 'getfield_gc':
                 instnode = self.getnode(op.args[0])
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
@@ -431,7 +425,7 @@ class PerfectSpecializer(object):
                 op = self.optimize_guard(op)
                 newoperations.append(op)
                 continue
-            elif opname.startswith('getfield_gc_'):
+            elif opname == 'getfield_gc':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtual or instnode.virtualized:
                     ofs = op.args[1].getint()
@@ -448,18 +442,12 @@ class PerfectSpecializer(object):
                     key = instnode.cls.source.getint()
                     type_cache.class_size[key] = size
                     continue
-            elif opname.startswith('setfield_gc_'):
+            elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
                 if instnode.virtual or instnode.virtualized:
                     ofs = op.args[1].getint()
                     instnode.curfields[ofs] = valuenode
-                    # XXX hack
-                    assert instnode.cls is not None
-                    cls = instnode.cls.source.getint()
-                    typemarker = opname[len('setfield_gc_'):]
-                    type_cache.field_type[cls, ofs] = typemarker
-                    # XXX end of hack
                     continue
                 assert not valuenode.virtual
             elif opname == 'ooisnull' or opname == 'oononnull':
@@ -549,9 +537,9 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
         else:
             fieldbox = boxes_from_frame[index_in_arglist]
         vtable = storage.allocations[index_in_alloc]
-        opname = 'setfield_gc_' + type_cache.field_type[vtable, ofs]
         box = allocated_boxes[index_in_alloc]
-        history.execute_and_record(opname, [box, ConstInt(ofs), fieldbox],
+        history.execute_and_record('setfield_gc',
+                                   [box, ConstInt(ofs), fieldbox],
                                    'void', False)
     newboxes = []
     for index in storage.indices:

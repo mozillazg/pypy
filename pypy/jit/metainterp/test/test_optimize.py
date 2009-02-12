@@ -66,8 +66,8 @@ def equaloplists(oplist1, oplist2):
 # ____________________________________________________________
 
 class A:
-    ofs_next = runner.CPU.offsetof(NODE, 'next')
-    ofs_value = runner.CPU.offsetof(NODE, 'value')
+    ofs_next = runner.CPU.fielddescrof(NODE, 'next')
+    ofs_value = runner.CPU.fielddescrof(NODE, 'value')
     size_of_node = runner.CPU.sizeof(NODE)
     #
     startnode = lltype.malloc(NODE)
@@ -84,12 +84,12 @@ class A:
     ops = [
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
         Jump('jump', [sum2, n2], []),
         ]
 
@@ -134,12 +134,12 @@ class B:
     ops = [
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
         ResOperation('some_escaping_operation', [n2], []),    # <== escaping
         Jump('jump', [sum2, n2], []),
         ]
@@ -171,12 +171,12 @@ def test_B_optimize_loop():
     assert equaloplists(operations, [
         MergePoint('merge_point', [B.sum, B.n1], []),
         # guard_class is gone
-        ResOperation('getfield_gc__4', [B.n1, ConstInt(B.ofs_value)], [B.v]),
+        ResOperation('getfield_gc', [B.n1, ConstInt(B.ofs_value)], [B.v]),
         ResOperation('int_sub', [B.v, ConstInt(1)], [B.v2]),
         ResOperation('int_add', [B.sum, B.v], [B.sum2]),
         ResOperation('new_with_vtable', [ConstInt(B.size_of_node),
                                          ConstAddr(node_vtable, cpu)], [B.n2]),
-        ResOperation('setfield_gc__4', [B.n2, ConstInt(B.ofs_value), B.v2],
+        ResOperation('setfield_gc', [B.n2, ConstInt(B.ofs_value), B.v2],
                                        []),
         ResOperation('some_escaping_operation', [B.n2], []),    # <== escaping
         Jump('jump', [B.sum2, B.n2], []),
@@ -189,13 +189,13 @@ class C:
     ops = [
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('some_escaping_operation', [n1], []),    # <== escaping
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
         Jump('jump', [sum2, n2], []),
         ]
 
@@ -226,13 +226,13 @@ def test_C_optimize_loop():
     assert equaloplists(operations, [
         MergePoint('merge_point', [C.sum, C.n1], []),
         # guard_class is gone
-        ResOperation('getfield_gc__4', [C.n1, ConstInt(C.ofs_value)], [C.v]),
+        ResOperation('getfield_gc', [C.n1, ConstInt(C.ofs_value)], [C.v]),
         ResOperation('int_sub', [C.v, ConstInt(1)], [C.v2]),
         ResOperation('int_add', [C.sum, C.v], [C.sum2]),
         ResOperation('some_escaping_operation', [C.n1], []),    # <== escaping
         ResOperation('new_with_vtable', [ConstInt(C.size_of_node),
                                          ConstAddr(node_vtable, cpu)], [C.n2]),
-        ResOperation('setfield_gc__4', [C.n2, ConstInt(C.ofs_value), C.v2],
+        ResOperation('setfield_gc', [C.n2, ConstInt(C.ofs_value), C.v2],
                                        []),
         Jump('jump', [C.sum2, C.n2], []),
         ])
@@ -245,12 +245,12 @@ class D:
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node2_vtable, cpu)], []),
         # the only difference is different vtable  ^^^^^^^^^^^^
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
         Jump('jump', [sum2, n2], []),
         ]
 
@@ -266,12 +266,12 @@ class E:
     ops = [
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
         ResOperation('guard_true', [v2], []),
         Jump('jump', [sum2, n2], []),
         ]
@@ -324,7 +324,7 @@ def test_E_rebuild_after_failure():
     vt = cpu.cast_adr_to_int(node_vtable_adr)
     assert fake_history.ops == [
        ('new_with_vtable', [ConstInt(type_cache.class_size[vt]), ConstInt(vt)]),
-       ('setfield_gc__4', ['allocated', ConstInt(E.ofs_value), v_v_b])
+       ('setfield_gc', ['allocated', ConstInt(E.ofs_value), v_v_b])
        ]
     assert newboxes == [v_sum_b, 'allocated']
 
@@ -341,12 +341,12 @@ class F:
     ops = [
         MergePoint('merge_point', [sum, n1, n3], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
         ResOperation('ooisnot', [n2, n3], [vbool1]),
         GuardOp('guard_true', [vbool1], []),
         ResOperation('ooisnull', [n2], [vbool2]),
@@ -391,16 +391,16 @@ class G:
     ops = [
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value),
                                             ConstInt(123)], []),
-        ResOperation('getfield_gc__4', [n2, ConstInt(ofs_value)], [v3]),
+        ResOperation('getfield_gc', [n2, ConstInt(ofs_value)], [v3]),
         ResOperation('int_add', [v3, ConstInt(1)], [v4]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v4], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v4], []),
         ResOperation('guard_true', [v2], []),
         Jump('jump', [sum2, n2], []),
         ]
@@ -444,13 +444,13 @@ class H:
     v2 = BoxInt(nextnode.value)
     ops = [
         MergePoint('merge_point', [n0], []),
-        ResOperation('getfield_gc_ptr', [n0, ConstInt(ofs_next)], [n1]),
-        ResOperation('getfield_gc__4', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('getfield_gc', [n0, ConstInt(ofs_next)], [n1]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc__4', [n2, ConstInt(ofs_value), v2], []),
-        ResOperation('setfield_gc_ptr', [n0, ConstInt(ofs_next), n2], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
+        ResOperation('setfield_gc', [n0, ConstInt(ofs_next), n2], []),
         Jump('jump', [n0], []),
         ]
 
@@ -478,7 +478,7 @@ class I:
         MergePoint('merge_point', [n0], []),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc_ptr', [n2, ConstInt(ofs_next), n0], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_next), n0], []),
         Jump('jump', [n2], []),
         ]
 
@@ -505,10 +505,10 @@ class J:
     n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
     ops = [
         MergePoint('merge_point', [n0], []),
-        ResOperation('getfield_gc_ptr', [n0, ConstInt(ofs_next)], [n1]),
+        ResOperation('getfield_gc', [n0, ConstInt(ofs_next)], [n1]),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc_ptr', [n2, ConstInt(ofs_next), n1], []),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_next), n1], []),
         Jump('jump', [n2], []),
         ]
 
