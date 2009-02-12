@@ -818,15 +818,12 @@ class BranchBuilder(GenBuilder):
 
     @specialize.arg(1)
     def genraisingop2(self, opname, gv_arg1, gv_arg2):
-        if opname == 'int_add_ovf':
-            opcls = ops.IntAddOvf
-            op = opcls(self.meth, gv_arg1, gv_arg2)
-            self.appendop(op)
-            gv_res = op.gv_res()
-            gv_excflag = op.gv_excflag()
-            return gv_res, gv_excflag
-        else:
-            assert False
+        opcls = ops.getopclass2(opname)
+        op = opcls(self.meth, gv_arg1, gv_arg2)
+        self.appendop(op)
+        gv_res = op.gv_res()
+        gv_excflag = op.gv_excflag()
+        return gv_res, gv_excflag
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         op = ops.Call(self.meth, sigtoken, gv_fnptr, args_gv)
