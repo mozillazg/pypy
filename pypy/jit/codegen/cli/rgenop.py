@@ -812,9 +812,14 @@ class BranchBuilder(GenBuilder):
         gv_res = op.gv_res()
         return gv_res
 
-##     @specialize.arg(1)
-##     def genraisingop1(self, opname, gv_arg):
-##         return a pair (gv_result, gv_flag_set_if_exception)
+    @specialize.arg(1)
+    def genraisingop1(self, opname, gv_arg):
+        opcls = ops.getopclass1(opname)
+        op = opcls(self.meth, gv_arg)
+        self.appendop(op)
+        gv_res = op.gv_res()
+        gv_excflag = op.gv_excflag()
+        return gv_res, gv_excflag
 
     @specialize.arg(1)
     def genraisingop2(self, opname, gv_arg1, gv_arg2):
