@@ -238,7 +238,8 @@ class PerfectSpecializer(object):
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
                 field = fieldbox.getint()
-                instnode.curfields[field] = self.getnode(op.args[2])
+                fieldnode = self.getnode(op.args[2])
+                instnode.curfields[field] = fieldnode
                 continue
             elif opname.startswith('getfield_gc_'):
                 instnode = self.getnode(op.args[0])
@@ -252,6 +253,8 @@ class PerfectSpecializer(object):
                     fieldnode = instnode.origfields[field]
                 else:
                     fieldnode = InstanceNode(box, escaped=False)
+                    if instnode.startbox:
+                        fieldnode.startbox = True
                     instnode.origfields[field] = fieldnode
                 self.nodes[box] = fieldnode
                 continue
