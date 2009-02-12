@@ -28,10 +28,10 @@ class TestRCliGenopDirect(AbstractRGenOpTestsDirect):
         py.test.skip('fixme')
 
     def test_float_adder(self):
-        py.test.skip('fixme')
+        py.test.skip('Pythonnet bug: il.Emit(..., 3.2) selects the wrong overload')
 
     def test_float_loop_direct(self):
-        py.test.skip('fixme')
+        py.test.skip('Pythonnet bug: il.Emit(..., 3.2) selects the wrong overload')
 
     def test_read_frame_var_direct(self):
         py.test.skip('fixme: add support for frames')
