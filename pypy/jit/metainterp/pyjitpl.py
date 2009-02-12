@@ -402,43 +402,20 @@ class MIFrame(object):
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_value(self, pc, box):
-        return self.implement_guard_value(pc, box)
+        self.implement_guard_value(pc, box)
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_class(self, pc, box):
-        obj = box.getptr(lltype.Ptr(rclass.OBJECT))
-        cls = llmemory.cast_ptr_to_adr(obj.typeptr)
-        clsbox = ConstInt(self.metainterp.cpu.cast_adr_to_int(cls))
         if isinstance(box, Box):
+            clsbox = self.cls_of_box(box)
             self.generate_guard(pc, 'guard_class', box, [clsbox])
-        return clsbox
 
     @arguments("orgpc", "box", "virtualizabledesc", "int")
-    def opimpl_guard_nonvirtualized__1(self, pc, box, vdesc, guard_field):
-        self.execute('#virtualizabledesc', [box, vdesc], 'void', False)
-        self.generate_guard(pc, 'guard_nonvirtualized__1', box,
-                            [ConstInt(guard_field)])
-    @arguments("orgpc", "box", "virtualizabledesc", "int")
-    def opimpl_guard_nonvirtualized__2(self, pc, box, vdesc, guard_field):
-        self.execute('#virtualizabledesc', [box, vdesc], 'void', False)
-        self.generate_guard(pc, 'guard_nonvirtualized__2', box,
-                            [ConstInt(guard_field)])
-    @arguments("orgpc", "box", "virtualizabledesc", "int")
-    def opimpl_guard_nonvirtualized__4(self, pc, box, vdesc, guard_field):
-        self.execute('#virtualizabledesc', [box, vdesc], 'void', False)
-        self.generate_guard(pc, 'guard_nonvirtualized__4', box,
-                            [ConstInt(guard_field)])
-    @arguments("orgpc", "box", "virtualizabledesc", "int")
-    def opimpl_guard_nonvirtualized__8(self, pc, box, vdesc, guard_field):
-        self.execute('#virtualizabledesc', [box, vdesc], 'void', False)
-        self.generate_guard(pc, 'guard_nonvirtualized__8', box,
-                            [ConstInt(guard_field)])
-
-    @arguments("orgpc", "box", "virtualizabledesc", "int")
-    def opimpl_guard_nonvirtualized_ptr(self, pc, box, vdesc, guard_field):
-        self.execute('#virtualizabledesc', [box, vdesc], 'void', False)
-        self.generate_guard(pc, 'guard_nonvirtualized_ptr', box,
-                            [ConstInt(guard_field)])
+    def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):
+        clsbox = self.cls_of_box(box)
+        op = self.generate_guard(pc, 'guard_nonvirtualized', box,
+                                 [clsbox, ConstInt(guard_field)])
+        op.desc = vdesc
         
     @arguments("box")
     def opimpl_keepalive(self, box):
@@ -548,6 +525,7 @@ class MIFrame(object):
         self.pc = pc
         guard_op.key = self.metainterp.record_state()
         self.pc = saved_pc
+        return guard_op
 
     def implement_guard_value(self, pc, box):
         if isinstance(box, Box):
@@ -556,6 +534,11 @@ class MIFrame(object):
             return promoted_box
         else:
             return box     # no promotion needed, already a Const
+
+    def cls_of_box(self, box):
+        obj = box.getptr(lltype.Ptr(rclass.OBJECT))
+        cls = llmemory.cast_ptr_to_adr(obj.typeptr)
+        return ConstInt(self.metainterp.cpu.cast_adr_to_int(cls))
 
     def follow_jump(self):
         self.pc -= 3
