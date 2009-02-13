@@ -553,6 +553,41 @@ def test_K0_optimize_loop():
     ])
 
 
+class K1:
+    locals().update(A.__dict__)    # :-)
+    sum3 = BoxInt(3)
+    v3 = BoxInt(4)
+    ops = [
+        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
+        ResOperation('int_add', [sum, v], [sum2]),
+        ResOperation('setfield_gc', [n1, ConstInt(ofs_value), sum], []),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
+        ResOperation('int_add', [sum2, v3], [sum3]),
+        ResOperation('escape', [n1], []),
+        Jump('jump', [sum3, n1], []),
+        ]
+
+def test_K1_optimize_loop():
+    spec = PerfectSpecializer(Loop(K1.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [K1.sum, K1.n1], []),
+        ResOperation('getfield_gc', [K1.n1, ConstInt(K1.ofs_value)], [K1.v]),
+        ResOperation('int_sub', [K1.v, ConstInt(1)], [K1.v2]),
+        ResOperation('int_add', [K1.sum, K1.v], [K1.sum2]),
+        ResOperation('int_add', [K1.sum2, K1.sum], [K1.sum3]),
+        ResOperation('setfield_gc', [K1.n1, ConstInt(K1.ofs_value), K1.sum],
+                     []),
+        ResOperation('escape', [K1.n1], []),
+        Jump('jump', [K1.sum3, K1.n1], []),
+    ])
+
+
 class K:
     locals().update(A.__dict__)    # :-)
     sum3 = BoxInt(3)
