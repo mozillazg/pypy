@@ -1,5 +1,4 @@
 from pypy.annotation import model as annmodel
-from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
 from pypy.rlib import objectmodel
@@ -14,6 +13,20 @@ py.log.setconsumer('jitcodewriter', ansi_log)
 
 MAX_MAKE_NEW_VARS = 16
 
+
+class BuiltinDescr(history.AbstractValue):
+    pass
+
+class ListDescr(BuiltinDescr):
+    def __init__(self, getfunc, setfunc, tp):
+        self.setfunc = setfunc
+        self.getfunc = getfunc
+        self.tp = tp
+    
+    def equals(self, other):
+        if isinstance(other, ListDescr):
+            return True
+        return False
 
 class JitCode(history.AbstractValue):
     def __init__(self, name):
@@ -74,6 +87,7 @@ class CodeWriter(object):
         self.rtyper = metainterp.cpu.rtyper
         self.cpu = metainterp.cpu
         self.policy = policy
+        self.list_cache = {}
 
     def make_portal_bytecode(self, graph):
         log.info("making JitCodes...")
@@ -124,6 +138,29 @@ class CodeWriter(object):
             value = (oopspec_name.replace('.', '_'), self.get_list_desc(LIST))
             metainterp.builtins_keys.append(key)
             metainterp.builtins_values.append(value)
+
+
+    def list_descr_for_tp(self, TP):
+        try:
+            return self.list_cache[TP.TO]
+        except KeyError:
+            rtyper = self.rtyper
+            args = [TP, lltype.Signed, TP.TO.OF]
+            setfunc = support.builtin_func_for_spec(rtyper, 'list.setitem',
+                                                    args, lltype.Void)
+            getfunc = support.builtin_func_for_spec(rtyper, 'list.getitem',
+                                                    args[:-1], TP.TO.OF)
+            if isinstance(TP.TO.OF, lltype.Number):
+                tp = "int"
+            else:
+                tp = "ptr"
+            ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
+                           history.ConstAddr(setfunc.value, self.cpu),
+                           tp)
+            self.list_cache[TP.TO] = ld
+            return ld
+
+    
 
 class BytecodeMaker(object):
     debug = True
@@ -515,10 +552,11 @@ class BytecodeMaker(object):
                 if isinstance(arg.concretetype, lltype.Ptr):
                     # XXX very complex logic for getting all things
                     # that are pointers, but not objects
-                    if not (isinstance(arg.concretetype.TO, lltype.GcStruct) and
-                        (heaptracker.get_vtable_for_gcstruct(self.cpu,
-                                               arg.concretetype.TO))):
-                        self.emit('guard_builtin', self.var_position(arg))
+                    if isinstance(arg.concretetype.TO, lltype.GcArray):
+                        descr = self.codewriter.list_descr_for_tp(
+                            arg.concretetype)
+                        self.emit('guard_builtin', self.var_position(arg),
+                                  self.get_position(descr))
             
         elif op.args[0].value == 'can_enter_jit':
             self.emit('can_enter_jit')
@@ -559,21 +597,10 @@ class BytecodeMaker(object):
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
-        args_s = [annmodel.lltype_to_annotation(v.concretetype)
-                  for v in args]
-        if '.' not in oopspec_name:    # 'newxxx' operations
-            LIST_OR_DICT = op.result.concretetype
-            bk = self.codewriter.rtyper.annotator.bookkeeper
-            args_s.insert(0, annmodel.SomePBC([bk.getdesc(LIST_OR_DICT.TO)]))
-        else:
-            LIST_OR_DICT = args[0].concretetype
-        s_result = annmodel.lltype_to_annotation(op.result.concretetype)
-        impl = support.setup_extra_builtin(oopspec_name, len(args_s))
-        #
-        mixlevelann = MixLevelHelperAnnotator(self.codewriter.rtyper)
-        c_func = mixlevelann.constfunc(impl, args_s, s_result)
-        mixlevelann.finish()
-        #
+        ll_args = [v.concretetype for v in args]
+        c_func = support.builtin_func_for_spec(self.codewriter.rtyper,
+                                               oopspec_name, ll_args,
+                                               op.result.concretetype)
         if oopspec_name.endswith('_foldable'):
             opname = 'green_call_%s'
         else:

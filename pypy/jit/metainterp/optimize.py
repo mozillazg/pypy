@@ -7,8 +7,10 @@ from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           VirtualizableSpecNode,
                                           NotSpecNode,
                                           DelayedSpecNode,
-                                          SpecNodeWithBox)
+                                          SpecNodeWithBox,
+                                          DelayedListSpecNode)
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.jit.metainterp.codewriter import ListDescr
 
 class CancelInefficientLoop(Exception):
     pass
@@ -110,6 +112,8 @@ class InstanceNode(object):
                 return NotSpecNode()
             return FixedClassSpecNode(known_class)
         if not other.escaped:
+            # XXX write a spec node
+            assert not isinstance(known_class, ListDescr)
             fields = []
             lst = other.curfields.items()
             lst.sort()
@@ -128,6 +132,8 @@ class InstanceNode(object):
             for ofs in lst:
                 specnode = SpecNodeWithBox(self.origfields[ofs].source)
                 fields.append((ofs, specnode))
+            if isinstance(known_class, ListDescr):
+                return DelayedListSpecNode(known_class, fields)
             return DelayedSpecNode(known_class, fields)
         else:
             assert self is other
@@ -243,7 +249,7 @@ class PerfectSpecializer(object):
             elif opname == 'guard_builtin':
                 instnode = self.nodes[op.args[0]]
                 # all builtins have equal classes
-                instnode.cls = InstanceNode(ConstInt(0))
+                instnode.cls = InstanceNode(op.args[1])
                 continue
             elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
@@ -543,8 +549,14 @@ class PerfectSpecializer(object):
         # we need to invalidate everything
         for node in self.nodes.values():
             for ofs, valuenode in node.dirtyfields.items():
-                newoperations.append(ResOperation('setfield_gc',
-                         [node.source, ConstInt(ofs), valuenode.source], []))
+                # XXX move to IntanceNode eventually
+                if isinstance(node.cls.source, ListDescr):
+                    newoperations.append(ResOperation('setitem',
+                            [node.cls.source.setfunc, node.source,
+                             ConstInt(ofs), valuenode.source], []))
+                else:
+                    newoperations.append(ResOperation('setfield_gc',
+                       [node.source, ConstInt(ofs), valuenode.source], []))
             node.dirtyfields = {}
             node.cleanfields = {}
 

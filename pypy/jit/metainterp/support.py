@@ -10,6 +10,7 @@ from pypy import conftest
 from pypy.translator.translator import TranslationContext
 from pypy.annotation.policy import AnnotatorPolicy
 from pypy.annotation import model as annmodel
+from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 
 def getargtypes(annotator, values):
     if values is None:    # for backend tests producing stand-alone exe's
@@ -178,3 +179,20 @@ def decode_builtin_call(op):
         return get_call_oopspec_opargs(fnobj, opargs)
     else:
         raise ValueError(op.opname)
+
+def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
+    args_s = [annmodel.lltype_to_annotation(v) for v in ll_args]
+    if '.' not in oopspec_name:    # 'newxxx' operations
+        LIST_OR_DICT = op.result.concretetype
+        bk = self.codewriter.rtyper.annotator.bookkeeper
+        args_s.insert(0, annmodel.SomePBC([bk.getdesc(LIST_OR_DICT.TO)]))
+    else:
+        LIST_OR_DICT = ll_args[0]
+    s_result = annmodel.lltype_to_annotation(ll_res)
+    impl = setup_extra_builtin(oopspec_name, len(args_s))
+    #
+    mixlevelann = MixLevelHelperAnnotator(rtyper)
+    c_func = mixlevelann.constfunc(impl, args_s, s_result)
+    mixlevelann.finish()
+    #
+    return c_func
