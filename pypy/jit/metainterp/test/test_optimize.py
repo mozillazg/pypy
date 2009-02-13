@@ -579,6 +579,7 @@ def test_L_optimize_loop():
         MergePoint('merge_point', [L.sum, L.n1, L.v], []),
         ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
         ResOperation('int_add', [L.sum, L.v], [L.sum2]),
+        ResOperation('escape', [L.n1], []),
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
         ResOperation('int_add', [L.sum2, L.v3], [L.sum3]),
         Jump('jump', [L.sum3, L.n1, L.v3], []),
@@ -607,10 +608,14 @@ def test_M_optimize_loop():
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
+    # XXX why do we expect that?  I'd rather say that n1 is passed around
+    # as an escaped until the first getfield_gc instead of generating
+    # a getfield_gc eagerly after the 'escape'...
     equaloplists(spec.loop.operations, [
         MergePoint('merge_point', [L.sum, L.n1, L.v], []),
         ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
         ResOperation('int_add', [L.sum, L.v], [L.sum2]),
+        ResOperation('escape', [L.n1], []),
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
         Jump('jump', [L.sum2, L.n1, L.v3], []),
     ])
