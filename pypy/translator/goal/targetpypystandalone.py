@@ -47,12 +47,12 @@ def create_entry_point(space, w_dict):
             try:
                 space.call_function(w_run_toplevel, w_call_startup_gateway)
 
-                if space.config.objspace.usemodules.pypyjit:
-                    # initial setup of the JIT and handling of the
-                    # '--jit PARAM=VALUE,PARAM=VALUE...' command-line option
-                    # (for now it's a bit ad-hoc)
-                    from pypy.module.pypyjit.interp_jit import jit_startup
-                    jit_startup(space, argv)
+##                 if space.config.objspace.usemodules.pypyjit:
+##                     # initial setup of the JIT and handling of the
+##                     # '--jit PARAM=VALUE,PARAM=VALUE...' command-line option
+##                     # (for now it's a bit ad-hoc)
+##                     from pypy.module.pypyjit.interp_jit import jit_startup
+##                     jit_startup(space, argv)
 
                 w_executable = space.wrap(argv[0])
                 w_argv = space.newlist([space.wrap(s) for s in argv[1:]])

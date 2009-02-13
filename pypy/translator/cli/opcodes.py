@@ -106,6 +106,7 @@ unary_ops = {
     'ullong_is_true':            [PushAllArgs, 'ldc.i8 0', 'cgt.un'],
     'ullong_invert':             'not',
 
+    # XXX: why nop nop nop?
     'ooisnull':                 [PushAllArgs, 'nop', 'nop', 'nop', 'ldnull', 'ceq'],
     'oononnull':                [PushAllArgs, 'nop', 'nop', 'nop', 'nop', 'ldnull', 'ceq']+Not,
 
