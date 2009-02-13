@@ -7,7 +7,8 @@ from pypy.jit.metainterp.history import (ResOperation, MergePoint, Jump,
                                          ConstInt, ConstAddr, BoxInt, BoxPtr)
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
                                           VirtualizableSpecNode,
-                                          VirtualInstanceSpecNode)
+                                          VirtualInstanceSpecNode,
+                                          NotSpecNode)
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
                                                     equaloplists)
@@ -153,7 +154,7 @@ def test_B_intersect_input_and_output():
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == B.ofs_node
-    assert spec.specnodes[0].fields[0][1] is None
+    assert isinstance(spec.specnodes[0].fields[0][1], NotSpecNode)
 
 # ____________________________________________________________
 
@@ -189,4 +190,4 @@ def test_C_intersect_input_and_output():
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == C.ofs_node
-    assert spec.specnodes[0].fields[0][1] is None
+    assert isinstance(spec.specnodes[0].fields[0][1], NotSpecNode)

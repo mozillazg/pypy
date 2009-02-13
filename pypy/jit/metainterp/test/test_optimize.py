@@ -10,7 +10,8 @@ from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Jump, GuardOp)
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
     CancelInefficientLoop, VirtualInstanceSpecNode, FixedClassSpecNode,
-    rebuild_boxes_from_guard_failure, type_cache, AllocationStorage)
+    rebuild_boxes_from_guard_failure, type_cache, AllocationStorage,
+    NotSpecNode)
 
 cpu = runner.CPU(None)
 
@@ -109,10 +110,11 @@ def test_A_intersect_input_and_output():
     spec.intersect_input_and_output()
     assert len(spec.specnodes) == 2
     spec_sum, spec_n = spec.specnodes
-    assert spec_sum is None      # for now
+    assert isinstance(spec_sum, NotSpecNode)
     assert isinstance(spec_n, VirtualInstanceSpecNode)
     assert spec_n.known_class.value == node_vtable_adr
-    assert spec_n.fields == [(A.ofs_value, None)]
+    assert spec_n.fields[0][0] == A.ofs_value
+    assert isinstance(spec_n.fields[0][1], NotSpecNode)
 
 def test_A_optimize_loop():
     operations = A.ops[:]
@@ -158,7 +160,7 @@ def test_B_intersect_input_and_output():
     spec.intersect_input_and_output()
     assert len(spec.specnodes) == 2
     spec_sum, spec_n = spec.specnodes
-    assert spec_sum is None      # for now
+    assert isinstance(spec_sum, NotSpecNode)
     assert type(spec_n) is FixedClassSpecNode
     assert spec_n.known_class.value == node_vtable_adr
 
@@ -213,7 +215,7 @@ def test_C_intersect_input_and_output():
     assert spec.nodes[C.n2].escaped
     assert len(spec.specnodes) == 2
     spec_sum, spec_n = spec.specnodes
-    assert spec_sum is None      # for now
+    assert isinstance(spec_sum, NotSpecNode)
     assert type(spec_n) is FixedClassSpecNode
     assert spec_n.known_class.value == node_vtable_adr
 
