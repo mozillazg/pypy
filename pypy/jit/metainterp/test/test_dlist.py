@@ -1,6 +1,5 @@
 
 import py
-py.test.skip("next to go")
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 

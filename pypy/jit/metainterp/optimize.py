@@ -30,6 +30,9 @@ class AllocationStorage(object):
         # last two cases are for virtualizables only
         self.allocations = []
         self.setfields = []
+        # the same as above, but for lists and for running setitem
+        self.list_allocations = []
+        self.setitems = []
 
     def deal_with_box(self, box, nodes, liveboxes, memo):
         if isinstance(box, Const):
@@ -377,7 +380,11 @@ class PerfectSpecializer(object):
                     rev_boxes[fieldbox] = len(liveboxes)
                     liveboxes.append(fieldbox)
                 fieldindex = ~rev_boxes[fieldbox]
-                storage.setfields.append((index, ofs, fieldindex))
+                if isinstance(node.cls.source, ListDescr):
+                    f = node.cls.source.setfunc
+                    storage.setitems.append((f, index, ofs, fieldindex))
+                else:
+                    storage.setfields.append((index, ofs, fieldindex))
         if not we_are_translated():
             items = [box for box in liveboxes if isinstance(box, Box)]
             assert len(dict.fromkeys(items)) == len(items)
@@ -473,7 +480,7 @@ class PerfectSpecializer(object):
                         continue
                 if (opname == 'guard_no_exception' or
                     opname == 'guard_exception'):
-                    if exception_might_have_happened:
+                    if not exception_might_have_happened:
                         continue
                     exception_might_have_happened = False
                 if opname == 'guard_value':
@@ -606,6 +613,11 @@ class PerfectSpecializer(object):
             new_instnode = self.nodes[jump_op.args[i]]
             old_specnode.adapt_to(new_instnode)
 
+def box_from_index(allocated_boxes, boxes_from_frame, index):
+    if index < 0:
+        return boxes_from_frame[~index]
+    return allocated_boxes[index]
+
 def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     allocated_boxes = []
     storage = guard_op.storage_info
@@ -617,16 +629,20 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
                                                'ptr', False)
         allocated_boxes.append(instbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
-        if index_in_arglist < 0:
-            fieldbox = boxes_from_frame[~index_in_arglist]
-        else:
-            fieldbox = allocated_boxes[index_in_arglist]
-        if index_in_alloc < 0:
-            box = boxes_from_frame[~index_in_alloc]
-        else:
-            box = allocated_boxes[index_in_alloc]
+        fieldbox = box_from_index(allocated_boxes, boxes_from_frame,
+                                  index_in_arglist)
+        box = box_from_index(allocated_boxes, boxes_from_frame,
+                             index_in_alloc)
         history.execute_and_record('setfield_gc',
                                    [box, ConstInt(ofs), fieldbox],
+                                   'void', False)
+    for setfunc, index_in_alloc, ofs, index_in_arglist in storage.setitems:
+        itembox = box_from_index(allocated_boxes, boxes_from_frame,
+                                 index_in_arglist)
+        box = box_from_index(allocated_boxes, boxes_from_frame,
+                             index_in_alloc)
+        history.execute_and_record('setitem',
+                                   [setfunc, box, ConstInt(ofs), itembox],
                                    'void', False)
     newboxes = []
     for index in storage.indices:
