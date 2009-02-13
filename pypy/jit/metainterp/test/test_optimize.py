@@ -195,6 +195,7 @@ class C:
     ops = [
         MergePoint('merge_point', [sum, n1], []),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
+        ResOperation('some_escaping_operation', [n1], []),    # <== escaping
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
         ResOperation('int_sub', [v, ConstInt(1)], [v2]),
         ResOperation('int_add', [sum, v], [sum2]),
@@ -231,6 +232,7 @@ def test_C_optimize_loop():
     equaloplists(spec.loop.operations, [
         MergePoint('merge_point', [C.sum, C.n1], []),
         # guard_class is gone
+        ResOperation('some_escaping_operation', [C.n1], []),    # <== escaping
         ResOperation('getfield_gc', [C.n1, ConstInt(C.ofs_value)], [C.v]),
         ResOperation('int_sub', [C.v, ConstInt(1)], [C.v2]),
         ResOperation('int_add', [C.sum, C.v], [C.sum2]),
@@ -545,13 +547,13 @@ def test_K0_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [K0.sum, K0.n1], []),
-        ResOperation('getfield_gc', [K0.n1, ConstInt(K0.ofs_value)], [K0.v]),
+        MergePoint('merge_point', [K0.sum, K0.n1, K0.v], []),
         ResOperation('int_sub', [K0.v, ConstInt(1)], [K0.v2]),
         ResOperation('int_add', [K0.sum, K0.v], [K0.sum2]),
         ResOperation('int_add', [K0.sum2, K0.v], [K0.sum3]),
         ResOperation('escape', [K0.n1], []),
-        Jump('jump', [K0.sum3, K0.n1], []),
+        ResOperation('getfield_gc', [K0.n1, ConstInt(K0.ofs_value)], [ANY]),
+        Jump('jump', [K0.sum3, K0.n1, ANY], []),
     ])
 
 
@@ -578,15 +580,15 @@ def test_K1_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [K1.sum, K1.n1], []),
-        ResOperation('getfield_gc', [K1.n1, ConstInt(K1.ofs_value)], [K1.v]),
+        MergePoint('merge_point', [K1.sum, K1.n1, K1.v], []),
         ResOperation('int_sub', [K1.v, ConstInt(1)], [K1.v2]),
         ResOperation('int_add', [K1.sum, K1.v], [K1.sum2]),
         ResOperation('int_add', [K1.sum2, K1.sum], [K1.sum3]),
         ResOperation('setfield_gc', [K1.n1, ConstInt(K1.ofs_value), K1.sum],
                      []),
         ResOperation('escape', [K1.n1], []),
-        Jump('jump', [K1.sum3, K1.n1], []),
+        ResOperation('getfield_gc', [K1.n1, ConstInt(K1.ofs_value)], [ANY]),
+        Jump('jump', [K1.sum3, K1.n1, ANY], []),
     ])
 
 
@@ -606,7 +608,6 @@ class K:
         ]
 
 def test_K_optimize_loop():
-    py.test.skip("not yet")
     spec = PerfectSpecializer(Loop(K.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
@@ -638,7 +639,6 @@ class L:
         ]
 
 def test_L_optimize_loop():
-    py.test.skip("not yet")
     spec = PerfectSpecializer(Loop(L.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
@@ -648,11 +648,10 @@ def test_L_optimize_loop():
         ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
         ResOperation('int_add', [L.sum, L.v], [L.sum2]),
         ResOperation('escape', [L.n1], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
+        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [L.v3]),
         ResOperation('int_add', [L.sum2, L.v3], [L.sum3]),
         Jump('jump', [L.sum3, L.n1, L.v3], []),
     ])
-    assert spec.loop.prologue == [(L.n1, L.v, L.ofs_value)]
 
 # ____________________________________________________________
 
@@ -671,18 +670,17 @@ class M:
         ]
 
 def test_M_optimize_loop():
-    py.test.skip("not yet")
-    spec = PerfectSpecializer(Loop(L.ops))
+    spec = PerfectSpecializer(Loop(M.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [L.sum, L.n1], []),
-        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [L.v]),
+        MergePoint('merge_point', [L.sum, L.n1, L.v], []),
         ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
         ResOperation('int_add', [L.sum, L.v], [L.sum2]),
         ResOperation('escape', [L.n1], []),
-        Jump('jump', [L.sum2, L.n1], []),
+        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [ANY]),
+        Jump('jump', [L.sum2, L.n1, ANY], []),
     ])
-    assert spec.loop.prologue == []
+
 
