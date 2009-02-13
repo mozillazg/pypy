@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import JitDriver, hint
+from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import support, codewriter, pyjitpl, history
@@ -86,7 +86,6 @@ class BasicTests:
 
     def test_basic_mp(self):
         def f(x, y):
-            hint(x, concrete=True)
             return x + y
         res = self.interp_operations(f, [40, 2])
         assert res == 42
