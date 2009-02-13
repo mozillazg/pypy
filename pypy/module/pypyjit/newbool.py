@@ -62,7 +62,8 @@ class NewBoolDesc:
         else:
             if reverse:
                 gv_bool = jitstate.curbuilder.genop1("bool_not", gv_bool)
-            return rvalue.IntRedBox(self.boolkind, gv_bool)
+            #return rvalue.IntRedBox(self.boolkind, gv_bool)
+            return rvalue.IntRedBox(gv_bool)
 
     def genbooleq(self, jitstate, gv_bool1, gv_bool2, reverse=False):
         if gv_bool1.is_const:
@@ -80,6 +81,7 @@ class NewBoolDesc:
                 gv_res = curbuilder.genop2("int_ne", gv_int1, gv_int2)
             else:
                 gv_res = curbuilder.genop2("int_eq", gv_int1, gv_int2)
+            #return rvalue.IntRedBox(self.boolkind, gv_res)
             return rvalue.IntRedBox(self.boolkind, gv_res)
 
 
