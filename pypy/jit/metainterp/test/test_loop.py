@@ -26,6 +26,30 @@ class TestLoop(LLJitMixin):
         assert res == 84
         self.check_loop_count(1)
 
+    def test_loop_with_delayed_setfield(self):
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res', 'a'])
+        class A(object):
+            def __init__(self):
+                self.x = 3
+        
+        def f(x, y):
+            res = 0
+            a = A()
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res, a=a)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res, a=a)
+                a.x = y
+                if y < 3:
+                    return a.x
+                res += a.x
+                y -= 1
+            return res * 2
+        res = self.meta_interp(f, [6, 13])
+        assert res == f(6, 13)
+        self.check_loop_count(1)
+        if self.specialize:
+            self.check_loops(getfield_gc = 0, setfield_gc = 1)
+
     def test_loop_with_two_paths(self):
         myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
         def g(y, x):

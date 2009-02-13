@@ -6,6 +6,7 @@ from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           VirtualInstanceSpecNode,
                                           VirtualizableSpecNode,
                                           NotSpecNode)
+from pypy.rlib.objectmodel import we_are_translated
 
 class CancelInefficientLoop(Exception):
     pass
@@ -308,6 +309,26 @@ class PerfectSpecializer(object):
         for box in old_boxes:
             indices.append(storage.deal_with_box(box, self.nodes,
                                                  liveboxes, memo))
+        rev_boxes = {}
+        for i in range(len(liveboxes)):
+            box = liveboxes[i]
+            rev_boxes[box] = i
+        for node in self.nodes.values():
+            for ofs, subnode in node.dirtyfields.items():
+                box = node.source
+                if box not in rev_boxes:
+                    rev_boxes[box] = len(liveboxes)
+                    liveboxes.append(box)
+                index = ~rev_boxes[box]
+                fieldbox = subnode.source
+                if fieldbox not in rev_boxes:
+                    rev_boxes[fieldbox] = len(liveboxes)
+                    liveboxes.append(fieldbox)
+                fieldindex = ~rev_boxes[fieldbox]
+                storage.setfields.append((index, ofs, fieldindex))
+        if not we_are_translated():
+            items = [box for box in liveboxes if isinstance(box, Box)]
+            assert len(dict.fromkeys(items)) == len(items)
         storage.indices = indices
         op.args = self.new_arguments(op)
         op.liveboxes = liveboxes
@@ -351,7 +372,7 @@ class PerfectSpecializer(object):
                 newoperations.append(op)
                 continue
             elif opname == 'jump':
-                self.cleanup_field_caches(newoperations)
+                self.adjust_operations_before_jump(newoperations)
                 args = self.expanded_version_of(op.args)
                 op = Jump('jump', args, [])
                 newoperations.append(op)
@@ -449,6 +470,9 @@ class PerfectSpecializer(object):
         newoperations[0].specnodes = self.specnodes
         self.loop.operations = newoperations
 
+    def adjust_operations_before_jump(self, newoperations):
+        self.cleanup_field_caches(newoperations)
+
     def cleanup_field_caches(self, newoperations):
         # we need to invalidate everything
         for node in self.nodes.values():
@@ -518,4 +542,5 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
             newboxes.append(boxes_from_frame[~index])
         else:
             newboxes.append(allocated_boxes[index])
+
     return newboxes
