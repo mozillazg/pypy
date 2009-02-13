@@ -74,7 +74,7 @@ class arguments(object):
                     args += (indirectcallset, )
                 elif argspec == "builtin":
                     builtin = self.load_const_arg()
-                    assert isinstance(builtin, codewriter.BuiltinCall)
+                    assert isinstance(builtin, codewriter.BuiltinDescr)
                     args += (builtin, )
                 elif argspec == "virtualizabledesc":
                     from virtualizable import VirtualizableDesc
@@ -419,9 +419,9 @@ class MIFrame(object):
             self.generate_guard(pc, 'guard_class', box, [clsbox])
         return clsbox
 
-    @arguments("orgpc", "box")
-    def opimpl_guard_builtin(self, pc, box):
-        self.generate_guard(pc, "guard_builtin", box)
+    @arguments("orgpc", "box", "builtin")
+    def opimpl_guard_builtin(self, pc, box, builtin):
+        self.generate_guard(pc, "guard_builtin", box, [builtin])
 
     @arguments("orgpc", "box", "virtualizabledesc", "int")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):
