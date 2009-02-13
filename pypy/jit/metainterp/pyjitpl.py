@@ -375,6 +375,14 @@ class MIFrame(object):
     def opimpl_residual_call_void(self, varargs):
         return self.execute_with_exc('call_void', varargs, 'void')
 
+    @arguments("varargs")
+    def opimpl_getitem__4(self, varargs):
+        return self.execute_with_exc('getitem', varargs, 'int')
+
+    @arguments("varargs")
+    def opimpl_setitem_void(self, varargs):
+        return self.execute_with_exc('setitem', varargs, 'void')
+
     @arguments("indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, indirectcallset, box, varargs):
         assert isinstance(box, Const) # XXX
@@ -410,6 +418,10 @@ class MIFrame(object):
         if isinstance(box, Box):
             self.generate_guard(pc, 'guard_class', box, [clsbox])
         return clsbox
+
+    @arguments("orgpc", "box")
+    def opimpl_guard_builtin(self, pc, box):
+        self.generate_guard(pc, "guard_builtin", box)
 
     @arguments("orgpc", "box", "virtualizabledesc", "int")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):
