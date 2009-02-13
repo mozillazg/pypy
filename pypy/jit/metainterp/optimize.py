@@ -1,7 +1,8 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, BoxInt,
                                          MergePoint, ResOperation, Jump)
 from pypy.jit.metainterp.heaptracker import (always_pure_operations,
-                                             operations_without_side_effects)
+                                             operations_without_side_effects,
+                                             operation_never_raises)
 from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           VirtualInstanceSpecNode,
                                           VirtualizableSpecNode,
@@ -423,6 +424,7 @@ class PerfectSpecializer(object):
 
     def optimize_loop(self):
         newoperations = []
+        exception_might_have_happened = False
         mp = self.loop.operations[0]
         if mp.opname == 'merge_point':
             assert len(mp.args) == len(self.specnodes)
@@ -468,6 +470,15 @@ class PerfectSpecializer(object):
             elif opname.startswith('guard_'):
                 if opname == 'guard_true' or opname == 'guard_false':
                     if self.nodes[op.args[0]].const:
+                        continue
+                if (opname == 'guard_no_exception' or
+                    opname == 'guard_exception'):
+                    if exception_might_have_happened:
+                        continue
+                    exception_might_have_happened = False
+                if opname == 'guard_value':
+                    if (self.nodes[op.args[0]].const and
+                        self.nodes[op.args[1]].const):
                         continue
                 op = self.optimize_guard(op)
                 newoperations.append(op)
@@ -537,6 +548,8 @@ class PerfectSpecializer(object):
                     continue
             elif opname not in operations_without_side_effects:
                 self.cleanup_field_caches(newoperations)
+            if opname not in operation_never_raises:
+                exception_might_have_happened = True
             for box in op.results:
                 instnode = InstanceNode(box)
                 self.nodes[box] = instnode
@@ -550,7 +563,8 @@ class PerfectSpecializer(object):
         for node in self.nodes.values():
             for ofs, valuenode in node.dirtyfields.items():
                 # XXX move to IntanceNode eventually
-                if isinstance(node.cls.source, ListDescr):
+                if (node.cls is not None and
+                    isinstance(node.cls.source, ListDescr)):
                     newoperations.append(ResOperation('setitem',
                             [node.cls.source.setfunc, node.source,
                              ConstInt(ofs), valuenode.source], []))
