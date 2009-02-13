@@ -72,6 +72,12 @@ def setup():
     for _opname, _opdesc in lloperation.LL_OPERATIONS.iteritems():
         if _opdesc.canfold:
             always_pure_operations[_opname] = None
+        if not _opdesc.sideeffects:
+            operations_without_side_effects[_opname] = None
 
+    # XXX fish fish fish
+    operations_without_side_effects['getfield_gc'] = None
+
+operations_without_side_effects = {}
 always_pure_operations = {}
 setup()
