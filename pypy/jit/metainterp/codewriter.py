@@ -510,6 +510,16 @@ class BytecodeMaker(object):
             self.emit('jit_merge_point')
             assert ([self.var_position(i) for i in op.args[2:]] ==
                     range(0, 2*(len(op.args) - 2), 2))
+            for i in range(2, len(op.args)):
+                arg = op.args[i]
+                if isinstance(arg.concretetype, lltype.Ptr):
+                    # XXX very complex logic for getting all things
+                    # that are pointers, but not objects
+                    if not (isinstance(arg.concretetype.TO, lltype.GcStruct) and
+                        (heaptracker.get_vtable_for_gcstruct(self.cpu,
+                                               arg.concretetype.TO))):
+                        self.emit('guard_builtin', self.var_position(arg))
+            
         elif op.args[0].value == 'can_enter_jit':
             self.emit('can_enter_jit')
             self.emit_varargs(op.args[2:])
@@ -568,6 +578,10 @@ class BytecodeMaker(object):
             opname = 'green_call_%s'
         else:
             opname = 'residual_call_%s'
+        if oopspec_name == 'list.getitem':
+            opname = 'getitem_%s'
+        if oopspec_name == 'list.setitem':
+            opname = 'setitem_%s'
         self.emit(opname % getkind_num(self.cpu, op.result.concretetype))
         self.emit_varargs([c_func] + args)
         self.register_var(op.result)
@@ -610,7 +624,6 @@ class BytecodeMaker(object):
                              if x.concretetype is not lltype.Void])
         self.register_var(op.result)
         
-
     def serialize_op_debug_assert(self, op):
         pass     # for now
 

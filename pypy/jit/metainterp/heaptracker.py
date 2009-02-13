@@ -80,4 +80,9 @@ def setup():
 
 operations_without_side_effects = {}
 always_pure_operations = {}
+
+for guard in ['guard_no_exception', 'guard_exception', 'guard_true',
+              'guard_false', 'guard_value', 'guard_class']:
+    always_pure_operations[guard] = True
+
 setup()

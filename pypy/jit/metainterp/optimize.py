@@ -1,4 +1,4 @@
-from pypy.jit.metainterp.history import (Box, Const, ConstInt,
+from pypy.jit.metainterp.history import (Box, Const, ConstInt, BoxInt,
                                          MergePoint, ResOperation, Jump)
 from pypy.jit.metainterp.heaptracker import (always_pure_operations,
                                              operations_without_side_effects)
@@ -206,9 +206,28 @@ class PerfectSpecializer(object):
             node = self.nodes[box] = InstanceNode(box, escaped=True)
             return node
 
+    def find_nodes_setfield(self, instnode, ofs, fieldnode):
+        instnode.curfields[ofs] = fieldnode
+        self.dependency_graph.append((instnode, fieldnode))
+
+    def find_nodes_getfield(self, instnode, field, box):
+        if field in instnode.curfields:
+            fieldnode = instnode.curfields[field]
+        elif field in instnode.origfields:
+            fieldnode = instnode.origfields[field]
+        else:
+            fieldnode = InstanceNode(box, escaped=False)
+            if instnode.startbox:
+                fieldnode.startbox = True
+            self.dependency_graph.append((instnode, fieldnode))
+            instnode.origfields[field] = fieldnode
+        self.nodes[box] = fieldnode
+        if self.first_escaping_op:
+            instnode.expanded_fields[field] = None        
+        
     def find_nodes(self):
         # Steps (1) and (2)
-        first_escaping_op = True
+        self.first_escaping_op = True
         for box in self.loop.operations[0].args:
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True)
 
@@ -219,16 +238,20 @@ class PerfectSpecializer(object):
                 instnode = InstanceNode(box, escaped=False)
                 instnode.cls = InstanceNode(op.args[1])
                 self.nodes[box] = instnode
-                first_escaping_op = False
+                self.first_escaping_op = False
+                continue
+            elif opname == 'guard_builtin':
+                instnode = self.nodes[op.args[0]]
+                # all builtins have equal classes
+                instnode.cls = InstanceNode(ConstInt(0))
                 continue
             elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
                 field = fieldbox.getint()
-                fieldnode = self.getnode(op.args[2])
-                instnode.curfields[field] = fieldnode
-                self.dependency_graph.append((instnode, fieldnode))
+                self.find_nodes_setfield(instnode, field,
+                                         self.getnode(op.args[2]))
                 continue
             elif opname == 'getfield_gc':
                 instnode = self.getnode(op.args[0])
@@ -236,20 +259,24 @@ class PerfectSpecializer(object):
                 assert isinstance(fieldbox, ConstInt)
                 field = fieldbox.getint()
                 box = op.results[0]
-                if field in instnode.curfields:
-                    fieldnode = instnode.curfields[field]
-                elif field in instnode.origfields:
-                    fieldnode = instnode.origfields[field]
-                else:
-                    fieldnode = InstanceNode(box, escaped=False)
-                    if instnode.startbox:
-                        fieldnode.startbox = True
-                    self.dependency_graph.append((instnode, fieldnode))
-                    instnode.origfields[field] = fieldnode
-                self.nodes[box] = fieldnode
-                if first_escaping_op:
-                    instnode.expanded_fields[field] = None
+                self.find_nodes_getfield(instnode, field, box)
                 continue
+            elif opname == 'getitem':
+                instnode = self.getnode(op.args[1])
+                fieldbox = op.args[2]
+                if isinstance(fieldbox, ConstInt):
+                    field = fieldbox.getint()
+                    box = op.results[0]
+                    self.find_nodes_getfield(instnode, field, box)
+                    continue
+            elif opname == 'setitem':
+                instnode = self.getnode(op.args[1])
+                fieldbox = op.args[2]
+                if isinstance(fieldbox, ConstInt):
+                    field = fieldbox.getint()
+                    self.find_nodes_setfield(instnode, field,
+                                             self.getnode(op.args[3]))
+                    continue
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
@@ -262,10 +289,10 @@ class PerfectSpecializer(object):
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
-            elif opname not in ('oois', 'ooisnot',
-                                'ooisnull', 'oononnull'):
+            elif (opname not in always_pure_operations and
+                  opname not in operations_without_side_effects):
                 # default case
-                first_escaping_op = False
+                self.first_escaping_op = False
                 for box in op.args:
                     if isinstance(box, Box):
                         self.nodes[box].escaped = True
@@ -368,6 +395,26 @@ class PerfectSpecializer(object):
         op.args = self.new_arguments(op)
         return op
 
+    def optimize_getfield(self, instnode, ofs, box):
+        if instnode.virtual or instnode.virtualized:
+            assert ofs in instnode.curfields    # xxx
+            self.nodes[box] = instnode.curfields[ofs]
+        elif ofs in instnode.cleanfields:
+            self.nodes[box] = instnode.cleanfields[ofs]
+        else:
+            instnode.cleanfields[ofs] = InstanceNode(box)
+            return False
+        return True
+
+    def optimize_setfield(self, instnode, ofs, valuenode, valuebox):
+        if instnode.virtual or instnode.virtualized:
+            instnode.curfields[ofs] = valuenode
+        else:
+            assert not valuenode.virtual
+            instnode.cleanfields[ofs] = self.nodes[valuebox]
+            instnode.dirtyfields[ofs] = self.nodes[valuebox]
+            # we never perform this operation here, note
+
     def optimize_loop(self):
         newoperations = []
         mp = self.loop.operations[0]
@@ -403,6 +450,8 @@ class PerfectSpecializer(object):
                 op = self.optimize_guard(op)
                 newoperations.append(op)
                 continue
+            elif opname == 'guard_builtin':
+                continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtualized:
@@ -420,15 +469,15 @@ class PerfectSpecializer(object):
             elif opname == 'getfield_gc':
                 instnode = self.nodes[op.args[0]]
                 ofs = op.args[1].getint()
-                if instnode.virtual or instnode.virtualized:
-                    assert ofs in instnode.curfields    # xxx
-                    self.nodes[op.results[0]] = instnode.curfields[ofs]
+                if self.optimize_getfield(instnode, ofs, op.results[0]):
                     continue
-                elif ofs in instnode.cleanfields:
-                    self.nodes[op.results[0]] = instnode.cleanfields[ofs]
-                    continue
-                else:
-                    instnode.cleanfields[ofs] = InstanceNode(op.results[0])
+            elif opname == 'getitem':
+                instnode = self.nodes[op.args[1]]
+                ofsbox = op.args[2]
+                if isinstance(ofsbox, ConstInt):
+                    ofs = ofsbox.getint()
+                    if self.optimize_getfield(instnode, ofs, op.results[0]):
+                        continue
             elif opname == 'new_with_vtable':
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
                 instnode = self.nodes[op.results[0]]
@@ -443,14 +492,16 @@ class PerfectSpecializer(object):
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
                 ofs = op.args[1].getint()
-                if instnode.virtual or instnode.virtualized:
-                    instnode.curfields[ofs] = valuenode
-                else:
-                    assert not valuenode.virtual
-                    instnode.cleanfields[ofs] = self.nodes[op.args[2]]
-                    instnode.dirtyfields[ofs] = self.nodes[op.args[2]]
-                    # we never perform this operation here, note
+                self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
                 continue
+            elif opname == 'setitem':
+                instnode = self.nodes[op.args[1]]
+                valuenode = self.getnode(op.args[3])
+                ofsbox = op.args[2]
+                if isinstance(ofsbox, ConstInt):
+                    ofs = ofsbox.getint()
+                    self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
+                    continue
             elif opname == 'ooisnull' or opname == 'oononnull':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtual:
@@ -480,7 +531,6 @@ class PerfectSpecializer(object):
                     continue
             elif opname not in operations_without_side_effects:
                 self.cleanup_field_caches(newoperations)
-                first_escaping_op = False
             for box in op.results:
                 instnode = InstanceNode(box)
                 self.nodes[box] = instnode
@@ -488,21 +538,6 @@ class PerfectSpecializer(object):
 
         newoperations[0].specnodes = self.specnodes
         self.loop.operations = newoperations
-
-    def adjust_operations_before_jump(self, newoperations, args, newargs):
-        xxx
-        xxx
-        for i in range(len(args)):
-            specnode = self.specnodes[i]
-            arg = args[i]
-            if isinstance(specnode, DelayedSpecNode):
-                for ofs, subspecnode in specnode.fields:
-                    source = self.nodes[arg].source
-                    if ofs not in self.nodes[arg].cleanfields:
-                        v = subspecnode.box
-                        newoperations.append(ResOperation('getfield_gc',
-                          [source, ConstInt(ofs)], [v]))
-        self.cleanup_field_caches(newoperations)
 
     def cleanup_field_caches(self, newoperations):
         # we need to invalidate everything
