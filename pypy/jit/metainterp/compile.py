@@ -117,7 +117,7 @@ def compile_fresh_loop(metainterp, loop, old_loops, endliveboxes):
     history = metainterp.history
     loop.operations = history.operations
     close_loop(loop, loop.operations[0], endliveboxes)
-    old_loop = optimize.optimize_loop(metainterp, old_loops, loop.operations)
+    old_loop = optimize.optimize_loop(metainterp, old_loops, loop)
     if old_loop is not None:
         return old_loop
     finish_loop_or_bridge(metainterp, loop, loop.operations[0])
@@ -153,7 +153,7 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     op = Jump('jump', endliveboxes, [])
     operations.append(op)
     #
-    old_loop = optimize.optimize_bridge(metainterp, old_loops, operations)
+    old_loop = optimize.optimize_bridge(metainterp, old_loops, bridge)
     if old_loop is None:
         return None
     bridge.jump_to = old_loop

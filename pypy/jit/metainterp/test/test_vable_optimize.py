@@ -11,7 +11,7 @@ from pypy.jit.metainterp.optimize import (PerfectSpecializer,
                                           NotSpecNode)
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
-                                                    equaloplists)
+                                                    equaloplists, Loop)
 
 # ____________________________________________________________
 
@@ -93,12 +93,12 @@ class A:
     ops[1].vdesc = xy_desc
 
 def test_A_find_nodes():
-    spec = PerfectSpecializer(A.ops)
+    spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     assert spec.nodes[A.fr].virtualized
 
 def test_A_intersect_input_and_output():
-    spec = PerfectSpecializer(A.ops)
+    spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[A.fr].escaped
@@ -108,17 +108,16 @@ def test_A_intersect_input_and_output():
     assert isinstance(spec.specnodes[1], VirtualizableSpecNode)
 
 def test_A_optimize_loop():
-    operations = A.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    assert equaloplists(operations, [
-            MergePoint('merge_point', [A.sum, A.fr, A.v], []),
-            ResOperation('int_sub', [A.v, ConstInt(1)], [A.v2]),
-            ResOperation('int_add', [A.sum, A.v], [A.sum2]),
-            Jump('jump', [A.sum2, A.fr, A.v2], []),
-        ])
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [A.sum, A.fr, A.v], []),
+        ResOperation('int_sub', [A.v, ConstInt(1)], [A.v2]),
+        ResOperation('int_add', [A.sum, A.v], [A.sum2]),
+        Jump('jump', [A.sum2, A.fr, A.v2], []),
+    ])
 
 # ____________________________________________________________
 
@@ -145,7 +144,7 @@ class B:
     ops[1].vdesc = xy_desc
 
 def test_B_intersect_input_and_output():
-    spec = PerfectSpecializer(B.ops)
+    spec = PerfectSpecializer(Loop(B.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[B.fr].escaped
@@ -180,7 +179,7 @@ class C:
     ops[1].vdesc = xy_desc
 
 def test_C_intersect_input_and_output():
-    spec = PerfectSpecializer(C.ops)
+    spec = PerfectSpecializer(Loop(C.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[C.fr].escaped
