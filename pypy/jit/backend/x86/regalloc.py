@@ -4,7 +4,7 @@
 
 from history import Box, Const, ConstInt, ConstPtr, ResOperation, MergePoint,\
      ConstAddr
-from pypy.jit.codegen.i386.ri386 import *
+from pypy.jit.backend.x86.ri386 import *
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
