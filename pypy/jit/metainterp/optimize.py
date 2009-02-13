@@ -148,14 +148,14 @@ class InstanceNode(object):
                     node = other.curfields[ofs]
                     specnode = self.origfields[ofs].intersect(node)
                 elif ofs in self.origfields:
-                    specnode = NotSpecNode()
+                    node = self.origfields[ofs]
+                    specnode = node.intersect(node)
                 else:
                     # ofs in other.curfields
                     node = other.curfields[ofs]
                     self.origfields[ofs] = InstanceNode(node.source.clonebox())
                     specnode = NotSpecNode()
                 fields.append((ofs, specnode))
-                    
             return VirtualizableSpecNode(known_class, fields)
 
     def __repr__(self):

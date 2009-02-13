@@ -12,6 +12,7 @@ from pypy.jit.metainterp.optimize import (PerfectSpecializer,
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
                                                     equaloplists, Loop)
+from pypy.jit.metainterp.codewriter import ListDescr
 
 # ____________________________________________________________
 
@@ -21,10 +22,11 @@ XY = lltype.GcStruct(
     ('vable_base', llmemory.Address),
     ('vable_rti', VABLERTIPTR),
     ('x', lltype.Signed),
+    ('l', lltype.Ptr(lltype.GcArray(lltype.Signed))),
     ('node', lltype.Ptr(NODE)),
     hints = {'virtualizable2': True},
     adtmeths = {'access': VirtualizableAccessor()})
-XY._adtmeths['access'].initialize(XY, ['x', 'node'])
+XY._adtmeths['access'].initialize(XY, ['x', 'node', 'l'])
 
 xy_vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
 xy_vtable.name = lltype.malloc(rclass.OBJECT_VTABLE.name.TO, 3, immortal=True)
@@ -60,6 +62,7 @@ xy_desc = VirtualizableDesc(cpu, XY)
 
 class A:
     ofs_node = runner.CPU.fielddescrof(XY, 'node')
+    ofs_l = runner.CPU.fielddescrof(XY, 'l')
     ofs_value = runner.CPU.fielddescrof(NODE, 'value')
     size_of_node = runner.CPU.sizeof(NODE)
     #
@@ -190,3 +193,37 @@ def test_C_intersect_input_and_output():
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == C.ofs_node
     assert isinstance(spec.specnodes[0].fields[0][1], NotSpecNode)
+
+
+# ____________________________________________________________
+
+class D:
+    class SomeDescr(ListDescr):
+        def __init__(self):
+            pass
+    
+    locals().update(A.__dict__)
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    v2 = BoxInt(13)
+    l = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    ops = [
+        MergePoint('merge_point', [fr], []),
+        ResOperation('guard_nonvirtualized', [fr, ConstAddr(xy_vtable, cpu),
+                                              ConstInt(ofs_node)], []),
+        #
+        ResOperation('getfield_gc', [fr, ConstInt(ofs_l)], [l]),
+        ResOperation('guard_builtin', [l, SomeDescr()], []),
+        ResOperation('getitem', [None, l, ConstInt(0)], [v2]),
+        ResOperation('setitem', [None, l, ConstInt(0), v2], []),
+        Jump('jump', [fr], []),
+        ]
+    ops[1].vdesc = xy_desc
+
+def test_D_intersect_input_and_output():
+    spec = PerfectSpecializer(Loop(D.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    assert spec.nodes[D.fr].escaped
+    assert spec.nodes[D.fr].virtualized
+    assert spec.nodes[D.l].escaped
+    assert spec.nodes[D.l].expanded_fields.keys() == [0]
