@@ -684,3 +684,32 @@ def test_M_optimize_loop():
     ])
 
 
+# ____________________________________________________________
+
+class M:
+    locals().update(A.__dict__)    # :-)
+    sum3 = BoxInt(3)
+    v3 = BoxInt(4)
+    ops = [
+        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
+        ResOperation('int_add', [sum, v], [sum2]),
+        ResOperation('escape', [n1], []),
+        Jump('jump', [sum2, n1], []),
+        ]
+
+def test_M_optimize_loop():
+    spec = PerfectSpecializer(Loop(M.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [L.sum, L.n1, L.v], []),
+        ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
+        ResOperation('int_add', [L.sum, L.v], [L.sum2]),
+        ResOperation('escape', [L.n1], []),
+        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [ANY]),
+        Jump('jump', [L.sum2, L.n1, ANY], []),
+    ])

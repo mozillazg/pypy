@@ -183,8 +183,8 @@ def decode_builtin_call(op):
 def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
     args_s = [annmodel.lltype_to_annotation(v) for v in ll_args]
     if '.' not in oopspec_name:    # 'newxxx' operations
-        LIST_OR_DICT = op.result.concretetype
-        bk = self.codewriter.rtyper.annotator.bookkeeper
+        LIST_OR_DICT = ll_res
+        bk = rtyper.annotator.bookkeeper
         args_s.insert(0, annmodel.SomePBC([bk.getdesc(LIST_OR_DICT.TO)]))
     else:
         LIST_OR_DICT = ll_args[0]
