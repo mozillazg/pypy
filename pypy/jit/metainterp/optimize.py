@@ -145,7 +145,7 @@ class InstanceNode(object):
         return "<InstanceNode %s (%s)>" % (self.source, flags)
 
 
-def optimize_loop(metainterp, old_loops, operations):
+def optimize_loop(metainterp, old_loops, loop):
     if not metainterp._specialize:         # for tests only
         if old_loops:
             return old_loops[0]
@@ -153,11 +153,11 @@ def optimize_loop(metainterp, old_loops, operations):
             return None
 
     # This does "Perfect specialization" as per doc/jitpl5.txt.
-    perfect_specializer = PerfectSpecializer(operations)
+    perfect_specializer = PerfectSpecializer(loop)
     perfect_specializer.find_nodes()
     perfect_specializer.intersect_input_and_output()
     for old_loop in old_loops:
-        if perfect_specializer.match_exactly(old_loop.operations):
+        if perfect_specializer.match_exactly(old_loop):
             return old_loop
     perfect_specializer.optimize_loop()
     return None
@@ -177,8 +177,8 @@ def optimize_bridge(metainterp, old_loops, operations):
 
 class PerfectSpecializer(object):
 
-    def __init__(self, operations):
-        self.operations = operations
+    def __init__(self, loop):
+        self.loop = loop
         self.nodes = {}
         self.dependency_graph = []
 
@@ -192,10 +192,10 @@ class PerfectSpecializer(object):
 
     def find_nodes(self):
         # Steps (1) and (2)
-        for box in self.operations[0].args:
+        for box in self.loop.operations[0].args:
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True)
 
-        for op in self.operations[1:-1]:
+        for op in self.loop.operations[1:-1]:
             opname = op.opname
             if opname == 'new_with_vtable':
                 box = op.results[0]
@@ -252,13 +252,13 @@ class PerfectSpecializer(object):
                 self.nodes[box] = InstanceNode(box, escaped=True)
 
     def recursively_find_escaping_values(self):
-        assert self.operations[0].opname == 'merge_point'
-        end_args = self.operations[-1].args
+        assert self.loop.operations[0].opname == 'merge_point'
+        end_args = self.loop.operations[-1].args
         memo = {}
         for i in range(len(end_args)):
             self.nodes[end_args[i]].escape_if_startbox(memo)
         for i in range(len(end_args)):
-            box = self.operations[0].args[i]
+            box = self.loop.operations[0].args[i]
             other_box = end_args[i]
             self.nodes[box].add_to_dependency_graph(self.nodes[other_box],
                                                     self.dependency_graph)
@@ -275,12 +275,14 @@ class PerfectSpecializer(object):
     def intersect_input_and_output(self):
         # Step (3)
         self.recursively_find_escaping_values()
-        assert self.operations[0].opname == 'merge_point'
-        assert self.operations[-1].opname == 'jump'
+        mp = self.loop.operations[0]
+        jump = self.loop.operations[-1]
+        assert mp.opname == 'merge_point'
+        assert jump.opname == 'jump'
         specnodes = []
-        for i in range(len(self.operations[0].args)):
-            enternode = self.nodes[self.operations[0].args[i]]
-            leavenode = self.getnode(self.operations[-1].args[i])
+        for i in range(len(mp.args)):
+            enternode = self.nodes[mp.args[i]]
+            leavenode = self.getnode(jump.args[i])
             specnodes.append(enternode.intersect(leavenode))
         self.specnodes = specnodes
 
@@ -326,18 +328,19 @@ class PerfectSpecializer(object):
 
     def optimize_loop(self):
         newoperations = []
-        if self.operations[0].opname == 'merge_point':
-            assert len(self.operations[0].args) == len(self.specnodes)
+        mp = self.loop.operations[0]
+        if mp.opname == 'merge_point':
+            assert len(mp.args) == len(self.specnodes)
             for i in range(len(self.specnodes)):
-                box = self.operations[0].args[i]
+                box = mp.args[i]
                 self.specnodes[i].mutate_nodes(self.nodes[box])
         else:
-            assert self.operations[0].opname == 'catch'
-            for box in self.operations[0].args:
+            assert mp.opname == 'catch'
+            for box in mp.args:
                 self.nodes[box].cls = None
                 assert not self.nodes[box].virtual
 
-        for op in self.operations:
+        for op in self.loop.operations:
             opname = op.opname
             if opname == 'merge_point':
                 args = self.expanded_version_of(op.args)
@@ -429,9 +432,10 @@ class PerfectSpecializer(object):
             newoperations.append(op)
 
         newoperations[0].specnodes = self.specnodes
-        self.operations[:] = newoperations
+        self.loop.operations = newoperations
 
-    def match_exactly(self, old_operations):
+    def match_exactly(self, old_loop):
+        old_operations = old_loop.operations
         old_mp = old_operations[0]
         assert len(old_mp.specnodes) == len(self.specnodes)
         for i in range(len(self.specnodes)):
@@ -443,7 +447,7 @@ class PerfectSpecializer(object):
 
     def match(self, old_operations):
         old_mp = old_operations[0]
-        jump_op = self.operations[-1]
+        jump_op = self.loop.operations[-1]
         assert jump_op.opname == 'jump'
         assert len(old_mp.specnodes) == len(jump_op.args)
         for i in range(len(old_mp.specnodes)):
@@ -455,7 +459,7 @@ class PerfectSpecializer(object):
 
     def adapt_for_match(self, old_operations):
         old_mp = old_operations[0]
-        jump_op = self.operations[-1]
+        jump_op = self.loop.operations[-1]
         self.specnodes = old_mp.specnodes
         for i in range(len(old_mp.specnodes)):
             old_specnode = old_mp.specnodes[i]

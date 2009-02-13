@@ -32,6 +32,10 @@ node2_vtable_adr = llmemory.cast_ptr_to_adr(node2_vtable)
 
 # ____________________________________________________________
 
+class Loop(object):
+    def __init__(self, operations):
+        self.operations = operations
+
 class Any(object):
     def __eq__(self, other):
         return True
@@ -95,7 +99,7 @@ class A:
         ]
 
 def test_A_find_nodes():
-    spec = PerfectSpecializer(A.ops)
+    spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     assert spec.nodes[A.sum] is not spec.nodes[A.sum2]
     assert spec.nodes[A.n1] is not spec.nodes[A.n2]
@@ -105,7 +109,7 @@ def test_A_find_nodes():
     assert not spec.nodes[A.n2].escaped
 
 def test_A_intersect_input_and_output():
-    spec = PerfectSpecializer(A.ops)
+    spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert len(spec.specnodes) == 2
@@ -117,16 +121,15 @@ def test_A_intersect_input_and_output():
     assert isinstance(spec_n.fields[0][1], NotSpecNode)
 
 def test_A_optimize_loop():
-    operations = A.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    assert equaloplists(operations, [
-            MergePoint('merge_point', [A.sum, A.v], []),
-            ResOperation('int_sub', [A.v, ConstInt(1)], [A.v2]),
-            ResOperation('int_add', [A.sum, A.v], [A.sum2]),
-            Jump('jump', [A.sum2, A.v2], []),
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [A.sum, A.v], []),
+        ResOperation('int_sub', [A.v, ConstInt(1)], [A.v2]),
+        ResOperation('int_add', [A.sum, A.v], [A.sum2]),
+        Jump('jump', [A.sum2, A.v2], []),
         ])
 
 # ____________________________________________________________
@@ -147,7 +150,7 @@ class B:
         ]
 
 def test_B_find_nodes():
-    spec = PerfectSpecializer(B.ops)
+    spec = PerfectSpecializer(Loop(B.ops))
     spec.find_nodes()
     assert spec.nodes[B.n1].cls.source.value == node_vtable_adr
     assert not spec.nodes[B.n1].escaped
@@ -155,7 +158,7 @@ def test_B_find_nodes():
     assert spec.nodes[B.n2].escaped
 
 def test_B_intersect_input_and_output():
-    spec = PerfectSpecializer(B.ops)
+    spec = PerfectSpecializer(Loop(B.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert len(spec.specnodes) == 2
@@ -165,12 +168,11 @@ def test_B_intersect_input_and_output():
     assert spec_n.known_class.value == node_vtable_adr
 
 def test_B_optimize_loop():
-    operations = B.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(B.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    assert equaloplists(operations, [
+    equaloplists(spec.loop.operations, [
         MergePoint('merge_point', [B.sum, B.n1], []),
         # guard_class is gone
         ResOperation('getfield_gc', [B.n1, ConstInt(B.ofs_value)], [B.v]),
@@ -202,14 +204,14 @@ class C:
         ]
 
 def test_C_find_nodes():
-    spec = PerfectSpecializer(C.ops)
+    spec = PerfectSpecializer(Loop(C.ops))
     spec.find_nodes()
     assert spec.nodes[C.n1].cls.source.value == node_vtable_adr
     assert spec.nodes[C.n1].escaped
     assert spec.nodes[C.n2].cls.source.value == node_vtable_adr
 
 def test_C_intersect_input_and_output():
-    spec = PerfectSpecializer(C.ops)
+    spec = PerfectSpecializer(Loop(C.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[C.n2].escaped
@@ -220,12 +222,11 @@ def test_C_intersect_input_and_output():
     assert spec_n.known_class.value == node_vtable_adr
 
 def test_C_optimize_loop():
-    operations = C.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(C.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    assert equaloplists(operations, [
+    equaloplists(spec.loop.operations, [
         MergePoint('merge_point', [C.sum, C.n1], []),
         # guard_class is gone
         ResOperation('getfield_gc', [C.n1, ConstInt(C.ofs_value)], [C.v]),
@@ -257,7 +258,7 @@ class D:
         ]
 
 def test_D_intersect_input_and_output():
-    spec = PerfectSpecializer(D.ops)
+    spec = PerfectSpecializer(Loop(D.ops))
     spec.find_nodes()
     py.test.raises(CancelInefficientLoop, spec.intersect_input_and_output)
 
@@ -280,12 +281,11 @@ class E:
     ops[-2].liveboxes = [sum2, n2] 
         
 def test_E_optimize_loop():
-    operations = E.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(E.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    assert equaloplists(operations, [
+    equaloplists(spec.loop.operations, [
         MergePoint('merge_point', [E.sum, E.v], []),
         # guard_class is gone
         ResOperation('int_sub', [E.v, ConstInt(1)], [E.v2]),
@@ -293,7 +293,7 @@ def test_E_optimize_loop():
         ResOperation('guard_true', [E.v2], []),
         Jump('jump', [E.sum2, E.v2], []),
         ])
-    guard_op = operations[-2]
+    guard_op = spec.loop.operations[-2]
     assert guard_op.opname == 'guard_true'
     assert guard_op.liveboxes == [E.sum2, E.v2]
     vt = cpu.cast_adr_to_int(node_vtable_adr)
@@ -312,12 +312,11 @@ def test_E_rebuild_after_failure():
             else:
                 return []
     
-    operations = E.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(E.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    guard_op = operations[-2]
+    guard_op = spec.loop.operations[-2]
     fake_history = FakeHistory()
     v_sum_b = BoxInt(13)
     v_v_b = BoxInt(14)
@@ -363,19 +362,18 @@ class F:
     ops[-6].liveboxes = liveboxes[:]
 
 def test_F_find_nodes():
-    spec = PerfectSpecializer(F.ops)
+    spec = PerfectSpecializer(Loop(F.ops))
     spec.find_nodes()
     assert not spec.nodes[F.n1].escaped
     assert not spec.nodes[F.n2].escaped
 
 def test_F_optimize_loop():
-    operations = F.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(F.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[F.n3].escaped
     spec.optimize_loop()
-    assert equaloplists(operations, [
+    equaloplists(spec.loop.operations, [
             MergePoint('merge_point', [F.sum, F.v, F.n3], []),
             ResOperation('int_sub', [F.v, ConstInt(1)], [F.v2]),
             ResOperation('int_add', [F.sum, F.v], [F.sum2]),
@@ -409,12 +407,11 @@ class G:
     ops[-2].liveboxes = [sum2, n2] 
 
 def test_G_optimize_loop():
-    operations = G.ops[:]
-    spec = PerfectSpecializer(operations)
+    spec = PerfectSpecializer(Loop(G.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
-    assert equaloplists(operations, [
+    equaloplists(spec.loop.operations, [
         MergePoint('merge_point', [G.sum, G.v], []),
         # guard_class is gone
         ResOperation('int_sub', [G.v, ConstInt(1)], [G.v2]),
@@ -422,7 +419,7 @@ def test_G_optimize_loop():
         ResOperation('guard_true', [G.v2], []),
         Jump('jump', [G.sum2, ConstInt(124)], []),
         ])
-    guard_op = operations[-2]
+    guard_op = spec.loop.operations[-2]
     assert guard_op.opname == 'guard_true'
     assert guard_op.liveboxes == [G.sum2, ConstInt(124)]
     vt = cpu.cast_adr_to_int(node_vtable_adr)
@@ -457,7 +454,7 @@ class H:
         ]
 
 def test_H_intersect_input_and_output():
-    spec = PerfectSpecializer(H.ops)
+    spec = PerfectSpecializer(Loop(H.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[H.n0].escaped
@@ -485,7 +482,7 @@ class I:
         ]
 
 def test_I_intersect_input_and_output():
-    spec = PerfectSpecializer(I.ops)
+    spec = PerfectSpecializer(Loop(I.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[I.n0].escaped
@@ -515,10 +512,40 @@ class J:
         ]
 
 def test_J_intersect_input_and_output():
-    spec = PerfectSpecializer(J.ops)
+    spec = PerfectSpecializer(Loop(J.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert not spec.nodes[J.n0].escaped
     assert spec.nodes[J.n1].escaped
     assert not spec.nodes[J.n2].escaped
 
+# ____________________________________________________________
+
+class K:
+    locals().update(A.__dict__)    # :-)
+    sum3 = BoxInt(3)
+    v3 = BoxInt(4)
+    ops = [
+        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu)], []),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
+        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
+        ResOperation('int_add', [sum, v], [sum2]),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
+        ResOperation('int_add', [sum2, v3], [sum3]),
+        Jump('jump', [sum2, n1], []),
+        ]
+
+def test_K_optimize_loop():
+    py.test.skip("incomplete test")
+    spec = PerfectSpecializer(Loop(K.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    assert equaloplists(operations, [
+            MergePoint('merge_point', [K.sum, K.v], []),
+            ResOperation('int_sub', [K.v, ConstInt(1)], [K.v2]),
+            ResOperation('int_add', [K.sum, K.v], [K.sum2]),
+            Jump('jump', [K.sum2, K.v2], []),
+        ])
+    
