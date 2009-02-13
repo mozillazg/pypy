@@ -3,14 +3,14 @@ from pypy.jit.metainterp.history import ConstInt
 
 class SpecNode(object):
 
-    def expand_boxlist(self, instnode, newboxlist):
+    def expand_boxlist(self, instnode, newboxlist, start):
         newboxlist.append(instnode.source)
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         resultlist.append(valuebox)
 
     def adapt_to(self, instnode):
-        instnode.escaped = True
+        instnode.escaped = True    
 
 class NotSpecNode(SpecNode):
     def mutate_nodes(self, instnode):
@@ -24,6 +24,15 @@ class NotSpecNode(SpecNode):
     def matches(self, other):
         # NotSpecNode matches everything
         return True
+
+class SpecNodeWithBox(NotSpecNode):
+    def __init__(self, box):
+        self.box = box
+    
+    def equals(self, other):
+        if type(other) is SpecNodeWithBox:
+            return True
+        return False
 
 class FixedClassSpecNode(SpecNode):
     def __init__(self, known_class):
@@ -90,10 +99,10 @@ class SpecNodeWithFields(FixedClassSpecNode):
                 return False
         return True
 
-    def expand_boxlist(self, instnode, newboxlist):
+    def expand_boxlist(self, instnode, newboxlist, start):
         for ofs, subspecnode in self.fields:
             subinstnode = instnode.curfields[ofs]  # should really be there
-            subspecnode.expand_boxlist(subinstnode, newboxlist)
+            subspecnode.expand_boxlist(subinstnode, newboxlist, start)
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         for ofs, subspecnode in self.fields:
@@ -108,16 +117,11 @@ class SpecNodeWithFields(FixedClassSpecNode):
         for ofs, subspecnode in self.fields:
             subspecnode.adapt_to(instnode.curfields[ofs])
 
-class VirtualizableSpecNode(SpecNodeWithFields):
+class VirtualizedSpecNode(SpecNodeWithFields):
 
-    def equals(self, other):
-        if not isinstance(other, VirtualizableSpecNode):
-            return False
-        return SpecNodeWithFields.equals(self, other)
-
-    def expand_boxlist(self, instnode, newboxlist):
-        newboxlist.append(instnode.source)        
-        SpecNodeWithFields.expand_boxlist(self, instnode, newboxlist)
+    def expand_boxlist(self, instnode, newboxlist, start):
+        newboxlist.append(instnode.source)
+        SpecNodeWithFields.expand_boxlist(self, instnode, newboxlist, start)
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         resultlist.append(valuebox)
@@ -126,6 +130,33 @@ class VirtualizableSpecNode(SpecNodeWithFields):
     def adapt_to(self, instnode):
         instnode.escaped = True
         SpecNodeWithFields.adapt_to(self, instnode)
+
+class DelayedSpecNode(VirtualizedSpecNode):
+
+    def expand_boxlist(self, instnode, newboxlist, oplist):
+        from pypy.jit.metainterp.history import ResOperation, ConstInt
+        
+        newboxlist.append(instnode.source)
+        for ofs, subspecnode in self.fields:
+            assert isinstance(subspecnode, SpecNodeWithBox)
+            if oplist is None:
+                instnode.cleanfields[ofs] = instnode.origfields[ofs]
+                newboxlist.append(instnode.curfields[ofs].source)
+            else:
+                if ofs in instnode.cleanfields:
+                    newboxlist.append(instnode.cleanfields[ofs].source)
+                else:
+                    box = subspecnode.box.clonebox()
+                    oplist.append(ResOperation('getfield_gc',
+                       [instnode.source, ConstInt(ofs)], [box]))
+                    newboxlist.append(box)
+
+class VirtualizableSpecNode(VirtualizedSpecNode):
+
+    def equals(self, other):
+        if not isinstance(other, VirtualizableSpecNode):
+            return False
+        return SpecNodeWithFields.equals(self, other)
 
 class VirtualInstanceSpecNode(SpecNodeWithFields):
 

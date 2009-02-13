@@ -5,7 +5,9 @@ from pypy.jit.metainterp.heaptracker import (always_pure_operations,
 from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           VirtualInstanceSpecNode,
                                           VirtualizableSpecNode,
-                                          NotSpecNode)
+                                          NotSpecNode,
+                                          DelayedSpecNode,
+                                          SpecNodeWithBox)
 from pypy.rlib.objectmodel import we_are_translated
 
 class CancelInefficientLoop(Exception):
@@ -76,6 +78,7 @@ class InstanceNode(object):
         self.curfields = {}
         self.cleanfields = {}
         self.dirtyfields = {}
+        self.expanded_fields = {}
 
     def escape_if_startbox(self, memo):
         if self in memo:
@@ -101,7 +104,8 @@ class InstanceNode(object):
             known_class = self.cls.source
         else:
             known_class = other.cls.source
-        if other.escaped and not other.virtualized:
+        if (other.escaped and not other.virtualized and
+            not self.expanded_fields):
             if self.cls is None:
                 return NotSpecNode()
             return FixedClassSpecNode(known_class)
@@ -117,6 +121,14 @@ class InstanceNode(object):
                     specnode = NotSpecNode()
                 fields.append((ofs, specnode))
             return VirtualInstanceSpecNode(known_class, fields)
+        if not other.virtualized and self.expanded_fields:
+            fields = []
+            lst = self.expanded_fields.keys()
+            lst.sort()
+            for ofs in lst:
+                specnode = SpecNodeWithBox(self.origfields[ofs].source)
+                fields.append((ofs, specnode))
+            return DelayedSpecNode(known_class, fields)
         else:
             assert self is other
             d = self.origfields.copy()
@@ -196,6 +208,7 @@ class PerfectSpecializer(object):
 
     def find_nodes(self):
         # Steps (1) and (2)
+        first_escaping_op = True
         for box in self.loop.operations[0].args:
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True)
 
@@ -206,6 +219,7 @@ class PerfectSpecializer(object):
                 instnode = InstanceNode(box, escaped=False)
                 instnode.cls = InstanceNode(op.args[1])
                 self.nodes[box] = instnode
+                first_escaping_op = False
                 continue
             elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
@@ -233,6 +247,8 @@ class PerfectSpecializer(object):
                     self.dependency_graph.append((instnode, fieldnode))
                     instnode.origfields[field] = fieldnode
                 self.nodes[box] = fieldnode
+                if first_escaping_op:
+                    instnode.expanded_fields[field] = None
                 continue
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
@@ -249,6 +265,7 @@ class PerfectSpecializer(object):
             elif opname not in ('oois', 'ooisnot',
                                 'ooisnull', 'oononnull'):
                 # default case
+                first_escaping_op = False
                 for box in op.args:
                     if isinstance(box, Box):
                         self.nodes[box].escaped = True
@@ -290,13 +307,14 @@ class PerfectSpecializer(object):
             specnodes.append(enternode.intersect(leavenode))
         self.specnodes = specnodes
 
-    def expanded_version_of(self, boxlist):
+    def expanded_version_of(self, boxlist, oplist):
+        # oplist is None means at the start
         newboxlist = []
         assert len(boxlist) == len(self.specnodes)
         for i in range(len(boxlist)):
             box = boxlist[i]
             specnode = self.specnodes[i]
-            specnode.expand_boxlist(self.nodes[box], newboxlist)
+            specnode.expand_boxlist(self.nodes[box], newboxlist, oplist)
         return newboxlist
 
     def optimize_guard(self, op):
@@ -367,13 +385,13 @@ class PerfectSpecializer(object):
         for op in self.loop.operations:
             opname = op.opname
             if opname == 'merge_point':
-                args = self.expanded_version_of(op.args)
+                args = self.expanded_version_of(op.args, None)
                 op = MergePoint('merge_point', args, [])
                 newoperations.append(op)
                 continue
             elif opname == 'jump':
-                self.adjust_operations_before_jump(newoperations)
-                args = self.expanded_version_of(op.args)
+                args = self.expanded_version_of(op.args, newoperations)
+                self.cleanup_field_caches(newoperations)
                 op = Jump('jump', args, [])
                 newoperations.append(op)
                 continue
@@ -462,6 +480,7 @@ class PerfectSpecializer(object):
                     continue
             elif opname not in operations_without_side_effects:
                 self.cleanup_field_caches(newoperations)
+                first_escaping_op = False
             for box in op.results:
                 instnode = InstanceNode(box)
                 self.nodes[box] = instnode
@@ -470,7 +489,19 @@ class PerfectSpecializer(object):
         newoperations[0].specnodes = self.specnodes
         self.loop.operations = newoperations
 
-    def adjust_operations_before_jump(self, newoperations):
+    def adjust_operations_before_jump(self, newoperations, args, newargs):
+        xxx
+        xxx
+        for i in range(len(args)):
+            specnode = self.specnodes[i]
+            arg = args[i]
+            if isinstance(specnode, DelayedSpecNode):
+                for ofs, subspecnode in specnode.fields:
+                    source = self.nodes[arg].source
+                    if ofs not in self.nodes[arg].cleanfields:
+                        v = subspecnode.box
+                        newoperations.append(ResOperation('getfield_gc',
+                          [source, ConstInt(ofs)], [v]))
         self.cleanup_field_caches(newoperations)
 
     def cleanup_field_caches(self, newoperations):
