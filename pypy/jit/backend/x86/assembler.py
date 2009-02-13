@@ -1,6 +1,6 @@
 import sys
 import ctypes
-from pypy.jit.codegen.i386.ri386 import *
+from pypy.jit.backend.x86.ri386 import *
 from codegen386 import symbolic
 from history import Const, ConstInt, Box, MergePoint
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr
@@ -10,8 +10,8 @@ from pypy.tool.uid import fixid
 from codegen386.regalloc import RegAlloc, FRAMESIZE, WORD, REGS
 from codegen386.regalloc import arg_pos, lower_byte, stack_pos, Perform
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.jit.codegen.i386 import codebuf
-from pypy.jit.codegen.i386.rgenop import gc_malloc_fnaddr
+from pypy.jit.backend.x86 import codebuf
+from pypy.jit.backend.x86.rgenop import gc_malloc_fnaddr
 
 # our calling convention - we pass three first args as edx, ecx and eax
 # and the rest stays on stack
