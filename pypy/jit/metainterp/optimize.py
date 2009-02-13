@@ -72,6 +72,7 @@ class InstanceNode(object):
         self.cls = None
         self.origfields = {}
         self.curfields = {}
+        self.cleanfields = {}
 
     def escape_if_startbox(self, memo):
         if self in memo:
@@ -142,6 +143,7 @@ class InstanceNode(object):
         if self.const:       flags += 'c'
         if self.virtual:     flags += 'v'
         if self.virtualized: flags += 'V'
+        if self.dirty:       flags += 'd'
         return "<InstanceNode %s (%s)>" % (self.source, flags)
 
 
@@ -376,11 +378,17 @@ class PerfectSpecializer(object):
                 continue
             elif opname == 'getfield_gc':
                 instnode = self.nodes[op.args[0]]
+                ofs = op.args[1].getint()
                 if instnode.virtual or instnode.virtualized:
-                    ofs = op.args[1].getint()
                     assert ofs in instnode.curfields    # xxx
                     self.nodes[op.results[0]] = instnode.curfields[ofs]
                     continue
+                else:
+                    if ofs in instnode.cleanfields:
+                        self.nodes[op.results[0]] = instnode.cleanfields[ofs]
+                        continue
+                    else:
+                        instnode.cleanfields[ofs] = InstanceNode(op.results[0])
             elif opname == 'new_with_vtable':
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
                 instnode = self.nodes[op.results[0]]
@@ -415,6 +423,7 @@ class PerfectSpecializer(object):
                     self.nodes[box] = instnode
                     continue
             # default handling of arguments and return value(s)
+            self.cleanup_clean_fields(op.args)
             op = self.replace_arguments(op)
             if opname in always_pure_operations:
                 for box in op.args:
@@ -433,6 +442,11 @@ class PerfectSpecializer(object):
 
         newoperations[0].specnodes = self.specnodes
         self.loop.operations = newoperations
+
+    def cleanup_clean_fields(self, args):
+        for arg in args:
+            if not isinstance(arg, Const):
+                self.nodes[arg].cleanfields = {}
 
     def match_exactly(self, old_loop):
         old_operations = old_loop.operations
