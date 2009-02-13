@@ -17,7 +17,6 @@ class ToyLanguageTests:
                 myjitdriver.can_enter_jit(y=y, pc=pc, acc=acc, s=s)
                 myjitdriver.jit_merge_point(y=y, pc=pc, acc=acc, s=s)
                 op = s[pc]
-                hint(op, concrete=True)
                 if op == '+':
                     acc += y
                 elif op == '-':
@@ -27,7 +26,7 @@ class ToyLanguageTests:
 
         codes = ["++++++++++", "+-++---+-++-"]
         def main(n, x, y):
-            code = hint(codes, deepfreeze=True)[n]
+            code = codes[n]
             return ll_plus_minus(code, x, y)
 
         res = self.meta_interp(main, [0, 100, 2])
