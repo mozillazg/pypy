@@ -487,6 +487,7 @@ class BytecodeMaker(object):
                                        c_fieldname.value)
         self.emit(offset)
         self.register_var(op.result)
+        self._eventualy_builtin(op.result)
 
     def serialize_op_setfield(self, op):
         if self.is_typeptr_getset(op):
@@ -549,18 +550,21 @@ class BytecodeMaker(object):
                     range(0, 2*(len(op.args) - 2), 2))
             for i in range(2, len(op.args)):
                 arg = op.args[i]
-                if isinstance(arg.concretetype, lltype.Ptr):
-                    # XXX very complex logic for getting all things
-                    # that are pointers, but not objects
-                    if isinstance(arg.concretetype.TO, lltype.GcArray):
-                        descr = self.codewriter.list_descr_for_tp(
-                            arg.concretetype)
-                        self.emit('guard_builtin', self.var_position(arg),
-                                  self.get_position(descr))
+                self._eventualy_builtin(arg)
             
         elif op.args[0].value == 'can_enter_jit':
             self.emit('can_enter_jit')
             self.emit_varargs(op.args[2:])
+
+    def _eventualy_builtin(self, arg):
+        if isinstance(arg.concretetype, lltype.Ptr):
+            # XXX very complex logic for getting all things
+            # that are pointers, but not objects
+            if isinstance(arg.concretetype.TO, lltype.GcArray):
+                descr = self.codewriter.list_descr_for_tp(arg.concretetype)
+                self.emit('guard_builtin', self.var_position(arg),
+                          self.get_position(descr))
+
 
     #def serialize_op_direct_call(self, op):
     #    color = support.guess_call_kind(self.codewriter.hannotator, op)
