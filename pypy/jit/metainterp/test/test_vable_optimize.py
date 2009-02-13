@@ -220,10 +220,11 @@ class D:
     ops[1].vdesc = xy_desc
 
 def test_D_intersect_input_and_output():
+    py.test.skip("not yet")
     spec = PerfectSpecializer(Loop(D.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     assert spec.nodes[D.fr].escaped
     assert spec.nodes[D.fr].virtualized
-    assert spec.nodes[D.l].escaped
+    assert not spec.nodes[D.l].escaped
     assert spec.nodes[D.l].expanded_fields.keys() == [0]
