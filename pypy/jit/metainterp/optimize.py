@@ -1,74 +1,13 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt,
                                          MergePoint, ResOperation, Jump)
 from pypy.jit.metainterp.heaptracker import always_pure_operations
+from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
+                                          VirtualInstanceSpecNode,
+                                          VirtualizableSpecNode,
+                                          NotSpecNode)
 
 class CancelInefficientLoop(Exception):
     pass
-
-class FixedClassSpecNode(object):
-    def __init__(self, known_class):
-        self.known_class = known_class
-
-    def equals(self, other):
-        if type(other) is not FixedClassSpecNode:
-            return False
-        else:
-            assert isinstance(other, FixedClassSpecNode) # make annotator happy
-            return self.known_class.equals(other.known_class)
-
-    def matches(self, instnode):
-        if instnode.cls is None:
-            return False
-        return instnode.cls.source.equals(self.known_class)
-
-class SpecNodeWithFields(FixedClassSpecNode):
-    def __init__(self, known_class, fields):
-        FixedClassSpecNode.__init__(self, known_class)
-        self.fields = fields
-
-    def equals(self, other):
-        if not self.known_class.equals(other.known_class):
-            return False
-        elif len(self.fields) != len(other.fields):
-            return False
-        else:
-            for i in range(len(self.fields)):
-                key, value = self.fields[i]
-                otherkey, othervalue = other.fields[i]
-                if key != otherkey:
-                    return False
-                if value is None:
-                    if othervalue is not None:
-                        return False
-                else:
-                    if not value.equals(othervalue):
-                        return False
-            return True
-
-    def matches(self, instnode):
-        # XXX think about details of virtual vs virtualizable
-        if not FixedClassSpecNode.matches(self, instnode):
-            return False
-        for key, value in self.fields:
-            if key not in instnode.curfields:
-                return False
-            if value is not None and not value.matches(instnode.curfields[key]):
-                return False
-        return True
-
-class VirtualizableSpecNode(SpecNodeWithFields):
-
-    def equals(self, other):
-        if not isinstance(other, VirtualizableSpecNode):
-            return False
-        return SpecNodeWithFields.equals(self, other)
-
-class VirtualInstanceSpecNode(SpecNodeWithFields):
-
-    def equals(self, other):
-        if not isinstance(other, VirtualInstanceSpecNode):
-            return False
-        return SpecNodeWithFields.equals(self, other)
 
 class AllocationStorage(object):
     def __init__(self):
@@ -122,19 +61,6 @@ class TypeCache(object):
 type_cache = TypeCache()   # XXX remove me later
 type_cache.class_size = {}
 
-def extract_runtime_data(cpu, specnode, valuebox, resultlist):
-    if not isinstance(specnode, VirtualInstanceSpecNode):
-        resultlist.append(valuebox)
-    if isinstance(specnode, SpecNodeWithFields):
-        for ofs, subspecnode in specnode.fields:
-            cls = specnode.known_class.getint()
-            tp = cpu.typefor(ofs)
-            fieldbox = cpu.execute_operation('getfield_gc',
-                                             [valuebox, ConstInt(ofs)],
-                                             tp)
-            extract_runtime_data(cpu, subspecnode, fieldbox, resultlist)
-
-
 class InstanceNode(object):
     def __init__(self, source, escaped=True, startbox=False, const=False):
         self.source = source       # a Box
@@ -164,7 +90,7 @@ class InstanceNode(object):
 
     def intersect(self, other):
         if not other.cls:
-            return None
+            return NotSpecNode()
         if self.cls:
             if not self.cls.source.equals(other.cls.source):
                 raise CancelInefficientLoop
@@ -173,7 +99,7 @@ class InstanceNode(object):
             known_class = other.cls.source
         if other.escaped and not other.virtualized:
             if self.cls is None:
-                return None
+                return NotSpecNode()
             return FixedClassSpecNode(known_class)
         if not other.escaped:
             fields = []
@@ -184,7 +110,7 @@ class InstanceNode(object):
                     specnode = self.origfields[ofs].intersect(node)
                 else:
                     self.origfields[ofs] = InstanceNode(node.source.clonebox())
-                    specnode = None
+                    specnode = NotSpecNode()
                 fields.append((ofs, specnode))
             return VirtualInstanceSpecNode(known_class, fields)
         else:
@@ -199,22 +125,15 @@ class InstanceNode(object):
                     node = other.curfields[ofs]
                     specnode = self.origfields[ofs].intersect(node)
                 elif ofs in self.origfields:
-                    specnode = None
+                    specnode = NotSpecNode()
                 else:
                     # ofs in other.curfields
                     node = other.curfields[ofs]
                     self.origfields[ofs] = InstanceNode(node.source.clonebox())
-                    specnode = None
+                    specnode = NotSpecNode()
                 fields.append((ofs, specnode))
                     
             return VirtualizableSpecNode(known_class, fields)
-
-    def adapt_to(self, specnode):
-        if not isinstance(specnode, VirtualInstanceSpecNode):
-            self.escaped = True
-            return
-        for ofs, subspecnode in specnode.fields:
-            self.curfields[ofs].adapt_to(subspecnode)
 
     def __repr__(self):
         flags = ''
@@ -365,40 +284,14 @@ class PerfectSpecializer(object):
             specnodes.append(enternode.intersect(leavenode))
         self.specnodes = specnodes
 
-    def mutate_nodes(self, instnode, specnode):
-        if specnode is not None:
-            if instnode.cls is None:
-                instnode.cls = InstanceNode(specnode.known_class)
-            else:
-                assert instnode.cls.source.equals(specnode.known_class)
-            if isinstance(specnode, SpecNodeWithFields):
-                curfields = {}
-                for ofs, subspecnode in specnode.fields:
-                    subinstnode = instnode.origfields[ofs]
-                    # should really be there
-                    self.mutate_nodes(subinstnode, subspecnode)
-                    curfields[ofs] = subinstnode
-                instnode.curfields = curfields
-                if isinstance(specnode, VirtualInstanceSpecNode):
-                    instnode.virtual = True
-
     def expanded_version_of(self, boxlist):
         newboxlist = []
         assert len(boxlist) == len(self.specnodes)
         for i in range(len(boxlist)):
             box = boxlist[i]
             specnode = self.specnodes[i]
-            self.expanded_version_of_rec(specnode, self.nodes[box], newboxlist)
+            specnode.expand_boxlist(self.nodes[box], newboxlist)
         return newboxlist
-
-    def expanded_version_of_rec(self, specnode, instnode, newboxlist):
-        if not isinstance(specnode, VirtualInstanceSpecNode):
-            newboxlist.append(instnode.source)
-        if isinstance(specnode, SpecNodeWithFields):
-            for ofs, subspecnode in specnode.fields:
-                subinstnode = instnode.curfields[ofs]  # should really be there
-                self.expanded_version_of_rec(subspecnode, subinstnode,
-                                             newboxlist)
 
     def optimize_guard(self, op):
         liveboxes = []
@@ -437,7 +330,7 @@ class PerfectSpecializer(object):
             assert len(self.operations[0].args) == len(self.specnodes)
             for i in range(len(self.specnodes)):
                 box = self.operations[0].args[i]
-                self.mutate_nodes(self.nodes[box], self.specnodes[i])
+                self.specnodes[i].mutate_nodes(self.nodes[box])
         else:
             assert self.operations[0].opname == 'catch'
             for box in self.operations[0].args:
@@ -544,12 +437,8 @@ class PerfectSpecializer(object):
         for i in range(len(self.specnodes)):
             old_specnode = old_mp.specnodes[i]
             new_specnode = self.specnodes[i]
-            if old_specnode is None:
-                if new_specnode is not None:
-                    return False
-            else:
-                if not old_specnode.equals(new_specnode):
-                    return False
+            if not old_specnode.equals(new_specnode):
+                return False
         return True
 
     def match(self, old_operations):
@@ -560,9 +449,8 @@ class PerfectSpecializer(object):
         for i in range(len(old_mp.specnodes)):
             old_specnode = old_mp.specnodes[i]
             new_instnode = self.nodes[jump_op.args[i]]
-            if old_specnode is not None:
-                if not old_specnode.matches(new_instnode):
-                    return False
+            if not old_specnode.matches(new_instnode):
+                return False
         return True
 
     def adapt_for_match(self, old_operations):
@@ -572,7 +460,7 @@ class PerfectSpecializer(object):
         for i in range(len(old_mp.specnodes)):
             old_specnode = old_mp.specnodes[i]
             new_instnode = self.nodes[jump_op.args[i]]
-            new_instnode.adapt_to(old_specnode)
+            old_specnode.adapt_to(new_instnode)
 
 def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     allocated_boxes = []

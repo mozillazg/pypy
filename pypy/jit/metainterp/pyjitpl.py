@@ -762,8 +762,7 @@ class OOMetaInterp(object):
         expanded_args = []
         for i in range(len(mp.specnodes)):
             specnode = mp.specnodes[i]
-            optimize.extract_runtime_data(self.cpu, specnode,
-                                          args[i], expanded_args)
+            specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
         return expanded_args
 
     def initialize_state_from_start(self, args):

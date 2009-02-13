@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.warmspot import ll_meta_interp
-from pypy.rlib.jit import hint, JitDriver
+from pypy.rlib.jit import JitDriver
 
 class Exit(Exception):
     def __init__(self, result):
@@ -20,11 +20,9 @@ class WarmspotTests(object):
             i = 0
             while True:
                 mydriver.jit_merge_point(i=i, a=a)
-                lst2 = hint(lst, deepfreeze=True)
-                if i >= len(lst2):
+                if i >= len(lst):
                     break
-                elem = lst2[i]
-                hint(elem, concrete=True)
+                elem = lst[i]
                 if elem == CODE_INCREASE:
                     a = a + 1
                     i += 1
