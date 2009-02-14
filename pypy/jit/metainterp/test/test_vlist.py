@@ -41,6 +41,25 @@ class ListTests:
         assert res == f(10)
         self.check_all_virtualized()
 
+    def test_cannot_be_virtual(self):
+        jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
+        def f(n):
+            l = [3] * 100
+            while n > 0:
+                jitdriver.can_enter_jit(n=n, l=l)
+                jitdriver.jit_merge_point(n=n, l=l)
+                x = l[n]
+                l = [3] * 100
+                l[3] = x
+                l[3] = x + 1
+                n -= 1
+            return l[0]
+
+        res = self.meta_interp(f, [10])
+        assert res == f(10)
+        # one setitem should be gone by now
+        self.check_loops(newlist=1, setitem=1, getitem=1)
+
     def test_append_pop(self):
         py.test.skip("XXX")
         def f(n):

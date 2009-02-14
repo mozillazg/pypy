@@ -58,6 +58,15 @@ class FixedClassSpecNode(SpecNode):
             return False
         return instnode.cls.source.equals(self.known_class)
 
+class FixedListSpecNode(FixedClassSpecNode):
+
+    def equals(self, other):
+        if type(other) is not FixedListSpecNode:
+            return False
+        else:
+            assert isinstance(other, FixedListSpecNode) # make annotator happy
+            return self.known_class.equals(other.known_class)
+
 class SpecNodeWithFields(FixedClassSpecNode):
     def __init__(self, known_class, fields):
         FixedClassSpecNode.__init__(self, known_class)
