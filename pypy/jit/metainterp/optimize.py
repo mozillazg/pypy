@@ -516,8 +516,8 @@ class PerfectSpecializer(object):
                         continue
                     exception_might_have_happened = False
                 if opname == 'guard_value':
-                    if (self.nodes[op.args[0]].const and
-                        self.nodes[op.args[1]].const):
+                    if (isinstance(self.nodes[op.args[0]].source, Const) and
+                        isinstance(self.nodes[op.args[1]].source, Const)):
                         continue
                 op = self.optimize_guard(op)
                 newoperations.append(op)
