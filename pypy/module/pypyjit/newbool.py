@@ -82,7 +82,7 @@ class NewBoolDesc:
             else:
                 gv_res = curbuilder.genop2("int_eq", gv_int1, gv_int2)
             #return rvalue.IntRedBox(self.boolkind, gv_res)
-            return rvalue.IntRedBox(self.boolkind, gv_res)
+            return rvalue.IntRedBox(gv_res)
 
 
 class VirtualBool(rcontainer.VirtualContainer):
