@@ -523,6 +523,8 @@ class PerfectSpecializer(object):
                 newoperations.append(op)
                 continue
             elif opname == 'guard_builtin':
+                instnode = self.nodes[op.args[0]]
+                assert instnode.cls
                 continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
