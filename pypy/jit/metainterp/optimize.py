@@ -68,7 +68,8 @@ class AllocationStorage(object):
                 num = self.deal_with_box(node.source, nodes, liveboxes, memo)
                 if isinstance(instnode.cls.source, ListDescr):
                     ld = instnode.cls.source
-                    self.setitems.append((ld.setfunc, alloc_offset, ofs, num))
+                    x = (alloc_offset + 1) << 16
+                    self.setitems.append((ld.setfunc, x, ofs, num))
                 else:
                     self.setfields.append((alloc_offset, ofs, num))
         elif virtualized:
@@ -91,6 +92,8 @@ type_cache.class_size = {}
 
 class InstanceNode(object):
     def __init__(self, source, escaped=True, startbox=False, const=False):
+        if isinstance(source, Const):
+            assert const
         self.source = source       # a Box
         self.escaped = escaped
         self.startbox = startbox
@@ -138,7 +141,12 @@ class InstanceNode(object):
             return FixedClassSpecNode(known_class)
         if not other.escaped:
             fields = []
-            lst = other.curfields.items()
+            if self is other:
+                d = other.curfields
+                d.update(self.origfields)
+            else:
+                d = other.curfields
+            lst = d.items()
             lst.sort()
             for ofs, node in lst:
                 if ofs in self.origfields:
@@ -273,7 +281,7 @@ class PerfectSpecializer(object):
             if opname == 'new_with_vtable':
                 box = op.results[0]
                 instnode = InstanceNode(box, escaped=False)
-                instnode.cls = InstanceNode(op.args[1])
+                instnode.cls = InstanceNode(op.args[1], const=True)
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
                 continue
@@ -318,7 +326,6 @@ class PerfectSpecializer(object):
                     continue
                 else:
                     instnode.escaped = True
-                    self.first_escaping_op = False
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
@@ -330,23 +337,23 @@ class PerfectSpecializer(object):
                     continue
                 else:
                     instnode.escaped = True
-                    self.first_escaping_op = False
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
-                    instnode.cls = InstanceNode(op.args[1])
+                    instnode.cls = InstanceNode(op.args[1], const=True)
                 continue
             elif opname == 'guard_value':
                 instnode = self.getnode(op.args[0])
                 assert isinstance(op.args[1], Const)
-                instnode.const = op.args[1]
+                self.nodes[instnode.source] = InstanceNode(op.args[1],
+                                                           const=True)
                 continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.getnode(op.args[0])
                 if instnode.startbox:
                     instnode.virtualized = True
                 if instnode.cls is None:
-                    instnode.cls = InstanceNode(op.args[1])
+                    instnode.cls = InstanceNode(op.args[1], const=True)
                 continue
             elif opname in always_pure_operations:
                 for arg in op.args:
@@ -354,7 +361,8 @@ class PerfectSpecializer(object):
                         break
                 else:
                     for box in op.results:
-                        self.nodes[box] = InstanceNode(box, escaped=True,
+                        self.nodes[box] = InstanceNode(box.constbox(),
+                                                       escaped=True,
                                                        const=True)
                     continue
             elif opname not in operations_without_side_effects:
@@ -468,6 +476,7 @@ class PerfectSpecializer(object):
 
     def optimize_getfield(self, instnode, ofs, box):
         if instnode.virtual or instnode.virtualized:
+            assert ofs in instnode.curfields
             return True # this means field is never actually
         elif ofs in instnode.cleanfields:
             self.nodes[box] = instnode.cleanfields[ofs]
@@ -558,10 +567,9 @@ class PerfectSpecializer(object):
                 # invalidate caches
             elif opname == 'getitem':
                 instnode = self.nodes[op.args[1]]
-                ofsbox = op.args[2]
-                if (isinstance(ofsbox, ConstInt) or
-                    self.nodes[ofsbox].const):
-                    ofs = self.nodes[ofsbox].source.getint()
+                ofsbox = self.getsource(op.args[2])
+                if isinstance(ofsbox, ConstInt):
+                    ofs = ofsbox.getint()
                     if self.optimize_getfield(instnode, ofs, op.results[0]):
                         continue
             elif opname == 'new_with_vtable':
@@ -590,17 +598,16 @@ class PerfectSpecializer(object):
             elif opname == 'setitem':
                 instnode = self.nodes[op.args[1]]
                 valuenode = self.getnode(op.args[3])
-                ofsbox = op.args[2]
-                if (isinstance(ofsbox, ConstInt) or
-                    self.nodes[ofsbox].const):
-                    ofs = self.nodes[ofsbox].source.getint()
+                ofsbox = self.getsource(op.args[2])
+                if isinstance(ofsbox, ConstInt):
+                    ofs = ofsbox.getint()
                     self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
                     continue
             elif opname == 'ooisnull' or opname == 'oononnull':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtual:
                     box = op.results[0]
-                    instnode = InstanceNode(box, const=True)
+                    instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
             elif opname == 'oois' or opname == 'ooisnot':
@@ -608,19 +615,19 @@ class PerfectSpecializer(object):
                 instnode_y = self.nodes[op.args[1]]
                 if not instnode_x.virtual or not instnode_y.virtual:
                     box = op.results[0]
-                    instnode = InstanceNode(box, const=True)
+                    instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
             # default handling of arguments and return value(s)
             op = self.replace_arguments(op)
             if opname in always_pure_operations:
                 for box in op.args:
-                    if isinstance(box, Box) and not self.nodes[box].const:
+                    if isinstance(box, Box):
                         break
                 else:
                     # all constant arguments: constant-fold away
                     for box in op.results:
-                        instnode = InstanceNode(box.constbox())
+                        instnode = InstanceNode(box.constbox(), const=True)
                         self.nodes[box] = instnode
                     continue
             elif opname not in operations_without_side_effects:
@@ -687,17 +694,19 @@ class PerfectSpecializer(object):
             new_instnode = self.nodes[jump_op.args[i]]
             old_specnode.adapt_to(new_instnode)
 
-def box_from_index(allocated_boxes, boxes_from_frame, index):
+def box_from_index(allocated_boxes, allocated_lists,
+                   boxes_from_frame, index):
     if index < 0:
         return boxes_from_frame[~index]
     if index > 0xffff:
-        return allocated_boxes[(index - 1) >> 16]
+        return allocated_lists[(index - 1) >> 16]
     return allocated_boxes[index]
 
 def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     allocated_boxes = []
     allocated_lists = []
     storage = guard_op.storage_info
+
     for vtable in storage.allocations:
         sizebox = ConstInt(type_cache.class_size[vtable])
         vtablebox = ConstInt(vtable)
@@ -712,17 +721,17 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
                                                'ptr', False)
         allocated_lists.append(listbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
-        fieldbox = box_from_index(allocated_boxes, boxes_from_frame,
-                                  index_in_arglist)
-        box = box_from_index(allocated_boxes, boxes_from_frame,
+        fieldbox = box_from_index(allocated_boxes, allocated_lists,
+                                  boxes_from_frame, index_in_arglist)
+        box = box_from_index(allocated_boxes, allocated_lists, boxes_from_frame,
                              index_in_alloc)
         history.execute_and_record('setfield_gc',
                                    [box, ConstInt(ofs), fieldbox],
                                    'void', False)
     for setfunc, index_in_alloc, ofs, index_in_arglist in storage.setitems:
-        itembox = box_from_index(allocated_boxes, boxes_from_frame,
-                                 index_in_arglist)
-        box = box_from_index(allocated_lists, boxes_from_frame,
+        itembox = box_from_index(allocated_boxes, allocated_lists,
+                                 boxes_from_frame, index_in_arglist)
+        box = box_from_index(allocated_boxes, allocated_lists, boxes_from_frame,
                              index_in_alloc)
         history.execute_and_record('setitem',
                                    [setfunc, box, ConstInt(ofs), itembox],

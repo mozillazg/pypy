@@ -78,8 +78,8 @@ class ToyLanguageTests:
 
         res = self.meta_interp(main, [1, 6])
         # eventually this loop should become really virtual
-        self.check_loops({'merge_point':1, 'guard_value':1, 'getitem':2,
-                          'setitem':4, 'guard_no_exception':2, 'int_mul':1,
+        self.check_loops({'merge_point':1,
+                          'int_mul':1, 'jump':1,
                           'int_sub':1, 'int_is_true':1, 'int_le':1,
                           'guard_false':1})
         assert res == 5040
