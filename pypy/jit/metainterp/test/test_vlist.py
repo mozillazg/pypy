@@ -25,6 +25,22 @@ class ListTests:
         self.check_loops(int_sub=1)
         self.check_all_virtualized()
 
+    def test_list_pass_around(self):
+        jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
+        def f(n):
+            l = [3]
+            while n > 0:
+                jitdriver.can_enter_jit(n=n, l=l)
+                jitdriver.jit_merge_point(n=n, l=l)
+                x = l[0]
+                l = [x + 1]
+                n -= 1
+            return l[0]
+        
+        res = self.meta_interp(f, [10])
+        assert res == f(10)
+        self.check_all_virtualized()
+
     def test_append_pop(self):
         py.test.skip("XXX")
         def f(n):

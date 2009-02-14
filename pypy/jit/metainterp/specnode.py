@@ -193,14 +193,33 @@ class VirtualizableSpecNode(VirtualizedSpecNode):
             return False
         return SpecNodeWithFields.equals(self, other)
 
-class VirtualInstanceSpecNode(SpecNodeWithFields):
+class VirtualSpecNode(SpecNodeWithFields):
 
     def mutate_nodes(self, instnode):
         SpecNodeWithFields.mutate_nodes(self, instnode)
         instnode.virtual = True
+
+class VirtualInstanceSpecNode(VirtualSpecNode):
 
     def equals(self, other):
         if not isinstance(other, VirtualInstanceSpecNode):
             return False
         return SpecNodeWithFields.equals(self, other)
 
+class VirtualListSpecNode(VirtualSpecNode):
+
+    def equals(self, other):
+        if not isinstance(other, VirtualListSpecNode):
+            return False
+        return SpecNodeWithFields.equals(self, other)
+    
+    def extract_runtime_data(self, cpu, valuebox, resultlist):
+        from pypy.jit.metainterp.codewriter import ListDescr
+        
+        for ofs, subspecnode in self.fields:
+            cls = self.known_class
+            assert isinstance(cls, ListDescr)
+            fieldbox = cpu.execute_operation('getitem',
+                                    [cls.getfunc, valuebox, ConstInt(ofs)],
+                                             cls.tp)
+            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)

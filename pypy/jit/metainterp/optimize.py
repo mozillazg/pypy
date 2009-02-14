@@ -9,7 +9,8 @@ from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           NotSpecNode,
                                           DelayedSpecNode,
                                           SpecNodeWithBox,
-                                          DelayedListSpecNode)
+                                          DelayedListSpecNode,
+                                          VirtualListSpecNode)
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.codewriter import ListDescr
 
@@ -46,13 +47,25 @@ class AllocationStorage(object):
             virtual = instnode.virtual
             virtualized = instnode.virtualized
         if virtual:
-            alloc_offset = len(self.allocations)
-            self.allocations.append(instnode.cls.source.getint())
+            if isinstance(instnode.cls.source, ListDescr):
+                ld = instnode.cls.source
+                assert isinstance(ld, ListDescr)
+                alloc_offset = len(self.list_allocations)
+                malloc_func = ld.malloc_func
+                # XXX grab from somewhere the list length
+                self.list_allocations.append((malloc_func, 13))
+            else:
+                alloc_offset = len(self.allocations)
+                self.allocations.append(instnode.cls.source.getint())
             res = alloc_offset
             memo[box] = res
             for ofs, node in instnode.curfields.items():
                 num = self.deal_with_box(node.source, nodes, liveboxes, memo)
-                self.setfields.append((alloc_offset, ofs, num))
+                if isinstance(instnode.cls.source, ListDescr):
+                    ld = instnode.cls.source
+                    self.setitems.append((ld.setfunc, alloc_offset, ofs, num))
+                else:
+                    self.setfields.append((alloc_offset, ofs, num))
         elif virtualized:
             res = ~len(liveboxes)
             memo[box] = res
@@ -116,8 +129,6 @@ class InstanceNode(object):
                 return NotSpecNode()
             return FixedClassSpecNode(known_class)
         if not other.escaped:
-            # XXX write a spec node
-            assert not isinstance(known_class, ListDescr)
             fields = []
             lst = other.curfields.items()
             lst.sort()
@@ -128,6 +139,8 @@ class InstanceNode(object):
                     self.origfields[ofs] = InstanceNode(node.source.clonebox())
                     specnode = NotSpecNode()
                 fields.append((ofs, specnode))
+            if isinstance(known_class, ListDescr):
+                return VirtualListSpecNode(known_class, fields)
             return VirtualInstanceSpecNode(known_class, fields)
         if not other.virtualized and self.expanded_fields:
             fields = []
@@ -634,6 +647,7 @@ def box_from_index(allocated_boxes, boxes_from_frame, index):
 
 def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     allocated_boxes = []
+    allocated_lists = []
     storage = guard_op.storage_info
     for vtable in storage.allocations:
         sizebox = ConstInt(type_cache.class_size[vtable])
@@ -642,6 +656,12 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
                                                [sizebox, vtablebox],
                                                'ptr', False)
         allocated_boxes.append(instbox)
+    for malloc_func, lgt in storage.list_allocations:
+        sizebox = ConstInt(lgt)
+        [listbox] = history.execute_and_record('newlist',
+                                        [malloc_func, sizebox],
+                                               'ptr', False)
+        allocated_lists.append(listbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
         fieldbox = box_from_index(allocated_boxes, boxes_from_frame,
                                   index_in_arglist)
@@ -653,7 +673,7 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     for setfunc, index_in_alloc, ofs, index_in_arglist in storage.setitems:
         itembox = box_from_index(allocated_boxes, boxes_from_frame,
                                  index_in_arglist)
-        box = box_from_index(allocated_boxes, boxes_from_frame,
+        box = box_from_index(allocated_lists, boxes_from_frame,
                              index_in_alloc)
         history.execute_and_record('setitem',
                                    [setfunc, box, ConstInt(ofs), itembox],
@@ -663,6 +683,7 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
         if index < 0:
             newboxes.append(boxes_from_frame[~index])
         else:
+            # XXX allocated_boxes vs allocated_lists
             newboxes.append(allocated_boxes[index])
 
     return newboxes
