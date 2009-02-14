@@ -235,6 +235,11 @@ class PerfectSpecializer(object):
             node = self.nodes[box] = InstanceNode(box, escaped=True)
             return node
 
+    def getsource(self, box):
+        if isinstance(box, Const):
+            return box
+        return self.nodes[box].source
+
     def find_nodes_setfield(self, instnode, ofs, fieldnode):
         instnode.curfields[ofs] = fieldnode
         self.dependency_graph.append((instnode, fieldnode))
@@ -510,7 +515,9 @@ class PerfectSpecializer(object):
                 continue
             elif opname.startswith('guard_'):
                 if opname == 'guard_true' or opname == 'guard_false':
-                    if self.nodes[op.args[0]].const:
+                    # XXX why we need that?
+                    if (isinstance(self.nodes[op.args[0]].source, Const) or
+                        self.nodes[op.args[0]].const):
                         continue
                 if (opname == 'guard_no_exception' or
                     opname == 'guard_exception'):
@@ -531,20 +538,13 @@ class PerfectSpecializer(object):
                     continue
                 # otherwise we need this getfield, but it does not
                 # invalidate caches
-                op = self.replace_arguments(op)
-                newoperations.append(op)
-                continue
             elif opname == 'getitem':
                 instnode = self.nodes[op.args[1]]
-                ofsbox = op.args[2]
+                ofsbox = self.getsource(op.args[2])
                 if isinstance(ofsbox, ConstInt):
                     ofs = ofsbox.getint()
                     if self.optimize_getfield(instnode, ofs, op.results[0]):
                         continue
-                    op = self.replace_arguments(op)
-                    newoperations.append(op)
-                    exception_might_have_happened = True
-                    continue
             elif opname == 'new_with_vtable':
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
                 instnode = self.nodes[op.results[0]]
@@ -554,18 +554,14 @@ class PerfectSpecializer(object):
                     size = op.args[0].getint()
                     key = instnode.cls.source.getint()
                     type_cache.class_size[key] = size
-                op = self.replace_arguments(op)
-                newoperations.append(op)
-                continue
+                    continue
             elif opname == 'newlist':
                 instnode = self.nodes[op.results[0]]
                 assert isinstance(instnode.cls.source, ListDescr)
                 if not instnode.escaped:
                     instnode.virtual = True
                     assert isinstance(instnode.cls.source, ListDescr)
-                op = self.replace_arguments(op)
-                newoperations.append(op)
-                continue
+                    continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
@@ -575,7 +571,7 @@ class PerfectSpecializer(object):
             elif opname == 'setitem':
                 instnode = self.nodes[op.args[1]]
                 valuenode = self.getnode(op.args[3])
-                ofsbox = op.args[2]
+                ofsbox = self.getsource(op.args[2])
                 if isinstance(ofsbox, ConstInt):
                     ofs = ofsbox.getint()
                     self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
@@ -608,7 +604,11 @@ class PerfectSpecializer(object):
                         self.nodes[box] = instnode
                     continue
             elif opname not in operations_without_side_effects:
-                self.cleanup_field_caches(newoperations)
+                if opname not in ('getfield_gc', 'getitem',
+                                  'setfield_gc', 'setitem'):
+                    # those operations does not clean up caches, although
+                    # they have side effects (at least set ones)
+                    self.cleanup_field_caches(newoperations)
             if opname not in operation_never_raises:
                 exception_might_have_happened = True
             for box in op.results:
