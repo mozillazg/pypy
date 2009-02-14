@@ -710,6 +710,7 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     if storage.setitems:
         # XXX this needs to check for exceptions somehow
         # create guard_no_excpetion somehow
+        pass
     newboxes = []
     for index in storage.indices:
         if index < 0:
