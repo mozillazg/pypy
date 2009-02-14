@@ -309,6 +309,7 @@ class PerfectSpecializer(object):
                     continue
                 else:
                     instnode.escaped = True
+                    self.first_escaping_op = False
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
@@ -319,6 +320,7 @@ class PerfectSpecializer(object):
                     continue
                 else:
                     instnode.escaped = True
+                    self.first_escaping_op = False
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
@@ -527,6 +529,11 @@ class PerfectSpecializer(object):
                 ofs = op.args[1].getint()
                 if self.optimize_getfield(instnode, ofs, op.results[0]):
                     continue
+                # otherwise we need this getfield, but it does not
+                # invalidate caches
+                op = self.replace_arguments(op)
+                newoperations.append(op)
+                continue
             elif opname == 'getitem':
                 instnode = self.nodes[op.args[1]]
                 ofsbox = op.args[2]
@@ -534,6 +541,10 @@ class PerfectSpecializer(object):
                     ofs = ofsbox.getint()
                     if self.optimize_getfield(instnode, ofs, op.results[0]):
                         continue
+                    op = self.replace_arguments(op)
+                    newoperations.append(op)
+                    exception_might_have_happened = True
+                    continue
             elif opname == 'new_with_vtable':
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
                 instnode = self.nodes[op.results[0]]
