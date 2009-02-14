@@ -2,7 +2,7 @@ import py
 from pypy.rpython.lltypesystem import lltype, lloperation, rclass, llmemory
 from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.metainterp.policy import StopAtXPolicy
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
 from pypy.jit.metainterp.test.test_vable_optimize import XY, xy_vtable
@@ -83,7 +83,7 @@ class ExplicitVirtualizableTests:
             return xy.x
         res = self.meta_interp(f, [18])
         assert res == 10118
-        self.check_loops(getfield_gc=0, setfield_gc=0)
+        self.check_loops(getfield_gc=0, setfield_gc=0)                        
 
 
 class ImplicitVirtualizableTests:
@@ -115,6 +115,35 @@ class ImplicitVirtualizableTests:
         res = self.meta_interp(f, [10])
         assert res == 55
         self.check_loops(getfield_gc=0, setfield_gc=0)
+
+
+    def test_virtualizable_with_virtual_list(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'x'],
+                                virtualizables = ['frame'])
+
+
+        class Frame(object):
+            _virtualizable2_ = True
+            def __init__(self, l, s):
+                self.l = l
+                self.s = s
+        
+        def f(n):
+            frame = Frame([1,2,3,4], 0)
+            x = 0
+            while n > 0:
+                myjitdriver.can_enter_jit(frame=frame, n=n, x=x)
+                myjitdriver.jit_merge_point(frame=frame, n=n, x=x)
+                frame.s = hint(frame.s, promote=True)
+                n -= 1
+                x += frame.l[frame.s]
+                frame.s += 1
+                x += frame.l[frame.s]
+                frame.s -= 1
+            return x
+
+        res = self.meta_interp(f, [10])
+        assert res == f(10)
 
     def test_external_read(self):
         py.test.skip("Fails")
