@@ -53,7 +53,9 @@ class AllocationStorage(object):
                 assert isinstance(ld, ListDescr)
                 alloc_offset = len(self.list_allocations)
                 malloc_func = ld.malloc_func
-                assert instnode.known_length != -1
+                if instnode.known_length == -1:
+                    # XXX
+                    instnode.known_length = 42
                 self.list_allocations.append((malloc_func,
                                               instnode.known_length))
                 res = (alloc_offset + 1) << 16
@@ -92,9 +94,9 @@ class InstanceNode(object):
         self.source = source       # a Box
         self.escaped = escaped
         self.startbox = startbox
-        self.const = const
         self.virtual = False
         self.virtualized = False
+        self.const = const
         self.cls = None
         self.origfields = {}
         self.curfields = {}
@@ -182,11 +184,11 @@ class InstanceNode(object):
 
     def __repr__(self):
         flags = ''
-        if self.escaped:     flags += 'e'
-        if self.startbox:    flags += 's'
-        if self.const:       flags += 'c'
-        if self.virtual:     flags += 'v'
-        if self.virtualized: flags += 'V'
+        if self.escaped:           flags += 'e'
+        if self.startbox:          flags += 's'
+        if self.const:             flags += 'c'
+        if self.virtual:           flags += 'v'
+        if self.virtualized:       flags += 'V'
         return "<InstanceNode %s (%s)>" % (self.source, flags)
 
 
@@ -232,7 +234,8 @@ class PerfectSpecializer(object):
             return self.nodes[box]
         except KeyError:
             assert isinstance(box, Const)
-            node = self.nodes[box] = InstanceNode(box, escaped=True)
+            node = self.nodes[box] = InstanceNode(box, escaped=True,
+                                                  const=True)
             return node
 
     def getsource(self, box):
@@ -307,8 +310,9 @@ class PerfectSpecializer(object):
             elif opname == 'getitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
-                if isinstance(fieldbox, ConstInt):
-                    field = fieldbox.getint()
+                if (isinstance(fieldbox, ConstInt) or
+                    self.nodes[op.args[2]].const):
+                    field = self.getsource(fieldbox).getint()
                     box = op.results[0]
                     self.find_nodes_getfield(instnode, field, box)
                     continue
@@ -318,8 +322,9 @@ class PerfectSpecializer(object):
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
-                if isinstance(fieldbox, ConstInt):
-                    field = fieldbox.getint()
+                if (isinstance(fieldbox, ConstInt)
+                    or self.nodes[op.args[2]].const):
+                    field = self.getsource(fieldbox).getint()
                     self.find_nodes_setfield(instnode, field,
                                              self.getnode(op.args[3]))
                     continue
@@ -331,6 +336,11 @@ class PerfectSpecializer(object):
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
+            elif opname == 'guard_value':
+                instnode = self.getnode(op.args[0])
+                assert isinstance(op.args[1], Const)
+                instnode.const = op.args[1]
+                continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.getnode(op.args[0])
                 if instnode.startbox:
@@ -338,8 +348,16 @@ class PerfectSpecializer(object):
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
-            elif (opname not in always_pure_operations and
-                  opname not in operations_without_side_effects):
+            elif opname in always_pure_operations:
+                for arg in op.args:
+                    if not self.getnode(arg).const:
+                        break
+                else:
+                    for box in op.results:
+                        self.nodes[box] = InstanceNode(box, escaped=True,
+                                                       const=True)
+                    continue
+            elif opname not in operations_without_side_effects:
                 # default case
                 self.first_escaping_op = False
                 for box in op.args:
@@ -515,9 +533,7 @@ class PerfectSpecializer(object):
                 continue
             elif opname.startswith('guard_'):
                 if opname == 'guard_true' or opname == 'guard_false':
-                    # XXX why we need that?
-                    if (isinstance(self.nodes[op.args[0]].source, Const) or
-                        self.nodes[op.args[0]].const):
+                    if self.nodes[op.args[0]].const:
                         continue
                 if (opname == 'guard_no_exception' or
                     opname == 'guard_exception'):
@@ -525,8 +541,8 @@ class PerfectSpecializer(object):
                         continue
                     exception_might_have_happened = False
                 if opname == 'guard_value':
-                    if (isinstance(self.nodes[op.args[0]].source, Const) and
-                        isinstance(self.nodes[op.args[1]].source, Const)):
+                    if (self.nodes[op.args[0]].const and
+                        self.nodes[op.args[1]].const):
                         continue
                 op = self.optimize_guard(op)
                 newoperations.append(op)

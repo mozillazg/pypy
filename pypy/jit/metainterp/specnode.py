@@ -185,7 +185,7 @@ class DelayedListSpecNode(DelayedSpecNode):
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         from pypy.jit.metainterp.codewriter import ListDescr
-        
+
         resultlist.append(valuebox)
         ld = self.known_class
         assert isinstance(ld, ListDescr)
