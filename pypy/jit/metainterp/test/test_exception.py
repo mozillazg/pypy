@@ -74,6 +74,7 @@ class ExceptionTests:
                 return e.n
         def f(n):
             return a(n)
+        
         res = self.interp_operations(f, [-4])
         assert res == -40
 

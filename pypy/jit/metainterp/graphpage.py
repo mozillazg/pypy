@@ -68,7 +68,11 @@ class ResOpGen(object):
         _prev = Box._extended_display
         try:
             Box._extended_display = False
-            for i, graph in enumerate(self.graphs[1:]):
+            if len(self.graphs) > 1:
+                graphs = self.graphs[1:]
+            else:
+                graphs = self.graphs
+            for i, graph in enumerate(graphs):
                 self.gengraph(graph, i)
         finally:
             Box._extended_display = _prev

@@ -274,7 +274,8 @@ class PerfectSpecializer(object):
         # Steps (1) and (2)
         self.first_escaping_op = True
         for box in self.loop.operations[0].args:
-            self.nodes[box] = InstanceNode(box, escaped=False, startbox=True)
+            self.nodes[box] = InstanceNode(box, escaped=False, startbox=True,
+                                           const=isinstance(box, Const))
 
         for op in self.loop.operations[1:-1]:
             opname = op.opname
