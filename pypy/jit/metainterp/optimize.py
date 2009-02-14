@@ -53,11 +53,12 @@ class AllocationStorage(object):
                 alloc_offset = len(self.list_allocations)
                 malloc_func = ld.malloc_func
                 # XXX grab from somewhere the list length
-                self.list_allocations.append((malloc_func, 13))
+                self.list_allocations.append((malloc_func, 133))
+                res = (alloc_offset + 1) << 16
             else:
                 alloc_offset = len(self.allocations)
                 self.allocations.append(instnode.cls.source.getint())
-            res = alloc_offset
+                res = alloc_offset
             memo[box] = res
             for ofs, node in instnode.curfields.items():
                 num = self.deal_with_box(node.source, nodes, liveboxes, memo)
@@ -300,6 +301,8 @@ class PerfectSpecializer(object):
                     box = op.results[0]
                     self.find_nodes_getfield(instnode, field, box)
                     continue
+                else:
+                    self.cleanup_fields(instnode)
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
@@ -308,6 +311,8 @@ class PerfectSpecializer(object):
                     self.find_nodes_setfield(instnode, field,
                                              self.getnode(op.args[3]))
                     continue
+                else:
+                    self.cleanup_fields(instnode)
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
@@ -643,6 +648,8 @@ class PerfectSpecializer(object):
 def box_from_index(allocated_boxes, boxes_from_frame, index):
     if index < 0:
         return boxes_from_frame[~index]
+    if index > 0xffff:
+        return allocated_boxes[(index - 1) >> 16]
     return allocated_boxes[index]
 
 def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
@@ -682,8 +689,9 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     for index in storage.indices:
         if index < 0:
             newboxes.append(boxes_from_frame[~index])
+        elif index > 0xffff:
+            newboxes.append(allocated_lists[(index - 1) >> 16])
         else:
-            # XXX allocated_boxes vs allocated_lists
             newboxes.append(allocated_boxes[index])
 
     return newboxes
