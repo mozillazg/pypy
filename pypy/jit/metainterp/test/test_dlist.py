@@ -38,6 +38,26 @@ class ListTests:
         assert res == f(10)
         self.check_loops(setitem=2, getitem=1)
 
+    def test_list_escapes_but_getitem_goes(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'l'])
+        def f(n):
+            l = [0] * (n + 1)
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, l=l)
+                myjitdriver.jit_merge_point(n=n, l=l)
+                x = l[0]
+                l[0] = x + 1
+                l[n] = n
+                x = l[2]
+                y = l[1] + l[2]
+                l[1] = x + y
+                n -= 1
+            return l[3]
+
+        res = self.meta_interp(f, [10])
+        assert res == f(10)
+        self.check_loops(setitem=3, getitem=3)
+
     def test_list_indexerror(self):
         # this is an example where IndexError is raised before
         # even getting to the JIT
