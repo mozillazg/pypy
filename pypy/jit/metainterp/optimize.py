@@ -4,6 +4,7 @@ from pypy.jit.metainterp.heaptracker import (always_pure_operations,
                                              operations_without_side_effects,
                                              operation_never_raises)
 from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
+                                          FixedListSpecNode,
                                           VirtualInstanceSpecNode,
                                           VirtualizableSpecNode,
                                           NotSpecNode,
@@ -130,6 +131,8 @@ class InstanceNode(object):
             not self.expanded_fields):
             if self.cls is None:
                 return NotSpecNode()
+            if isinstance(known_class, ListDescr):
+                return FixedListSpecNode(known_class)
             return FixedClassSpecNode(known_class)
         if not other.escaped:
             fields = []
@@ -304,6 +307,8 @@ class PerfectSpecializer(object):
                     box = op.results[0]
                     self.find_nodes_getfield(instnode, field, box)
                     continue
+                else:
+                    instnode.escaped = True
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
@@ -312,6 +317,8 @@ class PerfectSpecializer(object):
                     self.find_nodes_setfield(instnode, field,
                                              self.getnode(op.args[3]))
                     continue
+                else:
+                    instnode.escaped = True
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
@@ -536,13 +543,18 @@ class PerfectSpecializer(object):
                     size = op.args[0].getint()
                     key = instnode.cls.source.getint()
                     type_cache.class_size[key] = size
-                    continue
+                op = self.replace_arguments(op)
+                newoperations.append(op)
+                continue
             elif opname == 'newlist':
                 instnode = self.nodes[op.results[0]]
+                assert isinstance(instnode.cls.source, ListDescr)
                 if not instnode.escaped:
                     instnode.virtual = True
                     assert isinstance(instnode.cls.source, ListDescr)
-                    continue
+                op = self.replace_arguments(op)
+                newoperations.append(op)
+                continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
