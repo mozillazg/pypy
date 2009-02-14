@@ -85,7 +85,7 @@ TYPES = {
     'strsetitem'      : (('ptr', 'int', 'int'), None),
     'getitem'         : (('ptr', 'ptr', 'int'), 'int'),
     'setitem'         : (('ptr', 'ptr', 'int', 'int'), None),
-    'newlist'         : (('ptr', 'int'), 'ptr'),
+    'newlist'         : (('ptr', 'varargs'), 'ptr'),
 }
 
 # ____________________________________________________________
@@ -762,8 +762,19 @@ class ExtendedLLFrame(LLFrame):
     def op_setitem(self, ll_setitem, lst, item, val):
         self.do_call(ll_setitem, lst, item, val)
 
-    def op_newlist(self, ll_newlist, lgt):
-        return self.do_call(ll_newlist, lgt)
+    def op_newlist(self, ll_newlist, lgt, default_val=None):
+        res = self.do_call(ll_newlist, lgt)
+        if (default_val is not None and
+            isinstance(lltype.typeOf(default_val), lltype.Ptr)):
+            TP = lltype.typeOf(res).TO.OF
+            if default_val:
+                default_val = lltype.cast_opaque_ptr(TP, res)
+            else:
+                default_val = lltype.nullptr(TP.TO)
+        if default_val is not None:
+            for i in range(len(res)):
+                res[i] = default_val
+        return res
 
     def op_cast_int_to_ptr(self, i):
         if i == 0:
