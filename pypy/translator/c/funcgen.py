@@ -764,7 +764,7 @@ class FunctionCodeGenerator(object):
         if isinstance(msg, Constant):
             msg = c_string_constant(''.join(msg.value.chars))
         else:
-            msg = 'RPyString_AsString(%s)' % self.expr(msg)
+            msg = 'RPyString_AsCharP(%s)' % self.expr(msg)
 
         return 'fprintf(stderr, "%%s\\n", %s); abort();' % msg
 
