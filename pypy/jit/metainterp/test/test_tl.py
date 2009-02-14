@@ -77,6 +77,12 @@ class ToyLanguageTests:
             return interp_without_call(code, inputarg=inputarg)
 
         res = self.meta_interp(main, [1, 6])
+        # we could eventually get away without setitems at all I think
+        # we're missing once guard_no_exception at the end I think
+        self.check_loops({'merge_point':1, 'guard_value':1, 'getitem':2,
+                          'setitem':4, 'guard_no_exception':2, 'int_mul':1,
+                          'int_sub':1, 'int_is_true':1, 'int_le':1,
+                          'guard_false':1})
         assert res == 5040
 
 
