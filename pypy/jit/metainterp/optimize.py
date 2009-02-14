@@ -468,14 +468,13 @@ class PerfectSpecializer(object):
 
     def optimize_getfield(self, instnode, ofs, box):
         if instnode.virtual or instnode.virtualized:
-            assert ofs in instnode.curfields    # xxx
-            self.nodes[box] = instnode.curfields[ofs]
+            return True # this means field is never actually
         elif ofs in instnode.cleanfields:
             self.nodes[box] = instnode.cleanfields[ofs]
+            return True
         else:
             instnode.cleanfields[ofs] = InstanceNode(box)
             return False
-        return True
 
     def optimize_setfield(self, instnode, ofs, valuenode, valuebox):
         if instnode.virtual or instnode.virtualized:
@@ -559,9 +558,10 @@ class PerfectSpecializer(object):
                 # invalidate caches
             elif opname == 'getitem':
                 instnode = self.nodes[op.args[1]]
-                ofsbox = self.getsource(op.args[2])
-                if isinstance(ofsbox, ConstInt):
-                    ofs = ofsbox.getint()
+                ofsbox = op.args[2]
+                if (isinstance(ofsbox, ConstInt) or
+                    self.nodes[ofsbox].const):
+                    ofs = self.nodes[ofsbox].source.getint()
                     if self.optimize_getfield(instnode, ofs, op.results[0]):
                         continue
             elif opname == 'new_with_vtable':
@@ -590,9 +590,10 @@ class PerfectSpecializer(object):
             elif opname == 'setitem':
                 instnode = self.nodes[op.args[1]]
                 valuenode = self.getnode(op.args[3])
-                ofsbox = self.getsource(op.args[2])
-                if isinstance(ofsbox, ConstInt):
-                    ofs = ofsbox.getint()
+                ofsbox = op.args[2]
+                if (isinstance(ofsbox, ConstInt) or
+                    self.nodes[ofsbox].const):
+                    ofs = self.nodes[ofsbox].source.getint()
                     self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
                     continue
             elif opname == 'ooisnull' or opname == 'oononnull':
@@ -614,7 +615,7 @@ class PerfectSpecializer(object):
             op = self.replace_arguments(op)
             if opname in always_pure_operations:
                 for box in op.args:
-                    if isinstance(box, Box):
+                    if isinstance(box, Box) and not self.nodes[box].const:
                         break
                 else:
                     # all constant arguments: constant-fold away
