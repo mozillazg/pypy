@@ -524,7 +524,8 @@ class PerfectSpecializer(object):
                 continue
             elif opname == 'guard_builtin':
                 instnode = self.nodes[op.args[0]]
-                assert instnode.cls
+                if instnode.cls is None:
+                    instnode.cls = InstanceNode(op.args[1])
                 continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
