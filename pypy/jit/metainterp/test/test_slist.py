@@ -1,4 +1,5 @@
 import py
+py.test.skip("unsupported list ops")
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rlib.jit import JitDriver, hint

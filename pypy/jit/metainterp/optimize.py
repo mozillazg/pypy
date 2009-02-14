@@ -52,8 +52,9 @@ class AllocationStorage(object):
                 assert isinstance(ld, ListDescr)
                 alloc_offset = len(self.list_allocations)
                 malloc_func = ld.malloc_func
-                # XXX grab from somewhere the list length
-                self.list_allocations.append((malloc_func, 133))
+                assert instnode.known_length != -1
+                self.list_allocations.append((malloc_func,
+                                              instnode.known_length))
                 res = (alloc_offset + 1) << 16
             else:
                 alloc_offset = len(self.allocations)
@@ -99,6 +100,7 @@ class InstanceNode(object):
         self.cleanfields = {}
         self.dirtyfields = {}
         self.expanded_fields = {}
+        self.known_length = -1
 
     def escape_if_startbox(self, memo):
         if self in memo:
@@ -269,6 +271,7 @@ class PerfectSpecializer(object):
                 instnode = InstanceNode(box, escaped=False)
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
+                instnode.known_length = op.args[1].getint()
                 # XXX following guard_builtin will set the
                 #     correct class, otherwise it's a mess
                 continue
@@ -301,8 +304,6 @@ class PerfectSpecializer(object):
                     box = op.results[0]
                     self.find_nodes_getfield(instnode, field, box)
                     continue
-                else:
-                    self.cleanup_fields(instnode)
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
@@ -311,8 +312,6 @@ class PerfectSpecializer(object):
                     self.find_nodes_setfield(instnode, field,
                                              self.getnode(op.args[3]))
                     continue
-                else:
-                    self.cleanup_fields(instnode)
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
