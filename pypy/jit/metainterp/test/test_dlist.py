@@ -36,7 +36,7 @@ class ListTests:
 
         res = self.meta_interp(f, [10])
         assert res == f(10)
-        self.check_loops(setitem=2, getitem=1)
+        self.check_loops(setitem=2, getitem=0)
 
     def test_list_escapes_but_getitem_goes(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'l'])
@@ -56,7 +56,7 @@ class ListTests:
 
         res = self.meta_interp(f, [10])
         assert res == f(10)
-        self.check_loops(setitem=3, getitem=3)
+        self.check_loops(setitem=3, getitem=2)
 
     def test_list_indexerror(self):
         # this is an example where IndexError is raised before
