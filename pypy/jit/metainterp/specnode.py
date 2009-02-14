@@ -155,6 +155,7 @@ class DelayedListSpecNode(DelayedSpecNode):
 
     def expand_boxlist(self, instnode, newboxlist, oplist):
         from pypy.jit.metainterp.history import ResOperation, ConstInt
+        from pypy.jit.metainterp.codewriter import ListDescr
         
         newboxlist.append(instnode.source)
         for ofs, subspecnode in self.fields:
@@ -166,11 +167,12 @@ class DelayedListSpecNode(DelayedSpecNode):
                 if ofs in instnode.cleanfields:
                     newboxlist.append(instnode.cleanfields[ofs].source)
                 else:
-                    xxx
+                    ld = instnode.cls.source
+                    assert isinstance(ld, ListDescr)
                     box = subspecnode.box.clonebox()
-                    oplist.append(ResOperation('setitem',
-                       [instnode.source, ConstInt(ofs)], [box]))
-                    newboxlist.append(box)    
+                    oplist.append(ResOperation('getitem',
+                       [ld.getfunc, instnode.source, ConstInt(ofs)], [box]))
+                    newboxlist.append(box)
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         from pypy.jit.metainterp.codewriter import ListDescr

@@ -195,4 +195,4 @@ def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
     c_func = mixlevelann.constfunc(impl, args_s, s_result)
     mixlevelann.finish()
     #
-    return c_func
+    return c_func, LIST_OR_DICT

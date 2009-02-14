@@ -62,7 +62,6 @@ class ListTests:
         res = self.meta_interp(g, [10])
         assert res == 42
         self.check_loops(setitem=2)
-        
 
 class TestLLtype(ListTests, LLJitMixin):
     pass
