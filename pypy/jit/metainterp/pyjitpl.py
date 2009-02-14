@@ -375,13 +375,19 @@ class MIFrame(object):
     def opimpl_residual_call_void(self, varargs):
         return self.execute_with_exc('call_void', varargs, 'void')
 
-    @arguments("varargs")
-    def opimpl_getitem__4(self, varargs):
-        return self.execute_with_exc('getitem', varargs, 'int')
+    @arguments("builtin", "varargs")
+    def opimpl_getitem(self, descr, varargs):
+        args = [descr.getfunc] + varargs
+        return self.execute_with_exc('getitem', args, descr.tp)
 
-    @arguments("varargs")
-    def opimpl_setitem_void(self, varargs):
-        return self.execute_with_exc('setitem', varargs, 'void')
+    @arguments("builtin", "varargs")
+    def opimpl_setitem(self, descr, varargs):
+        args = [descr.setfunc] + varargs
+        return self.execute_with_exc('setitem', args, 'void')
+
+    @arguments("builtin", "varargs")
+    def opimpl_newlist(self, descr, varargs):
+        return self.execute_with_exc('newlist', varargs, 'ptr')        
 
     @arguments("indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, indirectcallset, box, varargs):

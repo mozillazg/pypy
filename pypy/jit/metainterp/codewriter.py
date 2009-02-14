@@ -146,10 +146,10 @@ class CodeWriter(object):
         except KeyError:
             rtyper = self.rtyper
             args = [TP, lltype.Signed, TP.TO.OF]
-            setfunc = support.builtin_func_for_spec(rtyper, 'list.setitem',
-                                                    args, lltype.Void)
-            getfunc = support.builtin_func_for_spec(rtyper, 'list.getitem',
-                                                    args[:-1], TP.TO.OF)
+            setfunc, _ = support.builtin_func_for_spec(rtyper, 'list.setitem',
+                                                       args, lltype.Void)
+            getfunc, _ = support.builtin_func_for_spec(rtyper, 'list.getitem',
+                                                       args[:-1], TP.TO.OF)
             if isinstance(TP.TO.OF, lltype.Number):
                 tp = "int"
             else:
@@ -602,25 +602,31 @@ class BytecodeMaker(object):
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
         ll_args = [v.concretetype for v in args]
-        c_func = support.builtin_func_for_spec(self.codewriter.rtyper,
-                                               oopspec_name, ll_args,
-                                               op.result.concretetype)
+        c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,
+                                                   oopspec_name, ll_args,
+                                                   op.result.concretetype)
         if oopspec_name.endswith('_foldable'):
             opname = 'green_call_%s'
         else:
             opname = 'residual_call_%s'
-        if oopspec_name == 'list.getitem':
-            opname = 'getitem_%s'
-        if oopspec_name == 'list.setitem':
-            opname = 'setitem_%s'
+            if oopspec_name.startswith('list') or oopspec_name == 'newlist':
+                if oopspec_name == 'list.getitem':
+                    opname = 'getitem'
+                elif oopspec_name == 'list.setitem':
+                    opname = 'setitem'
+                elif oopspec_name == 'newlist':
+                    opname = 'newlist'
+                else:
+                    raise NotImplementedError("not supported %s" % oopspec_name)
+                self.emit(opname)
+                ld = self.codewriter.list_descr_for_tp(TP)
+                self.emit(self.get_position(ld))
+                self.emit_varargs(args)
+                self.register_var(op.result)
+                return
         self.emit(opname % getkind_num(self.cpu, op.result.concretetype))
         self.emit_varargs([c_func] + args)
         self.register_var(op.result)
-        #
-        #if (oopspec_name.startswith('newlist') or
-        #    oopspec_name.startswith('list.')):
-        #    self.codewriter.register_list_op(c_func.value, oopspec_name,
-        #                                     LIST_OR_DICT)
 
 #     def serialize_op_indirect_call(self, op):
 #         xxx

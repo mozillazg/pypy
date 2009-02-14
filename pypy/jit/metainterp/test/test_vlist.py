@@ -1,30 +1,32 @@
 import py
-py.test.skip("XXX")
 from pypy.rlib.jit import JitDriver, hint
-from pypy.jit.hintannotator.policy import StopAtXPolicy
-from pyjitpl import get_stats
+from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rpython.ootypesystem import ootype
-from test.test_basic import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
 
 class ListTests:
 
     def check_all_virtualized(self):
-        get_stats().check_loops(new=0, new_with_vtable=0,
+        self.check_loops(new=0, new_with_vtable=0,
                                 call__4=0, call__8=0, call_ptr=0)
 
     def test_simple_array(self):
+        jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
+                jitdriver.can_enter_jit(n=n)
+                jitdriver.jit_merge_point(n=n)
                 lst = [n]
                 n = lst[0] - 1
             return n
-        res = self.meta_interp(f, [10], exceptions=False)
+        res = self.meta_interp(f, [10])
         assert res == 0
         get_stats().check_loops(int_sub=1)
         self.check_all_virtualized()
 
     def test_append_pop(self):
+        py.test.skip("XXX")
         def f(n):
             while n > 0:
                 lst = []
@@ -34,11 +36,12 @@ class ListTests:
                 three = lst[0]
                 n = lst.pop() - three
             return n
-        res = self.meta_interp(f, [31], exceptions=False)
+        res = self.meta_interp(f, [31])
         assert res == -2
         self.check_all_virtualized()
 
     def test_insert(self):
+        py.test.skip("XXX")
         def f(n):
             while n > 0:
                 lst = [1, 2, 3]
@@ -50,6 +53,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_list_escapes(self):
+        py.test.skip("XXX")
         def f(n):
             while True:
                 lst = []
@@ -62,6 +66,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_list_reenters(self):
+        py.test.skip("XXX")
         def f(n):
             while n > 0:
                 lst = []
@@ -75,6 +80,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_cannot_merge(self):
+        py.test.skip("XXX")
         def f(n):
             while n > 0:
                 lst = []
@@ -89,6 +95,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_extend(self):
+        py.test.skip("XXX")
         def f(n):
             while n > 0:
                 lst = [5, 2]
