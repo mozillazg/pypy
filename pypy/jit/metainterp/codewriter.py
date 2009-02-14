@@ -609,7 +609,8 @@ class BytecodeMaker(object):
         c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,
                                                    oopspec_name, ll_args,
                                                    op.result.concretetype)
-        if oopspec_name.startswith('list') or oopspec_name == 'newlist':
+        if ((oopspec_name.startswith('list') or oopspec_name == 'newlist') and
+            not isinstance(TP.TO, lltype.GcStruct)):
             if oopspec_name.startswith('list.getitem'):
                 opname = oopspec_name[len('list.'):]
             elif oopspec_name.startswith('list.setitem'):
