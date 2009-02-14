@@ -380,7 +380,7 @@ class PerfectSpecializer(object):
                     rev_boxes[fieldbox] = len(liveboxes)
                     liveboxes.append(fieldbox)
                 fieldindex = ~rev_boxes[fieldbox]
-                if isinstance(node.cls.source, ListDescr):
+                if node.cls is not None and isinstance(node.cls.source, ListDescr):
                     f = node.cls.source.setfunc
                     storage.setitems.append((f, index, ofs, fieldindex))
                 else:

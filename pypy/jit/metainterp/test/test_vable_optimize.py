@@ -1,3 +1,5 @@
+import py
+
 from pypy.rpython.lltypesystem import lltype, rclass, llmemory
 from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
 from pypy.rpython.lltypesystem.rvirtualizable2 import VirtualizableAccessor
@@ -192,7 +194,7 @@ def test_C_intersect_input_and_output():
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == C.ofs_node
-    assert isinstance(spec.specnodes[0].fields[0][1], NotSpecNode)
+    assert isinstance(spec.specnodes[0].fields[0][1], VirtualInstanceSpecNode)
 
 
 # ____________________________________________________________
@@ -220,7 +222,7 @@ class D:
     ops[1].vdesc = xy_desc
 
 def test_D_intersect_input_and_output():
-    py.test.skip("not yet")
+    py.test.skip("XXX")
     spec = PerfectSpecializer(Loop(D.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
