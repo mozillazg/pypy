@@ -8,8 +8,8 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 class ListTests:
 
     def check_all_virtualized(self):
-        self.check_loops(new=0, new_with_vtable=0,
-                                call__4=0, call__8=0, call_ptr=0)
+        self.check_loops(new=0, newlist=0,
+                         getitem=0, setitem=0)
 
     def test_simple_array(self):
         jitdriver = JitDriver(greens = [], reds = ['n'])
@@ -22,7 +22,7 @@ class ListTests:
             return n
         res = self.meta_interp(f, [10])
         assert res == 0
-        get_stats().check_loops(int_sub=1)
+        self.check_loops(int_sub=1)
         self.check_all_virtualized()
 
     def test_append_pop(self):

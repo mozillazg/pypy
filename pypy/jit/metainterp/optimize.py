@@ -250,6 +250,14 @@ class PerfectSpecializer(object):
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
                 continue
+            elif opname == 'newlist':
+                box = op.results[0]
+                instnode = InstanceNode(box, escaped=False)
+                self.nodes[box] = instnode
+                self.first_escaping_op = False
+                # XXX following guard_builtin will set the
+                #     correct class, otherwise it's a mess
+                continue
             elif opname == 'guard_builtin':
                 instnode = self.nodes[op.args[0]]
                 # all builtins have equal classes
@@ -511,6 +519,12 @@ class PerfectSpecializer(object):
                     size = op.args[0].getint()
                     key = instnode.cls.source.getint()
                     type_cache.class_size[key] = size
+                    continue
+            elif opname == 'newlist':
+                instnode = self.nodes[op.results[0]]
+                if not instnode.escaped:
+                    instnode.virtual = True
+                    assert isinstance(instnode.cls.source, ListDescr)
                     continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
