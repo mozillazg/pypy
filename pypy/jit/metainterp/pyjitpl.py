@@ -375,6 +375,7 @@ class MIFrame(object):
     def opimpl_residual_call_void(self, varargs):
         return self.execute_with_exc('call_void', varargs, 'void')
 
+
     @arguments("builtin", "varargs")
     def opimpl_getitem(self, descr, varargs):
         args = [descr.getfunc] + varargs
@@ -386,8 +387,19 @@ class MIFrame(object):
         return self.execute_with_exc('setitem', args, 'void')
 
     @arguments("builtin", "varargs")
+    def opimpl_getitem_foldable(self, descr, varargs):
+        args = [descr.getfunc] + varargs
+        return self.execute_with_exc('getitem', args, descr.tp, True)
+
+    @arguments("builtin", "varargs")
+    def opimpl_setitem_foldable(self, descr, varargs):
+        args = [descr.setfunc] + varargs
+        return self.execute_with_exc('setitem', args, 'void', True)
+
+    @arguments("builtin", "varargs")
     def opimpl_newlist(self, descr, varargs):
-        return self.execute_with_exc('newlist', varargs, 'ptr')        
+        args = [descr.malloc_func] + varargs
+        op = self.execute_with_exc('newlist', args, 'ptr')
 
     @arguments("indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, indirectcallset, box, varargs):

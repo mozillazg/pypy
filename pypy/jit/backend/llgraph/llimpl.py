@@ -78,10 +78,14 @@ TYPES = {
     'guard_no_exception'      : ((), None),
     'guard_exception'         : (('ptr',), 'ptr'),
     'guard_nonvirtualized__4' : (('ptr', 'int'), None),
+    'guard_builtin'   : (('ptr',), None),
     'newstr'          : (('int',), 'ptr'),
     'strlen'          : (('ptr',), 'int'),
     'strgetitem'      : (('ptr', 'int'), 'int'),
     'strsetitem'      : (('ptr', 'int', 'int'), None),
+    'getitem'         : (('ptr', 'ptr', 'int'), 'int'),
+    'setitem'         : (('ptr', 'ptr', 'int', 'int'), None),
+    'newlist'         : (('ptr', 'int'), 'ptr'),
 }
 
 # ____________________________________________________________
@@ -549,6 +553,9 @@ class ExtendedLLFrame(LLFrame):
     def op_guard_pause(self):
         raise GuardFailed
 
+    def op_guard_builtin(self, b):
+        pass
+
     def op_guard_true(self, value, *livevars):
         if not value:
             raise GuardFailed
@@ -748,6 +755,15 @@ class ExtendedLLFrame(LLFrame):
     op_call__4 = do_call
     op_call_ptr = do_call
     op_call_void = do_call
+
+    def op_getitem(self, ll_getitem, lst, item):
+        return self.do_call(ll_getitem, lst, item)
+
+    def op_setitem(self, ll_setitem, lst, item, val):
+        self.do_call(ll_setitem, lst, item, val)
+
+    def op_newlist(self, ll_newlist, lgt):
+        return self.do_call(ll_newlist, lgt)
 
     def op_cast_int_to_ptr(self, i):
         if i == 0:
