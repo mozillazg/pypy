@@ -276,7 +276,14 @@ class PerfectSpecializer(object):
             instnode.origfields[field] = fieldnode
         self.nodes[box] = fieldnode
         if self.first_escaping_op:
-            instnode.expanded_fields[field] = None        
+            instnode.expanded_fields[field] = None
+
+    def find_nodes_insert(self, instnode, field, fieldnode):
+        for ofs, node in instnode.curfields.items():
+            if ofs >= field:
+                instnode.curfields[ofs + 1] = node
+        instnode.curfields[field] = fieldnode
+        self.dependency_graph.append((instnode, fieldnode))
         
     def find_nodes(self):
         # Steps (1) and (2)
@@ -349,6 +356,16 @@ class PerfectSpecializer(object):
                 instnode.known_length += 1
                 self.find_nodes_setfield(instnode, field,
                                          self.getnode(op.args[2]))
+                continue
+            elif opname == 'insert':
+                instnode = self.getnode(op.args[1])
+                assert isinstance(instnode.cls.source, ListDescr)
+                assert instnode.known_length != -1
+                fieldbox = self.getsource(op.args[2])
+                assert isinstance(fieldbox, Const) or fieldbox.const
+                field = fieldbox.getint()
+                self.find_nodes_insert(instnode, field,
+                                       self.getnode(op.args[3]))
                 continue
             elif opname == 'pop':
                 instnode = self.getnode(op.args[1])
@@ -534,6 +551,13 @@ class PerfectSpecializer(object):
             instnode.dirtyfields[ofs] = self.nodes[valuebox]
             # we never perform this operation here, note
 
+    def optimize_insert(self, instnode, field, valuenode, valuebox):
+        assert instnode.virtual
+        for ofs, node in instnode.curfields.items():
+            if ofs >= field:
+                instnode.curfields[ofs + 1] = node
+        instnode.curfields[field] = valuenode
+
     def optimize_loop(self):
         self.ready_results = {}
         newoperations = []
@@ -660,6 +684,12 @@ class PerfectSpecializer(object):
                 instnode.known_length += 1
                 assert ofs != -1
                 self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
+                continue
+            elif opname == 'insert':
+                instnode = self.nodes[op.args[1]]
+                ofs = self.getsource(op.args[2]).getint()
+                valuenode = self.nodes[op.args[3]]
+                self.optimize_insert(instnode, ofs, valuenode, op.args[3])
                 continue
             elif opname == 'pop':
                 instnode = self.nodes[op.args[1]]

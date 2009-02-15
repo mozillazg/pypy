@@ -9,7 +9,8 @@ class ListTests:
 
     def check_all_virtualized(self):
         self.check_loops(new=0, newlist=0,
-                         getitem=0, setitem=0, append=0, pop=0, len=0)
+                         getitem=0, setitem=0, append=0, pop=0, len=0,
+                         insert=0)
 
     def test_simple_array(self):
         jitdriver = JitDriver(greens = [], reds = ['n'])
@@ -95,15 +96,19 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_insert(self):
-        py.test.skip("XXX")
+        jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
+                jitdriver.can_enter_jit(n=n)
+                jitdriver.jit_merge_point(n=n)
                 lst = [1, 2, 3]
                 lst.insert(0, n)
-                n = lst[0] - 10
+                n = lst[0] - 1
+                lst.pop()
+                # last pop is needed, otherwise it won't work
             return n
-        res = self.meta_interp(f, [33], exceptions=False)
-        assert res == -7
+        res = self.meta_interp(f, [33])
+        assert res == f(33)
         self.check_all_virtualized()
 
     def test_list_escapes(self):

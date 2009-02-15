@@ -19,11 +19,12 @@ class BuiltinDescr(history.AbstractValue):
 
 class ListDescr(BuiltinDescr):
     def __init__(self, getfunc, setfunc, malloc_func, append_func,
-                 pop_func, len_func, tp):
+                 pop_func, insert_func, len_func, tp):
         self.setfunc     = setfunc
         self.getfunc     = getfunc
         self.malloc_func = malloc_func
         self.append_func = append_func
+        self.insert_func = insert_func
         self.pop_func    = pop_func
         self.len_func    = len_func
         self.tp          = tp
@@ -170,6 +171,8 @@ class CodeWriter(object):
                                                         [TP, OF], lltype.Void)
                 pop_func, _ = support.builtin_func_for_spec(rtyper, 'list.pop',
                                                             [TP], OF)
+                insert_func, _ = support.builtin_func_for_spec(rtyper,
+                      'list.insert', [TP, lltype.Signed, OF], lltype.Void)
             if isinstance(OF, lltype.Number):
                 tp = "int"
             else:
@@ -180,13 +183,14 @@ class CodeWriter(object):
                                history.ConstAddr(malloc_func.value, self.cpu),
                                history.ConstAddr(append_func.value, self.cpu),
                                history.ConstAddr(pop_func.value, self.cpu),
+                               history.ConstAddr(insert_func.value, self.cpu),
                                history.ConstAddr(len_func.value, self.cpu),
                                tp)
             else:
                 ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
                                history.ConstAddr(setfunc.value, self.cpu),
                                history.ConstAddr(malloc_func.value, self.cpu),
-                               None, None,
+                               None, None, None,
                                history.ConstAddr(len_func.value, self.cpu),
                                tp)
             self.list_cache[TP.TO] = ld
@@ -658,6 +662,8 @@ class BytecodeMaker(object):
                 opname = 'pop'
             elif oopspec_name == 'list.len':
                 opname = 'len'
+            elif oopspec_name == 'list.insert':
+                opname = 'insert'
             else:
                 raise NotImplementedError("not supported %s" % oopspec_name)
             self.emit(opname)
