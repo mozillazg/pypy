@@ -71,6 +71,7 @@ class AllocationStorage(object):
                 if isinstance(instnode.cls.source, ListDescr):
                     ld = instnode.cls.source
                     x = (alloc_offset + 1) << 16
+                    assert ofs < instnode.known_length
                     self.setitems.append((ld.setfunc, x, ofs, num))
                 else:
                     self.setfields.append((alloc_offset, ofs, num))
