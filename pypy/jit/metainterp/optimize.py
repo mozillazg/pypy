@@ -375,7 +375,7 @@ class PerfectSpecializer(object):
                 field = instnode.known_length
                 self.find_nodes_getfield(instnode, field, op.results[0])
                 continue
-            elif opname == 'len':
+            elif opname == 'len' or opname == 'listnonzero':
                 instnode = self.getnode(op.args[1])
                 assert instnode.known_length != -1
                 lgtbox = op.results[0].constbox()
@@ -697,7 +697,7 @@ class PerfectSpecializer(object):
                 ofs = instnode.known_length
                 if self.optimize_getfield(instnode, ofs, op.results[0]):
                     continue
-            elif opname == 'len':
+            elif opname == 'len' or opname == 'listnonzero':
                 instnode = self.nodes[op.args[1]]
                 assert instnode.known_length
                 continue

@@ -19,15 +19,16 @@ class BuiltinDescr(history.AbstractValue):
 
 class ListDescr(BuiltinDescr):
     def __init__(self, getfunc, setfunc, malloc_func, append_func,
-                 pop_func, insert_func, len_func, tp):
-        self.setfunc     = setfunc
-        self.getfunc     = getfunc
-        self.malloc_func = malloc_func
-        self.append_func = append_func
-        self.insert_func = insert_func
-        self.pop_func    = pop_func
-        self.len_func    = len_func
-        self.tp          = tp
+                 pop_func, insert_func, len_func, nonzero_func, tp):
+        self.setfunc      = setfunc
+        self.getfunc      = getfunc
+        self.malloc_func  = malloc_func
+        self.append_func  = append_func
+        self.insert_func  = insert_func
+        self.pop_func     = pop_func
+        self.len_func     = len_func
+        self.nonzero_func = nonzero_func
+        self.tp           = tp
     
     def equals(self, other):
         if isinstance(other, ListDescr):
@@ -164,6 +165,9 @@ class CodeWriter(object):
                                                            [lltype.Signed], TP)
             len_func, _ = support.builtin_func_for_spec(rtyper, 'list.len',
                                                         [TP], lltype.Signed)
+            nonzero_func, _ = support.builtin_func_for_spec(rtyper,
+                                                            'list.nonzero',
+                                                            [TP], lltype.Bool)
 
             if isinstance(TP.TO, lltype.GcStruct):
                 append_func, _ = support.builtin_func_for_spec(rtyper,
@@ -184,6 +188,7 @@ class CodeWriter(object):
                                history.ConstAddr(append_func.value, self.cpu),
                                history.ConstAddr(pop_func.value, self.cpu),
                                history.ConstAddr(insert_func.value, self.cpu),
+                               history.ConstAddr(nonzero_func.value, self.cpu),
                                history.ConstAddr(len_func.value, self.cpu),
                                tp)
             else:
@@ -191,6 +196,7 @@ class CodeWriter(object):
                                history.ConstAddr(setfunc.value, self.cpu),
                                history.ConstAddr(malloc_func.value, self.cpu),
                                None, None, None,
+                               history.ConstAddr(nonzero_func.value, self.cpu),
                                history.ConstAddr(len_func.value, self.cpu),
                                tp)
             self.list_cache[TP.TO] = ld
@@ -664,6 +670,8 @@ class BytecodeMaker(object):
                 opname = 'len'
             elif oopspec_name == 'list.insert':
                 opname = 'insert'
+            elif oopspec_name == 'list.nonzero':
+                opname = 'listnonzero'
             else:
                 raise NotImplementedError("not supported %s" % oopspec_name)
             self.emit(opname)

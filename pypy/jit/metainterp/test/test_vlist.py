@@ -111,6 +111,26 @@ class ListTests:
         assert res == f(33)
         self.check_all_virtualized()
 
+    def test_nonzero(self):
+        jitdriver = JitDriver(greens = [], reds = ['n'])
+        def f(n):
+            while n > 0:
+                jitdriver.can_enter_jit(n=n)
+                jitdriver.jit_merge_point(n=n)
+                lst = [1, 2, 3]
+                lst.insert(0, n)
+                # nonzero should go away
+                if not lst:
+                    return -33
+                n = lst[0] - 1
+                lst.pop()
+                # last pop is needed, otherwise it won't work
+            return n
+        res = self.meta_interp(f, [33])
+        assert res == f(33)
+        self.check_all_virtualized()
+        self.check_loops(listnonzero=0, guard_true=1, guard_false=0)
+
     def test_list_escapes(self):
         py.test.skip("XXX")
         def f(n):
