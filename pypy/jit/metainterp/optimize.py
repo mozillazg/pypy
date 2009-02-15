@@ -606,8 +606,10 @@ class PerfectSpecializer(object):
                 assert isinstance(instnode.cls.source, ListDescr)
                 if not instnode.escaped:
                     instnode.virtual = True
+                    valuesource = self.getsource(op.args[2])
+                    assert isinstance(valuesource, Const)
                     for i in range(instnode.known_length):
-                        instnode.curfields[i] = InstanceNode(op.args[2],
+                        instnode.curfields[i] = InstanceNode(valuesource,
                                                              const=True)
                     for ofs, item in instnode.origfields.items():
                         self.nodes[item.source] = instnode.curfields[ofs]
