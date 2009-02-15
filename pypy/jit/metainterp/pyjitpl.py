@@ -399,6 +399,11 @@ class MIFrame(object):
     @arguments("builtin", "varargs")
     def opimpl_newlist(self, descr, varargs):
         args = [descr.malloc_func] + varargs
+        if len(varargs) == 1:
+            if descr.tp == "int":
+                args.append(ConstInt(0))
+            else:
+                args.append(ConstPtr(lltype.nullptr(llmemory.GCREF.TO)))
         op = self.execute_with_exc('newlist', args, 'ptr')
 
     @arguments("indirectcallset", "box", "varargs")
