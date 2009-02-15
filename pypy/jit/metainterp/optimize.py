@@ -284,6 +284,7 @@ class PerfectSpecializer(object):
             if ofs >= field:
                 instnode.curfields[ofs + 1] = node
         instnode.curfields[field] = fieldnode
+        instnode.known_length += 1
         self.dependency_graph.append((instnode, fieldnode))
         
     def find_nodes(self):
@@ -344,6 +345,8 @@ class PerfectSpecializer(object):
                 if (isinstance(fieldbox, ConstInt) or
                     self.nodes[op.args[2]].const):
                     field = self.getsource(fieldbox).getint()
+                    if field < 0:
+                        field = instnode.known_length - field
                     box = op.results[0]
                     self.find_nodes_getfield(instnode, field, box)
                     continue
@@ -365,6 +368,8 @@ class PerfectSpecializer(object):
                 fieldbox = self.getsource(op.args[2])
                 assert isinstance(fieldbox, Const) or fieldbox.const
                 field = fieldbox.getint()
+                if field < 0:
+                    field = instnode.known_length - field
                 self.find_nodes_insert(instnode, field,
                                        self.getnode(op.args[3]))
                 continue
@@ -378,16 +383,20 @@ class PerfectSpecializer(object):
                 continue
             elif opname == 'len' or opname == 'listnonzero':
                 instnode = self.getnode(op.args[1])
-                assert instnode.known_length != -1
-                lgtbox = op.results[0].constbox()
-                self.nodes[op.results[0]] = InstanceNode(lgtbox, const=True)
-                continue
+                if not instnode.escaped:
+                    assert instnode.known_length != -1
+                    lgtbox = op.results[0].constbox()
+                    self.nodes[op.results[0]] = InstanceNode(lgtbox, const=True)
+                    continue
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
                 if (isinstance(fieldbox, ConstInt)
                     or self.nodes[op.args[2]].const):
                     field = self.getsource(fieldbox).getint()
+                    if field < 0:
+                        field = instnode.known_length - field
+                    assert field < instnode.known_length
                     self.find_nodes_setfield(instnode, field,
                                              self.getnode(op.args[3]))
                     continue
@@ -534,6 +543,8 @@ class PerfectSpecializer(object):
 
     def optimize_getfield(self, instnode, ofs, box):
         if instnode.virtual or instnode.virtualized:
+            if ofs < 0:
+                ofs = instnode.known_length - ofs
             assert ofs in instnode.curfields
             return True # this means field is never actually
         elif ofs in instnode.cleanfields:
@@ -558,6 +569,7 @@ class PerfectSpecializer(object):
             if ofs >= field:
                 instnode.curfields[ofs + 1] = node
         instnode.curfields[field] = valuenode
+        instnode.known_length += 1
 
     def optimize_loop(self):
         self.ready_results = {}
