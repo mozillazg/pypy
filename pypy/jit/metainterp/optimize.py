@@ -56,9 +56,7 @@ class AllocationStorage(object):
                 assert isinstance(ld, ListDescr)
                 alloc_offset = len(self.list_allocations)
                 malloc_func = ld.malloc_func
-                if instnode.known_length == -1:
-                    # XXX
-                    instnode.known_length = 42
+                assert instnode.known_length != -1
                 self.list_allocations.append((malloc_func,
                                               instnode.known_length))
                 res = (alloc_offset + 1) << 16
@@ -145,6 +143,9 @@ class InstanceNode(object):
                 return FixedListSpecNode(known_class)
             return FixedClassSpecNode(known_class)
         if not other.escaped:
+            if (isinstance(known_class, ListDescr)
+                and self.known_length != other.known_length):
+                XXX # XXX think
             fields = []
             if self is other:
                 d = other.curfields
@@ -162,7 +163,8 @@ class InstanceNode(object):
                     specnode = NotSpecNode()
                 fields.append((ofs, specnode))
             if isinstance(known_class, ListDescr):
-                return VirtualListSpecNode(known_class, fields)
+                return VirtualListSpecNode(known_class, fields,
+                                           other.known_length)
             return VirtualInstanceSpecNode(known_class, fields)
         if not other.virtualized and self.expanded_fields:
             fields = []
@@ -279,10 +281,10 @@ class PerfectSpecializer(object):
     def find_nodes(self):
         # Steps (1) and (2)
         self.first_escaping_op = True
+        # only catch can have consts
         for box in self.loop.operations[0].args:
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True,
                                            const=isinstance(box, Const))
-
         for op in self.loop.operations[1:-1]:
             opname = op.opname
             if opname == 'new_with_vtable':
@@ -307,6 +309,10 @@ class PerfectSpecializer(object):
                 instnode = self.nodes[op.args[0]]
                 # all builtins have equal classes
                 instnode.cls = InstanceNode(op.args[1])
+                continue
+            elif opname == 'guard_len':
+                instnode = self.nodes[op.args[0]]
+                instnode.known_length = op.args[1].getint()
                 continue
             elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
@@ -335,6 +341,29 @@ class PerfectSpecializer(object):
                     continue
                 else:
                     instnode.escaped = True
+            elif opname == 'append':
+                instnode = self.getnode(op.args[1])
+                assert isinstance(instnode.cls.source, ListDescr)
+                assert instnode.known_length != -1
+                field = instnode.known_length
+                instnode.known_length += 1
+                self.find_nodes_setfield(instnode, field,
+                                         self.getnode(op.args[2]))
+                continue
+            elif opname == 'pop':
+                instnode = self.getnode(op.args[1])
+                assert isinstance(instnode.cls.source, ListDescr)
+                assert instnode.known_length != -1
+                instnode.known_length -= 1
+                field = instnode.known_length
+                self.find_nodes_getfield(instnode, field, op.results[0])
+                continue
+            elif opname == 'len':
+                instnode = self.getnode(op.args[1])
+                assert instnode.known_length != -1
+                lgtbox = op.results[0].constbox()
+                self.nodes[op.results[0]] = InstanceNode(lgtbox, const=True)
+                continue
             elif opname == 'setitem':
                 instnode = self.getnode(op.args[1])
                 fieldbox = op.args[2]
@@ -554,6 +583,13 @@ class PerfectSpecializer(object):
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1])
                 continue
+            elif opname == 'guard_len':
+                # it should be completely gone, because if it escapes
+                # we don't virtualize it anymore
+                if not instnode.escaped:
+                    instnode = self.nodes[op.args[0]]
+                    instnode.known_length = op.args[1].getint()
+                continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtualized:
@@ -608,12 +644,33 @@ class PerfectSpecializer(object):
                     instnode.virtual = True
                     valuesource = self.getsource(op.args[2])
                     assert isinstance(valuesource, Const)
-                    for i in range(instnode.known_length):
+                    maxlength = max(instnode.curfields.keys() +
+                                    instnode.origfields.keys())
+                    for i in range(maxlength + 1):
                         instnode.curfields[i] = InstanceNode(valuesource,
                                                              const=True)
                     for ofs, item in instnode.origfields.items():
                         self.nodes[item.source] = instnode.curfields[ofs]
+                    instnode.known_length = op.args[1].getint()
                     continue
+            elif opname == 'append':
+                instnode = self.nodes[op.args[1]]
+                valuenode = self.nodes[op.args[2]]
+                ofs = instnode.known_length
+                instnode.known_length += 1
+                assert ofs != -1
+                self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
+                continue
+            elif opname == 'pop':
+                instnode = self.nodes[op.args[1]]
+                instnode.known_length -= 1
+                ofs = instnode.known_length
+                if self.optimize_getfield(instnode, ofs, op.results[0]):
+                    continue
+            elif opname == 'len':
+                instnode = self.nodes[op.args[1]]
+                assert instnode.known_length
+                continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]

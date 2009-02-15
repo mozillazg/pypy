@@ -217,6 +217,14 @@ class VirtualInstanceSpecNode(VirtualSpecNode):
 
 class VirtualListSpecNode(VirtualSpecNode):
 
+    def __init__(self, known_class, fields, known_length):
+        VirtualSpecNode.__init__(self, known_class, fields)
+        self.known_length = known_length
+
+    def mutate_nodes(self, instnode):
+        VirtualSpecNode.mutate_nodes(self, instnode)
+        instnode.known_length = self.known_length
+
     def equals(self, other):
         if not isinstance(other, VirtualListSpecNode):
             return False
