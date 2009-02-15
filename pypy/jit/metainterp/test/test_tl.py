@@ -43,7 +43,7 @@ class ToyLanguageTests:
         res = self.meta_interp(main, [1, 10])
         assert res == 100
 
-    def test_tl_base(self):
+    def setup_class(cls):
         from pypy.jit.tl.tl import interp_without_call
         from pypy.jit.tl.tlopcode import compile
 
@@ -70,20 +70,41 @@ class ToyLanguageTests:
                 POP
                 RETURN
         ''')
+
+        code2 = compile('''
+                PUSHARG
+            start:
+                PUSH 1
+                SUB
+                PICK 0
+                PUSH 1
+                LE
+                BR_COND exit
+                PUSH 1
+                BR_COND start
+            exit:
+                RETURN
+        ''')
         
-        codes = ["", code]
+        codes = [code, code2]
         def main(n, inputarg):
             code = codes[n]
             return interp_without_call(code, inputarg=inputarg)
+        cls.main = main
 
-        res = self.meta_interp(main, [1, 6])
-        # eventually this loop should become really virtual
+    def test_tl_base(self):
+        res = self.meta_interp(self.main.im_func, [0, 6])
         self.check_loops({'merge_point':1,
                           'int_mul':1, 'jump':1,
                           'int_sub':1, 'int_is_true':1, 'int_le':1,
                           'guard_false':1})
         assert res == 5040
 
+    def test_tl_2(self):
+        res = self.meta_interp(self.main.im_func, [1, 10])
+        assert res == self.main(1, 10)
+        self.check_loop({'merge_point':1, 'int_sub':1, 'int_le':1,
+                         'int_is_true':1, 'guard_false':1, 'jump':1})
 
 class TestOOtype(ToyLanguageTests, OOJitMixin):
     pass
