@@ -83,9 +83,13 @@ TYPES = {
     'strlen'          : (('ptr',), 'int'),
     'strgetitem'      : (('ptr', 'int'), 'int'),
     'strsetitem'      : (('ptr', 'int', 'int'), None),
-    'getitem'         : (('ptr', 'ptr', 'int'), 'int'),
-    'setitem'         : (('ptr', 'ptr', 'int', 'int'), None),
-    'newlist'         : (('ptr', 'varargs'), 'ptr'),
+    'getitem'         : (('void', 'ptr', 'int'), 'int'),
+    'setitem'         : (('void', 'ptr', 'int', 'int'), None),
+    'newlist'         : (('void', 'varargs'), 'ptr'),
+    'append'          : (('void', 'ptr', 'int'), None),
+    'insert'          : (('void', 'ptr', 'int', 'int'), None),
+    'pop'             : (('void', 'ptr',), 'int'),
+    'len'             : (('void', 'ptr',), 'int'),
 }
 
 # ____________________________________________________________
@@ -158,6 +162,8 @@ def repr1(x, tp, cpu, extraarg):
             tp = "int"
     if tp == 'int':
         return str(x)
+    elif tp == 'void':
+        return ''
     elif tp == 'ptr':
         if not x:
             return '(* None)'
@@ -756,11 +762,18 @@ class ExtendedLLFrame(LLFrame):
     op_call_ptr = do_call
     op_call_void = do_call
 
-    def op_getitem(self, ll_getitem, lst, item):
-        return self.do_call(ll_getitem, lst, item)
+    def op_listop_return(self, ll_func, *args):
+        return self.do_call(ll_func, *args)
 
-    def op_setitem(self, ll_setitem, lst, item, val):
-        self.do_call(ll_setitem, lst, item, val)
+    def op_listop(self, ll_func, *args):
+        self.do_call(ll_func, *args)
+
+    op_getitem = op_listop_return
+    op_setitem = op_listop
+    op_append = op_listop
+    op_insert = op_listop
+    op_pop = op_listop_return
+    op_len = op_listop_return
 
     def op_newlist(self, ll_newlist, lgt, default_val=None):
         res = self.do_call(ll_newlist, lgt)
@@ -772,8 +785,12 @@ class ExtendedLLFrame(LLFrame):
             else:
                 default_val = lltype.nullptr(TP.TO)
         if default_val is not None:
-            for i in range(len(res)):
-                res[i] = default_val
+            if hasattr(res, 'items'):
+                items = res.items
+            else:
+                items = res
+            for i in range(len(items)):
+                items[i] = default_val
         return res
 
     def op_cast_int_to_ptr(self, i):

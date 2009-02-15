@@ -412,6 +412,11 @@ class MIFrame(object):
         self.execute_with_exc('append', args, 'void')
 
     @arguments("builtin", "varargs")
+    def opimpl_insert(self, descr, varargs):
+        args = [descr.insert_func] + varargs
+        self.execute_with_exc('insert', args, 'void')
+
+    @arguments("builtin", "varargs")
     def opimpl_pop(self, descr, varargs):
         args = [descr.pop_func] + varargs
         self.execute_with_exc('pop', args, descr.tp)
