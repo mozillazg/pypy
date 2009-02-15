@@ -9,7 +9,7 @@ class ListTests:
 
     def check_all_virtualized(self):
         self.check_loops(new=0, newlist=0,
-                         getitem=0, setitem=0)
+                         getitem=0, setitem=0, append=0, pop=0, len=0)
 
     def test_simple_array(self):
         jitdriver = JitDriver(greens = [], reds = ['n'])
@@ -78,9 +78,11 @@ class ListTests:
         assert res == f(10)
         
     def test_append_pop(self):
-        py.test.skip("XXX")
+        jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
+                jitdriver.can_enter_jit(n=n)
+                jitdriver.jit_merge_point(n=n)
                 lst = []
                 lst.append(5)
                 lst.append(n)

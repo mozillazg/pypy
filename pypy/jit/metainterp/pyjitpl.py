@@ -404,7 +404,22 @@ class MIFrame(object):
                 args.append(ConstInt(0))
             else:
                 args.append(ConstPtr(lltype.nullptr(llmemory.GCREF.TO)))
-        op = self.execute_with_exc('newlist', args, 'ptr')
+        self.execute_with_exc('newlist', args, 'ptr')
+
+    @arguments("builtin", "varargs")
+    def opimpl_append(self, descr, varargs):
+        args = [descr.append_func] + varargs
+        self.execute_with_exc('append', args, 'void')
+
+    @arguments("builtin", "varargs")
+    def opimpl_pop(self, descr, varargs):
+        args = [descr.pop_func] + varargs
+        self.execute_with_exc('pop', args, descr.tp)
+
+    @arguments("builtin", "varargs")
+    def opimpl_len(self, descr, varargs):
+        args = [descr.len_func] + varargs
+        self.execute_with_exc('len', args, 'int')
 
     @arguments("indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, indirectcallset, box, varargs):
@@ -445,6 +460,12 @@ class MIFrame(object):
     @arguments("orgpc", "box", "builtin")
     def opimpl_guard_builtin(self, pc, box, builtin):
         self.generate_guard(pc, "guard_builtin", box, [builtin])
+
+    @arguments("orgpc", "box", "builtin")
+    def opimpl_guard_len(self, pc, box, builtin):
+        intbox = self.metainterp.cpu.execute_operation(
+            'len', [builtin.len_func, box], 'int')
+        self.generate_guard(pc, "guard_len", box, [intbox])
 
     @arguments("orgpc", "box", "virtualizabledesc", "int")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):

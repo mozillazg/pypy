@@ -18,10 +18,14 @@ class BuiltinDescr(history.AbstractValue):
     pass
 
 class ListDescr(BuiltinDescr):
-    def __init__(self, getfunc, setfunc, malloc_func, tp):
+    def __init__(self, getfunc, setfunc, malloc_func, append_func,
+                 pop_func, len_func, tp):
         self.setfunc     = setfunc
         self.getfunc     = getfunc
         self.malloc_func = malloc_func
+        self.append_func = append_func
+        self.pop_func    = pop_func
+        self.len_func    = len_func
         self.tp          = tp
     
     def equals(self, other):
@@ -145,22 +149,46 @@ class CodeWriter(object):
         try:
             return self.list_cache[TP.TO]
         except KeyError:
+            if isinstance(TP.TO, lltype.GcStruct):
+                OF = TP.TO.items.TO.OF
+            else:
+                OF = TP.TO.OF
             rtyper = self.rtyper
-            args = [TP, lltype.Signed, TP.TO.OF]
+            args = [TP, lltype.Signed, OF]
             setfunc, _ = support.builtin_func_for_spec(rtyper, 'list.setitem',
                                                        args, lltype.Void)
             getfunc, _ = support.builtin_func_for_spec(rtyper, 'list.getitem',
-                                                       args[:-1], TP.TO.OF)
+                                                       args[:-1], OF)
             malloc_func, _ = support.builtin_func_for_spec(rtyper, 'newlist',
                                                            [lltype.Signed], TP)
-            if isinstance(TP.TO.OF, lltype.Number):
+            len_func, _ = support.builtin_func_for_spec(rtyper, 'list.len',
+                                                        [TP], lltype.Signed)
+
+            if isinstance(TP.TO, lltype.GcStruct):
+                append_func, _ = support.builtin_func_for_spec(rtyper,
+                                                               'list.append',
+                                                        [TP, OF], lltype.Void)
+                pop_func, _ = support.builtin_func_for_spec(rtyper, 'list.pop',
+                                                            [TP], OF)
+            if isinstance(OF, lltype.Number):
                 tp = "int"
             else:
                 tp = "ptr"
-            ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
-                           history.ConstAddr(setfunc.value, self.cpu),
-                           history.ConstAddr(malloc_func.value, self.cpu),
-                           tp)
+            if isinstance(TP.TO, lltype.GcStruct):
+                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
+                               history.ConstAddr(setfunc.value, self.cpu),
+                               history.ConstAddr(malloc_func.value, self.cpu),
+                               history.ConstAddr(append_func.value, self.cpu),
+                               history.ConstAddr(pop_func.value, self.cpu),
+                               history.ConstAddr(len_func.value, self.cpu),
+                               tp)
+            else:
+                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
+                               history.ConstAddr(setfunc.value, self.cpu),
+                               history.ConstAddr(malloc_func.value, self.cpu),
+                               None, None,
+                               history.ConstAddr(len_func.value, self.cpu),
+                               tp)
             self.list_cache[TP.TO] = ld
             return ld
 
@@ -560,15 +588,23 @@ class BytecodeMaker(object):
             self.emit('can_enter_jit')
             self.emit_varargs(op.args[2:])
 
-    def _eventualy_builtin(self, arg):
+    def _eventualy_builtin(self, arg, need_length=True):
         if isinstance(arg.concretetype, lltype.Ptr):
             # XXX very complex logic for getting all things
             # that are pointers, but not objects
+            is_list = False
             if isinstance(arg.concretetype.TO, lltype.GcArray):
+                is_list = True
+            if isinstance(arg.concretetype.TO, lltype.GcStruct):
+                if arg.concretetype.TO._hints.get('list'):
+                    is_list = True
+            if is_list:
                 descr = self.codewriter.list_descr_for_tp(arg.concretetype)
                 self.emit('guard_builtin', self.var_position(arg),
                           self.get_position(descr))
-
+                if need_length:
+                    self.emit('guard_len', self.var_position(arg),
+                              self.get_position(descr))
 
     #def serialize_op_direct_call(self, op):
     #    color = support.guess_call_kind(self.codewriter.hannotator, op)
@@ -609,14 +645,19 @@ class BytecodeMaker(object):
         c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,
                                                    oopspec_name, ll_args,
                                                    op.result.concretetype)
-        if ((oopspec_name.startswith('list') or oopspec_name == 'newlist') and
-            not isinstance(TP.TO, lltype.GcStruct)):
+        if oopspec_name.startswith('list') or oopspec_name == 'newlist':
             if oopspec_name.startswith('list.getitem'):
                 opname = oopspec_name[len('list.'):]
             elif oopspec_name.startswith('list.setitem'):
                 opname = oopspec_name[len('list.'):]
             elif oopspec_name == 'newlist':
                 opname = 'newlist'
+            elif oopspec_name == 'list.append':
+                opname = 'append'
+            elif oopspec_name == 'list.pop':
+                opname = 'pop'
+            elif oopspec_name == 'list.len':
+                opname = 'len'
             else:
                 raise NotImplementedError("not supported %s" % oopspec_name)
             self.emit(opname)
@@ -625,7 +666,7 @@ class BytecodeMaker(object):
             self.emit_varargs(args)
             self.register_var(op.result)
             if opname == 'newlist':
-                self._eventualy_builtin(op.result)
+                self._eventualy_builtin(op.result, False)
             return
         if oopspec_name.endswith('_foldable'):
             opname = 'green_call_%s'
