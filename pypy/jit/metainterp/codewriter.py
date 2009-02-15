@@ -188,16 +188,16 @@ class CodeWriter(object):
                                history.ConstAddr(append_func.value, self.cpu),
                                history.ConstAddr(pop_func.value, self.cpu),
                                history.ConstAddr(insert_func.value, self.cpu),
-                               history.ConstAddr(nonzero_func.value, self.cpu),
                                history.ConstAddr(len_func.value, self.cpu),
+                               history.ConstAddr(nonzero_func.value, self.cpu),
                                tp)
             else:
                 ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
                                history.ConstAddr(setfunc.value, self.cpu),
                                history.ConstAddr(malloc_func.value, self.cpu),
                                None, None, None,
-                               history.ConstAddr(nonzero_func.value, self.cpu),
                                history.ConstAddr(len_func.value, self.cpu),
+                               history.ConstAddr(nonzero_func.value, self.cpu),
                                tp)
             self.list_cache[TP.TO] = ld
             return ld
