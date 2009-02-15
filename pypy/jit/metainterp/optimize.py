@@ -606,7 +606,11 @@ class PerfectSpecializer(object):
                 assert isinstance(instnode.cls.source, ListDescr)
                 if not instnode.escaped:
                     instnode.virtual = True
-                    valuesource = self.getsource(op.args[2])
+                    if len(op.args) > 2:
+                        valuesource = self.getsource(op.args[2])
+                    else:
+                        # XXX check for type
+                        valuesource = ConstInt(0)
                     assert isinstance(valuesource, Const)
                     for i in range(instnode.known_length):
                         instnode.curfields[i] = InstanceNode(valuesource,
@@ -762,8 +766,9 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
                                    [setfunc, box, ConstInt(ofs), itembox],
                                    'void', False)
     if storage.setitems:
+        #history.execute_and_record('guard_no_exception', [], 'void', False)
         # XXX this needs to check for exceptions somehow
-        # create guard_no_excpetion somehow
+        # create guard_no_excpetion somehow, needs tests
         pass
     newboxes = []
     for index in storage.indices:

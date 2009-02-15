@@ -77,7 +77,6 @@ class ListTests:
         res = self.meta_interp(f, [10])
         assert res == f(10)
         
-
     def test_append_pop(self):
         py.test.skip("XXX")
         def f(n):
