@@ -90,6 +90,7 @@ TYPES = {
     'insert'          : (('void', 'ptr', 'int', 'int'), None),
     'pop'             : (('void', 'ptr',), 'int'),
     'len'             : (('void', 'ptr',), 'int'),
+    'listnonzero'     : (('void', 'ptr',), 'int'),
 }
 
 # ____________________________________________________________
@@ -774,12 +775,16 @@ class ExtendedLLFrame(LLFrame):
     op_insert = op_listop
     op_pop = op_listop_return
     op_len = op_listop_return
+    op_listnonzero = op_listop_return
 
     def op_newlist(self, ll_newlist, lgt, default_val=None):
         res = self.do_call(ll_newlist, lgt)
         if (default_val is not None and
             isinstance(lltype.typeOf(default_val), lltype.Ptr)):
-            TP = lltype.typeOf(res).TO.OF
+            if hasattr(res, 'items'):
+                TP = lltype.typeOf(res.items).TO.OF
+            else:
+                TP = lltype.typeOf(res).TO.OF
             if default_val:
                 default_val = lltype.cast_opaque_ptr(TP, res)
             else:

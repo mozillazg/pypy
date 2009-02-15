@@ -426,6 +426,11 @@ class MIFrame(object):
         args = [descr.len_func] + varargs
         self.execute_with_exc('len', args, 'int')
 
+    @arguments("builtin", "varargs")
+    def opimpl_listnonzero(self, descr, varargs):
+        args = [descr.nonzero_func] + varargs
+        self.execute_with_exc('listnonzero', args, 'int')
+
     @arguments("indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, indirectcallset, box, varargs):
         assert isinstance(box, Const) # XXX
