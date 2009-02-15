@@ -168,12 +168,6 @@ class VirtualTests:
         res = self.meta_interp(f, [20])
         assert res == 9
 
-    #def test_virtual_and_only_setfield(self):
-    #    myjitdriver = JitDriver(greens = [], reds = ['n', 'i'])
-
-    #    def f(n):
-            
-
 ##class TestOOtype(VirtualTests, OOJitMixin):
 ##    _new = staticmethod(ootype.new)
 

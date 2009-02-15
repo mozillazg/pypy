@@ -60,6 +60,24 @@ class ListTests:
         # one setitem should be gone by now
         self.check_loops(newlist=1, setitem=1, getitem=1)
 
+    def test_vlist_with_default_read(self):
+        jitdriver = JitDriver(greens = [], reds = ['n'])
+        def f(n):
+            l = [1] * 20
+            while n > 0:
+                jitdriver.can_enter_jit(n=n)
+                jitdriver.jit_merge_point(n=n)
+                l = [0] * 20
+                x = l[3]
+                if n < 3:
+                    return x
+                n -= 1
+            return l[0]
+
+        res = self.meta_interp(f, [10])
+        assert res == f(10)
+        
+
     def test_append_pop(self):
         py.test.skip("XXX")
         def f(n):

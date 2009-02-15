@@ -151,6 +151,7 @@ class InstanceNode(object):
                 d.update(self.origfields)
             else:
                 d = other.curfields
+            d = other.curfields
             lst = d.items()
             lst.sort()
             for ofs, node in lst:
@@ -296,6 +297,8 @@ class PerfectSpecializer(object):
                 instnode = InstanceNode(box, escaped=False)
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
+                # XXX we don't support lists with variable length
+                assert isinstance(op.args[1], ConstInt)
                 instnode.known_length = op.args[1].getint()
                 # XXX following guard_builtin will set the
                 #     correct class, otherwise it's a mess
@@ -603,7 +606,11 @@ class PerfectSpecializer(object):
                 assert isinstance(instnode.cls.source, ListDescr)
                 if not instnode.escaped:
                     instnode.virtual = True
-                    assert isinstance(instnode.cls.source, ListDescr)
+                    for i in range(instnode.known_length):
+                        instnode.curfields[i] = InstanceNode(op.args[2],
+                                                             const=True)
+                    for ofs, item in instnode.origfields.items():
+                        self.nodes[item.source] = instnode.curfields[ofs]
                     continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
