@@ -36,17 +36,20 @@ class AllocationStorage(object):
         self.list_allocations = []
         self.setitems = []
 
-    def deal_with_box(self, box, nodes, liveboxes, memo):
+    def deal_with_box(self, box, nodes, liveboxes, memo, ready):
         if isinstance(box, Const):
             virtual = False
             virtualized = False
         else:
+            prevbox = box
             instnode = nodes[box]
             box = instnode.source
             if box in memo:
                 return memo[box]
             virtual = instnode.virtual
             virtualized = instnode.virtualized
+            if not virtual:
+                assert box in ready
         if virtual:
             if isinstance(instnode.cls.source, ListDescr):
                 ld = instnode.cls.source
@@ -65,7 +68,8 @@ class AllocationStorage(object):
                 res = alloc_offset
             memo[box] = res
             for ofs, node in instnode.curfields.items():
-                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo,
+                                         ready)
                 if isinstance(instnode.cls.source, ListDescr):
                     ld = instnode.cls.source
                     x = (alloc_offset + 1) << 16
@@ -77,7 +81,8 @@ class AllocationStorage(object):
             memo[box] = res
             liveboxes.append(box)
             for ofs, node in instnode.curfields.items():
-                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo,
+                                         ready)
                 self.setfields.append((res, ofs, num))
         else:
             res = ~len(liveboxes)
@@ -429,7 +434,8 @@ class PerfectSpecializer(object):
         op = op.clone()
         for box in old_boxes:
             indices.append(storage.deal_with_box(box, self.nodes,
-                                                 liveboxes, memo))
+                                                 liveboxes, memo,
+                                                 self.ready_results))
         rev_boxes = {}
         for i in range(len(liveboxes)):
             box = liveboxes[i]
@@ -467,6 +473,7 @@ class PerfectSpecializer(object):
                 instnode = self.nodes[box]
                 assert not instnode.virtual
                 box = instnode.source
+            assert isinstance(box, Const) or box in self.ready_results
             newboxes.append(box)
         return newboxes
 
@@ -496,6 +503,7 @@ class PerfectSpecializer(object):
             # we never perform this operation here, note
 
     def optimize_loop(self):
+        self.ready_results = {}
         newoperations = []
         exception_might_have_happened = False
         mp = self.loop.operations[0]
@@ -511,12 +519,19 @@ class PerfectSpecializer(object):
                 assert not self.nodes[box].virtual
 
         for op in self.loop.operations:
+            if newoperations and newoperations[-1].results:
+                self.ready_results[newoperations[-1].results[0]] = None
             opname = op.opname
             if opname == 'merge_point':
                 args = self.expanded_version_of(op.args, None)
                 op = MergePoint('merge_point', args, [])
                 newoperations.append(op)
+                for arg in op.args:
+                    self.ready_results[arg] = None
                 continue
+            elif opname == 'catch':
+                for arg in op.args:
+                    self.ready_results[arg] = None
             elif opname == 'jump':
                 args = self.expanded_version_of(op.args, newoperations)
                 self.cleanup_field_caches(newoperations)

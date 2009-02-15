@@ -102,8 +102,8 @@ class ToyLanguageTests:
 
     def test_tl_2(self):
         res = self.meta_interp(self.main.im_func, [1, 10])
-        assert res == self.main(1, 10)
-        self.check_loop({'merge_point':1, 'int_sub':1, 'int_le':1,
+        assert res == self.main.im_func(1, 10)
+        self.check_loops({'merge_point':1, 'int_sub':1, 'int_le':1,
                          'int_is_true':1, 'guard_false':1, 'jump':1})
 
 class TestOOtype(ToyLanguageTests, OOJitMixin):
