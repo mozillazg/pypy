@@ -216,30 +216,19 @@ def char2int(c):
         t = -(-ord(c) & 0xff)
     return t
 
-class FrameStack:
-    def __init__(self):
-        self.pc_stack = []
-        self.args_stack = []
-        self.stack_stack = []
+class Frame(object):
+    _virtualizable2_ = True
 
-    def push(self, pc, args, stack):
-        self.pc_stack.append(pc)
-        self.args_stack.append(args)
-        self.stack_stack.append(stack)
-        return self
-
-    def pop(self):
-        pc = self.pc_stack.pop()
-        args = self.args_stack.pop()
-        stack = self.stack_stack.pop()
-        return pc, args, stack
-
-    def isempty(self):
-        return len(self.pc_stack) == 0
+    def __init__(self, args, pc):
+        assert isinstance(pc, int)
+        self.args  = args
+        self.pc    = pc
+        self.stack = []
         
 def make_interp(supports_call, jitted=True):
     myjitdriver = JitDriver(greens = ['code', 'pc'],
-                            reds = ['pool', 'args', 'stack', 'framestack'])
+                            reds = ['frame', 'framestack', 'pool'],
+                            virtualizables = ['frame'])
     def interp(code='', pc=0, inputarg=0, pool=None):
         if not isinstance(code,str):
             raise TypeError("code '%s' should be a string" % str(code))
@@ -250,14 +239,17 @@ def make_interp(supports_call, jitted=True):
         return interp_eval(code, pc, args, pool).int_o()
 
     def interp_eval(code, pc, args, pool):
-        stack = []
-        framestack = FrameStack()
+        assert isinstance(pc, int)
+        framestack = []
+        frame = Frame(args, pc)
+        pc = frame.pc
 
         while pc < len(code):
-            myjitdriver.jit_merge_point(code=code, pc=pc, pool=pool, args=args,
-                                        stack=stack, framestack=framestack)
+            myjitdriver.jit_merge_point(frame=frame, framestack=framestack,
+                                        code=code, pc=pc, pool=pool)
             opcode = ord(code[pc])
             pc += 1
+            stack = frame.stack
 
             if opcode == NOP:
                 pass
@@ -355,10 +347,9 @@ def make_interp(supports_call, jitted=True):
                 pc += char2int(code[pc])
                 pc += 1
                 if old_pc > pc:
-                    myjitdriver.can_enter_jit(code=code, pc=pc, pool=pool,
-                                              args=args,
-                                              stack=stack,
-                                              framestack=framestack)
+                    myjitdriver.can_enter_jit(code=code, pc=pc, frame=frame,
+                                              framestack=framestack,
+                                              pool=pool)
                 
             elif opcode == BR_COND:
                 cond = stack.pop()
@@ -366,10 +357,9 @@ def make_interp(supports_call, jitted=True):
                     old_pc = pc
                     pc += char2int(code[pc]) + 1
                     if old_pc > pc:
-                        myjitdriver.can_enter_jit(code=code, pc=pc, pool=pool,
-                                                  args=args,
-                                                  stack=stack,
-                                                  framestack=framestack)
+                        myjitdriver.can_enter_jit(code=code, pc=pc, frame=frame,
+                                                  framestack=framestack,
+                                                  pool=pool)
                 else:
                     pc += 1
                 
@@ -379,38 +369,39 @@ def make_interp(supports_call, jitted=True):
                     old_pc = pc
                     pc += offset
                     if old_pc > pc:
-                        myjitdriver.can_enter_jit(code=code, pc=pc, pool=pool,
-                                                  args=args,
-                                                  stack=stack,
-                                                  framestack=framestack)
+                        myjitdriver.can_enter_jit(code=code, pc=pc, frame=frame,
+                                                  framestack=framestack,
+                                                  pool=pool)
                         
 
             elif supports_call and opcode == CALL:
                 offset = char2int(code[pc])
                 pc += 1
-                framestack.push(pc, args, stack)
-                pc = pc + offset
-                args = [zero]
-                stack = []
+                frame.pc = pc
+                framestack.append(frame)
+                frame = Frame([zero], pc + offset)
+                pc = frame.pc
 
             elif opcode == RETURN:
-                if framestack.isempty():                    
+                if not framestack:
                     break
                 if stack:
                     res = stack.pop()
                 else:
                     res = None
-                pc, args, stack = framestack.pop()
+                frame = framestack.pop()
+                stack = frame.stack
+                pc = frame.pc
                 if res:
                     stack.append(res)
 
             elif opcode == PUSHARG:
-                stack.append(args[0])
+                stack.append(frame.args[0])
 
             elif opcode == PUSHARGN:
                 idx = char2int(code[pc])
                 pc += 1
-                stack.append(args[idx])
+                stack.append(frame.args[idx])
 
             elif opcode == NEW:
                 idx = char2int(code[pc])
@@ -446,10 +437,10 @@ def make_interp(supports_call, jitted=True):
                     meth_args[num_args] = stack.pop()
                 a = meth_args[0]
                 meth_pc = a.send(name)
-                framestack.push(pc, args, stack)
+                frame.pc = pc
+                framestack.append(frame)
+                frame = Frame(meth_args, meth_pc)
                 pc = meth_pc
-                args = meth_args
-                stack = []
 
             elif opcode == PRINT:
                 if not we_are_translated():
@@ -466,7 +457,7 @@ def make_interp(supports_call, jitted=True):
             else:
                 raise RuntimeError("unknown opcode: " + str(opcode))
 
-        return stack[-1]
+        return frame.stack[-1]
     
     return interp, interp_eval
 

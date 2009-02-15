@@ -1,5 +1,4 @@
 import py
-py.test.skip("Somehow broken")
 from pypy.jit.tl.tlopcode import compile, NEW, RETURN
 from pypy.jit.tl.test import test_tl
 from pypy.jit.tl.tlc import ConstantPool
@@ -32,7 +31,7 @@ def test_serialization():
     assert bytecode == bytecode2
     assert pool == pool2
 
-class TestTLC(test_tl.TestTL):
+class TestTLC(object):
     @staticmethod
     def interp(code='', pc=0, inputarg=0):
         from pypy.jit.tl.tlc import interp
