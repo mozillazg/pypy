@@ -473,6 +473,20 @@ def make_interp(supports_call, jitted=True):
                 args = meth_args
                 stack = []
 
+            elif supports_call and opcode == CALLARGS:
+                offset = char2int(code[pc])
+                pc += 1
+                num_args = char2int(code[pc])
+                call_args = [None] * num_args
+                while num_args > 0:
+                    num_args -= 1
+                    call_args[num_args] = stack.pop()
+                    hint(num_args, concrete=True)
+                framestack.push(pc, args, stack)
+                pc = pc + offset
+                args = call_args
+                stack = []
+
             elif opcode == PRINT:
                 if not we_are_translated():
                     a = stack.pop()

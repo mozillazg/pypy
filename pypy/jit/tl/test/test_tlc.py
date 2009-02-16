@@ -270,6 +270,22 @@ class TestTLC(test_tl.TestTL):
         res = interp_eval(bytecode, 0, [nil], pool)
         assert res.int_o() == 42
 
+    def test_call_with_arguments(self):
+        from pypy.jit.tl.tlc import interp_eval, nil
+        pool = ConstantPool()
+        bytecode = compile("""
+            PUSH 41
+            CALLARGS foo/1
+            RETURN
+        foo:
+            PUSHARG
+            PUSH 1
+            ADD
+            RETURN
+        """, pool)
+        res = interp_eval(bytecode, 0, [nil], pool)
+        assert res.int_o() == 42
+
     def compile(self, filename):
         from pypy.jit.tl.tlc import interp_eval, IntObj
         pool = ConstantPool()
