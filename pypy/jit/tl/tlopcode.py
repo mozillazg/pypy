@@ -54,6 +54,7 @@ opcode(32, "PUSHARGN")
 opcode(33, "PRINT")
 opcode(34, "DUMP")
 opcode(35, "BR")
+opcode(36, "CALLARGS")
 
 del opcode
 
@@ -105,6 +106,12 @@ def compile(code='', pool=None):
                     methname, num_args = arg.split('/')
                     idx = pool.add_string(methname)
                     bytecode.append(idx)
+                    bytecode.append(int(num_args))
+                elif t[0] == 'CALLARGS':
+                    # 'label/num_args'
+                    fnname, num_args = arg.split('/')
+                    label_usage.append( (fnname, len(bytecode)) )
+                    bytecode.append( 0 )
                     bytecode.append(int(num_args))
                 else:
                     # it's a label
