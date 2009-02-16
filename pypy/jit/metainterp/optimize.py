@@ -37,7 +37,7 @@ class AllocationStorage(object):
         self.setitems = []
 
     def deal_with_box(self, box, nodes, liveboxes, memo, ready):
-        if isinstance(box, Const):
+        if isinstance(box, Const) or box not in nodes:
             virtual = False
             virtualized = False
         else:
@@ -48,8 +48,6 @@ class AllocationStorage(object):
                 return memo[box]
             virtual = instnode.virtual
             virtualized = instnode.virtualized
-            if not virtual:
-                assert box in ready
         if virtual:
             if isinstance(instnode.cls.source, ListDescr):
                 ld = instnode.cls.source
@@ -112,14 +110,26 @@ class InstanceNode(object):
         self.expanded_fields = {}
         self.known_length = -1
 
+    def set_known_length(self, val):
+        if val != -1:
+            print "Setting: %r to %d" % (self, val)
+        assert val >= -1
+        self._kl = val
+
+    def get_known_length(self):
+        return self._kl
+
+    known_length = property(get_known_length, set_known_length)
+
     def escape_if_startbox(self, memo):
         if self in memo:
             return
         memo[self] = None
         if self.startbox:
             self.escaped = True
-        for node in self.curfields.values():
-            node.escape_if_startbox(memo)
+        if not self.virtualized:
+            for node in self.curfields.values():
+                node.escape_if_startbox(memo)
 
     def add_to_dependency_graph(self, other, dep_graph):
         dep_graph.append((self, other))
@@ -149,11 +159,10 @@ class InstanceNode(object):
                 XXX # XXX think
             fields = []
             if self is other:
-                d = other.curfields
+                d = other.curfields.copy()
                 d.update(self.origfields)
             else:
                 d = other.curfields
-            d = other.curfields
             lst = d.items()
             lst.sort()
             for ofs, node in lst:
@@ -284,7 +293,7 @@ class PerfectSpecializer(object):
             if ofs >= field:
                 instnode.curfields[ofs + 1] = node
         instnode.curfields[field] = fieldnode
-        instnode.known_length += 1
+        instnode.known_length = instnode.known_length + 1
         self.dependency_graph.append((instnode, fieldnode))
         
     def find_nodes(self):
@@ -308,20 +317,21 @@ class PerfectSpecializer(object):
                 instnode = InstanceNode(box, escaped=False)
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
-                # XXX we don't support lists with variable length
-                assert isinstance(op.args[1], ConstInt)
-                instnode.known_length = op.args[1].getint()
-                # XXX following guard_builtin will set the
-                #     correct class, otherwise it's a mess
-                continue
+                if (isinstance(op.args[1], ConstInt) or
+                    self.nodes[op.args[1]].const):
+                    instnode.known_length = self.getsource(op.args[1]).getint()
+                    # XXX following guard_builtin will set the
+                    #     correct class, otherwise it's a mess
+                    continue
             elif opname == 'guard_builtin':
                 instnode = self.nodes[op.args[0]]
                 # all builtins have equal classes
                 instnode.cls = InstanceNode(op.args[1])
                 continue
             elif opname == 'guard_len':
-                instnode = self.nodes[op.args[0]]
-                instnode.known_length = op.args[1].getint()
+                if instnode.known_length == -1:
+                    instnode = self.nodes[op.args[0]]
+                    instnode.known_length = op.args[1].getint()
                 continue
             elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
@@ -346,41 +356,47 @@ class PerfectSpecializer(object):
                     self.nodes[op.args[2]].const):
                     field = self.getsource(fieldbox).getint()
                     if field < 0:
-                        field = instnode.known_length - field
+                        field = instnode.known_length + field
                     box = op.results[0]
                     self.find_nodes_getfield(instnode, field, box)
+                    print instnode, instnode.curfields, instnode.known_length 
                     continue
                 else:
                     instnode.escaped = True
             elif opname == 'append':
                 instnode = self.getnode(op.args[1])
                 assert isinstance(instnode.cls.source, ListDescr)
-                assert instnode.known_length != -1
-                field = instnode.known_length
-                instnode.known_length += 1
-                self.find_nodes_setfield(instnode, field,
-                                         self.getnode(op.args[2]))
+                if instnode.known_length != -1:
+                    field = instnode.known_length
+                    instnode.known_length = instnode.known_length + 1
+                    self.find_nodes_setfield(instnode, field,
+                                             self.getnode(op.args[2]))
+                    print instnode, instnode.curfields, instnode.known_length
                 continue
             elif opname == 'insert':
                 instnode = self.getnode(op.args[1])
                 assert isinstance(instnode.cls.source, ListDescr)
-                assert instnode.known_length != -1
-                fieldbox = self.getsource(op.args[2])
-                assert isinstance(fieldbox, Const) or fieldbox.const
-                field = fieldbox.getint()
-                if field < 0:
-                    field = instnode.known_length - field
-                self.find_nodes_insert(instnode, field,
-                                       self.getnode(op.args[3]))
+                if instnode.known_length != -1:
+                    fieldbox = self.getsource(op.args[2])
+                    assert isinstance(fieldbox, Const) or fieldbox.const
+                    field = fieldbox.getint()
+                    if field < 0:
+                        field = instnode.known_length + field
+                    self.find_nodes_insert(instnode, field,
+                                           self.getnode(op.args[3]))
+                print instnode, instnode.curfields, instnode.known_length
                 continue
             elif opname == 'pop':
                 instnode = self.getnode(op.args[1])
                 assert isinstance(instnode.cls.source, ListDescr)
-                assert instnode.known_length != -1
-                instnode.known_length -= 1
-                field = instnode.known_length
-                self.find_nodes_getfield(instnode, field, op.results[0])
-                continue
+                if instnode.known_length != -1:
+                    instnode.known_length = instnode.known_length - 1
+                    field = instnode.known_length
+                    self.find_nodes_getfield(instnode, field, op.results[0])
+                    if field in instnode.curfields:
+                        del instnode.curfields[field]                
+                    print instnode, instnode.curfields, instnode.known_length
+                    continue
             elif opname == 'len' or opname == 'listnonzero':
                 instnode = self.getnode(op.args[1])
                 if not instnode.escaped:
@@ -395,10 +411,11 @@ class PerfectSpecializer(object):
                     or self.nodes[op.args[2]].const):
                     field = self.getsource(fieldbox).getint()
                     if field < 0:
-                        field = instnode.known_length - field
+                        field = instnode.known_length + field
                     assert field < instnode.known_length
                     self.find_nodes_setfield(instnode, field,
                                              self.getnode(op.args[3]))
+                    print instnode, instnode.curfields, instnode.known_length
                     continue
                 else:
                     instnode.escaped = True
@@ -544,7 +561,7 @@ class PerfectSpecializer(object):
     def optimize_getfield(self, instnode, ofs, box):
         if instnode.virtual or instnode.virtualized:
             if ofs < 0:
-                ofs = instnode.known_length - ofs
+                ofs = instnode.known_length + ofs
             assert ofs in instnode.curfields
             return True # this means field is never actually
         elif ofs in instnode.cleanfields:
@@ -556,6 +573,8 @@ class PerfectSpecializer(object):
 
     def optimize_setfield(self, instnode, ofs, valuenode, valuebox):
         if instnode.virtual or instnode.virtualized:
+            if ofs < 0:
+                ofs = instnode.known_length + ofs
             instnode.curfields[ofs] = valuenode
         else:
             assert not valuenode.virtual
@@ -569,12 +588,13 @@ class PerfectSpecializer(object):
             if ofs >= field:
                 instnode.curfields[ofs + 1] = node
         instnode.curfields[field] = valuenode
-        instnode.known_length += 1
+        instnode.known_length = instnode.known_length + 1
 
     def optimize_loop(self):
         self.ready_results = {}
         newoperations = []
         exception_might_have_happened = False
+        ops_so_far = []
         mp = self.loop.operations[0]
         if mp.opname == 'merge_point':
             assert len(mp.args) == len(self.specnodes)
@@ -588,6 +608,8 @@ class PerfectSpecializer(object):
                 assert not self.nodes[box].virtual
 
         for op in self.loop.operations:
+            ops_so_far.append(op)
+
             if newoperations and newoperations[-1].results:
                 self.ready_results[newoperations[-1].results[0]] = None
             opname = op.opname
@@ -623,13 +645,13 @@ class PerfectSpecializer(object):
             elif opname == 'guard_len':
                 # it should be completely gone, because if it escapes
                 # we don't virtualize it anymore
-                if not instnode.escaped:
+                if not instnode.escaped and instnode.known_length == -1:
                     instnode = self.nodes[op.args[0]]
                     instnode.known_length = op.args[1].getint()
                 continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
-                if instnode.virtualized:
+                if instnode.virtualized or instnode.virtual:
                     continue
                 op = self.optimize_guard(op)
                 newoperations.append(op)
@@ -680,40 +702,40 @@ class PerfectSpecializer(object):
                 if not instnode.escaped:
                     instnode.virtual = True
                     valuesource = self.getsource(op.args[2])
-                    assert isinstance(valuesource, Const)
-                    maxlength = max(instnode.curfields.keys() +
-                                    instnode.origfields.keys())
-                    for i in range(maxlength + 1):
-                        instnode.curfields[i] = InstanceNode(valuesource,
-                                                             const=True)
-                    for ofs, item in instnode.origfields.items():
-                        self.nodes[item.source] = instnode.curfields[ofs]
                     instnode.known_length = op.args[1].getint()
+                    curfields = {}
+                    for i in range(instnode.known_length):
+                        curfields[i] = InstanceNode(valuesource,
+                                                    const=True)
+                    instnode.curfields = curfields
                     continue
             elif opname == 'append':
                 instnode = self.nodes[op.args[1]]
-                valuenode = self.nodes[op.args[2]]
-                ofs = instnode.known_length
-                instnode.known_length += 1
-                assert ofs != -1
-                self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
-                continue
+                valuenode = self.getnode(op.args[2])
+                if instnode.virtual:
+                    ofs = instnode.known_length
+                    instnode.known_length = instnode.known_length + 1
+                    self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
+                    continue
             elif opname == 'insert':
                 instnode = self.nodes[op.args[1]]
-                ofs = self.getsource(op.args[2]).getint()
-                valuenode = self.nodes[op.args[3]]
-                self.optimize_insert(instnode, ofs, valuenode, op.args[3])
-                continue
+                if instnode.virtual:
+                    ofs = self.getsource(op.args[2]).getint()
+                    valuenode = self.nodes[op.args[3]]
+                    self.optimize_insert(instnode, ofs, valuenode, op.args[3])
+                    continue
             elif opname == 'pop':
                 instnode = self.nodes[op.args[1]]
-                instnode.known_length -= 1
-                ofs = instnode.known_length
-                if self.optimize_getfield(instnode, ofs, op.results[0]):
+                if instnode.virtual:
+                    instnode.known_length = instnode.known_length - 1
+                    ofs = instnode.known_length
+                    if self.optimize_getfield(instnode, ofs, op.results[0]):
+                        del instnode.curfields[ofs]
                     continue
             elif opname == 'len' or opname == 'listnonzero':
                 instnode = self.nodes[op.args[1]]
-                assert instnode.known_length
-                continue
+                if instnode.virtual:
+                    continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
