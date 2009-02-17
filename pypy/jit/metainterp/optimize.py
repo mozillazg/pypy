@@ -865,6 +865,9 @@ def rebuild_boxes_from_guard_failure(guard_op, history, boxes_from_frame):
     storage = guard_op.storage_info
 
     for vtable in storage.allocations:
+        # XXX virtual object that came from the outside (stored on
+        # a virtualizable) has no entry in type_cache, probably
+        # we need to attach some info to guard_class
         sizebox = ConstInt(type_cache.class_size[vtable])
         vtablebox = ConstInt(vtable)
         [instbox] = history.execute_and_record('new_with_vtable',
