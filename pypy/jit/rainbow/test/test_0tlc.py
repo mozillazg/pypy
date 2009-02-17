@@ -106,7 +106,6 @@ class BaseTestTLC(PortalTest):
         #self.check_insns(...)
 
     def test_bug(self):
-        py.test.skip('fix me')
         code = """
             NEW foo,meth=meth
             PUSHARG           # if we use PUSH <constant> it works
