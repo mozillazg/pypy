@@ -1,5 +1,6 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
+from pypy.rpython.normalizecalls import TotalOrderSymbolic
 
 class OPERAND(object):
     _attrs_ = []
@@ -244,6 +245,8 @@ imm16 = IMM16
 rel32 = REL32
 
 def imm(value):
+    if isinstance(value, TotalOrderSymbolic):
+        raise TypeError # XXX?
     if isinstance(value, ComputedIntSymbolic):
         value = value.compute_fn()
     elif isinstance(value, CDefinedIntSymbolic):
