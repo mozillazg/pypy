@@ -224,11 +224,17 @@ class Frame(object):
         self.args  = args
         self.pc    = pc
         self.stack = []
+
+class Framestack(object):
+    _virtualizable2_ = True
+
+    def __init__(self):
+        self.s = []
         
 def make_interp(supports_call, jitted=True):
     myjitdriver = JitDriver(greens = ['code', 'pc'],
                             reds = ['frame', 'framestack', 'pool'],
-                            virtualizables = ['frame'])
+                            virtualizables = ['frame', 'framestack'])
     def interp(code='', pc=0, inputarg=0, pool=None):
         if not isinstance(code,str):
             raise TypeError("code '%s' should be a string" % str(code))
@@ -240,7 +246,7 @@ def make_interp(supports_call, jitted=True):
 
     def interp_eval(code, pc, args, pool):
         assert isinstance(pc, int)
-        framestack = []
+        framestack = Framestack()
         frame = Frame(args, pc)
         pc = frame.pc
 
@@ -378,18 +384,18 @@ def make_interp(supports_call, jitted=True):
                 offset = char2int(code[pc])
                 pc += 1
                 frame.pc = pc
-                framestack.append(frame)
+                framestack.s.append(frame)
                 frame = Frame([zero], pc + offset)
                 pc = frame.pc
 
             elif opcode == RETURN:
-                if not framestack:
+                if not framestack.s:
                     break
                 if stack:
                     res = stack.pop()
                 else:
                     res = None
-                frame = framestack.pop()
+                frame = framestack.s.pop()
                 stack = frame.stack
                 pc = frame.pc
                 if res:
@@ -438,7 +444,7 @@ def make_interp(supports_call, jitted=True):
                 a = meth_args[0]
                 meth_pc = a.send(name)
                 frame.pc = pc
-                framestack.append(frame)
+                framestack.s.append(frame)
                 frame = Frame(meth_args, meth_pc)
                 pc = meth_pc
 
