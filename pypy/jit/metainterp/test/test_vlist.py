@@ -279,7 +279,25 @@ class ListTests:
         res = self.meta_interp(f, [30])
         assert res == 0
         self.check_loops(append=1)
-        
+
+    def test_virtual_escaping_via_list(self):
+        jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
+        class Stuff(object):
+            def __init__(self, x):
+                self.x = x
+
+        def f(n):
+            l = [Stuff(n-i) for i in range(n)]
+
+            while n > 0:
+                jitdriver.can_enter_jit(n=n, l=l)
+                jitdriver.jit_merge_point(n=n, l=l)
+                s = l.pop()
+                n -= s.x
+
+        res = self.meta_interp(f, [20])
+        assert res == f(20)
+        self.check_loops(pop=1, getfield_gc=1)
 
     def test_extend(self):
         py.test.skip("XXX")
