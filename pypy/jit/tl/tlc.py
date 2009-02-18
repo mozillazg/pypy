@@ -266,6 +266,10 @@ def make_interp(supports_call, jitted=True):
         code_len = len(code)
         pool = hint(hint(pool2, concrete=True), deepfreeze=True)
         stack = []
+        pc_stack = []
+        args_stack = []
+        stack_stack = []
+
         framestack = FrameStack()
 
         while pc < code_len:
@@ -410,14 +414,19 @@ def make_interp(supports_call, jitted=True):
                 stack = []
 
             elif opcode == RETURN:
-                if framestack.isempty():                    
+                #if framestack.isempty():
+                if len(pc_stack) == 0:
                     break
                 if stack:
                     res = stack.pop()
                 else:
                     res = None
-                pc2, args, stack = framestack.pop()
-                pc = hint(pc2, promote=True)
+                #pc2, args, stack = framestack.pop()
+                #pc = hint(pc2, promote=True)
+                pc3 = pc_stack.pop()
+                pc = hint(pc3, promote=True)
+                args = args_stack.pop()
+                stack = stack_stack.pop()
                 if res:
                     stack.append(res)
 
@@ -486,7 +495,10 @@ def make_interp(supports_call, jitted=True):
                     num_args -= 1
                     call_args[num_args] = stack.pop()
                     hint(num_args, concrete=True)
-                framestack.push(pc, args, stack)
+                #framestack.push(pc, args, stack)
+                pc_stack.append(pc)
+                args_stack.append(args)
+                stack_stack.append(stack)
                 pc = pc + offset - 1
                 args = call_args
                 stack = []
