@@ -466,7 +466,10 @@ def make_interp(supports_call, jitted=True):
                     meth_args[num_args] = stack.pop()
                     hint(num_args, concrete=True)
                 a = meth_args[0]
+                # XXX: if you uncomment the next line,
+                # test_0tlc.test_expr fails
                 hint(a, promote_class=True)
+
                 meth_pc = hint(a.send(name), promote=True)
                 framestack.push(pc, args, stack)
                 pc = meth_pc
@@ -477,13 +480,14 @@ def make_interp(supports_call, jitted=True):
                 offset = char2int(code[pc])
                 pc += 1
                 num_args = char2int(code[pc])
+                pc += 1
                 call_args = [None] * num_args
                 while num_args > 0:
                     num_args -= 1
                     call_args[num_args] = stack.pop()
                     hint(num_args, concrete=True)
                 framestack.push(pc, args, stack)
-                pc = pc + offset
+                pc = pc + offset - 1
                 args = call_args
                 stack = []
 
