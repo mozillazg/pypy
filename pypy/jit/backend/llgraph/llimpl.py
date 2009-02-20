@@ -17,6 +17,8 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.jit.metainterp import heaptracker
 from pypy.jit.backend.llgraph import symbolic
 
+from pypy.rlib.objectmodel import ComputedIntSymbolic
+
 import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer('runner')
@@ -387,6 +389,9 @@ class Frame(object):
             values.insert(0, result_type)
         exec_counters = _stats.exec_counters
         exec_counters[opname] = exec_counters.get(opname, 0) + 1
+        for i in range(len(values)):
+            if isinstance(values[i], ComputedIntSymbolic):
+                values[i] = values[i].compute_fn()
         res = ophandler(*values)
         if verbose:
             argtypes, restype = TYPES[opname]
@@ -871,6 +876,7 @@ setannotation(compile_add_ptr_result, annmodel.SomeInteger())
 setannotation(compile_add_jump_target, annmodel.s_None)
 setannotation(compile_add_failnum, annmodel.s_None)
 setannotation(compile_from_guard, annmodel.s_None)
+setannotation(compile_add_livebox, annmodel.s_None)
 
 setannotation(new_frame, s_Frame)
 setannotation(frame_clear, annmodel.s_None)
