@@ -10,7 +10,8 @@ from pypy.jit.metainterp import history, support
 from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
                                          BoxInt, BoxPtr, GuardOp)
 from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
-from pypy.jit.metainterp.heaptracker import get_vtable_for_gcstruct
+from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
+                                             populate_type_cache)
 from pypy.jit.metainterp import codewriter, optimize
 
 # ____________________________________________________________
@@ -492,7 +493,7 @@ class MIFrame(object):
     def generate_merge_point(self, pc, varargs):
         if isinstance(self.metainterp.history, history.BlackHole):
             raise self.metainterp.ContinueRunningNormally(varargs)
-        num_green_args = self.metainterp.warmrunnerdesc.num_green_args
+        num_green_args = self.metainterp.num_green_args
         for i in range(num_green_args):
             varargs[i] = self.implement_guard_value(pc, varargs[i])
 
@@ -659,8 +660,9 @@ class MIFrame(object):
 
 
 class OOMetaInterp(object):
+    num_green_args = 0
 
-    def __init__(self, portal_graph, cpu, stats, specialize):
+    def __init__(self, portal_graph, graphs, cpu, stats, specialize):
         self.portal_graph = portal_graph
         self.cpu = cpu
         self.stats = stats
@@ -675,7 +677,9 @@ class OOMetaInterp(object):
         self.builtins_keys = []
         self.builtins_values = []
         self.builtins_seen = {}
-        
+
+        self.class_sizes = populate_type_cache(graphs, self.cpu)
+
         self._virtualizabledescs = {}
 
     def generate_bytecode(self, policy):
@@ -772,7 +776,7 @@ class OOMetaInterp(object):
             self.jump_after_guard_failure(guard_failure, loop, resargs)
 
     def designate_target_loop(self, gmp, loop):
-        num_green_args = self.warmrunnerdesc.num_green_args
+        num_green_args = self.num_green_args
         residual_args = self.get_residual_args(loop,
                                                gmp.argboxes[num_green_args:])
         return (loop, residual_args)
@@ -784,7 +788,7 @@ class OOMetaInterp(object):
                                  i, residual_args[i])
 
     def compile(self, original_boxes, live_arg_boxes):
-        num_green_args = self.warmrunnerdesc.num_green_args
+        num_green_args = self.num_green_args
         for i in range(num_green_args):
             box1 = original_boxes[i]
             box2 = live_arg_boxes[i]
@@ -803,7 +807,7 @@ class OOMetaInterp(object):
         return loop
 
     def compile_bridge(self, guard_failure, original_boxes, live_arg_boxes):
-        num_green_args = self.warmrunnerdesc.num_green_args
+        num_green_args = self.num_green_args
         mp = history.ResOperation('catch', original_boxes, [])
         mp.coming_from = guard_failure.guard_op
         self.history.operations.insert(0, mp)
@@ -833,7 +837,7 @@ class OOMetaInterp(object):
 
     def initialize_state_from_start(self, args):
         self.create_empty_history()
-        num_green_args = self.warmrunnerdesc.num_green_args
+        num_green_args = self.num_green_args
         original_boxes = []
         for i in range(len(args)):
             value = args[i]
@@ -851,7 +855,7 @@ class OOMetaInterp(object):
 
     def initialize_state_from_guard_failure(self, guard_failure):
         # guard failure: rebuild a complete MIFrame stack
-        if self.warmrunnerdesc.state.must_compile_from_failure(guard_failure):
+        if self.state.must_compile_from_failure(guard_failure):
             self.history = history.History(self.cpu)
         else:
             self.history = history.BlackHole(self.cpu)
@@ -869,7 +873,7 @@ class OOMetaInterp(object):
             boxes_from_frame.append(newbox)
         if guard_op.storage_info is not None:
             newboxes = optimize.rebuild_boxes_from_guard_failure(
-                guard_op, self.history, boxes_from_frame)
+                guard_op, self, boxes_from_frame)
         else:
             # xxx for tests only
             newboxes = boxes_from_frame

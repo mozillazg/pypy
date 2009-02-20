@@ -1,5 +1,4 @@
 import py
-py.test.skip("unsupported list ops")
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rlib.jit import JitDriver, hint
@@ -20,6 +19,7 @@ class ListTests:
         assert res == 9
 
     def test_list_operations(self):
+        py.test.skip("pop(int) not supported")
         class FooBar:
             def __init__(self, z):
                 self.z = z

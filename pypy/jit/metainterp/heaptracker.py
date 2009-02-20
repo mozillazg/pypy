@@ -63,6 +63,21 @@ def set_testing_vtable_for_gcstruct(GCSTRUCT, vtable):
     # structures in case they are GcStruct inheriting from OBJECT.
     testing_gcstruct2vtable[GCSTRUCT] = vtable
 
+def populate_type_cache(graphs, cpu):
+    cache = {}
+    for graph in graphs:
+        for block in graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'malloc':
+                    STRUCT = op.args[0].value
+                    if isinstance(STRUCT, lltype.GcStruct):
+                        vtable = get_vtable_for_gcstruct(cpu, STRUCT)
+                        if vtable:
+                            vt = cpu.cast_adr_to_int(
+                                llmemory.cast_ptr_to_adr(vtable))
+                            cache[vt] = cpu.sizeof(STRUCT)
+    return cache
+
 testing_gcstruct2vtable = {}
 
 # ____________________________________________________________
@@ -86,7 +101,7 @@ operation_never_raises = {}
 
 for guard in ['guard_no_exception', 'guard_true',
               'guard_false', 'guard_value', 'guard_class']:
-    always_pure_operations[guard] = True
-    operation_never_raises[guard] = True
+    always_pure_operations[guard] = None
+    operation_never_raises[guard] = None
 
 setup()

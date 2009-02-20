@@ -1,47 +1,18 @@
 import py
-py.test.skip("XXX")
-from pyjitpl import ll_meta_interp, get_stats
-from rpyjitpl import rpython_ll_meta_interp
-from test import test_basic
-
+py.test.skip("XXX WiP")
+from pypy.jit.metainterp.warmspot import rpython_ll_meta_interp, ll_meta_interp
+from pypy.jit.metainterp.test import test_basic
+from pypy.rlib.jit import JitDriver
 
 class TestBasic:
 
-    def test_dummy(self):
-        def f(x):
-            return x
-        res = ll_meta_interp(f, [42])
-        assert res == 42
-        res = rpython_ll_meta_interp(f, [42], loops=0)
-        assert res == 42
-
-    def test_basic(self):
-        def f(x, y):
-            return x + y
-        res = ll_meta_interp(f, [40, 2])
-        assert res == 42
-        res = rpython_ll_meta_interp(f, [40, 2], loops=0)
-        assert res == 42
-
-    def test_if(self):
-        def f(x, y, z):
-            if x:
-                return y
-            else:
-                return z
-        res = ll_meta_interp(f, [1, 40, 2])
-        assert res == 40
-        res = ll_meta_interp(f, [1, 40, 2])
-        assert res == 40
-        res = rpython_ll_meta_interp(f, [1, 40, 2], loops=0)
-        assert res == 40
-        res = rpython_ll_meta_interp(f, [0, 40, 2], loops=0)
-        assert res == 2
-
     def test_loop_1(self):
+        jitdriver = JitDriver(greens = [], reds = ['i', 'total'])
         def f(i):
             total = 0
             while i > 3:
+                jitdriver.can_enter_jit(i=i, total=total)
+                jitdriver.jit_merge_point(i=i, total=total)
                 total += i
                 i -= 1
             return total * 10
@@ -63,31 +34,6 @@ class TestBasic:
         assert res == (17+14+11+8+7+6+5+4) * 10
         res = rpython_ll_meta_interp(f, [17], loops=2)
         assert res == (17+14+11+8+7+6+5+4) * 10
-
-    def test_ptr_very_simple(self):
-        class A:
-            pass
-        a = A()
-        def f(i):
-            a.i = i
-            return a.i + 2
-        res = ll_meta_interp(f, [17])
-        assert res == 19
-        res = rpython_ll_meta_interp(f, [17])
-        assert res == 19
-
-    def test_ptr_simple(self):
-        class A:
-            pass
-        def f(i):
-            a = A()
-            a.i = i
-            return a.i + 2
-        res = ll_meta_interp(f, [17])
-        assert res == 19
-        res = rpython_ll_meta_interp(f, [17], loops=0)
-        assert res == 19
-
 
 class LLInterpJitMixin:
     type_system = 'lltype'

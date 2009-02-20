@@ -1,6 +1,7 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
-from pypy.rpython.annlowlevel import llhelper
+from pypy.rpython.annlowlevel import llhelper, MixLevelHelperAnnotator
+from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLException
 from pypy.rpython.test.test_llinterp import get_interpreter, clear_tcache
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
@@ -27,6 +28,18 @@ def ll_meta_interp(function, args, backendopt=False, **kwds):
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
     return interp.eval_graph(graph, args)
+
+def rpython_ll_meta_interp(function, args, loops=None, **kwds):
+    kwds['translate_support_code'] = True
+    interp, graph = get_interpreter(function, args, backendopt=True,
+                                    inline_threshold=0)
+    clear_tcache()
+    translator = interp.typer.annotator.translator
+    warmrunnerdesc = WarmRunnerDesc(translator, **kwds)
+    warmrunnerdesc.state.set_param_threshold(3)          # for tests
+    warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
+    xxx
+    interp.eval_graph(boot, args)
 
 def find_can_enter_jit(graphs):
     results = []
@@ -78,7 +91,8 @@ class WarmRunnerDesc:
         self.make_enter_function()
         self.rewrite_can_enter_jit()
         self.rewrite_jit_merge_point()
-        self.metainterp.warmrunnerdesc = self    # allows call-backs
+        self.metainterp.num_green_args = self.num_green_args
+        self.metainterp.state = self.state
 
     def _freeze_(self):
         return True
@@ -90,6 +104,8 @@ class WarmRunnerDesc:
         cpu = CPUClass(self.translator.rtyper, self.stats,
                        translate_support_code)
         self.cpu = cpu
+        if translate_support_code:
+            self.annhelper = MixLevelHelperAnnotator(self.translator.rtyper)
         graphs = self.translator.graphs
         self.jit_merge_point_pos = find_jit_merge_point(graphs)
         graph, block, pos = self.jit_merge_point_pos
@@ -102,7 +118,8 @@ class WarmRunnerDesc:
         self.translator.graphs.append(graph)
         self.portal_graph = graph
         self.jitdriver = block.operations[pos].args[1].value
-        self.metainterp = OOMetaInterp(graph, cpu, self.stats, specialize)
+        self.metainterp = OOMetaInterp(graph, graphs, cpu, self.stats,
+                                       specialize)
 
     def make_enter_function(self):
         WarmEnterState = make_state_class(self)
@@ -131,10 +148,9 @@ class WarmRunnerDesc:
         self.PORTAL_FUNCTYPE = lltype.FuncType(ALLARGS, RESTYPE)
 
     def rewrite_can_enter_jit(self):
-        assert not self.cpu.translate_support_code, "XXX for now"
         FUNC = self.JIT_ENTER_FUNCTYPE
         FUNCPTR = lltype.Ptr(FUNC)
-        jit_enter_fnptr = llhelper(FUNCPTR, self.maybe_enter_jit_fn)
+        jit_enter_fnptr = self.helper_func(FUNCPTR, self.maybe_enter_jit_fn)
 
         graphs = self.translator.graphs
         can_enter_jits = find_can_enter_jit(graphs)
@@ -152,6 +168,14 @@ class WarmRunnerDesc:
             v_result.concretetype = lltype.Void
             newop = SpaceOperation('direct_call', vlist, v_result)
             block.operations[index] = newop
+
+    def helper_func(self, FUNCPTR, func):
+        if not self.cpu.translate_support_code:
+            return llhelper(FUNCPTR, func)
+        FUNC = FUNCPTR.TO
+        args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
+        s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
+        return self.annhelper.delayedfunction(func, args_s, s_result)
 
     def rewrite_jit_merge_point(self):
         #
@@ -228,34 +252,39 @@ class WarmRunnerDesc:
         self.metainterp.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
 
-        def ll_portal_runner(*args):
-            while 1:
-                try:
-                    return support.maybe_on_top_of_llinterp(rtyper,
-                                                            portal_ptr)(*args)
-                except ContinueRunningNormally, e:
-                    # XXX NOT RPYTHON
-                    args = []
-                    for i, arg in enumerate(e.args):
-                        v = arg.value
-                        if lltype.typeOf(v) == llmemory.GCREF:
-                            v = lltype.cast_opaque_ptr(PORTALFUNC.ARGS[i], v)
-                        args.append(v)
-                except DoneWithThisFrame, e:
-                    if e.resultbox is not None:
-                        return e.resultbox.value
-                    return
-                except ExitFrameWithException, e:
-                    type = e.typebox.getaddr(self.metainterp.cpu)
-                    type = llmemory.cast_adr_to_ptr(type, rclass.CLASSTYPE)
-                    value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
-                    raise LLException(type, value)
-
         if not self.cpu.translate_support_code:
-            portal_runner_ptr = llhelper(lltype.Ptr(PORTALFUNC),
-                                         ll_portal_runner)
+            def ll_portal_runner(*args):
+                while 1:
+                    try:
+                        return support.maybe_on_top_of_llinterp(rtyper,
+                                                          portal_ptr)(*args)
+                    except ContinueRunningNormally, e:
+                        args = []
+                        for i, arg in enumerate(e.args):
+                            v = arg.value
+                            if lltype.typeOf(v) == llmemory.GCREF:
+                                v = lltype.cast_opaque_ptr(PORTALFUNC.ARGS[i],
+                                                           v)
+                            args.append(v)
+                    except DoneWithThisFrame, e:
+                        if e.resultbox is not None:
+                            return e.resultbox.value
+                        return
+                    except ExitFrameWithException, e:
+                        type = e.typebox.getaddr(self.metainterp.cpu)
+                        type = llmemory.cast_adr_to_ptr(type, rclass.CLASSTYPE)
+                        value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
+                        raise LLException(type, value)
+
         else:
-            xxx
+            def ll_portal_runner(*args):
+                while 1:
+                    #try:
+                    portal_ptr(*args)
+                    #xexcept DoneWi
+
+        portal_runner_ptr = self.helper_func(lltype.Ptr(PORTALFUNC),
+                                             ll_portal_runner)
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
@@ -276,6 +305,8 @@ class WarmRunnerDesc:
         origblock.exitswitch = None
         origblock.recloseblock(Link([v_result], origportalgraph.returnblock))
         checkgraph(origportalgraph)
+        if self.cpu.translate_support_code:
+            self.annhelper.finish()
 
 
 def decode_hp_hint_args(op):
@@ -318,8 +349,8 @@ def make_state_class(warmrunnerdesc):
         __slots__ = 'counter'
 
     class MachineCodeEntryPoint(StateCell):
-        def __init__(self, mc, *greenargs):
-            self.mc = mc
+        def __init__(self, mp, *greenargs):
+            self.mp = mp
             self.next = Counter(0)
             i = 0
             for name in green_args_names:
@@ -378,16 +409,17 @@ def make_state_class(warmrunnerdesc):
                     self.cells[argshash] = Counter(n)
                     return
                 #interp.debug_trace("jit_compile", *greenargs)
-                return self.compile_and_run(argshash, *args)
+                self.compile_and_run(argshash, *args)
             else:
+                raise NotImplementedError("bridges to compiled code")
                 # machine code was already compiled for these greenargs
                 # (or we have a hash collision)
-                XXX
                 assert isinstance(cell, MachineCodeEntryPoint)
                 if cell.equalkey(*greenargs):
-                    return cell.mc
+                    self.run(cell, *args)
                 else:
-                    return self.handle_hash_collision(cell, argshash, *args)
+                    xxx
+                    self.handle_hash_collision(cell, argshash, *args)
         maybe_compile_and_run._dont_inline_ = True
 
         def handle_hash_collision(self, cell, argshash, *args):

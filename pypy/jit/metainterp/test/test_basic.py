@@ -16,7 +16,9 @@ def get_metainterp(func, values, CPUClass, type_system, policy):
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, False)
     graph = rtyper.annotator.translator.graphs[0]
-    return pyjitpl.OOMetaInterp(graph, cpu, stats, False), rtyper
+    metainterp = pyjitpl.OOMetaInterp(graph, [], cpu, stats, False)
+    metainterp.num_green_args = 0
+    return metainterp, rtyper
 
 class JitMixin:
     basic = True

@@ -42,8 +42,23 @@ class WarmspotTests(object):
             except Exit, e:
                 return e.result
 
-        res = self.meta_interp(main, [1], interpreter_loop)
+        res = self.meta_interp(main, [1])
         assert res == 21
+
+    def test_reentry(self):
+        mydriver = JitDriver(reds = ['n'], greens = [])
+
+        def f(n):
+            while n > 0:
+                mydriver.can_enter_jit(n=n)
+                mydriver.jit_merge_point(n=n)
+                if n % 20 == 0:
+                    n -= 2
+                n -= 1
+
+        res = self.meta_interp(f, [60])
+        assert res == f(30)
+
 
 class TestLLWarmspot(WarmspotTests):
     pass
