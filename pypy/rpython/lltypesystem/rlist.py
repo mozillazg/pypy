@@ -110,7 +110,8 @@ class ListRepr(AbstractListRepr, BaseListRepr):
                                           "_ll_resize_ge": _ll_list_resize_ge,
                                           "_ll_resize_le": _ll_list_resize_le,
                                           "_ll_resize": _ll_list_resize,
-                                      }))
+                                      }),
+                                      hints = {'list': True})
                              )
 
     def compact_repr(self):
