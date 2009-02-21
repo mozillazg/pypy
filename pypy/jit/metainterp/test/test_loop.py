@@ -51,21 +51,30 @@ class TestLoop(LLJitMixin):
             self.check_loops(getfield_gc = 0, setfield_gc = 1)
 
     def test_loop_with_two_paths(self):
+        from pypy.rpython.lltypesystem import lltype
+        from pypy.rpython.lltypesystem.lloperation import llop
         myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])
-        def g(y, x):
+
+        def l(y, x, t):
+            llop.debug_print(lltype.Void, y, x, t)
+        
+        def g(y, x, r):
             if y <= 12:
-                return x - 2
+                res = x - 2
             else:
-                return x
+                res = x
+            l(y, x, r)
+            return res
+
         def f(x, y):
             res = 0
             while y > 0:
                 myjitdriver.can_enter_jit(x=x, y=y, res=res)
                 myjitdriver.jit_merge_point(x=x, y=y, res=res)
-                res += g(y, x)
+                res += g(y, x, res)
                 y -= 1
             return res * 2
-        res = self.meta_interp(f, [6, 33])
+        res = self.meta_interp(f, [6, 33], policy=StopAtXPolicy(l))
         assert res == f(6, 33)
         self.check_loop_count(2)
 
@@ -304,7 +313,6 @@ class TestLoop(LLJitMixin):
         loops = get_stats().loops
         assert loops[0].operations[0].opname == 'merge_point'
         assert loops[1].operations[0].opname == 'catch'
-
 
     def test_example(self):
         myjitdriver = JitDriver(greens = ['i'],

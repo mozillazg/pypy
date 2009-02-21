@@ -1,5 +1,4 @@
 import py
-py.test.skip("XXX WiP")
 from pypy.jit.metainterp.warmspot import rpython_ll_meta_interp, ll_meta_interp
 from pypy.jit.metainterp.test import test_basic
 from pypy.rlib.jit import JitDriver

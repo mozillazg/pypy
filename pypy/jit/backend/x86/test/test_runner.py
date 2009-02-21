@@ -1,8 +1,9 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from history import ResOperation, MergePoint, Jump
-from history import BoxInt, BoxPtr, ConstInt, ConstPtr
-from codegen386.runner import CPU, GuardFailed
+from pypy.jit.metainterp.history import ResOperation, MergePoint, Jump
+from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
+                                         GuardOp)
+from pypy.jit.backend.x86.runner import CPU, GuardFailed
 
 class FakeStats(object):
     pass
@@ -10,11 +11,10 @@ class FakeStats(object):
 class FakeMetaInterp(object):
     def handle_guard_failure(self, gf):
         assert isinstance(gf, GuardFailed)
-        assert gf.merge_point.opname == 'merge_point'
         self.gf = gf
         self.recordedvalues = [
-                gf.cpu.getvaluebox(gf.frame, gf.merge_point, i).value
-                    for i in range(len(gf.merge_point.args))]
+                gf.cpu.getvaluebox(gf.frame, gf.guard_op, i).value
+                    for i in range(len(gf.guard_op.liveboxes))]
         gf.make_ready_for_return(BoxInt(42))
 
 MY_VTABLE = lltype.Struct('my_vtable')    # for tests only
@@ -72,12 +72,12 @@ class TestX86(object):
         cpu = self.cpu
         u = lltype.malloc(U)
         u_box = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, u))
-        ofs_box = ConstInt(cpu.offsetof(S, 'value'))
-        assert cpu.execute_operation('setfield_gc__4', [u_box, ofs_box, BoxInt(3)],
+        ofs_box = ConstInt(cpu.fielddescrof(S, 'value'))
+        assert cpu.execute_operation('setfield_gc', [u_box, ofs_box, BoxInt(3)],
                                      'void') == None
         assert u.parent.parent.value == 3
         u.parent.parent.value += 100
-        assert (cpu.execute_operation('getfield_gc__4', [u_box, ofs_box], 'int')
+        assert (cpu.execute_operation('getfield_gc', [u_box, ofs_box], 'int')
                 .value == 103)
 
     def test_execute_operations_in_env(self):
@@ -93,20 +93,18 @@ class TestX86(object):
             ResOperation('int_add', [x, y], [z]),
             ResOperation('int_sub', [y, ConstInt(1)], [t]),
             ResOperation('int_eq', [t, ConstInt(0)], [u]),
-            MergePoint('merge_point', [t, u, z], []),
-            ResOperation('guard_false', [u], []),
+            GuardOp('guard_false', [u], []),
             Jump('jump', [z, t], []),
             ]
         startmp = operations[0]
-        othermp = operations[-3]
         operations[-1].jump_target = startmp
+        operations[-2].liveboxes = [t, u, z]
         cpu.compile_operations(operations)
         res = cpu.execute_operations_in_new_frame('foo', startmp,
                                                   [BoxInt(0), BoxInt(10)],
                                                   'int')
         assert res.value == 42
         gf = cpu.metainterp.gf
-        assert gf.merge_point is othermp
         assert cpu.metainterp.recordedvalues == [0, True, 55]
         assert gf.guard_op is operations[-2]
 
@@ -114,18 +112,16 @@ class TestX86(object):
         vtable_for_T = lltype.malloc(MY_VTABLE, immortal=True)
         cpu = self.cpu
         cpu._cache_gcstruct2vtable = {T: vtable_for_T}
-        assert cpu.execute_operation('guard_true', [BoxInt(1)], 'void') == None
-        assert cpu.execute_operation('guard_false', [BoxInt(0)], 'void') == None
-        assert cpu.execute_operation('guard_value', [BoxInt(42), BoxInt(42)],
-                                     'void') == None
+        for (opname, args) in [('guard_true', [BoxInt(1)]),
+                               ('guard_false', [BoxInt(0)]),
+                               ('guard_value', [BoxInt(42), BoxInt(42)])]:
+                assert cpu.execute_operation(opname, args, 'void') == None
         t = lltype.malloc(T)
         t.parent.typeptr = vtable_for_T
         t_box = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, t))
         T_box = ConstInt(rffi.cast(lltype.Signed, vtable_for_T))
         null_box = ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.nullptr(T)))
         assert cpu.execute_operation('guard_class', [t_box, T_box], 'void') == None
-        assert cpu.execute_operation('guard_nonnull', [t_box], 'void') == None
-        assert cpu.execute_operation('guard_isnull', [null_box], 'void') == None
 
     def test_failing_guards(self):
         vtable_for_T = lltype.malloc(MY_VTABLE, immortal=True)
@@ -147,10 +143,6 @@ class TestX86(object):
                              ('guard_value', [BoxInt(42), BoxInt(41)]),
                              ('guard_class', [t_box, U_box]),
                              ('guard_class', [u_box, T_box]),
-                             ('guard_lt', [BoxInt(42), BoxInt(41)]),
-                             ('guard_ge', [BoxInt(42), BoxInt(43)]),
-                             ('guard_isnull', [u_box]),
-                             ('guard_nonnull', [null_box]),
                              ]:
             cpu.metainterp.gf = None
             assert cpu.execute_operation(opname, args, 'void') == None
