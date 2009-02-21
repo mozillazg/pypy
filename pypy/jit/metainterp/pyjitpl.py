@@ -784,7 +784,7 @@ class OOMetaInterp(object):
     def jump_after_guard_failure(self, guard_failure, loop, residual_args):
         guard_failure.make_ready_for_continuing_at(loop.operations[0])
         for i in range(len(residual_args)):
-            self.cpu.setvaluebox(guard_failure.frame, guard_failure.guard_op,
+            self.cpu.setvaluebox(guard_failure.frame, loop.operations[0],
                                  i, residual_args[i])
 
     def compile(self, original_boxes, live_arg_boxes):

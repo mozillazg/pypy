@@ -262,6 +262,10 @@ class WarmRunnerDesc:
                         args = []
                         for i, arg in enumerate(e.args):
                             v = arg.value
+                            # HACK for x86 backend always returning int
+                            if (isinstance(PORTALFUNC.ARGS[i], lltype.Ptr) and
+                                isinstance(v, int)):
+                                v = self.metainterp.cpu.cast_int_to_gcref(v)
                             if lltype.typeOf(v) == llmemory.GCREF:
                                 v = lltype.cast_opaque_ptr(PORTALFUNC.ARGS[i],
                                                            v)
@@ -467,7 +471,8 @@ def make_state_class(warmrunnerdesc):
                 cpu = warmrunnerdesc.metainterp.cpu
                 mp = loop.operations[0]
                 box = cpu.execute_operations_in_new_frame('run_this_loop',
-                                                          mp, boxes)
+                                                          mp, boxes,
+                                                          "int")
                 raise warmrunnerdesc.DoneWithThisFrame(box)
 
         def must_compile_from_failure(self, guard_failure):

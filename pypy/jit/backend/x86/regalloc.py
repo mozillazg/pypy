@@ -2,12 +2,13 @@
 """ Register allocation scheme. The idea is as follows:
 """
 
-from history import Box, Const, ConstInt, ConstPtr, ResOperation, MergePoint,\
-     ConstAddr
+from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
+                                         ResOperation, MergePoint, ConstAddr)
 from pypy.jit.backend.x86.ri386 import *
-from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi
+from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.jit.backend.x86 import symbolic
 
 # esi edi and ebp can be added to this list, provided they're correctly
 # saved and restored
@@ -100,33 +101,29 @@ class RegAlloc(object):
         else:
             loop_consts = self._compute_loop_consts(mp, jump)
         self.current_stack_depth = len(mp.args)
-        if guard_op:
-            self.most_recent_mp = guard_op.most_recent_mp
-        else:
-            self.most_recent_mp = None
         self.computed_ops = self.walk_operations(operations, loop_consts)
         assert not self.reg_bindings
 
     def _start_from_guard_op(self, guard_op, mp, jump):
-        most_recent_mp = guard_op.most_recent_mp
         rev_stack_binds = {}
         self.jump_reg_candidates = {}
+        j = 0
         for i in range(len(mp.args)):
             arg = mp.args[i]
-            stackpos = most_recent_mp.stacklocs[i]
-            loc = most_recent_mp.arglocs[i]
             if not isinstance(arg, Const):
+                stackpos = guard_op.stacklocs[j]
+                loc = guard_op.locs[j]
                 if isinstance(loc, REG):
                     self.free_regs = [reg for reg in self.free_regs if reg is not loc]
                     self.reg_bindings[arg] = loc
                     self.dirty_stack[arg] = True
                 self.stack_bindings[arg] = stack_pos(stackpos)
                 rev_stack_binds[stackpos] = arg
+                j += 1
         if jump.opname != 'jump':
             return {}
         for i in range(len(jump.args)):
             argloc = jump.jump_target.arglocs[i]
-            stackpos = jump.jump_target.stacklocs[i]
             jarg = jump.args[i]
             if isinstance(argloc, REG):
                 self.jump_reg_candidates[jarg] = argloc
@@ -137,8 +134,9 @@ class RegAlloc(object):
                 # overlap.
                 pass # we don't care that they occupy the same place
             else:
-                self.stack_bindings[jarg] = stack_pos(stackpos)
-                self.dirty_stack[jarg] = True
+                #self.dirty_stack[jarg] = True
+                # XXX ^^^^^^^^^ why?
+                self.stack_bindings[jarg] = stack_pos(i)
         return {}
 
     def _compute_loop_consts(self, mp, jump):
@@ -198,7 +196,6 @@ class RegAlloc(object):
         # operations that is a "last-time-seen"
         longevity = {}
         start_live = {}
-        most_recent_mp_args = []
         for v in operations[0].args:
             start_live[v] = 0
         for i in range(len(operations)):
@@ -208,11 +205,10 @@ class RegAlloc(object):
             for arg in op.args:
                 if isinstance(arg, Box):
                     longevity[arg] = (start_live[arg], i)
-            if op.opname == "merge_point" or op.opname == 'catch':
-                most_recent_mp_args = op.args
-            elif op.opname.startswith('guard_'):
-                for arg in most_recent_mp_args:
-                    longevity[arg] = (start_live[arg], i)
+            if op.opname.startswith('guard_'):
+                for arg in op.liveboxes:
+                    if isinstance(arg, Box):
+                        longevity[arg] = (start_live[arg], i)
         self.longevity = longevity
 
     def try_allocate_reg(self, v, selected_reg=None):
@@ -261,8 +257,17 @@ class RegAlloc(object):
             # this means we cannot have it in IMM, eh
             if selected_reg in self.free_regs:
                 return selected_reg, [Load(v, convert_to_imm(v), selected_reg)]
-            # otherwise we need to do all dance etc
-            raise NotImplementedError # XXX needs tests
+            v_to_spill = self.pick_variable_to_spill(v, forbidden_vars, selected_reg)
+            if v_to_spill not in self.stack_bindings or v_to_spill in self.dirty_stack:
+                newloc = self.stack_loc(v_to_spill)
+                try:
+                    del self.dirty_stack[v_to_spill]
+                except KeyError:
+                    pass
+                ops = [Store(v_to_spill, selected_reg, newloc)]
+            else:
+                ops = []
+            return selected_reg, ops+[Load(v, convert_to_imm(v), selected_reg)]
         return convert_to_imm(v), []
 
     def force_allocate_reg(self, v, forbidden_vars, selected_reg=None):
@@ -273,6 +278,9 @@ class RegAlloc(object):
         loc = self.try_allocate_reg(v, selected_reg)
         if loc:
             return loc, []
+        return self._spill_var(v, forbidden_vars, selected_reg)
+
+    def _spill_var(self, v, forbidden_vars, selected_reg):
         v_to_spill = self.pick_variable_to_spill(v, forbidden_vars, selected_reg)
         loc = self.reg_bindings[v_to_spill]
         del self.reg_bindings[v_to_spill]
@@ -285,6 +293,17 @@ class RegAlloc(object):
                 pass
             return loc, [Store(v_to_spill, loc, newloc)]
         return loc, []
+
+    def _locs_from_liveboxes(self, guard_op):
+        stacklocs = []
+        locs = []
+        for arg in guard_op.liveboxes:
+            if isinstance(arg, Box):
+                stacklocs.append(self.stack_loc(arg).position)
+                locs.append(self.loc(arg))
+        guard_op.stacklocs = stacklocs
+        guard_op.locs = locs
+        return locs
 
     def stack_loc(self, v):
         try:
@@ -391,75 +410,71 @@ class RegAlloc(object):
         # XXX we can sort out here by longevity if we need something
         # more optimal
         ops = [PerformDiscard(op, [])]
-        if self.most_recent_mp is None:
-            locs = [None] * len(op.args)
-            for i in range(len(op.args)):
-                arg = op.args[i]
-                assert not isinstance(arg, Const)
-                reg = None            
-                loc = stack_pos(i)
-                self.stack_bindings[arg] = loc
-                if arg not in self.loop_consts:
-                    reg = self.try_allocate_reg(arg)
-                if reg:
-                    locs[i] = reg
-                    self.dirty_stack[arg] = True
-                else:
-                    locs[i] = loc
-                # otherwise we have it saved on stack, so no worry
-        else:
-            locs = []
-            for arg in op.args:
-                l = self.loc(arg)
-                if isinstance(l, REG):
-                    self.dirty_stack[arg] = True
-                locs.append(l)
-            # possibly constants
-        op.stacklocs = [self.stack_loc(arg).position for arg in op.args]
+        locs = [None] * len(op.args)
+        for i in range(len(op.args)):
+            arg = op.args[i]
+            assert not isinstance(arg, Const)
+            reg = None            
+            loc = stack_pos(i)
+            self.stack_bindings[arg] = loc
+            if arg not in self.loop_consts:
+                reg = self.try_allocate_reg(arg)
+            if reg:
+                locs[i] = reg
+                self.dirty_stack[arg] = True
+            else:
+                locs[i] = loc
+            # otherwise we have it saved on stack, so no worry
         op.arglocs = locs
         ops[-1].arglocs = op.arglocs
-        self.most_recent_mp = op
+        op.stacklocs = [i for i in range(len(op.args))]
         # XXX be a bit smarter and completely ignore such vars
         self.eventually_free_vars(op.args)
         return ops
 
-    consider_catch = consider_merge_point
+    def consider_catch(self, op):
+        locs = []
+        for arg in op.args:
+            l = self.loc(arg)
+            if isinstance(l, REG):
+                self.dirty_stack[arg] = True
+            locs.append(l)
+            # possibly constants
+        op.arglocs = locs
+        op.stacklocs = [self.stack_loc(arg).position for arg in op.args]
+        self.eventually_free_vars(op.args)
+        return [PerformDiscard(op, [])]
 
     def consider_guard(self, op):
         loc, ops = self.make_sure_var_in_reg(op.args[0], [])
-        #if self.most_recent_mp is self.first_merge_point:
-        locs = [self.loc(arg) for arg in self.most_recent_mp.args]
+        locs = self._locs_from_liveboxes(op)
         self.eventually_free_var(op.args[0])
-        self.eventually_free_vars(self.most_recent_mp.args)
+        self.eventually_free_vars(op.liveboxes)
         return ops + [PerformDiscard(op, [loc] + locs)]
+
+    def consider_guard_no_exception(self, op):
+        locs = self._locs_from_liveboxes(op)
+        self.eventually_free_vars(op.liveboxes)
+        return [PerformDiscard(op, locs)]
 
     consider_guard_true = consider_guard
     consider_guard_false = consider_guard
-    consider_guard_nonzero = consider_guard
-    consider_guard_iszero  = consider_guard
-    consider_guard_nonnull = consider_guard
-    consider_guard_isnull  = consider_guard
 
-    def consider_guard2(self, op):
-        loc1, ops1 = self.make_sure_var_in_reg(op.args[0], [])
-        loc2, ops2 = self.make_sure_var_in_reg(op.args[1], [])
-        locs = [self.loc(arg) for arg in self.most_recent_mp.args]
-        self.eventually_free_vars(op.args + self.most_recent_mp.args)
-        return ops1 + ops2 + [PerformDiscard(op, [loc1, loc2] + locs)]
+    #def consider_guard2(self, op):
+    #    loc1, ops1 = self.make_sure_var_in_reg(op.args[0], [])
+    #    loc2, ops2 = self.make_sure_var_in_reg(op.args[1], [])
+    #    locs = [self.loc(arg) for arg in op.liveboxes]
+    #    self.eventually_free_vars(op.args + op.liveboxes)
+    #    return ops1 + ops2 + [PerformDiscard(op, [loc1, loc2] + locs)]
 
-    consider_guard_lt = consider_guard2
-    consider_guard_le = consider_guard2
-    consider_guard_eq = consider_guard2
-    consider_guard_ne = consider_guard2
-    consider_guard_gt = consider_guard2
-    consider_guard_ge = consider_guard2
-    consider_guard_is = consider_guard2
-    consider_guard_isnot = consider_guard2
-
-    def consider_guard_pause(self, op):
-        locs = [self.loc(arg) for arg in self.most_recent_mp.args]
-        self.eventually_free_vars(self.most_recent_mp.args)
-        return [PerformDiscard(op, locs)]
+    #consider_guard_lt = consider_guard2
+    #consider_guard_le = consider_guard2
+    #consider_guard_eq = consider_guard2
+    #consider_guard_ne = consider_guard2
+    #consider_guard_gt = consider_guard2
+    #consider_guard_ge = consider_guard2
+    #consider_guard_is = consider_guard2
+    #consider_guard_isnot = consider_guard2
 
     def consider_guard_value(self, op):
         x = self.loc(op.args[0])
@@ -468,15 +483,15 @@ class RegAlloc(object):
         else:
             ops = []
         y = self.loc(op.args[1])
-        locs = [self.loc(arg) for arg in self.most_recent_mp.args]
-        self.eventually_free_vars(self.most_recent_mp.args + op.args)
+        locs = self._locs_from_liveboxes(op)
+        self.eventually_free_vars(op.liveboxes + op.args)
         return ops + [PerformDiscard(op, [x, y] + locs)]
 
     def consider_guard_class(self, op):
         x, ops = self.make_sure_var_in_reg(op.args[0], [], imm_fine=False)
         y = self.loc(op.args[1])
-        locs = [self.loc(arg) for arg in self.most_recent_mp.args]
-        self.eventually_free_vars(self.most_recent_mp.args + op.args)
+        locs = self._locs_from_liveboxes(op)
+        self.eventually_free_vars(op.liveboxes + op.args)
         return ops + [PerformDiscard(op, [x, y] + locs)]
 
     def consider_return(self, op):
@@ -565,11 +580,11 @@ class RegAlloc(object):
     consider_int_ne = consider_compop
     consider_int_eq = consider_compop
 
-    def _call(self, op, arglocs):
+    def _call(self, op, arglocs, force_store=[]):
         ops = []
         # we need to store all variables which are now in registers
         for v, reg in self.reg_bindings.items():
-            if self.longevity[v][1] >= self.position:
+            if self.longevity[v][1] > self.position or v in force_store:
                 ops.append(Store(v, reg, self.stack_loc(v)))
                 try:
                     del self.dirty_stack[v]
@@ -577,7 +592,7 @@ class RegAlloc(object):
                     pass
         self.reg_bindings = newcheckdict()
         if op.results:
-            self.reg_bindings[op.results[0]] = eax
+            self.reg_bindings = {op.results[0]: eax}
             self.free_regs = [reg for reg in REGS if reg is not eax]
             return ops + [Perform(op, arglocs, eax)]
         else:
@@ -599,6 +614,19 @@ class RegAlloc(object):
     def consider_new_with_vtable(self, op):
         return self._call(op, [self.loc(arg) for arg in op.args])
 
+    def consider_newstr(self, op):
+        ops = self._call(op, [self.loc(arg) for arg in op.args],
+                         [op.args[0]])
+        loc, ops1 = self.make_sure_var_in_reg(op.args[0], [])
+        assert self.loc(op.results[0]) == eax
+        # now we have to reload length to some reasonable place
+        # XXX hardcoded length offset
+        self.eventually_free_var(op.args[0])
+        ofs = symbolic.get_field_token(rstr.STR, 'chars')[0]
+        res = ops + ops1 + [PerformDiscard(ResOperation('setfield_gc', [], []),
+                                           [eax, imm(ofs), loc])]
+        return res
+
     def consider_oononnull(self, op):
         argloc = self.loc(op.args[0])
         self.eventually_free_var(op.args[0])
@@ -606,7 +634,7 @@ class RegAlloc(object):
         assert reg
         return [Perform(op, [argloc], reg)]
 
-    def consider_setfield_gc__4(self, op):
+    def consider_setfield_gc(self, op):
         base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc, ops1   = self.make_sure_var_in_reg(op.args[1], op.args)
         value_loc, ops2 = self.make_sure_var_in_reg(op.args[2], op.args)
@@ -614,9 +642,10 @@ class RegAlloc(object):
         return (ops0 + ops1 + ops2 +
                 [PerformDiscard(op, [base_loc, ofs_loc, value_loc])])
 
-    consider_setfield_gc_ptr = consider_setfield_gc__4
+    # XXX location is a bit smaller, but we don't care too much
+    consider_strsetitem = consider_setfield_gc
 
-    def consider_getfield_gc__4(self, op):
+    def consider_getfield_gc(self, op):
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[1], op.args)
         self.eventually_free_vars([op.args[0], op.args[1]])
@@ -624,9 +653,11 @@ class RegAlloc(object):
         return (ops0 + ops1 + more_ops +
                 [Perform(op, [base_loc, ofs_loc], result_loc)])
 
-    consider_getfield_gc_ptr = consider_getfield_gc__4
-    consider_getfield_raw__4 = consider_getfield_gc__4
-    consider_getfield_raw_ptr = consider_getfield_gc__4
+    consider_getfield_raw = consider_getfield_gc
+    consider_getfield_raw = consider_getfield_gc
+
+    def consider_getitem(self, op):
+        return self._call(op, [self.loc(arg) for arg in op.args])
 
     def consider_zero_gc_pointers_inside(self, op):
         self.eventually_free_var(op.args[0])

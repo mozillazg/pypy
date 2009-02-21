@@ -1,17 +1,17 @@
 import sys
 import ctypes
-from pypy.jit.backend.x86.ri386 import *
-from codegen386 import symbolic
-from history import Const, ConstInt, Box, MergePoint
+from pypy.jit.backend.x86 import symbolic
+from pypy.jit.metainterp.history import Const, ConstInt, Box, MergePoint
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
-from codegen386.regalloc import RegAlloc, FRAMESIZE, WORD, REGS
-from codegen386.regalloc import arg_pos, lower_byte, stack_pos, Perform
+from pypy.jit.backend.x86.regalloc import (RegAlloc, FRAMESIZE, WORD, REGS,
+                                      arg_pos, lower_byte, stack_pos, Perform)
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
-from pypy.jit.backend.x86.rgenop import gc_malloc_fnaddr
+from pypy.jit.backend.x86.support import gc_malloc_fnaddr
+from pypy.jit.backend.x86.ri386 import *
 
 # our calling convention - we pass three first args as edx, ecx and eax
 # and the rest stays on stack
@@ -55,7 +55,6 @@ class Assembler386(object):
             ptr = rffi.cast(TP, guard_op._jmp_from - WORD)
             ptr[0] = new_rel_addr
             self.mc.redone(guard_op._jmp_from - WORD, guard_op._jmp_from)
-            self.most_recent_mp = guard_op.most_recent_mp            
         if self.verbose and not we_are_translated():
             import pprint
             print
@@ -274,7 +273,11 @@ class Assembler386(object):
         loc_size = arglocs[0]
         self.call(self.malloc_func_addr, [loc_size], eax)
 
-    def genop_getfield_gc__4(self, op, arglocs, resloc):
+    def genop_newstr(self, op, arglocs, result_loc):
+        loc_size = arglocs[0]
+        self.call(self.malloc_func_addr, [loc_size], eax)
+
+    def genop_getfield_gc(self, op, arglocs, resloc):
         base_loc, ofs_loc = arglocs
         #if isinstance(op.args[0], Constant):
         #    x, _ = self.cpu.get_value_as_int(op.args[0].value)
@@ -283,17 +286,19 @@ class Assembler386(object):
         #    ...
         self.mc.MOV(resloc, addr_add(base_loc, ofs_loc))
 
-    genop_getfield_gc_ptr = genop_getfield_gc__4
-    genop_getfield_raw__4 = genop_getfield_gc__4
-    genop_getfield_raw_ptr = genop_getfield_gc__4
+    genop_getfield_raw = genop_getfield_gc
 
-    def genop_setfield_gc__4(self, op, arglocs):
+    def genop_setfield_gc(self, op, arglocs):
         base_loc, ofs_loc, value_loc = arglocs
         self.mc.MOV(addr_add(base_loc, ofs_loc), value_loc)
 
-    genop_setfield_gc_ptr = genop_setfield_gc__4
-    genop_setfield_raw__4 = genop_setfield_gc__4
-    genop_setfield_raw_ptr = genop_setfield_gc__4
+    def genop_strsetitem(self, op, arglocs):
+        base_loc, ofs_loc, val_loc = arglocs
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
+        self.mc.MOV(addr8_add(base_loc, ofs_loc, basesize),
+                    lower_byte(val_loc))
+
+    genop_setfield_raw = genop_setfield_gc
 
     def genop_strlen(self, op, arglocs, resloc):
         base_loc = arglocs[0]
@@ -310,7 +315,6 @@ class Assembler386(object):
         # position of the live values into a flat array of c_long's.
         # XXX update comment
         # we load constants into arguments
-        self.most_recent_mp = op
         op.position = self.mc.tell()
         op.comeback_bootstrap_addr = self.assemble_comeback_bootstrap(op)
         #nb_args = len(op.args)
@@ -342,6 +346,9 @@ class Assembler386(object):
         loc = locs[0]
         self.mc.TEST(loc, loc)
         self.implement_guard(op, self.mc.JZ, locs[1:])
+
+    def genop_guard_no_exception(self, op, locs):
+        pass # XXX # exception handling
 
     def genop_guard_false(self, op, locs):
         loc = locs[0]
@@ -404,18 +411,17 @@ class Assembler386(object):
 
     @specialize.arg(2)
     def implement_guard(self, guard_op, emit_jump, locs):
+        # XXX add caching, as we need only one for each combination
+        # of locs
         recovery_addr = self.get_recovery_code(guard_op, locs)
         emit_jump(rel32(recovery_addr))
         guard_op._jmp_from = self.mc.tell()
 
     def get_recovery_code(self, guard_op, locs):
-        guard_op.most_recent_mp = self.most_recent_mp
         index = self.cpu.make_guard_index(guard_op)
         recovery_code_addr = self.mc2.tell()
-        mp = self.most_recent_mp
-        assert len(mp.args) == len(locs)
-        # we need to copy arguments to our last merge point
-        stacklocs = mp.stacklocs
+        stacklocs = guard_op.stacklocs
+        assert len(locs) == len(stacklocs)
         for i in range(len(locs)):
             loc = locs[i]
             if isinstance(loc, REG):
@@ -451,6 +457,7 @@ class Assembler386(object):
     genop_call__4 = _new_gen_call()
     gen_call = _new_gen_call()
     genop_call_ptr = gen_call
+    genop_getitem = _new_gen_call()
 
     def genop_call_void(self, op, arglocs):
         extra_on_stack = 0

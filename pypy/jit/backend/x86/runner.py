@@ -9,11 +9,11 @@ from pypy.rlib.objectmodel import CDefinedIntSymbolic, specialize
 from pypy.rlib.objectmodel import we_are_translated, keepalive_until_here
 from pypy.annotation import model as annmodel
 
-import history
-from history import MergePoint, ResOperation, Box, Const, ConstInt, ConstPtr,\
-     BoxInt, BoxPtr, ConstAddr
-from codegen386.assembler import Assembler386
-from codegen386 import symbolic
+from pypy.jit.metainterp import history
+from pypy.jit.metainterp.history import (MergePoint, ResOperation, Box, Const,
+     ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
+from pypy.jit.backend.x86.assembler import Assembler386
+from pypy.jit.backend.x86 import symbolic
 
 class CPU386(object):
     debug = True
@@ -143,6 +143,8 @@ class CPU386(object):
             operations = [mp,
                           ResOperation(opname, livevarlist, results),
                           ResOperation('return', results, [])]
+            if opname.startswith('guard_'):
+                operations[1].liveboxes = []
             self.compile_operations(operations, verbose=False)
             self._compiled_ops[real_key] = mp
             return mp
@@ -269,10 +271,12 @@ class CPU386(object):
         else:
             raise ValueError(valuebox.type)
 
-    def getvaluebox(self, frameadr, mp, argindex):
+    def getvaluebox(self, frameadr, guard_op, argindex):
+        # XXX that's plain stupid, do we care about the return value???
+        box = [b for b in guard_op.liveboxes if isinstance(b, Box)][argindex]
         frame = getframe(frameadr)
-        intvalue = frame[mp.stacklocs[argindex]]
-        box = mp.args[argindex]
+        pos = guard_op.stacklocs[argindex]
+        intvalue = frame[pos]
         if isinstance(box, history.BoxInt):
             return history.BoxInt(intvalue)
         elif isinstance(box, history.BoxPtr):
@@ -308,6 +312,16 @@ class CPU386(object):
         return res
 
     @staticmethod
+    def fielddescrof(S, fieldname):
+        ofs, size = symbolic.get_field_token(S, fieldname)
+        assert size == 4
+        return ofs
+
+    @staticmethod
+    def typefor(fielddesc):
+        return "int"
+
+    @staticmethod
     def cast_int_to_adr(x):
         return llmemory.cast_ptr_to_adr(rffi.cast(llmemory.GCREF, x))
 
@@ -334,7 +348,6 @@ class GuardFailed(object):
         self.cpu = cpu
         self.frame = frame
         self.guard_op = guard_op
-        self.merge_point = guard_op.most_recent_mp
 
     def make_ready_for_return(self, return_value_box):
         self.cpu.assembler.make_sure_mc_exists()
@@ -346,7 +359,6 @@ class GuardFailed(object):
     def make_ready_for_continuing_at(self, merge_point):
         # we need to make sure here that return_addr points to a code
         # that is ready to grab coorect values
-        self.merge_point = merge_point
         self.return_addr = merge_point.comeback_bootstrap_addr
 
 def getframe(frameadr):

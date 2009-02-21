@@ -34,7 +34,10 @@ class JitMixin:
 class LLJitMixin(JitMixin):
     type_system = 'lltype'
     CPUClass = runner.CPU
-    meta_interp = staticmethod(ll_meta_interp)
+
+    def meta_interp(self, *args, **kwds):
+        kwds['CPUClass'] = self.CPUClass
+        return ll_meta_interp(*args, **kwds)
 
     def interp_operations(self, f, args, policy=None):
         class DoneWithThisFrame(Exception):
