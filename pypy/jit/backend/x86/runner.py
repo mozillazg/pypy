@@ -206,6 +206,7 @@ class CPU386(object):
                                  range(len(valueboxes))])
         if self.debug:
             llop.debug_print(lltype.Void, 'exec:', name, values_repr)
+
         self.keepalives_index = len(self.keepalives)
         res = self.execute_call(startmp, func, values_as_int)
         if result_type == 'void':
