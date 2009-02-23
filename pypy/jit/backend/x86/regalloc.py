@@ -267,6 +267,8 @@ class RegAlloc(object):
                 ops = [Store(v_to_spill, selected_reg, newloc)]
             else:
                 ops = []
+            del self.reg_bindings[v_to_spill]
+            self.free_regs.append(selected_reg)
             return selected_reg, ops+[Load(v, convert_to_imm(v), selected_reg)]
         return convert_to_imm(v), []
 
