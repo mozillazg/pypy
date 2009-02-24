@@ -139,7 +139,6 @@ class CPU(object):
             return history.BoxPtr(llimpl.frame_ptr_getresult(frame))
         else:
             return None
-    execute_operation._annspecialcase_ = 'specialize:arg(3)'
 
     def get_compiled_single_op(self, opname, valueboxes, result_type):
         keylist = self.compiled_single_ops.setdefault((opname, result_type),

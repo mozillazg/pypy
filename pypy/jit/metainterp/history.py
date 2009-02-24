@@ -441,9 +441,16 @@ class RunningMatcher(Matcher):
     execute_and_record._annspecialcase_ = 'specialize:arg(3, 4)'
 
     def record(self, opname, argboxes, resboxes, opcls=ResOperation):
+        # xxx the indirection from record to _record is to work
+        # around a limitation of the annotator (normalizecalls.py)
+        return self._record(opname, argboxes, resboxes, opcls)
+    record._annspecialcase_ = 'specialize:arg(4)'
+
+    def _record(self, opname, argboxes, resboxes, opcls):
         op = opcls(opname, argboxes, resboxes)
         self.operations.append(op)
         return op
+    _record._annspecialcase_ = 'specialize:arg(4)'
 
     def generate_anything_since(self, old_index):
         return len(self.operations) > old_index
@@ -452,8 +459,9 @@ class History(RunningMatcher):
     pass
 
 class BlackHole(RunningMatcher):
-    def record(self, step, argboxes, resboxes, opcls=ResOperation):
+    def _record(self, step, argboxes, resboxes, opcls):
         return None
+    _record._annspecialcase_ = 'specialize:arg(4)'
 
     def generate_anything_since(self, old_index):
         return True
