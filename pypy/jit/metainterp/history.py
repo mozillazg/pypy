@@ -134,6 +134,9 @@ class ConstInt(Const):
     def _getrepr_(self):
         return self.value
 
+CONST_FALSE = ConstInt(0)
+CONST_TRUE  = ConstInt(1)
+
 class ConstAddr(Const):       # only for constants built before translation
     type = 'int'
     ever_seen = False
