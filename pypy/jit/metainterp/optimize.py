@@ -761,7 +761,7 @@ class PerfectSpecializer(object):
             elif opname == 'oois' or opname == 'ooisnot':
                 instnode_x = self.nodes[op.args[0]]
                 instnode_y = self.nodes[op.args[1]]
-                if not instnode_x.virtual or not instnode_y.virtual:
+                if instnode_x.virtual or instnode_y.virtual:
                     box = op.results[0]
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
