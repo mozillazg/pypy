@@ -695,18 +695,18 @@ def test_M_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [L.sum, L.n1, L.v], []),
-        ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
-        ResOperation('int_add', [L.sum, L.v], [L.sum2]),
-        ResOperation('escape', [L.n1], []),
-        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [ANY]),
-        Jump('jump', [L.sum2, L.n1, ANY], []),
+        MergePoint('merge_point', [M.sum, M.n1, M.v], []),
+        ResOperation('int_sub', [M.v, ConstInt(1)], [M.v2]),
+        ResOperation('int_add', [M.sum, M.v], [M.sum2]),
+        ResOperation('escape', [M.n1], []),
+        ResOperation('getfield_gc', [M.n1, ConstInt(M.ofs_value)], [ANY]),
+        Jump('jump', [M.sum2, M.n1, ANY], []),
     ])
 
 
 # ____________________________________________________________
 
-class M:
+class N:
     locals().update(A.__dict__)    # :-)
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
@@ -721,16 +721,16 @@ class M:
         Jump('jump', [sum2, n1], []),
         ]
 
-def test_M_optimize_loop():
-    spec = PerfectSpecializer(Loop(M.ops))
+def test_N_optimize_loop():
+    spec = PerfectSpecializer(Loop(N.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [L.sum, L.n1, L.v], []),
-        ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
-        ResOperation('int_add', [L.sum, L.v], [L.sum2]),
-        ResOperation('escape', [L.n1], []),
-        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [ANY]),
-        Jump('jump', [L.sum2, L.n1, ANY], []),
+        MergePoint('merge_point', [N.sum, N.n1, N.v], []),
+        ResOperation('int_sub', [N.v, ConstInt(1)], [N.v2]),
+        ResOperation('int_add', [N.sum, N.v], [N.sum2]),
+        ResOperation('escape', [N.n1], []),
+        ResOperation('getfield_gc', [N.n1, ConstInt(N.ofs_value)], [ANY]),
+        Jump('jump', [N.sum2, N.n1, ANY], []),
     ])
