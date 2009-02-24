@@ -400,6 +400,31 @@ def test_F_optimize_loop():
             Jump('jump', [F.sum2, F.v2, F.n3], []),
         ])
 
+class F2:
+    locals().update(A.__dict__)    # :-)
+    node2 = lltype.malloc(NODE)
+    node3 = lltype.malloc(NODE)
+    node4 = lltype.malloc(NODE)
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node2))
+    n3 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node3))
+    n4 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node4))
+    vbool1 = BoxInt(0)
+    ops = [
+        MergePoint('merge_point', [n2, n3], []),
+        ResOperation('oois', [n2, n3], [vbool1]),
+        GuardOp('guard_true', [vbool1], []),
+        ResOperation('external', [], [n4]),
+        Jump('jump', [n2, n4], []),
+        ]
+    ops[2].liveboxes = [n2]
+
+def test_F2_optimize_loop():
+    spec = PerfectSpecializer(Loop(F2.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    equaloplists(spec.loop.operations, F2.ops)
+
 # ____________________________________________________________
 
 class G:
