@@ -153,9 +153,10 @@ class InstanceNode(object):
                 d.update(self.origfields)
             else:
                 d = other.curfields
-            lst = d.items()
-            lst.sort()
-            for ofs, node in lst:
+            lst = d.keys()
+            sort_integers(lst)
+            for ofs in lst:
+                node = d[ofs]
                 if ofs in self.origfields:
                     specnode = self.origfields[ofs].intersect(node)
                 else:
@@ -169,7 +170,7 @@ class InstanceNode(object):
         if not other.virtualized and self.expanded_fields:
             fields = []
             lst = self.expanded_fields.keys()
-            lst.sort()
+            sort_integers(lst)
             for ofs in lst:
                 specnode = SpecNodeWithBox(self.origfields[ofs].source)
                 fields.append((ofs, specnode))
@@ -181,7 +182,7 @@ class InstanceNode(object):
             d = self.origfields.copy()
             d.update(other.curfields)
             offsets = d.keys()
-            offsets.sort()
+            sort_integers(offsets)
             fields = []
             for ofs in offsets:
                 if ofs in self.origfields and ofs in other.curfields:
@@ -798,7 +799,7 @@ class PerfectSpecializer(object):
         # we need to invalidate everything
         for node in self.nodes.values():
             for ofs, valuenode in node.dirtyfields.items():
-                # XXX move to IntanceNode eventually
+                # XXX move to InstanceNode eventually
 ##                if (node.cls is not None and
 ##                    isinstance(node.cls.source, ListDescr)):
 ##                    newoperations.append(ResOperation('setitem',
@@ -902,3 +903,25 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
             newboxes.append(allocated_boxes[index])
 
     return newboxes
+
+
+def partition(array, left, right):
+    pivot = array[right]
+    storeindex = left
+    for i in range(left, right):
+        if array[i] <= pivot:
+            array[i], array[storeindex] = array[storeindex], array[i]
+            storeindex += 1
+    # Move pivot to its final place
+    array[storeindex], array[right] = pivot, array[storeindex]
+    return storeindex
+
+def quicksort(array, left, right):
+    # sort array[left:right+1] (i.e. bounds included)
+    if right > left:
+        pivotnewindex = partition(array, left, right)
+        quicksort(array, left, pivotnewindex - 1)
+        quicksort(array, pivotnewindex + 1, right)
+
+def sort_integers(lst):
+    quicksort(lst, 0, len(lst)-1)
