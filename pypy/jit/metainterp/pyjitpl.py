@@ -263,11 +263,14 @@ class MIFrame(object):
             currentpc = self.pc
             targetpc = target
             opname = "guard_true"
+            const_if_fail = history.CONST_FALSE
         else:
             currentpc = target
             targetpc = self.pc
             opname = "guard_false"
-        self.generate_guard(targetpc, opname, box, ignore_box=switchcase)
+            const_if_fail = history.CONST_TRUE
+        self.generate_guard(targetpc, opname, box, ignore_box=box,
+                                                   const_if_fail=const_if_fail)
         self.pc = currentpc
 
     @arguments("orgpc", "box", "intargs", "jumptargets")
@@ -575,7 +578,8 @@ class MIFrame(object):
             if stop:
                 break
 
-    def generate_guard(self, pc, opname, box, extraargs=[], ignore_box=None):
+    def generate_guard(self, pc, opname, box, extraargs=[], ignore_box=None,
+                       const_if_fail=None):
         if isinstance(box, Const):    # no need for a guard
             return
         if isinstance(self.metainterp.history, history.BlackHole):
@@ -583,8 +587,12 @@ class MIFrame(object):
         liveboxes = []
         for frame in self.metainterp.framestack:
             for framebox in frame.env:
+                assert framebox is not None
                 if framebox is not ignore_box:
                     liveboxes.append(framebox)
+                else:
+                    assert const_if_fail is not None
+                    liveboxes.append(const_if_fail)
         if box is not None:
             extraargs = [box] + extraargs
         guard_op = self.metainterp.history.record(opname, extraargs, [],
