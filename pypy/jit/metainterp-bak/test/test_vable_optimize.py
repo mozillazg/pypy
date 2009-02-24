@@ -14,7 +14,7 @@ from pypy.jit.metainterp.optimize import (PerfectSpecializer,
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
                                                     equaloplists, Loop)
-#from pypy.jit.metainterp.codewriter import ListDescr
+from pypy.jit.metainterp.codewriter import ListDescr
 
 # ____________________________________________________________
 
@@ -201,8 +201,7 @@ def test_C_intersect_input_and_output():
 
 # ____________________________________________________________
 
-if 0:
-  class D:
+class D:
     class SomeDescr(ListDescr):
         def __init__(self):
             pass

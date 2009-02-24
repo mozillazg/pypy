@@ -77,9 +77,9 @@ TYPES = {
     'guard_false'     : (('bool',), None),
     'guard_value'     : (('int', 'int'), None),
     'guard_class'     : (('ptr', 'ptr'), None),
-    'guard_no_exception'      : ((), None),
-    'guard_exception'         : (('ptr',), 'ptr'),
-    'guard_nonvirtualized__4' : (('ptr', 'int'), None),
+    'guard_no_exception'   : ((), None),
+    'guard_exception'      : (('ptr',), 'ptr'),
+    'guard_nonvirtualized' : (('ptr', 'ptr', 'int'), None),
     'guard_builtin'   : (('ptr',), None),
     'newstr'          : (('int',), 'ptr'),
     'strlen'          : (('ptr',), 'int'),
@@ -568,11 +568,11 @@ class ExtendedLLFrame(LLFrame):
     def op_guard_builtin(self, b):
         pass
 
-    def op_guard_true(self, value, *livevars):
+    def op_guard_true(self, value):
         if not value:
             raise GuardFailed
 
-    def op_guard_false(self, value, *livevars):
+    def op_guard_false(self, value):
         if value:
             raise GuardFailed
 
@@ -618,7 +618,7 @@ class ExtendedLLFrame(LLFrame):
     op_guard_is    = op_guard_eq
     op_guard_isnot = op_guard_ne
 
-    def op_guard_class(self, value, expected_class, *livevars):
+    def op_guard_class(self, value, expected_class):
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, value)
         expected_class = llmemory.cast_adr_to_ptr(
             self.cpu.cast_int_to_adr(expected_class),
@@ -630,11 +630,11 @@ class ExtendedLLFrame(LLFrame):
         if value != expected_value:
             raise GuardFailed
 
-    def op_guard_nonvirtualized__4(self, value, for_accessing_field):
+    def op_guard_nonvirtualized(self, value, expected_class,
+                                for_accessing_field):
+        self.op_guard_class(value, expected_class)
         if heaptracker.cast_vable(value).vable_rti:
             raise GuardFailed    # some other code is already in control
-
-    op_guard_nonvirtualized_ptr = op_guard_nonvirtualized__4
 
     def op_guard_no_exception(self):
         if self.last_exception:

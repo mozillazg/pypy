@@ -1,21 +1,19 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, BoxInt,
                                          MergePoint, ResOperation, Jump)
-from pypy.jit.metainterp.history import Options
 from pypy.jit.metainterp.heaptracker import (always_pure_operations,
                                              operations_without_side_effects,
                                              operation_never_raises)
 from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
-                                          #FixedListSpecNode,
+                                          FixedListSpecNode,
                                           VirtualInstanceSpecNode,
                                           VirtualizableSpecNode,
                                           NotSpecNode,
                                           DelayedSpecNode,
                                           SpecNodeWithBox,
-                                          #DelayedListSpecNode,
-                                          #VirtualListSpecNode,
-                                          )
+                                          DelayedListSpecNode,
+                                          VirtualListSpecNode)
 from pypy.rlib.objectmodel import we_are_translated
-#from pypy.jit.metainterp.codewriter import ListDescr
+from pypy.jit.metainterp.codewriter import ListDescr
 
 class CancelInefficientLoop(Exception):
     pass
@@ -35,8 +33,8 @@ class AllocationStorage(object):
         self.allocations = []
         self.setfields = []
         # the same as above, but for lists and for running setitem
-##        self.list_allocations = []
-##        self.setitems = []
+        self.list_allocations = []
+        self.setitems = []
 
     def deal_with_box(self, box, nodes, liveboxes, memo, ready):
         if isinstance(box, Const) or box not in nodes:
@@ -51,17 +49,16 @@ class AllocationStorage(object):
             virtual = instnode.virtual
             virtualized = instnode.virtualized
         if virtual:
-##            if isinstance(instnode.cls.source, ListDescr):
-##                ld = instnode.cls.source
-##                assert isinstance(ld, ListDescr)
-##                alloc_offset = len(self.list_allocations)
-##                malloc_func = ld.malloc_func
-##                assert instnode.cursize != -1
-##                self.list_allocations.append((malloc_func,
-##                                              instnode.cursize))
-##                res = (alloc_offset + 1) << 16
-##            else:
-            if 1:
+            if isinstance(instnode.cls.source, ListDescr):
+                ld = instnode.cls.source
+                assert isinstance(ld, ListDescr)
+                alloc_offset = len(self.list_allocations)
+                malloc_func = ld.malloc_func
+                assert instnode.cursize != -1
+                self.list_allocations.append((malloc_func,
+                                              instnode.cursize))
+                res = (alloc_offset + 1) << 16
+            else:
                 alloc_offset = len(self.allocations)
                 self.allocations.append(instnode.cls.source.getint())
                 res = alloc_offset
@@ -69,13 +66,12 @@ class AllocationStorage(object):
             for ofs, node in instnode.curfields.items():
                 num = self.deal_with_box(node.source, nodes, liveboxes, memo,
                                          ready)
-##                if isinstance(instnode.cls.source, ListDescr):
-##                    ld = instnode.cls.source
-##                    x = (alloc_offset + 1) << 16
-##                    assert ofs < instnode.cursize
-##                    self.setitems.append((ld.setfunc, x, ofs, num))
-##                else:
-                if 1:
+                if isinstance(instnode.cls.source, ListDescr):
+                    ld = instnode.cls.source
+                    x = (alloc_offset + 1) << 16
+                    assert ofs < instnode.cursize
+                    self.setitems.append((ld.setfunc, x, ofs, num))
+                else:
                     self.setfields.append((alloc_offset, ofs, num))
         elif virtualized:
             res = ~len(liveboxes)
@@ -139,16 +135,16 @@ class InstanceNode(object):
             not self.expanded_fields):
             if self.cls is None:
                 return NotSpecNode()
-##            if isinstance(known_class, ListDescr):
-##                return FixedListSpecNode(known_class)
+            if isinstance(known_class, ListDescr):
+                return FixedListSpecNode(known_class)
             return FixedClassSpecNode(known_class)
         if not other.escaped:
-##            if (isinstance(known_class, ListDescr)
-##                and self.cursize != other.origsize):
-##                # or DelayedListSpecNode, later on
-##                self.escaped = True
-##                other.escaped = True
-##                return FixedListSpecNode(known_class)
+            if (isinstance(known_class, ListDescr)
+                and self.cursize != other.origsize):
+                # or DelayedListSpecNode, later on
+                self.escaped = True
+                other.escaped = True
+                return FixedListSpecNode(known_class)
             fields = []
             if self is other:
                 d = other.curfields.copy()
@@ -164,9 +160,9 @@ class InstanceNode(object):
                     self.origfields[ofs] = InstanceNode(node.source.clonebox())
                     specnode = NotSpecNode()
                 fields.append((ofs, specnode))
-##            if isinstance(known_class, ListDescr):
-##                return VirtualListSpecNode(known_class, fields,
-##                                           other.cursize)
+            if isinstance(known_class, ListDescr):
+                return VirtualListSpecNode(known_class, fields,
+                                           other.cursize)
             return VirtualInstanceSpecNode(known_class, fields)
         if not other.virtualized and self.expanded_fields:
             fields = []
@@ -175,8 +171,8 @@ class InstanceNode(object):
             for ofs in lst:
                 specnode = SpecNodeWithBox(self.origfields[ofs].source)
                 fields.append((ofs, specnode))
-##            if isinstance(known_class, ListDescr):
-##                return DelayedListSpecNode(known_class, fields)
+            if isinstance(known_class, ListDescr):
+                return DelayedListSpecNode(known_class, fields)
             return DelayedSpecNode(known_class, fields)
         else:
             assert self is other
@@ -242,7 +238,7 @@ def optimize_bridge(options, old_loops, bridge):
 
 class PerfectSpecializer(object):
 
-    def __init__(self, loop, options=Options()):
+    def __init__(self, loop, options):
         self.loop = loop
         self.options = options
         self.nodes = {}
@@ -280,7 +276,7 @@ class PerfectSpecializer(object):
         self.nodes[box] = fieldnode
         if (self.first_escaping_op and
             instnode.cls and
-            1):  ##not isinstance(instnode.cls.source, ListDescr)):
+            not isinstance(instnode.cls.source, ListDescr)):
             instnode.expanded_fields[field] = None
 
     def find_nodes_insert(self, instnode, field, fieldnode):
@@ -307,32 +303,32 @@ class PerfectSpecializer(object):
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
                 continue
-##            elif opname == 'newlist':
-##                box = op.results[0]
-##                instnode = InstanceNode(box, escaped=False)
-##                self.nodes[box] = instnode
-##                self.first_escaping_op = False
-##                if (isinstance(op.args[1], ConstInt) or
-##                    self.nodes[op.args[1]].const):
-##                    size = self.getsource(op.args[1]).getint()
-##                    instnode.cursize = size
-##                    instnode.origsize = size
-##                    # XXX following guard_builtin will set the
-##                    #     correct class, otherwise it's a mess
-##                    continue
-##            elif opname == 'guard_builtin':
-##                instnode = self.nodes[op.args[0]]
-##                # all builtins have equal classes
-##                instnode.cls = InstanceNode(op.args[1])
-##                continue
-##            elif opname == 'guard_len':
-##                instnode = self.nodes[op.args[0]]
-##                if instnode.cursize == -1:
-##                    instnode = self.nodes[op.args[0]]
-##                    size = op.args[1].getint()
-##                    instnode.cursize = size
-##                    instnode.origsize = size
-##                continue
+            elif opname == 'newlist':
+                box = op.results[0]
+                instnode = InstanceNode(box, escaped=False)
+                self.nodes[box] = instnode
+                self.first_escaping_op = False
+                if (isinstance(op.args[1], ConstInt) or
+                    self.nodes[op.args[1]].const):
+                    size = self.getsource(op.args[1]).getint()
+                    instnode.cursize = size
+                    instnode.origsize = size
+                    # XXX following guard_builtin will set the
+                    #     correct class, otherwise it's a mess
+                    continue
+            elif opname == 'guard_builtin':
+                instnode = self.nodes[op.args[0]]
+                # all builtins have equal classes
+                instnode.cls = InstanceNode(op.args[1])
+                continue
+            elif opname == 'guard_len':
+                instnode = self.nodes[op.args[0]]
+                if instnode.cursize == -1:
+                    instnode = self.nodes[op.args[0]]
+                    size = op.args[1].getint()
+                    instnode.cursize = size
+                    instnode.origsize = size
+                continue
             elif opname == 'setfield_gc':
                 instnode = self.getnode(op.args[0])
                 fieldbox = op.args[1]
@@ -349,81 +345,81 @@ class PerfectSpecializer(object):
                 box = op.results[0]
                 self.find_nodes_getfield(instnode, field, box)
                 continue
-##            elif opname == 'getitem':
-##                instnode = self.getnode(op.args[1])
-##                fieldbox = op.args[2]
-##                if (isinstance(fieldbox, ConstInt) or
-##                    self.nodes[op.args[2]].const):
-##                    field = self.getsource(fieldbox).getint()
-##                    if field < 0:
-##                        field = instnode.cursize + field
-##                    box = op.results[0]
-##                    self.find_nodes_getfield(instnode, field, box)
-##                    continue
-##                else:
-##                    instnode.escaped = True
-##                    self.nodes[op.results[0]] = InstanceNode(op.results[0],
-##                                                             escaped=True)
-##                    continue
-##            elif opname == 'append':
-##                instnode = self.getnode(op.args[1])
-##                assert isinstance(instnode.cls.source, ListDescr)
-##                if instnode.cursize != -1:
-##                    field = instnode.cursize
-##                    instnode.cursize += 1
-##                    self.find_nodes_setfield(instnode, field,
-##                                             self.getnode(op.args[2]))
-##                continue
-##            elif opname == 'insert':
-##                instnode = self.getnode(op.args[1])
-##                assert isinstance(instnode.cls.source, ListDescr)
-##                if instnode.cursize != -1:
-##                    fieldbox = self.getsource(op.args[2])
-##                    assert isinstance(fieldbox, Const) or fieldbox.const
-##                    field = fieldbox.getint()
-##                    if field < 0:
-##                        field = instnode.cursize + field
-##                    self.find_nodes_insert(instnode, field,
-##                                           self.getnode(op.args[3]))
-##                continue
-##            elif opname == 'pop':
-##                instnode = self.getnode(op.args[1])
-##                assert isinstance(instnode.cls.source, ListDescr)
-##                if instnode.cursize != -1:
-##                    instnode.cursize -= 1
-##                    field = instnode.cursize
-##                    self.find_nodes_getfield(instnode, field, op.results[0])
-##                    if field in instnode.curfields:
-##                        del instnode.curfields[field]                
-##                    continue
-##                self.nodes[op.results[0]] = InstanceNode(op.results[0],
-##                                                         escaped=True)
-##                self.dependency_graph.append((instnode,
-##                                              self.nodes[op.results[0]]))
-##                continue
-##            elif opname == 'len' or opname == 'listnonzero':
-##                instnode = self.getnode(op.args[1])
-##                if not instnode.escaped:
-##                    assert instnode.cursize != -1
-##                    lgtbox = op.results[0].constbox()
-##                    self.nodes[op.results[0]] = InstanceNode(lgtbox, const=True)
-##                    continue
-##            elif opname == 'setitem':
-##                instnode = self.getnode(op.args[1])
-##                fieldbox = op.args[2]
-##                if (isinstance(fieldbox, ConstInt)
-##                    or self.nodes[op.args[2]].const):
-##                    field = self.getsource(fieldbox).getint()
-##                    if field < 0:
-##                        field = instnode.cursize + field
-##                    assert field < instnode.cursize
-##                    self.find_nodes_setfield(instnode, field,
-##                                             self.getnode(op.args[3]))
-##                    continue
-##                else:
-##                    self.dependency_graph.append((instnode,
-##                                                 self.getnode(op.args[3])))
-##                    instnode.escaped = True
+            elif opname == 'getitem':
+                instnode = self.getnode(op.args[1])
+                fieldbox = op.args[2]
+                if (isinstance(fieldbox, ConstInt) or
+                    self.nodes[op.args[2]].const):
+                    field = self.getsource(fieldbox).getint()
+                    if field < 0:
+                        field = instnode.cursize + field
+                    box = op.results[0]
+                    self.find_nodes_getfield(instnode, field, box)
+                    continue
+                else:
+                    instnode.escaped = True
+                    self.nodes[op.results[0]] = InstanceNode(op.results[0],
+                                                             escaped=True)
+                    continue
+            elif opname == 'append':
+                instnode = self.getnode(op.args[1])
+                assert isinstance(instnode.cls.source, ListDescr)
+                if instnode.cursize != -1:
+                    field = instnode.cursize
+                    instnode.cursize += 1
+                    self.find_nodes_setfield(instnode, field,
+                                             self.getnode(op.args[2]))
+                continue
+            elif opname == 'insert':
+                instnode = self.getnode(op.args[1])
+                assert isinstance(instnode.cls.source, ListDescr)
+                if instnode.cursize != -1:
+                    fieldbox = self.getsource(op.args[2])
+                    assert isinstance(fieldbox, Const) or fieldbox.const
+                    field = fieldbox.getint()
+                    if field < 0:
+                        field = instnode.cursize + field
+                    self.find_nodes_insert(instnode, field,
+                                           self.getnode(op.args[3]))
+                continue
+            elif opname == 'pop':
+                instnode = self.getnode(op.args[1])
+                assert isinstance(instnode.cls.source, ListDescr)
+                if instnode.cursize != -1:
+                    instnode.cursize -= 1
+                    field = instnode.cursize
+                    self.find_nodes_getfield(instnode, field, op.results[0])
+                    if field in instnode.curfields:
+                        del instnode.curfields[field]                
+                    continue
+                self.nodes[op.results[0]] = InstanceNode(op.results[0],
+                                                         escaped=True)
+                self.dependency_graph.append((instnode,
+                                              self.nodes[op.results[0]]))
+                continue
+            elif opname == 'len' or opname == 'listnonzero':
+                instnode = self.getnode(op.args[1])
+                if not instnode.escaped:
+                    assert instnode.cursize != -1
+                    lgtbox = op.results[0].constbox()
+                    self.nodes[op.results[0]] = InstanceNode(lgtbox, const=True)
+                    continue
+            elif opname == 'setitem':
+                instnode = self.getnode(op.args[1])
+                fieldbox = op.args[2]
+                if (isinstance(fieldbox, ConstInt)
+                    or self.nodes[op.args[2]].const):
+                    field = self.getsource(fieldbox).getint()
+                    if field < 0:
+                        field = instnode.cursize + field
+                    assert field < instnode.cursize
+                    self.find_nodes_setfield(instnode, field,
+                                             self.getnode(op.args[3]))
+                    continue
+                else:
+                    self.dependency_graph.append((instnode,
+                                                 self.getnode(op.args[3])))
+                    instnode.escaped = True
             elif opname == 'guard_class':
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
@@ -533,11 +529,10 @@ class PerfectSpecializer(object):
                     rev_boxes[fieldbox] = len(liveboxes)
                     liveboxes.append(fieldbox)
                 fieldindex = ~rev_boxes[fieldbox]
-##                if node.cls is not None and isinstance(node.cls.source, ListDescr):
-##                    f = node.cls.source.setfunc
-##                    storage.setitems.append((f, index, ofs, fieldindex))
-##                else:
-                if 1:
+                if node.cls is not None and isinstance(node.cls.source, ListDescr):
+                    f = node.cls.source.setfunc
+                    storage.setitems.append((f, index, ofs, fieldindex))
+                else:
                     storage.setfields.append((index, ofs, fieldindex))
         if not we_are_translated():
             items = [box for box in liveboxes if isinstance(box, Box)]
@@ -686,13 +681,13 @@ class PerfectSpecializer(object):
                     continue
                 # otherwise we need this getfield, but it does not
                 # invalidate caches
-##            elif opname == 'getitem':
-##                instnode = self.nodes[op.args[1]]
-##                ofsbox = self.getsource(op.args[2])
-##                if isinstance(ofsbox, ConstInt):
-##                    ofs = ofsbox.getint()
-##                    if self.optimize_getfield(instnode, ofs, op.results[0]):
-##                        continue
+            elif opname == 'getitem':
+                instnode = self.nodes[op.args[1]]
+                ofsbox = self.getsource(op.args[2])
+                if isinstance(ofsbox, ConstInt):
+                    ofs = ofsbox.getint()
+                    if self.optimize_getfield(instnode, ofs, op.results[0]):
+                        continue
             elif opname == 'new_with_vtable':
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
                 instnode = self.nodes[op.results[0]]
@@ -700,60 +695,60 @@ class PerfectSpecializer(object):
                     instnode.virtual = True
                     assert instnode.cls is not None
                     continue
-##            elif opname == 'newlist':
-##                instnode = self.nodes[op.results[0]]
-##                assert isinstance(instnode.cls.source, ListDescr)
-##                if not instnode.escaped:
-##                    instnode.virtual = True
-##                    valuesource = self.getsource(op.args[2])
-##                    instnode.cursize = op.args[1].getint()
-##                    curfields = {}
-##                    for i in range(instnode.cursize):
-##                        curfields[i] = InstanceNode(valuesource,
-##                                                    const=True)
-##                    instnode.curfields = curfields
-##                    continue
-##            elif opname == 'append':
-##                instnode = self.nodes[op.args[1]]
-##                valuenode = self.getnode(op.args[2])
-##                if not instnode.escaped:
-##                    ofs = instnode.cursize
-##                    instnode.cursize += 1
-##                    self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
-##                    continue
-##            elif opname == 'insert':
-##                instnode = self.nodes[op.args[1]]
-##                if not instnode.escaped:
-##                    ofs = self.getsource(op.args[2]).getint()
-##                    valuenode = self.nodes[op.args[3]]
-##                    self.optimize_insert(instnode, ofs, valuenode, op.args[3])
-##                    continue
-##            elif opname == 'pop':
-##                instnode = self.nodes[op.args[1]]
-##                if not instnode.escaped:
-##                    instnode.cursize -= 1
-##                    ofs = instnode.cursize
-##                    if self.optimize_getfield(instnode, ofs, op.results[0]):
-##                        del instnode.curfields[ofs]
-##                    continue
-##            elif opname == 'len' or opname == 'listnonzero':
-##                instnode = self.nodes[op.args[1]]
-##                if instnode.virtual:
-##                    continue
+            elif opname == 'newlist':
+                instnode = self.nodes[op.results[0]]
+                assert isinstance(instnode.cls.source, ListDescr)
+                if not instnode.escaped:
+                    instnode.virtual = True
+                    valuesource = self.getsource(op.args[2])
+                    instnode.cursize = op.args[1].getint()
+                    curfields = {}
+                    for i in range(instnode.cursize):
+                        curfields[i] = InstanceNode(valuesource,
+                                                    const=True)
+                    instnode.curfields = curfields
+                    continue
+            elif opname == 'append':
+                instnode = self.nodes[op.args[1]]
+                valuenode = self.getnode(op.args[2])
+                if not instnode.escaped:
+                    ofs = instnode.cursize
+                    instnode.cursize += 1
+                    self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
+                    continue
+            elif opname == 'insert':
+                instnode = self.nodes[op.args[1]]
+                if not instnode.escaped:
+                    ofs = self.getsource(op.args[2]).getint()
+                    valuenode = self.nodes[op.args[3]]
+                    self.optimize_insert(instnode, ofs, valuenode, op.args[3])
+                    continue
+            elif opname == 'pop':
+                instnode = self.nodes[op.args[1]]
+                if not instnode.escaped:
+                    instnode.cursize -= 1
+                    ofs = instnode.cursize
+                    if self.optimize_getfield(instnode, ofs, op.results[0]):
+                        del instnode.curfields[ofs]
+                    continue
+            elif opname == 'len' or opname == 'listnonzero':
+                instnode = self.nodes[op.args[1]]
+                if instnode.virtual:
+                    continue
             elif opname == 'setfield_gc':
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
                 ofs = op.args[1].getint()
                 self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
                 continue
-##            elif opname == 'setitem':
-##                instnode = self.nodes[op.args[1]]
-##                valuenode = self.getnode(op.args[3])
-##                ofsbox = self.getsource(op.args[2])
-##                if isinstance(ofsbox, ConstInt):
-##                    ofs = ofsbox.getint()
-##                    self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
-##                    continue
+            elif opname == 'setitem':
+                instnode = self.nodes[op.args[1]]
+                valuenode = self.getnode(op.args[3])
+                ofsbox = self.getsource(op.args[2])
+                if isinstance(ofsbox, ConstInt):
+                    ofs = ofsbox.getint()
+                    self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
+                    continue
             elif opname == 'ooisnull' or opname == 'oononnull':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtual:
@@ -802,13 +797,12 @@ class PerfectSpecializer(object):
         for node in self.nodes.values():
             for ofs, valuenode in node.dirtyfields.items():
                 # XXX move to IntanceNode eventually
-##                if (node.cls is not None and
-##                    isinstance(node.cls.source, ListDescr)):
-##                    newoperations.append(ResOperation('setitem',
-##                            [node.cls.source.setfunc, node.source,
-##                             ConstInt(ofs), valuenode.source], []))
-##                else:
-                if 1:
+                if (node.cls is not None and
+                    isinstance(node.cls.source, ListDescr)):
+                    newoperations.append(ResOperation('setitem',
+                            [node.cls.source.setfunc, node.source,
+                             ConstInt(ofs), valuenode.source], []))
+                else:
                     newoperations.append(ResOperation('setfield_gc',
                        [node.source, ConstInt(ofs), valuenode.source], []))
             node.dirtyfields = {}
@@ -846,12 +840,12 @@ class PerfectSpecializer(object):
             new_instnode = self.nodes[jump_op.args[i]]
             old_specnode.adapt_to(new_instnode)
 
-def box_from_index(allocated_boxes, ## allocated_lists,
+def box_from_index(allocated_boxes, allocated_lists,
                    boxes_from_frame, index):
     if index < 0:
         return boxes_from_frame[~index]
-##    if index > 0xffff:
-##        return allocated_lists[(index - 1) >> 16]
+    if index > 0xffff:
+        return allocated_lists[(index - 1) >> 16]
     return allocated_boxes[index]
 
 def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
@@ -867,40 +861,39 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
                                                [sizebox, vtablebox],
                                                'ptr', False)
         allocated_boxes.append(instbox)
-##    for malloc_func, lgt in storage.list_allocations:
-##        sizebox = ConstInt(lgt)
-##        [listbox] = history.execute_and_record('newlist',
-##                                        [malloc_func, sizebox],
-##                                               'ptr', False)
-##        allocated_lists.append(listbox)
+    for malloc_func, lgt in storage.list_allocations:
+        sizebox = ConstInt(lgt)
+        [listbox] = history.execute_and_record('newlist',
+                                        [malloc_func, sizebox],
+                                               'ptr', False)
+        allocated_lists.append(listbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
-        fieldbox = box_from_index(allocated_boxes, ## allocated_lists,
+        fieldbox = box_from_index(allocated_boxes, allocated_lists,
                                   boxes_from_frame, index_in_arglist)
-        box = box_from_index(allocated_boxes, ## allocated_lists,
-                             boxes_from_frame,
+        box = box_from_index(allocated_boxes, allocated_lists, boxes_from_frame,
                              index_in_alloc)
         history.execute_and_record('setfield_gc',
                                    [box, ConstInt(ofs), fieldbox],
                                    'void', False)
-##    for setfunc, index_in_alloc, ofs, index_in_arglist in storage.setitems:
-##        itembox = box_from_index(allocated_boxes, allocated_lists,
-##                                 boxes_from_frame, index_in_arglist)
-##        box = box_from_index(allocated_boxes, allocated_lists, boxes_from_frame,
-##                             index_in_alloc)
-##        history.execute_and_record('setitem',
-##                                   [setfunc, box, ConstInt(ofs), itembox],
-##                                   'void', False)
-##    if storage.setitems:
-##        #history.execute_and_record('guard_no_exception', [], 'void', False)
-##        # XXX this needs to check for exceptions somehow
-##        # create guard_no_excpetion somehow, needs tests
-##        pass
+    for setfunc, index_in_alloc, ofs, index_in_arglist in storage.setitems:
+        itembox = box_from_index(allocated_boxes, allocated_lists,
+                                 boxes_from_frame, index_in_arglist)
+        box = box_from_index(allocated_boxes, allocated_lists, boxes_from_frame,
+                             index_in_alloc)
+        history.execute_and_record('setitem',
+                                   [setfunc, box, ConstInt(ofs), itembox],
+                                   'void', False)
+    if storage.setitems:
+        #history.execute_and_record('guard_no_exception', [], 'void', False)
+        # XXX this needs to check for exceptions somehow
+        # create guard_no_excpetion somehow, needs tests
+        pass
     newboxes = []
     for index in storage.indices:
         if index < 0:
             newboxes.append(boxes_from_frame[~index])
-##        elif index > 0xffff:
-##            newboxes.append(allocated_lists[(index - 1) >> 16])
+        elif index > 0xffff:
+            newboxes.append(allocated_lists[(index - 1) >> 16])
         else:
             newboxes.append(allocated_boxes[index])
 
