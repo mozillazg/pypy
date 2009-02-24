@@ -206,15 +206,15 @@ class InstanceNode(object):
         return "<InstanceNode %s (%s)>" % (self.source, flags)
 
 
-def optimize_loop(metainterp, old_loops, loop):
-    if not metainterp._specialize:         # for tests only
+def optimize_loop(options, old_loops, loop):
+    if not options.specialize:         # for tests only
         if old_loops:
             return old_loops[0]
         else:
             return None
 
     # This does "Perfect specialization" as per doc/jitpl5.txt.
-    perfect_specializer = PerfectSpecializer(loop)
+    perfect_specializer = PerfectSpecializer(loop, options)
     perfect_specializer.find_nodes()
     perfect_specializer.intersect_input_and_output()
     for old_loop in old_loops:
@@ -223,11 +223,11 @@ def optimize_loop(metainterp, old_loops, loop):
     perfect_specializer.optimize_loop()
     return None
 
-def optimize_bridge(metainterp, old_loops, operations):
-    if not metainterp._specialize:         # for tests only
+def optimize_bridge(options, old_loops, bridge):
+    if not options.specialize:         # for tests only
         return old_loops[0]
 
-    perfect_specializer = PerfectSpecializer(operations)
+    perfect_specializer = PerfectSpecializer(bridge, options)
     perfect_specializer.find_nodes()
     for old_loop in old_loops:
         if perfect_specializer.match(old_loop.operations):
@@ -238,8 +238,9 @@ def optimize_bridge(metainterp, old_loops, operations):
 
 class PerfectSpecializer(object):
 
-    def __init__(self, loop):
+    def __init__(self, loop, options):
         self.loop = loop
+        self.options = options
         self.nodes = {}
         self.dependency_graph = []
 

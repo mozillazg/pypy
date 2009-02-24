@@ -12,7 +12,7 @@ from pypy.rlib.jit import PARAMETERS
 from pypy.rlib.rarithmetic import r_uint
 
 from pypy.jit.metainterp import support, history, pyjitpl
-from pypy.jit.metainterp.pyjitpl import OOMetaInterp
+from pypy.jit.metainterp.pyjitpl import OOMetaInterp, Options
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.policy import JitPolicy
 
@@ -97,9 +97,9 @@ class WarmRunnerDesc:
     def _freeze_(self):
         return True
 
-    def build_meta_interp(self, specialize=True,
-                          CPUClass=runner.CPU, view="auto",
-                          translate_support_code=False):
+    def build_meta_interp(self, CPUClass=runner.CPU, view="auto",
+                          translate_support_code=False, **kwds):
+        opt = Options(**kwds)
         self.stats = history.Stats()
         cpu = CPUClass(self.translator.rtyper, self.stats,
                        translate_support_code)
@@ -118,8 +118,7 @@ class WarmRunnerDesc:
         self.translator.graphs.append(graph)
         self.portal_graph = graph
         self.jitdriver = block.operations[pos].args[1].value
-        self.metainterp = OOMetaInterp(graph, graphs, cpu, self.stats,
-                                       specialize)
+        self.metainterp = OOMetaInterp(graph, graphs, cpu, self.stats, opt)
 
     def make_enter_function(self):
         WarmEnterState = make_state_class(self)

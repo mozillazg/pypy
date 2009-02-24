@@ -405,32 +405,32 @@ class MIFrame(object):
                 args.append(ConstInt(0))
             else:
                 args.append(ConstPtr(lltype.nullptr(llmemory.GCREF.TO)))
-        self.execute_with_exc('newlist', args, 'ptr')
+        return self.execute_with_exc('newlist', args, 'ptr')
 
     @arguments("builtin", "varargs")
     def opimpl_append(self, descr, varargs):
         args = [descr.append_func] + varargs
-        self.execute_with_exc('append', args, 'void')
+        return self.execute_with_exc('append', args, 'void')
 
     @arguments("builtin", "varargs")
     def opimpl_insert(self, descr, varargs):
         args = [descr.insert_func] + varargs
-        self.execute_with_exc('insert', args, 'void')
+        return self.execute_with_exc('insert', args, 'void')
 
     @arguments("builtin", "varargs")
     def opimpl_pop(self, descr, varargs):
         args = [descr.pop_func] + varargs
-        self.execute_with_exc('pop', args, descr.tp)
+        return self.execute_with_exc('pop', args, descr.tp)
 
     @arguments("builtin", "varargs")
     def opimpl_len(self, descr, varargs):
         args = [descr.len_func] + varargs
-        self.execute_with_exc('len', args, 'int')
+        return self.execute_with_exc('len', args, 'int')
 
     @arguments("builtin", "varargs")
     def opimpl_listnonzero(self, descr, varargs):
         args = [descr.nonzero_func] + varargs
-        self.execute_with_exc('listnonzero', args, 'int')
+        return self.execute_with_exc('listnonzero', args, 'int')
 
     @arguments("indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, indirectcallset, box, varargs):
@@ -662,11 +662,11 @@ class MIFrame(object):
 class OOMetaInterp(object):
     num_green_args = 0
 
-    def __init__(self, portal_graph, graphs, cpu, stats, specialize):
+    def __init__(self, portal_graph, graphs, cpu, stats, options):
         self.portal_graph = portal_graph
         self.cpu = cpu
         self.stats = stats
-        self._specialize = specialize
+        self.options = options
         self.compiled_merge_points = r_dict(history.mp_eq, history.mp_hash)
                  # { greenkey: list-of-MergePoints }
 
@@ -1006,3 +1006,10 @@ class OOMetaInterp(object):
 class GenerateMergePoint(Exception):
     def __init__(self, args):
         self.argboxes = args
+
+
+class Options:
+    def __init__(self, specialize=True):
+        self.specialize = specialize
+    def _freeze_(self):
+        return True
