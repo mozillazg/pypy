@@ -38,7 +38,7 @@ class AllocationStorage(object):
 ##        self.list_allocations = []
 ##        self.setitems = []
 
-    def deal_with_box(self, box, nodes, liveboxes, memo, ready):
+    def deal_with_box(self, box, nodes, liveboxes, memo):
         if isinstance(box, Const) or box not in nodes:
             virtual = False
             virtualized = False
@@ -67,8 +67,7 @@ class AllocationStorage(object):
                 res = alloc_offset
             memo[box] = res
             for ofs, node in instnode.curfields.items():
-                num = self.deal_with_box(node.source, nodes, liveboxes, memo,
-                                         ready)
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
 ##                if isinstance(instnode.cls.source, ListDescr):
 ##                    ld = instnode.cls.source
 ##                    x = (alloc_offset + 1) << 16
@@ -82,8 +81,7 @@ class AllocationStorage(object):
             memo[box] = res
             liveboxes.append(box)
             for ofs, node in instnode.curfields.items():
-                num = self.deal_with_box(node.source, nodes, liveboxes, memo,
-                                         ready)
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
                 self.setfields.append((res, ofs, num))
         else:
             res = ~len(liveboxes)
@@ -107,8 +105,8 @@ class InstanceNode(object):
         self.cleanfields = {}
         self.dirtyfields = {}
         self.expanded_fields = {}
-        self.origsize = -1
-        self.cursize  = -1
+        #self.origsize = -1
+        #self.cursize  = -1
 
     def escape_if_startbox(self, memo):
         if self in memo:
@@ -283,13 +281,13 @@ class PerfectSpecializer(object):
             1):  ##not isinstance(instnode.cls.source, ListDescr)):
             instnode.expanded_fields[field] = None
 
-    def find_nodes_insert(self, instnode, field, fieldnode):
-        for ofs, node in instnode.curfields.items():
-            if ofs >= field:
-                instnode.curfields[ofs + 1] = node
-        instnode.curfields[field] = fieldnode
-        instnode.cursize += 1
-        self.dependency_graph.append((instnode, fieldnode))
+##    def find_nodes_insert(self, instnode, field, fieldnode):
+##        for ofs, node in instnode.curfields.items():
+##            if ofs >= field:
+##                instnode.curfields[ofs + 1] = node
+##        instnode.curfields[field] = fieldnode
+##        instnode.cursize += 1
+##        self.dependency_graph.append((instnode, fieldnode))
         
     def find_nodes(self):
         # Steps (1) and (2)
@@ -515,8 +513,7 @@ class PerfectSpecializer(object):
         op = op.clone()
         for box in old_boxes:
             indices.append(storage.deal_with_box(box, self.nodes,
-                                                 liveboxes, memo,
-                                                 self.ready_results))
+                                                 liveboxes, memo))
         rev_boxes = {}
         for i in range(len(liveboxes)):
             box = liveboxes[i]
@@ -555,7 +552,7 @@ class PerfectSpecializer(object):
                 instnode = self.nodes[box]
                 assert not instnode.virtual
                 box = instnode.source
-            assert isinstance(box, Const) or box in self.ready_results
+            #assert isinstance(box, Const) or box in self.ready_results
             newboxes.append(box)
         return newboxes
 
@@ -566,8 +563,8 @@ class PerfectSpecializer(object):
 
     def optimize_getfield(self, instnode, ofs, box):
         if instnode.virtual or instnode.virtualized:
-            if ofs < 0:
-                ofs = instnode.cursize + ofs
+##            if ofs < 0:
+##                ofs = instnode.cursize + ofs
             assert ofs in instnode.curfields
             return True # this means field is never actually
         elif ofs in instnode.cleanfields:
@@ -579,8 +576,8 @@ class PerfectSpecializer(object):
 
     def optimize_setfield(self, instnode, ofs, valuenode, valuebox):
         if instnode.virtual or instnode.virtualized:
-            if ofs < 0:
-                ofs = instnode.cursize + ofs
+##            if ofs < 0:
+##                ofs = instnode.cursize + ofs
             instnode.curfields[ofs] = valuenode
         else:
             assert not valuenode.virtual
@@ -588,19 +585,19 @@ class PerfectSpecializer(object):
             instnode.dirtyfields[ofs] = self.nodes[valuebox]
             # we never perform this operation here, note
 
-    def optimize_insert(self, instnode, field, valuenode, valuebox):
-        assert instnode.virtual
-        for ofs, node in instnode.curfields.items():
-            if ofs >= field:
-                instnode.curfields[ofs + 1] = node
-        instnode.curfields[field] = valuenode
-        instnode.cursize += 1
+##    def optimize_insert(self, instnode, field, valuenode, valuebox):
+##        assert instnode.virtual
+##        for ofs, node in instnode.curfields.items():
+##            if ofs >= field:
+##                instnode.curfields[ofs + 1] = node
+##        instnode.curfields[field] = valuenode
+##        instnode.cursize += 1
 
     def optimize_loop(self):
-        self.ready_results = {}
+        #self.ready_results = {}
         newoperations = []
         exception_might_have_happened = False
-        ops_so_far = []
+        #ops_so_far = []
         mp = self.loop.operations[0]
         if mp.opname == 'merge_point':
             assert len(mp.args) == len(self.specnodes)
@@ -614,21 +611,21 @@ class PerfectSpecializer(object):
                 assert not self.nodes[box].virtual
 
         for op in self.loop.operations:
-            ops_so_far.append(op)
+            #ops_so_far.append(op)
 
-            if newoperations and newoperations[-1].results:
-                self.ready_results[newoperations[-1].results[0]] = None
+            #if newoperations and newoperations[-1].results:
+            #    self.ready_results[newoperations[-1].results[0]] = None
             opname = op.opname
             if opname == 'merge_point':
                 args = self.expanded_version_of(op.args, None)
                 op = MergePoint('merge_point', args, [])
                 newoperations.append(op)
-                for arg in op.args:
-                    self.ready_results[arg] = None
+                #for arg in op.args:
+                #    self.ready_results[arg] = None
                 continue
-            elif opname == 'catch':
-                for arg in op.args:
-                    self.ready_results[arg] = None
+            #elif opname == 'catch':
+            #    for arg in op.args:
+            #        self.ready_results[arg] = None
             elif opname == 'jump':
                 args = self.expanded_version_of(op.args, newoperations)
                 self.cleanup_field_caches(newoperations)
@@ -643,19 +640,19 @@ class PerfectSpecializer(object):
                 op = self.optimize_guard(op)
                 newoperations.append(op)
                 continue
-            elif opname == 'guard_builtin':
-                instnode = self.nodes[op.args[0]]
-                if instnode.cls is None:
-                    instnode.cls = InstanceNode(op.args[1])
-                continue
-            elif opname == 'guard_len':
-                # it should be completely gone, because if it escapes
-                # we don't virtualize it anymore
-                instnode = self.nodes[op.args[0]]
-                if not instnode.escaped and instnode.cursize == -1:
-                    instnode = self.nodes[op.args[0]]
-                    instnode.cursize = op.args[1].getint()
-                continue
+##            elif opname == 'guard_builtin':
+##                instnode = self.nodes[op.args[0]]
+##                if instnode.cls is None:
+##                    instnode.cls = InstanceNode(op.args[1])
+##                continue
+##            elif opname == 'guard_len':
+##                # it should be completely gone, because if it escapes
+##                # we don't virtualize it anymore
+##                instnode = self.nodes[op.args[0]]
+##                if not instnode.escaped and instnode.cursize == -1:
+##                    instnode = self.nodes[op.args[0]]
+##                    instnode.cursize = op.args[1].getint()
+##                continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtualized or instnode.virtual:
