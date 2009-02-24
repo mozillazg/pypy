@@ -29,17 +29,10 @@ def ll_meta_interp(function, args, backendopt=False, **kwds):
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
     return interp.eval_graph(graph, args)
 
-def rpython_ll_meta_interp(function, args, loops=None, **kwds):
-    kwds['translate_support_code'] = True
-    interp, graph = get_interpreter(function, args, backendopt=True,
-                                    inline_threshold=0)
-    clear_tcache()
-    translator = interp.typer.annotator.translator
-    warmrunnerdesc = WarmRunnerDesc(translator, **kwds)
-    warmrunnerdesc.state.set_param_threshold(3)          # for tests
-    warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
-    xxx
-    interp.eval_graph(boot, args)
+def rpython_ll_meta_interp(function, args, loops='not used right now', **kwds):
+    return ll_meta_interp(function, args,
+                          translate_support_code=True, backendopt=True,
+                          **kwds)
 
 def find_can_enter_jit(graphs):
     results = []
@@ -93,6 +86,8 @@ class WarmRunnerDesc:
         self.rewrite_jit_merge_point()
         self.metainterp.num_green_args = self.num_green_args
         self.metainterp.state = self.state
+        if self.cpu.translate_support_code:
+            self.annhelper.finish()
 
     def _freeze_(self):
         return True
@@ -250,41 +245,44 @@ class WarmRunnerDesc:
         self.metainterp.ExitFrameWithException = ExitFrameWithException
         self.metainterp.ContinueRunningNormally = ContinueRunningNormally
         rtyper = self.translator.rtyper
+        portalfunc_ARGS = unrolling_iterable(list(enumerate(PORTALFUNC.ARGS)))
+        RESULT = PORTALFUNC.RESULT
 
-        if not self.cpu.translate_support_code:
-            def ll_portal_runner(*args):
-                while 1:
-                    try:
-                        return support.maybe_on_top_of_llinterp(rtyper,
-                                                          portal_ptr)(*args)
-                    except ContinueRunningNormally, e:
-                        args = []
-                        for i, arg in enumerate(e.args):
-                            v = arg.value
-                            # HACK for x86 backend always returning int
-                            if (isinstance(PORTALFUNC.ARGS[i], lltype.Ptr) and
-                                isinstance(v, int)):
-                                v = self.metainterp.cpu.cast_int_to_gcref(v)
-                            if lltype.typeOf(v) == llmemory.GCREF:
-                                v = lltype.cast_opaque_ptr(PORTALFUNC.ARGS[i],
-                                                           v)
-                            args.append(v)
-                    except DoneWithThisFrame, e:
-                        if e.resultbox is not None:
-                            return e.resultbox.value
-                        return
-                    except ExitFrameWithException, e:
+        def unwrap(TYPE, box):
+            if TYPE is lltype.Void:
+                return None
+            if isinstance(TYPE, lltype.Ptr):
+                return box.getptr(TYPE)
+            else:
+                return box.getint()
+        unwrap._annspecialcase_ = 'specialize:arg(0)'
+
+        def ll_portal_runner(*args):
+            while 1:
+                try:
+                    return support.maybe_on_top_of_llinterp(rtyper,
+                                                      portal_ptr)(*args)
+                except ContinueRunningNormally, e:
+                    args = ()
+                    for i, ARG in portalfunc_ARGS:
+                        v = unwrap(ARG, e.args[i])
+                        # HACK for x86 backend always returning int
+                        #if isinstance(ARG, lltype.Ptr) and type(v) is int:
+                        #    v = self.metainterp.cpu.cast_int_to_gcref(v)
+                        #if lltype.typeOf(v) == llmemory.GCREF:
+                        #    v = lltype.cast_opaque_ptr(ARG, v)
+                        args = args + (v,)
+                except DoneWithThisFrame, e:
+                    return unwrap(RESULT, e.resultbox)
+                except ExitFrameWithException, e:
+                    value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
+                    if we_are_translated():
+                        # re-raise the exception as it is
+                        raise Exception, value
+                    else:
                         type = e.typebox.getaddr(self.metainterp.cpu)
                         type = llmemory.cast_adr_to_ptr(type, rclass.CLASSTYPE)
-                        value = e.valuebox.getptr(lltype.Ptr(rclass.OBJECT))
                         raise LLException(type, value)
-
-        else:
-            def ll_portal_runner(*args):
-                while 1:
-                    #try:
-                    portal_ptr(*args)
-                    #xexcept DoneWi
 
         portal_runner_ptr = self.helper_func(lltype.Ptr(PORTALFUNC),
                                              ll_portal_runner)
@@ -308,8 +306,6 @@ class WarmRunnerDesc:
         origblock.exitswitch = None
         origblock.recloseblock(Link([v_result], origportalgraph.returnblock))
         checkgraph(origportalgraph)
-        if self.cpu.translate_support_code:
-            self.annhelper.finish()
 
 
 def decode_hp_hint_args(op):

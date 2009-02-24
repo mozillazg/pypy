@@ -3,6 +3,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import rlist
 from pypy.rpython.lltypesystem import rdict, rstr
 from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.translator.simplify import get_funcobj
 from pypy.translator.unsimplify import split_block
 from pypy.objspace.flow.model import Constant
@@ -79,6 +80,14 @@ def maybe_on_top_of_llinterp(rtyper, fnptr):
         def on_top_of_llinterp(*args):
             return fnptr._callable(*args)
     return on_top_of_llinterp
+
+class Entry(ExtRegistryEntry):
+    _about_ = maybe_on_top_of_llinterp
+    def compute_result_annotation(self, s_rtyper, s_fnptr):
+        return s_fnptr
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        return hop.inputarg(hop.args_r[1], arg=1)
 
 # ____________________________________________________________
 #

@@ -297,9 +297,13 @@ class PerfectSpecializer(object):
         for box in self.loop.operations[0].args:
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True,
                                            const=isinstance(box, Const))
-        for op in self.loop.operations[1:-1]:
+        for op in self.loop.operations:
             opname = op.opname
-            if opname == 'new_with_vtable':
+            if (opname == 'merge_point' or
+                opname == 'catch' or
+                opname == 'jump'):
+                continue
+            elif opname == 'new_with_vtable':
                 box = op.results[0]
                 instnode = InstanceNode(box, escaped=False)
                 instnode.cls = InstanceNode(op.args[1], const=True)
