@@ -8,7 +8,7 @@ from pypy.rlib.debug import debug_print
 
 from pypy.jit.metainterp import history, support
 from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
-                                         BoxInt, BoxPtr, GuardOp, Options)
+                                         BoxInt, BoxPtr, GuardOp)
 from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
@@ -1006,3 +1006,10 @@ class OOMetaInterp(object):
 class GenerateMergePoint(Exception):
     def __init__(self, args):
         self.argboxes = args
+
+
+class Options:
+    def __init__(self, specialize=True):
+        self.specialize = specialize
+    def _freeze_(self):
+        return True

@@ -22,14 +22,14 @@ def fixupobj(EXPECTED_TYPE, x):
         return lltype.cast_primitive(EXPECTED_TYPE, x)
 
 def cast_vable(p):
-    T = lltype.Ptr(lltype.typeOf(p._obj._normalizedcontainer()))
+    T = lltype.Ptr(lltype.typeOf(p._obj.container))
     p = lltype.cast_opaque_ptr(T, p)
     STRUCT = cast_vable_type(T.TO)
     return lltype.cast_pointer(lltype.Ptr(STRUCT), p)
 
 def cast_vable_type(STRUCT):
     assert STRUCT._hints.get('virtualizable2'), \
-           "not a virtualizable2: %r" % (STRUCT,)
+           "not a virtualizable2: %r" % (p,)
     while True:
         _, PARENT = STRUCT._first_struct()
         if PARENT is None or not PARENT._hints.get('virtualizable2'):

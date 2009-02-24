@@ -522,9 +522,3 @@ class Stats(object):
         ResOpGraphPage(graphs, errmsg, highlightops).display()
 
 # ----------------------------------------------------------------
-
-class Options:
-    def __init__(self, specialize=True):
-        self.specialize = specialize
-    def _freeze_(self):
-        return True

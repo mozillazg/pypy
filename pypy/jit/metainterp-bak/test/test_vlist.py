@@ -1,6 +1,4 @@
 import py
-py.test.skip("re-enable list optimizations")
-
 from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rpython.ootypesystem import ootype
