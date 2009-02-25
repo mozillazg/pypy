@@ -23,6 +23,9 @@ def ll_meta_interp(function, args, backendopt=False, **kwds):
     interp, graph = get_interpreter(function, args, backendopt=backendopt,
                                     inline_threshold=0)
     clear_tcache()
+    return jittify_and_run(interp, graph)
+
+def jittify_and_run(interp, graph):
     translator = interp.typer.annotator.translator
     warmrunnerdesc = WarmRunnerDesc(translator, **kwds)
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
