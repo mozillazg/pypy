@@ -179,6 +179,28 @@ class BasicTests:
         res = self.meta_interp(f, [31])
         assert res == -4
 
+    def test_stopatxpolicy(self):
+        myjitdriver = JitDriver(greens = [], reds = ['y'])
+        def internfn(y):
+            return y * 3
+        def externfn(y):
+            return y % 4
+        def f(y):
+            while y >= 0:
+                myjitdriver.can_enter_jit(y=y)
+                myjitdriver.jit_merge_point(y=y)
+                if y & 7:
+                    f = internfn
+                else:
+                    f = externfn
+                f(y)
+                y -= 1
+            return 42
+        policy = StopAtXPolicy(externfn)
+        res = self.meta_interp(f, [31], policy=policy)
+        assert res == 42
+        self.check_loops(int_mul=1, int_mod=0)
+
 
 class TestOOtype(BasicTests, OOJitMixin):
     pass
