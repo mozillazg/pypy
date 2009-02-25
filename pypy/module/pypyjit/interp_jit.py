@@ -18,7 +18,6 @@ from pypy.interpreter.pyopcode import ExitFrame
 
 
 #Frame._virtualizable2_ = True
-super_dispatch = PyFrame.dispatch
 
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
