@@ -6,7 +6,7 @@ import py
 import sys
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
-from pypy.rlib.jit import hint, _is_early_constant, JitDriver
+from pypy.rlib.jit import JitDriver
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, Arguments
@@ -14,10 +14,10 @@ from pypy.interpreter.eval import Frame
 from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.function import Function
-from pypy.interpreter.pyopcode import Return, Yield
+from pypy.interpreter.pyopcode import ExitFrame
 
 
-Frame._virtualizable_ = True
+#Frame._virtualizable2_ = True
 PyCode.jit_enable = False     # new default attribute
 super_dispatch = PyFrame.dispatch
 
@@ -25,44 +25,13 @@ class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
 
-    def compute_invariants(self, reds, next_instr, pycode):
-        # compute the information that really only depends on next_instr
-        # and pycode
-        frame = reds.frame
-        valuestackdepth = frame.valuestackdepth
-        blockstack = frame.blockstack
-        return (valuestackdepth, blockstack)
-
-    def on_enter_jit(self, invariants, reds, next_instr, pycode):
-        # *loads* of nonsense for now
-        (depth, oldblockstack) = invariants
-        frame = reds.frame
-        pycode = hint(pycode, deepfreeze=True)
-
-        fastlocals_w = [None] * pycode.co_nlocals
-
-        i = pycode.co_nlocals
-        while True:
-            i -= 1
-            if i < 0:
-                break
-            hint(i, concrete=True)
-            w_obj = frame.fastlocals_w[i]
-            fastlocals_w[i] = w_obj
-
-        frame.pycode = pycode
-        frame.valuestackdepth = depth
-
-        frame.fastlocals_w = fastlocals_w
-
-        virtualstack_w = [None] * pycode.co_stacksize
-        while depth > 0:
-            depth -= 1
-            hint(depth, concrete=True)
-            virtualstack_w[depth] = frame.valuestack_w[depth]
-        frame.valuestack_w = virtualstack_w
-
-        # XXX we should also make a completely virtual copy of oldblockstack
+##    def compute_invariants(self, reds, next_instr, pycode):
+##        # compute the information that really only depends on next_instr
+##        # and pycode
+##        frame = reds.frame
+##        valuestackdepth = frame.valuestackdepth
+##        blockstack = frame.blockstack
+##        return (valuestackdepth, blockstack)
 
 pypyjitdriver = PyPyJitDriver()
 
@@ -70,21 +39,14 @@ class __extend__(PyFrame):
 
     def dispatch(self, pycode, next_instr, ec):
         next_instr = r_uint(next_instr)
+        co_code = pycode.co_code
         try:
             while True:
                 pypyjitdriver.jit_merge_point(
                     frame=self, ec=ec, next_instr=next_instr, pycode=pycode)
-                pycode = hint(pycode, deepfreeze=True)
-                co_code = pycode.co_code
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
-        except Return:
-            w_result = self.popvalue()
-            self.blockstack = None
-            self.valuestack_w = None
-            return w_result
-        except Yield:
-            w_result = self.popvalue()
-            return w_result
+        except ExitFrame:
+            return self.popvalue()
 
     def JUMP_ABSOLUTE(f, jumpto, next_instr, *ignored):
         ec = f.space.getexecutioncontext()
@@ -92,19 +54,19 @@ class __extend__(PyFrame):
                                     pycode=f.getcode())
         return jumpto
 
-class __extend__(Function):
-    __metaclass__ = extendabletype
+##class __extend__(Function):
+##    __metaclass__ = extendabletype
 
-    def getcode(self):
-        # if the self is a compile time constant and if its code
-        # is a BuiltinCode => grab and return its code as a constant
-        if _is_early_constant(self):
-            from pypy.interpreter.gateway import BuiltinCode
-            code = hint(self, deepfreeze=True).code
-            if not isinstance(code, BuiltinCode): code = self.code
-        else:
-            code = self.code
-        return code
+##    def getcode(self):
+##        # if the self is a compile time constant and if its code
+##        # is a BuiltinCode => grab and return its code as a constant
+##        if _is_early_constant(self):
+##            from pypy.interpreter.gateway import BuiltinCode
+##            code = hint(self, deepfreeze=True).code
+##            if not isinstance(code, BuiltinCode): code = self.code
+##        else:
+##            code = self.code
+##        return code
         
 
 # ____________________________________________________________
@@ -114,7 +76,7 @@ class __extend__(Function):
 def jit_startup(space, argv):
     # save the app-level sys.executable in JITInfo, where the machine
     # code backend can fish for it.  A bit hackish.
-    from pypy.jit.codegen.hlinfo import highleveljitinfo
+    from pypy.jit.backend.hlinfo import highleveljitinfo
     highleveljitinfo.sys_executable = argv[0]
 
     # recognize the option  --jit PARAM=VALUE,PARAM=VALUE...
