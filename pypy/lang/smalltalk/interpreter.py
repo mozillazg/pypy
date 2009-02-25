@@ -42,8 +42,12 @@ class Interpreter(object):
         except ReturnFromTopLevel, e:
             return e.object
 
-    def should_trace(self):
-        return (not objectmodel.we_are_translated()) and option.bc_trace
+    def should_trace(self, primitives=False):
+        if objectmodel.we_are_translated():
+            return False
+        if not primitives:
+            return option.bc_trace
+        return option.prim_trace
 
     def step(self):
         next = self.s_active_context().getNextBytecode()
@@ -207,7 +211,7 @@ class __extend__(ContextPartShadow):
                     w_result = func(interp, argcount)
                     return
                 except primitives.PrimitiveFailedError:
-                    if interp.should_trace():
+                    if interp.should_trace(True):
                         print "PRIMITIVE FAILED: %d %s" % (method.primitive, selector,)
                     pass # ignore this error and fall back to the Smalltalk version
         arguments = self.pop_and_return_n(argcount)

@@ -34,13 +34,13 @@ def make_getter_setter(index0):
     return make_getter(index0), make_setter(index0)
 
 def make_int_getter(index0):
-    def getter(self, space):
-        return space.unwrap_int(self.read(index0))
+    def getter(self):
+        return self.space.unwrap_int(self.read(index0))
     return getter
 
 def make_int_setter(index0):
-    def setter(self, space, new):
-        return self.write(index0, space.wrap_int(new))
+    def setter(self, new):
+        return self.write(index0, self.space.wrap_int(new))
     return setter
 
 def make_int_getter_setter(index0):
@@ -186,17 +186,17 @@ class SemaphoreWrapper(LinkedListWrapper):
 
     def signal(self, interp):
         if self.is_empty_list():
-            value = self.excess_signals(interp.space)
-            self.store_excess_signals(interp.space, value + 1)
+            value = self.excess_signals()
+            self.store_excess_signals(value + 1)
         else:
             process = self.remove_first_link_of_list()
             ProcessWrapper(self.space, process).resume(interp)
 
     def wait(self, interp):
-        excess = self.excess_signals(interp.space)
+        excess = self.excess_signals()
         w_process = scheduler(interp.space).active_process()
         if excess > 0:
-            self.store_excess_signals(interp.space, excess - 1)
+            self.store_excess_signals(excess - 1)
         else:
             self.add_last_link(w_process)
             ProcessWrapper(self.space, w_process).suspend(interp)
@@ -219,6 +219,3 @@ class MaskWrapper(Wrapper):
 class CursorWrapper(MaskWrapper):
     offset   = make_getter(4)
  
-class PointWrapper(Wrapper):
-    x, store_x = make_int_getter_setter(0)
-    y, store_y = make_int_getter_setter(1)

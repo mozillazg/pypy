@@ -111,6 +111,7 @@ class ImageReader(object):
         # 1 word last used hash
         lasthash = self.stream.next()
         savedwindowssize = self.stream.next()
+        print "savedwindowssize", savedwindowssize
         fullscreenflag = self.stream.next()
         extravmmemory = self.stream.next()
         # we called 9 times next, 1 word = 4 byte

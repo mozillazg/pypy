@@ -7,4 +7,9 @@ option = py.test.config.addoptions("smalltalk options",
                dest="bc_trace",
                default=False,
                help="print bytecodes and stack during execution"),
-    )
+        Option('--prim-trace',
+               action="store_true",
+               dest="prim_trace",
+               default=False,
+               help="print called primitives during execution"),
+)

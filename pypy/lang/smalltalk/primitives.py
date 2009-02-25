@@ -289,10 +289,10 @@ MAKE_POINT = 18
 
 @expose_primitive(MAKE_POINT, unwrap_spec=[int, int])
 def func(interp, x, y):
-    w_res = interp.space.classtable['w_Point'].as_class_get_shadow(interp.space).new(2)
+    w_res = interp.space.w_Point.as_class_get_shadow(interp.space).new(2)
     point = wrapper.PointWrapper(interp.space, w_res)
-    point.store_x(interp.space, x)
-    point.store_y(interp.space, y)
+    point.store_x(x)
+    point.store_y(y)
     return w_res
 
 
@@ -453,6 +453,31 @@ def func(interp, w_class, bytecount, header):
     # We ignore w_class because W_CompiledMethod is special
     w_method = model.W_CompiledMethod(bytecount, header)
     return w_method
+
+# ___________________________________________________________________________
+# I/O Primitives
+
+MOUSE_POINT = 90
+TEST_DISPLAY_DEPTH = 91 
+SET_DISPLAY_MODE = 92
+INPUT_SEMAPHORE = 93
+GET_NEXT_EVENT = 94
+INPUT_WORD = 95
+OBSOLETE_INDEXED_PRIMITIVE = 96
+SNAPSHOT = 97
+STORE_IMAGE_SEGMENT = 98
+LOAD_IMAGE_SEGMENT = 99
+PERFORM_IN_SUPERCLASS = 100
+BE_CURSOR = 101
+BE_DISPLAY = 102
+SCAN_CHARACTERS = 103
+OBSOLETE_INDEXED_PRIMITIVE =104
+STRING_REPLACE = 105
+SCREEN_SIZE = 106
+MOUSE_BUTTONS = 107
+KBD_NEXT = 108
+KBD_PEEK = 109
+
 
 # ___________________________________________________________________________
 # Control Primitives
