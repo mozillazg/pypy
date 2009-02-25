@@ -1570,7 +1570,11 @@ class _subarray(_parentable):     # only for direct_fieldptr()
             self._parentstructure().setitem(baseoffset + index, value)
 
     def _makeptr(parent, baseoffset_or_fieldname, solid=False):
-        cache = _subarray._cache.setdefault(parent, {})
+        try:
+            cache = _subarray._cache.setdefault(parent, {})
+        except RuntimeError:    # pointer comparison with a freed structure
+            _subarray._cleanup_cache()
+            cache = _subarray._cache.setdefault(parent, {})    # try again
         try:
             subarray = cache[baseoffset_or_fieldname]
         except KeyError:
@@ -1589,6 +1593,17 @@ class _subarray(_parentable):     # only for direct_fieldptr()
 
     def _getid(self):
         raise NotImplementedError('_subarray._getid()')
+
+    def _cleanup_cache():
+        newcache = weakref.WeakKeyDictionary()
+        for key, value in _subarray._cache.items():
+            try:
+                if not key._was_freed():
+                    newcache[key] = value
+            except RuntimeError:
+                pass    # ignore "accessing subxxx, but already gc-ed parent"
+        _subarray._cache = newcache
+    _cleanup_cache = staticmethod(_cleanup_cache)
 
 
 class _arraylenref(_parentable):
