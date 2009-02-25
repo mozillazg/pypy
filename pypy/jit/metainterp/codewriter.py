@@ -210,9 +210,11 @@ class BytecodeMaker(object):
     def __init__(self, codewriter, graph, portal):
         self.codewriter = codewriter
         self.cpu = codewriter.metainterp.cpu
-        self.graph = graph
         self.portal = portal
-        self.bytecode = self.codewriter.get_jitcode(self.graph)
+        self.bytecode = self.codewriter.get_jitcode(graph)
+        if not codewriter.policy.look_inside_graph(graph):
+            graph = make_calling_stub(codewriter.rtyper, graph)
+        self.graph = graph
 
     def assemble(self):
         """Assemble the opcodes for self.bytecode."""
@@ -620,11 +622,11 @@ class BytecodeMaker(object):
     #    return getattr(self, 'handle_%s_call' % color)(op)
 
     def serialize_op_direct_call(self, op):
-        self.minimize_variables()
         color = self.codewriter.policy.guess_call_kind(op)
         return getattr(self, 'handle_%s_call' % color)(op)
 
     def handle_regular_call(self, op):
+        self.minimize_variables()
         [targetgraph] = self.codewriter.policy.graphs_from(op)
         jitbox = self.codewriter.get_jitcode(targetgraph)
         self.emit('call')
@@ -633,15 +635,8 @@ class BytecodeMaker(object):
                            if x.concretetype is not lltype.Void])
         self.register_var(op.result)
 
-#     def handle_green_call(self, op):
-#         assert op.result.concretetype is not lltype.Void
-#         self.emit('green_call_%s' % getkind_num(self.cpu,
-#                                                 op.result.concretetype))
-#         self.emit_varargs([x for x in op.args
-#                              if x.concretetype is not lltype.Void])
-#         self.register_var(op.result)
-
     def handle_residual_call(self, op):
+        self.minimize_variables()
         self.emit('residual_call_%s' % getkind_num(self.cpu,
                                                    op.result.concretetype))
         self.emit_varargs([x for x in op.args
@@ -688,28 +683,6 @@ class BytecodeMaker(object):
         self.emit(opname % getkind_num(self.cpu, op.result.concretetype))
         self.emit_varargs([c_func] + args)
         self.register_var(op.result)
-
-#     def serialize_op_indirect_call(self, op):
-#         xxx
-#         color = support.guess_call_kind(self.codewriter.hannotator, op)
-#         return getattr(self, 'handle_%s_indirect_call' % color)(op)
-
-#     def handle_red_indirect_call(self, op):
-#         # indirect_call to a red function pointer
-#         # XXX for now, this is handled as a residual call
-#         self.handle_residual_indirect_call(op)
-
-#     def handle_direct_indirect_call(self, op):
-#         # indirect_call to a green function pointer
-#         self.minimize_variables()
-#         targets = support.graphs_from(self.codewriter.hannotator, op)
-#         indirectcallset = self.codewriter.get_indirectcallset(targets)
-#         self.emit('direct_indirect_call')
-#         self.emit(self.get_position(indirectcallset))
-#         self.emit(self.var_position(op.args[0]))
-#         self.emit_varargs([x for x in op.args[1:-1]
-#                              if x.concretetype is not lltype.Void])
-#         self.register_var(op.result)
 
     def serialize_op_indirect_call(self, op):
         self.minimize_variables()
@@ -840,3 +813,23 @@ def assemble(labelpos, metainterp, assembler):
             result[i + 1] = chr((index >>  8) & 0xff)
             result[i + 2] = chr(index & 0xff)
     return "".join(result)
+
+# ____________________________________________________________
+
+def make_calling_stub(rtyper, graph):
+    from pypy.objspace.flow.model import Block, Link, FunctionGraph
+    from pypy.objspace.flow.model import SpaceOperation
+    from pypy.translator.unsimplify import copyvar
+    #
+    args_v = [copyvar(None, v) for v in graph.getargs()]
+    v_res = copyvar(None, graph.getreturnvar())
+    fnptr = rtyper.getcallable(graph)
+    v_ptr = Constant(fnptr, lltype.typeOf(fnptr))
+    newstartblock = Block(args_v)
+    newstartblock.operations.append(
+        SpaceOperation('direct_call', [v_ptr] + args_v, v_res))
+    newgraph = FunctionGraph('%s_ts_stub' % (graph.name,), newstartblock)
+    newgraph.getreturnvar().concretetype = v_res.concretetype
+    newstartblock.closeblock(Link([v_res], newgraph.returnblock))
+    newgraph.ts_stub_for = graph
+    return newgraph
