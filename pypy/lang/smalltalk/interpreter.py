@@ -493,22 +493,22 @@ class __extend__(ContextPartShadow):
 
     def bytecodePrimBlockCopy(self, interp):
         # the primitive checks the class of the receiver
-        self.callPrimitive(primitives.PRIMITIVE_BLOCK_COPY,
+        self.callPrimitive(primitives.BLOCK_COPY,
                            "blockCopy:", 1, interp)
 
     def bytecodePrimValue(self, interp):
         # the primitive checks the class of the receiver
         self.callPrimitive(
-            primitives.PRIMITIVE_VALUE, "value", 0, interp)
+            primitives.VALUE, "value", 0, interp)
 
     def bytecodePrimValueWithArg(self, interp):
         # the primitive checks the class of the receiver
-        # Note that the PRIMITIVE_VALUE_WITH_ARGS takes an array of
+        # Note that the VALUE_WITH_ARGS takes an array of
         # arguments but this bytecode is about the one-argument case.
-        # The PRIMITIVE_VALUE is general enough to take any number of
+        # The VALUE is general enough to take any number of
         # arguments from the stack, so it's the one we need to use here.
         self.callPrimitive(
-            primitives.PRIMITIVE_VALUE, "value:", 1, interp)
+            primitives.VALUE, "value:", 1, interp)
 
     def bytecodePrimDo(self, interp):
         self._sendSelfSelector("do:", 1, interp)
