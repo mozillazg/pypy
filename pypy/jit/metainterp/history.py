@@ -69,6 +69,7 @@ class Const(AbstractValue):
     __slots__ = ()
 
     def _new(x, cpu):
+        "NOT_RPYTHON"
         T = lltype.typeOf(x)
         kind = getkind(T)
         if kind == "int":
@@ -199,6 +200,7 @@ class Box(AbstractValue):
 
     @staticmethod
     def _new(x, cpu):
+        "NOT_RPYTHON"
         kind = getkind(lltype.typeOf(x))
         if kind == "int":
             intval = lltype.cast_primitive(lltype.Signed, x)
@@ -438,7 +440,7 @@ class RunningMatcher(Matcher):
         if not canfold:
             self.record(step, argboxes, resboxes)
         return resboxes
-    execute_and_record._annspecialcase_ = 'specialize:arg(3, 4)'
+    execute_and_record._annspecialcase_ = 'specialize:arg(4)'
 
     def record(self, opname, argboxes, resboxes, opcls=ResOperation):
         # xxx the indirection from record to _record is to work

@@ -161,8 +161,9 @@ class SendTests:
                 w.foo()
                 y -= 1
             return 42
+        policy = StopAtXPolicy(externfn)
         for j in range(69, 75):
-            res = self.meta_interp(f, [j], policy=StopAtXPolicy(externfn))
+            res = self.meta_interp(f, [j], policy=policy)
             assert res == 42
             self.check_loop_count(3)
 

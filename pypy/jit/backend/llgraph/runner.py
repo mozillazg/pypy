@@ -22,7 +22,7 @@ class CPU(object):
         self.stats = stats or MiniStats()
         self.stats.exec_counters = {}
         self.stats.exec_jumps = 0
-        self.memo_cast = lltype.nullptr(llimpl.MEMOCAST.TO)
+        self.memo_cast = llimpl.new_memo_cast()
         llimpl._stats = self.stats
         llimpl._rtyper = self.rtyper
         if translate_support_code:
@@ -103,7 +103,7 @@ class CPU(object):
         follow the merge point.
         """
         assert result_type is None or isinstance(result_type, str)
-        frame = llimpl.new_frame(self)
+        frame = llimpl.new_frame(self.memo_cast)
         llimpl.frame_clear(frame, merge_point._compiled, merge_point._opindex)
         for box in valueboxes:
             if isinstance(box, history.BoxInt):
@@ -122,7 +122,7 @@ class CPU(object):
         if opname[0] == '#':
             return None
         c = self.get_compiled_single_op(opname, valueboxes, result_type)
-        frame = llimpl.new_frame(self)
+        frame = llimpl.new_frame(self.memo_cast)
         llimpl.frame_clear(frame, c, 0)
         for box in valueboxes:
             if box.type == 'int':
@@ -269,8 +269,6 @@ class CPU(object):
         return ofs_length
 
     def cast_adr_to_int(self, adr):
-        if not self.memo_cast:
-            self.memo_cast = llimpl.new_memo_cast()
         return llimpl.cast_adr_to_int(self.memo_cast, adr)
 
     def cast_int_to_adr(self, int):

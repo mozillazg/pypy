@@ -10,7 +10,16 @@ class SpecNode(object):
         resultlist.append(valuebox)
 
     def adapt_to(self, instnode):
-        instnode.escaped = True    
+        instnode.escaped = True
+
+    def mutate_nodes(self, instnode):
+        raise NotImplementedError
+
+    def equals(self, other):
+        raise NotImplementedError
+
+    def matches(self, other):
+        raise NotImplementedError
 
 class NotSpecNode(SpecNode):
     def mutate_nodes(self, instnode):
