@@ -218,11 +218,11 @@ def test_map_mirrors_to_classtable():
 def test_runimage():
     py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
     from pypy.lang.smalltalk import wrapper
-    ap = wrapper.ProcessWraper(wrapper.scheduler().active_process())
-    s_ctx = ap.suspended_context().as_methodcontext_get_shadow()
+    ap = wrapper.ProcessWrapper(space, wrapper.scheduler(space).active_process())
+    s_ctx = ap.suspended_context().as_methodcontext_get_shadow(space)
     ap.store_suspended_context(space.w_nil)
 
-    interp = interpreter.Interpreter()
+    interp = interpreter.Interpreter(space)
     interp.store_w_active_context(s_ctx.w_self())
     interp.interpret()
 
