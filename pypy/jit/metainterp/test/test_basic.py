@@ -63,7 +63,7 @@ class LLJitMixin(JitMixin):
         metainterp.DoneWithThisFrame = DoneWithThisFrame
         self.metainterp = metainterp
         try:
-            metainterp.compile_and_run(args)
+            metainterp.compile_and_run(*args)
         except DoneWithThisFrame, e:
             return e.args[0].value
         else:
