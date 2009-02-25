@@ -18,7 +18,6 @@ from pypy.interpreter.pyopcode import ExitFrame
 
 
 #Frame._virtualizable2_ = True
-PyCode.jit_enable = False     # new default attribute
 super_dispatch = PyFrame.dispatch
 
 class PyPyJitDriver(JitDriver):
