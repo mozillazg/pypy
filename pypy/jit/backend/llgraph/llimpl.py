@@ -141,7 +141,7 @@ def repr0(x):
     else:
         return repr(x)
 
-def repr_list(lst, types, cpu):
+def repr_list(lst, types, memocast):
     res_l = []
     if types and types[-1] == 'varargs':
         types = types[:-1] + ('int',) * (len(lst) - len(types) + 1)
@@ -152,12 +152,12 @@ def repr_list(lst, types, cpu):
         else:
             extraarg = None
         if isinstance(elem, Constant):
-            res_l.append('(%s)' % repr1(elem, tp, cpu, extraarg))
+            res_l.append('(%s)' % repr1(elem, tp, memocast, extraarg))
         else:
-            res_l.append(repr1(elem, tp, cpu, extraarg))
+            res_l.append(repr1(elem, tp, memocast, extraarg))
     return '[%s]' % (', '.join(res_l))
 
-def repr1(x, tp, cpu, extraarg):
+def repr1(x, tp, memocast, extraarg):
     if tp == "intorptr":
         if extraarg % 2:
             tp = "ptr"
@@ -172,7 +172,7 @@ def repr1(x, tp, cpu, extraarg):
             return '(* None)'
         if isinstance(x, int):
             # XXX normalize?
-            ptr = str(cpu.cast_int_to_adr(x))
+            ptr = str(cast_int_to_adr(memocast, x))
         else:
             if getattr(x, '_fake', None):
                 return repr(x)
@@ -270,9 +270,9 @@ def compile_add_jump_target(loop, loop_target, loop_target_index):
     op.jump_target_index = loop_target_index
     if op.opname == 'jump':
         if loop_target == loop and loop_target_index == 0:
-            log.trace("compiling new loop")
+            log.info("compiling new loop")
         else:
-            log.trace("compiling new bridge")
+            log.info("compiling new bridge")
 
 def compile_add_failnum(loop, failnum):
     loop = _from_opaque(loop)
@@ -296,16 +296,15 @@ def compile_from_guard(loop, guard_loop, guard_opindex):
 
 class Frame(object):
 
-    def __init__(self, cpu):
-        assert cpu
+    def __init__(self, memocast):
         llinterp = LLInterpreter(_rtyper)    # '_rtyper' set by CPU
         llinterp.traceback_frames = []
         self.llframe = ExtendedLLFrame(None, None, llinterp)
-        self.llframe.cpu = cpu
+        self.llframe.memocast = memocast
         self.llframe.last_exception = None
         self.llframe.last_exception_handled = True
-        self.verbose = False # cpu is not None
-        self.cpu = cpu
+        self.verbose = False
+        self.memocast = memocast
 
     def getenv(self, v):
         if isinstance(v, Constant):
@@ -402,10 +401,10 @@ class Frame(object):
                     extraarg = values[1]
                 else:
                     extraarg = None
-                resdata = '-> ' + repr1(res, restype, self.cpu, extraarg)
+                resdata = '-> ' + repr1(res, restype, self.memocast, extraarg)
             # fish the types
             log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
-                                                      self.cpu), resdata))
+                                                      self.memocast), resdata))
         if res is None:
             return []
         elif isinstance(res, list):
@@ -417,9 +416,9 @@ class Frame(object):
         TP = lltype.typeOf(x)
         if isinstance(TP, lltype.Ptr):
             assert TP.TO._gckind == 'raw'
-            return self.cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+            return cast_adr_to_int(self.memocast, llmemory.cast_ptr_to_adr(x))
         if TP == llmemory.Address:
-            return self.cpu.cast_adr_to_int(x)
+            return cast_adr_to_int(self.memocast, x)
         return lltype.cast_primitive(lltype.Signed, x)
     
     def as_ptr(self, x):
@@ -434,8 +433,8 @@ class Frame(object):
         log.trace('ran %d operations, %d jumps' % (count, count_jumps))
 
 
-def new_frame(cpu):
-    frame = Frame(cpu)
+def new_frame(memocast):
+    frame = Frame(memocast)
     return _to_opaque(frame)
 
 def frame_clear(frame, loop, opindex):
@@ -581,13 +580,13 @@ class ExtendedLLFrame(LLFrame):
 
     def op_guard_nonnull(self, ptr):
         if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = self.cpu.cast_int_to_adr(ptr)
+            ptr = cast_int_to_adr(self.memocast, ptr)
         if not ptr:
             raise GuardFailed
 
     def op_guard_isnull(self, ptr):
         if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = self.cpu.cast_int_to_adr(ptr)
+            ptr = cast_int_to_adr(self.memocast, ptr)
         if ptr:
             raise GuardFailed
 
@@ -621,7 +620,7 @@ class ExtendedLLFrame(LLFrame):
     def op_guard_class(self, value, expected_class):
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, value)
         expected_class = llmemory.cast_adr_to_ptr(
-            self.cpu.cast_int_to_adr(expected_class),
+            cast_int_to_adr(self.memocast, expected_class),
             rclass.CLASSTYPE)
         if value.typeptr != expected_class:
             raise GuardFailed
@@ -643,7 +642,7 @@ class ExtendedLLFrame(LLFrame):
 
     def op_guard_exception(self, expected_exception):
         expected_exception = llmemory.cast_adr_to_ptr(
-            self.cpu.cast_int_to_adr(expected_exception),
+            cast_int_to_adr(self.memocast, expected_exception),
             rclass.CLASSTYPE)
         assert expected_exception
         if self.last_exception:
@@ -673,7 +672,7 @@ class ExtendedLLFrame(LLFrame):
 
     def op_getfield_raw(self, intval, fielddesc):
         STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
-        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
+        ptr = llmemory.cast_adr_to_ptr(cast_int_to_adr(self.memocast, intval),
                                        lltype.Ptr(STRUCT))
         return getattr(ptr, fieldname)
 
@@ -689,25 +688,25 @@ class ExtendedLLFrame(LLFrame):
             if isinstance(FIELDTYPE, lltype.Ptr):
                 assert FIELDTYPE.TO._gckind == 'raw'
                 newvalue = llmemory.cast_adr_to_ptr(
-                    self.cpu.cast_int_to_adr(newvalue),
+                    cast_int_to_adr(self.memocast, newvalue),
                     FIELDTYPE)
             elif FIELDTYPE == llmemory.Address:
-                newvalue = self.cpu.cast_int_to_adr(newvalue)
+                newvalue = cast_int_to_adr(self.memocast, newvalue)
         setattr(ptr, fieldname, newvalue)
 
     def op_setfield_raw(self, intval, fielddesc, newvalue):
-        ptr = llmemory.cast_adr_to_ptr(self.cpu.cast_int_to_adr(intval),
+        ptr = llmemory.cast_adr_to_ptr(cast_int_to_adr(self.memocast, intval),
                                        lltype.Ptr(STRUCT))
         self.op_setfield_gc(ptr, fielddesc, newvalue)
 
     def op_ooisnull(self, ptr):
         if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = self.cpu.cast_int_to_adr(ptr)
+            ptr = cast_int_to_adr(self.memocast, ptr)
         return not ptr
 
     def op_oononnull(self, ptr):
         if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = self.cpu.cast_int_to_adr(ptr)
+            ptr = cast_int_to_adr(self.memocast, ptr)
         return bool(ptr)
 
     def op_oois(self, ptr1, ptr2):
@@ -745,7 +744,7 @@ class ExtendedLLFrame(LLFrame):
         self.last_exception = None
 
     def do_call(self, f, *args):
-        ptr = self.cpu.cast_int_to_adr(f).ptr
+        ptr = cast_int_to_adr(self.memocast, f).ptr
         FUNC = lltype.typeOf(ptr).TO
         ARGS = FUNC.ARGS
         args = list(args)

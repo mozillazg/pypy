@@ -1,6 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.llinterp import LLException
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import we_are_translated, r_dict
 from pypy.rlib.unroll import unrolling_iterable
@@ -629,7 +630,7 @@ class MIFrame(object):
         if len(resboxes) == 1:
             resultbox = resboxes[0]
             self.make_result_box(resultbox)
-    execute._annspecialcase_ = 'specialize:arg(3, 4)'
+    execute._annspecialcase_ = 'specialize:arg(4)'
 
     def execute_with_exc(self, step, argboxes, result_type, pure=False):
         old_index = len(self.metainterp.history.operations)
@@ -641,7 +642,8 @@ class MIFrame(object):
                     raise
                 etype, evalue = e.args[:2]
             else:
-                XXX
+                evalue = cast_instance_to_base_ptr(e)
+                etype = evalue.typeptr
             if result_type == 'void':
                 resultboxes = []
             else:
@@ -662,7 +664,7 @@ class MIFrame(object):
             llmemory.cast_ptr_to_adr(etype))
         value_as_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, evalue)
         return self.metainterp.handle_exception(type_as_int, value_as_gcref)
-    execute_with_exc._annspecialcase_ = 'specialize:arg(3, 4)'
+    execute_with_exc._annspecialcase_ = 'specialize:arg(4)'
 
 # ____________________________________________________________
 
@@ -759,8 +761,8 @@ class OOMetaInterp(object):
             else:
                 debug_print('LEAVE')
 
-    def compile_and_run(self, args):
-        orig_boxes = self.initialize_state_from_start(args)
+    def compile_and_run(self, *args):
+        orig_boxes = self.initialize_state_from_start(*args)
         try:
             self.interpret()
             assert False, "should always raise"
@@ -843,17 +845,30 @@ class OOMetaInterp(object):
             specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
         return expanded_args
 
-    def initialize_state_from_start(self, args):
+    def _initialize_from_start(self, original_boxes, num_green_args, *args):
+        if args:
+            value = args[0]
+            if isinstance(lltype.typeOf(value), lltype.Ptr):
+                value = lltype.cast_opaque_ptr(llmemory.GCREF, value)
+                if num_green_args > 0:
+                    cls = ConstPtr
+                else:
+                    cls = BoxPtr
+            else:
+                if num_green_args > 0:
+                    cls = ConstInt
+                else:
+                    cls = BoxInt
+            box = cls(value)
+            original_boxes.append(box)
+            self._initialize_from_start(original_boxes, num_green_args-1,
+                                        *args[1:])
+
+    def initialize_state_from_start(self, *args):
         self.create_empty_history()
         num_green_args = self.num_green_args
         original_boxes = []
-        for i in range(len(args)):
-            value = args[i]
-            if i < num_green_args:
-                box = Const._new(value, self.cpu)
-            else:
-                box = Box._new(value, self.cpu)
-            original_boxes.append(box)
+        self._initialize_from_start(original_boxes, num_green_args, *args)
         # ----- make a new frame -----
         self.framestack = []
         f = self.newframe(self.portal_code)
@@ -867,7 +882,6 @@ class OOMetaInterp(object):
             self.history = history.History(self.cpu)
         else:
             self.history = history.BlackHole(self.cpu)
-        self.guard_failure = guard_failure
         guard_op = guard_failure.guard_op
         boxes_from_frame = []
         index = 0

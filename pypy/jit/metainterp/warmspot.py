@@ -27,12 +27,13 @@ def ll_meta_interp(function, args, backendopt=False, **kwds):
     warmrunnerdesc = WarmRunnerDesc(translator, **kwds)
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
+    warmrunnerdesc.finish()
     return interp.eval_graph(graph, args)
 
-def rpython_ll_meta_interp(function, args, loops='not used right now', **kwds):
-    return ll_meta_interp(function, args,
-                          translate_support_code=True, backendopt=True,
-                          **kwds)
+def rpython_ll_meta_interp(function, args, backendopt=True,
+                           loops='not used right now', **kwds):
+    return ll_meta_interp(function, args, backendopt=backendopt,
+                          translate_support_code=True, **kwds)
 
 def find_can_enter_jit(graphs):
     results = []
@@ -86,6 +87,8 @@ class WarmRunnerDesc:
         self.rewrite_jit_merge_point()
         self.metainterp.num_green_args = self.num_green_args
         self.metainterp.state = self.state
+
+    def finish(self):
         if self.cpu.translate_support_code:
             self.annhelper.finish()
 
@@ -461,7 +464,7 @@ def make_state_class(warmrunnerdesc):
         getkeyhash._always_inline_ = True
 
         def compile_and_run(self, argshash, *args):
-            loop, boxes = warmrunnerdesc.metainterp.compile_and_run(list(args))
+            loop, boxes = warmrunnerdesc.metainterp.compile_and_run(*args)
             if loop:
                 cpu = warmrunnerdesc.metainterp.cpu
                 mp = loop.operations[0]

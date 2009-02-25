@@ -21,9 +21,12 @@ class TestBasic:
         assert res == 490
 
     def test_loop_2(self):
+        jitdriver = JitDriver(greens = [], reds = ['i', 'total'])
         def f(i):
             total = 0
             while i > 3:
+                jitdriver.can_enter_jit(i=i, total=total)
+                jitdriver.jit_merge_point(i=i, total=total)
                 total += i
                 if i >= 10:
                     i -= 2
