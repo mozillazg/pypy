@@ -463,7 +463,7 @@ SET_DISPLAY_MODE = 92
 INPUT_SEMAPHORE = 93
 GET_NEXT_EVENT = 94
 INPUT_WORD = 95
-OBSOLETE_INDEXED_PRIMITIVE = 96
+OBSOLETE_INDEXED = 96
 SNAPSHOT = 97
 STORE_IMAGE_SEGMENT = 98
 LOAD_IMAGE_SEGMENT = 99
@@ -471,13 +471,23 @@ PERFORM_IN_SUPERCLASS = 100
 BE_CURSOR = 101
 BE_DISPLAY = 102
 SCAN_CHARACTERS = 103
-OBSOLETE_INDEXED_PRIMITIVE =104
+# OBSOLETE_INDEXED = 104 # also 96
 STRING_REPLACE = 105
 SCREEN_SIZE = 106
 MOUSE_BUTTONS = 107
 KBD_NEXT = 108
 KBD_PEEK = 109
 
+@expose_primitive(BE_CURSOR, unwrap_spec=[object])
+def func(interp, w_rcvr):
+    # TODO: Use info from cursor object.
+    interp.space.objtable['w_cursor'] = w_rcvr
+    return w_rcvr
+
+@expose_primitive(BE_DISPLAY, unwrap_spec=[object])
+def func(interp, w_rcvr):
+    interp.space.objtable['w_display'] = w_rcvr
+    return w_rcvr
 
 # ___________________________________________________________________________
 # Control Primitives
@@ -667,18 +677,18 @@ for (code, name) in [
 # ___________________________________________________________________________
 # Control Primitives
 
-PRIMITIVE_BLOCK_COPY = 80
-PRIMITIVE_VALUE = 81
-PRIMITIVE_VALUE_WITH_ARGS = 82
-PRIMITIVE_PERFORM = 83
-PRIMITIVE_PERFORM_WITH_ARGS = 84
-PRIMITIVE_SIGNAL = 85
-PRIMITIVE_WAIT = 86
-PRIMITIVE_RESUME = 87
-PRIMITIVE_SUSPEND = 88
-PRIMITIVE_FLUSH_CACHE = 89
+BLOCK_COPY = 80
+VALUE = 81
+VALUE_WITH_ARGS = 82
+PERFORM = 83
+PERFORM_WITH_ARGS = 84
+SIGNAL = 85
+WAIT = 86
+RESUME = 87
+SUSPEND = 88
+FLUSH_CACHE = 89
 
-@expose_primitive(PRIMITIVE_BLOCK_COPY, unwrap_spec=[object, int])
+@expose_primitive(BLOCK_COPY, unwrap_spec=[object, int])
 def func(interp, w_context, argcnt):
     frame = interp.s_active_context()
 
@@ -703,7 +713,7 @@ def finalize_block_ctx(interp, s_block_ctx, frame):
     s_block_ctx.store_w_sender(frame)
     interp.store_w_active_context(s_block_ctx.w_self())
     
-@expose_primitive(PRIMITIVE_VALUE, no_result=True)
+@expose_primitive(VALUE, no_result=True)
 def func(interp, argument_count):
     # argument_count does NOT include the receiver.
     # This means that for argument_count == 3 the stack looks like:
@@ -741,7 +751,7 @@ def func(interp, argument_count):
     frame.pop()
     finalize_block_ctx(interp, s_block_ctx, frame.w_self())
     
-@expose_primitive(PRIMITIVE_VALUE_WITH_ARGS, unwrap_spec=[object, object],
+@expose_primitive(VALUE_WITH_ARGS, unwrap_spec=[object, object],
                   no_result=True)
 def func(interp, w_block_ctx, w_args):
 
@@ -765,11 +775,11 @@ def func(interp, w_block_ctx, w_args):
     # because falls back to value + internal implementation
     finalize_block_ctx(interp, s_block_ctx, interp.w_active_context())
 
-@expose_primitive(PRIMITIVE_PERFORM)
+@expose_primitive(PERFORM)
 def func(interp, argcount):
     raise PrimitiveFailedError()
 
-@expose_primitive(PRIMITIVE_PERFORM_WITH_ARGS,
+@expose_primitive(PERFORM_WITH_ARGS,
                   unwrap_spec=[object, str, object],
                   no_result=True)
 def func(interp, w_rcvr, sel, w_args):
@@ -782,7 +792,7 @@ def func(interp, w_rcvr, sel, w_args):
     w_frame.as_context_get_shadow(interp.space).store_w_sender(interp.w_active_context())
     interp.store_w_active_context(w_frame)
 
-@expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
+@expose_primitive(SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
@@ -791,7 +801,7 @@ def func(interp, w_rcvr):
     wrapper.SemaphoreWrapper(interp.space, w_rcvr).signal(interp)
     return w_rcvr
     
-@expose_primitive(PRIMITIVE_WAIT, unwrap_spec=[object])
+@expose_primitive(WAIT, unwrap_spec=[object])
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
@@ -800,7 +810,7 @@ def func(interp, w_rcvr):
     wrapper.SemaphoreWrapper(interp.space, w_rcvr).wait(interp)
     return w_rcvr
     
-@expose_primitive(PRIMITIVE_RESUME, unwrap_spec=[object])
+@expose_primitive(RESUME, unwrap_spec=[object])
 def func(interp, w_rcvr,):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
@@ -809,7 +819,7 @@ def func(interp, w_rcvr,):
     wrapper.ProcessWrapper(interp.space, w_rcvr).resume(interp)
     return w_rcvr
  
-@expose_primitive(PRIMITIVE_SUSPEND, unwrap_spec=[object])
+@expose_primitive(SUSPEND, unwrap_spec=[object])
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
@@ -818,7 +828,7 @@ def func(interp, w_rcvr):
     wrapper.ProcessWrapper(interp.space, w_rcvr).suspend(interp)
     return w_rcvr
  
-@expose_primitive(PRIMITIVE_FLUSH_CACHE, unwrap_spec=[object])
+@expose_primitive(FLUSH_CACHE, unwrap_spec=[object])
 def func(interp, w_rcvr):
     # XXX we currently don't care about bad flushes :) XXX
     # raise PrimitiveNotYetWrittenError()
@@ -841,6 +851,5 @@ for i in range(264, 520):
             return w_object.fetch(interp.space, i - 264)
     globals()["INST_VAR_AT_%d" % (i-264)] = i
     make_prim(i)
-    
 
 unrolling_prim_table = unroll.unrolling_iterable(prim_table_implemented_only)

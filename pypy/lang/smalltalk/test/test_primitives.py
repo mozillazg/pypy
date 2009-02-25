@@ -418,9 +418,9 @@ def test_new_method():
 #   primitives.NEXT is unimplemented as it is a performance optimization
 #   primitives.NEXT_PUT is unimplemented as it is a performance optimization
 #   primitives.AT_END is unimplemented as it is a performance optimization
-#   primitives.PRIMITIVE_BLOCK_COPY is tested in test_interpreter
-#   primitives.PRIMITIVE_VALUE is tested in test_interpreter
-#   primitives.PRIMITIVE_VALUE_WITH_ARGS is tested in test_interpreter
+#   primitives.BLOCK_COPY is tested in test_interpreter
+#   primitives.VALUE is tested in test_interpreter
+#   primitives.VALUE_WITH_ARGS is tested in test_interpreter
 #   primitives.OBJECT_AT is tested in test_interpreter
 #   primitives.OBJECT_AT_PUT is tested in test_interpreter
 

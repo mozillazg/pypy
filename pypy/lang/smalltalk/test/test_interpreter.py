@@ -701,7 +701,7 @@ def test_bc_x_plus_y():
               176, 125, 33, 34, 240, 124 ],
             fakeliterals(space, "value:value:", space.wrap_int(3), space.wrap_int(4))).value == 7
     run_with_faked_methods(
-        [[space.w_BlockContext, primitives.PRIMITIVE_VALUE,
+        [[space.w_BlockContext, primitives.VALUE,
           2, "value:value:"]],
         test)
 
@@ -739,7 +739,7 @@ def test_bc_value_with_args():
             fakeliterals(space, "valueWithArguments:",
                          [3, 2])).value == 1
     run_with_faked_methods(
-        [[space.w_BlockContext, primitives.PRIMITIVE_VALUE_WITH_ARGS,
+        [[space.w_BlockContext, primitives.VALUE_WITH_ARGS,
           1, "valueWithArguments:"]],
         test)
 
