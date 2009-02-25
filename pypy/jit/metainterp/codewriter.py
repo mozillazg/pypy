@@ -3,6 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
 from pypy.rlib import objectmodel
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.jit import _we_are_jitted
 from pypy.jit.metainterp.history import Const, getkind, getkind_num
 from pypy.jit.metainterp import heaptracker, support, history
 
@@ -243,6 +244,7 @@ class BytecodeMaker(object):
         """Generate a constant of the given value.
         Returns its index in the list self.positions[].
         """
+        if constvalue is _we_are_jitted: constvalue = True
         const = Const._new(constvalue, self.cpu)
         return self.get_position(const)
 

@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, we_are_jitted
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import support, codewriter, pyjitpl, history
@@ -200,6 +200,22 @@ class BasicTests:
         res = self.meta_interp(f, [31], policy=policy)
         assert res == 42
         self.check_loops(int_mul=1, int_mod=0)
+
+    def test_we_are_jitted(self):
+        myjitdriver = JitDriver(greens = [], reds = ['y'])
+        def f(y):
+            while y >= 0:
+                myjitdriver.can_enter_jit(y=y)
+                myjitdriver.jit_merge_point(y=y)
+                if we_are_jitted():
+                    x = 1
+                else:
+                    x = 10
+                y -= x
+            return y
+        assert f(55) == -5
+        res = self.meta_interp(f, [55])
+        assert res == -1
 
 
 class TestOOtype(BasicTests, OOJitMixin):
