@@ -1,5 +1,3 @@
-from pypy.rlib.rarithmetic import LONG_BIT
-
 # ___________________________________________________________________________
 # Slot Names
 
@@ -131,5 +129,6 @@ objects_in_special_object_table = {
     "smalltalkdict" : SO_SMALLTALK,
 }
 
+LONG_BIT = 32
 TAGGED_MAXINT = 2 ** (LONG_BIT - 2) - 1
 TAGGED_MININT = -2 ** (LONG_BIT - 2)

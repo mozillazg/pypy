@@ -200,22 +200,12 @@ def func(interp, receiver, argument):
 
     # left shift, must fail if we lose bits beyond 32
     if argument > 0:
-        shifted = receiver << argument
-
-        # Make sure we respect our bitlimits set by TAGGED_XXXINT.
-        if shifted < 0:
-            # If negative, check if there are no bits unset outside the MAXINT
-            # region
-            if constants.TAGGED_MININT ^ shifted > constants.TAGGED_MAXINT:
-                raise PrimitiveFailedError()
-        else:
-            # If possitive, check if there are no bits set outside the MAXINT
-            # region
-            if shifted & constants.TAGGED_MAXINT != shifted:
-                raise PrimitiveFailedError()
-        
+        try:
+            shifted = rarithmetic.ovfcheck_lshift(receiver, argument)
+        except OverflowError:
+            raise PrimitiveFailedError()
         return interp.space.wrap_int(shifted)
-            
+
     # right shift, ok to lose bits
     else:
         return interp.space.wrap_int(receiver >> -argument)
