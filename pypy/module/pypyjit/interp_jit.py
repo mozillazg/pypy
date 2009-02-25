@@ -37,11 +37,11 @@ class __extend__(PyFrame):
 
     def dispatch(self, pycode, next_instr, ec):
         next_instr = r_uint(next_instr)
-        co_code = pycode.co_code
         try:
             while True:
                 pypyjitdriver.jit_merge_point(
                     frame=self, ec=ec, next_instr=next_instr, pycode=pycode)
+                co_code = pycode.co_code
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
         except ExitFrame:
             return self.popvalue()
