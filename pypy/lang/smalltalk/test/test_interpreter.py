@@ -18,7 +18,7 @@ def setup():
             return chr(opcode)
         return get_opcode_chr
     for entry in interpreter.BYTECODE_RANGES:
-        name = entry[-1].__name__
+        name = entry[-1]
         if len(entry) == 2:     # no range
             globals()[name] = chr(entry[0])
         else:
