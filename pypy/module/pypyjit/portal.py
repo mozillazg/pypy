@@ -1,25 +1,23 @@
 import pypy
-#from pypy.module.pypyjit.newbool import NewBoolDesc
-from pypy.translator.translator import graphof
-from pypy.annotation.specialize import getuniquenondirectgraph
-from pypy.jit.hintannotator.policy import ManualGraphPolicy
+from pypy.jit.metainterp.policy import ManualJitPolicy
 
-class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
-    hotpath = True
-    
-    def look_inside_graph_of_module(self, graph, func, mod):
-        if mod.startswith('pypy.objspace'):
+
+class PyPyJitPolicy(ManualJitPolicy):
+
+    def look_inside_function(self, func):
+        mod = func.__module__ or '?'
+        if mod.startswith('pypy.objspace.'):
             return False
         if '_geninterp_' in func.func_globals: # skip all geninterped stuff
             return False
-        if mod.startswith('pypy.interpreter.astcompiler'):
+        if mod.startswith('pypy.interpreter.astcompiler.'):
             return False
-        if mod.startswith('pypy.interpreter.pyparser'):
+        if mod.startswith('pypy.interpreter.pyparser.'):
             return False
         if mod.startswith('pypy.module.'):
             if not mod.startswith('pypy.module.pypyjit.'):
                 return False
-        if mod.startswith('pypy.translator.goal.nanos'):
+        if mod.startswith('pypy.translator.'):
             return False
         if mod in forbidden_modules:
             return False
@@ -27,7 +25,7 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
             return False
         if func.__name__.startswith('fastfunc_'):
             return False
-        return True
+        return super(PyPyJitPolicy, self).look_inside_function(func)
 
     def seebinary(self, opname):
         name2 = name1 = opname[:3].lower()
@@ -74,7 +72,7 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
                 descr_impl,
                 pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
 
-    def fill_timeshift_graphs(self):
+    def fill_seen_graphs(self):
         import pypy
 
         # --------------------
@@ -100,18 +98,16 @@ class PyPyHintAnnotatorPolicy(ManualGraphPolicy):
                      pypy.objspace.std.Space.is_w)
         self.seegraph(pypy.interpreter.pyframe.PyFrame.execute_frame, False)
         # --------------------
-        # special timeshifting logic for newbool
-        #self.seegraph(pypy.objspace.std.Space.newbool, NewBoolDesc)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
                      pypy.objspace.std.Space.is_true)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
                      pypy.objspace.std.Space.is_true)
 
         #
-        self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
-                     pypy.interpreter.function.Function.funccall_valuestack)
-        self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
-                     pypy.interpreter.function.Function.funccall_obj_valuestack)
+        #self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
+        #             pypy.interpreter.function.Function.funccall_valuestack)
+        #self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
+        #             pypy.interpreter.function.Function.funccall_obj_valuestack)
 
 
 

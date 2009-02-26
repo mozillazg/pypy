@@ -214,6 +214,7 @@ class BytecodeMaker(object):
         self.portal = portal
         self.bytecode = self.codewriter.get_jitcode(graph)
         if not codewriter.policy.look_inside_graph(graph):
+            assert not portal, "portal has been hidden!"
             graph = make_calling_stub(codewriter.rtyper, graph)
         self.graph = graph
 
@@ -499,17 +500,23 @@ class BytecodeMaker(object):
             # store the vtable as an address -- that's fine, because the
             # GC doesn't need to follow them
             self.emit('new_with_vtable',
-                      self.cpu.sizeof(STRUCT),
+                      self.const_position(self.cpu.sizeof(STRUCT)),
                       self.const_position(vtable))
         else:
-            self.emit('new', self.cpu.sizeof(STRUCT))
+            self.emit('new', self.const_position(self.cpu.sizeof(STRUCT)))
         self.register_var(op.result)
 
     def serialize_op_malloc_varsize(self, op):
-        # XXX strings only for now
-        assert op.args[0].value == rstr.STR
         assert op.args[1].value == {'flavor': 'gc'}
-        self.emit('newstr', self.var_position(op.args[2]))
+        if op.args[0].value == rstr.STR:
+            self.emit('newstr', self.var_position(op.args[2]))
+        else:
+            # XXX only strings or simple arrays for now
+            ARRAY = op.args[0].value
+            arraydescr = self.cpu.arraydescrof(ARRAY)
+            self.emit('new_array')
+            self.emit(self.const_position(arraydescr))
+            self.emit(self.var_position(op.args[2]))
         self.register_var(op.result)
 
     def serialize_op_zero_gc_pointers_inside(self, op):
@@ -535,7 +542,7 @@ class BytecodeMaker(object):
         self.emit(self.var_position(v_inst))
         offset = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                        c_fieldname.value)
-        self.emit(offset)
+        self.emit(self.const_position(offset))
         self.register_var(op.result)
         #self._eventualy_builtin(op.result)
 
@@ -553,7 +560,7 @@ class BytecodeMaker(object):
         self.emit(self.var_position(v_inst))
         offset = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                        c_fieldname.value)
-        self.emit(offset)
+        self.emit(self.const_position(offset))
         self.emit(self.var_position(v_value))
 
     def is_typeptr_getset(self, op):
@@ -565,6 +572,26 @@ class BytecodeMaker(object):
         self.minimize_variables()
         self.emit('guard_class', self.var_position(op.args[0]))
         self.register_var(op.result)
+
+    def serialize_op_getarrayitem(self, op):
+        ARRAY = op.args[0].concretetype.TO
+        assert ARRAY._gckind == 'gc'
+        arraydescr = self.cpu.arraydescrof(ARRAY)
+        self.emit('getarrayitem_gc')
+        self.emit(self.var_position(op.args[0]))
+        self.emit(self.const_position(arraydescr))
+        self.emit(self.var_position(op.args[1]))
+        self.register_var(op.result)
+
+    def serialize_op_setarrayitem(self, op):
+        ARRAY = op.args[0].concretetype.TO
+        assert ARRAY._gckind == 'gc'
+        arraydescr = self.cpu.arraydescrof(ARRAY)
+        self.emit('setarrayitem_gc')
+        self.emit(self.var_position(op.args[0]))
+        self.emit(self.const_position(arraydescr))
+        self.emit(self.var_position(op.args[1]))
+        self.emit(self.var_position(op.args[2]))
 
     def serialize_op_getinteriorarraysize(self, op):
         # XXX only supports strings for now
@@ -725,7 +752,7 @@ class BytecodeMaker(object):
             self.emit('guard_nonvirtualized')
             self.emit(self.var_position(op.args[0]))
             self.emit(self.get_position(virtualizabledesc))
-            self.emit(guard_field)
+            self.emit(self.const_position(guard_field))
 
     # ----------
 

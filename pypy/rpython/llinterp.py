@@ -204,6 +204,9 @@ class LLFrame(object):
         self.curr_operation_index = 0
         self.alloca_objects = []
 
+    def newsubframe(self, graph, args):
+        return self.__class__(graph, args, self.llinterpreter)
+
     # _______________________________________________________
     # variable setters/getters helpers
 
@@ -662,7 +665,7 @@ class LLFrame(object):
             if not lltype.isCompatibleType(T, v.concretetype):
                 raise TypeError("graph with %r args called with wrong func ptr type: %r" %
                                 (tuple([v.concretetype for v in args_v]), ARGS)) 
-        frame = self.__class__(graph, args, self.llinterpreter)
+        frame = self.newsubframe(graph, args)
         return frame.eval()        
 
     def op_direct_call(self, f, *args):
@@ -689,7 +692,7 @@ class LLFrame(object):
         args = []
         for inarg, arg in zip(inargs, obj.graph.startblock.inputargs):
             args.append(lltype._cast_whatever(arg.concretetype, inarg))
-        frame = self.__class__(graph, args, self.llinterpreter)
+        frame = self.newsubframe(graph, args)
         result = frame.eval()
         from pypy.translator.stackless.frame import storage_type
         assert storage_type(lltype.typeOf(result)) == TGT

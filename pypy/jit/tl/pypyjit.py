@@ -55,7 +55,10 @@ def test_run_translation():
         child_pid = os.fork()
         if child_pid == 0:
             break
-        os.waitpid(child_pid, 0)
+        try:
+            os.waitpid(child_pid, 0)
+        except KeyboardInterrupt:
+            pass
         print '-' * 79
         print 'Child process finished, press Enter to restart...'
         raw_input()

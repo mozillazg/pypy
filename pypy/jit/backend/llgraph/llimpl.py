@@ -65,6 +65,7 @@ TYPES = {
     'bool_not'        : (('bool',), 'bool'),
     'new_with_vtable' : (('int', 'ptr'), 'ptr'),
     'new'             : (('int',), 'ptr'),
+    'new_array'       : (('int', 'int'), 'ptr'),
     'oononnull'       : (('ptr',), 'bool'),
     'ooisnull'        : (('ptr',), 'bool'),
     'oois'            : (('ptr', 'ptr'), 'bool'),
@@ -73,6 +74,8 @@ TYPES = {
     'getfield_gc'     : (('ptr', 'fieldname'), 'intorptr'),
     'setfield_raw'    : (('ptr', 'fieldname', 'intorptr'), None),
     'getfield_raw'    : (('ptr', 'fieldname'), 'intorptr'),
+    'setarrayitem_gc' : (('ptr', 'int', 'int', 'intorptr'), None),
+    'getarrayitem_gc' : (('ptr', 'int', 'int'), 'intorptr'),
     'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
     'call__4'         : (('ptr', 'varargs'), 'int'),
     'call_void'       : (('ptr', 'varargs'), None),
@@ -558,6 +561,11 @@ class ExecutionRaised(Exception):
 
 class ExtendedLLFrame(LLFrame):
 
+    def newsubframe(self, graph, args):
+        # the default implementation would also create an ExtendedLLFrame,
+        # but we don't want this to occur in our case
+        return LLFrame(graph, args, self.llinterpreter)
+
     def op_return(self, value=None):
         if self.last_exception is None:
             raise ExecutionReturned(value)
@@ -668,6 +676,10 @@ class ExtendedLLFrame(LLFrame):
         self.op_setfield_gc(ptr, 2, vtable)
         return ptr
 
+    def op_new_array(self, arraydesc, count):
+        ITEMTYPE = symbolic.Size2Type[arraydesc/2]
+        return lltype.malloc(lltype.GcArray(ITEMTYPE), count)
+
     def op_getfield_gc(self, ptr, fielddesc):
         STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
         ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
@@ -679,28 +691,42 @@ class ExtendedLLFrame(LLFrame):
                                        lltype.Ptr(STRUCT))
         return getattr(ptr, fieldname)
 
+    def _cast_newvalue(self, desc, TYPE, newvalue):
+        if desc % 2:
+            newvalue = lltype.cast_opaque_ptr(TYPE, newvalue)
+        else:
+            if isinstance(TYPE, lltype.Ptr):
+                assert TYPE.TO._gckind == 'raw'
+                newvalue = llmemory.cast_adr_to_ptr(
+                    cast_int_to_adr(self.memocast, newvalue),
+                    TYPE)
+            elif TYPE == llmemory.Address:
+                newvalue = cast_int_to_adr(self.memocast, newvalue)
+        return newvalue
+
     def op_setfield_gc(self, ptr, fielddesc, newvalue):
         offset = fielddesc/2
         STRUCT, fieldname = symbolic.TokenToField[offset]
         if lltype.typeOf(ptr) == llmemory.GCREF:
             ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
         FIELDTYPE = getattr(STRUCT, fieldname)
-        if fielddesc % 2:
-            newvalue = lltype.cast_opaque_ptr(FIELDTYPE, newvalue)
-        else:
-            if isinstance(FIELDTYPE, lltype.Ptr):
-                assert FIELDTYPE.TO._gckind == 'raw'
-                newvalue = llmemory.cast_adr_to_ptr(
-                    cast_int_to_adr(self.memocast, newvalue),
-                    FIELDTYPE)
-            elif FIELDTYPE == llmemory.Address:
-                newvalue = cast_int_to_adr(self.memocast, newvalue)
+        newvalue = self._cast_newvalue(fielddesc, FIELDTYPE, newvalue)
         setattr(ptr, fieldname, newvalue)
 
     def op_setfield_raw(self, intval, fielddesc, newvalue):
         ptr = llmemory.cast_adr_to_ptr(cast_int_to_adr(self.memocast, intval),
                                        lltype.Ptr(STRUCT))
         self.op_setfield_gc(ptr, fielddesc, newvalue)
+
+    def op_getarrayitem_gc(self, array, arraydesc, index):
+        array = array._obj.container
+        return array.getitem(index)
+
+    def op_setarrayitem_gc(self, array, arraydesc, index, newvalue):
+        ITEMTYPE = symbolic.Size2Type[arraydesc/2]
+        array = array._obj.container
+        newvalue = self._cast_newvalue(arraydesc, ITEMTYPE, newvalue)
+        array.setitem(index, newvalue)
 
     def op_ooisnull(self, ptr):
         if lltype.typeOf(ptr) != llmemory.GCREF:

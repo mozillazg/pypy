@@ -217,6 +217,12 @@ class BasicTests:
         res = self.meta_interp(f, [55])
         assert res == -1
 
+    def test_format(self):
+        def f(n):
+            return len("<%d>" % n)
+        res = self.interp_operations(f, [421])
+        assert res == 5
+
 
 class TestOOtype(BasicTests, OOJitMixin):
     pass
