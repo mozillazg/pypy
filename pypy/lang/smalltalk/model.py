@@ -88,7 +88,10 @@ class W_Object(object):
         return self.getclass(space).as_class_get_shadow(space)
 
     def is_same_object(self, other):
-        """Compare object identity"""
+        """Compare object identity. This should be used instead of directly
+        using is everywhere in the interpreter, in case we ever want to
+        implement it differently (which is useful e.g. for proxies). Also,
+        SmallIntegers and Floats need a different implementation."""
         return self is other
 
     def become(self, other):
@@ -105,7 +108,6 @@ class W_SmallInteger(W_Object):
         self.value = value
 
     def getclass(self, space):
-        """Return SmallInteger from special objects array."""
         return space.w_SmallInteger
 
     def gethash(self):
@@ -191,11 +193,8 @@ class W_AbstractObjectWithIdentityHash(W_Object):
     def invariant(self):
         return isinstance(self.hash, int)
 
-    def become(self, w_other):
-        if not isinstance(w_other, W_AbstractObjectWithIdentityHash):
-            return False
+    def _become(self, w_other):
         self.hash, w_other.hash = w_other.hash, self.hash
-        return True
 
 class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
     """Objects with arbitrary class (ie not CompiledMethod, SmallInteger or
@@ -226,11 +225,9 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return (W_AbstractObjectWithIdentityHash.invariant(self) and
                 isinstance(self.w_class, W_PointersObject))
 
-    def become(self, w_other):
-        if not isinstance(w_other, W_AbstractObjectWithClassReference):
-            return False
+    def _become(self, w_other):
         self.w_class, w_other.w_class = w_other.w_class, self.w_class
-        return W_AbstractObjectWithIdentityHash.become(self, w_other)
+        W_AbstractObjectWithIdentityHash._become(self, w_other)
         
 
 class W_PointersObject(W_AbstractObjectWithClassReference):
@@ -344,7 +341,8 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
             return False
         self._vars, w_other._vars = w_other._vars, self._vars
         self._shadow, w_other._shadow = w_other._shadow, self._shadow
-        return W_AbstractObjectWithClassReference.become(self, w_other)
+        W_AbstractObjectWithClassReference._become(self, w_other)
+        return True
         
 
 class W_BytesObject(W_AbstractObjectWithClassReference):
@@ -386,6 +384,7 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
         return True
 
     def is_same_object(self, other):
+        # XXX this sounds very wrong to me
         if not isinstance(other, W_BytesObject):
             return False
         return self.bytes == other.bytes
@@ -397,13 +396,7 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
         
     def at0(self, space, index0):
         val = self.getword(index0)
-        if val & (3 << 30) == 0:
-            return space.wrap_int(val)
-        else:
-            w_result = W_BytesObject(space.classtable['w_LargePositiveInteger'], 4)
-            for i in range(4):
-                w_result.setchar(i, chr((val >> i*8) & 255))
-            return w_result
+        return space.wrap_pos_full_int(val)
  
     def atput0(self, space, index0, w_value):
         if isinstance(w_value, W_BytesObject):
@@ -458,6 +451,21 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
     def __init__(self, bytecount=0, header=0):
         self.setheader(header)
         self.bytes = "\x00"*bytecount
+
+    def become(self, w_other):
+        if not isinstance(w_other, W_CompiledMethod):
+            return False
+        self.argsize, w_other.argsize = w_other.argsize, self.argsize
+        self.primitive, w_other.primitive = w_other.primitive, self.primitive
+        self.literals, w_other.literals = w_other.literals, self.literals
+        self.tempsize, w_other.tempsize = w_other.tempsize, self.tempsize
+        self.bytes, w_other.bytes = w_other.bytes, self.bytes
+        self.header, w_other.header = w_other.header, self.header
+        self.literalsize, w_other.literalsize = w_other.literalsize, self.literalsize
+        self.w_compiledin, w_other.w_compiledin = w_other.w_compiledin, self.w_compiledin
+        self.islarge, w_other.islarge = w_other.islarge, self.islarge
+        W_AbstractObjectWithIdentityHash._become(self, w_other)
+        return True
 
     def compiledin(self):  
         if self.w_compiledin is None:
