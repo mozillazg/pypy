@@ -46,7 +46,7 @@ class PyFrame(eval.Frame):
     is_being_profiled        = False
 
     def __init__(self, space, code, w_globals, closure):
-        self = hint(self, access_directly=True)
+        #self = hint(self, access_directly=True)
         assert isinstance(code, pycode.PyCode)
         self.pycode = code
         eval.Frame.__init__(self, space, w_globals, code.co_nlocals)
@@ -145,7 +145,6 @@ class PyFrame(eval.Frame):
             n -= 1
             if n < 0:
                 break
-            hint(n, concrete=True)
             w_value = self.popvalue()
             w_key   = self.popvalue()
             key = self.space.str_w(w_key)
@@ -161,7 +160,6 @@ class PyFrame(eval.Frame):
                 n -= 1
                 if n < 0:
                     break
-                hint(n, concrete=True)
                 values_w[n] = self.popvalue()
             return values_w
         return popvalues
@@ -177,7 +175,6 @@ class PyFrame(eval.Frame):
             n -= 1
             if n < 0:
                 break
-            hint(n, concrete=True)
             values_w[n] = self.valuestack_w[base+n]
         return values_w
 
@@ -188,7 +185,6 @@ class PyFrame(eval.Frame):
             n -= 1
             if n < 0:
                 break
-            hint(n, concrete=True)
             self.valuestack_w[finaldepth+n] = None
         self.valuestackdepth = finaldepth
 
@@ -197,7 +193,6 @@ class PyFrame(eval.Frame):
             n -= 1
             if n < 0:
                 break
-            hint(n, concrete=True)
             self.pushvalue(values_w[n])
 
     def dupvalues(self, n):
@@ -206,7 +201,6 @@ class PyFrame(eval.Frame):
             n -= 1
             if n < 0:
                 break
-            hint(n, concrete=True)
             w_value = self.peekvalue(delta)
             self.pushvalue(w_value)
         
@@ -361,7 +355,7 @@ class PyFrame(eval.Frame):
         return self.pycode.hidden_applevel
 
     def getcode(self):
-        return hint(hint(self.pycode, promote=True), deepfreeze=True)
+        return hint(self.pycode, promote=True)
 
     def getfastscope(self):
         "Get the fast locals as a list."
