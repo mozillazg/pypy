@@ -460,6 +460,7 @@ class BytecodeMaker(object):
     serialize_op_cast_int_to_char = serialize_op_same_as
     serialize_op_cast_char_to_int = serialize_op_same_as
     serialize_op_cast_bool_to_int = serialize_op_same_as
+    serialize_op_resume_point = serialize_op_same_as
 
     def serialize_op_char_eq(self, op):
         self.default_serialize_op(op, 'int_eq')
