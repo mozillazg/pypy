@@ -261,23 +261,24 @@ def test_become():
       p1 := 1@2.
       p2 := #(3 4 5).
       a := p1 -> p2.
-      (1@2 = a key)        ifFalse: [^false].
-      (#(3 4 5) = a value) ifFalse: [^false].
-      (p1 -> p2 = a)       ifFalse: [^false].
-      (p1 == a key)        ifFalse: [^false].
-      (p2 == a value)      ifFalse: [^false].
+      (1@2 = a key)        ifFalse: [^1].
+      (#(3 4 5) = a value) ifFalse: [^2].
+      (p1 -> p2 = a)       ifFalse: [^3].
+      (p1 == a key)        ifFalse: [^4].
+      (p2 == a value)      ifFalse: [^5].
       p1 become: p2.
-      (1@2 = a value)      ifFalse: [^false].
-      (#(3 4 5) = a key)   ifFalse: [^false].
-      (p1 -> p2 = a)       ifFalse: [^false].
-      (p1 == a key)        ifFalse: [^false].
-      (p2 == a value)      ifFalse: [^false].
+      (1@2 = a value)      ifFalse: [^6].
+      (3 = (a key at: 1))  ifFalse: [^7].
+      (4 = (a key at: 2))  ifFalse: [^8].
+      (5 = (a key at: 3))  ifFalse: [^9].
+      (p1 -> p2 = a)       ifFalse: [^10].
+      (p1 == a key)        ifFalse: [^11].
+      (p2 == a value)      ifFalse: [^12].
   
-      ^true"""
+      ^42"""
     perform(w(10).getclass(space), "compile:classified:notifying:", w(sourcecode), w('pypy'), w(None))
-    w_true = w(True)
     w_result = perform(w(10), "testBecome")
-    w_result.is_same_object(w_true)
+    assert space.unwrap_int(w_result) == 42
        
 def perform(w_receiver, selector, *arguments_w):
     interp = interpreter.Interpreter(space)

@@ -46,11 +46,9 @@ def prim(code, stack):
 def prim_fails(code, stack):
     interp, argument_count = mock(stack)
     orig_stack = list(interp.s_active_context().stack())
-    try:
-        prim_table[code](interp, argument_count-1)
-        py.test.fail("Expected PrimitiveFailedError")
-    except PrimitiveFailedError:
-        assert interp.s_active_context().stack() == orig_stack
+    py.test.raises(PrimitiveFailedError,
+                   "prim_table[code](interp, argument_count - 1)")
+    assert interp.s_active_context().stack() == orig_stack
         
 # smallinteger tests
 def test_small_int_add():
@@ -291,9 +289,9 @@ def test_class():
     assert prim(primitives.CLASS, [1]).is_same_object(space.w_SmallInteger)
 
 def test_as_oop():
-    py.test.skip("not yet clear what AS_OOP returns: hash or header?")
+    # I checked potato, and that returns the hash for as_oop
     w_obj = mockclass(space, 0).as_class_get_shadow(space).new()
-    w_obj.w_hash = wrap(22)
+    w_obj.hash = 22
     assert prim(primitives.AS_OOP, [w_obj]).value == 22
 
 def test_as_oop_not_applicable_to_int():
@@ -396,7 +394,13 @@ def test_full_gc():
 def test_seconds_clock():
     import time
     now = int(time.time())
-    assert (prim(primitives.SECONDS_CLOCK, [42]).value - now) <= 2
+    w_smalltalk_now1 = prim(primitives.SECONDS_CLOCK, [42])
+    assert (now % 256 - ord(w_smalltalk_now1.bytes[0])) % 256 <= 2
+    w_smalltalk_now2 = prim(primitives.SECONDS_CLOCK, [42])
+    # the high-order byte should only change by one (and even that is
+    # extreeemely unlikely)
+    assert (ord(w_smalltalk_now2.bytes[-1]) - ord(w_smalltalk_now1.bytes[-1])) <= 1
+
 
 def test_load_inst_var():
     " try to test the LoadInstVar primitives a little "

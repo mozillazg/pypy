@@ -595,8 +595,9 @@ def func(interp, w_arg):
 @expose_primitive(SECONDS_CLOCK, unwrap_spec=[object])
 def func(interp, w_arg):
     import time
-    return interp.space.wrap_int(0x23910d6c)      # HACK: too big for a small int!
-    #return interp.space.wrap_int(int(time.time()))
+    sec_since_epoch = int(time.time())
+    sec_since_1901 = sec_since_epoch + ((69 * 365 + 17) * 24 * 3600)
+    return interp.space.wrap_pos_full_int(sec_since_1901)
 
 # ___________________________________________________________________________
 # Boolean Primitives
@@ -796,7 +797,7 @@ def func(interp, w_rcvr, sel, w_args):
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Semaphore']):
+        interp.space.w_Semaphore):
         raise PrimitiveFailedError()
     wrapper.SemaphoreWrapper(interp.space, w_rcvr).signal(interp)
     return w_rcvr
@@ -805,7 +806,7 @@ def func(interp, w_rcvr):
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Semaphore']):
+        interp.space.w_Semaphore):
         raise PrimitiveFailedError()
     wrapper.SemaphoreWrapper(interp.space, w_rcvr).wait(interp)
     return w_rcvr
@@ -814,7 +815,7 @@ def func(interp, w_rcvr):
 def func(interp, w_rcvr,):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Process']):
+        interp.space.w_Process):
         raise PrimitiveFailedError()
     wrapper.ProcessWrapper(interp.space, w_rcvr).resume(interp)
     return w_rcvr
@@ -823,7 +824,7 @@ def func(interp, w_rcvr,):
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Process']):
+        interp.space.w_Process):
         raise PrimitiveFailedError()
     wrapper.ProcessWrapper(interp.space, w_rcvr).suspend(interp)
     return w_rcvr

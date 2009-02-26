@@ -163,6 +163,19 @@ class ObjSpace(object):
             return model.W_SmallInteger(val)
         raise WrappingError("integer too large to fit into a tagged pointer")
 
+    def wrap_pos_full_int(self, val):
+        if val < 0:
+            raise WrappingError("negative integer")
+        try:
+            return self.wrap_int(val)
+        except WrappingError:
+            pass
+        # XXX this is not really working well on 64 bit machines
+        w_result = model.W_BytesObject(self.classtable['w_LargePositiveInteger'], 4)
+        for i in range(4):
+            w_result.setchar(i, chr((val >> i*8) & 255))
+        return w_result
+
     def wrap_float(self, i):
         return model.W_Float(i)
 
@@ -216,6 +229,8 @@ class ObjSpace(object):
         elif isinstance(w_v, model.W_SmallInteger): return float(w_v.value)
         raise UnwrappingError()
 
+    def _freeze_(self):
+        return True
 
 
 def bootstrap_class(space, instsize, w_superclass=None, w_metaclass=None,
