@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp import warmspot
+from pypy.module.pypyjit.portal import PyPyJitPolicy
 
 
 def run_child(glob, loc):
@@ -12,4 +13,5 @@ def run_child(glob, loc):
     interp.heap.malloc_nonmovable = returns_null     # XXX
 
     print 'warmspot.jittify_and_run() started...'
-    warmspot.jittify_and_run(interp, graph, [])
+    policy = PyPyJitPolicy(interp.typer.annotator.translator)
+    warmspot.jittify_and_run(interp, graph, [], policy=policy)

@@ -293,13 +293,27 @@ class MIFrame(object):
                 self.pc = jumptargets[i]
                 break
 
-    @arguments("int")
-    def opimpl_new(self, size):
-        self.execute('new', [ConstInt(size)], 'ptr')
+    @arguments("constbox")
+    def opimpl_new(self, sizebox):
+        self.execute('new', [sizebox], 'ptr')
 
-    @arguments("int", "constbox")
-    def opimpl_new_with_vtable(self, size, vtableref):
-        self.execute('new_with_vtable', [ConstInt(size), vtableref], 'ptr')
+    @arguments("constbox", "constbox")
+    def opimpl_new_with_vtable(self, sizebox, vtablebox):
+        self.execute('new_with_vtable', [sizebox, vtablebox], 'ptr')
+
+    @arguments("constbox", "box")
+    def opimpl_new_array(self, itemsizebox, countbox):
+        self.execute('new_array', [itemsizebox, countbox], 'ptr')
+
+    @arguments("box", "constbox", "box")
+    def opimpl_getarrayitem_gc(self, arraybox, arraydesc, indexbox):
+        tp = self.metainterp.cpu.typefor(arraydesc.getint())
+        self.execute('getarrayitem_gc', [arraybox, arraydesc, indexbox], tp)
+
+    @arguments("box", "constbox", "box", "box")
+    def opimpl_setarrayitem_gc(self, arraybox, arraydesc, indexbox, itembox):
+        self.execute('setarrayitem_gc', [arraybox, arraydesc,
+                                         indexbox, itembox], 'void')
 
     @arguments("box")
     def opimpl_ptr_nonzero(self, box):
@@ -318,30 +332,30 @@ class MIFrame(object):
         self.execute('ooisnot', [box1, box2], 'int', True)
 
 
-    @arguments("box", "int")
+    @arguments("box", "constbox")
     def opimpl_getfield_gc(self, box, fielddesc):
-        tp = self.metainterp.cpu.typefor(fielddesc)
-        self.execute('getfield_gc', [box, ConstInt(fielddesc)], tp)
-    @arguments("box", "int")
+        tp = self.metainterp.cpu.typefor(fielddesc.getint())
+        self.execute('getfield_gc', [box, fielddesc], tp)
+    @arguments("box", "constbox")
     def opimpl_getfield_pure_gc(self, box, fielddesc):
-        tp = self.metainterp.cpu.typefor(fielddesc)
-        self.execute('getfield_gc', [box, ConstInt(fielddesc)], tp, True)
-    @arguments("box", "int", "box")
+        tp = self.metainterp.cpu.typefor(fielddesc.getint())
+        self.execute('getfield_gc', [box, fielddesc], tp, True)
+    @arguments("box", "constbox", "box")
     def opimpl_setfield_gc(self, box, fielddesc, valuebox):
-        self.execute('setfield_gc', [box, ConstInt(fielddesc), valuebox],
+        self.execute('setfield_gc', [box, fielddesc, valuebox],
                      'void')
 
-    @arguments("box", "int")
+    @arguments("box", "constbox")
     def opimpl_getfield_raw(self, box, fielddesc):
-        tp = self.metainterp.cpu.typefor(fielddesc)
-        self.execute('getfield_raw', [box, ConstInt(fielddesc)], tp)
-    @arguments("box", "int")
+        tp = self.metainterp.cpu.typefor(fielddesc.getint())
+        self.execute('getfield_raw', [box, fielddesc], tp)
+    @arguments("box", "constbox")
     def opimpl_getfield_pure_raw(self, box, fielddesc):
-        tp = self.metainterp.cpu.typefor(fielddesc)
-        self.execute('getfield_raw', [box, ConstInt(fielddesc)], tp, True)
-    @arguments("box", "int", "box")
+        tp = self.metainterp.cpu.typefor(fielddesc.getint())
+        self.execute('getfield_raw', [box, fielddesc], tp, True)
+    @arguments("box", "constbox", "box")
     def opimpl_setfield_raw(self, box, fielddesc, valuebox):
-        self.execute('setfield_raw', [box, ConstInt(fielddesc), valuebox],
+        self.execute('setfield_raw', [box, fielddesc, valuebox],
                      'void')
 
     @arguments("bytecode", "varargs")
@@ -490,11 +504,11 @@ class MIFrame(object):
             'len', [builtin.len_func, box], 'int')
         self.generate_guard(pc, "guard_len", box, [intbox])
 
-    @arguments("orgpc", "box", "virtualizabledesc", "int")
+    @arguments("orgpc", "box", "virtualizabledesc", "constbox")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):
         clsbox = self.cls_of_box(box)
         op = self.generate_guard(pc, 'guard_nonvirtualized', box,
-                                 [clsbox, ConstInt(guard_field)])
+                                 [clsbox, guard_field])
         if op:
             op.desc = vdesc
         

@@ -253,6 +253,17 @@ class CPU(object):
         return ofs*2 + bit
 
     @staticmethod
+    def arraydescrof(A):
+        assert isinstance(A, lltype.GcArray)
+        size = symbolic.get_size(A.OF)
+        token = history.getkind(A.OF)
+        if token == 'ptr':
+            bit = 1
+        else:
+            bit = 0
+        return size*2 + bit
+
+    @staticmethod
     def typefor(fielddesc):
         if fielddesc % 2:
             return 'ptr'
