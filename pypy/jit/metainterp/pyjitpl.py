@@ -61,8 +61,8 @@ class arguments(object):
                     args += (self.load_int(), )
                 elif argspec == "varargs":
                     args += (self.load_varargs(), )
-                elif argspec == "intargs":
-                    args += (self.load_intargs(), )
+                elif argspec == "constargs":
+                    args += (self.load_constargs(), )
                 elif argspec == "bytecode":
                     bytecode = self.load_const_arg()
                     assert isinstance(bytecode, codewriter.JitCode)
@@ -170,9 +170,9 @@ class MIFrame(object):
         count = self.load_int()
         return [self.load_arg() for i in range(count)]
 
-    def load_intargs(self):
+    def load_constargs(self):
         count = self.load_int()
-        return [self.load_int() for i in range(count)]
+        return [self.load_const_arg() for i in range(count)]
 
     def getvarenv(self, i):
         return self.env[i]
@@ -282,14 +282,13 @@ class MIFrame(object):
                                                    const_if_fail=const_if_fail)
         self.pc = currentpc
 
-    @arguments("orgpc", "box", "intargs", "jumptargets")
-    def opimpl_switch(self, pc, valuebox, intargs, jumptargets):
+    @arguments("orgpc", "box", "constargs", "jumptargets")
+    def opimpl_switch(self, pc, valuebox, constargs, jumptargets):
         box = self.implement_guard_value(pc, valuebox)
-        switchcase = box.getint()
         # XXX implement dictionary for speedups at some point
-        for i in range(len(intargs)):
-            value = intargs[i]
-            if switchcase == value:
+        for i in range(len(constargs)):
+            casebox = constargs[i]
+            if box.equals(casebox):
                 self.pc = jumptargets[i]
                 break
 

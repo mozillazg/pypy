@@ -223,6 +223,15 @@ class BasicTests:
         res = self.interp_operations(f, [421])
         assert res == 5
 
+    def test_switch(self):
+        def f(n):
+            if n == -5:  return 12
+            elif n == 2: return 51
+            elif n == 7: return 1212
+            else:        return 42
+        res = self.interp_operations(f, [7])
+        assert res == 1212
+
 
 class TestOOtype(BasicTests, OOJitMixin):
     pass

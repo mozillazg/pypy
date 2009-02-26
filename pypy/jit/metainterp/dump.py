@@ -56,9 +56,9 @@ class SourceIterator:
         count = self.load_int()
         return [self.load_arg() for i in range(count)]
 
-    def load_intargs(self):
+    def load_constargs(self):
         count = self.load_int()
-        return [self.load_int() for i in range(count)]
+        return [self.load_const_arg() for i in range(count)]
 
     def get_redarg(self):
         return CustomRepr('r%d' % self.load_int())
