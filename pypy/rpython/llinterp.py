@@ -166,7 +166,18 @@ class LLInterpreter(object):
         self.mallocs[ptr._obj] = llframe
 
     def remember_free(self, ptr):
-        del self.mallocs[ptr._obj]
+        try:
+            del self.mallocs[ptr._obj]
+        except KeyError:
+            self._rehash_mallocs()
+            del self.mallocs[ptr._obj]
+
+    def _rehash_mallocs(self):
+        # rehashing is needed because some objects' hash may change
+        # when being turned to <C object>
+        items = self.mallocs.items()
+        self.mallocs = {}
+        self.mallocs.update(items)
 
 def checkptr(ptr):
     assert isinstance(lltype.typeOf(ptr), lltype.Ptr)
