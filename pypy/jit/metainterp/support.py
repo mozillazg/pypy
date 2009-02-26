@@ -191,6 +191,11 @@ def decode_builtin_call(op):
         raise ValueError(op.opname)
 
 def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
+    key = (oopspec_name, tuple(ll_args), ll_res)
+    try:
+        return rtyper._builtin_func_for_spec_cache[key]
+    except (KeyError, AttributeError):
+        pass
     args_s = [annmodel.lltype_to_annotation(v) for v in ll_args]
     if '.' not in oopspec_name:    # 'newxxx' operations
         LIST_OR_DICT = ll_res
@@ -205,5 +210,9 @@ def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
     mixlevelann = MixLevelHelperAnnotator(rtyper)
     c_func = mixlevelann.constfunc(impl, args_s, s_result)
     mixlevelann.finish()
+    #
+    if not hasattr(rtyper, '_builtin_func_for_spec_cache'):
+        rtyper._builtin_func_for_spec_cache = {}
+    rtyper._builtin_func_for_spec_cache[key] = (c_func, LIST_OR_DICT)
     #
     return c_func, LIST_OR_DICT
