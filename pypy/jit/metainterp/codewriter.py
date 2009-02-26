@@ -339,7 +339,8 @@ class BytecodeMaker(object):
                          for link in switches]
             self.emit("switch",
                       self.var_position(block.exitswitch))
-            self.emit_list([link.llexitcase for link in switches])
+            self.emit_list([self.const_position(link.llexitcase)
+                            for link in switches])
             self.emit_list([tlabel(link) for link in switches])
             if block.exits[-1].exitcase == 'default':
                 link = block.exits[-1]
