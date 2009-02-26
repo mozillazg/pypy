@@ -313,6 +313,7 @@ ll_newemptylist.oopspec = 'newlist(0)'
 
 def ll_length(l):
     return l.length
+ll_length.oopspec = 'list.len(l)'
 
 def ll_items(l):
     return l.items
@@ -320,10 +321,12 @@ def ll_items(l):
 def ll_getitem_fast(l, index):
     ll_assert(index < l.length, "getitem out of bounds")
     return l.ll_items()[index]
+ll_getitem_fast.oopspec = 'list.getitem(l, index)'
 
 def ll_setitem_fast(l, index, item):
     ll_assert(index < l.length, "setitem out of bounds")
     l.ll_items()[index] = item
+ll_setitem_fast.oopspec = 'list.setitem(l, index, item)'
 
 # fixed size versions
 
@@ -340,6 +343,7 @@ ll_fixed_newemptylist = typeMethod(ll_fixed_newemptylist)
 
 def ll_fixed_length(l):
     return len(l)
+ll_fixed_length.oopspec = 'list.len(l)'
 
 def ll_fixed_items(l):
     return l
@@ -347,10 +351,12 @@ def ll_fixed_items(l):
 def ll_fixed_getitem_fast(l, index):
     ll_assert(index < len(l), "fixed getitem out of bounds")
     return l[index]
+ll_fixed_getitem_fast.oopspec = 'list.getitem(l, index)'
 
 def ll_fixed_setitem_fast(l, index, item):
     ll_assert(index < len(l), "fixed setitem out of bounds")
     l[index] = item
+ll_fixed_setitem_fast.oopspec = 'list.setitem(l, index, item)'
 
 def newlist(llops, r_list, items_v):
     LIST = r_list.LIST
