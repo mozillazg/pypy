@@ -471,6 +471,9 @@ class BytecodeMaker(object):
     serialize_op_unichar_eq = serialize_op_char_eq
     serialize_op_unichar_ne = serialize_op_char_ne
 
+    def serialize_op_int_add_nonneg_ovf(self, op):
+        self.default_serialize_op(op, 'int_add_ovf')
+
     def serialize_op_hint(self, op):
         hints = op.args[1].value
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:

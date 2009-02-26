@@ -1,6 +1,7 @@
 import py
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rlib.jit import JitDriver, hint
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.jit.metainterp.policy import StopAtXPolicy
 
 
@@ -293,6 +294,20 @@ class ExceptionTests:
                 return 132
         res = self.meta_interp(main, [13], policy=StopAtXPolicy(check))
         assert res == 132
+
+    def test_int_ovf(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n'])
+        def f(n):
+            try:
+                while 1:
+                    myjitdriver.can_enter_jit(n=n)
+                    myjitdriver.jit_merge_point(n=n)
+                    n = ovfcheck(n * -3)
+            except OverflowError:
+                return n
+        expected = f(1)
+        res = self.meta_interp(f, [1])
+        assert res == expected
 
 
 class MyError(Exception):
