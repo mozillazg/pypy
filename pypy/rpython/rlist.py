@@ -987,7 +987,6 @@ def ll_listindex(lst, obj, eqfn):
 def ll_listremove(lst, obj, eqfn):
     index = ll_listindex(lst, obj, eqfn) # raises ValueError if obj not in lst
     ll_delitem_nonneg(dum_nocheck, lst, index)
-ll_listremove.oopspec = 'list.remove(obj)'
 
 def ll_inplace_mul(l, factor):
     length = l.ll_length()

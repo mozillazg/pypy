@@ -235,7 +235,7 @@ class MIFrame(object):
                 self.execute(%r, [b1, b2], "int", True)
         ''' % (_opimpl, _opimpl)).compile()
 
-    for _opimpl in ['int_is_true', 'int_neg',
+    for _opimpl in ['int_is_true', 'int_neg', 'bool_not',
                     ]:
         exec py.code.Source('''
             @arguments("box")

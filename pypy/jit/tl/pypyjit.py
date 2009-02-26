@@ -9,6 +9,7 @@ from pypy.config.translationoption import set_opt_level
 from pypy.config.pypyoption import get_pypy_config, set_pypy_opt_level
 
 config = get_pypy_config(translating=True)
+config.translation.backendopt.inline_threshold = 0
 set_opt_level(config, level='1')
 config.objspace.compiler = 'ast'
 config.objspace.nofaking = True

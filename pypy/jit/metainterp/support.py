@@ -95,11 +95,16 @@ class Entry(ExtRegistryEntry):
 # coming from modules like pypy.rpython.rlist.  The following
 # functions are fished from the globals() by setup_extra_builtin().
 
-def _ll_1_newlist(LIST):
+def _ll_0_newlist(LIST):
     return LIST.ll_newlist(0)
-def _ll_2_newlist(LIST, count):
+def _ll_1_newlist(LIST, count):
     return LIST.ll_newlist(count)
-_ll_3_newlist = rlist.ll_alloc_and_set
+def _ll_2_newlist(LIST, count, item):
+    return rlist.ll_alloc_and_set(LIST, count, item)
+_ll_0_newlist.need_result_type = True
+_ll_1_newlist.need_result_type = True
+_ll_2_newlist.need_result_type = True
+
 def _ll_1_list_len(l):
     return l.ll_length()
 def _ll_2_list_getitem(l, index):
@@ -110,16 +115,12 @@ def _ll_1_list_pop(l):
     return rlist.ll_pop_default(rlist.dum_checkidx, l)
 def _ll_2_list_pop(l, index):
     return rlist.ll_pop(rlist.dum_checkidx, l, index)
-def _ll_1_list_copy(l):
-    return rlist.ll_copy(lltype.typeOf(l).TO, l)
 _ll_2_list_append = rlist.ll_append
 _ll_2_list_extend = rlist.ll_extend
 _ll_3_list_insert = rlist.ll_insert_nonneg
-_ll_1_list_nonzero = rlist.ll_list_is_true
 
 _ll_2_list_getitem_foldable = _ll_2_list_getitem
 _ll_1_list_len_foldable     = _ll_1_list_len
-_ll_1_list_nonzero_foldable = _ll_1_list_nonzero
 
 _ll_2_dict_getitem = rdict.ll_dict_getitem
 _ll_3_dict_setitem = rdict.ll_dict_setitem
@@ -193,12 +194,13 @@ def builtin_func_for_spec(rtyper, oopspec_name, ll_args, ll_res):
     args_s = [annmodel.lltype_to_annotation(v) for v in ll_args]
     if '.' not in oopspec_name:    # 'newxxx' operations
         LIST_OR_DICT = ll_res
-        bk = rtyper.annotator.bookkeeper
-        args_s.insert(0, annmodel.SomePBC([bk.getdesc(LIST_OR_DICT.TO)]))
     else:
         LIST_OR_DICT = ll_args[0]
     s_result = annmodel.lltype_to_annotation(ll_res)
     impl = setup_extra_builtin(oopspec_name, len(args_s))
+    if getattr(impl, 'need_result_type', False):
+        bk = rtyper.annotator.bookkeeper
+        args_s.insert(0, annmodel.SomePBC([bk.getdesc(ll_res.TO)]))
     #
     mixlevelann = MixLevelHelperAnnotator(rtyper)
     c_func = mixlevelann.constfunc(impl, args_s, s_result)
