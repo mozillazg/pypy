@@ -59,6 +59,9 @@ TYPES = {
     'int_ne'          : (('int', 'int'), 'bool'),
     'int_is_true'     : (('int',), 'bool'),
     'int_neg'         : (('int',), 'int'),
+    'int_add_ovf'     : (('int', 'int'), 'int'),
+    'int_sub_ovf'     : (('int', 'int'), 'int'),
+    'int_mul_ovf'     : (('int', 'int'), 'int'),
     'bool_not'        : (('bool',), 'bool'),
     'new_with_vtable' : (('int', 'ptr'), 'ptr'),
     'new'             : (('int',), 'ptr'),
@@ -802,17 +805,19 @@ class ExtendedLLFrame(LLFrame):
                 items[i] = default_val
         return res
 
-    def op_cast_int_to_ptr(self, i):
-        if i == 0:
-            return dummy_null
-        elif i == 1:
-            return dummy_nonnull
-        else:
-            raise Exception("cast_int_to_ptr: got %d" % (i,))
-
-DUMMY = lltype.GcStruct('DUMMY')
-dummy_null = lltype.nullptr(DUMMY)
-dummy_nonnull = lltype.malloc(DUMMY, immortal=True)
+    for _opname in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
+                    ]:
+        exec py.code.Source('''
+            def op_%s(self, x, y):
+                try:
+                    z = LLFrame.op_%s(self, x, y)
+                except LLException, e:
+                    self.catch_exception(e)
+                    z = 0
+                else:
+                    self.clear_exception()
+                return z
+        ''' % (_opname, _opname)).compile()
 
 # ____________________________________________________________
 
