@@ -61,7 +61,7 @@ class Interpreter(object):
                     cnt = 0
                     p = self.w_active_context()
                     # AK make method
-                    while p is not self.space.w_nil:
+                    while not p.is_same_object(self.space.w_nil):
                         cnt += 1
                                                   # Do not update the context
                                                   # for this action.
@@ -93,6 +93,24 @@ class Interpreter(object):
 class ReturnFromTopLevel(Exception):
     def __init__(self, object):
         self.object = object
+
+def make_call_primitive_bytecode(primitive, selector, argcount):
+    def callPrimitive(self, interp):
+        # WARNING: this is used for bytecodes for which it is safe to
+        # directly call the primitive.  In general, it is not safe: for
+        # example, depending on the type of the receiver, bytecodePrimAt
+        # may invoke primitives.AT, primitives.STRING_AT, or anything
+        # else that the user put in a class in an 'at:' method.
+        # The rule of thumb is that primitives with only int and float
+        # in their unwrap_spec are safe.
+        func = primitives.prim_table[primitive]
+        try:
+            func(interp, argcount)
+            return
+        except primitives.PrimitiveFailedError:
+            pass
+        self._sendSelfSelector(selector, argcount, interp)
+    return callPrimitive
 
 # ___________________________________________________________________________
 # Bytecode Implementations:
@@ -222,7 +240,7 @@ class __extend__(ContextPartShadow):
 
     def _return(self, object, interp, w_return_to):
         # for tests, when returning from the top-level context
-        if w_return_to is self.space.w_nil:
+        if w_return_to.is_same_object(self.space.w_nil):
             raise ReturnFromTopLevel(object)
         w_return_to.as_context_get_shadow(self.space).push(object)
         interp.store_w_active_context(w_return_to)
@@ -371,93 +389,23 @@ class __extend__(ContextPartShadow):
     def longJumpIfFalse(self, interp):
         self.jumpConditional(interp.space.w_false, self.longJumpPosition())
 
-    # RPython trick: specialize the following function on its second argument
-    # this makes sure that the primitive call is a direct one
-    @objectmodel.specialize.arg(1)
-    def callPrimitive(self, primitive, selector, argcount, interp):
-        # WARNING: this is used for bytecodes for which it is safe to
-        # directly call the primitive.  In general, it is not safe: for
-        # example, depending on the type of the receiver, bytecodePrimAt
-        # may invoke primitives.AT, primitives.STRING_AT, or anything
-        # else that the user put in a class in an 'at:' method.
-        # The rule of thumb is that primitives with only int and float
-        # in their unwrap_spec are safe.
-        for i, func in primitives.unrolling_prim_table:
-            if i == primitive:
-                try:
-                    func(interp, argcount)
-                    return
-                except primitives.PrimitiveFailedError:
-                    break
-        self._sendSelfSelector(selector, argcount, interp)
 
-    def callPrimitive2(self, primitive1, primitive2,
-                       selector, argcount, interp):
-        # same as callPrimitive(), but tries two primitives before falling
-        # back to the general case.
-        try:
-            primitives.prim_table[primitive1](interp, argcount)
-            # the primitive pushes the result (if any) onto the stack itself
-        except primitives.PrimitiveFailedError:
-            self.callPrimitive(primitive2, selector, argcount, interp)
-
-    def bytecodePrimAdd(self, interp):
-        self.callPrimitive(primitives.ADD,
-                           "+", 1, interp)
-
-    def bytecodePrimSubtract(self, interp):
-        self.callPrimitive(primitives.SUBTRACT,
-                           "-", 1, interp)
-
-    def bytecodePrimLessThan(self, interp):        
-        self.callPrimitive(primitives.LESSTHAN,
-                           "<", 1, interp)
-
-    def bytecodePrimGreaterThan(self, interp):
-        self.callPrimitive(primitives.GREATERTHAN,
-                          ">", 1, interp)
-
-    def bytecodePrimLessOrEqual(self, interp):
-        self.callPrimitive(primitives.LESSOREQUAL,
-                           "<=", 1, interp)
-
-    def bytecodePrimGreaterOrEqual(self, interp):
-        self.callPrimitive(primitives.GREATEROREQUAL,
-                           ">=", 1, interp)
-
-    def bytecodePrimEqual(self, interp):
-        self.callPrimitive(primitives.EQUAL,
-                            "=", 1, interp)
-
-    def bytecodePrimNotEqual(self, interp):
-        self.callPrimitive(primitives.NOTEQUAL,
-                           "~=", 1, interp)
-
-    def bytecodePrimMultiply(self, interp):
-        self.callPrimitive(primitives.MULTIPLY,
-                           "*", 1, interp)
-
-    def bytecodePrimDivide(self, interp):
-        self.callPrimitive(primitives.DIVIDE,
-                           "/", 1, interp)
-
-    def bytecodePrimMod(self, interp):
-        self.callPrimitive(primitives.MOD, "\\\\", 1, interp)
-
-    def bytecodePrimMakePoint(self, interp):
-        self.callPrimitive(primitives.MAKE_POINT, "@", 1, interp)
-
-    def bytecodePrimBitShift(self, interp):
-        self.callPrimitive(primitives.BIT_SHIFT, "bitShift:", 1, interp)
-
-    def bytecodePrimDiv(self, interp):
-        self.callPrimitive(primitives.DIV, "//", 1, interp)
-
-    def bytecodePrimBitAnd(self, interp):
-        self.callPrimitive(primitives.BIT_AND, "bitAnd:", 1, interp)
-
-    def bytecodePrimBitOr(self, interp):
-        self.callPrimitive(primitives.BIT_OR, "bitOr:", 1, interp)
+    bytecodePrimAdd = make_call_primitive_bytecode(primitives.ADD, "+", 1)
+    bytecodePrimSubtract = make_call_primitive_bytecode(primitives.SUBTRACT, "-", 1)
+    bytecodePrimLessThan = make_call_primitive_bytecode (primitives.LESSTHAN, "<", 1)
+    bytecodePrimGreaterThan = make_call_primitive_bytecode(primitives.GREATERTHAN, ">", 1)
+    bytecodePrimLessOrEqual = make_call_primitive_bytecode(primitives.LESSOREQUAL,  "<=", 1)
+    bytecodePrimGreaterOrEqual = make_call_primitive_bytecode(primitives.GREATEROREQUAL,  ">=", 1)
+    bytecodePrimEqual = make_call_primitive_bytecode(primitives.EQUAL,   "=", 1)
+    bytecodePrimNotEqual = make_call_primitive_bytecode(primitives.NOTEQUAL,  "~=", 1)
+    bytecodePrimMultiply = make_call_primitive_bytecode(primitives.MULTIPLY,  "*", 1)
+    bytecodePrimDivide = make_call_primitive_bytecode(primitives.DIVIDE,  "/", 1)
+    bytecodePrimMod = make_call_primitive_bytecode(primitives.MOD, "\\\\", 1)
+    bytecodePrimMakePoint = make_call_primitive_bytecode(primitives.MAKE_POINT, "@", 1)
+    bytecodePrimBitShift = make_call_primitive_bytecode(primitives.BIT_SHIFT, "bitShift:", 1)
+    bytecodePrimDiv = make_call_primitive_bytecode(primitives.DIV, "//", 1)
+    bytecodePrimBitAnd = make_call_primitive_bytecode(primitives.BIT_AND, "bitAnd:", 1)
+    bytecodePrimBitOr = make_call_primitive_bytecode(primitives.BIT_OR, "bitOr:", 1)
 
     def bytecodePrimAt(self, interp):
         # n.b.: depending on the type of the receiver, this may invoke
@@ -491,24 +439,10 @@ class __extend__(ContextPartShadow):
         # which cannot fail
         primitives.prim_table[primitives.CLASS](interp, 0)
 
-    def bytecodePrimBlockCopy(self, interp):
-        # the primitive checks the class of the receiver
-        self.callPrimitive(primitives.BLOCK_COPY,
-                           "blockCopy:", 1, interp)
 
-    def bytecodePrimValue(self, interp):
-        # the primitive checks the class of the receiver
-        self.callPrimitive(
-            primitives.VALUE, "value", 0, interp)
-
-    def bytecodePrimValueWithArg(self, interp):
-        # the primitive checks the class of the receiver
-        # Note that the VALUE_WITH_ARGS takes an array of
-        # arguments but this bytecode is about the one-argument case.
-        # The VALUE is general enough to take any number of
-        # arguments from the stack, so it's the one we need to use here.
-        self.callPrimitive(
-            primitives.VALUE, "value:", 1, interp)
+    bytecodePrimBlockCopy = make_call_primitive_bytecode(primitives.BLOCK_COPY, "blockCopy:", 1)
+    bytecodePrimValue = make_call_primitive_bytecode(primitives.VALUE, "value", 0)
+    bytecodePrimValueWithArg = make_call_primitive_bytecode(primitives.VALUE, "value:", 1)
 
     def bytecodePrimDo(self, interp):
         self._sendSelfSelector("do:", 1, interp)
@@ -527,77 +461,77 @@ class __extend__(ContextPartShadow):
 
 
 BYTECODE_RANGES = [
-            (  0,  15, ContextPartShadow.pushReceiverVariableBytecode),
-            ( 16,  31, ContextPartShadow.pushTemporaryVariableBytecode),
-            ( 32,  63, ContextPartShadow.pushLiteralConstantBytecode),
-            ( 64,  95, ContextPartShadow.pushLiteralVariableBytecode),
-            ( 96, 103, ContextPartShadow.storeAndPopReceiverVariableBytecode),
-            (104, 111, ContextPartShadow.storeAndPopTemporaryVariableBytecode),
-            (112, ContextPartShadow.pushReceiverBytecode),
-            (113, ContextPartShadow.pushConstantTrueBytecode),
-            (114, ContextPartShadow.pushConstantFalseBytecode),
-            (115, ContextPartShadow.pushConstantNilBytecode),
-            (116, ContextPartShadow.pushConstantMinusOneBytecode),
-            (117, ContextPartShadow.pushConstantZeroBytecode),
-            (118, ContextPartShadow.pushConstantOneBytecode),
-            (119, ContextPartShadow.pushConstantTwoBytecode),
-            (120, ContextPartShadow.returnReceiver),
-            (121, ContextPartShadow.returnTrue),
-            (122, ContextPartShadow.returnFalse),
-            (123, ContextPartShadow.returnNil),
-            (124, ContextPartShadow.returnTopFromMethod),
-            (125, ContextPartShadow.returnTopFromBlock),
-            (126, ContextPartShadow.unknownBytecode),
-            (127, ContextPartShadow.unknownBytecode),
-            (128, ContextPartShadow.extendedPushBytecode),
-            (129, ContextPartShadow.extendedStoreBytecode),
-            (130, ContextPartShadow.extendedStoreAndPopBytecode),
-            (131, ContextPartShadow.singleExtendedSendBytecode),
-            (132, ContextPartShadow.doubleExtendedDoAnythingBytecode),
-            (133, ContextPartShadow.singleExtendedSuperBytecode),
-            (134, ContextPartShadow.secondExtendedSendBytecode),
-            (135, ContextPartShadow.popStackBytecode),
-            (136, ContextPartShadow.duplicateTopBytecode),
-            (137, ContextPartShadow.pushActiveContextBytecode),
-            (138, 143, ContextPartShadow.experimentalBytecode),
-            (144, 151, ContextPartShadow.shortUnconditionalJump),
-            (152, 159, ContextPartShadow.shortConditionalJump),
-            (160, 167, ContextPartShadow.longUnconditionalJump),
-            (168, 171, ContextPartShadow.longJumpIfTrue),
-            (172, 175, ContextPartShadow.longJumpIfFalse),
-            (176, ContextPartShadow.bytecodePrimAdd),
-            (177, ContextPartShadow.bytecodePrimSubtract),
-            (178, ContextPartShadow.bytecodePrimLessThan),
-            (179, ContextPartShadow.bytecodePrimGreaterThan),
-            (180, ContextPartShadow.bytecodePrimLessOrEqual),
-            (181, ContextPartShadow.bytecodePrimGreaterOrEqual),
-            (182, ContextPartShadow.bytecodePrimEqual),
-            (183, ContextPartShadow.bytecodePrimNotEqual),
-            (184, ContextPartShadow.bytecodePrimMultiply),
-            (185, ContextPartShadow.bytecodePrimDivide),
-            (186, ContextPartShadow.bytecodePrimMod),
-            (187, ContextPartShadow.bytecodePrimMakePoint),
-            (188, ContextPartShadow.bytecodePrimBitShift),
-            (189, ContextPartShadow.bytecodePrimDiv),
-            (190, ContextPartShadow.bytecodePrimBitAnd),
-            (191, ContextPartShadow.bytecodePrimBitOr),
-            (192, ContextPartShadow.bytecodePrimAt),
-            (193, ContextPartShadow.bytecodePrimAtPut),
-            (194, ContextPartShadow.bytecodePrimSize),
-            (195, ContextPartShadow.bytecodePrimNext),
-            (196, ContextPartShadow.bytecodePrimNextPut),
-            (197, ContextPartShadow.bytecodePrimAtEnd),
-            (198, ContextPartShadow.bytecodePrimEquivalent),
-            (199, ContextPartShadow.bytecodePrimClass),
-            (200, ContextPartShadow.bytecodePrimBlockCopy),
-            (201, ContextPartShadow.bytecodePrimValue),
-            (202, ContextPartShadow.bytecodePrimValueWithArg),
-            (203, ContextPartShadow.bytecodePrimDo),
-            (204, ContextPartShadow.bytecodePrimNew),
-            (205, ContextPartShadow.bytecodePrimNewWithArg),
-            (206, ContextPartShadow.bytecodePrimPointX),
-            (207, ContextPartShadow.bytecodePrimPointY),
-            (208, 255, ContextPartShadow.sendLiteralSelectorBytecode),
+            (  0,  15, "pushReceiverVariableBytecode"),
+            ( 16,  31, "pushTemporaryVariableBytecode"),
+            ( 32,  63, "pushLiteralConstantBytecode"),
+            ( 64,  95, "pushLiteralVariableBytecode"),
+            ( 96, 103, "storeAndPopReceiverVariableBytecode"),
+            (104, 111, "storeAndPopTemporaryVariableBytecode"),
+            (112, "pushReceiverBytecode"),
+            (113, "pushConstantTrueBytecode"),
+            (114, "pushConstantFalseBytecode"),
+            (115, "pushConstantNilBytecode"),
+            (116, "pushConstantMinusOneBytecode"),
+            (117, "pushConstantZeroBytecode"),
+            (118, "pushConstantOneBytecode"),
+            (119, "pushConstantTwoBytecode"),
+            (120, "returnReceiver"),
+            (121, "returnTrue"),
+            (122, "returnFalse"),
+            (123, "returnNil"),
+            (124, "returnTopFromMethod"),
+            (125, "returnTopFromBlock"),
+            (126, "unknownBytecode"),
+            (127, "unknownBytecode"),
+            (128, "extendedPushBytecode"),
+            (129, "extendedStoreBytecode"),
+            (130, "extendedStoreAndPopBytecode"),
+            (131, "singleExtendedSendBytecode"),
+            (132, "doubleExtendedDoAnythingBytecode"),
+            (133, "singleExtendedSuperBytecode"),
+            (134, "secondExtendedSendBytecode"),
+            (135, "popStackBytecode"),
+            (136, "duplicateTopBytecode"),
+            (137, "pushActiveContextBytecode"),
+            (138, 143, "experimentalBytecode"),
+            (144, 151, "shortUnconditionalJump"),
+            (152, 159, "shortConditionalJump"),
+            (160, 167, "longUnconditionalJump"),
+            (168, 171, "longJumpIfTrue"),
+            (172, 175, "longJumpIfFalse"),
+            (176, "bytecodePrimAdd"),
+            (177, "bytecodePrimSubtract"),
+            (178, "bytecodePrimLessThan"),
+            (179, "bytecodePrimGreaterThan"),
+            (180, "bytecodePrimLessOrEqual"),
+            (181, "bytecodePrimGreaterOrEqual"),
+            (182, "bytecodePrimEqual"),
+            (183, "bytecodePrimNotEqual"),
+            (184, "bytecodePrimMultiply"),
+            (185, "bytecodePrimDivide"),
+            (186, "bytecodePrimMod"),
+            (187, "bytecodePrimMakePoint"),
+            (188, "bytecodePrimBitShift"),
+            (189, "bytecodePrimDiv"),
+            (190, "bytecodePrimBitAnd"),
+            (191, "bytecodePrimBitOr"),
+            (192, "bytecodePrimAt"),
+            (193, "bytecodePrimAtPut"),
+            (194, "bytecodePrimSize"),
+            (195, "bytecodePrimNext"),
+            (196, "bytecodePrimNextPut"),
+            (197, "bytecodePrimAtEnd"),
+            (198, "bytecodePrimEquivalent"),
+            (199, "bytecodePrimClass"),
+            (200, "bytecodePrimBlockCopy"),
+            (201, "bytecodePrimValue"),
+            (202, "bytecodePrimValueWithArg"),
+            (203, "bytecodePrimDo"),
+            (204, "bytecodePrimNew"),
+            (205, "bytecodePrimNewWithArg"),
+            (206, "bytecodePrimPointX"),
+            (207, "bytecodePrimPointY"),
+            (208, 255, "sendLiteralSelectorBytecode"),
             ]
 
 
@@ -609,7 +543,7 @@ def initialize_bytecode_table():
         else:
             positions = range(entry[0], entry[1]+1)
         for pos in positions:
-            result[pos] = entry[-1]
+            result[pos] = getattr(ContextPartShadow, entry[-1])
     assert None not in result
     return result
 
