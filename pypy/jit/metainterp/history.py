@@ -36,6 +36,12 @@ def getkind_num(cpu, TYPE):
             return "_%d" % cpu.numof(TYPE)
         return "ptr"
 
+def repr_pointer(box):
+    try:
+        return '*%s' % (box.value._obj.container._TYPE._name,)
+    except AttributeError:
+        return box.value
+
 
 class AbstractValue(object):
     __slots__ = ()
@@ -190,8 +196,7 @@ class ConstPtr(Const):
     def equals(self, other):
         return self.value == other.getptr_base()
 
-    def _getrepr_(self):
-        return self.value
+    _getrepr_ = repr_pointer
 
 class Box(AbstractValue):
     __slots__ = ()
@@ -266,11 +271,7 @@ class BoxPtr(Box):
     def get_(self):
         return lltype.cast_ptr_to_int(self.value)
 
-    def _getrepr_(self):
-        try:
-            return self.value.ptr
-        except AttributeError:
-            return self.value
+    _getrepr_ = repr_pointer
 
 NULLBOX = BoxPtr()
 
