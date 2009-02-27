@@ -47,6 +47,7 @@ def from_opaque_string(s):
 TYPES = {
     'int_add'         : (('int', 'int'), 'int'),
     'int_mod'         : (('int', 'int'), 'int'),
+    'int_lshift'      : (('int', 'int'), 'int'),
     'int_rshift'      : (('int', 'int'), 'int'),
     'int_and'         : (('int', 'int'), 'int'),
     'int_sub'         : (('int', 'int'), 'int'),
@@ -482,6 +483,7 @@ def frame_execute(frame):
         raise e.args[0]
     except Exception, e:
         log.ERROR('%s in CPU frame: %s' % (e.__class__.__name__, e))
+        import sys, pdb; pdb.post_mortem(sys.exc_info()[2])
         raise
     return result
 
