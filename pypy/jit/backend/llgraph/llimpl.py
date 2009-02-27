@@ -19,7 +19,7 @@ from pypy.jit.metainterp import heaptracker
 from pypy.jit.backend.llgraph import symbolic
 
 from pypy.rlib.objectmodel import ComputedIntSymbolic
-from pypy.rlib.rarithmetic import r_uint
+from pypy.rlib.rarithmetic import r_uint, intmask
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -586,18 +586,19 @@ class ExtendedLLFrame(LLFrame):
 
     # ---------- signed/unsigned support ----------
 
-    # for these operations, allow us to be called with unsigned or with
-    # regular signed arguments (which would come e.g. from ConstInt)
+    # for these operations, we expect to be called with regular ints
+    # and to return regular ints
     for _opname in ['uint_add', 'uint_sub', 'uint_mul',
                     'uint_lt', 'uint_le', 'uint_eq',
-                    'uint_ne', 'uint_gt', 'int_ge',
+                    'uint_ne', 'uint_gt', 'uint_ge',
                     ]:
         exec py.code.Source("""
             def op_%s(self, x, y):
                 x = r_uint(x)
                 y = r_uint(y)
                 ophandler = lloperation.LL_OPERATIONS[%r].fold
-                return ophandler(x, y)
+                z = ophandler(x, y)
+                return intmask(z)
         """ % (_opname, _opname)).compile()
 
     # ----------------------------------------
