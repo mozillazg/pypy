@@ -9,6 +9,7 @@ from pypy.annotation import model as annmodel
 from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr,
                                          BoxInt, BoxPtr)
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
+from pypy.rpython.lltypesystem import lloperation
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLInterpreter, LLFrame, LLException
@@ -18,6 +19,7 @@ from pypy.jit.metainterp import heaptracker
 from pypy.jit.backend.llgraph import symbolic
 
 from pypy.rlib.objectmodel import ComputedIntSymbolic
+from pypy.rlib.rarithmetic import r_uint
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -69,6 +71,15 @@ TYPES = {
     'int_mul_ovf'     : (('int', 'int'), 'int'),
     'int_neg_ovf'     : (('int',), 'int'),
     'bool_not'        : (('bool',), 'bool'),
+    'uint_add'        : (('int', 'int'), 'int'),
+    'uint_sub'        : (('int', 'int'), 'int'),
+    'uint_mul'        : (('int', 'int'), 'int'),
+    'uint_lt'         : (('int', 'int'), 'bool'),
+    'uint_le'         : (('int', 'int'), 'bool'),
+    'uint_eq'         : (('int', 'int'), 'bool'),
+    'uint_ne'         : (('int', 'int'), 'bool'),
+    'uint_gt'         : (('int', 'int'), 'bool'),
+    'uint_ge'         : (('int', 'int'), 'bool'),
     'new_with_vtable' : (('int', 'ptr'), 'ptr'),
     'new'             : (('int',), 'ptr'),
     'new_array'       : (('int', 'int'), 'ptr'),
@@ -572,6 +583,24 @@ class ExtendedLLFrame(LLFrame):
         # the default implementation would also create an ExtendedLLFrame,
         # but we don't want this to occur in our case
         return LLFrame(graph, args, self.llinterpreter)
+
+    # ---------- signed/unsigned support ----------
+
+    # for these operations, allow us to be called with unsigned or with
+    # regular signed arguments (which would come e.g. from ConstInt)
+    for _opname in ['uint_add', 'uint_sub', 'uint_mul',
+                    'uint_lt', 'uint_le', 'uint_eq',
+                    'uint_ne', 'uint_gt', 'int_ge',
+                    ]:
+        exec py.code.Source("""
+            def op_%s(self, x, y):
+                x = r_uint(x)
+                y = r_uint(y)
+                ophandler = lloperation.LL_OPERATIONS[%r].fold
+                return ophandler(x, y)
+        """ % (_opname, _opname)).compile()
+
+    # ----------------------------------------
 
     def op_return(self, value=None):
         if self.last_exception is None:

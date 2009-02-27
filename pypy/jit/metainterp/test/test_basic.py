@@ -232,6 +232,19 @@ class BasicTests:
         res = self.interp_operations(f, [7])
         assert res == 1212
 
+    def test_r_uint(self):
+        from pypy.rlib.rarithmetic import r_uint
+        myjitdriver = JitDriver(greens = [], reds = ['y'])
+        def f(y):
+            y = r_uint(y)
+            while y > 0:
+                myjitdriver.can_enter_jit(y=y)
+                myjitdriver.jit_merge_point(y=y)
+                y -= 1
+            return y
+        res = self.meta_interp(f, [10])
+        assert res == 0
+
 
 class TestOOtype(BasicTests, OOJitMixin):
     pass
