@@ -286,6 +286,70 @@ class SendTests:
         self.check_loop_count(1)
         self.check_loops(int_add=0, int_mul=1, guard_class=0)
 
+    def test_indirect_call_unknown_object_1(self):
+        py.test.skip("XXX fix me")
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y'])
+        def getvalue2():
+            return 2
+        def getvalue25():
+            return 25
+        def getvalue1001():
+            return -1001
+        def externfn(n):
+            if n % 5:
+                return getvalue2
+            elif n % 7:
+                return getvalue25
+            else:
+                return getvalue1001
+        def f(y):
+            x = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y)
+                myjitdriver.jit_merge_point(x=x, y=y)
+                x += externfn(y)()
+                y -= 1
+            return x
+        res = self.meta_interp(f, [198], policy=StopAtXPolicy(externfn))
+        assert res == f(198)
+        self.check_loop_count(3)
+
+    def test_indirect_call_unknown_object_2(self):
+        py.test.skip("XXX fix me!!!!!!! problem in optimize.py")
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'state'])
+        def getvalue2():
+            return 2
+        def getvalue25():
+            return 25
+        def getvalue1001():
+            return -1001
+
+        class State:
+            count = 0
+            def externfn(self, n):
+                assert n == 198 - self.count
+                self.count += 1
+                if n % 5:
+                    return getvalue2
+                elif n % 7:
+                    return getvalue25
+                else:
+                    return getvalue1001
+        def f(y):
+            state = State()
+            x = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, state=state)
+                myjitdriver.jit_merge_point(x=x, y=y, state=state)
+                x += state.externfn(y)()
+                y -= 1
+            return x
+        res = self.meta_interp(f, [198],
+                               policy=StopAtXPolicy(State.externfn.im_func))
+        assert res == f(198)
+        self.check_loop_count(3)
+
+
 class TestOOtype(SendTests, OOJitMixin):
     pass
 
