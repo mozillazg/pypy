@@ -126,8 +126,19 @@ class WarmRunnerDesc:
         state = WarmEnterState()
         self.state = state
 
+        def crash_in_jit(e):
+            print "Crash in JIT!"
+            print '%s: %s' % (e.__class__, e)
+            if not we_are_translated():
+                import sys, pdb; pdb.post_mortem(sys.exc_info()[2])
+            raise AssertionError("crash in JIT")
+        crash_in_jit._dont_inline_ = True
+
         def maybe_enter_jit(*args):
-            state.maybe_compile_and_run(*args)
+            try:
+                state.maybe_compile_and_run(*args)
+            except Exception, e:
+                crash_in_jit(e)
         maybe_enter_jit._always_inline_ = True
 
         self.maybe_enter_jit_fn = maybe_enter_jit
