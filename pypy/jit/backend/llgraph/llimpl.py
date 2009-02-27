@@ -59,9 +59,11 @@ TYPES = {
     'int_ne'          : (('int', 'int'), 'bool'),
     'int_is_true'     : (('int',), 'bool'),
     'int_neg'         : (('int',), 'int'),
+    'int_invert'      : (('int',), 'int'),
     'int_add_ovf'     : (('int', 'int'), 'int'),
     'int_sub_ovf'     : (('int', 'int'), 'int'),
     'int_mul_ovf'     : (('int', 'int'), 'int'),
+    'int_neg_ovf'     : (('int',), 'int'),
     'bool_not'        : (('bool',), 'bool'),
     'new_with_vtable' : (('int', 'ptr'), 'ptr'),
     'new'             : (('int',), 'ptr'),
@@ -832,11 +834,12 @@ class ExtendedLLFrame(LLFrame):
         return res
 
     for _opname in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
+                    'int_neg_ovf',
                     ]:
         exec py.code.Source('''
-            def op_%s(self, x, y):
+            def op_%s(self, *args):
                 try:
-                    z = LLFrame.op_%s(self, x, y)
+                    z = LLFrame.op_%s(self, *args)
                 except LLException, e:
                     self.catch_exception(e)
                     z = 0

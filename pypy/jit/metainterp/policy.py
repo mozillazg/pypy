@@ -62,8 +62,8 @@ class ManualJitPolicy(JitPolicy):
         self.fill_seen_graphs()
 
     def look_inside_graph(self, graph):
-        if self.enabled_graphs.get(graph):
-            return True
+        if graph in self.enabled_graphs:
+            return self.enabled_graphs[graph]
         return super(ManualJitPolicy, self).look_inside_graph(graph)
 
     def fill_seen_graphs(self):

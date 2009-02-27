@@ -122,6 +122,11 @@ _ll_3_list_insert = rlist.ll_insert_nonneg
 _ll_2_list_getitem_foldable = _ll_2_list_getitem
 _ll_1_list_len_foldable     = _ll_1_list_len
 
+def _ll_0_newdict(DICT):
+    from pypy.rpython.lltypesystem.rdict import ll_newdict
+    return ll_newdict(DICT)
+_ll_0_newdict.need_result_type = True
+
 _ll_2_dict_getitem = rdict.ll_dict_getitem
 _ll_3_dict_setitem = rdict.ll_dict_setitem
 _ll_2_dict_contains = rdict.ll_contains

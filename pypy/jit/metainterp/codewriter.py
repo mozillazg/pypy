@@ -462,16 +462,25 @@ class BytecodeMaker(object):
     serialize_op_cast_int_to_char = serialize_op_same_as
     serialize_op_cast_char_to_int = serialize_op_same_as
     serialize_op_cast_bool_to_int = serialize_op_same_as
+    serialize_op_cast_int_to_uint = serialize_op_same_as
+    serialize_op_cast_uint_to_int = serialize_op_same_as
     serialize_op_resume_point = serialize_op_same_as
 
-    def serialize_op_char_eq(self, op):
-        self.default_serialize_op(op, 'int_eq')
-
-    def serialize_op_char_ne(self, op):
-        self.default_serialize_op(op, 'int_ne')
+    _defl = default_serialize_op
+    def serialize_op_char_eq(self, op): self._defl(op, 'int_eq')
+    def serialize_op_char_ne(self, op): self._defl(op, 'int_ne')
 
     serialize_op_unichar_eq = serialize_op_char_eq
     serialize_op_unichar_ne = serialize_op_char_ne
+
+    def serialize_op_uint_add(self, op): self._defl(op, 'int_add')
+    def serialize_op_uint_sub(self, op): self._defl(op, 'int_sub')
+    def serialize_op_uint_lt (self, op): self._defl(op, 'int_lt')
+    def serialize_op_uint_le (self, op): self._defl(op, 'int_le')
+    def serialize_op_uint_eq (self, op): self._defl(op, 'int_eq')
+    def serialize_op_uint_ne (self, op): self._defl(op, 'int_ne')
+    def serialize_op_uint_gt (self, op): self._defl(op, 'int_gt')
+    def serialize_op_uint_ge (self, op): self._defl(op, 'int_ge')
 
     def serialize_op_int_add_nonneg_ovf(self, op):
         self.default_serialize_op(op, 'int_add_ovf')
@@ -483,7 +492,8 @@ class BytecodeMaker(object):
             self.emit('guard_value', self.var_position(op.args[0]))
             self.register_var(op.result)
         else:
-            xxx
+            log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
+            self.serialize_op_same_as(op)
 
     def serialize_op_int_is_true(self, op):
         if isinstance(op.args[0], Constant):
