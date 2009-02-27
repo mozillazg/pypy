@@ -435,8 +435,10 @@ class PerfectSpecializer(object):
             elif opname == 'guard_value':
                 instnode = self.getnode(op.args[0])
                 assert isinstance(op.args[1], Const)
-                self.nodes[instnode.source] = InstanceNode(op.args[1],
-                                                           const=True)
+                # XXX need to think more about the 'const' attribute
+                #     (see test_send.test_indirect_call_unknown_object_1)
+                #self.nodes[instnode.source] = InstanceNode(op.args[1],
+                #                                           const=True)
                 continue
             elif opname == 'guard_nonvirtualized':
                 instnode = self.getnode(op.args[0])
@@ -669,14 +671,14 @@ class PerfectSpecializer(object):
                 if opname == 'guard_true' or opname == 'guard_false':
                     if self.nodes[op.args[0]].const:
                         continue
-                if (opname == 'guard_no_exception' or
-                    opname == 'guard_exception'):
+                elif (opname == 'guard_no_exception' or
+                      opname == 'guard_exception'):
                     if not exception_might_have_happened:
                         continue
                     exception_might_have_happened = False
-                if opname == 'guard_value':
-                    if (self.nodes[op.args[0]].const and
-                        self.nodes[op.args[1]].const):
+                elif opname == 'guard_value':
+                    if self.nodes[op.args[0]].const:
+                        assert isinstance(op.args[1], Const)
                         continue
                 op = self.optimize_guard(op)
                 newoperations.append(op)
