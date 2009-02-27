@@ -4,6 +4,7 @@ from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import support, codewriter, pyjitpl, history
 from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
+from pypy import conftest
 
 def get_metainterp(func, values, CPUClass, type_system, policy):
     from pypy.annotation.policy import AnnotatorPolicy
@@ -65,6 +66,8 @@ class LLJitMixin(JitMixin):
         try:
             metainterp.compile_and_run(*args)
         except DoneWithThisFrame, e:
+            if conftest.option.view:
+                metainterp.stats.view()
             return e.args[0].value
         else:
             raise Exception("FAILED")
@@ -244,6 +247,40 @@ class BasicTests:
             return y
         res = self.meta_interp(f, [10])
         assert res == 0
+
+    def test_getfield(self):
+        class A:
+            pass
+        a1 = A()
+        a1.foo = 5
+        a2 = A()
+        a2.foo = 8
+        def f(x):
+            if x > 5:
+                a = a1
+            else:
+                a = a2
+            return a.foo * x
+        res = self.interp_operations(f, [42])
+        assert res == 210
+        self.check_history_(getfield_gc=1)
+
+    def test_getfield_immutable(self):
+        class A:
+            _immutable_ = True
+        a1 = A()
+        a1.foo = 5
+        a2 = A()
+        a2.foo = 8
+        def f(x):
+            if x > 5:
+                a = a1
+            else:
+                a = a2
+            return a.foo * x
+        res = self.interp_operations(f, [42])
+        assert res == 210
+        self.check_history_(getfield_gc=0)
 
 
 class TestOOtype(BasicTests, OOJitMixin):
