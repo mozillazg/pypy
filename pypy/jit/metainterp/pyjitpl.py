@@ -243,12 +243,20 @@ class MIFrame(object):
                 return self.execute_with_exc(%r, [b1, b2], "int", True)
         ''' % (_opimpl, _opimpl)).compile()
 
-    for _opimpl in ['int_is_true', 'int_neg', 'bool_not',
+    for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
                     ]:
         exec py.code.Source('''
             @arguments("box")
             def opimpl_%s(self, b):
                 self.execute(%r, [b], "int", True)
+        ''' % (_opimpl, _opimpl)).compile()
+
+    for _opimpl in ['int_neg_ovf',
+                    ]:
+        exec py.code.Source('''
+            @arguments("box")
+            def opimpl_%s(self, b):
+                return self.execute_with_exc(%r, [b], "int", True)
         ''' % (_opimpl, _opimpl)).compile()
 
     @arguments()
