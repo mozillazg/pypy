@@ -1,6 +1,6 @@
 import py
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.rlib.jit import JitDriver, hint
+from pypy.rlib.jit import JitDriver
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.jit.metainterp.policy import StopAtXPolicy
 

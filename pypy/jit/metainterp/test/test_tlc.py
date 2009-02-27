@@ -1,6 +1,5 @@
 import py
 from pypy.rpython.module.support import LLSupport
-from pypy.rlib.jit import hint
 
 from pypy.jit.tl import tlc
 
