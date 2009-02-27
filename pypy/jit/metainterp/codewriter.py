@@ -621,8 +621,8 @@ class BytecodeMaker(object):
                                 self.var_position(op.args[3]))
 
     def serialize_op_jit_marker(self, op):
-        assert self.portal, "jit_marker in non-main graph!"
         if op.args[0].value == 'jit_merge_point':
+            assert self.portal, "jit_merge_point in non-main graph!"
             self.emit('jit_merge_point')
             assert ([self.var_position(i) for i in op.args[2:]] ==
                     range(0, 2*(len(op.args) - 2), 2))

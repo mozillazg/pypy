@@ -110,6 +110,10 @@ class CPU(object):
                 llimpl.frame_add_int(frame, box.value)
             elif isinstance(box, history.BoxPtr):
                 llimpl.frame_add_ptr(frame, box.value)
+            elif isinstance(box, history.ConstInt):
+                llimpl.frame_add_int(frame, box.value)
+            elif isinstance(box, history.ConstPtr):
+                llimpl.frame_add_ptr(frame, box.value)
             else:
                 raise Exception("bad box in valueboxes: %r" % (box,))
         return self.loop(frame)
