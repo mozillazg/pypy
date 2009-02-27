@@ -759,3 +759,98 @@ def test_N_optimize_loop():
         ResOperation('getfield_gc', [N.n1, ConstInt(N.ofs_value)], [ANY]),
         Jump('jump', [N.sum2, N.n1, ANY], []),
     ])
+
+# ____________________________________________________________
+
+class O1:
+    locals().update(A.__dict__)    # :-)
+    ops = [
+        MergePoint('merge_point', [], []),
+        ResOperation('produce_somehow_n1', [], [n1]),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
+                                     sizebox], []),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
+                                     sizebox], []),
+        Jump('jump', [], []),
+        ]
+    ops[-3].liveboxes = []
+    ops[-2].liveboxes = []
+
+def test_O1_optimize_loop():
+    spec = PerfectSpecializer(Loop(O1.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [], []),
+        ResOperation('produce_somehow_n1', [], [O1.n1]),
+        # only the first guard_class is left
+        ResOperation('guard_class', [O1.n1, ConstAddr(node_vtable, cpu),
+                                     O1.sizebox], []),
+        Jump('jump', [], []),
+    ])
+
+# ____________________________________________________________
+
+class O2:
+    locals().update(A.__dict__)    # :-)
+    v1 = BoxInt(1)
+    ops = [
+        MergePoint('merge_point', [], []),
+        ResOperation('produce_somehow_n1', [], [n1]),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
+                                     sizebox], []),
+        ResOperation('oononnull', [n1], [v1]),
+        ResOperation('guard_true', [v1], []),
+        Jump('jump', [], []),
+        ]
+    ops[-4].liveboxes = []
+    ops[-2].liveboxes = []
+
+def test_O2_optimize_loop():
+    spec = PerfectSpecializer(Loop(O2.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [], []),
+        ResOperation('produce_somehow_n1', [], [O2.n1]),
+        ResOperation('guard_class', [O2.n1, ConstAddr(node_vtable, cpu),
+                                     O2.sizebox], []),
+        # the oononnull and guard_true are gone, because we know they
+        # return True -- as there was already a guard_class done on n1
+        Jump('jump', [], []),
+    ])
+
+# ____________________________________________________________
+
+class O3:
+    locals().update(A.__dict__)    # :-)
+    v1 = BoxInt(1)
+    ops = [
+        MergePoint('merge_point', [], []),
+        ResOperation('produce_somehow_n1', [], [n1]),
+        ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
+                                     sizebox], []),
+        ResOperation('oois', [n1, ConstPtr(lltype.nullptr(llmemory.GCREF.TO))],
+                             [v1]),
+        ResOperation('guard_false', [v1], []),
+        Jump('jump', [], []),
+        ]
+    ops[-4].liveboxes = []
+    ops[-2].liveboxes = []
+
+def test_O3_optimize_loop():
+    spec = PerfectSpecializer(Loop(O3.ops))
+    spec.find_nodes()
+    spec.intersect_input_and_output()
+    spec.optimize_loop()
+    equaloplists(spec.loop.operations, [
+        MergePoint('merge_point', [], []),
+        ResOperation('produce_somehow_n1', [], [O3.n1]),
+        ResOperation('guard_class', [O3.n1, ConstAddr(node_vtable, cpu),
+                                     O3.sizebox], []),
+        # the oois and guard_false are gone, because we know they
+        # return False -- as there was already a guard_class done on n1
+        Jump('jump', [], []),
+    ])

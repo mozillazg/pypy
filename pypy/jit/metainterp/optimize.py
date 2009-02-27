@@ -642,14 +642,6 @@ class PerfectSpecializer(object):
                 op = Jump('jump', args, [])
                 newoperations.append(op)
                 continue
-            elif opname == 'guard_class':
-                instnode = self.nodes[op.args[0]]
-                if instnode.cls is not None:
-                    assert op.args[1].equals(instnode.cls.source)
-                    continue
-                op = self.optimize_guard(op)
-                newoperations.append(op)
-                continue
 ##            elif opname == 'guard_builtin':
 ##                instnode = self.nodes[op.args[0]]
 ##                if instnode.cls is None:
@@ -663,25 +655,31 @@ class PerfectSpecializer(object):
 ##                    instnode = self.nodes[op.args[0]]
 ##                    instnode.cursize = op.args[1].getint()
 ##                continue
-            elif opname == 'guard_nonvirtualized':
-                instnode = self.nodes[op.args[0]]
-                if instnode.virtualized or instnode.virtual:
+            elif (opname == 'guard_no_exception' or
+                  opname == 'guard_exception'):
+                if not exception_might_have_happened:
                     continue
+                exception_might_have_happened = False
                 op = self.optimize_guard(op)
                 newoperations.append(op)
                 continue
             elif opname.startswith('guard_'):
+                instnode = self.nodes[op.args[0]]
                 if opname == 'guard_true' or opname == 'guard_false':
-                    if self.nodes[op.args[0]].const:
+                    if instnode.const:
                         continue
-                elif (opname == 'guard_no_exception' or
-                      opname == 'guard_exception'):
-                    if not exception_might_have_happened:
+                elif opname == 'guard_class':
+                    if instnode.cls is not None:
+                        assert op.args[1].equals(instnode.cls.source)
                         continue
-                    exception_might_have_happened = False
+                    instnode.cls = InstanceNode(op.args[1], const=True)
                 elif opname == 'guard_value':
-                    if self.nodes[op.args[0]].const:
-                        assert isinstance(op.args[1], Const)
+                    assert isinstance(op.args[1], Const)
+                    if instnode.const:
+                        continue
+                    instnode.const = True
+                elif opname == 'guard_nonvirtualized':
+                    if instnode.virtualized or instnode.virtual:
                         continue
                 op = self.optimize_guard(op)
                 newoperations.append(op)
@@ -763,15 +761,27 @@ class PerfectSpecializer(object):
 ##                    continue
             elif opname == 'ooisnull' or opname == 'oononnull':
                 instnode = self.getnode(op.args[0])
-                if instnode.virtual:
+                # we know the result is constant if instnode is a virtual,
+                # or if we already checked the class of the object before
+                if instnode.virtual or instnode.cls is not None:
                     box = op.results[0]
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
+                # XXX we could also do a bit better by marking on the
+                # InstanceNode that we compared it with NULL already
             elif opname == 'oois' or opname == 'ooisnot':
                 instnode_x = self.getnode(op.args[0])
                 instnode_y = self.getnode(op.args[1])
-                if instnode_x.virtual or instnode_y.virtual:
+                # we know the result is constant in one of these 4 cases:
+                if (instnode_x.virtual or    # x is a virtual (even if y isn't)
+                    instnode_y.virtual or    # y is a virtual (even if x isn't)
+                    (instnode_x.cls is not None and     # we checked cls x and
+                     instnode_y.const and               # y is the const NULL
+                     not instnode_y.source.getptr_base()) or
+                    (instnode_y.cls is not None and     # we checked cls y and
+                     instnode_x.const and               # x is the const NULL
+                     not instnode_x.source.getptr_base())):
                     box = op.results[0]
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
