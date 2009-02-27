@@ -471,12 +471,15 @@ class PerfectSpecializer(object):
         end_args = self.loop.operations[-1].args
         memo = {}
         for i in range(len(end_args)):
-            self.nodes[end_args[i]].escape_if_startbox(memo)
+            end_box = end_args[i]
+            if isinstance(end_box, Box):
+                self.nodes[end_box].escape_if_startbox(memo)
         for i in range(len(end_args)):
             box = self.loop.operations[0].args[i]
             other_box = end_args[i]
-            self.nodes[box].add_to_dependency_graph(self.nodes[other_box],
-                                                    self.dependency_graph)
+            if isinstance(other_box, Box):
+                self.nodes[box].add_to_dependency_graph(self.nodes[other_box],
+                                                        self.dependency_graph)
         # XXX find efficient algorithm, we're too fried for that by now
         done = False
         while not done:
