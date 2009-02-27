@@ -464,9 +464,9 @@ class MIFrame(object):
         args = [descr.nonzero_func] + varargs
         return self.execute_with_exc('listnonzero', args, 'int')
 
-    @arguments("indirectcallset", "box", "varargs")
-    def opimpl_indirect_call(self, indirectcallset, box, varargs):
-        assert isinstance(box, Const) # XXX
+    @arguments("orgpc", "indirectcallset", "box", "varargs")
+    def opimpl_indirect_call(self, pc, indirectcallset, box, varargs):
+        box = self.implement_guard_value(pc, box)
         cpu = self.metainterp.cpu
         jitcode = indirectcallset.bytecode_for_address(box.getaddr(cpu))
         f = self.metainterp.newframe(jitcode)
@@ -776,18 +776,22 @@ class OOMetaInterp(object):
     def interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
         # a ContinueRunningNormally, or a GenerateMergePoint exception.
-        if not we_are_translated():
-            history.log.event('ENTER')
+        if isinstance(self.history, history.BlackHole):
+            text = ' (BlackHole)'
         else:
-            debug_print('ENTER')
+            text = ''
+        if not we_are_translated():
+            history.log.event('ENTER' + text)
+        else:
+            debug_print('ENTER' + text)
         try:
             while True:
                 self.framestack[-1].run_one_step()
         finally:
             if not we_are_translated():
-                history.log.event('LEAVE')
+                history.log.event('LEAVE' + text)
             else:
-                debug_print('LEAVE')
+                debug_print('LEAVE' + text)
 
     def compile_and_run(self, *args):
         orig_boxes = self.initialize_state_from_start(*args)
