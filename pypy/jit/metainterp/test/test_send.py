@@ -287,7 +287,6 @@ class SendTests:
         self.check_loops(int_add=0, int_mul=1, guard_class=0)
 
     def test_indirect_call_unknown_object_1(self):
-        py.test.skip("XXX fix me")
         myjitdriver = JitDriver(greens = [], reds = ['x', 'y'])
         def getvalue2():
             return 2
