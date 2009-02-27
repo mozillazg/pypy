@@ -592,11 +592,15 @@ def func(interp, w_arg):
     import math
     return interp.space.wrap_int(int(math.fmod(time.time()*1000, constants.TAGGED_MAXINT/2)))
 
+
+secs_between_1901_and_1970 = rarithmetic.r_uint((69 * 365 + 17) * 24 * 3600)
+
 @expose_primitive(SECONDS_CLOCK, unwrap_spec=[object])
 def func(interp, w_arg):
+    return interp.space.wrap_int(73)
     import time
-    sec_since_epoch = int(time.time())
-    sec_since_1901 = sec_since_epoch + ((69 * 365 + 17) * 24 * 3600)
+    sec_since_epoch = rarithmetic.r_uint(time.time())
+    sec_since_1901 = sec_since_epoch + secs_between_1901_and_1970
     return interp.space.wrap_pos_full_int(sec_since_1901)
 
 # ___________________________________________________________________________
