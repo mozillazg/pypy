@@ -73,6 +73,9 @@ def debug_checks():
     stats.maybe_view()
     stats.check_consistency()
 
+class JitException(Exception):
+    _go_through_llinterp_uncaught_ = True     # ugh
+
 # ____________________________________________________________
 
 class WarmRunnerDesc:
@@ -137,6 +140,8 @@ class WarmRunnerDesc:
         def maybe_enter_jit(*args):
             try:
                 state.maybe_compile_and_run(*args)
+            except JitException:
+                raise     # go through
             except Exception, e:
                 crash_in_jit(e)
         maybe_enter_jit._always_inline_ = True
@@ -229,15 +234,13 @@ class WarmRunnerDesc:
         portal_ptr = lltype.functionptr(PORTALFUNC, 'portal',
                                         graph = portalgraph)
 
-        class DoneWithThisFrame(Exception):
-            _go_through_llinterp_uncaught_ = True     # ugh
+        class DoneWithThisFrame(JitException):
             def __init__(self, resultbox):
                 self.resultbox = resultbox
             def __str__(self):
                 return 'DoneWithThisFrame(%s)' % (self.result,)
 
-        class ExitFrameWithException(Exception):
-            _go_through_llinterp_uncaught_ = True     # ugh
+        class ExitFrameWithException(JitException):
             def __init__(self, typebox, valuebox):
                 self.typebox = typebox
                 self.valuebox = valuebox
@@ -245,9 +248,7 @@ class WarmRunnerDesc:
                 return 'ExitFrameWithException(%s, %s)' % (self.type,
                                                            self.value)
 
-        class ContinueRunningNormally(Exception):
-            _go_through_llinterp_uncaught_ = True     # ugh
-
+        class ContinueRunningNormally(JitException):
             def __init__(self, args):
                 self.args = args
 
