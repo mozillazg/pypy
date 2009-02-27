@@ -45,6 +45,7 @@ class BridgeInProgress(Exception):
 
 # the following is not translatable
 def _compile_new_loop_1(metainterp, loop, old_loops, endliveboxes):
+    orgloop = loop
     try:
         try:
             loop = compile_fresh_loop(metainterp, loop, old_loops,
@@ -53,13 +54,17 @@ def _compile_new_loop_1(metainterp, loop, old_loops, endliveboxes):
             show_loop(metainterp, loop, loop.operations[0], exc)
             raise
         else:
-            show_loop(metainterp, loop, loop.operations[0], None)
+            if loop == orgloop:
+                show_loop(metainterp, loop, loop.operations[0], None)
+            else:
+                log.info("reusing loop at %r" % (loop,))
     except optimize.CancelInefficientLoop:
         return None
     loop.check_consistency()
     return loop
 
 def _compile_new_bridge_1(metainterp, bridge, old_loops, endliveboxes):
+    orgbridge = bridge
     try:
         try:
             bridge = compile_fresh_bridge(metainterp, bridge, old_loops,
@@ -68,7 +73,12 @@ def _compile_new_bridge_1(metainterp, bridge, old_loops, endliveboxes):
             show_loop(metainterp, bridge, None, exc)
             raise
         else:
-            show_loop(metainterp, bridge, None, None)
+            if bridge == orgbridge:
+                show_loop(metainterp, bridge, None, None)
+            elif bridge is not None:
+                log.info("reusing bridge at %r" % (bridge,))
+            else:
+                log.info("compile_fresh_bridge() returned None")
     except optimize.CancelInefficientLoop:
         return None
     if bridge is not None:
