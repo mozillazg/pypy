@@ -98,3 +98,6 @@ def test_longer_loop():
                                               'int')
     assert res.value == 42
     assert meta_interp.recordedvalues == f()
+
+def test_xxx():
+    pass

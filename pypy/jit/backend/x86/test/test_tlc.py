@@ -1,5 +1,6 @@
 
 import py
+py.test.skip("XXX")
 from codegen386.test.test_basic import Jit386Mixin
 from test.test_tlc import TLCTests
 from pypy.jit.tl import tlc

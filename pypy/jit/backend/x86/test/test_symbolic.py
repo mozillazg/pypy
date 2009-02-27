@@ -1,5 +1,5 @@
-from codegen386.symbolic import *
-from codegen386.runner import CPU386
+from pypy.jit.backend.x86.symbolic import *
+from pypy.jit.backend.x86.runner import CPU386
 from pypy.rpython.lltypesystem import lltype, rffi
 
 class FakeStats(object):
