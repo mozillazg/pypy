@@ -398,3 +398,24 @@ class TestLoop(LLJitMixin):
         # XXX maybe later optimize guard_value away
         self.check_loops({'merge_point' : 1, 'int_add' : 6, 'int_gt' : 1,
                           'guard_false' : 1, 'jump' : 1, 'guard_value' : 3})
+
+    def test_can_enter_jit_outside_main_loop(self):
+        myjitdriver = JitDriver(greens=[], reds=['i', 'j', 'a'])
+        def done(a, j):
+            myjitdriver.can_enter_jit(i=0, j=j, a=a)
+        def main_interpreter_loop(a):
+            i = j = 0
+            while True:
+                myjitdriver.jit_merge_point(i=i, j=j, a=a)
+                i += 1
+                j += 3
+                if i >= 10:
+                    a -= 1
+                    if not a:
+                        break
+                    i = 0
+                    done(a, j)
+            return j
+        assert main_interpreter_loop(5) == 5 * 10 * 3
+        res = self.meta_interp(main_interpreter_loop, [5])
+        assert res == 5 * 10 * 3
