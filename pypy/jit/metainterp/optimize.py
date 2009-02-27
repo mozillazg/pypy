@@ -762,15 +762,15 @@ class PerfectSpecializer(object):
 ##                    self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
 ##                    continue
             elif opname == 'ooisnull' or opname == 'oononnull':
-                instnode = self.nodes[op.args[0]]
+                instnode = self.getnode(op.args[0])
                 if instnode.virtual:
                     box = op.results[0]
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
             elif opname == 'oois' or opname == 'ooisnot':
-                instnode_x = self.nodes[op.args[0]]
-                instnode_y = self.nodes[op.args[1]]
+                instnode_x = self.getnode(op.args[0])
+                instnode_y = self.getnode(op.args[1])
                 if instnode_x.virtual or instnode_y.virtual:
                     box = op.results[0]
                     instnode = InstanceNode(box.constbox(), const=True)
