@@ -228,6 +228,9 @@ class MIFrame(object):
                     'int_ne', 'int_gt', 'int_ge',
                     'int_and', 'int_or', 'int_xor',
                     'int_rshift', 'int_lshift',
+                    'uint_add', 'uint_sub', 'uint_mul',
+                    'uint_lt', 'uint_le', 'uint_eq',
+                    'uint_ne', 'uint_gt', 'int_ge',
                     ]:
         exec py.code.Source('''
             @arguments("box", "box")

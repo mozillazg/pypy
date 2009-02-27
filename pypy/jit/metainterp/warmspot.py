@@ -272,7 +272,7 @@ class WarmRunnerDesc:
             if isinstance(TYPE, lltype.Ptr):
                 return box.getptr(TYPE)
             else:
-                return box.getint()
+                return lltype.cast_primitive(TYPE, box.getint())
         unwrap._annspecialcase_ = 'specialize:arg(0)'
 
         def ll_portal_runner(*args):
@@ -317,7 +317,7 @@ class WarmRunnerDesc:
         vlist += greens_v
         vlist += reds_v
         v_result = Variable()
-        v_result.concretetype = lltype.Void
+        v_result.concretetype = PORTALFUNC.RESULT
         newop = SpaceOperation('direct_call', vlist, v_result)
         del origblock.operations[origindex:]
         origblock.operations.append(newop)
