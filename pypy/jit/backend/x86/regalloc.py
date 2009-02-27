@@ -97,10 +97,10 @@ class RegAlloc(object):
         jump = operations[-1]
         self.startmp = mp
         if guard_op:
-            loop_consts = self._start_from_guard_op(guard_op, mp, jump)
+            loop_consts, sd = self._start_from_guard_op(guard_op, mp, jump)
         else:
-            loop_consts = self._compute_loop_consts(mp, jump)
-        self.current_stack_depth = len(mp.args)
+            loop_consts, sd = self._compute_loop_consts(mp, jump)
+        self.current_stack_depth = sd
         self.computed_ops = self.walk_operations(operations, loop_consts)
         assert not self.reg_bindings
 
@@ -108,10 +108,15 @@ class RegAlloc(object):
         rev_stack_binds = {}
         self.jump_reg_candidates = {}
         j = 0
+        sd = len(mp.args)
+        if len(jump.args) > sd:
+            sd = len(jump.args)
         for i in range(len(mp.args)):
             arg = mp.args[i]
             if not isinstance(arg, Const):
                 stackpos = guard_op.stacklocs[j]
+                if stackpos >= sd:
+                    sd = stackpos + 1
                 loc = guard_op.locs[j]
                 if isinstance(loc, REG):
                     self.free_regs = [reg for reg in self.free_regs if reg is not loc]
@@ -121,23 +126,26 @@ class RegAlloc(object):
                 rev_stack_binds[stackpos] = arg
                 j += 1
         if jump.opname != 'jump':
-            return {}
+            return {}, sd
         for i in range(len(jump.args)):
             argloc = jump.jump_target.arglocs[i]
             jarg = jump.args[i]
-            if isinstance(argloc, REG):
-                self.jump_reg_candidates[jarg] = argloc
-            if (stackpos in rev_stack_binds and
-                (self.longevity[rev_stack_binds[stackpos]][1] >
-                 self.longevity[jarg][0])):
-                # variables cannot occupy the same place on stack, because they
-                # overlap.
-                pass # we don't care that they occupy the same place
-            else:
-                #self.dirty_stack[jarg] = True
-                # XXX ^^^^^^^^^ why?
-                self.stack_bindings[jarg] = stack_pos(i)
-        return {}
+            if not isinstance(jarg, Const):
+                if isinstance(argloc, REG):
+                    self.jump_reg_candidates[jarg] = argloc
+                if (i in rev_stack_binds and
+                    (self.longevity[rev_stack_binds[i]][1] >
+                     self.longevity[jarg][0])):
+                    # variables cannot occupy the same place on stack,
+                    # because they overlap, but we care only in consider_jump
+                    pass
+                else:
+                    # optimization for passing around values
+                    if jarg not in self.stack_bindings:
+                        self.dirty_stack[jarg] = True
+                        self.stack_bindings[jarg] = stack_pos(i)
+                j += 1
+        return {}, sd
 
     def _compute_loop_consts(self, mp, jump):
         self.jump_reg_candidates = {}
@@ -157,13 +165,13 @@ class RegAlloc(object):
                     if free_regs:
                         self.jump_reg_candidates[jarg] = free_regs.pop()
                     if self.longevity[arg][1] <= self.longevity[jarg][0]:
-                        self.stack_bindings[jarg] = stack_pos(i)
-                        self.dirty_stack[jarg] = True
+                        if jarg not in self.stack_bindings:
+                            self.stack_bindings[jarg] = stack_pos(i)
+                            self.dirty_stack[jarg] = True
                 else:
                     # these are loop consts, but we need stack space anyway
                     self.stack_bindings[jarg] = stack_pos(i)
-                    self.dirty_stack[jarg] = True
-        return loop_consts
+        return loop_consts, len(mp.args)
 
     def _check_invariants(self):
         if not we_are_translated():
@@ -176,6 +184,11 @@ class RegAlloc(object):
             for reg in self.free_regs:
                 assert reg not in rev_regs
             assert len(rev_regs) + len(self.free_regs) == len(REGS)
+            for v, val in self.stack_bindings.items():
+                if (isinstance(v, Box) and (v not in self.reg_bindings) and
+                    self.longevity[v][1] > self.position and
+                    self.longevity[v][0] <= self.position):
+                    assert not v in self.dirty_stack
 
     def walk_operations(self, operations, loop_consts):
         # first pass - walk along the operations in order to find
@@ -303,6 +316,8 @@ class RegAlloc(object):
             if isinstance(arg, Box):
                 stacklocs.append(self.stack_loc(arg).position)
                 locs.append(self.loc(arg))
+        if not we_are_translated():
+            assert len(dict.fromkeys(stacklocs)) == len(stacklocs)
         guard_op.stacklocs = stacklocs
         guard_op.locs = locs
         return locs
@@ -457,7 +472,7 @@ class RegAlloc(object):
     def consider_guard_no_exception(self, op):
         locs = self._locs_from_liveboxes(op)
         self.eventually_free_vars(op.liveboxes)
-        return [PerformDiscard(op, locs)]
+        return []
 
     consider_guard_true = consider_guard
     consider_guard_false = consider_guard
@@ -658,8 +673,17 @@ class RegAlloc(object):
     consider_getfield_raw = consider_getfield_gc
     consider_getfield_raw = consider_getfield_gc
 
-    def consider_getitem(self, op):
+    def _consider_listop(self, op):
         return self._call(op, [self.loc(arg) for arg in op.args])
+    
+    consider_getitem     = _consider_listop
+    consider_len         = _consider_listop
+    consider_append      = _consider_listop
+    consider_pop         = _consider_listop
+    consider_setitem     = _consider_listop
+    consider_newlist     = _consider_listop
+    consider_insert      = _consider_listop
+    consider_listnonzero = _consider_listop
 
     def consider_zero_gc_pointers_inside(self, op):
         self.eventually_free_var(op.args[0])
@@ -717,13 +741,14 @@ class RegAlloc(object):
     def consider_jump(self, op):
         ops = []
         laterops = []
+        middle_ops = []
         for i in range(len(op.args)):
             arg = op.args[i]
+            mp = op.jump_target
+            res = mp.arglocs[i]
             if not (isinstance(arg, Const) or (arg in self.loop_consts
                                                and self.loop_consts[arg] == i)):
-                mp = op.jump_target
                 assert isinstance(mp, MergePoint)
-                res = mp.arglocs[i]
                 if arg in self.reg_bindings:
                     if not isinstance(res, REG):
                         ops.append(Store(arg, self.loc(arg), self.stack_bindings[arg]))
@@ -742,14 +767,20 @@ class RegAlloc(object):
                         else:
                             ops.append(Load(arg, self.loc(arg), res))
                 else:
-                    assert arg in self.stack_bindings
-                    if isinstance(res, REG):
-                        laterops.append(Load(arg, self.loc(arg), res))
+                    if arg not in self.stack_bindings:
+                        # we can load it correctly, because we don't care
+                        # any more about the previous var staying there
+                        assert not isinstance(res, REG)
+                        ops.append(Store(arg, self.loc(arg), res))
                     else:
-                        # otherwise it's correct
-                        if not we_are_translated():
-                            assert repr(self.stack_bindings[arg]) == repr(res)
-                            assert arg not in self.dirty_stack
+                        assert arg not in self.dirty_stack
+                        if isinstance(res, REG):
+                            laterops.append(Load(arg, self.loc(arg), res))
+                        else:
+                            if not we_are_translated():
+                                assert repr(res) == repr(self.loc(arg))
+            elif isinstance(arg, Const):
+                laterops.append(Load(arg, self.loc(arg), res))
         self.eventually_free_vars(op.args)
         return ops + laterops + [PerformDiscard(op, [])]
 

@@ -1,12 +1,12 @@
-from test.test_virtual import VirtualTests
-from codegen386.test.test_basic import Jit386Mixin
+from pypy.jit.metainterp.test.test_virtual import VirtualTests
+from pypy.jit.backend.x86.test.test_basic import Jit386Mixin
 
 class MyClass:
     pass
 
 class TestsVirtual(Jit386Mixin, VirtualTests):
     # for the individual tests see
-    # ====> ../../test/test_virtual.py
+    # ====> ../../../metainterp/test/test_virtual.py
     _new_op = 'new_with_vtable'
     
     @staticmethod

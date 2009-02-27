@@ -457,7 +457,11 @@ class Assembler386(object):
     genop_call__4 = _new_gen_call()
     gen_call = _new_gen_call()
     genop_call_ptr = gen_call
-    genop_getitem = _new_gen_call()
+    genop_getitem = _new_gen_call()    
+    genop_len = _new_gen_call()
+    genop_pop = _new_gen_call()
+    genop_newlist = _new_gen_call()
+    genop_listnonzero = _new_gen_call()
 
     def genop_call_void(self, op, arglocs):
         extra_on_stack = 0
@@ -476,7 +480,11 @@ class Assembler386(object):
             # XXX add extra_on_stack?
             x = arglocs[0]
         self.mc.CALL(x)
-        self.mc.ADD(esp, imm(WORD * extra_on_stack))        
+        self.mc.ADD(esp, imm(WORD * extra_on_stack))
+
+    genop_append = genop_call_void
+    genop_setitem = genop_call_void
+    genop_insert = genop_call_void
 
     def genop_call__1(self, op, arglocs, resloc):
         self.gen_call(op, arglocs, resloc)
