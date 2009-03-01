@@ -15,6 +15,7 @@ from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
 from pypy.jit.metainterp import codewriter, optimize
+from pypy.rlib.rarithmetic import intmask
 
 # ____________________________________________________________
 
@@ -894,6 +895,7 @@ class OOMetaInterp(object):
                     cls = ConstInt
                 else:
                     cls = BoxInt
+                value = intmask(value)
             box = cls(value)
             original_boxes.append(box)
             self._initialize_from_start(original_boxes, num_green_args-1,

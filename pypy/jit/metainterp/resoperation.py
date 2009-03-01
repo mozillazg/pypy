@@ -18,6 +18,7 @@ class ResOperation(object):
         assert isinstance(opnum, int)
         self.opnum = opnum
         self.args = list(args)
+        assert not isinstance(result, list)
         self.result = result
 
     def __repr__(self):
