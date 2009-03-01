@@ -6,8 +6,7 @@ from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         ConstAddr, ResOperation, MergePoint,
-                                         Jump, GuardOp)
+                                         ConstAddr, ResOperation)
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
     CancelInefficientLoop, VirtualInstanceSpecNode, FixedClassSpecNode,
     rebuild_boxes_from_guard_failure, AllocationStorage,
@@ -61,7 +60,7 @@ def equaloplists(oplist1, oplist2):
         assert len(op1.args) == len(op2.args)
         for x, y in zip(op1.args, op2.args):
             assert x == y or y == x     # for ANY object :-(
-        assert op1.results == op2.results
+        assert op1.result == op2.result
     assert len(oplist1) == len(oplist2)
     print '-'*57
     #finally:
@@ -88,16 +87,16 @@ class A:
     v2 = BoxInt(startnode.value-1)
     sum2 = BoxInt(0 + startnode.value)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [sizebox,
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        Jump('jump', [sum2, n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('jump', [sum2, n2], None),
         ]
 
 def test_A_find_nodes():
@@ -128,10 +127,10 @@ def test_A_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [A.sum, A.v], []),
-        ResOperation('int_sub', [A.v, ConstInt(1)], [A.v2]),
-        ResOperation('int_add', [A.sum, A.v], [A.sum2]),
-        Jump('jump', [A.sum2, A.v2], []),
+        ResOperation('merge_point', [A.sum, A.v], None),
+        ResOperation('int_sub', [A.v, ConstInt(1)], A.v2),
+        ResOperation('int_add', [A.sum, A.v], A.sum2),
+        ResOperation('jump', [A.sum2, A.v2], None),
         ])
 
 # ____________________________________________________________
@@ -139,18 +138,18 @@ def test_A_optimize_loop():
 class B:
     locals().update(A.__dict__)    # :-)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('escape', [n1], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
+                                     sizebox], None),
+        ResOperation('escape', [n1], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        ResOperation('some_escaping_operation', [n2], []),    # <== escaping
-        Jump('jump', [sum2, n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('some_escaping_operation', [n2], None),    # <== escaping
+        ResOperation('jump', [sum2, n2], None),
         ]
 
 def test_B_find_nodes():
@@ -177,18 +176,18 @@ def test_B_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [B.sum, B.n1], []),
+        ResOperation('merge_point', [B.sum, B.n1], None),
         # guard_class is gone
-        ResOperation('escape', [B.n1], []),
-        ResOperation('getfield_gc', [B.n1, ConstInt(B.ofs_value)], [B.v]),
-        ResOperation('int_sub', [B.v, ConstInt(1)], [B.v2]),
-        ResOperation('int_add', [B.sum, B.v], [B.sum2]),
+        ResOperation('escape', [B.n1], None),
+        ResOperation('getfield_gc', [B.n1, ConstInt(B.ofs_value)], B.v),
+        ResOperation('int_sub', [B.v, ConstInt(1)], B.v2),
+        ResOperation('int_add', [B.sum, B.v], B.sum2),
         ResOperation('new_with_vtable', [ConstInt(B.size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [B.n2]),
+                                         ConstAddr(node_vtable, cpu)], B.n2),
         ResOperation('setfield_gc', [B.n2, ConstInt(B.ofs_value), B.v2],
-                                       []),
-        ResOperation('some_escaping_operation', [B.n2], []),    # <== escaping
-        Jump('jump', [B.sum2, B.n2], []),
+                                       None),
+        ResOperation('some_escaping_operation', [B.n2], None),   # <== escaping
+        ResOperation('jump', [B.sum2, B.n2], None),
         ])
 
 # ____________________________________________________________
@@ -196,18 +195,18 @@ def test_B_optimize_loop():
 class C:
     locals().update(A.__dict__)    # :-)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('some_escaping_operation', [n1], []),    # <== escaping
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('some_escaping_operation', [n1], []),    # <== escaping
+                                     sizebox], None),
+        ResOperation('some_escaping_operation', [n1], None),    # <== escaping
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('some_escaping_operation', [n1], None),    # <== escaping
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        Jump('jump', [sum2, n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('jump', [sum2, n2], None),
         ]
 
 def test_C_find_nodes():
@@ -234,18 +233,18 @@ def test_C_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [C.sum, C.n1], []),
+        ResOperation('merge_point', [C.sum, C.n1], None),
         # guard_class is gone
-        ResOperation('some_escaping_operation', [C.n1], []),    # <== escaping
-        ResOperation('getfield_gc', [C.n1, ConstInt(C.ofs_value)], [C.v]),
-        ResOperation('int_sub', [C.v, ConstInt(1)], [C.v2]),
-        ResOperation('int_add', [C.sum, C.v], [C.sum2]),
-        ResOperation('some_escaping_operation', [C.n1], []),    # <== escaping
+        ResOperation('some_escaping_operation', [C.n1], None),   # <== escaping
+        ResOperation('getfield_gc', [C.n1, ConstInt(C.ofs_value)], C.v),
+        ResOperation('int_sub', [C.v, ConstInt(1)], C.v2),
+        ResOperation('int_add', [C.sum, C.v], C.sum2),
+        ResOperation('some_escaping_operation', [C.n1], None),   # <== escaping
         ResOperation('new_with_vtable', [ConstInt(C.size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [C.n2]),
+                                         ConstAddr(node_vtable, cpu)], C.n2),
         ResOperation('setfield_gc', [C.n2, ConstInt(C.ofs_value), C.v2],
-                                       []),
-        Jump('jump', [C.sum2, C.n2], []),
+                                       None),
+        ResOperation('jump', [C.sum2, C.n2], None),
         ])
 
 # ____________________________________________________________
@@ -253,17 +252,17 @@ def test_C_optimize_loop():
 class D:
     locals().update(A.__dict__)    # :-)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node2_vtable, cpu),
-                                     sizebox], []),
+                                     sizebox], None),
         # the only difference is different vtable  ^^^^^^^^^^^^
-        ResOperation('getfield', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
+        ResOperation('getfield', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        Jump('jump', [sum2, n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('jump', [sum2, n2], None),
         ]
 
 def test_D_intersect_input_and_output():
@@ -276,17 +275,17 @@ def test_D_intersect_input_and_output():
 class E:
     locals().update(A.__dict__)    # :-)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        ResOperation('guard_true', [v2], []),
-        Jump('jump', [sum2, n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('guard_true', [v2], None),
+        ResOperation('jump', [sum2, n2], None),
         ]
     ops[-2].liveboxes = [sum2, n2] 
         
@@ -296,12 +295,12 @@ def test_E_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [E.sum, E.v], []),
+        ResOperation('merge_point', [E.sum, E.v], None),
         # guard_class is gone
-        ResOperation('int_sub', [E.v, ConstInt(1)], [E.v2]),
-        ResOperation('int_add', [E.sum, E.v], [E.sum2]),
-        ResOperation('guard_true', [E.v2], []),
-        Jump('jump', [E.sum2, E.v2], []),
+        ResOperation('int_sub', [E.v, ConstInt(1)], E.v2),
+        ResOperation('int_add', [E.sum, E.v], E.sum2),
+        ResOperation('guard_true', [E.v2], None),
+        ResOperation('jump', [E.sum2, E.v2], None),
         ])
     guard_op = spec.loop.operations[-2]
     assert guard_op.opname == 'guard_true'
@@ -318,9 +317,9 @@ def test_E_rebuild_after_failure():
         def execute_and_record(self, opname, args, res_type, pure):
             self.ops.append((opname, args))
             if res_type != 'void':
-                return ['allocated']
+                return 'allocated'
             else:
-                return []
+                return None
 
     class FakeMetaInterp(object):
         def __init__(self):
@@ -357,22 +356,22 @@ class F:
     vbool2 = BoxInt(0)
     vbool3 = BoxInt(1)
     ops = [
-        MergePoint('merge_point', [sum, n1, n3], []),
+        ResOperation('merge_point', [sum, n1, n3], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        ResOperation('ooisnot', [n2, n3], [vbool1]),
-        GuardOp('guard_true', [vbool1], []),
-        ResOperation('ooisnull', [n2], [vbool2]),
-        GuardOp('guard_false', [vbool2], []),
-        ResOperation('oononnull', [n3], [vbool3]),
-        GuardOp('guard_true', [vbool3], []),        
-        Jump('jump', [sum2, n2, n3], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('ooisnot', [n2, n3], vbool1),
+        ResOperation('guard_true', [vbool1], None),
+        ResOperation('ooisnull', [n2], vbool2),
+        ResOperation('guard_false', [vbool2], None),
+        ResOperation('oononnull', [n3], vbool3),
+        ResOperation('guard_true', [vbool3], None),        
+        ResOperation('jump', [sum2, n2, n3], None),
         ]
     liveboxes = [sum2, n2, n3]
     ops[-2].liveboxes = liveboxes[:]
@@ -392,12 +391,12 @@ def test_F_optimize_loop():
     assert spec.nodes[F.n3].escaped
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-            MergePoint('merge_point', [F.sum, F.v, F.n3], []),
-            ResOperation('int_sub', [F.v, ConstInt(1)], [F.v2]),
-            ResOperation('int_add', [F.sum, F.v], [F.sum2]),
-            ResOperation('oononnull', [F.n3], [F.vbool3]),
-            GuardOp('guard_true', [F.vbool3], []),        
-            Jump('jump', [F.sum2, F.v2, F.n3], []),
+            ResOperation('merge_point', [F.sum, F.v, F.n3], None),
+            ResOperation('int_sub', [F.v, ConstInt(1)], F.v2),
+            ResOperation('int_add', [F.sum, F.v], F.sum2),
+            ResOperation('oononnull', [F.n3], F.vbool3),
+            ResOperation('guard_true', [F.vbool3], None),        
+            ResOperation('jump', [F.sum2, F.v2, F.n3], None),
         ])
 
 class F2:
@@ -410,11 +409,11 @@ class F2:
     n4 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node4))
     vbool1 = BoxInt(0)
     ops = [
-        MergePoint('merge_point', [n2, n3], []),
-        ResOperation('oois', [n2, n3], [vbool1]),
-        GuardOp('guard_true', [vbool1], []),
-        ResOperation('external', [], [n4]),
-        Jump('jump', [n2, n4], []),
+        ResOperation('merge_point', [n2, n3], None),
+        ResOperation('oois', [n2, n3], vbool1),
+        ResOperation('guard_true', [vbool1], None),
+        ResOperation('external', [], n4),
+        ResOperation('jump', [n2, n4], None),
         ]
     ops[2].liveboxes = [n2]
 
@@ -432,21 +431,21 @@ class G:
     v3 = BoxInt(123)
     v4 = BoxInt(124)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
+                                         ConstAddr(node_vtable, cpu)], n2),
         ResOperation('setfield_gc', [n2, ConstInt(ofs_value),
-                                            ConstInt(123)], []),
-        ResOperation('getfield_gc', [n2, ConstInt(ofs_value)], [v3]),
-        ResOperation('int_add', [v3, ConstInt(1)], [v4]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v4], []),
-        ResOperation('guard_true', [v2], []),
-        Jump('jump', [sum2, n2], []),
+                                            ConstInt(123)], None),
+        ResOperation('getfield_gc', [n2, ConstInt(ofs_value)], v3),
+        ResOperation('int_add', [v3, ConstInt(1)], v4),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v4], None),
+        ResOperation('guard_true', [v2], None),
+        ResOperation('jump', [sum2, n2], None),
         ]
     ops[-2].liveboxes = [sum2, n2] 
 
@@ -456,12 +455,12 @@ def test_G_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [G.sum, G.v], []),
+        ResOperation('merge_point', [G.sum, G.v], None),
         # guard_class is gone
-        ResOperation('int_sub', [G.v, ConstInt(1)], [G.v2]),
-        ResOperation('int_add', [G.sum, G.v], [G.sum2]),
-        ResOperation('guard_true', [G.v2], []),
-        Jump('jump', [G.sum2, ConstInt(124)], []),
+        ResOperation('int_sub', [G.v, ConstInt(1)], G.v2),
+        ResOperation('int_add', [G.sum, G.v], G.sum2),
+        ResOperation('guard_true', [G.v2], None),
+        ResOperation('jump', [G.sum2, ConstInt(124)], None),
         ])
     guard_op = spec.loop.operations[-2]
     assert guard_op.opname == 'guard_true'
@@ -486,15 +485,15 @@ class H:
     v = BoxInt(containernode.next.value)
     v2 = BoxInt(nextnode.value)
     ops = [
-        MergePoint('merge_point', [n0], []),
-        ResOperation('getfield_gc', [n0, ConstInt(ofs_next)], [n1]),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
+        ResOperation('merge_point', [n0], None),
+        ResOperation('getfield_gc', [n0, ConstInt(ofs_next)], n1),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], []),
-        ResOperation('setfield_gc', [n0, ConstInt(ofs_next), n2], []),
-        Jump('jump', [n0], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
+        ResOperation('setfield_gc', [n0, ConstInt(ofs_next), n2], None),
+        ResOperation('jump', [n0], None),
         ]
 
 def test_H_intersect_input_and_output():
@@ -518,11 +517,11 @@ class I:
     nextnode.value = 19
     n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
     ops = [
-        MergePoint('merge_point', [n0], []),
+        ResOperation('merge_point', [n0], None),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_next), n0], []),
-        Jump('jump', [n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_next), n0], None),
+        ResOperation('jump', [n2], None),
         ]
 
 def test_I_intersect_input_and_output():
@@ -531,7 +530,6 @@ def test_I_intersect_input_and_output():
     spec.intersect_input_and_output()
     assert spec.nodes[I.n0].escaped
     assert spec.nodes[I.n2].escaped
-
 
 # ____________________________________________________________
 
@@ -547,12 +545,12 @@ class J:
     n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
     n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
     ops = [
-        MergePoint('merge_point', [n0], []),
-        ResOperation('getfield_gc', [n0, ConstInt(ofs_next)], [n1]),
+        ResOperation('merge_point', [n0], None),
+        ResOperation('getfield_gc', [n0, ConstInt(ofs_next)], n1),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
-                                         ConstAddr(node_vtable, cpu)], [n2]),
-        ResOperation('setfield_gc', [n2, ConstInt(ofs_next), n1], []),
-        Jump('jump', [n2], []),
+                                         ConstAddr(node_vtable, cpu)], n2),
+        ResOperation('setfield_gc', [n2, ConstInt(ofs_next), n1], None),
+        ResOperation('jump', [n2], None),
         ]
 
 def test_J_intersect_input_and_output():
@@ -570,16 +568,16 @@ class K0:
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
-        ResOperation('int_add', [sum2, v3], [sum3]),
-        ResOperation('escape', [n1], []),
-        Jump('jump', [sum3, n1], []),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v3),
+        ResOperation('int_add', [sum2, v3], sum3),
+        ResOperation('escape', [n1], None),
+        ResOperation('jump', [sum3, n1], None),
         ]
 
 def test_K0_optimize_loop():
@@ -587,14 +585,15 @@ def test_K0_optimize_loop():
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
+    v4 = spec.loop.operations[-1].args[-1]
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [K0.sum, K0.n1, K0.v], []),
-        ResOperation('int_sub', [K0.v, ConstInt(1)], [K0.v2]),
-        ResOperation('int_add', [K0.sum, K0.v], [K0.sum2]),
-        ResOperation('int_add', [K0.sum2, K0.v], [K0.sum3]),
-        ResOperation('escape', [K0.n1], []),
-        ResOperation('getfield_gc', [K0.n1, ConstInt(K0.ofs_value)], [ANY]),
-        Jump('jump', [K0.sum3, K0.n1, ANY], []),
+        ResOperation('merge_point', [K0.sum, K0.n1, K0.v], None),
+        ResOperation('int_sub', [K0.v, ConstInt(1)], K0.v2),
+        ResOperation('int_add', [K0.sum, K0.v], K0.sum2),
+        ResOperation('int_add', [K0.sum2, K0.v], K0.sum3),
+        ResOperation('escape', [K0.n1], None),
+        ResOperation('getfield_gc', [K0.n1, ConstInt(K0.ofs_value)], v4),
+        ResOperation('jump', [K0.sum3, K0.n1, v4], None),
     ])
 
 
@@ -603,17 +602,17 @@ class K1:
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('setfield_gc', [n1, ConstInt(ofs_value), sum], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
-        ResOperation('int_add', [sum2, v3], [sum3]),
-        ResOperation('escape', [n1], []),
-        Jump('jump', [sum3, n1], []),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('setfield_gc', [n1, ConstInt(ofs_value), sum], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v3),
+        ResOperation('int_add', [sum2, v3], sum3),
+        ResOperation('escape', [n1], None),
+        ResOperation('jump', [sum3, n1], None),
         ]
 
 def test_K1_optimize_loop():
@@ -621,16 +620,17 @@ def test_K1_optimize_loop():
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
+    v4 = spec.loop.operations[-1].args[-1]
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [K1.sum, K1.n1, K1.v], []),
-        ResOperation('int_sub', [K1.v, ConstInt(1)], [K1.v2]),
-        ResOperation('int_add', [K1.sum, K1.v], [K1.sum2]),
-        ResOperation('int_add', [K1.sum2, K1.sum], [K1.sum3]),
+        ResOperation('merge_point', [K1.sum, K1.n1, K1.v], None),
+        ResOperation('int_sub', [K1.v, ConstInt(1)], K1.v2),
+        ResOperation('int_add', [K1.sum, K1.v], K1.sum2),
+        ResOperation('int_add', [K1.sum2, K1.sum], K1.sum3),
         ResOperation('setfield_gc', [K1.n1, ConstInt(K1.ofs_value), K1.sum],
-                     []),
-        ResOperation('escape', [K1.n1], []),
-        ResOperation('getfield_gc', [K1.n1, ConstInt(K1.ofs_value)], [ANY]),
-        Jump('jump', [K1.sum3, K1.n1, ANY], []),
+                     None),
+        ResOperation('escape', [K1.n1], None),
+        ResOperation('getfield_gc', [K1.n1, ConstInt(K1.ofs_value)], v4),
+        ResOperation('jump', [K1.sum3, K1.n1, v4], None),
     ])
 
 
@@ -639,15 +639,15 @@ class K:
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
-        ResOperation('int_add', [sum2, v3], [sum3]),
-        Jump('jump', [sum3, n1], []),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v3),
+        ResOperation('int_add', [sum2, v3], sum3),
+        ResOperation('jump', [sum3, n1], None),
         ]
 
 def test_K_optimize_loop():
@@ -656,11 +656,11 @@ def test_K_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [K.sum, K.n1, K.v], []),
-        ResOperation('int_sub', [K.v, ConstInt(1)], [K.v2]),
-        ResOperation('int_add', [K.sum, K.v], [K.sum2]),
-        ResOperation('int_add', [K.sum2, K.v], [K.sum3]),
-        Jump('jump', [K.sum3, K.n1, K.v], []),
+        ResOperation('merge_point', [K.sum, K.n1, K.v], None),
+        ResOperation('int_sub', [K.v, ConstInt(1)], K.v2),
+        ResOperation('int_add', [K.sum, K.v], K.sum2),
+        ResOperation('int_add', [K.sum2, K.v], K.sum3),
+        ResOperation('jump', [K.sum3, K.n1, K.v], None),
     ])
 
 # ____________________________________________________________
@@ -670,16 +670,16 @@ class L:
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('escape', [n1], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v3]),
-        ResOperation('int_add', [sum2, v3], [sum3]),
-        Jump('jump', [sum3, n1], []),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('escape', [n1], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v3),
+        ResOperation('int_add', [sum2, v3], sum3),
+        ResOperation('jump', [sum3, n1], None),
         ]
 
 def test_L_optimize_loop():
@@ -688,13 +688,13 @@ def test_L_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [L.sum, L.n1, L.v], []),
-        ResOperation('int_sub', [L.v, ConstInt(1)], [L.v2]),
-        ResOperation('int_add', [L.sum, L.v], [L.sum2]),
-        ResOperation('escape', [L.n1], []),
-        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], [L.v3]),
-        ResOperation('int_add', [L.sum2, L.v3], [L.sum3]),
-        Jump('jump', [L.sum3, L.n1, L.v3], []),
+        ResOperation('merge_point', [L.sum, L.n1, L.v], None),
+        ResOperation('int_sub', [L.v, ConstInt(1)], L.v2),
+        ResOperation('int_add', [L.sum, L.v], L.sum2),
+        ResOperation('escape', [L.n1], None),
+        ResOperation('getfield_gc', [L.n1, ConstInt(L.ofs_value)], L.v3),
+        ResOperation('int_add', [L.sum2, L.v3], L.sum3),
+        ResOperation('jump', [L.sum3, L.n1, L.v3], None),
     ])
 
 # ____________________________________________________________
@@ -704,14 +704,14 @@ class M:
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('escape', [n1], []),
-        Jump('jump', [sum2, n1], []),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('escape', [n1], None),
+        ResOperation('jump', [sum2, n1], None),
         ]
 
 def test_M_optimize_loop():
@@ -719,15 +719,15 @@ def test_M_optimize_loop():
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
+    v4 = spec.loop.operations[-1].args[-1]
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [M.sum, M.n1, M.v], []),
-        ResOperation('int_sub', [M.v, ConstInt(1)], [M.v2]),
-        ResOperation('int_add', [M.sum, M.v], [M.sum2]),
-        ResOperation('escape', [M.n1], []),
-        ResOperation('getfield_gc', [M.n1, ConstInt(M.ofs_value)], [ANY]),
-        Jump('jump', [M.sum2, M.n1, ANY], []),
+        ResOperation('merge_point', [M.sum, M.n1, M.v], None),
+        ResOperation('int_sub', [M.v, ConstInt(1)], M.v2),
+        ResOperation('int_add', [M.sum, M.v], M.sum2),
+        ResOperation('escape', [M.n1], None),
+        ResOperation('getfield_gc', [M.n1, ConstInt(M.ofs_value)], v4),
+        ResOperation('jump', [M.sum2, M.n1, v4], None),
     ])
-
 
 # ____________________________________________________________
 
@@ -736,14 +736,14 @@ class N:
     sum3 = BoxInt(3)
     v3 = BoxInt(4)
     ops = [
-        MergePoint('merge_point', [sum, n1], []),
+        ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], [v]),
-        ResOperation('int_sub', [v, ConstInt(1)], [v2]),
-        ResOperation('int_add', [sum, v], [sum2]),
-        ResOperation('escape', [n1], []),
-        Jump('jump', [sum2, n1], []),
+                                     sizebox], None),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
+        ResOperation('int_sub', [v, ConstInt(1)], v2),
+        ResOperation('int_add', [sum, v], sum2),
+        ResOperation('escape', [n1], None),
+        ResOperation('jump', [sum2, n1], None),
         ]
 
 def test_N_optimize_loop():
@@ -751,13 +751,14 @@ def test_N_optimize_loop():
     spec.find_nodes()
     spec.intersect_input_and_output()
     spec.optimize_loop()
+    v4 = spec.loop.operations[-1].args[-1]
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [N.sum, N.n1, N.v], []),
-        ResOperation('int_sub', [N.v, ConstInt(1)], [N.v2]),
-        ResOperation('int_add', [N.sum, N.v], [N.sum2]),
-        ResOperation('escape', [N.n1], []),
-        ResOperation('getfield_gc', [N.n1, ConstInt(N.ofs_value)], [ANY]),
-        Jump('jump', [N.sum2, N.n1, ANY], []),
+        ResOperation('merge_point', [N.sum, N.n1, N.v], None),
+        ResOperation('int_sub', [N.v, ConstInt(1)], N.v2),
+        ResOperation('int_add', [N.sum, N.v], N.sum2),
+        ResOperation('escape', [N.n1], None),
+        ResOperation('getfield_gc', [N.n1, ConstInt(N.ofs_value)], v4),
+        ResOperation('jump', [N.sum2, N.n1, v4], None),
     ])
 
 # ____________________________________________________________
@@ -765,13 +766,13 @@ def test_N_optimize_loop():
 class O1:
     locals().update(A.__dict__)    # :-)
     ops = [
-        MergePoint('merge_point', [], []),
-        ResOperation('produce_somehow_n1', [], [n1]),
+        ResOperation('merge_point', [], None),
+        ResOperation('produce_somehow_n1', [], n1),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
+                                     sizebox], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        Jump('jump', [], []),
+                                     sizebox], None),
+        ResOperation('jump', [], None),
         ]
     ops[-3].liveboxes = []
     ops[-2].liveboxes = []
@@ -782,12 +783,12 @@ def test_O1_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [], []),
-        ResOperation('produce_somehow_n1', [], [O1.n1]),
+        ResOperation('merge_point', [], None),
+        ResOperation('produce_somehow_n1', [], O1.n1),
         # only the first guard_class is left
         ResOperation('guard_class', [O1.n1, ConstAddr(node_vtable, cpu),
-                                     O1.sizebox], []),
-        Jump('jump', [], []),
+                                     O1.sizebox], None),
+        ResOperation('jump', [], None),
     ])
 
 # ____________________________________________________________
@@ -796,13 +797,13 @@ class O2:
     locals().update(A.__dict__)    # :-)
     v1 = BoxInt(1)
     ops = [
-        MergePoint('merge_point', [], []),
-        ResOperation('produce_somehow_n1', [], [n1]),
+        ResOperation('merge_point', [], None),
+        ResOperation('produce_somehow_n1', [], n1),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
-        ResOperation('oononnull', [n1], [v1]),
-        ResOperation('guard_true', [v1], []),
-        Jump('jump', [], []),
+                                     sizebox], None),
+        ResOperation('oononnull', [n1], v1),
+        ResOperation('guard_true', [v1], None),
+        ResOperation('jump', [], None),
         ]
     ops[-4].liveboxes = []
     ops[-2].liveboxes = []
@@ -813,13 +814,13 @@ def test_O2_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [], []),
-        ResOperation('produce_somehow_n1', [], [O2.n1]),
+        ResOperation('merge_point', [], None),
+        ResOperation('produce_somehow_n1', [], O2.n1),
         ResOperation('guard_class', [O2.n1, ConstAddr(node_vtable, cpu),
-                                     O2.sizebox], []),
+                                     O2.sizebox], None),
         # the oononnull and guard_true are gone, because we know they
         # return True -- as there was already a guard_class done on n1
-        Jump('jump', [], []),
+        ResOperation('jump', [], None),
     ])
 
 # ____________________________________________________________
@@ -828,14 +829,14 @@ class O3:
     locals().update(A.__dict__)    # :-)
     v1 = BoxInt(1)
     ops = [
-        MergePoint('merge_point', [], []),
-        ResOperation('produce_somehow_n1', [], [n1]),
+        ResOperation('merge_point', [], None),
+        ResOperation('produce_somehow_n1', [], n1),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
-                                     sizebox], []),
+                                     sizebox], None),
         ResOperation('oois', [n1, ConstPtr(lltype.nullptr(llmemory.GCREF.TO))],
-                             [v1]),
-        ResOperation('guard_false', [v1], []),
-        Jump('jump', [], []),
+                             v1),
+        ResOperation('guard_false', [v1], None),
+        ResOperation('jump', [], None),
         ]
     ops[-4].liveboxes = []
     ops[-2].liveboxes = []
@@ -846,11 +847,11 @@ def test_O3_optimize_loop():
     spec.intersect_input_and_output()
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
-        MergePoint('merge_point', [], []),
-        ResOperation('produce_somehow_n1', [], [O3.n1]),
+        ResOperation('merge_point', [], None),
+        ResOperation('produce_somehow_n1', [], O3.n1),
         ResOperation('guard_class', [O3.n1, ConstAddr(node_vtable, cpu),
-                                     O3.sizebox], []),
+                                     O3.sizebox], None),
         # the oois and guard_false are gone, because we know they
         # return False -- as there was already a guard_class done on n1
-        Jump('jump', [], []),
+        ResOperation('jump', [], None),
     ])

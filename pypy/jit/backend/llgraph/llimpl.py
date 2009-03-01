@@ -134,17 +134,16 @@ class Operation(object):
     def __init__(self, opname):
         self.opname = opname
         self.args = []
-        self.results = []
+        self.result = None
         self.livevars = []   # for guards only
 
     def __repr__(self):
-        results = self.results
-        if len(results) == 1:
-            sres = repr0(results[0])
+        if self.result is not None:
+            sres = repr0(self.result) + ' = '
         else:
-            sres = repr0(results)
-        return '{%s = %s(%s)}' % (sres, self.opname,
-                                  ', '.join(map(repr0, self.args)))
+            sres = ''
+        return '{%s%s(%s)}' % (sres, self.opname,
+                               ', '.join(map(repr0, self.args)))
 
 def repr0(x):
     if isinstance(x, list):
@@ -270,7 +269,7 @@ def compile_add_int_result(loop):
     v = Variable()
     v.concretetype = lltype.Signed
     op = loop.operations[-1]
-    op.results.append(v)
+    op.result = v
     r = len(_variables)
     _variables.append(v)
     return r
@@ -280,7 +279,7 @@ def compile_add_ptr_result(loop):
     v = Variable()
     v.concretetype = llmemory.GCREF
     op = loop.operations[-1]
-    op.results.append(v)
+    op.result = v
     r = len(_variables)
     _variables.append(v)
     return r
@@ -361,20 +360,19 @@ class Frame(object):
                 _stats.exec_jumps += 1
                 continue
             try:
-                results = self.execute_operation(op.opname, args, verbose)
+                result = self.execute_operation(op.opname, args, verbose)
                 #verbose = self.verbose
-                assert len(results) == len(op.results)
-                assert len(op.results) <= 1
-                if len(op.results) > 0:
-                    RESTYPE = op.results[0].concretetype
+                assert (result is None) == (op.result is None)
+                if op.result is not None:
+                    RESTYPE = op.result.concretetype
                     if RESTYPE is lltype.Signed:
-                        x = self.as_int(results[0])
+                        x = self.as_int(result)
                     elif RESTYPE is llmemory.GCREF:
-                        x = self.as_ptr(results[0])
+                        x = self.as_ptr(result)
                     else:
-                        raise Exception("op.results[0].concretetype is %r"
+                        raise Exception("op.result.concretetype is %r"
                                         % (RESTYPE,))
-                    self.env[op.results[0]] = x
+                    self.env[op.result] = x
             except GuardFailed:
                 assert self.llframe.last_exception_handled
                 if hasattr(op, 'jump_target'):
@@ -428,12 +426,7 @@ class Frame(object):
             # fish the types
             log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
                                                       self.memocast), resdata))
-        if res is None:
-            return []
-        elif isinstance(res, list):
-            return res
-        else:
-            return [res]
+        return res
 
     def as_int(self, x):
         TP = lltype.typeOf(x)

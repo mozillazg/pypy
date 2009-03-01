@@ -277,69 +277,50 @@ NULLBOX = BoxPtr()
 
 # ____________________________________________________________
 
-# The central ResOperation class, representing one operation.
-# It's a bit unoptimized; it could be improved, but on the other hand it
-# is unclear how much would really be gained by doing this as they are
-# mostly temporaries.
-
 class ResOperation(object):
-    jump_target = None
+    """The central ResOperation class, representing one operation."""
 
-    def __init__(self, opname, args, results):
-        self.opname = opname
-        self.args = list(args)
-        self.results = list(results)
-
-    def __repr__(self):
-        results = self.results
-        if len(results) == 1:
-            sres = repr(results[0])
-        else:
-            sres = repr(results)
-        return '%s = %s(%s)' % (sres, self.opname,
-                                ', '.join(map(repr, self.args)))
-
-    def clone(self):
-        return ResOperation(self.opname, self.args, self.results)
-
-
-class MergePoint(ResOperation):
+    # for 'merge_point'
     specnodes = None
     key = None
 
-    def __new__(cls, opname, args, results):
-        assert len(dict.fromkeys(args)) == len(args)
-        return ResOperation.__new__(cls, opname, args, results)
+    # for 'jump' and 'guard_*'
+    jump_target = None
 
-    def clone(self):
-        mp = MergePoint(self.opname, self.args, self.results)
-        mp.specnodes = self.specnodes
-        mp.key = self.key
-        return mp
-
-
-class Jump(ResOperation):
-    target_mp = None
-
-    def clone(self):
-        return Jump(self.opname, self.args, self.results)
-
-
-class GuardOp(ResOperation):
-    key = None
+    # for 'guard_*'
     counter = 0
     storage_info = None
+    liveboxes = None
+
+    def __init__(self, opname, args, result):
+        if not we_are_translated():
+            assert result is None or isinstance(result, Box)
+            if opname == 'merge_point':
+                assert len(dict.fromkeys(args)) == len(args)
+        self.opname = opname
+        self.args = list(args)
+        self.result = result
+
+    def __repr__(self):
+        if self.result is not None:
+            sres = repr(self.result) + ' = '
+        else:
+            sres = ''
+        result = '%s%s(%s)' % (sres, self.opname,
+                               ', '.join(map(repr, self.args)))
+        if self.liveboxes is not None:
+            result = '%s [%s]' % (result, ', '.join(map(repr, self.liveboxes)))
+        return result
 
     def clone(self):
-        op = GuardOp(self.opname, self.args, self.results)
+        op = ResOperation(self.opname, self.args, self.result)
+        op.specnodes = self.specnodes
         op.key = self.key
         return op
 
-    def __repr__(self):
-        result = ResOperation.__repr__(self)
-        if hasattr(self, 'liveboxes'):
-            result = '%s [%s]' % (result, ', '.join(map(repr, self.liveboxes)))
-        return result
+# compatibility
+MergePoint = ResOperation
+Jump = ResOperation
 
 # ____________________________________________________________
 
@@ -394,15 +375,13 @@ class Graph(object):
                 elif isinstance(box, Const):
                     assert op.opname not in ('merge_point', 'catch'), (
                         "no Constant arguments allowed in: %s" % (op,))
-            for box in op.results:
+            box = op.result
+            if box is not None:
+                assert isinstance(box, Box)
                 assert box not in seen
                 seen[box] = True
         assert operations[-1].opname == 'jump'
         assert operations[-1].jump_target.opname == 'merge_point'
-
-    def get_final_target_mp(self):
-        op = self.operations[-1]
-        return op.jump_target
 
     def __repr__(self):
         return '<%s>' % (self.name,)
@@ -432,28 +411,18 @@ class RunningMatcher(Matcher):
         # really run this operation
         resbox = self.cpu.execute_operation(step, argboxes, result_type)
         # collect the result(s)
-        if resbox is None:
-            resboxes = []
-        elif canfold:
-            resboxes = [resbox.constbox()]
+        if canfold:
+            resbox = resbox.constbox()
         else:
-            resboxes = [resbox]
-        if not canfold:
-            self.record(step, argboxes, resboxes)
-        return resboxes
+            self.record(step, argboxes, resbox)
+        return resbox
     execute_and_record._annspecialcase_ = 'specialize:arg(4)'
 
-    def record(self, opname, argboxes, resboxes, opcls=ResOperation):
-        # xxx the indirection from record to _record is to work
-        # around a limitation of the annotator (normalizecalls.py)
-        return self._record(opname, argboxes, resboxes, opcls)
-    record._annspecialcase_ = 'specialize:arg(4)'
-
-    def _record(self, opname, argboxes, resboxes, opcls):
-        op = opcls(opname, argboxes, resboxes)
+    def record(self, opname, argboxes, resbox):
+        op = ResOperation(opname, argboxes, resbox)
         self.operations.append(op)
         return op
-    _record._annspecialcase_ = 'specialize:arg(4)'
+    record._annspecialcase_ = 'specialize:arg(4)'
 
     def generate_anything_since(self, old_index):
         return len(self.operations) > old_index
@@ -462,9 +431,9 @@ class History(RunningMatcher):
     pass
 
 class BlackHole(RunningMatcher):
-    def _record(self, step, argboxes, resboxes, opcls):
+    def record(self, step, argboxes, resbox):
         return None
-    _record._annspecialcase_ = 'specialize:arg(4)'
+    record._annspecialcase_ = 'specialize:arg(4)'
 
     def generate_anything_since(self, old_index):
         return True

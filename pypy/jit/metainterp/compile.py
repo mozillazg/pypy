@@ -4,7 +4,7 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.conftest import option
 
-from pypy.jit.metainterp.history import Graph, Jump, log, Box
+from pypy.jit.metainterp.history import Graph, ResOperation, log, Box
 from pypy.jit.metainterp import optimize
 
 
@@ -136,7 +136,7 @@ def compile_fresh_loop(metainterp, loop, old_loops, endliveboxes):
 
 def close_loop(loop, targetmp, endliveboxes):
     assert targetmp.opname == 'merge_point'
-    op = Jump('jump', endliveboxes, [])
+    op = ResOperation('jump', endliveboxes, None)
     op.jump_target = targetmp
     loop.operations.append(op)
 
@@ -160,7 +160,7 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     assert guard_op.opname.startswith('guard_')
     #
     operations = bridge.operations = history.operations
-    op = Jump('jump', endliveboxes, [])
+    op = ResOperation('jump', endliveboxes, None)
     operations.append(op)
     #
     old_loop = optimize.optimize_bridge(metainterp.options, old_loops, bridge)

@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, BoxInt,
-                                         MergePoint, ResOperation, Jump)
+                                         ResOperation)
 from pypy.jit.metainterp.history import Options
 from pypy.jit.metainterp.heaptracker import (always_pure_operations,
                                              operations_without_side_effects,
@@ -304,7 +304,7 @@ class PerfectSpecializer(object):
                 opname == 'jump'):
                 continue
             elif opname == 'new_with_vtable':
-                box = op.results[0]
+                box = op.result
                 instnode = InstanceNode(box, escaped=False)
                 instnode.cls = InstanceNode(op.args[1], const=True)
                 self.nodes[box] = instnode
@@ -349,7 +349,7 @@ class PerfectSpecializer(object):
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
                 field = fieldbox.getint()
-                box = op.results[0]
+                box = op.result
                 self.find_nodes_getfield(instnode, field, box)
                 continue
 ##            elif opname == 'getitem':
@@ -452,10 +452,11 @@ class PerfectSpecializer(object):
                     if not self.getnode(arg).const:
                         break
                 else:
-                    for box in op.results:
-                        self.nodes[box] = InstanceNode(box.constbox(),
-                                                       escaped=True,
-                                                       const=True)
+                    box = op.result
+                    assert box is not None
+                    self.nodes[box] = InstanceNode(box.constbox(),
+                                                   escaped=True,
+                                                   const=True)
                     continue
             elif opname not in operations_without_side_effects:
                 # default case
@@ -463,7 +464,8 @@ class PerfectSpecializer(object):
                 for box in op.args:
                     if isinstance(box, Box):
                         self.nodes[box].escaped = True
-            for box in op.results:
+            box = op.result
+            if box is not None:
                 self.nodes[box] = InstanceNode(box, escaped=True)
 
     def recursively_find_escaping_values(self):
@@ -628,7 +630,7 @@ class PerfectSpecializer(object):
             opname = op.opname
             if opname == 'merge_point':
                 args = self.expanded_version_of(op.args, None)
-                op = MergePoint('merge_point', args, [])
+                op = ResOperation('merge_point', args, None)
                 newoperations.append(op)
                 #for arg in op.args:
                 #    self.ready_results[arg] = None
@@ -639,7 +641,7 @@ class PerfectSpecializer(object):
             elif opname == 'jump':
                 args = self.expanded_version_of(op.args, newoperations)
                 self.cleanup_field_caches(newoperations)
-                op = Jump('jump', args, [])
+                op = ResOperation('jump', args, None)
                 newoperations.append(op)
                 continue
 ##            elif opname == 'guard_builtin':
@@ -687,7 +689,7 @@ class PerfectSpecializer(object):
             elif opname == 'getfield_gc':
                 instnode = self.nodes[op.args[0]]
                 ofs = op.args[1].getint()
-                if self.optimize_getfield(instnode, ofs, op.results[0]):
+                if self.optimize_getfield(instnode, ofs, op.result):
                     continue
                 # otherwise we need this getfield, but it does not
                 # invalidate caches
@@ -700,7 +702,7 @@ class PerfectSpecializer(object):
 ##                        continue
             elif opname == 'new_with_vtable':
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
-                instnode = self.nodes[op.results[0]]
+                instnode = self.nodes[op.result]
                 if not instnode.escaped:
                     instnode.virtual = True
                     assert instnode.cls is not None
@@ -764,7 +766,7 @@ class PerfectSpecializer(object):
                 # we know the result is constant if instnode is a virtual,
                 # or if we already checked the class of the object before
                 if instnode.virtual or instnode.cls is not None:
-                    box = op.results[0]
+                    box = op.result
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
@@ -782,7 +784,7 @@ class PerfectSpecializer(object):
                     (instnode_y.cls is not None and     # we checked cls y and
                      instnode_x.const and               # x is the const NULL
                      not instnode_x.source.getptr_base())):
-                    box = op.results[0]
+                    box = op.result
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
@@ -794,9 +796,10 @@ class PerfectSpecializer(object):
                         break
                 else:
                     # all constant arguments: constant-fold away
-                    for box in op.results:
-                        instnode = InstanceNode(box.constbox(), const=True)
-                        self.nodes[box] = instnode
+                    box = op.result
+                    assert box is not None
+                    instnode = InstanceNode(box.constbox(), const=True)
+                    self.nodes[box] = instnode
                     continue
             elif opname not in operations_without_side_effects:
                 if opname not in ('getfield_gc', 'getitem',
@@ -804,9 +807,10 @@ class PerfectSpecializer(object):
                     # those operations does not clean up caches, although
                     # they have side effects (at least set ones)
                     self.cleanup_field_caches(newoperations)
-            if opname not in operation_never_raises:
+            if opname not in operation_never_raises:    # XXX do me right
                 exception_might_have_happened = True
-            for box in op.results:
+            box = op.result
+            if box is not None:
                 instnode = InstanceNode(box)
                 self.nodes[box] = instnode
             newoperations.append(op)
@@ -827,7 +831,7 @@ class PerfectSpecializer(object):
 ##                else:
                 if 1:
                     newoperations.append(ResOperation('setfield_gc',
-                       [node.source, ConstInt(ofs), valuenode.source], []))
+                       [node.source, ConstInt(ofs), valuenode.source], None))
             node.dirtyfields = {}
             node.cleanfields = {}
 
@@ -880,9 +884,9 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
     for vtable in storage.allocations:
         sizebox = ConstInt(metainterp.class_sizes[vtable])
         vtablebox = ConstInt(vtable)
-        [instbox] = history.execute_and_record('new_with_vtable',
-                                               [sizebox, vtablebox],
-                                               'ptr', False)
+        instbox = history.execute_and_record('new_with_vtable',
+                                             [sizebox, vtablebox],
+                                             'ptr', False)
         allocated_boxes.append(instbox)
 ##    for malloc_func, lgt in storage.list_allocations:
 ##        sizebox = ConstInt(lgt)
