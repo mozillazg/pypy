@@ -131,9 +131,11 @@ class WarmRunnerDesc:
 
         def crash_in_jit(e):
             print "Crash in JIT!"
-            print '%s: %s' % (e.__class__, e)
             if not we_are_translated():
+                print '%s: %s' % (e.__class__, e)
                 import sys, pdb; pdb.post_mortem(sys.exc_info()[2])
+            else:
+                print e
             raise AssertionError("crash in JIT")
         crash_in_jit._dont_inline_ = True
 
