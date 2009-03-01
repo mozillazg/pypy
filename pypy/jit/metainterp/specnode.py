@@ -1,4 +1,4 @@
-
+from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import ConstInt
 
 class SpecNode(object):
@@ -127,7 +127,7 @@ class SpecNodeWithFields(FixedClassSpecNode):
         for ofs, subspecnode in self.fields:
             cls = self.known_class.getint()
             tp = cpu.typefor(ofs)
-            fieldbox = cpu.execute_operation('getfield_gc',
+            fieldbox = cpu.execute_operation(rop.GETFIELD_GC,
                                              [valuebox, ConstInt(ofs)],
                                              tp)
             subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
@@ -153,8 +153,6 @@ class VirtualizedSpecNode(SpecNodeWithFields):
 class DelayedSpecNode(VirtualizedSpecNode):
 
     def expand_boxlist(self, instnode, newboxlist, oplist):
-        from pypy.jit.metainterp.history import ResOperation, ConstInt
-        
         newboxlist.append(instnode.source)
         for ofs, subspecnode in self.fields:
             assert isinstance(subspecnode, SpecNodeWithBox)
@@ -166,7 +164,7 @@ class DelayedSpecNode(VirtualizedSpecNode):
                     newboxlist.append(instnode.cleanfields[ofs].source)
                 else:
                     box = subspecnode.box.clonebox()
-                    oplist.append(ResOperation('getfield_gc',
+                    oplist.append(ResOperation(rop.GETFIELD_GC,
                        [instnode.source, ConstInt(ofs)], box))
                     newboxlist.append(box)
 

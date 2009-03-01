@@ -4,7 +4,7 @@ from pypy.rpython.test.test_llinterp import interpret
 from pypy.rlib.unroll import unrolling_iterable
 
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, Const, ConstInt
-from pypy.jit.metainterp.history import ResOperation, MergePoint, Jump
+from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend.llgraph.runner import CPU, GuardFailed
 
 
@@ -45,7 +45,8 @@ class TestLLGraph:
 
     def test_simple(self):
         cpu = CPU(None)
-        box = cpu.execute_operation("int_sub", [BoxInt(10), BoxInt(2)], "int")
+        box = cpu.execute_operation(rop.INT_SUB, [BoxInt(10), BoxInt(2)],
+                                    "int")
         assert isinstance(box, BoxInt)
         assert box.value == 8
 
@@ -54,15 +55,15 @@ class TestLLGraph:
         node = lltype.malloc(NODE)
         node_value = cpu.fielddescrof(NODE, 'value')
         nodeadr = lltype.cast_opaque_ptr(llmemory.GCREF, node)
-        box = cpu.execute_operation('setfield_gc', [BoxPtr(nodeadr),
-                                                    ConstInt(node_value),
-                                                    BoxInt(3)],
+        box = cpu.execute_operation(rop.SETFIELD_GC, [BoxPtr(nodeadr),
+                                                      ConstInt(node_value),
+                                                      BoxInt(3)],
                                     'void')
         assert box is None
         assert node.value == 3
 
-        box = cpu.execute_operation('getfield_gc', [BoxPtr(nodeadr),
-                                                    ConstInt(node_value)],
+        box = cpu.execute_operation(rop.GETFIELD_GC, [BoxPtr(nodeadr),
+                                                      ConstInt(node_value)],
                                     'int')
         assert box.value == 3
 
@@ -75,12 +76,12 @@ class TestLLGraph:
         t = BoxInt(455)
         u = BoxInt(0)
         operations = [
-            MergePoint('merge_point', [x, y], None),
-            ResOperation('int_add', [x, y], z),
-            ResOperation('int_sub', [y, ConstInt(1)], t),
-            ResOperation('int_eq', [t, ConstInt(0)], u),
-            ResOperation('guard_false', [u], None),
-            Jump('jump', [z, t], None),
+            ResOperation(rop.MERGE_POINT, [x, y], None),
+            ResOperation(rop.INT_ADD, [x, y], z),
+            ResOperation(rop.INT_SUB, [y, ConstInt(1)], t),
+            ResOperation(rop.INT_EQ, [t, ConstInt(0)], u),
+            ResOperation(rop.GUARD_FALSE, [u], None),
+            ResOperation(rop.JUMP, [z, t], None),
             ]
         operations[-2].liveboxes = [t, z]
         startmp = operations[0]
@@ -98,10 +99,12 @@ class TestLLGraph:
     def test_passing_guards(self):
         py.test.skip("rewrite me")
         cpu = CPU(None)
-        assert cpu.execute_operation('guard_true', [BoxInt(1)], 'void') == None
-        assert cpu.execute_operation('guard_false',[BoxInt(0)], 'void') == None
-        assert cpu.execute_operation('guard_value',[BoxInt(42),
-                                                    BoxInt(42)],'void') == None
+        assert cpu.execute_operation(rop.GUARD_TRUE, [BoxInt(1)],
+                                     'void') == None
+        assert cpu.execute_operation(rop.GUARD_FALSE,[BoxInt(0)],
+                                     'void') == None
+        assert cpu.execute_operation(rop.GUARD_VALUE,[BoxInt(42), BoxInt(42)],
+                                     'void') == None
         #subnode = lltype.malloc(SUBNODE)
         #assert cpu.execute_operation('guard_class', [subnode, SUBNODE]) == []
         #assert cpu.stats.exec_counters == {'guard_true': 1, 'guard_false': 1,
@@ -114,16 +117,16 @@ class TestLLGraph:
         cpu.set_meta_interp(FakeMetaInterp(cpu))
         #node = ootype.new(NODE)
         #subnode = ootype.new(SUBNODE)
-        for opname, args in [('guard_true', [BoxInt(0)]),
-                             ('guard_false', [BoxInt(1)]),
-                             ('guard_value', [BoxInt(42), BoxInt(41)]),
-                             #('guard_class', [node, SUBNODE]),
-                             #('guard_class', [subnode, NODE]),
-                             ]:
+        for opnum, args in [(rop.GUARD_TRUE, [BoxInt(0)]),
+                            (rop.GUARD_FALSE, [BoxInt(1)]),
+                            (rop.GUARD_VALUE, [BoxInt(42), BoxInt(41)]),
+                            #('guard_class', [node, SUBNODE]),
+                            #('guard_class', [subnode, NODE]),
+                            ]:
             operations = [
-                MergePoint('merge_point', args, []),
-                ResOperation(opname, args, []),
-                ResOperation('void_return', [], []),
+                ResOperation(rop.MERGE_POINT, args, []),
+                ResOperation(opnum, args, []),
+                ResOperation(rop.VOID_RETURN, [], []),
                 ]
             startmp = operations[0]
             cpu.compile_operations(operations)

@@ -10,6 +10,7 @@ from pypy.rlib.debug import debug_print
 from pypy.jit.metainterp import history, support
 from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
                                          BoxInt, BoxPtr, Options)
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
@@ -235,32 +236,32 @@ class MIFrame(object):
         exec py.code.Source('''
             @arguments("box", "box")
             def opimpl_%s(self, b1, b2):
-                self.execute(%r, [b1, b2], "int", True)
-        ''' % (_opimpl, _opimpl)).compile()
+                self.execute(rop.%s, [b1, b2], "int", True)
+        ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
                     ]:
         exec py.code.Source('''
             @arguments("box", "box")
             def opimpl_%s(self, b1, b2):
-                return self.execute_with_exc(%r, [b1, b2], "int", True)
-        ''' % (_opimpl, _opimpl)).compile()
+                return self.execute_with_exc(rop.%s, [b1, b2], "int", True)
+        ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
                     ]:
         exec py.code.Source('''
             @arguments("box")
             def opimpl_%s(self, b):
-                self.execute(%r, [b], "int", True)
-        ''' % (_opimpl, _opimpl)).compile()
+                self.execute(rop.%s, [b], "int", True)
+        ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_neg_ovf',
                     ]:
         exec py.code.Source('''
             @arguments("box")
             def opimpl_%s(self, b):
-                return self.execute_with_exc(%r, [b], "int", True)
-        ''' % (_opimpl, _opimpl)).compile()
+                return self.execute_with_exc(rop.%s, [b], "int", True)
+        ''' % (_opimpl, _opimpl.upper())).compile()
 
     @arguments()
     def opimpl_return(self):
@@ -282,15 +283,15 @@ class MIFrame(object):
         if switchcase:
             currentpc = self.pc
             targetpc = target
-            opname = "guard_true"
+            opnum = rop.GUARD_TRUE
             const_if_fail = history.CONST_FALSE
         else:
             currentpc = target
             targetpc = self.pc
-            opname = "guard_false"
+            opnum = rop.GUARD_FALSE
             const_if_fail = history.CONST_TRUE
-        self.generate_guard(targetpc, opname, box, ignore_box=box,
-                                                   const_if_fail=const_if_fail)
+        self.generate_guard(targetpc, opnum, box, ignore_box=box,
+                                                  const_if_fail=const_if_fail)
         self.pc = currentpc
 
     @arguments("orgpc", "box", "constargs", "jumptargets")
@@ -314,67 +315,67 @@ class MIFrame(object):
 
     @arguments("constbox")
     def opimpl_new(self, sizebox):
-        self.execute('new', [sizebox], 'ptr')
+        self.execute(rop.NEW, [sizebox], 'ptr')
 
     @arguments("constbox", "constbox")
     def opimpl_new_with_vtable(self, sizebox, vtablebox):
-        self.execute('new_with_vtable', [sizebox, vtablebox], 'ptr')
+        self.execute(rop.NEW_WITH_VTABLE, [sizebox, vtablebox], 'ptr')
 
     @arguments("constbox", "box")
     def opimpl_new_array(self, itemsizebox, countbox):
-        self.execute('new_array', [itemsizebox, countbox], 'ptr')
+        self.execute(rop.NEW_ARRAY, [itemsizebox, countbox], 'ptr')
 
     @arguments("box", "constbox", "box")
     def opimpl_getarrayitem_gc(self, arraybox, arraydesc, indexbox):
         tp = self.metainterp.cpu.typefor(arraydesc.getint())
-        self.execute('getarrayitem_gc', [arraybox, arraydesc, indexbox], tp)
+        self.execute(rop.GETARRAYITEM_GC, [arraybox, arraydesc, indexbox], tp)
 
     @arguments("box", "constbox", "box", "box")
     def opimpl_setarrayitem_gc(self, arraybox, arraydesc, indexbox, itembox):
-        self.execute('setarrayitem_gc', [arraybox, arraydesc,
-                                         indexbox, itembox], 'void')
+        self.execute(rop.SETARRAYITEM_GC, [arraybox, arraydesc,
+                                           indexbox, itembox], 'void')
 
     @arguments("box")
     def opimpl_ptr_nonzero(self, box):
-        self.execute('oononnull', [box], 'int', True)
+        self.execute(rop.OONONNULL, [box], 'int', True)
 
     @arguments("box")
     def opimpl_ptr_iszero(self, box):
-        self.execute('ooisnull', [box], 'int', True)
+        self.execute(rop.OOISNULL, [box], 'int', True)
 
     @arguments("box", "box")
     def opimpl_ptr_eq(self, box1, box2):
-        self.execute('oois', [box1, box2], 'int', True)
+        self.execute(rop.OOIS, [box1, box2], 'int', True)
 
     @arguments("box", "box")
     def opimpl_ptr_ne(self, box1, box2):
-        self.execute('ooisnot', [box1, box2], 'int', True)
+        self.execute(rop.OOISNOT, [box1, box2], 'int', True)
 
 
     @arguments("box", "constbox")
     def opimpl_getfield_gc(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
-        self.execute('getfield_gc', [box, fielddesc], tp)
+        self.execute(rop.GETFIELD_GC, [box, fielddesc], tp)
     @arguments("box", "constbox")
     def opimpl_getfield_pure_gc(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
-        self.execute('getfield_gc', [box, fielddesc], tp, True)
+        self.execute(rop.GETFIELD_GC, [box, fielddesc], tp, True)
     @arguments("box", "constbox", "box")
     def opimpl_setfield_gc(self, box, fielddesc, valuebox):
-        self.execute('setfield_gc', [box, fielddesc, valuebox],
+        self.execute(rop.SETFIELD_GC, [box, fielddesc, valuebox],
                      'void')
 
     @arguments("box", "constbox")
     def opimpl_getfield_raw(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
-        self.execute('getfield_raw', [box, fielddesc], tp)
+        self.execute(rop.GETFIELD_RAW, [box, fielddesc], tp)
     @arguments("box", "constbox")
     def opimpl_getfield_pure_raw(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
-        self.execute('getfield_raw', [box, fielddesc], tp, True)
+        self.execute(rop.GETFIELD_RAW, [box, fielddesc], tp, True)
     @arguments("box", "constbox", "box")
     def opimpl_setfield_raw(self, box, fielddesc, valuebox):
-        self.execute('setfield_raw', [box, fielddesc, valuebox],
+        self.execute(rop.SETFIELD_RAW, [box, fielddesc, valuebox],
                      'void')
 
     @arguments("bytecode", "varargs")
@@ -385,41 +386,41 @@ class MIFrame(object):
 
     @arguments("varargs")
     def opimpl_green_call__1(self, varargs):
-        return self.execute_with_exc('call__1', varargs, 'int', True)
+        return self.execute_with_exc(rop.CALL__1, varargs, 'int', True)
     @arguments("varargs")
     def opimpl_green_call__2(self, varargs):
-        return self.execute_with_exc('call__2', varargs, 'int', True)
+        return self.execute_with_exc(rop.CALL__2, varargs, 'int', True)
     @arguments("varargs")
     def opimpl_green_call__4(self, varargs):
-        return self.execute_with_exc('call__4', varargs, 'int', True)
+        return self.execute_with_exc(rop.CALL__4, varargs, 'int', True)
     @arguments("varargs")
     def opimpl_green_call__8(self, varargs):
-        return self.execute_with_exc('call__8', varargs, 'int', True)
+        return self.execute_with_exc(rop.CALL__8, varargs, 'int', True)
 
     @arguments("varargs")
     def opimpl_green_call_ptr(self, varargs):
-        return self.execute_with_exc('call_ptr', varargs, 'ptr', True)
+        return self.execute_with_exc(rop.CALL_PTR, varargs, 'ptr', True)
 
     @arguments("varargs")
     def opimpl_residual_call__1(self, varargs):
-        return self.execute_with_exc('call__1', varargs, 'int')
+        return self.execute_with_exc(rop.CALL__1, varargs, 'int')
     @arguments("varargs")
     def opimpl_residual_call__2(self, varargs):
-        return self.execute_with_exc('call__2', varargs, 'int')
+        return self.execute_with_exc(rop.CALL__2, varargs, 'int')
     @arguments("varargs")
     def opimpl_residual_call__4(self, varargs):
-        return self.execute_with_exc('call__4', varargs, 'int')
+        return self.execute_with_exc(rop.CALL__4, varargs, 'int')
     @arguments("varargs")
     def opimpl_residual_call__8(self, varargs):
-        return self.execute_with_exc('call__8', varargs, 'int')
+        return self.execute_with_exc(rop.CALL__8, varargs, 'int')
 
     @arguments("varargs")
     def opimpl_residual_call_ptr(self, varargs):
-        return self.execute_with_exc('call_ptr', varargs, 'ptr')
+        return self.execute_with_exc(rop.CALL_PTR, varargs, 'ptr')
 
     @arguments("varargs")
     def opimpl_residual_call_void(self, varargs):
-        return self.execute_with_exc('call_void', varargs, 'void')
+        return self.execute_with_exc(rop.CALL_VOID, varargs, 'void')
 
 
     @arguments("builtin", "varargs")
@@ -487,19 +488,19 @@ class MIFrame(object):
 
     @arguments("box")
     def opimpl_strlen(self, str):
-        self.execute('strlen', [str], 'int', True)
+        self.execute(rop.STRLEN, [str], 'int', True)
 
     @arguments("box", "box")
     def opimpl_strgetitem(self, str, index):
-        self.execute('strgetitem', [str, index], 'int', True)
+        self.execute(rop.STRGETITEM, [str, index], 'int', True)
 
     @arguments("box", "box", "box")
     def opimpl_strsetitem(self, str, index, newchar):
-        self.execute('strsetitem', [str, index, newchar], 'void')
+        self.execute(rop.STRSETITEM, [str, index, newchar], 'void')
 
     @arguments("box")
     def opimpl_newstr(self, length):
-        self.execute('newstr', [length], 'ptr')
+        self.execute(rop.NEWSTR, [length], 'ptr')
 
     @arguments("orgpc", "box", returns="box")
     def opimpl_guard_value(self, pc, box):
@@ -509,7 +510,7 @@ class MIFrame(object):
     def opimpl_guard_class(self, pc, box):
         clsbox = self.cls_of_box(box)
         if isinstance(box, Box):
-            self.generate_guard(pc, 'guard_class', box, [clsbox])
+            self.generate_guard(pc, rop.GUARD_CLASS, box, [clsbox])
         return clsbox
 
     @arguments("orgpc", "box", "builtin")
@@ -525,7 +526,7 @@ class MIFrame(object):
     @arguments("orgpc", "box", "virtualizabledesc", "constbox")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):
         clsbox = self.cls_of_box(box)
-        op = self.generate_guard(pc, 'guard_nonvirtualized', box,
+        op = self.generate_guard(pc, rop.GUARD_NONVIRTUALIZED, box,
                                  [clsbox, guard_field])
         if op:
             op.desc = vdesc
@@ -620,7 +621,7 @@ class MIFrame(object):
             if stop:
                 break
 
-    def generate_guard(self, pc, opname, box, extraargs=[], ignore_box=None,
+    def generate_guard(self, pc, opnum, box, extraargs=[], ignore_box=None,
                        const_if_fail=None):
         if isinstance(box, Const):    # no need for a guard
             return
@@ -637,7 +638,7 @@ class MIFrame(object):
                     liveboxes.append(const_if_fail)
         if box is not None:
             extraargs = [box] + extraargs
-        guard_op = self.metainterp.history.record(opname, extraargs, None)
+        guard_op = self.metainterp.history.record(opnum, extraargs, None)
         guard_op.liveboxes = liveboxes
         saved_pc = self.pc
         self.pc = pc
@@ -648,7 +649,7 @@ class MIFrame(object):
     def implement_guard_value(self, pc, box):
         if isinstance(box, Box):
             promoted_box = box.constbox()
-            self.generate_guard(pc, 'guard_value', box, [promoted_box])
+            self.generate_guard(pc, rop.GUARD_VALUE, box, [promoted_box])
             return promoted_box
         else:
             return box     # no promotion needed, already a Const
@@ -662,18 +663,18 @@ class MIFrame(object):
         self.pc -= 3
         self.pc = self.load_3byte()
 
-    def execute(self, step, argboxes, result_type, pure=False):
-        resbox = self.metainterp.history.execute_and_record(step, argboxes,
+    def execute(self, opnum, argboxes, result_type, pure=False):
+        resbox = self.metainterp.history.execute_and_record(opnum, argboxes,
                                                             result_type,
                                                             pure)
         if resbox is not None:
             self.make_result_box(resbox)
     execute._annspecialcase_ = 'specialize:arg(4)'
 
-    def execute_with_exc(self, step, argboxes, result_type, pure=False):
+    def execute_with_exc(self, opnum, argboxes, result_type, pure=False):
         old_index = len(self.metainterp.history.operations)
         try:
-            self.execute(step, argboxes, result_type, pure)
+            self.execute(opnum, argboxes, result_type, pure)
         except Exception, e:
             if not we_are_translated():
                 if not isinstance(e, LLException):
@@ -690,7 +691,7 @@ class MIFrame(object):
                 else:
                     resultbox = BoxInt()
                 self.make_result_box(resultbox)
-            self.metainterp.history.record(step, argboxes, resultbox)
+            self.metainterp.history.record(opnum, argboxes, resultbox)
         else:
             if not self.metainterp.history.generate_anything_since(old_index):
                 assert pure
@@ -807,8 +808,8 @@ class OOMetaInterp(object):
     def handle_guard_failure(self, guard_failure):
         orig_boxes = self.initialize_state_from_guard_failure(guard_failure)
         try:
-            if guard_failure.guard_op.opname in ['guard_exception',
-                                                 'guard_no_exception']:
+            if guard_failure.guard_op.opnum in (rop.GUARD_EXCEPTION,
+                                                rop.GUARD_NO_EXCEPTION):
                 self.raise_exception_upon_guard_failure(guard_failure)
             self.interpret()
             assert False, "should always raise"
@@ -839,7 +840,7 @@ class OOMetaInterp(object):
             if not box1.equals(box2):
                 # not a valid loop
                 raise self.ContinueRunningNormally(live_arg_boxes)
-        mp = history.ResOperation('merge_point',
+        mp = history.ResOperation(rop.MERGE_POINT,
                                   original_boxes[num_green_args:], None)
         mp.greenkey = original_boxes[:num_green_args]
         self.history.operations.insert(0, mp)
@@ -852,7 +853,7 @@ class OOMetaInterp(object):
 
     def compile_bridge(self, guard_failure, original_boxes, live_arg_boxes):
         num_green_args = self.num_green_args
-        mp = history.ResOperation('catch', original_boxes, None)
+        mp = history.ResOperation(rop.CATCH, original_boxes, None)
         mp.coming_from = guard_failure.guard_op
         self.history.operations.insert(0, mp)
         try:
@@ -946,13 +947,13 @@ class OOMetaInterp(object):
         if etype:
             exception_box = ConstInt(etype)
             exc_value_box = BoxPtr(evalue)
-            op = frame.generate_guard(frame.pc, 'guard_exception',
+            op = frame.generate_guard(frame.pc, rop.GUARD_EXCEPTION,
                                       None, [exception_box])
             if op:
                 op.result = exc_value_box
             return self.finishframe_exception(exception_box, exc_value_box)
         else:
-            frame.generate_guard(frame.pc, 'guard_no_exception', None, [])
+            frame.generate_guard(frame.pc, rop.GUARD_NO_EXCEPTION, None, [])
             return False
 
     def rebuild_state_after_failure(self, key, newboxes):

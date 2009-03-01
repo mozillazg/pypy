@@ -5,8 +5,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.tool.uid import uid
 from pypy.conftest import option
 
-from pypy.jit.metainterp import resoperation as rop
-from pypy.jit.metainterp.resoperation import ResOperation
+from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -280,53 +279,6 @@ NULLBOX = BoxPtr()
 
 # ____________________________________________________________
 
-class ResOperation(object):
-    """The central ResOperation class, representing one operation."""
-
-    # for 'merge_point'
-    specnodes = None
-    key = None
-
-    # for 'jump' and 'guard_*'
-    jump_target = None
-
-    # for 'guard_*'
-    counter = 0
-    storage_info = None
-    liveboxes = None
-
-    def __init__(self, opname, args, result):
-        if not we_are_translated():
-            assert result is None or isinstance(result, Box)
-            if opname == 'merge_point':
-                assert len(dict.fromkeys(args)) == len(args)
-        self.opname = opname
-        self.args = list(args)
-        self.result = result
-
-    def __repr__(self):
-        if self.result is not None:
-            sres = repr(self.result) + ' = '
-        else:
-            sres = ''
-        result = '%s%s(%s)' % (sres, self.opname,
-                               ', '.join(map(repr, self.args)))
-        if self.liveboxes is not None:
-            result = '%s [%s]' % (result, ', '.join(map(repr, self.liveboxes)))
-        return result
-
-    def clone(self):
-        op = ResOperation(self.opname, self.args, self.result)
-        op.specnodes = self.specnodes
-        op.key = self.key
-        return op
-
-# compatibility
-MergePoint = ResOperation
-Jump = ResOperation
-
-# ____________________________________________________________
-
 # The Graph class is to store a loop or a bridge.
 # Unclear if it's really useful any more; just the list of operations
 # is enough in most cases.
@@ -344,7 +296,8 @@ class Graph(object):
     def summary(self, adding_insns={}):    # for debugging
         insns = adding_insns.copy()
         for op in self.operations:
-            insns[op.opname] = insns.get(op.opname, 0) + 1
+            opname = op.getopname()
+            insns[opname] = insns.get(opname, 0) + 1
         return insns
 
     def get_display_text(self):    # for graphpage.py
@@ -369,22 +322,22 @@ class Graph(object):
         "NOT_RPYTHON"
         operations = self.operations
         op = operations[0]
-        assert op.opname in ('merge_point', 'catch')
+        assert op.opnum in (rop.MERGE_POINT, rop.CATCH)
         seen = dict.fromkeys(op.args)
         for op in operations[1:]:
             for box in op.args:
                 if isinstance(box, Box):
                     assert box in seen
                 elif isinstance(box, Const):
-                    assert op.opname not in ('merge_point', 'catch'), (
+                    assert op.opnum not in (rop.MERGE_POINT, rop.CATCH), (
                         "no Constant arguments allowed in: %s" % (op,))
             box = op.result
             if box is not None:
                 assert isinstance(box, Box)
                 assert box not in seen
                 seen[box] = True
-        assert operations[-1].opname == 'jump'
-        assert operations[-1].jump_target.opname == 'merge_point'
+        assert operations[-1].opnum == rop.JUMP
+        assert operations[-1].jump_target.opnum == rop.MERGE_POINT
 
     def __repr__(self):
         return '<%s>' % (self.name,)
@@ -402,7 +355,7 @@ class RunningMatcher(Matcher):
         self.cpu = cpu
         self.operations = []
 
-    def execute_and_record(self, step, argboxes, result_type, pure):
+    def execute_and_record(self, opnum, argboxes, result_type, pure):
         # collect arguments
         canfold = False
         if pure:
@@ -412,17 +365,17 @@ class RunningMatcher(Matcher):
             else:
                 canfold = True
         # really run this operation
-        resbox = self.cpu.execute_operation(step, argboxes, result_type)
+        resbox = self.cpu.execute_operation(opnum, argboxes, result_type)
         # collect the result(s)
         if canfold:
             resbox = resbox.constbox()
         else:
-            self.record(step, argboxes, resbox)
+            self.record(opnum, argboxes, resbox)
         return resbox
     execute_and_record._annspecialcase_ = 'specialize:arg(4)'
 
-    def record(self, opname, argboxes, resbox):
-        op = ResOperation(opname, argboxes, resbox)
+    def record(self, opnum, argboxes, resbox):
+        op = ResOperation(opnum, argboxes, resbox)
         self.operations.append(op)
         return op
     record._annspecialcase_ = 'specialize:arg(4)'
