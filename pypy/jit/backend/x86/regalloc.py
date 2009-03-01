@@ -3,13 +3,13 @@
 """
 
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
-                                         ResOperation, MergePoint, ConstAddr)
+                                         ResOperation, ConstAddr)
 from pypy.jit.backend.x86.ri386 import *
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.backend.x86 import symbolic
-from pypy.jit.metainterp.heaptracker import operations_without_side_effects
+from pypy.jit.metainterp.resoperation import rop, opname
 
 # esi edi and ebp can be added to this list, provided they're correctly
 # saved and restored
@@ -126,7 +126,7 @@ class RegAlloc(object):
                 self.stack_bindings[arg] = stack_pos(stackpos)
                 rev_stack_binds[stackpos] = arg
                 j += 1
-        if jump.opname != 'jump':
+        if jump.opnum != rop.JUMP:
             return {}, sd
         for i in range(len(jump.args)):
             argloc = jump.jump_target.arglocs[i]
@@ -150,7 +150,7 @@ class RegAlloc(object):
 
     def _compute_loop_consts(self, mp, jump):
         self.jump_reg_candidates = {}
-        if jump.opname != 'jump':
+        if jump.opnum != rop.JUMP:
             loop_consts = {}
         else:
             assert jump.jump_target is mp
@@ -198,21 +198,14 @@ class RegAlloc(object):
         self.loop_consts = loop_consts
         for i in range(len(operations)):
             op = operations[i]
-            if op.opname.startswith('#'):
-                continue
             self.position = i
-            canfold = True
-            if op.opname in operations_without_side_effects:
-                for result in op.results:
-                    if result in self.longevity:
-                        # means it's never used
-                        canfold = False
-                        break
+            if op.has_no_side_effect() and op.result not in self.longevity:
+                canfold = True
             else:
                 canfold = False
             if not canfold:
-                new_ops += opdict[op.opname](self, op)
-                self.eventually_free_vars(op.results)
+                new_ops += oplist[op.opnum](self, op)
+                self.eventually_free_var(op.result)
                 self._check_invariants()
         return new_ops
 
@@ -225,12 +218,12 @@ class RegAlloc(object):
             start_live[v] = 0
         for i in range(len(operations)):
             op = operations[i]
-            if op.results:
-                start_live[op.results[0]] = i
+            if op.result is not None:
+                start_live[op.result] = i
             for arg in op.args:
                 if isinstance(arg, Box):
                     longevity[arg] = (start_live[arg], i)
-            if op.opname.startswith('guard_'):
+            if op.is_guard():
                 for arg in op.liveboxes:
                     if isinstance(arg, Box):
                         longevity[arg] = (start_live[arg], i)
@@ -490,15 +483,15 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         return [PerformDiscard(op, [])]
 
-    def consider_guard(self, op):
+    def _consider_guard(self, op):
         loc, ops = self.make_sure_var_in_reg(op.args[0], [])
         locs = self._locs_from_liveboxes(op)
         self.eventually_free_var(op.args[0])
         self.eventually_free_vars(op.liveboxes)
         return ops + [PerformDiscard(op, [loc] + locs)]
 
-    consider_guard_true = consider_guard
-    consider_guard_false = consider_guard
+    consider_guard_true = _consider_guard
+    consider_guard_false = _consider_guard
 
     def consider_guard_nonvirtualized(self, op):
         # XXX implement it
@@ -519,9 +512,9 @@ class RegAlloc(object):
         loc, ops = self.make_sure_var_in_reg(op.args[0], [])
         box = TempBox()
         loc1, ops1 = self.force_allocate_reg(box, op.args)
-        if op.results[0] in self.longevity:
+        if op.result in self.longevity:
             # this means, is it ever used
-            resloc, ops2 = self.force_allocate_reg(op.results[0],
+            resloc, ops2 = self.force_allocate_reg(op.result,
                                                    op.args + [box])
         else:
             resloc, ops2 = None, []
@@ -573,40 +566,40 @@ class RegAlloc(object):
             arglocs = []
         return [PerformDiscard(op, arglocs)]
     
-    def consider_binop(self, op):
+    def _consider_binop(self, op):
         x = op.args[0]
         ops = []
         if isinstance(x, Const):
-            res, ops = self.force_allocate_reg(op.results[0], [])
+            res, ops = self.force_allocate_reg(op.result, [])
             argloc = self.loc(op.args[1])
             self.eventually_free_var(op.args[1])
             load_op = Load(x, self.loc(x), res) 
             return ops + [load_op, Perform(op, [res, argloc], res)]
-        loc, ops = self.force_result_in_reg(op.results[0], x, op.args)
+        loc, ops = self.force_result_in_reg(op.result, x, op.args)
         argloc = self.loc(op.args[1])
         self.eventually_free_var(op.args[1])
         return ops + [Perform(op, [loc, argloc], loc)]
         # otherwise load this variable to some register
 
-    consider_int_add = consider_binop
-    consider_int_mul = consider_binop
-    consider_int_sub = consider_binop
-    consider_int_and = consider_binop
-    consider_uint_add = consider_binop
-    consider_uint_mul = consider_binop
-    consider_uint_sub = consider_binop
-    consider_uint_and = consider_binop
+    consider_int_add = _consider_binop
+    consider_int_mul = _consider_binop
+    consider_int_sub = _consider_binop
+    consider_int_and = _consider_binop
+    consider_uint_add = _consider_binop
+    consider_uint_mul = _consider_binop
+    consider_uint_sub = _consider_binop
+    #consider_uint_and = _consider_binop
     
-    def consider_binop_ovf(self, op):
-        return self.consider_binop(op)
+    def _consider_binop_ovf(self, op):
+        return self._consider_binop(op)
 
-    consider_int_mul_ovf = consider_binop_ovf
-    consider_int_sub_ovf = consider_binop_ovf
-    consider_int_add_ovf = consider_binop_ovf
+    consider_int_mul_ovf = _consider_binop_ovf
+    consider_int_sub_ovf = _consider_binop_ovf
+    consider_int_add_ovf = _consider_binop_ovf
     # XXX ovf_neg op
 
     def consider_int_neg(self, op):
-        res, ops = self.force_result_in_reg(op.results[0], op.args[0], [])
+        res, ops = self.force_result_in_reg(op.result, op.args[0], [])
         return ops + [Perform(op, [res], res)]
 
     consider_bool_not = consider_int_neg
@@ -615,7 +608,7 @@ class RegAlloc(object):
         tmpvar = TempBox()
         reg, ops = self.force_allocate_reg(tmpvar, [], ecx)
         y = self.loc(op.args[1])
-        x, more_ops = self.force_result_in_reg(op.results[0], op.args[0],
+        x, more_ops = self.force_result_in_reg(op.result, op.args[0],
                                                op.args + [tmpvar])
         self.eventually_free_vars(op.args + [tmpvar])
         return ops + more_ops + [Perform(op, [x, y, reg], x)]
@@ -623,7 +616,7 @@ class RegAlloc(object):
     def consider_int_mod(self, op):
         l0, ops0 = self.make_sure_var_in_reg(op.args[0], [], eax)
         l1, ops1 = self.make_sure_var_in_reg(op.args[1], [], ecx)
-        l2, ops2 = self.force_allocate_reg(op.results[0], [], edx)
+        l2, ops2 = self.force_allocate_reg(op.result, [], edx)
         # eax is trashed after that operation
         tmpvar = TempBox()
         _, ops3 = self.force_allocate_reg(tmpvar, [], eax)
@@ -633,7 +626,7 @@ class RegAlloc(object):
 
     def consider_int_floordiv(self, op):
         tmpvar = TempBox()
-        l0, ops0 = self.force_result_in_reg(op.results[0], op.args[0], [], eax)
+        l0, ops0 = self.force_result_in_reg(op.result, op.args[0], [], eax)
         l1, ops1 = self.make_sure_var_in_reg(op.args[1], [], ecx)
         # we need to make sure edx is empty, since we're going to use it
         l2, ops2 = self.force_allocate_reg(tmpvar, [], edx)
@@ -641,7 +634,7 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args + [tmpvar])
         return ops0 + ops1 + ops2 + [Perform(op, [eax, ecx], eax)]
 
-    def consider_compop(self, op):
+    def _consider_compop(self, op):
         vx = op.args[0]
         vy = op.args[1]
         arglocs = [self.loc(vx), self.loc(vy)]
@@ -652,17 +645,17 @@ class RegAlloc(object):
             arglocs[0], ops0 = self.force_allocate_reg(vx, [])
         self.eventually_free_var(vx)
         self.eventually_free_var(vy)
-        loc, ops = self.force_allocate_reg(op.results[0], op.args)
+        loc, ops = self.force_allocate_reg(op.result, op.args)
         return ops0 + ops + [Perform(op, arglocs, loc)]
 
-    consider_int_lt = consider_compop
-    consider_int_gt = consider_compop
-    consider_int_ge = consider_compop
-    consider_int_le = consider_compop
-    consider_char_eq = consider_compop
-    consider_int_ne = consider_compop
-    consider_int_eq = consider_compop
-    consider_uint_gt = consider_compop
+    consider_int_lt = _consider_compop
+    consider_int_gt = _consider_compop
+    consider_int_ge = _consider_compop
+    consider_int_le = _consider_compop
+    xxx_consider_char_eq = _consider_compop
+    consider_int_ne = _consider_compop
+    consider_int_eq = _consider_compop
+    consider_uint_gt = _consider_compop
 
     def sync_var(self, v):
         ops = []
@@ -688,8 +681,8 @@ class RegAlloc(object):
             if self.longevity[v][1] > self.position or v in force_store:
                 ops += self.sync_var(v)
         self.reg_bindings = newcheckdict()
-        if op.results:
-            self.reg_bindings = {op.results[0]: eax}
+        if op.result is not None:
+            self.reg_bindings = {op.result: eax}
             self.free_regs = [reg for reg in REGS if reg is not eax]
             return ops + [Perform(op, arglocs, eax)]
         else:
@@ -716,7 +709,7 @@ class RegAlloc(object):
         ofs_items = symbolic.get_field_token(rstr.STR.chars, 'items')[0]
         ofs_length = symbolic.get_field_token(rstr.STR.chars, 'length')[0]
         return self._malloc_varsize(ofs, ofs_items, ofs_length, 0, op.args[0],
-                                    op.results[0])
+                                    op.result)
 
     def _malloc_varsize(self, ofs, ofs_items, ofs_length, size, v, res_v):
         if isinstance(v, Box):
@@ -749,12 +742,12 @@ class RegAlloc(object):
         size_of_field = arraydescr >> 16
         ofs = arraydescr & 0xffff
         return self._malloc_varsize(0, ofs, 0, size_of_field, op.args[1],
-                                    op.results[0])
+                                    op.result)
 
     def consider_oononnull(self, op):
         argloc = self.loc(op.args[0])
         self.eventually_free_var(op.args[0])
-        reg = self.try_allocate_reg(op.results[0])
+        reg = self.try_allocate_reg(op.result)
         assert reg
         return [Perform(op, [argloc], reg)]
 
@@ -800,7 +793,7 @@ class RegAlloc(object):
         ofs_loc, size_loc = self._unpack_fielddescr(op.args[1].getint())
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
         self.eventually_free_vars([op.args[0], op.args[1]])
-        result_loc, more_ops = self.force_allocate_reg(op.results[0], [])
+        result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return (ops0 + more_ops +
                 [Perform(op, [base_loc, ofs_loc, size_loc], result_loc)])
 
@@ -814,7 +807,7 @@ class RegAlloc(object):
         base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], args)
         ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[2], args)
         self.eventually_free_vars(op.args)
-        result_loc, more_ops = self.force_allocate_reg(op.results[0], [])
+        result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return (ops0 + ops1 + more_ops +
                 [Perform(op, [base_loc, ofs_loc, imm(scale), imm(ofs)],
                          result_loc)])
@@ -825,65 +818,61 @@ class RegAlloc(object):
     def _consider_listop(self, op):
         return self._call(op, [self.loc(arg) for arg in op.args])
     
-    consider_getitem     = _consider_listop
-    consider_len         = _consider_listop
-    consider_append      = _consider_listop
-    consider_pop         = _consider_listop
-    consider_setitem     = _consider_listop
-    consider_newlist     = _consider_listop
-    consider_insert      = _consider_listop
-    consider_listnonzero = _consider_listop
+    xxx_consider_getitem     = _consider_listop
+    xxx_consider_len         = _consider_listop
+    xxx_consider_append      = _consider_listop
+    xxx_consider_pop         = _consider_listop
+    xxx_consider_setitem     = _consider_listop
+    xxx_consider_newlist     = _consider_listop
+    xxx_consider_insert      = _consider_listop
+    xxx_consider_listnonzero = _consider_listop
 
-    def consider_zero_gc_pointers_inside(self, op):
-        self.eventually_free_var(op.args[0])
-        return []
+#     def consider_same_as(self, op):
+#         x = op.args[0]
+#         if isinstance(x, Const):
+#             pos = self.allocate_new_loc(op.result)
+#             return [Load(op.result, self.loc(x), pos)]
+#         if self.longevity[x][1] > self.position or x not in self.reg_bindings:
+#             if x in self.reg_bindings:
+#                 res = self.allocate_new_loc(op.result)
+#                 return [Load(op.result, self.loc(x), res)]
+#             else:
+#                 res, ops = self.force_allocate_reg(op.result, op.args)
+#                 return ops + [Load(op.result, self.loc(x), res)]
+#         else:
+#             self.reallocate_from_to(x, op.result)
+#             return []
 
-    def consider_same_as(self, op):
-        x = op.args[0]
-        if isinstance(x, Const):
-            pos = self.allocate_new_loc(op.results[0])
-            return [Load(op.results[0], self.loc(x), pos)]
-        if self.longevity[x][1] > self.position or x not in self.reg_bindings:
-            if x in self.reg_bindings:
-                res = self.allocate_new_loc(op.results[0])
-                return [Load(op.results[0], self.loc(x), res)]
-            else:
-                res, ops = self.force_allocate_reg(op.results[0], op.args)
-                return ops + [Load(op.results[0], self.loc(x), res)]
-        else:
-            self.reallocate_from_to(x, op.results[0])
-            return []
-
-    consider_cast_int_to_char = consider_same_as
-    consider_cast_int_to_ptr  = consider_same_as
+#    consider_cast_int_to_char = consider_same_as
+#    xxx_consider_cast_int_to_ptr  = consider_same_as
 
     def consider_int_is_true(self, op):
         argloc, ops = self.force_allocate_reg(op.args[0], [])
         self.eventually_free_var(op.args[0])
-        resloc, more_ops = self.force_allocate_reg(op.results[0], [])
+        resloc, more_ops = self.force_allocate_reg(op.result, [])
         return ops + more_ops + [Perform(op, [argloc], resloc)]
 
-    def consider_nullity(self, op):
+    def _consider_nullity(self, op):
         # doesn't need a register in arg
         argloc = self.loc(op.args[0])
         self.eventually_free_var(op.args[0])
-        resloc, ops = self.force_allocate_reg(op.results[0], [])
+        resloc, ops = self.force_allocate_reg(op.result, [])
         return ops + [Perform(op, [argloc], resloc)]
     
-    consider_ooisnull = consider_nullity
-    consider_oononnull = consider_nullity
+    consider_ooisnull = _consider_nullity
+    consider_oononnull = _consider_nullity
 
     def consider_strlen(self, op):
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
         self.eventually_free_var(op.args[0])
-        result_loc, more_ops = self.force_allocate_reg(op.results[0], [])
+        result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return ops0 + more_ops + [Perform(op, [base_loc], result_loc)]
 
     def consider_strgetitem(self, op):
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
         ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[1], op.args)
         self.eventually_free_vars([op.args[0], op.args[1]])
-        result_loc, more_ops = self.force_allocate_reg(op.results[0], [])
+        result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return (ops0 + ops1 + more_ops +
                 [Perform(op, [base_loc, ofs_loc], result_loc)])
 
@@ -933,17 +922,13 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         return ops + laterops + [PerformDiscard(op, [])]
 
-    def consider_debug_assert(self, op):
-        # ignore
-        self.eventually_free_var(op.args[0])
-        return []
-
-opdict = {}
+oplist = [None] * rop._CANRAISE_LAST
 
 for name, value in RegAlloc.__dict__.iteritems():
     if name.startswith('consider_'):
-        opname = name[len('consider_'):]
-        opdict[opname] = value
+        name = name[len('consider_'):]
+        num = getattr(rop, name.upper())
+        oplist[num] = value
 
 def arg_pos(i):
     res = mem(esp, FRAMESIZE + WORD * (i + 1))

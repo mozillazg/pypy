@@ -1,7 +1,7 @@
 import sys
 import ctypes
 from pypy.jit.backend.x86 import symbolic
-from pypy.jit.metainterp.history import Const, ConstInt, Box, MergePoint
+from pypy.jit.metainterp.history import Const, ConstInt, Box
 from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.annotation import model as annmodel

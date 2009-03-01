@@ -10,7 +10,7 @@ from pypy.rlib.objectmodel import we_are_translated, keepalive_until_here
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history
-from pypy.jit.metainterp.history import (MergePoint, ResOperation, Box, Const,
+from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
 from pypy.jit.backend.x86.assembler import Assembler386
 from pypy.jit.backend.x86 import symbolic
