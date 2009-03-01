@@ -7,6 +7,7 @@ from pypy.jit.backend.x86.runner import CPU, GuardFailed
 from pypy.jit.backend.x86.regalloc import WORD
 from pypy.jit.backend.x86 import symbolic
 import ctypes
+import sys
 
 class FakeStats(object):
     pass
@@ -334,4 +335,31 @@ class TestX86(object):
         assert c.value == 3
         
     def test_ovf_ops(self):
-        xxx
+        arg0 = BoxInt(12)
+        arg1 = BoxInt(13)
+        res = self.execute_operation('int_mul_ovf', [arg0, arg1], 'int')
+        assert res.value == 12*13
+        arg0 = BoxInt(sys.maxint/2)
+        arg1 = BoxInt(2222)
+        self.execute_operation('int_mul_ovf', [arg0, arg1], 'int')
+        assert self.cpu.assembler._exception_data[0] == 1
+        self.cpu.assembler._exception_data[0] = 0
+
+    def test_uint_ops(self):
+        from pypy.rlib.rarithmetic import r_uint, intmask
+
+        arg0 = BoxInt(intmask(r_uint(sys.maxint + 3)))
+        arg1 = BoxInt(intmask(r_uint(4)))
+        res = self.execute_operation('uint_add', [arg0, arg1], 'int')
+        assert res.value == intmask(r_uint(sys.maxint + 3) + r_uint(4))
+
+        arg0 = BoxInt(intmask(sys.maxint + 10))
+        arg1 = BoxInt(10)
+        res = self.execute_operation('uint_mul', [arg0, arg1], 'int')
+        assert res.value == intmask((sys.maxint + 10) * 10)
+
+        arg0 = BoxInt(intmask(r_uint(sys.maxint + 3)))
+        arg1 = BoxInt(intmask(r_uint(4)))
+
+        res = self.execute_operation('uint_gt', [arg0, arg1], 'int')
+        assert res.value == 1

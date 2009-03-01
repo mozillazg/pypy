@@ -500,6 +500,13 @@ class RegAlloc(object):
     consider_guard_true = consider_guard
     consider_guard_false = consider_guard
 
+    def consider_guard_nonvirtualized(self, op):
+        # XXX implement it
+        locs = self._locs_from_liveboxes(op)
+        self.eventually_free_var(op.args[0])
+        self.eventually_free_vars(op.liveboxes)
+        return []
+
     def consider_guard_no_exception(self, op):
         box = TempBox()
         loc, ops = self.force_allocate_reg(box, [])
@@ -585,11 +592,18 @@ class RegAlloc(object):
     consider_int_mul = consider_binop
     consider_int_sub = consider_binop
     consider_int_and = consider_binop
-
+    consider_uint_add = consider_binop
+    consider_uint_mul = consider_binop
+    consider_uint_sub = consider_binop
+    consider_uint_and = consider_binop
+    
     def consider_binop_ovf(self, op):
-        xxx
+        return self.consider_binop(op)
 
     consider_int_mul_ovf = consider_binop_ovf
+    consider_int_sub_ovf = consider_binop_ovf
+    consider_int_add_ovf = consider_binop_ovf
+    # XXX ovf_neg op
 
     def consider_int_neg(self, op):
         res, ops = self.force_result_in_reg(op.results[0], op.args[0], [])
@@ -648,6 +662,7 @@ class RegAlloc(object):
     consider_char_eq = consider_compop
     consider_int_ne = consider_compop
     consider_int_eq = consider_compop
+    consider_uint_gt = consider_compop
 
     def sync_var(self, v):
         ops = []
@@ -745,7 +760,7 @@ class RegAlloc(object):
 
     def _unpack_fielddescr(self, fielddescr):
         if fielddescr < 0:
-            fielddescr = -fielddescr
+            fielddescr = ~fielddescr
         ofs_loc = imm(fielddescr & 0xffff)
         size_loc = imm(fielddescr >> 16)
         return ofs_loc, size_loc

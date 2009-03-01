@@ -59,7 +59,8 @@ def test_varsized_struct_size():
 def test_methods_of_cpu():
     cpu = CPU386(rtyper=None, stats=FakeStats())
     assert cpu.sizeof(S) == get_size(S)
-    assert cpu.offsetof(S, 'y') == get_field_token(S, 'y')[0]
+    assert cpu.fielddescrof(S, 'y') & 0xffff == get_field_token(S, 'y')[0]
+    assert cpu.fielddescrof(S, 'y') >> 16 == get_field_token(S, 'y')[1]
     A = lltype.GcArray(lltype.Char)
     assert cpu.itemoffsetof(A) == get_array_token(A)[0]
     assert cpu.arraylengthoffset(A) == get_array_token(A)[2]
