@@ -14,7 +14,8 @@ class MiniStats:
 
 class CPU(object):
 
-    def __init__(self, rtyper, stats=None, translate_support_code=False):
+    def __init__(self, rtyper, stats=None, translate_support_code=False,
+                 annmixlevel=None):
         self.rtyper = rtyper
         self.translate_support_code = translate_support_code
         self.jumptarget2loop = {}
@@ -27,8 +28,7 @@ class CPU(object):
         llimpl._stats = self.stats
         llimpl._rtyper = self.rtyper
         if translate_support_code:
-            from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
-            self.mixlevelann = MixLevelHelperAnnotator(self.rtyper)
+            self.mixlevelann = annmixlevel
 
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp    # to handle guard failures
