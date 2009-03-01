@@ -1,11 +1,12 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.jit.metainterp.history import ResOperation, MergePoint, Jump
+from pypy.jit.metainterp.history import ResOperation
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         GuardOp, Box)
+                                         Box)
 from pypy.jit.backend.x86.runner import CPU, GuardFailed
 from pypy.jit.backend.x86.regalloc import WORD
 from pypy.jit.backend.x86 import symbolic
+from pypy.jit.metainterp.resoperation import rop
 import ctypes
 import sys
 
@@ -47,27 +48,27 @@ class TestX86(object):
                                                        result_type)
         return res
 
-    def get_compiled_single_operation(self, opname, result_type, valueboxes):
+    def get_compiled_single_operation(self, opnum, result_type, valueboxes):
         livevarlist = []
         for box in valueboxes:
             if isinstance(box, Box):
                 box = box.clonebox()
             livevarlist.append(box)
-        mp = MergePoint('merge_point',
+        mp = ResOperation(rop.MERGE_POINT,
                         [box for box in livevarlist if isinstance(box, Box)],
-                        [])
+                        None)
         if result_type == 'void':
-            results = []
+            result = None
         elif result_type == 'int':
-            results = [BoxInt()]
+            result = BoxInt()
         elif result_type == 'ptr':
-            results = [BoxPtr()]
+            result = BoxPtr()
         else:
             raise ValueError(result_type)
         operations = [mp,
-                      ResOperation(opname, livevarlist, results),
-                      ResOperation('return', results, [])]
-        if opname.startswith('guard_'):
+                      ResOperation(opnum, livevarlist, result),
+                      ResOperation(rop.RETURN, [result], None)]
+        if operations[1].is_guard():
             operations[1].liveboxes = []
         self.cpu.compile_operations(operations, verbose=False)
         return mp
@@ -75,10 +76,10 @@ class TestX86(object):
 
     def test_int_binary_ops(self):
         for op, args, res in [
-            ('int_sub', [BoxInt(42), BoxInt(40)], 2),
-            ('int_sub', [BoxInt(42), ConstInt(40)], 2),
-            ('int_sub', [ConstInt(42), BoxInt(40)], 2),
-            ('int_add', [ConstInt(-3), ConstInt(-5)], -8),
+            (rop.INT_SUB, [BoxInt(42), BoxInt(40)], 2),
+            (rop.INT_SUB, [BoxInt(42), ConstInt(40)], 2),
+            (rop.INT_SUB, [ConstInt(42), BoxInt(40)], 2),
+            (rop.INT_ADD, [ConstInt(-3), ConstInt(-5)], -8),
             ]:
             assert self.execute_operation(op, args, 'int').value == res
 
@@ -119,12 +120,12 @@ class TestX86(object):
         t = BoxInt(455)
         u = BoxInt(0)    # False
         operations = [
-            MergePoint('merge_point', [x, y], []),
-            ResOperation('int_add', [x, y], [z]),
-            ResOperation('int_sub', [y, ConstInt(1)], [t]),
+            ResOperation(rop.MERGE_POINT, [x, y], []),
+            ResOperation(rop.INT_ADD, [x, y], [z]),
+            ResOperation(rop.INT_SUB, [y, ConstInt(1)], [t]),
             ResOperation('int_eq', [t, ConstInt(0)], [u]),
-            GuardOp('guard_false', [u], []),
-            Jump('jump', [z, t], []),
+            ResOperation('guard_false', [u], []),
+            ResOperation('jump', [z, t], []),
             ]
         startmp = operations[0]
         operations[-1].jump_target = startmp
