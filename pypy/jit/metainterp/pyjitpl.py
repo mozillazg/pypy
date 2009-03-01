@@ -296,12 +296,21 @@ class MIFrame(object):
     @arguments("orgpc", "box", "constargs", "jumptargets")
     def opimpl_switch(self, pc, valuebox, constargs, jumptargets):
         box = self.implement_guard_value(pc, valuebox)
-        # XXX implement dictionary for speedups at some point
         for i in range(len(constargs)):
             casebox = constargs[i]
             if box.equals(casebox):
                 self.pc = jumptargets[i]
                 break
+
+    @arguments("orgpc", "box", "constbox")
+    def opimpl_switch_dict(self, pc, valuebox, switchdict):
+        box = self.implement_guard_value(pc, valuebox)
+        search_value = box.getint()
+        assert isinstance(switchdict, codewriter.SwitchDict)
+        try:
+            self.pc = switchdict.dict[search_value]
+        except KeyError:
+            pass
 
     @arguments("constbox")
     def opimpl_new(self, sizebox):
@@ -574,7 +583,8 @@ class MIFrame(object):
 
     @arguments()
     def opimpl_reraise(self):
-        xxx
+        return self.metainterp.finishframe_exception(self.exception_box,
+                                                     self.exc_value_box)
 
     # ------------------------------
 

@@ -282,6 +282,21 @@ class BasicTests:
         assert res == 210
         self.check_history_(getfield_gc=0)
 
+    def test_switch_dict(self):
+        def f(x):
+            if   x == 1: return 61
+            elif x == 2: return 511
+            elif x == 3: return -22
+            elif x == 4: return 81
+            elif x == 5: return 17
+            elif x == 6: return 54
+            elif x == 7: return 987
+            elif x == 8: return -12
+            elif x == 9: return 321
+            return -1
+        res = self.interp_operations(f, [5])
+        assert res == 17
+
 
 class TestOOtype(BasicTests, OOJitMixin):
     pass

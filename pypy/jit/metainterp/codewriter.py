@@ -80,6 +80,10 @@ class IndirectCallset(history.AbstractValue):
         self.bytecode_for_address = bytecode_for_address
         self.dict = None
 
+
+class SwitchDict(history.AbstractValue):
+    "Get a 'dict' attribute mapping integer values to bytecode positions."
+
 # ____________________________________________________________
 
 
@@ -233,6 +237,7 @@ class BytecodeMaker(object):
 
         labelpos = {}
         code = assemble(labelpos, self.codewriter.metainterp, self.assembler)
+        self.resolve_switch_targets(labelpos)
         self.bytecode.setup(code, self.constants)
 
         self.bytecode._source = self.assembler
@@ -335,13 +340,24 @@ class BytecodeMaker(object):
             self.minimize_variables()
             switches = [link for link in block.exits
                         if link.exitcase != 'default']
+            if len(switches) >= 6 and isinstance(block.exitswitch.concretetype,
+                                                 lltype.Primitive):
+                switchdict = SwitchDict()
+                switchdict._maps = {}
+                for link in switches:
+                    key = lltype.cast_primitive(lltype.Signed, link.llexitcase)
+                    switchdict._maps[key] = link
+                self.emit("switch_dict",
+                          self.var_position(block.exitswitch),
+                          self.get_position(switchdict))
+            else:
+                self.emit("switch",
+                          self.var_position(block.exitswitch))
+                self.emit_list([self.const_position(link.llexitcase)
+                                for link in switches])
+                self.emit_list([tlabel(link) for link in switches])
             renamings = [self.insert_renaming(link.args)
                          for link in switches]
-            self.emit("switch",
-                      self.var_position(block.exitswitch))
-            self.emit_list([self.const_position(link.llexitcase)
-                            for link in switches])
-            self.emit_list([tlabel(link) for link in switches])
             if block.exits[-1].exitcase == 'default':
                 link = block.exits[-1]
                 self.emit(*self.insert_renaming(link.args))
@@ -356,11 +372,18 @@ class BytecodeMaker(object):
         self.dont_minimize_variables += 1
         handler = object()
         renamings = []
-        for link in exception_exits:
+        for i, link in enumerate(exception_exits):
             args_without_last_exc = [v for v in link.args
                                        if (v is not link.last_exception and
                                            v is not link.last_exc_value)]
-            renamings.append(self.insert_renaming(args_without_last_exc))
+            if (link.exitcase is Exception and
+                not args_without_last_exc and link.target.operations == () and
+                len(link.target.inputargs) == 2):
+                # stop at the catch-and-reraise-every-exception branch, if any
+                exception_exits = exception_exits[:i]
+                break
+            renamings.append(self.insert_renaming(args_without_last_exc,
+                                                  force=True))
         self.pending_exception_handlers.append((handler, exception_exits,
                                                 renamings))
         self.emit("setup_exception_block",
@@ -394,7 +417,7 @@ class BytecodeMaker(object):
                 self.emit("put_last_exc_value", i)
         self.make_bytecode_block(link.target)
 
-    def insert_renaming(self, args):
+    def insert_renaming(self, args, force=False):
         args = [v for v in args if v.concretetype is not lltype.Void]
         if len(args) >= MAX_MAKE_NEW_VARS:
             code = ["make_new_vars", len(args)]
@@ -402,18 +425,33 @@ class BytecodeMaker(object):
             code = ["make_new_vars_%d" % len(args)]
         for v in args:
             code.append(self.var_position(v))
+        if (not force and len(args) == self.free_vars and
+            code[len(code)-len(args):] == range(0, self.free_vars*2, 2)):
+            return []     # no-op
         return code
 
     def minimize_variables(self):
         if self.dont_minimize_variables:
             return
         block, index = self.current_position
-        vars = self.vars_alive_through_op(block, index)
+        allvars = self.vars_alive_through_op(block, index)
+        seen = {}       # {position: unique Variable} without Voids
+        unique = {}     # {Variable: unique Variable} without Voids
+        for v in allvars:
+            if v.concretetype is not lltype.Void:
+                pos = self.var_position(v)
+                seen.setdefault(pos, v)
+                unique[v] = seen[pos]
+        vars = seen.items()
+        vars.sort()
+        vars = [v1 for pos, v1 in vars]
         self.emit(*self.insert_renaming(vars))
         self.free_vars = 0
         self.var_positions.clear()
-        for v in vars:
-            self.register_var(v, verbose=False)
+        for v1 in vars:
+            self.register_var(v1, verbose=False)
+        for v, v1 in unique.items():
+            self.var_positions[v] = self.var_positions[v1]
 
     def vars_alive_through_op(self, block, index):
         """Returns the list of variables that are really used by or after
@@ -789,6 +827,13 @@ class BytecodeMaker(object):
     def emit_list(self, l):
         self.emit(len(l))
         self.emit(*l)
+
+    def resolve_switch_targets(self, labelpos):
+        for sd in self.constants:
+            if isinstance(sd, SwitchDict):
+                sd.dict = {}
+                for key, link in sd._maps.items():
+                    sd.dict[key] = labelpos[link]
 
 # ____________________________________________________________
 

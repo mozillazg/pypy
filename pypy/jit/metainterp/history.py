@@ -5,6 +5,9 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.tool.uid import uid
 from pypy.conftest import option
 
+from pypy.jit.metainterp import resoperation as rop
+from pypy.jit.metainterp.resoperation import ResOperation
+
 import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer('compiler')

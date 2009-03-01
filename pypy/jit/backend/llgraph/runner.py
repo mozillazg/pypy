@@ -176,7 +176,7 @@ class CPU(object):
         if resbox is not None:
             resboxes.append(resbox)
         operations = [
-            history.MergePoint('merge_point', valueboxes, None),
+            history.ResOperation('merge_point', valueboxes, None),
             history.ResOperation(opname, valueboxes, resbox),
             history.ResOperation('return', resboxes, None),
             ]
