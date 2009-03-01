@@ -27,7 +27,6 @@ class CPU386(object):
         self.stats = stats
         self.translate_support_code = translate_support_code
         if translate_support_code:
-            assert False, "need exception support"
             self.mixlevelann = MixLevelHelperAnnotator(rtyper)
         else:
             self.current_interpreter = LLInterpreter(self.rtyper)
@@ -50,6 +49,16 @@ class CPU386(object):
         self.caught_exception = None
         if rtyper is not None: # for tests
             self.lltype2vtable = rtyper.lltype_to_vtable_mapping()
+            self._setup_ovf_error()
+
+    def _setup_ovf_error(self):
+        bk = self.rtyper.annotator.bookkeeper
+        clsdef = bk.getuniqueclassdef(OverflowError)
+        ovferror_repr = rclass.getclassrepr(self.rtyper, clsdef)
+        ll_inst = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
+            self.rtyper, clsdef)
+        self._ovf_error_vtable = self.cast_ptr_to_int(ll_inst.typeptr)
+        self._ovf_error_inst = self.cast_ptr_to_int(ll_inst)
 
     def setup(self):
         self.assembler = Assembler386(self)
@@ -112,9 +121,17 @@ class CPU386(object):
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp
 
+    def _get_overflow_error(self):
+        self.assembler._exception_data[1] = self._ovf_error_inst
+        return self._ovf_error_vtable
+
     def get_exception(self, frame):
         res = self.assembler._exception_data[0]
         self.assembler._exception_data[0] = 0
+        if res == 1:
+            # it's an overflow error, but we need to do all the dance
+            # to get a correct exception
+            return self._get_overflow_error()
         return res
 
     def get_exc_value(self, frame):
@@ -137,9 +154,9 @@ class CPU386(object):
         if self.assembler._exception_data[0] != 0:
             TP = lltype.Ptr(rclass.OBJECT_VTABLE)
             TP_V = lltype.Ptr(rclass.OBJECT)
-            exc_t_a = self.cast_int_to_adr(self.assembler._exception_data[0])
+            exc_t_a = self.cast_int_to_adr(self.get_exception(None))
             exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
-            exc_v_a = self.cast_int_to_gcref(self.assembler._exception_data[1])
+            exc_v_a = self.get_exc_value(None)
             exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
             # clean up the exception
             self.assembler._exception_data[0] = 0

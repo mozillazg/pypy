@@ -182,6 +182,14 @@ class Assembler386(object):
             getattr(self.mc, asmop)(arglocs[0], arglocs[1])
         return genop_binary
 
+    def _binaryop_ovf(asmop, can_swap=False):
+        def genop_binary_ovf(self, op, arglocs, result_loc):
+            getattr(self.mc, asmop)(arglocs[0], arglocs[1])
+            # XXX think about CMOV instead of SETO, this would avoid
+            # a mess in detecting an exception
+            self.mc.SETO(heap8(self._exception_addr))
+        return genop_binary_ovf
+
     def _cmpop(cond, rev_cond):
         def genop_cmp(self, op, arglocs, result_loc):
             if isinstance(op.args[0], Const):
@@ -208,12 +216,26 @@ class Assembler386(object):
     genop_int_mul = _binaryop("IMUL", True)
     genop_int_and = _binaryop("AND", True)
 
+    genop_uint_add = genop_int_add
+    genop_uint_sub = genop_int_sub
+    genop_uint_mul = genop_int_mul
+    genop_uint_and = genop_int_and
+
+    genop_int_mul_ovf = _binaryop_ovf("IMUL", True)
+    genop_int_sub_ovf = _binaryop_ovf("SUB")
+    genop_int_add_ovf = _binaryop_ovf("ADD")
+
     genop_int_lt = _cmpop("L", "G")
     genop_int_le = _cmpop("LE", "GE")
     genop_int_eq = _cmpop("E", "NE")
     genop_int_ne = _cmpop("NE", "E")
     genop_int_gt = _cmpop("G", "L")
     genop_int_ge = _cmpop("GE", "LE")
+
+    genop_uint_gt = _cmpop("A", "B")
+    genop_uint_lt = _cmpop("B", "A")
+    genop_uint_le = _cmpop("BE", "AE")
+    genop_uint_ge = _cmpop("AE", "BE")
 
     # for now all chars are being considered ints, although we should make
     # a difference at some point

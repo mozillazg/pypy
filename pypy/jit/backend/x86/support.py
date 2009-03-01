@@ -2,6 +2,7 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.translator.c.test.test_genc import compile
 import ctypes
 
 GC_MALLOC = lltype.Ptr(lltype.FuncType([lltype.Signed], llmemory.Address))
@@ -27,3 +28,20 @@ def gc_malloc_fnaddr():
         else:
             GC_malloc = boehmlib.GC_malloc
             return cast(GC_malloc, c_void_p).value
+
+def c_meta_interp(function, args, **kwds):
+    from pypy.translator.translator import TranslationContext
+    from pypy.jit.metainterp.warmspot import WarmRunnerDesc
+    from pypy.jit.backend.x86.runner import CPU386
+    
+    t = TranslationContext()
+    t.config.translation.gc = 'boehm'
+    t.buildannotator().build_types(function, [int] * len(args))
+    t.buildrtyper().specialize()
+    warmrunnerdesc = WarmRunnerDesc(t, translate_support_code=True,
+                                    CPUClass=CPU386,
+                                    **kwds)
+    warmrunnerdesc.state.set_param_threshold(3)          # for tests
+    warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
+    warmrunnerdesc.finish()
+
