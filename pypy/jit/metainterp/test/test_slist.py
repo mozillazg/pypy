@@ -46,7 +46,7 @@ class ListTests:
                 lst[0] += 2
                 n -= 1
             return lst[0]
-        res = self.meta_interp(f, [21])
+        res = self.meta_interp(f, [21], listops=True)
         assert res == 42
         # no more list operations in the loop
         py.test.skip("not a ModifiedList yet")

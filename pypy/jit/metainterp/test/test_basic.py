@@ -17,7 +17,8 @@ def get_metainterp(func, values, CPUClass, type_system, policy):
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, False)
     graph = rtyper.annotator.translator.graphs[0]
-    metainterp = pyjitpl.OOMetaInterp(graph, [], cpu, stats, False)
+    opt = history.Options(specialize=False, listops=False)
+    metainterp = pyjitpl.OOMetaInterp(graph, [], cpu, stats, opt)
     metainterp.num_green_args = 0
     return metainterp, rtyper
 

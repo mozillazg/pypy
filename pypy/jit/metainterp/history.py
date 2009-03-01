@@ -465,7 +465,8 @@ class Stats(object):
 # ----------------------------------------------------------------
 
 class Options:
-    def __init__(self, specialize=True):
+    def __init__(self, specialize=True, listops=False):
         self.specialize = specialize
+        self.listops = listops
     def _freeze_(self):
         return True

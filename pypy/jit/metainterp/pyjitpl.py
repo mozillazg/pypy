@@ -76,10 +76,6 @@ class arguments(object):
                     assert isinstance(indirectcallset,
                                       codewriter.IndirectCallset)
                     args += (indirectcallset, )
-                elif argspec == "builtin":
-                    builtin = self.load_const_arg()
-                    assert isinstance(builtin, codewriter.BuiltinDescr)
-                    args += (builtin, )
                 elif argspec == "virtualizabledesc":
                     from virtualizable import VirtualizableDesc
                     virtualizabledesc = self.load_const_arg()
@@ -424,59 +420,56 @@ class MIFrame(object):
         return self.execute_with_exc(rop.CALL_VOID, varargs, 'void')
 
 
-    @arguments("builtin", "varargs")
-    def opimpl_getitem(self, descr, varargs):
-        args = [descr.getfunc] + varargs
-        return self.execute_with_exc('getitem', args, descr.tp)
+##    @arguments("fixedlist", "box", "box")
+##    def opimpl_list_getitem(self, descr, listbox, indexbox):
+##        args = [descr.getfunc, listbox, indexbox]
+##        return self.execute_with_exc(rop.LIST_GETITEM, args, descr.tp)
 
-    @arguments("builtin", "varargs")
-    def opimpl_setitem(self, descr, varargs):
-        args = [descr.setfunc] + varargs
-        return self.execute_with_exc('setitem', args, 'void')
+##    @arguments("fixedlist", "box", "box", "box")
+##    def opimpl_list_setitem(self, descr, listbox, indexbox, newitembox):
+##        args = [descr.setfunc, listbox, indexbox, newitembox]
+##        return self.execute_with_exc(rop.LIST_SETITEM, args, 'void')
 
-    @arguments("builtin", "varargs")
-    def opimpl_getitem_foldable(self, descr, varargs):
-        args = [descr.getfunc] + varargs
-        return self.execute_with_exc('getitem', args, descr.tp, True)
+##    @arguments("builtin", "varargs")
+##    def opimpl_getitem_foldable(self, descr, varargs):
+##        args = [descr.getfunc] + varargs
+##        return self.execute_with_exc('getitem', args, descr.tp, True)
 
-    @arguments("builtin", "varargs")
-    def opimpl_setitem_foldable(self, descr, varargs):
-        args = [descr.setfunc] + varargs
-        return self.execute_with_exc('setitem', args, 'void', True)
+##    @arguments("builtin", "varargs")
+##    def opimpl_setitem_foldable(self, descr, varargs):
+##        args = [descr.setfunc] + varargs
+##        return self.execute_with_exc('setitem', args, 'void', True)
 
-    @arguments("builtin", "varargs")
-    def opimpl_newlist(self, descr, varargs):
-        if len(varargs) == 2:
-            mf = descr.malloc_3_func
-        else:
-            mf = descr.malloc_2_func
-        args = [mf] + varargs
-        return self.execute_with_exc('newlist', args, 'ptr')
+##    @arguments("fixedlist", "box", "box")
+##    def opimpl_newlist(self, descr, countbox, defaultbox):
+##        args = [descr.malloc_func, countbox, defaultbox]
+##        return self.execute_with_exc(rop.NEWLIST, args, 'ptr')
 
-    @arguments("builtin", "varargs")
-    def opimpl_append(self, descr, varargs):
-        args = [descr.append_func] + varargs
-        return self.execute_with_exc('append', args, 'void')
+##    @arguments("builtin", "varargs")
+##    def opimpl_append(self, descr, varargs):
+##        args = [descr.append_func] + varargs
+##        return self.execute_with_exc('append', args, 'void')
 
-    @arguments("builtin", "varargs")
-    def opimpl_insert(self, descr, varargs):
-        args = [descr.insert_func] + varargs
-        return self.execute_with_exc('insert', args, 'void')
+##    @arguments("builtin", "varargs")
+##    def opimpl_insert(self, descr, varargs):
+##        args = [descr.insert_func] + varargs
+##        return self.execute_with_exc('insert', args, 'void')
 
-    @arguments("builtin", "varargs")
-    def opimpl_pop(self, descr, varargs):
-        args = [descr.pop_func] + varargs
-        return self.execute_with_exc('pop', args, descr.tp)
+##    @arguments("builtin", "varargs")
+##    def opimpl_pop(self, descr, varargs):
+##        args = [descr.pop_func] + varargs
+##        return self.execute_with_exc('pop', args, descr.tp)
 
-    @arguments("builtin", "varargs")
-    def opimpl_len(self, descr, varargs):
-        args = [descr.len_func] + varargs
-        return self.execute_with_exc('len', args, 'int')
+##    @arguments("builtin", "varargs")
+##    def opimpl_len(self, descr, varargs):
+##        args = [descr.len_func] + varargs
+##        return self.execute_with_exc('len', args, 'int')
 
-    @arguments("builtin", "varargs")
-    def opimpl_listnonzero(self, descr, varargs):
-        args = [descr.nonzero_func] + varargs
-        return self.execute_with_exc('listnonzero', args, 'int')
+##    @arguments("builtin", "varargs")
+##    def opimpl_listnonzero(self, descr, varargs):
+##        args = [descr.nonzero_func] + varargs
+##        return self.execute_with_exc('listnonzero', args, 'int')
+
 
     @arguments("orgpc", "indirectcallset", "box", "varargs")
     def opimpl_indirect_call(self, pc, indirectcallset, box, varargs):
@@ -721,12 +714,6 @@ class OOMetaInterp(object):
 
         self.opcode_implementations = []
         self.opname_to_index = {}
-
-        # helpers to eventually build the dictionary "self.builtins":
-        self.builtins_keys = []
-        self.builtins_values = []
-        self.builtins_seen = {}
-
         self.class_sizes = populate_type_cache(graphs, self.cpu)
 
         self._virtualizabledescs = {}
@@ -979,26 +966,6 @@ class OOMetaInterp(object):
             key.append((frame.jitcode, frame.pc, len(frame.env),
                         frame.exception_target))
         return key
-
-    def make_builtin_dictionary(self):
-        # In case this is translated, the following runs at run-time.
-        # It's not possible to make a dictionary with keys that are function
-        # pointers at translation-time, as the actual address of each
-        # function could change from run to run.
-        if we_are_translated():
-            self.builtins = {}
-            for i in range(len(self.builtins_keys)):
-                self.builtins[self.builtins_keys[i]] = self.builtins_values[i]
-
-    def builtins_get(self, addr):
-        assert lltype.typeOf(addr) == llmemory.Address
-        if we_are_translated():
-            return self.builtins.get(addr, (None, None))
-        else:
-            for i in range(len(self.builtins_keys)):
-                if self.builtins_keys[i] == addr:
-                    return self.builtins_values[i]
-            return (None, None)
 
     # ____________________________________________________________
     # construction-time interface
