@@ -5,15 +5,15 @@ from pypy.rpython.lltypesystem.rvirtualizable2 import VABLERTIPTR
 from pypy.rpython.lltypesystem.rvirtualizable2 import VirtualizableAccessor
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp import heaptracker
-from pypy.jit.metainterp.history import (ResOperation,
-                                         ConstInt, ConstAddr, BoxInt, BoxPtr)
+from pypy.jit.metainterp.history import ConstInt, ConstAddr, BoxInt, BoxPtr
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
                                           VirtualizableSpecNode,
                                           VirtualInstanceSpecNode,
                                           NotSpecNode)
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
-                                                    equaloplists, Loop)
+                                                    equaloplists, Loop,
+                                                    ResOperation)
 #from pypy.jit.metainterp.codewriter import ListDescr
 
 # ____________________________________________________________

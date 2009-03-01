@@ -4,6 +4,7 @@ from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
 from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.metainterp.resoperation import rop
 
 class TestLoop(LLJitMixin):
     specialize = False
@@ -311,8 +312,8 @@ class TestLoop(LLJitMixin):
         assert res == expected
         
         loops = get_stats().loops
-        assert loops[0].operations[0].opname == 'merge_point'
-        assert loops[1].operations[0].opname == 'catch'
+        assert loops[0].operations[0].opnum == rop.MERGE_POINT
+        assert loops[1].operations[0].opnum == rop.CATCH
 
     def test_example(self):
         myjitdriver = JitDriver(greens = ['i'],

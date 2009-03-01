@@ -5,8 +5,10 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
 from pypy.jit.backend.llgraph import runner
+from pypy.jit.metainterp import resoperation
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         ConstAddr, ResOperation)
+                                         ConstAddr)
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
     CancelInefficientLoop, VirtualInstanceSpecNode, FixedClassSpecNode,
     rebuild_boxes_from_guard_failure, AllocationStorage,
@@ -56,7 +58,7 @@ def equaloplists(oplist1, oplist2):
             print '%-39s| %s' % (txt1[:39], txt2[:39])
             txt1 = txt1[39:]
             txt2 = txt2[39:]
-        assert op1.opname == op2.opname
+        assert op1.opnum == op2.opnum
         assert len(op1.args) == len(op2.args)
         for x, y in zip(op1.args, op2.args):
             assert x == y or y == x     # for ANY object :-(
@@ -66,6 +68,13 @@ def equaloplists(oplist1, oplist2):
     #finally:
     #    Box._extended_display = saved
     return True
+
+def ResOperation(opname, args, result):
+    if opname == 'escape':
+        opnum = -123       # random number not in the list
+    else:
+        opnum = getattr(rop, opname.upper())
+    return resoperation.ResOperation(opnum, args, result)
 
 # ____________________________________________________________
 
@@ -148,7 +157,7 @@ class B:
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], n2),
         ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
-        ResOperation('some_escaping_operation', [n2], None),    # <== escaping
+        ResOperation('escape', [n2], None),    # <== escaping
         ResOperation('jump', [sum2, n2], None),
         ]
 
@@ -186,7 +195,7 @@ def test_B_optimize_loop():
                                          ConstAddr(node_vtable, cpu)], B.n2),
         ResOperation('setfield_gc', [B.n2, ConstInt(B.ofs_value), B.v2],
                                        None),
-        ResOperation('some_escaping_operation', [B.n2], None),   # <== escaping
+        ResOperation('escape', [B.n2], None),   # <== escaping
         ResOperation('jump', [B.sum2, B.n2], None),
         ])
 
@@ -198,11 +207,11 @@ class C:
         ResOperation('merge_point', [sum, n1], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
                                      sizebox], None),
-        ResOperation('some_escaping_operation', [n1], None),    # <== escaping
+        ResOperation('escape', [n1], None),    # <== escaping
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
         ResOperation('int_sub', [v, ConstInt(1)], v2),
         ResOperation('int_add', [sum, v], sum2),
-        ResOperation('some_escaping_operation', [n1], None),    # <== escaping
+        ResOperation('escape', [n1], None),    # <== escaping
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
                                          ConstAddr(node_vtable, cpu)], n2),
         ResOperation('setfield_gc', [n2, ConstInt(ofs_value), v2], None),
@@ -235,11 +244,11 @@ def test_C_optimize_loop():
     equaloplists(spec.loop.operations, [
         ResOperation('merge_point', [C.sum, C.n1], None),
         # guard_class is gone
-        ResOperation('some_escaping_operation', [C.n1], None),   # <== escaping
+        ResOperation('escape', [C.n1], None),   # <== escaping
         ResOperation('getfield_gc', [C.n1, ConstInt(C.ofs_value)], C.v),
         ResOperation('int_sub', [C.v, ConstInt(1)], C.v2),
         ResOperation('int_add', [C.sum, C.v], C.sum2),
-        ResOperation('some_escaping_operation', [C.n1], None),   # <== escaping
+        ResOperation('escape', [C.n1], None),   # <== escaping
         ResOperation('new_with_vtable', [ConstInt(C.size_of_node),
                                          ConstAddr(node_vtable, cpu)], C.n2),
         ResOperation('setfield_gc', [C.n2, ConstInt(C.ofs_value), C.v2],
@@ -256,7 +265,7 @@ class D:
         ResOperation('guard_class', [n1, ConstAddr(node2_vtable, cpu),
                                      sizebox], None),
         # the only difference is different vtable  ^^^^^^^^^^^^
-        ResOperation('getfield', [n1, ConstInt(ofs_value)], v),
+        ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
         ResOperation('int_sub', [v, ConstInt(1)], v2),
         ResOperation('int_add', [sum, v], sum2),
         ResOperation('new_with_vtable', [ConstInt(size_of_node),
@@ -303,7 +312,7 @@ def test_E_optimize_loop():
         ResOperation('jump', [E.sum2, E.v2], None),
         ])
     guard_op = spec.loop.operations[-2]
-    assert guard_op.opname == 'guard_true'
+    assert guard_op.getopname() == 'guard_true'
     assert guard_op.liveboxes == [E.sum2, E.v2]
     vt = cpu.cast_adr_to_int(node_vtable_adr)
     assert guard_op.storage_info.allocations == [vt]
@@ -314,8 +323,8 @@ def test_E_rebuild_after_failure():
         def __init__(self):
             self.ops = []
         
-        def execute_and_record(self, opname, args, res_type, pure):
-            self.ops.append((opname, args))
+        def execute_and_record(self, opnum, args, res_type, pure):
+            self.ops.append((opnum, args))
             if res_type != 'void':
                 return 'allocated'
             else:
@@ -339,8 +348,8 @@ def test_E_rebuild_after_failure():
     newboxes = rebuild_boxes_from_guard_failure(guard_op, fake_metainterp,
                                                 [v_sum_b, v_v_b])
     expected = [
-       ('new_with_vtable', [E.sizebox, ConstInt(vt)]),
-       ('setfield_gc', ['allocated', ConstInt(E.ofs_value), v_v_b])
+       (rop.NEW_WITH_VTABLE, [E.sizebox, ConstInt(vt)]),
+       (rop.SETFIELD_GC, ['allocated', ConstInt(E.ofs_value), v_v_b])
        ]
     assert expected == fake_metainterp.history.ops
     assert newboxes == [v_sum_b, 'allocated']
@@ -412,7 +421,7 @@ class F2:
         ResOperation('merge_point', [n2, n3], None),
         ResOperation('oois', [n2, n3], vbool1),
         ResOperation('guard_true', [vbool1], None),
-        ResOperation('external', [], n4),
+        ResOperation('escape', [], n4),
         ResOperation('jump', [n2, n4], None),
         ]
     ops[2].liveboxes = [n2]
@@ -463,7 +472,7 @@ def test_G_optimize_loop():
         ResOperation('jump', [G.sum2, ConstInt(124)], None),
         ])
     guard_op = spec.loop.operations[-2]
-    assert guard_op.opname == 'guard_true'
+    assert guard_op.getopname() == 'guard_true'
     assert guard_op.liveboxes == [G.sum2, ConstInt(124)]
     vt = cpu.cast_adr_to_int(node_vtable_adr)
     assert guard_op.storage_info.allocations == [vt]
@@ -767,7 +776,7 @@ class O1:
     locals().update(A.__dict__)    # :-)
     ops = [
         ResOperation('merge_point', [], None),
-        ResOperation('produce_somehow_n1', [], n1),
+        ResOperation('escape', [], n1),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
                                      sizebox], None),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
@@ -784,7 +793,7 @@ def test_O1_optimize_loop():
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
         ResOperation('merge_point', [], None),
-        ResOperation('produce_somehow_n1', [], O1.n1),
+        ResOperation('escape', [], O1.n1),
         # only the first guard_class is left
         ResOperation('guard_class', [O1.n1, ConstAddr(node_vtable, cpu),
                                      O1.sizebox], None),
@@ -798,7 +807,7 @@ class O2:
     v1 = BoxInt(1)
     ops = [
         ResOperation('merge_point', [], None),
-        ResOperation('produce_somehow_n1', [], n1),
+        ResOperation('escape', [], n1),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
                                      sizebox], None),
         ResOperation('oononnull', [n1], v1),
@@ -815,7 +824,7 @@ def test_O2_optimize_loop():
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
         ResOperation('merge_point', [], None),
-        ResOperation('produce_somehow_n1', [], O2.n1),
+        ResOperation('escape', [], O2.n1),
         ResOperation('guard_class', [O2.n1, ConstAddr(node_vtable, cpu),
                                      O2.sizebox], None),
         # the oononnull and guard_true are gone, because we know they
@@ -830,7 +839,7 @@ class O3:
     v1 = BoxInt(1)
     ops = [
         ResOperation('merge_point', [], None),
-        ResOperation('produce_somehow_n1', [], n1),
+        ResOperation('escape', [], n1),
         ResOperation('guard_class', [n1, ConstAddr(node_vtable, cpu),
                                      sizebox], None),
         ResOperation('oois', [n1, ConstPtr(lltype.nullptr(llmemory.GCREF.TO))],
@@ -848,7 +857,7 @@ def test_O3_optimize_loop():
     spec.optimize_loop()
     equaloplists(spec.loop.operations, [
         ResOperation('merge_point', [], None),
-        ResOperation('produce_somehow_n1', [], O3.n1),
+        ResOperation('escape', [], O3.n1),
         ResOperation('guard_class', [O3.n1, ConstAddr(node_vtable, cpu),
                                      O3.sizebox], None),
         # the oois and guard_false are gone, because we know they

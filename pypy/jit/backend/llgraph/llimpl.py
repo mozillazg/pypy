@@ -15,7 +15,8 @@ from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLInterpreter, LLFrame, LLException
 from pypy.rpython.extregistry import ExtRegistryEntry
 
-from pypy.jit.metainterp import heaptracker
+from pypy.jit.metainterp import heaptracker, resoperation
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.llgraph import symbolic
 
 from pypy.rlib.objectmodel import ComputedIntSymbolic
@@ -131,8 +132,8 @@ class LoopOrBridge(object):
         return '\n'.join(lines)
 
 class Operation(object):
-    def __init__(self, opname):
-        self.opname = opname
+    def __init__(self, opnum):
+        self.opnum = opnum
         self.args = []
         self.result = None
         self.livevars = []   # for guards only
@@ -142,8 +143,14 @@ class Operation(object):
             sres = repr0(self.result) + ' = '
         else:
             sres = ''
-        return '{%s%s(%s)}' % (sres, self.opname,
+        return '{%s%s(%s)}' % (sres, self.getopname(),
                                ', '.join(map(repr0, self.args)))
+
+    def getopname(self):
+        try:
+            return resoperation.opname[self.opnum]
+        except KeyError:
+            return '<%d>' % self.opnum
 
 def repr0(x):
     if isinstance(x, list):
@@ -240,10 +247,9 @@ def compile_start_ptr_var(loop):
     _variables.append(v)
     return r
 
-def compile_add(loop, opname):
+def compile_add(loop, opnum):
     loop = _from_opaque(loop)
-    opname = from_opaque_string(opname)
-    loop.operations.append(Operation(opname))
+    loop.operations.append(Operation(opnum))
 
 def compile_add_var(loop, intvar):
     loop = _from_opaque(loop)
@@ -290,7 +296,7 @@ def compile_add_jump_target(loop, loop_target, loop_target_index):
     op = loop.operations[-1]
     op.jump_target = loop_target
     op.jump_target_index = loop_target_index
-    if op.opname == 'jump':
+    if op.opnum == rop.JUMP:
         if loop_target == loop and loop_target_index == 0:
             log.info("compiling new loop")
         else:
@@ -310,7 +316,7 @@ def compile_from_guard(loop, guard_loop, guard_opindex):
     loop = _from_opaque(loop)
     guard_loop = _from_opaque(guard_loop)
     op = guard_loop.operations[guard_opindex]
-    assert op.opname.startswith('guard_')
+    assert rop._GUARD_FIRST <= op.opnum <= rop._GUARD_LAST
     op.jump_target = loop
     op.jump_target_index = 0
 
@@ -350,17 +356,18 @@ class Frame(object):
             self.opindex += 1
             op = self.loop.operations[self.opindex]
             args = [self.getenv(v) for v in op.args]
-            if op.opname == 'merge_point':
+            if op.opnum == rop.MERGE_POINT:
                 self.go_to_merge_point(self.loop, self.opindex, args)
                 continue
-            if op.opname == 'jump':
+            if op.opnum == rop.JUMP:
                 self.go_to_merge_point(op.jump_target,
                                        op.jump_target_index,
                                        args)
                 _stats.exec_jumps += 1
                 continue
+            opname = resoperation.opname[op.opnum].lower()
             try:
-                result = self.execute_operation(op.opname, args, verbose)
+                result = self.execute_operation(opname, args, verbose)
                 #verbose = self.verbose
                 assert (result is None) == (op.result is None)
                 if op.result is not None:
@@ -379,7 +386,7 @@ class Frame(object):
                     # the guard already failed once, go to the
                     # already-generated code
                     catch_op = op.jump_target.operations[0]
-                    assert catch_op.opname == 'catch'
+                    assert catch_op.opnum == rop.CATCH
                     args = []
                     it = iter(op.livevars)
                     for v in catch_op.args:
@@ -394,7 +401,7 @@ class Frame(object):
                 else:
                     if self.verbose:
                         log.trace('failed: %s(%s)' % (
-                            op.opname, ', '.join(map(str, args))))
+                            opname, ', '.join(map(str, args))))
                     self.failed_guard_op = op
                     return op.failnum
 

@@ -137,10 +137,10 @@ class ResOpGen(object):
                 if tgt is not None and tgt in self.all_operations:
                     tgt_g, tgt_i = self.all_operations[tgt]
                     kwds = {}
-                    if op.opname == 'jump':
-                        #kwds['constraint'] = 'false'
-                        #kwds['headport'] = ':n'
-                        pass
+                    #if op.opname == 'jump':
+                    #    #kwds['constraint'] = 'false'
+                    #    #kwds['headport'] = ':n'
+                    #    pass
                     self.genedge((graphindex, opstartindex),
                                  (tgt_g, tgt_i+delta),
                                  color='red',
@@ -150,8 +150,8 @@ class ResOpGen(object):
                 break
             if opindex in block_starters:
                 kwds = {}
-                if op.opname == 'jump':
-                    kwds['color'] = '#d0d0ff'
+                #if op.opname == 'jump':
+                #    kwds['color'] = '#d0d0ff'
                 self.genedge((graphindex, opstartindex),
                              (graphindex, opindex), **kwds)
                 break

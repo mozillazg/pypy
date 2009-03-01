@@ -79,28 +79,3 @@ def populate_type_cache(graphs, cpu):
     return cache
 
 testing_gcstruct2vtable = {}
-
-# ____________________________________________________________
-# helpers
-
-def setup():
-    for _opname, _opdesc in lloperation.LL_OPERATIONS.iteritems():
-        if _opdesc.canfold:
-            always_pure_operations[_opname] = None
-        if not _opdesc.sideeffects:
-            operations_without_side_effects[_opname] = None
-        if not _opdesc.canraise:
-            operation_never_raises[_opname] = None
-
-    # XXX fish fish fish
-    operations_without_side_effects['getfield_gc'] = None
-
-operations_without_side_effects = {}
-always_pure_operations = {}
-operation_never_raises = {}
-
-for guard in ['guard_no_exception', 'guard_true',
-              'guard_false', 'guard_value', 'guard_class']:
-    operation_never_raises[guard] = None
-
-setup()

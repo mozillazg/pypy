@@ -1,9 +1,7 @@
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, BoxInt,
                                          ResOperation)
 from pypy.jit.metainterp.history import Options
-from pypy.jit.metainterp.heaptracker import (always_pure_operations,
-                                             operations_without_side_effects,
-                                             operation_never_raises)
 from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           #FixedListSpecNode,
                                           VirtualInstanceSpecNode,
@@ -305,12 +303,12 @@ class PerfectSpecializer(object):
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True,
                                            const=isinstance(box, Const))
         for op in self.loop.operations:
-            opname = op.opname
-            if (opname == 'merge_point' or
-                opname == 'catch' or
-                opname == 'jump'):
+            opnum = op.opnum
+            if (opnum == rop.MERGE_POINT or
+                opnum == rop.CATCH or
+                opnum == rop.JUMP):
                 continue
-            elif opname == 'new_with_vtable':
+            elif opnum == rop.NEW_WITH_VTABLE:
                 box = op.result
                 instnode = InstanceNode(box, escaped=False)
                 instnode.cls = InstanceNode(op.args[1], const=True)
@@ -343,7 +341,7 @@ class PerfectSpecializer(object):
 ##                    instnode.cursize = size
 ##                    instnode.origsize = size
 ##                continue
-            elif opname == 'setfield_gc':
+            elif opnum == rop.SETFIELD_GC:
                 instnode = self.getnode(op.args[0])
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
@@ -351,7 +349,7 @@ class PerfectSpecializer(object):
                 self.find_nodes_setfield(instnode, field,
                                          self.getnode(op.args[2]))
                 continue
-            elif opname == 'getfield_gc':
+            elif opnum == rop.GETFIELD_GC:
                 instnode = self.getnode(op.args[0])
                 fieldbox = op.args[1]
                 assert isinstance(fieldbox, ConstInt)
@@ -434,12 +432,12 @@ class PerfectSpecializer(object):
 ##                    self.dependency_graph.append((instnode,
 ##                                                 self.getnode(op.args[3])))
 ##                    instnode.escaped = True
-            elif opname == 'guard_class':
+            elif opnum == rop.GUARD_CLASS:
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1], const=True)
                 continue
-            elif opname == 'guard_value':
+            elif opnum == rop.GUARD_VALUE:
                 instnode = self.getnode(op.args[0])
                 assert isinstance(op.args[1], Const)
                 # XXX need to think more about the 'const' attribute
@@ -447,14 +445,14 @@ class PerfectSpecializer(object):
                 #self.nodes[instnode.source] = InstanceNode(op.args[1],
                 #                                           const=True)
                 continue
-            elif opname == 'guard_nonvirtualized':
+            elif opnum == rop.GUARD_NONVIRTUALIZED:
                 instnode = self.getnode(op.args[0])
                 if instnode.startbox:
                     instnode.virtualized = True
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1], const=True)
                 continue
-            elif opname in always_pure_operations:
+            elif op.is_always_pure():
                 for arg in op.args:
                     if not self.getnode(arg).const:
                         break
@@ -465,7 +463,7 @@ class PerfectSpecializer(object):
                                                    escaped=True,
                                                    const=True)
                     continue
-            elif opname not in operations_without_side_effects:
+            elif not op.has_no_side_effect():
                 # default case
                 self.first_escaping_op = False
                 for box in op.args:
@@ -476,7 +474,7 @@ class PerfectSpecializer(object):
                 self.nodes[box] = InstanceNode(box, escaped=True)
 
     def recursively_find_escaping_values(self):
-        assert self.loop.operations[0].opname == 'merge_point'
+        assert self.loop.operations[0].opnum == rop.MERGE_POINT
         end_args = self.loop.operations[-1].args
         memo = {}
         for i in range(len(end_args)):
@@ -504,8 +502,8 @@ class PerfectSpecializer(object):
         self.recursively_find_escaping_values()
         mp = self.loop.operations[0]
         jump = self.loop.operations[-1]
-        assert mp.opname == 'merge_point'
-        assert jump.opname == 'jump'
+        assert mp.opnum == rop.MERGE_POINT
+        assert jump.opnum == rop.JUMP
         specnodes = []
         for i in range(len(mp.args)):
             enternode = self.nodes[mp.args[i]]
@@ -618,13 +616,13 @@ class PerfectSpecializer(object):
         exception_might_have_happened = False
         #ops_so_far = []
         mp = self.loop.operations[0]
-        if mp.opname == 'merge_point':
+        if mp.opnum == rop.MERGE_POINT:
             assert len(mp.args) == len(self.specnodes)
             for i in range(len(self.specnodes)):
                 box = mp.args[i]
                 self.specnodes[i].mutate_nodes(self.nodes[box])
         else:
-            assert mp.opname == 'catch'
+            assert mp.opnum == rop.CATCH
             for box in mp.args:
                 self.nodes[box].cls = None
                 assert not self.nodes[box].virtual
@@ -634,10 +632,10 @@ class PerfectSpecializer(object):
 
             #if newoperations and newoperations[-1].results:
             #    self.ready_results[newoperations[-1].results[0]] = None
-            opname = op.opname
-            if opname == 'merge_point':
+            opnum = op.opnum
+            if opnum == rop.MERGE_POINT:
                 args = self.expanded_version_of(op.args, None)
-                op = ResOperation('merge_point', args, None)
+                op = ResOperation(rop.MERGE_POINT, args, None)
                 newoperations.append(op)
                 #for arg in op.args:
                 #    self.ready_results[arg] = None
@@ -645,10 +643,10 @@ class PerfectSpecializer(object):
             #elif opname == 'catch':
             #    for arg in op.args:
             #        self.ready_results[arg] = None
-            elif opname == 'jump':
+            elif opnum == rop.JUMP:
                 args = self.expanded_version_of(op.args, newoperations)
                 self.cleanup_field_caches(newoperations)
-                op = ResOperation('jump', args, None)
+                op = ResOperation(rop.JUMP, args, None)
                 newoperations.append(op)
                 continue
 ##            elif opname == 'guard_builtin':
@@ -664,36 +662,43 @@ class PerfectSpecializer(object):
 ##                    instnode = self.nodes[op.args[0]]
 ##                    instnode.cursize = op.args[1].getint()
 ##                continue
-            elif (opname == 'guard_no_exception' or
-                  opname == 'guard_exception'):
+            elif (opnum == rop.GUARD_NO_EXCEPTION or
+                  opnum == rop.GUARD_EXCEPTION):
                 if not exception_might_have_happened:
                     continue
                 exception_might_have_happened = False
-                op = self.optimize_guard(op)
-                newoperations.append(op)
+                newoperations.append(self.optimize_guard(op))
                 continue
-            elif opname.startswith('guard_'):
+            elif (opnum == rop.GUARD_TRUE or
+                  opnum == rop.GUARD_FALSE):
                 instnode = self.nodes[op.args[0]]
-                if opname == 'guard_true' or opname == 'guard_false':
-                    if instnode.const:
-                        continue
-                elif opname == 'guard_class':
-                    if instnode.cls is not None:
-                        assert op.args[1].equals(instnode.cls.source)
-                        continue
-                    instnode.cls = InstanceNode(op.args[1], const=True)
-                elif opname == 'guard_value':
-                    assert isinstance(op.args[1], Const)
-                    if instnode.const:
-                        continue
-                    instnode.const = True
-                elif opname == 'guard_nonvirtualized':
-                    if instnode.virtualized or instnode.virtual:
-                        continue
-                op = self.optimize_guard(op)
-                newoperations.append(op)
+                if instnode.const:
+                    continue
+                newoperations.append(self.optimize_guard(op))
                 continue
-            elif opname == 'getfield_gc':
+            elif opnum == rop.GUARD_CLASS:
+                instnode = self.nodes[op.args[0]]
+                if instnode.cls is not None:
+                    assert op.args[1].equals(instnode.cls.source)
+                    continue
+                instnode.cls = InstanceNode(op.args[1], const=True)
+                newoperations.append(self.optimize_guard(op))
+                continue
+            elif opnum == rop.GUARD_VALUE:
+                instnode = self.nodes[op.args[0]]
+                assert isinstance(op.args[1], Const)
+                if instnode.const:
+                    continue
+                instnode.const = True
+                newoperations.append(self.optimize_guard(op))
+                continue
+            elif opnum == rop.GUARD_NONVIRTUALIZED:
+                instnode = self.nodes[op.args[0]]
+                if instnode.virtualized or instnode.virtual:
+                    continue
+                newoperations.append(self.optimize_guard(op))
+                continue
+            elif opnum == rop.GETFIELD_GC:
                 instnode = self.nodes[op.args[0]]
                 ofs = op.args[1].getint()
                 if self.optimize_getfield(instnode, ofs, op.result):
@@ -707,7 +712,7 @@ class PerfectSpecializer(object):
 ##                    ofs = ofsbox.getint()
 ##                    if self.optimize_getfield(instnode, ofs, op.results[0]):
 ##                        continue
-            elif opname == 'new_with_vtable':
+            elif opnum == rop.NEW_WITH_VTABLE:
                 # self.nodes[op.results[0]] keep the value from Steps (1,2)
                 instnode = self.nodes[op.result]
                 if not instnode.escaped:
@@ -754,7 +759,7 @@ class PerfectSpecializer(object):
 ##                instnode = self.nodes[op.args[1]]
 ##                if instnode.virtual:
 ##                    continue
-            elif opname == 'setfield_gc':
+            elif opnum == rop.SETFIELD_GC:
                 instnode = self.nodes[op.args[0]]
                 valuenode = self.nodes[op.args[2]]
                 ofs = op.args[1].getint()
@@ -768,7 +773,8 @@ class PerfectSpecializer(object):
 ##                    ofs = ofsbox.getint()
 ##                    self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
 ##                    continue
-            elif opname == 'ooisnull' or opname == 'oononnull':
+            elif (opnum == rop.OOISNULL or
+                  opnum == rop.OONONNULL):
                 instnode = self.getnode(op.args[0])
                 # we know the result is constant if instnode is a virtual,
                 # a constant, or known to be non-zero.
@@ -777,7 +783,8 @@ class PerfectSpecializer(object):
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
-            elif opname == 'oois' or opname == 'ooisnot':
+            elif (opnum == rop.OOIS or
+                  opnum == rop.OOISNOT):
                 instnode_x = self.getnode(op.args[0])
                 instnode_y = self.getnode(op.args[1])
                 # we know the result is constant in one of these 5 cases:
@@ -794,9 +801,9 @@ class PerfectSpecializer(object):
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
-            # default handling of arguments and return value(s)
+            # default handling of arguments and return value
             op = self.replace_arguments(op)
-            if opname in always_pure_operations:
+            if op.is_always_pure():
                 for box in op.args:
                     if isinstance(box, Box):
                         break
@@ -807,13 +814,12 @@ class PerfectSpecializer(object):
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
-            elif opname not in operations_without_side_effects:
-                if opname not in ('getfield_gc', 'getitem',
-                                  'setfield_gc', 'setitem'):
-                    # those operations does not clean up caches, although
-                    # they have side effects (at least set ones)
-                    self.cleanup_field_caches(newoperations)
-            if opname not in operation_never_raises:    # XXX do me right
+            elif (not op.has_no_side_effect()
+                  and opnum != rop.SETFIELD_GC):
+                # the setfield operations do not clean up caches, although
+                # they have side effects
+                self.cleanup_field_caches(newoperations)
+            if op.can_raise():
                 exception_might_have_happened = True
             box = op.result
             if box is not None:
@@ -836,7 +842,7 @@ class PerfectSpecializer(object):
 ##                             ConstInt(ofs), valuenode.source], []))
 ##                else:
                 if 1:
-                    newoperations.append(ResOperation('setfield_gc',
+                    newoperations.append(ResOperation(rop.SETFIELD_GC,
                        [node.source, ConstInt(ofs), valuenode.source], None))
             node.dirtyfields = {}
             node.cleanfields = {}
@@ -855,7 +861,7 @@ class PerfectSpecializer(object):
     def match(self, old_operations):
         old_mp = old_operations[0]
         jump_op = self.loop.operations[-1]
-        assert jump_op.opname == 'jump'
+        assert jump_op.opnum == rop.JUMP
         assert len(old_mp.specnodes) == len(jump_op.args)
         for i in range(len(old_mp.specnodes)):
             old_specnode = old_mp.specnodes[i]
@@ -890,7 +896,7 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
     for vtable in storage.allocations:
         sizebox = ConstInt(metainterp.class_sizes[vtable])
         vtablebox = ConstInt(vtable)
-        instbox = history.execute_and_record('new_with_vtable',
+        instbox = history.execute_and_record(rop.NEW_WITH_VTABLE,
                                              [sizebox, vtablebox],
                                              'ptr', False)
         allocated_boxes.append(instbox)
@@ -906,7 +912,7 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
         box = box_from_index(allocated_boxes, ## allocated_lists,
                              boxes_from_frame,
                              index_in_alloc)
-        history.execute_and_record('setfield_gc',
+        history.execute_and_record(rop.SETFIELD_GC,
                                    [box, ConstInt(ofs), fieldbox],
                                    'void', False)
 ##    for setfunc, index_in_alloc, ofs, index_in_arglist in storage.setitems:

@@ -4,6 +4,7 @@ Minimal-API wrapper around the llinterpreter to run operations.
 
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.metainterp import history
+from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend.llgraph import llimpl, symbolic
 
 
@@ -54,12 +55,12 @@ class CPU(object):
         j = 0
         for i in range(len(operations)):
             op = operations[i]
-            if op.opname[0] == '#':
-                continue
+            #if op.opname[0] == '#':
+            #    continue
             op._compiled = c
             op._opindex = j
             j += 1
-            llimpl.compile_add(c, op.opname)
+            llimpl.compile_add(c, op.opnum)
             for x in op.args:
                 if isinstance(x, history.Box):
                     llimpl.compile_add_var(c, var2index[x])
@@ -71,7 +72,8 @@ class CPU(object):
                       isinstance(x, history.ConstAddr)):
                     llimpl.compile_add_int_const(c, x.getint())
                 else:
-                    raise Exception("%s args contain: %r" % (op.opname, x))
+                    raise Exception("%s args contain: %r" % (op.getopname(),
+                                                             x))
             x = op.result
             if x is not None:
                 if isinstance(x, history.BoxInt):
@@ -79,19 +81,20 @@ class CPU(object):
                 elif isinstance(x, history.BoxPtr):
                     var2index[x] = llimpl.compile_add_ptr_result(c)
                 else:
-                    raise Exception("%s.results contain: %r" % (op.opname, x))
+                    raise Exception("%s.result contain: %r" % (op.getopname(),
+                                                               x))
             if op.jump_target is not None:
                 loop_target, loop_target_index = \
                                            self.jumptarget2loop[op.jump_target]
                 llimpl.compile_add_jump_target(c, loop_target,
                                                   loop_target_index)
-            if op.opname.startswith('guard_'):
+            if op.is_guard():
                 llimpl.compile_add_failnum(c, len(self.guard_ops))
                 self.guard_ops.append(op)
                 for box in op.liveboxes:
                     if isinstance(box, history.Box):
                         llimpl.compile_add_livebox(c, var2index[box])
-            if op.opname == 'merge_point':
+            if op.opnum == rop.MERGE_POINT:
                 self.jumptarget2loop[op] = c, i
         if from_guard is not None:
             llimpl.compile_from_guard(c, from_guard._compiled,
@@ -119,14 +122,14 @@ class CPU(object):
                 raise Exception("bad box in valueboxes: %r" % (box,))
         return self.loop(frame)
 
-    def execute_operation(self, opname, valueboxes, result_type):
+    def execute_operation(self, opnum, valueboxes, result_type):
         """Execute a single operation, returning the result.
         Mostly a hack: falls back to interpreting a complete bridge
         containing the operation.
         """
-        if opname[0] == '#':
-            return None
-        c = self.get_compiled_single_op(opname, valueboxes, result_type)
+        #if opname[0] == '#':
+        #    return None
+        c = self.get_compiled_single_op(opnum, valueboxes, result_type)
         frame = llimpl.new_frame(self.memo_cast)
         llimpl.frame_clear(frame, c, 0)
         for box in valueboxes:
@@ -145,8 +148,9 @@ class CPU(object):
         else:
             return None
 
-    def get_compiled_single_op(self, opname, valueboxes, result_type):
-        keylist = self.compiled_single_ops.setdefault((opname, result_type),
+    def get_compiled_single_op(self, opnum, valueboxes, result_type):
+        assert isinstance(opnum, int)
+        keylist = self.compiled_single_ops.setdefault((opnum, result_type),
                                                       [])
         types = [valuebox.type for valuebox in valueboxes]
         for key, impl in keylist:
@@ -176,9 +180,9 @@ class CPU(object):
         if resbox is not None:
             resboxes.append(resbox)
         operations = [
-            history.ResOperation('merge_point', valueboxes, None),
-            history.ResOperation(opname, valueboxes, resbox),
-            history.ResOperation('return', resboxes, None),
+            ResOperation(rop.MERGE_POINT, valueboxes, None),
+            ResOperation(opnum, valueboxes, resbox),
+            ResOperation(rop.RETURN, resboxes, None),
             ]
         self.compile_operations(operations)
         impl = operations[0]._compiled
