@@ -195,7 +195,7 @@ def repr1(x, tp, memocast, extraarg):
     if tp == 'int':
         return str(x)
     elif tp == 'void':
-        return ''
+        return '---'
     elif tp == 'ptr':
         if not x:
             return '(* None)'

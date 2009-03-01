@@ -126,6 +126,7 @@ class rop(object):
     OOIS                   = 72
     OOISNOT                = 73
     #
+    ARRAYLEN_GC            = 77
     STRLEN                 = 78
     STRGETITEM             = 79
     _ALWAYS_PURE_LAST = 79  # ----- end of always_pure operations -----

@@ -15,27 +15,6 @@ py.log.setconsumer('jitcodewriter', ansi_log)
 MAX_MAKE_NEW_VARS = 16
 
 
-##class BuiltinDescr(history.AbstractValue):
-##    pass
-
-##class ListDescr(BuiltinDescr):
-##    def __init__(self, getfunc, setfunc, malloc_func, append_func,
-##                 pop_func, insert_func, len_func, nonzero_func, tp):
-##        self.setfunc      = setfunc
-##        self.getfunc      = getfunc
-##        self.malloc_func  = malloc_func
-##        self.append_func  = append_func
-##        self.insert_func  = insert_func
-##        self.pop_func     = pop_func
-##        self.len_func     = len_func
-##        self.nonzero_func = nonzero_func
-##        self.tp           = tp
-    
-##    def equals(self, other):
-##        if isinstance(other, ListDescr):
-##            return True
-##        return False
-
 class JitCode(history.AbstractValue):
     def __init__(self, name):
         self.name = name
@@ -99,7 +78,6 @@ class CodeWriter(object):
         self.rtyper = metainterp.cpu.rtyper
         self.cpu = metainterp.cpu
         self.policy = policy
-        self.list_cache = {}
 
     def make_portal_bytecode(self, graph):
         log.info("making JitCodes...")
@@ -133,81 +111,52 @@ class CodeWriter(object):
                                   IndirectCallset(self, graphs)
         return result
 
-    def get_list_desc(self, LIST):
+
+    if 0:        # disabled
+      def fixed_list_descr_for_tp(self, TP):
         try:
-            return self.all_listdescs[LIST]
+            return self.fixed_list_cache[TP.TO]
         except KeyError:
-            import vlist
-            listdesc = vlist.ListClassDesc(self, LIST)
-            self.all_listdescs[LIST] = listdesc
-            return listdesc
-
-    def register_list_op(self, llfunc, oopspec_name, LIST):
-        metainterp = self.metainterp
-        if llfunc._obj not in metainterp.builtins_seen:
-            metainterp.builtins_seen[llfunc._obj] = True
-            key = llmemory.cast_ptr_to_adr(llfunc)
-            value = (oopspec_name.replace('.', '_'), self.get_list_desc(LIST))
-            metainterp.builtins_keys.append(key)
-            metainterp.builtins_values.append(value)
-
-
-    def list_descr_for_tp(self, TP):
-        try:
-            return self.list_cache[TP.TO]
-        except KeyError:
-            if isinstance(TP.TO, lltype.GcStruct):
-                OF = TP.TO.items.TO.OF
-            else:
-                OF = TP.TO.OF
+            OF = TP.TO.OF
             rtyper = self.rtyper
-            args = [TP, lltype.Signed, OF]
             setfunc, _ = support.builtin_func_for_spec(rtyper, 'list.setitem',
-                                                       args, lltype.Void)
+                                                       [TP, lltype.Signed, OF],
+                                                       lltype.Void)
             getfunc, _ = support.builtin_func_for_spec(rtyper, 'list.getitem',
-                                                       args[:-1], OF)
+                                                       [TP, lltype.Signed], OF)
             malloc_func, _ = support.builtin_func_for_spec(rtyper, 'newlist',
-                                                           [lltype.Signed], TP)
+                                                           [lltype.Signed, OF],
+                                                           TP)
             len_func, _ = support.builtin_func_for_spec(rtyper, 'list.len',
                                                         [TP], lltype.Signed)
-            nonzero_func, _ = support.builtin_func_for_spec(rtyper,
-                                                            'list.nonzero',
-                                                            [TP], lltype.Bool)
-
-            if isinstance(TP.TO, lltype.GcStruct):
-                append_func, _ = support.builtin_func_for_spec(rtyper,
-                                                               'list.append',
-                                                        [TP, OF], lltype.Void)
-                pop_func, _ = support.builtin_func_for_spec(rtyper, 'list.pop',
-                                                            [TP], OF)
-                insert_func, _ = support.builtin_func_for_spec(rtyper,
-                      'list.insert', [TP, lltype.Signed, OF], lltype.Void)
-            if isinstance(OF, lltype.Number):
-                tp = "int"
-            else:
-                tp = "ptr"
-            if isinstance(TP.TO, lltype.GcStruct):
-                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
-                               history.ConstAddr(setfunc.value, self.cpu),
-                               history.ConstAddr(malloc_func.value, self.cpu),
-                               history.ConstAddr(append_func.value, self.cpu),
-                               history.ConstAddr(pop_func.value, self.cpu),
-                               history.ConstAddr(insert_func.value, self.cpu),
-                               history.ConstAddr(len_func.value, self.cpu),
-                               history.ConstAddr(nonzero_func.value, self.cpu),
-                               tp)
-            else:
-                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
-                               history.ConstAddr(setfunc.value, self.cpu),
-                               history.ConstAddr(malloc_func.value, self.cpu),
-                               None, None, None,
-                               history.ConstAddr(len_func.value, self.cpu),
-                               history.ConstAddr(nonzero_func.value, self.cpu),
-                               tp)
-            self.list_cache[TP.TO] = ld
+##            if isinstance(TP.TO, lltype.GcStruct):
+##                append_func, _ = support.builtin_func_for_spec(rtyper,
+##                                                               'list.append',
+##                                                        [TP, OF], lltype.Void)
+##                pop_func, _ = support.builtin_func_for_spec(rtyper, 'list.pop',
+##                                                            [TP], OF)
+##                insert_func, _ = support.builtin_func_for_spec(rtyper,
+##                      'list.insert', [TP, lltype.Signed, OF], lltype.Void)
+            tp = getkind(OF)
+##            if isinstance(TP.TO, lltype.GcStruct):
+##                ld = ListDescr(history.ConstAddr(getfunc.value, self.cpu),
+##                               history.ConstAddr(setfunc.value, self.cpu),
+##                               history.ConstAddr(malloc_func.value, self.cpu),
+##                               history.ConstAddr(append_func.value, self.cpu),
+##                               history.ConstAddr(pop_func.value, self.cpu),
+##                               history.ConstAddr(insert_func.value, self.cpu),
+##                               history.ConstAddr(len_func.value, self.cpu),
+##                               history.ConstAddr(nonzero_func.value, self.cpu),
+##                               tp)
+##            else:
+            ld = FixedListDescr(history.ConstAddr(getfunc.value, self.cpu),
+                                history.ConstAddr(setfunc.value, self.cpu),
+                                history.ConstAddr(malloc_func.value, self.cpu),
+                                history.ConstAddr(len_func.value, self.cpu),
+                                tp)
+            self.fixed_list_cache[TP.TO] = ld
             return ld
 
-    
 
 class BytecodeMaker(object):
     debug = True
@@ -722,7 +671,9 @@ class BytecodeMaker(object):
         c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,
                                                    oopspec_name, ll_args,
                                                    op.result.concretetype)
-##        if oopspec_name.startswith('list') or oopspec_name == 'newlist':
+        if self.codewriter.metainterp.options.listops:
+            if self.handle_list_call(op, oopspec_name, args, TP):
+                return
 ##            if oopspec_name.startswith('list.getitem'):
 ##                opname = oopspec_name[len('list.'):]
 ##            elif oopspec_name.startswith('list.setitem'):
@@ -756,6 +707,57 @@ class BytecodeMaker(object):
         self.emit(opname % getkind_num(self.cpu, op.result.concretetype))
         self.emit_varargs([c_func] + args)
         self.register_var(op.result)
+
+    def handle_list_call(self, op, oopspec_name, args, TP):
+        if not (oopspec_name.startswith('list.') or oopspec_name == 'newlist'):
+            return False
+        if hasattr(TP, '_ll_resize'):
+            return False
+        # non-resizable lists: they are just arrays
+        ARRAY = TP.TO
+        assert isinstance(ARRAY, lltype.GcArray)
+        arraydescr = self.cpu.arraydescrof(ARRAY)
+        #
+        if oopspec_name == 'newlist':
+            # normalize number of arguments
+            if len(args) < 1:
+                args.append(Constant(0, lltype.Signed))
+            if len(args) > 1:
+                v_default = args[1]
+                if (not isinstance(v_default, Constant) or
+                    v_default.value != TP.TO.OF._defl()):
+                    return False     # variable or non-null initial value
+            self.emit('new_array')
+            self.emit(self.const_position(arraydescr))
+            self.emit(self.var_position(args[0]))
+            self.register_var(op.result)
+            return True
+        #
+        if (oopspec_name == 'list.getitem' or
+            oopspec_name == 'list.getitem_foldable'): # <- XXX do better here
+            # XXX check if index < 0, and check IndexError, both only if needed
+            self.emit('getarrayitem_gc')
+            self.emit(self.var_position(args[0]))
+            self.emit(self.const_position(arraydescr))
+            self.emit(self.var_position(args[1]))
+            self.register_var(op.result)
+            return True
+        #
+        if oopspec_name == 'list.setitem':
+            # XXX check if index < 0, and check IndexError, both only if needed
+            self.emit('setarrayitem_gc')
+            self.emit(self.var_position(args[0]))
+            self.emit(self.const_position(arraydescr))
+            self.emit(self.var_position(args[1]))
+            self.emit(self.var_position(args[2]))
+            self.register_var(op.result)
+            return True
+        #
+        if (oopspec_name == 'list.len' or
+            oopspec_name == 'list.len_foldable'):
+            xxx  # ... 'arraylen_gc'
+        #
+        return False
 
     def serialize_op_indirect_call(self, op):
         self.minimize_variables()
