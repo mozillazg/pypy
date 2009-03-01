@@ -99,6 +99,7 @@ class InstanceNode(object):
         self.virtual = False
         self.virtualized = False
         self.const = const
+        self.nonzero = False     # NB. never set to True so far
         self.cls = None
         self.origfields = {}
         self.curfields = {}
@@ -107,6 +108,12 @@ class InstanceNode(object):
         self.expanded_fields = {}
         #self.origsize = -1
         #self.cursize  = -1
+
+    def is_nonzero(self):
+        return self.cls is not None or self.nonzero
+
+    def is_zero(self):
+        return self.const and not self.source.getptr_base()
 
     def escape_if_startbox(self, memo):
         if self in memo:
@@ -764,26 +771,25 @@ class PerfectSpecializer(object):
             elif opname == 'ooisnull' or opname == 'oononnull':
                 instnode = self.getnode(op.args[0])
                 # we know the result is constant if instnode is a virtual,
-                # or if we already checked the class of the object before
-                if instnode.virtual or instnode.cls is not None:
+                # a constant, or known to be non-zero.
+                if instnode.virtual or instnode.const or instnode.is_nonzero():
                     box = op.result
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode
                     continue
-                # XXX we could also do a bit better by marking on the
-                # InstanceNode that we compared it with NULL already
             elif opname == 'oois' or opname == 'ooisnot':
                 instnode_x = self.getnode(op.args[0])
                 instnode_y = self.getnode(op.args[1])
-                # we know the result is constant in one of these 4 cases:
+                # we know the result is constant in one of these 5 cases:
                 if (instnode_x.virtual or    # x is a virtual (even if y isn't)
                     instnode_y.virtual or    # y is a virtual (even if x isn't)
-                    (instnode_x.cls is not None and     # we checked cls x and
-                     instnode_y.const and               # y is the const NULL
-                     not instnode_y.source.getptr_base()) or
-                    (instnode_y.cls is not None and     # we checked cls y and
-                     instnode_x.const and               # x is the const NULL
-                     not instnode_x.source.getptr_base())):
+                    # x != NULL and y == NULL
+                    (instnode_x.is_nonzero() and instnode_y.is_zero()) or
+                    # x == NULL and y != NULL
+                    (instnode_x.is_zero() and instnode_y.is_nonzero()) or
+                    # x == NULL and y == NULL
+                    (instnode_x.is_zero() and instnode_y.is_zero())):
+                    #
                     box = op.result
                     instnode = InstanceNode(box.constbox(), const=True)
                     self.nodes[box] = instnode

@@ -23,7 +23,7 @@ from pypy.module.pypyjit.portal import PyPyJitPolicy
 #     Consts -- make sure that these Consts are not stored, or else
 #     remove them entirely
 #
-#   - dead operation removal: e.g. line 158
+#   - dead operation removal: e.g. unused 'getfield_gc' (line 158)
 
 
 def run_child(glob, loc):
