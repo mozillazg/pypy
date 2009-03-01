@@ -16,26 +16,38 @@ from pypy.jit.backend.x86.ri386 import *
 from pypy.jit.metainterp.resoperation import rop
 
 # our calling convention - we pass three first args as edx, ecx and eax
-# and the rest stays on stack
+# and the rest stays on the stack
 
 class Assembler386(object):
     MC_SIZE = 1024*1024     # 1MB, but assumed infinite for now
+    generic_return_addr = 0
+    position = -1
 
-    def __init__(self, cpu):
+    def __init__(self, cpu, translate_support_code=False):
         self.cpu = cpu
         self.verbose = False
         self.mc = None
         self.mc2 = None
         self.rtyper = cpu.rtyper
         self.malloc_func_addr = 0
-        self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
-                                             zero=True, flavor='raw')
-        self._exception_addr = cpu.cast_ptr_to_int(self._exception_data)
+        if translate_support_code:
+            self._exception_data = lltype.nullptr(rffi.CArray(lltype.Signed))
+            self._exception_addr = 0
+            # patched later, after exc transform
+        else:
+            self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                                 zero=True, flavor='raw')
+            self._exception_addr = cpu.cast_ptr_to_int(self._exception_data)
 
     def make_sure_mc_exists(self):
         if self.mc is None:
             # we generate the loop body in 'mc'
             # 'mc2' is for guard recovery code
+            # XXX we should catch the real one, somehow
+            self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                                 zero=True, flavor='raw')
+            self._exception_addr = self.cpu.cast_ptr_to_int(
+                self._exception_data)
             self.mc = codebuf.MachineCodeBlock(self.MC_SIZE)
             self.mc2 = codebuf.MachineCodeBlock(self.MC_SIZE)
             self.generic_return_addr = self.assemble_generic_return()
@@ -52,9 +64,10 @@ class Assembler386(object):
         self.make_sure_mc_exists()
         op0 = operations[0]
         op0.position = self.mc.tell()
-        self._regalloc = RegAlloc(operations, guard_op) # for debugging
-        self.max_stack_depth = self._regalloc.current_stack_depth
-        computed_ops = self._regalloc.computed_ops
+        regalloc = RegAlloc(operations, guard_op)
+        if not we_are_translated():
+            self._regalloc = regalloc # for debugging
+        computed_ops = regalloc.computed_ops
         if guard_op is not None:
             new_rel_addr = self.mc.tell() - guard_op._jmp_from
             TP = rffi.CArrayPtr(lltype.Signed)
@@ -313,6 +326,7 @@ class Assembler386(object):
 
     def genop_getfield_gc(self, op, arglocs, resloc):
         base_loc, ofs_loc, size_loc = arglocs
+        assert isinstance(size_loc, IMM32)
         size = size_loc.value
         if size == 1:
             self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc))
@@ -323,12 +337,15 @@ class Assembler386(object):
 
     def genop_getarrayitem_gc(self, op, arglocs, resloc):
         base_loc, ofs_loc, scale, ofs = arglocs
+        assert isinstance(ofs, IMM32)
+        assert isinstance(scale, IMM32)
         self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value, scale.value))
 
     genop_getfield_raw = genop_getfield_gc
 
     def genop_setfield_gc(self, op, arglocs):
         base_loc, ofs_loc, size_loc, value_loc = arglocs
+        assert isinstance(size_loc, IMM32)
         size = size_loc.value
         if size == WORD:
             self.mc.MOV(addr_add(base_loc, ofs_loc), value_loc)
@@ -342,6 +359,8 @@ class Assembler386(object):
 
     def genop_setarrayitem_gc(self, op, arglocs):
         base_loc, ofs_loc, value_loc, scale_loc, baseofs = arglocs
+        assert isinstance(baseofs, IMM32)
+        assert isinstance(scale_loc, IMM32)
         self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value, scale_loc.value),
                     value_loc)
 

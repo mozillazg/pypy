@@ -4,7 +4,6 @@ import py
 from pypy.rpython.lltypesystem import lltype, llmemory, ll2ctypes, rffi
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rlib.objectmodel import CDefinedIntSymbolic, specialize
 from pypy.rlib.objectmodel import we_are_translated, keepalive_until_here
 from pypy.annotation import model as annmodel
@@ -23,12 +22,14 @@ class CPU386(object):
                                     lltype.Ptr(rffi.CArray(lltype.Signed))],
                                    lltype.Signed)
 
-    def __init__(self, rtyper, stats, translate_support_code=False):
+    def __init__(self, rtyper, stats, translate_support_code=False,
+                 mixlevelann=None):
         self.rtyper = rtyper
         self.stats = stats
         self.translate_support_code = translate_support_code
         if translate_support_code:
-            self.mixlevelann = MixLevelHelperAnnotator(rtyper)
+            assert mixlevelann
+            self.mixlevelann = mixlevelann
         else:
             self.current_interpreter = LLInterpreter(self.rtyper)
 
@@ -53,16 +54,21 @@ class CPU386(object):
             self._setup_ovf_error()
 
     def _setup_ovf_error(self):
-        bk = self.rtyper.annotator.bookkeeper
-        clsdef = bk.getuniqueclassdef(OverflowError)
-        ovferror_repr = rclass.getclassrepr(self.rtyper, clsdef)
-        ll_inst = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
-            self.rtyper, clsdef)
-        self._ovf_error_vtable = self.cast_ptr_to_int(ll_inst.typeptr)
-        self._ovf_error_inst = self.cast_ptr_to_int(ll_inst)
+        if self.translate_support_code:
+            self._ovf_error_vtable = 0
+            self._ovf_error_inst   = 0
+            # do something here
+        else:
+            bk = self.rtyper.annotator.bookkeeper
+            clsdef = bk.getuniqueclassdef(OverflowError)
+            ovferror_repr = rclass.getclassrepr(self.rtyper, clsdef)
+            ll_inst = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
+                self.rtyper, clsdef)
+            self._ovf_error_vtable = self.cast_ptr_to_int(ll_inst.typeptr)
+            self._ovf_error_inst = self.cast_ptr_to_int(ll_inst)
 
     def setup(self):
-        self.assembler = Assembler386(self)
+        self.assembler = Assembler386(self, self.translate_support_code)
         # the generic assembler stub that just performs a return
         if self.translate_support_code:
             mixlevelann = self.mixlevelann
@@ -141,35 +147,37 @@ class CPU386(object):
     def execute_operation(self, opnum, valueboxes, result_type):
         # mostly a hack: fall back to compiling and executing the single
         # operation.
-        key = [opnum, result_type]
+        key = []
         for valuebox in valueboxes:
             if isinstance(valuebox, Box):
                 key.append(valuebox.type)
             else:
-                key.append(repr(valuebox)) # XXX not RPython
-        mp = self.get_compiled_single_operation(key, valueboxes)
+                key.append(str(valuebox.get_()))
+        mp = self.get_compiled_single_operation(opnum, result_type,
+                                                key, valueboxes)
         res = self.execute_operations_in_new_frame(opname[opnum], mp,
                                                    valueboxes,
                                                    result_type)
-        if self.assembler._exception_data[0] != 0:
-            TP = lltype.Ptr(rclass.OBJECT_VTABLE)
-            TP_V = lltype.Ptr(rclass.OBJECT)
-            exc_t_a = self.cast_int_to_adr(self.get_exception(None))
-            exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
-            exc_v_a = self.get_exc_value(None)
-            exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
-            # clean up the exception
-            self.assembler._exception_data[0] = 0
-            raise LLException(exc_type, exc_val)
+        if not self.translate_support_code:
+            if self.assembler._exception_data[0] != 0:
+                TP = lltype.Ptr(rclass.OBJECT_VTABLE)
+                TP_V = lltype.Ptr(rclass.OBJECT)
+                exc_t_a = self.cast_int_to_adr(self.get_exception(None))
+                exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
+                exc_v_a = self.get_exc_value(None)
+                exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
+                # clean up the exception
+                self.assembler._exception_data[0] = 0
+                raise LLException(exc_type, exc_val)
+        # otherwise exception data is set correctly, no problem at all
         return res
 
-    def get_compiled_single_operation(self, key, valueboxes):
-        real_key = ','.join([str(k) for k in key])
+    def get_compiled_single_operation(self, opnum, result_type, key,
+                                      valueboxes):
+        real_key = '%d,%s' % (opnum, result_type) + ','.join(key)
         try:
             return self._compiled_ops[real_key]
         except KeyError:
-            opnum = key[0]
-            result_type = key[1]
             livevarlist = []
             i = 0
             # clonebox below is necessary, because sometimes we know

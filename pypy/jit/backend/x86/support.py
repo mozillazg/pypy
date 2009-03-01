@@ -3,7 +3,10 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.translator.c.test.test_genc import compile
+from pypy.rpython.annlowlevel import llhelper
+from pypy.jit.metainterp.history import log, ConstAddr
 import ctypes
+import py
 
 GC_MALLOC = lltype.Ptr(lltype.FuncType([lltype.Signed], llmemory.Address))
 
@@ -33,9 +36,26 @@ def c_meta_interp(function, args, **kwds):
     from pypy.translator.translator import TranslationContext
     from pypy.jit.metainterp.warmspot import WarmRunnerDesc
     from pypy.jit.backend.x86.runner import CPU386
+    from pypy.translator.c.genc import CStandaloneBuilder as CBuilder
+    from pypy.annotation.listdef import s_list_of_strings
+    from pypy.annotation import model as annmodel
     
+    for arg in args:
+        assert isinstance(arg, int)
+
+    ConstAddr.ever_seen = False
+
     t = TranslationContext()
     t.config.translation.gc = 'boehm'
+    src = py.code.Source("""
+    def entry_point(argv):
+        args = (%s,)
+        res = function(*args)
+        print res
+        return 0
+    """ % (", ".join(['int(argv[%d])' % (i + 1) for i in range(len(args))]),))
+    exec src.compile() in locals()
+
     t.buildannotator().build_types(function, [int] * len(args))
     t.buildrtyper().specialize()
     warmrunnerdesc = WarmRunnerDesc(t, translate_support_code=True,
@@ -43,5 +63,16 @@ def c_meta_interp(function, args, **kwds):
                                     **kwds)
     warmrunnerdesc.state.set_param_threshold(3)          # for tests
     warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
+    mixlevelann = warmrunnerdesc.annhelper
+    entry_point_graph = mixlevelann.getgraph(entry_point, [s_list_of_strings],
+                                             annmodel.SomeInteger())
     warmrunnerdesc.finish()
-
+    # XXX patch exceptions
+    cbuilder = CBuilder(t, entry_point, config=t.config)
+    cbuilder.generate_source()
+    exe_name = cbuilder.compile()
+    log('---------- Test starting ----------')
+    stdout = cbuilder.cmdexec(" ".join([str(arg) for arg in args]))
+    res = int(stdout)
+    log('---------- Test done (%d) ----------' % (res,))
+    return res
