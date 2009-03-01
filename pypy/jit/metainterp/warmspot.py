@@ -284,11 +284,6 @@ class WarmRunnerDesc:
                     args = ()
                     for i, ARG in portalfunc_ARGS:
                         v = unwrap(ARG, e.args[i])
-                        # HACK for x86 backend always returning int
-                        #if isinstance(ARG, lltype.Ptr) and type(v) is int:
-                        #    v = self.metainterp.cpu.cast_int_to_gcref(v)
-                        #if lltype.typeOf(v) == llmemory.GCREF:
-                        #    v = lltype.cast_opaque_ptr(ARG, v)
                         args = args + (v,)
                 except DoneWithThisFrame, e:
                     return unwrap(RESULT, e.resultbox)
