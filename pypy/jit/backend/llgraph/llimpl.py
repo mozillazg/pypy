@@ -848,24 +848,10 @@ class ExtendedLLFrame(LLFrame):
     op_listnonzero = op_listop_return
 
     def op_newlist(self, ll_newlist, lgt, default_val=None):
-        res = self.do_call(ll_newlist, lgt)
-        if (default_val is not None and
-            isinstance(lltype.typeOf(default_val), lltype.Ptr)):
-            if hasattr(res, 'items'):
-                TP = lltype.typeOf(res.items).TO.OF
-            else:
-                TP = lltype.typeOf(res).TO.OF
-            if default_val:
-                default_val = lltype.cast_opaque_ptr(TP, res)
-            else:
-                default_val = lltype.nullptr(TP.TO)
         if default_val is not None:
-            if hasattr(res, 'items'):
-                items = res.items
-            else:
-                items = res
-            for i in range(len(items)):
-                items[i] = default_val
+            res = self.do_call(ll_newlist, lgt, default_val)
+        else:
+            res = self.do_call(ll_newlist, lgt)
         return res
 
     for _opname in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
