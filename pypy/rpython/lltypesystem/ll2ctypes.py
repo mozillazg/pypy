@@ -15,14 +15,13 @@ from pypy.tool.uid import fixid
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.annotation import model as annmodel
-from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython import raddress
 
 def uaddressof(obj):
     return fixid(ctypes.addressof(obj))
-
 
 _ctypes_cache = {}
 _eci_cache = {}
@@ -553,7 +552,11 @@ def lltype2ctypes(llobj, normalize=True):
                     if LLInterpreter.current_interpreter is None:
                         raise AssertionError
                     llinterp = LLInterpreter.current_interpreter
-                    llres = llinterp.eval_graph(container.graph, llargs)
+                    try:
+                        llres = llinterp.eval_graph(container.graph, llargs)
+                    except LLException, lle:
+                        llinterp._store_exception(lle)
+                        return 0
                 else:
                     llres = container._callable(*llargs)
                 assert lltype.typeOf(llres) == T.TO.RESULT
@@ -651,6 +654,8 @@ def ctypes2lltype(T, cobj):
     """Convert the ctypes object 'cobj' to its lltype equivalent.
     'T' is the expected lltype type.
     """
+    if T is lltype.Void:
+        return None
     if isinstance(T, lltype.Ptr):
         if not cobj:   # NULL pointer
             return lltype.nullptr(T.TO)
