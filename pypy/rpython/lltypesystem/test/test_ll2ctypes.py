@@ -978,3 +978,4 @@ class TestLL2Ctypes(object):
         assert v
         v2 = ctypes2lltype(llmemory.GCREF, ctypes.c_void_p(1235))
         assert v2 != v
+        
