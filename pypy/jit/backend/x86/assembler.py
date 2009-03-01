@@ -7,11 +7,13 @@ from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import (RegAlloc, FRAMESIZE, WORD, REGS,
-                                      arg_pos, lower_byte, stack_pos, Perform)
+                                      arg_pos, lower_byte, stack_pos, Perform,
+                                           MALLOC_VARSIZE)
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.support import gc_malloc_fnaddr
 from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.metainterp.resoperation import rop
 
 # our calling convention - we pass three first args as edx, ecx and eax
 # and the rest stays on stack
@@ -164,10 +166,10 @@ class Assembler386(object):
     def regalloc_perform(self, op):
         assert isinstance(op, Perform)
         resloc = op.result_loc
-        genop_dict[op.op.opname](self, op.op, op.arglocs, resloc)
+        genop_list[op.op.opnum](self, op.op, op.arglocs, resloc)
 
     def regalloc_perform_discard(self, op):
-        genop_discard_dict[op.op.opname](self, op.op, op.arglocs)
+        genop_discard_list[op.op.opnum](self, op.op, op.arglocs)
 
     def regalloc_store_to_arg(self, op):
         self.mc.MOV(arg_pos(op.pos), op.from_loc)
@@ -219,7 +221,7 @@ class Assembler386(object):
     genop_uint_add = genop_int_add
     genop_uint_sub = genop_int_sub
     genop_uint_mul = genop_int_mul
-    genop_uint_and = genop_int_and
+    xxx_genop_uint_and = genop_int_and
 
     genop_int_mul_ovf = _binaryop_ovf("IMUL", True)
     genop_int_sub_ovf = _binaryop_ovf("SUB")
@@ -239,7 +241,7 @@ class Assembler386(object):
 
     # for now all chars are being considered ints, although we should make
     # a difference at some point
-    genop_char_eq = genop_int_eq
+    xxx_genop_char_eq = genop_int_eq
 
     def genop_bool_not(self, op, arglocs, resloc):
         self.mc.XOR(arglocs[0], imm8(1))
@@ -300,12 +302,12 @@ class Assembler386(object):
         # xxx ignore NULL returns for now
         self.mc.POP(mem(eax, 0))
 
-    def genop_new(self, op, arglocs, result_loc):
-        assert result_loc is eax
+    def genop_malloc_varsize(self, op, arglocs, result_loc):
         loc_size = arglocs[0]
         self.call(self.malloc_func_addr, [loc_size], eax)
 
-    def genop_malloc_varsize(self, op, arglocs, result_loc):
+    def genop_new(self, op, arglocs, result_loc):
+        assert result_loc is eax
         loc_size = arglocs[0]
         self.call(self.malloc_func_addr, [loc_size], eax)
 
@@ -377,7 +379,6 @@ class Assembler386(object):
 
     def genop_jump(self, op, locs):
         targetmp = op.jump_target
-        assert isinstance(targetmp, MergePoint)
         self.mc.JMP(rel32(targetmp.position))
 
     def genop_guard_true(self, op, locs):
@@ -406,38 +407,6 @@ class Assembler386(object):
         self.mc.TEST(loc, loc)
         self.implement_guard(op, self.mc.JNZ, locs[1:])
 
-    genop_guard_nonzero = genop_guard_true
-    genop_guard_iszero  = genop_guard_false
-    genop_guard_nonnull = genop_guard_true
-    genop_guard_isnull  = genop_guard_false
-
-    def genop_guard_lt(self, op, locs):
-        self.mc.CMP(locs[0], locs[1])
-        self.implement_guard(op, self.mc.JGE, locs[2:])
-
-    def genop_guard_le(self, op, locs):
-        self.mc.CMP(locs[0], locs[1])
-        self.implement_guard(op, self.mc.JG, locs[2:])
-
-    def genop_guard_eq(self, op, locs):
-        self.mc.CMP(locs[0], locs[1])
-        self.implement_guard(op, self.mc.JNE, locs[2:])
-
-    def genop_guard_ne(self, op, locs):
-        self.mc.CMP(locs[0], locs[1])
-        self.implement_guard(op, self.mc.JE, locs[2:])
-
-    def genop_guard_gt(self, op, locs):
-        self.mc.CMP(locs[0], locs[1])
-        self.implement_guard(op, self.mc.JLE, locs[2:])
-
-    def genop_guard_ge(self, op, locs):
-        self.mc.CMP(locs[0], locs[1])
-        self.implement_guard(op, self.mc.JL, locs[2:])
-
-    genop_guard_is = genop_guard_eq
-    genop_guard_isnot = genop_guard_ne
-
     def genop_guard_value(self, op, locs):
         arg0 = locs[0]
         arg1 = locs[1]
@@ -448,9 +417,6 @@ class Assembler386(object):
         offset = 0    # XXX for now, the vtable ptr is at the start of the obj
         self.mc.CMP(mem(locs[0], offset), locs[1])
         self.implement_guard(op, self.mc.JNE, locs[2:])
-
-    def genop_guard_pause(self, op, locs):
-        self.implement_guard(op, self.mc.JMP, locs)
 
     #def genop_guard_nonvirtualized(self, op):
     #    STRUCT = op.args[0].concretetype.TO
@@ -508,11 +474,11 @@ class Assembler386(object):
     genop_call__4 = _new_gen_call()
     gen_call = _new_gen_call()
     genop_call_ptr = gen_call
-    genop_getitem = _new_gen_call()    
-    genop_len = _new_gen_call()
-    genop_pop = _new_gen_call()
-    genop_newlist = _new_gen_call()
-    genop_listnonzero = _new_gen_call()
+    xxx_genop_getitem = _new_gen_call()    
+    xxx_genop_len = _new_gen_call()
+    xxx_genop_pop = _new_gen_call()
+    xxx_genop_newlist = _new_gen_call()
+    xxx_genop_listnonzero = _new_gen_call()
 
     def genop_call_void(self, op, arglocs):
         extra_on_stack = 0
@@ -533,9 +499,9 @@ class Assembler386(object):
         self.mc.CALL(x)
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
 
-    genop_append = genop_call_void
-    genop_setitem = genop_call_void
-    genop_insert = genop_call_void
+    xxx_genop_append = genop_call_void
+    xxx_genop_setitem = genop_call_void
+    xxx_genop_insert = genop_call_void
 
     def genop_call__1(self, op, arglocs, resloc):
         self.gen_call(op, arglocs, resloc)
@@ -546,18 +512,22 @@ class Assembler386(object):
         self.gen_call(op, arglocs, resloc)
         self.mc.MOVZX(eax, eax)
 
-genop_discard_dict = {}
-genop_dict = {}
+genop_discard_list = [None] * (MALLOC_VARSIZE + 1)
+genop_list = [None] * (MALLOC_VARSIZE + 1)
 
 for name, value in Assembler386.__dict__.iteritems():
     if name.startswith('genop_'):
         opname = name[len('genop_'):]
-        if value.func_code.co_argcount == 3:
-            genop_discard_dict[opname] = value
+        if opname == 'malloc_varsize':
+            num = MALLOC_VARSIZE
         else:
-            genop_dict[opname] = value
+            num = getattr(rop, opname.upper())
+        if value.func_code.co_argcount == 3:
+            genop_discard_list[num] = value
+        else:
+            genop_list[num] = value
 
-genop_discard_dict['call_void'] = Assembler386.genop_call_void
+genop_discard_list[rop.CALL_VOID] = Assembler386.genop_call_void
 
 def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
     if isinstance(reg_or_imm1, IMM32):

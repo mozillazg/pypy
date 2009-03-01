@@ -11,6 +11,9 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 
+
+MALLOC_VARSIZE = rop._CANRAISE_LAST + 1
+
 # esi edi and ebp can be added to this list, provided they're correctly
 # saved and restored
 REGS = [eax, ecx, edx]
@@ -656,6 +659,9 @@ class RegAlloc(object):
     consider_int_ne = _consider_compop
     consider_int_eq = _consider_compop
     consider_uint_gt = _consider_compop
+    consider_uint_lt = _consider_compop
+    consider_uint_le = _consider_compop
+    consider_uint_ge = _consider_compop
 
     def sync_var(self, v):
         ops = []
@@ -717,21 +723,21 @@ class RegAlloc(object):
             ops0 += self.sync_var(v)
             if size != 0:
                 # XXX lshift?
-                ops0.append(Perform(ResOperation('int_mul', [], []),
+                ops0.append(Perform(ResOperation(rop.INT_MUL, [], None),
                                 [loc, imm(1 << size)], loc))
-            ops0.append(Perform(ResOperation('int_add', [], []),
+            ops0.append(Perform(ResOperation(rop.INT_ADD, [], None),
                                 [loc, imm(ofs + ofs_items)], loc))
         else:
             ops0 = []
             loc = imm(ofs + ofs_items + (v.getint() << size))
-        ops = self._call(ResOperation('malloc_varsize', [v], [res_v])
+        ops = self._call(ResOperation(MALLOC_VARSIZE, [v], res_v)
                          , [loc], [v])
         loc, ops1 = self.make_sure_var_in_reg(v, [res_v])
         assert self.loc(res_v) == eax
         # now we have to reload length to some reasonable place
         self.eventually_free_var(v)
         res = (ops0 + ops + ops1 +
-               [PerformDiscard(ResOperation('setfield_gc', [], []),
+               [PerformDiscard(ResOperation(rop.SETFIELD_GC, [], None),
                                [eax, imm(ofs + ofs_length), imm(WORD), loc])])
         return res
 
@@ -886,7 +892,7 @@ class RegAlloc(object):
             res = mp.arglocs[i]
             if not (isinstance(arg, Const) or (arg in self.loop_consts
                                                and self.loop_consts[arg] == i)):
-                assert isinstance(mp, MergePoint)
+                assert mp.opnum == rop.MERGE_POINT
                 if arg in self.reg_bindings:
                     if not isinstance(res, REG):
                         ops.append(Store(arg, self.loc(arg), self.stack_bindings[arg]))

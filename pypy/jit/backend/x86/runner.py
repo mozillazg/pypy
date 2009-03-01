@@ -14,6 +14,7 @@ from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
 from pypy.jit.backend.x86.assembler import Assembler386
 from pypy.jit.backend.x86 import symbolic
+from pypy.jit.metainterp.resoperation import rop, opname
 
 class CPU386(object):
     debug = True
@@ -137,19 +138,18 @@ class CPU386(object):
     def get_exc_value(self, frame):
         return self.cast_int_to_gcref(self.assembler._exception_data[1])
 
-    def execute_operation(self, opname, valueboxes, result_type):
+    def execute_operation(self, opnum, valueboxes, result_type):
         # mostly a hack: fall back to compiling and executing the single
         # operation.
-        if opname.startswith('#'):
-            return None
-        key = [opname, result_type]
+        key = [opnum, result_type]
         for valuebox in valueboxes:
             if isinstance(valuebox, Box):
                 key.append(valuebox.type)
             else:
                 key.append(repr(valuebox)) # XXX not RPython
         mp = self.get_compiled_single_operation(key, valueboxes)
-        res = self.execute_operations_in_new_frame(opname, mp, valueboxes,
+        res = self.execute_operations_in_new_frame(opname[opnum], mp,
+                                                   valueboxes,
                                                    result_type)
         if self.assembler._exception_data[0] != 0:
             TP = lltype.Ptr(rclass.OBJECT_VTABLE)
@@ -168,7 +168,7 @@ class CPU386(object):
         try:
             return self._compiled_ops[real_key]
         except KeyError:
-            opname = key[0]
+            opnum = key[0]
             result_type = key[1]
             livevarlist = []
             i = 0
@@ -185,19 +185,23 @@ class CPU386(object):
                     raise ValueError(type)
                 livevarlist.append(box)
                 i += 1
-            mp = MergePoint('merge_point', livevarlist, [])
+            mp = ResOperation(rop.MERGE_POINT, livevarlist, None)
             if result_type == 'void':
-                results = []
+                result = None
             elif result_type == 'int':
-                results = [history.BoxInt()]
+                result = history.BoxInt()
             elif result_type == 'ptr':
-                results = [history.BoxPtr()]
+                result = history.BoxPtr()
             else:
                 raise ValueError(result_type)
+            if result is None:
+                results = []
+            else:
+                results = [result]
             operations = [mp,
-                          ResOperation(opname, livevarlist, results),
-                          ResOperation('return', results, [])]
-            if opname.startswith('guard_'):
+                          ResOperation(opnum, livevarlist, result),
+                          ResOperation(rop.RETURN, results, None)]
+            if operations[1].is_guard():
                 operations[1].liveboxes = []
             self.compile_operations(operations, verbose=False)
             self._compiled_ops[real_key] = mp
