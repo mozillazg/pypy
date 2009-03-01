@@ -3,11 +3,11 @@
 """
 
 import py
-from pypy.jit.metainterp.history import (ResOperation, MergePoint, Jump,
-                                         BoxInt, ConstInt, GuardOp)
+from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt
 from pypy.jit.backend.x86.runner import CPU, GuardFailed
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.backend.x86.test.test_runner import FakeMetaInterp, FakeStats
+from pypy.jit.metainterp.resoperation import rop
 
 def test_simple_loop():
     meta_interp = FakeMetaInterp()
@@ -22,11 +22,11 @@ def test_simple_loop():
     # while i < 5:
     #    i += 1
     operations = [
-        MergePoint('merge_point', [i, flag], []),
-        GuardOp('guard_true', [flag], []),
-        ResOperation('int_add', [i, ConstInt(1)], [i_0]),
-        ResOperation('int_lt', [i_0, ConstInt(5)], [flag_0]),
-        Jump('jump', [i_0, flag_0], []),
+        ResOperation(rop.MERGE_POINT, [i, flag], None),
+        ResOperation(rop.GUARD_TRUE, [flag], None),
+        ResOperation(rop.INT_ADD, [i, ConstInt(1)], i_0),
+        ResOperation(rop.INT_LT, [i_0, ConstInt(5)], flag_0),
+        ResOperation(rop.JUMP, [i_0, flag_0], None),
         ]
     startmp = operations[0]
     operations[-1].jump_target = startmp
@@ -74,17 +74,17 @@ def test_longer_loop():
             i += 1
         return [x, y, i, i < 5]
     operations = [
-        MergePoint('merge_point', [x, y, i, flag], []),
-        GuardOp('guard_true', [flag], []),
-        ResOperation('int_add', [y, x], [v0]),
-        ResOperation('int_mul', [v0, i], [v1]),
-        ResOperation('int_sub', [v1, x], [x0]),
-        ResOperation('int_mul', [x0, y], [v2]),
-        ResOperation('int_mul', [i, y], [v3]),
-        ResOperation('int_sub', [v3, v2], [y0]),
-        ResOperation('int_add', [i, ConstInt(1)], [i0]),
-        ResOperation('int_lt', [i0, ConstInt(5)], [flag0]),
-        Jump('jump', [x0, y0, i0, flag0], []),
+        ResOperation(rop.MERGE_POINT, [x, y, i, flag], None),
+        ResOperation(rop.GUARD_TRUE, [flag], None),
+        ResOperation(rop.INT_ADD, [y, x], v0),
+        ResOperation(rop.INT_MUL, [v0, i], v1),
+        ResOperation(rop.INT_SUB, [v1, x], x0),
+        ResOperation(rop.INT_MUL, [x0, y], v2),
+        ResOperation(rop.INT_MUL, [i, y], v3),
+        ResOperation(rop.INT_SUB, [v3, v2], y0),
+        ResOperation(rop.INT_ADD, [i, ConstInt(1)], i0),
+        ResOperation(rop.INT_LT, [i0, ConstInt(5)], flag0),
+        ResOperation(rop.JUMP, [x0, y0, i0, flag0], None),
         ]
     startmp = operations[0]
     operations[-1].jump_target = startmp
@@ -110,11 +110,11 @@ def test_loop_with_const_and_var_swap():
     i0 = BoxInt(0)
     v0 = BoxInt(0)
     operations = [
-        MergePoint('merge_point', [x, y, z, i], []),
-        ResOperation('int_sub', [i, ConstInt(1)], [i0]),
-        ResOperation('int_gt', [i0, ConstInt(0)], [v0]),
-        GuardOp('guard_true', [v0], []),
-        ResOperation('jump', [x, z, y, i0], []),
+        ResOperation(rop.MERGE_POINT, [x, y, z, i], None),
+        ResOperation(rop.INT_SUB, [i, ConstInt(1)], i0),
+        ResOperation(rop.INT_GT, [i0, ConstInt(0)], v0),
+        ResOperation(rop.GUARD_TRUE, [v0], None),
+        ResOperation(rop.JUMP, [x, z, y, i0], None),
         ]
     operations[-1].jump_target = operations[0]
     operations[3].liveboxes = [v0, x, y, z, i0]
