@@ -65,9 +65,13 @@ class TestX86(object):
             result = BoxPtr()
         else:
             raise ValueError(result_type)
+        if result is None:
+            results = []
+        else:
+            results = [result]
         operations = [mp,
                       ResOperation(opnum, livevarlist, result),
-                      ResOperation(rop.RETURN, [result], None)]
+                      ResOperation(rop.RETURN, results, None)]
         if operations[1].is_guard():
             operations[1].liveboxes = []
         self.cpu.compile_operations(operations, verbose=False)
@@ -85,17 +89,17 @@ class TestX86(object):
 
     def test_int_unary_ops(self):
         for op, args, res in [
-            ('int_neg', [BoxInt(42)], -42),
+            (rop.INT_NEG, [BoxInt(42)], -42),
             ]:
             assert self.execute_operation(op, args, 'int').value == res
 
     def test_int_comp_ops(self):
         for op, args, res in [
-            ('int_lt', [BoxInt(40), BoxInt(39)], 0),
-            ('int_lt', [BoxInt(40), ConstInt(41)], 1),
-            ('int_lt', [ConstInt(41), BoxInt(40)], 0),
-            ('int_le', [ConstInt(42), BoxInt(42)], 1),
-            ('int_gt', [BoxInt(40), ConstInt(-100)], 1),
+            (rop.INT_LT, [BoxInt(40), BoxInt(39)], 0),
+            (rop.INT_LT, [BoxInt(40), ConstInt(41)], 1),
+            (rop.INT_LT, [ConstInt(41), BoxInt(40)], 0),
+            (rop.INT_LE, [ConstInt(42), BoxInt(42)], 1),
+            (rop.INT_GT, [BoxInt(40), ConstInt(-100)], 1),
             ]:
             assert self.execute_operation(op, args, 'int').value == res
 
@@ -104,11 +108,12 @@ class TestX86(object):
         u = lltype.malloc(U)
         u_box = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, u))
         ofs_box = ConstInt(cpu.fielddescrof(S, 'value'))
-        assert self.execute_operation('setfield_gc', [u_box, ofs_box, BoxInt(3)],
+        assert self.execute_operation(rop.SETFIELD_GC,
+                                      [u_box, ofs_box, BoxInt(3)],
                                      'void') == None
         assert u.parent.parent.value == 3
         u.parent.parent.value += 100
-        assert (self.execute_operation('getfield_gc', [u_box, ofs_box], 'int')
+        assert (self.execute_operation(rop.GETFIELD_GC, [u_box, ofs_box], 'int')
                 .value == 103)
 
     def test_execute_operations_in_env(self):
@@ -120,12 +125,12 @@ class TestX86(object):
         t = BoxInt(455)
         u = BoxInt(0)    # False
         operations = [
-            ResOperation(rop.MERGE_POINT, [x, y], []),
-            ResOperation(rop.INT_ADD, [x, y], [z]),
-            ResOperation(rop.INT_SUB, [y, ConstInt(1)], [t]),
-            ResOperation('int_eq', [t, ConstInt(0)], [u]),
-            ResOperation('guard_false', [u], []),
-            ResOperation('jump', [z, t], []),
+            ResOperation(rop.MERGE_POINT, [x, y], None),
+            ResOperation(rop.INT_ADD, [x, y], z),
+            ResOperation(rop.INT_SUB, [y, ConstInt(1)], t),
+            ResOperation(rop.INT_EQ, [t, ConstInt(0)], u),
+            ResOperation(rop.GUARD_FALSE, [u], None),
+            ResOperation(rop.JUMP, [z, t], None),
             ]
         startmp = operations[0]
         operations[-1].jump_target = startmp
@@ -143,16 +148,16 @@ class TestX86(object):
         vtable_for_T = lltype.malloc(MY_VTABLE, immortal=True)
         cpu = self.cpu
         cpu._cache_gcstruct2vtable = {T: vtable_for_T}
-        for (opname, args) in [('guard_true', [BoxInt(1)]),
-                               ('guard_false', [BoxInt(0)]),
-                               ('guard_value', [BoxInt(42), BoxInt(42)])]:
+        for (opname, args) in [(rop.GUARD_TRUE, [BoxInt(1)]),
+                               (rop.GUARD_FALSE, [BoxInt(0)]),
+                               (rop.GUARD_VALUE, [BoxInt(42), BoxInt(42)])]:
                 assert self.execute_operation(opname, args, 'void') == None
         t = lltype.malloc(T)
         t.parent.typeptr = vtable_for_T
         t_box = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, t))
         T_box = ConstInt(rffi.cast(lltype.Signed, vtable_for_T))
         null_box = ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.nullptr(T)))
-        assert self.execute_operation('guard_class', [t_box, T_box], 'void') == None
+        assert self.execute_operation(rop.GUARD_CLASS, [t_box, T_box], 'void') == None
 
     def test_failing_guards(self):
         vtable_for_T = lltype.malloc(MY_VTABLE, immortal=True)
@@ -169,11 +174,11 @@ class TestX86(object):
         u_box = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, u))
         U_box = ConstInt(rffi.cast(lltype.Signed, vtable_for_U))
         null_box = ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.nullptr(T)))
-        for opname, args in [('guard_true', [BoxInt(0)]),
-                             ('guard_false', [BoxInt(1)]),
-                             ('guard_value', [BoxInt(42), BoxInt(41)]),
-                             ('guard_class', [t_box, U_box]),
-                             ('guard_class', [u_box, T_box]),
+        for opname, args in [(rop.GUARD_TRUE, [BoxInt(0)]),
+                             (rop.GUARD_FALSE, [BoxInt(1)]),
+                             (rop.GUARD_VALUE, [BoxInt(42), BoxInt(41)]),
+                             (rop.GUARD_CLASS, [t_box, U_box]),
+                             (rop.GUARD_CLASS, [u_box, T_box]),
                              ]:
             cpu.metainterp.gf = None
             assert self.execute_operation(opname, args, 'void') == None
@@ -181,15 +186,15 @@ class TestX86(object):
 
     def test_misc_int_ops(self):
         for op, args, res in [
-            ('int_mod', [BoxInt(7), BoxInt(3)], 1),
-            ('int_mod', [ConstInt(0), BoxInt(7)], 0),
-            ('int_mod', [BoxInt(13), ConstInt(5)], 3),
-            ('int_mod', [ConstInt(33), ConstInt(10)], 3),
-            ('int_floordiv', [BoxInt(13), BoxInt(3)], 4),
-            ('int_floordiv', [BoxInt(42), ConstInt(10)], 4),
-            ('int_floordiv', [ConstInt(42), BoxInt(10)], 4),
-            ('int_rshift', [ConstInt(3), BoxInt(4)], 3>>4),
-            ('int_rshift', [BoxInt(3), ConstInt(10)], 3>>10),
+            (rop.INT_MOD, [BoxInt(7), BoxInt(3)], 1),
+            (rop.INT_MOD, [ConstInt(0), BoxInt(7)], 0),
+            (rop.INT_MOD, [BoxInt(13), ConstInt(5)], 3),
+            (rop.INT_MOD, [ConstInt(33), ConstInt(10)], 3),
+            (rop.INT_FLOORDIV, [BoxInt(13), BoxInt(3)], 4),
+            (rop.INT_FLOORDIV, [BoxInt(42), ConstInt(10)], 4),
+            (rop.INT_FLOORDIV, [ConstInt(42), BoxInt(10)], 4),
+            (rop.INT_RSHIFT, [ConstInt(3), BoxInt(4)], 3>>4),
+            (rop.INT_RSHIFT, [BoxInt(3), ConstInt(10)], 3>>10),
             ]:
             assert self.execute_operation(op, args, 'int').value == res
 
@@ -223,14 +228,14 @@ class TestX86(object):
             self.cpu.assembler.malloc_func_addr = addr
             ofs = symbolic.get_field_token(rstr.STR, 'chars')[0]
             
-            res = self.execute_operation('newstr', [ConstInt(7)], 'ptr')
+            res = self.execute_operation(rop.NEWSTR, [ConstInt(7)], 'ptr')
             assert allocs[0] == 7 + ofs + WORD
             resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
             assert resbuf[ofs/WORD] == 7
             
             # ------------------------------------------------------------
 
-            res = self.execute_operation('newstr', [BoxInt(7)], 'ptr')
+            res = self.execute_operation(rop.NEWSTR, [BoxInt(7)], 'ptr')
             assert allocs[0] == 7 + ofs + WORD
             resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
             assert resbuf[ofs/WORD] == 7
@@ -241,7 +246,7 @@ class TestX86(object):
             ofs = symbolic.get_field_token(TP, 'length')[0]
             descr = ConstInt(self.cpu.arraydescrof(TP))
 
-            res = self.execute_operation('new_array', [descr, ConstInt(10)],
+            res = self.execute_operation(rop.NEW_ARRAY, [descr, ConstInt(10)],
                                              'ptr')
             assert allocs[0] == 10*WORD + ofs + WORD
             resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
@@ -249,7 +254,7 @@ class TestX86(object):
 
             # ------------------------------------------------------------
 
-            res = self.execute_operation('new_array', [descr, BoxInt(10)],
+            res = self.execute_operation(rop.NEW_ARRAY, [descr, BoxInt(10)],
                                              'ptr')
             assert allocs[0] == 10*WORD + ofs + WORD
             resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
@@ -263,13 +268,13 @@ class TestX86(object):
         ofs = symbolic.get_field_token(STR, 'chars')[0]
         ofs_items = symbolic.get_field_token(STR.chars, 'items')[0]
 
-        res = self.execute_operation('newstr', [ConstInt(10)], 'ptr')
-        self.execute_operation('strsetitem', [res, ConstInt(2), ConstInt(ord('d'))], 'void')
+        res = self.execute_operation(rop.NEWSTR, [ConstInt(10)], 'ptr')
+        self.execute_operation(rop.STRSETITEM, [res, ConstInt(2), ConstInt(ord('d'))], 'void')
         resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_char))
         assert resbuf[ofs + ofs_items + 2] == 'd'
-        self.execute_operation('strsetitem', [res, BoxInt(2), ConstInt(ord('z'))], 'void')
+        self.execute_operation(rop.STRSETITEM, [res, BoxInt(2), ConstInt(ord('z'))], 'void')
         assert resbuf[ofs + ofs_items + 2] == 'z'
-        r = self.execute_operation('strgetitem', [res, BoxInt(2)], 'int')
+        r = self.execute_operation(rop.STRGETITEM, [res, BoxInt(2)], 'int')
         assert r.value == ord('z')
 
     def test_arrayitems(self):
@@ -277,25 +282,25 @@ class TestX86(object):
         ofs = symbolic.get_field_token(TP, 'length')[0]
         itemsofs = symbolic.get_field_token(TP, 'items')[0]
         descr = ConstInt(self.cpu.arraydescrof(TP))
-        res = self.execute_operation('new_array', [descr, ConstInt(10)],
+        res = self.execute_operation(rop.NEW_ARRAY, [descr, ConstInt(10)],
                                      'ptr')
         resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
         assert resbuf[ofs/WORD] == 10
-        self.execute_operation('setarrayitem_gc', [res, descr,
-                                                   ConstInt(2), BoxInt(38)],
+        self.execute_operation(rop.SETARRAYITEM_GC, [res, descr,
+                                                     ConstInt(2), BoxInt(38)],
                                'void')
         assert resbuf[itemsofs/WORD + 2] == 38
         
-        self.execute_operation('setarrayitem_gc', [res, descr,
-                                                   BoxInt(3), BoxInt(42)],
+        self.execute_operation(rop.SETARRAYITEM_GC, [res, descr,
+                                                     BoxInt(3), BoxInt(42)],
                                'void')
         assert resbuf[itemsofs/WORD + 3] == 42
 
-        r = self.execute_operation('getarrayitem_gc', [res, descr,
-                                                       ConstInt(2)], 'int')
+        r = self.execute_operation(rop.GETARRAYITEM_GC, [res, descr,
+                                                         ConstInt(2)], 'int')
         assert r.value == 38
-        r = self.execute_operation('getarrayitem_gc', [res, descr,
-                                                       BoxInt(3)], 'int')
+        r = self.execute_operation(rop.GETARRAYITEM_GC, [res, descr,
+                                                         BoxInt(3)], 'int')
         assert r.value == 42
 
     def test_getfield_setfield(self):
@@ -305,7 +310,7 @@ class TestX86(object):
                              ('c1', lltype.Char),
                              ('c2', lltype.Char),
                              ('c3', lltype.Char))
-        res = self.execute_operation('new', [ConstInt(self.cpu.sizeof(TP))],
+        res = self.execute_operation(rop.NEW, [ConstInt(self.cpu.sizeof(TP))],
                                      'ptr')
         ofs_s = ConstInt(self.cpu.fielddescrof(TP, 's'))
         ofs_f = ConstInt(self.cpu.fielddescrof(TP, 'f'))
@@ -313,36 +318,36 @@ class TestX86(object):
         ofsc1 = ConstInt(self.cpu.fielddescrof(TP, 'c1'))
         ofsc2 = ConstInt(self.cpu.fielddescrof(TP, 'c2'))
         ofsc3 = ConstInt(self.cpu.fielddescrof(TP, 'c3'))
-        self.execute_operation('setfield_gc', [res, ofs_s, ConstInt(3)], 'void')
+        self.execute_operation(rop.SETFIELD_GC, [res, ofs_s, ConstInt(3)], 'void')
         # XXX ConstFloat
-        #self.execute_operation('setfield_gc', [res, ofs_f, 1e100], 'void')
+        #self.execute_operation(rop.SETFIELD_GC, [res, ofs_f, 1e100], 'void')
         # XXX we don't support shorts (at all)
-        #self.execute_operation('setfield_gc', [res, ofs_u, ConstInt(5)], 'void')
-        s = self.execute_operation('getfield_gc', [res, ofs_s], 'int')
+        #self.execute_operation(rop.SETFIELD_GC, [res, ofs_u, ConstInt(5)], 'void')
+        s = self.execute_operation(rop.GETFIELD_GC, [res, ofs_s], 'int')
         assert s.value == 3
-        self.execute_operation('setfield_gc', [res, ofs_s, BoxInt(3)], 'void')
-        s = self.execute_operation('getfield_gc', [res, ofs_s], 'int')
+        self.execute_operation(rop.SETFIELD_GC, [res, ofs_s, BoxInt(3)], 'void')
+        s = self.execute_operation(rop.GETFIELD_GC, [res, ofs_s], 'int')
         assert s.value == 3
-        #u = self.execute_operation('getfield_gc', [res, ofs_u], 'int')
+        #u = self.execute_operation(rop.GETFIELD_GC, [res, ofs_u], 'int')
         #assert u.value == 5
-        self.execute_operation('setfield_gc', [res, ofsc1, ConstInt(1)], 'void')
-        self.execute_operation('setfield_gc', [res, ofsc2, ConstInt(2)], 'void')
-        self.execute_operation('setfield_gc', [res, ofsc3, ConstInt(3)], 'void')
-        c = self.execute_operation('getfield_gc', [res, ofsc1], 'int')
+        self.execute_operation(rop.SETFIELD_GC, [res, ofsc1, ConstInt(1)], 'void')
+        self.execute_operation(rop.SETFIELD_GC, [res, ofsc2, ConstInt(2)], 'void')
+        self.execute_operation(rop.SETFIELD_GC, [res, ofsc3, ConstInt(3)], 'void')
+        c = self.execute_operation(rop.GETFIELD_GC, [res, ofsc1], 'int')
         assert c.value == 1
-        c = self.execute_operation('getfield_gc', [res, ofsc2], 'int')
+        c = self.execute_operation(rop.GETFIELD_GC, [res, ofsc2], 'int')
         assert c.value == 2
-        c = self.execute_operation('getfield_gc', [res, ofsc3], 'int')
+        c = self.execute_operation(rop.GETFIELD_GC, [res, ofsc3], 'int')
         assert c.value == 3
         
     def test_ovf_ops(self):
         arg0 = BoxInt(12)
         arg1 = BoxInt(13)
-        res = self.execute_operation('int_mul_ovf', [arg0, arg1], 'int')
+        res = self.execute_operation(rop.INT_MUL_OVF, [arg0, arg1], 'int')
         assert res.value == 12*13
         arg0 = BoxInt(sys.maxint/2)
         arg1 = BoxInt(2222)
-        self.execute_operation('int_mul_ovf', [arg0, arg1], 'int')
+        self.execute_operation(rop.INT_MUL_OVF, [arg0, arg1], 'int')
         assert self.cpu.assembler._exception_data[0] == 1
         self.cpu.assembler._exception_data[0] = 0
 
@@ -351,16 +356,16 @@ class TestX86(object):
 
         arg0 = BoxInt(intmask(r_uint(sys.maxint + 3)))
         arg1 = BoxInt(intmask(r_uint(4)))
-        res = self.execute_operation('uint_add', [arg0, arg1], 'int')
+        res = self.execute_operation(rop.UINT_ADD, [arg0, arg1], 'int')
         assert res.value == intmask(r_uint(sys.maxint + 3) + r_uint(4))
 
         arg0 = BoxInt(intmask(sys.maxint + 10))
         arg1 = BoxInt(10)
-        res = self.execute_operation('uint_mul', [arg0, arg1], 'int')
+        res = self.execute_operation(rop.UINT_MUL, [arg0, arg1], 'int')
         assert res.value == intmask((sys.maxint + 10) * 10)
 
         arg0 = BoxInt(intmask(r_uint(sys.maxint + 3)))
         arg1 = BoxInt(intmask(r_uint(4)))
 
-        res = self.execute_operation('uint_gt', [arg0, arg1], 'int')
+        res = self.execute_operation(rop.UINT_GT, [arg0, arg1], 'int')
         assert res.value == 1
