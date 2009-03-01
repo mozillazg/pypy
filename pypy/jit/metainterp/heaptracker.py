@@ -73,9 +73,13 @@ def populate_type_cache(graphs, cpu):
                     if isinstance(STRUCT, lltype.GcStruct):
                         vtable = get_vtable_for_gcstruct(cpu, STRUCT)
                         if vtable:
-                            vt = cpu.cast_adr_to_int(
-                                llmemory.cast_ptr_to_adr(vtable))
-                            cache[vt] = cpu.sizeof(STRUCT)
+                            if not cpu.translate_support_code:
+                                vt = cpu.cast_adr_to_int(
+                                    llmemory.cast_ptr_to_adr(vtable))
+                                cache[vt] = cpu.sizeof(STRUCT)
+                            else:
+                                vt = llmemory.cast_ptr_to_adr(vtable)
+                                cache[vt] = cpu.sizeof(STRUCT)
     return cache
 
 testing_gcstruct2vtable = {}
