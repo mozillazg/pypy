@@ -894,7 +894,11 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
     history = metainterp.history
 
     for vtable in storage.allocations:
-        sizebox = ConstInt(metainterp.class_sizes[vtable])
+        if metainterp.cpu.translate_support_code:
+            vtable_addr = metainterp.cpu.cast_int_to_adr(vtable)
+            sizebox = ConstInt(metainterp.class_sizes[vtable_addr])
+        else:
+            sizebox = ConstInt(metainterp.class_sizes[vtable])
         vtablebox = ConstInt(vtable)
         instbox = history.execute_and_record(rop.NEW_WITH_VTABLE,
                                              [sizebox, vtablebox],

@@ -6,7 +6,7 @@ from pypy.rpython.llinterp import LLException
 from pypy.rpython.test.test_llinterp import get_interpreter, clear_tcache
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import checkgraph, Link, copygraph
-from pypy.rlib.objectmodel import we_are_translated, UnboxedValue
+from pypy.rlib.objectmodel import we_are_translated, UnboxedValue, specialize
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import PARAMETERS
 from pypy.rlib.rarithmetic import r_uint
@@ -105,11 +105,14 @@ class WarmRunnerDesc:
                           translate_support_code=False, **kwds):
         opt = Options(**kwds)
         self.stats = history.Stats()
-        cpu = CPUClass(self.translator.rtyper, self.stats,
-                       translate_support_code)
-        self.cpu = cpu
         if translate_support_code:
             self.annhelper = MixLevelHelperAnnotator(self.translator.rtyper)
+            annhelper = self.annhelper
+        else:
+            annhelper = None
+        cpu = CPUClass(self.translator.rtyper, self.stats,
+                       translate_support_code, annhelper)
+        self.cpu = cpu
         graphs = self.translator.graphs
         self.jit_merge_point_pos = find_jit_merge_point(graphs)
         graph, block, pos = self.jit_merge_point_pos
@@ -348,7 +351,8 @@ def make_state_class(warmrunnerdesc):
     jitdriver = warmrunnerdesc.jitdriver
     num_green_args = len(jitdriver.greens)
     warmrunnerdesc.num_green_args = num_green_args
-    green_args_spec = unrolling_iterable(warmrunnerdesc.green_args_spec)
+    green_args_spec = unrolling_iterable(
+        list(enumerate(warmrunnerdesc.green_args_spec)))
     green_args_names = unrolling_iterable(jitdriver.greens)
     if num_green_args:
         MAX_HASH_TABLE_BITS = 28
@@ -461,17 +465,20 @@ def make_state_class(warmrunnerdesc):
             return self.compile(argshash, *args)
         handle_hash_collision._dont_inline_ = True
 
+        @specialize.arg(2)
+        def _get_hash_part(self, greenargs, i, TYPE, result):
+            item = greenargs[i]
+            return result ^ cast_whatever_to_int(TYPE, item)
+
         def getkeyhash(self, *greenargs):
             result = r_uint(0x345678)
             i = 0
             mult = r_uint(1000003)
-            for TYPE in green_args_spec:
+            for i, TYPE in green_args_spec:
                 if i > 0:
                     result = result * mult
                     mult = mult + 82520 + 2*len(greenargs)
-                item = greenargs[i]
-                result = result ^ cast_whatever_to_int(TYPE, item)
-                i += 1
+                result = self._get_hash_part(greenargs, i, TYPE, result)
             return result
         getkeyhash._always_inline_ = True
 

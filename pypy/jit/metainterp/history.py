@@ -380,7 +380,6 @@ class RunningMatcher(Matcher):
         op = ResOperation(opnum, argboxes, resbox)
         self.operations.append(op)
         return op
-    record._annspecialcase_ = 'specialize:arg(4)'
 
     def generate_anything_since(self, old_index):
         return len(self.operations) > old_index
@@ -391,7 +390,6 @@ class History(RunningMatcher):
 class BlackHole(RunningMatcher):
     def record(self, step, argboxes, resbox):
         return None
-    record._annspecialcase_ = 'specialize:arg(4)'
 
     def generate_anything_since(self, old_index):
         return True
