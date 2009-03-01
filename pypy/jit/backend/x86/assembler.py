@@ -26,6 +26,9 @@ class Assembler386(object):
         self.mc2 = None
         self.rtyper = cpu.rtyper
         self.malloc_func_addr = 0
+        self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                             zero=True, flavor='raw')
+        self._exception_addr = cpu.cast_ptr_to_int(self._exception_data)
 
     def make_sure_mc_exists(self):
         if self.mc is None:
@@ -36,7 +39,8 @@ class Assembler386(object):
             self.generic_return_addr = self.assemble_generic_return()
             # the address of the function called by 'new': directly use
             # Boehm's GC_malloc function.
-            self.malloc_func_addr = gc_malloc_fnaddr() 
+            if self.malloc_func_addr == 0:
+                self.malloc_func_addr = gc_malloc_fnaddr() 
 
     def assemble(self, operations, guard_op, verbose=False):
         self.verbose = verbose
@@ -178,15 +182,21 @@ class Assembler386(object):
             getattr(self.mc, asmop)(arglocs[0], arglocs[1])
         return genop_binary
 
-    def _cmpop(cond):
+    def _cmpop(cond, rev_cond):
         def genop_cmp(self, op, arglocs, result_loc):
-            self.mc.CMP(arglocs[0], arglocs[1])
-            self.mc.MOV(result_loc, imm8(0))
-            getattr(self.mc, 'SET' + cond)(lower_byte(result_loc))
+            if isinstance(op.args[0], Const):
+                self.mc.CMP(arglocs[1], arglocs[0])
+                self.mc.MOV(result_loc, imm8(0))
+                getattr(self.mc, 'SET' + rev_cond)(lower_byte(result_loc))
+            else:
+                self.mc.CMP(arglocs[0], arglocs[1])
+                self.mc.MOV(result_loc, imm8(0))
+                getattr(self.mc, 'SET' + cond)(lower_byte(result_loc))
         return genop_cmp
 
     def call(self, addr, args, res):
-        for arg in args:
+        for i in range(len(args)):
+            arg = args[i]
             self.mc.PUSH(arg)
         self.mc.CALL(rel32(addr))
         self.mc.ADD(esp, imm(len(args) * WORD))
@@ -198,12 +208,12 @@ class Assembler386(object):
     genop_int_mul = _binaryop("IMUL", True)
     genop_int_and = _binaryop("AND", True)
 
-    genop_int_lt = _cmpop("L")
-    genop_int_le = _cmpop("LE")
-    genop_int_eq = _cmpop("E")
-    genop_int_ne = _cmpop("NE")
-    genop_int_gt = _cmpop("G")
-    genop_int_ge = _cmpop("GE")
+    genop_int_lt = _cmpop("L", "G")
+    genop_int_le = _cmpop("LE", "GE")
+    genop_int_eq = _cmpop("E", "NE")
+    genop_int_ne = _cmpop("NE", "E")
+    genop_int_gt = _cmpop("G", "L")
+    genop_int_ge = _cmpop("GE", "LE")
 
     # for now all chars are being considered ints, although we should make
     # a difference at some point
@@ -273,24 +283,43 @@ class Assembler386(object):
         loc_size = arglocs[0]
         self.call(self.malloc_func_addr, [loc_size], eax)
 
-    def genop_newstr(self, op, arglocs, result_loc):
+    def genop_malloc_varsize(self, op, arglocs, result_loc):
         loc_size = arglocs[0]
         self.call(self.malloc_func_addr, [loc_size], eax)
 
     def genop_getfield_gc(self, op, arglocs, resloc):
-        base_loc, ofs_loc = arglocs
-        #if isinstance(op.args[0], Constant):
-        #    x, _ = self.cpu.get_value_as_int(op.args[0].value)
-        #    pos = mem(None, offset + x)
-        #else:
-        #    ...
-        self.mc.MOV(resloc, addr_add(base_loc, ofs_loc))
+        base_loc, ofs_loc, size_loc = arglocs
+        size = size_loc.value
+        if size == 1:
+            self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc))
+        elif size == WORD:
+            self.mc.MOV(resloc, addr_add(base_loc, ofs_loc))
+        else:
+            raise NotImplementedError("getfield size = %d" % size)
+
+    def genop_getarrayitem_gc(self, op, arglocs, resloc):
+        base_loc, ofs_loc, scale, ofs = arglocs
+        self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value, scale.value))
 
     genop_getfield_raw = genop_getfield_gc
 
     def genop_setfield_gc(self, op, arglocs):
-        base_loc, ofs_loc, value_loc = arglocs
-        self.mc.MOV(addr_add(base_loc, ofs_loc), value_loc)
+        base_loc, ofs_loc, size_loc, value_loc = arglocs
+        size = size_loc.value
+        if size == WORD:
+            self.mc.MOV(addr_add(base_loc, ofs_loc), value_loc)
+        elif size == 2:
+            raise NotImplementedError("shorts and friends")
+            self.mc.MOV(addr16_add(base_loc, ofs_loc), lower_2_bytes(value_loc))
+        elif size == 1:
+            self.mc.MOV(addr8_add(base_loc, ofs_loc), lower_byte(value_loc))
+        else:
+            raise NotImplementedError("Addr size %d" % size)
+
+    def genop_setarrayitem_gc(self, op, arglocs):
+        base_loc, ofs_loc, value_loc, scale_loc, baseofs = arglocs
+        self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value, scale_loc.value),
+                    value_loc)
 
     def genop_strsetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs
@@ -311,21 +340,8 @@ class Assembler386(object):
         self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, basesize))
 
     def genop_merge_point(self, op, locs):
-        # encode the current machine code position and the current stack
-        # position of the live values into a flat array of c_long's.
-        # XXX update comment
-        # we load constants into arguments
         op.position = self.mc.tell()
         op.comeback_bootstrap_addr = self.assemble_comeback_bootstrap(op)
-        #nb_args = len(op.args)
-        #array_type = ctypes.c_long * (2 + nb_args)
-        #label = array_type()
-        #label[0] = nb_args
-        #label[1] = self.mc.tell()
-        #for i in range(nb_args):
-        #    v = op.args[i]
-        #    label[2 + i] = self.stack_positions[v]
-        #op._asm_label = label
 
     genop_catch = genop_merge_point
 
@@ -348,7 +364,20 @@ class Assembler386(object):
         self.implement_guard(op, self.mc.JZ, locs[1:])
 
     def genop_guard_no_exception(self, op, locs):
-        pass # XXX # exception handling
+        loc = locs[0]
+        self.mc.MOV(loc, heap(self._exception_addr))
+        self.mc.TEST(loc, loc)
+        self.implement_guard(op, self.mc.JNZ, locs[1:])
+
+    def genop_guard_exception(self, op, locs, resloc):
+        loc = locs[0]
+        loc1 = locs[1]
+        self.mc.MOV(loc1, heap(self._exception_addr))
+        self.mc.CMP(loc1, loc)
+        self.implement_guard(op, self.mc.JNE, locs[2:])
+        if resloc is not None:
+            self.mc.MOV(resloc, addr_add(imm(self._exception_addr), imm(WORD)))
+        self.mc.MOV(heap(self._exception_addr), imm(0))
 
     def genop_guard_false(self, op, locs):
         loc = locs[0]
@@ -508,29 +537,44 @@ for name, value in Assembler386.__dict__.iteritems():
 
 genop_discard_dict['call_void'] = Assembler386.genop_call_void
 
-def addr_add(reg_or_imm1, reg_or_imm2, offset=0):
+def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
     if isinstance(reg_or_imm1, IMM32):
         if isinstance(reg_or_imm2, IMM32):
-            return heap(reg_or_imm1.value + offset + reg_or_imm2.value)
+            return heap(reg_or_imm1.value + offset +
+                        (reg_or_imm2.value << scale))
         else:
-            return mem(reg_or_imm2, reg_or_imm1.value + offset)
+            return mem(reg_or_imm2, (reg_or_imm1.value << scale) + offset)
     else:
         if isinstance(reg_or_imm2, IMM32):
-            return mem(reg_or_imm1, offset + reg_or_imm2.value)
+            return mem(reg_or_imm1, offset + (reg_or_imm2.value << scale))
         else:
-            return memSIB(reg_or_imm1, reg_or_imm2, 0, offset)
+            return memSIB(reg_or_imm1, reg_or_imm2, scale, offset)
 
-def addr8_add(reg_or_imm1, reg_or_imm2, offset=0):
+def addr8_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
     if isinstance(reg_or_imm1, IMM32):
         if isinstance(reg_or_imm2, IMM32):
-            return heap8(reg_or_imm1.value + offset + reg_or_imm2.value)
+            return heap8(reg_or_imm1.value + (offset << scale) +
+                         reg_or_imm2.value)
         else:
-            return mem8(reg_or_imm2, reg_or_imm1.value + offset)
+            return mem8(reg_or_imm2, reg_or_imm1.value + (offset << scale))
     else:
         if isinstance(reg_or_imm2, IMM32):
-            return mem8(reg_or_imm1, offset + reg_or_imm2.value)
+            return mem8(reg_or_imm1, (offset << scale) + reg_or_imm2.value)
         else:
-            return memSIB8(reg_or_imm1, reg_or_imm2, 0, offset)
+            return memSIB8(reg_or_imm1, reg_or_imm2, scale, offset)
+
+def addr16_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
+    if isinstance(reg_or_imm1, IMM32):
+        if isinstance(reg_or_imm2, IMM32):
+            return heap16(reg_or_imm1.value + (offset << scale) +
+                         reg_or_imm2.value)
+        else:
+            return mem16(reg_or_imm2, reg_or_imm1.value + (offset << scale))
+    else:
+        if isinstance(reg_or_imm2, IMM32):
+            return mem16(reg_or_imm1, (offset << scale) + reg_or_imm2.value)
+        else:
+            return memSIB16(reg_or_imm1, reg_or_imm2, scale, offset)
 
 def addr_add_const(reg_or_imm1, offset):
     if isinstance(reg_or_imm1, IMM32):

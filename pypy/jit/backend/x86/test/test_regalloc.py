@@ -99,5 +99,32 @@ def test_longer_loop():
     assert res.value == 42
     assert meta_interp.recordedvalues == f()
 
-def test_xxx():
-    pass
+def test_loop_with_const_and_var_swap():
+    meta_interp = FakeMetaInterp()
+    cpu = CPU(rtyper=None, stats=FakeStats())
+    cpu.set_meta_interp(meta_interp)
+    x = BoxInt(0)
+    y = BoxInt(0)
+    z = BoxInt(0)
+    i = BoxInt(0)
+    i0 = BoxInt(0)
+    v0 = BoxInt(0)
+    operations = [
+        MergePoint('merge_point', [x, y, z, i], []),
+        ResOperation('int_sub', [i, ConstInt(1)], [i0]),
+        ResOperation('int_gt', [i0, ConstInt(0)], [v0]),
+        GuardOp('guard_true', [v0], []),
+        ResOperation('jump', [x, z, y, i0], []),
+        ]
+    operations[-1].jump_target = operations[0]
+    operations[3].liveboxes = [v0, x, y, z, i0]
+
+    cpu.compile_operations(operations)
+
+    res = cpu.execute_operations_in_new_frame('foo', operations[0],
+                                                   [BoxInt(1), BoxInt(2),
+                                                    BoxInt(3), BoxInt(10)],
+                                              'int')
+    assert res.value == 42
+    assert meta_interp.recordedvalues == [0, 1, 3, 2, 0]
+
