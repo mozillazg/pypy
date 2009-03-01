@@ -2,13 +2,13 @@ import sys
 import ctypes
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, ll2ctypes, rffi
-from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rlib.objectmodel import CDefinedIntSymbolic, specialize
 from pypy.rlib.objectmodel import we_are_translated, keepalive_until_here
 from pypy.annotation import model as annmodel
-
+from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import (MergePoint, ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
@@ -27,9 +27,19 @@ class CPU386(object):
         self.stats = stats
         self.translate_support_code = translate_support_code
         if translate_support_code:
+            assert False, "need exception support"
             self.mixlevelann = MixLevelHelperAnnotator(rtyper)
         else:
             self.current_interpreter = LLInterpreter(self.rtyper)
+
+            def _store_exception(lle):
+                tp_i = self.cast_ptr_to_int(lle.args[0])
+                v_i = self.cast_gcref_to_int(lle.args[1])
+                self.assembler._exception_data[0] = tp_i
+                self.assembler._exception_data[1] = v_i
+            
+            self.current_interpreter._store_exception = _store_exception
+        TP = lltype.GcArray(llmemory.GCREF)
         self.keepalives = []
         self.keepalives_index = 0
         self._bootstrap_cache = {}
@@ -102,6 +112,14 @@ class CPU386(object):
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp
 
+    def get_exception(self, frame):
+        res = self.assembler._exception_data[0]
+        self.assembler._exception_data[0] = 0
+        return res
+
+    def get_exc_value(self, frame):
+        return self.cast_int_to_gcref(self.assembler._exception_data[1])
+
     def execute_operation(self, opname, valueboxes, result_type):
         # mostly a hack: fall back to compiling and executing the single
         # operation.
@@ -109,13 +127,26 @@ class CPU386(object):
             return None
         key = [opname, result_type]
         for valuebox in valueboxes:
-            key.append(valuebox.type)
-        mp = self.get_compiled_single_operation(key)
+            if isinstance(valuebox, Box):
+                key.append(valuebox.type)
+            else:
+                key.append(repr(valuebox)) # XXX not RPython
+        mp = self.get_compiled_single_operation(key, valueboxes)
         res = self.execute_operations_in_new_frame(opname, mp, valueboxes,
                                                    result_type)
+        if self.assembler._exception_data[0] != 0:
+            TP = lltype.Ptr(rclass.OBJECT_VTABLE)
+            TP_V = lltype.Ptr(rclass.OBJECT)
+            exc_t_a = self.cast_int_to_adr(self.assembler._exception_data[0])
+            exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
+            exc_v_a = self.cast_int_to_gcref(self.assembler._exception_data[1])
+            exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
+            # clean up the exception
+            self.assembler._exception_data[0] = 0
+            raise LLException(exc_type, exc_val)
         return res
 
-    def get_compiled_single_operation(self, key):
+    def get_compiled_single_operation(self, key, valueboxes):
         real_key = ','.join([str(k) for k in key])
         try:
             return self._compiled_ops[real_key]
@@ -123,14 +154,20 @@ class CPU386(object):
             opname = key[0]
             result_type = key[1]
             livevarlist = []
-            for type in key[2:]:
-                if type == 'int':
-                    box = history.BoxInt()
-                elif type == 'ptr':
-                    box = history.BoxPtr()
+            i = 0
+            # clonebox below is necessary, because sometimes we know
+            # that the value is constant (ie ArrayDescr), but we're not
+            # going to get the contant. So instead we get a box with correct
+            # value
+            for box in valueboxes:
+                if box.type == 'int':
+                    box = valueboxes[i].clonebox()
+                elif box.type == 'ptr':
+                    box = valueboxes[i].clonebox()
                 else:
                     raise ValueError(type)
                 livevarlist.append(box)
+                i += 1
             mp = MergePoint('merge_point', livevarlist, [])
             if result_type == 'void':
                 results = []
@@ -295,10 +332,6 @@ class CPU386(object):
     numof = sizeof
     addresssuffix = str(symbolic.get_size(llmemory.Address))
 
-    def offsetof(self, S, fieldname):
-        ofs, size = symbolic.get_field_token(S, fieldname)
-        return ofs
-
     def itemoffsetof(self, A):
         basesize, itemsize, ofs_length = symbolic.get_array_token(A)
         return basesize
@@ -313,13 +346,34 @@ class CPU386(object):
         return res
 
     @staticmethod
+    def cast_ptr_to_int(x):
+        adr = llmemory.cast_ptr_to_adr(x)
+        return CPU386.cast_adr_to_int(adr)
+
+    @staticmethod
+    def arraydescrof(A):
+        assert isinstance(A, lltype.GcArray)
+        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
+        assert ofs_length == 0
+        counter = 0
+        while itemsize != 1:
+            itemsize >>= 1
+            counter += 1
+        return basesize + counter * 0x10000
+
+    @staticmethod
     def fielddescrof(S, fieldname):
         ofs, size = symbolic.get_field_token(S, fieldname)
-        assert size == 4
-        return ofs
+        val = (size << 16) + ofs
+        if (isinstance(getattr(S, fieldname), lltype.Ptr) and
+            getattr(S, fieldname).TO._gckind == 'gc'):
+            return ~val
+        return val
 
     @staticmethod
     def typefor(fielddesc):
+        if fielddesc < 0:
+            return "ptr"
         return "int"
 
     @staticmethod

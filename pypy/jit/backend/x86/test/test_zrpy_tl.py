@@ -1,7 +1,7 @@
 
 import py
-from test.test_tl import ToyLanguageTests
-from codegen386.test.test_zrpy_slist import Jit386Mixin
+from pypy.jit.metainterp.test.test_tl import ToyLanguageTests
+from pypy.jit.backend.x86.test.test_zrpy_slist import Jit386Mixin
 from pypy.jit.tl import tlc
 
 class TestTL(Jit386Mixin, ToyLanguageTests):
