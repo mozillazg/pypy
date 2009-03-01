@@ -237,7 +237,8 @@ class BoxInt(Box):
     type = 'int'
 
     def __init__(self, value=0):
-        assert isinstance(value, int)
+        if not we_are_translated():
+            assert isinstance(value, (int, ComputedIntSymbolic))
         self.value = value
 
     def clonebox(self):
