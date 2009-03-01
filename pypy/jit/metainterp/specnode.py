@@ -167,7 +167,7 @@ class DelayedSpecNode(VirtualizedSpecNode):
                 else:
                     box = subspecnode.box.clonebox()
                     oplist.append(ResOperation('getfield_gc',
-                       [instnode.source, ConstInt(ofs)], [box]))
+                       [instnode.source, ConstInt(ofs)], box))
                     newboxlist.append(box)
 
 ##class DelayedListSpecNode(DelayedSpecNode):

@@ -101,7 +101,6 @@ operation_never_raises = {}
 
 for guard in ['guard_no_exception', 'guard_true',
               'guard_false', 'guard_value', 'guard_class']:
-    always_pure_operations[guard] = None
     operation_never_raises[guard] = None
 
 setup()

@@ -178,7 +178,7 @@ class ResOpGen(object):
     def getlinks(self):
         boxes = {}
         for op in self.all_operations:
-            for box in op.args + op.results:
+            for box in op.args + [op.result]:
                 if isinstance(box, Box):
                     boxes[box] = True
         links = {}

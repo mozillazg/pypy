@@ -72,7 +72,8 @@ class CPU(object):
                     llimpl.compile_add_int_const(c, x.getint())
                 else:
                     raise Exception("%s args contain: %r" % (op.opname, x))
-            for x in op.results:
+            x = op.result
+            if x is not None:
                 if isinstance(x, history.BoxInt):
                     var2index[x] = llimpl.compile_add_int_result(c)
                 elif isinstance(x, history.BoxPtr):
@@ -164,17 +165,20 @@ class CPU(object):
             else:
                 raise AssertionError('valuebox type=%s' % (type,))
         if result_type == 'void':
-            resboxes = []
+            resbox = None
         elif result_type == 'int':
-            resboxes = [history.BoxInt()]
+            resbox = history.BoxInt()
         elif result_type == 'ptr':
-            resboxes = [history.BoxPtr()]
+            resbox = history.BoxPtr()
         else:
             raise AssertionError(result_type)
+        resboxes = []
+        if resbox is not None:
+            resboxes.append(resbox)
         operations = [
-            history.MergePoint('merge_point', valueboxes, []),
-            history.ResOperation(opname, valueboxes, resboxes),
-            history.ResOperation('return', resboxes, []),
+            history.MergePoint('merge_point', valueboxes, None),
+            history.ResOperation(opname, valueboxes, resbox),
+            history.ResOperation('return', resboxes, None),
             ]
         self.compile_operations(operations)
         impl = operations[0]._compiled

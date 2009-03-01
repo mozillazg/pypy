@@ -75,12 +75,12 @@ class TestLLGraph:
         t = BoxInt(455)
         u = BoxInt(0)
         operations = [
-            MergePoint('merge_point', [x, y], []),
-            ResOperation('int_add', [x, y], [z]),
-            ResOperation('int_sub', [y, ConstInt(1)], [t]),
-            ResOperation('int_eq', [t, ConstInt(0)], [u]),
-            ResOperation('guard_false', [u], []),
-            Jump('jump', [z, t], []),
+            MergePoint('merge_point', [x, y], None),
+            ResOperation('int_add', [x, y], z),
+            ResOperation('int_sub', [y, ConstInt(1)], t),
+            ResOperation('int_eq', [t, ConstInt(0)], u),
+            ResOperation('guard_false', [u], None),
+            Jump('jump', [z, t], None),
             ]
         operations[-2].liveboxes = [t, z]
         startmp = operations[0]

@@ -9,7 +9,7 @@ from pypy.rlib.debug import debug_print
 
 from pypy.jit.metainterp import history, support
 from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
-                                         BoxInt, BoxPtr, GuardOp, Options)
+                                         BoxInt, BoxPtr, Options)
 from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
@@ -627,8 +627,7 @@ class MIFrame(object):
                     liveboxes.append(const_if_fail)
         if box is not None:
             extraargs = [box] + extraargs
-        guard_op = self.metainterp.history.record(opname, extraargs, [],
-                                                  opcls=GuardOp)
+        guard_op = self.metainterp.history.record(opname, extraargs, None)
         guard_op.liveboxes = liveboxes
         saved_pc = self.pc
         self.pc = pc
@@ -654,13 +653,11 @@ class MIFrame(object):
         self.pc = self.load_3byte()
 
     def execute(self, step, argboxes, result_type, pure=False):
-        resboxes = self.metainterp.history.execute_and_record(step, argboxes,
-                                                              result_type,
-                                                              pure)
-        assert len(resboxes) <= 1
-        if len(resboxes) == 1:
-            resultbox = resboxes[0]
-            self.make_result_box(resultbox)
+        resbox = self.metainterp.history.execute_and_record(step, argboxes,
+                                                            result_type,
+                                                            pure)
+        if resbox is not None:
+            self.make_result_box(resbox)
     execute._annspecialcase_ = 'specialize:arg(4)'
 
     def execute_with_exc(self, step, argboxes, result_type, pure=False):
@@ -676,15 +673,14 @@ class MIFrame(object):
                 evalue = cast_instance_to_base_ptr(e)
                 etype = evalue.typeptr
             if result_type == 'void':
-                resultboxes = []
+                resultbox = None
             else:
                 if result_type == 'ptr':
                     resultbox = BoxPtr()
                 else:
                     resultbox = BoxInt()
                 self.make_result_box(resultbox)
-                resultboxes = [resultbox]
-            self.metainterp.history.record(step, argboxes, resultboxes)
+            self.metainterp.history.record(step, argboxes, resultbox)
         else:
             if not self.metainterp.history.generate_anything_since(old_index):
                 assert pure
@@ -745,13 +741,6 @@ class OOMetaInterp(object):
                 self.framestack[-1].make_result_box(resultbox)
             return True
         else:
-            if resultbox is None:
-                resultboxes = []
-            else:
-                resultboxes = [resultbox]
-            #self.history.record('return', resultboxes, [])
-            #self.guard_failure.make_ready_for_return(resultbox)
-            #raise DoneMetaInterpreting
             raise self.DoneWithThisFrame(resultbox)
 
     def finishframe_exception(self, exceptionbox, excvaluebox):
@@ -840,8 +829,8 @@ class OOMetaInterp(object):
             if not box1.equals(box2):
                 # not a valid loop
                 raise self.ContinueRunningNormally(live_arg_boxes)
-        mp = history.MergePoint('merge_point',
-                                original_boxes[num_green_args:], [])
+        mp = history.ResOperation('merge_point',
+                                  original_boxes[num_green_args:], None)
         mp.greenkey = original_boxes[:num_green_args]
         self.history.operations.insert(0, mp)
         old_loops = self.compiled_merge_points.setdefault(mp.greenkey, [])
@@ -853,7 +842,7 @@ class OOMetaInterp(object):
 
     def compile_bridge(self, guard_failure, original_boxes, live_arg_boxes):
         num_green_args = self.num_green_args
-        mp = history.ResOperation('catch', original_boxes, [])
+        mp = history.ResOperation('catch', original_boxes, None)
         mp.coming_from = guard_failure.guard_op
         self.history.operations.insert(0, mp)
         try:
@@ -950,22 +939,11 @@ class OOMetaInterp(object):
             op = frame.generate_guard(frame.pc, 'guard_exception',
                                       None, [exception_box])
             if op:
-                op.results = [exc_value_box]
+                op.result = exc_value_box
             return self.finishframe_exception(exception_box, exc_value_box)
         else:
             frame.generate_guard(frame.pc, 'guard_no_exception', None, [])
             return False
-
-##    def forced_vars_after_guard_failure(self, guard_failure):
-##        # for a 'guard_true' or 'guard_false' failure, the purpose of this is
-##        # to avoid a new 'guard' operation just to check for the other case
-##        forced_vars = {}
-##        guard_op = guard_failure.guard_op
-##        assert guard_op.opname.startswith('guard_')
-##        if guard_op.opname in ('guard_true', 'guard_false'):
-##            guardbox = guard_op.args[0]
-##            forced_vars[guardbox] = None
-##        return forced_vars                
 
     def rebuild_state_after_failure(self, key, newboxes):
         self.framestack = []
@@ -988,39 +966,6 @@ class OOMetaInterp(object):
             key.append((frame.jitcode, frame.pc, len(frame.env),
                         frame.exception_target))
         return key
-
-##    def generate_mp_and_continue(self):
-##        if self.most_recent_mp is not None:
-##            return self.most_recent_mp
-##        greenkey = []
-##        liveboxes = []
-##        memo = {}
-##        for frame in self.framestack:
-##            frame.record_state(greenkey, liveboxes, memo)
-##        # try to loop back to a previous merge point with the same green key
-##        mplist = self.history.get_merge_points_from_current_branch(greenkey)
-##        for oldmp in mplist:
-##            newloop = compile_new_loop(self, oldmp, liveboxes)
-##            if newloop is not None:
-##                self.execute_new_loop(newloop, liveboxes)
-##                # ^^^ raised DoneMetaInterpreting
-##        # else try to jump to some older already-compiled merge point
-##        mplist = self.compiled_merge_points.get(greenkey, [])
-##        for oldmp in mplist:
-##            newbridge = compile_new_bridge(self, oldmp, liveboxes)
-##            if newbridge is not None:
-##                self.execute_new_loop(newbridge, liveboxes)
-##                # ^^^ raised DoneMetaInterpreting
-##        # else continue
-##        mp = self.history.record_merge_point(greenkey, liveboxes)
-##        self.most_recent_mp = mp
-##        return mp
-
-##    def execute_new_loop(self, loop, liveboxes):
-##        mp = loop.get_final_target_mp()
-##        specnode.copy_data_into_cpu_frame(self.cpu, self.guard_failure,
-##                                          mp, liveboxes)
-##        raise DoneMetaInterpreting
 
     def make_builtin_dictionary(self):
         # In case this is translated, the following runs at run-time.
