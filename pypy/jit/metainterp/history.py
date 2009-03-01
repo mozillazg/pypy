@@ -237,6 +237,7 @@ class BoxInt(Box):
     type = 'int'
 
     def __init__(self, value=0):
+        assert isinstance(value, int)
         self.value = value
 
     def clonebox(self):
