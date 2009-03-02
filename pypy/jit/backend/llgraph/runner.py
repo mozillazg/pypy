@@ -68,8 +68,7 @@ class CPU(object):
                     llimpl.compile_add_int_const(c, x.value)
                 elif isinstance(x, history.ConstPtr):
                     llimpl.compile_add_ptr_const(c, x.value)
-                elif (history.ConstAddr.ever_seen and
-                      isinstance(x, history.ConstAddr)):
+                elif isinstance(x, history.ConstAddr):
                     llimpl.compile_add_int_const(c, x.getint())
                 else:
                     raise Exception("%s args contain: %r" % (op.getopname(),
@@ -232,8 +231,7 @@ class CPU(object):
             llimpl.frame_int_setvalue(frame, argindex, valuebox.value)
         elif isinstance(valuebox, history.ConstPtr):
             llimpl.frame_ptr_setvalue(frame, argindex, valuebox.value)
-        elif (history.ConstAddr.ever_seen and
-              isinstance(valuebox, history.ConstAddr)):
+        elif isinstance(valuebox, history.ConstAddr):
             llimpl.frame_int_setvalue(frame, argindex, valuebox.getint())
         else:
             raise AssertionError('setvalue: valuebox = %s' % (valuebox,))

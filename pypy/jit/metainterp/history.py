@@ -148,11 +148,9 @@ CONST_TRUE  = ConstInt(1)
 
 class ConstAddr(Const):       # only for constants built before translation
     type = 'int'
-    ever_seen = False
 
     def __init__(self, adrvalue, cpu):
         "NOT_RPYTHON"
-        self.__class__.ever_seen = True
         assert not we_are_translated()
         if isinstance(lltype.typeOf(adrvalue), lltype.Ptr):
             adrvalue = llmemory.cast_ptr_to_adr(adrvalue)    # convenience

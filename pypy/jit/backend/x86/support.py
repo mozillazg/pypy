@@ -43,8 +43,6 @@ def c_meta_interp(function, args, **kwds):
     for arg in args:
         assert isinstance(arg, int)
 
-    ConstAddr.ever_seen = False
-
     t = TranslationContext()
     t.config.translation.gc = 'boehm'
     src = py.code.Source("""
