@@ -117,8 +117,11 @@ class WarmRunnerDesc:
         self.jit_merge_point_pos = find_jit_merge_point(graphs)
         graph, block, pos = self.jit_merge_point_pos
         graph = copygraph(graph)
+        graph.startblock.isstartblock = False
         graph.startblock = support.split_before_jit_merge_point(
             *find_jit_merge_point([graph]))
+        graph.startblock.isstartblock = True
+        checkgraph(graph)
         for v in graph.getargs():
             assert isinstance(v, Variable)
         assert len(dict.fromkeys(graph.getargs())) == len(graph.getargs())
