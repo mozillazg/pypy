@@ -462,6 +462,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
 
     # ______________________________________________________________________
     # Stack Manipulation
+    # XXX this should really be done with a fixedsize list as well.
     def pop(self):
         return self._stack.pop()
 

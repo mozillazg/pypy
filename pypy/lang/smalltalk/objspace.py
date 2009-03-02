@@ -1,8 +1,9 @@
 from pypy.lang.smalltalk import constants
 from pypy.lang.smalltalk import model
 from pypy.lang.smalltalk import shadow
-from pypy.rlib.objectmodel import instantiate
 from pypy.lang.smalltalk.error import UnwrappingError, WrappingError
+from pypy.rlib.objectmodel import instantiate
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 class ObjSpace(object):
     def __init__(self):
@@ -163,17 +164,18 @@ class ObjSpace(object):
             return model.W_SmallInteger(val)
         raise WrappingError("integer too large to fit into a tagged pointer")
 
-    def wrap_pos_full_int(self, val):
+    def wrap_uint(self, val):
         if val < 0:
             raise WrappingError("negative integer")
-        try:
-            return self.wrap_int(val)
-        except WrappingError:
-            pass
+        if intmask(val) > 0:
+            try:
+                return self.wrap_int(intmask(val))
+            except WrappingError:
+                pass
         # XXX this is not really working well on 64 bit machines
         w_result = model.W_BytesObject(self.classtable['w_LargePositiveInteger'], 4)
         for i in range(4):
-            w_result.setchar(i, chr((val >> i*8) & 255))
+            w_result.setchar(i, chr(intmask((val >> i*8) & 255)))
         return w_result
 
     def wrap_float(self, i):
@@ -196,7 +198,7 @@ class ObjSpace(object):
 
     def wrap_list(self, lst_w):
         """
-        Converts a Python list of wrapper objects into
+        Converts a Python list of wrapped objects into
         a wrapped smalltalk array
         """
         lstlen = len(lst_w)
@@ -209,6 +211,26 @@ class ObjSpace(object):
         if isinstance(w_value, model.W_SmallInteger):
             return w_value.value
         raise UnwrappingError("expected a W_SmallInteger, got %s" % (w_value,))
+
+    def unwrap_uint(self, w_value):
+        if isinstance(w_value, model.W_SmallInteger):
+            val = w_value.value
+            if val < 0:
+                raise UnwrappingError("got negative integer")
+            return w_value.value
+        if isinstance(w_value, model.W_BytesObject):
+            # TODO: Completely untested! This failed translation bigtime...
+            # XXX Probably we want to allow all subclasses
+            if not (w_value.getclass(self).is_same_object(
+                self.w_LargePositiveInteger) and
+                w_value.size() == 4):
+                raise UnwrappingError("Failed to convert bytes to word")
+            word = 0 
+            for i in range(4):
+                word += r_uint(ord(w_value.getchar(i))) << 8*i
+            return word
+        else:
+            raise UnwrappingError("Got unexpected class in unwrap_uint")
 
     def unwrap_char(self, w_char):
         from pypy.lang.smalltalk import constants
