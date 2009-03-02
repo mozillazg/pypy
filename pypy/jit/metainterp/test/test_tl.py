@@ -93,7 +93,8 @@ class ToyLanguageTests:
         cls.main = main
 
     def test_tl_base(self):
-        res = self.meta_interp(self.main.im_func, [0, 6])
+        # XXX
+        res = self.meta_interp(self.main.im_func, [0, 6], listops=False)
         assert res == 5040
         py.test.skip("re-enable list optimizations")
         self.check_loops({'merge_point':1,

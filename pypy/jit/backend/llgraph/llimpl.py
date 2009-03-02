@@ -94,6 +94,7 @@ TYPES = {
     'getfield_raw'    : (('ptr', 'fieldname'), 'intorptr'),
     'setarrayitem_gc' : (('ptr', 'int', 'int', 'intorptr'), None),
     'getarrayitem_gc' : (('ptr', 'int', 'int'), 'intorptr'),
+    'arraylen_gc'     : (('ptr', 'int'), 'int'),
     'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
     'call__4'         : (('ptr', 'varargs'), 'int'),
     'call_void'       : (('ptr', 'varargs'), None),
@@ -758,6 +759,10 @@ class ExtendedLLFrame(LLFrame):
     def op_getarrayitem_gc(self, array, arraydesc, index):
         array = array._obj.container
         return array.getitem(index)
+
+    def op_arraylen_gc(self, array, arraydesc):
+        array = array._obj.container
+        return len(array.items)
 
     def op_setarrayitem_gc(self, array, arraydesc, index, newvalue):
         ITEMTYPE = symbolic.Size2Type[arraydesc/2]

@@ -50,3 +50,6 @@ class LLInterpJitMixin:
         pass
     def check_jumps(self, maxcount):
         pass
+
+    def interp_operations(self, *args, **kwds):
+        py.test.skip("interp operations makes no sense when translated")

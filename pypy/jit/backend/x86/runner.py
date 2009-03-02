@@ -388,7 +388,10 @@ class CPU386(object):
         while itemsize != 1:
             itemsize >>= 1
             counter += 1
-        return basesize + counter * 0x10000
+        res = basesize + counter * 0x10000
+        if isinstance(A.OF, lltype.Ptr):
+            res = ~res
+        return res
 
     @staticmethod
     def fielddescrof(S, fieldname):

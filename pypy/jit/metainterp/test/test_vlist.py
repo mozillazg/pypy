@@ -1,6 +1,4 @@
 import py
-py.test.skip("re-enable list optimizations")
-
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.rpython.ootypesystem import ootype
@@ -10,9 +8,8 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 class ListTests:
 
     def check_all_virtualized(self):
-        self.check_loops(new=0, newlist=0,
-                         getitem=0, setitem=0, append=0, pop=0, len=0,
-                         insert=0)
+        self.check_loops(new_array=0, setarrayitem_gc=0, getarrayitem_gc=0,
+                         arraylen_gc=0)
 
     def test_simple_array(self):
         jitdriver = JitDriver(greens = [], reds = ['n'])
@@ -23,7 +20,7 @@ class ListTests:
                 lst = [n]
                 n = lst[0] - 1
             return n
-        res = self.meta_interp(f, [10])
+        res = self.meta_interp(f, [10], listops=True)
         assert res == 0
         self.check_loops(int_sub=1)
         self.check_all_virtualized()
@@ -40,7 +37,7 @@ class ListTests:
                 n -= 1
             return l[0]
         
-        res = self.meta_interp(f, [10])
+        res = self.meta_interp(f, [10], listops=True)
         assert res == f(10)
         self.check_all_virtualized()
 
@@ -58,12 +55,13 @@ class ListTests:
                 n -= 1
             return l[0]
 
-        res = self.meta_interp(f, [10])
+        res = self.meta_interp(f, [10], listops=True)
         assert res == f(10)
         # one setitem should be gone by now
-        self.check_loops(newlist=1, setitem=1, getitem=1)
+        self.check_loops(call_ptr=1, setarrayitem_gc=1, getarrayitem_gc=1)
 
     def test_vlist_with_default_read(self):
+        py.test.skip("for now, more support in codewriter needed")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             l = [1] * 20
@@ -78,10 +76,11 @@ class ListTests:
                 n -= 1
             return l[0]
 
-        res = self.meta_interp(f, [10])
+        res = self.meta_interp(f, [10], listops=True)
         assert res == f(10)
         
     def test_append_pop(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
@@ -99,6 +98,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_insert(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
@@ -115,6 +115,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_nonzero(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
@@ -135,6 +136,7 @@ class ListTests:
         self.check_loops(listnonzero=0, guard_true=1, guard_false=0)
 
     def test_append_pop_rebuild(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
@@ -154,6 +156,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_list_escapes(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while True:
@@ -169,6 +172,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_list_reenters(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
@@ -185,6 +189,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_cannot_merge(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
             while n > 0:
@@ -202,6 +207,7 @@ class ListTests:
         self.check_all_virtualized()
 
     def test_list_escapes(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def g(l):
             pass
@@ -220,6 +226,7 @@ class ListTests:
         self.check_loops(append=1)
 
     def test_list_escapes_various_ops(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def g(l):
             pass
@@ -242,6 +249,7 @@ class ListTests:
         self.check_loops(append=2)
 
     def test_list_escapes_find_nodes(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def g(l):
             pass
@@ -264,6 +272,7 @@ class ListTests:
         self.check_loops(append=2)
 
     def test_stuff_escapes_via_setitem(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
         class Stuff(object):
             def __init__(self, x):
@@ -283,6 +292,7 @@ class ListTests:
         self.check_loops(append=1)
 
     def test_virtual_escaping_via_list(self):
+        py.test.skip("unsupported")
         jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
         class Stuff(object):
             def __init__(self, x):

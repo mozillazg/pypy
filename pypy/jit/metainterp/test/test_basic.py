@@ -6,7 +6,8 @@ from pypy.jit.metainterp import support, codewriter, pyjitpl, history
 from pypy.jit.metainterp.policy import JitPolicy, StopAtXPolicy
 from pypy import conftest
 
-def get_metainterp(func, values, CPUClass, type_system, policy):
+def get_metainterp(func, values, CPUClass, type_system, policy,
+                   listops=False):
     from pypy.annotation.policy import AnnotatorPolicy
     from pypy.annotation.model import lltype_to_annotation
     from pypy.rpython.test.test_llinterp import gengraph
@@ -17,7 +18,7 @@ def get_metainterp(func, values, CPUClass, type_system, policy):
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, False)
     graph = rtyper.annotator.translator.graphs[0]
-    opt = history.Options(specialize=False, listops=False)
+    opt = history.Options(specialize=False, listops=listops)
     metainterp = pyjitpl.OOMetaInterp(graph, [], cpu, stats, opt)
     metainterp.num_green_args = 0
     return metainterp, rtyper
@@ -41,7 +42,7 @@ class LLJitMixin(JitMixin):
         kwds['CPUClass'] = self.CPUClass
         return ll_meta_interp(*args, **kwds)
 
-    def interp_operations(self, f, args, policy=None):
+    def interp_operations(self, f, args, policy=None, **kwds):
         class DoneWithThisFrame(Exception):
             pass
         
@@ -51,7 +52,8 @@ class LLJitMixin(JitMixin):
         if policy is None:
             policy = JitPolicy()
         metainterp, rtyper = get_metainterp(f, args, self.CPUClass,
-                                            self.type_system, policy=policy)
+                                            self.type_system, policy=policy,
+                                            **kwds)
         cw = codewriter.CodeWriter(metainterp, policy)
         graph = rtyper.annotator.translator.graphs[0]
         maingraph = cw.make_one_bytecode(graph, False)
@@ -82,7 +84,7 @@ class OOJitMixin(JitMixin):
     def meta_interp(self, *args, **kwds):
         py.test.skip("not for ootype right now")
 
-    def interp_operations(self, f, args, policy=None):
+    def interp_operations(self, f, args, policy=None, **kwds):
         py.test.skip("not for ootype right now")
 
 class BasicTests:    
