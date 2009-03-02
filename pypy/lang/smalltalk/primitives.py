@@ -79,7 +79,8 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                 frame = interp.w_active_context()
                 s_frame = frame.as_context_get_shadow(interp.space)
                 assert argument_count == len_unwrap_spec
-                if len(s_frame.stack()) < len_unwrap_spec:
+                if s_frame.stackdepth() < len_unwrap_spec:
+                    # XXX shouldn't this be a crash instead?
                     raise PrimitiveFailedError()
                 args = ()
                 for i, spec in unrolling_unwrap_spec:

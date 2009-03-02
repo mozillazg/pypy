@@ -15,7 +15,9 @@ class MockFrame(model.W_PointersObject):
     def __init__(self, stack):
         self._vars = [None] * 6 + stack
         s_self = self.as_blockcontext_get_shadow()
-        s_self._stack = stack
+        s_self.init_stack()
+        s_self.reset_stack()
+        s_self.push_all(stack)
         s_self.store_expected_argument_count(0)
     def as_blockcontext_get_shadow(self):
         self._shadow = shadow.BlockContextShadow(space, self)
@@ -40,7 +42,7 @@ def prim(code, stack):
     interp, argument_count = mock(stack)
     prim_table[code](interp, argument_count-1)
     res = interp.s_active_context().pop()
-    assert not len(interp.s_active_context().stack()) # check args are consumed
+    assert not interp.s_active_context().stackdepth() # check args are consumed
     return res
 
 def prim_fails(code, stack):

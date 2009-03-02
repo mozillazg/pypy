@@ -1,6 +1,7 @@
 import weakref
 from pypy.lang.smalltalk import model, constants, error
 from pypy.tool.pairtype import extendabletype
+from pypy.rlib import rarithmetic
 
 class AbstractShadow(object):
     """A shadow is an optional extra bit of information that
@@ -314,10 +315,13 @@ class ContextPartShadow(AbstractRedirectingShadow):
     __metaclass__ = extendabletype
 
     def __init__(self, space, w_self):
+        from pypy.interpreter.miscutils import FixedStack
+
         self._w_sender = space.w_nil
-        self._stack = []
+        self._stack = FixedStack()
         self.currentBytecode = -1
         AbstractRedirectingShadow.__init__(self, space, w_self)
+
 
     @staticmethod
     def is_block_context(w_pointers, space):
@@ -333,7 +337,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         if n0 == constants.CTXPART_STACKP_INDEX:
             return self.wrap_stackpointer()
         if self.stackstart() <= n0 < self.external_stackpointer():
-            return self._stack[n0-self.stackstart()]
+            return self._stack.top(self.stackdepth() - (n0-self.stackstart()) - 1)
         if self.external_stackpointer() <= n0 < self.stackend():
             return self.space.w_nil
         else:
@@ -348,7 +352,8 @@ class ContextPartShadow(AbstractRedirectingShadow):
         if n0 == constants.CTXPART_STACKP_INDEX:
             return self.unwrap_store_stackpointer(w_value)
         if self.stackstart() <= n0 < self.external_stackpointer():
-            self._stack[n0 - self.stackstart()] = w_value
+            return self._stack.set_top(w_value,
+                                       self.stackdepth() - (n0-self.stackstart()) - 1)
             return
         if self.external_stackpointer() <= n0 < self.stackend():
             return
@@ -364,20 +369,21 @@ class ContextPartShadow(AbstractRedirectingShadow):
                                 self.tempsize())
 
     def store_stackpointer(self, size):
-        if size < len(self._stack):
+        depth = self.stackdepth()
+        if size < depth:
             # TODO Warn back to user
             assert size >= 0
-            self._stack = self._stack[:size]
+            self._stack.drop_n(depth - size)
         else:
-            add = [self.space.w_nil] * (size - len(self._stack))
-            self._stack.extend(add)
+            for i in range(depth, size):
+                self._stack.push(self.space.w_nil)
 
     def wrap_stackpointer(self):
-        return self.space.wrap_int(len(self._stack) + 
-                                self.tempsize())
+        return self.space.wrap_int(self.stackdepth() + 
+                                   self.tempsize())
 
     def external_stackpointer(self):
-        return len(self._stack) + self.stackstart()
+        return self.stackdepth() + self.stackstart()
 
     def w_home(self):
         raise NotImplementedError()
@@ -462,38 +468,39 @@ class ContextPartShadow(AbstractRedirectingShadow):
 
     # ______________________________________________________________________
     # Stack Manipulation
-    # XXX this should really be done with a fixedsize list as well.
+    def init_stack(self):
+        self._stack.setup(self.stackend() - self.stackstart())
+
+    def stack(self):
+        """NOT_RPYTHON""" # purely for testing
+        return self._stack.items[:self.stackdepth()]
+
     def pop(self):
         return self._stack.pop()
 
     def push(self, w_v):
-        self._stack.append(w_v)
+        self._stack.push(w_v)
 
     def push_all(self, lst):
-        self._stack.extend(lst)
+        for elt in lst:
+            self.push(elt)
 
     def top(self):
         return self.peek(0)
         
     def peek(self, idx):
-        return self._stack[-(idx + 1)]
+        return self._stack.top(idx)
 
     def pop_n(self, n):
-        assert n >= 0
-        start = len(self._stack) - n
-        assert start >= 0          # XXX what if this fails?
-        del self._stack[start:]
+        self._stack.drop(n)
 
-    def stack(self):
-        return self._stack
+    def stackdepth(self):
+        return rarithmetic.intmask(self._stack.depth())
 
     def pop_and_return_n(self, n):
-        assert n >= 0
-        start = len(self._stack) - n
-        assert start >= 0          # XXX what if this fails?
-        res = self._stack[start:]
-        del self._stack[start:]
-        return res
+        result = [self._stack.top(i) for i in range(n - 1, -1, -1)]
+        self.pop_n(n)
+        return result
 
     def stackend(self):
         # XXX this is incorrect when there is subclassing
@@ -517,6 +524,7 @@ class BlockContextShadow(ContextPartShadow):
         s_result.store_initialip(initialip)
         s_result.store_w_home(w_home)
         s_result.store_pc(initialip)
+        s_result.init_stack()
         return w_result
 
     def fetch(self, n0):
@@ -542,6 +550,7 @@ class BlockContextShadow(ContextPartShadow):
     def attach_shadow(self):
         # Make sure the home context is updated first
         self.copy_from_w_self(constants.BLKCTX_HOME_INDEX)
+        self.init_stack()
         ContextPartShadow.attach_shadow(self)
 
     def unwrap_store_initialip(self, w_value):
@@ -580,7 +589,7 @@ class BlockContextShadow(ContextPartShadow):
         return self._w_home
 
     def reset_stack(self):
-        self._stack = []
+        self.pop_n(self.stackdepth())
 
     def stackstart(self):
         return constants.BLKCTX_STACK_START
@@ -619,6 +628,7 @@ class MethodContextShadow(ContextPartShadow):
         s_result._temps = [space.w_nil] * w_method.tempsize
         for i in range(len(arguments)):
             s_result.settemp(i, arguments[i])
+        s_result.init_stack()
         return w_result
 
     def fetch(self, n0):
@@ -653,6 +663,7 @@ class MethodContextShadow(ContextPartShadow):
     def attach_shadow(self):
         # Make sure the method is updated first
         self.copy_from_w_self(constants.MTHDCTX_METHOD)
+        self.init_stack()
         # And that there is space for the temps
         self._temps = [self.space.w_nil] * self.tempsize()
         ContextPartShadow.attach_shadow(self)
