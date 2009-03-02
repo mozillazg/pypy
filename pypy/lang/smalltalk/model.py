@@ -16,7 +16,7 @@ that create W_PointersObjects of correct size with attached shadows.
 """
 import sys
 from pypy.rlib import rrandom, objectmodel
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.lang.smalltalk import constants, error
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.objectmodel import instantiate
@@ -392,25 +392,14 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
 class W_WordsObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
-        self.words = [0] * size
+        self.words = [r_uint(0)] * size
         
     def at0(self, space, index0):
         val = self.getword(index0)
-        return space.wrap_pos_full_int(val)
+        return space.wrap_uint(val)
  
     def atput0(self, space, index0, w_value):
-        if isinstance(w_value, W_BytesObject):
-            # TODO: Completely untested! This failed translation bigtime...
-            # XXX Probably we want to allow all subclasses
-            if not (w_value.getclass(space).is_same_object(
-                space.w_LargePositiveInteger) and
-                w_value.size() == 4):
-                raise error.UnwrappingError("Failed to convert bytes to word")
-            word = 0 
-            for i in range(4):
-                word += ord(w_value.getchar(i)) << 8*i
-        else:
-            word = space.unwrap_int(w_value)
+        word = space.unwrap_uint(w_value)
         self.setword(index0, word)
 
     def getword(self, n):
