@@ -373,7 +373,7 @@ class ContextPartShadow(AbstractRedirectingShadow):
         if size < depth:
             # TODO Warn back to user
             assert size >= 0
-            self._stack.drop_n(depth - size)
+            self._stack.drop(depth - size)
         else:
             for i in range(depth, size):
                 self._stack.push(self.space.w_nil)
