@@ -159,6 +159,7 @@ class rop(object):
     INT_MUL_OVF            = 112
     INT_NEG_OVF            = 113
     _CANRAISE_LAST = 119 # ----- end of can_raise operations -----
+    _LAST = 119     # for the backend to add more internal operations
 
 
 opname = {}      # mapping numbers to the original names, for debugging
