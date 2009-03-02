@@ -15,11 +15,10 @@ class ListTests:
                 lst.append(n)
                 n -= len(lst)
             return len(lst)
-        res = self.meta_interp(f, [42])
+        res = self.meta_interp(f, [42], listops=True)
         assert res == 9
 
     def test_list_operations(self):
-        py.test.skip("pop(int) not supported")
         class FooBar:
             def __init__(self, z):
                 self.z = z
@@ -33,7 +32,7 @@ class ListTests:
             lst2.append(FooBar(5))
             m += lst2.pop().z     # 49
             return m
-        res = self.interp_operations(f, [11])
+        res = self.interp_operations(f, [11], listops=True)
         assert res == 49
 
     def test_lazy_getitem_1(self):

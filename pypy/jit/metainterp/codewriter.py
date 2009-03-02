@@ -616,9 +616,9 @@ class BytecodeMaker(object):
             self.emit('jit_merge_point')
             assert ([self.var_position(i) for i in op.args[2:]] ==
                     range(0, 2*(len(op.args) - 2), 2))
-##            for i in range(2, len(op.args)):
-##                arg = op.args[i]
-##                self._eventualy_builtin(arg)
+            for i in range(2, len(op.args)):
+                arg = op.args[i]
+                #self._eventualy_builtin(arg)
         elif op.args[0].value == 'can_enter_jit':
             self.emit('can_enter_jit')
             self.emit_varargs(op.args[2:])
@@ -713,7 +713,7 @@ class BytecodeMaker(object):
     def handle_list_call(self, op, oopspec_name, args, TP):
         if not (oopspec_name.startswith('list.') or oopspec_name == 'newlist'):
             return False
-        if hasattr(TP, '_ll_resize'):
+        if hasattr(TP.TO, '_ll_resize'):
             return False
         # non-resizable lists: they are just arrays
         ARRAY = TP.TO
@@ -757,7 +757,11 @@ class BytecodeMaker(object):
         #
         if (oopspec_name == 'list.len' or
             oopspec_name == 'list.len_foldable'):
-            xxx  # ... 'arraylen_gc'
+            self.emit('arraylen_gc')
+            self.emit(self.var_position(args[0]))
+            self.emit(self.const_position(arraydescr))
+            self.register_var(op.result)
+            return True
         #
         return False
 

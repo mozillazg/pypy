@@ -381,6 +381,10 @@ class Assembler386(object):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
         self.mc.MOV(resloc, addr_add_const(base_loc, ofs_length))
 
+    def genop_arraylen_gc(self, op, arglocs, resloc):
+        base_loc, ofs_loc = arglocs
+        self.mc.MOV(resloc, addr_add(base_loc, imm(0)))
+
     def genop_strgetitem(self, op, arglocs, resloc):
         base_loc, ofs_loc = arglocs
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)

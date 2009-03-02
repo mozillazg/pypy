@@ -742,12 +742,17 @@ class RegAlloc(object):
         return res
 
     
-    def consider_new_array(self, op):
-        arraydescr = op.args[0].getint()
+    def _unpack_arraydescr(self, arraydescr):
+        if arraydescr < 0:
+            arraydescr = ~arraydescr
         assert arraydescr
         size_of_field = arraydescr >> 16
         ofs = arraydescr & 0xffff
-        return self._malloc_varsize(0, ofs, 0, size_of_field, op.args[1],
+        return size_of_field, ofs
+
+    def consider_new_array(self, op):
+        size_of_field, basesize = self._unpack_arraydescr(op.args[0].getint())
+        return self._malloc_varsize(0, basesize, 0, size_of_field, op.args[1],
                                     op.result)
 
     def consider_oononnull(self, op):
@@ -781,10 +786,7 @@ class RegAlloc(object):
                 [PerformDiscard(op, [base_loc, ofs_loc, value_loc])])
 
     def consider_setarrayitem_gc(self, op):
-        arraydescr = op.args[1].getint()
-        assert arraydescr
-        scale = arraydescr >> 16
-        ofs = arraydescr & 0xffff
+        scale, ofs = self._unpack_arraydescr(op.args[1].getint())
         assert scale == 2
         args = [op.args[0], op.args[2], op.args[3]]
         base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], args)
@@ -804,11 +806,7 @@ class RegAlloc(object):
                 [Perform(op, [base_loc, ofs_loc, size_loc], result_loc)])
 
     def consider_getarrayitem_gc(self, op):
-        arraydescr = op.args[1].getint()
-        assert arraydescr
-        scale = arraydescr >> 16
-        ofs = arraydescr & 0xffff
-        assert scale == 2
+        scale, ofs = self._unpack_arraydescr(op.args[1].getint())
         args = [op.args[0], op.args[2]]
         base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], args)
         ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[2], args)
@@ -870,9 +868,17 @@ class RegAlloc(object):
 
     def consider_strlen(self, op):
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
-        self.eventually_free_var(op.args[0])
+        self.eventually_free_vars(op.args)
         result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return ops0 + more_ops + [Perform(op, [base_loc], result_loc)]
+
+    def consider_arraylen_gc(self, op):
+        _, ofs = self._unpack_arraydescr(op.args[1].getint())
+        base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
+        self.eventually_free_vars(op.args)
+        result_loc, more_ops = self.force_allocate_reg(op.result, [])
+        return ops0 + more_ops + [Perform(op, [base_loc, imm(ofs)],
+                                          result_loc)]
 
     def consider_strgetitem(self, op):
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)

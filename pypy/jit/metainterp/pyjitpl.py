@@ -332,6 +332,10 @@ class MIFrame(object):
         self.execute(rop.SETARRAYITEM_GC, [arraybox, arraydesc,
                                            indexbox, itembox], 'void')
 
+    @arguments("box", "constbox")
+    def opimpl_arraylen_gc(self, arraybox, arraydesc):
+        self.execute(rop.ARRAYLEN_GC, [arraybox, arraydesc], 'int')
+
     @arguments("box")
     def opimpl_ptr_nonzero(self, box):
         self.execute(rop.OONONNULL, [box], 'int', True)

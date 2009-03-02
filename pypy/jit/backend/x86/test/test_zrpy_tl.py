@@ -6,7 +6,7 @@ from pypy.jit.tl import tlc
 
 class TestTL(Jit386Mixin, ToyLanguageTests):
     # for the individual tests see
-    # ====> ../../test/test_tl.py
+    # ====> ../../../metainterp/test/test_tl.py
     pass
 
 class TestTLC(Jit386Mixin):
