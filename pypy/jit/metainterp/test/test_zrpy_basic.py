@@ -50,6 +50,3 @@ class LLInterpJitMixin:
         pass
     def check_jumps(self, maxcount):
         pass
-
-class TestLLBasic(test_basic.BasicTests, LLInterpJitMixin):
-    pass
