@@ -351,8 +351,7 @@ def make_state_class(warmrunnerdesc):
     jitdriver = warmrunnerdesc.jitdriver
     num_green_args = len(jitdriver.greens)
     warmrunnerdesc.num_green_args = num_green_args
-    green_args_spec = unrolling_iterable(
-        list(enumerate(warmrunnerdesc.green_args_spec)))
+    green_args_spec = unrolling_iterable(warmrunnerdesc.green_args_spec)
     green_args_names = unrolling_iterable(jitdriver.greens)
     if num_green_args:
         MAX_HASH_TABLE_BITS = 28
@@ -465,20 +464,17 @@ def make_state_class(warmrunnerdesc):
             return self.compile(argshash, *args)
         handle_hash_collision._dont_inline_ = True
 
-        @specialize.arg(2)
-        def _get_hash_part(self, greenargs, i, TYPE, result):
-            item = greenargs[i]
-            return result ^ cast_whatever_to_int(TYPE, item)
-
         def getkeyhash(self, *greenargs):
             result = r_uint(0x345678)
             i = 0
             mult = r_uint(1000003)
-            for i, TYPE in green_args_spec:
+            for TYPE in green_args_spec:
                 if i > 0:
                     result = result * mult
                     mult = mult + 82520 + 2*len(greenargs)
-                result = self._get_hash_part(greenargs, i, TYPE, result)
+                item = greenargs[i]
+                result = result ^ cast_whatever_to_int(TYPE, item)
+                i = i + 1
             return result
         getkeyhash._always_inline_ = True
 
