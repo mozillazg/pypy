@@ -565,10 +565,12 @@ class MIFrame(object):
 
     @arguments("int")
     def opimpl_put_last_exception(self, index):
+        assert index >= 0
         self.env.insert(index, self.exception_box)
 
     @arguments("int")
     def opimpl_put_last_exc_value(self, index):
+        assert index >= 0
         self.env.insert(index, self.exc_value_box)
 
     @arguments()
