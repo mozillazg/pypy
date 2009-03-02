@@ -243,7 +243,7 @@ class CPU386(object):
         elif isinstance(box, ConstPtr): 
             self.keepalives.append(box.value)
             return self.cast_gcref_to_int(box.value)
-        elif ConstAddr.ever_seen and isinstance(box, ConstAddr):
+        elif isinstance(box, ConstAddr):
             return self.cast_adr_to_int(box.value)
         else:
             raise ValueError('get_box_value_as_int, wrong arg')
