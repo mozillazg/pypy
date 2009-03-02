@@ -4,7 +4,7 @@ from pypy.rpython import rlist
 from pypy.rpython.lltypesystem import rdict, rstr
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.translator.simplify import get_funcobj, checkgraph, simplify_graph
+from pypy.translator.simplify import get_funcobj
 from pypy.translator.unsimplify import split_block
 from pypy.objspace.flow.model import Constant
 from pypy import conftest
@@ -52,7 +52,6 @@ def split_before_jit_merge_point(graph, portalblock, portalopindex):
     """Find the block with 'jit_merge_point' and split just before,
     making sure the input args are in the canonical order.
     """
-    origstartblock = graph.startblock
     # split the block just before the jit_merge_point()
     if portalopindex > 0:
         link = split_block(None, portalblock, portalopindex)
@@ -65,12 +64,6 @@ def split_before_jit_merge_point(graph, portalblock, portalopindex):
     livevars = [v for v in portalop.args[2:]
                   if v.concretetype is not lltype.Void]
     link = split_block(None, portalblock, 0, livevars)
-    if origstartblock != portalblock:
-        portalblock.isstartblock = True
-        origstartblock.isstartblock = False
-    graph.startblock = portalblock
-    simplify_graph(graph)
-    checkgraph(graph)
     return link.target
 
 def maybe_on_top_of_llinterp(rtyper, fnptr):
