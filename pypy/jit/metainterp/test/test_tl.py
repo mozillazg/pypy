@@ -95,18 +95,17 @@ class ToyLanguageTests:
     def test_tl_base(self):
         res = self.meta_interp(self.main.im_func, [0, 6], listops=True)
         assert res == 5040
-        py.test.skip("re-enable list optimizations")
         self.check_loops({'merge_point':1,
                           'int_mul':1, 'jump':1,
                           'int_sub':1, 'int_is_true':1, 'int_le':1,
-                          'guard_false':1})
+                          'guard_false':1, 'guard_value':1})
 
     def test_tl_2(self):
-        res = self.meta_interp(self.main.im_func, [1, 10])
+        res = self.meta_interp(self.main.im_func, [1, 10], listops=True)
         assert res == self.main.im_func(1, 10)
-        py.test.skip("re-enable list optimizations")
         self.check_loops({'merge_point':1, 'int_sub':1, 'int_le':1,
-                         'int_is_true':1, 'guard_false':1, 'jump':1})
+                         'int_is_true':1, 'guard_false':1, 'jump':1,
+                          'guard_value':1})
 
 class TestOOtype(ToyLanguageTests, OOJitMixin):
     pass
