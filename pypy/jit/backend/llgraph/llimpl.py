@@ -715,8 +715,8 @@ class ExtendedLLFrame(LLFrame):
         return ptr
 
     def op_new_array(self, arraydesc, count):
-        ITEMTYPE = symbolic.Size2Type[arraydesc/2]
-        return lltype.malloc(lltype.GcArray(ITEMTYPE), count)
+        TYPE = symbolic.Size2Type[arraydesc/2]
+        return lltype.malloc(TYPE, count)
 
     def op_getfield_gc(self, ptr, fielddesc):
         STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]

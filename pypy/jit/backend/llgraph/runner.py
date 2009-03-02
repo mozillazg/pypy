@@ -265,7 +265,7 @@ class CPU(object):
     @staticmethod
     def arraydescrof(A):
         assert isinstance(A, lltype.GcArray)
-        size = symbolic.get_size(A.OF)
+        size = symbolic.get_size(A)
         token = history.getkind(A.OF)
         if token == 'ptr':
             bit = 1
