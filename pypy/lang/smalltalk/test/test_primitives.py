@@ -419,6 +419,24 @@ def test_new_method():
     assert w_method.literalat0(space, 1).is_same_object(space.w_nil)
     assert w_method.bytes == "\x00" * len(bytecode)
 
+def test_image_name():
+    w_v = prim(primitives.IMAGE_NAME, [2])
+    assert w_v.bytes == []
+    
+def test_clone():
+    w_obj = mockclass(space, 1, varsized=True).as_class_get_shadow(space).new(1)
+    w_obj.atput0(space, 0, space.wrap_int(1))
+    w_v = prim(primitives.CLONE, [w_obj])
+    assert space.unwrap_int(w_v.at0(space, 0)) == 1
+    w_obj.atput0(space, 0, space.wrap_int(2))
+    assert space.unwrap_int(w_v.at0(space, 0)) == 1
+    
+def test_directory_delimitor():
+    import os.path
+    w_c = prim(primitives.DIRECTORY_DELIMITOR, [1])
+    assert space.unwrap_char(w_c) == os.path.sep
+
+
 
 # Note:
 #   primitives.NEXT is unimplemented as it is a performance optimization

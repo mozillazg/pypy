@@ -19,11 +19,12 @@ class IllegalStoreError(Exception):
 class Interpreter(object):
 
     _w_last_active_context = None
+    cnt = 0
     
-    def __init__(self, space):
+    def __init__(self, space, image_name=""):
         self._w_active_context = None
         self.space = space
-        self.cnt = 0
+        self.image_name = image_name
 
     def w_active_context(self):
         return self._w_active_context

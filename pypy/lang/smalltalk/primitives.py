@@ -490,6 +490,14 @@ def func(interp, w_rcvr):
     interp.space.objtable['w_display'] = w_rcvr
     return w_rcvr
 
+@expose_primitive(SCREEN_SIZE, unwrap_spec=[object])
+def func(interp, w_rcvr):
+    # XXX get the real screen size
+    w_res = interp.space.w_Point.as_class_get_shadow(interp.space).new(2)
+    point = wrapper.PointWrapper(interp.space, w_res)
+    point.store_x(640)
+    point.store_y(480)
+    return w_res
 # ___________________________________________________________________________
 # Control Primitives
 
@@ -549,10 +557,32 @@ def func(interp, w_arg, w_rcvr):
     w_rcvr.w_class = w_arg.w_class
 
 # ___________________________________________________________________________
+# Miscellaneous Primitives (120-127)
+CALLOUT_TO_FFI = 120
+IMAGE_NAME = 121
+NOOP = 122
+VALUE_UNINTERRUPTABLY = 123
+LOW_SPACE_SEMAPHORE = 124
+SIGNAL_AT_BYTES_LEFT = 125
+
+@expose_primitive(IMAGE_NAME)
+def func(interp, argument_count):
+    if argument_count == 0:
+        interp.s_active_context().pop()
+        return interp.space.wrap_string(interp.image_name)        
+    elif argument_count == 1:
+        pass # XXX
+    raise PrimitiveFailedError
+
+
+
+
+# ___________________________________________________________________________
 # Squeak Miscellaneous Primitives (128-149)
 BECOME = 128
 FULL_GC = 130
 INC_GC = 131
+CLONE = 148
 
 @expose_primitive(BECOME, unwrap_spec=[object, object])
 def func(interp, w_rcvr, w_new):
@@ -582,6 +612,10 @@ def func(interp, w_arg): # Squeak pops the arg and ignores it ... go figure
     rgc.collect()
     return fake_bytes_left(interp)
 
+@expose_primitive(CLONE, unwrap_spec=[object])
+def func(interp, w_arg):
+    return w_arg.clone()
+
 #____________________________________________________________________________
 # Time Primitives
 MILLISECOND_CLOCK = 135
@@ -602,6 +636,32 @@ def func(interp, w_arg):
     sec_since_epoch = rarithmetic.r_uint(time.time())
     sec_since_1901 = sec_since_epoch + secs_between_1901_and_1970
     return interp.space.wrap_uint(sec_since_1901)
+
+# ___________________________________________________________________________
+# File primitives (150-169)
+# (XXX they are obsolete in Squeak and done with a plugin)
+
+FILE_AT_END = 150
+FILE_CLOSE = 151
+FILE_GET_POSITION = 152
+FILE_OPEN = 153
+FILE_READ = 154
+FILE_SET_POSITION = 155
+FILE_DELETE = 156
+FILE_SIZE = 157
+FILE_WRITE = 158
+FILE_RENAME = 159
+DIRECTORY_CREATE = 160
+DIRECTORY_DELIMITOR = 161
+DIRECTORY_LOOKUP = 162
+DIRECTORY_DELTE = 163
+
+
+@expose_primitive(DIRECTORY_DELIMITOR, unwrap_spec=[object])
+def func(interp, _):
+    import os.path
+    return interp.space.wrap_char(os.path.sep)
+
 
 # ___________________________________________________________________________
 # Boolean Primitives
