@@ -99,6 +99,9 @@ class W_Object(object):
            False means swapping failed"""
         return False
 
+    def clone(self):
+        raise NotImplementedError
+
 class W_SmallInteger(W_Object):
     """Boxed integer value"""
     # TODO can we tell pypy that its never larger then 31-bit?
@@ -136,6 +139,8 @@ class W_SmallInteger(W_Object):
     def __hash__(self):
         return self.value
 
+    def clone(self):
+        return self
 
 class W_Float(W_Object):
     """Boxed float value."""
@@ -171,6 +176,9 @@ class W_Float(W_Object):
 
     def __hash__(self):
         return hash(self.value)
+
+    def clone(self):
+        return self
 
 class W_AbstractObjectWithIdentityHash(W_Object):
     """Object with explicit hash (ie all except small
@@ -344,6 +352,10 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         W_AbstractObjectWithClassReference._become(self, w_other)
         return True
         
+    def clone(self):
+        w_result = W_PointersObject(self.w_class, len(self._vars))
+        w_result._vars[:] = self._vars
+        return w_result
 
 class W_BytesObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
@@ -389,6 +401,11 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
             return False
         return self.bytes == other.bytes
 
+    def clone(self):
+        w_result = W_BytesObject(self.w_class, len(self.bytes))
+        w_result.bytes[:] = self.bytes
+        return w_result
+
 class W_WordsObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
@@ -414,6 +431,11 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
     def invariant(self):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self.words, list))
+
+    def clone(self):
+        w_result = W_WordsObject(self.w_class, len(self.words))
+        w_result.words[:] = self.words
+        return w_result
 
 # XXX Shouldn't compiledmethod have class reference for subclassed compiled
 # methods?
