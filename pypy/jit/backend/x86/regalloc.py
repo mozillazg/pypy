@@ -82,7 +82,7 @@ def convert_to_imm(c):
         return imm(c.value)
     elif isinstance(c, ConstPtr):
         return imm(rffi.cast(lltype.Signed, c.value))
-    elif isinstance(c, ConstAddr):
+    elif ConstAddr.ever_seen and isinstance(c, ConstAddr):
         return imm(ll2ctypes.cast_adr_to_int(c.value))
     else:
         raise ValueError("convert_to_imm: got a %s" % c)
