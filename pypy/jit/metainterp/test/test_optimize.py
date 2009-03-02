@@ -335,6 +335,8 @@ def test_E_rebuild_after_failure():
             self.history = FakeHistory()
             self.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr):
                                 E.size_of_node}
+            self.cpu = cpu
+            self.cpu.translate_support_code = False
     
     spec = PerfectSpecializer(Loop(E.ops))
     spec.find_nodes()
