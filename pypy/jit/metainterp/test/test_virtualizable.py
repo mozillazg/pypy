@@ -142,7 +142,7 @@ class ImplicitVirtualizableTests:
                 frame.s -= 1
             return x
 
-        res = self.meta_interp(f, [10])
+        res = self.meta_interp(f, [10], listops=True)
         assert res == f(10)
 
     def test_virtual_on_virtualizable(self):
@@ -173,6 +173,7 @@ class ImplicitVirtualizableTests:
 
         res = self.meta_interp(f, [30])
         assert res == f(30)
+        self.check_loops(getfield_gc=0)
 
     def test_unequal_list_lengths_cannot_be_virtual(self):
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],

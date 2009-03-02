@@ -49,7 +49,7 @@ class AllocationStorage(object):
         self.list_allocations = []
         self.setitems = []
 
-    def deal_with_box(self, box, nodes, liveboxes, memo):
+    def deal_with_box(self, box, nodes, liveboxes, memo, cpu):
         if isinstance(box, Const) or box not in nodes:
             virtual = False
             virtualized = False
@@ -66,10 +66,16 @@ class AllocationStorage(object):
                 ld = instnode.cls.source
                 assert isinstance(ld, FixedList)
                 alloc_offset = len(self.list_allocations)
+                ad = ConstInt(ld.arraydescr)
                 if instnode.cursize == -1:
-                    xxx
-                self.list_allocations.append((ConstInt(ld.arraydescr),
-                                              instnode.cursize))
+                    # fish fish fish
+                    res = cpu.execute_operation(rop.ARRAYLEN_GC,
+                                                [instnode.source, ad],
+                                                'int')
+                    size = res.getint()
+                else:
+                    size = instnode.cursize
+                self.list_allocations.append((ad, size))
                 res = (alloc_offset + 1) << 16
             else:
                 alloc_offset = len(self.allocations)
@@ -77,7 +83,8 @@ class AllocationStorage(object):
                 res = alloc_offset
             memo[box] = res
             for ofs, node in instnode.curfields.items():
-                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo,
+                                         cpu)
                 if isinstance(instnode.cls.source, FixedList):
                     ld = instnode.cls.source
                     x = (alloc_offset + 1) << 16
@@ -90,7 +97,8 @@ class AllocationStorage(object):
             memo[box] = res
             liveboxes.append(box)
             for ofs, node in instnode.curfields.items():
-                num = self.deal_with_box(node.source, nodes, liveboxes, memo)
+                num = self.deal_with_box(node.source, nodes, liveboxes, memo,
+                                         cpu)
                 self.setfields.append((res, ofs, num))
         else:
             res = ~len(liveboxes)
@@ -116,7 +124,6 @@ class InstanceNode(object):
         self.dirtyfields = {}
         self.expanded_fields = {}
         self.cursize = -1
-        #self.origsize = -1
 
     def is_nonzero(self):
         return self.cls is not None or self.nonzero
@@ -218,7 +225,7 @@ class InstanceNode(object):
         if self.virtualized:       flags += 'V'
         return "<InstanceNode %s (%s)>" % (self.source, flags)
 
-def optimize_loop(options, old_loops, loop):
+def optimize_loop(options, old_loops, loop, cpu=None):
     if not options.specialize:         # for tests only
         if old_loops:
             return old_loops[0]
@@ -232,10 +239,10 @@ def optimize_loop(options, old_loops, loop):
     for old_loop in old_loops:
         if perfect_specializer.match_exactly(old_loop):
             return old_loop
-    perfect_specializer.optimize_loop()
+    perfect_specializer.optimize_loop(cpu)
     return None
 
-def optimize_bridge(options, old_loops, bridge):
+def optimize_bridge(options, old_loops, bridge, cpu=None):
     if not options.specialize:         # for tests only
         return old_loops[0]
 
@@ -244,7 +251,7 @@ def optimize_bridge(options, old_loops, bridge):
     for old_loop in old_loops:
         if perfect_specializer.match(old_loop.operations):
             perfect_specializer.adapt_for_match(old_loop.operations)
-            perfect_specializer.optimize_loop()
+            perfect_specializer.optimize_loop(cpu)
             return old_loop
     return None     # no loop matches
 
@@ -564,7 +571,7 @@ class PerfectSpecializer(object):
             specnode.expand_boxlist(self.nodes[box], newboxlist, oplist)
         return newboxlist
 
-    def optimize_guard(self, op):
+    def optimize_guard(self, op, cpu):
         liveboxes = []
         storage = AllocationStorage()
         memo = {}
@@ -573,7 +580,7 @@ class PerfectSpecializer(object):
         op = op.clone()
         for box in old_boxes:
             indices.append(storage.deal_with_box(box, self.nodes,
-                                                 liveboxes, memo))
+                                                 liveboxes, memo, cpu))
         rev_boxes = {}
         for i in range(len(liveboxes)):
             box = liveboxes[i]
@@ -655,7 +662,7 @@ class PerfectSpecializer(object):
 ##        instnode.curfields[field] = valuenode
 ##        instnode.cursize += 1
 
-    def optimize_loop(self):
+    def optimize_loop(self, cpu):
         #self.ready_results = {}
         newoperations = []
         exception_might_have_happened = False
@@ -715,14 +722,14 @@ class PerfectSpecializer(object):
                 if not exception_might_have_happened:
                     continue
                 exception_might_have_happened = False
-                newoperations.append(self.optimize_guard(op))
+                newoperations.append(self.optimize_guard(op, cpu))
                 continue
             elif (opnum == rop.GUARD_TRUE or
                   opnum == rop.GUARD_FALSE):
                 instnode = self.nodes[op.args[0]]
                 if instnode.const:
                     continue
-                newoperations.append(self.optimize_guard(op))
+                newoperations.append(self.optimize_guard(op, cpu))
                 continue
             elif opnum == rop.GUARD_CLASS:
                 instnode = self.nodes[op.args[0]]
@@ -730,7 +737,7 @@ class PerfectSpecializer(object):
                     assert op.args[1].equals(instnode.cls.source)
                     continue
                 instnode.cls = InstanceNode(op.args[1], const=True)
-                newoperations.append(self.optimize_guard(op))
+                newoperations.append(self.optimize_guard(op, cpu))
                 continue
             elif opnum == rop.GUARD_VALUE:
                 instnode = self.nodes[op.args[0]]
@@ -738,13 +745,13 @@ class PerfectSpecializer(object):
                 if instnode.const:
                     continue
                 instnode.const = True
-                newoperations.append(self.optimize_guard(op))
+                newoperations.append(self.optimize_guard(op, cpu))
                 continue
             elif opnum == rop.GUARD_NONVIRTUALIZED:
                 instnode = self.nodes[op.args[0]]
                 if instnode.virtualized or instnode.virtual:
                     continue
-                newoperations.append(self.optimize_guard(op))
+                newoperations.append(self.optimize_guard(op, cpu))
                 continue
             elif opnum == rop.GETFIELD_GC:
                 instnode = self.nodes[op.args[0]]
