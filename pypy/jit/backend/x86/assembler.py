@@ -200,6 +200,10 @@ class Assembler386(object):
     def _binaryop_ovf(asmop, can_swap=False):
         def genop_binary_ovf(self, op, arglocs, result_loc):
             getattr(self.mc, asmop)(arglocs[0], arglocs[1])
+            if we_are_translated():
+                # XXX setting the lowest byte of _exception_addr to 0 or 1
+                # does not work after translation
+                XXX
             # XXX think about CMOV instead of SETO, this would avoid
             # a mess in detecting an exception
             self.mc.SETO(heap8(self._exception_addr))
@@ -238,7 +242,7 @@ class Assembler386(object):
 
     genop_int_mul_ovf = _binaryop_ovf("IMUL", True)
     genop_int_sub_ovf = _binaryop_ovf("SUB")
-    genop_int_add_ovf = _binaryop_ovf("ADD")
+    genop_int_add_ovf = _binaryop_ovf("ADD", True)
 
     genop_int_lt = _cmpop("L", "G")
     genop_int_le = _cmpop("LE", "GE")

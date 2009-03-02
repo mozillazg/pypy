@@ -12,7 +12,7 @@ from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 
 
-MALLOC_VARSIZE = rop._CANRAISE_LAST + 1
+MALLOC_VARSIZE = rop._LAST + 1
 
 # esi edi and ebp can be added to this list, provided they're correctly
 # saved and restored
@@ -928,7 +928,7 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         return ops + laterops + [PerformDiscard(op, [])]
 
-oplist = [None] * rop._CANRAISE_LAST
+oplist = [None] * rop._LAST
 
 for name, value in RegAlloc.__dict__.iteritems():
     if name.startswith('consider_'):
