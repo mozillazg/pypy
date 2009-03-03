@@ -779,12 +779,16 @@ class BytecodeMaker(object):
 
     def prepare_list_getset(self, op, arraydescr, args):
         func = op.args[0].value._obj._callable      # xxx break of abstraction
+        # XXX what if the type is called _nonneg or _fast???
         non_negative = '_nonneg' in func.__name__
-        if isinstance(op.args[1], Variable):
-            return None
-        tag = op.args[1].value
-        assert tag in (rlist.dum_nocheck, rlist.dum_checkidx)
-        can_raise = tag != rlist.dum_nocheck
+        fast = '_fast' in func.__name__
+        if fast:
+            can_raise = False
+            non_negative = True
+        else:
+            tag = op.args[1].value
+            assert tag in (rlist.dum_nocheck, rlist.dum_checkidx)
+            can_raise = tag != rlist.dum_nocheck
         #
         if can_raise:
             return None

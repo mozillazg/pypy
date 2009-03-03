@@ -60,6 +60,24 @@ class ListTests:
         # one setitem should be gone by now
         self.check_loops(call_ptr=1, setarrayitem_gc=1, getarrayitem_gc=1)
 
+    def test_ll_fixed_setitem_fast(self):
+        jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
+        
+        def f(n):
+            l = [1, 2, 3]
+
+            while n > 0:
+                jitdriver.can_enter_jit(n=n, l=l)
+                jitdriver.jit_merge_point(n=n, l=l)
+                l = l[:]
+                n -= 1
+            return l[0]
+
+        res = self.meta_interp(f, [10], listops=True)
+        assert res == 1
+        py.test.skip("Constant propagation of length missing")
+        self.check_loops(setarrayitem_gc=0, call_ptr=0, call__4=0)
+
     def test_vlist_with_default_read(self):
         py.test.skip("for now, more support in codewriter needed")
         jitdriver = JitDriver(greens = [], reds = ['n'])
