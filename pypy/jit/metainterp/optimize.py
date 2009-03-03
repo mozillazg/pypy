@@ -143,12 +143,13 @@ class InstanceNode(object):
                 node.escape_if_startbox(memo)
         else:
             for key, node in self.curfields.items():
-                if key not in self.vdesc.virtuals:
+                if self.vdesc and key not in self.vdesc.virtuals:
                     node.escape_if_startbox(memo)
             # we also need to escape fields that are only read, never written,
             # if they're not marked specifically as ones that does not escape
             for key, node in self.origfields.items():
-                if key not in self.vdesc.virtuals and key not in self.curfields:
+                if (self.vdesc and key not in self.vdesc.virtuals and
+                    key not in self.curfields):
                     node.escape_if_startbox(memo)
 
     def add_to_dependency_graph(self, other, dep_graph):
