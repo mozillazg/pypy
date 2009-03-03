@@ -60,7 +60,7 @@ heaptracker.set_testing_vtable_for_gcstruct(XYSUB, xysub_vtable)
 
 # ____________________________________________________________
 
-xy_desc = VirtualizableDesc(cpu, XY)
+xy_desc = VirtualizableDesc(cpu, XY, XY)
 
 # ____________________________________________________________
 
