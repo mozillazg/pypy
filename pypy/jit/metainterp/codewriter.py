@@ -736,17 +736,13 @@ class BytecodeMaker(object):
             self.register_var(op.result)
             return True
         #
-        if (oopspec_name == 'list.getitem' or
-            oopspec_name == 'list.getitem_foldable'): # <- XXX do better here
-            index = self.prepare_list_getset(op, arraydescr, args)
-            if index is None:
-                return False
-            self.emit('getarrayitem_gc')
-            self.emit(self.var_position(args[0]))
-            self.emit(self.const_position(arraydescr))
-            self.emit(self.var_position(index))
-            self.register_var(op.result)
-            return True
+        if oopspec_name == 'list.getitem':
+            return self.handle_list_getitem(op, arraydescr, args,
+                                            'getarrayitem_gc')
+        #
+        if oopspec_name == 'list.getitem_foldable':
+            return self.handle_list_getitem(op, arraydescr, args,
+                                            'getarrayitem_foldable_gc')
         #
         if oopspec_name == 'list.setitem':
             index = self.prepare_list_getset(op, arraydescr, args)
@@ -769,6 +765,17 @@ class BytecodeMaker(object):
             return True
         #
         return False
+
+    def handle_list_getitem(self, op, arraydescr, args, opname):
+        index = self.prepare_list_getset(op, arraydescr, args)
+        if index is None:
+            return False
+        self.emit(opname)
+        self.emit(self.var_position(args[0]))
+        self.emit(self.const_position(arraydescr))
+        self.emit(self.var_position(index))
+        self.register_var(op.result)
+        return True
 
     def prepare_list_getset(self, op, arraydescr, args):
         func = op.args[0].value._obj._callable      # xxx break of abstraction
