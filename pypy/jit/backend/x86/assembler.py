@@ -7,8 +7,7 @@ from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import (RegAlloc, FRAMESIZE, WORD, REGS,
-                                      arg_pos, lower_byte, stack_pos, Perform,
-                                           MALLOC_VARSIZE)
+                                      arg_pos, lower_byte, stack_pos, Perform)
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.support import gc_malloc_fnaddr
@@ -86,6 +85,8 @@ class Assembler386(object):
             if not we_are_translated():
                 self.dump_op(op)
             self.position = i
+            # XXX eventually change to numbers or kill
+            #     alltogether
             if op.opname == 'load':
                 self.regalloc_load(op)
             elif op.opname == 'store':
@@ -94,6 +95,10 @@ class Assembler386(object):
                 self.regalloc_perform_discard(op)
             elif op.opname == 'perform':
                 self.regalloc_perform(op)
+            elif op.opname == 'perform_with_guard':
+                self.regalloc_perform_with_guard(op)
+            else:
+                raise NotImplementedError(op.opname)
         if not we_are_translated():
             self.dump_op('')
         self.mc.done()
@@ -184,6 +189,10 @@ class Assembler386(object):
     def regalloc_perform_discard(self, op):
         genop_discard_list[op.op.opnum](self, op.op, op.arglocs)
 
+    def regalloc_perform_with_guard(self, op):
+        genop_guard_list[op.op.opnum](self, op.op, op.guard_op, op.arglocs,
+                                      op.result_loc)
+
     def regalloc_store_to_arg(self, op):
         self.mc.MOV(arg_pos(op.pos), op.from_loc)
 
@@ -198,15 +207,28 @@ class Assembler386(object):
         return genop_binary
 
     def _binaryop_ovf(asmop, can_swap=False):
-        def genop_binary_ovf(self, op, arglocs, result_loc):
+        def genop_binary_ovf(self, op, guard_op, arglocs, result_loc):
             getattr(self.mc, asmop)(arglocs[0], arglocs[1])
-            if we_are_translated():
-                # XXX setting the lowest byte of _exception_addr to 0 or 1
-                # does not work after translation
-                XXX
-            # XXX think about CMOV instead of SETO, this would avoid
-            # a mess in detecting an exception
-            self.mc.SETO(heap8(self._exception_addr))
+            index = self.cpu.make_guard_index(guard_op)
+            recovery_code_addr = self.mc2.tell()
+            stacklocs = guard_op.stacklocs
+            locs = arglocs[2:]
+            assert len(locs) == len(stacklocs)
+            for i in range(len(locs)):
+                loc = locs[i]
+                if isinstance(loc, REG):
+                    self.mc2.MOV(stack_pos(stacklocs[i]), loc)
+            self.mc2.MOV(eax, imm(self._ovf_error_vtable))
+            self.mc2.MOV(addr_add(imm(self._exception_addr), imm(0)), eax)
+            self.mc2.MOV(eax, imm(self._ovf_error_inst))
+            self.mc2.MOV(addr_add(imm(self._exception_addr), imm(WORD)), eax)
+            self.mc2.PUSH(esp)           # frame address
+            self.mc2.PUSH(imm(index))    # index of guard that failed
+            self.mc2.CALL(rel32(self.cpu.get_failure_recovery_func_addr()))
+            self.mc2.ADD(esp, imm(8))
+            self.mc2.JMP(eax)
+            self.mc.JO(rel32(recovery_code_addr))
+            guard_op._jmp_from = self.mc.tell()
         return genop_binary_ovf
 
     def _cmpop(cond, rev_cond):
@@ -319,10 +341,7 @@ class Assembler386(object):
         # xxx ignore NULL returns for now
         self.mc.POP(mem(eax, 0))
 
-    def genop_malloc_varsize(self, op, arglocs, result_loc):
-        loc_size = arglocs[0]
-        self.call(self.malloc_func_addr, [loc_size], eax)
-
+    # same as malloc varsize after all
     def genop_new(self, op, arglocs, result_loc):
         assert result_loc is eax
         loc_size = arglocs[0]
@@ -539,8 +558,9 @@ class Assembler386(object):
         self.gen_call(op, arglocs, resloc)
         self.mc.MOVZX(eax, eax)
 
-genop_discard_list = [None] * (MALLOC_VARSIZE + 1)
-genop_list = [None] * (MALLOC_VARSIZE + 1)
+genop_discard_list = [None] * rop._LAST
+genop_list = [None] * rop._LAST
+genop_guard_list = [None] * rop._LAST
 
 for name, value in Assembler386.__dict__.iteritems():
     if name.startswith('genop_'):
@@ -551,6 +571,8 @@ for name, value in Assembler386.__dict__.iteritems():
             num = getattr(rop, opname.upper())
         if value.func_code.co_argcount == 3:
             genop_discard_list[num] = value
+        elif value.func_code.co_argcount == 5:
+            genop_guard_list[num] = value
         else:
             genop_list[num] = value
 
