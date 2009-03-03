@@ -10,6 +10,8 @@ class VirtualizableDesc(history.AbstractValue):
 
     def __init__(self, cpu, TOPSTRUCT):
         "NOT_RPYTHON"
+        self.virtuals     = [cpu.fielddescrof(TOPSTRUCT, 'inst_' + name) for
+                             name in TOPSTRUCT._hints['virtuals']]
         initialize_virtualizable(cpu, TOPSTRUCT.access)
         self.vable_base = cpu.fielddescrof(TOPSTRUCT, 'vable_base')
         self.vable_rti  = cpu.fielddescrof(TOPSTRUCT, 'vable_rti')
