@@ -1,9 +1,4 @@
 
-* Kill hack for .position attr of modrm (there is a method for that as well,
-  unsure what's saner)
-
-* SETO vs CMOVO
-
 * test_zrpy_exceptions, needed
 
 * fix ll2ctypes for typeptr accesses (test_tl*)
