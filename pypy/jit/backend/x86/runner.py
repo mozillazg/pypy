@@ -14,6 +14,7 @@ from pypy.jit.metainterp.history import (ResOperation, Box, Const,
 from pypy.jit.backend.x86.assembler import Assembler386
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
+from pypy.jit.backend.x86.executor import execute
 
 class CPU386(object):
     debug = True
@@ -55,8 +56,9 @@ class CPU386(object):
 
     def _setup_ovf_error(self):
         if self.translate_support_code:
-            self._ovf_error_vtable = 0
-            self._ovf_error_inst   = 0
+            self.assembler._ovf_error_vtable = 0
+            self.assembler._ovf_error_inst   = 0
+            xxx
             # do something here
         else:
             bk = self.rtyper.annotator.bookkeeper
@@ -64,8 +66,8 @@ class CPU386(object):
             ovferror_repr = rclass.getclassrepr(self.rtyper, clsdef)
             ll_inst = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
                 self.rtyper, clsdef)
-            self._ovf_error_vtable = self.cast_ptr_to_int(ll_inst.typeptr)
-            self._ovf_error_inst = self.cast_ptr_to_int(ll_inst)
+            self.assembler._ovf_error_vtable = self.cast_ptr_to_int(ll_inst.typeptr)
+            self.assembler._ovf_error_inst = self.cast_ptr_to_int(ll_inst)
 
     def setup(self):
         self.assembler = Assembler386(self, self.translate_support_code)
@@ -128,23 +130,18 @@ class CPU386(object):
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp
 
-    def _get_overflow_error(self):
-        self.assembler._exception_data[1] = self._ovf_error_inst
-        return self._ovf_error_vtable
-
     def get_exception(self, frame):
         res = self.assembler._exception_data[0]
         self.assembler._exception_data[0] = 0
-        if res == 1:
-            # it's an overflow error, but we need to do all the dance
-            # to get a correct exception
-            return self._get_overflow_error()
         return res
 
     def get_exc_value(self, frame):
         return self.cast_int_to_gcref(self.assembler._exception_data[1])
 
     def execute_operation(self, opnum, valueboxes, result_type):
+        if execute[opnum] is not None:
+            return execute[opnum](valueboxes)
+        
         # mostly a hack: fall back to compiling and executing the single
         # operation.
         key = []

@@ -341,6 +341,7 @@ class TestX86(object):
         assert c.value == 3
         
     def test_ovf_ops(self):
+        py.test.skip("Cannot run like this, rewrite me")
         arg0 = BoxInt(12)
         arg1 = BoxInt(13)
         res = self.execute_operation(rop.INT_MUL_OVF, [arg0, arg1], 'int')
