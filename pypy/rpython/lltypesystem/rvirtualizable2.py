@@ -79,14 +79,15 @@ class Virtualizable2InstanceRepr(InstanceRepr):
                                  hints = {'virtualizable2': True,
                                           'virtuals' : self.virtuals},
                                  adtmeths = {'access': self.accessor})
+        my_redirected_fields = []
+        for _, (mangled_name, _) in self.fields.items():
+            my_redirected_fields.append(mangled_name)
+        self.my_redirected_fields = dict.fromkeys(my_redirected_fields)    
         if self.top_of_virtualizable_hierarchy:
-            my_redirected_fields = []
-            for _, (mangled_name, _) in self.fields.items():
-                my_redirected_fields.append(mangled_name)
-            self.my_redirected_fields = dict.fromkeys(my_redirected_fields)
             self.accessor.initialize(self.object_type, my_redirected_fields)
         else:
-            xxx
+            self.accessor.initialize(self.object_type, my_redirected_fields,
+                                     self.rbase.lowleveltype.TO)
 
     def set_vable(self, llops, vinst, force_cast=False):
         if self.top_of_virtualizable_hierarchy:
