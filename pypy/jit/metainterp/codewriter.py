@@ -1,5 +1,6 @@
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
+from pypy.rpython import rlist
 from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
 from pypy.rlib import objectmodel
 from pypy.rlib.objectmodel import we_are_translated
@@ -737,20 +738,24 @@ class BytecodeMaker(object):
         #
         if (oopspec_name == 'list.getitem' or
             oopspec_name == 'list.getitem_foldable'): # <- XXX do better here
-            # XXX check if index < 0, and check IndexError, both only if needed
+            index = self.prepare_list_getset(op, arraydescr, args)
+            if index is None:
+                return False
             self.emit('getarrayitem_gc')
             self.emit(self.var_position(args[0]))
             self.emit(self.const_position(arraydescr))
-            self.emit(self.var_position(args[1]))
+            self.emit(self.var_position(index))
             self.register_var(op.result)
             return True
         #
         if oopspec_name == 'list.setitem':
-            # XXX check if index < 0, and check IndexError, both only if needed
+            index = self.prepare_list_getset(op, arraydescr, args)
+            if index is None:
+                return False
             self.emit('setarrayitem_gc')
             self.emit(self.var_position(args[0]))
             self.emit(self.const_position(arraydescr))
-            self.emit(self.var_position(args[1]))
+            self.emit(self.var_position(index))
             self.emit(self.var_position(args[2]))
             self.register_var(op.result)
             return True
@@ -764,6 +769,27 @@ class BytecodeMaker(object):
             return True
         #
         return False
+
+    def prepare_list_getset(self, op, arraydescr, args):
+        func = op.args[0].value._obj._callable      # xxx break of abstraction
+        non_negative = '_nonneg' in func.__name__
+        tag = op.args[1].value
+        assert tag in (rlist.dum_nocheck, rlist.dum_checkidx)
+        can_raise = tag != rlist.dum_nocheck
+        #
+        if can_raise:
+            return None
+        if non_negative:
+            v_posindex = args[1]
+        else:
+            self.emit('check_neg_index')
+            self.emit(self.var_position(args[0]))
+            self.emit(self.const_position(arraydescr))
+            self.emit(self.var_position(args[1]))
+            v_posindex = Variable('posindex')
+            v_posindex.concretetype = lltype.Signed
+            self.register_var(v_posindex)
+        return v_posindex
 
     def serialize_op_indirect_call(self, op):
         self.minimize_variables()

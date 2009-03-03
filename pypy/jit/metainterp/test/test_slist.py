@@ -83,6 +83,20 @@ class ListTests:
         # two levels of list operations removed from the loop
         self.check_loops(call_void=0, call__4=0)
 
+    def test_lazy_getitem_4(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'lst'])
+        def f(n):
+            lst = [0]
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, lst=lst)
+                myjitdriver.jit_merge_point(n=n, lst=lst)
+                lst[-1] += 2
+                n -= 1
+            return lst[0]
+        res = self.meta_interp(f, [21], listops=True)
+        assert res == 42
+        py.test.skip("not virtualized away so far")
+
 class TestOOtype(ListTests, OOJitMixin):
     pass
 

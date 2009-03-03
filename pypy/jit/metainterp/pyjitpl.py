@@ -334,7 +334,20 @@ class MIFrame(object):
 
     @arguments("box", "constbox")
     def opimpl_arraylen_gc(self, arraybox, arraydesc):
-        self.execute(rop.ARRAYLEN_GC, [arraybox, arraydesc], 'int')
+        self.execute(rop.ARRAYLEN_GC, [arraybox, arraydesc], 'int', True)
+
+    @arguments("orgpc", "box", "constbox", "box")
+    def opimpl_check_neg_index(self, pc, arraybox, arraydesc, indexbox):
+        negbox = self.metainterp.history.execute_and_record(
+            rop.INT_LT, [indexbox, ConstInt(0)], 'int', True)
+        negbox = self.implement_guard_value(pc, negbox)
+        if negbox.getint():
+            # the index is < 0; add the array length to it
+            lenbox = self.metainterp.history.execute_and_record(
+                rop.ARRAYLEN_GC, [arraybox, arraydesc], 'int', True)
+            indexbox = self.metainterp.history.execute_and_record(
+                rop.INT_ADD, [indexbox, lenbox], 'int', True)
+        self.make_result_box(indexbox)
 
     @arguments("box")
     def opimpl_ptr_nonzero(self, box):
