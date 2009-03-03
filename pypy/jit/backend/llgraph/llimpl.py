@@ -765,7 +765,7 @@ class ExtendedLLFrame(LLFrame):
         return len(array.items)
 
     def op_setarrayitem_gc(self, array, arraydesc, index, newvalue):
-        ITEMTYPE = symbolic.Size2Type[arraydesc/2]
+        ITEMTYPE = symbolic.Size2Type[arraydesc/2].OF
         array = array._obj.container
         newvalue = self._cast_newvalue(arraydesc, ITEMTYPE, newvalue)
         array.setitem(index, newvalue)
