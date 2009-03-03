@@ -9,7 +9,8 @@ from pypy.jit.metainterp.history import ConstInt, ConstAddr, BoxInt, BoxPtr
 from pypy.jit.metainterp.optimize import (PerfectSpecializer,
                                           VirtualizableSpecNode,
                                           VirtualInstanceSpecNode,
-                                          NotSpecNode)
+                                          NotSpecNode,
+                                          DelayedSpecNode)
 from pypy.jit.metainterp.virtualizable import VirtualizableDesc
 from pypy.jit.metainterp.test.test_optimize import (cpu, NODE, node_vtable,
                                                     equaloplists, Loop,
@@ -26,7 +27,8 @@ XY = lltype.GcStruct(
     ('x', lltype.Signed),
     ('l', lltype.Ptr(lltype.GcArray(lltype.Signed))),
     ('node', lltype.Ptr(NODE)),
-    hints = {'virtualizable2': True},
+    hints = {'virtualizable2': True,
+             'virtuals':()},
     adtmeths = {'access': VirtualizableAccessor()})
 XY._adtmeths['access'].initialize(XY, ['x', 'node', 'l'])
 
@@ -95,7 +97,7 @@ class A:
         ResOperation('setfield_gc', [fr, ConstInt(ofs_node), n2], None),
         ResOperation('jump', [sum2, fr], None),
         ]
-    ops[1].vdesc = xy_desc
+    ops[1].desc = xy_desc
 
 def test_A_find_nodes():
     spec = PerfectSpecializer(Loop(A.ops))
@@ -146,7 +148,7 @@ class B:
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
         ResOperation('jump', [fr], None),
         ]
-    ops[1].vdesc = xy_desc
+    ops[1].desc = xy_desc
 
 def test_B_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(B.ops))
@@ -154,7 +156,7 @@ def test_B_intersect_input_and_output():
     spec.intersect_input_and_output()
     assert spec.nodes[B.fr].escaped
     assert spec.nodes[B.fr].virtualized
-    assert not spec.nodes[B.n1].escaped
+    assert spec.nodes[B.n1].escaped
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == B.ofs_node
@@ -183,7 +185,7 @@ class C:
         #
         ResOperation('jump', [fr], None),
         ]
-    ops[1].vdesc = xy_desc
+    ops[1].desc = xy_desc
 
 def test_C_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(C.ops))
@@ -191,12 +193,12 @@ def test_C_intersect_input_and_output():
     spec.intersect_input_and_output()
     assert spec.nodes[C.fr].escaped
     assert spec.nodes[C.fr].virtualized
-    assert not spec.nodes[C.n1].escaped
-    assert not spec.nodes[C.n2].escaped
+    assert spec.nodes[C.n1].escaped
+    assert spec.nodes[C.n2].escaped
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
     assert spec.specnodes[0].fields[0][0] == C.ofs_node
-    assert isinstance(spec.specnodes[0].fields[0][1], VirtualInstanceSpecNode)
+    assert isinstance(spec.specnodes[0].fields[0][1], DelayedSpecNode)
 
 
 # ____________________________________________________________
@@ -222,7 +224,7 @@ if 0:
         ResOperation('setitem', [None, l, ConstInt(0), v2], None),
         ResOperation('jump', [fr], None),
         ]
-    ops[1].vdesc = xy_desc
+    ops[1].desc = xy_desc
 
 def test_D_intersect_input_and_output():
     py.test.skip("XXX")

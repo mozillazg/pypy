@@ -125,7 +125,7 @@ class ImplicitVirtualizableTests:
         class Frame(object):
             _virtualizable2_ = True
 
-            _virtualizable_desc_ = {'virtuals' : 'l'}
+            _always_virtual_ = ['l']
 
             def __init__(self, l, s):
                 self.l = l
@@ -195,7 +195,7 @@ class ImplicitVirtualizableTests:
         class Frame(object):
             _virtualizable2_ = True
 
-            _virtualizable_desc_ = {'virtuals' : 'stuff'}
+            _always_virtual_ = ['stuff']
             
             def __init__(self, x):
                 self.stuff = Stuff(x)

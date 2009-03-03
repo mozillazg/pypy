@@ -124,6 +124,7 @@ class InstanceNode(object):
         self.dirtyfields = {}
         self.expanded_fields = {}
         self.cursize = -1
+        self.vdesc = None # for virtualizables
 
     def is_nonzero(self):
         return self.cls is not None or self.nonzero
@@ -140,6 +141,15 @@ class InstanceNode(object):
         if not self.virtualized:
             for node in self.curfields.values():
                 node.escape_if_startbox(memo)
+        else:
+            for key, node in self.curfields.items():
+                if key not in self.vdesc.virtuals:
+                    node.escape_if_startbox(memo)
+            # we also need to escape fields that are only read, never written,
+            # if they're not marked specifically as ones that does not escape
+            for key, node in self.origfields.items():
+                if key not in self.vdesc.virtuals and key not in self.curfields:
+                    node.escape_if_startbox(memo)
 
     def add_to_dependency_graph(self, other, dep_graph):
         dep_graph.append((self, other))
@@ -293,9 +303,7 @@ class PerfectSpecializer(object):
             self.dependency_graph.append((instnode, fieldnode))
             instnode.origfields[field] = fieldnode
         self.nodes[box] = fieldnode
-        if (self.first_escaping_op and
-            instnode.cls and
-            1):  ##not isinstance(instnode.cls.source, ListDescr)):
+        if (self.first_escaping_op and instnode.cls):
             instnode.expanded_fields[field] = None
 
 ##    def find_nodes_insert(self, instnode, field, fieldnode):
@@ -501,6 +509,7 @@ class PerfectSpecializer(object):
                     instnode.virtualized = True
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1], const=True)
+                    instnode.vdesc = op.desc
                 continue
             elif op.is_always_pure():
                 for arg in op.args:
