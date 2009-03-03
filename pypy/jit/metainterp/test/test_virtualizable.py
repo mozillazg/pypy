@@ -124,12 +124,15 @@ class ImplicitVirtualizableTests:
 
         class Frame(object):
             _virtualizable2_ = True
+
+            _virtualizable_desc_ = {'virtuals' : 'l'}
+
             def __init__(self, l, s):
                 self.l = l
                 self.s = s
         
-        def f(n):
-            frame = Frame([1,2,3,4], 0)
+        def f(n, a):
+            frame = Frame([a,a+1,a+2,a+3], 0)
             x = 0
             while n > 0:
                 myjitdriver.can_enter_jit(frame=frame, n=n, x=x)
@@ -142,8 +145,40 @@ class ImplicitVirtualizableTests:
                 frame.s -= 1
             return x
 
-        res = self.meta_interp(f, [10], listops=True)
-        assert res == f(10)
+        res = self.meta_interp(f, [10, 1], listops=True)
+        assert res == f(10, 1)
+        self.check_loops(getarrayitem_gc=0)
+
+
+    def test_virtualizable_with_list(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'x'],
+                                virtualizables = ['frame'])
+
+
+        class Frame(object):
+            _virtualizable2_ = True
+
+            def __init__(self, l, s):
+                self.l = l
+                self.s = s
+        
+        def f(n, a):
+            frame = Frame([a,a+1,a+2,a+3], 0)
+            x = 0
+            while n > 0:
+                myjitdriver.can_enter_jit(frame=frame, n=n, x=x)
+                myjitdriver.jit_merge_point(frame=frame, n=n, x=x)
+                frame.s = hint(frame.s, promote=True)
+                n -= 1
+                x += frame.l[frame.s]
+                frame.s += 1
+                x += frame.l[frame.s]
+                frame.s -= 1
+            return x
+
+        res = self.meta_interp(f, [10, 1], listops=True)
+        assert res == f(10, 1)
+        self.check_loops(getarrayitem_gc=2)
 
     def test_virtual_on_virtualizable(self):
         myjitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
@@ -158,11 +193,14 @@ class ImplicitVirtualizableTests:
 
         class Frame(object):
             _virtualizable2_ = True
+
+            _virtualizable_desc_ = {'virtuals' : 'stuff'}
+            
             def __init__(self, x):
                 self.stuff = Stuff(x)
 
         def f(n):
-            frame = Frame(3)
+            frame = Frame(n/10)
             while n > 0:
                 myjitdriver.can_enter_jit(frame=frame, n=n)
                 myjitdriver.jit_merge_point(frame=frame, n=n)
@@ -174,6 +212,38 @@ class ImplicitVirtualizableTests:
         res = self.meta_interp(f, [30])
         assert res == f(30)
         self.check_loops(getfield_gc=0)
+
+
+    def test_no_virtual_on_virtualizable(self):
+        myjitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
+                                virtualizables = ['frame'])
+
+        class Stuff(object):
+            def __init__(self, x):
+                self.x = x
+
+        class Stuff2(Stuff):
+            pass
+
+        class Frame(object):
+            _virtualizable2_ = True
+            
+            def __init__(self, x):
+                self.stuff = Stuff(x)
+
+        def f(n):
+            frame = Frame(n/10)
+            while n > 0:
+                myjitdriver.can_enter_jit(frame=frame, n=n)
+                myjitdriver.jit_merge_point(frame=frame, n=n)
+                if isinstance(frame.stuff, Stuff2):
+                    return 2
+                n -= frame.stuff.x
+            return n
+
+        res = self.meta_interp(f, [30])
+        assert res == f(30)
+        self.check_loops(getfield_gc=1)
 
     def test_unequal_list_lengths_cannot_be_virtual(self):
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
