@@ -780,6 +780,8 @@ class BytecodeMaker(object):
     def prepare_list_getset(self, op, arraydescr, args):
         func = op.args[0].value._obj._callable      # xxx break of abstraction
         non_negative = '_nonneg' in func.__name__
+        if isinstance(op.args[1], Variable):
+            return None
         tag = op.args[1].value
         assert tag in (rlist.dum_nocheck, rlist.dum_checkidx)
         can_raise = tag != rlist.dum_nocheck
