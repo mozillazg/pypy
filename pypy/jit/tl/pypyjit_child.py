@@ -27,6 +27,7 @@ from pypy.module.pypyjit.portal import PyPyJitPolicy
 
 
 def run_child(glob, loc):
+    import sys, pdb
     interp = loc['interp']
     graph = loc['graph']
     interp.malloc_check = False
@@ -38,4 +39,9 @@ def run_child(glob, loc):
     print 'warmspot.jittify_and_run() started...'
     policy = PyPyJitPolicy(interp.typer.annotator.translator)
     option.view = True
-    warmspot.jittify_and_run(interp, graph, [], policy=policy)
+    try:
+        warmspot.jittify_and_run(interp, graph, [], policy=policy,
+                                 listops=True)
+    except Exception, e:
+        print '%s: %s' % (e.__class__, e)
+        pdb.post_mortem(sys.exc_info()[2])
