@@ -45,7 +45,7 @@ def test_A_optimize_loop():
     spec = PerfectSpecializer(Loop(A.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
-    spec.optimize_loop()
+    spec.optimize_loop(None)
     equaloplists(spec.loop.operations, [
         ResOperation(rop.MERGE_POINT, [A.l, A.e0], None),
         ResOperation(rop.SETARRAYITEM_GC, [A.l, A.ad, ConstInt(0), A.e0], None),
@@ -74,7 +74,7 @@ def test_B_optimize_loop():
     spec = PerfectSpecializer(Loop(B.ops))
     spec.find_nodes()
     spec.intersect_input_and_output()
-    spec.optimize_loop()
+    spec.optimize_loop(None)
     equaloplists(spec.loop.operations, [
         ResOperation(rop.MERGE_POINT, [B.l, B.e0], None),
         ResOperation(rop.INT_ADD, [B.e0, ConstInt(1)], B.e1),
