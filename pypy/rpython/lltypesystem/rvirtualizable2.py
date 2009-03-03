@@ -64,6 +64,10 @@ class Virtualizable2InstanceRepr(InstanceRepr):
             self.top_of_virtualizable_hierarchy = True
         else:
             self.top_of_virtualizable_hierarchy = False
+        try:
+            self.virtuals = tuple(classdesc.classdict['_always_virtual_'].value)
+        except KeyError:
+            self.virtuals = ()
         self.accessor = VirtualizableAccessor()
 
     def _setup_repr(self):
@@ -72,7 +76,8 @@ class Virtualizable2InstanceRepr(InstanceRepr):
             llfields.append(('vable_base', llmemory.Address))
             llfields.append(('vable_rti', VABLERTIPTR))
         InstanceRepr._setup_repr(self, llfields,
-                                 hints = {'virtualizable2': True},
+                                 hints = {'virtualizable2': True,
+                                          'virtuals' : self.virtuals},
                                  adtmeths = {'access': self.accessor})
         if self.top_of_virtualizable_hierarchy:
             my_redirected_fields = []
