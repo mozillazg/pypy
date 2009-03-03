@@ -56,6 +56,9 @@ class ResOperation(object):
     def can_raise(self):
         return rop._CANRAISE_FIRST <= self.opnum <= rop._CANRAISE_LAST
 
+    def is_ovf(self):
+        return rop._OVF_FIRST <= self.opnum <= rop._OVF_LAST
+
 # ____________________________________________________________
 
 
@@ -154,10 +157,12 @@ class rop(object):
     CALL_PTR               = _CALL + typ.PTR
     CALL_VOID              = _CALL + typ.VOID
     #
+    _OVF_FIRST             = 109
     INT_ADD_OVF            = 110
     INT_SUB_OVF            = 111
     INT_MUL_OVF            = 112
     INT_NEG_OVF            = 113
+    _OVF_LAST              = 114
     _CANRAISE_LAST = 119 # ----- end of can_raise operations -----
     _LAST = 119     # for the backend to add more internal operations
 
