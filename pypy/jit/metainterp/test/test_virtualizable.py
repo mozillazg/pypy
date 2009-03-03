@@ -173,12 +173,13 @@ class ImplicitVirtualizableTests:
                 x += frame.l[frame.s]
                 frame.s += 1
                 x += frame.l[frame.s]
+                frame.l[frame.s] += 1
                 frame.s -= 1
             return x
 
         res = self.meta_interp(f, [10, 1], listops=True)
         assert res == f(10, 1)
-        self.check_loops(getarrayitem_gc=2)
+        self.check_loops(setarrayitem_gc=1)
 
     def test_virtual_on_virtualizable(self):
         myjitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
