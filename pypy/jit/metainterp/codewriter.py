@@ -826,7 +826,7 @@ class BytecodeMaker(object):
             except KeyError:
                 from pypy.jit.metainterp import virtualizable
                 virtualizabledesc = virtualizable.VirtualizableDesc(
-                    self.cpu, TOPSTRUCT)
+                    self.cpu, TOPSTRUCT, STRUCTTYPE)
                 virtualizabledesc.hash = len(metainterp._virtualizabledescs)
                 metainterp._virtualizabledescs[TOPSTRUCT] = virtualizabledesc
                 metainterp._can_have_virtualizables = virtualizabledesc
