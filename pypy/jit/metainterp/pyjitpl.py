@@ -327,6 +327,12 @@ class MIFrame(object):
         tp = self.metainterp.cpu.typefor(arraydesc.getint())
         self.execute(rop.GETARRAYITEM_GC, [arraybox, arraydesc, indexbox], tp)
 
+    @arguments("box", "constbox", "box")
+    def opimpl_getarrayitem_foldable_gc(self, arraybox, arraydesc, indexbox):
+        tp = self.metainterp.cpu.typefor(arraydesc.getint())
+        self.execute(rop.GETARRAYITEM_GC, [arraybox, arraydesc, indexbox], tp,
+                     True)
+
     @arguments("box", "constbox", "box", "box")
     def opimpl_setarrayitem_gc(self, arraybox, arraydesc, indexbox, itembox):
         self.execute(rop.SETARRAYITEM_GC, [arraybox, arraydesc,
