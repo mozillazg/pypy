@@ -6,7 +6,7 @@ import py
 import sys
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, hint
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, Arguments
@@ -17,11 +17,13 @@ from pypy.interpreter.function import Function
 from pypy.interpreter.pyopcode import ExitFrame
 
 
-#Frame._virtualizable2_ = True
+PyFrame._virtualizable2_ = True
+PyFrame._always_virtual_ = ['valuestack_w']
 
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
     greens = ['next_instr', 'pycode']
+    virtualizables = ['frame']
 
 ##    def compute_invariants(self, reds, next_instr, pycode):
 ##        # compute the information that really only depends on next_instr
@@ -42,6 +44,7 @@ class __extend__(PyFrame):
                 pypyjitdriver.jit_merge_point(
                     frame=self, ec=ec, next_instr=next_instr, pycode=pycode)
                 co_code = pycode.co_code
+                self.valuestackdepth = hint(self.valuestackdepth, promote=True)
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
         except ExitFrame:
             return self.popvalue()
