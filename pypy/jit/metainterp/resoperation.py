@@ -138,11 +138,14 @@ class rop(object):
     ARRAYLEN_GC            = 77
     STRLEN                 = 78
     STRGETITEM             = 79
-    _ALWAYS_PURE_LAST = 79  # ----- end of always_pure operations -----
+    GETFIELD_GC_PURE       = 80
+    GETFIELD_RAW_PURE      = 81
+    GETARRAYITEM_GC_PURE   = 82
+    _ALWAYS_PURE_LAST = 82  # ----- end of always_pure operations -----
 
-    GETARRAYITEM_GC        = 80
-    GETFIELD_GC            = 81
-    GETFIELD_RAW           = 82
+    GETARRAYITEM_GC        = 83
+    GETFIELD_GC            = 84
+    GETFIELD_RAW           = 85
     _NOSIDEEFFECT_LAST = 89 # ----- end of no_side_effect operations -----
 
     NEW                    = 90
