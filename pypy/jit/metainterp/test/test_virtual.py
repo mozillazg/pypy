@@ -169,24 +169,24 @@ class VirtualTests:
         assert res == 9
 
     def test_immutable_constant_getfield(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n', 'i'])
+        myjitdriver = JitDriver(greens = ['stuff'], reds = ['n', 'i'])
 
         class Stuff(object):
             _immutable_ = True
             def __init__(self, x):
                 self.x = x
         
-        stuff = [Stuff(1), Stuff(3)]
-
-        def f(n, i):
+        def f(n, a, i):
+            stuff = [Stuff(a), Stuff(3)]
             while n > 0:
-                myjitdriver.can_enter_jit(n=n, i=i)
-                myjitdriver.jit_merge_point(n=n, i=i)
+                myjitdriver.can_enter_jit(n=n, i=i, stuff=stuff)
+                myjitdriver.jit_merge_point(n=n, i=i, stuff=stuff)
                 i = hint(i, promote=True)
-                n -= stuff[i].x
+                v = Stuff(i)
+                n -= stuff[v.x].x
             return n
 
-        res = self.meta_interp(f, [10, 0])
+        res = self.meta_interp(f, [10, 1, 0], listops=True)
         assert res == 0
         self.check_loops(getfield_gc=0)
 
