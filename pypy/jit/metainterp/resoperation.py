@@ -109,7 +109,8 @@ class rop(object):
     UINT_ADD               = 40
     UINT_SUB               = 41
     UINT_MUL               = 42
-    _COMPARISON_FIRST      = 43
+    #
+    _COMPARISON_FIRST = 44
     INT_LT                 = 44
     INT_LE                 = 45
     INT_EQ                 = 46
@@ -122,7 +123,7 @@ class rop(object):
     UINT_NE                = 53
     UINT_GT                = 54
     UINT_GE                = 55
-    _COMPARISON_LAST       = 56
+    _COMPARISON_LAST = 55
     #
     INT_IS_TRUE            = 60
     INT_NEG                = 61
@@ -162,12 +163,12 @@ class rop(object):
     CALL_PTR               = _CALL + typ.PTR
     CALL_VOID              = _CALL + typ.VOID
     #
-    _OVF_FIRST             = 109
+    _OVF_FIRST = 110
     INT_ADD_OVF            = 110
     INT_SUB_OVF            = 111
     INT_MUL_OVF            = 112
     INT_NEG_OVF            = 113
-    _OVF_LAST              = 114
+    _OVF_LAST = 113
     _CANRAISE_LAST = 119 # ----- end of can_raise operations -----
     _LAST = 119     # for the backend to add more internal operations
 
