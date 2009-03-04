@@ -168,6 +168,9 @@ class VirtualTests:
         res = self.meta_interp(f, [20])
         assert res == 9
 
+    def test_immutable_constant_getfield(self):
+        xxx
+
 ##class TestOOtype(VirtualTests, OOJitMixin):
 ##    _new = staticmethod(ootype.new)
 
