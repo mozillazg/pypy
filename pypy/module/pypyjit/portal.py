@@ -98,10 +98,10 @@ class PyPyJitPolicy(ManualJitPolicy):
                      pypy.objspace.std.Space.is_w)
         self.seegraph(pypy.interpreter.pyframe.PyFrame.execute_frame, False)
         # --------------------
-        self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
-                     pypy.objspace.std.Space.is_true)
-        self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
-                     pypy.objspace.std.Space.is_true)
+        #self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
+        #             pypy.objspace.std.Space.is_true)
+        #self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
+        #             pypy.objspace.std.Space.is_true)
 
         #
         #self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
