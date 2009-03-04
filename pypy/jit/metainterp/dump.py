@@ -85,7 +85,6 @@ class CustomRepr:
     def __repr__(self):
         return self.s
 
-
 def dump_bytecode(jitcode, file=None):
     # XXX this is not really a disassembler, but just a pretty-printer
     # for the '_source' attribute that codewriter.py attaches
@@ -134,3 +133,21 @@ def dump_bytecode(jitcode, file=None):
 
     if src.pc != len(jitcode.code):
         print >> file, 'WARNING: the pc column is bogus! fix dump.py!'
+
+def dump_call_history(call_history):
+    indent = 0
+    for ev, code, args in call_history:
+        if ev == 'enter':
+            if args is not None:
+                args_s = [str(a) for a in args]
+            else:
+                args_s = []
+            print "%s%s(%s)" % (" "*indent, code.name, ','.join(args_s))
+            indent += 2
+        elif ev.startswith('leave'):
+            indent -= 2
+        elif ev == 'guard_failure':
+            break
+        else:
+            raise NotImplementedError(ev)
+

@@ -613,6 +613,8 @@ class MIFrame(object):
             check_args(*argboxes)
         self.pc = 0
         self.env = argboxes
+        if not we_are_translated():
+            self.metainterp._debug_history[-1][-1] = argboxes
         #self.starts_with_greens()
         #assert len(argboxes) == len(self.graph.getargs())
 
@@ -742,6 +744,7 @@ class OOMetaInterp(object):
         self.class_sizes = populate_type_cache(graphs, self.cpu)
 
         self._virtualizabledescs = {}
+        self._debug_history = []
 
     def generate_bytecode(self, policy):
         self._codewriter = codewriter.CodeWriter(self, policy)
@@ -754,12 +757,16 @@ class OOMetaInterp(object):
         return not we_are_translated()
 
     def newframe(self, jitcode):
+        if not we_are_translated():
+            self._debug_history.append(['enter', jitcode, None])
         f = MIFrame(self, jitcode)
         self.framestack.append(f)
         return f
 
     def finishframe(self, resultbox):
-        self.framestack.pop()
+        frame = self.framestack.pop()
+        if not we_are_translated():
+            self._debug_history.append(['leave', frame.jitcode, None])
         if self.framestack:
             if resultbox is not None:
                 self.framestack[-1].make_result_box(resultbox)
@@ -776,6 +783,8 @@ class OOMetaInterp(object):
                 frame.exception_box = exceptionbox
                 frame.exc_value_box = excvaluebox
                 return True
+            if not we_are_translated():
+                self._debug_history.append(['leave_exc', frame.jitcode, None])
             self.framestack.pop()
         raise self.ExitFrameWithException(exceptionbox, excvaluebox)
 
@@ -862,6 +871,9 @@ class OOMetaInterp(object):
                                 live_arg_boxes[num_green_args:])
         if not loop:
             raise self.ContinueRunningNormally(live_arg_boxes)
+        if not we_are_translated():
+            loop._call_history = self._debug_history
+            self.debug_history = []
         return loop
 
     def compile_bridge(self, guard_failure, original_boxes, live_arg_boxes):
@@ -879,6 +891,9 @@ class OOMetaInterp(object):
                                         live_arg_boxes[num_green_args:])
         if bridge is None:
             raise self.ContinueRunningNormally(live_arg_boxes)
+        if not we_are_translated():
+            bridge._call_history = self._debug_history
+            self.debug_history = []
         guard_failure.guard_op.jump_target = bridge.operations[0]
         return bridge
 
@@ -971,7 +986,9 @@ class OOMetaInterp(object):
             return False
 
     def rebuild_state_after_failure(self, key, newboxes):
-        self.framestack = []
+        if not we_are_translated():
+            self._debug_history.append(['guard_failure', None, None])
+            self.framestack = []
         nbindex = 0
         for jitcode, pc, envlength, exception_target in key:
             f = self.newframe(jitcode)
