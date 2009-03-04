@@ -717,6 +717,9 @@ class MIFrame(object):
             if not self.metainterp.history.generate_anything_since(old_index):
                 assert pure
                 return False
+            if not we_are_translated():
+                self.metainterp._debug_history.append(['call',
+                                                  argboxes[0], argboxes[1:]])
             etype = lltype.nullptr(rclass.OBJECT_VTABLE)
             evalue = lltype.nullptr(rclass.OBJECT)
         type_as_int = self.metainterp.cpu.cast_adr_to_int(
