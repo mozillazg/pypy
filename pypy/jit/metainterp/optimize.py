@@ -304,6 +304,20 @@ class PerfectSpecializer(object):
         if (self.first_escaping_op and instnode.cls):
             instnode.expanded_fields[field] = None
 
+    def find_nodes_getarrayitem(self, op):
+        instnode = self.getnode(op.args[0])
+        if instnode.cls is None:
+            instnode.cls = InstanceNode(FixedList(op.args[1].getint()))
+        fieldbox = op.args[2]
+        if self.getnode(fieldbox).const:
+            item = self.getsource(fieldbox).getint()
+            assert item >= 0 # XXX
+            self.find_nodes_getfield(instnode, item, op.result)
+        else:
+            instnode.escaped = True
+            self.nodes[op.result] = InstanceNode(op.result,
+                                                 escaped=True)
+
 ##    def find_nodes_insert(self, instnode, field, fieldnode):
 ##        for ofs, node in instnode.curfields.items():
 ##            if ofs >= field:
@@ -369,19 +383,13 @@ class PerfectSpecializer(object):
 ##                    instnode.origsize = size
 ##                continue
             elif opnum == rop.GETARRAYITEM_GC:
-                instnode = self.getnode(op.args[0])
-                if instnode.cls is None:
-                    instnode.cls = InstanceNode(FixedList(op.args[1].getint()))
-                fieldbox = op.args[2]
-                if self.getnode(fieldbox).const:
-                    item = self.getsource(fieldbox).getint()
-                    assert item >= 0 # XXX
-                    self.find_nodes_getfield(instnode, item, op.result)
-                else:
-                    instnode.escaped = True
-                    self.nodes[op.result] = InstanceNode(op.result,
-                                                         escaped=True)
+                self.find_nodes_getarrayitem(op)
                 continue
+            elif opnum == rop.GETARRAYITEM_GC_PURE:
+                instnode = self.getnode(op.args[0])
+                if not instnode.const or not self.getnode(op.args[2]).const:
+                    self.find_nodes_getarrayitem(op)
+                    continue
             elif opnum == rop.SETARRAYITEM_GC:
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
@@ -413,6 +421,15 @@ class PerfectSpecializer(object):
                 box = op.result
                 self.find_nodes_getfield(instnode, field, box)
                 continue
+            elif opnum == rop.GETFIELD_GC_PURE:
+                instnode = self.getnode(op.args[0])
+                fieldbox = op.args[1]
+                assert isinstance(fieldbox, ConstInt)
+                field = fieldbox.getint()
+                if not instnode.const:
+                    box = op.result
+                    self.find_nodes_getfield(instnode, field, box)
+                    continue
 ##            elif opname == 'getitem':
 ##                instnode = self.getnode(op.args[1])
 ##                fieldbox = op.args[2]
@@ -767,6 +784,12 @@ class PerfectSpecializer(object):
                     continue
                 # otherwise we need this getfield, but it does not
                 # invalidate caches
+            elif opnum == rop.GETFIELD_GC_PURE:
+                instnode = self.nodes[op.args[0]]
+                if not instnode.const:
+                    ofs = op.args[1].getint()
+                    if self.optimize_getfield(instnode, ofs, op.result):
+                        continue
             elif opnum == rop.GETARRAYITEM_GC:
                 instnode = self.nodes[op.args[0]]
                 ofsbox = self.getsource(op.args[2])
@@ -774,6 +797,15 @@ class PerfectSpecializer(object):
                     ofs = ofsbox.getint()
                     if self.optimize_getfield(instnode, ofs, op.result):
                         continue
+            elif opnum == rop.GETARRAYITEM_GC_PURE:
+                instnode = self.nodes[op.args[0]]
+                ofsbox = self.getsource(op.args[2])
+                if not instnode.const:
+                    if isinstance(ofsbox, ConstInt):
+                        ofs = ofsbox.getint()
+                        if self.optimize_getfield(instnode, ofs, op.result):
+                            continue
+
 ##            elif opname == 'getitem':
 ##                instnode = self.nodes[op.args[1]]
 ##                ofsbox = self.getsource(op.args[2])

@@ -330,8 +330,8 @@ class MIFrame(object):
     @arguments("box", "constbox", "box")
     def opimpl_getarrayitem_foldable_gc(self, arraybox, arraydesc, indexbox):
         tp = self.metainterp.cpu.typefor(arraydesc.getint())
-        self.execute(rop.GETARRAYITEM_GC, [arraybox, arraydesc, indexbox], tp,
-                     True)
+        self.execute(rop.GETARRAYITEM_GC_PURE,
+                     [arraybox, arraydesc, indexbox], tp, True)
 
     @arguments("box", "constbox", "box", "box")
     def opimpl_setarrayitem_gc(self, arraybox, arraydesc, indexbox, itembox):
@@ -379,7 +379,7 @@ class MIFrame(object):
     @arguments("box", "constbox")
     def opimpl_getfield_pure_gc(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
-        self.execute(rop.GETFIELD_GC, [box, fielddesc], tp, True)
+        self.execute(rop.GETFIELD_GC_PURE, [box, fielddesc], tp, True)
     @arguments("box", "constbox", "box")
     def opimpl_setfield_gc(self, box, fielddesc, valuebox):
         self.execute(rop.SETFIELD_GC, [box, fielddesc, valuebox],
