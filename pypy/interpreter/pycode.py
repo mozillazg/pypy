@@ -11,7 +11,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import NoneNotWrapped 
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib.debug import make_sure_not_resized, make_sure_not_modified
 
 # helper
 
@@ -67,6 +67,7 @@ class PyCode(eval.Code):
         self.co_stacksize = stacksize
         self.co_flags = flags
         self.co_code = code
+        #self.co_consts_w = make_sure_not_modified(consts)
         self.co_consts_w = make_sure_not_resized(consts)
         self.co_names_w = [space.new_interned_str(aname) for aname in names]
         self.co_varnames = varnames
