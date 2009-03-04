@@ -168,6 +168,26 @@ class VirtualTests:
         res = self.meta_interp(f, [20])
         assert res == 9
 
+    def test_immutable_constant_getfield(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n'])
+
+        class Stuff(object):
+            _immutable_ = True
+            def __init__(self, x):
+                self.x = x
+
+        def f(n):
+            stuff = Stuff(1)
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                n -= stuff.x
+            return n
+
+        res = self.meta_interp(f, [10])
+        assert n == 0
+        self.check_loops(getfield_gc=0)
+
 ##class TestOOtype(VirtualTests, OOJitMixin):
 ##    _new = staticmethod(ootype.new)
 
