@@ -9,6 +9,7 @@ from pypy.interpreter import pytraceback
 import opcode
 from pypy.rlib.objectmodel import we_are_translated, instantiate
 from pypy.rlib.jit import we_are_jitted, hint
+from pypy.rlib.debug import make_sure_not_resized
 
 # Define some opcodes used
 g = globals()
@@ -59,6 +60,7 @@ class PyFrame(eval.Frame):
         # class bodies only have CO_NEWLOCALS.
         self.initialize_frame_scopes(closure)
         self.fastlocals_w = [None]*self.numlocals
+        make_sure_not_resized(self.fastlocals_w)
         self.f_lineno = self.pycode.co_firstlineno
 
     def get_builtin(self):
