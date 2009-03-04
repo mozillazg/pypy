@@ -18,6 +18,7 @@ config.objspace.allworkingmodules = False
 config.objspace.usemodules.pypyjit = True
 set_pypy_opt_level(config, level='0')
 config.objspace.std.multimethods = 'mrd'
+config.objspace.std.builtinshortcut = True
 multimethod.Installer = multimethod.InstallerVersion2
 print config
 
