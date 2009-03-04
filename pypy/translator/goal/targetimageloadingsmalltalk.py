@@ -7,8 +7,8 @@ from pypy.lang.smalltalk import model, interpreter, primitives, shadow
 from pypy.lang.smalltalk import squeakimage
 from pypy.lang.smalltalk import constants
 
-def tinyBenchmarks(space, image):
-    interp = interpreter.Interpreter(space)
+def tinyBenchmarks(space, image_name):
+    interp = interpreter.Interpreter(space, image_name=image_name)
 
     w_object = model.W_SmallInteger(0)
 
@@ -54,7 +54,7 @@ def entry_point(argv):
     reader.initialize()
     image = squeakimage.SqueakImage()
     image.from_reader(space, reader)
-    interp = tinyBenchmarks(space, image)
+    interp = tinyBenchmarks(space, filename)
     run_benchmarks(interp)
     return 0
 
