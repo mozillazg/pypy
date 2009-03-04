@@ -51,7 +51,8 @@ class Interpreter(object):
         return option.prim_trace
 
     def step(self):
-        next = self.s_active_context().getNextBytecode()
+        s_active_context = self.s_active_context()
+        next = s_active_context.getNextBytecode()
         # we_are_translated returns false on top of CPython and true when
         # translating the interpreter
         if not objectmodel.we_are_translated():
@@ -72,23 +73,16 @@ class Interpreter(object):
 
                 print "%sStack=%s" % (
                     self._last_indent,
-                    repr(self.s_active_context().stack()),)
+                    repr(s_active_context.stack()),)
                 print "%sBytecode at %d (%d:%s):" % (
                     self._last_indent,
-                    self.s_active_context().pc(),
+                    s_active_context.pc(),
                     next, bytecodeimpl.__name__,)
 
-            bytecodeimpl(self.s_active_context(), self)
+            bytecodeimpl(s_active_context, self)
 
         else:
-            # this is a performance optimization: when translating the
-            # interpreter, the bytecode dispatching is not implemented as a
-            # list lookup and an indirect call but as a switch. The for loop
-            # below produces the switch (by being unrolled).
-            for code, bytecodeimpl in unrolling_bytecode_table:
-                if code == next:
-                    bytecodeimpl(self.s_active_context(), self)
-                    break
+            bytecode_dispatch_translated(self, s_active_context, next)
 
         
 class ReturnFromTopLevel(Exception):
@@ -549,4 +543,30 @@ def initialize_bytecode_table():
     return result
 
 BYTECODE_TABLE = initialize_bytecode_table()
-unrolling_bytecode_table = unroll.unrolling_iterable(enumerate(BYTECODE_TABLE))
+
+
+def make_bytecode_dispatch_translated():
+    # this is a performance optimization: when translating the
+    # interpreter, the bytecode dispatching is not implemented as a
+    # list lookup and an indirect call but as a switch.
+
+    code = ["def bytecode_dispatch_translated(self, context, bytecode):"]
+    prefix = ""
+    for entry in BYTECODE_RANGES:
+        if len(entry) == 2:
+            numbers = [entry[0]]
+        else:
+            numbers = range(entry[0], entry[1]+1)
+        cond = " or ".join(["bytecode == %s" % (i, )
+                                for i in numbers])
+        code.append("    %sif %s:" % (prefix, cond, ))
+        code.append("        context.%s(self)" % (entry[-1], ))
+        prefix = "el"
+    code.append("bytecode_dispatch_translated._always_inline_ = True")
+    source = py.code.Source("\n".join(code))
+    print source
+    miniglob = {}
+    exec source.compile() in miniglob
+    return miniglob["bytecode_dispatch_translated"]
+    
+bytecode_dispatch_translated = make_bytecode_dispatch_translated()
