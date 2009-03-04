@@ -1,5 +1,5 @@
 from pypy.jit.metainterp import codewriter
-
+import sys
 
 class SourceIterator:
 
@@ -134,7 +134,9 @@ def dump_bytecode(jitcode, file=None):
     if src.pc != len(jitcode.code):
         print >> file, 'WARNING: the pc column is bogus! fix dump.py!'
 
-def dump_call_history(call_history):
+def dump_call_history(call_history, outfile=None):
+    if outfile is None:
+        outfile = sys.stderr
     indent = 0
     for ev, code, args in call_history:
         if ev == 'enter':
@@ -142,7 +144,7 @@ def dump_call_history(call_history):
                 args_s = [str(a) for a in args]
             else:
                 args_s = []
-            print "%s%s(%s)" % (" "*indent, code.name, ','.join(args_s))
+            print >>outfile, "%s%s(%s)" % (" "*indent, code.name, ','.join(args_s))
             indent += 2
         elif ev.startswith('leave'):
             indent -= 2
