@@ -69,13 +69,10 @@ class AllocationStorage(object):
                 ad = ConstInt(ld.arraydescr)
                 if instnode.cursize == -1:
                     # fish fish fish
-                    res = cpu.execute_operation(rop.ARRAYLEN_GC,
-                                                [instnode.source, ad],
-                                                'int')
-                    size = res.getint()
-                else:
-                    size = instnode.cursize
-                self.list_allocations.append((ad, size))
+                    instnode.cursize=  cpu.execute_operation(rop.ARRAYLEN_GC,
+                                               [instnode.source, ad],
+                                                'int').getint()
+                self.list_allocations.append((ad, instnode.cursize))
                 res = (alloc_offset + 1) << 16
             else:
                 alloc_offset = len(self.allocations)
