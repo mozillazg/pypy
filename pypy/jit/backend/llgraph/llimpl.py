@@ -90,10 +90,13 @@ TYPES = {
     'ooisnot'         : (('ptr', 'ptr'), 'bool'),
     'setfield_gc'     : (('ptr', 'fieldname', 'intorptr'), None),
     'getfield_gc'     : (('ptr', 'fieldname'), 'intorptr'),
+    'getfield_gc_pure': (('ptr', 'fieldname'), 'intorptr'),
     'setfield_raw'    : (('ptr', 'fieldname', 'intorptr'), None),
     'getfield_raw'    : (('ptr', 'fieldname'), 'intorptr'),
+    'getfield_raw_pure': (('ptr', 'fieldname'), 'intorptr'),
     'setarrayitem_gc' : (('ptr', 'int', 'int', 'intorptr'), None),
     'getarrayitem_gc' : (('ptr', 'int', 'int'), 'intorptr'),
+    'getarrayitem_gc_pure' : (('ptr', 'int', 'int'), 'intorptr'),
     'arraylen_gc'     : (('ptr', 'int'), 'int'),
     'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
     'call__4'         : (('ptr', 'varargs'), 'int'),
@@ -723,11 +726,15 @@ class ExtendedLLFrame(LLFrame):
         ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
         return getattr(ptr, fieldname)
 
+    op_getfield_gc_pure = op_getfield_gc
+
     def op_getfield_raw(self, intval, fielddesc):
         STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
         ptr = llmemory.cast_adr_to_ptr(cast_int_to_adr(self.memocast, intval),
                                        lltype.Ptr(STRUCT))
         return getattr(ptr, fieldname)
+
+    op_getfield_raw_pure = op_getfield_raw
 
     def _cast_newvalue(self, desc, TYPE, newvalue):
         if desc % 2:
@@ -759,6 +766,8 @@ class ExtendedLLFrame(LLFrame):
     def op_getarrayitem_gc(self, array, arraydesc, index):
         array = array._obj.container
         return array.getitem(index)
+
+    op_getarrayitem_gc_pure = op_getarrayitem_gc
 
     def op_arraylen_gc(self, array, arraydesc):
         array = array._obj.container

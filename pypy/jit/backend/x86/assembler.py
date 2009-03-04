@@ -358,6 +358,8 @@ class Assembler386(object):
         else:
             raise NotImplementedError("getfield size = %d" % size)
 
+    genop_getfield_gc_pure = genop_getfield_gc
+
     def genop_getarrayitem_gc(self, op, arglocs, resloc):
         base_loc, ofs_loc, scale, ofs = arglocs
         assert isinstance(ofs, IMM32)
@@ -365,6 +367,7 @@ class Assembler386(object):
         self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value, scale.value))
 
     genop_getfield_raw = genop_getfield_gc
+    genop_getarrayitem_gc_pure = genop_getarrayitem_gc
 
     def genop_setfield_gc(self, op, arglocs):
         base_loc, ofs_loc, size_loc, value_loc = arglocs

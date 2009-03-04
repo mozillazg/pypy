@@ -828,6 +828,8 @@ class RegAlloc(object):
         return (ops0 + more_ops +
                 [Perform(op, [base_loc, ofs_loc, size_loc], result_loc)])
 
+    consider_getfield_gc_pure = consider_getfield_gc
+
     def consider_getarrayitem_gc(self, op, ignored):
         scale, ofs = self._unpack_arraydescr(op.args[1].getint())
         args = [op.args[0], op.args[2]]
@@ -840,7 +842,7 @@ class RegAlloc(object):
                          result_loc)])
 
     consider_getfield_raw = consider_getfield_gc
-    
+    consider_getarrayitem_gc_pure = consider_getarrayitem_gc
 
     def _consider_listop(self, op, ignored):
         return self._call(op, [self.loc(arg) for arg in op.args])
