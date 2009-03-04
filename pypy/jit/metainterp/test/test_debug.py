@@ -29,14 +29,15 @@ class TestDebug(LLJitMixin):
         res = self.meta_interp(f, [10], policy=StopAtXPolicy(x))
         assert res == 0
         ch = get_stats().loops[0]._call_history
-        cmp = [(i, getattr(j, 'name', 'gf')) for i, j, _ in ch]
+        cmp = [(i, getattr(j, 'name', None)) for i, j, _ in ch]
         assert cmp == [
             ('enter', 'f'),
             ('enter', 'g'),
             ('enter', 'z'),
+            ('call',  None),
             ('leave', 'z'),
             ('leave', 'g'),
-            ('guard_failure', 'gf'),
+            ('guard_failure', None),
             ('enter', 'f'),
             ('leave', 'f'),
             ]
