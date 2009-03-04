@@ -614,7 +614,7 @@ def func(interp, w_arg): # Squeak pops the arg and ignores it ... go figure
 
 @expose_primitive(CLONE, unwrap_spec=[object])
 def func(interp, w_arg):
-    return w_arg.clone()
+    return w_arg.clone(interp.space)
 
 #____________________________________________________________________________
 # Time Primitives

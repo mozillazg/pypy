@@ -99,7 +99,7 @@ class W_Object(object):
            False means swapping failed"""
         return False
 
-    def clone(self):
+    def clone(self, space):
         raise NotImplementedError
 
 class W_SmallInteger(W_Object):
@@ -139,7 +139,7 @@ class W_SmallInteger(W_Object):
     def __hash__(self):
         return self.value
 
-    def clone(self):
+    def clone(self, space):
         return self
 
 class W_Float(W_Object):
@@ -177,7 +177,7 @@ class W_Float(W_Object):
     def __hash__(self):
         return hash(self.value)
 
-    def clone(self):
+    def clone(self, space):
         return self
 
 class W_AbstractObjectWithIdentityHash(W_Object):
@@ -352,9 +352,9 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         W_AbstractObjectWithClassReference._become(self, w_other)
         return True
         
-    def clone(self):
+    def clone(self, space):
         w_result = W_PointersObject(self.w_class, len(self._vars))
-        w_result._vars[:] = self._vars
+        w_result._vars = [self.fetch(space, i) for i in range(len(self._vars))]
         return w_result
 
 class W_BytesObject(W_AbstractObjectWithClassReference):
@@ -401,9 +401,9 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
             return False
         return self.bytes == other.bytes
 
-    def clone(self):
+    def clone(self, space):
         w_result = W_BytesObject(self.w_class, len(self.bytes))
-        w_result.bytes[:] = self.bytes
+        w_result.bytes = list(self.bytes)
         return w_result
 
 class W_WordsObject(W_AbstractObjectWithClassReference):
@@ -432,9 +432,9 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self.words, list))
 
-    def clone(self):
+    def clone(self, space):
         w_result = W_WordsObject(self.w_class, len(self.words))
-        w_result.words[:] = self.words
+        w_result.words = list(self.words)
         return w_result
 
 # XXX Shouldn't compiledmethod have class reference for subclassed compiled
