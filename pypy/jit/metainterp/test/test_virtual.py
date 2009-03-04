@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rpython.lltypesystem import lltype, rclass
@@ -169,23 +169,25 @@ class VirtualTests:
         assert res == 9
 
     def test_immutable_constant_getfield(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'i'])
 
         class Stuff(object):
             _immutable_ = True
             def __init__(self, x):
                 self.x = x
+        
+        stuff = [Stuff(1), Stuff(3)]
 
-        def f(n):
-            stuff = Stuff(1)
+        def f(n, i):
             while n > 0:
-                myjitdriver.can_enter_jit(n=n)
-                myjitdriver.jit_merge_point(n=n)
-                n -= stuff.x
+                myjitdriver.can_enter_jit(n=n, i=i)
+                myjitdriver.jit_merge_point(n=n, i=i)
+                i = hint(i, promote=True)
+                n -= stuff[i].x
             return n
 
-        res = self.meta_interp(f, [10])
-        assert n == 0
+        res = self.meta_interp(f, [10, 0])
+        assert res == 0
         self.check_loops(getfield_gc=0)
 
 ##class TestOOtype(VirtualTests, OOJitMixin):
