@@ -973,6 +973,13 @@ def do_setfield_gc_int(struct, fielddesc, newvalue, memocast):
     newvalue = cast_from_int(FIELDTYPE, newvalue, memocast)
     setattr(ptr, fieldname, newvalue)
 
+def do_setfield_gc_ptr(struct, fielddesc, newvalue):
+    STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
+    ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
+    FIELDTYPE = getattr(STRUCT, fieldname)
+    newvalue = cast_from_ptr(FIELDTYPE, newvalue)
+    setattr(ptr, fieldname, newvalue)
+
 # ____________________________________________________________
 
 
@@ -1068,3 +1075,4 @@ setannotation(do_new_array, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_setarrayitem_gc_int, annmodel.s_None)
 setannotation(do_setarrayitem_gc_ptr, annmodel.s_None)
 setannotation(do_setfield_gc_int, annmodel.s_None)
+setannotation(do_setfield_gc_ptr, annmodel.s_None)

@@ -199,6 +199,12 @@ class TestLLGraph:
              BoxInt(descrfld_x)])
         assert x.value == ord('Z')
         #
+        cpu.do_setfield_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
+             BoxInt(descrfld_x),
+             BoxInt(ord('4'))])
+        assert s.x == '4'
+        #
         descrfld_y = cpu.fielddescrof(S, 'y')
         s.y = a
         x = cpu.do_getfield_gc(
@@ -206,6 +212,13 @@ class TestLLGraph:
              BoxInt(descrfld_y)])
         assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
+        #
+        s.y = lltype.nullptr(A)
+        cpu.do_setfield_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
+             BoxInt(descrfld_y),
+             x])
+        assert s.y == a
         #
         RS = lltype.Struct('S', ('x', lltype.Char), ('y', lltype.Ptr(A)))
         descrfld_rx = cpu.fielddescrof(RS, 'x')
