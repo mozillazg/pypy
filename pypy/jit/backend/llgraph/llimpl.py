@@ -922,6 +922,18 @@ def do_getfield_gc_ptr(struct, fielddesc):
     x = getattr(ptr, fieldname)
     return cast_to_ptr(x)
 
+def do_getfield_raw_int(struct, fielddesc, memocast):
+    STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
+    ptr = llmemory.cast_adr_to_ptr(struct, lltype.Ptr(STRUCT))
+    x = getattr(ptr, fieldname)
+    return cast_to_int(x, memocast)
+
+def do_getfield_raw_ptr(struct, fielddesc):
+    STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
+    ptr = llmemory.cast_adr_to_ptr(struct, lltype.Ptr(STRUCT))
+    x = getattr(ptr, fieldname)
+    return cast_to_ptr(x)
+
 # ____________________________________________________________
 
 
@@ -1010,3 +1022,5 @@ setannotation(do_getarrayitem_gc_int, annmodel.SomeInteger())
 setannotation(do_getarrayitem_gc_ptr, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_getfield_gc_int, annmodel.SomeInteger())
 setannotation(do_getfield_gc_ptr, annmodel.SomePtr(llmemory.GCREF))
+setannotation(do_getfield_raw_int, annmodel.SomeInteger())
+setannotation(do_getfield_raw_ptr, annmodel.SomePtr(llmemory.GCREF))

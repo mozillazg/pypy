@@ -206,3 +206,20 @@ class TestLLGraph:
              BoxInt(descrfld_y)])
         assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
+        #
+        RS = lltype.Struct('S', ('x', lltype.Char), ('y', lltype.Ptr(A)))
+        descrfld_rx = cpu.fielddescrof(RS, 'x')
+        rs = lltype.malloc(RS, immortal=True)
+        rs.x = '?'
+        x = cpu.do_getfield_raw(
+            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))),
+             BoxInt(descrfld_rx)])
+        assert x.value == ord('?')
+        #
+        descrfld_ry = cpu.fielddescrof(RS, 'y')
+        rs.y = a
+        x = cpu.do_getfield_raw(
+            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))),
+             BoxInt(descrfld_ry)])
+        assert isinstance(x, BoxPtr)
+        assert x.getptr(lltype.Ptr(A)) == a
