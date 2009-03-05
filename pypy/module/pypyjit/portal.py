@@ -80,7 +80,7 @@ class PyPyJitPolicy(ManualJitPolicy):
         import pypy
 
         # --------------------
-        for binop in 'ADD SUBTRACT MULTIPLY AND OR XOR'.split():
+        for binop in 'MODULO ADD SUBTRACT MULTIPLY AND OR XOR'.split():
             self.seebinary(binop)
         for cmpname in 'lt le eq ne ge gt'.split():
             self.seecmp(cmpname)
@@ -108,6 +108,10 @@ class PyPyJitPolicy(ManualJitPolicy):
                      pypy.objspace.std.boolobject.nonzero__Bool)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
                      pypy.objspace.std.boolobject.nonzero__Bool)
+        self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
+                     pypy.objspace.std.intobject.nonzero__Int)
+        self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
+                     pypy.objspace.std.intobject.nonzero__Int)
 
         #
         #self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
