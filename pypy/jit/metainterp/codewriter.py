@@ -162,7 +162,7 @@ class CodeWriter(object):
 
 
 class BytecodeMaker(object):
-    debug = True
+    debug = False
     
     def __init__(self, codewriter, graph, portal):
         self.codewriter = codewriter
@@ -197,6 +197,8 @@ class BytecodeMaker(object):
         self.bytecode._labelpos = labelpos
         if self.debug:
             self.bytecode.dump()
+        else:
+            print repr(self.bytecode)
 
     def const_position(self, constvalue):
         """Generate a constant of the given value.
@@ -465,6 +467,10 @@ class BytecodeMaker(object):
 
     def serialize_op_int_add_nonneg_ovf(self, op):
         self.default_serialize_op(op, 'int_add_ovf')
+
+    def serialize_op_int_mod_ovf_zer(self, op):
+        # XXX handle ZeroDivisionError
+        self.default_serialize_op(op, 'int_mod_ovf')
 
     def serialize_op_hint(self, op):
         hints = op.args[1].value
