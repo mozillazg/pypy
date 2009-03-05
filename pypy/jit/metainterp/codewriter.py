@@ -5,7 +5,7 @@ from pypy.objspace.flow.model import Variable, Constant, Link, c_last_exception
 from pypy.rlib import objectmodel
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import _we_are_jitted
-from pypy.jit.metainterp.history import Const, getkind, getkind_num
+from pypy.jit.metainterp.history import Const, getkind
 from pypy.jit.metainterp import heaptracker, support, history
 
 import py
@@ -662,18 +662,23 @@ class BytecodeMaker(object):
 
     def handle_residual_call(self, op):
         self.minimize_variables()
-        self.emit('residual_call_%s' % getkind_num(self.cpu,
-                                                   op.result.concretetype))
-        self.emit_varargs([x for x in op.args
-                             if x.concretetype is not lltype.Void])
+        args = [x for x in op.args[1:] if x.concretetype is not lltype.Void]
+        argtypes = [v.concretetype for v in args]
+        resulttype = op.result.concretetype
+        calldescr = self.cpu.calldescrof(argtypes, resulttype)
+        self.emit('residual_call')
+        self.emit(self.var_position(op.args[0]))
+        self.emit(self.const_position(calldescr))
+        self.emit_varargs(args)
         self.register_var(op.result)
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
-        ll_args = [v.concretetype for v in args]
+        argtypes = [v.concretetype for v in args]
+        resulttype = op.result.concretetype
         c_func, TP = support.builtin_func_for_spec(self.codewriter.rtyper,
-                                                   oopspec_name, ll_args,
-                                                   op.result.concretetype)
+                                                   oopspec_name, argtypes,
+                                                   resulttype)
         if self.codewriter.metainterp.options.listops:
             if self.handle_list_call(op, oopspec_name, args, TP):
                 return
@@ -704,11 +709,14 @@ class BytecodeMaker(object):
 ##                self._eventualy_builtin(op.result, False)
 ##            return
         if oopspec_name.endswith('_foldable'):
-            opname = 'green_call_%s'
+            opname = 'residual_call_pure'
         else:
-            opname = 'residual_call_%s'
-        self.emit(opname % getkind_num(self.cpu, op.result.concretetype))
-        self.emit_varargs([c_func] + args)
+            opname = 'residual_call'
+        calldescr = self.cpu.calldescrof(argtypes, resulttype)
+        self.emit(opname)
+        self.emit(self.var_position(c_func))
+        self.emit(self.const_position(calldescr))
+        self.emit_varargs(args)
         self.register_var(op.result)
 
     def handle_list_call(self, op, oopspec_name, args, TP):

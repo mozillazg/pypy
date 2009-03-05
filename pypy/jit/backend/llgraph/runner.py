@@ -274,7 +274,19 @@ class CPU(object):
         return size*2 + bit
 
     @staticmethod
+    def calldescrof(ARGS, RESULT):
+        if RESULT is lltype.Void:
+            return -1
+        token = history.getkind(RESULT)
+        if token == 'ptr':
+            return 1
+        else:
+            return 0
+
+    @staticmethod
     def typefor(fielddesc):
+        if fielddesc == -1:
+            return 'void'
         if fielddesc % 2:
             return 'ptr'
         return 'int'

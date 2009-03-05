@@ -44,11 +44,11 @@ class SendTests:
         res = self.meta_interp(f, [1], policy=StopAtXPolicy(externfn))
         assert res == 2
         if self.type_system == 'ootype':
-            self.check_loops(call_ptr=1, builtin=1) # 'len' remains
+            self.check_loops(call=1, builtin=1) # 'len' remains
         else:
             # 'len' becomes a getfield('num_items') for now in lltype,
             # which is itself encoded as a 'getfield_gc'
-            self.check_loops(call_ptr=1, getfield_gc=1)
+            self.check_loops(call=1, getfield_gc=1)
 
     def test_send_to_single_target_method(self):
         myjitdriver = JitDriver(greens = [], reds = ['i', 'counter'])
@@ -72,7 +72,7 @@ class SendTests:
         res = self.meta_interp(f, [1], policy=StopAtXPolicy(externfn),
                                backendopt=True)
         assert res == 43
-        self.check_loops({'call_ptr': 1, 'guard_no_exception': 1,
+        self.check_loops({'call': 1, 'guard_no_exception': 1,
                           'getfield_gc': 1,
                           'int_add': 1, 'merge_point' : 1,
                           'jump': 1, 'int_gt' : 1, 'guard_true' : 1,

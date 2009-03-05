@@ -413,7 +413,7 @@ class ImplicitVirtualizableTests:
 
         res = self.meta_interp(f, [53], exceptions=False)
         assert res == -6
-        self.check_loops(getfield_gc=0, setfield_gc=0, call__4=0)
+        self.check_loops(getfield_gc=0, setfield_gc=0, call=0)
 
     def test_single_list_implicit(self):
         py.test.skip("in-progress")
@@ -430,7 +430,7 @@ class ImplicitVirtualizableTests:
 
         res = self.meta_interp(f, [53], exceptions=False)
         assert res == -17
-        self.check_loops(getfield_gc=0, setfield_gc=0, call__4=0)
+        self.check_loops(getfield_gc=0, setfield_gc=0, call=0)
 
 
 ##class TestOOtype(ExplicitVirtualizableTests,
