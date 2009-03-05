@@ -384,6 +384,17 @@ class CPU(object):
             llimpl.do_setarrayitem_gc_int(array, index, newvalue,
                                           self.memo_cast)
 
+    def do_setfield_gc(self, args):
+        struct = args[0].getptr_base()
+        fielddescr = args[1].getint()
+        if self.typefor(fielddescr) == 'ptr':
+            newvalue = args[2].getptr_base()
+            llimpl.do_setfield_gc_ptr(struct, fielddescr, newvalue)
+        else:
+            newvalue = args[2].getint()
+            llimpl.do_setfield_gc_int(struct, fielddescr, newvalue,
+                                      self.memo_cast)
+
 
 class GuardFailed(object):
     returns = False
