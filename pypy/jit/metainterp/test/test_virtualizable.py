@@ -271,7 +271,8 @@ class ImplicitVirtualizableTests:
         assert res == f(20)
 
     def test_virtualizable_hierarchy(self):
-        jitdriver = JitDriver(greens = [], reds = ['frame', 'n'])
+        jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
+                              virtualizables = ['frame'])
 
         class BaseFrame(object):
             _virtualizable2_ = True
@@ -301,6 +302,45 @@ class ImplicitVirtualizableTests:
         res = self.meta_interp(f, [20])
         assert res == f(20)
         self.check_loops(getfield_gc=0, setfield_gc=0)
+
+    def test_non_virtual_on_always_virtual(self):
+        jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
+                              virtualizables = ['frame'])
+
+        class Frame(object):
+            _virtualizable2_ = True
+
+            _always_virtual_ = ['node']
+
+            def __init__(self, node):
+                self.node = node
+
+        class Node(object):
+            def __init__(self, node):
+                self.node = node
+
+        class SubNode(object):
+            def __init__(self, x):
+                self.x = x
+
+        def g(node):
+            pass
+
+        def f(n):
+            frame = Frame(Node(SubNode(1)))
+            
+            while n > 0:
+                jitdriver.can_enter_jit(frame=frame, n=n)
+                jitdriver.jit_merge_point(frame=frame, n=n)
+                node = frame.node
+                subnode = node.node
+                g(subnode)
+                frame.node = Node(SubNode(subnode.x + 1))
+                n -= 1
+            return n
+
+        res = self.meta_interp(f, [10], policy=StopAtXPolicy(g))
+        assert res == 0
 
     def test_external_read(self):
         py.test.skip("Fails")
