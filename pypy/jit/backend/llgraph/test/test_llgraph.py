@@ -1,5 +1,5 @@
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rclass
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rlib.unroll import unrolling_iterable
 
@@ -229,3 +229,11 @@ class TestLLGraph:
             [BoxInt(descrsize)])
         assert isinstance(x, BoxPtr)
         x.getptr(lltype.Ptr(S))
+        #
+        descrsize2 = cpu.sizeof(rclass.OBJECT)
+        vtable2 = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
+        x = cpu.do_new_with_vtable(
+            [BoxInt(descrsize2),
+             BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable2)))])
+        assert isinstance(x, BoxPtr)
+        assert x.getptr(rclass.OBJECTPTR).typeptr == vtable2

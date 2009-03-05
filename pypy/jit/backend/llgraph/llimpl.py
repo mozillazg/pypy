@@ -460,11 +460,21 @@ def cast_to_int(x, memocast):
         return cast_adr_to_int(memocast, x)
     return lltype.cast_primitive(lltype.Signed, x)
 
-def cast_to_ptr(x):
-    if isinstance(lltype.typeOf(x), lltype.Ptr):
-        return lltype.cast_opaque_ptr(llmemory.GCREF, x)
+def cast_from_int(TYPE, x, memocast):
+    if isinstance(TYPE, lltype.Ptr):
+        assert TYPE.TO._gckind == 'raw'
+        return llmemory.cast_adr_to_ptr(cast_int_to_adr(memocast, x), TYPE)
+    elif TYPE == llmemory.Address:
+        return cast_int_to_adr(memocast, x)
     else:
-        return x
+        return lltype.cast_primitive(TYPE, x)
+
+def cast_to_ptr(x):
+    assert isinstance(lltype.typeOf(x), lltype.Ptr)
+    return lltype.cast_opaque_ptr(llmemory.GCREF, x)
+
+def cast_from_ptr(TYPE, x):
+    return lltype.cast_opaque_ptr(TYPE, x)
 
 
 def new_frame(memocast):
@@ -939,6 +949,13 @@ def do_new(size):
     x = lltype.malloc(TYPE)
     return cast_to_ptr(x)
 
+def do_setfield_gc_int(struct, fielddesc, newvalue, memocast):
+    STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
+    ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
+    FIELDTYPE = getattr(STRUCT, fieldname)
+    newvalue = cast_from_int(FIELDTYPE, newvalue, memocast)
+    setattr(ptr, fieldname, newvalue)
+
 # ____________________________________________________________
 
 
@@ -1030,3 +1047,4 @@ setannotation(do_getfield_gc_ptr, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_getfield_raw_int, annmodel.SomeInteger())
 setannotation(do_getfield_raw_ptr, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_new, annmodel.SomePtr(llmemory.GCREF))
+setannotation(do_setfield_gc_int, annmodel.s_None)

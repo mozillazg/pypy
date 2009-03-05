@@ -2,7 +2,7 @@
 Minimal-API wrapper around the llinterpreter to run operations.
 """
 
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend.llgraph import llimpl, symbolic
@@ -29,6 +29,7 @@ class CPU(object):
         llimpl._rtyper = self.rtyper
         if translate_support_code:
             self.mixlevelann = annmixlevel
+        self.fielddescrof_vtable = self.fielddescrof(rclass.OBJECT, 'typeptr')
 
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp    # to handle guard failures
@@ -357,6 +358,14 @@ class CPU(object):
     def do_new(self, args):
         size = args[0].getint()
         return history.BoxPtr(llimpl.do_new(size))
+
+    def do_new_with_vtable(self, args):
+        size = args[0].getint()
+        vtable = args[1].getint()
+        result = llimpl.do_new(size)
+        llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable, vtable,
+                                  self.memo_cast)
+        return history.BoxPtr(result)
 
 
 class GuardFailed(object):
