@@ -190,6 +190,29 @@ class VirtualTests:
         assert res == 0
         self.check_loops(getfield_gc=0)
 
+    def test_escapes(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
+
+        class Node(object):
+            def __init__(self, x):
+                self.x = x
+
+        def g(x):
+            pass
+
+        def f(n):
+            node = Node(3)
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, node=node)
+                myjitdriver.jit_merge_point(n=n, node=node)
+                g(node)
+                node = Node(3)
+                n -= 1
+            return node.x
+
+        res = self.meta_interp(f, [10], policy=StopAtXPolicy(g))
+        assert res == 3
+
 ##class TestOOtype(VirtualTests, OOJitMixin):
 ##    _new = staticmethod(ootype.new)
 
