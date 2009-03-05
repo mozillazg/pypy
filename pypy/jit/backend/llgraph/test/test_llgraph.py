@@ -1,5 +1,5 @@
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rlib.unroll import unrolling_iterable
 
@@ -156,9 +156,20 @@ class TestLLGraph:
 
     def test_do_operations(self):
         cpu = CPU(None)
+        #
         A = lltype.GcArray(lltype.Signed)
         a = lltype.malloc(A, 5)
         descrbox = ConstInt(cpu.arraydescrof(A))
         x = cpu.do_arraylen_gc(
             [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox])
         assert x.value == 5
+        #
+        s = rstr.mallocstr(6)
+        x = cpu.do_strlen(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s))])
+        assert x.value == 6
+        #
+        s.chars[3] = 'X'
+        x = cpu.do_strgetitem(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)), BoxInt(3)])
+        assert x.value == ord('X')

@@ -887,6 +887,14 @@ def do_arraylen_gc(array):
     array = array._obj.container
     return array.getlength()
 
+def do_strlen(string):
+    str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
+    return len(str.chars)
+
+def do_strgetitem(string, index):
+    str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
+    return ord(str.chars[index])
+
 # ____________________________________________________________
 
 
@@ -969,3 +977,5 @@ setannotation(cast_adr_to_int, annmodel.SomeInteger())
 setannotation(cast_int_to_adr, annmodel.SomeAddress())
 
 setannotation(do_arraylen_gc, annmodel.SomeInteger())
+setannotation(do_strlen, annmodel.SomeInteger())
+setannotation(do_strgetitem, annmodel.SomeInteger())

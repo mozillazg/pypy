@@ -313,6 +313,15 @@ class CPU(object):
         array = args[0].getptr_base()
         return history.BoxInt(llimpl.do_arraylen_gc(array))
 
+    def do_strlen(cpu, args):
+        string = args[0].getptr_base()
+        return history.BoxInt(llimpl.do_strlen(string))
+
+    def do_strgetitem(cpu, args):
+        string = args[0].getptr_base()
+        index = args[1].getint()
+        return history.BoxInt(llimpl.do_strgetitem(string, index))
+
 
 class GuardFailed(object):
     returns = False
