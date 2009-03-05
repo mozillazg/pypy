@@ -177,6 +177,7 @@ class TestLLGraph:
         x = cpu.do_getarrayitem_gc(
             [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), descrbox_B,
              BoxInt(3)])
+        assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
         #
         s = rstr.mallocstr(6)
@@ -188,3 +189,20 @@ class TestLLGraph:
         x = cpu.do_strgetitem(
             [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)), BoxInt(3)])
         assert x.value == ord('X')
+        #
+        S = lltype.GcStruct('S', ('x', lltype.Char), ('y', lltype.Ptr(A)))
+        descrfld_x = cpu.fielddescrof(S, 'x')
+        s = lltype.malloc(S)
+        s.x = 'Z'
+        x = cpu.do_getfield_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
+             BoxInt(descrfld_x)])
+        assert x.value == ord('Z')
+        #
+        descrfld_y = cpu.fielddescrof(S, 'y')
+        s.y = a
+        x = cpu.do_getfield_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
+             BoxInt(descrfld_y)])
+        assert isinstance(x, BoxPtr)
+        assert x.getptr(lltype.Ptr(A)) == a

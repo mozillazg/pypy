@@ -910,6 +910,18 @@ def do_getarrayitem_gc_ptr(array, index):
     array = array._obj.container
     return cast_to_ptr(array.getitem(index))
 
+def do_getfield_gc_int(struct, fielddesc, memocast):
+    STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
+    ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
+    x = getattr(ptr, fieldname)
+    return cast_to_int(x, memocast)
+
+def do_getfield_gc_ptr(struct, fielddesc):
+    STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
+    ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
+    x = getattr(ptr, fieldname)
+    return cast_to_ptr(x)
+
 # ____________________________________________________________
 
 
@@ -996,3 +1008,5 @@ setannotation(do_strlen, annmodel.SomeInteger())
 setannotation(do_strgetitem, annmodel.SomeInteger())
 setannotation(do_getarrayitem_gc_int, annmodel.SomeInteger())
 setannotation(do_getarrayitem_gc_ptr, annmodel.SomePtr(llmemory.GCREF))
+setannotation(do_getfield_gc_int, annmodel.SomeInteger())
+setannotation(do_getfield_gc_ptr, annmodel.SomePtr(llmemory.GCREF))

@@ -332,6 +332,17 @@ class CPU(object):
             return history.BoxInt(llimpl.do_getarrayitem_gc_int(array, index,
                                                                self.memo_cast))
 
+    def do_getfield_gc(self, args):
+        struct = args[0].getptr_base()
+        fielddescr = args[1].getint()
+        if self.typefor(fielddescr) == 'ptr':
+            return history.BoxPtr(llimpl.do_getfield_gc_ptr(struct,
+                                                            fielddescr))
+        else:
+            return history.BoxInt(llimpl.do_getfield_gc_int(struct,
+                                                            fielddescr,
+                                                            self.memo_cast))
+
 
 class GuardFailed(object):
     returns = False
