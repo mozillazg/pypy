@@ -343,6 +343,17 @@ class CPU(object):
                                                             fielddescr,
                                                             self.memo_cast))
 
+    def do_getfield_raw(self, args):
+        struct = self.cast_int_to_adr(args[0].getint())
+        fielddescr = args[1].getint()
+        if self.typefor(fielddescr) == 'ptr':
+            return history.BoxPtr(llimpl.do_getfield_raw_ptr(struct,
+                                                             fielddescr))
+        else:
+            return history.BoxInt(llimpl.do_getfield_raw_int(struct,
+                                                             fielddescr,
+                                                             self.memo_cast))
+
 
 class GuardFailed(object):
     returns = False
