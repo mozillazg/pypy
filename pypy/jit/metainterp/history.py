@@ -324,12 +324,12 @@ class Graph(object):
         op = operations[0]
         assert op.opnum in (rop.MERGE_POINT, rop.CATCH)
         seen = dict.fromkeys(op.args)
-        for op in operations[1:]:
+        for op in operations:
             for box in op.args:
                 if isinstance(box, Box):
                     assert box in seen
                 elif isinstance(box, Const):
-                    assert op.opnum not in (rop.MERGE_POINT, rop.CATCH), (
+                    assert op.opnum != rop.MERGE_POINT, (
                         "no Constant arguments allowed in: %s" % (op,))
             box = op.result
             if box is not None:
@@ -348,48 +348,20 @@ class Graph(object):
 class Matcher(object):
     pass
 
-
 class RunningMatcher(Matcher):
-
     def __init__(self, cpu):
         self.cpu = cpu
         self.operations = []
 
-    def execute_and_record(self, opnum, argboxes, result_type):
-        # collect arguments
-        canfold = False
-        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
-            for box in argboxes:
-                if not isinstance(box, Const):
-                    break
-            else:
-                canfold = True
-        # really run this operation
-        resbox = self.cpu.execute_operation(opnum, argboxes, result_type)
-        # collect the result(s)
-        if canfold:
-            resbox = resbox.constbox()
-        else:
-            self.record(opnum, argboxes, resbox)
-        return resbox
-
+class History(RunningMatcher):
     def record(self, opnum, argboxes, resbox):
         op = ResOperation(opnum, argboxes, resbox)
         self.operations.append(op)
         return op
 
-    def generate_anything_since(self, old_index):
-        return len(self.operations) > old_index
-
-class History(RunningMatcher):
-    pass
-
 class BlackHole(RunningMatcher):
-    def record(self, step, argboxes, resbox):
+    def record(self, opnum, argboxes, resbox):
         return None
-
-    def generate_anything_since(self, old_index):
-        return True
 
 def mp_eq(greenkey1, greenkey2):
     assert len(greenkey1) == len(greenkey2)

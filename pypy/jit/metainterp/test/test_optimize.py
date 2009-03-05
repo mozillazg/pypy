@@ -319,8 +319,12 @@ def test_E_optimize_loop():
     assert guard_op.storage_info.setfields == [(0, E.ofs_value, -2)]
 
 def test_E_rebuild_after_failure():
-    class FakeHistory(object):
+    class FakeMetaInterp(object):
         def __init__(self):
+            self.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr):
+                                E.size_of_node}
+            self.cpu = cpu
+            self.cpu.translate_support_code = False
             self.ops = []
         
         def execute_and_record(self, opnum, args, res_type):
@@ -329,14 +333,6 @@ def test_E_rebuild_after_failure():
                 return 'allocated'
             else:
                 return None
-
-    class FakeMetaInterp(object):
-        def __init__(self):
-            self.history = FakeHistory()
-            self.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr):
-                                E.size_of_node}
-            self.cpu = cpu
-            self.cpu.translate_support_code = False
     
     spec = PerfectSpecializer(Loop(E.ops))
     spec.find_nodes()
@@ -353,7 +349,7 @@ def test_E_rebuild_after_failure():
        (rop.NEW_WITH_VTABLE, [E.sizebox, ConstInt(vt)]),
        (rop.SETFIELD_GC, ['allocated', ConstInt(E.ofs_value), v_v_b])
        ]
-    assert expected == fake_metainterp.history.ops
+    assert expected == fake_metainterp.ops
     assert newboxes == [v_sum_b, 'allocated']
 
 # ____________________________________________________________

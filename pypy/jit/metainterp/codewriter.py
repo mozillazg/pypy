@@ -709,7 +709,7 @@ class BytecodeMaker(object):
 ##                self._eventualy_builtin(op.result, False)
 ##            return
         if oopspec_name.endswith('_foldable'):
-            opname = 'residual_call_pure'
+            opname = 'residual_call_pure'  # XXX not for possibly-raising calls
         else:
             opname = 'residual_call'
         calldescr = self.cpu.calldescrof(argtypes, resulttype)
