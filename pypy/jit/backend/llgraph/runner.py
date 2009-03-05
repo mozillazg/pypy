@@ -395,6 +395,17 @@ class CPU(object):
             llimpl.do_setfield_gc_int(struct, fielddescr, newvalue,
                                       self.memo_cast)
 
+    def do_setfield_raw(self, args):
+        struct = self.cast_int_to_adr(args[0].getint())
+        fielddescr = args[1].getint()
+        if self.typefor(fielddescr) == 'ptr':
+            newvalue = args[2].getptr_base()
+            llimpl.do_setfield_raw_ptr(struct, fielddescr, newvalue)
+        else:
+            newvalue = args[2].getint()
+            llimpl.do_setfield_raw_int(struct, fielddescr, newvalue,
+                                       self.memo_cast)
+
 
 class GuardFailed(object):
     returns = False
