@@ -31,9 +31,6 @@ class PyPyJitPolicy(ManualJitPolicy):
         return super(PyPyJitPolicy, self).look_inside_function(func)
 
     def seebinary(self, opname):
-        def fc(o):
-            return [i[1] for i in find_calls_from(self.translator, o)]
-
         name2 = name1 = opname[:3].lower()
         if name1 in ('and', 'or'):
             name1 += '_'
@@ -78,6 +75,9 @@ class PyPyJitPolicy(ManualJitPolicy):
 
     def fill_seen_graphs(self):
         import pypy
+        def fc(o):
+            return [i[1] for i in find_calls_from(self.translator, o)]
+
 
         # --------------------
         for binop in 'MODULO ADD SUBTRACT MULTIPLY AND OR XOR'.split():
@@ -112,7 +112,10 @@ class PyPyJitPolicy(ManualJitPolicy):
                      pypy.objspace.std.intobject.nonzero__Int)
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_FALSE,
                      pypy.objspace.std.intobject.nonzero__Int)
-
+        self.seepath(pypy.interpreter.pyframe.PyFrame.FOR_ITER,
+                     pypy.objspace.descroperation.DescrOperation.next,
+                     pypy.objspace.std.rangeobject.next__RangeIter)
+#                     pypy.objspace.std.rangeobject.)
         #
         #self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
         #             pypy.interpreter.function.Function.funccall_valuestack)
