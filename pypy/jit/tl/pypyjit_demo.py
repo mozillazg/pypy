@@ -21,7 +21,7 @@ def f():
     s = 0
     for i in range(100):
         # XXX implement inplace_add method for ints
-        s += i
+        s = s + i
     print s        # should print 102
 
 f()
