@@ -46,7 +46,9 @@ def readfile(filename):
 def entry_point():
     source = readfile('pypyjit_demo.py')
     ec = space.getexecutioncontext()
+    print "compiling..."
     code = ec.compiler.compile(source, '?', 'exec', 0)
+    print "compiled"
     code.exec_code(space, w_dict, w_dict)
 
 
@@ -76,7 +78,13 @@ def test_run_translation():
             pass
         print '-' * 79
         print 'Child process finished, press Enter to restart...'
-        raw_input()
+        try:
+            raw_input()
+        except KeyboardInterrupt:
+            x = raw_input("are you sure? (y/n)")
+            if x == 'y':
+                raise
+            # otherwise continue
 
     from pypy.jit.tl.pypyjit_child import run_child
     run_child(globals(), locals())
