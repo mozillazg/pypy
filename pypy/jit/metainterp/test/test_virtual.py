@@ -191,24 +191,29 @@ class VirtualTests:
         self.check_loops(getfield_gc=0)
 
     def test_escapes(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'parent'])
 
         class Node(object):
             def __init__(self, x):
                 self.x = x
 
+        class Parent(object):
+            def __init__(self, node):
+                self.node = node
+
         def g(x):
             pass
 
         def f(n):
-            node = Node(3)
+            parent = Parent(Node(3))
             while n > 0:
-                myjitdriver.can_enter_jit(n=n, node=node)
-                myjitdriver.jit_merge_point(n=n, node=node)
+                myjitdriver.can_enter_jit(n=n, parent=parent)
+                myjitdriver.jit_merge_point(n=n, parent=parent)
+                node = parent.node
                 g(node)
-                node = Node(3)
+                parent = Parent(Node(node.x))
                 n -= 1
-            return node.x
+            return parent.node.x
 
         res = self.meta_interp(f, [10], policy=StopAtXPolicy(g))
         assert res == 3
