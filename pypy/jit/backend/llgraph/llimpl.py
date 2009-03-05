@@ -68,6 +68,7 @@ TYPES = {
     'int_neg'         : (('int',), 'int'),
     'int_invert'      : (('int',), 'int'),
     'int_add_ovf'     : (('int', 'int'), 'int'),
+    'int_mod_ovf'     : (('int', 'int'), 'int'),
     'int_sub_ovf'     : (('int', 'int'), 'int'),
     'int_mul_ovf'     : (('int', 'int'), 'int'),
     'int_neg_ovf'     : (('int',), 'int'),
@@ -866,7 +867,7 @@ class ExtendedLLFrame(LLFrame):
         return res
 
     for _opname in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
-                    'int_neg_ovf',
+                    'int_neg_ovf', 'int_mod_ovf',
                     ]:
         exec py.code.Source('''
             def op_%s(self, *args):

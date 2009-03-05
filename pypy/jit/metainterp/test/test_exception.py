@@ -309,6 +309,17 @@ class ExceptionTests:
         res = self.meta_interp(f, [1])
         assert res == expected
 
+    def test_int_mod_ovf_zer(self):
+        def f(x, y):
+            try:
+                return ovfcheck(x%y)
+            except ZeroDivisionError:
+                return 1
+            except OverflowError:
+                return 2
+
+        res = self.interp_operations(f, [1, 2])
+        assert res == 1
 
 class MyError(Exception):
     def __init__(self, n):
