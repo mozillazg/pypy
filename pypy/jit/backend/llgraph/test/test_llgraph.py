@@ -243,3 +243,12 @@ class TestLLGraph:
             [BoxInt(arraydescr), BoxInt(7)])
         assert isinstance(x, BoxPtr)
         assert len(x.getptr(lltype.Ptr(A))) == 7
+        #
+        cpu.do_setarrayitem_gc(
+            [x, descrbox_A, BoxInt(5), BoxInt(ord('*'))])
+        assert x.getptr(lltype.Ptr(A))[5] == '*'
+        #
+        cpu.do_setarrayitem_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), descrbox_B,
+             BoxInt(1), x])
+        assert b[1] == x.getptr(lltype.Ptr(A))
