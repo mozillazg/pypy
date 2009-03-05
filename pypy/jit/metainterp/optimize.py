@@ -129,31 +129,34 @@ class InstanceNode(object):
     def is_zero(self):
         return self.const and not self.source.getptr_base()
 
-    def escape_if_startbox(self, memo):
+    def escape_if_startbox(self, memo, escape_self=True):
         if self in memo:
             return
         memo[self] = None
-        if self.startbox:
+        if self.startbox and escape_self:
             self.escaped = True
         if not self.virtualized:
             for node in self.curfields.values():
                 node.escape_if_startbox(memo)
         else:
             for key, node in self.curfields.items():
-                if self.vdesc and key not in self.vdesc.virtuals:
-                    node.escape_if_startbox(memo)
+                esc_self = self.vdesc and key not in self.vdesc.virtuals
+                node.escape_if_startbox(memo, esc_self)
             # we also need to escape fields that are only read, never written,
             # if they're not marked specifically as ones that does not escape
             for key, node in self.origfields.items():
-                if (self.vdesc and key not in self.vdesc.virtuals and
-                    key not in self.curfields):
-                    node.escape_if_startbox(memo)
+                if key not in self.curfields:
+                    esc_self = self.vdesc and key not in self.vdesc.virtuals
+                    node.escape_if_startbox(memo, esc_self)
 
     def add_to_dependency_graph(self, other, dep_graph):
         dep_graph.append((self, other))
         for ofs, node in self.origfields.items():
             if ofs in other.curfields:
                 node.add_to_dependency_graph(other.curfields[ofs], dep_graph)
+            if (self.virtualized and self.vdesc and
+                ofs in self.vdesc.virtuals):
+                node.add_to_dependency_graph(other.origfields[ofs], dep_graph)
 
     def intersect(self, other):
         if not other.cls:
