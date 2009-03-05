@@ -313,14 +313,24 @@ class CPU(object):
         array = args[0].getptr_base()
         return history.BoxInt(llimpl.do_arraylen_gc(array))
 
-    def do_strlen(cpu, args):
+    def do_strlen(self, args):
         string = args[0].getptr_base()
         return history.BoxInt(llimpl.do_strlen(string))
 
-    def do_strgetitem(cpu, args):
+    def do_strgetitem(self, args):
         string = args[0].getptr_base()
         index = args[1].getint()
         return history.BoxInt(llimpl.do_strgetitem(string, index))
+
+    def do_getarrayitem_gc(self, args):
+        array = args[0].getptr_base()
+        arraydescr = args[1].getint()
+        index = args[2].getint()
+        if self.typefor(arraydescr) == 'ptr':
+            return history.BoxPtr(llimpl.do_getarrayitem_gc_ptr(array, index))
+        else:
+            return history.BoxInt(llimpl.do_getarrayitem_gc_int(array, index,
+                                                               self.memo_cast))
 
 
 class GuardFailed(object):

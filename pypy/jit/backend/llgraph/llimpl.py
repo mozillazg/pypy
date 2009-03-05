@@ -440,24 +440,31 @@ class Frame(object):
         return res
 
     def as_int(self, x):
-        TP = lltype.typeOf(x)
-        if isinstance(TP, lltype.Ptr):
-            assert TP.TO._gckind == 'raw'
-            return cast_adr_to_int(self.memocast, llmemory.cast_ptr_to_adr(x))
-        if TP == llmemory.Address:
-            return cast_adr_to_int(self.memocast, x)
-        return lltype.cast_primitive(lltype.Signed, x)
-    
+        return cast_to_int(x, self.memocast)
+
     def as_ptr(self, x):
-        if isinstance(lltype.typeOf(x), lltype.Ptr):
-            return lltype.cast_opaque_ptr(llmemory.GCREF, x)
-        else:
-            return x
+        return cast_to_ptr(x)
 
     def log_progress(self):
         count = sum(_stats.exec_counters.values())
         count_jumps = _stats.exec_jumps
         log.trace('ran %d operations, %d jumps' % (count, count_jumps))
+
+
+def cast_to_int(x, memocast):
+    TP = lltype.typeOf(x)
+    if isinstance(TP, lltype.Ptr):
+        assert TP.TO._gckind == 'raw'
+        return cast_adr_to_int(memocast, llmemory.cast_ptr_to_adr(x))
+    if TP == llmemory.Address:
+        return cast_adr_to_int(memocast, x)
+    return lltype.cast_primitive(lltype.Signed, x)
+
+def cast_to_ptr(x):
+    if isinstance(lltype.typeOf(x), lltype.Ptr):
+        return lltype.cast_opaque_ptr(llmemory.GCREF, x)
+    else:
+        return x
 
 
 def new_frame(memocast):
@@ -895,6 +902,14 @@ def do_strgetitem(string, index):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     return ord(str.chars[index])
 
+def do_getarrayitem_gc_int(array, index, memocast):
+    array = array._obj.container
+    return cast_to_int(array.getitem(index), memocast)
+
+def do_getarrayitem_gc_ptr(array, index):
+    array = array._obj.container
+    return cast_to_ptr(array.getitem(index))
+
 # ____________________________________________________________
 
 
@@ -979,3 +994,5 @@ setannotation(cast_int_to_adr, annmodel.SomeAddress())
 setannotation(do_arraylen_gc, annmodel.SomeInteger())
 setannotation(do_strlen, annmodel.SomeInteger())
 setannotation(do_strgetitem, annmodel.SomeInteger())
+setannotation(do_getarrayitem_gc_int, annmodel.SomeInteger())
+setannotation(do_getarrayitem_gc_ptr, annmodel.SomePtr(llmemory.GCREF))
