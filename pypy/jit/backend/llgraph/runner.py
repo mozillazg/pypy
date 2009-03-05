@@ -372,6 +372,18 @@ class CPU(object):
         count = args[1].getint()
         return history.BoxPtr(llimpl.do_new_array(size, count))
 
+    def do_setarrayitem_gc(self, args):
+        array = args[0].getptr_base()
+        arraydescr = args[1].getint()
+        index = args[2].getint()
+        if self.typefor(arraydescr) == 'ptr':
+            newvalue = args[3].getptr_base()
+            llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
+        else:
+            newvalue = args[3].getint()
+            llimpl.do_setarrayitem_gc_int(array, index, newvalue,
+                                          self.memo_cast)
+
 
 class GuardFailed(object):
     returns = False
