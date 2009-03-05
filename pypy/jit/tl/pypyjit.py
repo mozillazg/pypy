@@ -16,12 +16,16 @@ config.objspace.compiler = 'ast'
 config.objspace.nofaking = True
 config.objspace.allworkingmodules = False
 config.objspace.usemodules.pypyjit = True
+config.objspace.usemodules._weakref = False
+config.objspace.usemodules._sre = False
+config.translation.rweakref = False # XXX
 set_pypy_opt_level(config, level='0')
 config.objspace.std.multimethods = 'mrd'
 config.objspace.std.builtinshortcut = True
 multimethod.Installer = multimethod.InstallerVersion2
 print config
 
+import sys, pdb
 
 space = Space(config)
 w_dict = space.newdict()
@@ -50,9 +54,14 @@ def test_run_translation():
     from pypy.rpython.test.test_llinterp import get_interpreter
 
     # first annotate, rtype, and backendoptimize PyPy
-    interp, graph = get_interpreter(entry_point, [], backendopt=True,
-                                    config=config,
-                                    policy=PyPyAnnotatorPolicy(space))
+    try:
+        interp, graph = get_interpreter(entry_point, [], backendopt=True,
+                                        config=config,
+                                        policy=PyPyAnnotatorPolicy(space))
+    except Exception, e:
+        print '%s: %s' % (e.__class__, e)
+        pdb.post_mortem(sys.exc_info()[2])
+
 
     # parent process loop: spawn a child, wait for the child to finish,
     # print a message, and restart
