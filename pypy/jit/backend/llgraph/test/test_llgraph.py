@@ -157,12 +157,27 @@ class TestLLGraph:
     def test_do_operations(self):
         cpu = CPU(None)
         #
-        A = lltype.GcArray(lltype.Signed)
+        A = lltype.GcArray(lltype.Char)
+        descrbox_A = ConstInt(cpu.arraydescrof(A))
         a = lltype.malloc(A, 5)
-        descrbox = ConstInt(cpu.arraydescrof(A))
         x = cpu.do_arraylen_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox_A])
         assert x.value == 5
+        #
+        a[2] = 'Y'
+        x = cpu.do_getarrayitem_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox_A,
+             BoxInt(2)])
+        assert x.value == ord('Y')
+        #
+        B = lltype.GcArray(lltype.Ptr(A))
+        descrbox_B = ConstInt(cpu.arraydescrof(B))
+        b = lltype.malloc(B, 4)
+        b[3] = a
+        x = cpu.do_getarrayitem_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), descrbox_B,
+             BoxInt(3)])
+        assert x.getptr(lltype.Ptr(A)) == a
         #
         s = rstr.mallocstr(6)
         x = cpu.do_strlen(
