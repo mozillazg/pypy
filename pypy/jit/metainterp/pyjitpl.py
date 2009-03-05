@@ -328,7 +328,7 @@ class MIFrame(object):
         self.execute(rop.GETARRAYITEM_GC, [arraybox, arraydesc, indexbox], tp)
 
     @arguments("box", "constbox", "box")
-    def opimpl_getarrayitem_foldable_gc(self, arraybox, arraydesc, indexbox):
+    def opimpl_getarrayitem_gc_pure(self, arraybox, arraydesc, indexbox):
         tp = self.metainterp.cpu.typefor(arraydesc.getint())
         self.execute(rop.GETARRAYITEM_GC_PURE,
                      [arraybox, arraydesc, indexbox], tp, True)
@@ -377,7 +377,7 @@ class MIFrame(object):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
         self.execute(rop.GETFIELD_GC, [box, fielddesc], tp)
     @arguments("box", "constbox")
-    def opimpl_getfield_pure_gc(self, box, fielddesc):
+    def opimpl_getfield_gc_pure(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
         self.execute(rop.GETFIELD_GC_PURE, [box, fielddesc], tp, True)
     @arguments("box", "constbox", "box")
@@ -390,9 +390,9 @@ class MIFrame(object):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
         self.execute(rop.GETFIELD_RAW, [box, fielddesc], tp)
     @arguments("box", "constbox")
-    def opimpl_getfield_pure_raw(self, box, fielddesc):
+    def opimpl_getfield_raw_pure(self, box, fielddesc):
         tp = self.metainterp.cpu.typefor(fielddesc.getint())
-        self.execute(rop.GETFIELD_RAW, [box, fielddesc], tp, True)
+        self.execute(rop.GETFIELD_RAW_PURE, [box, fielddesc], tp, True)
     @arguments("box", "constbox", "box")
     def opimpl_setfield_raw(self, box, fielddesc, valuebox):
         self.execute(rop.SETFIELD_RAW, [box, fielddesc, valuebox],
