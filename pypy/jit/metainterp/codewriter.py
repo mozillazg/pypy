@@ -521,16 +521,16 @@ class BytecodeMaker(object):
         # check for deepfrozen structures that force constant-folding
         #pure = self.codewriter.is_green_var(op.result)
         if op.args[0].concretetype.TO._hints.get('immutable'):
-            opname = 'getfield_pure'
+            pure = '_pure'
         else:
-            opname = 'getfield'
+            pure = ''
         # turn the flow graph 'getfield' operation into our own version
         [v_inst, c_fieldname] = op.args
         RESULT = op.result.concretetype
         if RESULT is lltype.Void:
             return
         argname = v_inst.concretetype.TO._gckind
-        self.emit('%s_%s' % (opname, argname))
+        self.emit('getfield_%s%s' % (argname, pure))
         self.emit(self.var_position(v_inst))
         offset = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                        c_fieldname.value)
@@ -742,7 +742,7 @@ class BytecodeMaker(object):
         #
         if oopspec_name == 'list.getitem_foldable':
             return self.handle_list_getitem(op, arraydescr, args,
-                                            'getarrayitem_foldable_gc')
+                                            'getarrayitem_gc_pure')
         #
         if oopspec_name == 'list.setitem':
             index = self.prepare_list_getset(op, arraydescr, args)
