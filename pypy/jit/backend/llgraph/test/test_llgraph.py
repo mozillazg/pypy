@@ -278,3 +278,10 @@ class TestLLGraph:
             [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), descrbox_B,
              BoxInt(1), x])
         assert b[1] == x.getptr(lltype.Ptr(A))
+        #
+        x = cpu.do_newstr([BoxInt(5)])
+        assert isinstance(x, BoxPtr)
+        assert len(x.getptr(lltype.Ptr(rstr.STR)).chars) == 5
+        #
+        cpu.do_strsetitem([x, BoxInt(4), BoxInt(ord('/'))])
+        assert x.getptr(lltype.Ptr(rstr.STR)).chars[4] == '/'

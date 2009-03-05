@@ -406,6 +406,16 @@ class CPU(object):
             llimpl.do_setfield_raw_int(struct, fielddescr, newvalue,
                                        self.memo_cast)
 
+    def do_newstr(self, args):
+        length = args[0].getint()
+        return history.BoxPtr(llimpl.do_newstr(length))
+
+    def do_strsetitem(self, args):
+        string = args[0].getptr_base()
+        index = args[1].getint()
+        newvalue = args[2].getint()
+        llimpl.do_strsetitem(string, index, newvalue)
+
 
 class GuardFailed(object):
     returns = False
