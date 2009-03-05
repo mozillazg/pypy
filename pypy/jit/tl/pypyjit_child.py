@@ -4,26 +4,24 @@ from pypy.jit.metainterp import warmspot
 from pypy.module.pypyjit.portal import PyPyJitPolicy
 
 
-# Current output: http://paste.pocoo.org/show/105784/
+# Current output: http://paste.pocoo.org/show/106540/
 #
 # Some optimizations missing:
 #
-#   - improve the optimization: e.g. ooisnull followed by oononnull
-#     on the same variable
-#
-#   - reintroduce some delayed list optimizations to remove this
-#     mess of push/pop on the stack
-#
 #   - remove the useless 'ec' argument (p1 and p115 in the trace)
-#
-#   - figure out who calls W_TypeObject.is_heaptype(), leading to
-#     the "int_and 512" (lines 48, 147, 154)
 #
 #   - the guards have very long 'liveboxes' lists containing mostly
 #     Consts -- make sure that these Consts are not stored, or else
 #     remove them entirely
+
+# Some optimizations that might help under different circumstances:
 #
-#   - dead operation removal: e.g. unused 'getfield_gc' (line 158)
+#   - figure out who calls W_TypeObject.is_heaptype(), leading to
+#     the "int_and 512" (lines 48, 147, 154)
+#
+#   - improve the optimization: e.g. ooisnull followed by oononnull
+#     on the same variable
+#
 
 
 def run_child(glob, loc):
