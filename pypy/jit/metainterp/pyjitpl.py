@@ -344,14 +344,14 @@ class MIFrame(object):
 
     @arguments("orgpc", "box", "constbox", "box")
     def opimpl_check_neg_index(self, pc, arraybox, arraydesc, indexbox):
-        negbox = self.metainterp.history.execute_and_record(
+        negbox = self.metainterp.execute_and_record(
             rop.INT_LT, [indexbox, ConstInt(0)], 'int')
         negbox = self.implement_guard_value(pc, negbox)
         if negbox.getint():
             # the index is < 0; add the array length to it
-            lenbox = self.metainterp.history.execute_and_record(
+            lenbox = self.metainterp.execute_and_record(
                 rop.ARRAYLEN_GC, [arraybox, arraydesc], 'int')
-            indexbox = self.metainterp.history.execute_and_record(
+            indexbox = self.metainterp.execute_and_record(
                 rop.INT_ADD, [indexbox, lenbox], 'int')
         self.make_result_box(indexbox)
 
@@ -414,7 +414,7 @@ class MIFrame(object):
     def opimpl_residual_call_pure(self, funcbox, calldescr, varargs):
         tp = self.metainterp.cpu.typefor(calldescr.getint())
         args = [funcbox, calldescr] + varargs
-        return self.execute_with_exc(rop.CALL_PURE, args, tp)
+        self.execute(rop.CALL_PURE, args, tp)
 
 ##    @arguments("fixedlist", "box", "box")
 ##    def opimpl_list_getitem(self, descr, listbox, indexbox):
@@ -654,15 +654,17 @@ class MIFrame(object):
         return ConstInt(self.metainterp.cpu.cast_adr_to_int(cls))
 
     def execute(self, opnum, argboxes, result_type):
-        resbox = self.metainterp.history.execute_and_record(opnum, argboxes,
-                                                            result_type)
+        resbox = self.metainterp.execute_and_record(opnum, argboxes,
+                                                    result_type)
         if resbox is not None:
             self.make_result_box(resbox)
+    execute._annspecialcase_ = 'specialize:arg(1)'
 
     def execute_with_exc(self, opnum, argboxes, result_type):
         old_index = len(self.metainterp.history.operations)
         try:
-            self.execute(opnum, argboxes, result_type)
+            resbox = self.metainterp.cpu.execute_operation(opnum, argboxes,
+                                                           result_type)
         except Exception, e:
             if not we_are_translated():
                 if not isinstance(e, LLException):
@@ -672,23 +674,22 @@ class MIFrame(object):
                 evalue = cast_instance_to_base_ptr(e)
                 etype = evalue.typeptr
             if result_type == 'void':
-                resultbox = None
+                resbox = None
             else:
                 if result_type == 'ptr':
-                    resultbox = BoxPtr()
+                    resbox = BoxPtr()
                 else:
-                    resultbox = BoxInt()
-                self.make_result_box(resultbox)
-            self.metainterp.history.record(opnum, argboxes, resultbox)
+                    resbox = BoxInt()
         else:
-            if not self.metainterp.history.generate_anything_since(old_index):
-                assert rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST
-                return False
             if not we_are_translated():
                 self.metainterp._debug_history.append(['call',
                                                   argboxes[0], argboxes[1:]])
             etype = lltype.nullptr(rclass.OBJECT_VTABLE)
             evalue = lltype.nullptr(rclass.OBJECT)
+        # record the operation in the history
+        self.metainterp.history.record(opnum, argboxes, resbox)
+        if resbox is not None:
+            self.make_result_box(resbox)
         type_as_int = self.metainterp.cpu.cast_adr_to_int(
             llmemory.cast_ptr_to_adr(etype))
         value_as_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, evalue)
@@ -766,6 +767,30 @@ class OOMetaInterp(object):
         # XXX call me again later
         self.history = None
         self.framestack = None
+
+    def _all_constants(self, boxes):
+        for box in boxes:
+            if not isinstance(box, Const):
+                return False
+        return True
+
+    def execute_and_record(self, opnum, argboxes, result_type):
+        # execute the operation first
+        resbox = self.cpu.execute_operation(opnum, argboxes, result_type)
+        # check if the operation can be constant-folded away
+        canfold = False
+        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
+            # this part disappears if execute() is specialized for an
+            # opnum that is not within the range
+            assert resbox is not None
+            canfold = self._all_constants(argboxes)
+            if canfold:
+                resbox = resbox.constbox()
+        # record the operation if not constant-folded away
+        if not canfold:
+            self.history.record(opnum, argboxes, resbox)
+        return resbox
+    execute_and_record._annspecialcase_ = 'specialize:arg(1)'
 
     def interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
