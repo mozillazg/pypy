@@ -354,6 +354,10 @@ class CPU(object):
                                                              fielddescr,
                                                              self.memo_cast))
 
+    def do_new(self, args):
+        size = args[0].getint()
+        return history.BoxPtr(llimpl.do_new(size))
+
 
 class GuardFailed(object):
     returns = False

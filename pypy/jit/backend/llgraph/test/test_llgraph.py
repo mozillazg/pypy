@@ -223,3 +223,9 @@ class TestLLGraph:
              BoxInt(descrfld_ry)])
         assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
+        #
+        descrsize = cpu.sizeof(S)
+        x = cpu.do_new(
+            [BoxInt(descrsize)])
+        assert isinstance(x, BoxPtr)
+        x.getptr(lltype.Ptr(S))
