@@ -98,9 +98,8 @@ TYPES = {
     'getarrayitem_gc' : (('ptr', 'int', 'int'), 'intorptr'),
     'getarrayitem_gc_pure' : (('ptr', 'int', 'int'), 'intorptr'),
     'arraylen_gc'     : (('ptr', 'int'), 'int'),
-    'call_ptr'        : (('ptr', 'varargs'), 'ptr'),
-    'call__4'         : (('ptr', 'varargs'), 'int'),
-    'call_void'       : (('ptr', 'varargs'), None),
+    'call'            : (('ptr', 'int', 'varargs'), 'intorptr'),
+    'call_pure'       : (('ptr', 'int', 'varargs'), 'intorptr'),
     'guard_true'      : (('bool',), None),
     'guard_false'     : (('bool',), None),
     'guard_value'     : (('int', 'int'), None),
@@ -823,7 +822,7 @@ class ExtendedLLFrame(LLFrame):
         assert self.last_exception_handled
         self.last_exception = None
 
-    def do_call(self, f, *args):
+    def op_call(self, f, calldescr, *args):
         ptr = cast_int_to_adr(self.memocast, f).ptr
         FUNC = lltype.typeOf(ptr).TO
         ARGS = FUNC.ARGS
@@ -843,9 +842,7 @@ class ExtendedLLFrame(LLFrame):
             self.clear_exception()
         return x
 
-    op_call__4 = do_call
-    op_call_ptr = do_call
-    op_call_void = do_call
+    op_call_pure = op_call
 
     def op_listop_return(self, ll_func, *args):
         return self.do_call(ll_func, *args)

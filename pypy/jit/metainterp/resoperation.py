@@ -65,17 +65,6 @@ class ResOperation(object):
 # ____________________________________________________________
 
 
-class typ(object):
-    INT     = 0       # a register-sized, non-GC-aware value (int or addr)
-    PTR     = 1       # a pointer to a GC object
-    VOID    = 2       # a void
-
-    INT1    = 3       # when we need more precision about the size of the int,
-    INT2    = 4       # use these instead of INT
-    INT4    = 5       # (e.g. for reading or writing fields)
-    INT8    = 6
-
-
 class rop(object):
     """The possible names of the ResOperations."""
 
@@ -94,8 +83,10 @@ class rop(object):
     GUARD_EXCEPTION        = 16
     _GUARD_LAST = 19 # ----- end of guard operations -----
 
-    _NOSIDEEFFECT_FIRST = 30 # ----- start of no_side_effect operations -----
-    _ALWAYS_PURE_FIRST = 30 # ----- start of always_pure operations -----
+    _NOSIDEEFFECT_FIRST = 20 # ----- start of no_side_effect operations -----
+    _ALWAYS_PURE_FIRST = 20 # ----- start of always_pure operations -----
+    CALL_PURE              = 20
+    #
     INT_ADD                = 30
     INT_SUB                = 31
     INT_MUL                = 32
@@ -158,13 +149,7 @@ class rop(object):
     STRSETITEM             = 97
 
     _CANRAISE_FIRST = 100 # ----- start of can_raise operations -----
-    _CALL = 100
-    CALL__1                = _CALL + typ.INT1
-    CALL__2                = _CALL + typ.INT2
-    CALL__4                = _CALL + typ.INT4
-    CALL__8                = _CALL + typ.INT8
-    CALL_PTR               = _CALL + typ.PTR
-    CALL_VOID              = _CALL + typ.VOID
+    CALL = 100
     #
     _OVF_FIRST = 110
     INT_ADD_OVF            = 110

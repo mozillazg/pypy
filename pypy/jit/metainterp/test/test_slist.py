@@ -49,7 +49,7 @@ class ListTests:
         assert res == 42
         # no more list operations in the loop
         py.test.skip("not a ModifiedList yet")
-        self.check_loops(call_void=0, call__4=0)
+        self.check_loops(call=0)
 
     def test_lazy_getitem_2(self):
         py.test.skip("BUG!")
@@ -68,7 +68,7 @@ class ListTests:
         res = self.meta_interp(f, [50], policy=StopAtXPolicy(g))
         assert res == f(50)
         # the list operations stay in the loop
-        self.check_loops(call_void=1, call__4=2)
+        self.check_loops(call=3)
 
     def test_lazy_getitem_3(self):
         py.test.skip("in-progress")
@@ -81,7 +81,7 @@ class ListTests:
         res = self.meta_interp(f, [21])
         assert res == 42
         # two levels of list operations removed from the loop
-        self.check_loops(call_void=0, call__4=0)
+        self.check_loops(call=0)
 
     def test_lazy_getitem_4(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'lst'])

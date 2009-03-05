@@ -404,44 +404,17 @@ class MIFrame(object):
         f.setup_call(varargs)
         return True
 
-    @arguments("varargs")
-    def opimpl_green_call__1(self, varargs):
-        return self.execute_with_exc(rop.CALL__1, varargs, 'int', True)
-    @arguments("varargs")
-    def opimpl_green_call__2(self, varargs):
-        return self.execute_with_exc(rop.CALL__2, varargs, 'int', True)
-    @arguments("varargs")
-    def opimpl_green_call__4(self, varargs):
-        return self.execute_with_exc(rop.CALL__4, varargs, 'int', True)
-    @arguments("varargs")
-    def opimpl_green_call__8(self, varargs):
-        return self.execute_with_exc(rop.CALL__8, varargs, 'int', True)
+    @arguments("box", "constbox", "varargs")
+    def opimpl_residual_call(self, funcbox, calldescr, varargs):
+        tp = self.metainterp.cpu.typefor(calldescr.getint())
+        args = [funcbox, calldescr] + varargs
+        return self.execute_with_exc(rop.CALL, args, tp)
 
-    @arguments("varargs")
-    def opimpl_green_call_ptr(self, varargs):
-        return self.execute_with_exc(rop.CALL_PTR, varargs, 'ptr', True)
-
-    @arguments("varargs")
-    def opimpl_residual_call__1(self, varargs):
-        return self.execute_with_exc(rop.CALL__1, varargs, 'int')
-    @arguments("varargs")
-    def opimpl_residual_call__2(self, varargs):
-        return self.execute_with_exc(rop.CALL__2, varargs, 'int')
-    @arguments("varargs")
-    def opimpl_residual_call__4(self, varargs):
-        return self.execute_with_exc(rop.CALL__4, varargs, 'int')
-    @arguments("varargs")
-    def opimpl_residual_call__8(self, varargs):
-        return self.execute_with_exc(rop.CALL__8, varargs, 'int')
-
-    @arguments("varargs")
-    def opimpl_residual_call_ptr(self, varargs):
-        return self.execute_with_exc(rop.CALL_PTR, varargs, 'ptr')
-
-    @arguments("varargs")
-    def opimpl_residual_call_void(self, varargs):
-        return self.execute_with_exc(rop.CALL_VOID, varargs, 'void')
-
+    @arguments("box", "constbox", "varargs")
+    def opimpl_residual_call_pure(self, funcbox, calldescr, varargs):
+        tp = self.metainterp.cpu.typefor(calldescr.getint())
+        args = [funcbox, calldescr] + varargs
+        return self.execute_with_exc(rop.CALL_PURE, args, tp, True)
 
 ##    @arguments("fixedlist", "box", "box")
 ##    def opimpl_list_getitem(self, descr, listbox, indexbox):
