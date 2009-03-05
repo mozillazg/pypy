@@ -42,10 +42,10 @@ class PyPyJitPolicy(ManualJitPolicy):
                      pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
         descr_impl = getattr(pypy.objspace.descroperation.DescrOperation,
                              'inplace_' + name2)
-        self.seepath(
-            getattr(pypy.interpreter.pyframe.PyFrame, 'INPLACE_'+ opname),
-            descr_impl,
-            obj_impl)
+        op_impl = getattr(pypy.interpreter.pyframe.PyFrame, 'INPLACE_'+ opname)
+        self.seepath(op_impl, descr_impl, obj_impl)
+        self.seepath(op_impl,
+                     pypy.objspace.std.multimethod.raiseFailedToImplement)
         self.seepath(descr_impl,
                      pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
         
