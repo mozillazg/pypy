@@ -883,6 +883,12 @@ class ExtendedLLFrame(LLFrame):
 
 # ____________________________________________________________
 
+def do_arraylen_gc(array):
+    array = array._obj.container
+    return array.getlength()
+
+# ____________________________________________________________
+
 
 def setannotation(func, annotation, specialize_as_constant=False):
 
@@ -961,3 +967,5 @@ setannotation(frame_exc_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(new_memo_cast, s_MemoCast)
 setannotation(cast_adr_to_int, annmodel.SomeInteger())
 setannotation(cast_int_to_adr, annmodel.SomeAddress())
+
+setannotation(do_arraylen_gc, annmodel.SomeInteger())

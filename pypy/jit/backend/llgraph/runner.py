@@ -307,6 +307,12 @@ class CPU(object):
     def cast_int_to_adr(self, int):
         return llimpl.cast_int_to_adr(self.memo_cast, int)
 
+    # ---------- the backend-dependent operations ----------
+
+    def do_arraylen_gc(self, args):
+        array = args[0].getptr_base()
+        return history.BoxInt(llimpl.do_arraylen_gc(array))
+
 
 class GuardFailed(object):
     returns = False
