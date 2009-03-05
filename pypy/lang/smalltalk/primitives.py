@@ -479,11 +479,13 @@ MOUSE_BUTTONS = 107
 KBD_NEXT = 108
 KBD_PEEK = 109
 
+
 @expose_primitive(BE_CURSOR, unwrap_spec=[object])
 def func(interp, w_rcvr):
     # TODO: Use info from cursor object.
     interp.space.objtable['w_cursor'] = w_rcvr
     return w_rcvr
+
 
 @expose_primitive(BE_DISPLAY, unwrap_spec=[object])
 def func(interp, w_rcvr):
@@ -498,6 +500,7 @@ def func(interp, w_rcvr):
     point.store_x(640)
     point.store_y(480)
     return w_res
+
 # ___________________________________________________________________________
 # Control Primitives
 
@@ -574,7 +577,16 @@ def func(interp, argument_count):
         pass # XXX
     raise PrimitiveFailedError
 
+@expose_primitive(LOW_SPACE_SEMAPHORE, unwrap_spec=[object, object])
+def func(interp, w_reciver, i):
+    # dont know when the space runs out
+    return w_reciver
 
+
+@expose_primitive(SIGNAL_AT_BYTES_LEFT, unwrap_spec=[object, int])
+def func(interp, w_reciver, i):
+    # dont know when the space runs out
+    return w_reciver
 
 
 # ___________________________________________________________________________
