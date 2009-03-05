@@ -994,6 +994,14 @@ def do_setfield_raw_ptr(struct, fielddesc, newvalue):
     newvalue = cast_from_ptr(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
+def do_newstr(length):
+    x = rstr.mallocstr(length)
+    return cast_to_ptr(x)
+
+def do_strsetitem(string, index, newvalue):
+    str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
+    str.chars[index] = chr(newvalue)
+
 # ____________________________________________________________
 
 
@@ -1092,3 +1100,5 @@ setannotation(do_setfield_gc_int, annmodel.s_None)
 setannotation(do_setfield_gc_ptr, annmodel.s_None)
 setannotation(do_setfield_raw_int, annmodel.s_None)
 setannotation(do_setfield_raw_ptr, annmodel.s_None)
+setannotation(do_newstr, annmodel.SomePtr(llmemory.GCREF))
+setannotation(do_strsetitem, annmodel.s_None)
