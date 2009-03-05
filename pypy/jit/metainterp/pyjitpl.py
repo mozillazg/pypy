@@ -530,15 +530,15 @@ class MIFrame(object):
             self.generate_guard(pc, rop.GUARD_CLASS, box, [clsbox])
         return clsbox
 
-    @arguments("orgpc", "box", "builtin")
-    def opimpl_guard_builtin(self, pc, box, builtin):
-        self.generate_guard(pc, "guard_builtin", box, [builtin])
+##    @arguments("orgpc", "box", "builtin")
+##    def opimpl_guard_builtin(self, pc, box, builtin):
+##        self.generate_guard(pc, "guard_builtin", box, [builtin])
 
-    @arguments("orgpc", "box", "builtin")
-    def opimpl_guard_len(self, pc, box, builtin):
-        intbox = self.metainterp.cpu.execute_operation(
-            'len', [builtin.len_func, box], 'int')
-        self.generate_guard(pc, "guard_len", box, [intbox])
+##    @arguments("orgpc", "box", "builtin")
+##    def opimpl_guard_len(self, pc, box, builtin):
+##        intbox = self.metainterp.cpu.execute_operation(
+##            'len', [builtin.len_func, box], 'int')
+##        self.generate_guard(pc, "guard_len", box, [intbox])
 
     @arguments("orgpc", "box", "virtualizabledesc", "constbox")
     def opimpl_guard_nonvirtualized(self, pc, box, vdesc, guard_field):
@@ -679,10 +679,6 @@ class MIFrame(object):
         obj = box.getptr(lltype.Ptr(rclass.OBJECT))
         cls = llmemory.cast_ptr_to_adr(obj.typeptr)
         return ConstInt(self.metainterp.cpu.cast_adr_to_int(cls))
-
-    def follow_jump(self):
-        self.pc -= 3
-        self.pc = self.load_3byte()
 
     def execute(self, opnum, argboxes, result_type, pure=False):
         resbox = self.metainterp.history.execute_and_record(opnum, argboxes,
