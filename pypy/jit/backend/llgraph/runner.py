@@ -367,6 +367,11 @@ class CPU(object):
                                   self.memo_cast)
         return history.BoxPtr(result)
 
+    def do_new_array(self, args):
+        size = args[0].getint()
+        count = args[1].getint()
+        return history.BoxPtr(llimpl.do_new_array(size, count))
+
 
 class GuardFailed(object):
     returns = False

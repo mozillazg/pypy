@@ -237,3 +237,9 @@ class TestLLGraph:
              BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable2)))])
         assert isinstance(x, BoxPtr)
         assert x.getptr(rclass.OBJECTPTR).typeptr == vtable2
+        #
+        arraydescr = cpu.arraydescrof(A)
+        x = cpu.do_new_array(
+            [BoxInt(arraydescr), BoxInt(7)])
+        assert isinstance(x, BoxPtr)
+        assert len(x.getptr(lltype.Ptr(A))) == 7

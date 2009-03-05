@@ -949,6 +949,11 @@ def do_new(size):
     x = lltype.malloc(TYPE)
     return cast_to_ptr(x)
 
+def do_new_array(arraydesc, count):
+    TYPE = symbolic.Size2Type[arraydesc/2]
+    x = lltype.malloc(TYPE, count)
+    return cast_to_ptr(x)
+
 def do_setfield_gc_int(struct, fielddesc, newvalue, memocast):
     STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
     ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), struct)
@@ -1047,4 +1052,5 @@ setannotation(do_getfield_gc_ptr, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_getfield_raw_int, annmodel.SomeInteger())
 setannotation(do_getfield_raw_ptr, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_new, annmodel.SomePtr(llmemory.GCREF))
+setannotation(do_new_array, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_setfield_gc_int, annmodel.s_None)
