@@ -8,6 +8,10 @@ from pypy.objspace.std import Space
 from pypy.config.translationoption import set_opt_level
 from pypy.config.pypyoption import get_pypy_config, set_pypy_opt_level
 from pypy.objspace.std import multimethod
+from pypy.rpython.annlowlevel import llhelper, llstr, hlstr
+from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rpython.lltypesystem import lltype
+from pypy.interpreter.pycode import PyCode
 
 config = get_pypy_config(translating=True)
 config.translation.backendopt.inline_threshold = 0
@@ -44,14 +48,22 @@ def readfile(filename):
     os.close(fd)
     return ''.join(blocks)
 
-def entry_point():
+def read_code():
+    from pypy.module.marshal.interp_marshal import dumps
+    
     source = readfile('pypyjit_demo.py')
     ec = space.getexecutioncontext()
-    print "compiling..."
     code = ec.compiler.compile(source, '?', 'exec', 0)
-    print "compiled"
-    code.exec_code(space, w_dict, w_dict)
+    return llstr(space.str_w(dumps(space, code, space.wrap(2))))
 
+FPTR = lltype.Ptr(lltype.FuncType([], lltype.Ptr(STR)))
+read_code_ptr = llhelper(FPTR, read_code)
+
+def entry_point():
+    from pypy.module.marshal.interp_marshal import loads
+    code = loads(space, space.wrap(hlstr(read_code_ptr())))
+    assert isinstance(code, PyCode)
+    code.exec_code(space, w_dict, w_dict)
 
 def test_run_translation():
     from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
@@ -65,7 +77,7 @@ def test_run_translation():
     except Exception, e:
         print '%s: %s' % (e.__class__, e)
         pdb.post_mortem(sys.exc_info()[2])
-
+        raise
 
     # parent process loop: spawn a child, wait for the child to finish,
     # print a message, and restart
