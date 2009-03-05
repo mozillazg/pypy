@@ -323,7 +323,7 @@ def test_E_rebuild_after_failure():
         def __init__(self):
             self.ops = []
         
-        def execute_and_record(self, opnum, args, res_type, pure):
+        def execute_and_record(self, opnum, args, res_type):
             self.ops.append((opnum, args))
             if res_type != 'void':
                 return 'allocated'

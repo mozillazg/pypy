@@ -355,10 +355,10 @@ class RunningMatcher(Matcher):
         self.cpu = cpu
         self.operations = []
 
-    def execute_and_record(self, opnum, argboxes, result_type, pure):
+    def execute_and_record(self, opnum, argboxes, result_type):
         # collect arguments
         canfold = False
-        if pure:
+        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
             for box in argboxes:
                 if not isinstance(box, Const):
                     break
@@ -372,7 +372,6 @@ class RunningMatcher(Matcher):
         else:
             self.record(opnum, argboxes, resbox)
         return resbox
-    execute_and_record._annspecialcase_ = 'specialize:arg(4)'
 
     def record(self, opnum, argboxes, resbox):
         op = ResOperation(opnum, argboxes, resbox)

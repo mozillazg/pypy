@@ -1024,13 +1024,13 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
         vtablebox = ConstInt(vtable)
         instbox = history.execute_and_record(rop.NEW_WITH_VTABLE,
                                              [sizebox, vtablebox],
-                                             'ptr', False)
+                                             'ptr')
         allocated_boxes.append(instbox)
     for ad, lgt in storage.list_allocations:
         sizebox = ConstInt(lgt)
         listbox = history.execute_and_record(rop.NEW_ARRAY,
                                                [ad, sizebox],
-                                               'ptr', False)
+                                               'ptr')
         allocated_lists.append(listbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
         fieldbox = box_from_index(allocated_boxes, allocated_lists,
@@ -1040,7 +1040,7 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
                              index_in_alloc)
         history.execute_and_record(rop.SETFIELD_GC,
                                    [box, ConstInt(ofs), fieldbox],
-                                   'void', False)
+                                   'void')
     for index_in_alloc, ad, ofs, index_in_arglist in storage.setitems:
         itembox = box_from_index(allocated_boxes, allocated_lists,
                                  boxes_from_frame, index_in_arglist)
@@ -1048,7 +1048,7 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
                              boxes_from_frame, index_in_alloc)
         history.execute_and_record(rop.SETARRAYITEM_GC,
                                    [box, ad, ConstInt(ofs), itembox],
-                                   'void', False)
+                                   'void')
 ##    if storage.setitems:
 ##        #history.execute_and_record('guard_no_exception', [], 'void', False)
 ##        # XXX this needs to check for exceptions somehow
