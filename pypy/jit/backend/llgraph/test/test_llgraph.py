@@ -153,3 +153,12 @@ class TestLLGraph:
                            [BoxInt(10), BoxInt(2)], "int",
                            expected_class = BoxInt,
                            expected_value = 8)
+
+    def test_do_operations(self):
+        cpu = CPU(None)
+        A = lltype.GcArray(lltype.Signed)
+        a = lltype.malloc(A, 5)
+        descrbox = ConstInt(cpu.arraydescrof(A))
+        x = cpu.do_arraylen_gc(
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox])
+        assert x.value == 5
