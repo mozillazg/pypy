@@ -1,11 +1,14 @@
 import pypy
 from pypy.jit.metainterp.policy import ManualJitPolicy
 
+from pypy.translator.backendopt.support import find_calls_from
 
 class PyPyJitPolicy(ManualJitPolicy):
 
     def look_inside_function(self, func):
         mod = func.__module__ or '?'
+        if func.__name__.startswith('__mm_'):
+            return True
         if mod.startswith('pypy.objspace.'):
             return False
         if '_geninterp_' in func.func_globals: # skip all geninterped stuff
@@ -28,6 +31,9 @@ class PyPyJitPolicy(ManualJitPolicy):
         return super(PyPyJitPolicy, self).look_inside_function(func)
 
     def seebinary(self, opname):
+        def fc(o):
+            return [i[1] for i in find_calls_from(self.translator, o)]
+
         name2 = name1 = opname[:3].lower()
         if name1 in ('and', 'or'):
             name1 += '_'
@@ -44,8 +50,6 @@ class PyPyJitPolicy(ManualJitPolicy):
                              'inplace_' + name2)
         op_impl = getattr(pypy.interpreter.pyframe.PyFrame, 'INPLACE_'+ opname)
         self.seepath(op_impl, descr_impl, obj_impl)
-        self.seepath(op_impl,
-                     pypy.objspace.std.multimethod.raiseFailedToImplement)
         self.seepath(descr_impl,
                      pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
         
@@ -97,6 +101,8 @@ class PyPyJitPolicy(ManualJitPolicy):
         self.seepath(pypy.objspace.descroperation.DescrOperation.add,
                      pypy.objspace.std.Space.is_w)
         self.seegraph(pypy.interpreter.pyframe.PyFrame.execute_frame, False)
+        self.seegraph(pypy.objspace.std.multimethod.FailedToImplement.__init__,
+                      True)
         # --------------------
         self.seepath(pypy.interpreter.pyframe.PyFrame.JUMP_IF_TRUE,
                      pypy.objspace.std.boolobject.nonzero__Bool)
