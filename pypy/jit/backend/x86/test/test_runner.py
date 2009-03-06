@@ -4,7 +4,7 @@ from pypy.jit.metainterp.history import ResOperation
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Box)
 from pypy.jit.backend.x86.runner import CPU, GuardFailed
-from pypy.jit.backend.x86.regalloc import WORD
+from pypy.jit.backend.x86.regalloc import WORD, RETURN
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop
 import ctypes
@@ -71,7 +71,7 @@ class TestX86(object):
             results = [result]
         operations = [mp,
                       ResOperation(opnum, livevarlist, result),
-                      ResOperation(rop.RETURN, results, None)]
+                      ResOperation(RETURN, results, None)]
         if operations[1].is_guard():
             operations[1].liveboxes = []
         self.cpu.compile_operations(operations, verbose=False)
