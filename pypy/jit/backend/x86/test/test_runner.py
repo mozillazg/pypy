@@ -4,7 +4,7 @@ from pypy.jit.metainterp.history import ResOperation
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Box)
 from pypy.jit.backend.x86.runner import CPU, GuardFailed
-from pypy.jit.backend.x86.regalloc import WORD, RETURN
+from pypy.jit.backend.x86.regalloc import WORD
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop
 import ctypes
@@ -20,7 +20,10 @@ class FakeMetaInterp(object):
         self.recordedvalues = [
                 gf.cpu.getvaluebox(gf.frame, gf.guard_op, i).value
                     for i in range(len(gf.guard_op.liveboxes))]
-        gf.make_ready_for_return(BoxInt(42))
+        if len(gf.guard_op.liveboxes) > 0:
+            gf.make_ready_for_return(gf.cpu.getvaluebox(gf.frame, gf.guard_op, 0))
+        else:
+            gf.make_ready_for_return(None)
 
 MY_VTABLE = lltype.Struct('my_vtable')    # for tests only
 
@@ -39,13 +42,14 @@ U = lltype.GcStruct('U', ('parent', T),
 class TestX86(object):
     def setup_class(cls):
         cls.cpu = CPU(rtyper=None, stats=FakeStats())
+        cls.cpu.set_meta_interp(FakeMetaInterp())
 
     def execute_operation(self, opname, valueboxes, result_type):
         key = [opname, result_type]
         mp = self.get_compiled_single_operation(opname, result_type, valueboxes)
         boxes = [box for box in valueboxes if isinstance(box, Box)]
-        res = self.cpu.execute_operations_in_new_frame(opname, mp, boxes,
-                                                       result_type)
+        res = self.cpu.execute_operations_in_new_frame(opname, mp, boxes +
+                                                       [BoxInt(1)])
         return res
 
     def get_compiled_single_operation(self, opnum, result_type, valueboxes):
@@ -54,9 +58,10 @@ class TestX86(object):
             if isinstance(box, Box):
                 box = box.clonebox()
             livevarlist.append(box)
-        mp = ResOperation(rop.MERGE_POINT,
-                        [box for box in livevarlist if isinstance(box, Box)],
-                        None)
+        args = [box for box in livevarlist if isinstance(box, Box)]
+        checker = BoxInt(1)
+        args.append(checker)
+        mp = ResOperation(rop.MERGE_POINT, args, None)
         if result_type == 'void':
             result = None
         elif result_type == 'int':
@@ -71,11 +76,12 @@ class TestX86(object):
             results = [result]
         operations = [mp,
                       ResOperation(opnum, livevarlist, result),
-                      ResOperation(RETURN, results, None)]
+                      ResOperation(rop.GUARD_FALSE, [checker], None)]
+        operations[-1].liveboxes = results
         if operations[1].is_guard():
             operations[1].liveboxes = []
         self.cpu.compile_operations(operations, verbose=False)
-        return mp
+        return operations
 
 
     def test_int_binary_ops(self):
@@ -136,10 +142,9 @@ class TestX86(object):
         operations[-1].jump_target = startmp
         operations[-2].liveboxes = [t, u, z]
         cpu.compile_operations(operations)
-        res = self.cpu.execute_operations_in_new_frame('foo', startmp,
-                                                       [BoxInt(0), BoxInt(10)],
-                                                       'int')
-        assert res.value == 42
+        res = self.cpu.execute_operations_in_new_frame('foo', operations,
+                                                       [BoxInt(0), BoxInt(10)])
+        assert res.value == 0
         gf = cpu.metainterp.gf
         assert cpu.metainterp.recordedvalues == [0, True, 55]
         assert gf.guard_op is operations[-2]

@@ -17,8 +17,6 @@ REGS = [eax, ecx, edx]
 WORD = 4
 FRAMESIZE = 1024    # XXX should not be a constant at all!!
 
-RETURN = rop._LAST + 1
-
 class TempBox(Box):
     def __init__(self):
         pass
@@ -580,7 +578,7 @@ class RegAlloc(object):
         self.eventually_free_vars(op.liveboxes + op.args)
         return ops + [PerformDiscard(op, [x, y] + locs)]
 
-    def consider_return(self, op, ignored):
+    def xxx_consider_return(self, op, ignored):
         if op.args:
             arglocs = [self.loc(op.args[0])]
             self.eventually_free_var(op.args[0])
@@ -951,15 +949,12 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         return ops + laterops + [PerformDiscard(op, [])]
 
-oplist = [None] * (RETURN + 1)
+oplist = [None] * rop._LAST
 
 for name, value in RegAlloc.__dict__.iteritems():
     if name.startswith('consider_'):
         name = name[len('consider_'):]
-        if name == 'return':
-            num = RETURN
-        else:
-            num = getattr(rop, name.upper())
+        num = getattr(rop, name.upper())
         oplist[num] = value
 
 def arg_pos(i):

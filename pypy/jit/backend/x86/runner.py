@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
-from pypy.jit.backend.x86.assembler import Assembler386, WORD, RETURN
+from pypy.jit.backend.x86.assembler import Assembler386, WORD
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.backend.x86.executor import execute
@@ -29,6 +29,7 @@ class CPU386(object):
     BOOTSTRAP_TP = lltype.FuncType([lltype.Signed,
                                     lltype.Ptr(rffi.CArray(lltype.Signed))],
                                    lltype.Signed)
+
     return_value_box = None
 
     def __init__(self, rtyper, stats, translate_support_code=False,
@@ -148,81 +149,81 @@ class CPU386(object):
     def get_exc_value(self, frame):
         return self.cast_int_to_gcref(self.assembler._exception_data[1])
 
-    def execute_operation(self, opnum, valueboxes, result_type):
-        xxx
-        if execute[opnum] is not None:
-            return execute[opnum](valueboxes)
+#     def execute_operation(self, opnum, valueboxes, result_type):
+#         xxx
+#         if execute[opnum] is not None:
+#             return execute[opnum](valueboxes)
         
-        # mostly a hack: fall back to compiling and executing the single
-        # operation.
-        key = []
-        for valuebox in valueboxes:
-            if isinstance(valuebox, Box):
-                key.append(valuebox.type)
-            else:
-                key.append(str(valuebox.get_()))
-        mp = self.get_compiled_single_operation(opnum, result_type,
-                                                key, valueboxes)
-        res = self.execute_operations_in_new_frame(opname[opnum], mp,
-                                                   valueboxes,
-                                                   result_type)
-        if not self.translate_support_code:
-            if self.assembler._exception_data[0] != 0:
-                TP = lltype.Ptr(rclass.OBJECT_VTABLE)
-                TP_V = lltype.Ptr(rclass.OBJECT)
-                exc_t_a = self.cast_int_to_adr(self.get_exception(None))
-                exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
-                exc_v_a = self.get_exc_value(None)
-                exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
-                # clean up the exception
-                self.assembler._exception_data[0] = 0
-                raise LLException(exc_type, exc_val)
-        # otherwise exception data is set correctly, no problem at all
-        return res
+#         # mostly a hack: fall back to compiling and executing the single
+#         # operation.
+#         key = []
+#         for valuebox in valueboxes:
+#             if isinstance(valuebox, Box):
+#                 key.append(valuebox.type)
+#             else:
+#                 key.append(str(valuebox.get_()))
+#         mp = self.get_compiled_single_operation(opnum, result_type,
+#                                                 key, valueboxes)
+#         res = self.execute_operations_in_new_frame(opname[opnum], mp,
+#                                                    valueboxes,
+#                                                    result_type)
+#         if not self.translate_support_code:
+#             if self.assembler._exception_data[0] != 0:
+#                 TP = lltype.Ptr(rclass.OBJECT_VTABLE)
+#                 TP_V = lltype.Ptr(rclass.OBJECT)
+#                 exc_t_a = self.cast_int_to_adr(self.get_exception(None))
+#                 exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
+#                 exc_v_a = self.get_exc_value(None)
+#                 exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
+#                 # clean up the exception
+#                 self.assembler._exception_data[0] = 0
+#                 raise LLException(exc_type, exc_val)
+#         # otherwise exception data is set correctly, no problem at all
+#         return res
 
-    def get_compiled_single_operation(self, opnum, result_type, key,
-                                      valueboxes):
-        xxx
-        real_key = '%d,%s' % (opnum, result_type) + ','.join(key)
-        try:
-            return self._compiled_ops[real_key]
-        except KeyError:
-            livevarlist = []
-            i = 0
-            # clonebox below is necessary, because sometimes we know
-            # that the value is constant (ie ArrayDescr), but we're not
-            # going to get the contant. So instead we get a box with correct
-            # value
-            for box in valueboxes:
-                if box.type == 'int':
-                    box = valueboxes[i].clonebox()
-                elif box.type == 'ptr':
-                    box = valueboxes[i].clonebox()
-                else:
-                    raise ValueError(type)
-                livevarlist.append(box)
-                i += 1
-            mp = ResOperation(rop.MERGE_POINT, livevarlist, None)
-            if result_type == 'void':
-                result = None
-            elif result_type == 'int':
-                result = history.BoxInt()
-            elif result_type == 'ptr':
-                result = history.BoxPtr()
-            else:
-                raise ValueError(result_type)
-            if result is None:
-                results = []
-            else:
-                results = [result]
-            operations = [mp,
-                          ResOperation(opnum, livevarlist, result),
-                          ResOperation(rop.RETURN, results, None)]
-            if operations[1].is_guard():
-                operations[1].liveboxes = []
-            self.compile_operations(operations, verbose=False)
-            self._compiled_ops[real_key] = mp
-            return mp
+#     def get_compiled_single_operation(self, opnum, result_type, key,
+#                                       valueboxes):
+#         xxx
+#         real_key = '%d,%s' % (opnum, result_type) + ','.join(key)
+#         try:
+#             return self._compiled_ops[real_key]
+#         except KeyError:
+#             livevarlist = []
+#             i = 0
+#             # clonebox below is necessary, because sometimes we know
+#             # that the value is constant (ie ArrayDescr), but we're not
+#             # going to get the contant. So instead we get a box with correct
+#             # value
+#             for box in valueboxes:
+#                 if box.type == 'int':
+#                     box = valueboxes[i].clonebox()
+#                 elif box.type == 'ptr':
+#                     box = valueboxes[i].clonebox()
+#                 else:
+#                     raise ValueError(type)
+#                 livevarlist.append(box)
+#                 i += 1
+#             mp = ResOperation(rop.MERGE_POINT, livevarlist, None)
+#             if result_type == 'void':
+#                 result = None
+#             elif result_type == 'int':
+#                 result = history.BoxInt()
+#             elif result_type == 'ptr':
+#                 result = history.BoxPtr()
+#             else:
+#                 raise ValueError(result_type)
+#             if result is None:
+#                 results = []
+#             else:
+#                 results = [result]
+#             operations = [mp,
+#                           ResOperation(opnum, livevarlist, result),
+#                           ResOperation(rop.RETURN, results, None)]
+#             if operations[1].is_guard():
+#                 operations[1].liveboxes = []
+#             self.compile_operations(operations, verbose=False)
+#             self._compiled_ops[real_key] = mp
+#             return mp
 
     def compile_operations(self, operations, guard_op=None, verbose=True):
         self.assembler.assemble(operations, guard_op, verbose=verbose)
@@ -258,9 +259,9 @@ class CPU386(object):
             raise ValueError('get_box_value_as_int, wrong arg')
 
     def get_valuebox_from_int(self, type, x):
-        if type == 'int':
+        if type == INT:
             return history.BoxInt(x)
-        elif type == 'ptr':
+        elif type == PTR:
             return history.BoxPtr(self.cast_int_to_gcref(x))
         else:
             raise ValueError('get_valuebox_from_int: %s' % (type,))
@@ -271,12 +272,13 @@ class CPU386(object):
         actual = self.generated_mps[argnum]
         if actual is not None:
             return actual
-        args = [BoxInt(0) for i in range(argnum + 1)]
+        args = [BoxInt(0) for i in range(argnum + 3)]
         result = BoxInt(0)
         operations = [
             ResOperation(rop.MERGE_POINT, args, None),
-            ResOperation(rop.CALL, args, result),
-            ResOperation(RETURN, [result], None)]
+            ResOperation(rop.CALL, args[:-1], result),
+            ResOperation(rop.GUARD_FALSE, [args[-1]], None)]
+        operations[-1].liveboxes = [result]
         self.compile_operations(operations)
         self.generated_mps[argnum] = operations
         return operations
@@ -303,7 +305,6 @@ class CPU386(object):
         if self.return_value_box is None:
             if self.debug:
                 llop.debug_print(lltype.Void, " => void result")
-            res = None
         else:
             if self.debug:
                 llop.debug_print(lltype.Void, " => ", res)
@@ -547,7 +548,7 @@ class CPU386(object):
         calldescr = args[1].getint()
         num_args, tp = self.unpack_calldescr(calldescr)
         mp = self._get_mp_for_call(num_args)
-        self.execute_operations_in_new_frame('call', mp, args)
+        return self.execute_operations_in_new_frame('call', mp, args + [BoxInt(1)])
 
     # ------------------- helpers and descriptions --------------------
 
