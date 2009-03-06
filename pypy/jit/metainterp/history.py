@@ -202,6 +202,9 @@ class ConstPtr(Const):
     def get_(self):
         return lltype.cast_ptr_to_int(self.value)
 
+    def getaddr(self, cpu):
+        return llmemory.cast_ptr_to_adr(self.value)
+
     def equals(self, other):
         return self.value == other.getptr_base()
 
