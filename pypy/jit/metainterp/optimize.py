@@ -530,7 +530,7 @@ class PerfectSpecializer(object):
                     instnode.virtualized = True
                 if instnode.cls is None:
                     instnode.cls = InstanceNode(op.args[1], const=True)
-                    instnode.vdesc = op.desc
+                    instnode.vdesc = op.vdesc
                 continue
             elif op.is_always_pure():
                 for arg in op.args:
