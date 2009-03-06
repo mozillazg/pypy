@@ -1,7 +1,7 @@
 import sys
 import ctypes
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory, ll2ctypes, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, ll2ctypes, rffi, rstr
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import CDefinedIntSymbolic, specialize
@@ -11,10 +11,13 @@ from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
-from pypy.jit.backend.x86.assembler import Assembler386
+from pypy.jit.backend.x86.assembler import Assembler386, WORD
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.backend.x86.executor import execute
+from pypy.jit.backend.x86.support import gc_malloc_fnaddr
+
+GC_MALLOC = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
 
 class CPU386(object):
     debug = True
@@ -139,6 +142,7 @@ class CPU386(object):
         return self.cast_int_to_gcref(self.assembler._exception_data[1])
 
     def execute_operation(self, opnum, valueboxes, result_type):
+        xxx
         if execute[opnum] is not None:
             return execute[opnum](valueboxes)
         
@@ -171,6 +175,7 @@ class CPU386(object):
 
     def get_compiled_single_operation(self, opnum, result_type, key,
                                       valueboxes):
+        xxx
         real_key = '%d,%s' % (opnum, result_type) + ','.join(key)
         try:
             return self._compiled_ops[real_key]
@@ -355,16 +360,161 @@ class CPU386(object):
     def sizeof(self, S):
         return symbolic.get_size(S)
 
-    numof = sizeof
-    addresssuffix = str(symbolic.get_size(llmemory.Address))
+#    numof = sizeof
+#    addresssuffix = str(symbolic.get_size(llmemory.Address))
 
-    def itemoffsetof(self, A):
-        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
-        return basesize
+#    def itemoffsetof(self, A):
+#        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
+#        return basesize
 
-    def arraylengthoffset(self, A):
-        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
-        return ofs_length
+#    def arraylengthoffset(self, A):
+#        basesize, itemsize, ofs_length = symbolic.get_array_token(A)
+#        return ofs_length
+
+    # ------------------- backend-specific ops ------------------------
+
+    def do_arraylen_gc(self, args):
+        gcref = args[0].getptr(llmemory.GCREF)
+        return BoxInt(rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[0])
+
+    def do_getarrayitem_gc(self, args):
+        arraydescr = args[1].getint()
+        field = args[2].getint()
+        gcref = args[0].getptr(llmemory.GCREF)
+        if arraydescr < 0:
+            ptr = True
+        else:
+            ptr = False
+        shift, ofs = self.unpack_arraydescr(arraydescr)
+        size = 1 << shift
+        if size == 1:
+            return BoxInt(ord(rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)
+                          [ofs + field]))
+        elif size == WORD:
+            val = (rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
+                   [ofs/WORD + field])
+            if not ptr:
+                return BoxInt(val)
+            else:
+                return BoxPtr(self.cast_int_to_gcref(val))
+        else:
+            raise NotImplementedError("size = %d" % size)
+
+    def do_setarrayitem_gc(self, args):
+        arraydescr = args[1].getint()
+        field = args[2].getint()
+        gcref = args[0].getptr(llmemory.GCREF)
+        if arraydescr < 0:
+            ptr = True
+        else:
+            ptr = False
+        shift, ofs = self.unpack_arraydescr(arraydescr)
+        size = 1 << shift
+        if size == 1:
+            v = args[3].getint()
+            rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs + field] = chr(v)
+        elif size == WORD:
+            a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
+            if not ptr:
+                a[ofs/WORD + field] = args[3].getint()
+            else:
+                p = args[3].getptr(llmemory.GCREF)
+                a[ofs/WORD + field] = self.cast_gcref_to_int(p)
+        else:
+            raise NotImplementedError("size = %d" % size)
+
+    def do_strlen(self, args):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
+        gcref = args[0].getptr(llmemory.GCREF)
+        v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs_length/WORD]
+        return BoxInt(v)
+
+    def do_strgetitem(self, args):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
+        gcref = args[0].getptr(llmemory.GCREF)
+        i = args[1].getint()
+        v = rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[basesize + i]
+        return BoxInt(ord(v))
+
+    @specialize.argtype(1)
+    def _base_do_getfield(self, gcref, fielddescr):
+        ofs, size, ptr = self.unpack_fielddescr(fielddescr)
+        if size == 1:
+            v = ord(rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs])
+        elif size == 2:
+            v = rffi.cast(rffi.CArrayPtr(rffi.USHORT), gcref)[ofs/2]
+        elif size == WORD:
+            v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs/WORD]
+            if ptr:
+                return BoxPtr(self.cast_int_to_gcref(v))
+        else:
+            raise NotImplementedError("size = %d" % size)
+        return BoxInt(v)
+
+    def do_getfield_gc(self, args):
+        fielddescr = args[1].getint()
+        gcref = args[0].getptr(llmemory.GCREF)
+        return self._base_do_getfield(gcref, fielddescr)
+
+    def do_getfield_raw(self, args):
+        fielddescr = args[1].getint()
+        return self._base_do_getfield(args[0].getint(), fielddescr)
+
+    @specialize.argtype(2)
+    def _base_do_setfield(self, fielddescr, gcref, vbox):
+        ofs, size, ptr = self.unpack_fielddescr(fielddescr)
+        if size == 1:
+            v = vbox.getint()
+            rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs] = chr(v)
+        elif size == 2:
+            v = vbox.getint()
+            rffi.cast(rffi.CArrayPtr(rffi.USHORT), gcref)[ofs/2] = v
+        elif size == WORD:
+            a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
+            if ptr:
+                ptr = vbox.getptr(llmemory.GCREF)
+                a[ofs/WORD] = self.cast_gcref_to_int(ptr)
+            else:
+                a[ofs/WORD] = vbox.getint()
+        else:
+            raise NotImplementedError("size = %d" % size)
+
+    def do_setfield_gc(self, args):
+        fielddescr = args[1].getint()
+        gcref = args[0].getptr(llmemory.GCREF)
+        self._base_do_setfield(fielddescr, gcref, args[2])
+
+    def do_setfield_raw(self, args):
+        fielddescr = args[1].getint()
+        self._base_do_setfield(fielddescr, args[0].getint(), args[2])
+
+    def do_new(self, args):
+        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(args[0].getint())
+        return BoxPtr(self.cast_int_to_gcref(res))
+
+    def do_new_with_vtable(self, args):
+        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(args[0].getint())
+        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[0] = args[1].getint()
+        return BoxPtr(self.cast_int_to_gcref(res))
+
+    def do_new_array(self, args):
+        size_of_field, ofs = self.unpack_arraydescr(args[0].getint())
+        num_elem = args[1].getint()
+        size = ofs + (1 << size_of_field) * num_elem
+        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(size)
+        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[0] = num_elem
+        return BoxPtr(self.cast_int_to_gcref(res))
+
+    def do_newstr(self, args):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
+        assert itemsize == 1
+        num_elem = args[0].getint()
+        size = basesize + num_elem
+        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(size)
+        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
+        return BoxPtr(self.cast_int_to_gcref(res))
+
+    # ------------------- helpers and descriptions --------------------
 
     @staticmethod
     def cast_adr_to_int(x):
@@ -391,6 +541,20 @@ class CPU386(object):
         return res
 
     @staticmethod
+    def unpack_arraydescr(arraydescr):
+        # XXX move it to some saner place, regalloc is using it
+        if arraydescr < 0:
+            arraydescr = ~arraydescr
+        assert arraydescr
+        size_of_field = arraydescr >> 16
+        ofs = arraydescr & 0xffff
+        return size_of_field, ofs
+
+    @staticmethod
+    def calldescrof(argtypes, resulttype):
+        return 3
+
+    @staticmethod
     def fielddescrof(S, fieldname):
         ofs, size = symbolic.get_field_token(S, fieldname)
         val = (size << 16) + ofs
@@ -398,6 +562,16 @@ class CPU386(object):
             getattr(S, fieldname).TO._gckind == 'gc'):
             return ~val
         return val
+
+    @staticmethod
+    def unpack_fielddescr(fielddescr):
+        ptr = False
+        if fielddescr < 0:
+            fielddescr = ~fielddescr
+            ptr = True
+        ofs = fielddescr & 0xffff
+        size = fielddescr >> 16
+        return ofs, size, ptr
 
     @staticmethod
     def typefor(fielddesc):

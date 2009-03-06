@@ -718,14 +718,11 @@ class RegAlloc(object):
             self.free_regs = REGS[:]
             return ops + [PerformDiscard(op, arglocs)]
 
-    def consider_call_ptr(self, op, ignored):
-        return self._call(op, [self.loc(arg) for arg in op.args])
+    def consider_call(self, op, ignored):
+        args = [op.args[0]] + op.args[2:]
+        return self._call(op, [self.loc(arg) for arg in args])
 
-    consider_call_void = consider_call_ptr
-    consider_call__1 = consider_call_ptr
-    consider_call__2 = consider_call_ptr
-    consider_call__4 = consider_call_ptr
-    consider_call__8 = consider_call_ptr
+    consider_call_pure = consider_call
 
     def consider_new(self, op, ignored):
         return self._call(op, [self.loc(arg) for arg in op.args])
@@ -764,15 +761,6 @@ class RegAlloc(object):
                                [eax, imm(ofs + ofs_length), imm(WORD), loc])])
         return res
 
-    
-    def _unpack_arraydescr(self, arraydescr):
-        if arraydescr < 0:
-            arraydescr = ~arraydescr
-        assert arraydescr
-        size_of_field = arraydescr >> 16
-        ofs = arraydescr & 0xffff
-        return size_of_field, ofs
-
     def consider_new_array(self, op, ignored):
         size_of_field, basesize = self._unpack_arraydescr(op.args[0].getint())
         return self._malloc_varsize(0, basesize, 0, size_of_field, op.args[1],
@@ -785,12 +773,14 @@ class RegAlloc(object):
         assert reg
         return [Perform(op, [argloc], reg)]
 
+    def _unpack_arraydescr(self, arraydescr):
+        from pypy.jit.backend.x86.runner import CPU386
+        return CPU386.unpack_arraydescr(arraydescr)
+
     def _unpack_fielddescr(self, fielddescr):
-        if fielddescr < 0:
-            fielddescr = ~fielddescr
-        ofs_loc = imm(fielddescr & 0xffff)
-        size_loc = imm(fielddescr >> 16)
-        return ofs_loc, size_loc
+        from pypy.jit.backend.x86.runner import CPU386
+        ofs, size, _ = CPU386.unpack_fielddescr(arraydescr)
+        return imm(ofs), imm(size)
 
     def consider_setfield_gc(self, op, ignored):
         base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], op.args)
