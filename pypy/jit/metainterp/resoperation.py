@@ -68,10 +68,12 @@ class ResOperation(object):
 class rop(object):
     """The possible names of the ResOperations."""
 
+    _SPECIAL_FIRST = 1
     MERGE_POINT            = 1
     CATCH                  = 2
     JUMP                   = 3
     RETURN                 = 4
+    _SPECIAL_LAST = 9
 
     _GUARD_FIRST = 10 # ----- start of guard operations -----
     GUARD_TRUE             = 10
