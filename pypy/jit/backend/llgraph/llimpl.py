@@ -1002,6 +1002,52 @@ def do_strsetitem(string, index, newvalue):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     str.chars[index] = chr(newvalue)
 
+# ---------- call ----------
+
+_call_args = []
+
+def do_call_pushint(x):
+    _call_args.append(('int', x))
+
+def do_call_pushptr(x):
+    _call_args.append(('ptr', x))
+
+def _do_call_common(f, memocast):
+    ptr = cast_int_to_adr(memocast, f).ptr
+    FUNC = lltype.typeOf(ptr).TO
+    ARGS = FUNC.ARGS
+    args = []
+    nextitem = iter(_call_args).next
+    for i in range(len(ARGS)):
+        if ARGS[i] is lltype.Void:
+            x = None
+        else:
+            typ, x = nextitem()
+            if typ == 'ptr':
+                x = cast_from_ptr(ARGS[i], x)
+            else:
+                x = cast_from_int(ARGS[i], x, memocast)
+        args.append(x)
+    del _call_args[:]
+    assert len(ARGS) == len(args)
+    if hasattr(ptr._obj, 'graph'):
+        llinterp = _llinterp      # it's a global set here by CPU.__init__()
+        result = llinterp.eval_graph(ptr._obj.graph, args)
+    else:
+        result = ptr._obj._callable(*args)
+    return result
+
+def do_call_void(f, memocast):
+    _do_call_common(f, memocast)
+
+def do_call_int(f, memocast):
+    x = _do_call_common(f, memocast)
+    return cast_to_int(x, memocast)
+
+def do_call_ptr(f, memocast):
+    x = _do_call_common(f, memocast)
+    return cast_to_ptr(x)
+
 # ____________________________________________________________
 
 
@@ -1102,3 +1148,8 @@ setannotation(do_setfield_raw_int, annmodel.s_None)
 setannotation(do_setfield_raw_ptr, annmodel.s_None)
 setannotation(do_newstr, annmodel.SomePtr(llmemory.GCREF))
 setannotation(do_strsetitem, annmodel.s_None)
+setannotation(do_call_pushint, annmodel.s_None)
+setannotation(do_call_pushptr, annmodel.s_None)
+setannotation(do_call_int, annmodel.SomeInteger())
+setannotation(do_call_ptr, annmodel.SomePtr(llmemory.GCREF))
+setannotation(do_call_void, annmodel.s_None)
