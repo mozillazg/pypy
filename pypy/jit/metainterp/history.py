@@ -67,6 +67,9 @@ class AbstractValue(object):
     def constbox(self):
         raise NotImplementedError
 
+    def nonconstbox(self):
+        raise NotImplementedError
+
     def getaddr(self, cpu):
         raise NotImplementedError
 
@@ -128,6 +131,8 @@ class ConstInt(Const):
     def clonebox(self):
         return BoxInt(self.value)
 
+    nonconstbox = clonebox
+
     def getint(self):
         return self.value
 
@@ -162,6 +167,8 @@ class ConstAddr(Const):       # only for constants built before translation
     def clonebox(self):
         return BoxInt(self.cpu.cast_adr_to_int(self.value))
 
+    nonconstbox = clonebox
+
     def getint(self):
         return self.cpu.cast_adr_to_int(self.value)
 
@@ -186,6 +193,8 @@ class ConstPtr(Const):
 
     def clonebox(self):
         return BoxPtr(self.value)
+
+    nonconstbox = clonebox
 
     def getptr_base(self):
         return self.value
@@ -218,6 +227,9 @@ class Box(AbstractValue):
 
     def equals(self, other):
         return self is other
+
+    def nonconstbox(self):
+        return self
 
     def __repr__(self):
         result = str(self)

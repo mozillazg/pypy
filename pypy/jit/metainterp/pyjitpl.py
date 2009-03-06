@@ -15,6 +15,7 @@ from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
 from pypy.jit.metainterp import codewriter, optimize
+from pypy.jit.metainterp.executor import get_execute_function
 from pypy.rlib.rarithmetic import intmask
 
 # ____________________________________________________________
@@ -776,16 +777,20 @@ class OOMetaInterp(object):
 
     def execute_and_record(self, opnum, argboxes, result_type):
         # execute the operation first
-        resbox = self.cpu.execute_operation(opnum, argboxes, result_type)
+        func = get_execute_function(self.cpu, opnum)
+        resbox = func(self.cpu, argboxes)
         # check if the operation can be constant-folded away
         canfold = False
         if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
             # this part disappears if execute() is specialized for an
             # opnum that is not within the range
-            assert resbox is not None
             canfold = self._all_constants(argboxes)
             if canfold:
-                resbox = resbox.constbox()
+                resbox = resbox.constbox()       # ensure it is a Const
+            else:
+                resbox = resbox.nonconstbox()    # ensure it is a Box
+        else:
+            assert resbox is None or isinstance(resbox, Box)
         # record the operation if not constant-folded away
         if not canfold:
             self.history.record(opnum, argboxes, resbox)
