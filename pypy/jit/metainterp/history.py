@@ -366,13 +366,13 @@ class RunningMatcher(Matcher):
         self.operations = []
 
 class History(RunningMatcher):
-    def record(self, opnum, argboxes, resbox):
-        op = ResOperation(opnum, argboxes, resbox)
+    def record(self, opnum, argboxes, resbox, descr=0):
+        op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations.append(op)
         return op
 
 class BlackHole(RunningMatcher):
-    def record(self, opnum, argboxes, resbox):
+    def record(self, opnum, argboxes, resbox, descr=0):
         return None
 
 def mp_eq(greenkey1, greenkey2):

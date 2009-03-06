@@ -67,7 +67,7 @@ class AllocationStorage(object):
                 ld = instnode.cls.source
                 assert isinstance(ld, FixedList)
                 alloc_offset = len(self.list_allocations)
-                ad = ConstInt(ld.arraydescr)
+                ad = ld.arraydescr
                 if instnode.cursize == -1:
                     # fish fish fish
                     instnode.cursize = executor.execute(cpu, rop.ARRAYLEN_GC,
@@ -87,7 +87,7 @@ class AllocationStorage(object):
                     ld = instnode.cls.source
                     x = (alloc_offset + 1) << 16
                     assert isinstance(ld, FixedList)
-                    self.setitems.append((x, ConstInt(ld.arraydescr), ofs, num))
+                    self.setitems.append((x, ld.arraydescr, ofs, num))
                 else:
                     self.setfields.append((alloc_offset, ofs, num))
         elif virtualized:
@@ -313,8 +313,8 @@ class PerfectSpecializer(object):
     def find_nodes_getarrayitem(self, op):
         instnode = self.getnode(op.args[0])
         if instnode.cls is None:
-            instnode.cls = InstanceNode(FixedList(op.args[1].getint()))
-        fieldbox = op.args[2]
+            instnode.cls = InstanceNode(FixedList(op.descr))
+        fieldbox = op.args[1]
         if self.getnode(fieldbox).const:
             item = self.getsource(fieldbox).getint()
             assert item >= 0 # XXX
@@ -348,17 +348,17 @@ class PerfectSpecializer(object):
             elif opnum == rop.NEW_WITH_VTABLE:
                 box = op.result
                 instnode = InstanceNode(box, escaped=False)
-                instnode.cls = InstanceNode(op.args[1], const=True)
+                instnode.cls = InstanceNode(op.args[0], const=True)
                 self.nodes[box] = instnode
                 self.first_escaping_op = False
                 continue
             elif opnum == rop.NEW_ARRAY:
                 box = op.result
                 instnode = InstanceNode(box, escaped=False)
-                instnode.cls = InstanceNode(FixedList(op.args[0].getint()))
+                instnode.cls = InstanceNode(FixedList(op.descr))
                 self.nodes[box] = instnode
-                if self.getnode(op.args[1]).const:
-                    instnode.cursize = op.args[1].getint()
+                if self.getnode(op.args[0]).const:
+                    instnode.cursize = op.args[0].getint()
                 else:
                     instnode.escaped = True
                 continue
@@ -393,45 +393,39 @@ class PerfectSpecializer(object):
                 continue
             elif opnum == rop.GETARRAYITEM_GC_PURE:
                 instnode = self.getnode(op.args[0])
-                if not instnode.const or not self.getnode(op.args[2]).const:
+                if not instnode.const or not self.getnode(op.args[1]).const:
                     self.find_nodes_getarrayitem(op)
                     continue
             elif opnum == rop.SETARRAYITEM_GC:
                 instnode = self.getnode(op.args[0])
                 if instnode.cls is None:
-                    instnode.cls = InstanceNode(FixedList(op.args[1].getint()))
-                fieldbox = op.args[2]
+                    instnode.cls = InstanceNode(FixedList(op.descr))
+                fieldbox = op.args[1]
                 if self.getnode(fieldbox).const:
                     item = self.getsource(fieldbox).getint()
                     assert item >= 0 # XXX
                     self.find_nodes_setfield(instnode, item,
-                                             self.getnode(op.args[3]))
+                                             self.getnode(op.args[2]))
                 else:
                     instnode.escaped = True
                     self.dependency_graph.append((instnode,
-                                                 self.getnode(op.args[3])))
+                                                 self.getnode(op.args[2])))
                 continue
             elif opnum == rop.SETFIELD_GC:
                 instnode = self.getnode(op.args[0])
-                fieldbox = op.args[1]
-                assert isinstance(fieldbox, ConstInt)
-                field = fieldbox.getint()
+                field = op.descr
                 self.find_nodes_setfield(instnode, field,
-                                         self.getnode(op.args[2]))
+                                         self.getnode(op.args[1]))
                 continue
             elif opnum == rop.GETFIELD_GC:
                 instnode = self.getnode(op.args[0])
-                fieldbox = op.args[1]
-                assert isinstance(fieldbox, ConstInt)
-                field = fieldbox.getint()
+                field = op.descr
                 box = op.result
                 self.find_nodes_getfield(instnode, field, box)
                 continue
             elif opnum == rop.GETFIELD_GC_PURE:
                 instnode = self.getnode(op.args[0])
-                fieldbox = op.args[1]
-                assert isinstance(fieldbox, ConstInt)
-                field = fieldbox.getint()
+                field = op.descr
                 if not instnode.const:
                     box = op.result
                     self.find_nodes_getfield(instnode, field, box)
@@ -631,7 +625,7 @@ class PerfectSpecializer(object):
                     isinstance(node.cls.source, FixedList)):
                     ld = node.cls.source
                     assert isinstance(ld, FixedList)
-                    ad = ConstInt(ld.arraydescr)
+                    ad = ld.arraydescr
                     storage.setitems.append((index, ad, ofs, fieldindex))
                 else:
                     storage.setfields.append((index, ofs, fieldindex))
@@ -788,27 +782,25 @@ class PerfectSpecializer(object):
                 continue
             elif opnum == rop.GETFIELD_GC:
                 instnode = self.nodes[op.args[0]]
-                ofs = op.args[1].getint()
-                if self.optimize_getfield(instnode, ofs, op.result):
+                if self.optimize_getfield(instnode, op.descr, op.result):
                     continue
                 # otherwise we need this getfield, but it does not
                 # invalidate caches
             elif opnum == rop.GETFIELD_GC_PURE:
                 instnode = self.nodes[op.args[0]]
                 if not instnode.const:
-                    ofs = op.args[1].getint()
-                    if self.optimize_getfield(instnode, ofs, op.result):
+                    if self.optimize_getfield(instnode, op.descr, op.result):
                         continue
             elif opnum == rop.GETARRAYITEM_GC:
                 instnode = self.nodes[op.args[0]]
-                ofsbox = self.getsource(op.args[2])
+                ofsbox = self.getsource(op.args[1])
                 if isinstance(ofsbox, ConstInt):
                     ofs = ofsbox.getint()
                     if self.optimize_getfield(instnode, ofs, op.result):
                         continue
             elif opnum == rop.GETARRAYITEM_GC_PURE:
                 instnode = self.nodes[op.args[0]]
-                ofsbox = self.getsource(op.args[2])
+                ofsbox = self.getsource(op.args[1])
                 if not instnode.const:
                     if isinstance(ofsbox, ConstInt):
                         ofs = ofsbox.getint()
@@ -833,7 +825,7 @@ class PerfectSpecializer(object):
                 instnode = self.nodes[op.result]
                 if not instnode.escaped:
                     instnode.virtual = True
-                    instnode.cursize = op.args[1].getint()
+                    instnode.cursize = op.args[0].getint()
                     continue
 ##            elif opname == 'newlist':
 ##                instnode = self.nodes[op.results[0]]
@@ -877,19 +869,19 @@ class PerfectSpecializer(object):
 ##                    continue
             elif opnum == rop.SETFIELD_GC:
                 instnode = self.nodes[op.args[0]]
-                valuenode = self.nodes[op.args[2]]
-                ofs = op.args[1].getint()
-                self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
+                valuenode = self.nodes[op.args[1]]
+                ofs = op.descr
+                self.optimize_setfield(instnode, ofs, valuenode, op.args[1])
                 continue
             elif opnum == rop.SETARRAYITEM_GC:
                 instnode = self.nodes[op.args[0]]
                 if instnode.cls is None:
-                    instnode.cls = InstanceNode(FixedList(op.args[1].getint()))
-                ofsbox = self.getsource(op.args[2])
+                    instnode.cls = InstanceNode(FixedList(op.descr))
+                ofsbox = self.getsource(op.args[1])
                 if isinstance(ofsbox, ConstInt):
                     ofs = ofsbox.getint()
-                    valuenode = self.getnode(op.args[3])
-                    self.optimize_setfield(instnode, ofs, valuenode, op.args[3])
+                    valuenode = self.getnode(op.args[2])
+                    self.optimize_setfield(instnode, ofs, valuenode, op.args[2])
                     continue
 ##            elif opname == 'setitem':
 ##                instnode = self.nodes[op.args[1]]
@@ -966,13 +958,12 @@ class PerfectSpecializer(object):
                     isinstance(node.cls.source, FixedList)):
                     ld = node.cls.source
                     assert isinstance(ld, FixedList)
-                    ad = ConstInt(ld.arraydescr)
                     newoperations.append(ResOperation(rop.SETARRAYITEM_GC,
-                         [node.source, ad, ConstInt(ofs), valuenode.source],
-                                                      None))
+                         [node.source, ConstInt(ofs), valuenode.source],
+                                                      None, ld.arraydescr))
                 else:
                     newoperations.append(ResOperation(rop.SETFIELD_GC,
-                       [node.source, ConstInt(ofs), valuenode.source], None))
+                       [node.source, valuenode.source], None, ofs))
             node.dirtyfields = {}
             node.cleanfields = {}
 
@@ -1023,17 +1014,17 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
     for vtable in storage.allocations:
         if metainterp.cpu.translate_support_code:
             vtable_addr = metainterp.cpu.cast_int_to_adr(vtable)
-            sizebox = ConstInt(metainterp.class_sizes[vtable_addr])
+            size = metainterp.class_sizes[vtable_addr]
         else:
-            sizebox = ConstInt(metainterp.class_sizes[vtable])
+            size = metainterp.class_sizes[vtable]
         vtablebox = ConstInt(vtable)
         instbox = metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
-                                                [sizebox, vtablebox])
+                                                [vtablebox], size)
         allocated_boxes.append(instbox)
     for ad, lgt in storage.list_allocations:
         sizebox = ConstInt(lgt)
         listbox = metainterp.execute_and_record(rop.NEW_ARRAY,
-                                                [ad, sizebox])
+                                                [sizebox], ad)
         allocated_lists.append(listbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
         fieldbox = box_from_index(allocated_boxes, allocated_lists,
@@ -1042,14 +1033,14 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
                              boxes_from_frame,
                              index_in_alloc)
         metainterp.execute_and_record(rop.SETFIELD_GC,
-                                      [box, ConstInt(ofs), fieldbox])
+                                      [box, fieldbox], ofs)
     for index_in_alloc, ad, ofs, index_in_arglist in storage.setitems:
         itembox = box_from_index(allocated_boxes, allocated_lists,
                                  boxes_from_frame, index_in_arglist)
         box = box_from_index(allocated_boxes, allocated_lists,
                              boxes_from_frame, index_in_alloc)
         metainterp.execute_and_record(rop.SETARRAYITEM_GC,
-                                      [box, ad, ConstInt(ofs), itembox])
+                                      [box, ConstInt(ofs), itembox], ad)
 ##    if storage.setitems:
 ##        #history.execute_and_record('guard_no_exception', [], 'void', False)
 ##        # XXX this needs to check for exceptions somehow

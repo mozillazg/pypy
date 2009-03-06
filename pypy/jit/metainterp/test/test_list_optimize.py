@@ -18,13 +18,13 @@ class A:
     l = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lst))
     e0 = BoxInt(0)
     e1 = BoxInt(0)
-    ad = ConstInt(cpu.arraydescrof(TP))
+    ad = cpu.arraydescrof(TP)
     ops = [
         ResOperation(rop.MERGE_POINT, [l], None),
-        ResOperation(rop.GETARRAYITEM_GC, [l, ad, ConstInt(0)], e0),
-        ResOperation(rop.SETARRAYITEM_GC, [l, ad, ConstInt(0), e0], None),
-        ResOperation(rop.GETARRAYITEM_GC, [l, ad, ConstInt(0)], e1),
-        ResOperation(rop.SETARRAYITEM_GC, [l, ad, ConstInt(0), e1], None),
+        ResOperation(rop.GETARRAYITEM_GC, [l, ConstInt(0)], e0, ad),
+        ResOperation(rop.SETARRAYITEM_GC, [l, ConstInt(0), e0], None, ad),
+        ResOperation(rop.GETARRAYITEM_GC, [l, ConstInt(0)], e1, ad),
+        ResOperation(rop.SETARRAYITEM_GC, [l, ConstInt(0), e1], None, ad),
         ResOperation(rop.JUMP, [l], None),
         ]
 
@@ -48,7 +48,7 @@ def test_A_optimize_loop():
     spec.optimize_loop(None)
     equaloplists(spec.loop.operations, [
         ResOperation(rop.MERGE_POINT, [A.l, A.e0], None),
-        ResOperation(rop.SETARRAYITEM_GC, [A.l, A.ad, ConstInt(0), A.e0], None),
+        ResOperation(rop.SETARRAYITEM_GC, [A.l, ConstInt(0), A.e0], None, A.ad),
         ResOperation(rop.JUMP, [A.l, A.e0], None)
     ])
 
@@ -60,13 +60,13 @@ class B:
     e3 = BoxInt(0)
     ops = [
         ResOperation(rop.MERGE_POINT, [l], None),
-        ResOperation(rop.GETARRAYITEM_GC, [l, ad, ConstInt(0)], e0),
+        ResOperation(rop.GETARRAYITEM_GC, [l, ConstInt(0)], e0, ad),
         ResOperation(rop.INT_ADD, [e0, ConstInt(1)], e1),
-        ResOperation(rop.SETARRAYITEM_GC, [l, ad, ConstInt(0), e1], None),
+        ResOperation(rop.SETARRAYITEM_GC, [l, ConstInt(0), e1], None, ad),
         ResOperation(-123, [e1], None),
-        ResOperation(rop.GETARRAYITEM_GC, [l, ad, ConstInt(0)], e2),
+        ResOperation(rop.GETARRAYITEM_GC, [l, ConstInt(0)], e2, ad),
         ResOperation(rop.INT_ADD, [e2, ConstInt(1)], e3),
-        ResOperation(rop.SETARRAYITEM_GC, [l, ad, ConstInt(0), e3], None),
+        ResOperation(rop.SETARRAYITEM_GC, [l, ConstInt(0), e3], None, ad),
         ResOperation(rop.JUMP, [l], None),
     ]
 
@@ -78,11 +78,11 @@ def test_B_optimize_loop():
     equaloplists(spec.loop.operations, [
         ResOperation(rop.MERGE_POINT, [B.l, B.e0], None),
         ResOperation(rop.INT_ADD, [B.e0, ConstInt(1)], B.e1),
-        ResOperation(rop.SETARRAYITEM_GC, [B.l, B.ad, ConstInt(0), B.e1], None),
+        ResOperation(rop.SETARRAYITEM_GC, [B.l, ConstInt(0), B.e1], None, B.ad),
         ResOperation(-123, [B.e1], None),
-        ResOperation(rop.GETARRAYITEM_GC, [B.l, B.ad, ConstInt(0)], B.e2),
+        ResOperation(rop.GETARRAYITEM_GC, [B.l, ConstInt(0)], B.e2, B.ad),
         ResOperation(rop.INT_ADD, [B.e2, ConstInt(1)], B.e3),
-        ResOperation(rop.SETARRAYITEM_GC, [B.l, B.ad, ConstInt(0), B.e3], None),
+        ResOperation(rop.SETARRAYITEM_GC, [B.l, ConstInt(0), B.e3], None, B.ad),
         ResOperation(rop.JUMP, [B.l, B.e3], None),
     ])
 
@@ -94,13 +94,13 @@ class C:
     e2 = BoxInt(0)
     ops = [
         ResOperation(rop.MERGE_POINT, [l], None),
-        ResOperation(rop.GETARRAYITEM_GC, [l, ad, ConstInt(0)], e0),
+        ResOperation(rop.GETARRAYITEM_GC, [l, ConstInt(0)], e0, ad),
         ResOperation(rop.INT_ADD, [e0, ConstInt(1)], e1),
-        ResOperation(rop.SETARRAYITEM_GC, [l, ad, ConstInt(0), e1], None),
+        ResOperation(rop.SETARRAYITEM_GC, [l, ConstInt(0), e1], None, ad),
         ResOperation(-123, [e1], None),
-        ResOperation(rop.GETARRAYITEM_GC, [l, ad, ConstInt(0)], e2),
+        ResOperation(rop.GETARRAYITEM_GC, [l, ConstInt(0)], e2, ad),
         ResOperation(rop.INT_ADD, [e2, ConstInt(1)], e3),
-        ResOperation(rop.SETARRAYITEM_GC, [l, ad, ConstInt(0), e3], None),
+        ResOperation(rop.SETARRAYITEM_GC, [l, ConstInt(0), e3], None, ad),
         ResOperation(rop.JUMP, [l], None),
     ]
     

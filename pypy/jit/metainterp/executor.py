@@ -13,34 +13,34 @@ from pypy.jit.metainterp.resoperation import rop
 
 # ____________________________________________________________
 
-def do_int_add(cpu, args):
+def do_int_add(cpu, args, descr=0):
     return ConstInt(args[0].getint() + args[1].getint())
 
-def do_int_sub(cpu, args):
+def do_int_sub(cpu, args, descr=0):
     return ConstInt(args[0].getint() - args[1].getint())
 
-def do_int_mul(cpu, args):
+def do_int_mul(cpu, args, descr=0):
     return ConstInt(args[0].getint() * args[1].getint())
 
-def do_int_floordiv(cpu, args):
+def do_int_floordiv(cpu, args, descr=0):
     return ConstInt(args[0].getint() // args[1].getint())
 
-def do_int_mod(cpu, args):
+def do_int_mod(cpu, args, descr=0):
     return ConstInt(args[0].getint() % args[1].getint())
 
-def do_int_and(cpu, args):
+def do_int_and(cpu, args, descr=0):
     return ConstInt(args[0].getint() & args[1].getint())
 
-def do_int_or(cpu, args):
+def do_int_or(cpu, args, descr=0):
     return ConstInt(args[0].getint() | args[1].getint())
 
-def do_int_xor(cpu, args):
+def do_int_xor(cpu, args, descr=0):
     return ConstInt(args[0].getint() ^ args[1].getint())
 
-def do_int_rshift(cpu, args):
+def do_int_rshift(cpu, args, descr=0):
     return ConstInt(args[0].getint() >> args[1].getint())
 
-def do_int_lshift(cpu, args):
+def do_int_lshift(cpu, args, descr=0):
     return ConstInt(args[0].getint() << args[1].getint())
 
 do_uint_add = do_int_add
@@ -49,63 +49,63 @@ do_uint_mul = do_int_mul
 
 # ----------
 
-def do_int_lt(cpu, args):
+def do_int_lt(cpu, args, descr=0):
     return ConstInt(args[0].getint() < args[1].getint())
 
-def do_int_le(cpu, args):
+def do_int_le(cpu, args, descr=0):
     return ConstInt(args[0].getint() <= args[1].getint())
 
-def do_int_eq(cpu, args):
+def do_int_eq(cpu, args, descr=0):
     return ConstInt(args[0].getint() == args[1].getint())
 
-def do_int_ne(cpu, args):
+def do_int_ne(cpu, args, descr=0):
     return ConstInt(args[0].getint() != args[1].getint())
 
-def do_int_gt(cpu, args):
+def do_int_gt(cpu, args, descr=0):
     return ConstInt(args[0].getint() > args[1].getint())
 
-def do_int_ge(cpu, args):
+def do_int_ge(cpu, args, descr=0):
     return ConstInt(args[0].getint() >= args[1].getint())
 
-def do_uint_lt(cpu, args):
+def do_uint_lt(cpu, args, descr=0):
     return ConstInt(r_uint(args[0].getint()) < r_uint(args[1].getint()))
 
-def do_uint_le(cpu, args):
+def do_uint_le(cpu, args, descr=0):
     return ConstInt(r_uint(args[0].getint()) <= r_uint(args[1].getint()))
 
 do_uint_eq = do_int_eq
 do_uint_ne = do_int_ne
 
-def do_uint_gt(cpu, args):
+def do_uint_gt(cpu, args, descr=0):
     return ConstInt(r_uint(args[0].getint()) > r_uint(args[1].getint()))
 
-def do_uint_ge(cpu, args):
+def do_uint_ge(cpu, args, descr=0):
     return ConstInt(r_uint(args[0].getint()) >= r_uint(args[1].getint()))
 
 # ----------
 
-def do_int_is_true(cpu, args):
+def do_int_is_true(cpu, args, descr=0):
     return ConstInt(bool(args[0].getint()))
 
-def do_int_neg(cpu, args):
+def do_int_neg(cpu, args, descr=0):
     return ConstInt(-args[0].getint())
 
-def do_int_invert(cpu, args):
+def do_int_invert(cpu, args, descr=0):
     return ConstInt(~args[0].getint())
 
-def do_bool_not(cpu, args):
+def do_bool_not(cpu, args, descr=0):
     return ConstInt(not args[0].getint())
 
-def do_oononnull(cpu, args):
+def do_oononnull(cpu, args, descr=0):
     return ConstInt(bool(args[0].getptr_base()))
 
-def do_ooisnull(cpu, args):
+def do_ooisnull(cpu, args, descr=0):
     return ConstInt(not args[0].getptr_base())
 
-def do_oois(cpu, args):
+def do_oois(cpu, args, descr=0):
     return ConstInt(args[0].getptr_base() == args[1].getptr_base())
 
-def do_ooisnot(cpu, args):
+def do_ooisnot(cpu, args, descr=0):
     return ConstInt(args[0].getptr_base() != args[1].getptr_base())
 
 # ----------
@@ -129,7 +129,7 @@ def do_ooisnot(cpu, args):
 
 # ----------
 
-def do_int_add_ovf(cpu, args):
+def do_int_add_ovf(cpu, args, descr=0):
     x = args[0].getint()
     y = args[1].getint()
     try:
@@ -139,7 +139,7 @@ def do_int_add_ovf(cpu, args):
         z = 0
     return BoxInt(z)
 
-def do_int_sub_ovf(cpu, args):
+def do_int_sub_ovf(cpu, args, descr=0):
     x = args[0].getint()
     y = args[1].getint()
     try:
@@ -149,7 +149,7 @@ def do_int_sub_ovf(cpu, args):
         z = 0
     return BoxInt(z)
 
-def do_int_mul_ovf(cpu, args):
+def do_int_mul_ovf(cpu, args, descr=0):
     x = args[0].getint()
     y = args[1].getint()
     try:
@@ -159,7 +159,7 @@ def do_int_mul_ovf(cpu, args):
         z = 0
     return BoxInt(z)
 
-def do_int_neg_ovf(cpu, args):
+def do_int_neg_ovf(cpu, args, descr=0):
     x = args[0].getint()
     try:
         z = ovfcheck(-x)
@@ -168,7 +168,7 @@ def do_int_neg_ovf(cpu, args):
         z = 0
     return BoxInt(z)
 
-def do_int_mod_ovf(cpu, args):
+def do_int_mod_ovf(cpu, args, descr=0):
     x = args[0].getint()
     y = args[1].getint()
     try:
@@ -206,7 +206,7 @@ def get_execute_function(cpu, opnum):
     return cpu._execute_list[opnum]
 get_execute_function._annspecialcase_ = 'specialize:memo'
 
-def execute(cpu, opnum, argboxes):
+def execute(cpu, opnum, argboxes, descr=0):
     func = get_execute_function(cpu, opnum)
-    return func(cpu, argboxes)
+    return func(cpu, argboxes, descr)
 execute._annspecialcase_ = 'specialize:arg(1)'
