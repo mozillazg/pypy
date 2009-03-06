@@ -17,6 +17,8 @@ REGS = [eax, ecx, edx]
 WORD = 4
 FRAMESIZE = 1024    # XXX should not be a constant at all!!
 
+RETURN = rop._LAST + 1
+
 class TempBox(Box):
     def __init__(self):
         pass
@@ -779,7 +781,7 @@ class RegAlloc(object):
 
     def _unpack_fielddescr(self, fielddescr):
         from pypy.jit.backend.x86.runner import CPU386
-        ofs, size, _ = CPU386.unpack_fielddescr(arraydescr)
+        ofs, size, _ = CPU386.unpack_fielddescr(fielddescr)
         return imm(ofs), imm(size)
 
     def consider_setfield_gc(self, op, ignored):
@@ -949,12 +951,15 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         return ops + laterops + [PerformDiscard(op, [])]
 
-oplist = [None] * rop._LAST
+oplist = [None] * (RETURN + 1)
 
 for name, value in RegAlloc.__dict__.iteritems():
     if name.startswith('consider_'):
         name = name[len('consider_'):]
-        num = getattr(rop, name.upper())
+        if name == 'return':
+            num = RETURN
+        else:
+            num = getattr(rop, name.upper())
         oplist[num] = value
 
 def arg_pos(i):

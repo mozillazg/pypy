@@ -514,6 +514,13 @@ class CPU386(object):
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
         return BoxPtr(self.cast_int_to_gcref(res))
 
+    def do_strsetitem(self, args):
+        basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
+        index = args[1].getint()
+        v = args[2].getint()
+        a = args[0].getptr(llmemory.GCREF)
+        rffi.cast(rffi.CArrayPtr(lltype.Char), a)[index + basesize] = chr(v)
+
     # ------------------- helpers and descriptions --------------------
 
     @staticmethod
