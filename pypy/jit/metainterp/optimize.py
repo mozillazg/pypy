@@ -69,7 +69,7 @@ class AllocationStorage(object):
                 ad = ConstInt(ld.arraydescr)
                 if instnode.cursize == -1:
                     # fish fish fish
-                    instnode.cursize=  cpu.execute_operation(rop.ARRAYLEN_GC,
+                    instnode.cursize = cpu.execute_operation(rop.ARRAYLEN_GC,
                                                [instnode.source, ad],
                                                 'int').getint()
                 self.list_allocations.append((ad, instnode.cursize))
@@ -158,7 +158,7 @@ class InstanceNode(object):
                 ofs in self.vdesc.virtuals):
                 node.add_to_dependency_graph(other.origfields[ofs], dep_graph)
 
-    def intersect(self, other):
+    def intersect(self, other, nodes):
         if not other.cls:
             return NotSpecNode()
         if self.cls:
@@ -175,21 +175,23 @@ class InstanceNode(object):
                 return NotSpecNode()
             return FixedClassSpecNode(known_class)
         if not other.escaped:
+
             fields = []
             if self is other:
-                d = other.curfields.copy()
-                d.update(self.origfields)
+                d = self.origfields.copy()
+                d.update(other.curfields)
             else:
                 d = other.curfields
             lst = d.keys()
             sort_integers(lst)
             for ofs in lst:
                 node = d[ofs]
-                if ofs in self.origfields:
-                    specnode = self.origfields[ofs].intersect(node)
-                else:
-                    self.origfields[ofs] = InstanceNode(node.source.clonebox())
-                    specnode = NotSpecNode()
+                if ofs not in self.origfields:
+                    box = node.source.clonebox()
+                    self.origfields[ofs] = InstanceNode(box, escaped=False)
+                    self.origfields[ofs].cls = node.cls
+                    nodes[box] = self.origfields[ofs]
+                specnode = self.origfields[ofs].intersect(node, nodes)
                 fields.append((ofs, specnode))
             if isinstance(known_class, FixedList):
                 return VirtualFixedListSpecNode(known_class, fields,
@@ -215,10 +217,10 @@ class InstanceNode(object):
             for ofs in offsets:
                 if ofs in self.origfields and ofs in other.curfields:
                     node = other.curfields[ofs]
-                    specnode = self.origfields[ofs].intersect(node)
+                    specnode = self.origfields[ofs].intersect(node, nodes)
                 elif ofs in self.origfields:
                     node = self.origfields[ofs]
-                    specnode = node.intersect(node)
+                    specnode = node.intersect(node, nodes)
                 else:
                     # ofs in other.curfields
                     node = other.curfields[ofs]
@@ -585,7 +587,7 @@ class PerfectSpecializer(object):
         for i in range(len(mp.args)):
             enternode = self.nodes[mp.args[i]]
             leavenode = self.getnode(jump.args[i])
-            specnodes.append(enternode.intersect(leavenode))
+            specnodes.append(enternode.intersect(leavenode, self.nodes))
         self.specnodes = specnodes
 
     def expanded_version_of(self, boxlist, oplist):
@@ -724,6 +726,9 @@ class PerfectSpecializer(object):
             #        self.ready_results[arg] = None
             elif opnum == rop.JUMP:
                 args = self.expanded_version_of(op.args, newoperations)
+                for arg in args:
+                    if arg in self.nodes:
+                        assert not self.nodes[arg].virtual
                 self.cleanup_field_caches(newoperations)
                 op = ResOperation(rop.JUMP, args, None)
                 newoperations.append(op)
