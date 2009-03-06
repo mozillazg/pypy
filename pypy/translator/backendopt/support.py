@@ -111,7 +111,8 @@ def find_calls_from(translator, graph, memo=None):
     if memo and graph in memo:
         return memo[graph]
     res = [i for i in _find_calls_from(translator, graph)]
-    memo[graph] = res
+    if memo is not None:
+        memo[graph] = res
     return res
 
 def _find_calls_from(translator, graph):
