@@ -171,11 +171,14 @@ class CPU(object):
         else:
             raise AssertionError('setvalue: valuebox = %s' % (valuebox,))
 
-    def get_exception(self, frame):
-        return self.cast_adr_to_int(llimpl.frame_exception(frame))
+    def get_exception(self):
+        return self.cast_adr_to_int(llimpl.get_exception())
 
-    def get_exc_value(self, frame):
-        return llimpl.frame_exc_value(frame)
+    def get_exc_value(self):
+        return llimpl.get_exc_value()
+
+    def set_overflow_error(self):
+        llimpl.set_overflow_error()
 
     @staticmethod
     def sizeof(S):
@@ -246,7 +249,7 @@ class CPU(object):
 
     def do_arraylen_gc(self, args):
         array = args[0].getptr_base()
-        return history.BoxInt(llimpl.do_arraylen_gc(array))
+        return history.BoxInt(llimpl.do_arraylen_gc(array, 0))
 
     def do_strlen(self, args):
         string = args[0].getptr_base()

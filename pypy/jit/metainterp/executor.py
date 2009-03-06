@@ -3,7 +3,7 @@
 
 import py
 from pypy.rlib.rarithmetic import ovfcheck, r_uint
-from pypy.jit.metainterp.history import BoxInt, ConstInt, BoxPtr
+from pypy.jit.metainterp.history import BoxInt, ConstInt
 from pypy.jit.metainterp.resoperation import rop
 
 
@@ -130,19 +130,53 @@ def do_ooisnot(cpu, args):
 # ----------
 
 def do_int_add_ovf(cpu, args):
-    return BoxInt(ovfcheck(args[0].getint() + args[1].getint()))
+    x = args[0].getint()
+    y = args[1].getint()
+    try:
+        z = ovfcheck(x + y)
+    except OverflowError:
+        cpu.set_overflow_error()
+        z = 0
+    return BoxInt(z)
 
 def do_int_sub_ovf(cpu, args):
-    return BoxInt(ovfcheck(args[0].getint() - args[1].getint()))
+    x = args[0].getint()
+    y = args[1].getint()
+    try:
+        z = ovfcheck(x - y)
+    except OverflowError:
+        cpu.set_overflow_error()
+        z = 0
+    return BoxInt(z)
 
 def do_int_mul_ovf(cpu, args):
-    return BoxInt(ovfcheck(args[0].getint() * args[1].getint()))
+    x = args[0].getint()
+    y = args[1].getint()
+    try:
+        z = ovfcheck(x * y)
+    except OverflowError:
+        cpu.set_overflow_error()
+        z = 0
+    return BoxInt(z)
 
 def do_int_neg_ovf(cpu, args):
-    return BoxInt(ovfcheck(-args[0].getint()))
+    x = args[0].getint()
+    try:
+        z = ovfcheck(-x)
+    except OverflowError:
+        cpu.set_overflow_error()
+        z = 0
+    return BoxInt(z)
 
 def do_int_mod_ovf(cpu, args):
-    return BoxInt(ovfcheck(args[0].getint() % args[1].getint()))
+    x = args[0].getint()
+    y = args[1].getint()
+    try:
+        z = ovfcheck(x % y)
+    except OverflowError:
+        cpu.set_overflow_error()
+        z = 0
+    return BoxInt(z)
 
 # ____________________________________________________________
 

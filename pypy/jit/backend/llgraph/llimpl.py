@@ -12,10 +12,10 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.lltypesystem import lloperation
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
-from pypy.rpython.llinterp import LLInterpreter, LLFrame, LLException
+from pypy.rpython.llinterp import LLException
 from pypy.rpython.extregistry import ExtRegistryEntry
 
-from pypy.jit.metainterp import heaptracker, resoperation
+from pypy.jit.metainterp import heaptracker, resoperation, executor
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.llgraph import symbolic
 
@@ -124,7 +124,6 @@ TYPES = {
 }
 
 # ____________________________________________________________
-
 
 class LoopOrBridge(object):
     def __init__(self):
@@ -327,14 +326,9 @@ def compile_from_guard(loop, guard_loop, guard_opindex):
 # ------------------------------
 
 class Frame(object):
+    OPHANDLERS = [None] * (rop._LAST+1)
 
     def __init__(self, memocast):
-        llinterp = LLInterpreter(_rtyper)    # '_rtyper' set by CPU
-        llinterp.traceback_frames = []
-        self.llframe = ExtendedLLFrame(None, None, llinterp)
-        self.llframe.memocast = memocast
-        self.llframe.last_exception = None
-        self.llframe.last_exception_handled = True
         self.verbose = False
         self.memocast = memocast
 
@@ -355,6 +349,9 @@ class Frame(object):
         """Execute all operations in a loop,
         possibly following to other loops as well.
         """
+        global _last_exception, _last_exception_handled
+        _last_exception = None
+        _last_exception_handled = True
         verbose = True
         while True:
             self.opindex += 1
@@ -369,9 +366,8 @@ class Frame(object):
                                        args)
                 _stats.exec_jumps += 1
                 continue
-            opname = resoperation.opname[op.opnum].lower()
             try:
-                result = self.execute_operation(opname, args, verbose)
+                result = self.execute_operation(op.opnum, args, verbose)
                 #verbose = self.verbose
                 assert (result is None) == (op.result is None)
                 if op.result is not None:
@@ -385,7 +381,7 @@ class Frame(object):
                                         % (RESTYPE,))
                     self.env[op.result] = x
             except GuardFailed:
-                assert self.llframe.last_exception_handled
+                assert _last_exception_handled
                 if hasattr(op, 'jump_target'):
                     # the guard already failed once, go to the
                     # already-generated code
@@ -409,21 +405,21 @@ class Frame(object):
                     self.failed_guard_op = op
                     return op.failnum
 
-    def execute_operation(self, opname, values, verbose):
+    def execute_operation(self, opnum, values, verbose):
         """Execute a single operation.
         """
-        ophandler = self.llframe.getoperationhandler(opname)
-        assert not getattr(ophandler, 'specialform', False)
-        if getattr(ophandler, 'need_result_type', False):
-            assert result_type is not None
-            values = list(values)
-            values.insert(0, result_type)
+        ophandler = self.OPHANDLERS[opnum]
+        if ophandler is None:
+            self._define_impl(opnum)
+            ophandler = self.OPHANDLERS[opnum]
+            assert ophandler is not None, "missing impl for op %d" % opnum
+        opname = resoperation.opname[opnum].lower()
         exec_counters = _stats.exec_counters
         exec_counters[opname] = exec_counters.get(opname, 0) + 1
         for i in range(len(values)):
             if isinstance(values[i], ComputedIntSymbolic):
                 values[i] = values[i].compute_fn()
-        res = ophandler(*values)
+        res = ophandler(self, *values)
         if verbose:
             argtypes, restype = TYPES[opname]
             if res is None:
@@ -450,191 +446,36 @@ class Frame(object):
         count_jumps = _stats.exec_jumps
         log.trace('ran %d operations, %d jumps' % (count, count_jumps))
 
+    # ----------
 
-def cast_to_int(x, memocast):
-    TP = lltype.typeOf(x)
-    if isinstance(TP, lltype.Ptr):
-        assert TP.TO._gckind == 'raw'
-        return cast_adr_to_int(memocast, llmemory.cast_ptr_to_adr(x))
-    if TP == llmemory.Address:
-        return cast_adr_to_int(memocast, x)
-    return lltype.cast_primitive(lltype.Signed, x)
-
-def cast_from_int(TYPE, x, memocast):
-    if isinstance(TYPE, lltype.Ptr):
-        assert TYPE.TO._gckind == 'raw'
-        return llmemory.cast_adr_to_ptr(cast_int_to_adr(memocast, x), TYPE)
-    elif TYPE == llmemory.Address:
-        return cast_int_to_adr(memocast, x)
-    else:
-        return lltype.cast_primitive(TYPE, x)
-
-def cast_to_ptr(x):
-    assert isinstance(lltype.typeOf(x), lltype.Ptr)
-    return lltype.cast_opaque_ptr(llmemory.GCREF, x)
-
-def cast_from_ptr(TYPE, x):
-    return lltype.cast_opaque_ptr(TYPE, x)
-
-
-def new_frame(memocast):
-    frame = Frame(memocast)
-    return _to_opaque(frame)
-
-def frame_clear(frame, loop, opindex):
-    frame = _from_opaque(frame)
-    loop = _from_opaque(loop)
-    frame.loop = loop
-    frame.opindex = opindex
-    frame.env = {}
-
-def frame_add_int(frame, value):
-    frame = _from_opaque(frame)
-    i = len(frame.env)
-    mp = frame.loop.operations[0]
-    frame.env[mp.args[i]] = value
-
-def frame_add_ptr(frame, value):
-    frame = _from_opaque(frame)
-    i = len(frame.env)
-    mp = frame.loop.operations[0]
-    frame.env[mp.args[i]] = value
-
-def frame_execute(frame):
-    frame = _from_opaque(frame)
-    if frame.verbose:
-        mp = frame.loop.operations[0]
-        values = [frame.env[v] for v in mp.args]
-        log.trace('Entering CPU frame <- %r' % (values,))
-    try:
-        result = frame.execute()
-        if frame.verbose:
-            log.trace('Leaving CPU frame -> #%d' % (result,))
-            frame.log_progress()
-    except ExecutionReturned, e:
-        frame.returned_value = e.args[0]
-        return -1
-    except ExecutionRaised, e:
-        raise e.args[0]
-    except Exception, e:
-        log.ERROR('%s in CPU frame: %s' % (e.__class__.__name__, e))
-        import sys, pdb; pdb.post_mortem(sys.exc_info()[2])
-        raise
-    return result
-
-def frame_int_getvalue(frame, num):
-    frame = _from_opaque(frame)
-    return frame.env[frame.failed_guard_op.livevars[num]]
-
-def frame_ptr_getvalue(frame, num):
-    frame = _from_opaque(frame)
-    return frame.env[frame.failed_guard_op.livevars[num]]
-
-def frame_int_setvalue(frame, num, value):
-    frame = _from_opaque(frame)
-    frame.env[frame.loop.operations[0].args[num]] = value
-
-def frame_ptr_setvalue(frame, num, value):
-    frame = _from_opaque(frame)
-    frame.env[frame.loop.operations[0].args[num]] = value
-
-def frame_int_getresult(frame):
-    frame = _from_opaque(frame)
-    return frame.returned_value
-
-def frame_ptr_getresult(frame):
-    frame = _from_opaque(frame)
-    return frame.returned_value
-
-def frame_exception(frame):
-    frame = _from_opaque(frame)
-    assert frame.llframe.last_exception_handled
-    last_exception = frame.llframe.last_exception
-    if last_exception:
-        return llmemory.cast_ptr_to_adr(last_exception.args[0])
-    else:
-        return llmemory.NULL
-
-def frame_exc_value(frame):
-    frame = _from_opaque(frame)
-    last_exception = frame.llframe.last_exception
-    if last_exception:
-        return lltype.cast_opaque_ptr(llmemory.GCREF, last_exception.args[1])
-    else:
-        return lltype.nullptr(llmemory.GCREF.TO)
-
-class MemoCast(object):
-    def __init__(self):
-        self.addresses = [llmemory.NULL]
-        self.rev_cache = {}
-
-def new_memo_cast():
-    memocast = MemoCast()
-    return _to_opaque(memocast)
-
-def cast_adr_to_int(memocast, adr):
-    # xxx slow
-    assert lltype.typeOf(adr) == llmemory.Address
-    memocast = _from_opaque(memocast)
-    addresses = memocast.addresses
-    for i in xrange(len(addresses)-1, -1, -1):
-        if addresses[i] == adr:
-            return i
-    i = len(addresses)
-    addresses.append(adr)
-    return i
-
-def cast_int_to_adr(memocast, int):
-    memocast = _from_opaque(memocast)
-    assert 0 <= int < len(memocast.addresses)
-    return memocast.addresses[int]
-
-class GuardFailed(Exception):
-    pass
-
-class ExecutionReturned(Exception):
-    pass
-
-class ExecutionRaised(Exception):
-    pass
-
-class ExtendedLLFrame(LLFrame):
-
-    def newsubframe(self, graph, args):
-        # the default implementation would also create an ExtendedLLFrame,
-        # but we don't want this to occur in our case
-        return LLFrame(graph, args, self.llinterpreter)
-
-    # ---------- signed/unsigned support ----------
-
-    # for these operations, we expect to be called with regular ints
-    # and to return regular ints
-    for _opname in ['uint_add', 'uint_sub', 'uint_mul',
-                    'uint_lt', 'uint_le', 'uint_eq',
-                    'uint_ne', 'uint_gt', 'uint_ge',
-                    ]:
-        exec py.code.Source("""
-            def op_%s(self, x, y):
-                x = r_uint(x)
-                y = r_uint(y)
-                ophandler = lloperation.LL_OPERATIONS[%r].fold
-                z = ophandler(x, y)
-                return intmask(z)
-        """ % (_opname, _opname)).compile()
-
-    # ----------------------------------------
-
-    def op_return(self, value=None):
-        if self.last_exception is None:
-            raise ExecutionReturned(value)
-        else:
-            raise ExecutionRaised(self.last_exception)
-
-    def op_guard_pause(self):
-        raise GuardFailed
-
-    def op_guard_builtin(self, b):
-        pass
+    def _define_impl(self, opnum):
+        opname = resoperation.opname[opnum]
+        try:
+            op = getattr(Frame, 'op_' + opname.lower())   # op_guard_true etc.
+        except AttributeError:
+            name = 'do_' + opname.lower()
+            try:
+                impl = globals()[name]                    # do_arraylen_gc etc.
+                def op(self, *args):
+                    return impl(*args)
+                #
+            except KeyError:
+                from pypy.jit.backend.llgraph import llimpl
+                impl = getattr(executor, name)            # do_int_add etc.
+                def _op_default_implementation(self, *args):
+                    # for all operations implemented in execute.py
+                    boxedargs = []
+                    for x in args:
+                        if type(x) is int:
+                            boxedargs.append(BoxInt(x))
+                        else:
+                            boxedargs.append(BoxPtr(x))
+                    # xxx this passes the 'llimpl' module as the CPU argument
+                    resbox = impl(llimpl, boxedargs)
+                    return resbox.value
+                op = _op_default_implementation
+                #
+        Frame.OPHANDLERS[opnum] = op
 
     def op_guard_true(self, value):
         if not value:
@@ -705,202 +546,240 @@ class ExtendedLLFrame(LLFrame):
             raise GuardFailed    # some other code is already in control
 
     def op_guard_no_exception(self):
-        if self.last_exception:
-            self.last_exception_handled = True
+        global _last_exception_handled
+        _last_exception_handled = True
+        if _last_exception:
             raise GuardFailed
 
     def op_guard_exception(self, expected_exception):
+        global _last_exception_handled
+        _last_exception_handled = True
         expected_exception = llmemory.cast_adr_to_ptr(
             cast_int_to_adr(self.memocast, expected_exception),
             rclass.CLASSTYPE)
         assert expected_exception
-        if self.last_exception:
-            got = self.last_exception.args[0]
-            self.last_exception_handled = True
+        if _last_exception:
+            got = _last_exception.args[0]
             if not rclass.ll_issubclass(got, expected_exception):
                 raise GuardFailed
-            return self.last_exception.args[1]
+            return _last_exception.args[1]
         else:
             raise GuardFailed
 
-    def op_new(self, typesize):
-        TYPE = symbolic.Size2Type[typesize]
-        return lltype.malloc(TYPE)
+    # ----------
+    # delegating to the builtins do_xxx() (done automatically for simple cases)
 
-    def op_new_with_vtable(self, typesize, vtable):
-        TYPE = symbolic.Size2Type[typesize]
-        ptr = lltype.malloc(TYPE)
-        ptr = lltype.cast_opaque_ptr(llmemory.GCREF, ptr)
-        self.op_setfield_gc(ptr, 2, vtable)
-        return ptr
-
-    def op_new_array(self, arraydesc, count):
-        TYPE = symbolic.Size2Type[arraydesc/2]
-        return lltype.malloc(TYPE, count)
-
-    def op_getfield_gc(self, ptr, fielddesc):
-        STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
-        ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
-        return getattr(ptr, fieldname)
-
-    op_getfield_gc_pure = op_getfield_gc
-
-    def op_getfield_raw(self, intval, fielddesc):
-        STRUCT, fieldname = symbolic.TokenToField[fielddesc/2]
-        ptr = llmemory.cast_adr_to_ptr(cast_int_to_adr(self.memocast, intval),
-                                       lltype.Ptr(STRUCT))
-        return getattr(ptr, fieldname)
-
-    op_getfield_raw_pure = op_getfield_raw
-
-    def _cast_newvalue(self, desc, TYPE, newvalue):
-        if desc % 2:
-            newvalue = lltype.cast_opaque_ptr(TYPE, newvalue)
+    def op_getarrayitem_gc(self, array, arraydescr, index):
+        if arraydescr & 1:
+            return do_getarrayitem_gc_ptr(array, index)
         else:
-            if isinstance(TYPE, lltype.Ptr):
-                assert TYPE.TO._gckind == 'raw'
-                newvalue = llmemory.cast_adr_to_ptr(
-                    cast_int_to_adr(self.memocast, newvalue),
-                    TYPE)
-            elif TYPE == llmemory.Address:
-                newvalue = cast_int_to_adr(self.memocast, newvalue)
-        return newvalue
+            return do_getarrayitem_gc_int(array, index, self.memocast)
 
-    def op_setfield_gc(self, ptr, fielddesc, newvalue):
-        offset = fielddesc/2
-        STRUCT, fieldname = symbolic.TokenToField[offset]
-        if lltype.typeOf(ptr) == llmemory.GCREF:
-            ptr = lltype.cast_opaque_ptr(lltype.Ptr(STRUCT), ptr)
-        FIELDTYPE = getattr(STRUCT, fieldname)
-        newvalue = self._cast_newvalue(fielddesc, FIELDTYPE, newvalue)
-        setattr(ptr, fieldname, newvalue)
+    def op_getfield_gc(self, struct, fielddescr):
+        if fielddescr & 1:
+            return do_getfield_gc_ptr(struct, fielddescr)
+        else:
+            return do_getfield_gc_int(struct, fielddescr, self.memocast)
 
-    def op_setfield_raw(self, intval, fielddesc, newvalue):
-        ptr = llmemory.cast_adr_to_ptr(cast_int_to_adr(self.memocast, intval),
-                                       lltype.Ptr(STRUCT))
-        self.op_setfield_gc(ptr, fielddesc, newvalue)
+    def op_getfield_raw(self, struct, fielddescr):
+        if fielddescr & 1:
+            return do_getfield_raw_ptr(struct, fielddescr)
+        else:
+            return do_getfield_raw_int(struct, fielddescr, self.memocast)
 
-    def op_getarrayitem_gc(self, array, arraydesc, index):
-        array = array._obj.container
-        return array.getitem(index)
+    def op_new_with_vtable(self, size, vtable):
+        result = do_new(size)
+        value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, result)
+        value.typeptr = cast_from_int(rclass.CLASSTYPE, vtable, self.memocast)
+        return result
 
-    op_getarrayitem_gc_pure = op_getarrayitem_gc
+    def op_setarrayitem_gc(self, array, arraydescr, index, newvalue):
+        if arraydescr & 1:
+            do_setarrayitem_gc_ptr(array, index, newvalue)
+        else:
+            do_setarrayitem_gc_int(array, index, newvalue, self.memocast)
 
-    def op_arraylen_gc(self, array, arraydesc):
-        array = array._obj.container
-        return array.getlength()
+    def op_setfield_gc(self, struct, fielddescr, newvalue):
+        if fielddescr & 1:
+            do_setfield_gc_ptr(struct, fielddescr, newvalue)
+        else:
+            do_setfield_gc_int(struct, fielddescr, newvalue, self.memocast)
 
-    def op_setarrayitem_gc(self, array, arraydesc, index, newvalue):
-        ITEMTYPE = symbolic.Size2Type[arraydesc/2].OF
-        array = array._obj.container
-        newvalue = self._cast_newvalue(arraydesc, ITEMTYPE, newvalue)
-        array.setitem(index, newvalue)
+    def op_setfield_raw(self, struct, fielddescr, newvalue):
+        if fielddescr & 1:
+            do_setfield_raw_ptr(struct, fielddescr, newvalue)
+        else:
+            do_setfield_raw_int(struct, fielddescr, newvalue, self.memocast)
 
-    def op_ooisnull(self, ptr):
-        if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = cast_int_to_adr(self.memocast, ptr)
-        return not ptr
-
-    def op_oononnull(self, ptr):
-        if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = cast_int_to_adr(self.memocast, ptr)
-        return bool(ptr)
-
-    def op_oois(self, ptr1, ptr2):
-        return ptr1 == ptr2
-
-    def op_ooisnot(self, ptr1, ptr2):
-        return ptr1 != ptr2
-
-    def op_bool_not(self, b):
-        assert isinstance(b, int)
-        return not b
-
-    def op_strlen(self, str):
-        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
-        return len(str.chars)
-
-    def op_strgetitem(self, str, index):
-        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
-        return ord(str.chars[index])
-
-    def op_strsetitem(self, str, index, newchar):
-        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
-        str.chars[index] = chr(newchar)
-
-    def op_newstr(self, length):
-        return rstr.mallocstr(length)
-
-    def catch_exception(self, e):
-        assert self.last_exception_handled
-        self.last_exception = e
-        self.last_exception_handled = False
-
-    def clear_exception(self):
-        assert self.last_exception_handled
-        self.last_exception = None
-
-    def op_call(self, f, calldescr, *args):
-        ptr = cast_int_to_adr(self.memocast, f).ptr
-        FUNC = lltype.typeOf(ptr).TO
-        ARGS = FUNC.ARGS
-        args = list(args)
-        for i in range(len(ARGS)):
-            if ARGS[i] is lltype.Void:
-                args.insert(i, lltype.Void)
-        assert len(ARGS) == len(args)
-        fixedargs = [heaptracker.fixupobj(TYPE, x)
-                     for TYPE, x in zip(ARGS, args)]
+    def op_call(self, func, calldescr, *args):
+        global _last_exception, _last_exception_handled
+        _call_args[:] = args
         try:
-            x = self.perform_call(ptr, ARGS, fixedargs)
+            res = _do_call_common(func, self.memocast)
+            _last_exception = None
+            return res
         except LLException, e:
-            self.catch_exception(e)
-            x = FUNC.RESULT._defl()
-        else:
-            self.clear_exception()
-        return x
-
-    op_call_pure = op_call
-
-    def op_listop_return(self, ll_func, *args):
-        return self.do_call(ll_func, *args)
-
-    def op_listop(self, ll_func, *args):
-        self.do_call(ll_func, *args)
-
-    op_getitem = op_listop_return
-    op_setitem = op_listop
-    op_append = op_listop
-    op_insert = op_listop
-    op_pop = op_listop_return
-    op_len = op_listop_return
-    op_listnonzero = op_listop_return
-
-    def op_newlist(self, ll_newlist, lgt, default_val=None):
-        if default_val is not None:
-            res = self.do_call(ll_newlist, lgt, default_val)
-        else:
-            res = self.do_call(ll_newlist, lgt)
-        return res
-
-    for _opname in ['int_add_ovf', 'int_sub_ovf', 'int_mul_ovf',
-                    'int_neg_ovf', 'int_mod_ovf',
-                    ]:
-        exec py.code.Source('''
-            def op_%s(self, *args):
-                try:
-                    z = LLFrame.op_%s(self, *args)
-                except LLException, e:
-                    self.catch_exception(e)
-                    z = 0
-                else:
-                    self.clear_exception()
-                return z
-        ''' % (_opname, _opname)).compile()
+            _last_exception = e
+            _last_exception_handled = False
+            if calldescr == -1:
+                return None
+            elif calldescr & 1:
+                return lltype.nullptr(llmemory.GCREF)
+            else:
+                return 0
 
 # ____________________________________________________________
 
-def do_arraylen_gc(array):
+def cast_to_int(x, memocast):
+    TP = lltype.typeOf(x)
+    if isinstance(TP, lltype.Ptr):
+        assert TP.TO._gckind == 'raw'
+        return cast_adr_to_int(memocast, llmemory.cast_ptr_to_adr(x))
+    if TP == llmemory.Address:
+        return cast_adr_to_int(memocast, x)
+    return lltype.cast_primitive(lltype.Signed, x)
+
+def cast_from_int(TYPE, x, memocast):
+    if isinstance(TYPE, lltype.Ptr):
+        assert TYPE.TO._gckind == 'raw'
+        return llmemory.cast_adr_to_ptr(cast_int_to_adr(memocast, x), TYPE)
+    elif TYPE == llmemory.Address:
+        return cast_int_to_adr(memocast, x)
+    else:
+        return lltype.cast_primitive(TYPE, x)
+
+def cast_to_ptr(x):
+    assert isinstance(lltype.typeOf(x), lltype.Ptr)
+    return lltype.cast_opaque_ptr(llmemory.GCREF, x)
+
+def cast_from_ptr(TYPE, x):
+    return lltype.cast_opaque_ptr(TYPE, x)
+
+
+def new_frame(memocast):
+    frame = Frame(memocast)
+    return _to_opaque(frame)
+
+def frame_clear(frame, loop, opindex):
+    frame = _from_opaque(frame)
+    loop = _from_opaque(loop)
+    frame.loop = loop
+    frame.opindex = opindex
+    frame.env = {}
+
+def frame_add_int(frame, value):
+    frame = _from_opaque(frame)
+    i = len(frame.env)
+    mp = frame.loop.operations[0]
+    frame.env[mp.args[i]] = value
+
+def frame_add_ptr(frame, value):
+    frame = _from_opaque(frame)
+    i = len(frame.env)
+    mp = frame.loop.operations[0]
+    frame.env[mp.args[i]] = value
+
+def frame_execute(frame):
+    frame = _from_opaque(frame)
+    if frame.verbose:
+        mp = frame.loop.operations[0]
+        values = [frame.env[v] for v in mp.args]
+        log.trace('Entering CPU frame <- %r' % (values,))
+    try:
+        result = frame.execute()
+        if frame.verbose:
+            log.trace('Leaving CPU frame -> #%d' % (result,))
+            frame.log_progress()
+    except Exception, e:
+        log.ERROR('%s in CPU frame: %s' % (e.__class__.__name__, e))
+        import sys, pdb; pdb.post_mortem(sys.exc_info()[2])
+        raise
+    return result
+
+def frame_int_getvalue(frame, num):
+    frame = _from_opaque(frame)
+    return frame.env[frame.failed_guard_op.livevars[num]]
+
+def frame_ptr_getvalue(frame, num):
+    frame = _from_opaque(frame)
+    return frame.env[frame.failed_guard_op.livevars[num]]
+
+def frame_int_setvalue(frame, num, value):
+    frame = _from_opaque(frame)
+    frame.env[frame.loop.operations[0].args[num]] = value
+
+def frame_ptr_setvalue(frame, num, value):
+    frame = _from_opaque(frame)
+    frame.env[frame.loop.operations[0].args[num]] = value
+
+def frame_int_getresult(frame):
+    frame = _from_opaque(frame)
+    return frame.returned_value
+
+def frame_ptr_getresult(frame):
+    frame = _from_opaque(frame)
+    return frame.returned_value
+
+def get_exception():
+    global _last_exception, _last_exception_handled
+    _last_exception_handled = True
+    if _last_exception:
+        return llmemory.cast_ptr_to_adr(_last_exception.args[0])
+    else:
+        return llmemory.NULL
+
+def get_exc_value():
+    global _last_exception, _last_exception_handled
+    _last_exception_handled = True
+    if _last_exception:
+        return lltype.cast_opaque_ptr(llmemory.GCREF, _last_exception.args[1])
+    else:
+        return lltype.nullptr(llmemory.GCREF.TO)
+
+def set_overflow_error():
+    global _last_exception, _last_exception_handled
+    llframe = _llinterp.frame_class(None, None, _llinterp)
+    try:
+        llframe.make_llexception(OverflowError())
+    except LLException, e:
+        _last_exception = e
+        _last_exception_handled = False
+    else:
+        assert 0, "should have raised"
+
+class MemoCast(object):
+    def __init__(self):
+        self.addresses = [llmemory.NULL]
+        self.rev_cache = {}
+
+def new_memo_cast():
+    memocast = MemoCast()
+    return _to_opaque(memocast)
+
+def cast_adr_to_int(memocast, adr):
+    # xxx slow
+    assert lltype.typeOf(adr) == llmemory.Address
+    memocast = _from_opaque(memocast)
+    addresses = memocast.addresses
+    for i in xrange(len(addresses)-1, -1, -1):
+        if addresses[i] == adr:
+            return i
+    i = len(addresses)
+    addresses.append(adr)
+    return i
+
+def cast_int_to_adr(memocast, int):
+    memocast = _from_opaque(memocast)
+    assert 0 <= int < len(memocast.addresses)
+    return memocast.addresses[int]
+
+class GuardFailed(Exception):
+    pass
+
+# ____________________________________________________________
+
+
+def do_arraylen_gc(array, ignored):
     array = array._obj.container
     return array.getlength()
 
@@ -1007,10 +886,10 @@ def do_strsetitem(string, index, newvalue):
 _call_args = []
 
 def do_call_pushint(x):
-    _call_args.append(('int', x))
+    _call_args.append(x)
 
 def do_call_pushptr(x):
-    _call_args.append(('ptr', x))
+    _call_args.append(x)
 
 def _do_call_common(f, memocast):
     ptr = cast_int_to_adr(memocast, f).ptr
@@ -1018,15 +897,15 @@ def _do_call_common(f, memocast):
     ARGS = FUNC.ARGS
     args = []
     nextitem = iter(_call_args).next
-    for i in range(len(ARGS)):
-        if ARGS[i] is lltype.Void:
+    for TYPE in ARGS:
+        if TYPE is lltype.Void:
             x = None
         else:
-            typ, x = nextitem()
-            if typ == 'ptr':
-                x = cast_from_ptr(ARGS[i], x)
+            x = nextitem()
+            if isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
+                x = cast_from_ptr(TYPE, x)
             else:
-                x = cast_from_int(ARGS[i], x, memocast)
+                x = cast_from_int(TYPE, x, memocast)
         args.append(x)
     del _call_args[:]
     assert len(ARGS) == len(args)
@@ -1122,8 +1001,10 @@ setannotation(frame_int_setvalue, annmodel.s_None)
 setannotation(frame_ptr_setvalue, annmodel.s_None)
 setannotation(frame_int_getresult, annmodel.SomeInteger())
 setannotation(frame_ptr_getresult, annmodel.SomePtr(llmemory.GCREF))
-setannotation(frame_exception, annmodel.SomeAddress())
-setannotation(frame_exc_value, annmodel.SomePtr(llmemory.GCREF))
+
+setannotation(get_exception, annmodel.SomeAddress())
+setannotation(get_exc_value, annmodel.SomePtr(llmemory.GCREF))
+setannotation(set_overflow_error, annmodel.s_None)
 
 setannotation(new_memo_cast, s_MemoCast)
 setannotation(cast_adr_to_int, annmodel.SomeInteger())
