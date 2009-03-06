@@ -547,7 +547,18 @@ class CPU386(object):
             self.return_value_type = PTR
         else:
             self.return_value_type = INT
-        return self.execute_operations_in_new_frame('call', mp, args)
+        result = self.execute_operations_in_new_frame('call', mp, args)
+        if not we_are_translated():
+            exc = self.get_exception()
+            if exc:
+                 TP = lltype.Ptr(rclass.OBJECT_VTABLE)
+                 TP_V = lltype.Ptr(rclass.OBJECT)
+                 exc_t_a = self.cast_int_to_adr(exc)
+                 exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
+                 exc_v_a = self.get_exc_value()
+                 exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
+                 raise LLException(exc_type, exc_val)
+        return result
 
     # ------------------- helpers and descriptions --------------------
 
