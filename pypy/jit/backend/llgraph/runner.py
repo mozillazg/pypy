@@ -3,6 +3,7 @@ Minimal-API wrapper around the llinterpreter to run operations.
 """
 
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.llinterp import LLInterpreter
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend.llgraph import llimpl, symbolic
@@ -27,6 +28,7 @@ class CPU(object):
         self.memo_cast = llimpl.new_memo_cast()
         llimpl._stats = self.stats
         llimpl._rtyper = self.rtyper
+        llimpl._llinterp = LLInterpreter(self.rtyper)
         if translate_support_code:
             self.mixlevelann = annmixlevel
         self.fielddescrof_vtable = self.fielddescrof(rclass.OBJECT, 'typeptr')
@@ -415,6 +417,23 @@ class CPU(object):
         index = args[1].getint()
         newvalue = args[2].getint()
         llimpl.do_strsetitem(string, index, newvalue)
+
+    def do_call(self, args):
+        func = args[0].getint()
+        calldescr = args[1].getint()
+        for arg in args[2:]:
+            if (isinstance(arg, history.BoxPtr) or
+                isinstance(arg, history.ConstPtr)):
+                llimpl.do_call_pushptr(arg.getptr_base())
+            else:
+                llimpl.do_call_pushint(arg.getint())
+        restype = self.typefor(calldescr)
+        if restype == 'ptr':
+            return history.BoxPtr(llimpl.do_call_ptr(func, self.memo_cast))
+        elif restype == 'int':
+            return history.BoxInt(llimpl.do_call_int(func, self.memo_cast))
+        else:  # restype == 'void'
+            llimpl.do_call_void(func, self.memo_cast)
 
 
 class GuardFailed(object):
