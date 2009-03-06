@@ -1,5 +1,6 @@
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import ConstInt
+from pypy.jit.metainterp import executor
 
 class SpecNode(object):
 
@@ -125,11 +126,8 @@ class SpecNodeWithFields(FixedClassSpecNode):
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         for ofs, subspecnode in self.fields:
-            cls = self.known_class.getint()
-            tp = cpu.typefor(ofs)
-            fieldbox = cpu.execute_operation(rop.GETFIELD_GC,
-                                             [valuebox, ConstInt(ofs)],
-                                             tp)
+            fieldbox = executor.execute(cpu, rop.GETFIELD_GC,
+                                        [valuebox, ConstInt(ofs)])
             subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
     def adapt_to(self, instnode):
@@ -203,9 +201,8 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
        arraydescr = cls.arraydescr
        ad = ConstInt(arraydescr)
        for ofs, subspecnode in self.fields:
-           fieldbox = cpu.execute_operation(rop.GETARRAYITEM_GC,
-                                            [valuebox, ad, ConstInt(ofs)],
-                                            cpu.typefor(arraydescr))
+           fieldbox = executor.execute(cpu, rop.GETARRAYITEM_GC,
+                                       [valuebox, ad, ConstInt(ofs)])
            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
 class VirtualizableSpecNode(VirtualizedSpecNode):
@@ -252,7 +249,6 @@ class VirtualFixedListSpecNode(VirtualSpecNode):
            cls = self.known_class
            assert isinstance(cls, FixedList)
            ad = ConstInt(cls.arraydescr)
-           fieldbox = cpu.execute_operation(rop.GETARRAYITEM_GC,
-                                   [valuebox, ad, ConstInt(ofs)],
-                                      cpu.typefor(cls.arraydescr))
+           fieldbox = executor.execute(cpu, rop.GETARRAYITEM_GC,
+                                       [valuebox, ad, ConstInt(ofs)])
            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)

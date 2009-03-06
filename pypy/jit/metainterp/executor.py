@@ -171,3 +171,8 @@ def get_execute_function(cpu, opnum):
     # constant-folded away.  Only works if opnum is a constant, of course.
     return cpu._execute_list[opnum]
 get_execute_function._annspecialcase_ = 'specialize:memo'
+
+def execute(cpu, opnum, argboxes):
+    func = get_execute_function(cpu, opnum)
+    return func(cpu, argboxes)
+execute._annspecialcase_ = 'specialize:arg(1)'
