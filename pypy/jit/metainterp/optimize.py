@@ -14,6 +14,7 @@ from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           VirtualFixedListSpecNode,
                                           #VirtualListSpecNode,
                                           )
+from pypy.jit.metainterp import executor
 from pypy.rlib.objectmodel import we_are_translated
 #from pypy.jit.metainterp.codewriter import ListDescr
 
@@ -69,9 +70,9 @@ class AllocationStorage(object):
                 ad = ConstInt(ld.arraydescr)
                 if instnode.cursize == -1:
                     # fish fish fish
-                    instnode.cursize = cpu.execute_operation(rop.ARRAYLEN_GC,
-                                               [instnode.source, ad],
-                                                'int').getint()
+                    instnode.cursize = executor.execute(cpu, rop.ARRAYLEN_GC,
+                                                        [instnode.source, ad]
+                                                        ).getint()
                 self.list_allocations.append((ad, instnode.cursize))
                 res = (alloc_offset + 1) << 16
             else:

@@ -14,8 +14,7 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
-from pypy.jit.metainterp import codewriter, optimize
-from pypy.jit.metainterp.executor import get_execute_function
+from pypy.jit.metainterp import codewriter, optimize, executor
 from pypy.rlib.rarithmetic import intmask
 
 # ____________________________________________________________
@@ -661,9 +660,8 @@ class MIFrame(object):
     execute._annspecialcase_ = 'specialize:arg(1)'
 
     def execute_with_exc(self, opnum, argboxes, makeresbox):
-        func = get_execute_function(self.metainterp.cpu, opnum)
         try:
-            resbox = func(self.metainterp.cpu, argboxes)
+            resbox = executor.execute(self.metainterp.cpu, opnum, argboxes)
         except Exception, e:
             if not we_are_translated():
                 if not isinstance(e, LLException):
@@ -769,8 +767,7 @@ class OOMetaInterp(object):
 
     def execute_and_record(self, opnum, argboxes):
         # execute the operation first
-        func = get_execute_function(self.cpu, opnum)
-        resbox = func(self.cpu, argboxes)
+        resbox = executor.execute(self.cpu, opnum, argboxes)
         # check if the operation can be constant-folded away
         canfold = False
         if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
