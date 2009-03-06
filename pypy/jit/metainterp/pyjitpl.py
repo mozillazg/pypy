@@ -133,7 +133,7 @@ class MIFrame(object):
             if not byte & 0x80:
                 break
         self.pc = pc
-        return result
+        return intmask(result)
     _load_larger_int._dont_inline_ = True
 
     def load_3byte(self):

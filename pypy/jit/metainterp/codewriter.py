@@ -8,7 +8,7 @@ from pypy.rlib.jit import _we_are_jitted
 from pypy.jit.metainterp.history import Const, getkind
 from pypy.jit.metainterp import heaptracker, support, history
 
-import py
+import py, sys
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer('jitcodewriter')
 py.log.setconsumer('jitcodewriter', ansi_log)
@@ -911,7 +911,8 @@ class tlabel(object):
         return "tlabel(%r)" % (self.name, )
 
 def encode_int(index):
-    assert index >= 0
+    if index < 0:
+        index += 2*(sys.maxint + 1)
     result = []
     while True:
         byte = index & 0x7F
