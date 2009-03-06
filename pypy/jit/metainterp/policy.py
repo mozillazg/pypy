@@ -59,6 +59,7 @@ class ManualJitPolicy(JitPolicy):
         self.translator = translator
         self.bookkeeper = translator.annotator.bookkeeper
         self.enabled_graphs = {}
+        self.memo = {}
         self.fill_seen_graphs()
 
     def look_inside_graph(self, graph):
@@ -80,7 +81,7 @@ class ManualJitPolicy(JitPolicy):
         for tofunc in tofuncs:
             targetgraphs[self._graph(tofunc)] = True
         graphs = graphs_on_the_path_to(self.translator, self._graph(fromfunc),
-                                       targetgraphs)
+                                       targetgraphs, self.memo)
         for graph in graphs:
             if graph not in self.enabled_graphs:
                 self.enabled_graphs[graph] = True
@@ -99,7 +100,7 @@ class ManualJitPolicy(JitPolicy):
         else:
             print '--', graph
 
-def enumerate_reachable_graphs(translator, startgraph):
+def enumerate_reachable_graphs(translator, startgraph, memo=None):
     from pypy.translator.backendopt.support import find_calls_from
     pending = [(startgraph, None)]
     yield pending[0]
@@ -110,7 +111,7 @@ def enumerate_reachable_graphs(translator, startgraph):
         nextseen = {}
         for node in pending:
             head, tail = node
-            for block, callee in find_calls_from(translator, head):
+            for block, callee in find_calls_from(translator, head, memo):
                 if callee not in seen:
                     newnode = callee, node
                     yield newnode
@@ -120,11 +121,11 @@ def enumerate_reachable_graphs(translator, startgraph):
         seen.update(nextseen)
     yield None
 
-def graphs_on_the_path_to(translator, startgraph, targetgraphs):
+def graphs_on_the_path_to(translator, startgraph, targetgraphs, memo=None):
     targetgraphs = targetgraphs.copy()
     result = {}
     found = {}
-    for node in enumerate_reachable_graphs(translator, startgraph):
+    for node in enumerate_reachable_graphs(translator, startgraph, memo):
         if node is None:  # hack: a separator meaning "length increases now"
             for graph in found:
                 del targetgraphs[graph]
