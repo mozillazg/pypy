@@ -719,8 +719,12 @@ class RegAlloc(object):
             return ops + [Perform(op, arglocs, eax)]
 
     def consider_call(self, op, ignored):
+        from pypy.jit.backend.x86.runner import CPU386
         args = [op.args[0]] + op.args[2:]
-        return self._call(op, [self.loc(arg) for arg in args])
+        calldescr = op.args[1].getint()
+        _, size, _ = CPU386.unpack_calldescr(calldescr)
+        return self._call(op, [imm(size)] +
+                          [self.loc(arg) for arg in args])
 
     consider_call_pure = consider_call
 

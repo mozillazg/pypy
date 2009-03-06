@@ -500,6 +500,10 @@ class Assembler386(object):
         return recovery_code_addr
 
     def genop_call(self, op, arglocs, resloc):
+        sizeloc = arglocs[0]
+        assert isinstance(sizeloc, IMM32)
+        size = sizeloc.value
+        arglocs = arglocs[1:]
         extra_on_stack = 0
         for i in range(len(op.args) - 1, 0, -1):
             # op.args[1] is a calldesc
@@ -519,6 +523,10 @@ class Assembler386(object):
             x = arglocs[0]
         self.mc.CALL(x)
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
+        if size == 1:
+            self.mc.AND(eax, imm(0xff))
+        elif size == 2:
+            self.mc.AND(eax, imm(0xffff))
 
     #def genop_call__1(self, op, arglocs, resloc):
     #    self.gen_call(op, arglocs, resloc)

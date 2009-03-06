@@ -62,7 +62,7 @@ class CPU386(object):
         if rtyper is not None: # for tests
             self.lltype2vtable = rtyper.lltype_to_vtable_mapping()
             self._setup_ovf_error()
-        self.generated_mps = [None] * 10
+        self.generated_mps = {}
 
     def _setup_ovf_error(self):
         if self.translate_support_code:
@@ -266,13 +266,13 @@ class CPU386(object):
         else:
             raise ValueError('get_valuebox_from_int: %s' % (type,))
 
-    def _get_mp_for_call(self, argnum):
-        if argnum >= len(self.generated_mps):
-            self.generated_mps += [None] * len(self.generated_mps)
-        actual = self.generated_mps[argnum]
-        if actual is not None:
-            return actual
+    def _get_mp_for_call(self, argnum, calldescr):
+        try:
+            return self.generated_mps[calldescr]
+        except KeyError:
+            pass
         args = [BoxInt(0) for i in range(argnum + 3)]
+        args[1].value = calldescr
         result = BoxInt(0)
         operations = [
             ResOperation(rop.MERGE_POINT, args, None),
@@ -280,7 +280,7 @@ class CPU386(object):
             ResOperation(rop.GUARD_FALSE, [args[-1]], None)]
         operations[-1].liveboxes = [result]
         self.compile_operations(operations)
-        self.generated_mps[argnum] = operations
+        self.generated_mps[calldescr] = operations
         return operations
 
     def execute_operations_in_new_frame(self, name, operations, valueboxes):
@@ -546,8 +546,8 @@ class CPU386(object):
 
     def do_call(self, args):
         calldescr = args[1].getint()
-        num_args, tp = self.unpack_calldescr(calldescr)
-        mp = self._get_mp_for_call(num_args)
+        num_args, size, ptr = self.unpack_calldescr(calldescr)
+        mp = self._get_mp_for_call(num_args, calldescr)
         return self.execute_operations_in_new_frame('call', mp, args + [BoxInt(1)])
 
     # ------------------- helpers and descriptions --------------------
@@ -589,16 +589,22 @@ class CPU386(object):
     @staticmethod
     def calldescrof(argtypes, resulttype):
         if resulttype is lltype.Void:
-            rt = VOID
-        elif isinstance(resulttype, lltype.Ptr):
-            rt = PTR
+            size = 0
         else:
-            rt = INT
-        return (len(argtypes) << 2) + rt
+            size = symbolic.get_size(resulttype)
+        res = (len(argtypes) << 4) + size
+        if isinstance(resulttype, lltype.Ptr):
+            return ~res
+        return res
 
     @staticmethod
     def unpack_calldescr(calldescr):
-        return calldescr >> 2, calldescr & 0x4
+        if calldescr < 0:
+            calldescr = ~calldescr
+            ptr = True
+        else:
+            ptr = False
+        return calldescr >> 4, calldescr & 0xf, ptr
 
     @staticmethod
     def fielddescrof(S, fieldname):
