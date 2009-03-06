@@ -519,7 +519,7 @@ class MIFrame(object):
         op = self.generate_guard(pc, rop.GUARD_NONVIRTUALIZED, box,
                                  [clsbox, guard_field])
         if op:
-            op.desc = vdesc
+            op.vdesc = vdesc
         
     @arguments("box")
     def opimpl_keepalive(self, box):

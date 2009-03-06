@@ -15,7 +15,7 @@ class ResOperation(object):
     liveboxes = None
 
     # for 'guard_nonvirtualizable'
-    desc = None
+    vdesc = None
 
     def __init__(self, opnum, args, result):
         assert isinstance(opnum, int)

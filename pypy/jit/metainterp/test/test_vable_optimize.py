@@ -97,7 +97,7 @@ class A:
         ResOperation('setfield_gc', [fr, ConstInt(ofs_node), n2], None),
         ResOperation('jump', [sum2, fr], None),
         ]
-    ops[1].desc = xy_desc
+    ops[1].vdesc = xy_desc
 
 def test_A_find_nodes():
     spec = PerfectSpecializer(Loop(A.ops))
@@ -148,7 +148,7 @@ class B:
         ResOperation('getfield_gc', [n1, ConstInt(ofs_value)], v),
         ResOperation('jump', [fr], None),
         ]
-    ops[1].desc = xy_desc
+    ops[1].vdesc = xy_desc
 
 def test_B_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(B.ops))
@@ -185,7 +185,7 @@ class C:
         #
         ResOperation('jump', [fr], None),
         ]
-    ops[1].desc = xy_desc
+    ops[1].vdesc = xy_desc
 
 def test_C_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(C.ops))
@@ -224,7 +224,7 @@ if 0:
         ResOperation('setitem', [None, l, ConstInt(0), v2], None),
         ResOperation('jump', [fr], None),
         ]
-    ops[1].desc = xy_desc
+    ops[1].vdesc = xy_desc
 
 def test_D_intersect_input_and_output():
     py.test.skip("XXX")
