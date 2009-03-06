@@ -724,7 +724,7 @@ class RegAlloc(object):
         from pypy.jit.backend.x86.runner import CPU386
         calldescr = op.descr
         numargs, size, _ = CPU386.unpack_calldescr(calldescr)
-        assert numargs == len(op.args)
+        assert numargs == len(op.args) - 1
         return self._call(op, [imm(size)] +
                           [self.loc(arg) for arg in op.args])
 

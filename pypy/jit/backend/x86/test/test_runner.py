@@ -524,7 +524,7 @@ class TestX86(object):
             return chr(ord(c) + 1)
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Char], lltype.Char))
         func_ptr = llhelper(FPTR, func)
-        calldescr = cpu.calldescrof([FPTR, lltype.Char], lltype.Char)
+        calldescr = cpu.calldescrof([lltype.Char], lltype.Char)
         x = cpu.do_call(
             [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(func_ptr))),
              BoxInt(ord('A'))],
