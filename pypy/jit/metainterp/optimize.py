@@ -1027,14 +1027,12 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
             sizebox = ConstInt(metainterp.class_sizes[vtable])
         vtablebox = ConstInt(vtable)
         instbox = metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
-                                                [sizebox, vtablebox],
-                                                'ptr')
+                                                [sizebox, vtablebox])
         allocated_boxes.append(instbox)
     for ad, lgt in storage.list_allocations:
         sizebox = ConstInt(lgt)
         listbox = metainterp.execute_and_record(rop.NEW_ARRAY,
-                                                [ad, sizebox],
-                                                'ptr')
+                                                [ad, sizebox])
         allocated_lists.append(listbox)
     for index_in_alloc, ofs, index_in_arglist in storage.setfields:
         fieldbox = box_from_index(allocated_boxes, allocated_lists,
@@ -1043,16 +1041,14 @@ def rebuild_boxes_from_guard_failure(guard_op, metainterp, boxes_from_frame):
                              boxes_from_frame,
                              index_in_alloc)
         metainterp.execute_and_record(rop.SETFIELD_GC,
-                                      [box, ConstInt(ofs), fieldbox],
-                                      'void')
+                                      [box, ConstInt(ofs), fieldbox])
     for index_in_alloc, ad, ofs, index_in_arglist in storage.setitems:
         itembox = box_from_index(allocated_boxes, allocated_lists,
                                  boxes_from_frame, index_in_arglist)
         box = box_from_index(allocated_boxes, allocated_lists,
                              boxes_from_frame, index_in_alloc)
         metainterp.execute_and_record(rop.SETARRAYITEM_GC,
-                                      [box, ad, ConstInt(ofs), itembox],
-                                      'void')
+                                      [box, ad, ConstInt(ofs), itembox])
 ##    if storage.setitems:
 ##        #history.execute_and_record('guard_no_exception', [], 'void', False)
 ##        # XXX this needs to check for exceptions somehow
