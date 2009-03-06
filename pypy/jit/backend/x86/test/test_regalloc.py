@@ -33,9 +33,9 @@ def test_simple_loop():
     operations[1].liveboxes = [i, flag]
 
     cpu.compile_operations(operations)
-    res = cpu.execute_operations_in_new_frame('foo', startmp,
-                                              [BoxInt(0), BoxInt(1)], 'int')
-    assert res.value == 42
+    res = cpu.execute_operations_in_new_frame('foo', operations,
+                                              [BoxInt(0), BoxInt(1)])
+    assert res.value == 5
     assert meta_interp.recordedvalues == [5, False]
     # assert stuff
     regalloc = cpu.assembler._regalloc
@@ -92,11 +92,10 @@ def test_longer_loop():
 
     cpu.compile_operations(operations)
 
-    res = cpu.execute_operations_in_new_frame('foo', startmp,
+    res = cpu.execute_operations_in_new_frame('foo', operations,
                                               [BoxInt(1), BoxInt(1),
-                                               BoxInt(0), BoxInt(1)],
-                                              'int')
-    assert res.value == 42
+                                               BoxInt(0), BoxInt(1)])
+    assert res.value == 6
     assert meta_interp.recordedvalues == f()
 
 def test_loop_with_const_and_var_swap():
@@ -121,11 +120,10 @@ def test_loop_with_const_and_var_swap():
 
     cpu.compile_operations(operations)
 
-    res = cpu.execute_operations_in_new_frame('foo', operations[0],
+    res = cpu.execute_operations_in_new_frame('foo', operations,
                                                    [BoxInt(1), BoxInt(2),
-                                                    BoxInt(3), BoxInt(10)],
-                                              'int')
-    assert res.value == 42
+                                                    BoxInt(3), BoxInt(10)])
+    assert res.value == 0
     assert meta_interp.recordedvalues == [0, 1, 3, 2, 0]
 
 def test_bool_optimizations():
