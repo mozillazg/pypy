@@ -820,7 +820,7 @@ class OOMetaInterp(object):
         try:
             if guard_failure.guard_op.opnum in (rop.GUARD_EXCEPTION,
                                                 rop.GUARD_NO_EXCEPTION):
-                self.raise_exception_upon_guard_failure(guard_failure)
+                self.raise_exception_upon_guard_failure()
             self.interpret()
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
@@ -954,9 +954,9 @@ class OOMetaInterp(object):
         self.rebuild_state_after_failure(guard_op.key, newboxes)
         return boxes_from_frame
 
-    def raise_exception_upon_guard_failure(self, guard_failure):
-        etype = self.cpu.get_exception(guard_failure.frame)
-        evalue = self.cpu.get_exc_value(guard_failure.frame)
+    def raise_exception_upon_guard_failure(self):
+        etype = self.cpu.get_exception()
+        evalue = self.cpu.get_exc_value()
         self.handle_exception(etype, evalue)
 
     def handle_exception(self, etype, evalue):
