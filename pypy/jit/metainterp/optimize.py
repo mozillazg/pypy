@@ -72,8 +72,8 @@ class AllocationStorage(object):
                 if instnode.cursize == -1:
                     # fish fish fish
                     instnode.cursize = executor.execute(cpu, rop.ARRAYLEN_GC,
-                                                        [instnode.source, ad]
-                                                        ).getint()
+                                                        [instnode.source],
+                                                        ad).getint()
                 self.list_allocations.append((ad, instnode.cursize))
                 res = (alloc_offset + 1) << 16
             else:
@@ -142,13 +142,19 @@ class InstanceNode(object):
                 node.escape_if_startbox(memo)
         else:
             for key, node in self.curfields.items():
-                esc_self = self.vdesc and key not in self.vdesc.virtuals
+                if self.vdesc and key not in self.vdesc.virtuals:
+                    esc_self = True
+                else:
+                    esc_self = False
                 node.escape_if_startbox(memo, esc_self)
             # we also need to escape fields that are only read, never written,
             # if they're not marked specifically as ones that does not escape
             for key, node in self.origfields.items():
                 if key not in self.curfields:
-                    esc_self = self.vdesc and key not in self.vdesc.virtuals
+                    if self.vdesc and key not in self.vdesc.virtuals:
+                        esc_self = True
+                    else:
+                        esc_self = False
                     node.escape_if_startbox(memo, esc_self)
 
     def add_to_dependency_graph(self, other, dep_graph):
