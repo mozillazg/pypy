@@ -114,8 +114,8 @@ class PyPyJitPolicy(ManualJitPolicy):
                      pypy.objspace.std.intobject.nonzero__Int)
         self.seepath(pypy.interpreter.pyframe.PyFrame.FOR_ITER,
                      pypy.objspace.descroperation.DescrOperation.next,
-                     pypy.objspace.std.rangeobject.next__RangeIter)
-#                     pypy.objspace.std.rangeobject.)
+                     pypy.objspace.std.rangeobject.next__RangeIter,
+                     pypy.objspace.std.rangeobject.W_RangeListObject.getitem)
         #
         #self.seepath(pypy.interpreter.pyframe.PyFrame.CALL_FUNCTION,
         #             pypy.interpreter.function.Function.funccall_valuestack)
