@@ -1,7 +1,7 @@
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, BoxInt,
                                          ResOperation)
-from pypy.jit.metainterp.history import Options, AbstractValue
+from pypy.jit.metainterp.history import Options, AbstractValue, ConstPtr
 from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           #FixedListSpecNode,
                                           VirtualInstanceSpecNode,
@@ -16,6 +16,7 @@ from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
                                           )
 from pypy.jit.metainterp import executor
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import lltype, llmemory
 #from pypy.jit.metainterp.codewriter import ListDescr
 
 
@@ -744,11 +745,13 @@ class PerfectSpecializer(object):
 ##                    instnode = self.nodes[op.args[0]]
 ##                    instnode.cursize = op.args[1].getint()
 ##                continue
-            elif (opnum == rop.GUARD_NO_EXCEPTION or
-                  opnum == rop.GUARD_EXCEPTION):
+            elif opnum == rop.GUARD_NO_EXCEPTION:
                 if not exception_might_have_happened:
                     continue
                 exception_might_have_happened = False
+                newoperations.append(self.optimize_guard(op, cpu))
+                continue
+            elif opnum == rop.GUARD_EXCEPTION:
                 newoperations.append(self.optimize_guard(op, cpu))
                 continue
             elif (opnum == rop.GUARD_TRUE or
