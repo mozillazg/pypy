@@ -102,14 +102,13 @@ class CPU(object):
             llimpl.compile_from_guard(c, from_guard._compiled,
                                          from_guard._opindex)
 
-    def execute_operations_in_new_frame(self, name, merge_point, valueboxes,
-                                        result_type=None):
+    def execute_operations_in_new_frame(self, name, operations, valueboxes):
         """Perform a 'call' to the given merge point, i.e. create
         a new CPU frame and use it to execute the operations that
         follow the merge point.
         """
-        assert result_type is None or isinstance(result_type, str)
         frame = llimpl.new_frame(self.memo_cast)
+        merge_point = operations[0]
         llimpl.frame_clear(frame, merge_point._compiled, merge_point._opindex)
         for box in valueboxes:
             if isinstance(box, history.BoxInt):
@@ -123,73 +122,6 @@ class CPU(object):
             else:
                 raise Exception("bad box in valueboxes: %r" % (box,))
         return self.loop(frame)
-
-    def execute_operation(self, opnum, valueboxes, result_type):
-        """Execute a single operation, returning the result.
-        Mostly a hack: falls back to interpreting a complete bridge
-        containing the operation.
-        """
-        #if opname[0] == '#':
-        #    return None
-        c = self.get_compiled_single_op(opnum, valueboxes, result_type)
-        frame = llimpl.new_frame(self.memo_cast)
-        llimpl.frame_clear(frame, c, 0)
-        for box in valueboxes:
-            if box.type == 'int':
-                llimpl.frame_add_int(frame, box.getint())
-            elif box.type == 'ptr':
-                llimpl.frame_add_ptr(frame, box.getptr_base())
-            else:
-                raise Exception("bad box in valueboxes: %r" % (box,))
-        res = llimpl.frame_execute(frame)
-        assert res == -1
-        if result_type == 'int':
-            return history.BoxInt(llimpl.frame_int_getresult(frame))
-        elif result_type == 'ptr':
-            return history.BoxPtr(llimpl.frame_ptr_getresult(frame))
-        else:
-            return None
-
-    def get_compiled_single_op(self, opnum, valueboxes, result_type):
-        assert isinstance(opnum, int)
-        keylist = self.compiled_single_ops.setdefault((opnum, result_type),
-                                                      [])
-        types = [valuebox.type for valuebox in valueboxes]
-        for key, impl in keylist:
-            if len(key) == len(types):
-                for i in range(len(key)):
-                    if key[i] is not types[i]:
-                        break
-                else:
-                    return impl
-        valueboxes = []
-        for type in types:
-            if type == 'int':
-                valueboxes.append(history.BoxInt())
-            elif type == 'ptr':
-                valueboxes.append(history.BoxPtr())
-            else:
-                raise AssertionError('valuebox type=%s' % (type,))
-        if result_type == 'void':
-            resbox = None
-        elif result_type == 'int':
-            resbox = history.BoxInt()
-        elif result_type == 'ptr':
-            resbox = history.BoxPtr()
-        else:
-            raise AssertionError(result_type)
-        resboxes = []
-        if resbox is not None:
-            resboxes.append(resbox)
-        operations = [
-            ResOperation(rop.MERGE_POINT, valueboxes, None),
-            ResOperation(opnum, valueboxes, resbox),
-            ResOperation(rop.RETURN, resboxes, None),
-            ]
-        self.compile_operations(operations)
-        impl = operations[0]._compiled
-        keylist.append((types, impl))
-        return impl
 
     def loop(self, frame):
         """Execute a loop.  When the loop fails, ask the metainterp for more.

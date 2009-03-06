@@ -5,7 +5,7 @@ from pypy.rlib.unroll import unrolling_iterable
 
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, Const, ConstInt
 from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.executor import get_execute_function
+from pypy.jit.metainterp.executor import execute
 from pypy.jit.backend.llgraph.runner import CPU, GuardFailed
 
 
@@ -44,30 +44,6 @@ class TestLLGraph:
                     assert getattr(res, key) == value
         interpret(main, [])
 
-    def test_simple(self):
-        cpu = CPU(None)
-        box = cpu.execute_operation(rop.INT_SUB, [BoxInt(10), BoxInt(2)],
-                                    "int")
-        assert isinstance(box, BoxInt)
-        assert box.value == 8
-
-    def test_execute_operation(self):
-        cpu = CPU(None)
-        node = lltype.malloc(NODE)
-        node_value = cpu.fielddescrof(NODE, 'value')
-        nodeadr = lltype.cast_opaque_ptr(llmemory.GCREF, node)
-        box = cpu.execute_operation(rop.SETFIELD_GC, [BoxPtr(nodeadr),
-                                                      ConstInt(node_value),
-                                                      BoxInt(3)],
-                                    'void')
-        assert box is None
-        assert node.value == 3
-
-        box = cpu.execute_operation(rop.GETFIELD_GC, [BoxPtr(nodeadr),
-                                                      ConstInt(node_value)],
-                                    'int')
-        assert box.value == 3
-
     def test_execute_operations_in_env(self):
         cpu = CPU(None)
         cpu.set_meta_interp(FakeMetaInterp(cpu))
@@ -85,10 +61,9 @@ class TestLLGraph:
             ResOperation(rop.JUMP, [z, t], None),
             ]
         operations[-2].liveboxes = [t, z]
-        startmp = operations[0]
-        operations[-1].jump_target = startmp
+        operations[-1].jump_target = operations[0]
         cpu.compile_operations(operations)
-        res = cpu.execute_operations_in_new_frame('foo', startmp,
+        res = cpu.execute_operations_in_new_frame('foo', operations,
                                                   [BoxInt(0), BoxInt(10)])
         assert res.value == 42
         gf = cpu.metainterp.gf
@@ -129,9 +104,8 @@ class TestLLGraph:
                 ResOperation(opnum, args, []),
                 ResOperation(rop.VOID_RETURN, [], []),
                 ]
-            startmp = operations[0]
             cpu.compile_operations(operations)
-            res = cpu.execute_operations_in_new_frame('foo', startmp, args)
+            res = cpu.execute_operations_in_new_frame('foo', operations, args)
             assert res.value == 42
 
     def test_cast_adr_to_int_and_back(self):
@@ -304,8 +278,7 @@ class TestLLGraph:
 
     def test_executor(self):
         cpu = CPU(None)
-        fn = get_execute_function(cpu, rop.INT_ADD)
-        assert fn(cpu, [BoxInt(100), ConstInt(42)]).value == 142
-        fn = get_execute_function(cpu, rop.NEWSTR)
-        s = fn(cpu, [BoxInt(8)])
+        x = execute(cpu, rop.INT_ADD, [BoxInt(100), ConstInt(42)])
+        assert x.value == 142
+        s = execute(cpu, rop.NEWSTR, [BoxInt(8)])
         assert len(s.getptr(lltype.Ptr(rstr.STR)).chars) == 8
