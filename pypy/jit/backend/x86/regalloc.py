@@ -891,7 +891,7 @@ class RegAlloc(object):
         return ops0 + more_ops + [Perform(op, [base_loc], result_loc)]
 
     def consider_arraylen_gc(self, op, ignored):
-        _, ofs = self._unpack_arraydescr(op.args[1].getint())
+        _, ofs = self._unpack_arraydescr(op.descr)
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
         self.eventually_free_vars(op.args)
         result_loc, more_ops = self.force_allocate_reg(op.result, [])
