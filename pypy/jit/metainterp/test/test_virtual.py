@@ -218,6 +218,31 @@ class VirtualTests:
         res = self.meta_interp(f, [10], policy=StopAtXPolicy(g))
         assert res == 3
 
+    def test_virtual_on_virtual(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'parent'])
+
+        class Node(object):
+            def __init__(self, f):
+                self.f = f
+
+        class SubNode(object):
+            def __init__(self, f):
+                self.f = f
+        
+        def f(n):
+            node = Node(SubNode(3))
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, parent=node)
+                myjitdriver.jit_merge_point(n=n, parent=node)
+                node = Node(SubNode(n + 1))
+                if n == -3:
+                    return 8
+                n -= 1
+            return node.f.f
+
+        res = self.meta_interp(f, [10])
+        assert res == 2
+
 ##class TestOOtype(VirtualTests, OOJitMixin):
 ##    _new = staticmethod(ootype.new)
 
