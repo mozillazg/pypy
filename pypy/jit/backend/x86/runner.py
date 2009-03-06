@@ -383,7 +383,7 @@ class CPU386(object):
     def sizeof(self, S):
         return symbolic.get_size(S)
 
-#    numof = sizeof
+    numof = sizeof
 #    addresssuffix = str(symbolic.get_size(llmemory.Address))
 
 #    def itemoffsetof(self, A):
