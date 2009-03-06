@@ -7,8 +7,7 @@ from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import (RegAlloc, FRAMESIZE, WORD, REGS,
-                                      arg_pos, lower_byte, stack_pos, Perform,
-                                      RETURN)
+                                      arg_pos, lower_byte, stack_pos, Perform)
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.support import gc_malloc_fnaddr
@@ -419,7 +418,7 @@ class Assembler386(object):
 
     genop_catch = genop_merge_point
 
-    def genop_return(self, op, locs):
+    def xxx_genop_return(self, op, locs):
         if op.args:
             loc = locs[0]
             if loc is not eax:
@@ -530,17 +529,14 @@ class Assembler386(object):
     #    self.gen_call(op, arglocs, resloc)
     #    self.mc.MOVZX(eax, eax)
 
-genop_discard_list = [None] * (RETURN + 1)
-genop_list = [None] * (RETURN + 1)
-genop_guard_list = [None] * (RETURN + 1)
+genop_discard_list = [None] * rop._LAST
+genop_list = [None] * rop._LAST
+genop_guard_list = [None] * rop._LAST
 
 for name, value in Assembler386.__dict__.iteritems():
     if name.startswith('genop_'):
         opname = name[len('genop_'):]
-        if opname == 'return':
-            num = RETURN
-        else:
-            num = getattr(rop, opname.upper())
+        num = getattr(rop, opname.upper())
         if value.func_code.co_argcount == 3:
             genop_discard_list[num] = value
         elif value.func_code.co_argcount == 5:
