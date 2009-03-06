@@ -718,7 +718,7 @@ class RegAlloc(object):
             return ops + [Perform(op, arglocs, eax)]
         else:
             self.free_regs = REGS[:]
-            return ops + [PerformDiscard(op, arglocs)]
+            return ops + [Perform(op, arglocs, eax)]
 
     def consider_call(self, op, ignored):
         args = [op.args[0]] + op.args[2:]
