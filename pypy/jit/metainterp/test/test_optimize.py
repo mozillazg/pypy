@@ -327,12 +327,9 @@ def test_E_rebuild_after_failure():
             self.cpu.translate_support_code = False
             self.ops = []
         
-        def execute_and_record(self, opnum, args, res_type):
+        def execute_and_record(self, opnum, args):
             self.ops.append((opnum, args))
-            if res_type != 'void':
-                return 'allocated'
-            else:
-                return None
+            return 'stuff'
     
     spec = PerfectSpecializer(Loop(E.ops))
     spec.find_nodes()
@@ -347,10 +344,10 @@ def test_E_rebuild_after_failure():
                                                 [v_sum_b, v_v_b])
     expected = [
        (rop.NEW_WITH_VTABLE, [E.sizebox, ConstInt(vt)]),
-       (rop.SETFIELD_GC, ['allocated', ConstInt(E.ofs_value), v_v_b])
+       (rop.SETFIELD_GC, ['stuff', ConstInt(E.ofs_value), v_v_b])
        ]
     assert expected == fake_metainterp.ops
-    assert newboxes == [v_sum_b, 'allocated']
+    assert newboxes == [v_sum_b, 'stuff']
 
 # ____________________________________________________________
 
