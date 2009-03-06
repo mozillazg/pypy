@@ -20,7 +20,7 @@ class PyPyPage(Page):
             html.a("documentation", href=self.get_doclink("index.html"),
                    class_="menu"),
             " ", 
-            html.a("svn", href="https://codespeak.net/viewvc/pypy/trunk/",
+            html.a("svn", href="https://codespeak.net/viewvc/pypy/dist/",
                    class_="menu"),
             " ", 
             html.a("issues",
