@@ -671,7 +671,7 @@ class BytecodeMaker(object):
         args = [x for x in op.args if x.concretetype is not lltype.Void]
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
-        calldescr = self.cpu.calldescrof(argtypes, resulttype)
+        calldescr = self.cpu.calldescrof(argtypes[1:], resulttype)
         self.emit('residual_call_%s' % getkind(resulttype))
         self.emit(calldescr)
         self.emit_varargs(args)

@@ -271,7 +271,7 @@ class CPU386(object):
             return self.generated_mps[calldescr]
         except KeyError:
             pass
-        args = [BoxInt(0) for i in range(argnum)]
+        args = [BoxInt(0) for i in range(argnum + 1)]
         result = BoxInt(0)
         operations = [
             ResOperation(rop.MERGE_POINT, args, None),
