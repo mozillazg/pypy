@@ -17,12 +17,16 @@ class ResOperation(object):
     # for 'guard_nonvirtualizable'
     vdesc = None
 
-    def __init__(self, opnum, args, result):
+    def __init__(self, opnum, args, result, descr=0):
         assert isinstance(opnum, int)
         self.opnum = opnum
         self.args = list(args)
         assert not isinstance(result, list)
         self.result = result
+        # for 'call', 'new', 'getfield_gc'...: the descr is a number provided
+        # by the backend holding details about the type of the operation
+        assert isinstance(descr, int)
+        self.descr = descr
 
     def __repr__(self):
         if self.result is not None:
@@ -36,7 +40,7 @@ class ResOperation(object):
         return result
 
     def clone(self):
-        op = ResOperation(self.opnum, self.args, self.result)
+        op = ResOperation(self.opnum, self.args, self.result, self.descr)
         op.specnodes = self.specnodes
         op.key = self.key
         return op

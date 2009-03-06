@@ -127,7 +127,7 @@ class SpecNodeWithFields(FixedClassSpecNode):
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         for ofs, subspecnode in self.fields:
             fieldbox = executor.execute(cpu, rop.GETFIELD_GC,
-                                        [valuebox, ConstInt(ofs)])
+                                        [valuebox], ofs)
             subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
     def adapt_to(self, instnode):
@@ -163,7 +163,7 @@ class DelayedSpecNode(VirtualizedSpecNode):
                 else:
                     box = subspecnode.box.clonebox()
                     oplist.append(ResOperation(rop.GETFIELD_GC,
-                       [instnode.source, ConstInt(ofs)], box))
+                       [instnode.source], box, ofs))
                     newboxlist.append(box)
 
 class DelayedFixedListSpecNode(DelayedSpecNode):
@@ -176,7 +176,7 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
        newboxlist.append(instnode.source)
        cls = self.known_class
        assert isinstance(cls, FixedList)
-       ad = ConstInt(cls.arraydescr)
+       arraydescr = cls.arraydescr
        for ofs, subspecnode in self.fields:
            assert isinstance(subspecnode, SpecNodeWithBox)
            if oplist is None:
@@ -188,7 +188,7 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
                else:
                    box = subspecnode.box.clonebox()
                    oplist.append(ResOperation(rop.GETARRAYITEM_GC,
-                      [instnode.source, ad, ConstInt(ofs)], box))
+                      [instnode.source, ConstInt(ofs)], box, arraydescr))
                    newboxlist.append(box)
 
    def extract_runtime_data(self, cpu, valuebox, resultlist):
@@ -199,10 +199,9 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
        cls = self.known_class
        assert isinstance(cls, FixedList)
        arraydescr = cls.arraydescr
-       ad = ConstInt(arraydescr)
        for ofs, subspecnode in self.fields:
            fieldbox = executor.execute(cpu, rop.GETARRAYITEM_GC,
-                                       [valuebox, ad, ConstInt(ofs)])
+                                       [valuebox, ConstInt(ofs)], arraydescr)
            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
 class VirtualizableSpecNode(VirtualizedSpecNode):
@@ -248,7 +247,7 @@ class VirtualFixedListSpecNode(VirtualSpecNode):
        for ofs, subspecnode in self.fields:
            cls = self.known_class
            assert isinstance(cls, FixedList)
-           ad = ConstInt(cls.arraydescr)
+           arraydescr = cls.arraydescr
            fieldbox = executor.execute(cpu, rop.GETARRAYITEM_GC,
-                                       [valuebox, ad, ConstInt(ofs)])
+                                       [valuebox, ConstInt(ofs)], arraydescr)
            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)

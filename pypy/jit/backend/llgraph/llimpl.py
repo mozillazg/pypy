@@ -4,6 +4,7 @@ This contains all the code that is directly run
 when executing on top of the llinterpreter.
 """
 
+import sys
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.annotation import model as annmodel
 from pypy.jit.metainterp.history import (ConstInt, ConstPtr, ConstAddr,
@@ -82,45 +83,44 @@ TYPES = {
     'uint_ne'         : (('int', 'int'), 'bool'),
     'uint_gt'         : (('int', 'int'), 'bool'),
     'uint_ge'         : (('int', 'int'), 'bool'),
-    'new_with_vtable' : (('int', 'ptr'), 'ptr'),
-    'new'             : (('int',), 'ptr'),
-    'new_array'       : (('int', 'int'), 'ptr'),
+    'new_with_vtable' : (('ptr',), 'ptr'),
+    'new'             : ((), 'ptr'),
+    'new_array'       : (('int',), 'ptr'),
     'oononnull'       : (('ptr',), 'bool'),
     'ooisnull'        : (('ptr',), 'bool'),
     'oois'            : (('ptr', 'ptr'), 'bool'),
     'ooisnot'         : (('ptr', 'ptr'), 'bool'),
-    'setfield_gc'     : (('ptr', 'fieldname', 'intorptr'), None),
-    'getfield_gc'     : (('ptr', 'fieldname'), 'intorptr'),
-    'getfield_gc_pure': (('ptr', 'fieldname'), 'intorptr'),
-    'setfield_raw'    : (('ptr', 'fieldname', 'intorptr'), None),
-    'getfield_raw'    : (('ptr', 'fieldname'), 'intorptr'),
-    'getfield_raw_pure': (('ptr', 'fieldname'), 'intorptr'),
-    'setarrayitem_gc' : (('ptr', 'int', 'int', 'intorptr'), None),
-    'getarrayitem_gc' : (('ptr', 'int', 'int'), 'intorptr'),
-    'getarrayitem_gc_pure' : (('ptr', 'int', 'int'), 'intorptr'),
-    'arraylen_gc'     : (('ptr', 'int'), 'int'),
-    'call'            : (('ptr', 'int', 'varargs'), 'intorptr'),
-    'call_pure'       : (('ptr', 'int', 'varargs'), 'intorptr'),
+    'setfield_gc'     : (('ptr', 'intorptr'), None),
+    'getfield_gc'     : (('ptr',), 'intorptr'),
+    'getfield_gc_pure': (('ptr',), 'intorptr'),
+    'setfield_raw'    : (('ptr', 'intorptr'), None),
+    'getfield_raw'    : (('ptr',), 'intorptr'),
+    'getfield_raw_pure': (('ptr',), 'intorptr'),
+    'setarrayitem_gc' : (('ptr', 'int', 'intorptr'), None),
+    'getarrayitem_gc' : (('ptr', 'int'), 'intorptr'),
+    'getarrayitem_gc_pure' : (('ptr', 'int'), 'intorptr'),
+    'arraylen_gc'     : (('ptr',), 'int'),
+    'call'            : (('ptr', 'varargs'), 'intorptr'),
+    'call_pure'       : (('ptr', 'varargs'), 'intorptr'),
     'guard_true'      : (('bool',), None),
     'guard_false'     : (('bool',), None),
     'guard_value'     : (('int', 'int'), None),
     'guard_class'     : (('ptr', 'ptr'), None),
     'guard_no_exception'   : ((), None),
     'guard_exception'      : (('ptr',), 'ptr'),
-    'guard_nonvirtualized' : (('ptr', 'ptr', 'int'), None),
-    'guard_builtin'   : (('ptr',), None),
+    'guard_nonvirtualized' : (('ptr', 'ptr'), None),
     'newstr'          : (('int',), 'ptr'),
     'strlen'          : (('ptr',), 'int'),
     'strgetitem'      : (('ptr', 'int'), 'int'),
     'strsetitem'      : (('ptr', 'int', 'int'), None),
-    'getitem'         : (('void', 'ptr', 'int'), 'int'),
-    'setitem'         : (('void', 'ptr', 'int', 'int'), None),
-    'newlist'         : (('void', 'varargs'), 'ptr'),
-    'append'          : (('void', 'ptr', 'int'), None),
-    'insert'          : (('void', 'ptr', 'int', 'int'), None),
-    'pop'             : (('void', 'ptr',), 'int'),
-    'len'             : (('void', 'ptr',), 'int'),
-    'listnonzero'     : (('void', 'ptr',), 'int'),
+    #'getitem'         : (('void', 'ptr', 'int'), 'int'),
+    #'setitem'         : (('void', 'ptr', 'int', 'int'), None),
+    #'newlist'         : (('void', 'varargs'), 'ptr'),
+    #'append'          : (('void', 'ptr', 'int'), None),
+    #'insert'          : (('void', 'ptr', 'int', 'int'), None),
+    #'pop'             : (('void', 'ptr',), 'int'),
+    #'len'             : (('void', 'ptr',), 'int'),
+    #'listnonzero'     : (('void', 'ptr',), 'int'),
 }
 
 # ____________________________________________________________
@@ -135,10 +135,11 @@ class LoopOrBridge(object):
         return '\n'.join(lines)
 
 class Operation(object):
-    def __init__(self, opnum):
+    def __init__(self, opnum, descr):
         self.opnum = opnum
         self.args = []
         self.result = None
+        self.descr = descr
         self.livevars = []   # for guards only
 
     def __repr__(self):
@@ -179,19 +180,16 @@ def repr_list(lst, types, memocast):
         types = types[:-1] + ('int',) * (len(lst) - len(types) + 1)
     assert len(types) == len(lst)
     for elem, tp in zip(lst, types):
-        if len(lst) >= 2:
-            extraarg = lst[1]
-        else:
-            extraarg = None
         if isinstance(elem, Constant):
-            res_l.append('(%s)' % repr1(elem, tp, memocast, extraarg))
+            res_l.append('(%s)' % repr1(elem, tp, memocast))
         else:
-            res_l.append(repr1(elem, tp, memocast, extraarg))
+            res_l.append(repr1(elem, tp, memocast))
     return '[%s]' % (', '.join(res_l))
 
-def repr1(x, tp, memocast, extraarg):
+def repr1(x, tp, memocast):
     if tp == "intorptr":
-        if extraarg % 2:
+        TYPE = lltype.typeOf(x)
+        if isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
             tp = "ptr"
         else:
             tp = "int"
@@ -221,8 +219,8 @@ def repr1(x, tp, memocast, extraarg):
     elif tp == 'bool':
         assert x == 0 or x == 1
         return str(bool(x))
-    elif tp == 'fieldname':
-        return str(symbolic.TokenToField[x/2][1])
+    #elif tp == 'fieldname':
+    #    return str(symbolic.TokenToField[x/2][1])
     else:
         raise NotImplementedError("tp = %s" % tp)
 
@@ -250,9 +248,9 @@ def compile_start_ptr_var(loop):
     _variables.append(v)
     return r
 
-def compile_add(loop, opnum):
+def compile_add(loop, opnum, descr):
     loop = _from_opaque(loop)
-    loop.operations.append(Operation(opnum))
+    loop.operations.append(Operation(opnum, descr))
 
 def compile_add_var(loop, intvar):
     loop = _from_opaque(loop)
@@ -367,7 +365,8 @@ class Frame(object):
                 _stats.exec_jumps += 1
                 continue
             try:
-                result = self.execute_operation(op.opnum, args, verbose)
+                result = self.execute_operation(op.opnum, args, op.descr,
+                                                verbose)
                 #verbose = self.verbose
                 assert (result is None) == (op.result is None)
                 if op.result is not None:
@@ -405,7 +404,7 @@ class Frame(object):
                     self.failed_guard_op = op
                     return op.failnum
 
-    def execute_operation(self, opnum, values, verbose):
+    def execute_operation(self, opnum, values, descr, verbose):
         """Execute a single operation.
         """
         ophandler = self.OPHANDLERS[opnum]
@@ -419,17 +418,13 @@ class Frame(object):
         for i in range(len(values)):
             if isinstance(values[i], ComputedIntSymbolic):
                 values[i] = values[i].compute_fn()
-        res = ophandler(self, *values)
+        res = ophandler(self, descr, *values)
         if verbose:
             argtypes, restype = TYPES[opname]
             if res is None:
                 resdata = ''
             else:
-                if len(values) >= 2:
-                    extraarg = values[1]
-                else:
-                    extraarg = None
-                resdata = '-> ' + repr1(res, restype, self.memocast, extraarg)
+                resdata = '-> ' + repr1(res, restype, self.memocast)
             # fish the types
             log.cpu('\t%s %s %s' % (opname, repr_list(values, argtypes,
                                                       self.memocast), resdata))
@@ -456,13 +451,13 @@ class Frame(object):
             name = 'do_' + opname.lower()
             try:
                 impl = globals()[name]                    # do_arraylen_gc etc.
-                def op(self, *args):
-                    return impl(*args)
+                def op(self, descr, *args):
+                    return impl(descr, *args)
                 #
             except KeyError:
                 from pypy.jit.backend.llgraph import llimpl
                 impl = getattr(executor, name)            # do_int_add etc.
-                def _op_default_implementation(self, *args):
+                def _op_default_implementation(self, descr, *args):
                     # for all operations implemented in execute.py
                     boxedargs = []
                     for x in args:
@@ -477,57 +472,15 @@ class Frame(object):
                 #
         Frame.OPHANDLERS[opnum] = op
 
-    def op_guard_true(self, value):
+    def op_guard_true(self, _, value):
         if not value:
             raise GuardFailed
 
-    def op_guard_false(self, value):
+    def op_guard_false(self, _, value):
         if value:
             raise GuardFailed
 
-    op_guard_nonzero = op_guard_true
-    op_guard_iszero  = op_guard_false
-
-    def op_guard_nonnull(self, ptr):
-        if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = cast_int_to_adr(self.memocast, ptr)
-        if not ptr:
-            raise GuardFailed
-
-    def op_guard_isnull(self, ptr):
-        if lltype.typeOf(ptr) != llmemory.GCREF:
-            ptr = cast_int_to_adr(self.memocast, ptr)
-        if ptr:
-            raise GuardFailed
-
-    def op_guard_lt(self, value1, value2):
-        if value1 >= value2:
-            raise GuardFailed
-
-    def op_guard_le(self, value1, value2):
-        if value1 > value2:
-            raise GuardFailed
-
-    def op_guard_eq(self, value1, value2):
-        if value1 != value2:
-            raise GuardFailed
-
-    def op_guard_ne(self, value1, value2):
-        if value1 == value2:
-            raise GuardFailed
-
-    def op_guard_gt(self, value1, value2):
-        if value1 <= value2:
-            raise GuardFailed
-
-    def op_guard_ge(self, value1, value2):
-        if value1 < value2:
-            raise GuardFailed
-
-    op_guard_is    = op_guard_eq
-    op_guard_isnot = op_guard_ne
-
-    def op_guard_class(self, value, expected_class):
+    def op_guard_class(self, _, value, expected_class):
         value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, value)
         expected_class = llmemory.cast_adr_to_ptr(
             cast_int_to_adr(self.memocast, expected_class),
@@ -535,23 +488,23 @@ class Frame(object):
         if value.typeptr != expected_class:
             raise GuardFailed
 
-    def op_guard_value(self, value, expected_value):
+    def op_guard_value(self, _, value, expected_value):
         if value != expected_value:
             raise GuardFailed
 
-    def op_guard_nonvirtualized(self, value, expected_class,
-                                for_accessing_field):
-        self.op_guard_class(value, expected_class)
+    def op_guard_nonvirtualized(self, for_accessing_field,
+                                value, expected_class):
+        self.op_guard_class(-1, value, expected_class)
         if heaptracker.cast_vable(value).vable_rti:
             raise GuardFailed    # some other code is already in control
 
-    def op_guard_no_exception(self):
+    def op_guard_no_exception(self, _):
         global _last_exception_handled
         _last_exception_handled = True
         if _last_exception:
             raise GuardFailed
 
-    def op_guard_exception(self, expected_exception):
+    def op_guard_exception(self, _, expected_exception):
         global _last_exception_handled
         _last_exception_handled = True
         expected_exception = llmemory.cast_adr_to_ptr(
@@ -569,19 +522,19 @@ class Frame(object):
     # ----------
     # delegating to the builtins do_xxx() (done automatically for simple cases)
 
-    def op_getarrayitem_gc(self, array, arraydescr, index):
+    def op_getarrayitem_gc(self, arraydescr, array, index):
         if arraydescr & 1:
             return do_getarrayitem_gc_ptr(array, index)
         else:
             return do_getarrayitem_gc_int(array, index, self.memocast)
 
-    def op_getfield_gc(self, struct, fielddescr):
+    def op_getfield_gc(self, fielddescr, struct):
         if fielddescr & 1:
             return do_getfield_gc_ptr(struct, fielddescr)
         else:
             return do_getfield_gc_int(struct, fielddescr, self.memocast)
 
-    def op_getfield_raw(self, struct, fielddescr):
+    def op_getfield_raw(self, fielddescr, struct):
         if fielddescr & 1:
             return do_getfield_raw_ptr(struct, fielddescr)
         else:
@@ -593,25 +546,25 @@ class Frame(object):
         value.typeptr = cast_from_int(rclass.CLASSTYPE, vtable, self.memocast)
         return result
 
-    def op_setarrayitem_gc(self, array, arraydescr, index, newvalue):
+    def op_setarrayitem_gc(self, arraydescr, array, index, newvalue):
         if arraydescr & 1:
             do_setarrayitem_gc_ptr(array, index, newvalue)
         else:
             do_setarrayitem_gc_int(array, index, newvalue, self.memocast)
 
-    def op_setfield_gc(self, struct, fielddescr, newvalue):
+    def op_setfield_gc(self, fielddescr, struct, newvalue):
         if fielddescr & 1:
             do_setfield_gc_ptr(struct, fielddescr, newvalue)
         else:
             do_setfield_gc_int(struct, fielddescr, newvalue, self.memocast)
 
-    def op_setfield_raw(self, struct, fielddescr, newvalue):
+    def op_setfield_raw(self, fielddescr, struct, newvalue):
         if fielddescr & 1:
             do_setfield_raw_ptr(struct, fielddescr, newvalue)
         else:
             do_setfield_raw_int(struct, fielddescr, newvalue, self.memocast)
 
-    def op_call(self, func, calldescr, *args):
+    def op_call(self, calldescr, func, *args):
         global _last_exception, _last_exception_handled
         _call_args[:] = args
         try:
@@ -621,7 +574,7 @@ class Frame(object):
         except LLException, e:
             _last_exception = e
             _last_exception_handled = False
-            if calldescr == -1:
+            if calldescr == sys.maxint:
                 return None
             elif calldescr & 1:
                 return lltype.nullptr(llmemory.GCREF)
@@ -779,15 +732,15 @@ class GuardFailed(Exception):
 # ____________________________________________________________
 
 
-def do_arraylen_gc(array, ignored):
+def do_arraylen_gc(arraydescr, array):
     array = array._obj.container
     return array.getlength()
 
-def do_strlen(string):
+def do_strlen(_, string):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     return len(str.chars)
 
-def do_strgetitem(string, index):
+def do_strgetitem(_, string, index):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     return ord(str.chars[index])
 
@@ -873,11 +826,11 @@ def do_setfield_raw_ptr(struct, fielddesc, newvalue):
     newvalue = cast_from_ptr(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
 
-def do_newstr(length):
+def do_newstr(_, length):
     x = rstr.mallocstr(length)
     return cast_to_ptr(x)
 
-def do_strsetitem(string, index, newvalue):
+def do_strsetitem(_, string, index, newvalue):
     str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)
     str.chars[index] = chr(newvalue)
 

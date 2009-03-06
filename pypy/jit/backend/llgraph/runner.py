@@ -2,6 +2,7 @@
 Minimal-API wrapper around the llinterpreter to run operations.
 """
 
+import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.jit.metainterp import history
@@ -63,7 +64,7 @@ class CPU(object):
             op._compiled = c
             op._opindex = j
             j += 1
-            llimpl.compile_add(c, op.opnum)
+            llimpl.compile_add(c, op.opnum, op.descr)
             for x in op.args:
                 if isinstance(x, history.Box):
                     llimpl.compile_add_var(c, var2index[x])
@@ -214,7 +215,7 @@ class CPU(object):
     @staticmethod
     def calldescrof(ARGS, RESULT):
         if RESULT is lltype.Void:
-            return -1
+            return sys.maxint
         token = history.getkind(RESULT)
         if token == 'ptr':
             return 1
@@ -223,7 +224,7 @@ class CPU(object):
 
     @staticmethod
     def typefor(fielddesc):
-        if fielddesc == -1:
+        if fielddesc == sys.maxint:
             return 'void'
         if fielddesc % 2:
             return 'ptr'
@@ -247,32 +248,30 @@ class CPU(object):
 
     # ---------- the backend-dependent operations ----------
 
-    def do_arraylen_gc(self, args):
+    def do_arraylen_gc(self, args, arraydescr):
         array = args[0].getptr_base()
-        return history.BoxInt(llimpl.do_arraylen_gc(array, 0))
+        return history.BoxInt(llimpl.do_arraylen_gc(arraydescr, array))
 
-    def do_strlen(self, args):
+    def do_strlen(self, args, descr=0):
         string = args[0].getptr_base()
-        return history.BoxInt(llimpl.do_strlen(string))
+        return history.BoxInt(llimpl.do_strlen(0, string))
 
-    def do_strgetitem(self, args):
+    def do_strgetitem(self, args, descr=0):
         string = args[0].getptr_base()
         index = args[1].getint()
-        return history.BoxInt(llimpl.do_strgetitem(string, index))
+        return history.BoxInt(llimpl.do_strgetitem(0, string, index))
 
-    def do_getarrayitem_gc(self, args):
+    def do_getarrayitem_gc(self, args, arraydescr):
         array = args[0].getptr_base()
-        arraydescr = args[1].getint()
-        index = args[2].getint()
+        index = args[1].getint()
         if self.typefor(arraydescr) == 'ptr':
             return history.BoxPtr(llimpl.do_getarrayitem_gc_ptr(array, index))
         else:
             return history.BoxInt(llimpl.do_getarrayitem_gc_int(array, index,
                                                                self.memo_cast))
 
-    def do_getfield_gc(self, args):
+    def do_getfield_gc(self, args, fielddescr):
         struct = args[0].getptr_base()
-        fielddescr = args[1].getint()
         if self.typefor(fielddescr) == 'ptr':
             return history.BoxPtr(llimpl.do_getfield_gc_ptr(struct,
                                                             fielddescr))
@@ -281,9 +280,8 @@ class CPU(object):
                                                             fielddescr,
                                                             self.memo_cast))
 
-    def do_getfield_raw(self, args):
+    def do_getfield_raw(self, args, fielddescr):
         struct = self.cast_int_to_adr(args[0].getint())
-        fielddescr = args[1].getint()
         if self.typefor(fielddescr) == 'ptr':
             return history.BoxPtr(llimpl.do_getfield_raw_ptr(struct,
                                                              fielddescr))
@@ -292,71 +290,64 @@ class CPU(object):
                                                              fielddescr,
                                                              self.memo_cast))
 
-    def do_new(self, args):
-        size = args[0].getint()
+    def do_new(self, args, size):
         return history.BoxPtr(llimpl.do_new(size))
 
-    def do_new_with_vtable(self, args):
-        size = args[0].getint()
-        vtable = args[1].getint()
+    def do_new_with_vtable(self, args, size):
+        vtable = args[0].getint()
         result = llimpl.do_new(size)
         llimpl.do_setfield_gc_int(result, self.fielddescrof_vtable, vtable,
                                   self.memo_cast)
         return history.BoxPtr(result)
 
-    def do_new_array(self, args):
-        size = args[0].getint()
-        count = args[1].getint()
+    def do_new_array(self, args, size):
+        count = args[0].getint()
         return history.BoxPtr(llimpl.do_new_array(size, count))
 
-    def do_setarrayitem_gc(self, args):
+    def do_setarrayitem_gc(self, args, arraydescr):
         array = args[0].getptr_base()
-        arraydescr = args[1].getint()
-        index = args[2].getint()
+        index = args[1].getint()
         if self.typefor(arraydescr) == 'ptr':
-            newvalue = args[3].getptr_base()
+            newvalue = args[2].getptr_base()
             llimpl.do_setarrayitem_gc_ptr(array, index, newvalue)
         else:
-            newvalue = args[3].getint()
+            newvalue = args[2].getint()
             llimpl.do_setarrayitem_gc_int(array, index, newvalue,
                                           self.memo_cast)
 
-    def do_setfield_gc(self, args):
+    def do_setfield_gc(self, args, fielddescr):
         struct = args[0].getptr_base()
-        fielddescr = args[1].getint()
         if self.typefor(fielddescr) == 'ptr':
-            newvalue = args[2].getptr_base()
+            newvalue = args[1].getptr_base()
             llimpl.do_setfield_gc_ptr(struct, fielddescr, newvalue)
         else:
-            newvalue = args[2].getint()
+            newvalue = args[1].getint()
             llimpl.do_setfield_gc_int(struct, fielddescr, newvalue,
                                       self.memo_cast)
 
-    def do_setfield_raw(self, args):
+    def do_setfield_raw(self, args, fielddescr):
         struct = self.cast_int_to_adr(args[0].getint())
-        fielddescr = args[1].getint()
         if self.typefor(fielddescr) == 'ptr':
-            newvalue = args[2].getptr_base()
+            newvalue = args[1].getptr_base()
             llimpl.do_setfield_raw_ptr(struct, fielddescr, newvalue)
         else:
-            newvalue = args[2].getint()
+            newvalue = args[1].getint()
             llimpl.do_setfield_raw_int(struct, fielddescr, newvalue,
                                        self.memo_cast)
 
-    def do_newstr(self, args):
+    def do_newstr(self, args, descr=0):
         length = args[0].getint()
-        return history.BoxPtr(llimpl.do_newstr(length))
+        return history.BoxPtr(llimpl.do_newstr(0, length))
 
-    def do_strsetitem(self, args):
+    def do_strsetitem(self, args, descr=0):
         string = args[0].getptr_base()
         index = args[1].getint()
         newvalue = args[2].getint()
-        llimpl.do_strsetitem(string, index, newvalue)
+        llimpl.do_strsetitem(0, string, index, newvalue)
 
-    def do_call(self, args):
+    def do_call(self, args, calldescr):
         func = args[0].getint()
-        calldescr = args[1].getint()
-        for arg in args[2:]:
+        for arg in args[1:]:
             if (isinstance(arg, history.BoxPtr) or
                 isinstance(arg, history.ConstPtr)):
                 llimpl.do_call_pushptr(arg.getptr_base())
