@@ -5,6 +5,7 @@ from pypy.rlib.unroll import unrolling_iterable
 
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, Const, ConstInt
 from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp.executor import get_execute_function
 from pypy.jit.backend.llgraph.runner import CPU, GuardFailed
 
 
@@ -300,3 +301,11 @@ class TestLLGraph:
              ConstInt(calldescr),
              BoxInt(ord('A'))])
         assert x.value == ord('B')
+
+    def test_executor(self):
+        cpu = CPU(None)
+        fn = get_execute_function(cpu, rop.INT_ADD)
+        assert fn(cpu, [BoxInt(100), ConstInt(42)]).value == 142
+        fn = get_execute_function(cpu, rop.NEWSTR)
+        s = fn(cpu, [BoxInt(8)])
+        assert len(s.getptr(lltype.Ptr(rstr.STR)).chars) == 8

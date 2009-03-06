@@ -451,3 +451,8 @@ class GuardFailed(object):
         llimpl.frame_clear(self.frame, merge_point._compiled,
                            merge_point._opindex)
         self.merge_point = merge_point
+
+# ____________________________________________________________
+
+import pypy.jit.metainterp.executor
+pypy.jit.metainterp.executor.make_execute_list(CPU)
