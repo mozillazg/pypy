@@ -499,47 +499,19 @@ class Assembler386(object):
         self.mc2.JMP(eax)
         return recovery_code_addr
 
-    def _new_gen_call():
-        def gen_call(self, op, arglocs, resloc):
-            extra_on_stack = 0
-            for i in range(len(op.args) - 1, 0, -1):
+    def genop_call(self, op, arglocs, resloc):
+        extra_on_stack = 0
+        for i in range(len(op.args) - 1, 0, -1):
+            # op.args[1] is a calldesc
+            if i != 1:
                 v = op.args[i]
-                loc = arglocs[i]
+                loc = arglocs[len(arglocs) - 1 - extra_on_stack]
                 if not isinstance(loc, MODRM):
                     self.mc.PUSH(loc)
                 else:
                     # we need to add a bit, ble
                     self.mc.PUSH(stack_pos(loc.position + extra_on_stack))
                 extra_on_stack += 1
-            if isinstance(op.args[0], Const):
-                x = rel32(self.cpu.get_box_value_as_int(op.args[0]))
-            else:
-                # XXX add extra_on_stack?
-                x = arglocs[0]
-            self.mc.CALL(x)
-            self.mc.ADD(esp, imm(WORD * extra_on_stack))
-        return gen_call
-
-    genop_call__4 = _new_gen_call()
-    gen_call = _new_gen_call()
-    genop_call_ptr = gen_call
-    xxx_genop_getitem = _new_gen_call()    
-    xxx_genop_len = _new_gen_call()
-    xxx_genop_pop = _new_gen_call()
-    xxx_genop_newlist = _new_gen_call()
-    xxx_genop_listnonzero = _new_gen_call()
-
-    def genop_call_void(self, op, arglocs):
-        extra_on_stack = 0
-        for i in range(len(op.args) - 1, 0, -1):
-            v = op.args[i]
-            loc = arglocs[i]
-            if not isinstance(loc, MODRM):
-                self.mc.PUSH(loc)
-            else:
-                # we need to add a bit, ble
-                self.mc.PUSH(stack_pos(loc.position + extra_on_stack))
-            extra_on_stack += 1
         if isinstance(op.args[0], Const):
             x = rel32(self.cpu.get_box_value_as_int(op.args[0]))
         else:
@@ -548,18 +520,14 @@ class Assembler386(object):
         self.mc.CALL(x)
         self.mc.ADD(esp, imm(WORD * extra_on_stack))
 
-    xxx_genop_append = genop_call_void
-    xxx_genop_setitem = genop_call_void
-    xxx_genop_insert = genop_call_void
+    #def genop_call__1(self, op, arglocs, resloc):
+    #    self.gen_call(op, arglocs, resloc)
+    #    self.mc.MOVZX(eax, al)
 
-    def genop_call__1(self, op, arglocs, resloc):
-        self.gen_call(op, arglocs, resloc)
-        self.mc.MOVZX(eax, al)
-
-    def genop_call__2(self, op, arglocs, resloc):
-        # XXX test it test it test it
-        self.gen_call(op, arglocs, resloc)
-        self.mc.MOVZX(eax, eax)
+    #def genop_call__2(self, op, arglocs, resloc):
+    #    # XXX test it test it test it
+    #    self.gen_call(op, arglocs, resloc)
+    #    self.mc.MOVZX(eax, eax)
 
 genop_discard_list = [None] * rop._LAST
 genop_list = [None] * rop._LAST
@@ -578,8 +546,6 @@ for name, value in Assembler386.__dict__.iteritems():
             genop_guard_list[num] = value
         else:
             genop_list[num] = value
-
-genop_discard_list[rop.CALL_VOID] = Assembler386.genop_call_void
 
 def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
     if isinstance(reg_or_imm1, IMM32):
