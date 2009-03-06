@@ -17,6 +17,8 @@ REGS = [eax, ecx, edx]
 WORD = 4
 FRAMESIZE = 1024    # XXX should not be a constant at all!!
 
+RETURN = rop._LAST
+
 class TempBox(Box):
     def __init__(self):
         pass
@@ -578,7 +580,7 @@ class RegAlloc(object):
         self.eventually_free_vars(op.liveboxes + op.args)
         return ops + [PerformDiscard(op, [x, y] + locs)]
 
-    def xxx_consider_return(self, op, ignored):
+    def consider_return(self, op, ignored):
         if op.args:
             arglocs = [self.loc(op.args[0])]
             self.eventually_free_var(op.args[0])
@@ -720,19 +722,19 @@ class RegAlloc(object):
 
     def consider_call(self, op, ignored):
         from pypy.jit.backend.x86.runner import CPU386
-        args = [op.args[0]] + op.args[2:]
-        calldescr = op.args[1].getint()
-        _, size, _ = CPU386.unpack_calldescr(calldescr)
+        calldescr = op.descr
+        numargs, size, _ = CPU386.unpack_calldescr(calldescr)
+        assert numargs == len(op.args)
         return self._call(op, [imm(size)] +
-                          [self.loc(arg) for arg in args])
+                          [self.loc(arg) for arg in op.args])
 
     consider_call_pure = consider_call
 
     def consider_new(self, op, ignored):
-        return self._call(op, [self.loc(arg) for arg in op.args])
+        return self._call(op, [imm(op.descr)])
 
     def consider_new_with_vtable(self, op, ignored):
-        return self._call(op, [self.loc(arg) for arg in op.args])
+        return self._call(op, [imm(op.descr), self.loc(op.args[0])])
 
     def consider_newstr(self, op, ignored):
         ofs = symbolic.get_field_token(rstr.STR, 'chars')[0]
@@ -766,8 +768,8 @@ class RegAlloc(object):
         return res
 
     def consider_new_array(self, op, ignored):
-        size_of_field, basesize = self._unpack_arraydescr(op.args[0].getint())
-        return self._malloc_varsize(0, basesize, 0, size_of_field, op.args[1],
+        size_of_field, basesize = self._unpack_arraydescr(op.descr)
+        return self._malloc_varsize(0, basesize, 0, size_of_field, op.args[0],
                                     op.result)
 
     def consider_oononnull(self, op, ignored):
@@ -788,9 +790,9 @@ class RegAlloc(object):
 
     def consider_setfield_gc(self, op, ignored):
         base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], op.args)
-        ofs_loc, size_loc = self._unpack_fielddescr(op.args[1].getint())
-        value_loc, ops2 = self.make_sure_var_in_reg(op.args[2], op.args)
-        self.eventually_free_vars([op.args[0], op.args[1], op.args[2]])
+        ofs_loc, size_loc = self._unpack_fielddescr(op.descr)
+        value_loc, ops2 = self.make_sure_var_in_reg(op.args[1], op.args)
+        self.eventually_free_vars(op.args)
         return (ops0 + ops2 +
                 [PerformDiscard(op, [base_loc, ofs_loc, size_loc, value_loc])])
 
@@ -803,21 +805,19 @@ class RegAlloc(object):
                 [PerformDiscard(op, [base_loc, ofs_loc, value_loc])])
 
     def consider_setarrayitem_gc(self, op, ignored):
-        scale, ofs = self._unpack_arraydescr(op.args[1].getint())
-        assert scale == 2
-        args = [op.args[0], op.args[2], op.args[3]]
-        base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], args)
-        ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[2], args)
-        value_loc, ops2 = self.make_sure_var_in_reg(op.args[3], args)
+        scale, ofs = self._unpack_arraydescr(op.descr)
+        base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], op.args)
+        ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[1], op.args)
+        value_loc, ops2 = self.make_sure_var_in_reg(op.args[2], op.args)
         self.eventually_free_vars(op.args)
         return (ops0 + ops2 + ops1 +
                 [PerformDiscard(op, [base_loc, ofs_loc, value_loc,
                                      imm(scale), imm(ofs)])])
 
     def consider_getfield_gc(self, op, ignored):
-        ofs_loc, size_loc = self._unpack_fielddescr(op.args[1].getint())
+        ofs_loc, size_loc = self._unpack_fielddescr(op.descr)
         base_loc, ops0 = self.make_sure_var_in_reg(op.args[0], op.args)
-        self.eventually_free_vars([op.args[0], op.args[1]])
+        self.eventually_free_vars(op.args)
         result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return (ops0 + more_ops +
                 [Perform(op, [base_loc, ofs_loc, size_loc], result_loc)])
@@ -825,10 +825,9 @@ class RegAlloc(object):
     consider_getfield_gc_pure = consider_getfield_gc
 
     def consider_getarrayitem_gc(self, op, ignored):
-        scale, ofs = self._unpack_arraydescr(op.args[1].getint())
-        args = [op.args[0], op.args[2]]
-        base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], args)
-        ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[2], args)
+        scale, ofs = self._unpack_arraydescr(op.descr)
+        base_loc, ops0  = self.make_sure_var_in_reg(op.args[0], op.args)
+        ofs_loc, ops1 = self.make_sure_var_in_reg(op.args[1], op.args)
         self.eventually_free_vars(op.args)
         result_loc, more_ops = self.force_allocate_reg(op.result, [])
         return (ops0 + ops1 + more_ops +
@@ -953,12 +952,15 @@ class RegAlloc(object):
         self.eventually_free_vars(op.args)
         return ops + laterops + [PerformDiscard(op, [])]
 
-oplist = [None] * rop._LAST
+oplist = [None] * (RETURN + 1)
 
 for name, value in RegAlloc.__dict__.iteritems():
     if name.startswith('consider_'):
         name = name[len('consider_'):]
-        num = getattr(rop, name.upper())
+        if name == 'return':
+            num = RETURN
+        else:
+            num = getattr(rop, name.upper())
         oplist[num] = value
 
 def arg_pos(i):

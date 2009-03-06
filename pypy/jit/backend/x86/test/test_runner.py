@@ -45,15 +45,17 @@ class TestX86(object):
         cls.cpu = CPU(rtyper=None, stats=FakeStats())
         cls.cpu.set_meta_interp(FakeMetaInterp())
 
-    def execute_operation(self, opname, valueboxes, result_type):
+    def execute_operation(self, opname, valueboxes, result_type, descr=0):
         key = [opname, result_type]
-        mp = self.get_compiled_single_operation(opname, result_type, valueboxes)
+        mp = self.get_compiled_single_operation(opname, result_type, valueboxes,
+                                                descr)
         boxes = [box for box in valueboxes if isinstance(box, Box)]
         res = self.cpu.execute_operations_in_new_frame(opname, mp, boxes +
                                                        [BoxInt(1)])
         return res
 
-    def get_compiled_single_operation(self, opnum, result_type, valueboxes):
+    def get_compiled_single_operation(self, opnum, result_type, valueboxes,
+                                      descr):
         livevarlist = []
         for box in valueboxes:
             if isinstance(box, Box):
@@ -78,6 +80,7 @@ class TestX86(object):
         operations = [mp,
                       ResOperation(opnum, livevarlist, result),
                       ResOperation(rop.GUARD_FALSE, [checker], None)]
+        operations[1].descr = descr
         operations[-1].liveboxes = results
         if operations[1].is_guard():
             operations[1].liveboxes = []
@@ -114,13 +117,13 @@ class TestX86(object):
         cpu = self.cpu
         u = lltype.malloc(U)
         u_box = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, u))
-        ofs_box = ConstInt(cpu.fielddescrof(S, 'value'))
+        ofs = cpu.fielddescrof(S, 'value')
         assert self.execute_operation(rop.SETFIELD_GC,
-                                      [u_box, ofs_box, BoxInt(3)],
-                                     'void') == None
+                                      [u_box, BoxInt(3)],
+                                     'void', ofs) == None
         assert u.parent.parent.value == 3
         u.parent.parent.value += 100
-        assert (self.execute_operation(rop.GETFIELD_GC, [u_box, ofs_box], 'int')
+        assert (self.execute_operation(rop.GETFIELD_GC, [u_box], 'int', ofs)
                 .value == 103)
 
     def test_execute_operations_in_env(self):
@@ -250,18 +253,18 @@ class TestX86(object):
 
             TP = lltype.GcArray(lltype.Signed)
             ofs = symbolic.get_field_token(TP, 'length')[0]
-            descr = ConstInt(self.cpu.arraydescrof(TP))
+            descr = self.cpu.arraydescrof(TP)
 
-            res = self.execute_operation(rop.NEW_ARRAY, [descr, ConstInt(10)],
-                                             'ptr')
+            res = self.execute_operation(rop.NEW_ARRAY, [ConstInt(10)],
+                                             'ptr', descr)
             assert allocs[0] == 10*WORD + ofs + WORD
             resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
             assert resbuf[ofs/WORD] == 10
 
             # ------------------------------------------------------------
 
-            res = self.execute_operation(rop.NEW_ARRAY, [descr, BoxInt(10)],
-                                             'ptr')
+            res = self.execute_operation(rop.NEW_ARRAY, [BoxInt(10)],
+                                             'ptr', descr)
             assert allocs[0] == 10*WORD + ofs + WORD
             resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
             assert resbuf[ofs/WORD] == 10
@@ -287,26 +290,26 @@ class TestX86(object):
         TP = lltype.GcArray(lltype.Signed)
         ofs = symbolic.get_field_token(TP, 'length')[0]
         itemsofs = symbolic.get_field_token(TP, 'items')[0]
-        descr = ConstInt(self.cpu.arraydescrof(TP))
-        res = self.execute_operation(rop.NEW_ARRAY, [descr, ConstInt(10)],
-                                     'ptr')
+        descr = self.cpu.arraydescrof(TP)
+        res = self.execute_operation(rop.NEW_ARRAY, [ConstInt(10)],
+                                     'ptr', descr)
         resbuf = ctypes.cast(res.value.intval, ctypes.POINTER(ctypes.c_int))
         assert resbuf[ofs/WORD] == 10
-        self.execute_operation(rop.SETARRAYITEM_GC, [res, descr,
+        self.execute_operation(rop.SETARRAYITEM_GC, [res,
                                                      ConstInt(2), BoxInt(38)],
-                               'void')
+                               'void', descr)
         assert resbuf[itemsofs/WORD + 2] == 38
         
-        self.execute_operation(rop.SETARRAYITEM_GC, [res, descr,
+        self.execute_operation(rop.SETARRAYITEM_GC, [res,
                                                      BoxInt(3), BoxInt(42)],
-                               'void')
+                               'void', descr)
         assert resbuf[itemsofs/WORD + 3] == 42
 
-        r = self.execute_operation(rop.GETARRAYITEM_GC, [res, descr,
-                                                         ConstInt(2)], 'int')
+        r = self.execute_operation(rop.GETARRAYITEM_GC, [res, ConstInt(2)],
+                                   'int', descr)
         assert r.value == 38
-        r = self.execute_operation(rop.GETARRAYITEM_GC, [res, descr,
-                                                         BoxInt(3)], 'int')
+        r = self.execute_operation(rop.GETARRAYITEM_GC, [res, BoxInt(3)],
+                                   'int', descr)
         assert r.value == 42
 
     def test_getfield_setfield(self):
@@ -316,34 +319,39 @@ class TestX86(object):
                              ('c1', lltype.Char),
                              ('c2', lltype.Char),
                              ('c3', lltype.Char))
-        res = self.execute_operation(rop.NEW, [ConstInt(self.cpu.sizeof(TP))],
-                                     'ptr')
-        ofs_s = ConstInt(self.cpu.fielddescrof(TP, 's'))
-        ofs_f = ConstInt(self.cpu.fielddescrof(TP, 'f'))
-        ofs_u = ConstInt(self.cpu.fielddescrof(TP, 'u'))
-        ofsc1 = ConstInt(self.cpu.fielddescrof(TP, 'c1'))
-        ofsc2 = ConstInt(self.cpu.fielddescrof(TP, 'c2'))
-        ofsc3 = ConstInt(self.cpu.fielddescrof(TP, 'c3'))
-        self.execute_operation(rop.SETFIELD_GC, [res, ofs_s, ConstInt(3)], 'void')
+        res = self.execute_operation(rop.NEW, [],
+                                     'ptr', self.cpu.sizeof(TP))
+        ofs_s = self.cpu.fielddescrof(TP, 's')
+        ofs_f = self.cpu.fielddescrof(TP, 'f')
+        ofs_u = self.cpu.fielddescrof(TP, 'u')
+        ofsc1 = self.cpu.fielddescrof(TP, 'c1')
+        ofsc2 = self.cpu.fielddescrof(TP, 'c2')
+        ofsc3 = self.cpu.fielddescrof(TP, 'c3')
+        self.execute_operation(rop.SETFIELD_GC, [res, ConstInt(3)], 'void',
+                               ofs_s)
         # XXX ConstFloat
         #self.execute_operation(rop.SETFIELD_GC, [res, ofs_f, 1e100], 'void')
         # XXX we don't support shorts (at all)
         #self.execute_operation(rop.SETFIELD_GC, [res, ofs_u, ConstInt(5)], 'void')
-        s = self.execute_operation(rop.GETFIELD_GC, [res, ofs_s], 'int')
+        s = self.execute_operation(rop.GETFIELD_GC, [res], 'int', ofs_s)
         assert s.value == 3
-        self.execute_operation(rop.SETFIELD_GC, [res, ofs_s, BoxInt(3)], 'void')
-        s = self.execute_operation(rop.GETFIELD_GC, [res, ofs_s], 'int')
+        self.execute_operation(rop.SETFIELD_GC, [res, BoxInt(3)], 'void',
+                               ofs_s)
+        s = self.execute_operation(rop.GETFIELD_GC, [res], 'int', ofs_s)
         assert s.value == 3
         #u = self.execute_operation(rop.GETFIELD_GC, [res, ofs_u], 'int')
         #assert u.value == 5
-        self.execute_operation(rop.SETFIELD_GC, [res, ofsc1, ConstInt(1)], 'void')
-        self.execute_operation(rop.SETFIELD_GC, [res, ofsc2, ConstInt(2)], 'void')
-        self.execute_operation(rop.SETFIELD_GC, [res, ofsc3, ConstInt(3)], 'void')
-        c = self.execute_operation(rop.GETFIELD_GC, [res, ofsc1], 'int')
+        self.execute_operation(rop.SETFIELD_GC, [res, ConstInt(1)], 'void',
+                               ofsc1)
+        self.execute_operation(rop.SETFIELD_GC, [res, ConstInt(2)], 'void',
+                               ofsc2)
+        self.execute_operation(rop.SETFIELD_GC, [res, ConstInt(3)], 'void',
+                               ofsc3)
+        c = self.execute_operation(rop.GETFIELD_GC, [res], 'int', ofsc1)
         assert c.value == 1
-        c = self.execute_operation(rop.GETFIELD_GC, [res, ofsc2], 'int')
+        c = self.execute_operation(rop.GETFIELD_GC, [res], 'int', ofsc2)
         assert c.value == 2
-        c = self.execute_operation(rop.GETFIELD_GC, [res, ofsc3], 'int')
+        c = self.execute_operation(rop.GETFIELD_GC, [res], 'int', ofsc3)
         assert c.value == 3
         
     def test_ovf_ops(self):
@@ -381,25 +389,26 @@ class TestX86(object):
         cpu = self.cpu
         #
         A = lltype.GcArray(lltype.Char)
-        descrbox_A = ConstInt(cpu.arraydescrof(A))
+        descr_A = cpu.arraydescrof(A)
         a = lltype.malloc(A, 5)
         x = cpu.do_arraylen_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox_A])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a))],
+            descr_A)
         assert x.value == 5
         #
         a[2] = 'Y'
         x = cpu.do_getarrayitem_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), descrbox_A,
-             BoxInt(2)])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, a)), BoxInt(2)],
+            descr_A)
         assert x.value == ord('Y')
         #
         B = lltype.GcArray(lltype.Ptr(A))
-        descrbox_B = ConstInt(cpu.arraydescrof(B))
+        descr_B = cpu.arraydescrof(B)
         b = lltype.malloc(B, 4)
         b[3] = a
         x = cpu.do_getarrayitem_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), descrbox_B,
-             BoxInt(3)])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), BoxInt(3)],
+            descr_B)
         assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
         #
@@ -418,29 +427,28 @@ class TestX86(object):
         s = lltype.malloc(S)
         s.x = 'Z'
         x = cpu.do_getfield_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
-             BoxInt(descrfld_x)])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s))],
+            descrfld_x)
         assert x.value == ord('Z')
         #
         cpu.do_setfield_gc(
             [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
-             BoxInt(descrfld_x),
-             BoxInt(ord('4'))])
+             BoxInt(ord('4'))],
+            descrfld_x)
         assert s.x == '4'
         #
         descrfld_y = cpu.fielddescrof(S, 'y')
         s.y = a
         x = cpu.do_getfield_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
-             BoxInt(descrfld_y)])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s))],
+            descrfld_y)
         assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
         #
         s.y = lltype.nullptr(A)
         cpu.do_setfield_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)),
-             BoxInt(descrfld_y),
-             x])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, s)), x],
+            descrfld_y)
         assert s.y == a
         #
         RS = lltype.Struct('S', ('x', lltype.Char), ('y', lltype.Ptr(A)))
@@ -448,61 +456,57 @@ class TestX86(object):
         rs = lltype.malloc(RS, immortal=True)
         rs.x = '?'
         x = cpu.do_getfield_raw(
-            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))),
-             BoxInt(descrfld_rx)])
+            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs)))],
+            descrfld_rx)
         assert x.value == ord('?')
         #
         cpu.do_setfield_raw(
             [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))),
-             BoxInt(descrfld_rx),
-             BoxInt(ord('!'))])
+             BoxInt(ord('!'))],
+            descrfld_rx)
         assert rs.x == '!'
         #
         descrfld_ry = cpu.fielddescrof(RS, 'y')
         rs.y = a
         x = cpu.do_getfield_raw(
-            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))),
-             BoxInt(descrfld_ry)])
+            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs)))],
+            descrfld_ry)
         assert isinstance(x, BoxPtr)
         assert x.getptr(lltype.Ptr(A)) == a
         #
         rs.y = lltype.nullptr(A)
         cpu.do_setfield_raw(
-            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))),
-             BoxInt(descrfld_ry),
-             x])
+            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(rs))), x],
+            descrfld_ry)
         assert rs.y == a
         #
         descrsize = cpu.sizeof(S)
-        x = cpu.do_new(
-            [BoxInt(descrsize)])
+        x = cpu.do_new([], descrsize)
         assert isinstance(x, BoxPtr)
         x.getptr(lltype.Ptr(S))
         #
         descrsize2 = cpu.sizeof(rclass.OBJECT)
         vtable2 = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
         x = cpu.do_new_with_vtable(
-            [BoxInt(descrsize2),
-             BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable2)))])
+            [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable2)))],
+            descrsize2)
         assert isinstance(x, BoxPtr)
-        # well....
-        assert (rffi.cast(rffi.CArrayPtr(lltype.Signed),
-                         x.getptr(llmemory.GCREF))[0])
+        # well...
         #assert x.getptr(rclass.OBJECTPTR).typeptr == vtable2
         #
         arraydescr = cpu.arraydescrof(A)
-        x = cpu.do_new_array(
-            [BoxInt(arraydescr), BoxInt(7)])
+        x = cpu.do_new_array([BoxInt(7)], arraydescr)
         assert isinstance(x, BoxPtr)
         assert len(x.getptr(lltype.Ptr(A))) == 7
         #
         cpu.do_setarrayitem_gc(
-            [x, descrbox_A, BoxInt(5), BoxInt(ord('*'))])
+            [x, BoxInt(5), BoxInt(ord('*'))], descr_A)
         assert x.getptr(lltype.Ptr(A))[5] == '*'
         #
         cpu.do_setarrayitem_gc(
-            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)), descrbox_B,
-             BoxInt(1), x])
+            [BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, b)),
+             BoxInt(1), x],
+            descr_B)
         assert b[1] == x.getptr(lltype.Ptr(A))
         #
         x = cpu.do_newstr([BoxInt(5)])
@@ -520,11 +524,11 @@ class TestX86(object):
             return chr(ord(c) + 1)
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Char], lltype.Char))
         func_ptr = llhelper(FPTR, func)
-        calldescr = cpu.calldescrof([lltype.Char], lltype.Char)
+        calldescr = cpu.calldescrof([FPTR, lltype.Char], lltype.Char)
         x = cpu.do_call(
             [BoxInt(cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(func_ptr))),
-             ConstInt(calldescr),
-             BoxInt(ord('A'))])
+             BoxInt(ord('A'))],
+            calldescr)
         assert x.value == ord('B')
 
     def test_executor(self):
