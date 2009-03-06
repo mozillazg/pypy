@@ -485,10 +485,9 @@ def make_state_class(warmrunnerdesc):
             loop, boxes = warmrunnerdesc.metainterp.compile_and_run(*args)
             if loop:
                 cpu = warmrunnerdesc.metainterp.cpu
-                mp = loop.operations[0]
+                operations = loop.operations
                 box = cpu.execute_operations_in_new_frame('run_this_loop',
-                                                          mp, boxes,
-                                                          "int")
+                                                          operations, boxes)
                 raise warmrunnerdesc.DoneWithThisFrame(box)
 
         def must_compile_from_failure(self, guard_failure):
