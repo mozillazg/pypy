@@ -128,3 +128,26 @@ def test_loop_with_const_and_var_swap():
     assert res.value == 42
     assert meta_interp.recordedvalues == [0, 1, 3, 2, 0]
 
+def test_bool_optimizations():
+    py.test.skip("Not yet")
+    meta_interp = FakeMetaInterp()
+    cpu = CPU(rtyper=None, stats=FakeStats())
+    cpu.set_meta_interp(meta_interp)
+    arg0 = BoxInt(3)
+    arg1 = BoxInt(4)
+    res = BoxInt(0)
+    ops = [
+        ResOperation(rop.MERGE_POINT, [arg0, arg1], None),
+        ResOperation(rop.INT_GT, [arg0, arg1], res),
+        ResOperation(rop.GUARD_TRUE, [res], None),
+        # we should never get here
+        ]
+    ops[2].liveboxes = [res]
+
+    cpu.compile_operations(ops)
+    res = cpu.execute_operations_in_new_frame('foo', ops[0],
+                                               [arg0, arg1], 'int')
+
+    assert len(cpu.assembler._regalloc.computed_ops) == 2
+    assert meta_interp.gf
+    # er, what to check here, assembler???
