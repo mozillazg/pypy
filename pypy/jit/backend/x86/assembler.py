@@ -7,7 +7,8 @@ from pypy.rpython.lltypesystem.rclass import OBJECT
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import (RegAlloc, FRAMESIZE, WORD, REGS,
-                                      arg_pos, lower_byte, stack_pos, Perform)
+                                      arg_pos, lower_byte, stack_pos, Perform,
+                                      RETURN)
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import codebuf
 from pypy.jit.backend.x86.support import gc_malloc_fnaddr
@@ -387,8 +388,14 @@ class Assembler386(object):
         base_loc, ofs_loc, value_loc, scale_loc, baseofs = arglocs
         assert isinstance(baseofs, IMM32)
         assert isinstance(scale_loc, IMM32)
-        self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value, scale_loc.value),
-                    value_loc)
+        if scale_loc.value == 2:
+            self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value,
+                                 scale_loc.value), value_loc)
+        elif scale_loc.value == 0:
+            self.mc.MOV(addr_add8(base_loc, ofs_loc, baseofs.value,
+                                 scale_loc.value), lower_byte(value_loc))
+        else:
+            raise NotImplementedError("scale = %d" % scale)
 
     def genop_strsetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs
@@ -418,7 +425,7 @@ class Assembler386(object):
 
     genop_catch = genop_merge_point
 
-    def xxx_genop_return(self, op, locs):
+    def genop_return(self, op, locs):
         if op.args:
             loc = locs[0]
             if loc is not eax:
@@ -506,16 +513,14 @@ class Assembler386(object):
         arglocs = arglocs[1:]
         extra_on_stack = 0
         for i in range(len(op.args) - 1, 0, -1):
-            # op.args[1] is a calldesc
-            if i != 1:
-                v = op.args[i]
-                loc = arglocs[len(arglocs) - 1 - extra_on_stack]
-                if not isinstance(loc, MODRM):
-                    self.mc.PUSH(loc)
-                else:
-                    # we need to add a bit, ble
-                    self.mc.PUSH(stack_pos(loc.position + extra_on_stack))
-                extra_on_stack += 1
+            v = op.args[i]
+            loc = arglocs[i]
+            if not isinstance(loc, MODRM):
+                self.mc.PUSH(loc)
+            else:
+                # we need to add a bit, ble
+                self.mc.PUSH(stack_pos(loc.position + extra_on_stack))
+            extra_on_stack += 1
         if isinstance(op.args[0], Const):
             x = rel32(self.cpu.get_box_value_as_int(op.args[0]))
         else:
@@ -537,14 +542,17 @@ class Assembler386(object):
     #    self.gen_call(op, arglocs, resloc)
     #    self.mc.MOVZX(eax, eax)
 
-genop_discard_list = [None] * rop._LAST
+genop_discard_list = [None] * (RETURN + 1)
 genop_list = [None] * rop._LAST
 genop_guard_list = [None] * rop._LAST
 
 for name, value in Assembler386.__dict__.iteritems():
     if name.startswith('genop_'):
         opname = name[len('genop_'):]
-        num = getattr(rop, opname.upper())
+        if opname == 'return':
+            num = RETURN
+        else:
+            num = getattr(rop, opname.upper())
         if value.func_code.co_argcount == 3:
             genop_discard_list[num] = value
         elif value.func_code.co_argcount == 5:

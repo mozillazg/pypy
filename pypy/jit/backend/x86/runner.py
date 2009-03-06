@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
-from pypy.jit.backend.x86.assembler import Assembler386, WORD
+from pypy.jit.backend.x86.assembler import Assembler386, WORD, RETURN
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.backend.x86.executor import execute
@@ -30,7 +30,7 @@ class CPU386(object):
                                     lltype.Ptr(rffi.CArray(lltype.Signed))],
                                    lltype.Signed)
 
-    return_value_box = None
+    return_value_type = 0
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  mixlevelann=None):
@@ -123,7 +123,7 @@ class CPU386(object):
                                  guard_op, 'to the jit')
             gf = GuardFailed(self, frame_addr, guard_op)
             self.metainterp.handle_guard_failure(gf)
-            self.return_value_box = gf.return_value_box
+            self.return_value_type = gf.return_value_type
             if self.debug:
                 if gf.return_addr == self.assembler.generic_return_addr:
                     llop.debug_print(lltype.Void, 'continuing at generic return address')
@@ -141,12 +141,12 @@ class CPU386(object):
     def set_meta_interp(self, metainterp):
         self.metainterp = metainterp
 
-    def get_exception(self, frame):
+    def get_exception(self):
         res = self.assembler._exception_data[0]
         self.assembler._exception_data[0] = 0
         return res
 
-    def get_exc_value(self, frame):
+    def get_exc_value(self):
         return self.cast_int_to_gcref(self.assembler._exception_data[1])
 
 #     def execute_operation(self, opnum, valueboxes, result_type):
@@ -271,14 +271,12 @@ class CPU386(object):
             return self.generated_mps[calldescr]
         except KeyError:
             pass
-        args = [BoxInt(0) for i in range(argnum + 3)]
-        args[1].value = calldescr
+        args = [BoxInt(0) for i in range(argnum)]
         result = BoxInt(0)
         operations = [
             ResOperation(rop.MERGE_POINT, args, None),
-            ResOperation(rop.CALL, args[:-1], result),
-            ResOperation(rop.GUARD_FALSE, [args[-1]], None)]
-        operations[-1].liveboxes = [result]
+            ResOperation(rop.CALL, args, result, calldescr),
+            ResOperation(RETURN, [result], None)]
         self.compile_operations(operations)
         self.generated_mps[calldescr] = operations
         return operations
@@ -302,16 +300,18 @@ class CPU386(object):
 
         self.keepalives_index = len(self.keepalives)
         res = self.execute_call(startmp, func, values_as_int)
-        if self.return_value_box is None:
+        if self.return_value_type == VOID:
             if self.debug:
                 llop.debug_print(lltype.Void, " => void result")
+            res = None
         else:
             if self.debug:
                 llop.debug_print(lltype.Void, " => ", res)
+            res = self.get_valuebox_from_int(self.return_value_type, res)
         keepalive_until_here(valueboxes)
         self.keepalives_index = oldindex
         del self.keepalives[oldindex:]
-        return self.return_value_box
+        return res
 
     def execute_call(self, startmp, func, values_as_int):
         # help flow objspace
@@ -396,13 +396,12 @@ class CPU386(object):
 
     # ------------------- backend-specific ops ------------------------
 
-    def do_arraylen_gc(self, args):
+    def do_arraylen_gc(self, args, arraydescr):
         gcref = args[0].getptr(llmemory.GCREF)
         return BoxInt(rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[0])
 
-    def do_getarrayitem_gc(self, args):
-        arraydescr = args[1].getint()
-        field = args[2].getint()
+    def do_getarrayitem_gc(self, args, arraydescr):
+        field = args[1].getint()
         gcref = args[0].getptr(llmemory.GCREF)
         if arraydescr < 0:
             ptr = True
@@ -423,9 +422,8 @@ class CPU386(object):
         else:
             raise NotImplementedError("size = %d" % size)
 
-    def do_setarrayitem_gc(self, args):
-        arraydescr = args[1].getint()
-        field = args[2].getint()
+    def do_setarrayitem_gc(self, args, arraydescr):
+        field = args[1].getint()
         gcref = args[0].getptr(llmemory.GCREF)
         if arraydescr < 0:
             ptr = True
@@ -434,25 +432,25 @@ class CPU386(object):
         shift, ofs = self.unpack_arraydescr(arraydescr)
         size = 1 << shift
         if size == 1:
-            v = args[3].getint()
+            v = args[2].getint()
             rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs + field] = chr(v)
         elif size == WORD:
             a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)
             if not ptr:
-                a[ofs/WORD + field] = args[3].getint()
+                a[ofs/WORD + field] = args[2].getint()
             else:
-                p = args[3].getptr(llmemory.GCREF)
+                p = args[2].getptr(llmemory.GCREF)
                 a[ofs/WORD + field] = self.cast_gcref_to_int(p)
         else:
             raise NotImplementedError("size = %d" % size)
 
-    def do_strlen(self, args):
+    def do_strlen(self, args, descr=0):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
         gcref = args[0].getptr(llmemory.GCREF)
         v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs_length/WORD]
         return BoxInt(v)
 
-    def do_strgetitem(self, args):
+    def do_strgetitem(self, args, descr=0):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
         gcref = args[0].getptr(llmemory.GCREF)
         i = args[1].getint()
@@ -474,13 +472,11 @@ class CPU386(object):
             raise NotImplementedError("size = %d" % size)
         return BoxInt(v)
 
-    def do_getfield_gc(self, args):
-        fielddescr = args[1].getint()
+    def do_getfield_gc(self, args, fielddescr):
         gcref = args[0].getptr(llmemory.GCREF)
         return self._base_do_getfield(gcref, fielddescr)
 
-    def do_getfield_raw(self, args):
-        fielddescr = args[1].getint()
+    def do_getfield_raw(self, args, fielddescr):
         return self._base_do_getfield(args[0].getint(), fielddescr)
 
     @specialize.argtype(2)
@@ -502,33 +498,31 @@ class CPU386(object):
         else:
             raise NotImplementedError("size = %d" % size)
 
-    def do_setfield_gc(self, args):
-        fielddescr = args[1].getint()
+    def do_setfield_gc(self, args, fielddescr):
         gcref = args[0].getptr(llmemory.GCREF)
-        self._base_do_setfield(fielddescr, gcref, args[2])
+        self._base_do_setfield(fielddescr, gcref, args[1])
 
-    def do_setfield_raw(self, args):
-        fielddescr = args[1].getint()
-        self._base_do_setfield(fielddescr, args[0].getint(), args[2])
+    def do_setfield_raw(self, args, fielddescr):
+        self._base_do_setfield(fielddescr, args[0].getint(), args[1])
 
-    def do_new(self, args):
-        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(args[0].getint())
+    def do_new(self, args, descrsize):
+        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(descrsize)
         return BoxPtr(self.cast_int_to_gcref(res))
 
-    def do_new_with_vtable(self, args):
-        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(args[0].getint())
-        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[0] = args[1].getint()
+    def do_new_with_vtable(self, args, descrsize):
+        res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(descrsize)
+        rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[0] = args[0].getint()
         return BoxPtr(self.cast_int_to_gcref(res))
 
-    def do_new_array(self, args):
-        size_of_field, ofs = self.unpack_arraydescr(args[0].getint())
-        num_elem = args[1].getint()
+    def do_new_array(self, args, arraydescr):
+        size_of_field, ofs = self.unpack_arraydescr(arraydescr)
+        num_elem = args[0].getint()
         size = ofs + (1 << size_of_field) * num_elem
         res = rffi.cast(GC_MALLOC, gc_malloc_fnaddr())(size)
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[0] = num_elem
         return BoxPtr(self.cast_int_to_gcref(res))
 
-    def do_newstr(self, args):
+    def do_newstr(self, args, descr=0):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
         assert itemsize == 1
         num_elem = args[0].getint()
@@ -537,18 +531,23 @@ class CPU386(object):
         rffi.cast(rffi.CArrayPtr(lltype.Signed), res)[ofs_length/WORD] = num_elem
         return BoxPtr(self.cast_int_to_gcref(res))
 
-    def do_strsetitem(self, args):
+    def do_strsetitem(self, args, descr=0):
         basesize, itemsize, ofs_length = symbolic.get_array_token(rstr.STR)
         index = args[1].getint()
         v = args[2].getint()
         a = args[0].getptr(llmemory.GCREF)
         rffi.cast(rffi.CArrayPtr(lltype.Char), a)[index + basesize] = chr(v)
 
-    def do_call(self, args):
-        calldescr = args[1].getint()
+    def do_call(self, args, calldescr):
         num_args, size, ptr = self.unpack_calldescr(calldescr)
         mp = self._get_mp_for_call(num_args, calldescr)
-        return self.execute_operations_in_new_frame('call', mp, args + [BoxInt(1)])
+        if size == 0:
+            self.return_value_type = VOID
+        elif ptr:
+            self.return_value_type = PTR
+        else:
+            self.return_value_type = INT
+        return self.execute_operations_in_new_frame('call', mp, args)
 
     # ------------------- helpers and descriptions --------------------
 
@@ -654,7 +653,7 @@ def uhex(x):
         return hex(x)
 
 class GuardFailed(object):
-    return_value_box = None
+    return_value_type = 0
     
     def __init__(self, cpu, frame, guard_op):
         self.cpu = cpu
@@ -666,7 +665,13 @@ class GuardFailed(object):
         if return_value_box is not None:
             frame = getframe(self.frame)
             frame[0] = self.cpu.convert_box_to_int(return_value_box)
-            self.return_value_box = return_value_box
+            if (isinstance(return_value_box, ConstInt) or
+                isinstance(return_value_box, BoxInt)):
+                self.return_value_type = INT
+            else:
+                self.return_value_type = PTR
+        else:
+            self.return_value_type = VOID
         self.return_addr = self.cpu.assembler.generic_return_addr
 
     def make_ready_for_continuing_at(self, merge_point):
