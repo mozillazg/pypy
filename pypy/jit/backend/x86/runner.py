@@ -11,7 +11,7 @@ from pypy.rpython.lltypesystem import rclass
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import (ResOperation, Box, Const,
      ConstInt, ConstPtr, BoxInt, BoxPtr, ConstAddr)
-from pypy.jit.backend.x86.assembler import Assembler386, WORD
+from pypy.jit.backend.x86.assembler import Assembler386, WORD, RETURN
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.backend.x86.executor import execute
@@ -19,12 +19,17 @@ from pypy.jit.backend.x86.support import gc_malloc_fnaddr
 
 GC_MALLOC = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
 
+VOID = 0
+PTR = 1
+INT = 2
+
 class CPU386(object):
     debug = True
 
     BOOTSTRAP_TP = lltype.FuncType([lltype.Signed,
                                     lltype.Ptr(rffi.CArray(lltype.Signed))],
                                    lltype.Signed)
+    return_value_box = None
 
     def __init__(self, rtyper, stats, translate_support_code=False,
                  mixlevelann=None):
@@ -56,6 +61,7 @@ class CPU386(object):
         if rtyper is not None: # for tests
             self.lltype2vtable = rtyper.lltype_to_vtable_mapping()
             self._setup_ovf_error()
+        self.generated_mps = [None] * 10
 
     def _setup_ovf_error(self):
         if self.translate_support_code:
@@ -116,6 +122,7 @@ class CPU386(object):
                                  guard_op, 'to the jit')
             gf = GuardFailed(self, frame_addr, guard_op)
             self.metainterp.handle_guard_failure(gf)
+            self.return_value_box = gf.return_value_box
             if self.debug:
                 if gf.return_addr == self.assembler.generic_return_addr:
                     llop.debug_print(lltype.Void, 'continuing at generic return address')
@@ -258,8 +265,24 @@ class CPU386(object):
         else:
             raise ValueError('get_valuebox_from_int: %s' % (type,))
 
-    def execute_operations_in_new_frame(self, name, startmp, valueboxes,
-                                        result_type):
+    def _get_mp_for_call(self, argnum):
+        if argnum >= len(self.generated_mps):
+            self.generated_mps += [None] * len(self.generated_mps)
+        actual = self.generated_mps[argnum]
+        if actual is not None:
+            return actual
+        args = [BoxInt(0) for i in range(argnum + 1)]
+        result = BoxInt(0)
+        operations = [
+            ResOperation(rop.MERGE_POINT, args, None),
+            ResOperation(rop.CALL, args, result),
+            ResOperation(RETURN, [result], None)]
+        self.compile_operations(operations)
+        self.generated_mps[argnum] = operations
+        return operations
+
+    def execute_operations_in_new_frame(self, name, operations, valueboxes):
+        startmp = operations[0]
         func = self.get_bootstrap_code(startmp)
         # turn all the values into integers
         TP = rffi.CArray(lltype.Signed)
@@ -270,25 +293,24 @@ class CPU386(object):
             v = self.get_box_value_as_int(box)
             values_as_int[i] = v
         # debug info
-        values_repr = ", ".join([str(values_as_int[i]) for i in
-                                 range(len(valueboxes))])
         if self.debug:
+            values_repr = ", ".join([str(values_as_int[i]) for i in
+                                     range(len(valueboxes))])
             llop.debug_print(lltype.Void, 'exec:', name, values_repr)
 
         self.keepalives_index = len(self.keepalives)
         res = self.execute_call(startmp, func, values_as_int)
-        if result_type == 'void':
+        if self.return_value_box is None:
             if self.debug:
                 llop.debug_print(lltype.Void, " => void result")
             res = None
         else:
             if self.debug:
                 llop.debug_print(lltype.Void, " => ", res)
-            res = self.get_valuebox_from_int(result_type, res)
         keepalive_until_here(valueboxes)
         self.keepalives_index = oldindex
         del self.keepalives[oldindex:]
-        return res
+        return self.return_value_box
 
     def execute_call(self, startmp, func, values_as_int):
         # help flow objspace
@@ -521,6 +543,12 @@ class CPU386(object):
         a = args[0].getptr(llmemory.GCREF)
         rffi.cast(rffi.CArrayPtr(lltype.Char), a)[index + basesize] = chr(v)
 
+    def do_call(self, args):
+        calldescr = args[1].getint()
+        num_args, tp = self.unpack_calldescr(calldescr)
+        mp = self._get_mp_for_call(num_args)
+        self.execute_operations_in_new_frame('call', mp, args)
+
     # ------------------- helpers and descriptions --------------------
 
     @staticmethod
@@ -559,7 +587,17 @@ class CPU386(object):
 
     @staticmethod
     def calldescrof(argtypes, resulttype):
-        return 3
+        if resulttype is lltype.Void:
+            rt = VOID
+        elif isinstance(resulttype, lltype.Ptr):
+            rt = PTR
+        else:
+            rt = INT
+        return (len(argtypes) << 2) + rt
+
+    @staticmethod
+    def unpack_calldescr(calldescr):
+        return calldescr >> 2, calldescr & 0x4
 
     @staticmethod
     def fielddescrof(S, fieldname):
@@ -609,6 +647,8 @@ def uhex(x):
         return hex(x)
 
 class GuardFailed(object):
+    return_value_box = None
+    
     def __init__(self, cpu, frame, guard_op):
         self.cpu = cpu
         self.frame = frame
@@ -619,6 +659,7 @@ class GuardFailed(object):
         if return_value_box is not None:
             frame = getframe(self.frame)
             frame[0] = self.cpu.convert_box_to_int(return_value_box)
+            self.return_value_box = return_value_box
         self.return_addr = self.cpu.assembler.generic_return_addr
 
     def make_ready_for_continuing_at(self, merge_point):
@@ -631,3 +672,5 @@ def getframe(frameadr):
 
 CPU = CPU386
 
+import pypy.jit.metainterp.executor
+pypy.jit.metainterp.executor.make_execute_list(CPU)
