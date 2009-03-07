@@ -65,19 +65,13 @@ class CPU386(object):
         self.generated_mps = {}
 
     def _setup_ovf_error(self):
-        if self.translate_support_code:
-            self.assembler._ovf_error_vtable = 0
-            self.assembler._ovf_error_inst   = 0
-            xxx
-            # do something here
-        else:
-            bk = self.rtyper.annotator.bookkeeper
-            clsdef = bk.getuniqueclassdef(OverflowError)
-            ovferror_repr = rclass.getclassrepr(self.rtyper, clsdef)
-            ll_inst = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
-                self.rtyper, clsdef)
-            self.assembler._ovf_error_vtable = self.cast_ptr_to_int(ll_inst.typeptr)
-            self.assembler._ovf_error_inst = self.cast_ptr_to_int(ll_inst)
+        bk = self.rtyper.annotator.bookkeeper
+        clsdef = bk.getuniqueclassdef(OverflowError)
+        ovferror_repr = rclass.getclassrepr(self.rtyper, clsdef)
+        ll_inst = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
+            self.rtyper, clsdef)
+        self.assembler._ovf_error_vtable = llmemory.cast_ptr_to_adr(ll_inst.typeptr)
+        self.assembler._ovf_error_inst   = llmemory.cast_ptr_to_adr(ll_inst)
 
     def setup(self):
         self.assembler = Assembler386(self, self.translate_support_code)
@@ -464,6 +458,7 @@ class CPU386(object):
             v = ord(rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs])
         elif size == 2:
             v = rffi.cast(rffi.CArrayPtr(rffi.USHORT), gcref)[ofs/2]
+            v = rffi.cast(lltype.Signed, v)
         elif size == WORD:
             v = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[ofs/WORD]
             if ptr:
@@ -486,7 +481,7 @@ class CPU386(object):
             v = vbox.getint()
             rffi.cast(rffi.CArrayPtr(lltype.Char), gcref)[ofs] = chr(v)
         elif size == 2:
-            v = vbox.getint()
+            v = rffi.cast(rffi.USHORT, vbox.getint())
             rffi.cast(rffi.CArrayPtr(rffi.USHORT), gcref)[ofs/2] = v
         elif size == WORD:
             a = rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)

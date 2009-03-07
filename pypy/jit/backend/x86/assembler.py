@@ -219,9 +219,11 @@ class Assembler386(object):
                 loc = locs[i]
                 if isinstance(loc, REG):
                     self.mc2.MOV(stack_pos(stacklocs[i]), loc)
-            self.mc2.MOV(eax, imm(self._ovf_error_vtable))
+            ovf_error_vtable = self.cpu.cast_adr_to_int(self._ovf_error_vtable)
+            self.mc2.MOV(eax, imm(ovf_error_vtable))
             self.mc2.MOV(addr_add(imm(self._exception_addr), imm(0)), eax)
-            self.mc2.MOV(eax, imm(self._ovf_error_inst))
+            ovf_error_instance = self.cpu.cast_adr_to_int(self._ovf_error_inst)
+            self.mc2.MOV(eax, imm(ovf_error_instance))
             self.mc2.MOV(addr_add(imm(self._exception_addr), imm(WORD)), eax)
             self.mc2.PUSH(esp)           # frame address
             self.mc2.PUSH(imm(index))    # index of guard that failed
@@ -392,10 +394,10 @@ class Assembler386(object):
             self.mc.MOV(addr_add(base_loc, ofs_loc, baseofs.value,
                                  scale_loc.value), value_loc)
         elif scale_loc.value == 0:
-            self.mc.MOV(addr_add8(base_loc, ofs_loc, baseofs.value,
+            self.mc.MOV(addr8_add(base_loc, ofs_loc, baseofs.value,
                                  scale_loc.value), lower_byte(value_loc))
         else:
-            raise NotImplementedError("scale = %d" % scale)
+            raise NotImplementedError("scale = %d" % scale_loc.value)
 
     def genop_strsetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs
