@@ -347,9 +347,8 @@ class Frame(object):
         """Execute all operations in a loop,
         possibly following to other loops as well.
         """
-        global _last_exception, _last_exception_handled
-        _last_exception = None
-        _last_exception_handled = True
+        global _last_exception
+        assert _last_exception is None, "exception left behind"
         verbose = True
         while True:
             self.opindex += 1
@@ -380,7 +379,6 @@ class Frame(object):
                                         % (RESTYPE,))
                     self.env[op.result] = x
             except GuardFailed:
-                assert _last_exception_handled
                 if hasattr(op, 'jump_target'):
                     # the guard already failed once, go to the
                     # already-generated code
@@ -499,23 +497,22 @@ class Frame(object):
             raise GuardFailed    # some other code is already in control
 
     def op_guard_no_exception(self, _):
-        global _last_exception_handled
-        _last_exception_handled = True
         if _last_exception:
             raise GuardFailed
 
     def op_guard_exception(self, _, expected_exception):
-        global _last_exception_handled
-        _last_exception_handled = True
+        global _last_exception
         expected_exception = llmemory.cast_adr_to_ptr(
             cast_int_to_adr(self.memocast, expected_exception),
             rclass.CLASSTYPE)
         assert expected_exception
-        if _last_exception:
-            got = _last_exception.args[0]
+        exc = _last_exception
+        if exc:
+            got = exc.args[0]
             if not rclass.ll_issubclass(got, expected_exception):
                 raise GuardFailed
-            return _last_exception.args[1]
+            _last_exception = None
+            return exc.args[1]
         else:
             raise GuardFailed
 
@@ -565,21 +562,14 @@ class Frame(object):
             do_setfield_raw_int(struct, fielddescr, newvalue, self.memocast)
 
     def op_call(self, calldescr, func, *args):
-        global _last_exception, _last_exception_handled
         _call_args[:] = args
-        try:
-            res = _do_call_common(func, self.memocast)
-            _last_exception = None
-            return res
-        except LLException, e:
-            _last_exception = e
-            _last_exception_handled = False
-            if calldescr == sys.maxint:
-                return None
-            elif calldescr & 1:
-                return lltype.nullptr(llmemory.GCREF)
-            else:
-                return 0
+        if calldescr == sys.maxint:
+            err_result = None
+        elif calldescr & 1:
+            err_result = lltype.nullptr(llmemory.GCREF.TO)
+        else:
+            err_result = 0
+        return _do_call_common(func, self.memocast, err_result)
 
 # ____________________________________________________________
 
@@ -673,30 +663,31 @@ def frame_ptr_getresult(frame):
     frame = _from_opaque(frame)
     return frame.returned_value
 
+_last_exception = None
+
 def get_exception():
-    global _last_exception, _last_exception_handled
-    _last_exception_handled = True
     if _last_exception:
         return llmemory.cast_ptr_to_adr(_last_exception.args[0])
     else:
         return llmemory.NULL
 
 def get_exc_value():
-    global _last_exception, _last_exception_handled
-    _last_exception_handled = True
     if _last_exception:
         return lltype.cast_opaque_ptr(llmemory.GCREF, _last_exception.args[1])
     else:
         return lltype.nullptr(llmemory.GCREF.TO)
 
+def clear_exception():
+    global _last_exception
+    _last_exception = None
+
 def set_overflow_error():
-    global _last_exception, _last_exception_handled
+    global _last_exception
     llframe = _llinterp.frame_class(None, None, _llinterp)
     try:
         llframe.make_llexception(OverflowError())
     except LLException, e:
         _last_exception = e
-        _last_exception_handled = False
     else:
         assert 0, "should have raised"
 
@@ -844,7 +835,9 @@ def do_call_pushint(x):
 def do_call_pushptr(x):
     _call_args.append(x)
 
-def _do_call_common(f, memocast):
+def _do_call_common(f, memocast, err_result=None):
+    global _last_exception
+    assert _last_exception is None, "exception left behind"
     ptr = cast_int_to_adr(memocast, f).ptr
     FUNC = lltype.typeOf(ptr).TO
     ARGS = FUNC.ARGS
@@ -864,20 +857,24 @@ def _do_call_common(f, memocast):
     assert len(ARGS) == len(args)
     if hasattr(ptr._obj, 'graph'):
         llinterp = _llinterp      # it's a global set here by CPU.__init__()
-        result = llinterp.eval_graph(ptr._obj.graph, args)
+        try:
+            result = llinterp.eval_graph(ptr._obj.graph, args)
+        except LLException, e:
+            _last_exception = e
+            result = err_result
     else:
-        result = ptr._obj._callable(*args)
+        result = ptr._obj._callable(*args)  # no exception support in this case
     return result
 
 def do_call_void(f, memocast):
     _do_call_common(f, memocast)
 
 def do_call_int(f, memocast):
-    x = _do_call_common(f, memocast)
+    x = _do_call_common(f, memocast, 0)
     return cast_to_int(x, memocast)
 
 def do_call_ptr(f, memocast):
-    x = _do_call_common(f, memocast)
+    x = _do_call_common(f, memocast, lltype.nullptr(llmemory.GCREF.TO))
     return cast_to_ptr(x)
 
 # ____________________________________________________________
@@ -957,6 +954,7 @@ setannotation(frame_ptr_getresult, annmodel.SomePtr(llmemory.GCREF))
 
 setannotation(get_exception, annmodel.SomeAddress())
 setannotation(get_exc_value, annmodel.SomePtr(llmemory.GCREF))
+setannotation(clear_exception, annmodel.s_None)
 setannotation(set_overflow_error, annmodel.s_None)
 
 setannotation(new_memo_cast, s_MemoCast)

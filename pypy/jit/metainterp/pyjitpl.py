@@ -241,7 +241,7 @@ class MIFrame(object):
         exec py.code.Source('''
             @arguments("box", "box")
             def opimpl_%s(self, b1, b2):
-                return self.execute_with_exc(rop.%s, [b1, b2], returnsBoxInt)
+                return self.execute_with_exc(rop.%s, [b1, b2])
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_is_true', 'int_neg', 'int_invert', 'bool_not',
@@ -257,7 +257,7 @@ class MIFrame(object):
         exec py.code.Source('''
             @arguments("box")
             def opimpl_%s(self, b):
-                return self.execute_with_exc(rop.%s, [b], returnsBoxInt)
+                return self.execute_with_exc(rop.%s, [b])
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     @arguments()
@@ -398,19 +398,8 @@ class MIFrame(object):
         return True
 
     @arguments("int", "varargs")
-    def opimpl_residual_call_int(self, calldescr, varargs):
-        return self.execute_with_exc(rop.CALL, varargs, returnsBoxInt,
-                                     descr=calldescr)
-
-    @arguments("int", "varargs")
-    def opimpl_residual_call_ptr(self, calldescr, varargs):
-        return self.execute_with_exc(rop.CALL, varargs, returnsBoxPtr,
-                                     descr=calldescr)
-
-    @arguments("int", "varargs")
-    def opimpl_residual_call_void(self, calldescr, varargs):
-        return self.execute_with_exc(rop.CALL, varargs, returnsNone,
-                                     descr=calldescr)
+    def opimpl_residual_call(self, calldescr, varargs):
+        return self.execute_with_exc(rop.CALL, varargs, descr=calldescr)
 
     @arguments("int", "varargs")
     def opimpl_residual_call_pure(self, calldescr, varargs):
@@ -660,33 +649,17 @@ class MIFrame(object):
             self.make_result_box(resbox)
     execute._annspecialcase_ = 'specialize:arg(1)'
 
-    def execute_with_exc(self, opnum, argboxes, makeresbox, descr=0):
-        try:
-            resbox = executor.execute(self.metainterp.cpu, opnum, argboxes,
-                                      descr)
-        except Exception, e:
-            if not we_are_translated():
-                if not isinstance(e, LLException):
-                    raise
-                etype, evalue = e.args[:2]
-            else:
-                evalue = cast_instance_to_base_ptr(e)
-                etype = evalue.typeptr
-            resbox = makeresbox()
-        else:
-            if not we_are_translated():
-                self.metainterp._debug_history.append(['call',
+    def execute_with_exc(self, opnum, argboxes, descr=0):
+        cpu = self.metainterp.cpu
+        resbox = executor.execute(cpu, opnum, argboxes, descr)
+        if not we_are_translated():
+            self.metainterp._debug_history.append(['call',
                                                   argboxes[0], argboxes[1:]])
-            etype = lltype.nullptr(rclass.OBJECT_VTABLE)
-            evalue = lltype.nullptr(rclass.OBJECT)
         # record the operation in the history
         self.metainterp.history.record(opnum, argboxes, resbox, descr)
         if resbox is not None:
             self.make_result_box(resbox)
-        type_as_int = self.metainterp.cpu.cast_adr_to_int(
-            llmemory.cast_ptr_to_adr(etype))
-        value_as_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, evalue)
-        return self.metainterp.handle_exception(type_as_int, value_as_gcref)
+        return self.metainterp.handle_exception()
 
 # ____________________________________________________________
 
@@ -822,7 +795,7 @@ class OOMetaInterp(object):
         try:
             if guard_failure.guard_op.opnum in (rop.GUARD_EXCEPTION,
                                                 rop.GUARD_NO_EXCEPTION):
-                self.raise_exception_upon_guard_failure()
+                self.handle_exception()
             self.interpret()
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
@@ -956,12 +929,10 @@ class OOMetaInterp(object):
         self.rebuild_state_after_failure(guard_op.key, newboxes)
         return boxes_from_frame
 
-    def raise_exception_upon_guard_failure(self):
+    def handle_exception(self):
         etype = self.cpu.get_exception()
         evalue = self.cpu.get_exc_value()
-        self.handle_exception(etype, evalue)
-
-    def handle_exception(self, etype, evalue):
+        self.cpu.clear_exception()
         frame = self.framestack[-1]
         if etype:
             exception_box = ConstInt(etype)
@@ -1020,8 +991,3 @@ class OOMetaInterp(object):
 class GenerateMergePoint(Exception):
     def __init__(self, args):
         self.argboxes = args
-
-
-def returnsBoxInt(): return BoxInt()
-def returnsBoxPtr(): return BoxPtr()
-def returnsNone():   return None

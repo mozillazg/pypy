@@ -672,7 +672,7 @@ class BytecodeMaker(object):
         argtypes = [v.concretetype for v in args]
         resulttype = op.result.concretetype
         calldescr = self.cpu.calldescrof(argtypes[1:], resulttype)
-        self.emit('residual_call_%s' % getkind(resulttype))
+        self.emit('residual_call')
         self.emit(calldescr)
         self.emit_varargs(args)
         self.register_var(op.result)
@@ -716,7 +716,7 @@ class BytecodeMaker(object):
         if oopspec_name.endswith('_foldable'):
             opname = 'residual_call_pure'  # XXX not for possibly-raising calls
         else:
-            opname = 'residual_call_%s' % getkind(resulttype)
+            opname = 'residual_call'
         calldescr = self.cpu.calldescrof(argtypes, resulttype)
         self.emit(opname)
         self.emit(calldescr)
