@@ -19,6 +19,13 @@ from pypy.jit.metainterp.policy import JitPolicy
 # ____________________________________________________________
 # Bootstrapping
 
+def apply_jit(translator, **kwds):
+    from pypy.jit.backend.detect_cpu import getcpuclass
+    warmrunnerdesc = WarmRunnerDesc(translator, CPUClass=getcpuclass(),
+                                    translate_support_code=True,
+                                    **kwds)
+    warmrunnerdesc.finish()
+
 def ll_meta_interp(function, args, backendopt=False, **kwds):
     interp, graph = get_interpreter(function, args, backendopt=backendopt,
                                     inline_threshold=0)
