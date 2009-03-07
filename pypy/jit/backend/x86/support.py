@@ -10,6 +10,9 @@ import py
 
 GC_MALLOC = lltype.Ptr(lltype.FuncType([lltype.Signed], llmemory.Address))
 
+def gc_malloc(size):
+    return llop.call_boehm_gc_alloc(llmemory.Address, size)
+
 def gc_malloc_fnaddr():
     """Returns the address of the Boehm 'malloc' function."""
     if we_are_translated():
