@@ -951,7 +951,7 @@ class OOMetaInterp(object):
     def rebuild_state_after_failure(self, key, newboxes):
         if not we_are_translated():
             self._debug_history.append(['guard_failure', None, None])
-            self.framestack = []
+        self.framestack = []
         nbindex = 0
         for jitcode, pc, envlength, exception_target in key:
             f = self.newframe(jitcode)
