@@ -367,6 +367,8 @@ class RunningMatcher(Matcher):
     def __init__(self, cpu):
         self.cpu = cpu
         self.operations = []
+    def record(self, opnum, argboxes, resbox, descr=0):
+        raise NotImplementedError
 
 class History(RunningMatcher):
     def record(self, opnum, argboxes, resbox, descr=0):
@@ -443,6 +445,10 @@ class Stats(object):
                 graphs.remove(graph)
             graphs.append(graph)
         ResOpGraphPage(graphs, errmsg, highlightops).display()
+
+
+class CrashInJIT(Exception):
+    pass
 
 # ----------------------------------------------------------------
 

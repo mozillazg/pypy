@@ -142,7 +142,7 @@ class WarmRunnerDesc:
                 import sys, pdb; pdb.post_mortem(sys.exc_info()[2])
             else:
                 print e
-            raise AssertionError("crash in JIT")
+            raise history.CrashInJIT("crash in JIT")
         crash_in_jit._dont_inline_ = True
 
         def maybe_enter_jit(*args):
