@@ -2,8 +2,9 @@ import sys
 import ctypes
 from pypy.jit.backend.x86 import symbolic
 from pypy.jit.metainterp.history import Const, ConstInt, Box
-from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr
+from pypy.rpython.lltypesystem import lltype, rffi, ll2ctypes, rstr, llmemory
 from pypy.rpython.lltypesystem.rclass import OBJECT
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.annotation import model as annmodel
 from pypy.tool.uid import fixid
 from pypy.jit.backend.x86.regalloc import (RegAlloc, FRAMESIZE, WORD, REGS,
@@ -37,14 +38,18 @@ class Assembler386(object):
         if self.mc is None:
             # we generate the loop body in 'mc'
             # 'mc2' is for guard recovery code
-            self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
-                                                 zero=True, flavor='raw')
+            if we_are_translated():
+                addr = llop.get_exception_addr(llmemory.Address)
+                self._exception_data = llmemory.cast_adr_to_ptr(addr, rffi.CArrayPtr(lltype.Signed))
+            else:
+                self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                                     zero=True, flavor='raw')
             self._exception_addr = self.cpu.cast_ptr_to_int(
                 self._exception_data)
             # a backup, in case our exception can be somehow mangled,
             # by a handling code
             self._exception_bck = lltype.malloc(rffi.CArray(lltype.Signed), 2,
-                                                 zero=True, flavor='raw')
+                                                zero=True, flavor='raw')
             self._exception_bck_addr = self.cpu.cast_ptr_to_int(
                 self._exception_bck)
             self.mc = codebuf.MachineCodeBlock(self.MC_SIZE)
