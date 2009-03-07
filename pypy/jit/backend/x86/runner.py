@@ -136,12 +136,20 @@ class CPU386(object):
         self.metainterp = metainterp
 
     def get_exception(self):
-        res = self.assembler._exception_data[0]
-        self.assembler._exception_data[0] = 0
-        return res
+        self.assembler.make_sure_mc_exists()
+        return self.assembler._exception_bck[0]
 
     def get_exc_value(self):
-        return self.cast_int_to_gcref(self.assembler._exception_data[1])
+        return self.cast_int_to_gcref(self.assembler._exception_bck[1])
+
+    def clear_exception(self):
+        self.assembler._exception_bck[0] = 0
+
+    def set_overflow_error(self):
+        ovf_vtable = self.cast_adr_to_int(self.assembler._ovf_error_vtable)
+        ovf_inst = self.cast_adr_to_int(self.assembler._ovf_error_inst)
+        self.assembler._exception_bck[0] = ovf_vtable
+        self.assembler._exception_bck[1] = ovf_inst
 
 #     def execute_operation(self, opnum, valueboxes, result_type):
 #         xxx
@@ -543,16 +551,10 @@ class CPU386(object):
         else:
             self.return_value_type = INT
         result = self.execute_operations_in_new_frame('call', mp, args)
-        if not we_are_translated():
-            exc = self.get_exception()
-            if exc:
-                 TP = lltype.Ptr(rclass.OBJECT_VTABLE)
-                 TP_V = lltype.Ptr(rclass.OBJECT)
-                 exc_t_a = self.cast_int_to_adr(exc)
-                 exc_type = llmemory.cast_adr_to_ptr(exc_t_a, TP)
-                 exc_v_a = self.get_exc_value()
-                 exc_val = lltype.cast_opaque_ptr(TP_V, exc_v_a)
-                 raise LLException(exc_type, exc_val)
+        # XXX I'm not sure if we're supposed to do that here, probably only
+        #     in assembler
+        self.assembler._exception_bck[0] = self.assembler._exception_data[0]
+        self.assembler._exception_bck[1] = self.assembler._exception_data[1]
         return result
 
     # ------------------- helpers and descriptions --------------------
