@@ -432,6 +432,16 @@ class Assembler386(object):
             if loc is not eax:
                 self.mc.MOV(eax, loc)
         self.mc.ADD(esp, imm(FRAMESIZE))
+        # copy exception to some safe place and clean the original
+        # one
+        self.mc.MOV(ecx, heap(self._exception_addr))
+        self.mc.MOV(heap(self._exception_bck_addr), ecx)
+        self.mc.MOV(ecx, addr_add(imm(self._exception_addr), imm(WORD)))
+        self.mc.MOV(addr_add(imm(self._exception_bck_addr), imm(WORD)),
+                     ecx)
+        # clean up the original exception, we don't want
+        # to enter more rpython code with exc set
+        self.mc.MOV(heap(self._exception_addr), imm(0))
         self.mc.RET()
 
     def genop_jump(self, op, locs):

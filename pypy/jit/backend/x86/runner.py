@@ -551,10 +551,6 @@ class CPU386(object):
         else:
             self.return_value_type = INT
         result = self.execute_operations_in_new_frame('call', mp, args)
-        # XXX I'm not sure if we're supposed to do that here, probably only
-        #     in assembler
-        self.assembler._exception_bck[0] = self.assembler._exception_data[0]
-        self.assembler._exception_bck[1] = self.assembler._exception_data[1]
         return result
 
     # ------------------- helpers and descriptions --------------------
