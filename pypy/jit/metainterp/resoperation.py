@@ -29,15 +29,19 @@ class ResOperation(object):
         self.descr = descr
 
     def __repr__(self):
-        if self.result is not None:
-            sres = repr(self.result) + ' = '
-        else:
-            sres = ''
-        result = '%s%s(%s)' % (sres, self.getopname(),
-                               ', '.join(map(repr, self.args)))
+        result = self.repr()
         if self.liveboxes is not None:
             result = '%s [%s]' % (result, ', '.join(map(repr, self.liveboxes)))
         return result
+
+    def repr(self):
+        # RPython-friendly version
+        if self.result is not None:
+            sres = '%s = ' % (self.result,)
+        else:
+            sres = ''
+        return '%s%s(%s)' % (sres, self.getopname(),
+                             ', '.join([str(a) for a in self.args]))
 
     def clone(self):
         op = ResOperation(self.opnum, self.args, self.result, self.descr)
