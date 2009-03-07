@@ -178,6 +178,9 @@ class CPU(object):
     def get_exc_value(self):
         return llimpl.get_exc_value()
 
+    def clear_exception(self):
+        llimpl.clear_exception()
+
     def set_overflow_error(self):
         llimpl.set_overflow_error()
 
