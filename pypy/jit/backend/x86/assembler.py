@@ -30,24 +30,23 @@ class Assembler386(object):
         self.mc2 = None
         self.rtyper = cpu.rtyper
         self.malloc_func_addr = 0
-        if translate_support_code:
-            self._exception_data = lltype.nullptr(rffi.CArray(lltype.Signed))
-            self._exception_addr = 0
-            # patched later, after exc transform
-        else:
-            self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
-                                                 zero=True, flavor='raw')
-            self._exception_addr = cpu.cast_ptr_to_int(self._exception_data)
+        self._exception_data = lltype.nullptr(rffi.CArray(lltype.Signed))
+        self._exception_addr = 0
 
     def make_sure_mc_exists(self):
         if self.mc is None:
             # we generate the loop body in 'mc'
             # 'mc2' is for guard recovery code
-            # XXX we should catch the real one, somehow
             self._exception_data = lltype.malloc(rffi.CArray(lltype.Signed), 2,
                                                  zero=True, flavor='raw')
             self._exception_addr = self.cpu.cast_ptr_to_int(
                 self._exception_data)
+            # a backup, in case our exception can be somehow mangled,
+            # by a handling code
+            self._exception_bck = lltype.malloc(rffi.CArray(lltype.Signed), 2,
+                                                 zero=True, flavor='raw')
+            self._exception_bck_addr = self.cpu.cast_ptr_to_int(
+                self._exception_bck)
             self.mc = codebuf.MachineCodeBlock(self.MC_SIZE)
             self.mc2 = codebuf.MachineCodeBlock(self.MC_SIZE)
             self.generic_return_addr = self.assemble_generic_return()
@@ -221,10 +220,10 @@ class Assembler386(object):
                     self.mc2.MOV(stack_pos(stacklocs[i]), loc)
             ovf_error_vtable = self.cpu.cast_adr_to_int(self._ovf_error_vtable)
             self.mc2.MOV(eax, imm(ovf_error_vtable))
-            self.mc2.MOV(addr_add(imm(self._exception_addr), imm(0)), eax)
+            self.mc2.MOV(addr_add(imm(self._exception_bck_addr), imm(0)), eax)
             ovf_error_instance = self.cpu.cast_adr_to_int(self._ovf_error_inst)
             self.mc2.MOV(eax, imm(ovf_error_instance))
-            self.mc2.MOV(addr_add(imm(self._exception_addr), imm(WORD)), eax)
+            self.mc2.MOV(addr_add(imm(self._exception_bck_addr), imm(WORD)),eax)
             self.mc2.PUSH(esp)           # frame address
             self.mc2.PUSH(imm(index))    # index of guard that failed
             self.mc2.CALL(rel32(self.cpu.get_failure_recovery_func_addr()))
@@ -501,6 +500,16 @@ class Assembler386(object):
             loc = locs[i]
             if isinstance(loc, REG):
                 self.mc2.MOV(stack_pos(stacklocs[i]), loc)
+        if (guard_op.opnum == rop.GUARD_EXCEPTION or
+            guard_op.opnum == rop.GUARD_NO_EXCEPTION):
+            self.mc2.MOV(eax, heap(self._exception_addr))
+            self.mc2.MOV(heap(self._exception_bck_addr), eax)
+            self.mc2.MOV(eax, addr_add(imm(self._exception_addr), imm(WORD)))
+            self.mc2.MOV(addr_add(imm(self._exception_bck_addr), imm(WORD)),
+                         eax)
+            # clean up the original exception, we don't want
+            # to enter more rpython code with exc set
+            self.mc2.MOV(heap(self._exception_addr), imm(0))
         self.mc2.PUSH(esp)           # frame address
         self.mc2.PUSH(imm(index))    # index of guard that failed
         self.mc2.CALL(rel32(self.cpu.get_failure_recovery_func_addr()))

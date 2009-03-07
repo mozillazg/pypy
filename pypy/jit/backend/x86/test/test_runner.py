@@ -537,3 +537,6 @@ class TestX86(object):
         assert x.value == 142
         s = execute(cpu, rop.NEWSTR, [BoxInt(8)])
         assert len(s.getptr(lltype.Ptr(rstr.STR)).chars) == 8
+        # XXX cannot work without rtyper
+        #s = execute(cpu, rop.INT_MUL_OVF, [BoxInt(sys.maxint/2), BoxInt(10)])
+        #assert cpu.get_exception()
