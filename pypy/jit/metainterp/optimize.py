@@ -347,6 +347,7 @@ class PerfectSpecializer(object):
             self.nodes[box] = InstanceNode(box, escaped=False, startbox=True,
                                            const=isinstance(box, Const))
         for op in self.loop.operations:
+            #print '| ' + op.repr()
             opnum = op.opnum
             if (opnum == rop.MERGE_POINT or
                 opnum == rop.CATCH or

@@ -599,6 +599,7 @@ class MIFrame(object):
         while True:
             pc = self.pc
             op = ord(self.bytecode[pc])
+            #print self.metainterp.opcode_names[op]
             self.pc = pc + 1
             stop = self.metainterp.opcode_implementations[op](self, pc)
             #self.metainterp.most_recent_mp = None
@@ -676,6 +677,7 @@ class OOMetaInterp(object):
                  # { greenkey: list-of-MergePoints }
 
         self.opcode_implementations = []
+        self.opcode_names = []
         self.opname_to_index = {}
         self.class_sizes = populate_type_cache(graphs, self.cpu)
 
@@ -978,6 +980,7 @@ class OOMetaInterp(object):
                "too many implementations of opcodes!"
         name = "opimpl_" + opname
         self.opname_to_index[opname] = len(self.opcode_implementations)
+        self.opcode_names.append(opname)
         self.opcode_implementations.append(getattr(MIFrame, name).im_func)
 
     def find_opcode(self, name):
