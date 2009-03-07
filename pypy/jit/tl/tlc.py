@@ -251,8 +251,9 @@ def make_interp(supports_call, jitted=True):
         pc = frame.pc
 
         while pc < len(code):
-            myjitdriver.jit_merge_point(frame=frame, framestack=framestack,
-                                        code=code, pc=pc, pool=pool)
+            if jitted:
+                myjitdriver.jit_merge_point(frame=frame, framestack=framestack,
+                                            code=code, pc=pc, pool=pool)
             opcode = ord(code[pc])
             pc += 1
             stack = frame.stack
@@ -352,7 +353,7 @@ def make_interp(supports_call, jitted=True):
                 old_pc = pc
                 pc += char2int(code[pc])
                 pc += 1
-                if old_pc > pc:
+                if jitted and old_pc > pc:
                     myjitdriver.can_enter_jit(code=code, pc=pc, frame=frame,
                                               framestack=framestack,
                                               pool=pool)
@@ -362,7 +363,7 @@ def make_interp(supports_call, jitted=True):
                 if cond.t():
                     old_pc = pc
                     pc += char2int(code[pc]) + 1
-                    if old_pc > pc:
+                    if jitted and old_pc > pc:
                         myjitdriver.can_enter_jit(code=code, pc=pc, frame=frame,
                                                   framestack=framestack,
                                                   pool=pool)
@@ -374,7 +375,7 @@ def make_interp(supports_call, jitted=True):
                 if stack.pop().t():
                     old_pc = pc
                     pc += offset
-                    if old_pc > pc:
+                    if jitted and old_pc > pc:
                         myjitdriver.can_enter_jit(code=code, pc=pc, frame=frame,
                                                   framestack=framestack,
                                                   pool=pool)
