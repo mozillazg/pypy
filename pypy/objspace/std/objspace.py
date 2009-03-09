@@ -580,8 +580,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             from pypy.objspace.std.listobject import W_ListObject
             return W_ListObject(list_w)
 
-    def newdict(self, track_builtin_shadowing=False):
-        if self.config.objspace.opcodes.CALL_LIKELY_BUILTIN and track_builtin_shadowing:
+    def newdict(self, module=False):
+        if self.config.objspace.std.withmultidict and module:
             from pypy.objspace.std.dictmultiobject import W_DictMultiObject
             return W_DictMultiObject(self, wary=True)
         return self.DictObjectCls(self)
