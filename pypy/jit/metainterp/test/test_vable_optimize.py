@@ -168,7 +168,7 @@ class C:
     locals().update(B.__dict__)
     n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
     v2 = BoxInt(13)
-    sizebox = ConstInt(cpu.sizeof(NODE))
+    sizebox = cpu.sizeof(NODE)
     ops = [
         ResOperation('merge_point', [fr], None),
         ResOperation('guard_nonvirtualized', [fr, ConstAddr(xy_vtable, cpu)],
