@@ -225,7 +225,7 @@ class BytecodeMaker(object):
             self.bytecode.dump()
         else:
             print repr(self.bytecode)
-            self.bytecode.dump(open("/tmp/jitcodes/%s" % self.bytecode.name, "w"))
+            #self.bytecode.dump(open("/tmp/jitcodes/%s" % self.bytecode.name, "w"))
 
     def const_position(self, constvalue):
         """Generate a constant of the given value.
