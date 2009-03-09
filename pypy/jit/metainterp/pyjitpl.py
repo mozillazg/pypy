@@ -521,7 +521,7 @@ class MIFrame(object):
                                  [clsbox])
         if op:
             op.vdesc = vdesc
-            op.descr = guard_field
+            op.descr = ConstInt(guard_field)
         
     @arguments("box")
     def opimpl_keepalive(self, box):
