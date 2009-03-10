@@ -590,6 +590,9 @@ class MIFrame(object):
         self.env = argboxes
         if not we_are_translated():
             self.metainterp._debug_history[-1][-1] = argboxes
+        elif LLDEBUG:
+            args_s = ", ".join([str(arg.get_()) for arg in argboxes])
+            print "  (%s)" % args_s
         #self.starts_with_greens()
         #assert len(argboxes) == len(self.graph.getargs())
 
@@ -637,6 +640,8 @@ class MIFrame(object):
                     liveboxes.append(const_if_fail)
         if box is not None:
             extraargs = [box] + extraargs
+        if LLDEBUG:
+            print "  g(%s)" % str(box.get_())
         guard_op = self.metainterp.history.record(opnum, extraargs, None)
         guard_op.liveboxes = liveboxes
         saved_pc = self.pc
@@ -661,6 +666,13 @@ class MIFrame(object):
     @specialize.arg(1)
     def execute(self, opnum, argboxes, descr=None):
         resbox = self.metainterp.execute_and_record(opnum, argboxes, descr)
+        if LLDEBUG:
+            args_s = ", ".join([str(arg.get_()) for arg in argboxes])
+            if resbox:
+                print "  (%s) -> %s" % (args_s, str(resbox.get_()))
+            else:
+                print "  (%s) -> void" % (args_s,)
+
         if resbox is not None:
             self.make_result_box(resbox)
 
@@ -668,6 +680,13 @@ class MIFrame(object):
     def execute_with_exc(self, opnum, argboxes, descr=None):
         cpu = self.metainterp.cpu
         resbox = executor.execute(cpu, opnum, argboxes, descr)
+        if LLDEBUG:
+            args_s = ", ".join([str(arg.get_()) for arg in argboxes])
+            if resbox:
+                print "  e(%s) -> %s" % (args_s, str(resbox.get_()))
+            else:
+                print "  e(%s) -> void" % (args_s,)
+
         if not we_are_translated():
             self.metainterp._debug_history.append(['call',
                                                   argboxes[0], argboxes[1:]])
@@ -734,9 +753,8 @@ class OOMetaInterp(object):
         frame = self.framestack.pop()
         if not we_are_translated():
             self._debug_history.append(['leave', frame.jitcode, None])
-        else:
-            if LLDEBUG:
-                print "LEAVE %s" % frame.jitcode.name
+        elif LLDEBUG:
+            print "LEAVE %s" % frame.jitcode.name
         if self.framestack:
             if resultbox is not None:
                 self.framestack[-1].make_result_box(resultbox)
