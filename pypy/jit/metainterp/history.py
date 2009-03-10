@@ -219,6 +219,10 @@ class ConstPtr(Const):
         return llmemory.cast_ptr_to_adr(self.value)
 
     def equals(self, other):
+        if not we_are_translated():
+            from pypy.rpython.lltypesystem import ll2ctypes
+            if isinstance(other.getptr_base(), ll2ctypes._llgcref):
+                return other.getptr_base() == self.value
         return self.value == other.getptr_base()
 
     _getrepr_ = repr_pointer
