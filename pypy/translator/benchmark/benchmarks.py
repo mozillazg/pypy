@@ -149,6 +149,8 @@ def run_gadfly(executable='/usr/local/bin/python'):
     command = 'PYTHONPATH="%s" "%s" "%s"' % (gadfly, executable, testscript)
     txt = run_cmd(command)
     lines = [line for line in txt.split('\n') if line.strip()]
+    if "NOTE" in lines[-1]:
+        del lines[-1]
     if lines[-1].strip() != 'OK':
         raise BenchmarkFailed
     lastword = lines[-2].split()[-1]
