@@ -10,7 +10,7 @@ from pypy.rlib.debug import debug_print
 from pypy.jit.metainterp import history, support
 from pypy.jit.metainterp.history import (Const, ConstInt, ConstPtr, Box,
                                          BoxInt, BoxPtr, Options)
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.compile import compile_new_loop, compile_new_bridge
 from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
                                              populate_type_cache)
@@ -179,6 +179,8 @@ class MIFrame(object):
 
     def make_result_box(self, box):
         assert isinstance(box, Box) or isinstance(box, Const)
+        if LLDEBUG:
+            print "  => %s" % (box.get_(),)
         self.env.append(box)
 
 ##    def starts_with_greens(self):
@@ -590,7 +592,7 @@ class MIFrame(object):
         self.env = argboxes
         if not we_are_translated():
             self.metainterp._debug_history[-1][-1] = argboxes
-        elif LLDEBUG:
+        if LLDEBUG:
             args_s = ", ".join([str(arg.get_()) for arg in argboxes])
             print "  (%s)" % args_s
         #self.starts_with_greens()
@@ -617,7 +619,11 @@ class MIFrame(object):
             #print self.metainterp.opcode_names[op]
             self.pc = pc + 1
             if LLDEBUG:
-                print "EXECUTE %d %d" % (pc, op)
+                try:
+                    name = opname[op]
+                except KeyError:
+                    name = "<%d>" % op
+                print "EXECUTE %d %s" % (pc, name)
             stop = self.metainterp.opcode_implementations[op](self, pc)
             #self.metainterp.most_recent_mp = None
             if stop:
@@ -641,7 +647,8 @@ class MIFrame(object):
         if box is not None:
             extraargs = [box] + extraargs
         if LLDEBUG:
-            print "  g(%s)" % str(box.get_())
+            if box is not None:
+                print "  g(%s)" % str(box.get_())
         guard_op = self.metainterp.history.record(opnum, extraargs, None)
         guard_op.liveboxes = liveboxes
         saved_pc = self.pc
@@ -690,7 +697,7 @@ class MIFrame(object):
         if not we_are_translated():
             self.metainterp._debug_history.append(['call',
                                                   argboxes[0], argboxes[1:]])
-        elif LLDEBUG:
+        if LLDEBUG:
             print "CALL %d" % argboxes[0].getint()
         # record the operation in the history
         self.metainterp.history.record(opnum, argboxes, resbox, descr)
@@ -743,7 +750,7 @@ class OOMetaInterp(object):
         self._recompute_class_sizes()
         if not we_are_translated():
             self._debug_history.append(['enter', jitcode, None])
-        elif LLDEBUG:
+        if LLDEBUG:
             print "ENTER %s" % jitcode.name
         f = MIFrame(self, jitcode)
         self.framestack.append(f)
@@ -753,7 +760,7 @@ class OOMetaInterp(object):
         frame = self.framestack.pop()
         if not we_are_translated():
             self._debug_history.append(['leave', frame.jitcode, None])
-        elif LLDEBUG:
+        if LLDEBUG:
             print "LEAVE %s" % frame.jitcode.name
         if self.framestack:
             if resultbox is not None:
@@ -773,7 +780,7 @@ class OOMetaInterp(object):
                 return True
             if not we_are_translated():
                 self._debug_history.append(['leave_exc', frame.jitcode, None])
-            elif LLDEBUG:
+            if LLDEBUG:
                 print "LEAVE_EXC %s" % frame.jitcode.name
             self.framestack.pop()
         raise self.ExitFrameWithException(exceptionbox, excvaluebox)
@@ -1003,7 +1010,7 @@ class OOMetaInterp(object):
     def rebuild_state_after_failure(self, key, newboxes):
         if not we_are_translated():
             self._debug_history.append(['guard_failure', None, None])
-        elif LLDEBUG:
+        if LLDEBUG:
             print "GUARD_FAILURE"
         self.framestack = []
         nbindex = 0

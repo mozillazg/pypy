@@ -1,6 +1,7 @@
 
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rlib.objectmodel import we_are_translated, r_dict, Symbolic
+from pypy.rlib.objectmodel import we_are_translated, r_dict, Symbolic,\
+     ComputedIntSymbolic
 from pypy.rlib.rarithmetic import intmask
 from pypy.tool.uid import uid
 from pypy.conftest import option
@@ -144,13 +145,15 @@ class ConstInt(Const):
     nonconstbox = clonebox
 
     def getint(self):
+        if isinstance(self.value, ComputedIntSymbolic):
+            return self.value.compute_fn()
         return self.value
 
     def getaddr(self, cpu):
         return cpu.cast_int_to_adr(self.value)
 
     def get_(self):
-        return self.value
+        return self.getint()
 
     def equals(self, other):
         return self.value == other.getint()
@@ -271,10 +274,12 @@ class BoxInt(Box):
         return ConstInt(self.value)
 
     def getint(self):
+        if isinstance(self.value, ComputedIntSymbolic):
+            return self.value.compute_fn()
         return self.value
 
     def get_(self):
-        return self.value
+        return self.getint()
 
     def _getrepr_(self):
         return self.value
