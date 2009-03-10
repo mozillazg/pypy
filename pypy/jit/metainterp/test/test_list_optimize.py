@@ -30,20 +30,20 @@ class A:
 
 def test_A_find_nodes():
     spec = PerfectSpecializer(Loop(A.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     node = spec.nodes[A.l]
     assert isinstance(node.cls.source, FixedList)
     assert node.expanded_fields.keys() == [0]
 
 def test_A_intersect():
     spec = PerfectSpecializer(Loop(A.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     assert isinstance(spec.specnodes[0], DelayedFixedListSpecNode)
 
 def test_A_optimize_loop():
     spec = PerfectSpecializer(Loop(A.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     spec.optimize_loop(None)
     equaloplists(spec.loop.operations, [
@@ -72,7 +72,7 @@ class B:
 
 def test_B_optimize_loop():
     spec = PerfectSpecializer(Loop(B.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     spec.optimize_loop(None)
     equaloplists(spec.loop.operations, [

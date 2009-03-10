@@ -19,6 +19,7 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.jit.metainterp import heaptracker, resoperation, executor
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.llgraph import symbolic
+from pypy.jit.metainterp import history
 
 from pypy.rlib.objectmodel import ComputedIntSymbolic
 from pypy.rlib.rarithmetic import r_uint, intmask
@@ -139,6 +140,8 @@ class Operation(object):
         self.opnum = opnum
         self.args = []
         self.result = None
+        if descr:
+            assert isinstance(descr, history.AbstractValue)
         self.descr = descr
         self.livevars = []   # for guards only
 
@@ -565,7 +568,7 @@ class Frame(object):
 
     def op_call(self, calldescr, func, *args):
         _call_args[:] = args
-        if calldescr == sys.maxint:
+        if calldescr.getint() == sys.maxint:
             err_result = None
         elif calldescr.getint() & 1:
             err_result = lltype.nullptr(llmemory.GCREF.TO)
