@@ -25,6 +25,7 @@ def uaddressof(obj):
 
 _ctypes_cache = {}
 _eci_cache = {}
+_parent_cache = {}
 
 def _setup_ctypes_cache():
     from pypy.rpython.lltypesystem import rffi
@@ -620,6 +621,8 @@ def lltype2ctypes(llobj, normalize=True):
                 raise NotImplementedError(T)
             container._ctypes_storage_was_allocated()
         storage = container._storage
+        if lltype.parentlink(container)[0] is not None:
+            _parent_cache[ctypes.addressof(storage)] = lltype.parentlink(container)
         p = ctypes.pointer(storage)
         if index:
             p = ctypes.cast(p, ctypes.c_void_p)
@@ -683,6 +686,9 @@ def ctypes2lltype(T, cobj):
                                           ctypes.cast(cobj, ctypes_instance)))
                 container = lltype._struct(T.TO)
             struct_use_ctypes_storage(container, cobj.contents)
+            addr = ctypes.addressof(cobj.contents)
+            if addr in _parent_cache:
+                container._setparentstructure(*_parent_cache[addr])
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):
                 container = _array_of_unknown_length(T.TO)
