@@ -2,8 +2,9 @@ from pypy.interpreter.error import OperationError
 from pypy.objspace.std.dictmultiobject import \
      W_DictMultiObject, setitem__DictMulti_ANY_ANY, getitem__DictMulti_ANY, \
      EmptyDictImplementation, RDictImplementation, StrDictImplementation, \
-     SmallDictImplementation, SmallStrDictImplementation, MeasuringDictImplementation, \
-     ModuleDictImplementation
+     SmallDictImplementation, SmallStrDictImplementation, MeasuringDictImplementation
+
+from pypy.objspace.std.celldict import ModuleDictImplementation
 from pypy.conftest import gettestobjspace
 from pypy.objspace.std.test import test_dictobject
 
