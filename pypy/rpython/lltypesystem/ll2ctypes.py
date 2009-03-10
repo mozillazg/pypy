@@ -622,7 +622,7 @@ def lltype2ctypes(llobj, normalize=True):
             container._ctypes_storage_was_allocated()
         storage = container._storage
         if lltype.parentlink(container)[0] is not None:
-            _parent_cache[ctypes.addressof(storage)] = lltype.parentlink(container)
+            _parent_cache[ctypes.addressof(storage)] = parentchain(container)
         p = ctypes.pointer(storage)
         if index:
             p = ctypes.cast(p, ctypes.c_void_p)
@@ -688,7 +688,10 @@ def ctypes2lltype(T, cobj):
             struct_use_ctypes_storage(container, cobj.contents)
             addr = ctypes.addressof(cobj.contents)
             if addr in _parent_cache:
-                container._setparentstructure(*_parent_cache[addr])
+                setparentstructure(container, _parent_cache[addr])
+            else:
+                import pdb
+                pdb.set_trace()
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):
                 container = _array_of_unknown_length(T.TO)
@@ -720,6 +723,8 @@ def ctypes2lltype(T, cobj):
             llobj = _lladdress(cobj)
     elif T is lltype.Char:
         llobj = chr(cobj)
+    elif T is lltype.Bool:
+        llobj = bool(cobj)
     elif T is lltype.UniChar:
         llobj = unichr(cobj)
     elif T is lltype.Signed:
@@ -1058,6 +1063,24 @@ class CastAdrToIntEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('cast_adr_to_int', [adr],
                          resulttype = lltype.Signed)
+
+# ------------------------------------------------------------
+
+def parentchain(container):
+    current = container
+    links = []
+    while True:
+        link = lltype.parentlink(current)
+        if link[0] is None:
+            return links
+        links.append(link)
+        current = link[0]
+
+def setparentstructure(container, chain):
+    current = container
+    for elem in chain:
+        current._setparentstructure(*elem)
+        current = elem[0]
 
 # ____________________________________________________________
 # errno
