@@ -167,44 +167,46 @@ class ModuleDictItemIteratorImplementation(IteratorImplementation):
 class State(object):
     def __init__(self, space):
         self.space = space
-        self.code_to_index = {}
-        self.caches = []
-        self.dictimpls = []
         self.invalidcell = ModuleCell(valid=False)
         self.always_invalid_cache = []
+        self.neverused_dictimpl = ModuleDictImplementation(space)
 
-    def getcache(self, code, w_globals):
+class GlobalCacheHolder(object):
+    def __init__(self, space):
+        self.cache = None
+        state = space.fromcache(State)
+        self.dictimpl = state.neverused_dictimpl
+
+    def getcache(self, space, code, w_globals):
         implementation = getimplementation(w_globals)
-        index = -1 # for flow space
-        if code in self.code_to_index:
-            index = self.code_to_index[code]
-            if self.dictimpls[index] is implementation:
-                return self.caches[index]
-            in_dict = True
-        else:
-            in_dict = False
-        if not isinstance(implementation, ModuleDictImplementation):
-            missing_length = max(len(code.co_names_w) - len(self.always_invalid_cache), 0)
-            self.always_invalid_cache.extend([self.invalidcell] * missing_length)
-            return self.always_invalid_cache
-        if not in_dict:
-            index = len(self.code_to_index)
-            self.code_to_index[code] = index
-            self.dictimpls.append(None)
-            self.caches.append(None)
-        cache = [self.invalidcell] * len(code.co_names_w)
-        self.caches[index] = cache
-        self.dictimpls[index] = implementation
-        return cache
+        if self.dictimpl is implementation:
+            return self.cache
+        return self.getcache_slow(space, code, w_globals, implementation)
+    getcache._always_inline_ = True
 
+    def getcache_slow(self, space, code, w_globals, implementation):
+        state = space.fromcache(State)
+        if not isinstance(implementation, ModuleDictImplementation):
+            missing_length = max(len(code.co_names_w) - len(state.always_invalid_cache), 0)
+            state.always_invalid_cache.extend([state.invalidcell] * missing_length)
+            cache = state.always_invalid_cache
+        else:
+            cache = [state.invalidcell] * len(code.co_names_w)
+        self.cache = cache
+        self.dictimpl = implementation
+        return cache
+    getcache_slow._dont_inline_ = True
+
+def init_code(code):
+    code.globalcacheholder = GlobalCacheHolder(code.space)
 
 
 def get_global_cache(space, code, w_globals):
     from pypy.interpreter.pycode import PyCode
     if not isinstance(code, PyCode):
         return []
-    cache = space.fromcache(State).getcache(code, w_globals)
-    return cache
+    holder = code.globalcacheholder
+    return holder.getcache(space, code, w_globals)
 
 def getimplementation(w_dict):
     if type(w_dict) is W_DictMultiObject:
