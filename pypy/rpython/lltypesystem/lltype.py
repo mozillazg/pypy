@@ -1161,6 +1161,8 @@ class _ptr(_abstract_ptr):
         while u:
             parent = struc._parentstructure()
             if parent is None:
+                import pdb
+                pdb.set_trace()
                 raise RuntimeError("widening to trash: %r" % self)
             PARENTTYPE = struc._parent_type
             if getattr(parent, PARENTTYPE._names[0]) != struc:
