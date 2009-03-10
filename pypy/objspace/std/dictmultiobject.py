@@ -865,135 +865,6 @@ class SharedKeyIteratorImplementation(IteratorImplementation):
         else:
             return None
 
-class ModuleCell(object):
-    def __init__(self):
-        self.w_value = None
-        self.valid = True
-
-    def invalidate(self):
-        self.w_value = None
-        self.valid = False
-
-class ModuleDictImplementation(DictImplementation):
-    def __init__(self, space):
-        self.space = space
-        self.content = {}
-
-    def getcell(self, key, make_new=True):
-        try:
-            return self.content[key]
-        except KeyError:
-            if not make_new:
-                raise
-            result = self.content[key] = ModuleCell()
-            return result
-
-    def setitem(self, w_key, w_value):
-        space = self.space
-        if space.is_w(space.type(w_key), space.w_str):
-            return self.setitem_str(w_key, w_value)
-        else:
-            return self._as_rdict().setitem(w_key, w_value)
-
-    def setitem_str(self, w_key, w_value, shadows_type=True):
-        self.getcell(self.space.str_w(w_key)).w_value = w_value
-        return self
-
-    def delitem(self, w_key):
-        space = self.space
-        w_key_type = space.type(w_key)
-        if space.is_w(w_key_type, space.w_str):
-            key = space.str_w(w_key)
-            cell = self.getcell(key, False)
-            cell.invalidate()
-            del self.content[key]
-            return self
-        elif _is_sane_hash(space, w_key_type):
-            raise KeyError
-        else:
-            return self._as_rdict().delitem(w_key)
-        
-    def length(self):
-        return len(self.content)
-
-    def get(self, w_lookup):
-        space = self.space
-        w_lookup_type = space.type(w_lookup)
-        if space.is_w(w_lookup_type, space.w_str):
-            try:
-                return self.getcell(space.str_w(w_lookup), False).w_value
-            except KeyError:
-                return None
-        elif _is_sane_hash(space, w_lookup_type):
-            return None
-        else:
-            return self._as_rdict().get(w_lookup)
-
-    def iteritems(self):
-        return ModuleDictItemIteratorImplementation(self.space, self)
-
-    def iterkeys(self):
-        return ModuleDictKeyIteratorImplementation(self.space, self)
-
-    def itervalues(self):
-        return ModuleDictValueIteratorImplementation(self.space, self)
-
-    def keys(self):
-        space = self.space
-        return [space.wrap(key) for key in self.content.iterkeys()]
-
-    def values(self):
-        return [cell.w_value for cell in self.content.itervalues()]
-
-    def items(self):
-        space = self.space
-        return [space.newtuple([space.wrap(key), cell.w_value])
-                    for (key, cell) in self.content.iteritems()]
-
-    def _as_rdict(self):
-        newimpl = self.space.DefaultDictImpl(self.space)
-        for k, cell in self.content.iteritems():
-            newimpl.setitem(self.space.wrap(k), cell.w_value)
-            cell.invalidate()
-        return newimpl
-
-# grrrrr. just a copy-paste from StrKeyIteratorImplementation above
-class ModuleDictKeyIteratorImplementation(IteratorImplementation):
-    def __init__(self, space, dictimplementation):
-        IteratorImplementation.__init__(self, space, dictimplementation)
-        self.iterator = dictimplementation.content.iterkeys()
-
-    def next_entry(self):
-        # note that this 'for' loop only runs once, at most
-        for key in self.iterator:
-            return self.space.wrap(key)
-        else:
-            return None
-
-class ModuleDictValueIteratorImplementation(IteratorImplementation):
-    def __init__(self, space, dictimplementation):
-        IteratorImplementation.__init__(self, space, dictimplementation)
-        self.iterator = dictimplementation.content.itervalues()
-
-    def next_entry(self):
-        # note that this 'for' loop only runs once, at most
-        for cell in self.iterator:
-            return cell.w_value
-        else:
-            return None
-
-class ModuleDictItemIteratorImplementation(IteratorImplementation):
-    def __init__(self, space, dictimplementation):
-        IteratorImplementation.__init__(self, space, dictimplementation)
-        self.iterator = dictimplementation.content.iteritems()
-
-    def next_entry(self):
-        # note that this 'for' loop only runs once, at most
-        for key, cell in self.iterator:
-            return self.space.newtuple([self.space.wrap(key), cell.w_value])
-        else:
-            return None
-
 import time, py
 
 class DictInfo(object):
@@ -1168,6 +1039,7 @@ class W_DictMultiObject(W_Object):
 
     def __init__(w_self, space, wary=False, sharing=False, module=False):
         if space.config.objspace.std.withcelldict and wary:
+            from pypy.objspace.std.celldict import ModuleDictImplementation
             w_self.implementation = ModuleDictImplementation(space)
         elif space.config.objspace.opcodes.CALL_LIKELY_BUILTIN and wary:
             w_self.implementation = WaryDictImplementation(space)
