@@ -175,6 +175,7 @@ class State(object):
 
     def getcache(self, code, w_globals):
         implementation = getimplementation(w_globals)
+        index = -1 # for flow space
         if code in self.code_to_index:
             index = self.code_to_index[code]
             if self.dictimpls[index] is implementation:
