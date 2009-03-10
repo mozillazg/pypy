@@ -218,12 +218,12 @@ class CPU(object):
     @staticmethod
     def calldescrof(ARGS, RESULT):
         if RESULT is lltype.Void:
-            return sys.maxint
+            return history.ConstInt(sys.maxint)
         token = history.getkind(RESULT)
         if token == 'ptr':
-            return 1
+            return history.ConstInt(1)
         else:
-            return 0
+            return history.ConstInt(0)
 
     @staticmethod
     def typefor(fielddesc):
@@ -291,9 +291,10 @@ class CPU(object):
                                                             fielddescr,
                                                             self.memo_cast))
 
-    def do_getfield_raw(self, args, fielddescr):
+    def do_getfield_raw(self, args, fieldbox):
+        fielddescr = fieldbox.getint()
         struct = self.cast_int_to_adr(args[0].getint())
-        if self.typefor(fielddescr) == 'ptr':
+        if self.typefor(fieldbox) == 'ptr':
             return history.BoxPtr(llimpl.do_getfield_raw_ptr(struct,
                                                              fielddescr))
         else:
@@ -359,6 +360,7 @@ class CPU(object):
         llimpl.do_strsetitem(0, string, index, newvalue)
 
     def do_call(self, args, calldescr):
+        assert isinstance(calldescr, history.ConstInt)
         func = args[0].getint()
         for arg in args[1:]:
             if (isinstance(arg, history.BoxPtr) or

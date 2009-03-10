@@ -101,12 +101,12 @@ class A:
 
 def test_A_find_nodes():
     spec = PerfectSpecializer(Loop(A.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     assert spec.nodes[A.fr].virtualized
 
 def test_A_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(A.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     assert spec.nodes[A.fr].escaped
     assert spec.nodes[A.fr].virtualized
@@ -116,9 +116,9 @@ def test_A_intersect_input_and_output():
 
 def test_A_optimize_loop():
     spec = PerfectSpecializer(Loop(A.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
-    spec.optimize_loop(None)
+    spec.optimize_loop(cpu)
     equaloplists(spec.loop.operations, [
         ResOperation('merge_point', [A.sum, A.fr, A.v], None),
         ResOperation('int_sub', [A.v, ConstInt(1)], A.v2),
@@ -152,14 +152,14 @@ class B:
 
 def test_B_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(B.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     assert spec.nodes[B.fr].escaped
     assert spec.nodes[B.fr].virtualized
     assert spec.nodes[B.n1].escaped
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
-    assert spec.specnodes[0].fields[0][0] == B.ofs_node
+    assert spec.specnodes[0].fields[0][0] == B.ofs_node.value
     assert isinstance(spec.specnodes[0].fields[0][1], NotSpecNode)
 
 # ____________________________________________________________
@@ -188,7 +188,7 @@ class C:
 
 def test_C_intersect_input_and_output():
     spec = PerfectSpecializer(Loop(C.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     assert spec.nodes[C.fr].escaped
     assert spec.nodes[C.fr].virtualized
@@ -196,7 +196,7 @@ def test_C_intersect_input_and_output():
     assert spec.nodes[C.n2].escaped
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
     assert len(spec.specnodes[0].fields) == 1
-    assert spec.specnodes[0].fields[0][0] == C.ofs_node
+    assert spec.specnodes[0].fields[0][0] == C.ofs_node.value
     assert isinstance(spec.specnodes[0].fields[0][1], DelayedSpecNode)
 
 
@@ -228,7 +228,7 @@ if 0:
 def test_D_intersect_input_and_output():
     py.test.skip("XXX")
     spec = PerfectSpecializer(Loop(D.ops))
-    spec.find_nodes()
+    spec.find_nodes(cpu)
     spec.intersect_input_and_output()
     assert spec.nodes[D.fr].escaped
     assert spec.nodes[D.fr].virtualized
