@@ -689,9 +689,6 @@ def ctypes2lltype(T, cobj):
             addr = ctypes.addressof(cobj.contents)
             if addr in _parent_cache:
                 setparentstructure(container, _parent_cache[addr])
-            else:
-                import pdb
-                pdb.set_trace()
         elif isinstance(T.TO, lltype.Array):
             if T.TO._hints.get('nolength', False):
                 container = _array_of_unknown_length(T.TO)
@@ -1067,20 +1064,12 @@ class CastAdrToIntEntry(ExtRegistryEntry):
 # ------------------------------------------------------------
 
 def parentchain(container):
-    current = container
-    links = []
-    while True:
-        link = lltype.parentlink(current)
-        if link[0] is None:
-            return links
-        links.append(link)
-        current = link[0]
+    from pypy.rpython.lltypesystem.ll2ctypes_sup import parentchain
+    return parentchain(container)
 
 def setparentstructure(container, chain):
-    current = container
-    for elem in chain:
-        current._setparentstructure(*elem)
-        current = elem[0]
+    from pypy.rpython.lltypesystem.ll2ctypes_sup import setparentstructure
+    setparentstructure(container, chain)
 
 # ____________________________________________________________
 # errno
