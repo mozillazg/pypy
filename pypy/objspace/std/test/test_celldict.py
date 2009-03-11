@@ -19,7 +19,7 @@ class AppTestCellDict(object):
             name = space.str_w(w_name)
             cache = get_global_cache(space, w_code, w_globals)
             index = [space.str_w(w_n) for w_n in w_code.co_names_w].index(name)
-            return space.wrap(cache[index].valid)
+            return space.wrap(cache[index].w_value is not None)
         is_in_cache = gateway.interp2app(is_in_cache)
         cls.w_is_in_cache = cls.space.wrap(is_in_cache) 
         stored_builtins = []
