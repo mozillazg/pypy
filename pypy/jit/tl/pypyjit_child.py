@@ -2,7 +2,7 @@ from pypy.conftest import option
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp import warmspot
 from pypy.module.pypyjit.portal import PyPyJitPolicy
-
+from pypy.jit.backend.x86.runner import CPU386
 
 # Current output: http://paste.pocoo.org/show/106540/
 #
@@ -39,7 +39,7 @@ def run_child(glob, loc):
     option.view = True
     try:
         warmspot.jittify_and_run(interp, graph, [], policy=policy,
-                                 listops=True)
+                                 listops=True, CPUClass=CPU386)
     except Exception, e:
         print '%s: %s' % (e.__class__, e)
         pdb.post_mortem(sys.exc_info()[2])
