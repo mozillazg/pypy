@@ -17,15 +17,14 @@ def f1():
     print i
     assert i == 102
 
-def f():
+def f2():
     print "range object, but outside the loop"
 
     s = 0
-    for i in range(100):
-        # XXX implement inplace_add method for ints
+    for i in range(1000000):
         s = s + i
     print s
-    assert s == 4950
+    assert s == 499999500000L
 
 def f():
     try:
@@ -39,4 +38,4 @@ def f():
     else:
         raise AssertionError
 
-f()
+f2()
