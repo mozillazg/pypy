@@ -3,19 +3,16 @@ from pypy.objspace.std.dictmultiobject import IteratorImplementation
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
 
 class ModuleCell(object):
-    def __init__(self, valid=True):
-        self.w_value = None
-        self.valid = valid
+    def __init__(self, w_value=None):
+        self.w_value = w_value
 
     def invalidate(self):
+        w_value = self.w_value
         self.w_value = None
-        self.valid = False
+        return w_value
 
     def __repr__(self):
-        if self.valid:
-            return "<ModuleCell: %s>" % (self.w_value, )
-        else:
-            return "<ModuleCell invalid>"
+        return "<ModuleCell: %s>" % (self.w_value, )
 
 class ModuleDictImplementation(DictImplementation):
     def __init__(self, space):
@@ -37,12 +34,11 @@ class ModuleDictImplementation(DictImplementation):
         self.unshadowed_builtins[name] = builtin_impl
 
     def invalidate_unshadowed_builtin(self, name):
+        # XXX what if the builtin was deleted in the meantime?
         impl = self.unshadowed_builtins[name]
         cell = impl.content[name]
-        w_value = cell.w_value
-        cell.invalidate()
-        cell = impl.content[name] = ModuleCell()
-        cell.w_value = w_value
+        w_value = cell.invalidate()
+        cell = impl.content[name] = ModuleCell(w_value)
 
     def setitem(self, w_key, w_value):
         space = self.space
@@ -167,7 +163,7 @@ class ModuleDictItemIteratorImplementation(IteratorImplementation):
 class State(object):
     def __init__(self, space):
         self.space = space
-        self.invalidcell = ModuleCell(valid=False)
+        self.invalidcell = ModuleCell()
         self.always_invalid_cache = []
         self.neverused_dictimpl = ModuleDictImplementation(space)
 
@@ -216,12 +212,11 @@ def getimplementation(w_dict):
 
 def LOAD_GLOBAL(f, nameindex, *ignored):
     cell = f.cache_for_globals[nameindex]
-    if cell.valid:
-        result = cell.w_value
-    else:
+    w_value = cell.w_value
+    if w_value is None:
         # slow path
-        result = load_global_fill_cache(f, nameindex)
-    f.pushvalue(result)
+        w_value = load_global_fill_cache(f, nameindex)
+    f.pushvalue(w_value)
 LOAD_GLOBAL._always_inline_ = True
 
 def find_cell_from_dict(implementation, name):
