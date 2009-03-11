@@ -34,11 +34,14 @@ class ModuleDictImplementation(DictImplementation):
         self.unshadowed_builtins[name] = builtin_impl
 
     def invalidate_unshadowed_builtin(self, name):
-        # XXX what if the builtin was deleted in the meantime?
         impl = self.unshadowed_builtins[name]
-        cell = impl.content[name]
-        w_value = cell.invalidate()
-        cell = impl.content[name] = ModuleCell(w_value)
+        try:
+            cell = impl.content[name]
+        except KeyError:
+            pass
+        else:
+            w_value = cell.invalidate()
+            cell = impl.content[name] = ModuleCell(w_value)
 
     def setitem(self, w_key, w_value):
         space = self.space
