@@ -123,6 +123,39 @@ class AppTestCellDict(object):
         finally:
             __builtins__.len = orig_len
 
+    def test_override_builtins2(self):
+        import sys, __builtin__
+        mod1 = type(sys)("abc")
+        glob1 = mod1.__dict__
+        self.impl_used(mod1.__dict__)
+        def f():
+            return l(x)
+        code = f.func_code
+        f1 = type(f)(f.func_code, glob1)
+        mod1.x = []
+        __builtin__.l = len
+        try:
+            assert not self.is_in_cache(code, glob1, "l")
+            assert not self.is_in_cache(code, glob1, "x")
+            assert f1() == 0
+            assert self.is_in_cache(code, glob1, "l")
+            assert self.is_in_cache(code, glob1, "x")
+            assert f1() == 0
+            mod1.x.append(1)
+            assert f1() == 1
+            assert self.is_in_cache(code, glob1, "l")
+            assert self.is_in_cache(code, glob1, "x")
+            del __builtin__.l
+            mod1.l = len
+            mod1.x.append(1)
+            assert not self.is_in_cache(code, glob1, "l")
+            assert f1() == 2
+            assert self.is_in_cache(code, glob1, "l")
+            assert self.is_in_cache(code, glob1, "x")
+        finally:
+            if hasattr(__builtins__, "l"):
+                del __builtins__.l
+
     def test_generator(self):
         import sys, __builtin__
         mod1 = type(sys)("abc")
