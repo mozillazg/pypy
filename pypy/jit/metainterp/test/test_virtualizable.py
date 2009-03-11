@@ -372,7 +372,6 @@ class ImplicitVirtualizableTests:
         assert res == f(10)
 
     def test_read_after_loop(self):
-        py.test.skip("FIXME")
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
                               virtualizables = ['frame'])
 
@@ -393,7 +392,7 @@ class ImplicitVirtualizableTests:
             return frame.x
 
         res = self.meta_interp(f, [30])
-        assert res == f(10)
+        assert res == f(30)
     
     def test_read_after_loop_2(self):
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
