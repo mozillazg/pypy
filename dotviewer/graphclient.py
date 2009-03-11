@@ -1,4 +1,5 @@
 import os, sys, re
+import subprocess
 import msgstruct
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -129,8 +130,10 @@ def spawn_local_handler():
         python = 'python'
     else:
         python = sys.executable
-    cmdline = '"%s" -u "%s" --stdio' % (python, GRAPHSERVER)
-    child_in, child_out = os.popen2(cmdline, 'tb')
+    args = [python, '-u', GRAPHSERVER, '--stdio']
+    p = subprocess.Popen(args,
+                         stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+    child_in, child_out = p.stdin, p.stdout
     io = msgstruct.FileIO(child_out, child_in)
     return io
 
