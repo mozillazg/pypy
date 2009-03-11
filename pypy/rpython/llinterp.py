@@ -14,6 +14,9 @@ import traceback, cStringIO
 log = py.log.Producer('llinterp')
 
 class LLException(Exception):
+    def __init__(self, *args):
+        "NOT_RPYTHON"
+        Exception.__init__(self, *args)
     def __str__(self):
         etype = self.args[0]
         #evalue = self.args[1]
@@ -1180,9 +1183,6 @@ class LLFrame(object):
 
     def op_oohash(self, s):
         return ootype.oohash(s)
-
-    def op_raise_exc_value(self, etype, evalue):
-        raise LLException(etype, evalue)
 
 class Tracer(object):
     Counter = 0
