@@ -299,7 +299,7 @@ MAKE_POINT = 18
 
 @expose_primitive(MAKE_POINT, unwrap_spec=[int, int])
 def func(interp, x, y):
-    w_res = interp.space.classtable['w_Point'].as_class_get_shadow(interp.space).new(2)
+    w_res = interp.space.w_Point.as_class_get_shadow(interp.space).new(2)
     point = wrapper.PointWrapper(interp.space, w_res)
     point.store_x(interp.space, x)
     point.store_y(interp.space, y)
@@ -771,7 +771,7 @@ def func(interp, w_rcvr, sel, w_args):
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Semaphore']):
+        interp.space.w_Semaphore):
         raise PrimitiveFailedError()
     wrapper.SemaphoreWrapper(interp.space, w_rcvr).signal(interp)
     return w_rcvr
@@ -780,7 +780,7 @@ def func(interp, w_rcvr):
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Semaphore']):
+        interp.space.w_Semaphore):
         raise PrimitiveFailedError()
     wrapper.SemaphoreWrapper(interp.space, w_rcvr).wait(interp)
     return w_rcvr
@@ -789,7 +789,7 @@ def func(interp, w_rcvr):
 def func(interp, w_rcvr,):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Process']):
+        interp.space.w_Process):
         raise PrimitiveFailedError()
     wrapper.ProcessWrapper(interp.space, w_rcvr).resume(interp)
     return w_rcvr
@@ -798,7 +798,7 @@ def func(interp, w_rcvr,):
 def func(interp, w_rcvr):
     # XXX we might want to disable this check
     if not w_rcvr.getclass(interp.space).is_same_object(
-        interp.space.classtable['w_Process']):
+        interp.space.w_Process):
         raise PrimitiveFailedError()
     wrapper.ProcessWrapper(interp.space, w_rcvr).suspend(interp)
     return w_rcvr

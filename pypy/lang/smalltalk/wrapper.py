@@ -11,12 +11,14 @@ class Wrapper(object):
     def read(self, index0):
         try:
             return self.w_self.fetch(self.space, index0)
+            # XXX Index error never raised after translation
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
     def write(self, index0, w_new):
         try:
             self.w_self.store(self.space, index0, w_new)
+            # XXX Index error never raised after translation
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
@@ -51,11 +53,8 @@ class LinkWrapper(Wrapper):
 
 class ProcessWrapper(LinkWrapper):
     suspended_context, store_suspended_context = make_getter_setter(1)
+    priority = make_int_getter(2)
     my_list, store_my_list = make_getter_setter(3)
-
-    def priority(self):
-        w_priority = self.read(2)
-        return self.space.unwrap_int(w_priority)
 
     def put_to_sleep(self):
         sched = scheduler(self.space)
