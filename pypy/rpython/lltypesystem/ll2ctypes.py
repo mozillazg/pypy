@@ -574,7 +574,7 @@ def lltype2ctypes(llobj, normalize=True):
                         return 0
                 return res
 
-            if conftest.option.usepdb:
+            if getattr(conftest.option, 'usepdb', False):
                 callback_original = callback
                 def callback(*cargs):
                     try:
