@@ -147,9 +147,9 @@ class ExternalCompilationInfo(object):
             raise ImportError("cannot find %r" % (execonfigtool,))
             # we raise ImportError to be nice to the pypy.config.pypyoption
             # logic of skipping modules depending on non-installed libs
-        cflags = py.process.cmdexec([str(path), '--cflags'])
+        cflags = py.process.cmdexec('"%s" --cflags' % (str(path),))
         eci1 = cls.from_compiler_flags(cflags)
-        libs = py.process.cmdexec([str(path), '--libs'])
+        libs = py.process.cmdexec('"%s" --libs' % (str(path),))
         eci2 = cls.from_linker_flags(libs)
         return eci1.merge(eci2)
     from_config_tool = classmethod(from_config_tool)
