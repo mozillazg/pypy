@@ -11,14 +11,12 @@ class Wrapper(object):
     def read(self, index0):
         try:
             return self.w_self.fetch(self.space, index0)
-            # XXX Index error never raised after translation
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
     def write(self, index0, w_new):
         try:
             self.w_self.store(self.space, index0, w_new)
-            # XXX Index error never raised after translation
         except IndexError:
             raise WrapperException("Unexpected instance layout. Too small")
 
@@ -36,13 +34,13 @@ def make_getter_setter(index0):
     return make_getter(index0), make_setter(index0)
 
 def make_int_getter(index0):
-    def getter(self):
-        return self.space.unwrap_int(self.read(index0))
+    def getter(self, space):
+        return space.unwrap_int(self.read(index0))
     return getter
 
 def make_int_setter(index0):
-    def setter(self, new):
-        return self.write(index0, self.space.wrap_int(new))
+    def setter(self, space, new):
+        return self.write(index0, space.wrap_int(new))
     return setter
 
 def make_int_getter_setter(index0):
@@ -53,8 +51,11 @@ class LinkWrapper(Wrapper):
 
 class ProcessWrapper(LinkWrapper):
     suspended_context, store_suspended_context = make_getter_setter(1)
-    priority = make_int_getter(2)
     my_list, store_my_list = make_getter_setter(3)
+
+    def priority(self):
+        w_priority = self.read(2)
+        return self.space.unwrap_int(w_priority)
 
     def put_to_sleep(self):
         sched = scheduler(self.space)
@@ -185,17 +186,17 @@ class SemaphoreWrapper(LinkedListWrapper):
 
     def signal(self, interp):
         if self.is_empty_list():
-            value = self.excess_signals()
-            self.store_excess_signals(value + 1)
+            value = self.excess_signals(interp.space)
+            self.store_excess_signals(interp.space, value + 1)
         else:
             process = self.remove_first_link_of_list()
             ProcessWrapper(self.space, process).resume(interp)
 
     def wait(self, interp):
-        excess = self.excess_signals()
+        excess = self.excess_signals(interp.space)
         w_process = scheduler(interp.space).active_process()
         if excess > 0:
-            self.store_excess_signals(excess - 1)
+            self.store_excess_signals(interp.space, excess - 1)
         else:
             self.add_last_link(w_process)
             ProcessWrapper(self.space, w_process).suspend(interp)
