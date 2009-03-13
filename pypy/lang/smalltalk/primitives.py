@@ -301,8 +301,8 @@ MAKE_POINT = 18
 def func(interp, x, y):
     w_res = interp.space.w_Point.as_class_get_shadow(interp.space).new(2)
     point = wrapper.PointWrapper(interp.space, w_res)
-    point.store_x(interp.space, x)
-    point.store_y(interp.space, y)
+    point.store_x(x)
+    point.store_y(y)
     return w_res
 
 
