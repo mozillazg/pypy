@@ -13,6 +13,13 @@ def object_getattribute(space):
     return w_getattribute
 object_getattribute._annspecialcase_ = 'specialize:memo'
 
+def object_setattr(space):
+    "Utility that returns the app-level descriptor object.__setattr__."
+    w_src, w_setattr = space.lookup_in_type_where(space.w_object,
+                                                  '__setattr__')
+    return w_setattr
+object_setattr._annspecialcase_ = 'specialize:memo'
+
 def raiseattrerror(space, w_obj, name, w_descr=None):
     w_type = space.type(w_obj)
     typename = w_type.getname(space, '?')
