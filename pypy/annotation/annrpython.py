@@ -309,7 +309,6 @@ class RPythonAnnotator(object):
             except AttributeError:
                 pass
 
-        graph = position_key[0]
         msgstr = format_someobject_error(self, position_key, what, s_value,
                                          called_from_graph,
                                          self.bindings.get(what, "(none)"))
