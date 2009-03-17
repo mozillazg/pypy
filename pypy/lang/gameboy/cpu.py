@@ -325,7 +325,7 @@ class CPU(object):
         self.flag.partial_reset(keep_is_zero=True)
         self.flag.is_half_carry = (((added ^ self.hl.get() ^ data) & 0x1000) != 0) 
         self.flag.is_carry = (added >= 0x10000 or added < 0)
-        self.hl.set(added & 0xFFFF)
+        self.hl.set(added)
         self.cycles -= 1
         
     def add_a_with_carry(self, getCaller, setCaller=None):
@@ -347,7 +347,7 @@ class CPU(object):
         self.flag.is_half_carry = (((s ^ self.a.get() ^ data) & 0x10) != 0)
         self.flag.is_carry = (s > 0xFF or s < 0)
         self.flag.zero_check(s)
-        self.a.set(s & 0xFF)  # 1 cycle
+        self.a.set(s)  # 1 cycle
         
     def subtract_a(self, getCaller, setCaller=None):
         # 1 cycle
@@ -552,7 +552,7 @@ class CPU(object):
         
     def store_expanded_c_in_a(self):
         # LDH A,(C) 2 cycles
-        self.a.set(self.read(0xFF00 + self.bc.get_lo())) # 1+2 cycles
+        self.a.set(self.read(0xFF00 + self.c.get())) # 1+2 cycles
         
     def load_and_increment_a_hli(self):
         # loadAndIncrement A,(HL) 2 cycles
@@ -611,9 +611,9 @@ class CPU(object):
         if (self.a.get() & 0xF0) > 0x90:
             delta |= 0x60
         if not self.is_n():
-            self.a.set((self.a.get() + delta) & 0xFF) # 1 cycle
+            self.a.add(delta) # 1 cycle
         else:
-            self.a.set((self.a.get() - delta) & 0xFF) # 1 cycle
+            self.a.add(-delta) # 1 cycle
         self.flag.partial_reset(keep_is_subtraction=True)
         if delta >= 0x60:
             self.flag.is_carry = True
@@ -635,15 +635,15 @@ class CPU(object):
         s = (self.sp.get() + offset) & 0xFFFF
         self.flag.reset()
         if (offset >= 0):
-            self.flag.is_carry = (s < self.sp.get())
-            if (s & 0x0F00) < (self.sp.get() & 0x0F00):
-                self.flag.is_half_carry = True
+            self.check_carry(s, self.sp.get(False))
         else:
-            self.flag.is_carry = (s > self.sp.get())
-            if (s & 0x0F00) > (self.sp.get() & 0x0F00):
-                self.flag.is_half_carry = True
+            self.check_carry(self.sp.get(False), s)
         return s
-        
+    
+    def check_carry(self, big, small):
+        self.flag.is_carry = big < small
+        self.flag.is_half_carry = (big & 0x0F00) < (small & 0x0F00)
+
     def complement_carry_flag(self):
         # CCF/SCF
         self.flag.partial_reset(keep_is_zero=True, keep_is_carry=True)
