@@ -86,7 +86,6 @@ class AbstractDoubleRegister(AbstractRegister):
             self.cpu.cycles -= 2
 
 
-
 class DoubleRegister(AbstractDoubleRegister):
     
     def __init__(self, cpu, hi, lo, reset_value=0):
@@ -158,6 +157,23 @@ class FastDoubleRegister(AbstractDoubleRegister):
     def get_lo(self, use_cycles=True):
         return (self.value & 0xFF)
 
+    def inc(self, use_cycles=True):
+        self.value += 1
+        self.value &= 0xFFFF
+        if use_cycles:
+            self.cpu.cycles -= 2
+
+    def dec(self, use_cycles=True):
+        self.value -= 1
+        self.value &= 0xFFFF
+        if use_cycles:
+            self.cpu.cycles -= 2
+
+    def add(self, value, use_cycles=True):
+        self.value += value
+        self.value &= 0xFFFF
+        if use_cycles:
+            self.cpu.cycles -= 3
 
 # ------------------------------------------------------------------------------
 

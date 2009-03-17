@@ -1,4 +1,4 @@
-
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import Interrupt
 from pypy.lang.gameboy.cpu_register import Register, DoubleRegister,\
@@ -66,9 +66,10 @@ class CPU(object):
         self.ime          = False
         self.halted       = False
         self.cycles       = 0
-        self.instruction_counter        = 0
-        self.last_op_code               = -1
-        self.last_fetch_execute_op_code = -1
+        if not we_are_translated():
+            self.instruction_counter        = 0
+            self.last_op_code               = -1
+            self.last_fetch_execute_op_code = -1
         
     def reset_registers(self):
         self.a.reset()
@@ -204,13 +205,15 @@ class CPU(object):
 
     def fetch_execute(self):
         op_code = self.fetch()
-        self.last_fetch_execute_op_code = op_code
+        if not we_are_translated():
+            self.last_fetch_execute_op_code = op_code
         FETCH_EXECUTE_OP_CODES[op_code](self)
         
         
     def execute(self, op_code):
-        self.instruction_counter += 1
-        self.last_op_code = op_code
+        if not we_are_translated():
+            self.instruction_counter += 1
+            self.last_op_code = op_code
         OP_CODES[op_code](self)
         
         
