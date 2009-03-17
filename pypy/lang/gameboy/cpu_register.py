@@ -1,8 +1,6 @@
-from pypy.rlib.objectmodel import specialize
 # ---------------------------------------------------------------------------
 
 class AbstractRegister(object):
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         return 0xFF
 
@@ -18,21 +16,17 @@ class Register(AbstractRegister):
     def reset(self):
         self.value = self.reset_value
         
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         self.value = value & 0xFF
         if use_cycles:
             self.cpu.cycles -= 1
         
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         return self.value
     
-    @specialize.arg(-1)
     def add(self, value, use_cycles=True):
         self.set(self.get(use_cycles)+value, use_cycles)
         
-    @specialize.arg(-1)
     def sub(self, value, use_cycles=True):
         self.set(self.get(use_cycles)-value, use_cycles)
     
@@ -44,12 +38,10 @@ class AbstractDoubleRegister(AbstractRegister):
         self.cpu = cpu
         self.reset_value = reset_value
         
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         # 1 Cycle
         raise Exception("Not Implemented")
     
-    @specialize.arg(-1)
     def set_hi_lo(self, hi, lo, use_cycles=True):
         # 2 Cycles
         raise Exception("Not Implemented")
@@ -57,44 +49,36 @@ class AbstractDoubleRegister(AbstractRegister):
     def reset(self):
         self.set(self.reset_value, use_cycles=False)
             
-    @specialize.arg(-1)
     def set_hi(self, hi=0, use_cycles=True):
         # 1 Cycle
         raise Exception("Not Implemented")
     
-    @specialize.arg(-1)
     def set_lo(self, lo=0, use_cycles=True):
         # 1 Cycle
         raise Exception("Not Implemented")
         
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         # 0 Cycles TODO: Check entanglement of cycles in CPU class.
         raise Exception("Not Implemented")
     
-    @specialize.arg(-1)
     def get_hi(self, use_cycles=True):
         # 0 Cycles
         raise Exception("Not Implemented")
         
-    @specialize.arg(-1)
     def get_lo(self, use_cycles=True):
         # 0 Cycles
         raise Exception("Not Implemented")
     
-    @specialize.arg(-1)
     def inc(self, use_cycles=True):
         self.add(1, use_cycles)
         if use_cycles:
             self.cpu.cycles += 1
         
-    @specialize.arg(-1)
     def dec(self, use_cycles=True):
         self.add(-1, use_cycles)
         if use_cycles:
             self.cpu.cycles += 1
         
-    @specialize.arg(-1)
     def add(self, value, use_cycles=True):
         self.set(self.get(use_cycles) + value, use_cycles=use_cycles)
         if use_cycles:
@@ -108,7 +92,6 @@ class DoubleRegister(AbstractDoubleRegister):
         self.hi = hi
         self.lo = lo
         
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         value  = value & 0xFFFF
         self.set_hi(value >> 8, use_cycles)
@@ -116,28 +99,22 @@ class DoubleRegister(AbstractDoubleRegister):
         if use_cycles:
             self.cpu.cycles += 1
     
-    @specialize.arg(-1)
     def set_hi_lo(self, hi, lo, use_cycles=True):
         self.set_hi(hi, use_cycles)
         self.set_lo(lo, use_cycles)
             
-    @specialize.arg(-1)
     def set_hi(self, hi=0, use_cycles=True):
         self.hi.set(hi, use_cycles)
     
-    @specialize.arg(-1)
     def set_lo(self, lo=0, use_cycles=True):
         self.lo.set(lo, use_cycles)
         
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         return (self.hi.get(use_cycles)<<8) + self.lo.get(use_cycles)
     
-    @specialize.arg(-1)
     def get_hi(self, use_cycles=True):
         return self.hi.get(use_cycles)
         
-    @specialize.arg(-1)
     def get_lo(self, use_cycles=True):
         return self.lo.get(use_cycles)
     
@@ -148,13 +125,11 @@ class FastDoubleRegister(AbstractDoubleRegister):
         AbstractDoubleRegister.__init__(self, cpu, reset_value)
         self.value = 0x0000
 
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         self.value = value & 0xFFFF
         if use_cycles:
             self.cpu.cycles -= 1
     
-    @specialize.arg(-1)
     def set_hi_lo(self, hi, lo, use_cycles=True):
         hi &= 0xFF
         lo &= 0xFF
@@ -162,45 +137,37 @@ class FastDoubleRegister(AbstractDoubleRegister):
         if use_cycles:
             self.cpu.cycles -= 1
             
-    @specialize.arg(-1)
     def set_hi(self, hi=0, use_cycles=True):
         self.set_hi_lo(hi, self.get_lo(False), use_cycles)
         if use_cycles:
             self.cpu.cycles += 1
     
-    @specialize.arg(-1)
     def set_lo(self, lo=0, use_cycles=True):
         self.set_hi_lo(self.get_hi(False), lo, use_cycles)
         if use_cycles:
             self.cpu.cycles += 1
         
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         return self.value
     
-    @specialize.arg(-1)
     def get_hi(self, use_cycles=True):
         return (self.value >> 8)
         
-    @specialize.arg(-1)
     def get_lo(self, use_cycles=True):
         return (self.value & 0xFF)
 
-    @specialize.arg(-1)
     def inc(self, use_cycles=True):
         self.value += 1
         self.value &= 0xFFFF
         if use_cycles:
             self.cpu.cycles -= 2
 
-    @specialize.arg(-1)
     def dec(self, use_cycles=True):
         self.value -= 1
         self.value &= 0xFFFF
         if use_cycles:
             self.cpu.cycles -= 2
 
-    @specialize.arg(-1)
     def add(self, value, use_cycles=True):
         self.value += value
         self.value &= 0xFFFF
@@ -216,13 +183,11 @@ class ImmediatePseudoRegister(Register):
         self.cpu = cpu
         self.hl = hl
         
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         self.cpu.write(self.hl.get(use_cycles=use_cycles), value) # 2 + 0
         if not use_cycles:
             self.cpu.cycles += 2
     
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         if not use_cycles:
             self.cpu.cycles += 1
@@ -293,7 +258,6 @@ class FlagRegister(Register):
             self.s_flag = False
         self.lower = 0x00
             
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         value  = 0
         value += (int(self.is_carry) << 4)
@@ -302,7 +266,6 @@ class FlagRegister(Register):
         value += (int(self.is_zero) << 7)
         return value + self.lower
             
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         self.is_carry        = bool(value & (1 << 4))
         self.is_half_carry  = bool(value & (1 << 5))
