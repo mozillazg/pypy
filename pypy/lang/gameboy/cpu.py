@@ -1,4 +1,4 @@
-from pypy.rlib.objectmodel import we_are_translated, specialize
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import Interrupt
 from pypy.lang.gameboy.cpu_register import Register, DoubleRegister,\
@@ -236,7 +236,6 @@ class CPU(object):
         self.memory.write(address, data)
         self.cycles -= 2
 
-    @specialize.arg(-1)
     def fetch(self, use_cycles=True):
         # Fetching  1 cycle
         if use_cycles:
@@ -257,19 +256,16 @@ class CPU(object):
     def fetch_double_register(self, register):
         self.double_register_inverse_call(CPUFetchCaller(self), register)
 
-    @specialize.arg(-1)
     def push(self, data, use_cycles=True):
         # Stack, 2 cycles
         self.sp.dec(use_cycles) # 2 cycles
         self.memory.write(self.sp.get(use_cycles), data)
         
-    @specialize.arg(-1)
     def push_double_register(self, register, use_cycles=True):
         # PUSH rr 4 cycles
         self.push(register.get_hi(), use_cycles) # 2 cycles
         self.push(register.get_lo(), use_cycles) # 2 cycles
 
-    @specialize.arg(-1)
     def pop(self, use_cycles=True):
         # 1 cycle
         data = self.memory.read(self.sp.get())
@@ -287,7 +283,6 @@ class CPU(object):
         register.set_hi_lo(a, b) # 2 cycles
         self.cycles += 1
         
-    @specialize.arg(-1)
     def call(self, address, use_cycles=True):
         # 4 cycles
         self.push_double_register(self.pc, use_cycles)
@@ -745,11 +740,9 @@ class CPU(object):
 # Call Wrappers --------------------------------------------------------------
 
 class CallWrapper(object):   
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         raise Exception("called CallWrapper.get")
     
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         raise Exception("called CallWrapper.set")
     
@@ -757,11 +750,9 @@ class NumberCallWrapper(CallWrapper):
     def __init__(self, number):
         self.number = number
     
-    @specialize.arg(-1)
     def get(self, use_cycles=True):
         return self.number
     
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         raise Exception("called CallWrapper.set")
         
@@ -769,11 +760,9 @@ class RegisterCallWrapper(CallWrapper):
     def __init__(self, register):
         self.register = register
         
-    @specialize.arg(-1)
     def get(self,  use_cycles=True):
         return self.register.get(use_cycles)
     
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         return self.register.set(value, use_cycles)
 
@@ -782,11 +771,9 @@ class DoubleRegisterCallWrapper(CallWrapper):
     def __init__(self, register):
         self.register = register
         
-    @specialize.arg(-1)
     def get(self,  use_cycles=True):
         return self.register.get(use_cycles)
     
-    @specialize.arg(-1)
     def set(self, value, use_cycles=True):
         return self.register.set(value, use_cycles) 
     
@@ -795,7 +782,6 @@ class CPUPopCaller(CallWrapper):
     def __init__(self, cpu):
         self.cpu = cpu
         
-    @specialize.arg(-1)
     def get(self,  use_cycles=True):
         return self.cpu.pop(use_cycles)
     
@@ -804,7 +790,6 @@ class CPUFetchCaller(CallWrapper):
     def __init__(self, cpu):
         self.cpu = cpu
         
-    @specialize.arg(-1)
     def get(self,  use_cycles=True):
         return self.cpu.fetch(use_cycles)
 
