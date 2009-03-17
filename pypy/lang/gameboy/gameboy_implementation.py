@@ -22,6 +22,8 @@ if constants.USE_RSDL:
 else:
     delay = time.sleep
 
+FPS = 1<<6 # About 1<<6 to make sure we have a clean distrubution of about
+           # 1<<6 frames per second
 
 from pypy.rlib.objectmodel import specialize
 
@@ -65,13 +67,11 @@ class GameBoyImplementation(GameBoy):
         return 0
     
     def emulate_cycle(self):
-        X = 1<<6 # About 1<<6 to make sure we have a clean distrubution of about
-                 # 1<<6 frames per second
         self.handle_events()
-        # Come back to this cycle every 1/X seconds
-        self.emulate(constants.GAMEBOY_CLOCK / X)
+        # Come back to this cycle every 1/FPS seconds
+        self.emulate(constants.GAMEBOY_CLOCK / FPS)
         spent = int(time.time()) - self.sync_time
-        left = int(1000.0/X) + self.penalty - spent
+        left = int(1000.0/FPS) + self.penalty - spent
         if left > 0:
             delay(left)
             self.penalty = 0
