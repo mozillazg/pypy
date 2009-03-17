@@ -384,7 +384,6 @@ class TestLLTypeMallocRemoval(BaseMallocRemovalTest):
         graph = self.check(f, [int], [42], 42)
 
     def test_bogus_cast_pointer(self):
-        py.test.skip("XXX fix me")
         S = lltype.GcStruct("S", ('x', lltype.Signed))
         T = lltype.GcStruct("T", ('s', S), ('y', lltype.Signed))
         def f(x):
