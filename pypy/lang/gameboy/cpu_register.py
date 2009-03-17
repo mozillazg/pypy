@@ -33,19 +33,68 @@ class Register(AbstractRegister):
     
 #------------------------------------------------------------------------------
 
-class DoubleRegister(AbstractRegister):
+class AbstractDoubleRegister(AbstractRegister):
     
-    def __init__(self, cpu, hi, lo, reset_value=0):
-        #assert isinstance(cpu, CPU)
-        #assert isinstance(lo, Register)
-        #assert isinstance(hi, Register)
+    def __init__(self, cpu, reset_value=0):
         self.cpu = cpu
-        self.hi = hi
-        self.lo = lo
         self.reset_value = reset_value
         
     def set(self, value, use_cycles=True):
-        # previous = self.get(False)
+        # 1 Cycle
+        raise Exception("Not Implemented")
+    
+    def set_hi_lo(self, hi, lo, use_cycles=True):
+        # 2 Cycles
+        raise Exception("Not Implemented")
+            
+    def reset(self):
+        self.set(self.reset_value, use_cycles=False)
+            
+    def set_hi(self, hi=0, use_cycles=True):
+        # 1 Cycle
+        raise Exception("Not Implemented")
+    
+    def set_lo(self, lo=0, use_cycles=True):
+        # 1 Cycle
+        raise Exception("Not Implemented")
+        
+    def get(self, use_cycles=True):
+        # 0 Cycles TODO: Check entanglement of cycles in CPU class.
+        raise Exception("Not Implemented")
+    
+    def get_hi(self, use_cycles=True):
+        # 0 Cycles
+        raise Exception("Not Implemented")
+        
+    def get_lo(self, use_cycles=True):
+        # 0 Cycles
+        raise Exception("Not Implemented")
+    
+    def inc(self, use_cycles=True):
+        self.add(1, use_cycles)
+        if use_cycles:
+            self.cpu.cycles += 1
+        
+    def dec(self, use_cycles=True):
+        self.add(-1, use_cycles)
+        if use_cycles:
+            self.cpu.cycles += 1
+        
+    def add(self, value, use_cycles=True):
+        self.set(self.get(use_cycles) + value, use_cycles=use_cycles)
+        if use_cycles:
+            self.cpu.cycles -= 2
+
+
+
+class DoubleRegister(AbstractDoubleRegister):
+    
+    def __init__(self, cpu, hi, lo, reset_value=0):
+        AbstractDoubleRegister.__init__(self, cpu, reset_value)
+        self.hi = hi
+        self.lo = lo
+        
+    def set(self, value, use_cycles=True):
         value  = value & 0xFFFF
         self.set_hi(value >> 8, use_cycles)
         self.set_lo(value & 0xFF, use_cycles)
@@ -55,9 +104,6 @@ class DoubleRegister(AbstractRegister):
     def set_hi_lo(self, hi, lo, use_cycles=True):
         self.set_hi(hi, use_cycles)
         self.set_lo(lo, use_cycles)
-            
-    def reset(self):
-        self.set(self.reset_value, use_cycles=False)
             
     def set_hi(self, hi=0, use_cycles=True):
         self.hi.set(hi, use_cycles)
@@ -74,22 +120,45 @@ class DoubleRegister(AbstractRegister):
     def get_lo(self, use_cycles=True):
         return self.lo.get(use_cycles)
     
-    def inc(self, use_cycles=True):
-        self.set(self.get(use_cycles) +1, use_cycles=use_cycles)
-        if use_cycles:
-            self.cpu.cycles -= 1
-        
-    def dec(self, use_cycles=True):
-        self.set(self.get(use_cycles) - 1, use_cycles=use_cycles)
-        if use_cycles:
-            self.cpu.cycles -= 1
-        
-    def add(self, value, use_cycles=True):
-        self.set(self.get(use_cycles) + value, use_cycles=use_cycles)
-        if use_cycles:
-            self.cpu.cycles -= 2
-            
+
+class FastDoubleRegister(AbstractDoubleRegister):
     
+    def __init__(self, cpu, reset_value=0):
+        AbstractDoubleRegister.__init__(self, cpu, reset_value)
+        self.value = 0x0000
+
+    def set(self, value, use_cycles=True):
+        self.value = value & 0xFFFF
+        if use_cycles:
+            self.cpu.cycles -= 1
+    
+    def set_hi_lo(self, hi, lo, use_cycles=True):
+        hi &= 0xFF
+        lo &= 0xFF
+        self.set((hi << 8) + lo, use_cycles)
+        if use_cycles:
+            self.cpu.cycles -= 1
+            
+    def set_hi(self, hi=0, use_cycles=True):
+        self.set_hi_lo(hi, self.get_lo(False), use_cycles)
+        if use_cycles:
+            self.cpu.cycles += 1
+    
+    def set_lo(self, lo=0, use_cycles=True):
+        self.set_hi_lo(self.get_hi(False), lo, use_cycles)
+        if use_cycles:
+            self.cpu.cycles += 1
+        
+    def get(self, use_cycles=True):
+        return self.value
+    
+    def get_hi(self, use_cycles=True):
+        return (self.value >> 8)
+        
+    def get_lo(self, use_cycles=True):
+        return (self.value & 0xFF)
+
+
 # ------------------------------------------------------------------------------
 
 class ImmediatePseudoRegister(Register):

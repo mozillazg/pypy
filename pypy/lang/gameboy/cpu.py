@@ -1,7 +1,8 @@
 
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import Interrupt
-from pypy.lang.gameboy.cpu_register import Register, DoubleRegister, \
+from pypy.lang.gameboy.cpu_register import Register, DoubleRegister,\
+                                           FastDoubleRegister, \
                                            FlagRegister, ImmediatePseudoRegister
 
 # ---------------------------------------------------------------------------
@@ -50,8 +51,8 @@ class CPU(object):
         self.hl   = DoubleRegister(self, self.h, self.l, constants.RESET_HL)
         
         self.hli  = ImmediatePseudoRegister(self, self.hl)
-        self.pc   = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_PC)
-        self.sp   = DoubleRegister(self, Register(self), Register(self), reset_value=constants.RESET_SP)
+        self.pc   = FastDoubleRegister(self, reset_value=constants.RESET_PC)
+        self.sp   = FastDoubleRegister(self, reset_value=constants.RESET_SP)
         
         self.a    = Register(self, constants.RESET_A)
         self.flag = FlagRegister(self, constants.RESET_F)
