@@ -2402,6 +2402,7 @@ class TestAnnotateTestCase:
         a.build_types(fun, [])
         a.annotate_helper_method(A, "helper", [])
         assert a.bookkeeper.getdesc(A.helper).getuniquegraph()
+        assert a.bookkeeper.getdesc(A().helper).getuniquegraph()
 
     def test_chr_out_of_bounds(self):
         def g(n, max):
