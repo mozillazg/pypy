@@ -282,9 +282,6 @@ class W_XMLParserType(Wrappable):
                     rffi.cast(rffi.CHAR, namespace_separator))
             else:
                 self.itself = XML_ParserCreate(self.encoding)
-            if not self.itself:
-                raise OperationError(space.w_RuntimeError,
-                                     space.wrap('XML_ParserCreate failed'))
 
         self.handlers = [None] * NB_HANDLERS
 
@@ -464,7 +461,7 @@ information passed to the ExternalEntityRefHandler."""
         else:
             encoding = space.str_w(w_encoding)
 
-        parser = W_XMLParserType(encoding, '\0', space.newdict(),
+        parser = W_XMLParserType(encoding, 0, space.newdict(),
                                  _from_external_entity=True)
         parser.itself = XML_ExternalEntityParserCreate(self.itself,
                                                        context, encoding)
@@ -597,6 +594,10 @@ Return a new XML parser object."""
         w_intern = space.newdict()
 
     parser = W_XMLParserType(encoding, namespace_separator, w_intern)
+    if not parser.itself:
+        raise OperationError(space.w_RuntimeError,
+                             space.wrap('XML_ParserCreate failed'))
+
     global_storage.get_nonmoving_id(
         CallbackData(space, parser),
         id=rffi.cast(lltype.Signed, parser.itself))
