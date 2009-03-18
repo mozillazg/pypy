@@ -8,13 +8,35 @@ def av_eq(self, other):
 def av_hash(self):
     return self.sort_key()
 
+class BoxRetriever(object):
+    def __init__(self):
+        self.lists = [[]]
+        self.current = self.lists[0]
+
+    def flatten(self):
+        res = self.lists[0]
+        for i in range(1, len(self.lists)):
+            res.extend(self.lists[i])
+        return res
+
+    def extend(self, group):
+        while len(self.lists) <= group:
+            self.lists.append([])
+        self.current = self.lists[group]
+
+    def append(self, box):
+        self.current.append(box)
+
+    def reset(self):
+        self.current = self.lists[0]
+
 class SpecNode(object):
 
-    def expand_boxlist(self, instnode, newboxlist, start):
-        newboxlist.append((0, instnode.source))
+    def expand_boxlist(self, instnode, newboxes, start):
+        newboxes.append(instnode.source)
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
-        resultlist.append((0, valuebox))
+        resultlist.append(valuebox)
 
     def adapt_to(self, instnode, newboxlist, newspecnodes, num):
         instnode.escaped = True
@@ -33,15 +55,15 @@ class RedirectingSpecNode(SpecNode):
         self.redirect_to = specnode
         self.group = group
 
-    def expand_boxlist(self, instnode, newboxlist, start):
-        l = []
-        self.redirect_to.expand_boxlist(instnode, l, start)
-        newboxlist.extend([(self.group, e) for _, e in l])
+    def expand_boxlist(self, instnode, newboxes, start):
+        newboxes.extend(self.group)
+        self.redirect_to.expand_boxlist(instnode, newboxes, start)
+        newboxes.reset()
 
-    def extract_runtime_data(self, cpu, valuebox, resultlist):
-        l = []
-        self.redirect_to.extract_runtime_data(cpu, valuebox, l)
-        resultlist.extend([(self.group, e) for _, e in l])
+    def extract_runtime_data(self, cpu, valuebox, result):
+        result.extend(self.group)
+        self.redirect_to.extract_runtime_data(cpu, valuebox, result)
+        result.reset()
 
     def adapt_to(self, *args):
         self.redirect_to.adapt_to(*args)
@@ -167,11 +189,11 @@ class SpecNodeWithFields(FixedClassSpecNode):
 class VirtualizedOrDelayedSpecNode(SpecNodeWithFields):
     
     def expand_boxlist(self, instnode, newboxlist, start):
-        newboxlist.append((0, instnode.source))
+        newboxlist.append(instnode.source)
         SpecNodeWithFields.expand_boxlist(self, instnode, newboxlist, start)
 
     def extract_runtime_data(self, cpu, valuebox, resultlist):
-        resultlist.append((0, valuebox))
+        resultlist.append(valuebox)
         SpecNodeWithFields.extract_runtime_data(self, cpu, valuebox, resultlist)
 
     def adapt_to(self, instnode, newboxlist, newspecnodes, num):
@@ -183,21 +205,21 @@ class DelayedSpecNode(VirtualizedOrDelayedSpecNode):
 
     def expand_boxlist(self, instnode, newboxlist, oplist):
         from pypy.jit.metainterp.history import AbstractDescr
-        newboxlist.append((0, instnode.source))
+        newboxlist.append(instnode.source)
         for ofs, subspecnode in self.fields:
             assert isinstance(subspecnode, SpecNodeWithBox)
             if oplist is None:
                 instnode.cleanfields[ofs] = instnode.origfields[ofs]
-                newboxlist.append((0, instnode.curfields[ofs].source))
+                newboxlist.append(instnode.curfields[ofs].source)
             else:
                 if ofs in instnode.cleanfields:
-                    newboxlist.append((0, instnode.cleanfields[ofs].source))
+                    newboxlist.append(instnode.cleanfields[ofs].source)
                 else:
                     box = subspecnode.box.clonebox()
                     assert isinstance(ofs, AbstractDescr)
                     oplist.append(ResOperation(rop.GETFIELD_GC,
                        [instnode.source], box, ofs))
-                    newboxlist.append((0, box))
+                    newboxlist.append(box)
 
 class DelayedFixedListSpecNode(DelayedSpecNode):
 
@@ -206,7 +228,7 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
        from pypy.jit.metainterp.resoperation import rop
        from pypy.jit.metainterp.optimize import FixedList
         
-       newboxlist.append((0, instnode.source))
+       newboxlist.append(instnode.source)
        cls = self.known_class
        assert isinstance(cls, FixedList)
        arraydescr = cls.arraydescr
@@ -214,22 +236,22 @@ class DelayedFixedListSpecNode(DelayedSpecNode):
            assert isinstance(subspecnode, SpecNodeWithBox)
            if oplist is None:
                instnode.cleanfields[ofs] = instnode.origfields[ofs]
-               newboxlist.append((0, instnode.curfields[ofs].source))
+               newboxlist.append(instnode.curfields[ofs].source)
            else:
                if ofs in instnode.cleanfields:
-                   newboxlist.append((0, instnode.cleanfields[ofs].source))
+                   newboxlist.append(instnode.cleanfields[ofs].source)
                else:
                    box = subspecnode.box.clonebox()
                    oplist.append(ResOperation(rop.GETARRAYITEM_GC,
                       [instnode.source, ofs], box, arraydescr))
-                   newboxlist.append((0, box))
+                   newboxlist.append(box)
 
    def extract_runtime_data(self, cpu, valuebox, resultlist):
        from pypy.jit.metainterp.resoperation import rop
        from pypy.jit.metainterp.optimize import FixedList
        from pypy.jit.metainterp.history import check_descr
        
-       resultlist.append((0, valuebox))
+       resultlist.append(valuebox)
        cls = self.known_class
        assert isinstance(cls, FixedList)
        arraydescr = cls.arraydescr
@@ -293,7 +315,7 @@ class VirtualizableListSpecNode(VirtualizedSpecNode):
         from pypy.jit.metainterp.optimize import FixedList
         from pypy.jit.metainterp.history import check_descr
 
-        resultlist.append((0, valuebox))
+        resultlist.append(valuebox)
         cls = self.known_class
         assert isinstance(cls, FixedList)
         arraydescr = cls.arraydescr
