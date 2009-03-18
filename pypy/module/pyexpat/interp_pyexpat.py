@@ -122,6 +122,7 @@ for index, (name, params) in enumerate(HANDLERS.items()):
 
     converters = []
     for i, ARG in enumerate(params):
+        # Some custom argument conversions
         if name == "StartElementHandler" and i == 1:
             converters.append(
                 'w_arg%d = parser.w_convert_attributes(space, arg%d)' % (i, i))
@@ -133,6 +134,8 @@ for index, (name, params) in enumerate(HANDLERS.items()):
             converters.append(
                 'w_arg%d = parser.w_convert_charp_n(space, arg%d, arg%d)' % (i, i, i+1))
             del warg_names[i+1]
+
+        # the standard conversions
         elif ARG == rffi.CCHARP:
             converters.append(
                 'w_arg%d = parser.w_convert_charp(space, arg%d)' % (i, i))
@@ -177,15 +180,15 @@ for index, (name, params) in enumerate(HANDLERS.items()):
         space = userdata.space
         parser = userdata.parser
 
-        %(converters)s
-        %(pre_code)s
         try:
+            %(converters)s
+            %(pre_code)s
             w_result = space.call_function(parser.handlers[%(index)s], %(wargs)s)
+            %(post_code)s
         except OperationError, e:
             parser._exc_info = e
             XML_StopParser(parser.itself, XML_FALSE)
             return %(result_error)s
-        %(post_code)s
         return %(result_converter)s
     """ % locals())
 
@@ -195,10 +198,12 @@ for index, (name, params) in enumerate(HANDLERS.items()):
     callback_type = lltype.Ptr(lltype.FuncType(
         [rffi.VOIDP] + params, result_type))
     func = expat_external(c_name,
-                          [XML_Parser, callback_type], rffi.INT)
+                          [XML_Parser, callback_type], lltype.Void)
     SETTERS[name] = (index, func, handler)
 
 ENUMERATE_SETTERS = unrolling_iterable(SETTERS.items())
+
+# Declarations of external functions
 
 XML_ParserCreate = expat_external(
     'XML_ParserCreate', [rffi.CCHARP], XML_Parser)
@@ -275,6 +280,12 @@ class W_XMLParserType(Wrappable):
                 rffi.cast(lltype.Signed, self.itself))
 
     def UseForeignDTD(self, space, w_flag=True):
+        """UseForeignDTD([flag])
+Allows the application to provide an artificial external subset if one is
+not specified as part of the document instance.  This readily allows the
+use of a 'default' document type controlled by the application, while still
+getting the advantage of providing document type information to the parser.
+'flag' defaults to True if not provided."""
         flag = space.is_true(w_flag)
         XML_UseForeignDTD(self.itself, flag)
     UseForeignDTD.unwrap_spec = ['self', ObjSpace, W_Root]
@@ -383,6 +394,9 @@ class W_XMLParserType(Wrappable):
     # Parse methods
 
     def Parse(self, space, data, isfinal=True):
+        """Parse(data[, isfinal])
+Parse XML data.  `isfinal' should be true at end of input."""
+
         res = XML_Parse(self.itself, data, len(data), bool(isfinal))
         if self._exc_info:
             e = self._exc_info
@@ -396,6 +410,8 @@ class W_XMLParserType(Wrappable):
     Parse.unwrap_spec = ['self', ObjSpace, str, int]
 
     def ParseFile(self, space, w_file):
+        """ParseFile(file)
+Parse XML data from file-like object."""
         return
     ParseFile.unwrap_spec = ['self', ObjSpace, W_Root]
 
@@ -491,6 +507,8 @@ W_XMLParserType.typedef = TypeDef(
 
 def ParserCreate(space, w_encoding=None, w_namespace_separator=None,
                  w_intern=NoneNotWrapped):
+    """ParserCreate([encoding[, namespace_separator]]) -> parser
+Return a new XML parser object."""
     if space.is_w(w_encoding, space.w_None):
         encoding = None
     else:
@@ -522,6 +540,8 @@ def ParserCreate(space, w_encoding=None, w_namespace_separator=None,
 ParserCreate.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root]
 
 def ErrorString(space, code):
+    """ErrorString(errno) -> string
+Returns string error for given number."""
     return space.wrap(rffi.charp2str(XML_ErrorString(code)))
 ErrorString.unwrap_spec = [ObjSpace, int]
 
