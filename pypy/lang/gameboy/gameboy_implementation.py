@@ -12,10 +12,10 @@ from pypy.lang.gameboy.video_meta import TileDataWindow, SpriteWindow,\
 from pypy.lang.gameboy import constants
 import time
 
-show_metadata = False # Extends the window with windows visualizing meta-data
+show_metadata = True # Extends the window with windows visualizing meta-data
 
 if constants.USE_RSDL:
-    from pypy.rlib.rsdl import RSDL, RSDL_helper, RMix
+    from pypy.rlib.rsdl import RSDL, RSDL_helper #, RMix
     from pypy.rpython.lltypesystem import lltype, rffi
     delay = RSDL.Delay
     get_ticks = RSDL.GetTicks
@@ -260,18 +260,20 @@ class SoundDriverImplementation(SoundDriver):
         SoundDriver.__init__(self)
         self.enabled       = False
         self.sampleRate    = 44100
-        self.chunksize     = 1024
+        self.buffersize    = 512
         self.channelCount  = 2
         self.bitsPerSample = 4
+        self.sampleSize    = self.bitsPerSample * self.channelCount
         self.create_sound_driver()
 
     def create_sound_driver(self):
-        if RMix.OpenAudio(self.sampleRate, RSDL.AUDIO_U8, 
-                          self.channelCount, self.chunksize) != 0:
-            error = rffi.charp2str(RSDL.GetError())
-            raise Exception(error)
-        else:
-            self.enabled = True
+        #if RMix.OpenAudio(self.sampleRate, RSDL.AUDIO_U8, 
+        #                  self.channelCount, self.chunksize) != 0:
+        #    error = rffi.charp2str(RSDL.GetError())
+        #    raise Exception(error)
+        #else:
+        #    self.enabled = True
+        pass
     
     def start(self):
         pass
