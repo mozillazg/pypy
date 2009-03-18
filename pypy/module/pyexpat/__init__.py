@@ -16,3 +16,8 @@ class Module(MixedModule):
         'ErrorString':   'interp_pyexpat.ErrorString',
         }
 
+    for name in ['XML_PARAM_ENTITY_PARSING_NEVER',
+                 'XML_PARAM_ENTITY_PARSING_UNLESS_STANDALONE',
+                 'XML_PARAM_ENTITY_PARSING_ALWAYS']:
+        interpleveldefs[name] = 'space.wrap(interp_pyexpat.%s)' % (name,)
+
