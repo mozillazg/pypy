@@ -881,8 +881,9 @@ def test_0x98_0x9F_subtract_with_carry_a():
     cpu       = get_cpu()
     opCode    = 0x98
     value     = 0x12
-    registers = [cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.hli, cpu.a]
+    registers = ["b", "c", "d", "e", "h", "l", "hli", "a"]
     for register in registers:
+        register = cpu.__dict__[register]
         cpu.reset()
         cpu.a.set(value)
         register.set(value)
@@ -896,11 +897,11 @@ def test_0x98_0x9F_subtract_with_carry_a():
         cpu.flag.is_carry = True
         cpu.a.set(value+1)
         register.set(value)
-        numCycles= 1
+        numCycles = 1
         if register == cpu.hli:
             numCycles = 2
         cycle_test(cpu, opCode, numCycles)
-        if register == cpu.a:
+        if register is cpu.a:
             assert cpu.a.get() == 0xFF
         else:
             assert cpu.a.get() == 0
