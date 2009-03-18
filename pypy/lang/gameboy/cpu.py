@@ -316,11 +316,10 @@ class CPU(object):
     def add_hl(self, register):
         # 2 cycles
         data = register.get()
-        added = (self.hl.get() + data) # 1 cycle
+        old = self.hl.get()
+        new = old + data
         self.flag.partial_reset(keep_is_zero=True)
-        self.flag.is_half_carry = (((added ^ self.hl.get() ^ data) & 0x1000) != 0) 
-        self.flag.is_carry = (added >= 0x10000 or added < 0)
-        self.hl.set(added)
+        self.hl.set(self.double_register_check(old, new, False))
         self.cycles -= 1
         
     def add_a_with_carry(self, getCaller, setCaller=None):
@@ -361,17 +360,19 @@ class CPU(object):
         self.compare_a_simple(getCaller.get())
         
     def compare_a_simple(self, s):
-        s = (self.a.get() - s) & 0xFF
+        s = self.a.get() - s
         self.flag.reset()
         self.flag.is_subtraction = True
         self.flag.zero_check(s)
-        self.subtract_his_carry_finish(s)
+        self.check_carry(self.a.get(), s)
         self.cycles -= 1
             
-    def subtract_his_carry_finish(self, data):
-        self.flag.is_carry = (data > self.a.get())
-        self.flag.is_half_carry_compare(data, self.a.get())
-        
+    def check_carry(self, big, small):
+        # Overflow
+        self.flag.is_carry      = ((small & 0xFF) > (big & 0xFF))
+        # Overflow in lower byte
+        self.flag.is_half_carry = ((small & 0x0F) > (big & 0x0F))
+
     def and_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set(self.a.get() & getCaller.get())  # 1 cycle
@@ -399,12 +400,12 @@ class CPU(object):
 
     def inc(self, getCaller, setCaller):
         # 1 cycle
-        data = (getCaller.get() + 1) & 0xFF
+        data = getCaller.get() + 1
         self.dec_inis_carry_finish(data, setCaller, 0x00)
         
     def dec(self, getCaller, setCaller):
         # 1 cycle
-        data = (getCaller.get() - 1) & 0xFF
+        data = getCaller.get() - 1
         self.dec_inis_carry_finish(data, setCaller, 0x0F)
         self.flag.is_subtraction = True
      
@@ -453,7 +454,7 @@ class CPU(object):
         data = getCaller.get()
         s = (data >> 1)
         if self.flag.is_carry:
-            s +=  0x80
+            s += 0x80
         self.flags_and_setter_finish(s, data, setCaller) # 1 cycle
 
     def rotate_right_a(self):
@@ -490,7 +491,7 @@ class CPU(object):
     def swap(self, getCaller, setCaller):
         # 1 cycle
         data = getCaller.get()
-        s = ((data << 4) + (data >> 4)) & 0xFF
+        s = ((data & 0x0F) << 4) + ((data & 0xF0) >> 4)
         self.flag.zero_check(s, reset=True)
         setCaller.set(s)
 
@@ -627,16 +628,20 @@ class CPU(object):
     def get_fetchadded_sp(self):
         # 1 cycle
         offset = process_2s_complement(self.fetch()) # 1 cycle
-        s = (self.sp.get() + offset) & 0xFFFF
+        old = self.sp.get()
+        new = old + offset
+
         self.flag.reset()
-        if (offset >= 0):
-            self.check_carry(s, self.sp.get(False))
+        return self.double_register_check(old, new, offset < 0)
+
+    def double_register_check(self, old, new, subtraction):
+        if subtraction:
+            self.check_carry(old >> 8, new >> 8)
         else:
-            self.check_carry(self.sp.get(False), s)
-        return s
-    
-    def check_carry(self, big, small):
-        self.flag.is_carry = big < small
+            self.check_carry(new >> 8, old >> 8)
+        return new
+   
+    def check_half_carry(self, big, small):
         self.flag.is_half_carry = (big & 0x0F00) < (small & 0x0F00)
 
     def complement_carry_flag(self):

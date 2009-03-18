@@ -286,13 +286,3 @@ class FlagRegister(Register):
         if reset:
              self.reset()
         self.is_carry = ((value & compare_and) != 0)
-
-    def is_half_carry_compare(self, value, a, inverted=False):
-        if inverted:
-            self.is_half_carry = ((value & 0x0F) < (a & 0x0F))
-        else:
-            self.is_half_carry = ((value & 0x0F) > (a & 0x0F))
-            
-    #def is_carry_compare(self, a, b):
-    #    self.is_carry = (a < b)
-   
