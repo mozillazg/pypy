@@ -272,9 +272,8 @@ class CPU(object):
         self.double_register_inverse_call(CPUPopCaller(self), register)
         
     def double_register_inverse_call(self, getCaller, register):
-        b = getCaller.get() # 1 cycle
-        a = getCaller.get() # 1 cycle
-        register.set_hi_lo(a, b) # 2 cycles
+        register.set_lo(getCaller.get()) # 2 cycles
+        register.set_hi(getCaller.get()) # 2 cycles
         self.cycles += 1
         
     def call(self, address, use_cycles=True):
@@ -694,9 +693,8 @@ class CPU(object):
 
     def ret(self):
         # RET 4 cycles
-        lo = self.pop() # 1 cycle
-        hi = self.pop() # 1 cycle
-        self.pc.set_hi_lo(hi, lo) # 2 cycles
+        self.pop_double_register(self.pc)
+        self.cycles -= 1
 
     def conditional_return(self, cc):
         # RET cc 2,5 cycles
