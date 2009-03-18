@@ -6,7 +6,7 @@ class AbstractRegister(object):
 
 class Register(AbstractRegister):
     
-    def __init__(self, cpu, value=0):
+    def __init__(self, cpu, value=0x00):
        # assert isinstance(cpu, CPU)
         self.reset_value = self.value = value
         self.cpu = cpu
