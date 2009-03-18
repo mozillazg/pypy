@@ -394,7 +394,6 @@ class ImplicitVirtualizableTests:
         assert res == 2
 
     def test_pass_always_virtual_to_bridge(self):
-        py.test.skip("in-progress")
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n'],
                               virtualizables = ['frame'])
 
@@ -423,7 +422,6 @@ class ImplicitVirtualizableTests:
         assert res == 3
 
     def test_virtual_obj_on_always_virtual(self):
-        py.test.skip("in-progress")
         jitdriver = JitDriver(greens = [], reds = ['frame', 'n', 's'],
                               virtualizables = ['frame'])
 
@@ -452,7 +450,7 @@ class ImplicitVirtualizableTests:
                     s += frame.l[1].elem
                     frame.l[1] = Stuff(n)
                 n -= 1
-            return s
+            return (frame.l[0].elem << 16) + frame.l[1].elem
 
         res = self.meta_interp(f, [30], listops=True)
         self.check_loops(getfield_gc=0)

@@ -898,7 +898,11 @@ class OOMetaInterp(object):
         for i in range(len(mp.specnodes)):
             specnode = mp.specnodes[i]
             specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
-        return expanded_args
+        l = []
+        for i, (group, arg) in enumerate(expanded_args):
+            l.append((group, i, arg))
+        l.sort()
+        return [e[2] for e in l]
 
     def _initialize_from_start(self, original_boxes, num_green_args, *args):
         if args:
