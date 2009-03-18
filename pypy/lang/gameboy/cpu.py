@@ -1,4 +1,4 @@
-from pypy.rlib.objectmodel import we_are_translated
+
 from pypy.lang.gameboy import constants
 from pypy.lang.gameboy.interrupt import Interrupt
 from pypy.lang.gameboy.cpu_register import Register, DoubleRegister,\
@@ -66,10 +66,9 @@ class CPU(object):
         self.ime          = False
         self.halted       = False
         self.cycles       = 0
-        if not we_are_translated():
-            self.instruction_counter        = 0
-            self.last_op_code               = -1
-            self.last_fetch_execute_op_code = -1
+        self.instruction_counter        = 0
+        self.last_op_code               = -1
+        self.last_fetch_execute_op_code = -1
         
     def reset_registers(self):
         self.a.reset()
@@ -160,6 +159,12 @@ class CPU(object):
     def is_not_c(self):
         return not self.is_c()
     
+    def is_not_h(self):
+        return not self.is_h()
+
+    def is_not_n(self):
+        return not self.is_n()
+
     def set_rom(self, banks):
         self.rom = banks       
     
@@ -199,15 +204,13 @@ class CPU(object):
 
     def fetch_execute(self):
         op_code = self.fetch()
-        if not we_are_translated():
-            self.last_fetch_execute_op_code = op_code
+        self.last_fetch_execute_op_code = op_code
         FETCH_EXECUTE_OP_CODES[op_code](self)
         
         
     def execute(self, op_code):
-        if not we_are_translated():
-            self.instruction_counter += 1
-            self.last_op_code = op_code
+        self.instruction_counter += 1
+        self.last_op_code = op_code
         OP_CODES[op_code](self)
         
         
@@ -249,6 +252,7 @@ class CPU(object):
         
     def fetch_double_register(self, register):
         self.double_register_inverse_call(CPUFetchCaller(self), register)
+        self.cycles += 1
 
     def push(self, data, use_cycles=True):
         # Stack, 2 cycles
@@ -270,11 +274,11 @@ class CPU(object):
     def pop_double_register(self, register):
         # 3 cycles
         self.double_register_inverse_call(CPUPopCaller(self), register)
+        self.cycles += 1
         
     def double_register_inverse_call(self, getCaller, register):
         register.set_lo(getCaller.get()) # 2 cycles
         register.set_hi(getCaller.get()) # 2 cycles
-        self.cycles += 1
         
     def call(self, address, use_cycles=True):
         # 4 cycles
@@ -309,11 +313,11 @@ class CPU(object):
     def add_hl(self, register):
         # 2 cycles
         data = register.get()
-        old = self.hl.get()
-        new = old + data
+        added = (self.hl.get() + data) # 1 cycle
         self.flag.partial_reset(keep_is_zero=True)
-        self.double_register_check(old, new, False)
-        self.hl.set(new)
+        self.flag.is_half_carry = (((added ^ self.hl.get() ^ data) & 0x1000) != 0) 
+        self.flag.is_carry = (added >= 0x10000 or added < 0)
+        self.hl.set(added & 0xFFFF)
         self.cycles -= 1
         
     def add_a_with_carry(self, getCaller, setCaller=None):
@@ -335,7 +339,7 @@ class CPU(object):
         self.flag.is_half_carry = (((s ^ self.a.get() ^ data) & 0x10) != 0)
         self.flag.is_carry = (s > 0xFF or s < 0)
         self.flag.zero_check(s)
-        self.a.set(s)  # 1 cycle
+        self.a.set(s & 0xFF)  # 1 cycle
         
     def subtract_a(self, getCaller, setCaller=None):
         # 1 cycle
@@ -354,19 +358,17 @@ class CPU(object):
         self.compare_a_simple(getCaller.get())
         
     def compare_a_simple(self, s):
-        s = self.a.get() - s
+        s = (self.a.get() - s) & 0xFF
         self.flag.reset()
-        self.flag.zero_check(s)
         self.flag.is_subtraction = True
-        self.check_carry(self.a.get(), s)
+        self.flag.zero_check(s)
+        self.subtract_his_carry_finish(s)
         self.cycles -= 1
             
-    def check_carry(self, big, small):
-        # Overflow
-        self.flag.is_carry      = ((small & 0xFF) > (big & 0xFF))
-        # Overflow in lower byte
-        self.flag.is_half_carry = ((small & 0x0F) > (big & 0x0F))
-
+    def subtract_his_carry_finish(self, data):
+        self.flag.is_carry = (data > self.a.get())
+        self.flag.is_half_carry_compare(data, self.a.get())
+        
     def and_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set(self.a.get() & getCaller.get())  # 1 cycle
@@ -376,7 +378,7 @@ class CPU(object):
 
     def xor_a(self, getCaller, setCaller=None):
         # 1 cycle
-        self.a.set(self.a.get() ^ getCaller.get())  # 1 cycle
+        self.a.set( self.a.get() ^ getCaller.get())  # 1 cycle
         self.flag.reset()
         self.flag.zero_check(self.a.get())
 
@@ -396,12 +398,12 @@ class CPU(object):
 
     def inc(self, getCaller, setCaller):
         # 1 cycle
-        data = getCaller.get() + 1
+        data = (getCaller.get() + 1) & 0xFF
         self.dec_inis_carry_finish(data, setCaller, 0x00)
         
     def dec(self, getCaller, setCaller):
         # 1 cycle
-        data = getCaller.get() - 1
+        data = (getCaller.get() - 1) & 0xFF
         self.dec_inis_carry_finish(data, setCaller, 0x0F)
         self.flag.is_subtraction = True
      
@@ -450,7 +452,7 @@ class CPU(object):
         data = getCaller.get()
         s = (data >> 1)
         if self.flag.is_carry:
-            s += 0x80
+            s +=  0x80
         self.flags_and_setter_finish(s, data, setCaller) # 1 cycle
 
     def rotate_right_a(self):
@@ -487,7 +489,7 @@ class CPU(object):
     def swap(self, getCaller, setCaller):
         # 1 cycle
         data = getCaller.get()
-        s = ((data & 0x0F) << 4) + ((data & 0xF0) >> 4)
+        s = ((data << 4) + (data >> 4)) & 0xFF
         self.flag.reset()
         self.flag.zero_check(s)
         setCaller.set(s)
@@ -545,7 +547,7 @@ class CPU(object):
         
     def store_expanded_c_in_a(self):
         # LDH A,(C) 2 cycles
-        self.a.set(self.read(0xFF00 + self.c.get())) # 1+2 cycles
+        self.a.set(self.read(0xFF00 + self.bc.get_lo())) # 1+2 cycles
         
     def load_and_increment_a_hli(self):
         # loadAndIncrement A,(HL) 2 cycles
@@ -590,33 +592,27 @@ class CPU(object):
         self.flag.is_subtraction = True
         self.flag.is_half_carry = True
 
-    def decimal_adjust_byte(self, byte, flag):
-        # [1 1 X X] or [1 0 1 X] at least
-        # or flag set: [0 1 1 0]
-        return ((byte & 0xF) > 0x9 | flag) * 0x6
-
-    def negate_if_subtraction(self, value):
-        # Flip the sign-bit of the 8-bit value.
-        return (self.flag.is_subtraction * 0x80) ^ value
-
     def decimal_adjust_a(self):
         # DAA 1 cycle
         delta = 0
-
-        a = process_2s_complement(self.a.get())
-
-        delta |= self.decimal_adjust_byte(a >> 4, self.is_c()) << 4
-        delta |= self.decimal_adjust_byte(a,      self.is_h())
-
-        if (a < 0) and ((a & 0xF) > 0x9):
+        if self.is_h(): 
+            delta |= 0x06
+        if self.is_c():
             delta |= 0x60
-
-        self.a.add(self.negate_if_subtraction(delta)) # 1 cycle
-
+        if (self.a.get() & 0x0F) > 0x09:
+            delta |= 0x06
+            if (self.a.get() & 0xF0) > 0x80:
+                delta |= 0x60
+        if (self.a.get() & 0xF0) > 0x90:
+            delta |= 0x60
+        if not self.is_n():
+            self.a.set((self.a.get() + delta) & 0xFF) # 1 cycle
+        else:
+            self.a.set((self.a.get() - delta) & 0xFF) # 1 cycle
         self.flag.partial_reset(keep_is_subtraction=True)
-        self.flag.zero_check(self.a.get())
         if delta >= 0x60:
             self.flag.is_carry = True
+        self.flag.zero_check(self.a.get())
 
     def increment_sp_by_fetch(self):
         # ADD SP,nn 4 cycles
@@ -631,18 +627,18 @@ class CPU(object):
     def get_fetchadded_sp(self):
         # 1 cycle
         offset = process_2s_complement(self.fetch()) # 1 cycle
-        old = self.sp.get()
-        new = old + offset
-
+        s = (self.sp.get() + offset) & 0xFFFF
         self.flag.reset()
-        self.double_register_check(old, new, offset < 0)
-        return new
-
-    def double_register_check(self, old, new, subtraction):
-        if subtraction:
-            new, old = old, new
-        self.check_carry(new >> 8, old >> 8)
-   
+        if (offset >= 0):
+            self.flag.is_carry = (s < self.sp.get())
+            if (s & 0x0F00) < (self.sp.get() & 0x0F00):
+                self.flag.is_half_carry = True
+        else:
+            self.flag.is_carry = (s > self.sp.get())
+            if (s & 0x0F00) > (self.sp.get() & 0x0F00):
+                self.flag.is_half_carry = True
+        return s
+        
     def complement_carry_flag(self):
         # CCF/SCF
         self.flag.partial_reset(keep_is_zero=True, keep_is_carry=True)
@@ -693,8 +689,7 @@ class CPU(object):
 
     def ret(self):
         # RET 4 cycles
-        self.pop_double_register(self.pc)
-        self.cycles -= 1
+        self.double_register_inverse_call(CPUPopCaller(self), self.pc)
 
     def conditional_return(self, cc):
         # RET cc 2,5 cycles
