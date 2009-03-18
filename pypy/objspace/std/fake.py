@@ -105,7 +105,7 @@ def really_build_fake_type(cpy_type):
                                                     baseobjspace.W_Root,
                                                     argument.Arguments])
     if cpy_type.__base__ is not object:
-        assert cpy_type.__base__ is basestring
+        assert cpy_type.__base__ is basestring, cpy_type
         from pypy.objspace.std.basestringtype import basestring_typedef
         base = basestring_typedef
     else:
