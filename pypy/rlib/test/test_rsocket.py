@@ -179,6 +179,9 @@ def test_simple_tcp():
     s2.close()
 
 def test_simple_udp():
+    if cpy_socket.gethostname() == 'wyvern':
+       py.test.skip("this is currently hanging on wyvern")
+
     s1 = RSocket(AF_INET, SOCK_DGRAM)
     try_ports = [1023] + range(20000, 30000, 437)
     for port in try_ports:
