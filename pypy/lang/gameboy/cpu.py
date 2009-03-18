@@ -160,12 +160,6 @@ class CPU(object):
     def is_not_c(self):
         return not self.is_c()
     
-    def is_not_h(self):
-        return not self.is_h()
-
-    def is_not_n(self):
-        return not self.is_n()
-
     def set_rom(self, banks):
         self.rom = banks       
     
@@ -319,7 +313,8 @@ class CPU(object):
         old = self.hl.get()
         new = old + data
         self.flag.partial_reset(keep_is_zero=True)
-        self.hl.set(self.double_register_check(old, new, False))
+        self.double_register_check(old, new, False)
+        self.hl.set(new)
         self.cycles -= 1
         
     def add_a_with_carry(self, getCaller, setCaller=None):
@@ -596,27 +591,33 @@ class CPU(object):
         self.flag.is_subtraction = True
         self.flag.is_half_carry = True
 
+    def decimal_adjust_byte(self, byte, flag):
+        # [1 1 X X] or [1 0 1 X] at least
+        # or flag set: [0 1 1 0]
+        return ((byte & 0xF) > 0x9 | flag) * 0x6
+
+    def negate_if_subtraction(self, value):
+        # Flip the sign-bit of the 8-bit value.
+        return (self.flag.is_subtraction * 0x80) ^ value
+
     def decimal_adjust_a(self):
         # DAA 1 cycle
         delta = 0
-        if self.is_h(): 
-            delta |= 0x06
-        if self.is_c():
+
+        a = process_2s_complement(self.a.get())
+
+        delta |= self.decimal_adjust_byte(a >> 4, self.is_c()) << 4
+        delta |= self.decimal_adjust_byte(a,      self.is_h())
+
+        if (a < 0) and ((a & 0xF) > 0x9):
             delta |= 0x60
-        if (self.a.get() & 0x0F) > 0x09:
-            delta |= 0x06
-            if (self.a.get() & 0xF0) > 0x80:
-                delta |= 0x60
-        if (self.a.get() & 0xF0) > 0x90:
-            delta |= 0x60
-        if not self.is_n():
-            self.a.add(delta) # 1 cycle
-        else:
-            self.a.add(-delta) # 1 cycle
+
+        self.a.add(self.negate_if_subtraction(delta)) # 1 cycle
+
         self.flag.partial_reset(keep_is_subtraction=True)
+        self.flag.zero_check(self.a.get())
         if delta >= 0x60:
             self.flag.is_carry = True
-        self.flag.zero_check(self.a.get())
 
     def increment_sp_by_fetch(self):
         # ADD SP,nn 4 cycles
@@ -635,18 +636,14 @@ class CPU(object):
         new = old + offset
 
         self.flag.reset()
-        return self.double_register_check(old, new, offset < 0)
+        self.double_register_check(old, new, offset < 0)
+        return new
 
     def double_register_check(self, old, new, subtraction):
         if subtraction:
-            self.check_carry(old >> 8, new >> 8)
-        else:
-            self.check_carry(new >> 8, old >> 8)
-        return new
+            new, old = old, new
+        self.check_carry(new >> 8, old >> 8)
    
-    def check_half_carry(self, big, small):
-        self.flag.is_half_carry = (big & 0x0F00) < (small & 0x0F00)
-
     def complement_carry_flag(self):
         # CCF/SCF
         self.flag.partial_reset(keep_is_zero=True, keep_is_carry=True)
