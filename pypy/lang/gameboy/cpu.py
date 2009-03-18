@@ -362,8 +362,8 @@ class CPU(object):
     def compare_a_simple(self, s):
         s = self.a.get() - s
         self.flag.reset()
-        self.flag.is_subtraction = True
         self.flag.zero_check(s)
+        self.flag.is_subtraction = True
         self.check_carry(self.a.get(), s)
         self.cycles -= 1
             
@@ -382,13 +382,15 @@ class CPU(object):
 
     def xor_a(self, getCaller, setCaller=None):
         # 1 cycle
-        self.a.set( self.a.get() ^ getCaller.get())  # 1 cycle
-        self.flag.zero_check(self.a.get(), reset=True)
+        self.a.set(self.a.get() ^ getCaller.get())  # 1 cycle
+        self.flag.reset()
+        self.flag.zero_check(self.a.get())
 
     def or_a(self, getCaller, setCaller=None):
         # 1 cycle
         self.a.set(self.a.get() | getCaller.get())  # 1 cycle
-        self.flag.zero_check(self.a.get(), reset=True)
+        self.flag.reset()
+        self.flag.zero_check(self.a.get())
 
     def inc_double_register(self, register):
         # INC rr
@@ -492,7 +494,8 @@ class CPU(object):
         # 1 cycle
         data = getCaller.get()
         s = ((data & 0x0F) << 4) + ((data & 0xF0) >> 4)
-        self.flag.zero_check(s, reset=True)
+        self.flag.reset()
+        self.flag.zero_check(s)
         setCaller.set(s)
 
     def test_bit(self, getCaller, setCaller, n):

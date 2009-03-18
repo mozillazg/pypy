@@ -239,8 +239,14 @@ class FlagRegister(Register):
         self.reset()
          
     def reset(self):
-        self.partial_reset()
-        
+        self.is_zero        = False
+        self.is_subtraction = False
+        self.is_half_carry  = False
+        self.is_carry       = False
+        self.p_flag         = False
+        self.s_flag         = False
+        self.lower          = 0x00
+
     def partial_reset(self, keep_is_zero=False, keep_is_subtraction=False, 
                       keep_is_half_carry=False, keep_is_carry=False,\
                 keep_p=False, keep_s=False):
@@ -260,14 +266,14 @@ class FlagRegister(Register):
             
     def get(self, use_cycles=True):
         value  = 0
-        value += (int(self.is_carry) << 4)
-        value += (int(self.is_half_carry) << 5)
-        value += (int(self.is_subtraction) << 6)
-        value += (int(self.is_zero) << 7)
+        value += (int(self.is_carry)        << 4)
+        value += (int(self.is_half_carry)   << 5)
+        value += (int(self.is_subtraction)  << 6)
+        value += (int(self.is_zero)         << 7)
         return value + self.lower
             
     def set(self, value, use_cycles=True):
-        self.is_carry        = bool(value & (1 << 4))
+        self.is_carry       = bool(value & (1 << 4))
         self.is_half_carry  = bool(value & (1 << 5))
         self.is_subtraction = bool(value & (1 << 6))
         self.is_zero        = bool(value & (1 << 7))
@@ -275,12 +281,8 @@ class FlagRegister(Register):
         if use_cycles:
             self.cpu.cycles -= 1
         
-    def zero_check(self, a, reset=False):
-        if reset:
-             self.reset()
-        if isinstance(a, (Register)):
-            a = a.get()
-        self.is_zero = ((a & 0xFF) == 0)
+    def zero_check(self, value):
+        self.is_zero = ((value & 0xFF) == 0)
             
     def is_carry_compare(self, value, compare_and=0x01, reset=False):
         if reset:
