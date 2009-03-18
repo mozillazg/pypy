@@ -6,7 +6,7 @@ from pypy.jit.metainterp.specnode import (FixedClassSpecNode,
      VirtualInstanceSpecNode, VirtualizableSpecNode, NotSpecNode,
      DelayedSpecNode, SpecNodeWithBox, DelayedFixedListSpecNode,
      VirtualFixedListSpecNode, MatchEverythingSpecNode,
-     VirtualizableListSpecNode, av_eq, av_hash)
+     VirtualizableListSpecNode, av_eq, av_hash, BoxRetriever)
 from pypy.jit.metainterp import executor
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -503,19 +503,13 @@ class PerfectSpecializer(object):
 
     def expanded_version_of(self, boxlist, oplist):
         # oplist is None means at the start
-        newboxlist = []
+        newboxes = BoxRetriever()
         assert len(boxlist) == len(self.specnodes)
         for i in range(len(boxlist)):
             box = boxlist[i]
             specnode = self.specnodes[i]
-            specnode.expand_boxlist(self.nodes[box], newboxlist, oplist)
-        l = []
-        for i, (group, arg) in enumerate(newboxlist):
-            l.append((group, i, arg))
-        l.sort()
-        return [e[2] for e in l]
-
-        return newboxlist
+            specnode.expand_boxlist(self.nodes[box], newboxes, oplist)
+        return newboxes.flatten()
 
     def deal_with_boxes(self, boxes):
         storage = AllocationStorage()
@@ -836,14 +830,13 @@ class PerfectSpecializer(object):
         old_mp = old_operations[0]
         jump_op = self.loop.operations[-1]
         self.specnodes = old_mp.specnodes
-        newboxlist = []
+        newboxlist = BoxRetriever()
         extensions = []
         for i in range(len(old_mp.specnodes)):
             old_specnode = old_mp.specnodes[i]
             new_instnode = self.nodes[jump_op.args[i]]
             old_specnode.adapt_to(new_instnode, newboxlist, extensions, num)
-        newboxlist = [i for _, i in newboxlist]
-        return newboxlist, extensions
+        return newboxlist.flatten(), extensions
 
 class Chooser(object):
     def __init__(self, boxes_from_frame, allocated_boxes, allocated_lists):

@@ -17,6 +17,7 @@ from pypy.jit.metainterp.heaptracker import (get_vtable_for_gcstruct,
 from pypy.jit.metainterp import codewriter, optimize, executor
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
+from pypy.jit.metainterp.specnode import BoxRetriever
 
 # ____________________________________________________________
 
@@ -894,15 +895,11 @@ class OOMetaInterp(object):
         if mp.specnodes is None:     # it is None only for tests
             return args
         assert len(mp.specnodes) == len(args)
-        expanded_args = []
+        expanded_args = BoxRetriever()
         for i in range(len(mp.specnodes)):
             specnode = mp.specnodes[i]
             specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
-        l = []
-        for i, (group, arg) in enumerate(expanded_args):
-            l.append((group, i, arg))
-        l.sort()
-        return [e[2] for e in l]
+        return expanded_args.flatten()
 
     def _initialize_from_start(self, original_boxes, num_green_args, *args):
         if args:
