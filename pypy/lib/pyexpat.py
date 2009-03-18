@@ -427,7 +427,7 @@ class XMLParserType(object):
                 flag = XML_TRUE
             else:
                 flag = XML_FALSE
-            XML_SetParamEntityParsing(self.itself, flag)
+            XML_UseForeignDTD(self.itself, flag)
 
     def __getattr__(self, name):
         if name == 'buffer_text':
