@@ -27,10 +27,10 @@ class GameBoyProfiler(GameBoy):
         self.video_driver  = VideoDriver()
         self.sound_driver  = SoundDriver()
     
-    def mainLoop(self):
+    def mainLoop(self, execution_seconds):
         self.reset()
         self.is_running = True
-        for i in range(600 * FPS):
+        for i in range(execution_seconds * FPS):
             self.emulate_cycle()
     
     def emulate_cycle(self):
