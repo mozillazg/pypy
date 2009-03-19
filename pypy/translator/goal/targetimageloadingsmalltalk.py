@@ -28,18 +28,14 @@ def tinyBenchmarks(space, image_name):
 def run_benchmarks(interp):
     counter = 0
     try:
-        while True:
-            counter += 1
-            interp.step()
-            if counter == 100000:
-                counter = 0
-                os.write(2, '#')
+        interp.loop()
     except interpreter.ReturnFromTopLevel, e:
         w_result = e.object
 
-    assert isinstance(w_result, model.W_BytesObject)
-    print w_result.as_string()
-    return 0
+        assert isinstance(w_result, model.W_BytesObject)
+        print w_result.as_string()
+        return 0
+    return -1
 
 from pypy.lang.smalltalk import objspace
 space = objspace.ObjSpace()
