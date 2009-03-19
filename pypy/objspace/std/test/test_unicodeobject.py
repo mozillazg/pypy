@@ -415,7 +415,7 @@ class AppTestUnicodeString:
         import sys
         if sys.maxint > (1 << 32):
             skip("Wrong platform")
-        raises(OverflowError, u't\tt\t'.expandtabs, sys.maxint)
+        raises((OverflowError, MemoryError), u't\tt\t'.expandtabs, sys.maxint)
         
     def test_translate(self):
         assert u'bbbc' == u'abababc'.translate({ord('a'):None})
