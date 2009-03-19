@@ -632,9 +632,10 @@ else:
         self.initcode.append1('%s = space.wrap(%s)' % (name, functionname))
         return name
 
-    def nameof_instancemethod(self, meth):
-        if meth.im_func.func_globals is None:
-            # built-in methods (bound or not) on top of PyPy
+    def nameof_instancemethod(self, meth):        
+        if (not hasattr(meth.im_func, 'func_globals') or
+            meth.im_func.func_globals is None):
+            # built-in methods (bound or not) on top of PyPy or possibly 2.4
             return self.nameof_builtin_method(meth)
         if meth.im_self is None:
             # no error checking here
