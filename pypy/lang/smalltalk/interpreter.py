@@ -38,8 +38,7 @@ class Interpreter(object):
 
     def interpret(self):
         try:
-            while True:
-                self.step()
+            self.loop()
         except ReturnFromTopLevel, e:
             return e.object
 
@@ -51,38 +50,44 @@ class Interpreter(object):
         return option.prim_trace
 
     def step(self):
+        """NOT_RPYTHON: only for testing"""
         s_active_context = self.s_active_context()
         next = s_active_context.getNextBytecode()
+        bytecodeimpl = BYTECODE_TABLE[next]
+
+        if self.should_trace():
+            if self._w_last_active_context != self.w_active_context():
+                cnt = 0
+                p = self.w_active_context()
+                # AK make method
+                while not p.is_same_object(self.space.w_nil):
+                    cnt += 1
+                                              # Do not update the context
+                                              # for this action.
+                    p = p.as_context_get_shadow(self.space).w_sender()
+                self._last_indent = "  " * cnt
+                self._w_last_active_context = self.w_active_context()
+
+            print "%sStack=%s" % (
+                self._last_indent,
+                repr(s_active_context.stack()),)
+            print "%sBytecode at %d (%d:%s):" % (
+                self._last_indent,
+                s_active_context.pc(),
+                next, bytecodeimpl.__name__,)
+
+        bytecodeimpl(s_active_context, self)
+
+    def loop(self):
         # we_are_translated returns false on top of CPython and true when
         # translating the interpreter
         if not objectmodel.we_are_translated():
-            bytecodeimpl = BYTECODE_TABLE[next]
-
-            if self.should_trace():
-                if self._w_last_active_context != self.w_active_context():
-                    cnt = 0
-                    p = self.w_active_context()
-                    # AK make method
-                    while not p.is_same_object(self.space.w_nil):
-                        cnt += 1
-                                                  # Do not update the context
-                                                  # for this action.
-                        p = p.as_context_get_shadow(self.space).w_sender()
-                    self._last_indent = "  " * cnt
-                    self._w_last_active_context = self.w_active_context()
-
-                print "%sStack=%s" % (
-                    self._last_indent,
-                    repr(s_active_context.stack()),)
-                print "%sBytecode at %d (%d:%s):" % (
-                    self._last_indent,
-                    s_active_context.pc(),
-                    next, bytecodeimpl.__name__,)
-
-            bytecodeimpl(s_active_context, self)
-
+            while True:
+                self.step()
         else:
-            bytecode_dispatch_translated(self, s_active_context, next)
+            s_active_context = self.s_active_context()
+            next = s_active_context.getNextBytecode()
+            bytecode_loop_translated(self, s_active_context, next)
 
         
 class ReturnFromTopLevel(Exception):
@@ -550,7 +555,8 @@ def make_bytecode_dispatch_translated():
     # interpreter, the bytecode dispatching is not implemented as a
     # list lookup and an indirect call but as a switch.
 
-    code = ["def bytecode_dispatch_translated(self, context, bytecode):"]
+    code = ["def bytecode_loop_translated(self, context, bytecode):"]
+    code.append("    while 1:")
     prefix = ""
     for entry in BYTECODE_RANGES:
         if len(entry) == 2:
@@ -559,14 +565,16 @@ def make_bytecode_dispatch_translated():
             numbers = range(entry[0], entry[1]+1)
         cond = " or ".join(["bytecode == %s" % (i, )
                                 for i in numbers])
-        code.append("    %sif %s:" % (prefix, cond, ))
-        code.append("        context.%s(self)" % (entry[-1], ))
+        code.append("        %sif %s:" % (prefix, cond, ))
+        code.append("            context.%s(self)" % (entry[-1], ))
+        code.append("            context = self.s_active_context()")
+        code.append("            bytecode = context.getNextBytecode()")
         prefix = "el"
-    code.append("bytecode_dispatch_translated._always_inline_ = True")
+    code.append("bytecode_loop_translated._always_inline_ = True")
     source = py.code.Source("\n".join(code))
     print source
     miniglob = {}
     exec source.compile() in miniglob
-    return miniglob["bytecode_dispatch_translated"]
+    return miniglob["bytecode_loop_translated"]
     
-bytecode_dispatch_translated = make_bytecode_dispatch_translated()
+bytecode_loop_translated = make_bytecode_dispatch_translated()
