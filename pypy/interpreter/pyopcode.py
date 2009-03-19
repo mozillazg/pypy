@@ -65,6 +65,9 @@ class __extend__(pyframe.PyFrame):
     """A PyFrame that knows about interpretation of standard Python opcodes
     minus the ones related to nested scopes."""
     
+    # for logbytecode:
+    last_opcode = -1
+    
     ### opcode dispatch ###
 
     def dispatch(self, pycode, next_instr, ec):
@@ -174,7 +177,13 @@ class __extend__(pyframe.PyFrame):
             opcode = ord(co_code[next_instr])
             next_instr += 1
             if space.config.objspace.logbytecodes:
-                space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
+                space.bytecodecounts[opcode] += 1
+                try:
+                    probs = space.bytecodetransitioncount[self.last_opcode]
+                except KeyError:
+                    probs = space.bytecodetransitioncount[self.last_opcode] = {}
+                probs[opcode] = probs.get(opcode, 0) + 1
+                self.last_opcode = opcode
 
             if opcode >= HAVE_ARGUMENT:
                 lo = ord(co_code[next_instr])
