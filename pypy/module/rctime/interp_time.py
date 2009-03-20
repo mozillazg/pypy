@@ -50,7 +50,7 @@ for k, v in platform.configure(CConfig).items():
     setattr(cConfig, k, v)
 cConfig.tm.__name__ = "_tm"
 
-def external(name, args, result):
+def external(name, args, result, eci=CConfig._compilation_info_):
     if _WIN and rffi.sizeof(rffi.TIME_T) == 8:
         # Recent Microsoft compilers use 64bit time_t and
         # the corresponding functions are named differently
@@ -58,7 +58,7 @@ def external(name, args, result):
             or result in (rffi.TIME_T, rffi.TIME_TP)):
             name = '_' + name + '64'
     return rffi.llexternal(name, args, result,
-                           compilation_info=CConfig._compilation_info_,
+                           compilation_info=eci,
                            calling_conv=calling_conv,
                            threadsafe=False)
 
@@ -83,6 +83,23 @@ c_asctime = external('asctime', [TM_P], rffi.CCHARP)
 c_localtime = external('localtime', [rffi.TIME_TP], TM_P)
 if _POSIX:
     c_tzset = external('tzset', [], lltype.Void)
+if _WIN:
+    win_eci = ExternalCompilationInfo(
+        includes = ["time.h"],
+        separate_module_sources = [ """
+        long get_timezone() { return timezone; }
+        int get_daylight() { return daylight; }
+        char** get_tzname() { return tzname; }
+        """
+        ],
+        export_symbols = ['_tzset', 'get_timezone', 'get_daylight', 'get_tzname'],
+        )
+    # Ensure sure that we use _tzset() and timezone from the same C Runtime.
+    c_tzset = external('_tzset', [], lltype.Void, win_eci)
+    c_get_timezone = external('get_timezone', [], rffi.LONG, win_eci)
+    c_get_daylight = external('get_daylight', [], rffi.INT, win_eci)
+    c_get_tzname = external('get_tzname', [], rffi.CCHARPP, win_eci)
+
 c_strftime = external('strftime', [rffi.CCHARP, rffi.SIZE_T, rffi.CCHARP, TM_P],
                       rffi.SIZE_T)
 
@@ -92,21 +109,15 @@ def _init_accept2dyear():
 def _init_timezone():
     timezone = daylight = altzone = 0
     tzname = ["", ""]
-    
-    # pypy cant' use in_dll to access global exported variables
-    # so we can't compute these attributes
 
-    # if _WIN:
-    #     cdll.msvcrt._tzset()
-    # 
-    #     timezone = c_long.in_dll(cdll.msvcrt, "_timezone").value
-    #     if hasattr(cdll.msvcrt, "altzone"):
-    #         altzone = c_long.in_dll(cdll.msvcrt, "altzone").value
-    #     else:
-    #         altzone = timezone - 3600
-    #     daylight = c_long.in_dll(cdll.msvcrt, "_daylight").value
-    #     tzname = _tzname_t.in_dll(cdll.msvcrt, "_tzname")
-    #     tzname = (tzname.tzname_0, tzname.tzname_1)
+    if _WIN:
+         c_tzset()
+         timezone = c_get_timezone()
+         altzone = timezone - 3600
+         daylight = c_get_daylight()
+         tzname_ptr = c_get_tzname()
+         tzname = rffi.charp2str(tzname_ptr[0]), rffi.charp2str(tzname_ptr[1])
+
     if _POSIX:
         YEAR = (365 * 24 + 6) * 3600
 
