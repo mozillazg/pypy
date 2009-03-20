@@ -86,27 +86,34 @@ if _POSIX:
 if _WIN:
     win_eci = ExternalCompilationInfo(
         includes = ["time.h"],
-        separate_module_sources = [ """
-        long get_timezone() { return timezone; }
-        int get_daylight() { return daylight; }
-        char** get_tzname() { return tzname; }
-        """
-        ],
-        export_symbols = ['_tzset', 'get_timezone', 'get_daylight', 'get_tzname'],
+        post_include_bits = ["long pypy_get_timezone();",
+                             "int pypy_get_daylight();",
+                             "char** pypy_get_tzname();"],
+        separate_module_sources = ["""
+        long pypy_get_timezone() { return timezone; }
+        int pypy_get_daylight() { return daylight; }
+        char** pypy_get_tzname() { return tzname; }
+        """],
+        export_symbols = [
+        '_tzset', 'pypy_get_timezone', 'pypy_get_daylight', 'pypy_get_tzname'],
         )
     # Ensure sure that we use _tzset() and timezone from the same C Runtime.
     c_tzset = external('_tzset', [], lltype.Void, win_eci)
-    c_get_timezone = external('get_timezone', [], rffi.LONG, win_eci)
-    c_get_daylight = external('get_daylight', [], rffi.INT, win_eci)
-    c_get_tzname = external('get_tzname', [], rffi.CCHARPP, win_eci)
+    c_get_timezone = external('pypy_get_timezone', [], rffi.LONG, win_eci)
+    c_get_daylight = external('pypy_get_daylight', [], rffi.INT, win_eci)
+    c_get_tzname = external('pypy_get_tzname', [], rffi.CCHARPP, win_eci)
 
 c_strftime = external('strftime', [rffi.CCHARP, rffi.SIZE_T, rffi.CCHARP, TM_P],
                       rffi.SIZE_T)
 
-def _init_accept2dyear():
-    return (1, 0)[bool(os.getenv("PYTHONY2K"))]
+def _init_accept2dyear(space):
+    if os.environ.get("PYTHONY2K"):
+        accept2dyear = 0
+    else:
+        accept2dyear = 1
+    _set_module_object(space, "accept2dyear", space.wrap(accept2dyear))
 
-def _init_timezone():
+def _init_timezone(space):
     timezone = daylight = altzone = 0
     tzname = ["", ""]
 
@@ -149,7 +156,11 @@ def _init_timezone():
             daylight = int(janzone != julyzone)
             tzname = [janname, julyname]
 
-    return timezone, daylight, tzname, altzone
+    _set_module_object(space, "timezone", space.wrap(timezone))
+    _set_module_object(space, 'daylight', space.wrap(daylight))
+    tzname_w = [space.wrap(tzname[0]), space.wrap(tzname[1])] 
+    _set_module_object(space, 'tzname', space.newtuple(tzname_w))
+    _set_module_object(space, 'altzone', space.wrap(altzone))
 
 def _get_error_msg():
     errno = rposix.get_errno()
@@ -402,12 +413,7 @@ if _POSIX:
         c_tzset()
         
         # reset timezone, altzone, daylight and tzname
-        timezone, daylight, tzname, altzone = _init_timezone()
-        _set_module_object(space, "timezone", space.wrap(timezone))
-        _set_module_object(space, 'daylight', space.wrap(daylight))
-        tzname_w = [space.wrap(tzname[0]), space.wrap(tzname[1])] 
-        _set_module_object(space, 'tzname', space.newtuple(tzname_w))
-        _set_module_object(space, 'altzone', space.wrap(altzone))
+        timezone, daylight, tzname, altzone = _init_timezone(space)
     tzset.unwrap_spec = [ObjSpace]
 
 def strftime(space, format, w_tup=None):
