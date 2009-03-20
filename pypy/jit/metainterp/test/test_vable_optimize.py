@@ -59,8 +59,10 @@ xysub_vtable.name[5] = '\x00'
 heaptracker.set_testing_vtable_for_gcstruct(XYSUB, xysub_vtable)
 
 # ____________________________________________________________
+ofs_node = runner.CPU.fielddescrof(XY, 'node')
 
 xy_desc = VirtualizableDesc(cpu, XY, XY)
+xy_desc.fields = [ofs_node]
 
 # ____________________________________________________________
 
