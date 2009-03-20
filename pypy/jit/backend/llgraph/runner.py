@@ -135,7 +135,7 @@ class CPU(object):
                                                                x))
             if op.jump_target is not None:
                 loop_target, loop_target_index = \
-                                           self.jumptarget2loop[op.jump_target]
+                         self.jumptarget2loop[op.jump_target.operations[0]]
                 llimpl.compile_add_jump_target(c, loop_target,
                                                   loop_target_index)
             if op.is_guard():
@@ -144,7 +144,7 @@ class CPU(object):
                 for box in op.liveboxes:
                     assert isinstance(box, history.Box)
                     llimpl.compile_add_livebox(c, var2index[box])
-            if op.opnum == rop.MERGE_POINT:
+            if op.opnum == rop.MERGE_POINT or op.opnum == rop.CATCH:
                 self.jumptarget2loop[op] = c, i
         if from_guard is not None:
             llimpl.compile_from_guard(c, from_guard._compiled,
