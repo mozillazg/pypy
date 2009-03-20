@@ -38,7 +38,7 @@ class Module(MixedModule):
         Module.interpleveldefs['timezone'] = 'space.wrap(%r)' % timezone
         Module.interpleveldefs['daylight'] = 'space.wrap(%r)' % daylight
         Module.interpleveldefs['tzname'] = \
-            'space.newlist([space.wrap(%r), space.wrap(%r)])' % tuple(tzname)
+            'space.newtuple([space.wrap(%r), space.wrap(%r)])' % tuple(tzname)
         Module.interpleveldefs['altzone'] = 'space.wrap(%r)' % altzone
         super(Module, cls).buildloaders()
     buildloaders = classmethod(buildloaders)
