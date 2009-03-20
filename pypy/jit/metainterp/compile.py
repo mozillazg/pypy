@@ -151,15 +151,6 @@ def finish_loop_or_bridge(metainterp, loop, targetmp, guard_op=None):
     metainterp.cpu.compile_operations(loop.operations, guard_op)
     metainterp.stats.loops.append(loop)
 
-def update_loop(metainterp, loop, guard_op, newboxlist):
-    mp = loop.operations[0]
-    mp.args += newboxlist
-    jump = loop.operations[-1]
-    jump.args += newboxlist
-    guard_op.liveboxes += newboxlist
-    guard_op.storage = None
-    metainterp.cpu.update_loop(loop, mp, guard_op, newboxlist)
-
 # ____________________________________________________________
 
 def matching_merge_point(metainterp, targetmp, endliveboxes):
@@ -176,14 +167,14 @@ def compile_fresh_bridge(metainterp, bridge, old_loops, endliveboxes):
     op = ResOperation(rop.JUMP, endliveboxes, None)
     operations.append(op)
     #
-    old_loop, newboxlist = optimize.optimize_bridge(metainterp.options,
-                                                    old_loops, bridge,
-                                                    metainterp.cpu)
+    old_loop, newboxlist, storage = optimize.optimize_bridge(metainterp.options,
+                                                             old_loops, bridge,
+                                                             metainterp.cpu)
     if old_loop is None:
         return None
     bridge.jump_to = old_loop
     if newboxlist:
         # recompile loop
-        update_loop(metainterp, old_loop, guard_op, newboxlist)
+        optimize.update_loop(metainterp, old_loop, newboxlist, storage)
     finish_loop_or_bridge(metainterp, bridge, old_loop.operations[0], guard_op)
     return bridge

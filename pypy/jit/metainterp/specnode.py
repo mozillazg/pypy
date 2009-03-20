@@ -38,7 +38,7 @@ class SpecNode(object):
     def extract_runtime_data(self, cpu, valuebox, resultlist):
         resultlist.append(valuebox)
 
-    def adapt_to(self, instnode, newboxlist, newspecnodes, num):
+    def adapt_to(self, instnode, newboxlist, newspecnodes, num, storage):
         instnode.escaped = True
 
     def mutate_nodes(self, instnode):
@@ -49,6 +49,9 @@ class SpecNode(object):
 
     def matches(self, other):
         raise NotImplementedError
+
+    def create_extra_storage(self, storage):
+        pass
 
 class RedirectingSpecNode(SpecNode):
     def __init__(self, specnode, group):
@@ -181,10 +184,10 @@ class SpecNodeWithFields(FixedClassSpecNode):
                                             [valuebox], ofs)
                 subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
 
-    def adapt_to(self, instnode, newboxlist, newspecnodes, num):
+    def adapt_to(self, instnode, newboxlist, newspecnodes, num, storage):
         for ofs, subspecnode in self.fields:
             subspecnode.adapt_to(instnode.curfields[ofs], newboxlist,
-                                 newspecnodes, num)
+                                 newspecnodes, num, storage)
 
 class VirtualizedOrDelayedSpecNode(SpecNodeWithFields):
     
@@ -196,10 +199,10 @@ class VirtualizedOrDelayedSpecNode(SpecNodeWithFields):
         resultlist.append(valuebox)
         SpecNodeWithFields.extract_runtime_data(self, cpu, valuebox, resultlist)
 
-    def adapt_to(self, instnode, newboxlist, newspecnodes, num):
+    def adapt_to(self, instnode, newboxlist, newspecnodes, num, storage):
         instnode.escaped = True
         SpecNodeWithFields.adapt_to(self, instnode, newboxlist, newspecnodes,
-                                    num)
+                                    num, storage)
 
 class DelayedSpecNode(VirtualizedOrDelayedSpecNode):
 
@@ -276,7 +279,7 @@ class VirtualizedSpecNode(VirtualizedOrDelayedSpecNode):
                 return False
         return True
 
-    def adapt_to(self, instnode, newboxlist, newspecnodes, num):
+    def adapt_to(self, instnode, newboxlist, newspecnodes, num, storage):
         instnode.virtualized = True
         fields = []
         for ofs, subspecnode in self.fields:
@@ -286,13 +289,15 @@ class VirtualizedSpecNode(VirtualizedOrDelayedSpecNode):
                     node = instnode.curfields[ofs]
                     subspecnode = orignode.intersect(node, {})
                     subspecnode.mutate_nodes(orignode)
+                    res = subspecnode.create_extra_storage(storage)
+                    self.add_to_storage(ofs, res, storage)
                     subspecnode = RedirectingSpecNode(subspecnode, num)
                     subspecnode.expand_boxlist(orignode, newboxlist, None)
                     newspecnodes.append(subspecnode)
                 # otherwise we simply ignore unused field
             else:
                 subspecnode.adapt_to(instnode.curfields[ofs], newboxlist,
-                                     newspecnodes, num)
+                                     newspecnodes, num, storage)
             fields.append((ofs, subspecnode))
         self.fields = fields
 
@@ -302,6 +307,9 @@ class VirtualizableSpecNode(VirtualizedSpecNode):
         if not isinstance(other, VirtualizableSpecNode):
             return False
         return VirtualizedSpecNode.equals(self, other)        
+
+    def create_extra_storage(self, storage):
+        raise NotImplementedError
 
 class VirtualizableListSpecNode(VirtualizedSpecNode):
 
@@ -328,10 +336,10 @@ class VirtualizableListSpecNode(VirtualizedSpecNode):
 
 class VirtualSpecNode(SpecNodeWithFields):
 
-    def adapt_to(self, instnode, newboxlist, newspecnodes, num):
+    def adapt_to(self, instnode, newboxlist, newspecnodes, num, storage):
         instnode.virtual = True
         return SpecNodeWithFields.adapt_to(self, instnode, newboxlist,
-                                           newspecnodes, num)
+                                           newspecnodes, num, storage)
 
     def mutate_nodes(self, instnode):
         SpecNodeWithFields.mutate_nodes(self, instnode)
@@ -344,30 +352,37 @@ class VirtualInstanceSpecNode(VirtualSpecNode):
             return False
         return SpecNodeWithFields.equals(self, other)
 
+    def create_extra_storage(self, storage):
+        xxx
+
 class VirtualFixedListSpecNode(VirtualSpecNode):
 
-   def __init__(self, known_class, fields, known_length):
-       VirtualSpecNode.__init__(self, known_class, fields)
-       self.known_length = known_length
+    def __init__(self, known_class, fields, known_length):
+        VirtualSpecNode.__init__(self, known_class, fields)
+        self.known_length = known_length
 
-   def mutate_nodes(self, instnode):
-       VirtualSpecNode.mutate_nodes(self, instnode)
-       instnode.cursize = self.known_length
+    def mutate_nodes(self, instnode):
+        VirtualSpecNode.mutate_nodes(self, instnode)
+        instnode.cursize = self.known_length
 
-   def equals(self, other):
-       if not isinstance(other, VirtualFixedListSpecNode):
-           return False
-       return SpecNodeWithFields.equals(self, other)
+    def equals(self, other):
+        if not isinstance(other, VirtualFixedListSpecNode):
+            return False
+        return SpecNodeWithFields.equals(self, other)
     
-   def extract_runtime_data(self, cpu, valuebox, resultlist):
-       from pypy.jit.metainterp.resoperation import rop
-       from pypy.jit.metainterp.optimize import FixedList
-       from pypy.jit.metainterp.history import check_descr
-       cls = self.known_class
-       assert isinstance(cls, FixedList)
-       arraydescr = cls.arraydescr
-       check_descr(arraydescr)
-       for ofs, subspecnode in self.fields:
-           fieldbox = executor.execute(cpu, rop.GETARRAYITEM_GC,
-                                       [valuebox, ofs], arraydescr)
-           subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
+    def extract_runtime_data(self, cpu, valuebox, resultlist):
+        from pypy.jit.metainterp.resoperation import rop
+        from pypy.jit.metainterp.optimize import FixedList
+        from pypy.jit.metainterp.history import check_descr
+        cls = self.known_class
+        assert isinstance(cls, FixedList)
+        arraydescr = cls.arraydescr
+        check_descr(arraydescr)
+        for ofs, subspecnode in self.fields:
+            fieldbox = executor.execute(cpu, rop.GETARRAYITEM_GC,
+                                        [valuebox, ofs], arraydescr)
+            subspecnode.extract_runtime_data(cpu, fieldbox, resultlist)
+
+    def create_extra_storage(self, storage):
+        xxx
+
