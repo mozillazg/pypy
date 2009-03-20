@@ -866,12 +866,12 @@ class AppTestAutoFree:
     def test_structure_autofree(self):
         import gc, _rawffi
         gc.collect()
+        gc.collect()
         S = _rawffi.Structure([('x', 'i')])
         oldnum = _rawffi._num_of_allocated_objects()
         s = S(autofree=True)
         s.x = 3
         s = None
-        gc.collect()
         gc.collect()
         assert oldnum == _rawffi._num_of_allocated_objects()
 
