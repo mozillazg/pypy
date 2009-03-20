@@ -910,6 +910,7 @@ def update_loop(metainterp, loop, bridge, newboxlist, newrebuildops):
     jump = bridge.operations[-1]
     for i in range(len(mp.args)):
         renaming[jump.args[i]] = mp.args[i]
+    # XXX also walk all already created bridges
     for op in loop.operations:
         if op.is_guard():
             op.liveboxes += newboxlist
