@@ -24,13 +24,13 @@ XY = lltype.GcStruct(
     ('parent', rclass.OBJECT),
     ('vable_base', llmemory.Address),
     ('vable_rti', VABLERTIPTR),
-    ('x', lltype.Signed),
-    ('l', lltype.Ptr(lltype.GcArray(lltype.Signed))),
-    ('node', lltype.Ptr(NODE)),
+    ('inst_x', lltype.Signed),
+    ('inst_l', lltype.Ptr(lltype.GcArray(lltype.Signed))),
+    ('inst_node', lltype.Ptr(NODE)),
     hints = {'virtualizable2': True,
              'virtuals':()},
     adtmeths = {'access': VirtualizableAccessor()})
-XY._adtmeths['access'].initialize(XY, ['x', 'node', 'l'])
+XY._adtmeths['access'].initialize(XY, ['inst_x', 'inst_node', 'inst_l'])
 
 xy_vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
 xy_vtable.name = lltype.malloc(rclass.OBJECT_VTABLE.name.TO, 3, immortal=True)
@@ -59,32 +59,30 @@ xysub_vtable.name[5] = '\x00'
 heaptracker.set_testing_vtable_for_gcstruct(XYSUB, xysub_vtable)
 
 # ____________________________________________________________
-ofs_node = runner.CPU.fielddescrof(XY, 'node')
 
 xy_desc = VirtualizableDesc(cpu, XY, XY)
-xy_desc.fields = [ofs_node]
 
 # ____________________________________________________________
 
 class A:
-    ofs_node = runner.CPU.fielddescrof(XY, 'node')
-    ofs_l = runner.CPU.fielddescrof(XY, 'l')
+    ofs_node = runner.CPU.fielddescrof(XY, 'inst_node')
+    ofs_l = runner.CPU.fielddescrof(XY, 'inst_l')
     ofs_value = runner.CPU.fielddescrof(NODE, 'value')
     size_of_node = runner.CPU.sizeof(NODE)
     #
     frame = lltype.malloc(XY)
     frame.vable_rti = lltype.nullptr(XY.vable_rti.TO)
-    frame.node = lltype.malloc(NODE)
-    frame.node.value = 20
+    frame.inst_node = lltype.malloc(NODE)
+    frame.inst_node.value = 20
     sum = BoxInt(0)
     fr = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame))
-    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.inst_node))
     nextnode = lltype.malloc(NODE)
     nextnode.value = 19
     n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, nextnode))
-    v = BoxInt(frame.node.value)
+    v = BoxInt(frame.inst_node.value)
     v2 = BoxInt(nextnode.value)
-    sum2 = BoxInt(0 + frame.node.value)
+    sum2 = BoxInt(0 + frame.inst_node.value)
     ops = [
         ResOperation('merge_point', [sum, fr], None),
         ResOperation('guard_nonvirtualized', [fr, ConstAddr(xy_vtable, cpu)],
@@ -131,16 +129,16 @@ def test_A_optimize_loop():
 # ____________________________________________________________
 
 class B:
-    ofs_node = runner.CPU.fielddescrof(XY, 'node')
+    ofs_node = runner.CPU.fielddescrof(XY, 'inst_node')
     ofs_value = runner.CPU.fielddescrof(NODE, 'value')
     size_of_node = runner.CPU.sizeof(NODE)
     #
     frame = lltype.malloc(XY)
     frame.vable_rti = lltype.nullptr(XY.vable_rti.TO)
-    frame.node = lltype.malloc(NODE)
-    frame.node.value = 20
+    frame.inst_node = lltype.malloc(NODE)
+    frame.inst_node.value = 20
     fr = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame))
-    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    n1 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.inst_node))
     v = BoxInt(13)
     ops = [
         ResOperation('merge_point', [fr], None),
@@ -160,15 +158,15 @@ def test_B_intersect_input_and_output():
     assert spec.nodes[B.fr].virtualized
     assert spec.nodes[B.n1].escaped
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
-    assert len(spec.specnodes[0].fields) == 1
-    assert spec.specnodes[0].fields[0][0] == B.ofs_node
-    assert isinstance(spec.specnodes[0].fields[0][1], NotSpecNode)
+    assert len(spec.specnodes[0].fields) == 3
+    assert spec.specnodes[0].fields[2][0] == B.ofs_node
+    assert isinstance(spec.specnodes[0].fields[2][1], NotSpecNode)
 
 # ____________________________________________________________
 
 class C:
     locals().update(B.__dict__)
-    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.node))
+    n2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, frame.inst_node))
     v2 = BoxInt(13)
     ops = [
         ResOperation('merge_point', [fr], None),
@@ -196,9 +194,9 @@ def test_C_intersect_input_and_output():
     assert spec.nodes[C.n1].escaped
     assert spec.nodes[C.n2].escaped
     assert isinstance(spec.specnodes[0], VirtualizableSpecNode)
-    assert len(spec.specnodes[0].fields) == 1
-    assert spec.specnodes[0].fields[0][0] == C.ofs_node
-    assert isinstance(spec.specnodes[0].fields[0][1], DelayedSpecNode)
+    assert len(spec.specnodes[0].fields) == 3
+    assert spec.specnodes[0].fields[2][0] == C.ofs_node
+    assert isinstance(spec.specnodes[0].fields[2][1], DelayedSpecNode)
 
 
 # ____________________________________________________________
