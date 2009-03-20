@@ -12,7 +12,7 @@ class AppTestRCTime:
         assert isinstance(rctime.altzone, int)
         assert isinstance(rctime.daylight, int)
         assert isinstance(rctime.timezone, int)
-        assert isinstance(rctime.tzname, list)
+        assert isinstance(rctime.tzname, tuple)
         assert isinstance(rctime.__doc__, str)
     
     def test_sleep(self):
