@@ -554,6 +554,9 @@ class Frame(object):
         value.typeptr = cast_from_int(rclass.CLASSTYPE, vtable, self.memocast)
         return result
 
+    def op_new(self, size):
+        return do_new(size.ofs)
+
     def op_setarrayitem_gc(self, arraydescr, array, index, newvalue):
         if arraydescr.type == 'p':
             do_setarrayitem_gc_ptr(array, index, newvalue)
